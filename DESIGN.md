@@ -19556,3 +19556,77 @@ the key beats, a title card in the story's colours, speech outliers evened out w
 `gain`, a quieter drone. Compatibility: the zoom change only acts while a shot holds the camera
 (no committed project zooms across a shot); effects only for voices with an effect; Phase Q
 baseline 31/31.
+
+## 101. Shorts from a longer video (Phase Z2, Steps 249–250)
+
+Phase Z2 cuts vertical Shorts (9:16, under 60 s, a hook in the first second, burned-in word-synced
+captions, an end card) out of a longer cartoon. What existed: variants (deep-merged overrides;
+a list replaces the base's, so a variant could only repeat the whole `scenes` list), karaoke
+captions (a few words at a time, the spoken one highlighted, word times from the alignment or
+the MP3), shots and zooms, `reframe` for 16:9 stages in 9:16, title and end cards, `render
+--max-scenes`. What was missing and is built here (Step 249): a way to pick scenes and beats
+with changes per cut, a hook caption, an end card for a cut, overlays that keep out of the phone
+app's buttons, lint for that and the 60 s limit, and a zoom that stays.
+
+### 101.1 Cuts (`cut:`, `vidgen.cuts`)
+
+- `cut: {scenes, beats, hook, end_card}` (`CutConfig`; `CutScene` entries allow extra keys).
+  `apply_cut(data, origins)` rewrites the **raw** config before sets are expanded and before
+  validation, in `Project._load` for the base config and for a variant (after the variant is
+  merged): everything later (sets, audio, timing, rendering, lint) sees an ordinary config. The
+  cut stays in the config (`config.cut`), so `voice_warnings` skips unused voices in a cut.
+- Beat ids are written out (`<scene>_b<n>` of the full video) before beats are chosen, so a cut
+  shares the full video's audio (`Project.has_own_audio` compares by beat id: unchanged lines
+  match). Beats are kept in the order listed (a list) or as a run (`{from, to}`).
+- Scene changes: `params` merge like a set's (`merge_params`: mappings recursively, the
+  `characters` / `props` / `layers` entries by name via `includes.entry_names`, an empty list
+  clears), other keys merge (mappings) or replace. A scene may be shown twice under another id.
+  The first scene's transition is dropped unless its entry gives one (it came from a scene that
+  is not in the cut; a crossfade into the first scene is invalid).
+- Beat changes (`cut.beats`): merged onto the beat (mappings merge, lists — `actions` — replace).
+- `hook` → an overlay entry `{type: hook, id: hook, ...}` appended to `overlays`; `end_card` → a
+  silent `end_card` (title and line) or `card` (text and subtitle) scene `cut_end` of `seconds`.
+- Errors (unknown scene or beat, a beat range backwards, a scene id or beat twice, a beat change
+  for a beat not in the cut) are one `VidgenError` with problems at `cut...` (variant-tagged).
+  Malformed `cut:` is left to the config check. `origins` under `scenes[i]` move with the scene.
+- Decision: no "fast-forward" of left-out beats (playing their actions instantly): manim cannot
+  skip animations exactly (updaters get one step, §100.16); a cut states where the characters
+  start instead, which is also what a re-staged Short needs.
+
+### 101.2 Shorts (`shorts:`) and the `hook` overlay
+
+- `shorts: true | {max_seconds: 60, bottom: 0.2, right: 0.15, top: 0, left: 0}`
+  (`ShortsConfig`; `VideoConfig.shorts_zones`). `overlays.shorts_area(project, area)` is the area
+  without those shares of the frame; `captions` (no default lift in a Short), `lower_third` and
+  `hook` place themselves in it, `NarratedScene.safe_area` is cut to it (built-in layouts keep
+  their text out of the app's parts) and a `card` narrows and centres its words in it (the burst
+  stays centred on the frame). Without `shorts:` nothing changes.
+- `hook` overlay (`scenes/overlays.py`, layer 11 over the captions): bold text (default 1.25 × the
+  theme's `title`), wrapped (`readable_text`), on a `primary` plate with an automatic text colour
+  (`text_color_on`), near the top of the Shorts area (6 % below its top) or centred; window `at`
+  .. `at + seconds`, a 0.25 s pop (opacity and scale 0.85 → 1) and a 0.4 s fade.
+- Layout dump: a Short's header gets `shorts: [x0, y0, x1, y1]` (px, the part of the frame the
+  app leaves clear); other dumps are unchanged.
+- Lint: `shorts_safe_area` (still): text (scene or overlay) reaching past that box by more than
+  `tolerance`; a face (`face` box of a character, not hidden by a clear shot) with `min_face` of
+  it outside; an overlay's union box over `min_face` of a face. `shorts_length` (scene, default
+  error): on the video's last scene, the planned length (`VideoPlan`) over `max_seconds`
+  (`SceneContext.video_seconds` / `shorts_max`). `vidgen validate` (`cuts.shorts_warnings`): not
+  portrait, planned length over the limit.
+- `zoom` option `hold` (`Zoom.revert` returns nothing): the camera stays zoomed after the beat
+  until a later camera move; shots return to the held view. Without it a zoom whose beat ends
+  just before a cut (a shot, the scene's end) zooms out over the beat's last moment — a flash of
+  the wide view in a Short.
+- `audio.bitrate` (`128k`–`320k`, default `192k`; `ffmpeg.join(audio_bitrate=)`): FFmpeg's
+  native AAC at 192k raised a dense −14 LUFS mix's true peak from −1.9 (the limited WAV) to
+  +1.9 dBTP; 256k gave −1.6 (the 16:9 story at −16 LUFS: −1.9 → −1.1). Default unchanged.
+
+### 101.3 Public surface and compatibility (Step 249)
+
+- `vidgen.api` adds `apply_cut`, `shorts_area`. Config: top-level `cut`, `shorts`; overlay type
+  `hook`; zoom option `hold`; `audio.bitrate`; lint rules `shorts_safe_area`, `shorts_length`
+  (last in `LINT_RULES`).
+- Additive and opt-in: a config without `cut` / `shorts` / `hold` loads, lays out, renders and
+  lints as before (the layout dump's header has no new key; the safe area, the captions', lower
+  third's and card's placement change only in a Short). Phase Q baseline re-run.
+- The private story project's Shorts 1–3 were built with these (scratchpad, never committed).

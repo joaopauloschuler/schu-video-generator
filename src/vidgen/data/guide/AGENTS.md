@@ -280,6 +280,57 @@ scenes:
   `character_size: large` (top level, or a stage's param; `small` / `medium` / `large`, default
   `medium`): characters measured against the narrow width are small on a phone; text keeps its size.
 
+**Shorts cut from a longer video.** One variant per Short: `cut:` keeps some scenes and beats of
+the full video (their ids and audio stay, so nothing is voiced again) and changes what 9:16
+needs; `shorts: true` keeps captions, lower thirds and the hook out of the app's buttons (bottom
+20 %, right 15 %) and turns on two lint rules (`shorts_safe_area`: text or a face where the app
+covers the frame, a caption over a face; `shorts_length`: over 60 s).
+
+```yaml
+characters: [{name: kit}, {name: pip}]
+scenes:                                   # the full video (shortened)
+  - id: workshop
+    type: stage
+    params: {characters: [kit, pip]}
+    beats: [{text: "Kit built a kite big enough for a cat."}]
+  - id: rescue
+    type: stage
+    params: {characters: [kit, {name: pip, at: 0.8}]}
+    beats:
+      - {text: "Then the wind came."}
+      - {text: "It lifted Pip off the ground!"}
+      - {text: "Kit ran after the string."}
+variants:
+  short1:
+    format: {width: 1080, height: 1920}
+    preview: {width: 360, height: 640}
+    shorts: true                          # or {max_seconds, bottom, right, top, left}
+    audio: {target_lufs: -14, bitrate: 256k}   # Shorts play louder; 256k keeps the AAC's peaks down
+    music: {source: horizon, volume: -5}  # music cues naming left-out scenes: give the cut its own
+    overlays: [{type: captions, style: karaoke, speakers: color}]
+    cut:
+      scenes:
+        - workshop                                     # a whole scene
+        - {scene: rescue, beats: [rescue_b2]}          # or beats: {from: rescue_b2, to: rescue_b3}
+        - {scene: rescue, id: rescue_end, beats: [rescue_b3], params: {light: sunset}}  # again, renamed
+      beats:                                           # changes for 9:16, by beat id
+        rescue_b2: {shot: {kind: closeup, of: [kit, pip], clear: true}}
+        rescue_b3:
+          actions: [{zoom: [kit, pip], scale: 2, at: 0.4, hold: true}]   # end on the close view
+      hook: "Can a kite carry a cat?"                  # big text over the first 3 s
+      end_card: "Full video on the channel"            # + the title; or {text, title, seconds, type: card, params}
+```
+
+- **Re-stage for 9:16**: wide iso views and two-shots of people far apart are tiny in a tall
+  frame. Give each kept beat a `closeup` / `medium` of one to three characters, or a `zoom` (in
+  9:16 about 1.5× the scale you would use in 16:9); `zoom ... hold: true` stays zoomed after its
+  beat (no zoom-out before a cut or at the end). A beat's `actions` in `cut.beats` replace its list.
+- Leaving beats out leaves out their actions too: start the scene where the kept beats need the
+  characters (`params: {characters: [{name: kit, at: door}]}`, merged by name), and give an
+  `until` that named a left-out beat a beat of the cut (validate says which).
+- `vidgen storyboard --variant short1 --per-beat 2` and `vidgen lint --variant short1`, then
+  `vidgen render --variant short1` (`--max-scenes` keeps each run short).
+
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
 
@@ -1797,7 +1848,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `highlight` | make the thing the voice names stand out (`style: color`, `box`, `underline`, `fill`, `flash`) | one target per beat |
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
-| `zoom` | look closer at a detail, then come back; on a `plot`, `x: [from, to]` / `y: [...]` zoom its axes to that region of the data instead of moving the camera | at most one per scene |
+| `zoom` | look closer at a detail, then come back (`hold: true`: stay close, e.g. a Short's last shot); on a `plot`, `x: [from, to]` / `y: [...]` zoom its axes to that region of the data instead of moving the camera | at most one per scene |
 | `pan` | on a `stage`: move the camera to a character or a mark (`to: right`); on an iso place to a spot (`to: well`) across and up the picture, moving in from the wide view | on a stage wider than the frame (`width: 2`), or on an iso place to look at a thing |
 | `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start; on an iso place it zooms in first, to a plain stage's size) | one at a time |
 | `reveal` | bring a later element in early; on an iso place an object with `shown: false` appears (a bridge over the pond) | rarely: the default order is usually right |
@@ -3685,6 +3736,8 @@ install; `vidgen validate` warns when it is missing.
 | `significance_claim` | a p-value said as the chance the result is wrong, a σ the spectrum does not reach | "background alone would fluctuate this high once in N tries"; the scene's σ |
 | `simulated_label` | simulated data called real, or a spectrum / event display without "simulated" on screen | say "simulated"; keep it in the label or caption |
 | `particle_units` (info) | masses both in GeV and GeV/c² on screen | one convention throughout |
+| `shorts_safe_area` | in a Short (`shorts:`), text or a face where the app covers the frame (bottom 20 %, right 15 %), or a caption / the hook over a face | a closer `shot` or `zoom` with the faces higher; move the scene's text inwards |
+| `shorts_length` (error) | a Short longer than `shorts.max_seconds` (60) | leave out beats or scenes in `cut:`, a shorter `end_card` |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

@@ -136,6 +136,8 @@ class LowerThird(Overlay):
         safe = safe_area()
         portrait = orientation() == "portrait"
         area = Region(safe.x0, safe.y0 + PORTRAIT_LIFT * safe.height, safe.x1, safe.y1) if portrait else safe
+        if self.context.project.config.shorts_zones is not None:   # a Short: out of the app's buttons (§101)
+            area = shorts_area(self.context.project)
         pad_x, pad_y, bar_w, gap = 0.3, 0.2, 0.09, 0.25
         width = area.width * (1.0 if portrait else o.max_width) - 2 * pad_x - bar_w
         lines = [readable_text(o.name, Region(0, 0, width, 2.0), size=o.name_size, color=o.name_color, weight=BOLD, align="left", role="heading")]
@@ -178,6 +180,88 @@ class LowerThird(Overlay):
 
     def settled(self, state: Hashable) -> bool:
         """Fully in (not sliding)."""
+        return float(state) >= 1  # type: ignore[arg-type]
+
+
+#: The hook's default text size: this times the theme's ``title`` size.
+HOOK_SCALE = 1.25
+#: Padding (units) between the hook's text and the edge of its plate.
+HOOK_PAD = (0.34, 0.24)
+
+
+@overlay("hook")
+class Hook(Overlay):
+    """A big caption over the first seconds of a video (a Short's hook, DESIGN.md §101): bold
+    text on a plate near the top of the safe area (of a Short: out of the app's buttons),
+    popping in at ``at`` and gone ``seconds`` later. A cut's ``hook:`` adds one."""
+
+    layer = 11   # over the captions
+
+    class Options(OverlayOptions):
+        text: TranslatableStr = Field(min_length=1)
+        """The hook's words (a question or a promise; a few words read in a second)."""
+        at: float = Field(0.0, ge=0)
+        """When it pops in: seconds into the video."""
+        seconds: float = Field(3.0, gt=0)
+        """How long it shows, its pop in and fade out included."""
+        position: Literal["top", "center"] = "top"
+        """Where in the safe area: top or center."""
+        size: ThemeSize | None = None
+        """Text size; default 1.25 times the theme's title size."""
+        color: ThemeColor | None = None
+        """Text colour; default the theme's text or background colour, whichever reads on the plate."""
+        background: ThemeColor | None = "primary"
+        """Plate colour (null: no plate, the text gets an outline in the theme background)."""
+        background_opacity: float = Field(0.92, ge=0, le=1)
+        """Plate opacity."""
+        max_width: float = Field(0.92, gt=0, le=1)
+        """Widest it may be, as a share of the safe width; longer text wraps."""
+        enter: float = Field(0.25, ge=0)
+        """Seconds of its pop in."""
+        exit: float = Field(0.4, ge=0)
+        """Seconds of its fade out."""
+
+    def window(self) -> tuple[float, float]:
+        """From ``at`` for ``seconds``."""
+        return self.options.at, self.options.at + self.options.seconds
+
+    def build(self) -> Mobject:
+        o = self.options
+        theme = current_theme()
+        area = shorts_area(self.context.project)
+        size = float(theme.size(o.size)) if o.size is not None else HOOK_SCALE * float(theme.size("title"))
+        pad_x, pad_y = HOOK_PAD
+        color = o.color or (text_color_on(o.background) if o.background is not None else "text")
+        width = o.max_width * area.width - 2 * pad_x
+        text = readable_text(o.text, Region(0, 0, width, area.height / 3), size=size, color=color, weight=BOLD, align="center", role="heading")
+        if o.background is None:
+            text.set_stroke(theme.background, width=max(size / 6, 3), background=True)
+            group: Mobject = VGroup(text)
+        else:
+            plate = RoundedRectangle(corner_radius=0.18, width=text.width + 2 * pad_x, height=text.height + 2 * pad_y)
+            plate.set_fill(resolve_color(o.background), opacity=o.background_opacity).set_stroke(width=0).move_to(text)
+            group = VGroup(plate, text)
+        if o.position == "top":   # a little below the top edge: under the app's top bar
+            group.move_to(area.center)
+            group.align_to(area.center + UP * (area.height / 2 - 0.06 * area.height), UP)
+        else:
+            place(group, area, fit="none", align="center")
+        return group
+
+    def state(self, t: float) -> Hashable | None:
+        """Progress of the pop in / fade out (0..1, 1 while fully in)."""
+        start, end = self.interval()
+        p = self.transition(t, start, end, self.options.enter, self.options.exit)
+        return round(p, 3) if p > 0 else None
+
+    def pose(self, mobject: Mobject, state: Hashable) -> Mobject:
+        p = float(state)  # type: ignore[arg-type]
+        if p >= 1:
+            return mobject
+        return with_opacity(mobject, p).scale(0.85 + 0.15 * p)
+
+    def settled(self, state: Hashable) -> bool:
+        """Fully in (not popping or fading)."""
         return float(state) >= 1  # type: ignore[arg-type]
 
 

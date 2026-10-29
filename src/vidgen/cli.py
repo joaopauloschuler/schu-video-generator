@@ -421,8 +421,10 @@ def validate_warnings(project: Project) -> list[str]:
     character that lacks the parts they need (§69.11), front views asked of SVG characters
     (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
     line of their own voice (§69.34), dubbed voices that lose their kind or merge (§80) and
-    composed music without the ``music`` extra or the SoundFont (§85)."""
+    composed music without the ``music`` extra or the SoundFont (§85), and a Short that is not
+    vertical or longer than its ``max_seconds`` (§101)."""
     from vidgen.carry import carry_warnings
+    from vidgen.cuts import shorts_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
     from vidgen.cartoon.host import host_warnings
     from vidgen.chapter_export import chapter_warnings
@@ -457,6 +459,7 @@ def validate_warnings(project: Project) -> list[str]:
         + dub_warnings(project)
         + music_warnings(project.config)
         + piece_warnings(project.config, project.root)
+        + shorts_warnings(project)
     )
 
 

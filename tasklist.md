@@ -1501,6 +1501,22 @@ audio and the studio unchanged (Phase Q's 31 baseline frames when shared code ch
 - [x] Story fidelity, visual quality (stills of every shot, 16:9; 9:16 not made, see Step 247), audio (distinct voices, levels, −16 LUFS), compatibility (Phase Q baseline 31/31), tests, docs; final render (16:9 1080p, 7:12) and a delivery copy under 28 MB (720p)
 - [x] Generic fixes (DESIGN §100.16): a `shot` inside a `zoom`'s `until` wins for its beat, then the zoom resumes; voice effects level-matched to the dry voice; `render --max-scenes N` (a long render in steps); `tests/test_actions.py` lists of built-in actions repaired
 
+## Phase Z2 — Vertical Shorts from a story project
+
+Goal: seven YouTube Shorts (9:16, under 60 s, a hook in the first second, burned-in word-synced
+captions, an end card) cut from the private story video, and the generic features for cutting
+Shorts out of any longer video. The story project and its Shorts stay in the scratchpad. DESIGN
+§101. Steps 249–250.
+
+### Step 249 — Generic Shorts support; Shorts 1–3
+- [x] `cut:` (scenes whole or some beats, `{from, to}`, a scene twice under another id; changes per scene and per beat; beat ids and audio kept), the `hook` overlay, a cut's `end_card` (DESIGN §101.1, §101.2)
+- [x] `shorts:` (overlays keep out of the app's zones), lint `shorts_safe_area` / `shorts_length`, validate warnings; `zoom` `hold: true`
+- [x] Tests `tests/test_cuts_shorts.py`; CONFIG, guide (`AGENTS.md`), README, CHANGELOG; Phase Q baseline
+- [x] Shorts 1–3 of the private story (scratchpad): re-staged for 9:16, rendered, stills checked
+
+### Step 250 — Shorts 4–7 and review
+- [ ] Shorts 4–6 and the teaser; a review of all seven (stills of every shot, captions, hooks, levels, durations, sizes), fixes, final renders and contact sheets
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

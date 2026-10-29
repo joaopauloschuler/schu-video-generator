@@ -91,7 +91,8 @@ from vidgen.regions import (  # noqa: E402
     region,
     safe_area,
 )
-from vidgen.overlays import Overlay, OverlayContext, OverlayOptions, with_opacity  # noqa: E402
+from vidgen.overlays import Overlay, OverlayContext, OverlayOptions, shorts_area, with_opacity  # noqa: E402
+from vidgen.cuts import apply_cut  # noqa: E402
 from vidgen.registry import action, overlay, scene  # noqa: E402
 from vidgen.registry import find as find_scene_type  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
@@ -723,6 +724,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "OverlayOptions",
     "OverlayContext",
     "with_opacity",
+    "shorts_area",
+    "apply_cut",
     "Chapter",
     "video_chapters",
     "carry_move",

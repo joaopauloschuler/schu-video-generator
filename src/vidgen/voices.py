@@ -293,9 +293,12 @@ def voice_color_problems(config: VideoConfig, theme: Theme) -> list[Problem]:
 
 def voice_warnings(config: VideoConfig, origins: Mapping[str, Origin] | None = None) -> list[str]:
     """Named voices no scene or beat uses (``vidgen validate`` warns). A voice written in an
-    included file (``origins``, §69.35) is not reported: a shared cast's episode may leave some out."""
+    included file (``origins``, §69.35) is not reported: a shared cast's episode may leave some out;
+    nor is any in a cut (``cut:``, §101), which leaves out the lines of some on purpose."""
     from vidgen.includes import origin_of
 
+    if config.cut is not None:
+        return []
     used = set(beat_voice_names(config).values())
     return [
         f"voices: '{name}' is not used by any scene or beat"

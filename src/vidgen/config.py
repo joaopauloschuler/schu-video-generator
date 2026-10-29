@@ -927,6 +927,8 @@ LINT_RULES: tuple[str, ...] = (
     "significance_claim",
     "simulated_label",
     "particle_units",
+    "shorts_safe_area",
+    "shorts_length",
 )
 RuleName = Literal[
     "off_frame",
@@ -1007,6 +1009,8 @@ RuleName = Literal[
     "significance_claim",
     "simulated_label",
     "particle_units",
+    "shorts_safe_area",
+    "shorts_length",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1549,6 +1553,19 @@ class UnclearSpeechRule(RuleConfig):
         return self
 
 
+class ShortsSafeAreaRule(RuleConfig):
+    """``shorts_safe_area``: in a Short (``shorts:``), text or a character's face where the phone app covers the frame (its buttons and texts), or an overlay (a caption, the hook) over a face (DESIGN.md §101)."""
+
+    tolerance: Fraction = 0.01
+    """How far (fraction of the frame's shorter side) text may reach into the covered parts unflagged."""
+    min_face: Fraction = 0.25
+    """Share of a face's box under the app's parts, or under an overlay, from which it is reported."""
+
+
+class ShortsLengthRule(RuleConfig):
+    """``shorts_length``: a Short (``shorts:``) longer than its ``max_seconds`` (DESIGN.md §101)."""
+
+
 class LintRules(_Strict):
     """Per-rule settings of ``vidgen lint``."""
 
@@ -1708,6 +1725,10 @@ class LintRules(_Strict):
     """Simulated data called real, or not labelled simulated on screen (default: warning)."""
     particle_units: ParticleUnitsRule = Field(default_factory=ParticleUnitsRule)
     """Masses written both in GeV and GeV/c² on screen (default: info)."""
+    shorts_safe_area: ShortsSafeAreaRule = Field(default_factory=ShortsSafeAreaRule)
+    """In a Short (shorts:), text or a face where the app covers the frame, or an overlay over a face (default: warning)."""
+    shorts_length: ShortsLengthRule = Field(default_factory=ShortsLengthRule)
+    """A Short (shorts:) longer than its max_seconds (default: error)."""
 
 
 class LintConfig(_Strict):
@@ -2307,6 +2328,8 @@ class AudioConfig(_Strict):
     """Integrated loudness (EBU R128 / BS.1770) of a normalised mix: -16 for web and social, -23 / -24 for broadcast."""
     true_peak: float = Field(default=-1.5, ge=-9, le=0)
     """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
+    bitrate: Literal["128k", "160k", "192k", "256k", "320k"] = "192k"
+    """AAC bitrate of the video's audio; a loud mix (a Short at -14 LUFS) keeps its true peak better at 256k or 320k (the encoder's overshoot is smaller)."""
 
 
 class ChaptersConfig(_Strict):
@@ -2834,6 +2857,78 @@ class SceneConfig(_Strict):
         return not self.beats
 
 
+class CutBeatRange(_Strict):
+    """A run of a scene's beats in a cut (``{from, to}``, both included; DESIGN.md §101)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: Identifier | None = Field(default=None, alias="from")
+    """The first beat kept (default: the scene's first)."""
+    to: Identifier | None = None
+    """The last beat kept (default: the scene's last)."""
+
+
+class CutScene(BaseModel):
+    """A scene of a cut (DESIGN.md §101): ``{scene, beats, ...}``; any other key (``params``,
+    ``set``, ``id``, ``transition``, ``music``, ``overlays``...) changes the scene in this cut."""
+
+    model_config = ConfigDict(extra="allow", use_attribute_docstrings=True)
+
+    scene: Identifier
+    """The id of a scene of the video."""
+    beats: list[Identifier] | CutBeatRange | None = None
+    """The beats kept: a list of beat ids (in the order shown) or {from, to}; default: all."""
+
+
+class CutEndCard(_Strict):
+    """The card a cut ends on (DESIGN.md §101)."""
+
+    text: str = Field(min_length=1)
+    """The line under the title, e.g. "Full story on the channel"."""
+    title: str | None = Field(default=None, min_length=1)
+    """The card's title; default the video's title."""
+    seconds: float = Field(3.0, gt=0, le=30)
+    """How long the card shows."""
+    type: Literal["end_card", "card"] = "end_card"
+    """The scene type: end_card (title and line) or card (a cartoon title card: title as text, line as subtitle)."""
+    id: Identifier = "cut_end"
+    """The scene's id."""
+    params: dict[str, Any] = Field(default_factory=dict)
+    """More params of the scene (colours, style...)."""
+    transition: Any = None
+    """The transition into the card (default the video's)."""
+
+
+class CutConfig(_Strict):
+    """``cut:`` (DESIGN.md §101): a shorter video made of chosen scenes and beats of this one —
+    usually set in a variant, one variant per cut (Shorts, teasers)."""
+
+    scenes: list[Identifier | CutScene] = Field(min_length=1)
+    """The scenes shown, in order: a scene id, or {scene, beats, ...changes}; a scene may come twice with another id."""
+    beats: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
+    """Changes to beats of the cut by beat id (shot, actions, emotion...): mappings merge, lists replace."""
+    hook: str | dict[str, Any] | None = None
+    """A big caption over the first seconds (the hook overlay): its text, or {text, seconds, position, ...}."""
+    end_card: str | CutEndCard | None = None
+    """A card at the end: its line (title: the video's title), or {text, title, seconds, type, id, params, transition}."""
+
+
+class ShortsConfig(_Strict):
+    """``shorts:`` (DESIGN.md §101): the video is a vertical Short: the parts of the frame the
+    phone app covers with its own buttons and text, and the longest it may be."""
+
+    max_seconds: float = Field(60.0, gt=0)
+    """The longest the video may be (lint shorts_length, vidgen validate)."""
+    bottom: float = Field(0.2, ge=0, lt=0.5)
+    """Share of the frame's height at the bottom covered by the app (title, channel, description)."""
+    right: float = Field(0.15, ge=0, lt=0.5)
+    """Share of the frame's width at the right covered by the app (like, comment, share buttons)."""
+    top: float = Field(0.0, ge=0, lt=0.5)
+    """Share of the frame's height at the top to keep clear (a search or menu bar)."""
+    left: float = Field(0.0, ge=0, lt=0.5)
+    """Share of the frame's width at the left to keep clear."""
+
+
 class VideoConfig(_Strict):
     """The whole ``video.yaml``."""
 
@@ -2927,8 +3022,19 @@ class VideoConfig(_Strict):
     """Motion effects on stage scenes, added on their own while cartoon_motion is lively or calm (smaller): dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture; false: none (a stage's motion_effects param wins)."""
     drawing: DrawingConfig | None = None
     """How the cartoons are drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: stage scenes and the host; a stage's drawing param wins key by key; default: normal, flat, none (as drawn)."""
+    cut: CutConfig | None = None
+    """A shorter video made of chosen scenes and beats (usually in a variant): {scenes, beats, hook, end_card}; the scenes keep their beat ids (and audio)."""
+    shorts: bool | ShortsConfig | None = None
+    """The video is a vertical Short: true or {max_seconds, bottom, right, top, left}; overlays keep out of the app's buttons, lint checks the length and what the app covers."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
+
+    @property
+    def shorts_zones(self) -> ShortsConfig | None:
+        """``shorts`` as settings (``true``: the defaults), ``None`` when the video is no Short."""
+        if self.shorts is True:
+            return ShortsConfig()
+        return self.shorts or None
 
     @field_validator("variants")
     @classmethod

@@ -5,7 +5,29 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–248)
+## Unreleased (Steps 193–249)
+
+### Shorts from a longer video (Phase Z2, Step 249)
+
+- **Cuts** (Step 249). `cut:` (usually in a variant, one per Short or teaser) keeps chosen scenes
+  (whole, some beats by id, or `{from, to}`; a scene may come twice under another id) and
+  changes them for this cut: a scene's `params` (characters, props and layers merged by name)
+  and other keys, beats by id (`cut.beats`: a shot, actions, an emotion). Beats keep their ids,
+  so the full video's narration audio is reused. `hook:` adds a hook caption and `end_card:` a
+  closing card ("Full video on the channel" under the title).
+- **The `hook` overlay** (Step 249): big bold text on a plate near the top over the first
+  seconds, popping in and fading out.
+- **Shorts** (Step 249). `shorts: true` (or `{max_seconds, bottom, right, top, left}`) keeps
+  captions, lower thirds and the hook out of the parts of the frame the phone app covers (bottom
+  20 %, right 15 %); lint rules `shorts_safe_area` (text or a face there, a caption over a face)
+  and `shorts_length` (over 60 s, an error); `vidgen validate` warns about a Short that is not
+  vertical or too long.
+- **`zoom` with `hold: true`** (Step 249) stays zoomed in after its beat (a scene ending on a
+  close view), until a later camera move.
+- **`audio.bitrate`** (Step 249): the AAC bitrate (default 192k as before); a loud Short's mix
+  kept its true peak at 256k (192k pushed it from −1.9 to +1.9 dBTP).
+- In a Short the scenes' safe area leaves out the app's parts, and a `card`'s words keep to the
+  clear part.
 
 ### Story-cartoon features (Phase Z, Steps 245–248)
 

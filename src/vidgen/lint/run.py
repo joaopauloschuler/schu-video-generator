@@ -218,6 +218,12 @@ def _timing_findings(
 
     if any(n in names and getattr(lint.rules, n).severity != "off" for n in PARTICLE_RULES):
         ctx.science = ctx.science + particle_issues(project, scene_id, lint.rules)
+    zones = project.config.shorts_zones
+    if "shorts_length" in names and zones is not None and scene_id == project.config.scenes[-1].id:
+        from vidgen.videoplan import VideoPlan
+
+        ctx.video_seconds = VideoPlan(project, project.render_format(preview).fps).duration
+        ctx.shorts_max = zones.max_seconds
     narration_rules = [n for n in ("said_before_shown", "unsaid_reveal") if n in names and getattr(lint.rules, n).severity != "off"]
     if narration_rules and layout is not None and activity["beats"]:
         from vidgen.lint.narration_rule import narration_picture

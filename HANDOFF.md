@@ -22929,3 +22929,96 @@ How to test: `tests/test_cartoon_shots.py -k zoom`, `tests/test_voice_effects.py
 `tests/test_render.py -k max_scenes`, `tests/test_actions.py`; stills (scratchpad, private)
 `story-qeh/proj/build/final/storyboard/scenes/*.png`, the contact sheet
 `story-qeh/contact.png`; the videos in `story-qeh/proj/output/`.
+
+## Step 249 — Shorts from a longer video: cuts, hooks, the Shorts safe area
+
+Phase Z2 (Steps 249–250) cuts vertical Shorts out of a private story video. This step built the
+generic support (DESIGN §101) and Shorts 1–3 of the story (scratchpad, never committed).
+
+What existed: variants (lists replace, so a variant had to repeat the whole `scenes`), karaoke
+captions (word-synced), shots / zooms, `reframe`, cards, `render --max-scenes`.
+
+What was built
+- **`cut:`** (`src/vidgen/cuts.py`, `apply_cut` on the raw config in `Project._load`, before sets
+  and validation; base config and variants): `scenes` (an id, or `{scene, beats: [ids] | {from,
+  to}, ...changes}`; a scene twice under another `id`), `beats` (changes by beat id: mappings
+  merge, lists replace), `hook` (adds the `hook` overlay), `end_card` (a silent `end_card` or
+  `card` scene `cut_end`). Beat ids are written out first, so a cut reuses the full video's
+  audio. Scene `params` merge like a set's (characters / props / layers by name). The first
+  scene's transition is dropped unless the entry gives one. Errors at `cut...`.
+- **`hook` overlay** (`scenes/overlays.py`): big bold text on a `primary` plate near the top,
+  `at` / `seconds` (default 0 / 3), pops in, fades out.
+- **`shorts:`** (`true | {max_seconds, bottom, right, top, left}`; defaults 60 s, 20 %, 15 %):
+  `overlays.shorts_area`; captions (no lift), lower thirds, the hook, every scene's safe area and
+  the `card`'s words keep out of the app's parts; the layout dump header gets `shorts` (px);
+  lint `shorts_safe_area` (text / a face in the covered parts, an overlay over a face) and
+  `shorts_length` (error; on the last scene, planned length); validate warns (not vertical, too
+  long). Unused voices are not warned about in a cut.
+- **`zoom` `hold: true`**: no zoom-out after the beat (avoids a flash of the wide view before a
+  cut or at a scene's end).
+- **`audio.bitrate`** (128k–320k, default 192k): FFmpeg's AAC at 192k pushed the −14 LUFS
+  Short's true peak from −1.9 (mix WAV) to +1.9 dBTP; 256k: −1.6.
+
+Files
+- New: `src/vidgen/cuts.py`, `src/vidgen/lint/shorts_rule.py`, `tests/test_cuts_shorts.py` (18, 1 render).
+- Changed: `config.py` (`CutConfig`, `CutScene`, `CutBeatRange`, `CutEndCard`, `ShortsConfig`,
+  `VideoConfig.cut/shorts/shorts_zones`, `AudioConfig.bitrate`, `ShortsSafeAreaRule`,
+  `ShortsLengthRule`, `LINT_RULES`), `project.py`, `overlays.py` (`shorts_area`),
+  `scenes/overlays.py` (`Hook`; lower third in a Short), `scenes/captions.py`, `scenes/card.py`,
+  `scene.py` (safe area), `scenes/actions.py` (`hold`), `introspect.py`, `lint/{__init__,rules,run}.py`,
+  `render/{ffmpeg,pipeline}.py`, `voices.py`, `cli.py` (validate warnings), `api.py`; tests
+  `test_overlays.py` (overlay list), `test_particle_lint.py` (rule order); docs CONFIG (top level,
+  Variants → "Cuts and Shorts", `hook`, captions / lower third placement, zoom `hold`,
+  `audio.bitrate`, lint rules), guide (social topic, actions table, lint table; copied to
+  `AGENTS.md`), README, CHANGELOG, DESIGN §101, tasklist (Phase Z2).
+
+Public interfaces: `vidgen.api` adds `apply_cut`, `shorts_area`. Config: `cut`, `shorts`,
+`audio.bitrate`, overlay `hook`, zoom `hold`, lint rules `shorts_safe_area`, `shorts_length`.
+
+Decisions
+- Cuts rewrite the raw config (no new pipeline stage); left-out beats are not "fast-forwarded"
+  (manim cannot replay a scene's state exactly, §100.16): a cut states where characters start.
+- `shorts` is a property of the output, separate from `cut` (a Short need not be a cut).
+- The bitrate is opt-in (default unchanged): existing projects' audio is identical.
+
+The story's Shorts (private, scratchpad `story-qeh/`)
+- Variants `short1`–`short3` in `story-qeh/proj/video.yaml` (1080×1920, `shorts: true`,
+  `audio: {target_lufs: -14, bitrate: 256k}`, music `enigma` −5 dB, karaoke captions with
+  `speakers: color, max_lines: 1`, hooks, end card "Full story on the channel" under the title in
+  the story's card colours). Re-staged in `cut.beats`: zooms ×1.5–2 of the 16:9 ones with
+  `hold`, closeups / mediums of one to three characters, a zoom centred on the pair so their
+  hands show above the captions, two long scenes split in two cut entries (each renders in one
+  run; the second starts with the characters where the first left them).
+- Results (`story-qeh/shorts/short1_*.mp4` … `short3_*.mp4`): Short 1 43.6 s, 6.3 MB, −14.5 LUFS,
+  −1.6 dBTP; Short 2 39.0 s, 10.5 MB, −14.9 LUFS, −1.7 dBTP; Short 3 47.7 s, 9.5 MB, −14.8 LUFS,
+  −1.8 dBTP. Contact sheets `story-qeh/shorts/shortN_contact.png` (the hook at
+  1 s, one frame per beat, the end card). Lint (preview): short1 2 narration-speed warnings
+  (from the film), short2 clean, short3 one `facing_away` (the visitor speaks to the pair out of
+  the frame, on purpose).
+- Render times at 1080×1920: 6–18× real time (the alarm scenes 23×: 15 s in 347 s), two scenes in
+  parallel with `render --variant shortN --jobs 2 --max-scenes 2`, then the rest and the join.
+
+Checks
+- Tests (one or two files at a time): test_cuts_shorts 18 (1 render), test_docs + test_guide 164,
+  test_schema + test_config + test_api 102, test_schema 71 (again after `bitrate`), test_project +
+  test_voices 41, test_overlays + test_captions 46, test_lint + test_iso_diagram_actions +
+  test_particle_lint 170, test_cartoon_lint + test_timing_lint 148, genetics / accuracy / calc /
+  orbit / narration lint 146, test_music_pieces + test_actions + test_introspect 44,
+  test_cartoon_shots + test_introspect 30, test_json_output + test_mcp 39, test_cli 10,
+  test_cartoon_cards + test_scene 52 (with test_cuts_shorts), test_render + test_robustness 48 —
+  all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check249`, run twice).
+
+Known gaps / for Step 250
+- `off_stage` reports the characters of a beat's `shot` when a `zoom` in the same beat moves
+  the camera away from them (avoid: two `hold` zooms instead of a shot plus a zoom).
+- A zoom `at: 0` in a scene's first beat still shows the wide view for about the first second
+  (the hook frame shows the establishing wide; fine, but check if a Short should open close).
+- In portrait a two-character `closeup` frames about like a `medium` (the narrow width needs
+  both bodies); use a `zoom` for a tighter face shot.
+- Scene renders of a variant are redone after code changes (no reuse across vidgen versions).
+- Hook text over 3 lines (short2) reads, but shorter hooks look better.
+
+How to test: `tests/test_cuts_shorts.py`; stills (scratchpad, private)
+`story-qeh/shorts/short1_contact.png`, `short2_contact.png`, `short3_contact.png`;
+storyboards `story-qeh/proj/build/preview_shortN/storyboard/`.

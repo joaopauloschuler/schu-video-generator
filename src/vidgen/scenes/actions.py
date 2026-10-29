@@ -443,6 +443,8 @@ class Zoom(Action):
         """plot scenes: zoom the plot's axes to x from..to (in data units) instead of moving the camera."""
         y: tuple[float, float] | None = None
         """plot scenes: zoom the plot's axes to y from..to (in data units) instead of moving the camera."""
+        hold: bool = False
+        """Stay zoomed in after the beat (a scene ending on a close view: a cliffhanger) until a later camera move; an until then changes nothing."""
 
         @model_validator(mode="after")
         def _region(self) -> "Zoom.Options":
@@ -503,6 +505,8 @@ class Zoom(Action):
         zoom lasts)."""
         if getattr(self, "region", False):
             return scene.zoom_back()  # type: ignore[attr-defined]
+        if self.options.hold:   # stays zoomed in (DESIGN.md §101)
+            return []
         before, shot = getattr(self, "before", None), getattr(scene, "camera_shot", None)
         if before is not None and shot is not None and shot is not getattr(self, "shot", None):
             if getattr(self, "shot", None) is None and scene.shot_home is not None:

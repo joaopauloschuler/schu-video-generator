@@ -570,6 +570,25 @@ def avoid(area: Region, box: Region, gap: float = RESERVE_GAP) -> Region:
     return max(cuts, key=lambda r: r.width * r.height)
 
 
+def shorts_area(project: Project | None, area: Region | None = None) -> Region:
+    """``area`` (default the safe area) without the parts of the frame a Shorts app covers
+    (the config's ``shorts:`` zones, DESIGN.md §101: the bottom and right edges by default);
+    ``area`` itself when the video is no Short."""
+    from vidgen.regions import frame_region, safe_area
+
+    area = area if area is not None else safe_area()
+    zones = project.config.shorts_zones if project is not None else None
+    if zones is None:
+        return area
+    frame = frame_region()
+    return Region(
+        max(area.x0, frame.x0 + zones.left * frame.width),
+        max(area.y0, frame.y0 + zones.bottom * frame.height),
+        min(area.x1, frame.x1 - zones.right * frame.width),
+        min(area.y1, frame.y1 - zones.top * frame.height),
+    )
+
+
 def mobject_region(mobject: Mobject) -> Region | None:
     """The bounding box of ``mobject`` as a :class:`Region` (``None`` without points)."""
     if not mobject.get_family() or all(len(m.points) == 0 for m in mobject.get_family()):

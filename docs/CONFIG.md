@@ -70,6 +70,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `ambience` | `true` | a sound bed chosen from each `stage` scene's set while foley is on: a room tone in a room (and on an indoor iso place), birdsong outdoors while the light is `day` or `morning` and it does not rain, crickets outdoors on an [iso place](#isometric-places-iso) while it is `sunset` or `night`; `false`: none unless a stage's `ambience` param names one; see [ambience](#ambience-and-door-sounds-ambience-knock) |
 | `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
 | `reframe` | none | on `stage` scenes wider than the frame: `speaker` moves the camera to whoever speaks (a 9:16 frame then crops the stage laid out as wide as the 16:9 one), `none` leaves the camera to the beats' own camera actions; none: `speaker` when a stage's characters do not fit in one view; a stage's `reframe` wins; see [vertical cartoons](#vertical-cartoons-reframe) |
+| `cut` | none | a shorter video made of chosen scenes and beats of this one (usually in a variant: one per Short or teaser): `{scenes, beats, hook, end_card}`; the beats keep their ids and audio; see [cuts and Shorts](#cuts-and-shorts-cut-shorts) |
+| `shorts` | none | the video is a vertical Short: `true` or `{max_seconds: 60, bottom: 0.2, right: 0.15, top: 0, left: 0}`: captions, lower thirds and the hook keep out of the parts the phone app covers, lint checks them (`shorts_safe_area`) and the length (`shorts_length`); see [cuts and Shorts](#cuts-and-shorts-cut-shorts) |
 | `character_size` | none (`medium`) | how big the characters are on `stage` scenes: `small` (a wide landscape, for cinema), `medium` (TV / YouTube) or `large` (big characters, for phones and Shorts); on a platform level the tiles and props scale with them; captions, on-screen text and speech bubbles keep their size; a stage's `character_size` or `size` wins; a variant may change it; see [character size](#character-size-character_size) |
 | `scenes` | required | the scenes in order, at least one |
 
@@ -573,7 +575,78 @@ variants:
 ```
 
 Renders of a variant go to `build/<final|preview>_<variant>/`. Audio sharing rules are under
-[narration audio](#narration-audio-elevenlabs).
+[narration audio](#narration-audio-elevenlabs). A variant that shows only some scenes and beats
+(a Short, a teaser) is easier written as a [`cut`](#cuts-and-shorts-cut-shorts) than as a new
+`scenes` list.
+
+### Cuts and Shorts (`cut`, `shorts`)
+
+A **cut** is a shorter video made of chosen scenes and beats of the full one — usually one
+variant per Short or teaser. The cut's beats keep their ids (a beat without an `id` keeps
+`<scene>_b<n>` of the full video), so their narration audio is the full video's: nothing is
+voiced again unless the cut changes a line's text, voice or emotion.
+
+```yaml
+variants:
+  short1:
+    format: {width: 1080, height: 1920}
+    preview: {width: 360, height: 640}
+    shorts: true
+    audio: {target_lufs: -14, bitrate: 256k}
+    music: {source: horizon, volume: -5}
+    overlays: [{type: captions, style: karaoke, speakers: color}]
+    cut:
+      scenes:
+        - workshop                                         # a whole scene
+        - {scene: rescue, beats: [rescue_b2, rescue_b3]}   # some beats, in this order
+        - {scene: rescue, beats: {from: rescue_b5, to: rescue_b6}}   # a run of beats ...
+          # (a scene shown twice needs another id: {scene: rescue, id: rescue_end, ...})
+        - {scene: finale, params: {light: night, characters: [{name: kit, at: door}]}, transition: crossfade}
+      beats:                                               # changes by beat id
+        rescue_b2: {shot: {kind: closeup, of: [kit, pip], clear: true}}
+        rescue_b6: {actions: [{zoom: kite, scale: 3, at: 0.4, hold: true}]}
+      hook: "Can a kite carry a cat?"
+      end_card: "Full video on the channel"
+```
+
+`cut:` keys:
+
+| key | default | |
+|---|---|---|
+| `scenes` | required | the scenes shown, in order: a scene id (the whole scene), or `{scene, beats, ...}`: `beats` a list of beat ids (shown in that order) or `{from, to}` (both included; either may be left out); any other key changes the scene in this cut: `params` merge into the scene's params (mappings key by key; `characters`, `props` and `layers` entries by name, as a [set's](#shared-casts-and-sets-include-and-sets); an empty list clears), anything else (`id`, `set`, `transition`, `music`, `overlays`, `duration`...) is merged (mappings) or replaced. A scene may come twice with another `id`. The first scene's transition is dropped (the scene it came from is not in the cut) unless its entry gives one |
+| `beats` | `{}` | changes to the cut's beats by beat id (`shot`, `actions`, `emotion`, `voice`, `text`...): mappings merge, lists (a beat's `actions`) replace |
+| `hook` | none | a [`hook`](#hook) overlay: its text, or its options (`{text, seconds, position, size, ...}`) |
+| `end_card` | none | a card at the end: its line, with the video's `title` above it; or `{text, title, seconds: 3, type: end_card \| card, id: cut_end, params, transition}` (`card`: a [cartoon title card](#card) with the title as its text and the line as its subtitle; `params` are more of the scene's params) |
+
+What a cut leaves out is gone with its actions: a stage scene starts as its params say, so put the
+characters where the kept beats need them (`params: {characters: [{name: kit, at: door}]}`), and
+give the actions that need it again (a left-out beat's `alarm: start`). An `until` naming a beat
+the cut leaves out, a first beat with `overlap` / `interrupt`, a music cue `from` / `to` a
+left-out scene are reported by `vidgen validate` with the variant's name: change them in
+`cut.beats` or give the variant its own `music`. `vidgen validate` checks every cut; a scene or
+beat id the video does not have is reported at `cut...`. Named voices a cut leaves unused are not
+reported. Other problems of a cut's scenes are reported at their place in the cut (`scenes[0]`
+is the cut's first scene).
+
+**Shorts.** `shorts: true` (or `{max_seconds: 60, bottom: 0.2, right: 0.15, top: 0, left: 0}`:
+shares of the frame) says the video is a vertical Short. The phone app puts its title, channel
+and description over the bottom of the frame and its buttons down the right side:
+
+- [captions](#captions), [lower thirds](#lower_third) and the [hook](#hook) keep out of those
+  parts (captions sit just above the bottom part, no extra `lift`; a `lift` still raises them);
+- the scenes' safe area leaves them out too, so built-in scenes lay their text out of them, and a
+  [`card`](#card)'s words keep to the clear part (its colour and burst still fill the frame);
+- `vidgen lint` checks the beat-end stills with `shorts_safe_area` (text or a face in those parts,
+  an overlay over a face) and the length with `shorts_length` (an error over `max_seconds`);
+- `vidgen validate` warns when the format is not vertical or the planned length is over
+  `max_seconds`.
+
+Re-stage for 9:16 in `cut.beats`: a wide view of a room, or a two-shot of characters far apart,
+is small in a tall frame. Give the kept beats closer framings — a `closeup` / `medium` of one to
+three characters, a `zoom` on the characters and props that matter (`hold: true` keeps it to the
+end of the scene, so a scene can end on a close view) — and look at `vidgen storyboard --variant
+short1 --per-beat 2`. Shorts are usually mixed louder than long videos (`audio: {target_lufs:
+-14, bitrate: 256k}`: at that loudness the AAC encode at 192k can push the peaks over 0 dBTP). Render long variants in steps with `vidgen render --variant short1 --max-scenes N`.
 
 ## Shared casts and sets (`include:` and `sets:`)
 
@@ -3784,6 +3857,7 @@ audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
 | `normalize` | `auto` | scale the final mix to `target_lufs`: `true`, `false`, or `auto` = only when the video has music (a narration-only video keeps the narration's own level, that of its MP3s). Never while no beat has its narration MP3 yet (a preview timed from word counts would lift the music to the target on its own) |
 | `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
 | `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
+| `bitrate` | `192k` | AAC bitrate of the video's audio: `128k`, `160k`, `192k`, `256k`, `320k`. A loud, dense mix (a Short at −14 LUFS) can come out of FFmpeg's AAC encoder at 192k several dB over `true_peak` (measured: −1.9 dBTP in the mix, +1.9 in the MP4); at 256k it stayed at −1.6. Check the MP4 (`ffmpeg -i out.mp4 -af ebur128=peak=true -f null -`) |
 
 When the mix is written (music, or `normalize: true`) vidgen measures the sum, applies one gain to
 reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
@@ -3794,7 +3868,8 @@ before (FFmpeg sums them), and the loudness is only measured. `vidgen render` pr
 calm)`), and `timings.json` / `render --json` carry `mix`: `{mixed, normalized, target_lufs,
 true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` (measured on the
 mix before the AAC encode; the limiter aims 0.4 dB under `true_peak` because the encode can
-raise the peak by ~0.2 dB, so the MP4 stays under it).
+raise the peak by ~0.2 dB, so the MP4 stays under it — a dense mix can be raised more, see
+`bitrate`).
 
 ### `vidgen list-music`
 
@@ -12974,7 +13049,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
-| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets); on a [`plot`](#plot): `x`, `y` (`[from, to]` in data units) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. With `x` / `y` on a `plot` (targets `axes`, `panel<N>` or a series' panel) the camera stays: the plot's axes ease to that region of the data and back (x zooms every panel sharing it, residual panels too); its annotations step aside meanwhile. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets), `hold` (`false`); on a [`plot`](#plot): `x`, `y` (`[from, to]` in data units) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). `hold: true` stays zoomed in after the beat, until a later `zoom`, `pan`, `follow` or shot moves the camera (a scene ending on a close view, a Short's last shot; a later beat's shot returns to the held view); its `until` then changes nothing. Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. With `x` / `y` on a `plot` (targets `axes`, `panel<N>` or a series' panel) the camera stays: the plot's axes ease to that region of the data and back (x zooms every panel sharing it, residual panels too); its annotations step aside meanwhile. |
 | `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in; on an iso place `to` is a spot, the camera moves up and down too, and from the wide view it moves in (at least twice as close as the whole place). Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
@@ -13169,7 +13244,7 @@ Keys every overlay entry has (any other key is an option of its type):
 
 | key | default | |
 |---|---|---|
-| `type` | required | `lower_third`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
+| `type` | required | `lower_third`, `hook`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
 | `id` | the type | the name a scene's `overlays:` refers to; when several entries share a type and have no `id`, they are `<type>1`, `<type>2`, ... (ids must be unique) |
 | `scenes` | `all` | the scenes it is drawn on: `all` or a list of scene ids |
 | `exclude` | `[]` | scenes it is not drawn on |
@@ -13216,7 +13291,8 @@ A name and a title on a plate in the lower third of the frame, sliding in at a m
 and out after `duration` seconds. It belongs to a scene (`scene`, default the first scene the
 entry is drawn on) and starts `at` seconds into it or at one of its beats; it goes by the end of
 that scene unless `across_cuts`. It is placed in the safe area (in 9:16 raised by 12 % of the
-safe height: phone apps put their controls over the bottom), at least at the readable text size,
+safe height: phone apps put their controls over the bottom; in a [Short](#cuts-and-shorts-cut-shorts)
+out of the parts the app covers), at least at the readable text size,
 and slides in from the side it is aligned to (from below / above when centred). It makes way for
 the scene's other overlays that reserve room: where it would meet bottom `captions` (or another
 overlay with `reserve: true`) it moves above them (with the 0.2 gap), in 16:9 and 9:16 alike.
@@ -13237,6 +13313,31 @@ overlay with `reserve: true`) it moves above them (with the 0.2 gap), in 16:9 an
 | `name_color`, `title_color` | `text`, `dim` | |
 | `name_size`, `title_size` | `body`, `caption` | |
 | `enter`, `exit` | `0.5`, `0.4` | seconds of the slide in and out |
+
+### `hook`
+
+A big caption over the first seconds of a video — a Short's hook, the question or promise that
+keeps a viewer from swiping on: bold text on a plate near the top of the safe area (in a
+[Short](#cuts-and-shorts-cut-shorts), below the top part the app covers and left of its buttons),
+popping in at `at` and fading out `seconds` later, over the captions. A [cut](#cuts-and-shorts-cut-shorts)'s
+`hook:` adds one (id `hook`).
+
+| param | default | |
+|---|---|---|
+| `text` | required | the hook's words: a few, read in a second |
+| `at` | `0` | when it pops in: seconds into the video |
+| `seconds` | `3` | how long it shows, its pop in and fade out included |
+| `position` | `top` | `top` or `center` of the safe area |
+| `size` | 1.25 × `title` | text size (wraps onto more lines rather than shrinking) |
+| `color` | auto | text colour; default the theme's text or background colour, whichever reads on the plate |
+| `background`, `background_opacity` | `primary`, `0.92` | the plate; `background: null` for none (the text gets an outline in the background colour) |
+| `max_width` | `0.92` | widest it may be, share of the safe width |
+| `enter`, `exit` | `0.25`, `0.4` | seconds of its pop in and fade out |
+
+```yaml
+overlays:
+  - {type: hook, text: "What if the kite could fly itself?", seconds: 2.5}
+```
 
 ### `watermark`
 
@@ -13335,7 +13436,8 @@ without audio) is shared among the words by syllables (numbers by their spoken w
 by letters), with pauses after sentence ends and commas. The SRT uses the same word times.
 
 **Placement.** In the safe area at the `bottom` (in 9:16 raised by 12 % of the safe height:
-phone apps put their controls over the bottom), `top` or `center`, centred, at least the
+phone apps put their controls over the bottom; in a [Short](#cuts-and-shorts-cut-shorts) just
+above the part the app covers and left of its buttons, no lift), `top` or `center`, centred, at least the
 readable text size, the text no wider than `max_width`. At the top or bottom it **reserves** its
 band (`max_lines` lines high) by default, so the scenes lay out above / below it; centred it
 does not (lint's `overlay_overlap` reports scene text under it; or set `reserve: false` and
@@ -13358,7 +13460,7 @@ a warning).
 | `highlight` | `highlight` | karaoke: the word being spoken |
 | `pop` | `1.12` | karaoke: scale of the word being spoken (`1`: none); limited so it never touches its neighbours |
 | `background`, `background_opacity` | `surface`, `0.8` | the plate; `background: null` for none (the text then gets an outline in the background colour) |
-| `lift` | `0`; 9:16 `0.12` | bottom captions: raised by this share of the safe height |
+| `lift` | `0`; 9:16 `0.12`; a Short `0` | bottom captions: raised by this share of the safe height (of a Short: of the part the app leaves clear) |
 | `speakers` | `subtitles.speakers` | who speaks ([multiple voices](#multiple-voices-voices)): `name` (a `Label:` tag in the speaker's colour before a beat whose speaker changed), `color` (each speaker's words in its colour), `both`, or `off` |
 | `genes` | `true` | gene symbols in italics (protein names stay roman): the symbols the video's cell-biology scenes declare as genes — a `cell` or `molecule` scene's `gene.name`, a molecule's `gene`, a `pathway`'s gene nodes — wherever the narration writes them, except where the next word makes it the protein ("SERPINA1 protein", "EGFR kinase"); `false`: as written |
 
@@ -13749,6 +13851,8 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `significance_claim` | warning | the p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists", "the chance it is a fluke"): it is the chance that background alone fluctuates this high; a "one in N" or a percentage that does not match the σ said (one- or two-sided); in a [`mass_spectrum`](#mass_spectrum) scene a σ said for the bump that it does not compute (its expected Asimov significance with all events and its likelihood-ratio fit; "so far", "already" accept anything along the filling; the 5σ convention itself is not compared); `sigmas` (0.5) |
 | `simulated_label` | warning | simulated data called real ("real collision data", "data from the LHC", "CMS data") in a `mass_spectrum`, `detector` or simulated `plot` scene, or such a picture whose screen does not say "simulated" (a `detector` `label` without it; a `plot` of the `mass_spectrum` or `decay_times` model without "simulated" in a series name, the title or the caption) |
 | `particle_units` | info | masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video: write them one way |
+| `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_face` of a face. Beat-end stills only, faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
+| `shorts_length` | error | a Short planned longer than `shorts.max_seconds` (60): reported on the video's last scene. Fix: fewer beats or scenes in the `cut`, a shorter end card |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -13835,6 +13939,8 @@ lint:
     significance_claim: {sigmas: 0.5}       # how far a σ said for a spectrum may be from what it computes
     simulated_label: {}
     particle_units: {}                      # default severity info
+    shorts_safe_area: {tolerance: 0.01, min_face: 0.25}   # in a Short only; share of a face's box
+    shorts_length: {}                       # default severity error; in a Short only
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any

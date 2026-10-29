@@ -256,7 +256,17 @@ class LayoutRecorder:
         safe = scene.safe_area
         x0, x1 = (safe.x0 + config.frame_width / 2) * sx, (safe.x1 + config.frame_width / 2) * sx
         y0, y1 = (config.frame_height / 2 - safe.y1) * sy, (config.frame_height / 2 - safe.y0) * sy
+        shorts: dict[str, Any] = {}
+        project = getattr(scene, "project", None)
+        if project is not None and project.config.shorts_zones is not None:   # a Short (DESIGN.md §101)
+            from vidgen.overlays import shorts_area
+            from vidgen.regions import frame_region
+
+            clear = shorts_area(project, frame_region())
+            shorts = {"shorts": [_r((clear.x0 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - clear.y1) * sy),
+                                 _r((clear.x1 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - clear.y0) * sy)]}
         return {
+            **shorts,
             "version": LAYOUT_VERSION,
             "scene": scene.spec.id,
             "type": scene.spec.type,

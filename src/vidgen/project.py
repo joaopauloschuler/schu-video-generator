@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, draft_format, parse_config
+from vidgen.cuts import apply_cut
 from vidgen.emotions import Prosody, named_cues, prosody
 from vidgen.errors import Problem, VidgenError
 from vidgen.includes import (
@@ -256,7 +257,7 @@ class Project:
         included = read_project_config(config_file, Path(confine) if confine else None)
         data = included.data
         _confine(data, root, source)
-        base_data, base_origins = expand_character_size(*expand_sets(data, included.origins))
+        base_data, base_origins = expand_character_size(*expand_sets(*apply_cut(data, included.origins)))
         base, base_source, base_report = _translated(base_data, root, source, base_origins)
         if variant is None:
             return cls(root, config_file, base, None, base, base_source, base_report, included, base_origins)
@@ -264,9 +265,10 @@ class Project:
             known = ", ".join(sorted(base.variants)) or "(none defined)"
             raise VidgenError(f"{source}: unknown variant '{variant}'; available variants: {known}")
         override = base.variants[variant]
-        data, origins = expand_character_size(*expand_sets(deep_merge(data, override), after_variant(included.origins, data, override)))
         where = f"{source} (variant '{variant}')"
         try:
+            cut = apply_cut(deep_merge(data, override), after_variant(included.origins, data, override))
+            data, origins = expand_character_size(*expand_sets(*cut))
             config, merged, report = _translated(data, root, where, origins)
         except VidgenError as exc:
             raise VidgenError(str(exc), problems=[p.in_variant(variant) for p in exc.problems]) from None

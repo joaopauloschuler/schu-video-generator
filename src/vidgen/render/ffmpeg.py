@@ -266,9 +266,10 @@ def join(
     overlays: list[tuple[Path, int]] | None = None,
     metadata: Path | None = None,
     language: str | None = None,
+    audio_bitrate: str = AUDIO_BITRATE,
 ) -> None:
-    """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC)
-    into ``dst`` with the concat demuxer. ``language``: an ISO 639-2 code (``por``) written as
+    """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC
+    at ``audio_bitrate``) into ``dst`` with the concat demuxer. ``language``: an ISO 639-2 code (``por``) written as
     the audio stream's ``language`` tag (DESIGN.md §54).
 
     ``sfx``: a WAV as long as the whole video (the sound effects track, DESIGN.md §47), added
@@ -345,7 +346,7 @@ def join(
             *inputs,
             *filters,
             "-map", video_map, "-map", audio_map,
-            *video_codec, "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
+            *video_codec, "-c:a", "aac", "-b:a", audio_bitrate, "-ar", str(AUDIO_RATE),
             *tagging,
             "-movflags", "+faststart",
         ],

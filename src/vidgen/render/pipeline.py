@@ -461,6 +461,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         overlays=parts.clips or None,
         metadata=parts.metadata,
         language=audio_language(project),
+        audio_bitrate=project.config.audio.bitrate,
     )
     return output, parts.timings
 

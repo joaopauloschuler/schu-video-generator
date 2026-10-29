@@ -325,6 +325,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   few big words at a time with the spoken one highlighted, for vertical / social videos. Word
   times are estimated from the audio, or exact with `voice: {timestamps: true}` (ElevenLabs
   character timings) ([reference](docs/CONFIG.md#captions)).
+- **Shorts cut from a longer video**: a variant's `cut:` keeps chosen scenes and beats (their
+  audio reused), re-stages them for 9:16 by beat id, adds a hook caption over the first seconds
+  and an end card; `shorts: true` keeps captions and the hook out of the phone app's buttons and
+  lints the Shorts safe area and the 60 s limit
+  ([reference](docs/CONFIG.md#cuts-and-shorts-cut-shorts)).
 - **Pronunciation dictionary**: `pronunciation: {K-Phi-3: kay fye three}` (plain, case-insensitive
   or regex entries, or a separate file) changes only what the voice is sent; subtitles and
   captions keep the written words, timed by the spoken ones. Only beats whose spoken text changes

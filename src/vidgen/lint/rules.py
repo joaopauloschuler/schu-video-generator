@@ -136,7 +136,8 @@ class SceneContext:
     whose cue starts in this scene (:func:`vidgen.lint.music_rule.music_issues`; filled when
     ``music_check`` runs), ``science`` the scene's scientific-accuracy findings
     (:class:`vidgen.lint.science_rule.ScienceIssue`; filled when a ``science_*``, ``genetics_*``,
-    ``calc_*`` or ``plot_*`` rule runs).
+    ``calc_*`` or ``plot_*`` rule runs), ``video_seconds`` / ``shorts_max`` the planned length of a
+    Short and its ``max_seconds`` (set on the video's last scene when ``shorts_length`` runs).
     """
 
     scene_id: str
@@ -151,6 +152,8 @@ class SceneContext:
     narration: Any = None
     music_issues: list[tuple[str, str | None]] = field(default_factory=list)
     science: list[Any] = field(default_factory=list)
+    video_seconds: float | None = None
+    shorts_max: float | None = None
 
     def spoken_text(self, beat: dict[str, Any]) -> str:
         """What the narrator says for an activity-file beat."""

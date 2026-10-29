@@ -309,8 +309,13 @@ class Captions(Overlay):
 
     def _area(self) -> Region:
         o = self.options
-        safe = safe_area()
-        lift = o.lift if o.lift is not None else (PORTRAIT_LIFT if orientation() == "portrait" else 0.0)
+        project = self.context.project
+        if project.config.shorts_zones is not None:   # a Short: out of the app's buttons (§101)
+            safe = shorts_area(project)
+            lift = o.lift or 0.0
+        else:
+            safe = safe_area()
+            lift = o.lift if o.lift is not None else (PORTRAIT_LIFT if orientation() == "portrait" else 0.0)
         if o.position == "bottom" and lift:
             return Region(safe.x0, safe.y0 + lift * safe.height, safe.x1, safe.y1)
         return safe
