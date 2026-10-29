@@ -99,10 +99,12 @@ from vidgen.hud import (  # noqa: E402
     HeartMonitor,
     ScanMeter,
     alert_on,
+    face_cover,
     heart_beats,
     heart_rate,
     heart_trace,
     lines_shown,
+    pick_place,
     scan_level,
     scan_wave,
 )
@@ -337,9 +339,23 @@ from vidgen.cartoon.hologram import HOLOGRAM_COLOR, apply_hologram, is_hologram,
 from vidgen.cartoon.echo import ECHO_COLOR, apply_echo, is_echo  # noqa: E402
 from vidgen.cartoon.alarm import ALARM_COLOR, ALARM_PERIOD, SHUTTER_CLOSE_SECONDS, AlarmSpan, alarm_grade, alarm_spans, shutter_level  # noqa: E402
 from vidgen.cartoon.apparition import MATERIALISE_SECONDS, flicker_level, iridescent_rgb, materialise_levels  # noqa: E402
-from vidgen.cartoon.figure_fx import Afterimages, FigureAlpha, HandHold, Iridescence, Materialise, figure_alpha  # noqa: E402
+from vidgen.cartoon.figure_fx import (  # noqa: E402
+    KISS_COLOR,
+    Afterimages,
+    FigureAlpha,
+    HandHold,
+    Iridescence,
+    KissBurst,
+    KissMotion,
+    KissPlan,
+    Materialise,
+    PendantPulse,
+    figure_alpha,
+)
+from vidgen.cartoon.clothes import PENDANT_GLOW  # noqa: E402
+from vidgen.cartoon.kiss import KISS_SECONDS, contact_time  # noqa: E402
 from vidgen.cartoon.holo_display import DISPLAY_PATTERNS, display_frame  # noqa: E402
-from vidgen.cartoon.iso_overlays import IsoBlinkers, IsoScreens, IsoShutters, IsoTraffic, PodLane  # noqa: E402
+from vidgen.cartoon.iso_overlays import HazeSpot, IsoBlinkers, IsoHaze, IsoScreens, IsoShutters, IsoTraffic, PodLane  # noqa: E402
 from vidgen.cartoon.iso_city import POD_LENGTH, TOWER_ANTENNA_LIGHT, box_outline, garden_bands, lane_pods, pod_hidden, screen_color, screen_lines, screen_seed  # noqa: E402
 from vidgen.cartoon.portal import PORTAL_VIEWS, portal_view  # noqa: E402
 from vidgen.cartoon.vignette import FLASHBACK_SATURATION, FLASHBACK_STRENGTH, FLASHBACK_TINT, VIGNETTE_COLOR, VIGNETTE_OPACITY, CameraVignette, flashback_grade  # noqa: E402
@@ -746,10 +762,12 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "HeartMonitor",
     "ScanMeter",
     "alert_on",
+    "face_cover",
     "heart_beats",
     "heart_rate",
     "heart_trace",
     "lines_shown",
+    "pick_place",
     "scan_level",
     "scan_wave",
     "shorts_area",
@@ -1145,6 +1163,14 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "Afterimages",
     "FigureAlpha",
     "HandHold",
+    "KISS_COLOR",
+    "KISS_SECONDS",
+    "KissBurst",
+    "KissMotion",
+    "KissPlan",
+    "PENDANT_GLOW",
+    "PendantPulse",
+    "contact_time",
     "Iridescence",
     "Materialise",
     "figure_alpha",
@@ -1154,6 +1180,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "IsoShutters",
     "IsoScreens",
     "IsoTraffic",
+    "IsoHaze",
+    "HazeSpot",
     "PodLane",
     "POD_LENGTH",
     "TOWER_ANTENNA_LIGHT",

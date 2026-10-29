@@ -157,11 +157,13 @@ src/vidgen/
                           # alarm.py, apparition.py, holo_display.py, vignette.py (alarms, shutters,
                           # materialise, flicker, iridescence, a display's patterns, a flashback's
                           # grade, §100.7-§100.12; no manim but CameraVignette), figure_fx.py
-                          # (FigureAlpha, Materialise, Iridescence, Afterimages, HandHold, §100.9-10),
+                          # (FigureAlpha, Materialise, Iridescence, Afterimages, HandHold, §100.9-10;
+                          # PendantPulse, KissPlan, KissMotion, KissBurst, §102.14-§102.15),
                           # iso_overlays.py (IsoShutters, IsoBlinkers, §100.7, §100.11; IsoScreens,
-                          # IsoTraffic, §102.2-§102.3), iso_city.py (towers' parts, screens' lines,
+                          # IsoTraffic, §102.2-§102.3; IsoHaze, §102.12), iso_city.py (towers' parts, screens' lines,
                           # pods on lanes and what hides them, §102.2-§102.3; no manim), echo.py
-                          # (echo characters, §102.6),
+                          # (echo characters, §102.6), haze.py (a haze's ribbons and sparkles,
+                          # §102.12; no manim), kiss.py (a kiss's lean, step and burst, §102.15; no manim),
                           # nature.py (fruit spots, a dropped fruit's fall and bounce, flocks of
                           # birds, §69.55; no manim), nature_drawing.py (Flock, FallenFruit,
                           # FruitDrop, hit_stars, §69.55), small_props.py (balloons floating away,
@@ -19696,7 +19698,9 @@ content.
 - **252**: the rest of the gaps: a `kiss` action; hologram display patterns `equations` and
   `timelines`; a handheld `scanner` small prop; small props `takeout` and `crystal`; a `medal`
   accessory; a glowing, pulsing pendant; a `haze` over a spot; a sliding room door; a closer look
-  at a pod's rider if needed. A private test cut of key shots.
+  at a pod's rider if needed. A private test cut of key shots. Done (§102.8-§102.16), with the
+  review of 251's stills: the HUD keeps its texts off faces and is drawn in pieces, iso rain
+  splashes in plain rings.
 - **253**: the story video (private): build, previews, stills of every shot, final 16:9 1080p
   and a delivery copy under 28 MB.
 - **254**: Shorts (9:16) cut from it and a critical review of the film and the features.
@@ -19830,3 +19834,143 @@ character.
   (`LIT_OBJECTS`), `test_iso_staging` (the `on` message), `test_overlays` (the overlay types).
 - No gallery entry: the gallery is 16.1 of 16.5 MB and a rainy neon city's GIFs (every pixel
   of rain changing) would not fit.
+
+### 102.8 A HUD that keeps off faces, drawn in pieces (Step 252)
+
+- **Faces**: `Overlay.avoids_faces` (class flag; `Hud` sets it) makes `OverlayLayer` give the
+  overlay `faces`, a callable returning the boxes `(left, bottom, right, top)` of the heads of
+  the scene's `cast` on screen at the frame being drawn (`OverlayLayer.face_boxes`: each figure
+  in `scene.mobjects`, not `hidden_by_shot`, `shown` ≥ 0.3, its `head` part's points through the
+  scene camera's centre and zoom into the overlays' whole-frame units). Decided over planning
+  faces per beat (the stage's predicted stills, `directing._still`, know no iso place) and over
+  reading the layout dump (it exists only for stills): the head points are a few arrays per
+  character and frame, read when the layer asks for the overlay's state.
+- **Places** (`vidgen/hud.py`, no manim): `face_cover(box, faces)` (the sum of each face's share
+  under the box, faces grown by `FACE_GROW` 0.12), `pick_place(places, faces, current, avoid)`
+  (the least covering place, the first of equals; a place overlapping `avoid` only when all do;
+  `current` kept while it covers ≤ `FACE_COVER` 0.02 or is within `FACE_SWITCH` 0.05 of the
+  best: no hopping). `Hud.build` makes the alert and the lines at the origin and their places:
+  the alert at the top centre, top right, top left, bottom centre above the meters; the lines'
+  block at the top left, top right (flush right), above the left or the right meter, each under
+  (or over) the alert's place when they would meet it. `Hud.state` picks the alert's place,
+  then the lines' (avoiding the alert's); `avoid_faces: false` keeps the first places (251's
+  look). `compact`: texts and panels × `COMPACT` 0.72, the safe margin halved.
+- **Pieces**: `Overlay.pieces` (class int, 0: one piece) — `state(t)` returns one state per
+  piece (`None`: hidden) and `pose_piece(mobject, k, state)` draws each; `OverlayLayer._patches`
+  caches each piece's patch by `(k, (piece, state))`, `composite` / `rgba` blend them in order,
+  `posed` (stills, the layout dump) groups them (`Overlay.posed_whole`). The HUD's four: the still
+  frame and plates (`(level,)`: drawn once when settled), the texts (places, alert lit, line
+  fades, level), the heart monitor and the scan meter (the frame since it came on: each frame,
+  small patches). Its boot flicker is the level in every piece's state. Measured on 251's lab
+  scene (5.9 s at 854 × 480): 24.7 s with the HUD (30.3 s in 251), 19.6 s without.
+- **Lint `overlay_face`** (`lint/shorts_rule.py`, after `shorts_safe_area`, still and mid-beat,
+  default warning, `OverlayFaceRule.min_cover` 0.15): the layout dump's still `overlays` entry
+  gets `faces: true` for an overlay that `avoids_faces`; its text objects (with letters) and
+  plates (`shape` objects with fill ≥ 0.3: not the frame's group) covering ≥ `min_cover` of a
+  character's `face` box are reported; not in a Short (`shorts_safe_area` reports any overlay
+  over a face there).
+
+### 102.9 Plain splashes on an iso place (Step 252)
+
+A splash is a flat ring and two droplets thrown up (§69.39); seen from above in a close-up two
+dots over a line read as a tiny face. On an `IsoRainGround` `ParticleField._draw_splashes` keeps
+the ring only (`splash_shapes(...)[:, :1]`); flat stages are unchanged (Phase Q baseline).
+
+### 102.10 Display patterns `equations` and `timelines` (Step 252)
+
+`DisplayFrame` gains `glyphs` (open strokes), `wings` (closed outlines), `boxes`, `dots` (x, y,
+r); the display's drawing keeps `GLYPHS` 48, `WINGS` 12, `BOXES` 8, `DOTS` 16 more members
+(`holo_box`, `holo_wing`, `holo_glyph`, `holo_dot` in `DISPLAY_PARTS`, before the edge; empty for
+the other patterns). `equations`: the `FORMULAS` (3 rows of symbols from `GLYPH_STROKES`: sum,
+integral, equals, x, psi, pi, root, plus) written one symbol after another over
+`WRITE_SECONDS` 2.4; `BUTTERFLIES` 6 formula butterflies (a symbol between two wings beating at
+`WING_BEATS` 1.6 Hz) each rising from a seeded point of the panel over `BUTTERFLY_SECONDS` 5.5,
+drifting outwards and swaying, growing in and shrinking away, kept in `FLOAT_BOX` (inside the
+display's glow, so its redraw region holds them). `timelines`: a binary tree of
+`TIMELINE_LEVELS` 3 from the panel's foot, growing level by level over `TIMELINE_GROW` 1.6 s,
+then a small panel at each of its 8 tips with two dots coming together and pulsing, each panel
+at its own phase of `MEETING_SECONDS` 3.2.
+
+### 102.11 Sliding doors (Step 252)
+
+`IsoColors.doors` (`swing` | `slide`, from `StageIso.doors`): `_wall_door(..., style)` draws a
+slide door (`_slide_door`): a steel frame, a light strip over it and a keypad light (glowing
+polys), closed two panels and a glowing seam, open a dark doorway with the panels' edges at its
+sides. Opening is the place change of §89.10 (the new picture fades in over the action's
+`run_time`). Foley: `place_change_cues(..., sliding=True)` gives a `swoosh` hiss (`DOOR_HISS`)
+and on closing a soft `thud` (`DOOR_SLIDE_SHUT`). The sliding motion itself is the crossfade —
+decided over a story thing animating the panels (the door is part of its wall's picture, ordered
+with everything).
+
+### 102.12 A haze over a spot (Step 252)
+
+`StageIso.haze: [IsoHazeParam {at, width 1.2, height 2.6, color #BFE8FF, strength 0.6, from}]`
+(checked like a traffic lane's ends; `haze_foot` is its cell's middle on the floor).
+`cartoon/haze.py` (no manim): `haze_ribbons(now, seed)` — `HAZE_RIBBONS` 7 outlines in haze
+units (u across −0.5..0.5, v up 0..1) swaying on a climbing ripple (more higher up), tapering at
+both ends, each with a breathing opacity share; `haze_sparks` (8 rising sparkles);
+`haze_level(now, start)` (a fade in over `HAZE_FADE` 0.8 s). `IsoHaze` (`iso_overlays.py`), a
+story thing over the place's pictures (behind the characters), unlit: per haze a floor glow,
+the ribbons and the sparkles mapped from its foot to its top on screen.
+
+### 102.13 Small props `scanner`, `takeout`, `crystal` (Step 252)
+
+In `SMALL_PROPS` (so iso places take them). `scanner` and `crystal` are `SWITCHED_PROPS` with
+`GLOWS`. A scanner's living overlays are its lit screen, a bar and a wave (tagged `screen`, the
+last two with `SCAN_ROLE`); `LivingProp(scan=ScanMeter)` (the HUD's model, `at` in scene
+seconds; `StageProp.scan: ScannerReading {level, to, at, wave}`) draws them on every frame
+(`_read`): the bar filled to the reading, the wave scaled by it, both in `SCANNER_WARNING`
+blinking and the wave jittering while above 1; the glow brightens with the reading. A crystal's
+lit core is a `lantern` overlay; its glow pulses (`crystal_pulse`). Grips: a scanner by its
+handle.
+
+### 102.14 Accessories `medal` and `pendant` (Step 252)
+
+`Accessory` adds both; `NECK_ACCESSORIES` (necklace, medal, pendant): one at a time. Drawn on
+the body (`clothes._medal`, `_pendant`; a plain outfit with one is no longer the pre-113 plain
+drawing). The medal: a V ribbon in the accessory colour, a gold disc (`MEDAL_RADIUS` 0.048) with
+a star, trailing a little in the wind. The pendant: a dark cord, a stone (`PENDANT_RADIUS`
+0.032) hanging `PENDANT_DROP` below the neck (clear of long hair), a white core and a halo
+marked `PENDANT_GLOW` (`core` / `halo`). The stage unmarks those members lit and
+(not in a draft) adds a `PendantPulse` (figure_fx: the halo's opacity follows `pendant_level`, a
+quick rise and slow fade every `PENDANT_SECONDS` 1.6, the stone a little; times the figure's
+`FigureAlpha` level).
+
+### 102.15 The `kiss` action (Step 252)
+
+`- {kiss: a, with: b, hearts, color}` (`story_actions.KissAction`, stage only, one target,
+generated characters; default `run_time` `KISS_SECONDS` 3). `StoryStaging.kiss` returns a
+`KissMotion` per character sharing one `KissPlan` and a `KissBurst`, plus a soft `chime` at the
+contact (foley). `KissPlan` (figure_fx): on its first frame both face each other, it records
+their poses, the lean (`lean_angles`: `KISS_LEAN` 11°, the one whose head is higher up to 8°
+more), poses both at full lean to measure the step across (`step_in`: half of what closes the
+heads' gap to an overlap of `KISS_TOUCH` 0.03 of a head's width) and the rise (half the heads'
+height difference, at most `KISS_RISE` 0.6 head heights each: on an iso place two neighbours on
+a map row stand on a slant). Each frame (once per time, from either animation) `kiss_share` (in
+over `KISS_IN` 0.7 s, held, back over `KISS_OUT` 0.6 s) sets the body's angle (forward), the
+legs' turned back (the feet stay down), the eyes `closed` from `EYES_CLOSE` 0.6, and the offset
+— kept apart from where the stage puts the figure (moved since the last frame: that is its own
+place), as `HandHold` does. The animations run on the kiss's own clock (`alpha × seconds`):
+the scene may play them in another run time. `figure.kissing` names the other while it lasts
+(the layout dump's `kissing`; `character_overlap` lets them stand close). `KissBurst`: hearts
+and sparkles (`kiss.burst`) rising from where the faces meet from `contact_time`, added over
+the scene (top z) and removed at the end, unlit.
+
+### 102.16 Lint `look_alike` and echoes; public surface and compatibility (Step 252)
+
+- `character_pairs` leaves out pairs with an `echo` (another self is alike on purpose).
+- `vidgen.api` adds `face_cover`, `pick_place`; `HazeSpot`, `IsoHaze`; `KISS_COLOR`,
+  `KISS_SECONDS`, `KissBurst`, `KissMotion`, `KissPlan`, `PENDANT_GLOW`, `PendantPulse`,
+  `contact_time`. `Overlay.avoids_faces`, `Overlay.pieces`, `Overlay.faces`,
+  `Overlay.pose_piece`, `Overlay.posed_whole`; config: overlay `hud` `avoid_faces`, `compact`;
+  lint `overlay_face`; display patterns `equations`, `timelines`; props `scanner` (`scan`),
+  `takeout`, `crystal`; accessories `medal`, `pendant`; `iso.doors`, `iso.haze`; action `kiss`.
+- Additive and opt-in. Shared code touched: the overlay layer (one patch per overlay as before
+  unless it has pieces; faces only for overlays that ask), `ParticleField` splashes (iso grounds
+  only), `DISPLAY_PARTS` (empty members for the old patterns), `SWITCHED_PROPS` (messages list
+  the new props), the necklace check of plain bodies. Phase Q baseline 31/31 identical. Tests
+  whose expectations grew: `test_particle_lint` (rule order), `test_story_fx` (panel patterns),
+  `test_cartoon_props` (74 props), `test_cartoon_living`, `test_cartoon_small_props`,
+  `test_cartoon_fire_nature` (the switched-props message).
+- Left: a closer look at a pod's rider (a `zoom` on the lane's end spot, `size: 1.4`, reads in
+  the test renders; no rider character inside a pod).

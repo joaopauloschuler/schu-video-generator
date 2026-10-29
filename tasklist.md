@@ -1542,8 +1542,10 @@ frames when shared code changes. DESIGN §102. Steps 251–254.
 - [x] Tests `tests/test_city_hud_echo.py`; CONFIG, guide (`AGENTS.md`), CHANGELOG; Phase Q baseline 31/31; no gallery entry (16.1 of 16.5 MB: a rainy city's GIFs would not fit)
 
 ### Step 252 — Remaining features and a test cut
-- [ ] A `kiss` action (two lean in, faces meet, eyes closed, a heart); display patterns `equations` (formulas drifting like butterflies) and `timelines` (a grid of small panels, two figures meeting in each); a handheld `scanner` small prop (a pulsing screen that spikes); small props `takeout` and `crystal`; a `medal` accessory; a glowing, pulsing pendant (`necklace` glow); a `haze` over a spot (a rippling shimmer); a sliding room door; a closer look at a pod's rider if the city shots need it
-- [ ] Tests, CONFIG, guide, CHANGELOG; Phase Q baseline; a private test cut of key shots, stills checked
+- [x] The review of 251's stills: the `hud` keeps its alert and lines off faces (free corners, `avoid_faces`, `compact`), is drawn in pieces (about half 251's extra render time), lint `overlay_face`; rain on an iso place splashes in plain rings (DESIGN §102.8-§102.9)
+- [x] A `kiss` action (turn, lean in, faces touch, eyes closed, a burst of hearts and sparkles; 16:9 and 9:16); display patterns `equations` (formulas written, formula butterflies) and `timelines` (a branching tree, two figures meeting in a panel at each tip); a handheld `scanner` small prop (a live readout spiking off its scale, `scan`); small props `takeout` and `crystal`; a `medal` accessory; a glowing, pulsing `pendant`; a `haze` over a spot; sliding room doors (`doors: slide`, a hiss) (§102.10-§102.15)
+- [~] A closer look at a pod's rider: not needed for now (a `zoom` on the lane's end spot with `size: 1.4` reads); revisit in 253 if the city shots need it
+- [x] Tests `tests/test_kiss_display_props.py`; CONFIG, guide (`AGENTS.md`), README, CHANGELOG; Phase Q baseline 31/31; a private test cut of key shots (16:9 and 9:16), stills checked; lint `look_alike` skips echoes
 
 ### Step 253 — The story video
 - [ ] Build the private project, preview every shot, iterate; final 16:9 1080p and a delivery copy under 28 MB; contact sheet (scratchpad)

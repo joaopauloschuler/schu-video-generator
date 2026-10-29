@@ -200,7 +200,7 @@ def test_a_tv_and_a_lamp_switch_on_and_off() -> None:
 @pytest.mark.parametrize(
     ("prop", "message"),
     [
-        ({"prop": "sofa", "on": True}, "on is for props that switch on (fireplace, kettle, lamp, phone, tv, portal, hologram_display), not sofa"),
+        ({"prop": "sofa", "on": True}, "on is for props that switch on (fireplace, kettle, lamp, phone, tv, portal, hologram_display, scanner, crystal), not sofa"),
         ({"prop": "lamp", "time": "10:00"}, "time and speed are for a clock, not lamp"),
         ({"prop": "clock", "time": "25:00"}, "is not a clock time"),
         ({"prop": "clock", "speed": 0}, "greater than 0"),

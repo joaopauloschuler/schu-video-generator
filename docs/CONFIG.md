@@ -1600,7 +1600,7 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
 | `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
 | `facial_hair` | `none` | `none`, `moustache`, `beard` (with a moustache; the mouth stays seen); colour `colors.hair` |
-| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace` (on the body), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, and only one of `hat`, `cap`, `crown`, `wizard_hat`, `party_hat` |
+| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace`, `medal` (a gold medal on a ribbon in `colors.accessory`), `pendant` (a stone in `colors.accessory` on a dark cord, glowing at night and pulsing like a slow heartbeat) (on the body), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, only one of `hat`, `cap`, `crown`, `wizard_hat`, `party_hat`, and one of `necklace`, `medal`, `pendant` |
 | `proportions` | `adult` | `adult`, `kid` (a big head on a short body and legs), `tall_kid` (lankier, a smaller head than a kid's); the figure is as tall as any other, so make a kid smaller with the stage's `scale` (about 0.7 for a `kid`, 0.85 for a `tall_kid`) |
 | `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
 | `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
@@ -10247,7 +10247,7 @@ never leaves the stage.
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10786,8 +10786,9 @@ they hide what is behind them.
     two cells, fully in the cell next to it): in the dark they are drawn warm and bright, fading
     as they walk away or the lamp goes off; by day it changes nothing.
   - `particles: [rain]` (or the `particles` action) rains over the place: seen from above, the
-    drops land anywhere on its ground in view, with a small splash, but not on the characters
-    (no splash on a face). A scene where it rains from the start and that gives no `light` gets
+    drops land anywhere on its ground in view, with a small splash (a plain ring: no droplets
+    that could read as a tiny face in a close-up), but not on the characters (no splash on a
+    face). A scene where it rains from the start and that gives no `light` gets
     the rainy day's tint by itself, so it does not look like a sunny day with drops; rain that
     starts during a scene (the `particles` action) goes with a `light` action, e.g. `- {action:
     light, tint: "#5D6A84", strength: 0.5, run_time: 3}`. Rain does not fall under what keeps
@@ -10846,6 +10847,30 @@ they hide what is behind them.
       - {from: west, to: east, height: 3.5, count: 3, seconds: 7, color: "#FF2E8B"}
       - {from: west, to: east, height: 2.5, count: 1, seconds: 6, at: 1.0, color: "#F4FF3A", size: 1.4}   # crosses once
   particles: [{kind: rain, glow: true, color: ["#5FFFE0", "#4FA8FF", "#7CFF9E"]}]   # neon rain
+  ```
+- **Sliding doors and shimmering air.** `doors: slide` draws a room's map doors (`+`) as steel
+  doors: a frame with a light strip over it, a keypad's light beside it, two panels meeting at a
+  glowing seam; `open` slides them apart into the wall (a dark doorway, the panels' edges at its
+  sides) with a hiss instead of a creak (closing: a hiss and a soft thud as they meet). `doors:
+  swing` (default) keeps the wooden doors. **`haze`** shimmers over spots of the place:
+  `{at, width, height, color, strength, from}` — a spot or `{column, row}` (its cell's middle), a
+  column `width` tiles wide (1.2) and `height` tiles high (2.6) of faint ribbons of light wavering
+  up it like a heat mirage, swaying more the higher they go, small sparkles drifting up through
+  them and a soft glow on the floor, in `color` (default `#BFE8FF`), `strength` 0.1–1 (0.6); with
+  `from` (seconds into the scene) it fades in then. It shines at night and is drawn behind the
+  characters (who may stand in it): strange air round a door, a vent, a spot where reality thins.
+
+  ```yaml
+  iso:
+    place: indoor
+    doors: slide
+    map: |
+      ######+#####
+      #.....d....#
+      #.m........#
+      ############
+    spots: {d: door_in, m: hall}
+    haze: [{at: door_in, width: 1.6, height: 2.8}]
   ```
 - **Sound** ([foley](#foley-and-music-stings), on by default): footsteps by what the feet walk on
   (grass, a sandy path, wooden boards or a bridge, stone steps and tiles, a rug), a door's creak
@@ -11149,9 +11174,16 @@ screen`. Its panel (about a character tall over the projector, 0.9 wide) shows i
 
 - `fractal` (default): curves of light turning and breathing, a spiral winding in and out;
 - `data`: bars rising and falling, a wave running along the top, a ring gauge turning;
-- `text`: lines being written one after another, then scrolling on (a message being composed).
+- `text`: lines being written one after another, then scrolling on (a message being composed);
+- `equations`: three rows of formulas written symbol by symbol (sums, integrals, roots, psi, pi),
+  and formula "butterflies" — a symbol between two beating wings of light — fluttering up out of
+  the panel one after another and drifting away in the glow above it (floating equations);
+- `timelines`: a tree of timelines growing from the panel's foot, branching three times, a small
+  panel at each of its eight tips in which two small figures come together and pulse as they
+  meet, each at its own moment (the same meeting in many lives).
 
-Scan lines drift up the panel, a beam joins it to the lens, a soft glow lies around it, and it
+The floating formulas reach a little above and beside the panel; a `scale` of 1.4–1.6 makes the
+symbols and the figures readable in a medium shot. Scan lines drift up the panel, a beam joins it to the lens, a soft glow lies around it, and it
 flickers a little; `color` is the light (default `#5FD8FF`), `detail` the projector. It is never
 graded by the stage's light and cannot be picked up or carried.
 
@@ -11159,6 +11191,7 @@ graded by the stage's light and cannot be picked up or carried.
 props:
   - {prop: hologram_display, name: screen, at: desk, "on": true, pattern: fractal}
   - {prop: hologram_display, name: letter_screen, at: desk_2, pattern: text, color: "#9DFFB0"}
+  - {prop: hologram_display, name: array, at: pad, "on": true, pattern: timelines, scale: 1.5}
 ```
 
 #### Fruit falling from a tree (`fruit`, `drop_fruit`)
@@ -11291,7 +11324,7 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can flower`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket`; [science fiction](#portals-portal): `portal` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can flower scanner takeout crystal`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket`; [science fiction](#portals-portal): `portal` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -11304,10 +11337,11 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella`, `door`, `book`, `letter` or `gift` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room), [small props](#everyday-small-props-let_go-pour)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
-| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle`, `phone` or `portal` only: `true` starts it switched on (a phone: ringing; a portal: open). vidgen and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
+| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle`, `phone`, `portal`, `hologram_display`, `scanner` or `crystal` only: `true` starts it switched on (a phone: ringing; a portal: open; a scanner: its readout lit; a crystal: glowing). vidgen and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
 | `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
 | `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
 | `fruit` | `false` | `tree` only: `true` hangs four fruits on it ([`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) lets one fall) |
+| `scan` | none | `scanner` only: its readout while on, `{level: 0.35, to, at: 0, wave: organic}` (`at` in seconds into the scene; `to` above 1 sends it off its scale, flashing red; [small props](#everyday-small-props-let_go-pour)) |
 
 A picnic set: a `basket` (0.2 of a character, held by its handle), a `napkin` (small: 0.05, a
 checked cloth lying flat) and an `umbrella` (0.6), drawn closed or open.
@@ -11661,8 +11695,9 @@ scenes:
 
 ##### Everyday small props (`let_go`, `pour`)
 
-Ten small things to hold, give, put down and set on a table (`lift`, as for any prop on
-furniture), drawn from simple shapes in the theme's colours:
+Thirteen small things to hold, give, put down and set on a table (`lift`, as for any prop on
+furniture), drawn from simple shapes in the theme's colours (the last three in their own:
+`color` / `detail` change them):
 
 ![The small props in the default theme](gallery/media/small_props.png)
 
@@ -11678,7 +11713,19 @@ furniture), drawn from simple shapes in the theme's colours:
 | `vase` | 0.32 | a vase with three flowers |
 | `watering_can` | 0.22 | held by its handle; `pour` waters |
 | `flower` | 0.22 | one flower picked with its stem and a leaf, held by its stem: to give |
+| `scanner` | 0.17 | a handheld scanner held by its grip; `on: true` or `- switch_on: scanner` lights its screen with a live **readout** (below) |
+| `takeout` | 0.12 | a folded paper box of noodles with its flaps up, a wire handle and chopsticks (clutter on a desk) |
+| `crystal` | 0.09 | a data crystal: a six-sided shard in a small dark holder; `on: true` makes its core glow, pulsing softly |
 
+- A **scanner that is on** shows its reading on its screen: a bar filled to the reading and a
+  live wave above it, scaled by it, in cyan. **`scan: {level, to, at, wave}`** (on the prop) sets
+  the reading at the start (`level`, a share of its scale, 0.35), the one it moves to from `at`
+  seconds into the scene (`to`), and the wave (`organic`, irregular and living, or `steady`);
+  above 1 it is **off its scale**: bar and wave flash red and the wave jitters. Its screen and a
+  small glow shine at night. Held (`- {hold: max, to: scanner}`), it goes with its holder. A
+  [`hud`](#hud)'s `scan` meter can show the same reading over the frame.
+- A **crystal that is on** glows from inside (a light core and a soft glow in its colour) and is
+  never darkened by the stage's light: data crystals scattered on a desk at night.
 - A **book, a letter or a gift** opens and closes like an umbrella (`- open: gift`, `open: true`
   in `props`), standing or in a hand; held open, it stays in front of its holder (only an open
   umbrella goes overhead).
@@ -11756,6 +11803,33 @@ beats:
       - {walk_to: ben, to: 0.75, at: 0.3}
   - text: "At the gate they let go."
     actions: [{let_go_hands: ana, at: 0.5}]
+```
+
+#### A kiss (`kiss`)
+
+**`- {kiss: ana, with: ben}`** has two characters of a stage kiss, a tasteful cartoon kiss: they
+turn to each other, lean in (their bodies tilt forward at the waist, the taller one a little
+more, their feet staying on the ground), step in until their faces touch — across the picture,
+and up or down a little so their heads are level (on an [iso place](#isometric-places-iso) two
+standing side by side on the map stand on a slant) — close their eyes, hold, and lean back to
+where they stood by the end of `run_time` (default 3 s: about 0.7 s in, 0.6 s back). As their
+faces meet a small burst of hearts and sparkles rises from there, with a soft chime (foley).
+Stand them a step apart (neighbouring cells, or marks close together) and frame them with a
+two-shot or a close-up; it works in 16:9 and 9:16. Generated characters only (it tilts the
+body and closes the eyes). Lint lets two kissing characters stand close (`character_overlap`).
+
+| option | default | |
+|---|---|---|
+| `with` | required | the other character of the scene |
+| `hearts` | `true` | the burst of hearts and sparkles; `false`: none |
+| `color` | `#FF5C8A` | the hearts' colour (a theme token or hex) |
+
+```yaml
+beats:
+  - text: "And then, at last, she kissed him."
+    shot: {kind: two_shot, of: [ana, ben]}
+    actions:
+      - {kiss: ana, with: ben, at: 0.2, run_time: 3.2}
 ```
 
 #### Sitting and leaning
@@ -13444,6 +13518,15 @@ with a flicker and fades out; usually written on the scene that needs it. In a
 and the hook; lint does not check its contrast (its text stands on dark plates or has a dark
 edge).
 
+**It keeps off faces** (`avoid_faces`, on by default): at each frame it knows where the
+characters' heads are on screen, and the alert and the readout lines go to the free place
+covering the least of a face — the alert at the top centre, top right, top left or bottom centre
+(above the meters), the lines at the top left or right (under the alert when it is up there too)
+or above a meter — moving only when a face comes under them (a shot, a zoom, a walk), so they do
+not hop about. In a close-up where every place touches the face, `compact: true` makes texts and
+meters smaller and closer to the frame's edges. Lint [`overlay_face`](#lint-vidgen-lint) warns when its text
+or a plate still covers a face (outside Shorts; in a Short `shorts_safe_area` does).
+
 | param | default | |
 |---|---|---|
 | `scene` | first scene drawn on | the scene it belongs to |
@@ -13459,6 +13542,8 @@ edge).
 | `heart` | none | `{bpm: 72, to, at: 0, skips: 0, label: BPM}`: the rate at the start, the rate it eases to from `at` (seconds after the HUD comes on), how many beats are skipped right at `at` |
 | `scan` | none | `{level: 0.35, to, at: 0, wave: organic, label: SCAN, off_scale: OFF SCALE}`: the reading (a share of the scale; above 1 off the scale), the one it moves to from `at`, an `organic` (irregular, living) or `steady` wave |
 | `opacity` | `0.92` | how strongly it shows over the scene |
+| `avoid_faces` | `true` | keep the alert and the lines off the characters' faces (each to the free place covering the least of a face); `false`: always the alert at the top centre, the lines at the top left |
+| `compact` | `false` | smaller texts and meters, closer to the frame's edges (for close-ups) |
 | `enter`, `exit` | `0.4`, `0.35` | seconds of its boot in and fade out |
 
 ```yaml
@@ -13478,8 +13563,8 @@ scenes:
         scan: {level: 0.4, to: 1.6, at: 3}
 ```
 
-Render cost: it is drawn again on every frame while it shows (a test scene of 6 s at 854 x 480
-took 30 s with it, 20 s without).
+Render cost: it is drawn in pieces — its frame once, its texts when they change, only the small
+meters on every frame (a test scene of 6 s at 854 x 480 takes 25 s with it, 20 s without).
 
 ### `watermark`
 
@@ -13936,7 +14021,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `offscreen_action` | warning | on an [iso place](#isometric-places-iso): something a beat does — a walk (`walk_to`, `run_to`, `meet`, `wander`, `enter`, `exit`), a small thing picked up, given or put down, a door, lamp or flowers changing, an object appearing or going — that the camera mostly does not show while it happens: on fewer than `min_seen` (`0.5`) of its frames is at least half of it in view (or enough of it to fill a quarter of the view: a house in a close-up). Fix: a wider shot (`shot: wide`), a `pan` or `follow` to it, or do it in a beat whose shot shows it |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's, area's, point's, vector's or mark's `color` or a `number_line` point's, interval's or jump's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
-| `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared. Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
+| `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared, nor an [echo](#echo-characters-echo) (another self, alike on purpose). Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` (or, when the next beat [overlaps](#overlapping-lines-overlap-interrupt) it, than the time until that beat) by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
@@ -13994,6 +14079,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `simulated_label` | warning | simulated data called real ("real collision data", "data from the LHC", "CMS data") in a `mass_spectrum`, `detector` or simulated `plot` scene, or such a picture whose screen does not say "simulated" (a `detector` `label` without it; a `plot` of the `mass_spectrum` or `decay_times` model without "simulated" in a series name, the title or the caption) |
 | `particle_units` | info | masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video: write them one way |
 | `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_cover` (0.1) of a face — for captions, any caption of the line being spoken (the layout dump's `reach` of the caption), not only the one in the still. Beat-end and mid-beat stills: in a Short, `vidgen lint` renders 3 stills per beat (stills of a storyboard with 2 or more per beat are reused), so a face under the captions while a zoom is held part-way through a beat is found too. Faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
+| `overlay_face` | warning | outside a Short, a [`hud`](#hud)'s text or panel plate covering at least `min_cover` (0.15) of a character's face (the HUD places its texts clear of faces by itself; this catches what it could not: a close-up with a face in every corner). Fix: frame the face away from the corners (a shot or zoom), `compact: true`, fewer `lines` |
 | `shorts_length` | error | a Short planned longer than `shorts.max_seconds` (60): reported on the video's last scene. Fix: fewer beats or scenes in the `cut`, a shorter end card |
 
 **Config** (all optional; the values shown are the defaults):
@@ -14082,6 +14168,7 @@ lint:
     simulated_label: {}
     particle_units: {}                      # default severity info
     shorts_safe_area: {tolerance: 0.01, min_face: 0.25, min_cover: 0.1}   # in a Short only; shares of a face's box (under the app's parts / an overlay)
+    overlay_face: {min_cover: 0.15}         # a hud's text or plate over a face (share of the face's box); not in a Short
     shorts_length: {}                       # default severity error; in a Short only
 ```
 

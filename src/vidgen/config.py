@@ -439,7 +439,7 @@ NoseStyle = Literal["none", "dot", "round", "triangle"]
 HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly", "ponytail", "braids", "afro"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
 Accessory = Literal[
-    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape",
+    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape", "medal", "pendant",
 ]
 ProportionStyle = Literal["adult", "kid", "tall_kid"]
 Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
@@ -460,6 +460,8 @@ SHELLED_SPECIES: frozenset[str] = frozenset({"turtle", "snail"})
 HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat"})
 #: Accessories worn on top of the head: a look wears at most one of them.
 TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat")
+#: Accessories hanging round the neck: a look wears at most one of them (DESIGN.md §102.14).
+NECK_ACCESSORIES: tuple[str, ...] = ("necklace", "medal", "pendant")
 RobotHead = Literal["box", "round"]
 RobotFace = Literal["eyes", "screen"]
 RobotMoves = Literal["legs", "wheels"]
@@ -502,7 +504,7 @@ class CharacterLook(_Strict):
     ears: EarStyle = "none"
     """Ears: none, round, pointy or floppy (skin colour)."""
     accessories: list[Accessory] = Field(default_factory=list)
-    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat)."""
+    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace, medal (a gold medal on a ribbon in the accessory colour), pendant (a glowing, pulsing pendant on a cord, in the accessory colour) and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat; one of necklace, medal, pendant)."""
     proportions: ProportionStyle = "adult"
     """adult, kid (big head, short body and legs) or tall_kid (lankier); pair a kid with the stage's scale (e.g. 0.7)."""
     outfit: Outfit = "plain"
@@ -532,6 +534,9 @@ class CharacterLook(_Strict):
         if len(on_top) > 1:
             listed = f"{', '.join(on_top[:-1])} and {on_top[-1]} are {'both' if len(on_top) == 2 else 'all'}"
             raise ValueError(f"{listed} worn on top of the head: choose one")
+        round_neck = [a for a in NECK_ACCESSORIES if a in value]
+        if len(round_neck) > 1:
+            raise ValueError(f"{' and '.join(round_neck)} both hang round the neck: choose one")
         return value
 
     @model_validator(mode="after")
@@ -953,6 +958,7 @@ LINT_RULES: tuple[str, ...] = (
     "simulated_label",
     "particle_units",
     "shorts_safe_area",
+    "overlay_face",
     "shorts_length",
 )
 RuleName = Literal[
@@ -1035,6 +1041,7 @@ RuleName = Literal[
     "simulated_label",
     "particle_units",
     "shorts_safe_area",
+    "overlay_face",
     "shorts_length",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
@@ -1589,6 +1596,13 @@ class ShortsSafeAreaRule(RuleConfig):
     """Share of a face's box under an overlay (a caption, the hook) from which it is reported."""
 
 
+class OverlayFaceRule(RuleConfig):
+    """``overlay_face``: an overlay that keeps off faces (a ``hud``) whose text or plate covers a character's face anyway (DESIGN.md §102.8)."""
+
+    min_cover: Fraction = 0.15
+    """Share of a face's box under the overlay's texts and plates from which it is reported."""
+
+
 class ShortsLengthRule(RuleConfig):
     """``shorts_length``: a Short (``shorts:``) longer than its ``max_seconds`` (DESIGN.md §101)."""
 
@@ -1754,6 +1768,8 @@ class LintRules(_Strict):
     """Masses written both in GeV and GeV/c² on screen (default: info)."""
     shorts_safe_area: ShortsSafeAreaRule = Field(default_factory=ShortsSafeAreaRule)
     """In a Short (shorts:), text or a face where the app covers the frame, or an overlay over a face (default: warning)."""
+    overlay_face: OverlayFaceRule = Field(default_factory=OverlayFaceRule)
+    """A hud's text or plate over a character's face, outside Shorts (default: warning)."""
     shorts_length: ShortsLengthRule = Field(default_factory=ShortsLengthRule)
     """A Short (shorts:) longer than its max_seconds (default: error)."""
 

@@ -341,5 +341,93 @@ class IsoTraffic(VGroup):
         return x0 - pad, y0 - pad, x1 + pad, y1 + pad
 
 
-__all__ = ["BLINK_DUTY", "BLINK_SECONDS", "POD_HEIGHT", "SCREEN_LINE_THICKNESS", "SHUTTER_SLATS", "IsoBlinkers", "IsoScreens", "IsoShutters", "IsoTraffic",
-           "PodLane", "blink_on"]
+@dataclass(frozen=True)
+class HazeSpot:
+    """A haze on screen (DESIGN.md §102.12): its ``foot`` and ``top`` (Manim units), its
+    ``width`` (Manim units), ``color``, ``strength`` (0..1) and the scene time it fades in
+    from (``start``)."""
+
+    foot: Point
+    top: Point
+    width: float
+    color: str
+    strength: float
+    start: float = 0.0
+
+
+#: A haze's ribbons, glow and sparkles at full strength: their opacities.
+HAZE_RIBBON_OPACITY = 0.2
+HAZE_GLOW_OPACITY = 0.16
+HAZE_SPARK_OPACITY = 0.85
+
+
+class IsoHaze(VGroup):
+    """Shimmering air over spots of an iso place (DESIGN.md §102.12): for each :class:`HazeSpot`
+    a soft glow on the floor, faint ribbons of light wavering up
+    (:func:`~vidgen.cartoon.haze.haze_ribbons`) and small sparkles rising through them
+    (:func:`~vidgen.cartoon.haze.haze_sparks`); never graded by the stage's light."""
+
+    def __init__(self, spots: Sequence[HazeSpot], *, seed: int = 0) -> None:
+        from vidgen.cartoon.haze import HAZE_RIBBONS, HAZE_SPARKS
+
+        super().__init__()
+        self.name = "haze"
+        self.spots = list(spots)
+        self.seed = seed
+        self.parts: list[tuple[VMobject, list[VMobject], list[VMobject]]] = []
+        for spot in self.spots:
+            glow = VMobject().set_fill(spot.color, opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+            ribbons = [VMobject().set_fill(spot.color, opacity=0.0).set_stroke(width=0.0, opacity=0.0) for _ in range(HAZE_RIBBONS)]
+            sparks = [VMobject().set_fill("#FFFFFF", opacity=0.0).set_stroke(spot.color, width=1.0, opacity=0.0) for _ in range(HAZE_SPARKS)]
+            self.parts.append((glow, ribbons, sparks))
+            self.add(glow, *ribbons, *sparks)
+        self.update_to(0.0)
+
+    def update_to(self, now: float) -> None:
+        """Draw every haze as it is at scene time ``now``."""
+        from vidgen.cartoon.haze import haze_level, haze_ribbons, haze_sparks
+
+        for k, (spot, (glow, ribbons, sparks)) in enumerate(zip(self.spots, self.parts)):
+            level = haze_level(now, spot.start) * spot.strength
+            (fx, fy), (tx, ty) = spot.foot, spot.top
+
+            def at(u: float, v: float) -> np.ndarray:
+                return np.array([fx + (tx - fx) * v + u * spot.width, fy + (ty - fy) * v, 0.0])
+
+            if level <= 1e-3:
+                for member in (glow, *ribbons, *sparks):
+                    member.points = np.zeros((0, 3))
+                continue
+            glow.set_points_as_corners(_ellipse(fx, fy, spot.width * 0.6, spot.width * 0.22))
+            glow.set_fill(opacity=HAZE_GLOW_OPACITY * level)
+            for ribbon, (outline, share) in zip(ribbons, haze_ribbons(now, self.seed + k)):
+                ribbon.set_points_as_corners([at(u, v) for u, v in (*outline, outline[0])])
+                ribbon.set_fill(opacity=HAZE_RIBBON_OPACITY * share * level)
+            for member, (u, v, size, shown) in zip(sparks, haze_sparks(now, self.seed + k)):
+                cx, cy = at(u, v)[:2]
+                r = size * spot.width
+                member.set_points_as_corners([np.array([cx + r * math.cos(a) * (1.0 if j % 2 == 0 else 0.3), cy + r * math.sin(a) * (1.0 if j % 2 == 0 else 0.3), 0.0])
+                                              for j, a in enumerate(np.linspace(0.0, 2.0 * math.pi, 9))])
+                member.set_fill(opacity=HAZE_SPARK_OPACITY * shown * level).set_stroke(opacity=0.6 * shown * level)
+
+    def changing(self, start: float, end: float) -> bool:
+        return bool(self.spots)
+
+    def done(self, now: float) -> bool:
+        return not self.spots
+
+    def movers(self) -> list[VMobject]:
+        return [self]
+
+    def region(self, start: float = 0.0, end: float = math.inf) -> Box:
+        boxes = []
+        for spot in self.spots:
+            (fx, fy), (tx, ty) = spot.foot, spot.top
+            pad = spot.width * 0.75
+            boxes.append((min(fx, tx) - pad, min(fy, ty) - pad, max(fx, tx) + pad, max(fy, ty) + pad))
+        boxes = boxes or [(0.0, 0.0, 0.0, 0.0)]
+        return min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
+
+
+__all__ = ["BLINK_DUTY", "BLINK_SECONDS", "POD_HEIGHT", "SCREEN_LINE_THICKNESS", "SHUTTER_SLATS", "HazeSpot", "IsoBlinkers", "IsoHaze", "IsoScreens",
+           "IsoShutters", "IsoTraffic", "PodLane", "blink_on"]

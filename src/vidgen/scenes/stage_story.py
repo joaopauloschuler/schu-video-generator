@@ -43,6 +43,8 @@ DEMATERIALISE_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
 #: Shutters: the slam as they hit the sill (closing), the rattle of them rolling up (opening).
 SHUTTER_SLAM: tuple[str, dict[str, float]] = ("slam", {"gain": -1.0})
 SHUTTER_ROLL: tuple[str, dict[str, float]] = ("swoosh", {"gain": -9.0, "duration": 1.3, "pitch": -8.0})
+#: A kiss: a soft, high chime as the faces meet (sound, params; DESIGN.md §102.15).
+KISS_CHIME: tuple[str, dict[str, float]] = ("chime", {"gain": -13.0, "pitch": 9.0, "duration": 1.6})
 
 
 class _Flicker:
@@ -92,10 +94,17 @@ class StoryStaging:
             if after is not None:
                 self.figure_fx.append(Afterimages(figure, place=lambda ghost, f=figure: self._place_ghost(ghost, f), remove=self._drop_ghost,
                                                   spacing=after.spacing, life=after.life, opacity=after.opacity))
+        for name, figure in self.cast.items():   # a glowing pendant shines at night and pulses (§102.14)
+            glowing = [(m, getattr(m, PENDANT_GLOW)) for m in figure.get_family() if getattr(m, PENDANT_GLOW, None)]
+            if glowing:
+                for member, _ in glowing:
+                    unmark_lit(member)
+                if fancy:
+                    self.figure_fx.append(PendantPulse(figure, glowing))
         for name in self._materialising():
             figure_alpha(self.cast[name]).set("appear", 0.0).apply()
         for thing in getattr(self, "story_things", []):
-            if isinstance(thing, (IsoBlinkers, IsoScreens, IsoTraffic)):
+            if isinstance(thing, (IsoBlinkers, IsoScreens, IsoTraffic, IsoHaze)):
                 unmark_lit(thing)   # a lab's lights, a city's screens and pods shine at night too
         if getattr(self, "story_things", []):
             self._watch_living()
@@ -177,6 +186,24 @@ class StoryStaging:
         self.figure_fx.append(hold)
         if not any(f is self._story_updater for f in self.updaters):
             self.add_updater(self._story_updater)
+
+    def kiss(self, a: str, b: str, *, seconds: float, hearts: bool, color: str) -> list[Animation]:
+        """``a`` and ``b`` kiss over ``seconds`` from now (DESIGN.md §102.15): both turn to each
+        other, lean in until their faces touch, close their eyes and lean back at the end; a small
+        burst of hearts and sparkles rises as their faces meet (``hearts``), with a soft chime
+        (foley)."""
+        plan = KissPlan(self.cast[a], self.cast[b], seconds)
+        anims: list[Animation] = [KissMotion(self.cast[a], plan, run_time=seconds), KissMotion(self.cast[b], plan, run_time=seconds)]
+        start = float(self.renderer.time)
+        if hearts:
+            burst = KissBurst(plan, contact_time(seconds), color=color, seed=motion_seed(self.spec.id, a, b, "kiss"), run_time=seconds)
+            top = max((m.z_index for m in self.get_mobject_family_members()), default=0)
+            burst.mobject.set_z_index(top + 1)
+            unmark_lit(burst.mobject)
+            anims.append(burst)
+        if self._foley_on():
+            self.sfx(KISS_CHIME[0], start + contact_time(seconds), **KISS_CHIME[1])
+        return anims
 
     def let_go_hands(self, names: list[str]) -> list[tuple[Any, str]]:
         """Every hold of a character of ``names`` ends now: the (character, hand) that held."""

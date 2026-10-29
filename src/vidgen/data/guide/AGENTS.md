@@ -1897,6 +1897,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `dematerialise` | on a `stage`: a character vanishes the same way backwards (`- dematerialise: guide`) | a projection switched off |
 | `hold_hands` | on a `stage`: a character takes another's hand (`- {hold_hands: ana, with: ben}`); they hold hands wherever they stand or walk | walk both in the same beat to places side by side to go hand in hand |
 | `let_go_hands` | on a `stage`: a character lets go of the hand it holds (`- let_go_hands: ana`; the other too) | before an arm gestures again |
+| `kiss` | on a `stage`: two characters kiss (`- {kiss: ana, with: ben}`, 3 s): they turn, lean in until their faces touch, eyes closed, a small burst of hearts and sparkles, then lean back (`hearts`, `color`) | stand them a step apart; a `two_shot` |
 | `let_go` | on a `stage`: a character lets go of the balloons it holds; they float away (`- let_go: pip`) | gone for the scene |
 | `pour` | on a `stage`: a character pours with the watering can it holds (`- pour: kit`, 2 s) | watering a plant |
 | `drop_fruit` | on a `stage`: a fruit falls from a tree with `fruit: true`, bounces, thuds (`- drop_fruit: tree`; `to: pip`: on pip's head, stars) | a comic moment; the character stands under the tree |
@@ -2138,7 +2139,10 @@ asks for one, say vidgen makes original characters and offer one with the same r
   and a gift `open` / `close` like an umbrella (held in front, not overhead). A `phone` that is on
   rings (`on: true` or `- switch_on: phone`; it shakes in bursts with a trill, `- switch_off:
   phone` answers it). Held balloons rise behind the head; `- let_go: pip` floats them away for
-  good. `- pour: kit` tilts the watering can kit holds and water drops fall.
+  good. `- pour: kit` tilts the watering can kit holds and water drops fall. A `scanner` that is on
+  shows a live readout (`scan: {level: 0.4, to: 1.6, at: 3}`: above 1 it goes off its scale,
+  flashing red; `- {hold: max, to: scanner}` to carry it); `takeout` boxes and glowing data
+  `crystal`s (`on: true`) clutter a desk.
 - **Ready-made sets**: `set: city_street`, `park`, `beach`, `forest` or `snowy_hills` on a stage
   scene gives a whole outdoor set without `sets:` (backdrop, props, light, ambience: a street
   sounds like a city, a park and a forest have birdsong by day). Put two characters on its
@@ -2600,7 +2604,9 @@ and give each scene `set: village`.
   give it an `effect: echo` on its voice. `- materialise: guide` makes it appear (a flickering
   wireframe, then solid; it waits unseen until then), `- dematerialise: guide` vanish.
 - A lab: `objects` `console` (glowing screens; a `hologram_display` prop at its spot floats a
-  panel of light over it: `pattern: fractal`, `data` or `text`), `server_rack` (blinking lights),
+  panel of light over it: `pattern: fractal`, `data`, `text`, `equations` (formulas written, and
+  formula butterflies fluttering up) or `timelines` (a branching tree, two figures meeting in a
+  small panel at each tip; `scale: 1.5` to read them)), `server_rack` (blinking lights),
   `projector_pad` (a glowing platform a hologram stands on), `whiteboard`. A portal's `view:
   coast` (or `stars`, `meadow`) shows another place inside it. `- alarm: start` darkens the room
   under a pulsing red light with a siren (`stop` ends it), `- shutters: close` slams steel
@@ -2625,7 +2631,14 @@ and give each scene `set: village`.
   ["#5FFFE0", "#4FA8FF"]}]` (`glow` works on any particles).
 - Other selves: a character with `echo: true` (or `{color, opacity}`) is a translucent other
   self that keeps its own costume, its outlines glowing (a timeline, a memory, a dream); stand
-  it beside the one it echoes and bring it with `- materialise: ana_captain`.
+  it beside the one it echoes and bring it with `- materialise: ana_captain`. Accessories
+  `medal` (gold, on a ribbon in `colors.accessory`) and `pendant` (a stone glowing and pulsing in
+  `colors.accessory`, bright at night) dress a laureate or a keeper of a secret.
+- Romance: `- {kiss: ana, with: ben, run_time: 3}` (two standing a step apart: they turn, lean in
+  until their faces touch, close their eyes, a small burst of hearts and sparkles, then lean
+  back); frame it with a `two_shot`.
+- A strange door: `iso: {doors: slide}` (steel doors sliding open with a hiss on `- open:
+  door_1`) and `haze: [{at: door_in}]` (shimmering air with sparkles over a spot).
 - Inside someone's head: a scene's `overlays: {implant: {type: hud, at: office_b2, duration: 6,
   alert: "INCOMING ALERT", lines: ["SIGNAL: SECTOR 7"], heart: {bpm: 70, to: 128, at: 1.5,
   skips: 3}, scan: {level: 0.4, to: 1.6, at: 3}}}` draws a HUD over the frame (brackets, a
@@ -3082,7 +3095,8 @@ scenes:
 - `watermark` small and faint, or not at all.
 - `captions` for social and muted viewing (`vidgen guide social`).
 - `hud` on a scene where the story is seen through an implant or a visor (`at`, `duration`,
-  `alert`, `lines`, `heart`, `scan`), not as decoration.
+  `alert`, `lines`, `heart`, `scan`), not as decoration. Its alert and lines move to a free
+  corner by themselves, off the faces; in a close-up use `compact: true` (lint `overlay_face`).
 Lint's `overlay_overlap` reports an overlay over scene text: give it `reserve: true` or move it.
 
 **Transitions** (`transition:` per scene = the way into it, or video-wide). Default: cuts (every
@@ -3759,6 +3773,7 @@ install; `vidgen validate` warns when it is missing.
 | `simulated_label` | simulated data called real, or a spectrum / event display without "simulated" on screen | say "simulated"; keep it in the label or caption |
 | `particle_units` (info) | masses both in GeV and GeV/c² on screen | one convention throughout |
 | `shorts_safe_area` | in a Short (`shorts:`), text or a face where the app covers the frame (bottom 20 %, right 15 %), or a caption / the hook over a face | a closer `shot` or `zoom` with the faces higher; move the scene's text inwards |
+| `overlay_face` | a `hud`'s text or plate over a character's face (outside Shorts) | frame the face away from the corners, `compact: true`, fewer `lines` |
 | `shorts_length` (error) | a Short longer than `shorts.max_seconds` (60) | leave out beats or scenes in `cut:`, a shorter `end_card` |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |

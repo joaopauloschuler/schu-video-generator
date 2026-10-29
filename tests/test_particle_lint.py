@@ -49,7 +49,7 @@ def _found(project: Project, scene_id: str) -> list[tuple[str, str]]:
 
 
 def test_rules_are_registered_last_with_their_defaults() -> None:
-    shorts = ("shorts_safe_area", "shorts_length")   # Step 249's rules come after them
+    shorts = ("shorts_safe_area", "overlay_face", "shorts_length")   # Step 249's (and 252's) rules come after them
     assert list(LINT_RULES[-len(PARTICLE_RULES) - len(shorts):-len(shorts)]) == list(PARTICLE_RULES)
     assert list(LINT_RULES[-len(shorts):]) == list(shorts)
     assert all(RULES[n].scope == "scene" for n in PARTICLE_RULES)

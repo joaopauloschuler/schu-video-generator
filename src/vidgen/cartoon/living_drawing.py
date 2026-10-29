@@ -53,6 +53,8 @@ from vidgen.cartoon.living import (
     tv_picture,
     union_box,
 )
+from vidgen.hud import ScanMeter, alert_on, scan_level, scan_wave
+from vidgen.cartoon.living import crystal_pulse
 from vidgen.cartoon.holo_display import LENS as DISPLAY_LENS
 from vidgen.cartoon.holo_display import PANEL as DISPLAY_PANEL
 from vidgen.cartoon.holo_display import display_frame
@@ -85,6 +87,12 @@ STEAM_EDGE_SHARE = 0.7
 #: A ringing phone (DESIGN.md §69.56): its lit screen, the middle it shakes about, the ring lines
 #: beside it (prop units) and their colour (amber: it shows on light and dark backgrounds).
 LIT_SCREEN = "#E3F4FF"
+#: A switched-on scanner (DESIGN.md §102.13): its lit screen, its readout (bar and wave) and the
+#: readout's colour off its scale; the attribute naming a readout member's role.
+SCANNER_LIT = "#0F3A44"
+SCANNER_READOUT = "#5FFFE0"
+SCANNER_WARNING = "#FF3B5C"
+SCAN_ROLE = "scan_role"
 PHONE_CENTRE = (0.0, 0.6)
 RING_RADII = (0.4, 0.54)
 RING_LINE = "#E8A33D"
@@ -143,6 +151,20 @@ def living_overlays(kind: str, paint: _Paint, *, view: str | None = None) -> lis
             tag(_circle(0.0, 0.6, 0.09, paint.detail, paint, outline=False), "screen"),
             *rings,
         ]
+    if kind == "scanner":   # its lit screen, the readout's bar and wave (DESIGN.md §102.13)
+        from vidgen.cartoon.props import SCANNER_SCREEN
+
+        x0, y0, x1, y1 = SCANNER_SCREEN
+        screen = tag(_rect(x0, y0, x1, y1, SCANNER_LIT, paint, radius=0.03), "screen")
+        bar = tag(_blank("screen").set_fill(SCANNER_READOUT, opacity=0.95), "screen")
+        wave = tag(_blank("screen").set_stroke(SCANNER_READOUT, width=1.6 * OUTLINE_WIDTH, opacity=1.0), "screen")
+        setattr(bar, SCAN_ROLE, "bar")
+        setattr(wave, SCAN_ROLE, "wave")
+        return [screen, bar, wave]
+    if kind == "crystal":   # its glowing core (§102.13)
+        core = _poly([(-0.1, 0.2), (-0.12, 0.6), (0.0, 0.88), (0.12, 0.6), (0.1, 0.2)], LIT_CORE, paint, outline=False)
+        core.set_fill(opacity=0.85)
+        return [tag(core, "lantern")]
     if kind == "portal":
         return _portal_overlays(paint, view)
     if kind == "fireplace":
@@ -199,10 +221,13 @@ def _portal_overlays(paint: _Paint, view: str | None = None) -> list[VMobject]:
 
 #: A hologram display's parts (DESIGN.md §100.10), drawn in this order: the beam from the lens,
 #: the panel, its scan lines, the pattern's bars, text lines and curves, the panel's edge.
-DISPLAY_PARTS: tuple[str, ...] = ("holo_beam", "holo_panel", "holo_scan", "holo_bar", "holo_line", "holo_curve", "holo_edge")
-#: The display's opacities: beam, panel, scan lines, bars, text lines, curves, edge.
+DISPLAY_PARTS: tuple[str, ...] = ("holo_beam", "holo_panel", "holo_scan", "holo_bar", "holo_line", "holo_curve", "holo_box", "holo_wing",
+                                  "holo_glyph", "holo_dot", "holo_edge")
+#: The display's opacities: beam, panel, scan lines, bars, text lines, curves, small panels,
+#: wings, glyphs, dots (DESIGN.md §102.10), edge.
 DISPLAY_OPACITY: dict[str, float] = {"holo_beam": 0.16, "holo_panel": 0.22, "holo_scan": 0.18, "holo_bar": 0.75, "holo_line": 0.85,
-                                     "holo_curve": 0.9, "holo_edge": 0.95}
+                                     "holo_curve": 0.9, "holo_box": 0.3, "holo_wing": 0.35, "holo_glyph": 0.95, "holo_dot": 0.95,
+                                     "holo_edge": 0.95}
 #: How many scan lines cross the panel.
 SCAN_LINES = 9
 
@@ -210,7 +235,7 @@ SCAN_LINES = 9
 def _display_overlays(paint: _Paint) -> list[VMobject]:
     """A hologram display's moving parts, without points yet, all in ``main`` (lighter for the
     lines and the edge)."""
-    from vidgen.cartoon.holo_display import BARS, CURVES, TEXT_LINES
+    from vidgen.cartoon.holo_display import BARS, BOXES, CURVES, DOTS, GLYPHS, TEXT_LINES, WINGS
 
     light = paint.light(paint.main)
     members = [_blank("holo_beam").set_fill(paint.main, opacity=DISPLAY_OPACITY["holo_beam"]),
@@ -219,6 +244,12 @@ def _display_overlays(paint: _Paint) -> list[VMobject]:
     members += [_blank("holo_bar").set_fill(light, opacity=DISPLAY_OPACITY["holo_bar"]) for _ in range(BARS)]
     members += [_blank("holo_line").set_fill(light, opacity=DISPLAY_OPACITY["holo_line"]) for _ in range(TEXT_LINES)]
     members += [_blank("holo_curve").set_stroke(light, width=1.2 * OUTLINE_WIDTH, opacity=DISPLAY_OPACITY["holo_curve"]) for _ in range(CURVES)]
+    members += [_blank("holo_box").set_fill(paint.main, opacity=DISPLAY_OPACITY["holo_box"]).set_stroke(light, width=0.6 * OUTLINE_WIDTH, opacity=0.8)
+                for _ in range(BOXES)]
+    members += [_blank("holo_wing").set_fill(light, opacity=DISPLAY_OPACITY["holo_wing"]).set_stroke(light, width=0.7 * OUTLINE_WIDTH, opacity=0.9)
+                for _ in range(WINGS)]
+    members += [_blank("holo_glyph").set_stroke("#FFFFFF", width=0.8 * OUTLINE_WIDTH, opacity=DISPLAY_OPACITY["holo_glyph"]) for _ in range(GLYPHS)]
+    members += [_blank("holo_dot").set_fill("#FFFFFF", opacity=DISPLAY_OPACITY["holo_dot"]) for _ in range(DOTS)]
     members.append(_blank("holo_edge").set_stroke("#FFFFFF", width=1.2 * OUTLINE_WIDTH, opacity=DISPLAY_OPACITY["holo_edge"]))
     return members
 
@@ -306,11 +337,14 @@ class LivingProp:
     with it; ``None``: calm)."""
 
     def __init__(self, prop: Prop, *, start: float | None = None, speed: float = 1.0, on: bool = False, seed: int = 0,
-                 movable: bool = False, wind: Callable[[float], float] | None = None, pattern: str = "fractal") -> None:
+                 movable: bool = False, wind: Callable[[float], float] | None = None, pattern: str = "fractal",
+                 scan: ScanMeter | None = None) -> None:
         self.prop = prop
         self.kind = prop.kind
         #: A hologram display's pattern (DESIGN.md §100.10).
         self.pattern = pattern
+        #: A scanner's reading (DESIGN.md §102.13; its ``at`` in scene seconds).
+        self.scan = scan if scan is not None else ScanMeter()
         self.start = DRAWN_CLOCK_SECONDS if start is None else float(start)
         self.speed = float(speed)
         self.on = bool(on)
@@ -372,7 +406,7 @@ class LivingProp:
         if switch_between(self.switches, start, end):
             return True
         on = on_between(self.on, self.switches, start, end)
-        return on and (self.kind in ("tv", "fireplace", "kettle", "phone", "hologram_display") or self.movable)
+        return on and (self.kind in ("tv", "fireplace", "kettle", "phone", "hologram_display", "scanner", "crystal") or self.movable)
 
     def movers(self) -> list[Mobject]:
         """The mobjects it changes on every frame: the hands, or the picture / lantern / flames
@@ -439,6 +473,10 @@ class LivingProp:
         if on and self.kind == "fireplace":
             self._burn(now)
             strength = fire_flicker(now, self.seed)
+        if on and self.kind == "crystal":
+            strength = crystal_pulse(now, self.seed)
+        if on and self.kind == "scanner":
+            strength = self._read(now)
         if self.steam is not None:
             self._steam(now if on else None)
         if self.glow is not None:
@@ -529,9 +567,23 @@ class LivingProp:
                     rect(member, boxes[k])
                 else:
                     member.points = np.zeros((0, 3))
-        for k, member in enumerate(self.display["holo_curve"]):
-            if k < len(frame.curves):
-                member.set_points_as_corners(placed(list(frame.curves[k])))
+        for group, boxes in (("holo_box", frame.boxes),):
+            for k, member in enumerate(self.display[group]):
+                if k < len(boxes):
+                    rect(member, boxes[k])
+                else:
+                    member.points = np.zeros((0, 3))
+        for group, polylines, closed in (("holo_curve", frame.curves, False), ("holo_glyph", frame.glyphs, False), ("holo_wing", frame.wings, True)):
+            for k, member in enumerate(self.display[group]):
+                if k < len(polylines):
+                    line = list(polylines[k])
+                    member.set_points_as_corners(placed([*line, line[0]] if closed else line))
+                else:
+                    member.points = np.zeros((0, 3))
+        for k, member in enumerate(self.display["holo_dot"]):
+            if k < len(frame.dots):
+                x, y, r = frame.dots[k]
+                member.set_points_as_corners(placed([(x + r * math.cos(a), y + r * math.sin(a)) for a in np.linspace(0.0, 2.0 * math.pi, 13)]))
             else:
                 member.points = np.zeros((0, 3))
         for member in members:
@@ -540,6 +592,34 @@ class LivingProp:
             member.set_stroke(opacity=stroke * frame.level)
         if self.glow is not None:
             self.glow.place(*self._glow_place(), frame.level * frame.grow)
+
+    def _read(self, now: float) -> float:
+        """A switched-on scanner's readout at scene time ``now`` (DESIGN.md §102.13): a bar along
+        the screen's foot filled to the reading and its live wave above it, both in the warning
+        colour and the wave jittering while the reading is off its scale; returns its glow's
+        strength (brighter as the reading climbs)."""
+        from vidgen.cartoon.props import SCANNER_SCREEN
+
+        x0, y0, x1, y1 = SCANNER_SCREEN
+        level = scan_level(now, self.scan)
+        off = level > 1.0
+        color = SCANNER_WARNING if off and alert_on(now, 0.4) else SCANNER_READOUT
+        pad = 0.035
+        for member in self.overlays:
+            role = getattr(member, SCAN_ROLE, None)
+            if role == "bar":
+                filled = x0 + pad + (x1 - x0 - 2 * pad) * min(max(level, 0.0), 1.0)
+                points = [(x0 + pad, y0 + pad), (filled, y0 + pad), (filled, y0 + pad + 0.05), (x0 + pad, y0 + pad + 0.05), (x0 + pad, y0 + pad)]
+                member.set_points_as_corners(self.prop.prop_points(np.array([[x, y, 0.0] for x, y in points])))
+                member.set_fill(color)
+            elif role == "wave":
+                values = scan_wave(now, self.scan, samples=24)
+                mid, amp = (y0 + 0.12 + y1) / 2, (y1 - y0 - 0.18) / 2 / 1.6
+                jitter = 0.35 if off else 0.0
+                points = [(x0 + pad + (x1 - x0 - 2 * pad) * k / 23, mid + amp * (v + jitter * math.sin(37.0 * now + 2.3 * k))) for k, v in enumerate(values)]
+                member.set_points_as_corners(self.prop.prop_points(np.array([[x, y, 0.0] for x, y in points])))
+                member.set_stroke(color)
+        return min(0.6 + 0.4 * level, 1.4)
 
     def _burn(self, now: float) -> None:
         """The flames as they are at scene time ``now``, leaning with the wind."""

@@ -23182,3 +23182,103 @@ left (frame a speaker away from them).
 How to test: `tests/test_city_hud_echo.py`; stills (scratchpad, private)
 `s251/t2/build/preview/frames/city/city_b1-1.png`, `s251/t2/build/preview/frames/lab/lab_b2-1.png`,
 `s251/t2/build/preview_vertical/frames/lab/lab_b2-1.png`; the script `story-qc/script.md`.
+
+## Step 252 — A kiss, floating formulas, a scanner, sliding doors; a HUD off the faces
+
+The remaining generic features of Phase AA's gap list, the review of 251's stills, and a private
+test cut of four key shots of the story (scratchpad `s252/t1`, never committed).
+
+What was done
+- **The HUD keeps off faces** (DESIGN §102.8): the overlay layer tells an overlay that
+  `avoids_faces` where the characters' heads are on screen at each frame; the `hud` puts its
+  alert (top centre / right / left, bottom centre) and its lines (top left / right, above a
+  meter) in the free place covering the least of a face, staying put while it stays clear.
+  `avoid_faces: false` keeps 251's places, `compact: true` shrinks texts and meters. Lint
+  **`overlay_face`** warns when its text or a plate still covers a face (outside Shorts).
+- **Overlays in pieces** (§102.8): `Overlay.pieces` / `pose_piece`; the layer caches each piece.
+  The HUD's frame is drawn once, only the meters every frame: 251's lab scene 24.7 s (was 30.3 s;
+  19.6 s without the HUD).
+- **Plain splashes** on an iso place (§102.9): a ring only (two droplets over a ring read as a
+  tiny face in a close-up). Flat stages unchanged.
+- **Display patterns** `equations` and `timelines` (§102.10).
+- **Sliding doors** `iso: {doors: slide}` with a hiss, and a **`haze`** over spots (§102.11-12).
+- **Small props** `scanner` (live readout, `scan: {level, to, at, wave}`, off its scale in red),
+  `takeout`, `crystal` (glowing while on) (§102.13).
+- **Accessories** `medal`, `pendant` (glowing, pulsing, unlit) (§102.14).
+- **`kiss`** action (§102.15): turn, lean in, faces touch (also levelling heads on an iso slant),
+  eyes closed, a burst of hearts and sparkles, a chime; lean back by the end.
+- Lint `look_alike` skips echoes (another self is alike on purpose) (§102.16).
+- **Test cut** (private, `s252/t1`, Kokoro: narrator/hero `am_fenrir`, heroine `af_bella`, the
+  synthetic voice `bf_emma` + `[robot, radio]`): the office alert with the HUD (texts moved off
+  the hero's face in the close-up), the corridor with a haze and a sliding door opening on the
+  heroine (scanner off its scale, her pendant glowing in the two-shot), the surge with echoes
+  (medal on the echo) and floating formulas, the kiss with the timelines display; 16:9 and 9:16
+  storyboards checked. Render times at 854 × 480: 20.8 s, 35.1 s, 20.0 s, 25.3 s for 9.6 s,
+  15.9 s, 9.8 s, 9.3 s of video; peak 0.56 GB.
+
+Files
+- New: `src/vidgen/cartoon/haze.py`, `src/vidgen/cartoon/kiss.py`, `tests/test_kiss_display_props.py` (14: 2 renders).
+- Changed: `overlays.py` (`avoids_faces`, `pieces`, `faces`, `pose_piece`, `posed_whole`),
+  `overlay_layer.py` (`face_boxes`, piece patches), `hud.py` (`face_cover`, `pick_place`),
+  `scenes/hud.py` (places, pieces, `avoid_faces`, `compact`), `lint/shorts_rule.py`
+  (`overlay_face`), `config.py` (`OverlayFaceRule`, rule names, accessories `medal`/`pendant`,
+  `NECK_ACCESSORIES`), `introspect.py` (overlay `faces`, character `kissing`),
+  `lint/cartoon_rules.py` (kissing pairs stand close), `cartoon/contrast.py` (echoes),
+  `particle_field.py` (plain iso splashes), `cartoon/holo_display.py` and `living_drawing.py`
+  (patterns; scanner and crystal drawing and readout), `cartoon/living.py` (switched props,
+  glows, `crystal_pulse`), `cartoon/props.py` (scanner, takeout, crystal), `cartoon/clothes.py`
+  and `primitives.py` (medal, pendant), `cartoon/figure_fx.py` (`PendantPulse`, `KissPlan`,
+  `KissMotion`, `KissBurst`), `cartoon/iso_scenery.py` (`IsoColors.doors`, slide doors),
+  `cartoon/iso_overlays.py` (`IsoHaze`, `HazeSpot`), `cartoon/foley.py` (door hiss),
+  `scenes/stage.py` (`ScannerReading`, `StageProp.scan`, `IsoHazeParam`, `StageIso.doors` /
+  `haze` / `haze_foot`), `scenes/stage_iso.py` (haze, doors' style, hiss), `scenes/stage_story.py`
+  (pendant pulses, `kiss`), `scenes/story_actions.py` (`kiss`), `scenes/__init__.py`, `api.py`;
+  tests whose expectations grew (`test_particle_lint`, `test_story_fx`, `test_cartoon_props`,
+  `test_cartoon_living`, `test_cartoon_small_props`, `test_cartoon_fire_nature`); docs CONFIG,
+  guide (copied to `AGENTS.md`), README, CHANGELOG, DESIGN §2 / §102, tasklist.
+
+Public interfaces: DESIGN §102.16. Config: `hud` `avoid_faces`, `compact`; lint `overlay_face`;
+`pattern: equations | timelines`; props `scanner` (+ `scan`), `takeout`, `crystal`; accessories
+`medal`, `pendant`; `iso.doors`, `iso.haze`; action `kiss`.
+
+Decisions
+- Faces are read live from the scene's characters at each frame (cheap), not planned per beat;
+  the placement keeps its place while clear, so texts move at cuts and zooms, not every frame.
+- Overlay pieces are a general layer feature (any overlay may use them); only the HUD does now.
+- The kiss is two animations sharing one plan on its own clock (a scene may play an action's
+  animations in a shorter run time); it steps the pair along the picture and levels their
+  heads, kept apart from where the stage puts them (as holding hands).
+- A sliding door opens by the place's crossfade (it is part of its wall's picture).
+- No gallery entry (the gallery budget; a neutral sample is in the docs).
+
+Checks
+- Tests (one or two files at a time): test_kiss_display_props 14 (2 renders), test_city_hud_echo
+  12, test_particle_lint + test_story_fx 150, test_overlays + test_schema + test_config +
+  test_api 128, test_docs + test_guide 164, test_cartoon_small_props + test_cartoon_props 114,
+  test_cartoon_living + test_cartoon_fire_nature 47, test_cartoon_character + test_cartoon_foley
+  29, test_iso_place + test_iso_staging 86, test_cartoon_rain + test_particles + test_iso_weather
+  51, test_introspect + test_cartoon_lint + test_cuts_shorts 48, test_lint + test_extensions 48,
+  test_iso_story + test_json_output 29, test_mcp 18 (not render), test_builtin_scenes 174 (not
+  render), test_random_cast + test_phase_l_review + test_docs 94, test_phase_k_review 8 — all
+  passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check252`).
+- `vidgen lint` of the test cut: no `overlay_face` (the HUD found free places); the rest are the
+  test cut's own staging and pacing (fast narration, two characters close).
+
+Notes for Step 253
+- HUD: give close-ups the face at the frame's middle; in 9:16 the lines may touch the top of the
+  hair (only spots of the head box); `compact: true` there.
+- Kiss: stand the pair on neighbouring cells of one map row (or marks close together), a
+  `two_shot` before it; `run_time` 3–3.5 s; it ends by itself (the pose comes back).
+- Pendant: shows best in a two-shot or close-up (the stone hangs low on the chest); medal on an
+  echo reads in a medium shot.
+- Echoes of one person no longer trip `look_alike`; give each a distinct echo `color`.
+- Display: `scale: 1.4–1.6` on the array for `equations` / `timelines`; zoom on it to read the
+  timelines' small panels.
+- Haze: put it at the spot right in front of the door (the cell next to the `+`); the heroine can
+  `enter` through `door: <that spot>` after `- open: door_1`.
+- Pods: no rider close-up built; a `zoom` on the hero lane's end spot with `size: 1.4`.
+
+How to test: `tests/test_kiss_display_props.py`; stills (scratchpad, private)
+`s252/t1/build/preview/storyboard/scenes/{office,door,surge,kiss}-1.png`, `door-2.png`,
+`s252/t1/build/preview_vertical/storyboard/video-1.png`, `video-2.png`.

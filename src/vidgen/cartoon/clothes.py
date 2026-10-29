@@ -228,6 +228,57 @@ def _necklace(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
     return pieces
 
 
+#: A medal (DESIGN.md §102.14): its disc's gold and the darker rim and star on it.
+MEDAL_GOLD = "#F2C14E"
+MEDAL_RIM = "#B8862B"
+#: The medal's disc radius (character units).
+MEDAL_RADIUS = 0.048
+#: A glowing pendant (§102.14): the attribute marking its glowing members (``core``: the stone
+#: and its light; ``halo``: the soft light round it), which the stage leaves unlit and pulses.
+PENDANT_GLOW = "pendant_glow"
+#: Its cord's colour (dark, so the stone's light stands out), how far below the neck the stone
+#: hangs and its radius (character units).
+PENDANT_CORD = "#2B2F3A"
+PENDANT_DROP = 0.085
+PENDANT_RADIUS = 0.032
+
+
+def _medal(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A medal: a ribbon in the accessory colour from both sides of the neck down to a gold
+    disc on the chest, a star on it (it trails in the wind)."""
+    x0, y0 = (0.0, f.body_top) if f.front else (0.05, f.body_top)
+    width = 0.08 if f.front else 0.05
+    drop = 0.15
+    tip = (x0, y0 - drop)
+    ribbon = polygon([(x0 - width, y0 + 0.01), (x0 - width + 0.035, y0 + 0.01), tip, (x0 + width - 0.035, y0 + 0.01), (x0 + width, y0 + 0.01),
+                      (tip[0] + 0.015, tip[1] - 0.012), (tip[0] - 0.015, tip[1] - 0.012)])
+    disc = Circle(radius=MEDAL_RADIUS).move_to([tip[0], tip[1] - MEDAL_RADIUS, 0])
+    star = polygon([(tip[0] + MEDAL_RADIUS * 0.6 * math.sin(a) * (1.0 if k % 2 == 0 else 0.45),
+                     tip[1] - MEDAL_RADIUS + MEDAL_RADIUS * 0.6 * math.cos(a) * (1.0 if k % 2 == 0 else 0.45))
+                    for k, a in enumerate(math.radians(36 * j) for j in range(10))])
+    medal = VGroup(outlined(disc, MEDAL_GOLD, c["outline"], w * 0.7), outlined(star, MEDAL_RIM, MEDAL_RIM, w * 0.3))
+    return [outlined(ribbon, c["accessory"], c["outline"], w * 0.6), trailing(medal, tip, "medal")]
+
+
+def _pendant(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A glowing pendant: a thin dark cord round the neck and a round stone in the accessory
+    colour with a bright core and a soft halo (marked :data:`PENDANT_GLOW`: never graded by the
+    stage's light, pulsing; DESIGN.md §102.14)."""
+    x0, y0 = (0.0, f.body_top) if f.front else (0.04, f.body_top)
+    width = 0.09 if f.front else 0.06
+    cord = [(x0 + width * math.cos(t), y0 + 0.085 * math.sin(t)) for t in (math.radians(200 + 140 * k / 10) for k in range(11))]
+    line = VMobject().set_points_as_corners([[x, y, 0] for x, y in cord]).set_fill(opacity=0).set_stroke(PENDANT_CORD, width=w * 0.6)
+    low = min(cord, key=lambda b: b[1]) if f.front else max(cord, key=lambda b: b[0] - b[1])
+    centre = [low[0] if f.front else x0, low[1] - PENDANT_DROP, 0]   # low on the chest, clear of long hair and the near arm
+    drop = Line([low[0], low[1], 0], [centre[0], centre[1] + PENDANT_RADIUS, 0]).set_stroke(PENDANT_CORD, width=w * 0.6)
+    halo = Circle(radius=PENDANT_RADIUS * 3.0).move_to(centre).set_fill(c["accessory"], opacity=0.38).set_stroke(width=0, opacity=0)
+    stone = outlined(Circle(radius=PENDANT_RADIUS).move_to(centre), c["accessory"], c["outline"], w * 0.7)
+    core = Circle(radius=PENDANT_RADIUS * 0.42).move_to(centre).set_fill("#FFFFFF", opacity=0.95).set_stroke(width=0, opacity=0)
+    for member, role in ((halo, "halo"), (stone, "core"), (core, "core")):
+        setattr(member, PENDANT_GLOW, role)
+    return [line, trailing(VGroup(drop, halo, stone, core), (low[0], low[1] - 0.004), "pendant")]
+
+
 def _backpack(f: Frame, body: Sequence[Point], c: Mapping[str, str], w: float, *, straps: bool) -> list[VMobject]:
     """A backpack: (side view, ``straps`` false) the pack behind the back; (``straps`` true) the
     straps over the shoulders."""
@@ -275,13 +326,17 @@ def body_shapes(look: CharacterLook, f: Frame, shape: VMobject, c: Mapping[str, 
     necklace, the backpack, the bag and the scarf. A plain outfit without a pattern, backpack or
     necklace is drawn as before Step 113."""
     top = c.get("trim", c["clothes"]) if look.outfit == "overalls" else c["clothes"]
-    plain = look.outfit == "plain" and look.pattern == "none" and not {"backpack", "necklace"} & set(look.accessories)
+    plain = look.outfit == "plain" and look.pattern == "none" and not {"backpack", "necklace", "medal", "pendant"} & set(look.accessories)
     if plain:
         return {"default": VGroup(outlined(shape, top, c["outline"], w), *_bag_and_scarf(look, f, c, w))}
     body = outline_polygon(shape)
     worn = [*_outfit_details(look, f, body, c, w)]
     if "necklace" in look.accessories:
         worn += _necklace(f, c, w)
+    if "medal" in look.accessories:
+        worn += _medal(f, c, w)
+    if "pendant" in look.accessories:
+        worn += _pendant(f, c, w)
     if "backpack" in look.accessories:
         worn += _backpack(f, body, c, w, straps=True)
     worn += _bag_and_scarf(look, f, c, w)

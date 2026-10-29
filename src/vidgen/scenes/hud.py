@@ -4,6 +4,11 @@ alert, readout lines appearing one by one, a heart monitor (a scrolling trace, i
 beats skipped) and a scanner's meter (a live wave that can spike off its scale). It belongs to a
 scene like a lower third (``scene``, ``at``, ``duration``) and boots in with a flicker.
 
+Its texts keep off the characters' faces (DESIGN.md §102.8): the overlay layer tells it where the
+heads are on screen at each frame (:attr:`Overlay.faces`), and the alert and the lines go to the
+free corner covering the least of a face (:func:`vidgen.hud.pick_place`). It is drawn in pieces
+(:attr:`Overlay.pieces`), so its still frame is drawn once and only the small meters each frame.
+
 The motion is :mod:`vidgen.hud`'s (pure functions of the time since it came on). Written against
 ``vidgen.api`` only.
 """
@@ -33,6 +38,8 @@ PANEL_STROKE = 1.6
 #: portrait frames use the second width).
 PANEL_WIDTH = (0.3, 0.47)
 PANEL_HEIGHT = 0.18
+#: ``compact``: texts and panels this size, the safe margin halved.
+COMPACT = 0.72
 
 
 class HudHeart(OverlayOptions):
@@ -77,6 +84,11 @@ class Hud(Overlay):
 
     layer = 9   # under the captions and the hook
     lint_skip = ("contrast",)   # glowing lines over a scene; its text stands on dark plates
+    avoids_faces = True
+    #: drawn in four pieces (DESIGN.md §102.8): the frame and the panels' plates (still), the
+    #: alert and the lines (changing when they blink, flicker in or move), the heart monitor and
+    #: the scan meter (moving on every frame, each a small patch)
+    pieces = 4
 
     class Options(OverlayOptions):
         scene: str | None = None
@@ -105,6 +117,10 @@ class Hud(Overlay):
         """A scanner's meter (bottom right): {level, to, at, wave, label, off_scale}."""
         opacity: float = Field(0.92, gt=0, le=1)
         """How strongly it shows over the scene."""
+        avoid_faces: bool = True
+        """Keep the alert and the readout lines off the characters' faces: each goes to the free corner of the frame (top centre, top right, top left, above the meters) that covers the least of a face, moving only when a face comes under it. false: always the alert at the top centre, the lines at the top left."""
+        compact: bool = False
+        """Smaller texts and meters, closer to the frame's edges (for close-ups)."""
         enter: float = Field(0.4, ge=0)
         """Seconds of its boot in (a flicker)."""
         exit: float = Field(0.35, ge=0)
@@ -130,44 +146,78 @@ class Hud(Overlay):
         short = min(frame.width, frame.height)
         color, warning = resolve_color(o.color), resolve_color(o.warning)
         self._color, self._warning = color, warning
-        parts: list[Mobject] = []
-        if o.frame:
-            parts += self._frame_parts(frame, short, color)
-        top = area.y1
-        #: the alert (its plate and words), shown while it blinks on
-        self._alert: Mobject | None = None
-        if o.alert:
-            self._alert = self._alert_plate(o.alert, area, warning)
-            self._alert.move_to([area.center[0], top - self._alert.height / 2, 0.0])
-            top -= self._alert.height + 0.18
-            parts.append(self._alert)
-        #: the readout lines, top left
-        self._lines: list[Mobject] = []
-        for text in o.lines:
-            line = T(text, "caption", color, role="code")
-            line.set_stroke(PANEL_FILL, width=4, opacity=0.8, background=True)
-            if line.width > area.width * (0.9 if portrait else 0.55):
-                line.scale_to_fit_width(area.width * (0.9 if portrait else 0.55))
-            line.move_to([area.x0 + line.width / 2, top - line.height / 2, 0.0])
-            top -= line.height + 0.12
-            self._lines.append(line)
-            parts.append(line)
-        width = area.width * PANEL_WIDTH[1 if portrait else 0]
-        height = max(area.height * PANEL_HEIGHT, 0.9)
+        shrink = COMPACT if o.compact else 1.0
+        if o.compact:   # closer to the frame's edges
+            inset = min(area.x0 - frame.x0, area.y0 - frame.y0, frame.x1 - area.x1, frame.y1 - area.y1) * 0.5
+            area = Region(area.x0 - inset, area.y0 - inset, area.x1 + inset, area.y1 - inset)
+        #: the still piece: the frame's brackets and scan lines, the panels' plates
+        still: list[Mobject] = self._frame_parts(frame, short, color) if o.frame else []
+        width = area.width * PANEL_WIDTH[1 if portrait else 0] * shrink
+        height = max(area.height * PANEL_HEIGHT * shrink, 0.9 * shrink)
         #: the heart panel's and the scan panel's boxes (x0, y0, x1, y1), when shown
         self._heart_box: tuple[float, float, float, float] | None = None
         self._scan_box: tuple[float, float, float, float] | None = None
         if o.heart is not None:
             self._heart_box = (area.x0, area.y0, area.x0 + width, area.y0 + height)
-            parts += self._panel(self._heart_box, color)
+            still += self._panel(self._heart_box, color)
         if o.scan is not None:
             self._scan_box = (area.x1 - width, area.y0, area.x1, area.y0 + height)
-            parts += self._panel(self._scan_box, color)
+            still += self._panel(self._scan_box, color)
+        #: the alert (its plate and words) and the readout lines, made at the origin; placed by
+        #: the poses in one of the places worked out here
+        self._alert: Mobject | None = None
+        if o.alert:
+            self._alert = self._alert_plate(o.alert, area, warning)
+            self._alert.scale(shrink).move_to(ORIGIN)
+        self._lines: list[Mobject] = []
+        for text in o.lines:
+            line = T(text, "caption", color, role="code")
+            line.set_stroke(PANEL_FILL, width=4, opacity=0.8, background=True)
+            line.scale(shrink)
+            widest = area.width * (0.9 if portrait else 0.55)
+            if line.width > widest:
+                line.scale_to_fit_width(widest)
+            self._lines.append(line.move_to(ORIGIN))
+        above = max((box[3] for box in (self._heart_box, self._scan_box) if box is not None), default=area.y0) + 0.15
+        self._places(area, above)
         #: texts made once and reused by the poses
         self._texts: dict[tuple[str, str], Mobject] = {}
-        for part in parts:
+        for part in [*still, *self._lines, *([self._alert] if self._alert is not None else [])]:
             _fade(part, o.opacity)
-        return VGroup(*parts)
+        #: the place chosen now for the alert and the lines (indices into the places)
+        self._placed: tuple[int, int] = (0, 0)
+        return VGroup(VGroup(*still), VGroup(*([self._alert] if self._alert is not None else []), *self._lines))
+
+    def _places(self, area: Region, above: float) -> None:
+        """Where the alert may stand (top centre, top right, top left, bottom centre above the
+        meters) and, for each, where the block of lines may stand (top left, top right, bottom
+        left and right above the meters; under the alert when it is up there too): boxes
+        (left, bottom, right, top) in order of preference."""
+        gap = 0.18
+        cx = area.center[0]
+        self._alert_boxes: list[tuple[float, float, float, float]] = []
+        if self._alert is not None:
+            w, h = self._alert.width, self._alert.height
+            self._alert_boxes = [(cx - w / 2, area.y1 - h, cx + w / 2, area.y1), (area.x1 - w, area.y1 - h, area.x1, area.y1),
+                                 (area.x0, area.y1 - h, area.x0 + w, area.y1), (cx - w / 2, above, cx + w / 2, above + h)]
+        heights = [line.height for line in self._lines]
+        block_w = max((line.width for line in self._lines), default=0.0)
+        block_h = sum(heights) + 0.12 * max(len(heights) - 1, 0)
+        self._line_boxes: list[list[tuple[float, float, float, float]]] = []
+        for alert in self._alert_boxes or [None]:   # type: ignore[list-item]
+            boxes = []
+            for x0, up in ((area.x0, True), (area.x1 - block_w, True), (area.x0, False), (area.x1 - block_w, False)):
+                if up:
+                    top = area.y1
+                    if alert is not None and alert[3] >= area.y1 - 1e-6 and alert[0] < x0 + block_w and x0 < alert[2]:
+                        top = alert[1] - gap
+                    boxes.append((x0, top - block_h, x0 + block_w, top))
+                else:
+                    bottom = above
+                    if alert is not None and alert[1] <= above + 1e-6 and alert[0] < x0 + block_w and x0 < alert[2]:
+                        bottom = alert[3] + gap
+                    boxes.append((x0, bottom, x0 + block_w, bottom + block_h))
+            self._line_boxes.append(boxes)
 
     def _frame_parts(self, frame: Region, short: float, color: str) -> list[Mobject]:
         """Corner brackets inside the frame's edges and faint scan lines across it."""
@@ -221,42 +271,82 @@ class Hud(Overlay):
     # ----- time -------------------------------------------------------------------------------
 
     def state(self, t: float) -> Hashable | None:
-        """The frame since it came on (it moves on every frame) and its boot progress (0..1)."""
+        """One state per piece (DESIGN.md §102.8), each ending with the boot level (1: fully on,
+        less while it boots in with a flicker or fades): the still frame; the texts (where the
+        alert and the lines stand, whether the alert is lit, how far each line has come in); the
+        heart monitor's and the scan meter's frame since it came on (they move on every frame)."""
+        o = self.options
         start, end = self.interval()
-        p = self.transition(t, start, end, self.options.enter, self.options.exit)
+        p = self.transition(t, start, end, o.enter, o.exit)
         if p <= 0:
             return None
-        return (round((t - start) * self.context.fps), round(p, 3))
+        since = t - start
+        level = 1.0 if p >= 1 else round(p * (0.55 + 0.45 * (int(since * 30) % 2)), 3)
+        frame = round(since * self.context.fps)
+        still = (level,) if (o.frame or o.heart is not None or o.scan is not None) else None
+        texts = None
+        if self._alert is not None or self._lines:
+            alert, lines = self._place_texts()
+            fades = tuple(round(v, 2) for v in lines_shown(since, len(self._lines), o.line_seconds))
+            texts = (alert, lines, self._alert is not None and alert_on(since), fades, level)
+        heart = (frame, level) if o.heart is not None else None
+        scan = (frame, level) if o.scan is not None else None
+        return (still, texts, heart, scan)
+
+    def _place_texts(self) -> tuple[int, int]:
+        """Where the alert and the lines stand now: clear of the faces on screen (keeping their
+        places while those stay clear), or the first places without ``avoid_faces``."""
+        if not self.options.avoid_faces or self.faces is None:
+            return (0, 0)
+        faces = self.faces()
+        alert, lines = self._placed
+        if self._alert_boxes:
+            alert = pick_place(self._alert_boxes, faces, alert)
+        boxes = self._line_boxes[alert if self._alert_boxes else 0]
+        if self._lines:
+            lines = pick_place(boxes, faces, lines, avoid=[self._alert_boxes[alert]] if self._alert_boxes else [])
+        self._placed = (alert, lines)
+        return self._placed
 
     def settled(self, state: Hashable) -> bool:
         """Fully on (not booting or fading)."""
-        return float(state[1]) >= 1   # type: ignore[index]
+        return all(piece is None or float(piece[-1]) >= 1 for piece in state)   # type: ignore[union-attr]
 
-    def pose(self, mobject: Mobject, state: Hashable) -> Mobject:
-        frame, p = state   # type: ignore[misc]
-        o = self.options
-        t = frame / self.context.fps
-        # a new group of the built parts (shared, unchanged) and of changed copies: no deep copy
-        parts = list(mobject.submobjects)
-        alert = self._alert
-        if alert is not None and not alert_on(t):
-            index = parts.index(alert)
-            parts[index] = with_opacity(alert, 0.25)
-        for line, shown in zip(self._lines, lines_shown(t, len(self._lines), o.line_seconds)):
-            if shown < 1:
-                index = parts.index(line)
-                parts[index] = with_opacity(line, shown)
-        moving: list[Mobject] = []
-        if o.heart is not None and self._heart_box is not None:
-            moving += self._heart_parts(t, o.heart, self._heart_box)
-        if o.scan is not None and self._scan_box is not None:
-            moving += self._scan_parts(t, o.scan, self._scan_box)
-        for part in moving:   # new each frame: faded in place
-            _fade(part, o.opacity)
-        group = VGroup(*parts, *moving)
-        if p >= 1:
-            return group
-        return with_opacity(group, p * (0.55 + 0.45 * (int(t * 30) % 2)))   # it boots in with a flicker
+    def pose_piece(self, mobject: Mobject, index: int, state: Hashable) -> Mobject:
+        level = float(state[-1])   # type: ignore[index]
+        if index == 0:
+            group: Mobject = mobject.submobjects[0]
+        elif index == 1:
+            group = self._texts_posed(state)   # type: ignore[arg-type]
+        else:
+            t = int(state[0]) / self.context.fps   # type: ignore[index]
+            o = self.options
+            moving = (self._heart_parts(t, o.heart, self._heart_box) if index == 2 and o.heart is not None and self._heart_box is not None
+                      else self._scan_parts(t, o.scan, self._scan_box) if index == 3 and o.scan is not None and self._scan_box is not None else [])
+            for part in moving:   # new each frame: faded in place
+                _fade(part, o.opacity)
+            group = VGroup(*moving)
+        return group if level >= 1 else with_opacity(group, level)
+
+    def _texts_posed(self, state: tuple[int, int, bool, tuple[float, ...], float]) -> Mobject:
+        """The alert and the lines in their places, the alert dimmed while it blinks off, each
+        line as far as it has come in."""
+        alert_at, lines_at, lit, fades, _ = state
+        parts: list[Mobject] = []
+        if self._alert is not None:
+            x0, y0, x1, y1 = self._alert_boxes[alert_at]
+            alert = self._alert.copy() if lit else with_opacity(self._alert, 0.25)
+            parts.append(alert.move_to([(x0 + x1) / 2, (y0 + y1) / 2, 0.0]))
+        if self._lines:
+            x0, _, x1, top = self._line_boxes[alert_at if self._alert_boxes else 0][lines_at]
+            right = lines_at % 2 == 1   # the places on the right: lines flush right
+            for line, shown in zip(self._lines, fades):
+                if shown > 0:
+                    placed = line.copy() if shown >= 1 else with_opacity(line, shown)
+                    x = x1 - line.width / 2 if right else x0 + line.width / 2
+                    parts.append(placed.move_to([x, top - line.height / 2, 0.0]))
+                top -= line.height + 0.12
+        return VGroup(*parts)
 
     def _heart_parts(self, t: float, options: HudHeart, box: tuple[float, float, float, float]) -> list[Mobject]:
         """The heart monitor at ``t``: its rate and word, a beating heart, the trace."""

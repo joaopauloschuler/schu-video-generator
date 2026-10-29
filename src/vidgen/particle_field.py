@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from vidgen.cartoon.rain import (
     PUDDLE_FLAT,
     SPLASH_OPACITY,
+    IsoRainGround,
     RainGround,
     drop_floors,
     drop_landings,
@@ -291,6 +292,8 @@ class ParticleField(VGroup):
         landed = drop_landings(tip_y, floor, spec.fall * self.seeds.speed * short, slant)
         idx = np.nonzero(landed.splashing)[0]
         shapes = splash_shapes(landed.age[idx], self._spread[idx], splash_depth_scale(floor[idx], ground)) * short
+        if isinstance(ground, IsoRainGround):   # plain rings: two droplets over a ring read as a tiny face close up (§102.9)
+            shapes = shapes[:, :1]
         centres = np.stack([tip_x[idx] - landed.back[idx], floor[idx]], axis=1)[:, None, :] + shapes[:, :, :2]
         circle = self._circle[None, None, :, :2] * shapes[:, :, None, 2:] + centres[:, :, None, :]
         points = np.zeros((circle.shape[0] * circle.shape[1] * circle.shape[2], 3))

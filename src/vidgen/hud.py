@@ -10,6 +10,7 @@ time, so the overlay looks the same on both sides of a cut.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 #: The HUD's colours by default: a cool cyan for readouts, a hot red for warnings.
@@ -146,6 +147,53 @@ def scan_level(t: float, scan: ScanMeter) -> float:
     return changing_value(t, scan.level, scan.to, scan.at, SCAN_RISE)
 
 
+#: Placing the HUD's texts clear of faces (DESIGN.md §102.8): a face's box is grown by this share
+#: of its size on each side; a place covering at most :data:`FACE_COVER` of the faces keeps its
+#: texts there, another must be better by :data:`FACE_SWITCH` for them to move.
+FACE_GROW = 0.12
+FACE_COVER = 0.02
+FACE_SWITCH = 0.05
+
+#: A box on screen: left, bottom, right, top (frame units, y up).
+Box = tuple[float, float, float, float]
+
+
+def _overlap(a: Box, b: Box) -> float:
+    """The area ``a`` and ``b`` share."""
+    return max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+
+
+def grown(face: Box, share: float = FACE_GROW) -> Box:
+    """``face`` grown by ``share`` of its width and height on each side."""
+    dx, dy = (face[2] - face[0]) * share, (face[3] - face[1]) * share
+    return (face[0] - dx, face[1] - dy, face[2] + dx, face[3] + dy)
+
+
+def face_cover(box: Box, faces: Sequence[Box]) -> float:
+    """How much of the ``faces`` (each grown by :data:`FACE_GROW`) ``box`` covers: the sum of the
+    shares of each face's box under it (0: clear of every face)."""
+    total = 0.0
+    for face in faces:
+        big = grown(face)
+        size = max((big[2] - big[0]) * (big[3] - big[1]), 1e-9)
+        total += _overlap(box, big) / size
+    return total
+
+
+def pick_place(places: Sequence[Box], faces: Sequence[Box], current: int | None = None, avoid: Sequence[Box] = ()) -> int:
+    """Which of ``places`` (boxes a text block could stand in, in order of preference) to put it
+    in: the one covering the least of the ``faces`` (:func:`face_cover`), the first of equals; a
+    place overlapping one of ``avoid`` (another block of the HUD) only when every one does. The
+    ``current`` place is kept while it covers at most :data:`FACE_COVER` or is within
+    :data:`FACE_SWITCH` of the best, so the texts do not hop about."""
+    scores = [face_cover(box, faces) + (10.0 if any(_overlap(box, other) > 1e-9 for other in avoid) else 0.0) for box in places]
+    best = min(range(len(places)), key=lambda k: (round(scores[k], 6), k))
+    if current is not None and 0 <= current < len(places):
+        if scores[current] <= FACE_COVER or scores[current] <= scores[best] + FACE_SWITCH:
+            return current
+    return best
+
+
 def scan_wave(t: float, scan: ScanMeter, samples: int = 60) -> list[float]:
     """The scanner's wave at ``t``: ``samples`` values (about -1 .. 1, scaled by the level, at
     most 1.6) across its window, moving left; ``organic`` mixes drifting partials, ``steady`` is
@@ -167,6 +215,9 @@ def scan_wave(t: float, scan: ScanMeter, samples: int = 60) -> list[float]:
 __all__ = [
     "ALERT_ON",
     "ALERT_PERIOD",
+    "FACE_COVER",
+    "FACE_GROW",
+    "FACE_SWITCH",
     "HEART_RISE",
     "HEART_WINDOW",
     "HUD_COLOR",
@@ -179,10 +230,13 @@ __all__ = [
     "alert_on",
     "changing_value",
     "ecg",
+    "face_cover",
+    "grown",
     "heart_beats",
     "heart_rate",
     "heart_trace",
     "lines_shown",
+    "pick_place",
     "scan_level",
     "scan_wave",
 ]

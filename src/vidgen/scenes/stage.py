@@ -118,6 +118,23 @@ class StageCharacter(SceneParams):
         return {"anyOf": [{"type": "string", "pattern": IDENTIFIER_PATTERN}, handler(core_schema)]}
 
 
+class ScannerReading(SceneParams):
+    """A switched-on scanner's readout (DESIGN.md §102.13)."""
+
+    level: float = Field(0.35, ge=0.0, le=2.0)
+    """Its reading at the start, a share of its scale."""
+    to: float | None = Field(None, ge=0.0, le=2.0)
+    """The reading it moves to from at (above 1: off its scale, the screen flashing red); none: steady."""
+    at: float = Field(0.0, ge=0.0)
+    """Seconds into the scene when the reading changes."""
+    wave: Literal["organic", "steady"] = "organic"
+    """organic (a living, irregular wave) or steady (a regular one)."""
+
+    def meter(self) -> ScanMeter:
+        """The reading as the HUD's :class:`~vidgen.hud.ScanMeter` (scene seconds)."""
+        return ScanMeter(self.level, self.to, self.at, self.wave)
+
+
 class StageProp(SceneParams):
     """A prop on the stage: a built-in one (``prop``) or an SVG file (``svg``). A plain string is
     a built-in prop's name."""
@@ -161,7 +178,9 @@ class StageProp(SceneParams):
     view: Literal[PORTAL_VIEWS] | None = None  # type: ignore[valid-type]
     """A portal: the place seen through it while it is open, instead of its swirling inside: coast (a sea coast at dusk, the sun setting), stars (a night sky) or meadow (green hills by day)."""
     pattern: Literal[DISPLAY_PATTERNS] = "fractal"  # type: ignore[valid-type]
-    """A hologram_display: what its floating panel shows while on: fractal (curves of light turning and breathing), data (bars, a wave, a gauge) or text (lines being written)."""
+    """A hologram_display: what its floating panel shows while on: fractal (curves of light turning and breathing), data (bars, a wave, a gauge), text (lines being written), equations (formulas being written, and formula butterflies fluttering up out of the panel) or timelines (a tree of branching timelines, a small panel at each tip in which two figures come together)."""
+    scan: ScannerReading | None = None
+    """A scanner: its readout while on, {level, to, at, wave} (at in seconds into the scene; to above 1 sends it off its scale, flashing red); default a steady low reading."""
 
     @model_validator(mode="before")
     @classmethod
@@ -201,6 +220,8 @@ class StageProp(SceneParams):
             raise ValueError(f"view is for a portal (the place seen through it), not {self.prop or 'an svg prop'}")
         if "pattern" in self.model_fields_set and self.prop != "hologram_display":
             raise ValueError(f"pattern is for a hologram_display, not {self.prop or 'an svg prop'}")
+        if self.scan is not None and self.prop != "scanner":
+            raise ValueError(f"scan is for a scanner, not {self.prop or 'an svg prop'}")
         return self
 
     def runs(self) -> bool:
@@ -643,6 +664,23 @@ class IsoTrafficLane(SceneParams):
     """Seconds into the scene when the first pod sets off to cross the lane once (the others follow, seconds / count apart), easing in and out; none: the pods loop along it all the time."""
 
 
+class IsoHazeParam(SceneParams):
+    """Shimmering air over a spot of an iso place (DESIGN.md §102.12)."""
+
+    at: Identifier | IsoCellRef
+    """Where it shimmers: a spot of the map, or {column, row} (its cell's middle)."""
+    width: float = Field(1.2, ge=0.3, le=6.0)
+    """How wide it is (tiles)."""
+    height: float = Field(2.6, ge=0.5, le=12.0)
+    """How high it rises (tiles; a character is 2 tiles tall)."""
+    color: ThemeColor = "#BFE8FF"
+    """Its faint glow and sparkles (a theme token or #hex)."""
+    strength: float = Field(0.6, ge=0.1, le=1.0)
+    """How strongly it shows (0.1 barely, 1 strongly)."""
+    start: float = Field(0.0, ge=0.0, alias="from")
+    """Seconds into the scene when it fades in (0: there from the start)."""
+
+
 class StageIso(SceneParams):
     """An isometric place (DESIGN.md §89): written as a small map, seen from above at an angle."""
 
@@ -666,6 +704,10 @@ class StageIso(SceneParams):
     """An indoor place: true starts with steel shutters down over its windows (the shutters action opens and closes them)."""
     traffic: list[IsoTrafficLane] = []
     """Outdoors: lanes of hover pods gliding over the place, {from, to, height, count, seconds, color, size, at} each (a city's traffic; with at, they cross once)."""
+    doors: Literal["swing", "slide"] = "swing"
+    """How the map's doors (+ in a room's back wall) look and open: swing (a wooden door swinging into the room, a creak) or slide (a steel door whose panels slide apart, a glowing seam and light over it, a hiss)."""
+    haze: list[IsoHazeParam] = []
+    """Shimmering air over spots of the place, {at, width, height, color, strength, from} each: a heat-haze ripple with faint sparkles (strange air round a door, over a vent)."""
 
     @model_validator(mode="after")
     def _parses(self) -> "StageIso":
@@ -684,7 +726,23 @@ class StageIso(SceneParams):
                     raise ValueError(f"traffic[{k}].{key}: row {end.row}, column {end.column} is outside the map ({place.rows} rows, {place.columns} columns)")
             if lane.start == lane.to:
                 raise ValueError(f"traffic[{k}]: from and to are the same place")
+        for k, haze in enumerate(self.haze):
+            if isinstance(haze.at, str) and haze.at not in spots:
+                raise ValueError(f"haze[{k}].at: the place has no spot '{haze.at}' (spots: {', '.join(sorted(spots)) or 'none'})")
+            if not isinstance(haze.at, str) and (haze.at.column > place.columns or haze.at.row > place.rows):
+                raise ValueError(f"haze[{k}].at: row {haze.at.row}, column {haze.at.column} is outside the map ({place.rows} rows, {place.columns} columns)")
         return self
+
+    def haze_foot(self, haze: IsoHazeParam) -> tuple[float, float, float]:
+        """The world point (tile units) a haze rises from: its cell's middle on the floor
+        (DESIGN.md §102.12)."""
+        place = self.parsed()
+        if isinstance(haze.at, str):
+            spot = place.spot(haze.at)
+            column, row = spot.column, spot.row
+        else:
+            column, row = haze.at.column - 1, haze.at.row - 1
+        return (column + 0.5, row + 0.5, place.floor_z(column, row))
 
     def lane_ends(self, lane: IsoTrafficLane) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
         """The world points (tile units) a traffic lane runs between: the middles of its cells,
@@ -2543,7 +2601,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
             self.living[name] = LivingProp(
                 self.props[name], start=prop.clock_start() if prop.runs() else None, speed=prop.speed or 1.0, on=prop.on,
                 seed=motion_seed(self.spec.id, name), movable=name in movable, wind=wind if prop.prop in ("fireplace", "kettle") else None,
-                pattern=prop.pattern,
+                pattern=prop.pattern, scan=prop.scan.meter() if prop.scan is not None else None,
             )
         #: the scene updater, kept: Manim removes an updater by identity
         self._living_updater = self._living_step

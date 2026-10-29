@@ -45,8 +45,10 @@ def _apart_in_depth(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 def _riding_together(a: dict[str, Any], b: dict[str, Any]) -> bool:
     """Whether two characters ride the same vehicle (one behind the other in a car or a bus,
-    DESIGN.md §69.52), or hold hands (side by side on purpose, §100.10)."""
+    DESIGN.md §69.52), or hold hands (side by side on purpose, §100.10), or kiss (§102.15)."""
     if a.get("hand_in_hand") == b.get("name") or b.get("hand_in_hand") == a.get("name"):
+        return True
+    if a.get("kissing") == b.get("name") or b.get("kissing") == a.get("name"):
         return True
     return a.get("riding") is not None and a.get("riding") == b.get("riding")
 

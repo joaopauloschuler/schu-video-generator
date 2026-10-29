@@ -305,7 +305,7 @@ class IsoStaging:
             x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
             center = view_center_within(self.camera_bounds(), (x, center[1]), width, width * self.frame_height / self.frame_width)
         self.camera.frame.scale(width / self.camera.frame.width).move_to([*center, 0.0])   # the wide view (§89.13)
-        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()})
+        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors)
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
                                          for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
                  for item in place.objects}
@@ -377,6 +377,13 @@ class IsoStaging:
             self.story_things.append(IsoBlinkers(lights, colors, LAB_LIGHT_SIZE * self.iso_view.unit, seed=motion_seed(self.spec.id, "lab_lights")))
         if not self.is_draft:
             self.story_things += self._iso_city(place, looks)
+        if p.iso.haze and not self.is_draft:   # shimmering air over spots (§102.12)
+            spots = []
+            for haze in p.iso.haze:
+                x, y, z = p.iso.haze_foot(haze)
+                spots.append(HazeSpot(self.iso_view.point(x, y, z), self.iso_view.point(x, y, z + haze.height), haze.width * self.iso_view.unit,
+                                      resolve_color(haze.color, self.theme), haze.strength, haze.start))
+            self.story_things.append(IsoHaze(spots, seed=motion_seed(self.spec.id, "haze")))
         return list(self.story_things)
 
     def _iso_city(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
@@ -745,7 +752,8 @@ class IsoStaging:
             self._iso_lamps[name][1].append((float(start), max(float(seconds), 1e-3), 1.0 if state.on and state.shown else 0.0))
         if self._foley_on():   # a door's creak, a bloom, an appearance (§89.11)
             kind = self.iso_scenery.pieces[k].kind or "door"
-            for cue in place_change_cues(kind, fields.get("open"), fields.get("shown"), float(start), float(seconds)):
+            sliding = kind == "door" and self.params.iso.doors == "slide"   # a sliding door hisses (§102.11)
+            for cue in place_change_cues(kind, fields.get("open"), fields.get("shown"), float(start), float(seconds), sliding=sliding):
                 self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **cue.params)
         if not any(f is self._iso_change_updater for f in self.updaters):
             self.add_updater(self._iso_change_updater)

@@ -80,7 +80,9 @@ FURNITURE: tuple[str, ...] = (
     "fireplace",
 )
 #: The everyday small props (DESIGN.md §69.56): things to hold, give, open and put on a table.
-SMALL_PROPS: tuple[str, ...] = ("cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can", "flower")
+SMALL_PROPS: tuple[str, ...] = (
+    "cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can", "flower", "scanner", "takeout", "crystal",
+)
 #: The outdoor props the built-in sets use (DESIGN.md §76): a street, a park, a beach, a forest.
 OUTDOOR_PROPS: tuple[str, ...] = (
     "shop", "bench", "bus_stop", "road", "path", "fountain", "flowers", "fence", "beach_umbrella", "shell", "pine",
@@ -106,7 +108,7 @@ PROP_HEIGHTS: dict[str, float] = {
     "sofa": 0.36, "armchair": 0.38, "bed": 0.34, "bookshelf": 0.9, "counter": 0.5, "fridge": 0.95,
     "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42, "fireplace": 0.75, "kettle": 0.15,
     "cake": 0.22, "muffin": 0.08, "book": 0.13, "phone": 0.13, "letter": 0.08, "gift": 0.2, "balloons": 1.1, "vase": 0.32,
-    "watering_can": 0.22, "flower": 0.22,
+    "watering_can": 0.22, "flower": 0.22, "scanner": 0.17, "takeout": 0.12, "crystal": 0.09,
     "shop": 1.7, "bench": 0.32, "bus_stop": 1.35, "road": 0.12, "path": 0.08, "fountain": 0.75, "flowers": 0.28,
     "fence": 0.42, "beach_umbrella": 1.3, "shell": 0.06, "pine": 1.9, "mushroom": 0.13, "log": 0.16,
     "blackboard": 0.5, "school_desk": 0.4, "shelf_with_goods": 0.95, "till": 0.26, "wardrobe": 1.1, "key": 0.3,
@@ -139,6 +141,7 @@ WATERING_SPOUT = (0.7, 0.64)
 PROP_GRIPS: dict[tuple[str, str | None], tuple[float, float]] = {
     ("basket", None): (0.0, 0.94), ("umbrella", "open"): (0.0, 0.16),
     ("balloons", None): BALLOON_KNOT, ("watering_can", None): WATERING_GRIP, ("key", None): (0.0, 0.8), ("flower", None): (0.0, 0.3),
+    ("scanner", None): (0.0, 0.16),
 }
 #: Height of an SVG prop relative to a character's, before its own ``scale``.
 SVG_PROP_HEIGHT = 0.5
@@ -163,7 +166,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "cake": ("accent", "highlight"), "muffin": ("secondary", "accent"), "book": ("primary", "highlight"),
     "phone": ("#2B2F3A", "primary"), "letter": ("#FBF8EF", "accent"), "gift": ("primary", "highlight"),
     "balloons": ("accent", "highlight"), "vase": ("primary", "accent"), "watering_can": ("tertiary", "highlight"),
-    "flower": ("accent", "highlight"),
+    "flower": ("accent", "highlight"), "scanner": ("#3A4150", "#0E2A33"), "takeout": ("#F4F1E8", "#D8403A"), "crystal": ("#7FE8FF", "#2E3340"),
     "bicycle": ("primary", "accent"), "car": ("accent", "highlight"), "bus": ("highlight", "primary"),
     "boat": ("highlight", "accent"), "hot_air_balloon": ("accent", "secondary"), "toy_rocket": ("primary", "accent"),
     "shop": ("primary", "accent"), "bench": ("secondary", "dim"), "bus_stop": ("primary", "dim"),
@@ -828,6 +831,51 @@ def _phone(p: _Paint) -> list[VMobject]:
         _poly([(-0.2, 0.86), (-0.04, 0.86), (-0.2, 0.62)], p.light(p.detail), p, outline=False),
         _rect(-0.07, 0.925, 0.07, 0.945, p.light(p.main), p, outline=False),
         _circle(0.0, 0.05, 0.025, p.light(p.main), p, outline=False),
+    ]
+
+
+#: A handheld scanner's screen (prop units: left, bottom, right, top; DESIGN.md §102.13), where a
+#: switched-on scanner shows its readout (:mod:`vidgen.cartoon.living_drawing`).
+SCANNER_SCREEN = (-0.21, 0.52, 0.21, 0.88)
+
+
+def _scanner(p: _Paint) -> list[VMobject]:
+    """A handheld scanner, its screen towards the viewer: a rounded body over a grip, a dark
+    screen (lit with a live readout when switched on), a sensor nub on top, two buttons."""
+    x0, y0, x1, y1 = SCANNER_SCREEN
+    return [
+        _rect(-0.11, 0.0, 0.11, 0.34, p.dark(p.main), p, radius=0.04),
+        _rect(-0.3, 0.3, 0.3, 0.97, p.main, p, radius=0.08),
+        _rect(-0.08, 0.95, 0.08, 1.0, p.dark(p.main), p, radius=0.02),
+        _rect(x0, y0, x1, y1, p.detail, p, radius=0.03),
+        _circle(-0.1, 0.41, 0.045, p.light(p.main), p, outline=False),
+        _circle(0.1, 0.41, 0.045, p.light(p.main), p, outline=False),
+    ]
+
+
+def _takeout(p: _Paint) -> list[VMobject]:
+    """A takeout box of noodles: a folded paper box wider at the top with its flaps up, a wire
+    handle, a round mark in ``detail`` and two chopsticks sticking out."""
+    return [
+        _line(-0.18, 0.95, 0.12, 1.0, "#C9A46A", 1.6 * OUTLINE_WIDTH),
+        _line(-0.05, 0.92, 0.3, 0.98, "#C9A46A", 1.6 * OUTLINE_WIDTH),
+        _poly([(-0.32, 0.0), (0.32, 0.0), (0.42, 0.72), (-0.42, 0.72)], p.main, p),
+        _poly([(-0.42, 0.72), (-0.1, 0.72), (-0.2, 0.9), (-0.47, 0.84)], p.dark(p.main), p),
+        _poly([(0.42, 0.72), (0.1, 0.72), (0.2, 0.9), (0.47, 0.84)], p.dark(p.main), p),
+        _circle(0.0, 0.36, 0.13, p.detail, p, outline=False),
+        _line(-0.3, 0.72, 0.0, 0.98, p.dark(p.main), 1.2 * OUTLINE_WIDTH),
+        _line(0.3, 0.72, 0.0, 0.98, p.dark(p.main), 1.2 * OUTLINE_WIDTH),
+    ]
+
+
+def _crystal(p: _Paint) -> list[VMobject]:
+    """A data crystal: a tall six-sided shard in ``main`` (a lighter facet catching the light)
+    standing in a small dark holder in ``detail``; switched on, its core glows (a light inside)."""
+    return [
+        _rect(-0.3, 0.0, 0.3, 0.14, p.detail, p, radius=0.03),
+        _poly([(-0.2, 0.12), (-0.24, 0.62), (0.0, 1.0), (0.24, 0.62), (0.2, 0.12)], p.main, p),
+        _poly([(-0.02, 0.12), (-0.04, 0.62), (0.0, 1.0), (0.24, 0.62), (0.2, 0.12)], p.light(p.main), p, outline=False),
+        _line(0.0, 1.0, -0.03, 0.14, p.dark(p.main), 0.8 * OUTLINE_WIDTH),
     ]
 
 
@@ -1541,6 +1589,7 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
     "mushroom": _mushroom, "log": _log,
     "blackboard": _blackboard, "school_desk": _school_desk, "shelf_with_goods": _shelf_with_goods, "till": _till,
     "wardrobe": _wardrobe, "key": _key, "portal": _portal, "hologram_display": _hologram_display,
+    "scanner": _scanner, "takeout": _takeout, "crystal": _crystal,
 }
 
 

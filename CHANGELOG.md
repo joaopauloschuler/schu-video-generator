@@ -5,7 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–251)
+## Unreleased (Steps 193–252)
+
+### A kiss, floating formulas, a scanner, sliding doors (Phase AA, Step 252)
+
+- **The `hud` keeps off faces**: its alert and readout lines go to the free corner covering the
+  least of a character's face, moving only when a face comes under them (`avoid_faces`, on by
+  default); `compact: true` for close-ups. It is drawn in pieces (its frame once, the meters on
+  every frame): about half the render cost of Step 251. New lint rule **`overlay_face`** (a HUD's
+  text or plate over a face, outside Shorts).
+- **`kiss`** action: two characters turn, lean in until their faces touch, close their eyes and
+  lean back; a small burst of hearts and sparkles (`hearts`, `color`).
+- **Display patterns** `equations` (formulas written, formula butterflies fluttering up out of
+  the panel) and `timelines` (a branching tree, two figures meeting in a panel at each tip).
+- **Small props** `scanner` (a live readout that can spike off its scale: `scan: {level, to,
+  at}`), `takeout`, `crystal` (glowing while on).
+- **Accessories** `medal` and `pendant` (glowing, pulsing, shining at night).
+- **Iso places**: `doors: slide` (steel doors sliding open with a hiss) and `haze` (shimmering
+  air with sparkles over a spot, `from` to fade it in). Rain on an iso place splashes in plain
+  rings (no droplets that read as a tiny face in a close-up).
+- Lint `look_alike` no longer compares an `echo` with anyone (another self, alike on purpose).
 
 ### A city at night, glowing particles, a HUD, echoes (Phase AA, Step 251)
 

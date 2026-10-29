@@ -185,7 +185,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   ([docs](docs/CONFIG.md#holograms-hologram)); for a city at night neon `tower`s with crawling
   screens, hover-pod `traffic` and glowing rain ([docs](docs/CONFIG.md#isometric-places-iso)),
   `echo` characters (other selves overlapping the present) and a `hud` overlay (an implant's
-  alerts, heart monitor and scanner over the frame).
+  alerts, heart monitor and scanner over the frame, its texts keeping off faces); a cartoon
+  `kiss`, holographic `equations` and `timelines`, a handheld `scanner`, a glowing `pendant`, a
+  `medal`, sliding doors and a shimmering `haze`.
 - **Isometric diagrams**: `iso_diagram` draws architecture and data flow as blocks in the same
   view (servers, databases, flat platforms, stacks of layers, group plates, connectors along a
   grid) with flat, readable labels, fitted to 16:9 and 9:16; blocks grow in on the word that names

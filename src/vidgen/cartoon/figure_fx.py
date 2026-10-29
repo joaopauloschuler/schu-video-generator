@@ -185,6 +185,215 @@ class Afterimages:
         self.ghosts = []
 
 
+#: A glowing pendant (DESIGN.md §102.14): its halo's light pulses between ``1 - PENDANT_PULSE``
+#: and 1 of its drawn opacity every ``PENDANT_SECONDS``, the stone brightening with it.
+PENDANT_PULSE = 0.65
+PENDANT_SECONDS = 1.6
+
+
+def pendant_level(now: float) -> float:
+    """How bright a glowing pendant is at scene time ``now`` (1 - PENDANT_PULSE .. 1): a soft
+    pulse, quick to rise and slow to fade, like a heartbeat of light."""
+    phase = (now / PENDANT_SECONDS) % 1.0
+    rise = min(phase / 0.2, 1.0) if phase < 0.2 else max(1.0 - (phase - 0.2) / 0.8, 0.0)
+    return 1.0 - PENDANT_PULSE * (1.0 - rise * rise * (3.0 - 2.0 * rise))
+
+
+class PendantPulse:
+    """``figure``'s glowing pendant pulsing (DESIGN.md §102.14): its halo's opacity follows
+    :func:`pendant_level`, its stone a little (members marked by the clothes'
+    ``PENDANT_GLOW``), times the figure's own opacity factors (a flicker, a materialise)."""
+
+    def __init__(self, figure: Character, members: list[tuple[VMobject, str]]) -> None:
+        self.figure = figure
+        self.members = [(m, role, m.fill_rgbas[:, 3].copy()) for m, role in members]
+
+    def update(self, now: float) -> None:
+        level = pendant_level(now)
+        alpha = getattr(self.figure, FIGURE_ALPHA, None)
+        shown = alpha.level()[0] if alpha is not None else 1.0
+        for member, role, base in self.members:
+            if len(member.fill_rgbas) != len(base):
+                continue
+            factor = level if role == "halo" else 0.75 + 0.25 * level
+            member.fill_rgbas[:, 3] = base * factor * shown
+
+
+#: A kiss's hearts and sparkles by default (DESIGN.md §102.15).
+KISS_COLOR = "#FF5C8A"
+KISS_SPARKLE = "#FFF1B8"
+#: The legs a lean turns back, so the feet stay on the ground.
+LEG_PARTS: tuple[str, ...] = ("legs", "leg_left", "leg_right")
+#: How far up or down (head heights) each steps to bring their heads level, at most.
+KISS_RISE = 0.6
+
+
+def head_box(figure: Character) -> tuple[float, float, float, float]:
+    """The box (left, bottom, right, top) of ``figure``'s head on screen (Manim units)."""
+    points = [m.points for m in figure.parts["head"].get_family() if len(m.points)]
+    xy = np.concatenate(points)[:, :2]
+    return float(xy[:, 0].min()), float(xy[:, 1].min()), float(xy[:, 0].max()), float(xy[:, 1].max())
+
+
+class KissPlan:
+    """Two characters kissing over ``seconds`` (DESIGN.md §102.15): on its first frame they turn
+    to each other and the plan measures how far each leans (:func:`~vidgen.cartoon.kiss.lean_angles`)
+    and steps in across the picture for their faces to touch at full lean
+    (:func:`~vidgen.cartoon.kiss.step_in`); :meth:`update` poses both for a time into the kiss
+    (:func:`~vidgen.cartoon.kiss.kiss_share`): bodies tilted forward at the waist (the legs
+    turned back, the feet on the ground), eyes closed while close, stepped in, and back to how
+    they stood at its end. Both characters' animations call it; it acts once per time."""
+
+    def __init__(self, a: Character, b: Character, seconds: float) -> None:
+        self.a, self.b, self.seconds = a, b, float(seconds)
+        self.ready = False
+        self._last: float | None = None
+        self.offsets: dict[str, np.ndarray] = {}
+        self.drawn: dict[str, np.ndarray] = {}
+
+    def _prepare(self) -> None:
+        from vidgen.cartoon.kiss import lean_angles, step_in
+
+        self.ready = True
+        ax, bx = float(self.a.feet()[0]), float(self.b.feet()[0])
+        for figure, other_x, own_x in ((self.a, bx, ax), (self.b, ax, bx)):
+            want = "right" if other_x >= own_x else "left"
+            if figure.facing != want:
+                figure.face(want)
+        self.before = {f.name: dict(f.state().parts) for f in (self.a, self.b)}
+        ha, hb = head_box(self.a), head_box(self.b)
+        height = max(ha[3] - ha[1], hb[3] - hb[1])
+        self.lean = dict(zip((self.a.name, self.b.name), lean_angles((ha[1] + ha[3]) / 2, (hb[1] + hb[3]) / 2, height)))
+        self._pose(1.0)
+        ha, hb = head_box(self.a), head_box(self.b)
+        left, right = (ha, hb) if ax <= bx else (hb, ha)
+        step = step_in(right[0] - left[2], min(ha[2] - ha[0], hb[2] - hb[0]))
+        # their heads level too, as far as a step towards each other takes them (on an iso place
+        # two side by side on the map stand on a slant across the picture)
+        rise = ((hb[1] + hb[3]) - (ha[1] + ha[3])) / 4.0
+        rise = min(max(rise, -KISS_RISE * height), KISS_RISE * height)
+        sign = 1.0 if ax <= bx else -1.0
+        self.moves = {self.a.name: (sign * step, rise), self.b.name: (-sign * step, -rise)}
+        self._pose(0.0)
+
+    def _pose(self, share: float) -> None:
+        from vidgen.cartoon.kiss import EYES_CLOSE
+
+        for figure in (self.a, self.b):
+            before = self.before[figure.name]
+            lean = self.lean[figure.name] * share
+            parts: dict[str, PartPose] = {}
+            body = before.get("body", PartPose())
+            parts["body"] = PartPose(body.angle - lean, body.scale, body.shift, body.shape)
+            for leg in LEG_PARTS:
+                if figure.has_part(leg):
+                    pose = before.get(leg, PartPose())
+                    parts[leg] = PartPose(pose.angle + lean, pose.scale, pose.shift, pose.shape)
+            if figure.has_part("eyes") and "closed" in figure.shape_names("eyes"):
+                eyes = before.get("eyes", PartPose())
+                parts["eyes"] = PartPose(eyes.angle, eyes.scale, eyes.shift, "closed") if share >= EYES_CLOSE else eyes
+            figure.set_state(CharacterState(figure.facing, {**figure.state().parts, **parts}))
+
+    def update(self, t: float) -> None:
+        """Pose both for ``t`` seconds into the kiss (once per time)."""
+        from vidgen.cartoon.kiss import kiss_share
+
+        if not self.ready:
+            self._prepare()
+        if self._last is not None and abs(self._last - t) < 1e-9:
+            return
+        self._last = t
+        share = kiss_share(t, self.seconds)
+        self._pose(share)
+        for figure in (self.a, self.b):
+            feet = np.asarray(figure.feet(), dtype=float)[:2]
+            last, offset = self.drawn.get(figure.name), self.offsets.get(figure.name, np.zeros(2))
+            own = feet if last is None or float(np.linalg.norm(feet - last)) > 1e-9 else feet - offset   # moved by the stage since: that is its place
+            new = np.array(self.moves[figure.name]) * share
+            figure.shift(np.array([*(own + new - feet), 0.0]))
+            self.offsets[figure.name] = new
+            self.drawn[figure.name] = np.asarray(figure.feet(), dtype=float)[:2]
+            figure.kissing = (self.b if figure is self.a else self.a).name if share > 0.0 else None   # the layout dump: lint lets them stand close
+
+    def meeting(self) -> tuple[float, float, float]:
+        """Where their faces meet now (x, y on screen) and a head's height."""
+        ha, hb = head_box(self.a), head_box(self.b)
+        left, right = (ha, hb) if ha[0] <= hb[0] else (hb, ha)
+        x = (left[2] + right[0]) / 2
+        y = (ha[1] + ha[3] + hb[1] + hb[3]) / 4
+        return x, y, max(ha[3] - ha[1], hb[3] - hb[1])
+
+
+class KissMotion(Animation):
+    """One character's side of a kiss: each frame asks the shared :class:`KissPlan` to pose
+    both for the time into the action (a linear clock)."""
+
+    def __init__(self, figure: Character, plan: KissPlan, **kwargs: Any) -> None:
+        self.plan = plan
+        kwargs.setdefault("rate_func", lambda t: t)
+        super().__init__(figure, **kwargs)
+
+    def create_starting_mobject(self) -> Mobject:
+        """No copy of the character: nothing interpolates from it."""
+        return Mobject()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        self.plan.update(alpha * self.plan.seconds)   # the kiss's own clock, whatever run time the scene plays it in
+
+
+def _heart_points(cx: float, cy: float, size: float) -> np.ndarray:
+    """A heart ``size`` wide about (cx, cy), as corners."""
+    points = []
+    for k in range(25):
+        a = 2.0 * math.pi * k / 24
+        x = 16 * math.sin(a) ** 3
+        y = 13 * math.cos(a) - 5 * math.cos(2 * a) - 2 * math.cos(3 * a) - math.cos(4 * a)
+        points.append([cx + x / 34 * size, cy + y / 34 * size, 0.0])
+    return np.array(points)
+
+
+class KissBurst(Animation):
+    """The small burst of hearts and sparkles of a kiss (:func:`~vidgen.cartoon.kiss.burst`),
+    rising from where the faces meet (``plan``) from ``contact`` seconds into the action; added
+    over the scene for the action and removed at its end. Never graded by the stage's light."""
+
+    def __init__(self, plan: KissPlan, contact: float, *, color: str = KISS_COLOR, seed: int = 0, **kwargs: Any) -> None:
+        from vidgen.cartoon.kiss import BURST_HEARTS, BURST_SPARKLES
+
+        self.plan, self.contact, self.seed = plan, float(contact), seed
+        self.hearts = [VMobject().set_fill(color, opacity=0.0).set_stroke("#FFFFFF", width=1.5, opacity=0.0) for _ in range(BURST_HEARTS)]
+        self.sparkles = [VMobject().set_fill(KISS_SPARKLE, opacity=0.0).set_stroke(width=0.0, opacity=0.0) for _ in range(BURST_SPARKLES)]
+        group = VGroup(*self.hearts, *self.sparkles)
+        group.name = "kiss_burst"
+        kwargs.setdefault("rate_func", lambda t: t)
+        super().__init__(group, introducer=True, remover=True, **kwargs)
+
+    def create_starting_mobject(self) -> Mobject:
+        return Mobject()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        from vidgen.cartoon.kiss import burst
+
+        found = burst(alpha * self.plan.seconds - self.contact, self.seed) if self.plan.ready else []
+        hearts = [f for f in found if f[0] == "heart"]
+        sparkles = [f for f in found if f[0] == "sparkle"]
+        x, y, h = self.plan.meeting() if found else (0.0, 0.0, 1.0)
+        for members, shapes in ((self.hearts, hearts), (self.sparkles, sparkles)):
+            for k, member in enumerate(members):
+                if k >= len(shapes) or shapes[k][3] <= 1e-4:
+                    member.points = np.zeros((0, 3))
+                    continue
+                kind, dx, dy, size, opacity = shapes[k]
+                cx, cy, s = x + dx * h, y + dy * h, size * h
+                if kind == "heart":
+                    member.set_points_as_corners(_heart_points(cx, cy, s))
+                    member.set_fill(opacity=opacity).set_stroke(opacity=0.8 * opacity)
+                else:
+                    member.set_points_as_corners([[cx + s * math.cos(a) * (1.0 if j % 2 == 0 else 0.25), cy + s * math.sin(a) * (1.0 if j % 2 == 0 else 0.25), 0.0]
+                                                  for j, a in enumerate(np.linspace(0.0, 2.0 * math.pi, 9))])
+                    member.set_fill(opacity=opacity)
+
+
 #: Holding hands: seconds the hands take to reach each other, and how far below the shoulders
 #: they meet (a share of the taller one's height).
 HAND_REACH_SECONDS = 0.4
@@ -311,6 +520,15 @@ __all__ = [
     "FigureAlpha",
     "HandHold",
     "Iridescence",
+    "KISS_COLOR",
+    "KissBurst",
+    "KissMotion",
+    "KissPlan",
     "Materialise",
+    "PENDANT_PULSE",
+    "PENDANT_SECONDS",
+    "PendantPulse",
     "figure_alpha",
+    "head_box",
+    "pendant_level",
 ]

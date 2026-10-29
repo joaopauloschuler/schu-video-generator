@@ -14,7 +14,7 @@ so an overlay looks the same on both sides of a cut.
 from __future__ import annotations
 
 import math
-from collections.abc import Hashable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -129,6 +129,13 @@ class Overlay:
     #: :attr:`clear_of` holding the boxes of those that reserve room (bottom captions), which
     #: :meth:`clear_area` keeps it clear of (a lower third moves above the captions).
     yields: ClassVar[bool] = False
+    #: Whether it keeps its texts off the characters' faces (DESIGN.md §102.8): the layer then
+    #: gives it :attr:`faces`, and the layout dump marks it for lint ``overlay_face``.
+    avoids_faces: ClassVar[bool] = False
+    #: How many pieces it is drawn in (0: one). With pieces, :meth:`state` returns a tuple of one
+    #: state per piece (``None``: that piece hidden) and :meth:`pose_piece` draws each: a piece
+    #: whose state stays the same is drawn once and reused (a HUD's frame while its meters move).
+    pieces: ClassVar[int] = 0
 
     def __init__(
         self,
@@ -148,6 +155,9 @@ class Overlay:
         self.span = span
         #: Boxes of the scene's reserving overlays, set before :meth:`build` when it :attr:`yields`.
         self.clear_of: list[Region] = []
+        #: When it :attr:`avoids_faces`: the boxes ``(left, bottom, right, top)`` of the
+        #: characters' heads on screen at the frame being drawn (frame units; set by the layer).
+        self.faces: Callable[[], list[tuple[float, float, float, float]]] | None = None
 
     @classmethod
     def validate_project(cls, options: Any, project: Project, scenes: Sequence[str]) -> list[str]:
@@ -192,6 +202,18 @@ class Overlay:
         """The mobject to draw for ``state`` (default: the built one). Return a modified copy;
         never change ``mobject`` itself."""
         return mobject
+
+    def pose_piece(self, mobject: Mobject, index: int, state: Hashable) -> Mobject:
+        """With :attr:`pieces`: piece ``index`` drawn for its ``state`` (never ``None``)."""
+        raise NotImplementedError
+
+    def posed_whole(self, mobject: Mobject, state: Hashable) -> Mobject:
+        """The whole overlay as drawn for ``state``: :meth:`pose`, or its pieces together."""
+        if not self.pieces:
+            return self.pose(mobject, state)
+        from manim import Group
+
+        return Group(*(self.pose_piece(mobject, k, s) for k, s in enumerate(state) if s is not None))   # type: ignore[arg-type]
 
     def settled(self, state: Hashable) -> bool:
         """Whether ``state`` is its full look rather than a transition (sliding in, fading out):

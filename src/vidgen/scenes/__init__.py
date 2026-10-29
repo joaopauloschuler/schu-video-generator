@@ -12,7 +12,7 @@ put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_i
 ``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``math_axes``: trace; ``switch_action``:
 switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: lightning,
 rainbow; ``knock_action``: knock; ``hide_action``: hide; ``story_actions``: alarm, shutters, materialise,
-dematerialise, hold_hands, let_go_hands; ``iso_actions``: build, raise, lower, explode, collapse, flow,
+dematerialise, hold_hands, let_go_hands, kiss; ``iso_actions``: build, raise, lower, explode, collapse, flow,
 focus, relabel; ``cell_actions``: zoom_to; ``molecule_actions``: set_state, transport, diffuse, osmosis,
 action_potential; ``gene_actions``: transcribe, cap, splice, polyadenylate, export, translate, target_er,
 glycosylate, fold, to_golgi, secrete; ``pathway_actions``: signal, inhibit, knockout, drug, amplify; ``cycle_actions``: advance, checkpoint; ``cross_actions``: form_gametes, fill, count, ratio, chi_square; ``pedigree_actions``: deduce, analyse, risk; ``linkage_actions``: cross_over, measure;

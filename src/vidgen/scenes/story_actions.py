@@ -1,5 +1,6 @@
-"""Story actions of a ``stage`` (DESIGN.md §100.7, §100.9, §100.10): ``alarm`` and ``shutters`` on
-the set, ``materialise`` / ``dematerialise`` and ``hold_hands`` / ``let_go_hands`` on characters.
+"""Story actions of a ``stage`` (DESIGN.md §100.7, §100.9, §100.10, §102.15): ``alarm`` and
+``shutters`` on the set, ``materialise`` / ``dematerialise``, ``hold_hands`` / ``let_go_hands`` and
+``kiss`` on characters.
 Written against ``vidgen.api`` only, like project actions; the stage does the work
 (:class:`~vidgen.scenes.stage_story.StoryStaging`)."""
 
@@ -154,6 +155,53 @@ class HoldHands(_Acting):
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
         return 0.0
+
+
+@action("kiss")
+class KissAction(_Acting):
+    """The target character and `with` kiss (`- {kiss: ana, with: ben}`): they turn to each other,
+    lean in and step close until their faces touch, close their eyes, hold, and lean back to where
+    they stood by the end of `run_time` (default 3 s); a small burst of hearts and sparkles rises
+    as their faces meet (`hearts: false`: none), with a soft chime (foley). Stand them side by
+    side, a step apart (one row of an iso place, or a two-shot). Stage scenes only."""
+
+    class Options(ActionOptions):
+        with_: str = Field(alias="with", pattern=r"^[A-Za-z0-9_]+$")
+        """The other character."""
+        hearts: bool = True
+        """A small burst of hearts and sparkles as their faces meet."""
+        color: ThemeColor = KISS_COLOR
+        """The hearts' colour (a theme token or #hex)."""
+
+    run_time = KISS_SECONDS
+    needs_visible = False
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        if not hasattr(scene_cls, "kiss"):
+            return [("action", "kiss is for the characters of a stage")]
+        names, problems = self._target_characters(scene_cls, params)
+        other = self.options.with_
+        on_stage = [c.name for c in params.characters]
+        if other not in on_stage:
+            problems.append(("with", f"'{other}' is not a character of this scene ({', '.join(on_stage)})"))
+        if other in names:
+            problems.append(("with", f"'{other}' cannot kiss itself; target the other character"))
+        if len(names) > 1:
+            problems.append(("target", "one character kisses the other: target one (- {kiss: ana, with: ben})"))
+        declared = _declared()
+        for name in [*names, other]:
+            entry = declared.get(name)
+            if entry is not None and entry.look.svg is not None:
+                problems.append(("target", f"'{name}' is drawn from an SVG; a kiss needs a generated character's body and eyes"))
+        return problems
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        seconds = float(self.config.run_time or self.run_time)
+        anims: list[Animation] = []
+        for character in _characters(scene, targets, "kiss")[:1]:
+            anims += scene.kiss(character.name, self.options.with_, seconds=seconds, hearts=self.options.hearts,
+                                color=resolve_color(self.options.color, scene.theme))
+        return anims
 
 
 @action("let_go_hands")

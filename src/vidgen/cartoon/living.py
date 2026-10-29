@@ -23,7 +23,7 @@ from functools import lru_cache
 
 #: The props a ``switch_on`` / ``switch_off`` action and the stage key ``on`` act on (a phone
 #: that is on rings, DESIGN.md §69.56).
-SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "phone", "tv", "portal", "hologram_display")
+SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "phone", "tv", "portal", "hologram_display", "scanner", "crystal")
 #: The props that can move by themselves: a running clock and the switched ones.
 LIVING_KINDS: tuple[str, ...] = ("clock", *SWITCHED_PROPS)
 #: The attribute naming a living part of a prop's drawing (``hour``, ``minute``, ``second``,
@@ -79,7 +79,18 @@ GLOWS: dict[str, GlowSpec] = {
     "fireplace": GlowSpec(0.0, 0.32, 1.05, "#FFA94D", 0.5),
     "portal": GlowSpec(0.0, 0.5, 0.75, "#C9A8FF", 0.5),   # in the portal's own rim colour (§100.4)
     "hologram_display": GlowSpec(0.0, 0.69, 0.7, "#5FD8FF", 0.32),   # in the panel's own colour (§100.10)
+    "scanner": GlowSpec(0.0, 0.7, 0.45, "#5FFFE0", 0.3),   # its lit screen (§102.13)
+    "crystal": GlowSpec(0.0, 0.55, 0.85, "#7FE8FF", 0.45),   # in the shard's own colour (§102.13)
 }
+#: A glowing data crystal's light pulses between ``1 - CRYSTAL_PULSE`` and 1 every
+#: ``CRYSTAL_PULSE_SECONDS``; a scanner's readout (DESIGN.md §102.13).
+CRYSTAL_PULSE = 0.3
+CRYSTAL_PULSE_SECONDS = 2.2
+
+
+def crystal_pulse(now: float, seed: int = 0) -> float:
+    """How strongly a glowing data crystal shines at scene time ``now`` (1 - CRYSTAL_PULSE .. 1)."""
+    return 1.0 - CRYSTAL_PULSE * 0.5 * (1.0 - math.cos(2.0 * math.pi * (now / CRYSTAL_PULSE_SECONDS + _unit(seed, "pulse"))))
 
 #: A fireplace's flames (prop units, as drawn facing right): the middle of each outer tongue's
 #: foot, its half width and its height at rest; the inner (yellow) tongues are
@@ -492,6 +503,7 @@ __all__ = [
     "TvPicture",
     "boxes_overlap",
     "clock_seconds",
+    "crystal_pulse",
     "fire_flicker",
     "flame_lean",
     "flame_shapes",

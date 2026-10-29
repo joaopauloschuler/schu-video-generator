@@ -21,7 +21,7 @@ from vidgen.cartoon.character import OUTER_HAIR_ATTRIBUTE, TRAIL_ATTRIBUTE
 #: not). Round ears and the other hair styles do not trail.
 TRAIL_WEIGHTS: dict[str, float] = {
     "scarf": 1.2, "long": 0.7, "bun": 0.4, "pointy": 0.35, "floppy": 1.0, "hat": 0.35,
-    "ponytail": 0.9, "braids": 0.6, "cap": 0.25, "pendant": 0.5,
+    "ponytail": 0.9, "braids": 0.6, "cap": 0.25, "pendant": 0.5, "medal": 0.3,
     "tail": 0.8, "feathers": 0.4, "long_ears": 0.3,
     "antenna": 0.35, "cape": 0.9, "wizard_hat": 0.4, "party_hat": 0.2,
 }

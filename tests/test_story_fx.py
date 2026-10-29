@@ -155,7 +155,7 @@ def test_windows_that_show_into_a_room() -> None:
 def test_display_patterns_stay_on_the_panel() -> None:
     assert holo_display.display_frame("fractal", None, 3.0) is None
     left, bottom, right, top = holo_display.PANEL
-    for pattern in holo_display.DISPLAY_PATTERNS:
+    for pattern in ("fractal", "data", "text"):   # equations and timelines: test_kiss_display_props
         frame = holo_display.display_frame(pattern, 0.0, 4.0, seed=2)
         assert frame is not None and frame.grow == 1.0
         points = [p for curve in frame.curves for p in curve] + [(b[0], b[1]) for b in (*frame.bars, *frame.lines)]

@@ -7,6 +7,8 @@ overlays') and the characters' ``face`` boxes. An overlay object's ``reach`` (ca
 every caption of the line being spoken) stands for the overlay when faces are checked, so a face
 that a longer caption of the same line covers is found from any still of it. ``shorts_length`` is a scene rule: it reads the
 video's planned length (``SceneContext.video_seconds``), set on the video's last scene only.
+``overlay_face`` (DESIGN.md §102.8) checks the overlays that keep off faces (a ``hud``) outside
+Shorts, from the same layout dump.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from vidgen.config import ShortsLengthRule, ShortsSafeAreaRule
+from vidgen.config import OverlayFaceRule, ShortsLengthRule, ShortsSafeAreaRule
 from vidgen.lint.layout_rules import area, describe, has_letters_or_digits, intersection, is_overlay, is_text, object_box
 from vidgen.lint.rules import Bbox, Issue, SceneContext, StillContext, rule
 
@@ -101,6 +103,40 @@ def shorts_safe_area(ctx: StillContext, settings: ShortsSafeAreaRule) -> Iterato
                     value=round(share, 3),
                     limit=settings.min_cover,
                     group=("shorts_face", overlay),
+                )
+
+
+@rule("overlay_face", mid_beat=True)
+def overlay_face(ctx: StillContext, settings: OverlayFaceRule) -> Iterator[Issue]:
+    """An overlay that keeps off faces (the layout dump's still ``overlays`` entry has ``faces``:
+    a ``hud``) whose text or plate covers a character's face anyway (DESIGN.md §102.8). In a
+    Short, ``shorts_safe_area`` reports every overlay over a face instead."""
+    if "shorts" in ctx.layout:
+        return
+    watched = {str(o["id"]) for o in ctx.frame.get("overlays", []) if o.get("faces")}
+    if not watched:
+        return
+    covering: dict[str, list[Bbox]] = {}
+    for obj in ctx.objects:
+        if not is_overlay(obj) or str(obj["overlay"]) not in watched:
+            continue
+        fill = obj.get("fill") or {}
+        plate = obj["kind"] == "shape" and float(fill.get("opacity", 0.0)) >= 0.3   # a panel's plate, not the frame's lines
+        if is_text(obj) and has_letters_or_digits(obj) or plate:
+            covering.setdefault(str(obj["overlay"]), []).append(object_box(obj))
+    for figure in _faces(ctx):
+        face: Bbox = tuple(float(v) for v in figure["face"])   # type: ignore[assignment]
+        for overlay, boxes in covering.items():
+            share = sum(area(shared) for shared in (intersection(face, box) for box in boxes) if shared is not None) / max(area(face), 1e-9)
+            if share >= settings.min_cover:
+                yield Issue(
+                    f"overlay '{overlay}' covers {min(share, 1.0):.0%} of the face of {describe(figure)}; "
+                    "frame the face away from the corners (a shot, a zoom), make the overlay compact, or give it fewer lines",
+                    face,
+                    (figure,),
+                    value=round(min(share, 1.0), 3),
+                    limit=settings.min_cover,
+                    group=("overlay_face", overlay),
                 )
 
 
