@@ -45,8 +45,12 @@ DELAYS: dict[str, float] = {"robot": 0.011, "chorus": 0.075, "echo": 0.23, "hall
 #: The default strength of the wet presets.
 DEFAULT_AMOUNT = 0.5
 #: dB a preset adds back so the voice stays about as loud (measured on Kokoro lines: the robot
-#: loses about 13 dB, the radio band 5.5).
+#: loses about 13 dB, the radio band 5.5); a rough first step: the effect's audio is then
+#: level-matched to the dry voice (:data:`MATCH_LIMIT`, :mod:`vidgen.tts.effects`).
 GAINS: dict[str, float] = {"robot": 12.5, "radio": 5.5}
+#: Largest correction (dB, either way) of the level match that brings each effect's audio to
+#: the dry voice's integrated loudness.
+MATCH_LIMIT = 15.0
 
 
 @dataclass(frozen=True)
@@ -59,8 +63,9 @@ class VoiceEffect:
     amount: float = DEFAULT_AMOUNT
 
     def spec(self) -> dict[str, Any]:
-        """What the audio depends on (part of each beat's hash)."""
-        return {"effects": list(self.names), "pitch": self.pitch, "amount": self.amount}
+        """What the audio depends on (part of each beat's hash; ``level``: the effect's audio is
+        level-matched to the dry voice)."""
+        return {"effects": list(self.names), "pitch": self.pitch, "amount": self.amount, "level": "matched"}
 
     @property
     def tail(self) -> float:
@@ -158,6 +163,7 @@ __all__ = [
     "EFFECT_DESCRIPTIONS",
     "VOICE_EFFECTS",
     "EFFECT_RATE",
+    "MATCH_LIMIT",
     "OTHERWORLDLY_PITCH",
     "PRESET_PITCH",
     "TAILS",

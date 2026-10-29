@@ -635,11 +635,14 @@ def build_server(root: Path) -> Any:
         jobs: Jobs = 1,
         frames: Annotated[bool, Field(description="also save a still per beat end")] = False,
         force: Annotated[bool, Field(description="render every scene again, even unchanged ones")] = False,
+        max_scenes: Annotated[int | None, Field(ge=1, description="render at most this many scenes, then stop without joining "
+                                                "if more are left (call again to go on): a long final render in steps")] = None,
         all_languages: AllLanguages = False,
     ) -> Any:
         options = {
             "preview": preview and not draft, "draft": draft, "scene": scene, "variant": variant, "no-audio": no_audio,
-            "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force, "all-languages": all_languages,
+            "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force, "max-scenes": max_scenes,
+            "all-languages": all_languages,
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 

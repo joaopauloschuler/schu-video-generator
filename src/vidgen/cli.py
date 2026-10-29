@@ -748,6 +748,7 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
         jobs=args.jobs,
         frames=frames,
         force=args.force,
+        max_scenes=args.max_scenes,
     )
     if args.json:
         return jsonout.render_document(project, result, args.preview or args.draft, time.monotonic() - started)
@@ -2015,6 +2016,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
     p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
+    p.add_argument(
+        "--max-scenes", type=int, metavar="N",
+        help="render at most N scenes in this run, then stop without joining if more are left (run again to go on; "
+        "finished scenes are kept): a long project in steps",
+    )
     output_dir_arg(p)
     all_languages_arg(p)
     p.set_defaults(func=cmd_render)

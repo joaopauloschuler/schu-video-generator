@@ -22847,3 +22847,85 @@ How to test: `tests/test_story_light_hands.py`; stills (scratchpad, private)
 `story-qeh/proj/build/final/storyboard/scenes/*.png` (1080p), `story-qeh/proj/build/preview/
 storyboard/scenes/*.png`, the contact sheet `story-qeh/contact.png`; the video (MP4 and SRT)
 in `story-qeh/proj/output/`.
+
+## Step 248 — Review of Phase Z: zoom and shots, level-matched effects, renders in steps
+
+A critical review of the private story video (every shot at 1080p, speech levels per voice, the
+mix) and of the issues Step 247 left. Generic fixes in vidgen (DESIGN §100.16); the story
+project itself (scratchpad, never committed) was fixed and rendered again.
+
+What was built
+- **A shot inside a zoom's `until`** (`Zoom.revert` in `scenes/actions.py`): the shot holds for
+  its beat, the next beat without a shot returns to the zoomed view, and the zoom ends at its
+  `until` beat; before, the camera pulled back during the shot and later returned to the zoom.
+  The zoom remembers the shot on screen when it starts; a zoom started inside a shot is undone
+  as before.
+- **Level-matched voice effects** (`tts/effects.py`: `level_match`, `with_effect`): the effect's
+  audio is brought to the dry voice's integrated loudness (within ±`MATCH_LIMIT` 15 dB), then
+  limited. The effect spec gains `level: matched` (voices with an effect are voiced again once).
+- **`vidgen render --max-scenes N`** (pipeline `render_project(max_scenes=)`, CLI, MCP
+  `render.max_scenes`): renders at most N of the scenes to render and stops without joining
+  while more are left (a `VidgenError` naming them, `details.rendered` / `remaining`); the next
+  run goes on. Docs: README, CONFIG (`--json` error details), the guide (copied to `AGENTS.md`).
+- **`tests/test_actions.py`**: one `BUILTIN_ACTIONS` list for the three tests that listed the
+  built-in actions by hand (failing since Phase X); the reversible actions come from the registry.
+
+Files
+- Changed: `src/vidgen/scenes/actions.py`, `src/vidgen/tts/effects.py`, `src/vidgen/voice_effects.py`
+  (`MATCH_LIMIT`, spec), `src/vidgen/render/pipeline.py`, `src/vidgen/cli.py`,
+  `src/vidgen/mcp_server.py`, guide + `AGENTS.md`, README, `docs/CONFIG.md` (voice effects,
+  shots, render JSON), CHANGELOG, DESIGN §100.16, tasklist; tests `test_cartoon_shots.py` (+1
+  render), `test_voice_effects.py` (+1), `test_render.py` (+1 render), `test_actions.py`.
+
+Public interfaces: CLI `render --max-scenes N`; MCP `render(max_scenes=)`;
+`render_project(..., max_scenes=None)`; `vidgen.tts.effects.level_match`;
+`vidgen.voice_effects.MATCH_LIMIT`. Behaviour: a zoom over a shot (above); effect loudness.
+
+Decisions
+- Resuming inside one scene was not built: manim would have to replay the scene's state up to a
+  beat, and skipped animations do not reproduce it exactly (updaters get one step). A scene
+  longer than a time limit is still split in two (beat ids keep their audio); a project of many
+  scenes renders in steps with `--max-scenes`.
+- `test_actions.py` keeps an explicit list for the registry check (a guard that new actions are
+  meant), and builds the message / enum expectations from it.
+
+The story video (private, scratchpad) — what the review found and changed
+- Fidelity: every beat of the story in order, names right (both doctors, the sister, the
+  student, the father, the visitors, the coast; the time and date line). No change needed.
+- Shots: key beats moved from tiny wides to closer framings (the AI materialising: a zoom on the
+  three; the hand found hers: a medium with the hands; the triumph: a two-shot; the visitors
+  stepping out: a zoom on the rift; the choice offered: a medium of the visitor and the pair; the
+  pair stepping through: a zoom on the rift with the visitors following); a two-face close-up
+  for a line said to the other; the student memory restaged (the student no longer cut by the
+  frame); the wedding memory's flashback lighter so the blue dress reads; warmer expressions
+  on the romantic and compassionate lines; the coast through the rift larger.
+- Title card in the story's night colours (it was a bright blue burst); end card line brighter.
+- Audio: speech outliers evened with an emotion's `gain` (two whispers were 8.5 dB under the
+  narrator, an excited line 3.8 over; a few narrator / hero lines +2–3); the robot voice +5 →
+  +0.4 dB by the generic fix; per-voice medians now within 2 dB of the narrator; music alone
+  about −27/−28 LUFS against speech about −16; a quieter drone.
+- Renders: 1080p scenes at 6–18× real time, rendered with `render --frames --jobs 2
+  --max-scenes 2..4` in seven runs under 10 minutes each, then joined (the join under a minute
+  this time). Final 16:9 1080p30: 7:12 (432.1 s), 98.9 MB, −16.3 LUFS, true peak −1.9 dBTP.
+  Delivery copy: H.264 720p two-pass `-preset slow -tune animation` 365 kb/s + AAC 128 kb/s,
+  27.3 MB (1080p at the same size showed blocks in the dark gradients; 720p looked cleaner).
+
+Checks
+- Tests (one or two files at a time): test_cartoon_shots 15, test_voice_effects 10,
+  test_actions 28, test_render 18, test_mcp 20, test_docs + test_guide 163, test_json_output +
+  test_tts + test_api 68 (+1 skipped), test_cli + test_schema + test_story_fx 101,
+  test_actions_coverage + test_platform_camera 127, test_iso_staging + test_cartoon_parallax 82,
+  test_step177 + test_introspect + test_callout_action 34 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check248`).
+
+Known gaps
+- A single scene longer than a command's time limit must still be split by hand.
+- Wide iso views of a whole room keep the characters small; the story uses closer shots for the
+  beats that matter. No 9:16 cut (see Step 247).
+- The heroine's and the hero's voices sit about 2 dB under the narrator (Kokoro's voices); lint was not
+  re-run on the story after the shot changes (validate is clean).
+
+How to test: `tests/test_cartoon_shots.py -k zoom`, `tests/test_voice_effects.py`,
+`tests/test_render.py -k max_scenes`, `tests/test_actions.py`; stills (scratchpad, private)
+`story-qeh/proj/build/final/storyboard/scenes/*.png`, the contact sheet
+`story-qeh/contact.png`; the videos in `story-qeh/proj/output/`.

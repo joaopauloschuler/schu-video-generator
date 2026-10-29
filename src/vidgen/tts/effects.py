@@ -12,16 +12,42 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import tempfile
+from pathlib import Path
 from typing import Any
 
-from vidgen.voice_effects import VoiceEffect, effect_filter
+import numpy as np
+
+from vidgen.voice_effects import EFFECT_RATE, MATCH_LIMIT, VoiceEffect, effect_filter
+
+
+def level_match(dry: np.ndarray, wet: np.ndarray) -> float:
+    """dB that bring ``wet``'s integrated loudness to ``dry``'s (mono samples at
+    :data:`~vidgen.voice_effects.EFFECT_RATE`), within ±:data:`~vidgen.voice_effects.MATCH_LIMIT`;
+    0 when either is silent or too short to measure."""
+    from vidgen.loudness import integrated_loudness
+
+    before, after = integrated_loudness(dry), integrated_loudness(wet)
+    if not (math.isfinite(before) and math.isfinite(after)):
+        return 0.0
+    return float(np.clip(before - after, -MATCH_LIMIT, MATCH_LIMIT))
 
 
 def with_effect(mp3: bytes, effect: VoiceEffect, ffmpeg: str | None = None) -> bytes:
-    """``mp3`` (any audio ffmpeg reads) through ``effect``, as MP3."""
+    """``mp3`` (any audio ffmpeg reads) through ``effect``, as MP3, level-matched to the dry
+    voice (:func:`level_match`; a limiter keeps the peaks below full scale)."""
+    from vidgen.render.ffmpeg import decode_mono, find_ffmpeg, run_ffmpeg
     from vidgen.tts.openrouter import convert_to_mp3
 
-    return convert_to_mp3(mp3, [], ffmpeg, source="the voice effect's audio", filters=effect_filter(effect))
+    exe = ffmpeg or find_ffmpeg()
+    with tempfile.TemporaryDirectory(prefix="vidgen-fx-") as folder:
+        given, wet = Path(folder) / "in.audio", Path(folder) / "wet.wav"
+        given.write_bytes(mp3)
+        run_ffmpeg(exe, ["-i", str(given), "-af", effect_filter(effect), "-c:a", "pcm_f32le", str(wet)], "applying a voice effect")
+        gain = level_match(decode_mono(given, EFFECT_RATE), decode_mono(wet, EFFECT_RATE))
+        filters = f"volume={gain:.2f}dB,alimiter=limit=0.89:level=false"
+        return convert_to_mp3(wet.read_bytes(), [], ffmpeg, source="the voice effect's audio", filters=filters)
 
 
 class EffectProvider:
@@ -66,4 +92,4 @@ class EffectProvider:
         return with_effect(audio, self.effect, self._ffmpeg), alignment
 
 
-__all__ = ["EffectProvider", "with_effect"]
+__all__ = ["EffectProvider", "level_match", "with_effect"]

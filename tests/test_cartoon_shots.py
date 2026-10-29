@@ -266,3 +266,25 @@ def test_a_shot_cuts_the_camera_and_the_next_beat_cuts_back(make_project, tmp_pa
     assert pip["bbox"][0] < 0 < pip["bbox"][2]   # the near character stands cut by the left edge
     assert any(o["kind"] == "particles" for o in first["objects"])
     assert scene.camera_shot is None and scene.shot_home is None
+
+
+@pytest.mark.render
+def test_a_shot_inside_a_zooms_until_wins_for_its_beat_then_the_zoom_resumes(make_project, tmp_path: Path) -> None:
+    from vidgen.introspect import LayoutRecorder
+
+    beats = [{"text": "Look at the tree over there.", "actions": [{"zoom": "tree", "scale": 2.0, "at": 0.0, "run_time": 0.4, "until": "park_b5"}]},
+             {"text": "Yes, I see it.", "voice": "pip_voice", "shot": "closeup pip"},
+             {"text": "It is tall."},
+             {"text": "Very tall.", "voice": "kit_voice", "shot": "closeup kit"},
+             {"text": "Fine."}]
+    project = stage_project(make_project, beats)
+    recorder = LayoutRecorder()
+    scene, _ = render_with_layout(project, "park", tmp_path / "media", recorder)
+    ends = {f["beat"]: f["camera"] for f in recorder.frames if f["k"] == f["n"]}
+    zoomed, pip_shot, resumed, kit_shot, back = (ends[f"park_b{k}"] for k in range(1, 6))
+    assert zoomed["zoom"] == pytest.approx(2.0, abs=0.01)
+    assert pip_shot["zoom"] > 2.2                        # the shot holds to its beat's end (not pulled back)
+    assert resumed["zoom"] == pytest.approx(zoomed["zoom"]) and resumed["center"] == pytest.approx(zoomed["center"])   # the zoom resumes
+    assert kit_shot["zoom"] > 2.2                        # the last beat inside until: still the shot
+    assert back["zoom"] == pytest.approx(1.0) and back["center"] == pytest.approx([0.0, 0.0])
+    assert scene.camera_shot is None and scene.shot_home is None

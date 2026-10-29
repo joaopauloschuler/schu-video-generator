@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–247)
+## Unreleased (Steps 193–248)
 
 ### Story-cartoon features (Phase Z, Steps 245–248)
 
@@ -48,6 +48,10 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   iridescent visitor shines partly by its own light (`iridescent: {glow}`, default 0.5).
 - **Hand in hand, side by side** (Step 247). Two holding hands step in close enough for their
   joined hands to show, and walking together (same `run_time`) they go side by side.
+- **Review** (Step 248). A `shot` inside a `zoom`'s `until` holds for its beat, then the zoom
+  resumes (the camera no longer pulls back during the shot). Voice effects are level-matched to
+  the dry voice (the robot was about 5 dB louder). `vidgen render --max-scenes N` renders a long
+  project in steps (stops without joining while scenes are left; run it again to go on).
 
 ### Particle physics (Phase Y, Steps 237–244)
 

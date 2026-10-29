@@ -491,13 +491,24 @@ class Zoom(Action):
         width, height = fw / factor, fh / factor
         center = view_center_within(scene.camera_bounds(), group.get_center()[:2], width, height)
         self.before = camera_view(scene)
+        self.shot = getattr(scene, "camera_shot", None)
         return [MoveCamera(scene, width, np.array([*center, 0.0]))]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Back to the view before the zoom (nothing to do when the camera is there)."""
+        """Back to the view before the zoom (nothing to do when the camera is there).
+
+        A ``shot`` that took the camera after the zoom (a beat inside its ``until`` with a shot
+        of its own) wins: the camera stays on the shot, and the view the shot goes back to
+        becomes the one before the zoom (the zoomed view resumes after a shot's beat while the
+        zoom lasts)."""
         if getattr(self, "region", False):
             return scene.zoom_back()  # type: ignore[attr-defined]
-        return move_camera_back(scene, getattr(self, "before", None))
+        before, shot = getattr(self, "before", None), getattr(scene, "camera_shot", None)
+        if before is not None and shot is not None and shot is not getattr(self, "shot", None):
+            if getattr(self, "shot", None) is None and scene.shot_home is not None:
+                scene.shot_home = (before, scene.shot_home[1])
+            return []
+        return move_camera_back(scene, before)
 
 
 class MoveCamera(Transform):

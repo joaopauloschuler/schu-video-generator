@@ -170,7 +170,9 @@ only the scenes that changed (`render` reuses the storyboard's renders of the sa
 `--force` renders everything, e.g. after editing a file outside `assets/`); `--jobs N` renders
 several at once, and `--jobs auto` picks N from the available memory (1.5 GB per job) and the CPU
 cores and prints why; never run two vidgen commands at once, and run Kokoro `tts` alone; preview
-while iterating.
+while iterating. Under a time limit per command, `render --max-scenes N` renders N scenes and
+stops (not joined while more are left); run it again until it joins — finished scenes are kept,
+also when a run is interrupted.
 
 **JSON everywhere.** Every command but `mcp` takes `--json` (`validate`, `list-scenes`,
 `schema`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `plan`, `init`, ...): one document on

@@ -734,6 +734,7 @@ def render_project(
     jobs: int = 1,
     frames: int = 0,
     force: bool = False,
+    max_scenes: int | None = None,
 ) -> RenderResult:
     """Render ``project`` (already loaded with its variant) and write the final MP4 + SRT.
 
@@ -746,6 +747,10 @@ def render_project(
     a :class:`VidgenError` listing the failed scenes is raised at the end.
     ``frames``: also save that many PNG stills per beat of every scene (1: the end of each beat)
     under ``build/.../frames/``; reused scenes without such stills are rendered again. 0: none.
+    ``max_scenes``: render at most that many of the scenes to render (config order); when more
+    are left, the video is not joined and a :class:`VidgenError` names them (details
+    ``rendered`` / ``remaining``): running again goes on with them, as every finished scene's
+    render is kept (also after an interrupted run). A long project renders in steps that way.
     With a ``thumbnail:`` config (and ``auto``), the thumbnail is written after the join
     (:func:`vidgen.thumbnail.make_thumbnail`; its warnings are logged). ``post_render`` hooks run
     last, with every output (``thumbnail``: its path, else ``None``).
@@ -754,6 +759,8 @@ def render_project(
 
     if frames < 0:
         raise VidgenError("frames per beat must not be negative")
+    if max_scenes is not None and max_scenes < 1:
+        raise VidgenError("--max-scenes must be at least 1")
     with extensions.project_session(project):
         _check_scenes(project)
         ffmpeg = ff.find_ffmpeg()
@@ -780,6 +787,9 @@ def render_project(
             render_dir=project.render_dir(preview),
         )
         to_render = [sid for sid in known if sid in ctx.data["scenes"]]
+        later: list[str] = []
+        if max_scenes is not None and len(to_render) > max_scenes:
+            to_render, later = to_render[:max_scenes], to_render[max_scenes:]
         frames_index = project.render_dir(preview) / "frames" / "index.json"
         remove_file(frames_index)  # rewritten below when stills are requested; never stale
         runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames)
@@ -788,6 +798,14 @@ def render_project(
                 f"{len(runs.failed)} scene(s) failed: {', '.join(f['scene'] for f in runs.failed)}; "
                 f"the video was not joined ({len(runs.rendered)} scene(s) rendered)",
                 details={"failed": runs.failed, "rendered": runs.rendered},
+            )
+        later = [sid for sid in later if sid not in runs.rendered]   # a carry may have rendered one
+        if later:
+            raise VidgenError(
+                f"rendered {len(runs.rendered)} scene(s) ({', '.join(runs.rendered) or 'none'}); "
+                f"{len(later)} still to render ({', '.join(later)}): the video was not joined - "
+                "run the same command again to go on",
+                details={"rendered": runs.rendered, "remaining": later, "render_seconds": runs.seconds},
             )
         print("joining scenes", flush=True)
         output, timings = join_scenes(project, preview, no_audio, ffmpeg)

@@ -1498,7 +1498,8 @@ audio and the studio unchanged (Phase Q's 31 baseline frames when shared code ch
 - [x] Generic fixes from the reviewer's notes (§100.15): a stage's `fill_light` (faces readable in a dark light), an iridescent visitor's own `glow` (default 0.5), holding hands steps the two in close and keeps them side by side while they walk; tests `tests/test_story_light_hands.py`; CONFIG, guide; Phase Q baseline 31/31
 
 ### Step 248 — Review of Phase Z
-- [ ] Story fidelity, visual quality (stills of every shot, 16:9 / 9:16), audio (distinct voices, levels, −16 LUFS), compatibility (Phase Q baseline), tests, docs; final render
+- [x] Story fidelity, visual quality (stills of every shot, 16:9; 9:16 not made, see Step 247), audio (distinct voices, levels, −16 LUFS), compatibility (Phase Q baseline 31/31), tests, docs; final render (16:9 1080p, 7:12) and a delivery copy under 28 MB (720p)
+- [x] Generic fixes (DESIGN §100.16): a `shot` inside a `zoom`'s `until` wins for its beat, then the zoom resumes; voice effects level-matched to the dry voice; `render --max-scenes N` (a long render in steps); `tests/test_actions.py` lists of built-in actions repaired
 
 ---
 

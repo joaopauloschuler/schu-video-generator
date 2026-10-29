@@ -3,9 +3,12 @@ real ffmpeg run over a fake Kokoro voice."""
 
 from __future__ import annotations
 
+import io
 import typing
+import wave
 from typing import Any
 
+import numpy as np
 import pytest
 import yaml
 
@@ -17,9 +20,10 @@ from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.speech import audio_duration, read_alignment
 from vidgen.tts import kokoro as kk
-from vidgen.tts.effects import EffectProvider
+from vidgen.tts.effects import EffectProvider, level_match, with_effect
 from vidgen.tts.run import describe_voice, plan_tts
 from vidgen.voice_effects import (
+    MATCH_LIMIT,
     VOICE_EFFECTS,
     OTHERWORLDLY_PITCH,
     TAILS,
@@ -147,6 +151,41 @@ def test_tts_run_with_an_effect(make_project, fake: Factory, capsys: pytest.Capt
     data["voices"]["guard"]["effect"] = "echo"
     (root / "video.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     assert [b.id for b in plan_tts(Project.load(root)).todo] == ["custom"]       # only that voice's beats
+
+
+def _speech_like(seconds: float = 3.0, rate: int = 24000) -> bytes:
+    """A WAV of a voice-like signal: harmonics of a gliding 110-190 Hz pitch in syllable bursts."""
+    t = np.arange(int(seconds * rate)) / rate
+    f0 = 150 + 40 * np.sin(2 * np.pi * 0.7 * t)
+    phase = 2 * np.pi * np.cumsum(f0) / rate
+    voice = sum(np.sin(k * phase) / k for k in range(1, 12))
+    syllables = np.clip(np.sin(2 * np.pi * 3.2 * t), 0, None) ** 0.6
+    pcm = (0.25 * voice * syllables / np.max(np.abs(voice)) * 32767).astype("<i2")
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
+    return out.getvalue()
+
+
+def test_every_effect_is_level_matched_to_the_dry_voice(tmp_path) -> None:
+    from vidgen.loudness import integrated_loudness
+    from vidgen.render.ffmpeg import decode_mono
+
+    dry_file = tmp_path / "dry.wav"
+    dry_file.write_bytes(_speech_like())
+    dry = integrated_loudness(decode_mono(dry_file, 48000))
+    for setting in ("robot", {"use": "robot", "pitch": -5}, "radio", "echo", "hall", "otherworldly", ["deep", "chorus"]):
+        out = tmp_path / "wet.mp3"
+        out.write_bytes(with_effect(dry_file.read_bytes(), voice_effect(setting)))
+        wet = decode_mono(out, 48000)
+        assert integrated_loudness(wet) == pytest.approx(dry, abs=1.0), setting
+        assert np.max(np.abs(wet)) < 1.0
+    assert level_match(np.zeros(48000), np.ones(48000)) == 0.0                      # silence: no correction
+    loud = np.sin(np.arange(96000) / 7.0)
+    assert level_match(loud * 0.001, loud) == -MATCH_LIMIT                         # never more than the limit
 
 
 def test_variant_with_another_effect_gets_its_own_audio(make_project) -> None:

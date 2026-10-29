@@ -1463,8 +1463,9 @@ voices:
 
 - **Order**: presets combine in a fixed order (the pitch, then the robot, the radio band, the
   chorus, the echo and the hall; with the robot the pitch comes after it), so `[deep, hall]` and
-  `[hall, deep]` are the same. Each preset keeps the voice about as loud as without it (measured
-  on Kokoro lines), and a limiter keeps the peaks under full scale.
+  `[hall, deep]` are the same. The effect's audio is level-matched to the dry voice (the same
+  integrated loudness, within 1 dB; at most ±15 dB of correction), and a limiter keeps the
+  peaks under full scale.
 - **Length**: the speech keeps its timing, so captions and lip sync stay on the words; `echo`,
   `hall` and `chorus` add a short tail after the last word for the reflections to ring out
   (0.35 s, 0.9 s, 0.1 s), and the beat is that much longer.
@@ -11813,6 +11814,10 @@ beats:
   - text: "They looked at each other."  # no shot: back to the view before the shots
 ```
 
+A `zoom` whose `until` spans beats with shots of their own gives way to them: each such beat
+shows its shot, the next beat without a shot returns to the zoomed view, and the zoom ends (the
+camera going back to the view before it) when its `until` beat starts.
+
 #### Vertical cartoons (`reframe`)
 
 A cartoon written for 16:9 also renders in a 9:16 [variant](#variants): with `reframe: speaker`
@@ -14622,7 +14627,10 @@ difference between two palette colours).
 narrated), with their `scene`, and YouTube's chapter rules the list breaks (`chapters: ...`). On failure, `error.details` is `{failed, rendered}`: `failed`
 lists `{scene, exit_code, output_tail}` (the last 60 lines of the worker's output; exit code 1
 for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids rendered before
-(or, with `--keep-going`, besides) the failures.
+(or, with `--keep-going`, besides) the failures. With `--max-scenes N`, a run that leaves scenes
+to render is not joined: it fails with `error.details` `{rendered, remaining, render_seconds}`
+(the next run goes on with `remaining`; finished scenes' renders are kept, as after an
+interrupted run).
 
 ### `vidgen storyboard --json`
 

@@ -19518,3 +19518,41 @@ front of the other; the visitors not reading tall) and the story video built in 
   `characters[].iridescent.glow`.
 - **Compatibility**: `fill_light` defaults to 0 (nothing marked); `HandHold` is used only by
   `hold_hands` (new in 246, no committed render); iridescence likewise. Phase Q baseline 31/31.
+
+### 100.16 Review of Phase Z (Step 248)
+
+A critical review of the story video (every shot at 1080p, the speech levels per voice, the mix)
+and of the issues Step 247 left. Generic fixes:
+
+- **A shot inside a zoom's `until`** (`Zoom.revert`): a zoom with `until` over a beat that has its
+  own `shot` moved the camera back during that shot (the temporary zoom is undone at the end of
+  the beat before `until`) and a later beat without a shot went back to the zoomed view. Now the
+  shot wins for its beat; after it the runner's way back (§69.29) returns to the zoomed view (the
+  zoom resumes); when the zoom is undone while a shot that came after it holds the camera, the
+  camera stays on the shot and the view the shot goes back to becomes the one before the zoom.
+  The zoom records the shot on screen when it starts (`camera_shot`); a zoom started inside a
+  shot is undone as before. Test: `test_cartoon_shots` (a tiny render).
+- **Voice effects level-matched** (`tts.effects.level_match`): each effect's audio is brought to
+  the dry voice's integrated loudness (BS.1770, `vidgen.loudness`), within ±`MATCH_LIMIT` 15 dB,
+  then limited below full scale; the fixed `GAINS` stay as a first rough step. Measured before:
+  the robot +4.5 dB on a test signal (+5 on Kokoro speech), `otherworldly` +1.9, `radio` −1.6;
+  after: within 1 dB (test), the story's robot line +0.4 dB of the narrator. The effect's spec
+  gains `level: matched`, so voices with an effect are voiced again once (no committed audio has
+  an effect).
+- **Rendering in steps** (`render --max-scenes N`, MCP `render.max_scenes`): render at most N of
+  the scenes to render (config order), then stop without joining when more are left
+  (`VidgenError` with `details.rendered` / `remaining`); running again goes on (finished scenes'
+  renders are kept, as after an interrupted run). A long final render fits a per-command time
+  limit that way. A single scene longer than the limit still has to be split into two scenes
+  (beats keep their ids, so their audio is reused); resuming inside a scene would need manim to
+  replay the scene's state up to a beat, which a skipped animation does not reproduce exactly.
+- **`tests/test_actions.py`**: the three tests that listed the built-in actions by hand (failing
+  since Phase X added actions) now share one `BUILTIN_ACTIONS` list (the registry is checked
+  against it; the unknown-action message and the schema's enum are built from it) and take the
+  reversible ones from the registry.
+
+The story project (private) was changed, not vidgen, for what it alone needed: closer shots on
+the key beats, a title card in the story's colours, speech outliers evened out with an emotion's
+`gain`, a quieter drone. Compatibility: the zoom change only acts while a shot holds the camera
+(no committed project zooms across a shot); effects only for voices with an effect; Phase Q
+baseline 31/31.
