@@ -1586,6 +1586,7 @@ characters:
 | `idle` | `true` | breathe, sway the head slightly and blink every 2 to 6 s on its own ([below](#idle-motion)); `false`: hold still between actions |
 | `cartoon_motion` | none (the scene's, else the video's: `lively`) | this character's [animation principles](#animation-principles-cartoon_motion): `lively`, `calm` or `none`; wins over the scene's and the video's |
 | `hologram` | `false` | `true` or `{color, opacity}`: draw it as a [hologram](#holograms-hologram), a translucent figure in one glowing colour that the stage's light never darkens |
+| `echo` | `false` | `true` or `{color, opacity, flicker}`: draw it as an [echo](#echo-characters-echo), a translucent other self that keeps its own colours, its outlines glowing |
 
 The **generator** draws every character from simple shapes (circles, ellipses, rounded
 rectangles, polygons, lines), so each figure is an original drawing:
@@ -1797,7 +1798,7 @@ characters:
   foley). A character whose first `materialise` / `dematerialise` is a `materialise` waits
   unseen at its spot until then. `- dematerialise: vega` is the same backwards (a falling
   swoosh): it is gone afterwards, until a `materialise`. Both work on any stage character; they
-  read best on a hologram.
+  read best on a hologram or an [echo](#echo-characters-echo).
 
 ```yaml
 beats:
@@ -1843,6 +1844,47 @@ scenes:
       - text: "The stranger crossed the hall in a shimmer of colours."
         actions: [{walk_to: wanderer, to: left}]
 ```
+
+#### Echo characters (`echo`)
+
+`echo: true` draws a character as an **echo**: a self from another timeline, a memory or a
+dream seen overlapping the present. Unlike a [hologram](#holograms-hologram), which recolours
+everything in one tint, an echo keeps its own colours (a uniform stays a uniform, a gold medal
+gold), leaning a little towards the echo's colour; its fills are translucent and its outlines
+glow in a light tint of the colour. Declare the other self as its own character (its own look:
+another outfit, a medal, a lab coat) and stand it beside the one it echoes.
+
+```yaml
+characters:
+  - name: ana
+    look: {body: pear, hair: long, outfit: plain}
+    colors: {clothes: "#3C6E71"}
+  - name: ana_captain                     # the same person in another life
+    echo: true                            # violet, #B48CFF, half seen through
+    look: {body: pear, hair: long, outfit: coat}
+    colors: {clothes: "#2B3350", trim: "#C9D2E8"}
+scenes:
+  - id: crossing
+    type: stage
+    params: {characters: [{name: ana, at: left}, {name: ana_captain, at: 0.62}]}
+    beats:
+      - text: "For a moment she saw herself as she might have been."
+        actions: [{materialise: ana_captain, at: 0.3}]   # it waits unseen until then
+      - text: "Then the other life was gone."
+        actions: [{dematerialise: ana_captain, at: 0.4}]
+```
+
+| key (`echo` as a mapping) | default | |
+|---|---|---|
+| `color` | `#B48CFF` | the echo's colour (a theme token or hex): its outlines glow in a light tint of it, its colours lean a little towards it |
+| `opacity` | `0.5` | 0.2–0.9: how solid it is (0.2 a faint ghost) |
+| `flicker` | `true` | on a stage it flickers softly now and then, as a hologram does; `false`: steady |
+
+- **Light**: a stage's light does not darken an echo (it shines the same at night); no soft
+  shading, no `fill_light` needed. A character is a hologram or an echo, not both.
+- **Appearing**: `materialise` / `dematerialise` (above) bring it and take it away; `enter` /
+  `exit` through a `door:` fade it in and out. Several echoes of the same moment (a couple in
+  other lives) are several echo characters standing side by side.
 
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
@@ -10205,7 +10247,7 @@ never leaves the stage.
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10585,7 +10627,8 @@ they hide what is behind them.
   `server_rack` (a tall dark cabinet whose small lights blink), `projector_pad` (a round glowing
   platform: walked on, a hologram stands on it) and `whiteboard` (2 x 1, a diagram on it); and
   for a memory or a garden a `flower_arch` (2 x 1, posts and an arch wound with leaves and
-  flowers) and a `chess_table` (a small table with a board and pieces). The screens, the
+  flowers) and a `chess_table` (a small table with a board and pieces); for a city a `tower`
+  (2 x 2, 9 tiles tall: see **A city at night** below). The screens, the
   pad's ring and the rack's lights glow: no `light` darkens them.
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
@@ -10763,6 +10806,47 @@ they hide what is behind them.
     `density: 1` (`settled: 30` starts it white) and stays when the snow stops. Its colour is
     snow white (`color` colours the flakes only).
   - A **run** (or a fast walk) leaves its **speed lines** along the walk's diagonal on screen.
+- **A city at night.** `tower` objects are tall buildings: walls in `color` (default a night
+  blue-grey, `#2A3050`), rows of windows on both faces of which a seeded share is lit (warm and
+  cool lights; `on: false` starts them dark, `switch_on` / `switch_off` change them), neon trims
+  up the front corners and round the roof in `detail` (default `#FF2E8B`), and an antenna whose
+  red light blinks. `height` is its height in tiles (2–30; a character is 2 tiles tall; default
+  9), `size` its footprint (default 2 x 2); `screen: true` puts a big info screen on its front
+  whose lines of text crawl up, `garden: true` glowing bands of algae farms up its faces. The
+  windows, trims, screens and farms glow (no `light` darkens them), so `light: night` makes a
+  neon skyline. Towers may reach out of the top of the wide view (they do not shrink the place to
+  fit them whole; `wide: 1.5`–`2.5` fills the frame with the streets). **`traffic`** lanes send
+  hover pods gliding over the place: `{from, to, height, count, seconds, color, size, at}` —
+  between two spots (or `{column, row}` cells) at `height` tiles over the ground (default 3),
+  `count` pods (default 3) taking `seconds` each (default 6), looping all along, each a small
+  capsule with a glowing rim in `color` (default `#5FE8FF`), a light canopy with a rider's head,
+  a headlight, a glow under it and a light trail. With `at` (seconds into the scene) they cross
+  once instead, the first setting off then, easing in and out: a hero's ride, which a `pan` to
+  the lane's end spot with the same `run_time` follows. A pod behind a building is hidden by it;
+  the pods are drawn behind the characters. Outdoors only.
+
+  ```yaml
+  iso:
+    wide: 1.6
+    map: |
+      ................
+      ................
+      ::::::::::::::::
+      a..............b
+      ::::::::::::::::
+      ......m.........
+      ................
+    spots: {a: west, b: east, m: plaza}
+    colors: {grass: "#23263A", path: "#30344A", earth: "#151826"}
+    objects:
+      - {object: tower, at: {column: 2, row: 1}, height: 12, screen: true}
+      - {object: tower, at: {column: 6, row: 1}, height: 8, detail: "#00C8FF", garden: true}
+      - {object: tower, at: {column: 10, row: 6}, size: [3, 2], height: 6, detail: "#39FF9C"}
+    traffic:
+      - {from: west, to: east, height: 3.5, count: 3, seconds: 7, color: "#FF2E8B"}
+      - {from: west, to: east, height: 2.5, count: 1, seconds: 6, at: 1.0, color: "#F4FF3A", size: 1.4}   # crosses once
+  particles: [{kind: rain, glow: true, color: ["#5FFFE0", "#4FA8FF", "#7CFF9E"]}]   # neon rain
+  ```
 - **Sound** ([foley](#foley-and-music-stings), on by default): footsteps by what the feet walk on
   (grass, a sandy path, wooden boards or a bridge, stone steps and tiles, a rug), a door's creak
   and thud, a soft sound as a small thing is picked up, given or put down, a lamp's click, a
@@ -12328,6 +12412,7 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 | `area` | the whole frame | `[x, y, w, h]`: fractions 0–1 of the visible frame from its top-left corner (smoke from a chimney: `[0.6, 0.1, 0.08, 0.5]`); particles fade out near its edges |
 | `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF`, leaves `#7BAE4E #C9A23A #C2703D`, streaks `#FFFFFF` |
 | `seed` | `1` | another number gives other positions |
+| `glow` | `false` | `true`: they shine — a light core (the colour towards white) with a soft halo in the colour, more opaque than the kind's own, the halo as wide on screen through a zoom (neon rain at night: `{kind: rain, glow: true, color: ["#5FFFE0", "#4FA8FF"]}`; splashes glow too). Any kind. Particles are never darkened by the stage's light, glowing or not |
 | `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground); on an iso place on its grass and paths, with ripples: [Isometric places](#isometric-places-iso)) |
 | `lightning` | `false` | rain on a `stage` only: `true` flashes [lightning](#lightning-and-thunder-lightning) while it rains, at seeded times about every 8 s, with thunder; a number (2–120) is the seconds between strikes on average |
 | `settle` | `false` | snow on a `stage` only: `true` lands it on the ground and on the props, where a white layer grows while it snows ([Snow that settles](#snow-that-settles-settle); on an iso place on its ground, roofs and tops: [Isometric places](#isometric-places-iso)) |
@@ -13249,7 +13334,7 @@ Keys every overlay entry has (any other key is an option of its type):
 
 | key | default | |
 |---|---|---|
-| `type` | required | `lower_third`, `hook`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
+| `type` | required | `lower_third`, `hook`, `hud`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
 | `id` | the type | the name a scene's `overlays:` refers to; when several entries share a type and have no `id`, they are `<type>1`, `<type>2`, ... (ids must be unique) |
 | `scenes` | `all` | the scenes it is drawn on: `all` or a list of scene ids |
 | `exclude` | `[]` | scenes it is not drawn on |
@@ -13343,6 +13428,58 @@ popping in at `at` and fading out `seconds` later, over the captions. A [cut](#c
 overlays:
   - {type: hook, text: "What if the kite could fly itself?", seconds: 2.5}
 ```
+
+### `hud`
+
+A heads-up display over the frame: what an implant, a helmet's visor or a robot's eye shows. Thin
+corner brackets and faint scan lines over the frame (`frame`), a blinking warning on a dark plate
+at the top (`alert`), readout lines in a monospaced font appearing one after another at the top
+left (`lines`), a heart monitor at the bottom left (`heart`: the rate, a beating heart, a
+scrolling trace; the rate rises or falls, beats can be skipped, shown in the warning colour
+while skipping or racing) and a scanner's meter at the bottom right (`scan`: its reading as a
+bar and a live wave; above 1 it is off its scale and flashes `off_scale` in the warning colour).
+It belongs to a scene like a [lower third](#lower_third) (`scene`, `at`, `duration`), boots in
+with a flicker and fades out; usually written on the scene that needs it. In a
+[Short](#cuts-and-shorts-cut-shorts) it keeps out of the app's parts. Drawn under the captions
+and the hook; lint does not check its contrast (its text stands on dark plates or has a dark
+edge).
+
+| param | default | |
+|---|---|---|
+| `scene` | first scene drawn on | the scene it belongs to |
+| `at` | `0` | when it comes on: seconds after its scene's start, a beat id of that scene, or a word its narration says (`"@alert"`) |
+| `duration` | `5.0` | seconds shown, its boot in and fade out included |
+| `across_cuts` | `false` | stay on over the following scenes until `duration` is over |
+| `color` | `#5FFFE0` | its lines, brackets and readouts |
+| `warning` | `#FF3B5C` | the alert, a racing or skipping heart, an off-scale reading |
+| `frame` | `true` | corner brackets and scan lines over the frame |
+| `alert` | none | a blinking warning at the top (`INCOMING ALERT`) |
+| `lines` | `[]` | readout lines at the top left, one every `line_seconds`, each flickering in |
+| `line_seconds` | `0.6` | seconds between the lines appearing |
+| `heart` | none | `{bpm: 72, to, at: 0, skips: 0, label: BPM}`: the rate at the start, the rate it eases to from `at` (seconds after the HUD comes on), how many beats are skipped right at `at` |
+| `scan` | none | `{level: 0.35, to, at: 0, wave: organic, label: SCAN, off_scale: OFF SCALE}`: the reading (a share of the scale; above 1 off the scale), the one it moves to from `at`, an `organic` (irregular, living) or `steady` wave |
+| `opacity` | `0.92` | how strongly it shows over the scene |
+| `enter`, `exit` | `0.4`, `0.35` | seconds of its boot in and fade out |
+
+```yaml
+scenes:
+  - id: office
+    type: stage
+    params: {...}
+    beats: [...]
+    overlays:
+      implant:
+        type: hud
+        at: office_b2
+        duration: 7
+        alert: "INCOMING ALERT"
+        lines: ["SIGNAL: SECTOR 7", "STATUS: ARMED"]
+        heart: {bpm: 70, to: 128, at: 1.5, skips: 3}
+        scan: {level: 0.4, to: 1.6, at: 3}
+```
+
+Render cost: it is drawn again on every frame while it shows (a test scene of 6 s at 854 x 480
+took 30 s with it, 20 s without).
 
 ### `watermark`
 

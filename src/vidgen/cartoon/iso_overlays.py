@@ -1,5 +1,6 @@
-"""Things drawn over an iso place's pictures that move by themselves (DESIGN.md §100.7, §100.11):
-the steel shutters over a room's windows and the blinking lights of its lab objects. Each is a
+"""Things drawn over an iso place's pictures that move by themselves (DESIGN.md §100.7, §100.11,
+§102.2, §102.3): the steel shutters over a room's windows, the blinking lights of its lab objects
+and towers, a city's crawling info screens and its hover pods on their lanes. Each is a
 *living thing* of the stage (``update_to``, ``changing``, ``done``, ``movers``, ``region``), drawn
 right after the place's pictures (behind the characters).
 """
@@ -8,12 +9,15 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
 from manim import Circle, VGroup, VMobject
 
 from vidgen.cartoon.alarm import shutter_level, shutters_changing
+from vidgen.cartoon.iso_city import SCREEN_LINES, SCREEN_TEXT, lane_pods, pod_hidden, screen_lines
 from vidgen.cartoon.living import _unit
+from vidgen.world.iso_view import Box3
 
 #: Shutters: the steel's colour, its slats' colour and how many slats a window has.
 SHUTTER_STEEL = "#8E96A3"
@@ -155,4 +159,187 @@ class IsoBlinkers(VGroup):
         return min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad
 
 
-__all__ = ["BLINK_DUTY", "BLINK_SECONDS", "SHUTTER_SLATS", "IsoBlinkers", "IsoShutters", "blink_on"]
+#: A tower's screen (DESIGN.md §102.2): its lines' thickness (a share of the screen's height).
+SCREEN_LINE_THICKNESS = 0.07
+
+
+def _quad_point(quad: Sequence[np.ndarray], across: float, up: float) -> np.ndarray:
+    """A point of the quad ``(bottom left, bottom right, top right, top left)``: ``across`` and
+    ``up`` shares of it."""
+    bl, br, tr, tl = quad
+    bottom = bl + (br - bl) * across
+    top = tl + (tr - tl) * across
+    return bottom + (top - bottom) * up
+
+
+class IsoScreens(VGroup):
+    """The info screens of a city's towers (DESIGN.md §102.2): over each screen (four points on
+    screen: bottom left, bottom right, top right, top left) its glowing plate in ``colors`` and
+    lines of text crawling up it (:func:`~vidgen.cartoon.iso_city.screen_lines`); never graded by
+    the stage's light."""
+
+    def __init__(self, screens: Sequence[Sequence[Point]], colors: Sequence[str], *, seeds: Sequence[int]) -> None:
+        super().__init__()
+        self.name = "tower_screens"
+        self.quads = [[np.array([float(x), float(y), 0.0]) for x, y in quad] for quad in screens]
+        self.seeds = list(seeds)
+        self.lines: list[list[VMobject]] = []
+        for quad, color in zip(self.quads, colors):
+            plate = VMobject().set_fill(color, opacity=1.0).set_stroke(width=0.0, opacity=0.0)
+            plate.set_points_as_corners([*quad, quad[0]])
+            rows = [VMobject().set_fill(SCREEN_TEXT, opacity=0.95).set_stroke(width=0.0, opacity=0.0) for _ in range(SCREEN_LINES)]
+            self.lines.append(rows)
+            self.add(plate, *rows)
+        self.update_to(0.0)
+
+    def update_to(self, now: float) -> None:
+        """Put each screen's lines where they are at scene time ``now``."""
+        half = SCREEN_LINE_THICKNESS / 2
+        for quad, rows, seed in zip(self.quads, self.lines, self.seeds):
+            for row, (up, length) in zip(rows, screen_lines(now, seed)):
+                low, high = max(up - half, 0.04), min(up + half, 0.96)
+                if high <= low:
+                    row.points = np.zeros((0, 3))
+                    continue
+                a0, a1 = 0.06, 0.06 + 0.88 * length
+                row.set_points_as_corners([_quad_point(quad, a0, low), _quad_point(quad, a1, low), _quad_point(quad, a1, high),
+                                           _quad_point(quad, a0, high), _quad_point(quad, a0, low)])
+
+    def changing(self, start: float, end: float) -> bool:
+        return bool(self.quads)
+
+    def done(self, now: float) -> bool:
+        return not self.quads
+
+    def movers(self) -> list[VMobject]:
+        return [self]
+
+    def region(self, start: float = 0.0, end: float = math.inf) -> Box:
+        points = [(float(p[0]), float(p[1])) for quad in self.quads for p in quad] or [(0.0, 0.0)]
+        return _box(points)
+
+
+@dataclass(frozen=True)
+class PodLane:
+    """A traffic lane over an iso place on screen (DESIGN.md §102.3): its ``start`` and ``end``
+    (Manim units), how long a pod takes along it (``seconds``), how many pods (``count``), their
+    ``color``, crossing once from scene time ``at`` (``None``: looping) and the pods' ``length``
+    (Manim units)."""
+
+    start: Point
+    end: Point
+    seconds: float
+    count: int
+    color: str
+    length: float
+    at: float | None = None
+    #: the lane's ends in the world (tile units), for what hides its pods (``None``: nothing does)
+    world: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None
+
+
+#: A pod's parts (DESIGN.md §102.3): its height as a share of its length, its trail's length (a
+#: share of its length), the glow under it, the canopy's and the hull's colours.
+POD_HEIGHT = 0.36
+POD_TRAIL = 2.4
+POD_GLOW_OPACITY = 0.28
+POD_CANOPY = "#CFF6FF"
+POD_HULL = "#262C44"
+
+
+def _ellipse(cx: float, cy: float, rx: float, ry: float, steps: int = 20) -> list[np.ndarray]:
+    return [np.array([cx + rx * math.cos(a), cy + ry * math.sin(a), 0.0]) for a in np.linspace(0.0, 2 * math.pi, steps + 1)]
+
+
+class IsoTraffic(VGroup):
+    """Hover pods gliding along traffic lanes over an iso place (DESIGN.md §102.3): each pod a
+    small capsule (a dark hull with a glowing rim in its lane's colour, a light canopy with a
+    rider's head, a headlight), a soft glow under it and a fading light trail behind it, facing
+    the way it goes; :func:`~vidgen.cartoon.iso_city.lane_pods` says where they are. A pod behind
+    one of ``occluders`` (the boxes of the place's tall objects, with their outlines on the
+    picture: :func:`~vidgen.cartoon.iso_city.pod_hidden`) is not drawn. Never graded by the
+    stage's light."""
+
+    def __init__(self, lanes: Sequence[PodLane], occluders: Sequence[tuple[Box3, list[tuple[float, float]]]] = ()) -> None:
+        super().__init__()
+        self.name = "traffic"
+        self.lanes = list(lanes)
+        self.occluders = list(occluders)
+        #: each lane's pods: (trail, glow, hull, canopy, head, light)
+        self.pods: list[list[tuple[VMobject, ...]]] = []
+        for lane in self.lanes:
+            pods = []
+            for _ in range(lane.count):
+                trail = VMobject().set_fill(lane.color, opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+                glow = VMobject().set_fill(lane.color, opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+                hull = VMobject().set_fill(POD_HULL, opacity=0.0).set_stroke(lane.color, width=2.0, opacity=0.0)
+                canopy = VMobject().set_fill(POD_CANOPY, opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+                head = VMobject().set_fill("#141826", opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+                light = VMobject().set_fill("#FFFFFF", opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+                parts = (trail, glow, hull, canopy, head, light)
+                pods.append(parts)
+                self.add(*parts)
+            self.pods.append(pods)
+        self.update_to(0.0)
+
+    def update_to(self, now: float) -> None:
+        """Place every pod where it is at scene time ``now``."""
+        for lane, pods in zip(self.lanes, self.pods):
+            spots = lane_pods(now, lane.seconds, lane.count, lane.at)
+            (x0, y0), (x1, y1) = lane.start, lane.end
+            dx, dy = x1 - x0, y1 - y0
+            norm = math.hypot(dx, dy) or 1.0
+            ux, uy = dx / norm, dy / norm
+            facing = 1.0 if dx >= 0 else -1.0
+            for k, parts in enumerate(pods):
+                spot = spots[k] if k < len(spots) else None
+                if spot is not None and lane.world is not None and self.occluders:
+                    (a, b) = lane.world
+                    point = tuple(a[i] + (b[i] - a[i]) * spot.share for i in range(3))
+                    if pod_hidden(point, self.occluders):   # type: ignore[arg-type]
+                        spot = None
+                if spot is None:
+                    for part in parts:
+                        part.points = np.zeros((0, 3))
+                    continue
+                self._draw(parts, x0 + dx * spot.share, y0 + dy * spot.share, ux, uy, facing, lane.length, spot.shown)
+
+    @staticmethod
+    def _draw(parts: tuple[VMobject, ...], x: float, y: float, ux: float, uy: float, facing: float, length: float, shown: float) -> None:
+        trail, glow, hull, canopy, head, light = parts
+        half, tall = length / 2, length * POD_HEIGHT / 2
+        back = np.array([x - ux * half * 0.8, y - uy * half * 0.8, 0.0])
+        tail = np.array([x - ux * length * POD_TRAIL, y - uy * length * POD_TRAIL, 0.0])
+        side = np.array([-uy, ux, 0.0]) * tall * 0.7
+        trail.set_points_as_corners([back + side, tail, back - side, back + side])
+        trail.set_fill(opacity=0.32 * shown)
+        glow.set_points_as_corners(_ellipse(x, y - tall * 1.6, half * 1.25, tall * 0.7))
+        glow.set_fill(opacity=POD_GLOW_OPACITY * shown)
+        hull.set_points_as_corners(_ellipse(x, y, half, tall))
+        hull.set_fill(opacity=shown).set_stroke(opacity=shown)
+        dome = [np.array([x + facing * half * 0.15 + half * 0.5 * math.cos(a), y + tall * 0.2 + tall * 1.1 * math.sin(a), 0.0])
+                for a in np.linspace(0.0, math.pi, 13)]
+        canopy.set_points_as_corners([*dome, dome[0]])
+        canopy.set_fill(opacity=0.85 * shown)
+        head.set_points_as_corners(_ellipse(x + facing * half * 0.05, y + tall * 0.75, tall * 0.42, tall * 0.48, 12))
+        head.set_fill(opacity=0.9 * shown)
+        light.set_points_as_corners(_ellipse(x + facing * half * 0.9, y - tall * 0.1, tall * 0.22, tall * 0.18, 10))
+        light.set_fill(opacity=shown)
+
+    def changing(self, start: float, end: float) -> bool:
+        return bool(self.lanes)
+
+    def done(self, now: float) -> bool:
+        return not self.lanes
+
+    def movers(self) -> list[VMobject]:
+        return [self]
+
+    def region(self, start: float = 0.0, end: float = math.inf) -> Box:
+        points = [p for lane in self.lanes for p in (lane.start, lane.end)] or [(0.0, 0.0)]
+        x0, y0, x1, y1 = _box(points)
+        pad = max((lane.length * (POD_TRAIL + 1) for lane in self.lanes), default=0.0)
+        return x0 - pad, y0 - pad, x1 + pad, y1 + pad
+
+
+__all__ = ["BLINK_DUTY", "BLINK_SECONDS", "POD_HEIGHT", "SCREEN_LINE_THICKNESS", "SHUTTER_SLATS", "IsoBlinkers", "IsoScreens", "IsoShutters", "IsoTraffic",
+           "PodLane", "blink_on"]

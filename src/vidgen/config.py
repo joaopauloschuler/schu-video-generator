@@ -613,6 +613,17 @@ class HologramConfig(_Strict):
     """Flicker now and then (short dips of its light, a few seconds apart); false: steady."""
 
 
+class EchoConfig(_Strict):
+    """``echo:`` of a character as a mapping (DESIGN.md §102.6)."""
+
+    color: ColorRef = "#B48CFF"
+    """The echo's colour (a theme token or hex): its outlines glow in a light tint of it and its colours lean a little towards it."""
+    opacity: float = Field(default=0.5, ge=0.2, le=0.9)
+    """How solid the figure is (0.2-0.9): 0.2 a faint ghost, 0.9 nearly solid."""
+    flicker: bool = True
+    """Flicker softly now and then (as a hologram does); false: steady."""
+
+
 class IridescentConfig(_Strict):
     """``iridescent:`` of a character as a mapping (DESIGN.md §100.9)."""
 
@@ -662,6 +673,14 @@ class CharacterEntry(_Strict):
     """Its skin and clothes shift colours like oil on water, slowly (bands of hue running up the figure): true or {seconds, strength}; on a stage."""
     afterimages: Union[bool, AfterimageConfig] = False
     """While it moves it leaves faint copies of itself that fade (a shimmering trail): true or {spacing, life, opacity}; on a stage."""
+    echo: Union[bool, EchoConfig] = False
+    """Draw the character as an echo, its other self from another timeline or a memory: true or {color, opacity, flicker}; translucent, keeping its own colours (a uniform, a medal), its outlines glowing in the echo's colour, never darkened by the stage's light; appear with materialise."""
+
+    @model_validator(mode="after")
+    def _one_look(self) -> "CharacterEntry":
+        if self.echo is not False and self.hologram is not False:
+            raise ValueError("a character is a hologram or an echo, not both (remove one)")
+        return self
 
     def hologram_look(self) -> HologramConfig | None:
         """Its hologram settings (``None``: drawn as usual)."""
@@ -680,6 +699,12 @@ class CharacterEntry(_Strict):
         if self.afterimages is False:
             return None
         return AfterimageConfig() if self.afterimages is True else self.afterimages
+
+    def echo_look(self) -> EchoConfig | None:
+        """Its echo settings (``None``: drawn as usual)."""
+        if self.echo is False:
+            return None
+        return EchoConfig() if self.echo is True else self.echo
 
 
 #: A host's height as a fraction of the frame's shorter side (DESIGN.md §71).

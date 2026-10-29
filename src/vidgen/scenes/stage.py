@@ -565,7 +565,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims)."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -580,10 +580,16 @@ class IsoObjectParam(SceneParams):
     """Its second colour (a house's roof, a lamp's light, flower heads...)."""
     open: bool | None = None
     """A house: true starts its door open; flowers: false starts them in bud (the open / close actions change it later)."""
-    on: bool = False
-    """A lamp: true starts it lit; a house: its windows lit (switch_on / switch_off change it)."""
+    on: bool | None = None
+    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default) (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
+    height: float | None = Field(None, ge=2.0, le=30.0)
+    """A tower: how tall it is, in tiles (2-30; a character is 2 tiles tall); default 9."""
+    screen: bool = False
+    """A tower: a big info screen on its front whose lines of text crawl up."""
+    garden: bool = False
+    """A tower: glowing bands of algae farms up its sides, pulsing softly."""
 
     @model_validator(mode="before")
     @classmethod
@@ -597,17 +603,44 @@ class IsoObjectParam(SceneParams):
         if self.open is not None and self.object not in OPENING_KINDS:
             raise ValueError(f"open is for a house (its door) or flowers (in bloom or in bud), not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
-            raise ValueError(f"on is for a lamp or a house (its windows lit), not {_a(self.object)}")
+            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), not {_a(self.object)}")
+        for option in ("height", "screen", "garden"):
+            if getattr(self, option) and self.object != "tower":
+                raise ValueError(f"{option} is for a tower, not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
         """How it is at the start (DESIGN.md §89.10)."""
         start = default_state(self.object)
-        return ObjectState(self.shown, start.open if self.open is None else self.open, self.on)
+        return ObjectState(self.shown, start.open if self.open is None else self.open, start.on if self.on is None else self.on)
 
     def placing(self) -> ObjectPlacing:
         at = self.at if isinstance(self.at, str) else (self.at.column, self.at.row)
-        return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail)
+        features = tuple(name for name in ("screen", "garden") if getattr(self, name))
+        return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail,
+                             self.height, features)
+
+
+class IsoTrafficLane(SceneParams):
+    """A traffic lane over an iso place (DESIGN.md §102.3): hover pods gliding from one spot to
+    another, high over the ground."""
+
+    start: Identifier | IsoCellRef = Field(alias="from")
+    """Where the pods come from: a spot of the map, or {column, row}."""
+    to: Identifier | IsoCellRef
+    """Where they go: a spot, or {column, row}."""
+    height: float = Field(3.0, ge=0.5, le=30.0)
+    """How high over the ground they fly (tiles; a character is 2 tiles tall)."""
+    count: int = Field(3, ge=1, le=12)
+    """How many pods are on the lane at a time (or cross it, with at)."""
+    seconds: float = Field(6.0, ge=1.0, le=120.0)
+    """Seconds a pod takes along the lane."""
+    color: ThemeColor = "#5FE8FF"
+    """The pods' glowing rim, glow and light trail (a theme token or #hex)."""
+    size: float = Field(1.0, ge=0.4, le=3.0)
+    """The pods' size (1: a little shorter than a tile is wide)."""
+    at: float | None = Field(None, ge=0.0)
+    """Seconds into the scene when the first pod sets off to cross the lane once (the others follow, seconds / count apart), easing in and out; none: the pods loop along it all the time."""
 
 
 class StageIso(SceneParams):
@@ -622,7 +655,7 @@ class StageIso(SceneParams):
     spots: dict[Annotated[str, Field(pattern=r"^[A-Za-z]$")], Identifier] = {}
     """Names for the map's letters, e.g. {w: well, d: door}; a letter without one is named by itself. Characters stand at spots (at: well); next to an object standing there."""
     objects: list[IsoObjectParam] = []
-    """Ready-made objects: {object, at, name, facing, size, color, detail, open, on, shown}, e.g. {object: house, at: home}."""
+    """Ready-made objects: {object, at, name, facing, size, color, detail, open, on, shown; a tower's height, screen, garden}, e.g. {object: house, at: home}."""
     colors: dict[Literal["grass", "earth", "path", "water", "stone", "floor", "tiles", "wall", "cut"], ThemeColor] = {}
     """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
     name_tags: bool = True
@@ -631,14 +664,42 @@ class StageIso(SceneParams):
     """How the wide (establishing) view frames the place: auto (the whole room in a landscape frame; outdoors the place fills the frame, its tips cut); fill (a room fills the frame too: its spots, objects and characters kept, the walls' far corners may be cut); or a number from 1 to 2.5: that many times closer than the whole place (kept on the characters)."""
     shutters: bool = False
     """An indoor place: true starts with steel shutters down over its windows (the shutters action opens and closes them)."""
+    traffic: list[IsoTrafficLane] = []
+    """Outdoors: lanes of hover pods gliding over the place, {from, to, height, count, seconds, color, size, at} each (a city's traffic; with at, they cross once)."""
 
     @model_validator(mode="after")
     def _parses(self) -> "StageIso":
         try:
-            self.parsed()
+            place = self.parsed()
         except VidgenError as exc:
             raise ValueError(str(exc)) from None
+        if self.traffic and self.place == "indoor":
+            raise ValueError("traffic flies over an outdoor place, not indoors")
+        spots = {spot.name for spot in place.spots}
+        for k, lane in enumerate(self.traffic):
+            for key, end in (("from", lane.start), ("to", lane.to)):
+                if isinstance(end, str) and end not in spots:
+                    raise ValueError(f"traffic[{k}].{key}: the place has no spot '{end}' (spots: {', '.join(sorted(spots)) or 'none'})")
+                if not isinstance(end, str) and (end.column > place.columns or end.row > place.rows):
+                    raise ValueError(f"traffic[{k}].{key}: row {end.row}, column {end.column} is outside the map ({place.rows} rows, {place.columns} columns)")
+            if lane.start == lane.to:
+                raise ValueError(f"traffic[{k}]: from and to are the same place")
         return self
+
+    def lane_ends(self, lane: IsoTrafficLane) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+        """The world points (tile units) a traffic lane runs between: the middles of its cells,
+        ``height`` over the ground at its start (DESIGN.md §102.3)."""
+        place = self.parsed()
+
+        def cell(end: Any) -> tuple[int, int]:
+            if isinstance(end, str):
+                spot = place.spot(end)
+                return spot.column, spot.row
+            return end.column - 1, end.row - 1
+
+        (c0, r0), (c1, r1) = cell(lane.start), cell(lane.to)
+        z = place.floor_z(c0, r0) + lane.height
+        return (c0 + 0.5, r0 + 0.5, z), (c1 + 0.5, r1 + 0.5, z)
 
     def parsed(self) -> IsoPlace:
         """The world's :class:`~vidgen.world.iso.IsoPlace` with its objects (:class:`VidgenError`
@@ -2007,9 +2068,9 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         if p.iso is not None:   # a lamp's light falls on who stands near it (§89.13)
             self.iso_lamplight()
         if self.drawing.shading == "soft":   # the characters' and props' fills (DESIGN.md §79)
-            mark_shaded(*(mob for _, mob in on_stage if not is_hologram(mob)))
-        for figure in self.cast.values():   # a hologram glows the same in any light (DESIGN.md §100.3)
-            if is_hologram(figure):
+            mark_shaded(*(mob for _, mob in on_stage if not (is_hologram(mob) or is_echo(mob))))
+        for figure in self.cast.values():   # a hologram or an echo glows the same in any light (DESIGN.md §100.3, §102.6)
+            if is_hologram(figure) or is_echo(figure):
                 unmark_lit(figure)
         self._fill_lights()   # faces readable in the dark, visitors shining (§100.15)
         self._start_living(living)

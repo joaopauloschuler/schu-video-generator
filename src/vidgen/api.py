@@ -92,6 +92,20 @@ from vidgen.regions import (  # noqa: E402
     safe_area,
 )
 from vidgen.overlays import Overlay, OverlayContext, OverlayOptions, shorts_area, with_opacity  # noqa: E402
+from vidgen.hud import (  # noqa: E402
+    HUD_COLOR,
+    HUD_LINE_SECONDS,
+    HUD_WARNING,
+    HeartMonitor,
+    ScanMeter,
+    alert_on,
+    heart_beats,
+    heart_rate,
+    heart_trace,
+    lines_shown,
+    scan_level,
+    scan_wave,
+)
 from vidgen.cuts import apply_cut  # noqa: E402
 from vidgen.registry import action, overlay, scene  # noqa: E402
 from vidgen.registry import find as find_scene_type  # noqa: E402
@@ -320,11 +334,13 @@ from vidgen.cartoon.living import (  # noqa: E402
 )
 from vidgen.cartoon.living_drawing import LivingProp, PropGlow, PropSteam  # noqa: E402
 from vidgen.cartoon.hologram import HOLOGRAM_COLOR, apply_hologram, is_hologram, unmark_lit  # noqa: E402
+from vidgen.cartoon.echo import ECHO_COLOR, apply_echo, is_echo  # noqa: E402
 from vidgen.cartoon.alarm import ALARM_COLOR, ALARM_PERIOD, SHUTTER_CLOSE_SECONDS, AlarmSpan, alarm_grade, alarm_spans, shutter_level  # noqa: E402
 from vidgen.cartoon.apparition import MATERIALISE_SECONDS, flicker_level, iridescent_rgb, materialise_levels  # noqa: E402
 from vidgen.cartoon.figure_fx import Afterimages, FigureAlpha, HandHold, Iridescence, Materialise, figure_alpha  # noqa: E402
 from vidgen.cartoon.holo_display import DISPLAY_PATTERNS, display_frame  # noqa: E402
-from vidgen.cartoon.iso_overlays import IsoBlinkers, IsoShutters  # noqa: E402
+from vidgen.cartoon.iso_overlays import IsoBlinkers, IsoScreens, IsoShutters, IsoTraffic, PodLane  # noqa: E402
+from vidgen.cartoon.iso_city import POD_LENGTH, TOWER_ANTENNA_LIGHT, box_outline, garden_bands, lane_pods, pod_hidden, screen_color, screen_lines, screen_seed  # noqa: E402
 from vidgen.cartoon.portal import PORTAL_VIEWS, portal_view  # noqa: E402
 from vidgen.cartoon.vignette import FLASHBACK_SATURATION, FLASHBACK_STRENGTH, FLASHBACK_TINT, VIGNETTE_COLOR, VIGNETTE_OPACITY, CameraVignette, flashback_grade  # noqa: E402
 from vidgen.cartoon.nature import (  # noqa: E402
@@ -590,9 +606,9 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_world,
 )
 from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
-from vidgen.world.iso_view import Box3, draw_order, iso_point  # noqa: E402
+from vidgen.world.iso_view import Box3, draw_order, in_front, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
-from vidgen.cartoon.iso_objects import LIT_OBJECTS, OBJECT_COLORS, ObjectLook, object_box, object_lights  # noqa: E402
+from vidgen.cartoon.iso_objects import LIT_OBJECTS, OBJECT_COLORS, ObjectLook, object_box, object_lights, tower_screen  # noqa: E402
 from vidgen.cartoon.iso_scenery import IsoColors, window_faces  # noqa: E402
 from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view  # noqa: E402
 from vidgen.cartoon.iso_pictures import GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
@@ -724,6 +740,18 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "OverlayOptions",
     "OverlayContext",
     "with_opacity",
+    "HUD_COLOR",
+    "HUD_WARNING",
+    "HUD_LINE_SECONDS",
+    "HeartMonitor",
+    "ScanMeter",
+    "alert_on",
+    "heart_beats",
+    "heart_rate",
+    "heart_trace",
+    "lines_shown",
+    "scan_level",
+    "scan_wave",
     "shorts_area",
     "apply_cut",
     "Chapter",
@@ -1100,6 +1128,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "apply_hologram",
     "is_hologram",
     "unmark_lit",
+    "ECHO_COLOR",
+    "apply_echo",
+    "is_echo",
     "ALARM_COLOR",
     "ALARM_PERIOD",
     "SHUTTER_CLOSE_SECONDS",
@@ -1121,6 +1152,20 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "display_frame",
     "IsoBlinkers",
     "IsoShutters",
+    "IsoScreens",
+    "IsoTraffic",
+    "PodLane",
+    "POD_LENGTH",
+    "TOWER_ANTENNA_LIGHT",
+    "box_outline",
+    "garden_bands",
+    "lane_pods",
+    "pod_hidden",
+    "screen_color",
+    "screen_lines",
+    "screen_seed",
+    "tower_screen",
+    "in_front",
     "PORTAL_VIEWS",
     "portal_view",
     "CameraVignette",

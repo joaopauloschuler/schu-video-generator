@@ -137,7 +137,7 @@ def test_lab_and_memory_objects_draw_and_blink() -> None:
     console, rack = place.objects
     look = ObjectLook("#8A93A3", "#5FD8FF")
     assert any(getattr(s, "glow", False) for s in object_shapes(console, look, 0.0))   # its screens glow
-    assert set(LIT_OBJECTS) == {"console", "server_rack"}
+    assert set(LIT_OBJECTS) == {"console", "server_rack", "tower"}
     assert len(object_lights(rack, 0.0)) == 18 and object_lights(console, 0.0)
     assert OBJECT_KINDS["projector_pad"].walkable and OBJECT_KINDS["console"].top is not None
 

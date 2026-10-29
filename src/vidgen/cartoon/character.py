@@ -1303,6 +1303,11 @@ def build_character(
         from vidgen.cartoon.hologram import apply_hologram
 
         apply_hologram(built, resolve_color(hologram.color, theme), hologram.opacity)
+    echo = entry.echo_look()
+    if echo is not None:   # a translucent other self in its own colours (DESIGN.md §102.6)
+        from vidgen.cartoon.echo import apply_echo
+
+        apply_echo(built, resolve_color(echo.color, theme), echo.opacity)
     return built.start_idle() if entry.idle else built
 
 

@@ -30,7 +30,7 @@ from vidgen.cartoon.iso_scenery import SLAB_DEPTH, IsoColors, IsoPiece, ground_s
 from vidgen.cartoon.iso_weather import TopSurface, top_surface
 from vidgen.cartoon.stage import MAX_ZOOM, StageItem, StagePlacement
 from vidgen.errors import VidgenError
-from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, VOID, IsoPlace, ObjectState, default_state
+from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, TALL_KINDS, VOID, IsoPlace, ObjectState, default_state
 from vidgen.world.iso_view import ISO_RISE, Box3, draw_order, in_front, iso_point
 
 #: Room left around the place in the frame, a share of the frame's width and height each side.
@@ -98,8 +98,8 @@ def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: 
     what must be seen leaves the view (with :data:`ISO_MARGIN`): ``bodies`` (the boxes of the
     characters and small things at their spots, those entering later too) and, in a frame at least as wide as tall, the
     spots (a character standing at each) and the objects named in ``placed`` (the scene's
-    ``iso.objects``) whole, so a house's roof is not cut; the map's trees, bushes, flowers and
-    fences may be cut at the frame's edges. A room keeps all of itself in such a frame. A
+    ``iso.objects``) whole, so a house's roof is not cut (not a city's towers, which may reach
+    out of the view); the map's trees, bushes, flowers and fences may be cut at the frame's edges. A room keeps all of itself in such a frame. A
     portrait frame keeps just the bodies: a Short shows the part of the place where they stand
     rather than the whole place small in the middle. At most :data:`ISO_WIDE_MAX` times the
     whole place's fit, at least that fit; centred on the place's middle, moved as little as keeps
@@ -119,7 +119,8 @@ def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: 
     if frame_width >= frame_height:
         if place.indoor and fit != "fill":
             keep.append((left, top, right, bottom))
-        keep += [object_box(item, place.floor_z(item.column, item.row)).picture_bounds() for item in place.objects if item.name in placed]
+        keep += [object_box(item, place.floor_z(item.column, item.row)).picture_bounds() for item in place.objects
+                 if item.name in placed and item.kind not in TALL_KINDS]   # a city's towers may reach out of the view (§102.2)
         for spot in place.spots:
             feet = iso_stand(place, spot.name)
             keep.append(_padded(standing_box(place, feet, ISO_CHARACTER_HEIGHT).picture_bounds(), ISO_WIDE_BODY_ROOM))

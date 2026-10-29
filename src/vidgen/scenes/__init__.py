@@ -19,8 +19,8 @@ glycosylate, fold, to_golgi, secrete; ``pathway_actions``: signal, inhibit, knoc
 ``karyotype_actions``: rearrange; ``plot_actions``: fit, annotate, grow; ``calculation_actions``: substitute, compute,
 convert; ``orbit_actions``: sweep, launch, burn, flyby, pause, coast; ``standard_model_actions``: antiparticles, couplings; ``feynman_actions``: travel, vertex_rule, swap_channel; ``kinematics_actions``: boost; ``detector_actions``: switch_view; ``host_actions``: host_point, host_look, host_react, host_move,
 host_enter, host_exit) and the
-built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
-chapter_indicator; ``captions``: captions).
+built-in overlays (``overlays``: lower_third, hook, watermark; ``progress``: progress_bar,
+chapter_indicator; ``captions``: captions; ``hud``: hud).
 """
 
 from vidgen.scenes import (  # noqa: F401
@@ -65,6 +65,7 @@ from vidgen.scenes import (  # noqa: F401
     hide_action,
     histogram,
     host_actions,
+    hud,
     icon_grid,
     image,
     karyotype,

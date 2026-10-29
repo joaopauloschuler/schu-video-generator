@@ -23093,3 +23093,92 @@ Known gaps
 
 How to test: `tests/test_cuts_shorts.py`; stills (scratchpad, private)
 `story-qeh/shorts/short1_contact.png` … `short7_contact.png`.
+
+## Step 251 — A city at night, glowing particles, a HUD, echoes (Phase AA plan)
+
+Phase AA (Steps 251–254): a second private story cartoon (a first-person noir romance at night in
+a city of towers; the narrator is the hero) drives generic features. The story, its adapted
+script and its project stay in the scratchpad (`story-qc/`); nothing of them is in the repo.
+
+What was done
+- **Adaptation and gap analysis** (private): the script (11 parts, about 1000 spoken words,
+  about 6:25 estimated) with shots, lines per speaker, Kokoro voices (narrator and hero
+  `am_fenrir`, heroine `af_bella`, the synthetic voice in the head `bf_emma` with
+  `[robot, radio]`; checked with `vidgen tts`), camera, staging, light, sounds, music cues
+  (`enigma`, `neon`, `beacon`, `calm`) and the gap list per shot; test renders of a city of
+  houses with coloured rain, then of the new city, a lab with an echo and the HUD (16:9 and 9:16).
+  Generic summary and the plan: DESIGN §102.1, tasklist Phase AA.
+- **Towers** (DESIGN §102.2): the iso object `tower` (`height` 2–30, `size`, lit window grids,
+  neon trims in `detail`, a blinking antenna light; `screen: true` an info screen whose lines
+  crawl up, `garden: true` glowing algae bands; `on` / `switch_on` for its windows, lit by
+  default). Towers may reach out of the wide view.
+- **Traffic** (§102.3): `iso.traffic` lanes of hover pods (`from`, `to`, `height`, `count`,
+  `seconds`, `color`, `size`, `at`: looping, or crossing once from `at`, eased), each a capsule
+  with a glowing rim, a canopy with a rider, a headlight, a glow and a trail; hidden behind
+  buildings (`pod_hidden`); drawn behind the characters.
+- **Glowing particles** (§102.4): `glow: true` on any particles (a light core, a halo in the
+  colour kept as wide on screen through a zoom, more opaque; splashes too).
+- **The `hud` overlay** (§102.5): a scene-timed heads-up display (`at` / `duration` like a lower
+  third): brackets and scan lines, a blinking `alert`, readout `lines`, a `heart` monitor (rate
+  easing to `to`, `skips` beats skipped, warning colour while racing or skipping), a `scan` meter
+  (a live wave; above 1 off its scale, `off_scale` flashing).
+- **Echo characters** (§102.6): `echo: true | {color, opacity, flicker}`: a translucent other
+  self keeping its own colours, outlines glowing in the echo's colour, unlit, flickering; appears
+  with `materialise`.
+
+Files
+- New: `src/vidgen/cartoon/iso_city.py`, `src/vidgen/cartoon/echo.py`, `src/vidgen/hud.py`,
+  `src/vidgen/scenes/hud.py`, `tests/test_city_hud_echo.py` (12: 2 renders).
+- Changed: `world/iso.py` (tower kind, `TALL_KINDS`, `OBJECT_FEATURES`, placing `height` /
+  `features`, tower lit by default), `cartoon/iso_objects.py` (`_tower`, `tower_screen`, the
+  antenna light, `LIT_OBJECTS`), `cartoon/iso_overlays.py` (`IsoScreens`, `IsoTraffic`, `PodLane`),
+  `cartoon/iso_stage.py` (`wide_view` lets tall objects be cut), `cartoon/character.py`
+  (`apply_echo`), `config.py` (`EchoConfig`, `CharacterEntry.echo`, `echo_look`, hologram /
+  echo exclusive), `particle_field.py` (`glow`, `glow_colors`, halo width by zoom),
+  `scenes/stage.py` (`IsoObjectParam.height/screen/garden`, `on: None`, `IsoTrafficLane`,
+  `StageIso.traffic` / `lane_ends`, echoes unlit), `scenes/stage_iso.py` (`_iso_city`: screens,
+  traffic, tower lights), `scenes/stage_story.py` (echo flicker, no fill light; screens and pods
+  unlit), `scenes/overlays.py` (`scene_at`), `scenes/__init__.py` (`hud`), `api.py`; tests whose
+  lists or messages grew (`test_story_fx`, `test_iso_staging`, `test_overlays`); docs CONFIG
+  (A city at night, `glow`, Echo characters, `hud`, iso keys, character keys), guide (copied to
+  `AGENTS.md`), README, CHANGELOG, DESIGN §2 / §102, tasklist.
+
+Public interfaces: see DESIGN §102.7. Config: iso object `tower` (`height`, `screen`, `garden`),
+`iso.traffic`, particles `glow`, overlay `hud`, `characters[].echo`.
+
+Decisions
+- Towers are iso objects (drawn into the place's pictures, ordered with everything) with their
+  moving parts (screen lines, antenna lights) as story things over the pictures, like a lab's
+  blinking lights; a screen another object hides is left still.
+- Pods are a story thing behind the characters with a cheap outline test for what hides them,
+  not drawn into the per-character front pictures. No rider character in a pod (252 if the city
+  shots need a closer look); a `pan` with the same `run_time` follows the hero's pod.
+- The HUD is an overlay (fixed to the screen, through camera moves, timed in its scene) rather
+  than stage actions; its pose reuses the built parts and makes only the moving ones per frame.
+- An echo is a recolouring like a hologram's (it keeps every action, viseme and expression),
+  keeping the costume's colours; several echoes are several characters.
+- No gallery entry: 16.1 of 16.5 MB; a rainy neon city's GIFs would not fit.
+
+Checks
+- Tests (one or two files at a time): test_city_hud_echo 12 (2 renders), test_story_fx +
+  test_iso_place 74, test_iso_staging 32, test_particles + test_cartoon_rain (with iso_staging)
+  70, test_overlays (not render 16; lower third renders 5), test_schema + test_config + test_api
+  102, test_docs + test_extensions 98, test_docs + test_guide 164, test_json_output +
+  test_portal_hologram + test_cartoon_character 57, test_builtin_scenes 174 (not render),
+  test_cartoon_snow_fog + test_actions_coverage + test_review2 + test_custom_scene_example 34,
+  test_mcp 18 (not render), test_cartoon_storm + test_particle_lint + test_cartoon_lighting 153 —
+  all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check251`).
+- Test renders (scratchpad `s251/t2`, preview 854 × 480): the city (6 towers, 3 lanes, glowing
+  rain, a pan) 11.2 s in 21.3 s; the lab with an echo and the HUD 5.9 s in 28.3 s (19.6 s
+  without the HUD); 9:16 (360 × 640) 18.4 s and 25.6 s.
+
+Left for Step 252 (DESIGN §102.1): `kiss`; display patterns `equations` and `timelines`; a
+`scanner` small prop; small props `takeout`, `crystal`; a `medal` accessory; a glowing pendant;
+a `haze` over a spot; a sliding room door; a closer pod / rider shot if needed. Noted: rain
+splashes on an iso ground read like small faces in a close-up; the HUD's lines sit at the top
+left (frame a speaker away from them).
+
+How to test: `tests/test_city_hud_echo.py`; stills (scratchpad, private)
+`s251/t2/build/preview/frames/city/city_b1-1.png`, `s251/t2/build/preview/frames/lab/lab_b2-1.png`,
+`s251/t2/build/preview_vertical/frames/lab/lab_b2-1.png`; the script `story-qc/script.md`.

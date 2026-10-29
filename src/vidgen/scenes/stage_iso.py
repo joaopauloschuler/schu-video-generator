@@ -369,10 +369,51 @@ class IsoStaging:
             if item.kind in LIT_OBJECTS:
                 for k, point in enumerate(object_lights(item, place.floor_z(item.column, item.row))):
                     lights.append(self.iso_view.point(*point))
-                    colors.append((looks[item.name].detail, LAB_AMBER, looks[item.name].detail)[k % 3] if item.kind == "server_rack" else LAB_AMBER)
+                    if item.kind == "tower":
+                        colors.append(TOWER_ANTENNA_LIGHT)
+                    else:
+                        colors.append((looks[item.name].detail, LAB_AMBER, looks[item.name].detail)[k % 3] if item.kind == "server_rack" else LAB_AMBER)
         if lights and not self.is_draft:
             self.story_things.append(IsoBlinkers(lights, colors, LAB_LIGHT_SIZE * self.iso_view.unit, seed=motion_seed(self.spec.id, "lab_lights")))
+        if not self.is_draft:
+            self.story_things += self._iso_city(place, looks)
         return list(self.story_things)
+
+    def _iso_city(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
+        """A city's moving parts over the place (DESIGN.md §102.2, §102.3): the crawling lines of
+        its towers' info screens (those no other object hides) and the hover pods of its
+        ``traffic`` lanes."""
+        p = self.params
+        things: list[Mobject] = []
+        screens, colors, seeds = [], [], []
+        boxes = [(item, object_box(item, place.floor_z(item.column, item.row))) for item in place.objects]
+        for item, box in boxes:
+            corners = tower_screen(item, place.floor_z(item.column, item.row))
+            if corners is None:
+                continue
+            picture = [iso_point(*corner) for corner in corners]
+            left, right = min(u for u, _ in picture), max(u for u, _ in picture)
+            top, bottom = min(v for _, v in picture), max(v for _, v in picture)
+
+            def covers(other: Any, other_box: Any) -> bool:
+                l, t, r, b = other_box.picture_bounds()
+                return in_front(other_box, box) is True and l < right and r > left and t < bottom and b > top
+
+            if any(other is not item and covers(other, other_box) for other, other_box in boxes):
+                continue   # another building stands in front of it: its picture shows the screen as it is
+            screens.append([self.iso_view.point(*corner) for corner in corners])
+            colors.append(screen_color(looks[item.name].detail))
+            seeds.append(screen_seed(item.name))
+        if screens:
+            things.append(IsoScreens(screens, colors, seeds=seeds))
+        lanes = []
+        for lane in p.iso.traffic:
+            start, end = p.iso.lane_ends(lane)
+            lanes.append(PodLane(self.iso_view.point(*start), self.iso_view.point(*end), lane.seconds, lane.count,
+                                 resolve_color(lane.color, self.theme), POD_LENGTH * lane.size * self.iso_view.unit, lane.at, (start, end)))
+        if lanes:   # a pod behind a building is hidden by it
+            things.append(IsoTraffic(lanes, [(box, box_outline(box)) for _, box in boxes]))
+        return things
 
     def _iso_arrivals(self, place: Any) -> list[Box3]:
         """In a tall frame, what the wide view keeps in view besides the characters: a character

@@ -1519,6 +1519,38 @@ Shorts out of any longer video. The story project and its Shorts stay in the scr
 - [x] Tests `tests/test_cuts_shorts.py` (+7); CONFIG, guide, CHANGELOG; Phase Q baseline 31/31
 - [x] Shorts 1–3 re-rendered with the fixes; Shorts 4–6 and the teaser built and rendered; all seven reviewed (stills of every beat, captions, hooks, levels, durations, sizes) with contact sheets (scratchpad)
 
+## Phase AA — A second story cartoon: a neon city, an implant's view, other timelines
+
+Goal: the owner's second private short story (a first-person cyberpunk noir romance at night)
+told as a narrated isometric cartoon (5–7 min, Kokoro voices: the narrator is the hero), then
+Shorts cut from it; and the generic features it needs, for every author: a city of towers at
+night with traffic in the air and glowing rain, a heads-up display over the frame (alerts,
+readouts, a heart monitor, a scanner), characters' other selves overlapping the present, a
+kiss, floating holographic formulas and many timelines on a display, a handheld scanner, a
+haze over a spot, small props and a medal. The story project stays in the scratchpad: nothing of
+it is committed (features use neutral samples). Additive and opt-in; Phase Q's 31 baseline
+frames when shared code changes. DESIGN §102. Steps 251–254.
+
+### Step 251 — Adaptation, gap analysis, first features
+- [x] The adapted script (private, scratchpad): shot list with lines per speaker, Kokoro voices (narrator = hero, a heroine, a synthetic voice in the head with `[robot, radio]`), camera, staging, light, sounds, music cues (`enigma`, `neon`, `beacon`, `calm`); test renders of a neon city and a lab; the gap list per shot (DESIGN §102.1)
+- [x] Phase AA plan here and DESIGN §102
+- [x] Towers: the iso `tower` object (`height`, `size`, lit window grids, neon trims, antenna light; `screen` with crawling lines, `garden` algae bands; `on`, `switch_on`); towers may reach out of the wide view (DESIGN §102.2)
+- [x] Traffic: `iso.traffic` lanes of hover pods (looping or crossing once with `at`; glowing rims, riders, trails; hidden behind buildings) (§102.3)
+- [x] Glowing particles: `glow: true` on any particles (a light core, a halo kept as wide on screen through a zoom, more opaque) (§102.4)
+- [x] The `hud` overlay (scene-timed like a lower third: frame, `alert`, `lines`, `heart` with `to` / `skips`, `scan` with `to` above 1 off scale) (§102.5)
+- [x] Echo characters: `echo: true | {color, opacity, flicker}` (translucent, own colours, glowing outlines, unlit, flickering; with `materialise`) (§102.6)
+- [x] Tests `tests/test_city_hud_echo.py`; CONFIG, guide (`AGENTS.md`), CHANGELOG; Phase Q baseline 31/31; no gallery entry (16.1 of 16.5 MB: a rainy city's GIFs would not fit)
+
+### Step 252 — Remaining features and a test cut
+- [ ] A `kiss` action (two lean in, faces meet, eyes closed, a heart); display patterns `equations` (formulas drifting like butterflies) and `timelines` (a grid of small panels, two figures meeting in each); a handheld `scanner` small prop (a pulsing screen that spikes); small props `takeout` and `crystal`; a `medal` accessory; a glowing, pulsing pendant (`necklace` glow); a `haze` over a spot (a rippling shimmer); a sliding room door; a closer look at a pod's rider if the city shots need it
+- [ ] Tests, CONFIG, guide, CHANGELOG; Phase Q baseline; a private test cut of key shots, stills checked
+
+### Step 253 — The story video
+- [ ] Build the private project, preview every shot, iterate; final 16:9 1080p and a delivery copy under 28 MB; contact sheet (scratchpad)
+
+### Step 254 — Shorts and review
+- [ ] 5–7 Shorts (9:16, hooks, captions, end card, < 60 s, < 28 MB, ~−14 LUFS) in the scratchpad; a critical review of the film and of the Phase AA features (tests, docs, Phase Q baseline, `tests/test_mcp.py` fully)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

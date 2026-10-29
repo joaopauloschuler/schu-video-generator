@@ -158,7 +158,10 @@ src/vidgen/
                           # materialise, flicker, iridescence, a display's patterns, a flashback's
                           # grade, §100.7-§100.12; no manim but CameraVignette), figure_fx.py
                           # (FigureAlpha, Materialise, Iridescence, Afterimages, HandHold, §100.9-10),
-                          # iso_overlays.py (IsoShutters, IsoBlinkers, §100.7, §100.11),
+                          # iso_overlays.py (IsoShutters, IsoBlinkers, §100.7, §100.11; IsoScreens,
+                          # IsoTraffic, §102.2-§102.3), iso_city.py (towers' parts, screens' lines,
+                          # pods on lanes and what hides them, §102.2-§102.3; no manim), echo.py
+                          # (echo characters, §102.6),
                           # nature.py (fruit spots, a dropped fruit's fall and bounce, flocks of
                           # birds, §69.55; no manim), nature_drawing.py (Flock, FallenFruit,
                           # FruitDrop, hit_stars, §69.55), small_props.py (balloons floating away,
@@ -236,6 +239,7 @@ src/vidgen/
   tts/prosody.py          # an emotion applied to speech: pauses by word timings, soft-limited gain, pitch filter (§72)
   emotions.py             # emotion: the table (speed, pitch, gain, pauses), manner words (§72; no manim)
   voice_effects.py        # voice effects: presets, VoiceEffect, the ffmpeg filter chain (§100.2; no manim)
+  hud.py                  # a heads-up display's motion: alert blink, lines, heart beats and trace, scan level and wave (§102.5; no manim)
   tts/effects.py          # EffectProvider: any provider's audio through a voice's effect (§100.2)
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
                           # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
@@ -297,6 +301,7 @@ src/vidgen/
                           # host_enter, host_exit (the scene's host), §71.1;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
+                          # hud.py: the hud overlay, §102.5;
                           # stage.py: the stage scene type, §69.6; card.py: the card scene type, §69.46)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
@@ -19671,3 +19676,157 @@ opt-in; Phase Q baseline unchanged):
 Public surface: `Action.opens_scene` (vidgen.api `Action`), `Rule.mid_beat` / `rule(mid_beat=)`;
 config: zoom `cut`, `shorts_safe_area.min_cover`, cut params `drop`; layout dump key `reach`
 (a Short only).
+
+## 102. A neon city, an implant's view, other timelines (Phase AA, Steps 251–254)
+
+Reference: docs/CONFIG.md "Isometric places" (**A city at night**), "Particles" (`glow`), "Echo
+characters (`echo`)", "Overlays" (`hud`). A second private story cartoon (a first-person noir
+romance at night in a city of towers: an implant that alerts and scans, a ride through the
+city in a hover pod under glowing rain, a lab where other timelines overlap the present, a kiss
+echoed across timelines) drives generic features for every author. The story, its script and
+its project live in the scratchpad and are never committed; docs and samples use neutral
+content.
+
+### 102.1 The phase (plan) and the gap analysis (Step 251)
+
+- **251**: the adapted script (private), test renders (a city of houses in neon colours with
+  coloured rain; then the new city, a lab with an echo and a HUD), the gap list below, this plan,
+  and the first features: towers (§102.2), traffic (§102.3), glowing particles (§102.4), the
+  `hud` overlay (§102.5), echo characters (§102.6).
+- **252**: the rest of the gaps: a `kiss` action; hologram display patterns `equations` and
+  `timelines`; a handheld `scanner` small prop; small props `takeout` and `crystal`; a `medal`
+  accessory; a glowing, pulsing pendant; a `haze` over a spot; a sliding room door; a closer look
+  at a pod's rider if needed. A private test cut of key shots.
+- **253**: the story video (private): build, previews, stills of every shot, final 16:9 1080p
+  and a delivery copy under 28 MB.
+- **254**: Shorts (9:16) cut from it and a critical review of the film and the features.
+
+**What vidgen did already** (test render: an outdoor iso place at `light: night` with two houses
+in neon colours, a lamp, a sign, path streets, rain with `color: [cyan, blue, green]`,
+`fill_light: 0.45`, two characters and a close-up; 10.8 s in 161.7 s at 854 × 480): night
+light, lit windows and lamps that glow, coloured rain with splashes and puddles, faces readable
+at night, per-speaker Kokoro voices with effects (`[robot, radio]` for a voice in the head),
+holograms, `materialise`, hand in hand, flashback looks, alarms, shots and zooms, music beds
+(`enigma`, `neon`, `beacon`, `calm`).
+
+**Gaps per need** (generic names): a city of tall buildings at night (window grids, neon,
+screens, algae farms); things flying over an iso place (hover pods on lanes); glowing rain; a
+heads-up display over the frame (alerts, readouts, a heartbeat that skips, a scanner spiking off
+its scale); other selves in their own costumes overlapping the present; a kiss; floating
+formulas and many timelines on a display; a handheld scanner; a haze; small props (takeout,
+crystals), a medal, a glowing pendant; a sliding door.
+
+### 102.2 Towers (Step 251)
+
+- **World** (`world/iso.py`): `OBJECT_KINDS["tower"]` (2 x 2, 9 tiles); `TALL_KINDS` (kinds a
+  placing may give a `height`: tower 2–30); `OBJECT_FEATURES` (a tower's `screen`, `garden`);
+  `ObjectPlacing.height` / `.features` and `IsoObject.features` (checked in `place_objects`:
+  height only for a tall kind and in range, features of its kind); `SWITCHED_KINDS` + tower;
+  `default_state("tower").on` is true (its windows lit). Config: `IsoObjectParam.height`,
+  `screen`, `garden` (towers only), `on` now `bool | None` (`None`: the kind's own: a tower lit,
+  others off — unchanged for them).
+- **Drawing** (`iso_objects._tower`, maths in `cartoon/iso_city.py`, no manim): the box in the
+  main colour; on each face rows of windows every `TOWER_FLOOR` 0.5 from `TOWER_FIRST` 0.55,
+  columns every `TOWER_COLUMN` 0.34 (windows 0.2 × 0.28), a seeded `TOWER_LIT_SHARE` 0.58 lit
+  (glow polys in one of four warm / cool lights) while on, the rest dark glass shaded by the
+  face; algae-farm bands (`garden_bands`: 0.42 tall every 2.5 from 1.4, `#3DFFB0`, glowing, with
+  darker tank frames); neon trims (glow bands `TOWER_TRIM` 0.05 wide) up the outer edges and
+  the front corner and round the top in `detail`; the info screen (`screen_box`: 12–88 % across
+  the front, 52–80 % up, at least 1.2 tiles) in a deep shade of the neon (`screen_color`) with a
+  casing and its lines as at time 0; an antenna (`TOWER_ANTENNA` 1.1). `object_lights` gives the
+  antenna's tip (red `TOWER_ANTENNA_LIGHT`, blinked by `IsoBlinkers`); `tower_screen` the
+  screen's corners.
+- **Crawling screens** (`IsoScreens`, a story thing over the place's pictures, unlit): over each
+  screen no other object hides (`in_front` of the tower's box and overlapping the screen's
+  picture box) a plate in the screen's colour and `SCREEN_LINES` 6 bars crawling up at
+  `SCREEN_CRAWL` 0.12 screen heights a second (`screen_lines(now, seed)`: a bar wrapping to the
+  bottom gets a new seeded length).
+- **The wide view**: `wide_view` no longer keeps placed `TALL_KINDS` objects whole (a skyline is
+  cut by the frame's top; `place_bounds` still counts them, so `wide: 1.5–2.5` fills the frame
+  with the streets).
+
+### 102.3 Traffic (Step 251)
+
+- **Config** (`IsoTrafficLane`, `StageIso.traffic`): `{from, to, height 0.5–30 = 3, count 1–12 =
+  3, seconds 1–120 = 6, color = #5FE8FF, size 0.4–3 = 1, at}`; ends are spots or cells (checked:
+  known spot, in the map, not the same), outdoors only. `StageIso.lane_ends` gives the world
+  points (cell middles, `height` over the start cell's floor).
+- **Motion** (`lane_pods(now, seconds, count, at)`): looping, `count` pods evenly spaced, already
+  on their way at time 0; with `at`, each crosses once (the next `seconds / count` later) with
+  smoothstep easing. Pods fade over `POD_FADE` 8 % at the ends.
+- **Drawing** (`IsoTraffic`, a story thing, unlit, drawn behind the characters): per pod a
+  tapered trail (`POD_TRAIL` 2.4 lengths, 0.32 opaque), a glow under it, an ellipse hull
+  (`POD_HULL` dark, rim in the lane's colour), a canopy dome with a rider's head, a headlight;
+  `POD_LENGTH` 0.8 tile widths × `size`; facing the way the lane goes across the picture.
+- **Hidden behind buildings** (`pod_hidden`): a pod whose box (`POD_BOX`) has an object's box
+  drawn in front of it (`in_front`) and whose middle lies inside that box's outline on the
+  picture (`box_outline`, the hull of its corners) is not drawn (all objects of the place are
+  occluders). Decided over drawing pods into the place's front pictures (§89.9): those are made
+  per character and position; the outline test is a few comparisons per pod and frame.
+- Following one: a `pan` to the lane's end spot with the same `run_time` (no `follow` of a pod).
+
+### 102.4 Glowing particles (Step 251)
+
+`ParticleSettings.glow` (any kind): each particle's fill is its colour `GLOW_CORE` 0.45 of the
+way to white and its stroke a halo in the colour (`GLOW_HALO_WIDTH` 3, `GLOW_HALO_OPACITY` 0.4);
+the kind's opacity × `GLOW_BOOST` 1.6 (at most 1); rain's splashes too. Strokes scale with the
+camera's view in Cairo, so the halo's width is set to `GLOW_HALO_WIDTH × zoom` whenever the
+view's zoom changes (the halo stays as wide on screen in a close-up). Without `glow` every value
+is the same as before (the boost is 1; the splash opacity is `min(SPLASH_OPACITY × 1, 1)`).
+
+### 102.5 The `hud` overlay (Step 251)
+
+- **Model** (`vidgen/hud.py`, no manim): `alert_on(t)` (on 68 % of 0.8 s), `lines_shown(t,
+  count, every)` (a line every `HUD_LINE_SECONDS` 0.6 s, flickering in over 0.25 s),
+  `HeartMonitor {bpm, to, at, skips}` → `heart_rate` (eased over `HEART_RISE` 1.6 s),
+  `heart_beats` (one every 60 / rate s from time 0, steady before it; the first `skips` beats
+  from `at` left out: a gap), `ecg(phase)` (P, QRS, T shapes), `heart_trace(t)` (the last
+  `HEART_WINDOW` 3 s); `ScanMeter {level, to, at, wave}` → `scan_level` (eased over 0.7 s; above
+  1 off the scale), `scan_wave` (`organic`: three drifting partials; `steady`: one sine; scaled
+  by the level, at most 1.6).
+- **Overlay** (`scenes/hud.py`, `@overlay("hud")`, layer 9: under captions and the hook; lint
+  skips `contrast`): timed in its scene like a lower third (`scene`, `at` — the shared
+  `scene_at` check now in `scenes/overlays.py` —, `duration`, `across_cuts`; `validate_project`,
+  `window`, `_start_in_scene` are `LowerThird`'s). `build` lays out, in the safe area (a Short's
+  clear part): corner brackets and `SCAN_LINES` 36 scan lines over the frame (two VMobjects),
+  the alert plate (a warning triangle, bold monospace words, warning outline) at the top
+  centre, the readout lines (monospace `caption`, a dark edge) under it at the left, the heart
+  and scan panels' plates at the bottom corners (0.3 of the width, 0.46 in portrait; 0.18 of
+  the height); `opacity` is applied in place to everything it makes. `state(t)` = (the frame
+  since it came on, the boot progress): it changes every frame. `pose` builds a new group of the
+  built parts (shared) with faded copies where needed (the alert blinking, lines not yet in)
+  and the moving parts made fresh (the rate and its word, a heart pulsing on each beat, the
+  trace; the meter's label or `off_scale` blinking, its bar, its wave) — no deep copy of the
+  whole HUD per frame; booting, a flicker × the progress.
+- **Cost**: the overlay layer draws the pose's whole box (here the full frame) twice per frame;
+  measured on a 5.9 s lab scene at 854 × 480: 30.3 s with it, 19.6 s without.
+
+### 102.6 Echo characters (Step 251)
+
+`CharacterEntry.echo: bool | EchoConfig {color = #B48CFF, opacity 0.2–0.9 = 0.5, flicker}`
+(`echo_look()`; a hologram and an echo together are refused). `cartoon/echo.py`:
+`apply_echo(figure, color, opacity)` (after `build_character`'s hologram step): every filled
+member keeps its colour moved `ECHO_TINT` 0.22 towards the echo's colour at `opacity` × its fill
+opacity; outlines become the colour `ECHO_EDGE_WHITE` 0.35 of the way to white at 0.9 of their
+opacity; hidden shapes too (every expression and viseme); `figure.echo`. The stage treats it as
+a hologram for light (`unmark_lit`, no soft shading, no fill light) and flickers it
+(`_Flicker`, its `flicker`). It appears with `materialise` (a wireframe, then solid) like any
+character.
+
+### 102.7 Public surface and compatibility (Step 251)
+
+- `vidgen.api` adds `ECHO_COLOR`, `apply_echo`, `is_echo`; `IsoScreens`, `IsoTraffic`, `PodLane`,
+  `POD_LENGTH`, `TOWER_ANTENNA_LIGHT`, `box_outline`, `garden_bands`, `lane_pods`, `pod_hidden`,
+  `screen_color`, `screen_lines`, `screen_seed`, `tower_screen`, `in_front`; `HUD_COLOR`,
+  `HUD_WARNING`, `HUD_LINE_SECONDS`, `HeartMonitor`, `ScanMeter`, `alert_on`, `heart_beats`,
+  `heart_rate`, `heart_trace`, `lines_shown`, `scan_level`, `scan_wave`. Config: iso object
+  `tower` with `height`, `screen`, `garden`; `iso.traffic`; particles `glow`; overlay `hud`;
+  `characters[].echo`.
+- Additive and opt-in. Shared code touched: `ParticleField` (the boost is 1 and no stroke
+  change without `glow`), `wide_view` (only `TALL_KINDS` objects are no longer kept), the
+  `LowerThird`'s `at` check (moved into `scene_at`, same messages), `IsoObjectParam.on`
+  (`None` default: the same states for every existing kind), the stage's hologram checks (now
+  also echoes). Phase Q baseline 31/31 identical. Tests whose lists grew: `test_story_fx`
+  (`LIT_OBJECTS`), `test_iso_staging` (the `on` message), `test_overlays` (the overlay types).
+- No gallery entry: the gallery is 16.1 of 16.5 MB and a rainy neon city's GIFs (every pixel
+  of rain changing) would not fit.

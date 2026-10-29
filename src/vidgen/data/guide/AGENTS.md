@@ -1882,7 +1882,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `switch_view` | on a `detector` scene: turn the transverse view (x–y, across the beam) into the longitudinal one (r–z, along it) or back (`- action: switch_view`, `to: rz` / `xy`); rings, tracks, towers and hits morph | "seen from the side" |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
-| `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
+| `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `glow: true` to make them shine, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |
 | `blow_away` | on a `stage`: the wind blows a light prop away, tumbling, out of a hand too (`- blow_away: napkin`; `to:` a mark to land there, else off the stage) | a gust in the story; napkin, umbrella, ball, cup, basket, box, letter, balloons only |
 | `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s; `move_sun: true` moves a `sun` / `moon` prop across the sky, shadows turning) | when time passes in the story |
@@ -1893,7 +1893,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `knock` | on a `stage`: someone knocks three times on a door (`- knock: front`; a room's door or a `door` prop; nobody needs to stand there) | a visitor in the story; the door then `open`s with a creak |
 | `alarm` | on a `stage`: an alarm goes off (`- alarm: start`) or stops (`- alarm: stop`): the set darkens under a red light pulsing like a beacon, a siren plays; portals, holograms and screens keep shining (`color`, `period`) | a security system, a red alert |
 | `shutters` | on an indoor iso place: steel shutters slam down over its windows (`- shutters: close`, a slam) or roll up (`- shutters: open`) | with an alarm; a lockdown |
-| `materialise` | on a `stage`: a character appears as a hologram does, a flickering wireframe, then solid (`- materialise: guide`; it waits unseen until then) | a projection switched on; best on `hologram: true` |
+| `materialise` | on a `stage`: a character appears as a hologram does, a flickering wireframe, then solid (`- materialise: guide`; it waits unseen until then) | a projection switched on, another self appearing; best on `hologram: true` or `echo: true` |
 | `dematerialise` | on a `stage`: a character vanishes the same way backwards (`- dematerialise: guide`) | a projection switched off |
 | `hold_hands` | on a `stage`: a character takes another's hand (`- {hold_hands: ana, with: ben}`); they hold hands wherever they stand or walk | walk both in the same beat to places side by side to go hand in hand |
 | `let_go_hands` | on a `stage`: a character lets go of the hand it holds (`- let_go_hands: ana`; the other too) | before an arm gestures again |
@@ -2615,6 +2615,21 @@ and give each scene `set: village`.
   `shot: closeup ana ben` frames two faces together, `{kind: closeup, of: guide, clear: true}`
   hides everyone else for the beat. A memory: `flashback: true` on a stage (faded warm colours,
   a soft vignette), with `flower_arch` and `chess_table` objects, and an iris in and out.
+- A city at night: `objects` `tower` (`height` 2–30 tiles, `size` its footprint; lit window
+  grids, neon trims in `detail`, a blinking antenna; `screen: true` a crawling info screen,
+  `garden: true` glowing algae bands) on the blocks between path streets, `light: night`, and
+  `traffic: [{from: west, to: east, height: 3, count: 3, seconds: 7, color: "#FF2E8B"}]` under
+  `iso:` for hover pods gliding over the streets (`at: 1.0` with `count: 1`: one pod crosses once;
+  a `pan` to the end spot with the same `run_time` follows it). `wide: 1.6`–`2.5` lets the towers
+  reach out of the top of the frame. Neon rain: `particles: [{kind: rain, glow: true, color:
+  ["#5FFFE0", "#4FA8FF"]}]` (`glow` works on any particles).
+- Other selves: a character with `echo: true` (or `{color, opacity}`) is a translucent other
+  self that keeps its own costume, its outlines glowing (a timeline, a memory, a dream); stand
+  it beside the one it echoes and bring it with `- materialise: ana_captain`.
+- Inside someone's head: a scene's `overlays: {implant: {type: hud, at: office_b2, duration: 6,
+  alert: "INCOMING ALERT", lines: ["SIGNAL: SECTOR 7"], heart: {bpm: 70, to: 128, at: 1.5,
+  skips: 3}, scan: {level: 0.4, to: 1.6, at: 3}}}` draws a HUD over the frame (brackets, a
+  blinking alert, readouts, a heart monitor, a scanner meter spiking off its scale).
 
 ```yaml
 characters:
@@ -3066,6 +3081,8 @@ scenes:
 - `lower_third` once, when a person or place first appears (5 s).
 - `watermark` small and faint, or not at all.
 - `captions` for social and muted viewing (`vidgen guide social`).
+- `hud` on a scene where the story is seen through an implant or a visor (`at`, `duration`,
+  `alert`, `lines`, `heart`, `scan`), not as decoration.
 Lint's `overlay_overlap` reports an overlay over scene text: give it `reserve: true` or move it.
 
 **Transitions** (`transition:` per scene = the way into it, or video-wide). Default: cuts (every

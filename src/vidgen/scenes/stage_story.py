@@ -82,7 +82,7 @@ class StoryStaging:
             entry = entries.get(name)
             if entry is None or not fancy:
                 continue
-            hologram = entry.hologram_look()
+            hologram = entry.hologram_look() or entry.echo_look()   # an echo flickers like a hologram (§102.6)
             if hologram is not None and hologram.flicker:
                 self.figure_fx.append(_Flicker(figure, motion_seed(self.spec.id, name, "flicker")))
             iridescent = entry.iridescent_look()
@@ -95,8 +95,8 @@ class StoryStaging:
         for name in self._materialising():
             figure_alpha(self.cast[name]).set("appear", 0.0).apply()
         for thing in getattr(self, "story_things", []):
-            if isinstance(thing, IsoBlinkers):
-                unmark_lit(thing)   # a lab's lights shine at night too
+            if isinstance(thing, (IsoBlinkers, IsoScreens, IsoTraffic)):
+                unmark_lit(thing)   # a lab's lights, a city's screens and pods shine at night too
         if getattr(self, "story_things", []):
             self._watch_living()
         #: the scene updater, kept: Manim removes an updater by identity
@@ -112,7 +112,7 @@ class StoryStaging:
             entry = entries.get(name)
             iridescent = entry.iridescent_look() if entry is not None else None
             share = max(float(self.params.fill_light), iridescent.glow if iridescent is not None else 0.0)
-            if share > 0.0 and not is_hologram(figure):
+            if share > 0.0 and not (is_hologram(figure) or is_echo(figure)):
                 mark_light_lift(figure, share)
 
     def _story_step(self, dt: float) -> None:

@@ -21,6 +21,20 @@ Corner = Literal["top_left", "top_right", "bottom_left", "bottom_right"]
 Placement = Literal["bottom_left", "bottom", "bottom_right", "top_left", "top", "top_right"]
 
 
+def scene_at(value: float | str) -> float | str:
+    """An overlay's ``at`` in its scene, checked: seconds (not negative), a beat id or a spoken
+    word (``"@word"``); ``ValueError`` otherwise."""
+    if is_word_anchor(value):
+        parse_word_anchor(str(value), beat_allowed=True)
+        return str(value).strip()
+    if isinstance(value, str):
+        if not value or not all(ch.isalnum() or ch == "_" for ch in value):
+            raise ValueError(f"at: a number of seconds, a beat id or a spoken word (\"@word\"), got {value!r}")
+    elif value < 0:
+        raise ValueError("at must not be negative")
+    return value
+
+
 @overlay("lower_third")
 class LowerThird(Overlay):
     """A name and title on a plate in the lower third of the frame (the way a speaker or a place
@@ -76,15 +90,7 @@ class LowerThird(Overlay):
         @field_validator("at")
         @classmethod
         def _at(cls, value: float | str) -> float | str:
-            if is_word_anchor(value):
-                parse_word_anchor(str(value), beat_allowed=True)
-                return str(value).strip()
-            if isinstance(value, str):
-                if not value or not all(ch.isalnum() or ch == "_" for ch in value):
-                    raise ValueError(f"at: a number of seconds, a beat id or a spoken word (\"@word\"), got {value!r}")
-            elif value < 0:
-                raise ValueError("at must not be negative")
-            return value
+            return scene_at(value)
 
     @classmethod
     def validate_project(cls, options: Any, project: Any, scenes: Sequence[str]) -> list[str]:

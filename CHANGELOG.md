@@ -5,7 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–250)
+## Unreleased (Steps 193–251)
+
+### A city at night, glowing particles, a HUD, echoes (Phase AA, Step 251)
+
+- **Towers** on an iso place: the `tower` object, a tall building with rows of windows (a seeded
+  share lit), neon trims in its `detail` colour and a blinking antenna light; `height` (2–30
+  tiles), `size`, `screen: true` (an info screen whose lines of text crawl up), `garden: true`
+  (glowing algae-farm bands); `on: false` / `switch_on` for its windows. With `light: night` a
+  neon skyline; towers may reach out of the wide view.
+- **Traffic** over an iso place: `iso.traffic` lanes of hover pods gliding between two spots at
+  a height, looping or (with `at`) crossing once; glowing rims, canopies with a rider, light
+  trails; hidden behind buildings.
+- **Glowing particles**: `glow: true` on any particles (a light core, a halo in the colour, more
+  opaque): neon rain.
+- **The `hud` overlay**: a heads-up display over the frame for a scene (brackets and scan lines,
+  a blinking alert, readout lines, a heart monitor with a rising rate and skipped beats, a
+  scanner meter spiking off its scale).
+- **Echo characters**: `echo: true` (or `{color, opacity, flicker}`) draws a character as a
+  translucent other self that keeps its own colours, its outlines glowing; it appears with
+  `materialise`.
 
 ### Shorts from a longer video (Phase Z2, Steps 249–250)
 
