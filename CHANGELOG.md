@@ -5,9 +5,24 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–249)
+## Unreleased (Steps 193–250)
 
-### Shorts from a longer video (Phase Z2, Step 249)
+### Shorts from a longer video (Phase Z2, Steps 249–250)
+
+- **Karaoke captions in a Short** (Step 250) show a phrase of about three to five words on one
+  line (`body` size, at most 5 words; title-size words fit only one or two in the narrow clear
+  part), a small margin (`lift: 0.03`) above the app's texts. Options given still win.
+- **`zoom` with `cut: true`** (Step 250) jumps to the zoomed view; at `at: 0` of a scene's first
+  beat the scene opens on it (no second of the wide view while the set fades in, e.g. under a
+  Short's hook).
+- **`shorts_safe_area`** (Step 250) checks a face against every caption of the line being
+  spoken (a longer caption of the line covering a face is found from any still of it), also on
+  mid-beat stills (lint renders 3 stills per beat in a Short), and reports an overlay over 10 %
+  of a face (`min_cover`).
+- **A cut leaves a character out** (Step 250): `params: {characters: [{name: x, drop: true}]}`
+  (also props and layers), e.g. someone who only arrives in a later beat.
+- **The hook** (Step 250) gets a little smaller (down to 0.8 × the title size) when that keeps it
+  on two lines.
 
 - **Cuts** (Step 249). `cut:` (usually in a variant, one per Short or teaser) keeps chosen scenes
   (whole, some beats by id, or `{from, to}`; a scene may come twice under another id) and

@@ -324,9 +324,14 @@ variants:
 - **Re-stage for 9:16**: wide iso views and two-shots of people far apart are tiny in a tall
   frame. Give each kept beat a `closeup` / `medium` of one to three characters, or a `zoom` (in
   9:16 about 1.5× the scale you would use in 16:9); `zoom ... hold: true` stays zoomed after its
-  beat (no zoom-out before a cut or at the end). A beat's `actions` in `cut.beats` replace its list.
+  beat (no zoom-out before a cut or at the end); `at: 0, cut: true` in a scene's first beat opens
+  the scene already framed (the hook is not over a wide view). A beat's `actions` in `cut.beats`
+  replace its list.
+- Karaoke captions in a Short show a phrase of about 3–5 words on one line (`body` size), a
+  little above the app's texts; lint checks every caption of a line against the faces.
 - Leaving beats out leaves out their actions too: start the scene where the kept beats need the
-  characters (`params: {characters: [{name: kit, at: door}]}`, merged by name), and give an
+  characters (`params: {characters: [{name: kit, at: door}]}`, merged by name; `{name: pip,
+  drop: true}` leaves one out, e.g. someone who only arrives later), and give an
   `until` that named a left-out beat a beat of the cut (validate says which).
 - `vidgen storyboard --variant short1 --per-beat 2` and `vidgen lint --variant short1`, then
   `vidgen render --variant short1` (`--max-scenes` keeps each run short).
@@ -1848,7 +1853,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `highlight` | make the thing the voice names stand out (`style: color`, `box`, `underline`, `fill`, `flash`) | one target per beat |
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
-| `zoom` | look closer at a detail, then come back (`hold: true`: stay close, e.g. a Short's last shot); on a `plot`, `x: [from, to]` / `y: [...]` zoom its axes to that region of the data instead of moving the camera | at most one per scene |
+| `zoom` | look closer at a detail, then come back (`hold: true`: stay close, e.g. a Short's last shot; `cut: true`: jump there, at 0 of a scene's first beat the scene opens on it); on a `plot`, `x: [from, to]` / `y: [...]` zoom its axes to that region of the data instead of moving the camera | at most one per scene |
 | `pan` | on a `stage`: move the camera to a character or a mark (`to: right`); on an iso place to a spot (`to: well`) across and up the picture, moving in from the wide view | on a stage wider than the frame (`width: 2`), or on an iso place to look at a thing |
 | `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start; on an iso place it zooms in first, to a plain stage's size) | one at a time |
 | `reveal` | bring a later element in early; on an iso place an object with `shown: false` appears (a bridge over the pond) | rarely: the default order is usually right |

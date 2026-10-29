@@ -242,8 +242,11 @@ class LayoutRecorder:
                 overlay=overlay.id,
             )
             self._walk(walk, mob, [f"overlay:{overlay.id}"], 0, in_code=False)
+            reach = _reach_px(scene, mob)
             for obj in walk.objects:
                 obj["overlay"] = overlay.id
+                if reach is not None:
+                    obj["reach"] = reach
             objects += walk.objects
         return objects
 
@@ -463,6 +466,22 @@ class LayoutRecorder:
             None if stroke is None else {"color": stroke[0], "opacity": _r(stroke[1], 3), "width_px": _r(stroke[2], 2)}
         )
         walk.objects.append(item)
+
+
+def _reach_px(scene: NarratedScene, mob: Mobject) -> list[float] | None:
+    """In a Short (DESIGN.md §101.4), an overlay mobject's ``overlay_reach`` (units: where that
+    overlay goes over the moments around this one, e.g. all captions of the line being spoken) as
+    a pixel box of the whole frame; ``None`` elsewhere or without one."""
+    from manim import config
+
+    reach = getattr(mob, "overlay_reach", None)
+    project = getattr(scene, "project", None)
+    if reach is None or project is None or project.config.shorts_zones is None:
+        return None
+    sx, sy = config.pixel_width / config.frame_width, config.pixel_height / config.frame_height
+    x0, y0, x1, y1 = (float(v) for v in reach)
+    return [_r((x0 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - y1) * sy),
+            _r((x1 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - y0) * sy)]
 
 
 def intersection_box(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, float, float, float] | None:

@@ -23022,3 +23022,74 @@ Known gaps / for Step 250
 How to test: `tests/test_cuts_shorts.py`; stills (scratchpad, private)
 `story-qeh/shorts/short1_contact.png`, `short2_contact.png`, `short3_contact.png`;
 storyboards `story-qeh/proj/build/preview_shortN/storyboard/`.
+
+## Step 250 — Shorts review fixes; Shorts 4–7
+
+Phase Z2's second step: fixes from a review of the first three Shorts (generic, DESIGN §101.4),
+then the remaining Shorts of a private story project (scratchpad only, never committed).
+
+What was built (generic)
+- Karaoke captions in a Short: a phrase of about 3–5 words on one line (`SHORTS_KARAOKE`:
+  `size: body`, `max_lines: 1`, `max_words: 5` when not given), a small margin (`lift` 0.03)
+  above the app's area. The "low caption" reported in one beat was in fact at the same place as
+  the others (plate bottom on the 80 % line, measured on the video); the margin makes it clear.
+- Lint `shorts_safe_area`: faces are checked against an overlay's `reach` (captions: every
+  caption of the line being spoken; a still shows only one, which is why a longer caption over a
+  face was missed), also on mid-beat stills (`Rule.mid_beat`; lint renders 3 stills per beat in a
+  Short), and `min_cover` (0.1) for an overlay over a face (0.25 was too lax for a chin + mouth).
+- `zoom` `cut: true`: jump to the view; at `at: 0` of a scene's first beat the scene opens on it
+  (`Action.opens_scene`, applied before the set's entrance) — the hook is no longer over the
+  establishing wide view for the first second.
+- A cut's params entry `{name: x, drop: true}` leaves a character / prop / layer out.
+- The hook shrinks (1.25 → 0.8 × title) when that keeps it on two lines.
+
+Files: `scenes/captions.py`, `scenes/overlays.py` (hook), `scenes/actions.py` (zoom `cut`),
+`actions.py` (`opens_scene`, `start_beat`), `cuts.py` (`drop`), `introspect.py` (`reach`),
+`lint/rules.py` (`mid_beat`), `lint/run.py` (`SHORTS_STILLS`, `_stills_current`),
+`lint/shorts_rule.py`, `config.py` (`min_cover`); tests `test_cuts_shorts.py` (+7: reach,
+min_cover, karaoke defaults and phrase lengths, `_mark_reach`, drop, cut zoom opens framed
+(render, with / without), hook on 2 lines and 3 stills per beat in the render test); CONFIG
+(Cuts and Shorts, captions table, hook `size`, zoom row, lint row and settings), guide (+
+`AGENTS.md`), CHANGELOG, DESIGN §101.4, tasklist.
+
+Public interfaces: `Action.opens_scene()`; `rule(..., mid_beat=)` / `Rule.mid_beat`; config zoom
+`cut`, `lint.rules.shorts_safe_area.min_cover`, cut params `drop`; layout dump `reach` (Shorts).
+
+Decisions
+- Shorts-only defaults, so other videos (and the Phase Q baseline) are unchanged.
+- A first-beat `shot:` still starts after the stage's entrance (changing it would move existing
+  frames); Shorts use `zoom ... cut: true` for the opening view.
+- Lint's caption check is per line, not per frame: the reach is the union of the line's captions
+  (conservative); the camera between stills is covered by the mid-beat stills.
+
+The private story's Shorts (scratchpad `story-qeh/shorts/`; variants `short1`–`short7` in
+`story-qeh/proj/video.yaml`; −14 LUFS target, 256k AAC; contact sheets `shortN_contact.png`
+with the first frame, the hook at 1 s, two frames per beat and the end card):
+- 1 43.6 s 6.1 MB −14.5 LUFS −1.6 dBTP; 2 39.0 s 11.0 MB −14.9 / −1.7; 3 47.7 s 9.5 MB
+  −14.8 / −1.8; 4 35.9 s 5.4 MB −14.5 / −1.8; 5 46.9 s 10.9 MB −14.7 / −1.4; 6 36.4 s 9.8 MB
+  −14.7 / −1.8; 7 (teaser) 16.4 s 4.3 MB −15.0 / −1.8.
+- Every scene opens framed (zoom `cut`), hooks shortened to 2–3 lines, characters who would
+  stand at the frame's edge under the captions dropped from that cut (`drop`).
+- Render times at 1080×1920: 6–32× real time (two scenes in parallel); each render command under
+  10 minutes with `--max-scenes`.
+- Lint (preview, 3 stills per beat): remaining warnings are a sliver of a face at a frame edge
+  (one beat each in Shorts 2 and 3, Short 6's visitors walking into the portal),
+  narration speed (from the film), `walk_overlap` (all exit through one door, as in the film),
+  `look_alike` (a character and its younger self), `facing_away` (as in Step 249).
+- Intermediates (build dirs of the Shorts, joined copies in `proj/output/`) deleted.
+
+Checks: test_cuts_shorts 23 (3 render), test_schema 71, test_docs + test_guide + test_config +
+test_api 195, test_captions + test_overlays 46, test_actions + test_introspect +
+test_cartoon_shots 58, test_lint + test_particle_lint + test_timing_lint 163, test_cartoon_lint
++ test_json_output + docs/guide 197, test_speech_flags + test_narration_rule + test_readback +
+test_callout_action 73 — all passing. Phase Q baseline 31/31 identical (run twice).
+
+Known gaps
+- Hook text still wraps at ~12 characters per line at 1.25 × title in a Short (the clear part is
+  narrow); long hooks keep three lines.
+- A first-beat `shot:` shows the wide view during the entrance (use a `zoom ... cut`).
+- A caption's reach is per line; a narrow caption never over a face can still be reported when a
+  wide one of the same line would be.
+
+How to test: `tests/test_cuts_shorts.py`; stills (scratchpad, private)
+`story-qeh/shorts/short1_contact.png` … `short7_contact.png`.

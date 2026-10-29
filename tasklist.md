@@ -1515,7 +1515,9 @@ Shorts out of any longer video. The story project and its Shorts stay in the scr
 - [x] Shorts 1–3 of the private story (scratchpad): re-staged for 9:16, rendered, stills checked
 
 ### Step 250 — Shorts 4–7 and review
-- [ ] Shorts 4–6 and the teaser; a review of all seven (stills of every shot, captions, hooks, levels, durations, sizes), fixes, final renders and contact sheets
+- [x] Review fixes, generic (DESIGN §101.4): karaoke captions in a Short show a phrase of 3–5 words on one line (`body`, `max_words` 5, `max_lines` 1) a small margin above the app's texts; `zoom` `cut: true` (at 0 of a scene's first beat the scene opens framed); a cut's `{name, drop: true}` leaves a character / prop / layer out; the hook shrinks (to 0.8 × title) to stay on 2 lines; lint `shorts_safe_area` checks every caption of the line (`reach`), mid-beat stills in a Short (3 per beat) and `min_cover` (0.1) for overlays over faces
+- [x] Tests `tests/test_cuts_shorts.py` (+7); CONFIG, guide, CHANGELOG; Phase Q baseline 31/31
+- [x] Shorts 1–3 re-rendered with the fixes; Shorts 4–6 and the teaser built and rendered; all seven reviewed (stills of every beat, captions, hooks, levels, durations, sizes) with contact sheets (scratchpad)
 
 ---
 

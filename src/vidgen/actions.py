@@ -212,6 +212,13 @@ class Action:
         :attr:`until_next_beat`, else ``None`` (it lasts)."""
         return later[0] if self.until_next_beat and later else None
 
+    def opens_scene(self) -> bool:
+        """Whether this use, due at the very start of its scene's first beat (``at: 0``), is
+        applied before anything is shown, so the scene opens on its result (a ``zoom`` with
+        ``cut``: the first frame already framed, DESIGN.md §101.4). It is applied instantly
+        (:meth:`apply` should change the scene directly). Default: ``False``."""
+        return False
+
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """The animations that perform the action on ``targets`` (played together; an empty
         list means nothing to do). Build them from the targets' current state."""
@@ -516,6 +523,13 @@ class ActionRunner:
         self._end = now + round((d + pad) * fps)
         due = [_Due(now, u, True) for u in self.uses if u.until == beat_id and u.applied and not u.kind.cls.temporary]
         own = {id(u): now + round(u.config.at * d * fps) for u in self.uses if u.beat == beat_id}
+        if self.scene.beats and beat_id == self.scene.beats[0].id:   # the scene opens on these (§101.4)
+            for u in self.uses:
+                if own.get(id(u)) == now and u.config.at == 0 and u.action.opens_scene():
+                    del own[id(u)]
+                    u.targets = self._resolve(u)
+                    self.scene._apply_now(u.action.apply(self.scene, u.targets))
+                    u.applied = True
         for u in self.uses:
             if id(u) in own and not u.kind.cls.animates:  # e.g. a sound: at its time, whatever plays then
                 u.action.cue(self.scene, own.pop(id(u)) / fps)

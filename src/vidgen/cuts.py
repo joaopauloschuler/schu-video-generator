@@ -27,6 +27,9 @@ from vidgen.includes import Origin, entry_names
 
 #: Stage params whose list entries a cut's ``params`` changes by name (like a set's).
 NAMED_LISTS = ("characters", "props", "layers")
+#: The key of a ``characters`` / ``props`` / ``layers`` entry in a cut's ``params`` that leaves
+#: the scene's entry of that name out of the cut (``{name: visitor, drop: true}``).
+DROP = "drop"
 #: The id of the overlay a cut's ``hook`` adds.
 HOOK_ID = "hook"
 
@@ -34,7 +37,8 @@ HOOK_ID = "hook"
 def merge_params(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
     """A scene's ``params`` with a cut's changes: mappings merge key by key (recursively),
     ``characters`` / ``props`` / ``layers`` entries named like one of the scene's change it (its
-    keys win; others are added; an empty list clears them), anything else is replaced."""
+    keys win; others are added; ``drop: true`` leaves the scene's entry of that name out; an
+    empty list clears them), anything else is replaced."""
     merged = copy.deepcopy(dict(base))
     for key, value in override.items():
         before = merged.get(key)
@@ -50,15 +54,20 @@ def merge_params(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[s
 def _merge_named(key: str, base: list[Any], override: list[Any]) -> list[Any]:
     out = copy.deepcopy(base)
     names = {name: j for j, name in enumerate(entry_names(key, base)) if name is not None}
+    dropped: set[int] = set()
     for entry, name in zip(override, entry_names(key, override)):
         j = names.get(name) if name is not None else None
+        if isinstance(entry, Mapping) and entry.get(DROP) is True:   # left out of this cut
+            if j is not None:
+                dropped.add(j)
+            continue
         if j is not None and isinstance(out[j], Mapping) and isinstance(entry, Mapping):
             out[j] = merge_params(out[j], entry)
         elif j is not None and isinstance(entry, Mapping):
             out[j] = copy.deepcopy(dict(entry))
         else:
             out.append(copy.deepcopy(entry))
-    return out
+    return [entry for j, entry in enumerate(out) if j not in dropped]
 
 
 def _merge(base: Any, override: Any) -> Any:

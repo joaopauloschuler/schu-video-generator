@@ -1559,7 +1559,9 @@ class ShortsSafeAreaRule(RuleConfig):
     tolerance: Fraction = 0.01
     """How far (fraction of the frame's shorter side) text may reach into the covered parts unflagged."""
     min_face: Fraction = 0.25
-    """Share of a face's box under the app's parts, or under an overlay, from which it is reported."""
+    """Share of a face's box under the app's parts from which it is reported."""
+    min_cover: Fraction = 0.1
+    """Share of a face's box under an overlay (a caption, the hook) from which it is reported."""
 
 
 class ShortsLengthRule(RuleConfig):

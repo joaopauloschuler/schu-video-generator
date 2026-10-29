@@ -613,7 +613,7 @@ variants:
 
 | key | default | |
 |---|---|---|
-| `scenes` | required | the scenes shown, in order: a scene id (the whole scene), or `{scene, beats, ...}`: `beats` a list of beat ids (shown in that order) or `{from, to}` (both included; either may be left out); any other key changes the scene in this cut: `params` merge into the scene's params (mappings key by key; `characters`, `props` and `layers` entries by name, as a [set's](#shared-casts-and-sets-include-and-sets); an empty list clears), anything else (`id`, `set`, `transition`, `music`, `overlays`, `duration`...) is merged (mappings) or replaced. A scene may come twice with another `id`. The first scene's transition is dropped (the scene it came from is not in the cut) unless its entry gives one |
+| `scenes` | required | the scenes shown, in order: a scene id (the whole scene), or `{scene, beats, ...}`: `beats` a list of beat ids (shown in that order) or `{from, to}` (both included; either may be left out); any other key changes the scene in this cut: `params` merge into the scene's params (mappings key by key; `characters`, `props` and `layers` entries by name, as a [set's](#shared-casts-and-sets-include-and-sets); `{name: ben, drop: true}` leaves that one out of the cut; an empty list clears), anything else (`id`, `set`, `transition`, `music`, `overlays`, `duration`...) is merged (mappings) or replaced. A scene may come twice with another `id`. The first scene's transition is dropped (the scene it came from is not in the cut) unless its entry gives one |
 | `beats` | `{}` | changes to the cut's beats by beat id (`shot`, `actions`, `emotion`, `voice`, `text`...): mappings merge, lists (a beat's `actions`) replace |
 | `hook` | none | a [`hook`](#hook) overlay: its text, or its options (`{text, seconds, position, size, ...}`) |
 | `end_card` | none | a card at the end: its line, with the video's `title` above it; or `{text, title, seconds: 3, type: end_card \| card, id: cut_end, params, transition}` (`card`: a [cartoon title card](#card) with the title as its text and the line as its subtitle; `params` are more of the scene's params) |
@@ -633,18 +633,23 @@ shares of the frame) says the video is a vertical Short. The phone app puts its 
 and description over the bottom of the frame and its buttons down the right side:
 
 - [captions](#captions), [lower thirds](#lower_third) and the [hook](#hook) keep out of those
-  parts (captions sit just above the bottom part, no extra `lift`; a `lift` still raises them);
+  parts (bottom captions sit a small margin, `lift: 0.03`, above the bottom part; a `lift`
+  replaces it). `karaoke` captions show a short phrase on one line in a Short — up to five
+  words in `body` size, the spoken word highlighted (`max_words`, `max_lines`, `size` change it);
+  title-size words fit only one or two at a time in the narrow clear part;
 - the scenes' safe area leaves them out too, so built-in scenes lay their text out of them, and a
   [`card`](#card)'s words keep to the clear part (its colour and burst still fill the frame);
-- `vidgen lint` checks the beat-end stills with `shorts_safe_area` (text or a face in those parts,
-  an overlay over a face) and the length with `shorts_length` (an error over `max_seconds`);
+- `vidgen lint` checks three stills per beat with `shorts_safe_area` (text or a face in those parts,
+  an overlay over a face — for captions, any caption of the line being spoken, not only the
+  one in the still) and the length with `shorts_length` (an error over `max_seconds`);
 - `vidgen validate` warns when the format is not vertical or the planned length is over
   `max_seconds`.
 
 Re-stage for 9:16 in `cut.beats`: a wide view of a room, or a two-shot of characters far apart,
 is small in a tall frame. Give the kept beats closer framings — a `closeup` / `medium` of one to
 three characters, a `zoom` on the characters and props that matter (`hold: true` keeps it to the
-end of the scene, so a scene can end on a close view) — and look at `vidgen storyboard --variant
+end of the scene, so a scene can end on a close view; `at: 0, cut: true` in a scene's first beat
+opens the scene on the close view, so the hook is not shown over a wide establishing view) — and look at `vidgen storyboard --variant
 short1 --per-beat 2`. Shorts are usually mixed louder than long videos (`audio: {target_lufs:
 -14, bitrate: 256k}`: at that loudness the AAC encode at 192k can push the peaks over 0 dBTP). Render long variants in steps with `vidgen render --variant short1 --max-scenes N`.
 
@@ -13049,7 +13054,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
-| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets), `hold` (`false`); on a [`plot`](#plot): `x`, `y` (`[from, to]` in data units) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). `hold: true` stays zoomed in after the beat, until a later `zoom`, `pan`, `follow` or shot moves the camera (a scene ending on a close view, a Short's last shot; a later beat's shot returns to the held view); its `until` then changes nothing. Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. With `x` / `y` on a `plot` (targets `axes`, `panel<N>` or a series' panel) the camera stays: the plot's axes ease to that region of the data and back (x zooms every panel sharing it, residual panels too); its annotations step aside meanwhile. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets), `hold` (`false`), `cut` (`false`); on a [`plot`](#plot): `x`, `y` (`[from, to]` in data units) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). `hold: true` stays zoomed in after the beat, until a later `zoom`, `pan`, `follow` or shot moves the camera (a scene ending on a close view, a Short's last shot; a later beat's shot returns to the held view); its `until` then changes nothing. `cut: true` jumps to the zoomed view (no camera move); at `at: 0` of a scene's first beat the scene opens on it — its first frame is already framed, where a zoom otherwise starts after the set has faded in (about a second of the wide view). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. With `x` / `y` on a `plot` (targets `axes`, `panel<N>` or a series' panel) the camera stays: the plot's axes ease to that region of the data and back (x zooms every panel sharing it, residual panels too); its annotations step aside meanwhile. |
 | `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in; on an iso place `to` is a spot, the camera moves up and down too, and from the wide view it moves in (at least twice as close as the whole place). Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
@@ -13328,7 +13333,7 @@ popping in at `at` and fading out `seconds` later, over the captions. A [cut](#c
 | `at` | `0` | when it pops in: seconds into the video |
 | `seconds` | `3` | how long it shows, its pop in and fade out included |
 | `position` | `top` | `top` or `center` of the safe area |
-| `size` | 1.25 × `title` | text size (wraps onto more lines rather than shrinking) |
+| `size` | 1.25 × `title` | text size (wraps onto more lines rather than shrinking); without `size`, a hook that would wrap onto 3 or more lines gets the largest size down to 0.8 × `title` that keeps it to 2 |
 | `color` | auto | text colour; default the theme's text or background colour, whichever reads on the plate |
 | `background`, `background_opacity` | `primary`, `0.92` | the plate; `background: null` for none (the text gets an outline in the background colour) |
 | `max_width` | `0.92` | widest it may be, share of the safe width |
@@ -13451,16 +13456,16 @@ a warning).
 |---|---|---|
 | `style` | `subtitles` | `subtitles` or `karaoke` (`words`) |
 | `position` | `bottom` | `bottom`, `top` or `center` (of the safe area) |
-| `size` | `body`; karaoke `title` | text size (at least the readable size) |
+| `size` | `body`; karaoke `title` (in a Short `body`) | text size (at least the readable size) |
 | `bold` | `false`; karaoke `true` | |
-| `max_lines` | `2` | lines per caption (1-3) |
-| `max_words` | none; karaoke `3` | words per caption |
+| `max_lines` | `2` (karaoke in a Short `1`) | lines per caption (1-3) |
+| `max_words` | none; karaoke `3` (in a Short `5`) | words per caption (in a [Short](#cuts-and-shorts-cut-shorts) karaoke shows a phrase of about three to five words on one line) |
 | `max_width` | `0.8`; karaoke `0.9` | widest the text may be, share of the safe width (9:16: `1`) |
 | `color` | auto | text colour; default the theme's `text` or background colour, whichever reads better on the plate |
 | `highlight` | `highlight` | karaoke: the word being spoken |
 | `pop` | `1.12` | karaoke: scale of the word being spoken (`1`: none); limited so it never touches its neighbours |
 | `background`, `background_opacity` | `surface`, `0.8` | the plate; `background: null` for none (the text then gets an outline in the background colour) |
-| `lift` | `0`; 9:16 `0.12`; a Short `0` | bottom captions: raised by this share of the safe height (of a Short: of the part the app leaves clear) |
+| `lift` | `0`; 9:16 `0.12`; a Short `0.03` | bottom captions: raised by this share of the safe height (of a Short: of the part the app leaves clear) |
 | `speakers` | `subtitles.speakers` | who speaks ([multiple voices](#multiple-voices-voices)): `name` (a `Label:` tag in the speaker's colour before a beat whose speaker changed), `color` (each speaker's words in its colour), `both`, or `off` |
 | `genes` | `true` | gene symbols in italics (protein names stay roman): the symbols the video's cell-biology scenes declare as genes — a `cell` or `molecule` scene's `gene.name`, a molecule's `gene`, a `pathway`'s gene nodes — wherever the narration writes them, except where the next word makes it the protein ("SERPINA1 protein", "EGFR kinase"); `false`: as written |
 
@@ -13851,7 +13856,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `significance_claim` | warning | the p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists", "the chance it is a fluke"): it is the chance that background alone fluctuates this high; a "one in N" or a percentage that does not match the σ said (one- or two-sided); in a [`mass_spectrum`](#mass_spectrum) scene a σ said for the bump that it does not compute (its expected Asimov significance with all events and its likelihood-ratio fit; "so far", "already" accept anything along the filling; the 5σ convention itself is not compared); `sigmas` (0.5) |
 | `simulated_label` | warning | simulated data called real ("real collision data", "data from the LHC", "CMS data") in a `mass_spectrum`, `detector` or simulated `plot` scene, or such a picture whose screen does not say "simulated" (a `detector` `label` without it; a `plot` of the `mass_spectrum` or `decay_times` model without "simulated" in a series name, the title or the caption) |
 | `particle_units` | info | masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video: write them one way |
-| `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_face` of a face. Beat-end stills only, faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
+| `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_cover` (0.1) of a face — for captions, any caption of the line being spoken (the layout dump's `reach` of the caption), not only the one in the still. Beat-end and mid-beat stills: in a Short, `vidgen lint` renders 3 stills per beat (stills of a storyboard with 2 or more per beat are reused), so a face under the captions while a zoom is held part-way through a beat is found too. Faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
 | `shorts_length` | error | a Short planned longer than `shorts.max_seconds` (60): reported on the video's last scene. Fix: fewer beats or scenes in the `cut`, a shorter end card |
 
 **Config** (all optional; the values shown are the defaults):
@@ -13939,7 +13944,7 @@ lint:
     significance_claim: {sigmas: 0.5}       # how far a σ said for a spectrum may be from what it computes
     simulated_label: {}
     particle_units: {}                      # default severity info
-    shorts_safe_area: {tolerance: 0.01, min_face: 0.25}   # in a Short only; share of a face's box
+    shorts_safe_area: {tolerance: 0.01, min_face: 0.25, min_cover: 0.1}   # in a Short only; shares of a face's box (under the app's parts / an overlay)
     shorts_length: {}                       # default severity error; in a Short only
 ```
 

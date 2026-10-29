@@ -84,6 +84,9 @@ def test_merge_params_names_and_mappings() -> None:
     merged = merge_params(base, {"props": [{"name": "tree", "at": 0.4}, {"prop": "bench"}], "iso": {"wide": 2}, "characters": []})
     assert merged["props"] == [{"prop": "tree", "at": 0.4, "name": "tree"}, {"prop": "bench"}]
     assert merged["iso"] == {"place": "indoor", "wide": 2} and merged["characters"] == []
+    cast = [{"name": "ana", "at": 0.3}, "ben", {"name": "cat"}]
+    merged = merge_params({"characters": cast}, {"characters": [{"name": "ben", "drop": True}, {"name": "cat", "at": 0.9}, {"name": "zed", "drop": True}]})
+    assert merged["characters"] == [{"name": "ana", "at": 0.3}, {"name": "cat", "at": 0.9}]   # ben left out; zed was never there
 
 
 def test_hook_and_end_card() -> None:
@@ -188,6 +191,52 @@ def test_shorts_safe_area_text_and_faces() -> None:
     assert list(check(_still([{**low, "hidden": True}]), ShortsSafeAreaRule())) == []
 
 
+def test_shorts_face_check_uses_the_reach_of_the_line() -> None:
+    check = RULES["shorts_safe_area"].check
+    face = {"kind": "character", "name": "ana", "bbox": [300, 900, 700, 1900], "face": [400, 1000, 600, 1200], "path": "c", "class": "Figure", "opacity": 1}
+    short = _text("it", [700, 1050, 800, 1180], overlay="captions")   # this caption misses the face...
+    assert list(check(_still([face, short]), ShortsSafeAreaRule())) == []
+    wide = {**short, "reach": [150, 1050, 850, 1180]}   # ...a longer one of the same line covers it
+    found = [i.message for i in check(_still([face, wide]), ShortsSafeAreaRule())]
+    assert any("overlay 'captions' covers 65% of the face of character 'ana' (while this line is shown)" in m for m in found)
+    chin = {**short, "reach": [150, 1170, 850, 1300]}   # 15 % of the face (its chin): over min_cover 0.1
+    assert any("covers 15% of the face" in i.message for i in check(_still([face, chin]), ShortsSafeAreaRule()))
+    assert list(check(_still([face, chin]), ShortsSafeAreaRule(min_cover=0.2))) == []
+
+
+def test_karaoke_in_a_short_shows_a_phrase_on_one_line() -> None:
+    from vidgen.cues import split_cues
+    from vidgen.scenes.captions import SHORTS_KARAOKE, STYLE_DEFAULTS, Captions
+
+    def captions(shorts: ShortsConfig | None, **options: Any) -> Captions:
+        context = SimpleNamespace(project=SimpleNamespace(config=SimpleNamespace(shorts_zones=shorts)))
+        return Captions(Captions.Options(style="karaoke", **options), None, context, id="captions")  # type: ignore[arg-type]
+
+    short = captions(ShortsConfig())
+    assert [short._setting(k) for k in ("size", "max_lines", "max_words", "bold")] == ["body", 1, 5, True]
+    assert [captions(None)._setting(k) for k in ("size", "max_lines", "max_words")] == ["title", 2, 3]
+    assert captions(ShortsConfig(), max_words=2, size="title")._setting("max_words") == 2
+    assert SHORTS_KARAOKE["max_words"] > STYLE_DEFAULTS["karaoke"]["max_words"]
+    # a line of about 20 characters (body text across the Shorts area) cuts into phrases of 3-5 words
+    text = "Then the AI they had built to read the motion data sparked to life, projecting a humanoid form in the centre of the lab."
+    cues = split_cues(text, 22, max_lines=1, max_words=5)
+    sizes = [len(lines[0].split()) for lines in cues]
+    assert all(len(lines) == 1 for lines in cues) and max(sizes) <= 5 and sum(sizes) / len(sizes) >= 3
+
+
+def test_caption_reach_covers_every_caption_of_a_line() -> None:
+    from manim import Rectangle
+
+    from vidgen.scenes.captions import _mark_reach
+
+    a = Rectangle(width=1, height=0.5).move_to([-1, -2, 0])
+    b = Rectangle(width=3, height=0.5).move_to([0, -2, 0])
+    c = Rectangle(width=0.5, height=0.5).move_to([2, -2, 0])
+    _mark_reach([({0}, a), ({0}, b), ({1}, c)])
+    assert a.overlay_reach == b.overlay_reach == pytest.approx((-1.5, -2.25, 1.5, -1.75))
+    assert c.overlay_reach == pytest.approx((1.75, -2.25, 2.25, -1.75))
+
+
 def test_shorts_length() -> None:
     check = RULES["shorts_length"].check
     ctx = SceneContext("end", {"fps": 30, "beats": []}, Path("."))
@@ -208,18 +257,40 @@ def test_a_short_renders_with_hook_captions_and_end_card(make_project: Any) -> N
         "format": {"width": 1080, "height": 1920}, "preview": {"width": 90, "height": 160, "fps": 5},
         "shorts": {"max_seconds": 2}, "overlays": [{"type": "captions", "style": "karaoke"}],
         "cut": {"scenes": [{"scene": "park", "beats": ["park_b1"]}],
-                "beats": {"park_b1": {"actions": [{"zoom": "ana", "scale": 2, "at": 0.1, "run_time": 0.2, "hold": True}]}},
-                "hook": "Will it fly?", "end_card": {"text": "Full video on the channel", "seconds": 1, "type": "card"}},
+                "beats": {"park_b1": {"actions": [{"zoom": "ana", "scale": 2, "at": 0, "cut": True, "hold": True}]}},
+                "hook": "Will the kite fly today?", "end_card": {"text": "Full video on the channel", "seconds": 1, "type": "card"}},
     }}}
     project = Project.load(make_project(data), variant="short")
     result = lint_project(project, preview=True)
     layout = json.loads((project.render_dir(True) / "layout" / "park.json").read_text(encoding="utf-8"))
     assert layout["shorts"] == [0.0, 0.0, 76.5, 128.0]   # the frame without its bottom 20 % and right 15 %
+    assert [f["k"] for f in layout["frames"]] == [1, 2, 3]   # a Short is linted mid-beat too
+    assert RULES["shorts_safe_area"].mid_beat and not RULES["safe_area"].mid_beat
     end = layout["frames"][-1]
     assert {"hook", "captions"} <= {o["id"] for o in end["overlays"]}
     assert end["camera"]["zoom"] == pytest.approx(2.0, abs=0.01)   # held after the zoom
+    hook = [o for o in layout["frames"][0]["objects"] if o.get("overlay") == "hook" and o["kind"] == "text"]
+    assert [o["text"] for o in hook] == ["Will the kite\nfly today?"]   # a little smaller: 2 lines, not 3
+    caption = next(o for o in end["objects"] if o.get("overlay") == "captions")
+    assert caption["reach"][3] <= 128.0 * 0.97 + 0.5   # the line's reach, above the app's area with a margin
     assert [s.id for s in project.config.scenes] == ["park", "cut_end"]
     assert "shorts_length" in {f.rule for f in result.findings}   # a narrated beat and a 1 s card: over 2 s
     card = json.loads((project.render_dir(True) / "layout" / "cut_end.json").read_text(encoding="utf-8"))
     assert card["safe_area"][2] <= 76.5   # the scene's safe area leaves the app's buttons out
     assert not [f for f in result.findings if f.scene == "cut_end" and f.rule in ("shorts_safe_area", "safe_area")]   # the card's words too
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("cut", [True, False])
+def test_a_cut_zoom_at_the_start_opens_the_scene_framed(make_project: Any, cut: bool) -> None:
+    from vidgen.storyboard import make_storyboard
+
+    data = {**_story(), "preview": {"width": 96, "height": 54, "fps": 10}}
+    data["scenes"] = [data["scenes"][1]]
+    data["scenes"][0]["beats"][0]["actions"] = [{"zoom": "ana", "scale": 2, "at": 0, "cut": cut, "hold": True}]
+    project = Project.load(make_project(data))
+    make_storyboard(project, per_beat=4)
+    layout = json.loads((project.render_dir(True) / "layout" / "park.json").read_text(encoding="utf-8"))
+    first = layout["frames"][0]
+    assert first["beat"] == "park_b1" and first["time"] < 1.0   # while the set fades in
+    assert first["camera"]["zoom"] == pytest.approx(2.0 if cut else 1.0, abs=0.01)   # without cut: wide first

@@ -38,6 +38,12 @@ STYLE_DEFAULTS: dict[str, dict[str, Any]] = {
     "subtitles": {"size": "body", "bold": False, "max_lines": 2, "max_words": None, "max_width": 0.8},
     "karaoke": {"size": "title", "bold": True, "max_lines": 2, "max_words": 3, "max_width": 0.9},
 }
+#: Karaoke in a Short (``shorts:``, DESIGN.md §101.4): a short phrase on one line (about three to
+#: five words; title-size text fits only one or two words in the narrow Shorts area).
+SHORTS_KARAOKE: dict[str, Any] = {"size": "body", "max_lines": 1, "max_words": 5}
+#: In a Short, bottom captions sit this share of the Shorts area's height above its bottom edge
+#: (a margin from the app's texts; ``lift`` overrides it).
+SHORTS_LIFT = 0.03
 
 
 _GENES: dict[int, tuple[Any, frozenset[str]]] = {}
@@ -109,6 +115,21 @@ def _glyph_map(mob: Mobject, line: str) -> list[list[int]] | None:
     return None
 
 
+def _mark_reach(placed: Sequence[tuple[set[int], Mobject]]) -> None:
+    """Give each caption (its beats, its mobject) ``overlay_reach``: the box ``(x0, y0, x1, y1)``
+    (units) of every caption of its beats, i.e. where the captions go while that line is spoken
+    (a still sees one caption; lint checks faces against the whole line, DESIGN.md §101.4)."""
+    boxes: dict[int, tuple[float, float, float, float]] = {}
+    for beats, mob in placed:
+        (x0, y0), (x1, y1) = mob.get_corner(DL)[:2], mob.get_corner(UR)[:2]
+        for k in beats:
+            a = boxes.get(k, (x0, y0, x1, y1))
+            boxes[k] = (min(a[0], x0), min(a[1], y0), max(a[2], x1), max(a[3], y1))
+    for beats, mob in placed:
+        found = [boxes[k] for k in beats]
+        mob.overlay_reach = (min(b[0] for b in found), min(b[1] for b in found), max(b[2] for b in found), max(b[3] for b in found))
+
+
 @overlay("captions")
 class Captions(Overlay):
     """The narration as captions burned into the video (off unless listed in ``overlays:``).
@@ -132,13 +153,13 @@ class Captions(Overlay):
         position: Literal["bottom", "top", "center"] = "bottom"
         """Where in the safe area: bottom, top or center (center does not reserve space: lint reports what it covers)."""
         size: ThemeSize | None = None
-        """Text size (at least the readable size); default body, karaoke title."""
+        """Text size (at least the readable size); default body, karaoke title (in a Short body)."""
         bold: bool | None = None
         """Bold text; default false, karaoke true."""
         max_lines: int | None = Field(None, ge=1, le=3)
-        """Lines per caption; default 2."""
+        """Lines per caption; default 2 (karaoke in a Short: 1)."""
         max_words: int | None = Field(None, ge=1)
-        """Words per caption; default no limit, karaoke 3."""
+        """Words per caption; default no limit, karaoke 3 (in a Short: a phrase of up to 5 on one line)."""
         max_width: float | None = Field(None, gt=0, le=1)
         """Widest a caption's text may be, as a share of the safe width; default 0.8, karaoke 0.9 (9:16: 1)."""
         color: ThemeColor | None = None
@@ -152,7 +173,7 @@ class Captions(Overlay):
         background_opacity: float = Field(0.8, ge=0, le=1)
         """Plate opacity; raised automatically until the text reaches lint's contrast ratio over anything behind it."""
         lift: float | None = Field(None, ge=0, le=0.6)
-        """Bottom captions: raise them by this share of the safe height; default 0, 9:16 0.12 (phone controls)."""
+        """Bottom captions: raise them by this share of the safe height; default 0, 9:16 0.12 (phone controls); in a Short 0.03 above the app's area."""
         speakers: Literal["off", "name", "color", "both"] | None = None
         """Show who speaks (voices:): name (a "Label:" tag in the speaker's colour where the speaker changes), color (each speaker's words in its colour), both, off; default subtitles.speakers."""
         genes: bool = True
@@ -166,9 +187,14 @@ class Captions(Overlay):
     # ----- settings --------------------------------------------------------------------------
 
     def _setting(self, name: str) -> Any:
-        """An option, or its style's default when not given."""
+        """An option, or its style's default when not given (karaoke in a Short: a phrase on one
+        line, :data:`SHORTS_KARAOKE`)."""
         value = getattr(self.options, name)
-        return STYLE_DEFAULTS[self.options.style][name] if value is None else value
+        if value is not None:
+            return value
+        if self.karaoke and name in SHORTS_KARAOKE and self.context.project.config.shorts_zones is not None:
+            return SHORTS_KARAOKE[name]
+        return STYLE_DEFAULTS[self.options.style][name]
 
     @property
     def karaoke(self) -> bool:
@@ -312,7 +338,7 @@ class Captions(Overlay):
         project = self.context.project
         if project.config.shorts_zones is not None:   # a Short: out of the app's buttons (§101)
             safe = shorts_area(project)
-            lift = o.lift or 0.0
+            lift = o.lift if o.lift is not None else SHORTS_LIFT
         else:
             safe = safe_area()
             lift = o.lift if o.lift is not None else (PORTRAIT_LIFT if orientation() == "portrait" else 0.0)
@@ -368,6 +394,7 @@ class Captions(Overlay):
         colored = self.speakers in ("color", "both")
         entries = self._cue_texts(size, weight, max_width)
         speakers = {id(cue): speaker for _, cue, speaker in entries}
+        placed: list[tuple[set[int], Mobject]] = []   # each caption's beats, for its reach
         for stack in stack_cues([(k, cue) for k, cue, _ in entries]):
             texts: list[str] = []
             colors: list[str] = []
@@ -389,6 +416,8 @@ class Captions(Overlay):
             place(mob, slot, fit="none", align=o.position)
             self._cues.append(_Cue(stack.start, stack.end, parts))
             group.add(mob)
+            placed.append(({k for k, _ in stack.parts}, mob))
+        _mark_reach(placed)
         self._starts = [c.start for c in self._cues]
         self._plated = o.background is not None
         return group

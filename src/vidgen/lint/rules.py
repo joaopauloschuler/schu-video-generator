@@ -193,6 +193,8 @@ class Rule:
     default: str
     doc: str
     check: Check
+    #: A still rule that also checks the mid-beat stills a layout dump has (not only beat ends).
+    mid_beat: bool = False
 
     def settings(self, rules_config: Any) -> RuleConfig:
         """This rule's settings from :class:`vidgen.config.LintRules`."""
@@ -203,8 +205,9 @@ class Rule:
 RULES: dict[str, Rule] = {}
 
 
-def rule(name: str, *, scope: Scope = "still", default: str = "warning") -> Callable[[Check], Check]:
-    """Register ``check`` as the rule ``name`` (its docstring's first line is the rule's doc)."""
+def rule(name: str, *, scope: Scope = "still", default: str = "warning", mid_beat: bool = False) -> Callable[[Check], Check]:
+    """Register ``check`` as the rule ``name`` (its docstring's first line is the rule's doc);
+    ``mid_beat``: a still rule that also checks mid-beat stills."""
     if name not in LINT_RULES:
         raise ValueError(f"lint rule {name!r} is not in vidgen.config.LINT_RULES")
     if default not in SEVERITIES:
@@ -212,7 +215,7 @@ def rule(name: str, *, scope: Scope = "still", default: str = "warning") -> Call
 
     def register(check: Check) -> Check:
         doc = (check.__doc__ or "").strip().splitlines()[0] if check.__doc__ else ""
-        RULES[name] = Rule(name, scope, default, doc, check)
+        RULES[name] = Rule(name, scope, default, doc, check, mid_beat)
         return check
 
     return register

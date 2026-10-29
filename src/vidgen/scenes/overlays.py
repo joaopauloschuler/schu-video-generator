@@ -185,6 +185,11 @@ class LowerThird(Overlay):
 
 #: The hook's default text size: this times the theme's ``title`` size.
 HOOK_SCALE = 1.25
+#: Without a ``size``, the hook's text gets smaller (down to :data:`HOOK_MIN_SCALE` times the
+#: theme's ``title`` size) when that keeps it to this many lines (a narrow Short wraps a short
+#: question onto three or four lines).
+HOOK_LINES = 2
+HOOK_MIN_SCALE = 0.8
 #: Padding (units) between the hook's text and the edge of its plate.
 HOOK_PAD = (0.34, 0.24)
 
@@ -207,7 +212,7 @@ class Hook(Overlay):
         position: Literal["top", "center"] = "top"
         """Where in the safe area: top or center."""
         size: ThemeSize | None = None
-        """Text size; default 1.25 times the theme's title size."""
+        """Text size; default 1.25 times the theme's title size, smaller (down to 0.8 times it) when that keeps it to 2 lines."""
         color: ThemeColor | None = None
         """Text colour; default the theme's text or background colour, whichever reads on the plate."""
         background: ThemeColor | None = "primary"
@@ -229,11 +234,24 @@ class Hook(Overlay):
         o = self.options
         theme = current_theme()
         area = shorts_area(self.context.project)
-        size = float(theme.size(o.size)) if o.size is not None else HOOK_SCALE * float(theme.size("title"))
         pad_x, pad_y = HOOK_PAD
         color = o.color or (text_color_on(o.background) if o.background is not None else "text")
         width = o.max_width * area.width - 2 * pad_x
-        text = readable_text(o.text, Region(0, 0, width, area.height / 3), size=size, color=color, weight=BOLD, align="center", role="heading")
+
+        def build_text(size: float) -> Mobject:
+            return readable_text(o.text, Region(0, 0, width, area.height / 3), size=size, color=color, weight=BOLD, align="center", role="heading")
+
+        if o.size is not None:
+            text = build_text(float(theme.size(o.size)))
+        else:   # the largest size from HOOK_SCALE down to HOOK_MIN_SCALE x title that keeps it to HOOK_LINES lines
+            title = float(theme.size("title"))
+            text = build_text(HOOK_SCALE * title)
+            scale = HOOK_SCALE
+            while len(text.submobjects) > HOOK_LINES and scale > HOOK_MIN_SCALE + 1e-9:
+                scale = max(HOOK_MIN_SCALE, round(scale - 0.05, 2))
+                smaller = build_text(scale * title)
+                if len(smaller.submobjects) <= HOOK_LINES:
+                    text = smaller
         if o.background is None:
             text.set_stroke(theme.background, width=max(size / 6, 3), background=True)
             group: Mobject = VGroup(text)

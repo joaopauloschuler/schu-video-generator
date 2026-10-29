@@ -19630,3 +19630,44 @@ app's buttons, lint for that and the 60 s limit, and a zoom that stays.
   lints as before (the layout dump's header has no new key; the safe area, the captions', lower
   third's and card's placement change only in a Short). Phase Q baseline re-run.
 - The private story project's Shorts 1–3 were built with these (scratchpad, never committed).
+
+### 101.4 Review fixes (Step 250)
+
+A review of Shorts 1–3 found: captions of one or two words (title-size words in the narrow
+Shorts area), a caption over a face that lint missed, a hook of four lines, hooks over the
+establishing wide view, and a visitor shown before its entrance. Fixes (all only in a Short or
+opt-in; Phase Q baseline unchanged):
+
+- **Karaoke in a Short** (`scenes/captions.py`, `SHORTS_KARAOKE`): when not given, `size` `body`,
+  `max_lines` 1, `max_words` 5 — a phrase of about three to five words on one line, the spoken
+  word highlighted (the segmenter still breaks at punctuation first). Bottom captions sit
+  `SHORTS_LIFT` (0.03 of the Shorts area's height) above its bottom edge; `lift` replaces it.
+  (The reported "low caption" in the last beat of Short 1 was at the same place as the others —
+  the plate's bottom on the 80 % line; the margin makes that visible.)
+- **Caption reach** (`_mark_reach`; introspect `reach`, a Short only): each caption mobject gets
+  `overlay_reach`, the box of every caption of its beat(s); the layout dump writes it in px on
+  the caption's objects. `shorts_safe_area` checks faces against an overlay's reach when it has
+  one (a still shows one caption; a longer caption of the same line covered the face).
+- **Mid-beat stills** (`Rule.mid_beat`; `rule(..., mid_beat=True)`): `_scene_findings` runs such
+  rules on mid-beat stills too (others still only on beat ends; `stills` counts beat ends).
+  `lint_project` renders `SHORTS_STILLS` (3) stills per beat in a Short and reuses a dump with
+  two or more (`_stills_current`). `shorts_safe_area` is the only `mid_beat` rule.
+- **`min_cover`** (`ShortsSafeAreaRule`, 0.1): an overlay over that share of a face is reported
+  (`min_face`, 0.25, stays for the app's parts): a caption over a chin and mouth is 10–20 %.
+- **`zoom` `cut: true`**: the camera jumps (the frame is moved in `apply`, no animation).
+  `Action.opens_scene()` (default `False`; `Zoom`: `cut` and not a plot region): in
+  `Actions.start_beat` of a scene's first beat, such a use due at `at: 0` is applied at once
+  (`_apply_now`) before the scene's entrance plays, so the set fades in already framed. Without
+  it a stage's entrance (up to 1 s) plays first and a zoom at 0 starts after it. A beat `shot:`
+  on a first beat still starts after the entrance (unchanged: it would move existing videos'
+  frames); a Short uses `zoom ... cut: true` instead.
+- **`drop: true`** in a cut's `params` list entries (`cuts.DROP`, `_merge_named`): the scene's
+  entry of that name is left out (a character who only arrives in a left-out beat; unknown names
+  are ignored).
+- **Hook size** (`HOOK_LINES` 2, `HOOK_MIN_SCALE` 0.8): without `size`, the hook steps down from
+  1.25 × title by 0.05 to 0.8 × title until it fits on two lines; if none does, it keeps 1.25 ×
+  (three lines at the large size read better than three at a smaller one).
+
+Public surface: `Action.opens_scene` (vidgen.api `Action`), `Rule.mid_beat` / `rule(mid_beat=)`;
+config: zoom `cut`, `shorts_safe_area.min_cover`, cut params `drop`; layout dump key `reach`
+(a Short only).

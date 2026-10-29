@@ -3,7 +3,9 @@ phone app covers and for its length.
 
 ``shorts_safe_area`` reads a still's layout dump: the header's ``shorts`` box (px, the part of the
 frame the app leaves clear, written only for a Short), the text objects (the scene's and the
-overlays') and the characters' ``face`` boxes. ``shorts_length`` is a scene rule: it reads the
+overlays') and the characters' ``face`` boxes. An overlay object's ``reach`` (captions: the box of
+every caption of the line being spoken) stands for the overlay when faces are checked, so a face
+that a longer caption of the same line covers is found from any still of it. ``shorts_length`` is a scene rule: it reads the
 video's planned length (``SceneContext.video_seconds``), set on the video's last scene only.
 """
 
@@ -42,7 +44,7 @@ def _faces(ctx: StillContext) -> list[dict[str, Any]]:
     return out
 
 
-@rule("shorts_safe_area")
+@rule("shorts_safe_area", mid_beat=True)
 def shorts_safe_area(ctx: StillContext, settings: ShortsSafeAreaRule) -> Iterator[Issue]:
     """In a Short, text or a face where the phone app covers the frame, or an overlay (a caption,
     the hook) over a face."""
@@ -66,9 +68,13 @@ def shorts_safe_area(ctx: StillContext, settings: ShortsSafeAreaRule) -> Iterato
                 group=("shorts_text", obj.get("overlay")) if is_overlay(obj) else None,
             )
     overlays: dict[str, list[Bbox]] = {}
+    reaching: set[str] = set()
     for obj in ctx.objects:
-        if is_overlay(obj):
-            overlays.setdefault(str(obj["overlay"]), []).append(object_box(obj))
+        if is_overlay(obj):   # its reach: where it goes around this moment (all captions of the line)
+            box = tuple(float(v) for v in obj["reach"]) if obj.get("reach") else object_box(obj)
+            overlays.setdefault(str(obj["overlay"]), []).append(box)   # type: ignore[arg-type]
+            if obj.get("reach"):
+                reaching.add(str(obj["overlay"]))
     for figure in _faces(ctx):
         face: Bbox = tuple(float(v) for v in figure["face"])   # type: ignore[assignment]
         under = _covered(face, clear)
@@ -85,14 +91,15 @@ def shorts_safe_area(ctx: StillContext, settings: ShortsSafeAreaRule) -> Iterato
             union = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
             shared = intersection(face, union)
             share = area(shared) / max(area(face), 1e-9) if shared is not None else 0.0
-            if share >= settings.min_face:
+            if share >= settings.min_cover:
                 yield Issue(
-                    f"overlay '{overlay}' covers {share:.0%} of the face of {describe(figure)}; frame the shot so the "
-                    "face is above the captions (or move the overlay)",
+                    f"overlay '{overlay}' covers {share:.0%} of the face of {describe(figure)}"
+                    f"{' (while this line is shown)' if overlay in reaching else ''}; "
+                    "frame the shot so the face is above the captions (or move the overlay)",
                     shared,
                     (figure,),
                     value=round(share, 3),
-                    limit=settings.min_face,
+                    limit=settings.min_cover,
                     group=("shorts_face", overlay),
                 )
 
