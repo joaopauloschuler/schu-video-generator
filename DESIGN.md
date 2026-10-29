@@ -153,7 +153,12 @@ src/vidgen/
                           # switches, what is redrawn over moving parts, §69.54; no manim),
                           # living_drawing.py (LivingProp, PropGlow, PropSteam, §69.54-55; a portal's
                           # parts, §100.4), portal.py (a portal opening, crackling, sealing, §100.4;
-                          # no manim), hologram.py (hologram characters, §100.3),
+                          # no manim; its view, §100.13), hologram.py (hologram characters, §100.3),
+                          # alarm.py, apparition.py, holo_display.py, vignette.py (alarms, shutters,
+                          # materialise, flicker, iridescence, a display's patterns, a flashback's
+                          # grade, §100.7-§100.12; no manim but CameraVignette), figure_fx.py
+                          # (FigureAlpha, Materialise, Iridescence, Afterimages, HandHold, §100.9-10),
+                          # iso_overlays.py (IsoShutters, IsoBlinkers, §100.7, §100.11),
                           # nature.py (fruit spots, a dropped fruit's fall and bounce, flocks of
                           # birds, §69.55; no manim), nature_drawing.py (Flock, FallenFruit,
                           # FruitDrop, hit_stars, §69.55), small_props.py (balloons floating away,
@@ -285,6 +290,9 @@ src/vidgen/
                           # switch_action.py: switch_on, switch_off (a tv or a lamp), §69.54;
                           # storm_action.py: lightning, rainbow, §69.61;
                           # knock_action.py: knock (a door), §69.62;
+                          # story_actions.py: alarm, shutters, materialise, dematerialise,
+                          # hold_hands, let_go_hands, §100.7-§100.10; stage_story.py:
+                          # StoryStaging (a part of Stage: the story effects, §100.6-§100.12);
                           # host_actions.py: host_point, host_look, host_react, host_move,
                           # host_enter, host_exit (the scene's host), §71.1;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
@@ -19140,7 +19148,8 @@ findings. Gallery entries unchanged (no gallery scene uses `vertex_rule`).
 ## 100. Story-cartoon features (Phase Z, Steps 245–248)
 
 Reference: docs/CONFIG.md "Voice effects (`effect`)", "Holograms (`hologram`)", "Portals
-(`portal`)". A private story cartoon (a lab at night, a newly conscious AI as a hologram, a rift
+(`portal`)", "Iridescent skins and afterimages", "Hologram displays", "Alarms and shutters",
+"Flashbacks", "Holding hands", "Shots", "Isometric places". A private story cartoon (a lab at night, a newly conscious AI as a hologram, a rift
 in space, visitors from another world, a farewell; narrated with several Kokoro voices) drives
 generic features for every author. The story project lives in the scratchpad and is never
 committed; docs and samples use neutral content.
@@ -19278,3 +19287,191 @@ Every branch is new and opt-in: no voice without `effect` is wrapped (hashes unc
 character without `hologram` is recoloured or unmarked, the portal is a new prop kind.
 `switch_props` keeps the click for every other kind. Phase Q baseline 31/31 identical; the
 existing tests whose messages list the switched props were updated (they now name `portal`).
+
+Step 246 (§100.6–§100.13) drew on a reviewer's notes on the 245 test stills: the room filled
+only ~60 % of the frame, close-ups cropped awkwardly (a leg poking in over a head), the visitor
+did not read tall or iridescent, the "alarm" was a salmon-pink tint, the "lab" looked like a
+living room. The story effects of a stage live in `scenes/stage_story.py` (`StoryStaging`, a
+part of `Stage` like `IsoStaging`) and `scenes/story_actions.py` (the actions); the maths in
+`cartoon/alarm.py`, `cartoon/apparition.py`, `cartoon/holo_display.py`, `cartoon/portal.py`,
+`cartoon/vignette.py` (no manim except `CameraVignette`); the drawing in `cartoon/figure_fx.py`,
+`cartoon/iso_overlays.py` and `cartoon/living_drawing.py`.
+
+### 100.6 Framing: a fuller wide view, faces together, clear shots (Step 246)
+
+- **`iso.wide`** (`StageIso.wide`: `auto` | `fill` | 1–2.5): `wide_view(..., fit=)`. `auto` is
+  §89.13's (a room keeps all of itself in a landscape frame). `fill` drops that keep: the place's
+  bounds are filled (at most `ISO_WIDE_MAX`), still keeping the spots, the placed objects and the
+  bodies (with `ISO_MARGIN`). A number is the magnification over the whole place's fit
+  (`_zoomed_view`), the centre moved as little as keeps the bodies in view. Portrait frames keep
+  their own rule (§90.14). Measured on a 13 x 8 lab: auto ~60 % of the frame's width is room,
+  fill ~80 %.
+- **Group close-ups**: `SHOT_NAMES` closeup and medium take 1–3 names (`ShotConfig._check_names`
+  says "names 1 to 3 characters"). `shot_figures` keeps up to three named subjects for them;
+  `frame_shot` → `_group`: each subject's `SHOT_SPANS` box (head and shoulders / hips up) and its
+  figure's width, the union with `GROUP_PADDING` (8 %) at the sides, no narrower than
+  `SHOT_MIN_WIDTHS` of the tallest, scale clamped to 1..`MAX_SHOT_SCALE`; centred across, the
+  view's top at the highest head's span top (a figure further back on an iso place stands higher:
+  both faces show). One name: as before (`LOOK_ROOM` in front of the face).
+- **`clear`** (`ShotConfig.clear`, the `shot` action's option): `Stage.shot_clear(keep)` hides
+  every other character through its `FigureAlpha` factor `shot` (§100.9; opacities 0, kept for
+  the restore), sets `hidden_by_shot` (the layout dump's `hidden`: lint's `_figures` leaves it
+  out) and shows them again when the view goes back (`_back`) or at the next shot.
+- Tall visitors need no feature: an iso character's `scale` is its size (1.4–1.5).
+
+### 100.7 Alarms and shutters (Step 246)
+
+- **Alarm** (`alarm` action, `start` | `stop`, `color` default `#FF2A1F`, `period` 0.4–6 s
+  default 1.6; `animates = False`, cued): `Stage.alarm` keeps the changes and gives the
+  `StageLight` `alarms = alarm_spans(changes)` (`AlarmSpan(start, end | None, color, period)`; a
+  `start` while running ends that span and starts another, they cross-fade). `StageLight.update`
+  applies `alarm_grade(grade, spans, now)` after the light and the lightning: the strongest
+  span's envelope (`ALARM_RISE` 0.4 s in, `ALARM_FALL` 0.8 s out, smoothstep) blends from the
+  stage's grade to `alarm_light(color, pulse)`: from `ALARM_DARK` (`#2B1B26` at 0.82: the set
+  barely seen) to the colour's tint at `ALARM_STRENGTH` 0.82, its multiply × `ALARM_BRIGHTNESS`
+  0.72 (a dim room lit red, not pink paint) plus `ALARM_GLOW` 0.06 of the colour; the pulse a
+  raised cosine of the period ^`ALARM_SHARPNESS` 2 (short and bright, a beacon passing), starting
+  dark; the stars fade with the envelope. `changing` / `settled` include the alarms (the stage
+  redraws every frame while one shows). Unlit things (portal, hologram, screens, a lab's lights)
+  keep shining over it: the 245 note about the portal's glow is moot in the dark phase. A draft
+  (`flat`) keeps the light; the siren still plays. The siren is the **`alarm` ambience bed**
+  (`Stage.alarm_beds` in the scene's timings: start to stop or the scene's end; §100.8).
+- **Shutters** (`shutters` action, `close` | `open`; `iso.shutters: true` starts them down; only
+  an indoor iso place with a window showing into the room): `window_faces(place)` gives each
+  window's frame on a standing back wall (the same insets as `_wall`), `IsoShutters` (a living
+  thing of the stage, §100.11's mechanism) draws a steel plate from the top down to
+  `shutter_level` (closing in `SHUTTER_CLOSE_SECONDS` 0.5, accelerating: level += (1 − level)·s²;
+  opening in 1.4 s, eased) with `SHUTTER_SLATS` 7 slats, graded by the light. Sounds: a `slam`
+  at 85 % of the drop, a low `swoosh` rolling up.
+
+### 100.8 Story sounds (Step 246)
+
+- **Built-in sounds** (`BUILTIN_SOUNDS`, numpy, seeded, `_finish`ed to the loudness target):
+  `alarm` (2.7 s: `siren` — `SIREN_TONES` 960 / 780 Hz alternating every `SIREN_HALF` 0.45 s,
+  whole cycles in each half, 7 harmonics, 15 ms edges, low-passed 4.5 kHz), `crackle` (1.5 s:
+  250–500 snaps a second in seeded clusters, each ringing 1.5 ms, band ~3.8 kHz, over a 100 Hz
+  buzz flaring with them), `hum` (3 s: 110 Hz + 110.125 Hz harmonic tones, a 3.5 kHz whine,
+  air), `drone` (6 s: `DRONE_PARTIALS` C6 G6 C7 E7 G7 swelling in turn with a slow shimmer, over a
+  rumble under 90 Hz and a 55 Hz sine; slow fades), `slam` (0.8 s: a 75 Hz impact, an
+  inharmonic clang ~0.3 s, a rattle of six slat bursts). Measured: −27 LUFS each, peaks −9 to −24
+  dBFS.
+- **Beds** (`AMBIENCE_BEDS` + `hum`, `alarm`; `SET_BEDS` + `hum`): `hum_loop` (8 s, whole cycles
+  of both voices: no seam, −42 LUFS, not ducked; chosen only by name: `ambience: hum`) and
+  `alarm_loop` (10 siren periods, the lowpass around a circle (`siren(circular=True)`), the right
+  channel 11 ms behind, −31 LUFS, ducked 7 dB, 0.15 s in / 0.6 s out).
+- The Listen page gains the row `sfx-story` and the two beds in its ambience clip; its budget
+  test grows from 6.5 to 6.8 MB (6.6 MB now).
+
+### 100.9 Characters: appearing, flickering, shimmering, trailing (Step 246)
+
+- **`FigureAlpha`** (`figure_fx.py`): a character's fill / stroke opacities snapshot when first
+  asked (`figure_alpha(figure)`), and named factors (`shot`, `flicker`, `appear`) whose product
+  `apply()` writes (a member whose rgba rows changed length gets its first value); it sets the
+  figure's `shown` (its shadow fades with it). One place for every opacity effect, so a flicker
+  and a materialise do not fight.
+- **Materialise** (`materialise` / `dematerialise` actions, `run_time` default
+  `MATERIALISE_SECONDS` 2.2): `Materialise` animation: `materialise_levels(share, now, seed)` —
+  outlines rise over `WIREFRAME_SHARE` 0.4, fills over the rest, both × a flicker that fades as it
+  completes (`MATERIALISE_FLICKER` 0.45, `_noise`); ends at (1, 1), or (0, 0) for a
+  dematerialise. `StoryStaging._materialising()`: a character whose first such action is a
+  materialise starts with `appear` 0 (it stands at its spot unseen: shots and walks treat it as
+  there). Sounds: a `riser` (+5 semitones) and a `chime` at 85 %, or a `swoosh`.
+- **Flicker** (`HologramConfig.flicker`, default true): `_Flicker` sets `flicker` =
+  `flicker_level(now, seed)`: a 5 % shimmer and, every 2.2–5 s (seeded slots), a 0.16 s dip with
+  two drops to 0.25–0.65; skipped while the character walks through a door (that fade is the
+  walk's). Holograms were new in 245 (no committed render shows one), so the default flickers.
+- **Iridescence** (`CharacterEntry.iridescent`: true | `{seconds 2–120 = 12, strength 0.1–1 =
+  0.8}`): `Iridescence` keeps every filled member's drawn colour and recolours it every frame by
+  `iridescent_rgb(rgb, height, now)`: its hue turned by `now / seconds + IRIDESCENT_BANDS (1.3) ×
+  height on the figure` plus a small wobble, at least `IRIDESCENT_SATURATION` 0.5 saturated,
+  mixed by strength; lightness under 0.18 (ink) or over 0.93 (eye whites) kept. Graded by the
+  light like any character (at night it is muted).
+- **Afterimages** (`CharacterEntry.afterimages`: true | `{spacing 0.12, life 0.6, opacity
+  0.35}`): `Afterimages` copies the figure's drawn leaves (no updaters) every `spacing` s while
+  its feet moved `AFTERIMAGE_MOVE` 3 % of its height (not while it is less than half shown),
+  puts the copy right before the figure in `scene.mobjects` and in the animation's
+  `moving_mobjects` (else Manim would not draw it until the next `play`), fades it by (1 − age)^1.5
+  and removes it after `life`.
+- All run in one scene updater (`_story_step`, after the animations: a walk's state then a held
+  hand). Draft renders skip flicker, iridescence and afterimages.
+
+### 100.10 Holding hands and the hologram display (Step 246)
+
+- **`hold_hands`** (target one character, `with` the other; generated characters only):
+  `HandHold(a, b, start)`: each one's hand nearer the other (`_nearer_hand`, by hand point to
+  the other's feet) reaches (`reached_parts`) for the shoulders' midpoint `HAND_DROP` 0.3 of the
+  taller one's height lower, blended from the arm's pose at the start over `HAND_REACH_SECONDS`
+  0.4; every frame, so they stay joined while one or both walk (two walks in the same beat to
+  places side by side; no joint route planning). `let_go_hands` returns `PoseChange`s of the
+  holding arms to rest. `figure.hand_in_hand` names the partner (the layout dump's
+  `hand_in_hand`): lint's `walk_overlap` / `character_overlap` let the pair stand close.
+- **`hologram_display`** prop (`SCIFI_PROPS`, a switched living prop; 1.0 character tall;
+  `#5FD8FF` light, `#3A3F4B` projector; `pattern: fractal | data | text`): drawn off as a
+  projector puck in an invisible box as large as the panel (`PANEL` −0.46..0.46 × 0.4..0.98);
+  `DISPLAY_PARTS` overlays (beam, panel, scan lines, bars, text lines, curves, edge) placed by
+  `LivingProp._project` from `display_frame(pattern, since, now, seed)`: the panel grows over
+  `GROW_SECONDS` 0.6 (stretching up from its bottom) with a flicker, `level` 0.88 ± 0.12 noise;
+  fractal = three rose curves (3–5 petals) turning and breathing + a spiral; data = six bars, a
+  running wave, a ring gauge; text = lines written one per `LINE_SECONDS` 0.7 to seeded lengths,
+  scrolling once `TEXT_LINES` 7 are shown. Unlit, glow in its own colour; switched on with a
+  `hum` and a chime (no click). It and a portal cannot be held (`_Handling.scene_problems`).
+
+### 100.11 Lab and memory objects on an iso place (Step 246)
+
+`OBJECT_KINDS` + `console` (2 x 1, 1.8 high, `top` 0.86: two cabinets, a long top, three
+monitors whose screens and text lines are `glow` polygons), `server_rack` (1 x 1, 2.6: six units
+with vents and dark lights), `projector_pad` (1 x 1, walkable, deck 0.12: a cylinder, a glowing
+ring, an emitter; footsteps `stone`), `whiteboard` (2 x 1), `flower_arch` (2 x 1, 3.2: posts, an
+arch line, leaf blobs with flowers), `chess_table` (1 x 1, `top` 0.86: a board of squares, four
+pieces). `object_lights(item, base)` gives a rack's 18 and a console's 4 small lights;
+`IsoBlinkers` (a living thing, unlit, drawn over the place's pictures) blinks each at its seeded
+period (0.35–2.4 s, every fourth four times faster) and duty, with a halo (`LIGHT_HALO` 1.8 ×,
+0.22). The stage's **story things** (`story_things`: shutters, blinkers) join `_living_things`
+(`update_to`, `changing`, `done`, `movers`, `region`) and are made in `_iso_story_overlays` at
+the end of `_iso_scenery`.
+
+### 100.12 A flashback's look (Step 246)
+
+`flashback: true | {tint, strength, saturation, vignette, color}` on a stage
+(`FlashbackSetting`): `LightGrade` gains **`saturation`** (default 1; `grade_rgbas` /
+`grade_pixels` move colours towards their Rec. 709 grey first; `blend_grades` keeps it exactly
+when both are equal, so no other light changes a pixel), and `flashback_grade(grade)` multiplies
+the stage's light by the tint's grade (`#E8C08A` at 0.45), lifts the blacks by 6 % of the tint and
+keeps 40 % of the saturation; `Stage.flashback_look` wraps the light at the start and every
+`light` change. `CameraVignette` (an RGBA picture, `vignette_pixels`: clear inside 45 % of the way
+to the corners, rising smoothly to `vignette` 0.7 of `#2A1C12`) is stretched over the camera's
+frame every frame and added on top of the set's foreground (bubbles, tags and captions come
+later, over it).
+
+### 100.13 A view through a portal (Step 246)
+
+`view: coast | stars | meadow` on a portal prop: `living_overlays(..., view=)` adds
+`VIEW_SHAPES` (18) `portal_view` members after the inside (the depth rings are left out, the
+swirls drawn at 0.22). `portal_view(view, rx, ry, now, seed)`: the sky in bands from the top to
+the horizon (`_band`: the oval's part between two curves, sampled at 28 cosine-spaced x's), each
+edge rippling ±1.2 % of the half height at 2.2 rad/s, a sun or moon (clamped into the oval), the
+sea with four glints shimmering under the sun, the land (coast: a far headland and a near cliff;
+meadow: two hills); stars: eight twinkling diamonds. `LivingProp._show_view` places them in the
+oval as large as it is, fading in from 25 % to 85 % of its width.
+
+### 100.14 Compatibility (Step 246)
+
+Additive and opt-in. Shared code touched: `LightGrade.saturation` (default 1: `grade_*` skip it,
+`blend_grades` returns it exactly; `flash_grade` carries it), `StageLight` (empty `alarms`),
+`wide_view(fit="auto")`, `frame_shot` / `shot_figures` (one name: unchanged), the layout dump
+(two optional keys), lint's `_figures` / `_riding_together` (hidden and hand-in-hand
+characters) and `character_overlap` (characters wholly out of view, e.g. two waiting off stage
+to enter, are no longer reported), `surface_at` (a projector pad is stone). Phase Q baseline
+31/31 identical. **Public** (`vidgen.api` adds): `ALARM_COLOR`, `ALARM_PERIOD`,
+`SHUTTER_CLOSE_SECONDS`, `AlarmSpan`, `alarm_grade`, `alarm_spans`, `shutter_level`,
+`MATERIALISE_SECONDS`, `flicker_level`, `iridescent_rgb`, `materialise_levels`, `Afterimages`,
+`FigureAlpha`, `HandHold`, `Iridescence`, `Materialise`, `figure_alpha`, `DISPLAY_PATTERNS`,
+`display_frame`, `IsoBlinkers`, `IsoShutters`, `PORTAL_VIEWS`, `portal_view`, `CameraVignette`,
+`FLASHBACK_SATURATION`, `FLASHBACK_STRENGTH`, `FLASHBACK_TINT`, `VIGNETTE_COLOR`,
+`VIGNETTE_OPACITY`, `flashback_grade`, `LIT_OBJECTS`, `object_lights`, `window_faces`. Config:
+`characters[].iridescent`, `.afterimages`, `.hologram.flicker`; stage `flashback`; `iso.wide`,
+`iso.shutters`; props `view`, `pattern`, prop `hologram_display`; `shot.clear`, closeup / medium
+of 2–3; iso objects as §100.11; actions `alarm`, `shutters`, `materialise`, `dematerialise`,
+`hold_hands`, `let_go_hands`; sounds and beds as §100.8. Tests updated for the new counts and lists: the switched props
+(`hologram_display`), 71 prop kinds, the shot names message, the set beds (the first four), the
+portal's parts without a view, the Listen page budget.

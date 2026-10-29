@@ -195,6 +195,8 @@ SHOWCASES: tuple[Showcase, ...] = (
     Showcase("iso_room", "isometric cartoons", "A cut-away room", "an isometric room seen like a dollhouse: furniture, a thing to pick up"),
     Showcase("iso_lamp", "isometric cartoons", "Lighting the lamp", "night on an isometric place: a lamp lit, a speaker's name tag"),
     Showcase("iso_snow", "isometric cartoons", "First snow", "snow settling on an isometric village: the ground, roofs and trees turn white"),
+    Showcase("iso_lab", "isometric cartoons", "The night shift",
+             "a lab at night: a hologram materialises, screens and blinking racks, shutters, a rift with a starry sky inside"),
     Showcase("plant_cell", "cell biology", "Inside a plant cell", "a plant cell's wall, vacuole and chloroplasts, then a zoom into one chloroplast's grana"),
     Showcase("sodium_pump", "cell biology", "The sodium pump", "a membrane pump's cycle: 3 Na⁺ out and 2 K⁺ in per ATP, against their gradients"),
     Showcase("mek_inhibitor", "cell biology", "Blocking MEK", "a signal running down the MAPK cascade, then a drug that blocks MEK and its effects downstream"),

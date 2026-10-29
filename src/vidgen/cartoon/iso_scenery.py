@@ -339,6 +339,27 @@ def _wall_window(side: str, column: int, row: int, x1: float, y1: float, base: f
             Poly(sill, shade(FRAME, 0.15))]
 
 
+def window_faces(place: IsoPlace) -> list[tuple[tuple[float, float, float], ...]]:
+    """The frame of each window of a room that shows into it (DESIGN.md §100.7: shutters close
+    over them): four world points each, bottom left, bottom right, top right, top left as seen;
+    none outdoors."""
+    if not place.indoor:
+        return []
+    found = []
+    for row in range(place.rows):
+        for column in range(place.columns):
+            if place.ground(column, row) != WINDOW or place.is_cut(column, row) or place.wall_height(column, row) <= 0.0:
+                continue
+            near = {"e": (column + 1, row), "s": (column, row + 1)}
+            inset = {side: 0.0 if place.ground(*near[side]) == VOID else WALL_INSET for side in near}
+            x1, y1 = column + 1 - inset["e"], row + 1 - inset["s"]
+            for side in ("s", "e"):
+                ground = place.ground(*near[side])
+                if ground not in WALLS and ground != VOID:
+                    found.append(_on_face(side, column, row, x1, y1, place.floor_z(column, row), 0.14, 0.86, WINDOW_SILL, WINDOW_TOP))
+    return found
+
+
 def _wall_door(side: str, column: int, row: int, x1: float, y1: float, base: float, is_open: bool = False) -> list[Shape]:
     """A door on a standing wall's face; open: a dark doorway and the leaf swung into the room on
     its hinge at the doorway's left edge (as seen)."""
@@ -381,4 +402,4 @@ def place_pieces(place: IsoPlace, colors: IsoColors, looks: Mapping[str, ObjectL
     return pieces
 
 
-__all__ = ["SLAB_DEPTH", "WATER_DEPTH", "IsoColors", "IsoPiece", "ground_shapes", "place_pieces"]
+__all__ = ["SLAB_DEPTH", "WATER_DEPTH", "IsoColors", "IsoPiece", "ground_shapes", "place_pieces", "window_faces"]

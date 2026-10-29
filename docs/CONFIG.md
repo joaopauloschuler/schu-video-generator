@@ -1701,6 +1701,7 @@ characters:
 |---|---|---|
 | `color` | `#5FD8FF` | the hologram's colour (a theme token or hex) |
 | `opacity` | `0.6` | 0.2–1: how solid the figure is (1 hides what is behind it, 0.2 is a faint ghost) |
+| `flicker` | `true` | on a stage it flickers now and then: a short, jagged dip of its light every 2–5 s (seeded, the same in every render) over a faint shimmer; `false`: steady |
 
 - **Light**: a stage's [`light`](#light-and-shadows-light-shadows) does not grade a hologram (it
   shines the same by day, at night and under a coloured tint), nor does the soft
@@ -1711,6 +1712,56 @@ characters:
 - It enters and leaves like any character; `enter` / `exit` through a `door:` (a spot of an
   [iso place](#isometric-places-iso) too) fade it in and out where it stands, as if the projection
   were switched on.
+- **Materialising**: `- materialise: vega` makes it appear where it stands as a projection does:
+  its outlines first, a flickering wireframe (the first 40 % of `run_time`, default 2.2 s), then
+  its fills come in, still flickering, until it stands whole (a rising shimmer and a soft chime,
+  foley). A character whose first `materialise` / `dematerialise` is a `materialise` waits
+  unseen at its spot until then. `- dematerialise: vega` is the same backwards (a falling
+  swoosh): it is gone afterwards, until a `materialise`. Both work on any stage character; they
+  read best on a hologram.
+
+```yaml
+beats:
+  - text: "Then the projector hummed, and a figure of light took shape on the pad."
+    actions: [{materialise: vega, at: 0.3}]     # vega waits unseen at its spot until then
+  - text: "And as quickly as it came, it was gone."
+    actions: [{dematerialise: vega, at: 0.2, run_time: 1.5}]
+```
+
+#### Iridescent skins and afterimages (`iridescent`, `afterimages`)
+
+Two looks for visitors from elsewhere, on a stage:
+
+- **`iridescent: true`** (or `{seconds, strength}`) makes a character's skin and clothes shift
+  colours like oil on water: bands of hue running up the figure, drifting once round the rainbow
+  in `seconds` (default 12; slow reads best), mixed in by `strength` (0.1–1, default 0.8). Its
+  outlines, dark features and white eye-whites keep their colours; pale colours get a sheen
+  (at least half saturated). The stage's light grades it like any character.
+- **`afterimages: true`** (or `{spacing, life, opacity}`) leaves faint copies of the character
+  where it was while it moves (a walk, an entrance, a keyframe move): one every `spacing` s
+  (default 0.12) once it has moved a little, each starting at `opacity` (default 0.35) of the
+  figure and fading over `life` s (default 0.6), drawn just behind it. Nothing while it stands
+  still.
+- A tall, slender visitor: `look: {body: tall, head_size: 0.8}` and a `scale` on the stage
+  (`1.4`–`1.5`: taller than the others; on an iso place a character's `scale` is its size).
+- Render cost: an iridescent character is recoloured on every frame; afterimages are copies of
+  the figure (a few at a time). A draft render shows neither.
+
+```yaml
+characters:
+  - name: wanderer
+    iridescent: true                       # or {seconds: 8, strength: 1}
+    afterimages: true                      # or {spacing: 0.1, life: 0.8, opacity: 0.3}
+    look: {body: tall, head_size: 0.8, eyes: round}
+    colors: {skin: "#B7C8F0", clothes: "#8C7BD6"}
+scenes:
+  - id: arrival
+    type: stage
+    params: {characters: [{name: wanderer, at: right, scale: 1.45}]}
+    beats:
+      - text: "The stranger crossed the hall in a shimmer of colours."
+        actions: [{walk_to: wanderer, to: left}]
+```
 
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
@@ -2786,6 +2837,11 @@ writes them as WAV files to listen to):
 | `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
 | `sting_comic` | 1.1 s (0.6–3) | "ba-dum-tss": two falling tom hits and a splashy cymbal | after a punchline (`sting: comic`) |
 | `sting_sad` | 2.2 s (1.2–5) | "wah wah wah waaah": four muted brass notes falling B♭3 → G3, the last long and wobbling | a let-down played for laughs (`sting: sad`) |
+| `alarm` | 2.7 s (0.9–12) | an alarm siren, "hee-haw": two buzzy tones, ~960 and ~780 Hz, alternating every 0.45 s | an alarm going off (a stage's [`alarm`](#alarms-and-shutters-alarm-shutters) plays it as a bed while it runs) |
+| `crackle` | 1.5 s (0.3–8) | crackling energy: clusters of sharp electric snaps (bright, ~3–5 kHz) over a faint 100 Hz buzz that flares with them | sparks, a short circuit, a rift crackling |
+| `hum` | 3 s (0.5–15) | a soft electronic hum: a 110 Hz tone with harmonics and a slowly beating second voice, a faint ~3.5 kHz whine, fading in and out | a machine or a screen powering up (a [hologram display](#hologram-displays-hologram_display) switching on) |
+| `drone` | 6 s (1.5–20) | a crystalline singing drone: a high glassy chord (C6 G6 C7 E7 G7) shimmering, each note swelling in turn, over a deep rumble; slow fades | awe, an otherworldly place, a doorway to another world |
+| `slam` | 0.8 s (0.3–2) | a steel shutter slamming down: a heavy low impact (~75 Hz falling), a metallic clang ringing ~0.3 s and a short rattle of slats | [shutters](#alarms-and-shutters-alarm-shutters) closing, a metal door, a heavy impact |
 
 | key | default | |
 |---|---|---|
@@ -10439,7 +10495,14 @@ they hide what is behind them.
 - **`objects`**: ready-made objects `{object, at, name, facing, size, color, detail}`: outdoors
   `house` (3 x 3 cells), `tree`, `pine`, `bush`, `rock`, `flowers`, `fence`, `bench` (2 x 1),
   `lamp`, `well`, `sign`, `bridge` (1 x 3, over water: walked on); indoors `table` (2 x 1),
-  `chair`, `bed` (1 x 2), `shelf` (2 x 1), `sofa` (2 x 1), `plant`, `rug` (2 x 2: walked on).
+  `chair`, `bed` (1 x 2), `shelf` (2 x 1), `sofa` (2 x 1), `plant`, `rug` (2 x 2: walked on); a
+  lab's `console` (2 x 1: a desk with three monitors whose screens glow with lines of text, its
+  top takes small things and a [`hologram_display`](#hologram-displays-hologram_display)),
+  `server_rack` (a tall dark cabinet whose small lights blink), `projector_pad` (a round glowing
+  platform: walked on, a hologram stands on it) and `whiteboard` (2 x 1, a diagram on it); and
+  for a memory or a garden a `flower_arch` (2 x 1, posts and an arch wound with leaves and
+  flowers) and a `chess_table` (a small table with a board and pieces). The screens, the
+  pad's ring and the rack's lights glow: no `light` darkens them.
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
   front looks to the viewer's lower left) or `right` (lower right; its footprint turns: a bench
@@ -10473,6 +10536,10 @@ they hide what is behind them.
   view moves the least it needs), and when the tightest zoom leaves the view taller than the
   characters (a close-up: the characters are small on a place) they are centred up and down
   rather than the heads put at the top. `shot: wide` in 9:16 keeps the same spots in view.
+  **`wide`** changes how close the wide view is: `auto` (as above), `fill` (a room fills a
+  landscape frame too: its spots, placed objects and characters are kept, the far corners of its
+  walls may be cut) or a number from 1 to 2.5 (that many times closer than the whole place,
+  moved to keep the characters in view): `iso: {place: indoor, wide: fill, map: ...}`.
 - **`colors`**: `grass`, `earth` (the slab and the sides of raised grass), `path`, `water`,
   `stone` (raised blocks and garden walls outdoors), `floor`, `tiles`, `wall`, `cut` (the top of
   the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the
@@ -10529,6 +10596,9 @@ they hide what is behind them.
   - `reveal` an object that is not there (`shown: false`): a bridge appears over the pond, a
     present under the tree; `hide` takes one away (`- hide: rock`). Nobody walks on a bridge
     before it is there (or after it went).
+  - `- shutters: close` slams steel shutters down over a room's windows (each window that shows
+    into the room; 0.5 s, a `slam`); `- shutters: open` rolls them up again (1.4 s). `iso:
+    {shutters: true}` starts with them down. See [Alarms and shutters](#alarms-and-shutters-alarm-shutters).
 
   The object's new look fades in over its old one, for the action's `run_time`.
 - **Moving.** On an iso place the characters go from cell to cell on the map, round what is in
@@ -10860,6 +10930,13 @@ the ground; no shadow), indoors or out, on a plain stage or at a spot of an
   / `exit` and `door:` the portal's spot: it fades in there and walks to its own `at` (put that
   spot in front of the portal, or it stands inside it, hidden), or walks there and fades out.
 - **Size**: `scale` (1.4 for a portal a tall character walks through).
+- **A view through it**: `view: coast` (a sea coast at dusk: violet to gold sky, the sun low over
+  the water with glints shimmering on it, a cliff), `stars` (a night sky, the stars twinkling, a
+  moon) or `meadow` (green hills under a blue sky) shows that place inside the oval instead of
+  its swirling depths, fading in as it opens; its bands ripple a little, as if seen through
+  shimmering air, and faint swirls still turn over it. Like the rest of the portal it is never
+  graded by the light.
+- It cannot be picked up, held or carried (`pick_up`, `hold`... say so).
 
 ```yaml
 - id: lab
@@ -10892,6 +10969,29 @@ the ground; no shadow), indoors or out, on a plain stage or at a spot of an
 Render cost: like a fireplace's flames, the portal's parts and glow are redrawn on every frame
 while it is open, opening or sealing (with what is drawn over them); a sealed portal stays in
 Manim's static picture.
+
+##### Hologram displays (`hologram_display`)
+
+A `hologram_display` is a small projector throwing a floating, translucent panel of light: a
+lab's screen, a ship's star map, a wizard's scrying glass. It stands at a spot like a small thing
+(on an iso place on a `console`, a `table` or the floor; on a plain stage at a mark, with a
+`lift` to stand on a desk) and is switched like a television: `on: true`, `- switch_on: screen`
+(the panel grows out of the beam with a flicker, a soft `hum` and a chime) and `- switch_off:
+screen`. Its panel (about a character tall over the projector, 0.9 wide) shows its **`pattern`**:
+
+- `fractal` (default): curves of light turning and breathing, a spiral winding in and out;
+- `data`: bars rising and falling, a wave running along the top, a ring gauge turning;
+- `text`: lines being written one after another, then scrolling on (a message being composed).
+
+Scan lines drift up the panel, a beam joins it to the lens, a soft glow lies around it, and it
+flickers a little; `color` is the light (default `#5FD8FF`), `detail` the projector. It is never
+graded by the stage's light and cannot be picked up or carried.
+
+```yaml
+props:
+  - {prop: hologram_display, name: screen, at: desk, "on": true, pattern: fractal}
+  - {prop: hologram_display, name: letter_screen, at: desk_2, pattern: text, color: "#9DFFB0"}
+```
 
 #### Fruit falling from a tree (`fruit`, `drop_fruit`)
 
@@ -11462,6 +11562,29 @@ scenes:
           - {switch_off: phone, at: 0.8}
 ```
 
+#### Holding hands (`hold_hands`, `let_go_hands`)
+
+**`- {hold_hands: ana, with: ben}`** has two characters of a stage take each other's hand: each
+one's hand nearer the other reaches (0.4 s) for a point between their shoulders, a little lower,
+and they keep holding hands from then on wherever they stand or walk, the arms following every
+frame. To walk hand in hand, walk both in the same beat to places side by side (`- {walk_to:
+ana, to: 0.4}`, `- {walk_to: ben, to: 0.55}`; on an iso place to two neighbouring spots); far
+apart, their arms reach towards each other, straight. **`- let_go_hands: ana`** ends it (the
+other lets go too): the arms come back to their sides. While holding, the holding arm takes no
+other action (a `gesture` or `pick_up` with it is overridden); the other arm is free. Generated
+characters only (an SVG character's arms do not bend).
+
+```yaml
+beats:
+  - text: "She took his hand, and they walked on together."
+    actions:
+      - {hold_hands: ana, with: ben, at: 0.1}
+      - {walk_to: ana, to: 0.6, at: 0.3}
+      - {walk_to: ben, to: 0.75, at: 0.3}
+  - text: "At the gate they let go."
+    actions: [{let_go_hands: ana, at: 0.5}]
+```
+
 #### Sitting and leaning
 
 Three actions let a `stage`'s characters sit on its [props](#props) and lean on them. The
@@ -11644,9 +11767,14 @@ leave it; lint `off_stage` says so).
 |---|---|---|
 | `wide` | none | every character on the stage, no zoom (the middle of them on a wide stage) |
 | `two_shot` | none, one or two | two characters, whole, with a margin; default: the beat's speaker and the character nearest it (one name: that one and the nearest) |
-| `medium` | one | the character from about the hips up, with more room on the side it faces |
+| `medium` | one to three | one character from about the hips up, with more room on the side it faces; two or three framed together from the hips up |
 | `over_shoulder` | one, optionally the near one | the character seen past the *near* one (default: the one it last looked at, else the nearest), who stands at the other edge, cut by the frame. The nearer they stand, the tighter the shot (at most a close-up) |
-| `closeup` | one | its head and shoulders, with more room on the side it faces |
+| `closeup` | one to three | its head and shoulders, with more room on the side it faces; two or three: all their heads and shoulders together, centred, the view's top just above the highest head (on an iso place, where one stands further back and higher, both faces still show whole) |
+
+**`clear: true`** (`shot: {kind: closeup, of: [ana, ben], clear: true}`) hides every character
+the shot does not frame for that beat, so nobody standing behind or beside the framed ones (a
+leg poking in over a head, half a figure at the edge) clutters it; they are back with the next
+beat's view (or the next shot).
 
 `shot: closeup kit` (the kind, then the names) or `shot: {kind: closeup, of: kit, move: true,
 run_time: 1.2}`: `move: true` eases to the framing (1.0 s, or `run_time`) instead of cutting, and
@@ -12379,6 +12507,70 @@ light sets how dark they are (`night` faint). The layout dump leaves shadows and
         - {light: night, at: 0.2, run_time: 3}
 ```
 
+#### Alarms and shutters (`alarm`, `shutters`)
+
+**`- alarm: start`** sets an alarm off on a stage at `at` of the beat; **`- alarm: stop`** ends
+it. While it runs the set is a dark room lit by a red light that rises and falls, like a beacon
+sweeping by: dark between the pulses, glowing in the alarm's `color` (default `#FF2A1F`) at
+their top, one pulse every `period` seconds (default 1.6). It comes in over 0.4 s and gives the
+light back over 0.8 s after `stop` (a scene's own `light` then holds again). What the light never
+grades keeps shining over it: a [portal](#portals-portal), a [hologram](#holograms-hologram), a
+lit screen or lamp, a lab's lights. A siren (the `alarm` ambience bed: two tones, ducked under
+the lines) plays while it runs (foley). A draft render keeps the light flat (the siren still
+plays).
+
+**`- shutters: close`** slams steel shutters down over the windows of an
+[indoor iso place](#isometric-places-iso) (each `%` in a back wall: 0.5 s, accelerating, a
+metallic `slam` as they hit), **`- shutters: open`** rolls them up again (1.4 s, a low swoosh);
+`iso: {shutters: true}` starts with them down. They are graded by the light like the walls.
+
+```yaml
+beats:
+  - text: "A siren wailed. Metal shutters came down over every window of the tower."
+    actions:
+      - {alarm: start, at: 0.1}                # or {alarm: start, color: "#FF8A1F", period: 1.2}
+      - {shutters: close, at: 0.3}
+  - text: "Then, as suddenly, it was quiet."
+    actions:
+      - {alarm: stop, at: 0.2}
+      - {shutters: open, at: 0.5}
+```
+
+#### Flashbacks (`flashback`)
+
+**`flashback: true`** on a stage gives it a memory's look: the set and the characters in faded,
+warm colours, like an old photograph (40 % of their saturation, multiplied towards a warm sepia
+`#E8C08A`, the darks lifted a little), over whatever `light` it has; and a soft, warm-dark
+**vignette** framing the view (clear in the middle, darker towards the edges and corners),
+which stays on the camera's view as it moves. Speech bubbles, name tags and captions stay clear.
+Pair it with an iris in and out (`transition: {type: iris_in}`, `iris_out` on the scene after)
+and a gentle music cue.
+
+| key (`flashback` as a mapping) | default | |
+|---|---|---|
+| `tint` | `#E8C08A` | the warm colour the set is graded towards |
+| `strength` | `0.45` | how strongly (0–1) |
+| `saturation` | `0.4` | the share of the colours' saturation kept (0: grey, 1: all) |
+| `vignette` | `0.7` | how dark the frame is in the corners (0: no vignette) |
+| `color` | `#2A1C12` | the vignette's colour |
+
+```yaml
+- id: summer_garden
+  type: stage
+  transition: {type: iris_in, character: ana}
+  params:
+    background: ["#9CCBEA", "#E4F3FB"]
+    flashback: true                       # or {saturation: 0.6, vignette: 0.5}
+    iso:
+      map: |
+        ..........
+        ..a.......
+        ...e..c...
+      spots: {a: arch, e: ana_spot, c: chess}
+      objects: [{object: flower_arch, at: arch}, {object: chess_table, at: chess}]
+    characters: [{name: ana, at: ana_spot}]
+```
+
 #### Drawing style (`drawing`)
 
 The top-level **`drawing`** switches how every `stage` scene of the video is drawn; a stage's own
@@ -12524,6 +12716,11 @@ seeded, seamless loops, no recordings):
 | `city` | street sounds: a low traffic rumble, three or four cars passing (1–2 s swells around 600 Hz) and a far murmur of people; a 16 s loop | −35 | 5 dB |
 | `room_tone` | the air of a quiet room: soft low noise (40–250 Hz) with a faint hiss; an 8 s loop | −46 | no |
 | `crickets` | a warm night outdoors: four crickets, each at its own pitch (3.8–5.2 kHz), place and steady rate (1.3–2.6 chirps a second, each three or four quick pulses), over a faint low night air; a 12 s loop | −37 | 4 dB |
+| `hum` | a lab, a ship's bridge: a soft electronic 110 Hz tone with its harmonics and a second voice beating slowly against it, a faint ~3.5 kHz whine and air; an 8 s loop | −42 | no |
+
+An **`alarm`** bed (the two-tone siren of the `alarm` sound, an alternating ~960 / ~780 Hz,
+−31 LUFS, ducking 7 dB under the voice, 0.15 s in, 0.6 s out) plays by itself while a stage's
+[alarm](#alarms-and-shutters-alarm-shutters) runs; it is not a set bed.
 
 The levels are integrated loudness before ducking (the music: −28, the rain: −32); each bed fades
 in over 2 s from the scene's start and out over 1.5 s ending at its end, and the same bed in the
@@ -12535,7 +12732,7 @@ change](#light-and-shadows-light-shadows) counts half-way through its fade; not 
 `night`, `indoor` or a tint), never while it [rains](#rain-on-the-ground) and only 2 s after the
 rain stops, and not for less than 2 s; on an [iso place](#isometric-places-iso) outdoors also
 `crickets` while it is `sunset` or `night` (by the same rules), and an indoor iso place plays the
-`room_tone`; nothing else. The `city` bed is never chosen: name it.
+`room_tone`; nothing else. The `city` and `hum` beds are never chosen: name them (`ambience: hum`).
 A stage's **`ambience`** param names the bed for the whole scene (`ambience: city`, `ambience:
 [city, birdsong]` for a park in town) or turns it off (`false`); the top-level `ambience: false`
 turns the automatic choice off for the video (a stage that names a bed still plays it).

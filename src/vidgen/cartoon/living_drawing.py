@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 from dataclasses import replace
@@ -52,9 +53,14 @@ from vidgen.cartoon.living import (
     tv_picture,
     union_box,
 )
+from vidgen.cartoon.holo_display import LENS as DISPLAY_LENS
+from vidgen.cartoon.holo_display import PANEL as DISPLAY_PANEL
+from vidgen.cartoon.holo_display import display_frame
+from vidgen.cartoon.portal import CENTRE as PORTAL_CENTRE
+from vidgen.cartoon.portal import HALF_WIDTH as PORTAL_HALF_WIDTH
 from vidgen.cartoon.portal import changing as portal_changing
 from vidgen.cartoon.portal import openness as portal_openness
-from vidgen.cartoon.portal import portal_shape
+from vidgen.cartoon.portal import portal_shape, portal_view
 from vidgen.cartoon.props import Prop, _circle, _ellipse, _line, _Paint, _poly, _rect
 from vidgen.cartoon.room import darker
 from vidgen.cartoon.shading import LIT, mark_lit
@@ -101,10 +107,13 @@ def tag(mob: VMobject, part: str) -> VMobject:
     return mob
 
 
-def living_overlays(kind: str, paint: _Paint) -> list[VMobject]:
+def living_overlays(kind: str, paint: _Paint, *, view: str | None = None) -> list[VMobject]:
     """The parts a ``kind`` prop draws on top of itself when it lives, in prop units: a clock's
     second hand, a television's picture (sky, ground and two shapes over its screen, outlined like
-    it), a lamp's lit lantern. None for other props."""
+    it), a lamp's lit lantern, a portal's parts (with the shapes of its ``view``), a hologram
+    display's panel. None for other props."""
+    if kind == "hologram_display":
+        return _display_overlays(paint)
     if kind == "clock":
         x, y = CLOCK_CENTRE
         return [tag(_line(x, y, x, y + HAND_LENGTHS["second"], SECOND_HAND, OUTLINE_WIDTH), "second")]
@@ -135,7 +144,7 @@ def living_overlays(kind: str, paint: _Paint) -> list[VMobject]:
             *rings,
         ]
     if kind == "portal":
-        return _portal_overlays(paint)
+        return _portal_overlays(paint, view)
     if kind == "fireplace":
         flames: list[VMobject] = []
         for shape in flame_shapes(0.0, 0):
@@ -148,30 +157,69 @@ def living_overlays(kind: str, paint: _Paint) -> list[VMobject]:
     return []
 
 
-#: A portal's parts (DESIGN.md §100.4), drawn in this order: the inside, its depth rings, the
-#: swirls, the rim's glowing edge and bright core, the sparks.
-PORTAL_PARTS: tuple[str, ...] = ("portal_inside", "portal_ring", "portal_swirl", "portal_rim", "portal_core", "portal_spark")
+#: A portal's parts (DESIGN.md §100.4), drawn in this order: the inside, the shapes of the place
+#: seen through it (§100.13), its depth rings, the swirls, the rim's glowing edge and bright core,
+#: the sparks.
+PORTAL_PARTS: tuple[str, ...] = ("portal_inside", "portal_view", "portal_ring", "portal_swirl", "portal_rim", "portal_core", "portal_spark")
 #: How far the inside's depth rings go from the inside's colour towards the rim's.
 PORTAL_RING_MIX = (0.3, 0.6)
+#: With a view: the swirls' opacity over it (a shimmer, not a whirlpool).
+VIEW_SWIRL_OPACITY = 0.22
 
 
-def _portal_overlays(paint: _Paint) -> list[VMobject]:
+def _blank(part: str) -> VMobject:
+    return tag(VMobject().set_fill(opacity=0.0).set_stroke(width=0.0, opacity=0.0), part)
+
+
+def _portal_overlays(paint: _Paint, view: str | None = None) -> list[VMobject]:
     """A portal's moving parts, without points yet (:class:`LivingProp` places them on every
-    frame): the inside in ``detail``, two depth rings mixed towards ``main``, the swirl arms, the
-    rim in ``main`` with a light core, the sparks."""
-    from vidgen.cartoon.portal import DEPTH_RINGS, SPARKS, SWIRL_ARMS
+    frame): the inside in ``detail``, the shapes of a ``view`` (none: no members), two depth rings
+    mixed towards ``main`` (not with a view), the swirl arms, the rim in ``main`` with a light
+    core, the sparks."""
+    from vidgen.cartoon.portal import DEPTH_RINGS, SPARKS, SWIRL_ARMS, VIEW_SHAPES
 
-    def blank(part: str) -> VMobject:
-        return tag(VMobject().set_fill(opacity=0.0).set_stroke(width=0.0, opacity=0.0), part)
-
+    blank = _blank
     light = paint.light(paint.main)
     members = [blank("portal_inside").set_fill(paint.detail, opacity=1.0)]
-    for mix in PORTAL_RING_MIX[: len(DEPTH_RINGS)]:
-        members.append(blank("portal_ring").set_fill(interpolate_color(ManimColor(paint.detail), ManimColor(paint.main), mix).to_hex(), opacity=0.5))
-    members += [blank("portal_swirl").set_stroke(light, width=1.6 * OUTLINE_WIDTH, opacity=0.55) for _ in range(SWIRL_ARMS)]
+    if view is not None:
+        for _ in range(VIEW_SHAPES):
+            member = blank("portal_view")
+            setattr(member, "portal_view_name", view)
+            members.append(member)
+    if view is None:
+        for mix in PORTAL_RING_MIX[: len(DEPTH_RINGS)]:
+            members.append(blank("portal_ring").set_fill(interpolate_color(ManimColor(paint.detail), ManimColor(paint.main), mix).to_hex(), opacity=0.5))
+    swirl = 0.55 if view is None else VIEW_SWIRL_OPACITY
+    members += [blank("portal_swirl").set_stroke(light, width=1.6 * OUTLINE_WIDTH, opacity=swirl) for _ in range(SWIRL_ARMS)]
     members.append(blank("portal_rim").set_stroke(paint.main, width=3.2 * OUTLINE_WIDTH, opacity=1.0))
     members.append(blank("portal_core").set_stroke("#FFFFFF", width=1.1 * OUTLINE_WIDTH, opacity=0.9))
     members += [blank("portal_spark").set_stroke(light, width=1.4 * OUTLINE_WIDTH, opacity=1.0) for _ in range(SPARKS)]
+    return members
+
+
+#: A hologram display's parts (DESIGN.md §100.10), drawn in this order: the beam from the lens,
+#: the panel, its scan lines, the pattern's bars, text lines and curves, the panel's edge.
+DISPLAY_PARTS: tuple[str, ...] = ("holo_beam", "holo_panel", "holo_scan", "holo_bar", "holo_line", "holo_curve", "holo_edge")
+#: The display's opacities: beam, panel, scan lines, bars, text lines, curves, edge.
+DISPLAY_OPACITY: dict[str, float] = {"holo_beam": 0.16, "holo_panel": 0.22, "holo_scan": 0.18, "holo_bar": 0.75, "holo_line": 0.85,
+                                     "holo_curve": 0.9, "holo_edge": 0.95}
+#: How many scan lines cross the panel.
+SCAN_LINES = 9
+
+
+def _display_overlays(paint: _Paint) -> list[VMobject]:
+    """A hologram display's moving parts, without points yet, all in ``main`` (lighter for the
+    lines and the edge)."""
+    from vidgen.cartoon.holo_display import BARS, CURVES, TEXT_LINES
+
+    light = paint.light(paint.main)
+    members = [_blank("holo_beam").set_fill(paint.main, opacity=DISPLAY_OPACITY["holo_beam"]),
+               _blank("holo_panel").set_fill(paint.main, opacity=DISPLAY_OPACITY["holo_panel"])]
+    members += [_blank("holo_scan").set_stroke(light, width=0.6 * OUTLINE_WIDTH, opacity=DISPLAY_OPACITY["holo_scan"]) for _ in range(SCAN_LINES)]
+    members += [_blank("holo_bar").set_fill(light, opacity=DISPLAY_OPACITY["holo_bar"]) for _ in range(BARS)]
+    members += [_blank("holo_line").set_fill(light, opacity=DISPLAY_OPACITY["holo_line"]) for _ in range(TEXT_LINES)]
+    members += [_blank("holo_curve").set_stroke(light, width=1.2 * OUTLINE_WIDTH, opacity=DISPLAY_OPACITY["holo_curve"]) for _ in range(CURVES)]
+    members.append(_blank("holo_edge").set_stroke("#FFFFFF", width=1.2 * OUTLINE_WIDTH, opacity=DISPLAY_OPACITY["holo_edge"]))
     return members
 
 
@@ -258,9 +306,11 @@ class LivingProp:
     with it; ``None``: calm)."""
 
     def __init__(self, prop: Prop, *, start: float | None = None, speed: float = 1.0, on: bool = False, seed: int = 0,
-                 movable: bool = False, wind: Callable[[float], float] | None = None) -> None:
+                 movable: bool = False, wind: Callable[[float], float] | None = None, pattern: str = "fractal") -> None:
         self.prop = prop
         self.kind = prop.kind
+        #: A hologram display's pattern (DESIGN.md §100.10).
+        self.pattern = pattern
         self.start = DRAWN_CLOCK_SECONDS if start is None else float(start)
         self.speed = float(speed)
         self.on = bool(on)
@@ -283,6 +333,13 @@ class LivingProp:
         self._body = [(m, prop.drawn_points(m.points)) for m in prop.family_members_with_points() if m is not anchor] if self.kind == "phone" else []
         #: A portal's moving parts by name (DESIGN.md §100.4; empty for other props).
         self.portal = {part: living_parts(prop, part) for part in PORTAL_PARTS} if self.kind == "portal" else {}
+        views = self.portal.get("portal_view", [])
+        #: The place seen through a portal (§100.13; ``None``: its swirling inside).
+        self.view: str | None = getattr(views[0], "portal_view_name", None) if views else None
+        self._view_drawn = [(float(m.get_fill_opacity()), m) for m in views]
+        #: A hologram display's moving parts by name (§100.10; empty for other props).
+        self.display = {part: living_parts(prop, part) for part in DISPLAY_PARTS} if self.kind == "hologram_display" else {}
+        self._display_drawn = {id(m): (float(m.get_fill_opacity()), float(m.get_stroke_opacity())) for ms in self.display.values() for m in ms}
         spec = GLOWS.get(self.kind)
         seam = living_parts(prop, "seam")
         if spec is not None and seam:   # a portal glows in its own rim colour
@@ -315,7 +372,7 @@ class LivingProp:
         if switch_between(self.switches, start, end):
             return True
         on = on_between(self.on, self.switches, start, end)
-        return on and (self.kind in ("tv", "fireplace", "kettle", "phone") or self.movable)
+        return on and (self.kind in ("tv", "fireplace", "kettle", "phone", "hologram_display") or self.movable)
 
     def movers(self) -> list[Mobject]:
         """The mobjects it changes on every frame: the hands, or the picture / lantern / flames
@@ -324,7 +381,7 @@ class LivingProp:
             return [m for members in self.hands.values() for m in members]
         if self.kind == "phone":
             return [m for m, _ in self._body]
-        portal = [m for members in self.portal.values() for m in members]
+        portal = [m for members in [*self.portal.values(), *self.display.values()] for m in members]
         return [*self.overlays, *portal, *(m for m in (self.glow, self.steam) if m is not None)]
 
     def region(self, start: float = 0.0, end: float = math.inf) -> Box:
@@ -368,6 +425,9 @@ class LivingProp:
         if self.kind == "portal":
             self._open(now)
             return
+        if self.kind == "hologram_display":
+            self._project(now)
+            return
         on = self.is_on(now)
         self._shown.show(on)
         strength = 1.0 if on else 0.0
@@ -403,6 +463,8 @@ class LivingProp:
             return self.prop.prop_points(closed_curve(np.array(points, dtype=float)))
 
         self.portal["portal_inside"][0].points = closed(shape.inside)
+        if self.view is not None:
+            self._show_view(shape, now)
         for ring, outline in zip(self.portal["portal_ring"], shape.rings):
             ring.points = closed(outline)
         for arm, line in zip(self.portal["portal_swirl"], shape.swirls):
@@ -414,6 +476,70 @@ class LivingProp:
             spark.set_points_as_corners(placed((start, end)))
         if self.glow is not None:
             self.glow.place(*self._glow_place(), shape.glow)
+
+    def _show_view(self, shape: Any, now: float) -> None:
+        """The place seen through an open portal (DESIGN.md §100.13): :func:`portal_view` in the
+        oval as large as it is now, fading in as it widens."""
+        cx, cy = PORTAL_CENTRE
+        rx = max(x for x, _ in shape.inside) - cx
+        ry = max(y for _, y in shape.inside) - cy
+        shown = min(max((rx / PORTAL_HALF_WIDTH - 0.25) / 0.6, 0.0), 1.0)
+        shapes = portal_view(self.view, rx, ry, now, self.seed) if shown > 0 else []
+        for k, (_, member) in enumerate(self._view_drawn):
+            if k < len(shapes):
+                found = shapes[k]
+                member.set_points_as_corners(self.prop.prop_points(np.array([[x, y, 0.0] for x, y in (*found.points, found.points[0])])))
+                member.set_fill(found.color, opacity=found.opacity * shown)
+            else:
+                member.points = np.zeros((0, 3))
+
+    def _project(self, now: float) -> None:
+        """A hologram display as it is at scene time ``now`` (DESIGN.md §100.10): off (nothing but
+        its projector), or its beam, panel, scan lines and pattern, flickering."""
+        frame = display_frame(self.pattern, on_since(self.on, self.switches, now), now, self.seed)
+        members = [m for part in DISPLAY_PARTS for m in self.display[part]]
+        if frame is None:
+            for member in members:
+                member.points = np.zeros((0, 3))
+            if self.glow is not None:
+                self.glow.place(*self._glow_place(), 0.0)
+            return
+        left, bottom, right, top = DISPLAY_PANEL
+        top = bottom + (top - bottom) * frame.grow
+        lens_x, lens_y, lens_half = DISPLAY_LENS
+
+        def placed(points: list[tuple[float, float]]) -> np.ndarray:
+            return self.prop.prop_points(np.array([[x, y, 0.0] for x, y in points]))
+
+        def rect(member: VMobject, box: tuple[float, float, float, float]) -> None:
+            x0, y0, x1, y1 = box
+            member.set_points_as_corners(placed([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]))
+
+        self.display["holo_beam"][0].set_points_as_corners(placed([(lens_x - lens_half * 0.5, lens_y), (lens_x + lens_half * 0.5, lens_y), (right, bottom), (left, bottom),
+                                                                   (lens_x - lens_half * 0.5, lens_y)]))
+        rect(self.display["holo_panel"][0], (left, bottom, right, top))
+        rect(self.display["holo_edge"][0], (left, bottom, right, top))
+        scans = self.display["holo_scan"]
+        for k, scan in enumerate(scans):
+            y = bottom + (top - bottom) * (((k + 0.5) / len(scans) + 0.08 * now) % 1.0)
+            scan.set_points_as_corners(placed([(left, y), (right, y)]))
+        for group, boxes in (("holo_bar", frame.bars), ("holo_line", frame.lines)):
+            for k, member in enumerate(self.display[group]):
+                if k < len(boxes):
+                    rect(member, boxes[k])
+                else:
+                    member.points = np.zeros((0, 3))
+        for k, member in enumerate(self.display["holo_curve"]):
+            if k < len(frame.curves):
+                member.set_points_as_corners(placed(list(frame.curves[k])))
+            else:
+                member.points = np.zeros((0, 3))
+        for member in members:
+            fill, stroke = self._display_drawn[id(member)]
+            member.set_fill(opacity=fill * frame.level)
+            member.set_stroke(opacity=stroke * frame.level)
+        if self.glow is not None:
+            self.glow.place(*self._glow_place(), frame.level * frame.grow)
 
     def _burn(self, now: float) -> None:
         """The flames as they are at scene time ``now``, leaning with the wind."""
@@ -462,4 +588,4 @@ class LivingProp:
                 hand.set_points_as_corners(np.array([centre, [x, y, 0.0]]))
 
 
-__all__ = ["CLOCK_CENTRE", "HAND_LENGTHS", "PORTAL_PARTS", "LivingProp", "PropGlow", "PropSteam", "living_overlays", "living_parts", "tag"]
+__all__ = ["CLOCK_CENTRE", "DISPLAY_PARTS", "HAND_LENGTHS", "PORTAL_PARTS", "LivingProp", "PropGlow", "PropSteam", "living_overlays", "living_parts", "tag"]

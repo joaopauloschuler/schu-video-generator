@@ -22649,3 +22649,113 @@ tinted dark sky around it.
 How to test: `tests/test_voice_effects.py`, `tests/test_portal_hologram.py`; stills (scratchpad)
 `s245/t1/build/preview/storyboard/scenes/lab-1.png`, `lab-2.png` (the iso lab, hologram, portal),
 `s245/vega.png` (a hologram character).
+
+## Step 246 — Story-cartoon features: framing, alarms, labs, holograms, visitors, memories
+
+The rest of Phase Z's gap list, plus a reviewer's notes on the 245 test stills (the room filled
+~60 % of the frame; close-ups cropped badly; the visitor did not read tall or iridescent; the
+alarm was a salmon tint; the lab looked like a living room). All generic, opt-in, neutral
+samples; the private story project stays in the scratchpad.
+
+What was built (DESIGN §100.6–§100.14)
+- **Framing**: `iso: {wide: fill}` (or 1–2.5) — a room's wide view fills the frame (~80 % instead
+  of ~60 %); `closeup` / `medium` of 2–3 characters (`shot: closeup ana ben`: all faces, headroom
+  over the highest head, centred); `shot: {..., clear: true}` hides the characters the shot does
+  not frame for its beat (no legs poking in). Tall visitors: `scale: 1.4–1.5` (works already).
+- **Alarm and shutters**: `- alarm: start | stop` (`color`, `period`): a dark room under a red
+  light pulsing like a beacon (a new `StageLight.alarms` grade over the light), a two-tone siren
+  bed while it runs; unlit things (portal, holograms, screens) keep shining. `- shutters: close
+  | open` on an indoor iso place's windows (`iso.shutters: true` starts them down), with a slam.
+- **Holograms**: `materialise` / `dematerialise` actions (a flickering wireframe, then solid; the
+  character waits unseen until its first materialise); holograms flicker now and then
+  (`hologram.flicker`, default on). One `FigureAlpha` per character holds every opacity factor.
+- **Visitors**: `iridescent: true | {seconds, strength}` (oil-on-water hue bands drifting up the
+  figure) and `afterimages: true | {spacing, life, opacity}` (fading copies while it moves).
+- **Hand in hand**: `- {hold_hands: ana, with: ben}` / `- let_go_hands: ana`; the hands meet
+  every frame, standing or walking side by side; lint lets the pair stand close.
+- **Lab and memory objects**: iso `console` (glowing screens), `server_rack` (blinking lights),
+  `projector_pad`, `whiteboard`, `flower_arch`, `chess_table`; the `hologram_display` prop
+  (`pattern: fractal | data | text`, grows out of its beam, a hum and a chime); a portal's
+  `view: coast | stars | meadow`; portals and displays cannot be picked up.
+- **Flashback**: `flashback: true | {...}` on a stage: faded warm colours (`LightGrade.saturation`,
+  new) and a soft vignette over the camera's view.
+- **Sounds**: `alarm`, `crackle`, `hum`, `drone`, `slam` (procedural, numpy); beds `hum` (named:
+  `ambience: hum`) and `alarm`. The Listen page (`docs/music`) regenerated: a `sfx-story` row, the
+  two beds in the ambience clip (6.6 MB; its budget test 6.5 → 6.8 MB).
+- **Gallery**: showcase `iso_lab` ("The night shift": a hologram materialises on a pad, screens,
+  blinking racks, shutters, a rift with a starry sky); 16.1 of 16.5 MB. The alarm itself is left
+  out of it: its pulsing doubled the GIFs past `CLIP_MAX_BYTES`.
+
+Files
+- New: `cartoon/alarm.py`, `cartoon/apparition.py`, `cartoon/figure_fx.py`, `cartoon/holo_display.py`,
+  `cartoon/iso_overlays.py`, `cartoon/vignette.py`, `scenes/stage_story.py`, `scenes/story_actions.py`,
+  `data/gallery/showcases/iso_lab.yaml`, `tests/test_story_fx.py` (20: 2 renders), docs/gallery
+  `iso_lab.*`, docs/music `sfx-story.*`.
+- Changed: `sfx.py` (5 sounds, `siren`), `ambience.py` (2 beds), `listen.py` (row), `config.py`
+  (shot names 1–3, `ShotConfig.clear`, `HologramConfig.flicker`, `IridescentConfig`,
+  `AfterimageConfig`, `CharacterEntry.iridescent/afterimages`), `cartoon/lighting.py`
+  (`saturation`), `cartoon/storm.py`, `cartoon/shading.py` (alarms), `cartoon/shots.py`
+  (`_group`), `cartoon/iso_stage.py` (`fit`), `cartoon/iso_objects.py`, `cartoon/iso_scenery.py`
+  (`window_faces`), `world/iso.py`, `world/iso_moves.py`, `cartoon/props.py`, `cartoon/living.py`,
+  `cartoon/living_drawing.py`, `cartoon/portal.py` (`portal_view`), `scenes/stage.py`
+  (`StoryStaging`, params `flashback`, iso `wide` / `shutters`, prop `view` / `pattern`,
+  display sounds, alarm beds), `scenes/stage_iso.py` (`_iso_story_overlays`), `scenes/shot_action.py`,
+  `scenes/handling.py`, `scenes/__init__.py`, `introspect.py` (`hand_in_hand`, `hidden`),
+  `lint/cartoon_rules.py`, `gallery.py`, `api.py`; docs CONFIG, guide (copied to `AGENTS.md`),
+  README (41 sounds), CHANGELOG, DESIGN §2 / §100, tasklist; tests whose lists or counts grew
+  (`test_cartoon_shots`, `test_portal_hologram`, `test_cartoon_living`, `test_cartoon_fire_nature`,
+  `test_cartoon_small_props`, `test_cartoon_props` 71, `test_cartoon_sounds`, `test_listen`).
+
+Public interfaces: see DESIGN §100.14 (`vidgen.api` adds the alarm, apparition, figure-effect,
+display, portal-view, flashback and lab-object names).
+
+Decisions
+- Alarm as a light grade (not an overlay): it darkens and reddens exactly what the light grades,
+  so portals, holograms and screens shine over it; the 245 note about the portal's glow under a
+  dark tint no longer matters in the dark phase.
+- Group close-ups extend `closeup` / `medium` (1–3 names) instead of changing `two_shot` (which
+  frames whole figures): existing shots are unchanged.
+- One opacity owner per character (`FigureAlpha`) for clear shots, flicker and materialise.
+  A flicker pauses while its character walks through a door (that walk fades it).
+- Afterimages are inserted into the playing animation's `moving_mobjects` too: Manim draws only
+  those during a `play`.
+- Iridescence is graded by the light like any character: at `light: night` it is muted (the
+  stills show it, but softly). Lighter night tints help (247).
+- Hands: no joint route for two walkers; walk both in one beat to neighbouring spots.
+- Lint: characters wholly out of view (two waiting off stage to enter through the same door) no
+  longer count for `character_overlap`.
+
+Checks
+- Tests (one file at a time): test_story_fx 20 (2 renders), test_cartoon_shots 14,
+  test_portal_hologram 12, test_cartoon_living + fire_nature 47, test_cartoon_small_props +
+  props 111, test_sfx 146, test_listen 11, test_iso_place 54, test_iso_staging, test_iso_mood,
+  test_cartoon_stage (84 together), test_cartoon_lighting / storm / config / api 54, test_schema 71,
+  test_docs 73, test_guide 90, test_cartoon_character / sheet / effects / foley / voice_sounds /
+  sounds 109, robots / vehicles / water_air / platform_sounds 113, test_builtin_scenes / mcp /
+  gallery / phase_o_review / step177 221 (not render), test_gallery 19 (not render), lint /
+  depth / moving / phase_h_review / builtin_sets / directing 136, test_introspect 15 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check246`).
+- End-to-end (scratchpad `s246/cut`, private): two scenes of key shots with Kokoro (narrator,
+  heroine, hero, the lab AI with `echo`, the visitor `otherworldly`, the building's voice
+  `robot`): a hologram materialising on its pad, a two-face close-up with `clear` and held
+  hands, the alarm (dark / red pulse), shutters, the rift opening onto the coast, two tall
+  iridescent visitors stepping out, a visitor's close-up, a zoom into the rift. 57.6 s of video:
+  storyboard 16:9 in 32.6 + 78.1 s, 9:16 in 24.9 + 58.2 s (854 × 480 / 270 × 480). Lint: 0
+  errors, 6 warnings (the test cut's own staging: look_alike visitors, a rushed entrance, a slow
+  line, facing).
+
+Left for 247 / known gaps
+- Night faces are dark (dark skin especially): a screen or display does not light the
+  characters near it (a lamp does on an iso place); a lighter custom night tint helps.
+- In 9:16 a tall portal at the frame's edge can be cut a little (the wide view keeps bodies and
+  spots, a portal's box is narrow); place it inward.
+- A shot is framed where the characters stand at the beat's start: walk first, then the
+  close-up.
+- Afterimages and iridescence are skipped in draft renders; the gallery GIF leaves the alarm out.
+
+How to test: `tests/test_story_fx.py`; stills (scratchpad, private)
+`s246/cut/build/preview/storyboard/scenes/awakening-1.png`, `awakening-2.png`, `alarm-1.png`,
+`alarm-2.png`, `alarm-3.png` (16:9) and `s246/cut/build/preview_short/storyboard/video-1.png`,
+`video-2.png` (9:16); feature stills `s246/t1/build/preview/storyboard/scenes/memory-1.png`
+(flashback), `s246/t2/build/preview/storyboard/scenes/fx-1.png` (afterimages, hand in hand,
+text display, dematerialise); gallery `docs/gallery/media/iso_lab-16x9.png`.

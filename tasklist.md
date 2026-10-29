@@ -1483,14 +1483,15 @@ audio and the studio unchanged (Phase Q's 31 baseline frames when shared code ch
 - [x] Tests `tests/test_voice_effects.py`, `tests/test_portal_hologram.py`; CONFIG sections, guide (copied to `AGENTS.md`); Phase Q baseline 31/31
 
 ### Step 246 — Remaining story-cartoon features
-- [ ] Hologram materialise entrance (wireframe → solid, flicker) and an occasional flicker; a hologram display prop (a projector with a floating translucent panel: moving patterns, text lines)
-- [ ] A view through a portal (a picture or a simple scene inside it); `pick_up` of a portal refused
-- [ ] Alarm lighting (a pulsing coloured light) and window shutters on an iso room (close / open with a slam)
-- [ ] Built-in sounds: `alarm`, `crackle`, `hum`, `drone` (crystal singing), `slam`
-- [ ] Iridescent characters (oil-on-water colour shift) and afterimages behind moving characters
-- [ ] Hand in hand: two characters holding hands, standing and walking together
-- [ ] Lab objects on an iso place (console desk with screens, server rack, projector pad); props for the memories (a chess board, a flower arch) as needed; a flashback vignette look if tints are not enough
-- [ ] Tests, CONFIG, guide (`AGENTS.md`), neutral gallery entries within the budget (16.5 MB)
+- [x] Hologram `materialise` / `dematerialise` (a flickering wireframe, then solid; waits unseen until then) and a flicker (`hologram.flicker`); the `hologram_display` prop (a projector with a floating panel: `pattern: fractal | data | text`, scan lines, beam, glow) (DESIGN §100.9, §100.10)
+- [x] A view through a portal (`view: coast | stars | meadow`); `pick_up` / `hold`... of a portal or a display refused (§100.13)
+- [x] `alarm: start | stop` (a dark room under a pulsing red light, `color`, `period`; the `alarm` bed) and `shutters: close | open` on an iso room (`iso.shutters`) (§100.7)
+- [x] Built-in sounds `alarm`, `crackle`, `hum`, `drone`, `slam`; beds `hum` (a set bed) and `alarm` (§100.8)
+- [x] `iridescent` and `afterimages` on a character (§100.9)
+- [x] `hold_hands` / `let_go_hands` (standing and walking; lint lets them stand close) (§100.10)
+- [x] Iso objects `console`, `server_rack` (blinking lights), `projector_pad`, `whiteboard`, `flower_arch`, `chess_table`; `flashback` on a stage (faded warm colours, a vignette) (§100.11, §100.12)
+- [x] Reviewer's notes on the 245 stills: `iso.wide: fill | <zoom>` (a room fills the frame), `closeup` / `medium` of 2–3 characters and `shot.clear` (§100.6); tall visitors are a `scale` (1.4–1.5)
+- [x] Tests `tests/test_story_fx.py`; CONFIG, guide (`AGENTS.md`), README; the Listen page (a story row, two beds); gallery showcase `iso_lab` (16.1 of 16.5 MB); Phase Q baseline 31/31
 
 ### Step 247 — The story video
 - [ ] Build the private story project (scratchpad), render previews, look at stills, iterate; Kokoro narration with the chosen voices and effects; music cues and sounds; lint clean; final 16:9 1080p (and 9:16 if it reads well)

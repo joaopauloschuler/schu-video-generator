@@ -3,7 +3,7 @@
 **A video and presentation generator built for AI agents.** See the [scene gallery](docs/gallery/README.md).
 
 **Its own music and sound synthesizer: 17 original music beds, music composed for your video,
-36 sound effects, and a music studio where people and AI agents write their own music — all
+41 sound effects, and a music studio where people and AI agents write their own music — all
 generated from code, free to use.** [Listen](docs/music/README.md) ·
 [Studio](docs/CONFIG.md#music-studio-vidgen-studio)
 
@@ -53,9 +53,10 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   lines, swells on reveals, a closing cadence.
 - **Mixed like a finished video**: music cues per range of scenes, ducked under the narration only,
   the whole mix normalised to −16 LUFS with a true-peak limiter.
-- **36 synthesised sound effects and cartoon foley**: whooshes, pops, typing, risers and stings;
+- **41 synthesised sound effects and cartoon foley**: whooshes, pops, typing, risers and stings;
   footsteps by surface, doors that knock, unlock and creak, coins and stars picked up, vehicles,
-  thunder; and ambience beds (rain, fire, birdsong, city, room tone, crickets) under cartoon scenes.
+  thunder, an alarm, crackling energy, a hum, a crystal drone, a slam; and ambience beds (rain,
+  fire, birdsong, city, room tone, crickets, hum, alarm) under cartoon scenes.
 - **For agents, who cannot listen**: `vidgen list-music` and `vidgen list-sfx` describe every sound
   in words (instruments, key, tempo, chords, mood), `--render-dir` writes them out for a person,
   `vidgen music preview` composes a mood to WAV and MIDI; over MCP: `list_music`, `list_sfx`,

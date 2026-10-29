@@ -35,6 +35,8 @@ class ShotAction(_Acting):
         """The framing; none: back to the view before the shots (the runner adds that after a shot's beat)."""
         move: bool = False
         """Ease to the framing instead of cutting."""
+        clear: bool = False
+        """Hide the characters the shot does not frame, until the view goes back (or the next shot)."""
 
     run_time = SHOT_MOVE_SECONDS
     needs_target = False
@@ -66,6 +68,7 @@ class ShotAction(_Acting):
             return self._back(scene)
         names = [t.name for t in targets if isinstance(t.mobject, Character)]
         view, shot = scene.shot_framing(self.options.kind, names)
+        scene.shot_clear(list(shot.subjects) + ([shot.near] if shot.near else []) if self.options.clear else None)
         if scene.shot_home is None:
             scene.shot_home = (camera_view(scene), scene.camera_following)
         scene.follow_with_camera(None)
@@ -79,6 +82,7 @@ class ShotAction(_Acting):
 
     def _back(self, scene: NarratedScene) -> list[Animation]:
         home, scene.shot_home, scene.camera_shot = scene.shot_home, None, None
+        scene.shot_clear(None)
         if home is None:
             return []
         (width, center), followed = home

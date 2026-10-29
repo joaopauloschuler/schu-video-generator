@@ -90,8 +90,8 @@ OUTDOOR_PROPS: tuple[str, ...] = (
 INDOOR_PROPS: tuple[str, ...] = ("blackboard", "school_desk", "shelf_with_goods", "till", "wardrobe")
 #: The story props of a platform level (DESIGN.md §86.8): a key (to hold, give, and open a locked door with).
 STORY_PROPS: tuple[str, ...] = ("key",)
-#: Science-fiction props (DESIGN.md §100.4): a portal that opens in space.
-SCIFI_PROPS: tuple[str, ...] = ("portal",)
+#: Science-fiction props (DESIGN.md §100.4, §100.10): a portal that opens in space, a hologram display.
+SCIFI_PROPS: tuple[str, ...] = ("portal", "hologram_display")
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
@@ -110,7 +110,7 @@ PROP_HEIGHTS: dict[str, float] = {
     "shop": 1.7, "bench": 0.32, "bus_stop": 1.35, "road": 0.12, "path": 0.08, "fountain": 0.75, "flowers": 0.28,
     "fence": 0.42, "beach_umbrella": 1.3, "shell": 0.06, "pine": 1.9, "mushroom": 0.13, "log": 0.16,
     "blackboard": 0.5, "school_desk": 0.4, "shelf_with_goods": 0.95, "till": 0.26, "wardrobe": 1.1, "key": 0.3,
-    "portal": 1.5,
+    "portal": 1.5, "hologram_display": 1.0,
     **{kind: spec.height for kind, spec in VEHICLES.items()},
 }
 #: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
@@ -173,7 +173,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "log": ("secondary", "highlight"),
     "blackboard": ("secondary", "#2F5A46"), "school_desk": ("secondary", "dim"), "shelf_with_goods": ("secondary", "accent"),
     "till": ("accent", "highlight"), "wardrobe": ("secondary", "highlight"), "key": ("#E0B33A", "#6B4E1E"),
-    "portal": ("#C9A8FF", "#1B1240"),
+    "portal": ("#C9A8FF", "#1B1240"), "hologram_display": ("#5FD8FF", "#3A3F4B"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
@@ -1508,6 +1508,24 @@ def _portal(p: _Paint) -> list[VMobject]:
     return [box, seam]
 
 
+def _hologram_display(p: _Paint) -> list[VMobject]:
+    """A hologram display switched off (DESIGN.md §100.10): a low round projector in ``detail``
+    with a lens of ``main`` colour, in an invisible box as large as its panel of light (placed and
+    sized the same on or off); the panel is a prop that moves by itself
+    (:mod:`vidgen.cartoon.holo_display`)."""
+    from vidgen.cartoon.holo_display import LENS, PANEL
+
+    left, _, right, top = PANEL
+    box = Rectangle(width=right - left, height=top).move_to([(left + right) / 2, top / 2, 0.0])
+    box.set_fill(opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+    x, y, half = LENS
+    lens = _ellipse(x, y + 0.005, half * 0.7, 0.018, p.main, p, outline=False)
+    lens.set_fill(opacity=0.7)
+    setattr(lens, LIVING_PART, "seam")   # its colour is the display's glow's
+    return [box, _ellipse(x, 0.035, half * 1.6, 0.035, p.dark(p.detail), p), _rect(x - half * 1.3, 0.035, x + half * 1.3, y, p.detail, p, radius=0.02),
+            _ellipse(x, y, half * 1.3, 0.03, p.light(p.detail), p), lens]
+
+
 _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]]]] = {
     "table": _table, "chair": _chair, "tree": _tree, "bush": _bush, "house": _house, "door": _door,
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
@@ -1522,7 +1540,7 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
     "flowers": _flowers, "fence": _fence, "beach_umbrella": _beach_umbrella, "shell": _shell, "pine": _pine,
     "mushroom": _mushroom, "log": _log,
     "blackboard": _blackboard, "school_desk": _school_desk, "shelf_with_goods": _shelf_with_goods, "till": _till,
-    "wardrobe": _wardrobe, "key": _key, "portal": _portal,
+    "wardrobe": _wardrobe, "key": _key, "portal": _portal, "hologram_display": _hologram_display,
 }
 
 
@@ -1579,6 +1597,7 @@ def draw_prop(
     shape: str | None = None,
     living: bool = False,
     fruit: bool = False,
+    view: str | None = None,
 ) -> Prop:
     """A built-in prop ``kind`` ``height`` Manim units tall, its feet at the origin, coloured
     ``main`` / ``detail`` (theme tokens or #hex; default :data:`PROP_COLORS`). Outlines are as
@@ -1586,7 +1605,8 @@ def draw_prop(
     ``shape``: which of its :data:`PROP_SHAPES` it shows (default: the first). ``living``: a
     clock, television, lamp, fireplace or kettle that moves by itself gets its moving parts and an
     anchor (:func:`~vidgen.cartoon.living_drawing.living_overlays`, DESIGN.md §69.54, §69.55).
-    ``fruit``: a tree carries a few fruits (:func:`_fruits`)."""
+    ``fruit``: a tree carries a few fruits (:func:`_fruits`). ``view``: the place a living portal shows
+    inside it (DESIGN.md §100.13)."""
     if kind not in _DRAWERS and kind not in VEHICLES:
         raise VidgenError(f"unknown prop '{kind}' (props: {', '.join(PROP_KINDS)})")
     if height <= 0:
@@ -1608,7 +1628,7 @@ def draw_prop(
         from vidgen.cartoon.living_drawing import living_overlays
 
         front = FIREPLACE_FRONT if kind == "fireplace" else 0   # flames burn behind the front logs
-        drawn = [*drawn[: len(drawn) - front], *living_overlays(kind, paint), *drawn[len(drawn) - front :]]
+        drawn = [*drawn[: len(drawn) - front], *living_overlays(kind, paint, view=view), *drawn[len(drawn) - front :]]
     if fruit and kind == "tree" and isinstance(drawn, list):
         drawn = [*drawn, *_fruits(paint)]
     prop = Prop(

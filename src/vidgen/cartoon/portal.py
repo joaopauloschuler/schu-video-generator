@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from vidgen.cartoon.living import _noise, _unit
 
@@ -155,7 +156,128 @@ def portal_shape(level: float, now: float, seed: int = 0) -> PortalShape | None:
     return PortalShape(_oval(rx, ry, RIM_POINTS), _oval(rx, ry, RIM_POINTS, jag), rings, tuple(swirls), tuple(sparks), max(glow, 0.0))
 
 
+# ----- a view through the portal (DESIGN.md §100.13) ---------------------------------------------------
+
+#: The places a portal can show inside it.
+PORTAL_VIEWS: tuple[str, ...] = ("coast", "stars", "meadow")
+#: How many shapes a view draws at most (the drawing keeps this many members for it).
+VIEW_SHAPES = 18
+#: Each view's sky bands from the top down (colours), where its horizon is (a share of the
+#: oval's half height below its middle; ``None``: no ground), its sun or moon ((x share of the
+#: half width, height share over the horizon, radius share of the half width, colour) or
+#: ``None``) and its ground colours (water, then the land in front).
+_VIEWS: dict[str, dict[str, object]] = {
+    "coast": {"sky": ("#2E2A5C", "#5B3A78", "#A34C72", "#E2785F", "#FFC27D"), "horizon": 0.18,
+              "sun": (0.28, 0.08, 0.24, "#FFE2A0"), "water": "#4A6FA8", "glints": "#FFD49A",
+              "land": ("#3A2C55", "#6A4F80")},
+    "stars": {"sky": ("#070A24", "#121A45", "#1E2766", "#2D3580"), "horizon": None, "sun": (-0.3, 0.55, 0.16, "#F3F1E2"),
+              "water": None, "glints": "#FFFFFF", "land": ()},
+    "meadow": {"sky": ("#6FB4E8", "#8FC8F0", "#B6DDF7", "#DDF1FF"), "horizon": 0.05, "sun": (-0.32, 0.55, 0.2, "#FFF2B0"),
+               "water": None, "glints": None, "land": ("#4E9E48", "#6DBE5A")},
+}
+
+
+@dataclass(frozen=True)
+class ViewShape:
+    """One shape of a portal's view: a closed outline (prop units), its colour and opacity."""
+
+    points: tuple[Point, ...]
+    color: str
+    opacity: float = 1.0
+
+
+def _half_height(dx: float, rx: float, ry: float) -> float:
+    return ry * math.sqrt(max(1.0 - (dx / rx) ** 2, 0.0)) if rx > 0 else 0.0
+
+
+def _band(rx: float, ry: float, lower: Any, upper: Any, n: int = 28) -> tuple[Point, ...]:
+    """The part of the oval (middle :data:`CENTRE`, half sizes ``rx``, ``ry``) between the curves
+    ``lower(x)`` and ``upper(x)`` (y of an x, prop units), as one outline (empty where they cross)."""
+    cx, cy = CENTRE
+    xs = [cx + rx * -math.cos(math.pi * k / (n - 1)) for k in range(n)]
+    tops, bottoms = [], []
+    for x in xs:
+        dy = _half_height(x - cx, rx, ry)
+        top, bottom = min(cy + dy, upper(x)), max(cy - dy, lower(x))
+        if top < bottom:
+            top = bottom = min(max(bottom, cy - dy), cy + dy)
+        tops.append((x, top))
+        bottoms.append((x, bottom))
+    return tuple(tops + bottoms[::-1])
+
+
+def _inside(point: Point, rx: float, ry: float) -> Point:
+    """``point`` moved onto the oval when it lies outside it."""
+    cx, cy = CENTRE
+    dx, dy = point[0] - cx, point[1] - cy
+    reach = math.hypot(dx / max(rx, 1e-9), dy / max(ry, 1e-9))
+    return point if reach <= 1.0 else (cx + dx / reach, cy + dy / reach)
+
+
+def portal_view(view: str, rx: float, ry: float, now: float, seed: int = 0) -> list[ViewShape]:
+    """The shapes of ``view`` (:data:`PORTAL_VIEWS`) inside an oval of half sizes ``rx``, ``ry``
+    at scene time ``now``, back to front: the sky in bands, a sun or a moon, the sea with glints
+    of light shimmering on it, the land; the bands' edges ripple a little (a place seen through
+    shimmering air). At most :data:`VIEW_SHAPES`."""
+    spec = _VIEWS[view]
+    cx, cy = CENTRE
+    sky: tuple[str, ...] = spec["sky"]  # type: ignore[assignment]
+    horizon_share = spec["horizon"]
+    horizon = cy - ry * float(horizon_share) if horizon_share is not None else cy - ry
+
+    def ripple(k: int) -> Any:
+        return lambda x: 0.012 * ry * math.sin(9.0 * (x - cx) / max(rx, 1e-9) + 2.2 * now + k)
+
+    shapes: list[ViewShape] = []
+    edges = [cy + ry - (cy + ry - horizon) * k / len(sky) for k in range(len(sky) + 1)]
+    for k, color in enumerate(sky):
+        top, bottom = edges[k], edges[k + 1]
+        upper = (lambda x, t=top: t + 1.0) if k == 0 else (lambda x, t=top, r=ripple(k): t + r(x))
+        lower = (lambda x, b=bottom, r=ripple(k + 1): b + r(x)) if k < len(sky) - 1 else (lambda x, b=bottom: b)
+        shapes.append(ViewShape(_band(rx, ry, lower, upper), color))
+    if view == "stars":
+        for k in range(8):
+            x = cx + rx * (2.0 * _unit(seed, "star_x", k) - 1.0) * 0.85
+            y = cy + ry * (2.0 * _unit(seed, "star_y", k) - 1.0) * 0.85
+            size = 0.012 * (0.6 + _unit(seed, "star_size", k)) * (0.6 + 0.4 * math.sin(3.0 * now + 7.0 * k)) * rx / HALF_WIDTH
+            diamond = ((x, y + 2 * size), (x + size, y), (x, y - 2 * size), (x - size, y))
+            shapes.append(ViewShape(tuple(_inside(p, rx, ry) for p in diamond), str(spec["glints"])))
+    sun = spec["sun"]
+    if sun is not None:
+        sx, sh, sr, color = sun  # type: ignore[misc]
+        centre = (cx + float(sx) * rx, horizon + float(sh) * ry)
+        radius = float(sr) * rx
+        disc = tuple(_inside((centre[0] + radius * math.cos(a), centre[1] + radius * math.sin(a)), rx, ry)
+                     for a in (2.0 * math.pi * k / 20 for k in range(20)))
+        shapes.append(ViewShape(disc, str(color)))
+    if spec["water"] is not None:
+        shapes.append(ViewShape(_band(rx, ry, lambda x: -10.0, lambda x: horizon), str(spec["water"])))
+        sun_x = cx + float(sun[0]) * rx if sun is not None else cx  # type: ignore[index]
+        for k in range(4):
+            y = horizon - ry * (0.08 + 0.12 * k)
+            half = rx * (0.16 - 0.025 * k) * (0.7 + 0.3 * math.sin(4.0 * now + 1.7 * k))
+            x = sun_x + 0.03 * rx * math.sin(2.6 * now + k)
+            dash = ((x - half, y), (x + half, y), (x + half, y - 0.012 * ry), (x - half, y - 0.012 * ry))
+            shapes.append(ViewShape(tuple(_inside(p, rx, ry) for p in dash), str(spec["glints"]), 0.55 + 0.35 * math.sin(5.0 * now + 2.0 * k) ** 2))
+    land: tuple[str, ...] = spec["land"]  # type: ignore[assignment]
+    if view == "coast" and land:
+        cliff = lambda x: horizon + ry * 0.62 * max(0.0, 1.0 - ((x - (cx - 0.95 * rx)) / (0.75 * rx)) ** 2)  # noqa: E731
+        far = lambda x: horizon + ry * 0.16 * max(0.0, 1.0 - ((x - (cx + 0.85 * rx)) / (0.45 * rx)) ** 2)  # noqa: E731
+        shapes.append(ViewShape(_band(rx, ry, lambda x: horizon - 1e-4, far), land[1]))
+        shapes.append(ViewShape(_band(rx, ry, lambda x: -10.0, cliff), land[0]))
+    elif land:
+        back = lambda x: horizon + ry * 0.12 * math.sin(2.2 * (x - cx) / max(rx, 1e-9) + 0.6)  # noqa: E731
+        front = lambda x: horizon - ry * 0.3 + ry * 0.1 * math.sin(3.1 * (x - cx) / max(rx, 1e-9) + 2.0)  # noqa: E731
+        shapes.append(ViewShape(_band(rx, ry, lambda x: -10.0, back), land[1]))
+        shapes.append(ViewShape(_band(rx, ry, lambda x: -10.0, front), land[0]))
+    return shapes[:VIEW_SHAPES]
+
+
 __all__ = [
+    "PORTAL_VIEWS",
+    "VIEW_SHAPES",
+    "ViewShape",
+    "portal_view",
     "CENTRE",
     "CLOSE_SECONDS",
     "CRACKLE_RATE",

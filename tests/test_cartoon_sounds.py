@@ -105,7 +105,7 @@ def test_each_set_bed_is_a_seeded_seamless_loop_at_its_level(bed: str, level: fl
 
 
 def test_the_beds_sound_like_what_they_are() -> None:
-    birds, city, room, crickets = (ambience.BEDS[b].loop()[:, 0] for b in SET_BEDS)
+    birds, city, room, crickets = (ambience.BEDS[b].loop()[:, 0] for b in SET_BEDS[:4])   # hum: tests/test_story_fx.py (Step 246)
     assert band_share(birds, 1800, 7000) > 0.8   # the songs, high
     assert band_share(city, 20, 1200) > 0.8      # traffic and a murmur, low
     assert band_share(room, 20, 500) > 0.6       # a soft low air (and a faint hiss)

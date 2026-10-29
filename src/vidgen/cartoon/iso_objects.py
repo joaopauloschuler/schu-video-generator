@@ -29,6 +29,8 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "table": ("secondary", "secondary"), "chair": ("accent", "accent"), "bed": ("primary", "#F4F6FA"),
     "shelf": ("secondary", "accent"), "sofa": ("primary", "highlight"), "plant": ("tertiary", "accent"),
     "rug": ("accent", "highlight"),
+    "console": ("#8A93A3", "#5FD8FF"), "server_rack": ("#3A3F4B", "#48E07A"), "projector_pad": ("#5A6272", "#5FD8FF"),
+    "whiteboard": ("#B9BFC9", "#3B6FB6"), "flower_arch": ("#F2A7C3", "#FFFFFF"), "chess_table": ("#9C6B47", "#2B2F3A"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -431,10 +433,153 @@ def _rug(f: _Frame, look: ObjectLook) -> list[Shape]:
             Disc(f.p((a0 + a1) / 2, (b0 + b1) / 2, z), min(a1 - a0, b1 - b0) * 0.2, look.main, False)]
 
 
+# ----- a lab and a memory's props (DESIGN.md §100.11) -------------------------------------------------
+
+#: Dark casings (a monitor's frame, a rack's front), a screen's lines and a lab light's off look.
+CASING = "#2B2F3A"
+SCREEN_LINE = "#E8FBFF"
+LED_OFF = "#3D4350"
+#: The screens' faces as drawn on a console: (a from, a to) of each monitor, as shares of the width.
+CONSOLE_SCREENS = ((0.06, 0.34), (0.37, 0.63), (0.66, 0.94))
+#: A server rack's units: how many, and the lights on each (a across the front).
+RACK_UNITS = 6
+RACK_LIGHTS = (0.22, 0.32, 0.42)
+
+
+def _glow_rect(f: _Frame, a0: float, a1: float, b: float, z0: float, z1: float, color: str) -> Poly:
+    """A lit rectangle on a face at ``b`` (a screen): not dimmed by the stage's light."""
+    return f.poly([(a0, b, z0), (a1, b, z0), (a1, b, z1), (a0, b, z1)], color, False, True)
+
+
+def _console(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A lab desk: two cabinets under a long top, a keyboard, and a row of monitors along its
+    back whose screens glow in the detail colour with lines of text (lit at night too)."""
+    w = f.width
+    steel = look.main
+    shapes = f.box(0.08, 0.3, 0.0, 0.62, 0.92, 0.78, shade(steel, 0.1)) + f.box(w - 0.62, 0.3, 0.0, w - 0.08, 0.92, 0.78, shade(steel, 0.1))
+    shapes += f.box(0.04, 0.22, 0.78, w - 0.04, 0.98, 0.86, steel)
+    for share0, share1 in CONSOLE_SCREENS:
+        a0, a1 = share0 * w, share1 * w
+        shapes += f.box(a0, 0.28, 0.86, a1, 0.36, 1.78, CASING)
+        shapes.append(_glow_rect(f, a0 + 0.05, a1 - 0.05, 0.36, 0.93, 1.71, look.detail))
+        for k, z in enumerate((1.6, 1.48, 1.36, 1.24, 1.12)):
+            reach = a0 + 0.1 + (a1 - a0 - 0.2) * (0.9 - 0.17 * ((k * 3 + round(share0 * 10)) % 4))
+            shapes.append(_glow_rect(f, a0 + 0.1, reach, 0.361, z, z + 0.035, SCREEN_LINE))
+    shapes += f.box(0.3 * w, 0.55, 0.86, 0.7 * w, 0.8, 0.9, CASING)
+    return shapes
+
+
+def _server_rack(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A tall dark cabinet of server units, each with a vent and a row of small lights (dark in
+    the picture; the stage blinks them, :func:`object_lights`)."""
+    a0, a1, b0, b1 = 0.1, f.width - 0.1, 0.12, f.depth - 0.12
+    top = 2.6
+    shapes = f.box(a0, b0, 0.0, a1, b1, top, look.main)
+    shapes.append(f.poly([(a0 + 0.06, b1, 0.12), (a1 - 0.06, b1, 0.12), (a1 - 0.06, b1, top - 0.1), (a0 + 0.06, b1, top - 0.1)], shade(look.main, 0.35), False))
+    unit = (top - 0.3) / RACK_UNITS
+    for k in range(RACK_UNITS):
+        z = 0.16 + k * unit
+        shapes.append(f.poly([(a0 + 0.1, b1, z), (a1 - 0.1, b1, z), (a1 - 0.1, b1, z + unit - 0.06), (a0 + 0.1, b1, z + unit - 0.06)], shade(look.main, 0.15)))
+        for g in range(3):
+            shapes.append(Line((f.p(a1 - 0.45 + g * 0.1, b1, z + 0.08), f.p(a1 - 0.45 + g * 0.1, b1, z + unit - 0.14)), shade(look.main, 0.5), 0.6))
+        for a in RACK_LIGHTS:
+            shapes.append(Disc(f.p(a0 + a * (a1 - a0), b1, z + unit / 2 - 0.03), 0.035, LED_OFF, False, holds_snow=False))
+    return shapes
+
+
+def _projector_pad(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A round, low platform with a glowing ring and an emitter in its middle (a hologram stands
+    on it)."""
+    x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+    z = f.base
+    radius = min(f.width, f.depth) * 0.45
+    return [Upright(x, y, z, z + 0.12, radius, look.main), Disc((x, y, z + 0.121), radius * 0.86, look.detail, False, glow=True, holds_snow=False),
+            Disc((x, y, z + 0.122), radius * 0.74, shade(look.main, 0.25), False, holds_snow=False),
+            Disc((x, y, z + 0.123), radius * 0.18, mix(look.detail, "#FFFFFF", 0.5), False, glow=True, holds_snow=False)]
+
+
+def _whiteboard(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A whiteboard on two legs with a tray, scribbled with a diagram in the detail colour."""
+    w = f.width
+    b = f.depth / 2
+    shapes: list[Shape] = []
+    for a in (0.2, w - 0.2):
+        shapes += f.box(a - 0.04, b - 0.04, 0.0, a + 0.04, b + 0.04, 2.1, shade(look.main, 0.3))
+    shapes += f.box(0.12, b - 0.03, 0.75, w - 0.12, b + 0.03, 2.1, shade(look.main, 0.1))
+    face = b + 0.031
+    shapes.append(f.poly([(0.16, face, 0.79), (w - 0.16, face, 0.79), (w - 0.16, face, 2.06), (0.16, face, 2.06)], "#F7F8FA", False))
+    shapes += f.box(0.2, b, 0.72, w - 0.2, b + 0.12, 0.76, shade(look.main, 0.2))
+    ink = look.detail
+    shapes.append(Line((f.p(0.35, face, 1.25), f.p(0.6, face, 1.7), f.p(0.85, face, 1.35), f.p(1.1, face, 1.85)), ink, 1.2))
+    for k, z in enumerate((1.9, 1.7, 1.5, 1.3, 1.1)):
+        shapes.append(Line((f.p(w * 0.58, face, z), f.p(w * (0.88 - 0.05 * (k % 3)), face, z)), shade(ink, 0.2), 0.9))
+    shapes.append(Line((f.p(0.32, face, 0.95), f.p(w * 0.5, face, 0.95)), "#E2574C", 1.0))
+    return shapes
+
+
+def _flower_arch(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """An arch of flowers across its width (a wedding, a garden gate): two posts wound with
+    leaves and a curved top, flowers in the main and detail colours along it."""
+    w = f.width
+    b = f.depth / 2
+    shapes: list[Shape] = []
+    leaves = "#5BA35B"
+    top = 2.6
+    for a in (0.15, w - 0.15):
+        shapes.append(Upright(*f.p(a, b, 0.0)[:2], f.base, f.base + top, 0.07, "#F4F6FA"))
+    curve = [(0.15 + (w - 0.3) * t, b, top + 0.55 * math.sin(math.pi * t)) for t in [k / 12 for k in range(13)]]
+    shapes.append(Line(tuple(f.p(*q) for q in curve), "#F4F6FA", 3.0))
+    spots = [(0.15, b, z) for z in (0.6, 1.1, 1.6, 2.1)] + [(w - 0.15, b, z) for z in (0.6, 1.1, 1.6, 2.1)] + curve[1:-1:2] + [curve[0], curve[-1]]
+    centres = tuple(f.p(*q) for q in spots)
+    shapes.append(Blobs(centres, (0.17,) * len(centres), leaves))
+    for k, centre in enumerate(centres):
+        shapes.append(Blobs(((centre[0] + 0.05, centre[1] - 0.05, centre[2] + 0.05),), (0.09,), look.main if k % 2 else look.detail, False))
+    return shapes
+
+
+def _chess_table(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A small table with a board of squares on top and a few round pieces on it."""
+    a0, a1, b0, b1 = 0.15, f.width - 0.15, 0.15, f.depth - 0.15
+    back, front = _legs(f, a0 + 0.06, b0 + 0.06, a1 - 0.06, b1 - 0.06, 0.8, shade(WOOD, 0.1), 0.08)
+    shapes = back + front + f.box(a0, b0, 0.8, a1, b1, 0.86, look.main)
+    n = 6
+    for i in range(n):
+        for j in range(n):
+            if (i + j) % 2:
+                continue
+            u0, u1 = a0 + 0.05 + (a1 - a0 - 0.1) * i / n, a0 + 0.05 + (a1 - a0 - 0.1) * (i + 1) / n
+            v0, v1 = b0 + 0.05 + (b1 - b0 - 0.1) * j / n, b0 + 0.05 + (b1 - b0 - 0.1) * (j + 1) / n
+            shapes.append(f.poly([(u0, v0, 0.861), (u1, v0, 0.861), (u1, v1, 0.861), (u0, v1, 0.861)], look.detail, False))
+    for k, (u, v) in enumerate(((0.3, 0.3), (0.55, 0.35), (0.7, 0.65), (0.4, 0.7))):
+        centre = f.p(a0 + (a1 - a0) * u, b0 + (b1 - b0) * v, 0.87)
+        shapes.append(Upright(centre[0], centre[1], centre[2], centre[2] + 0.1, 0.05, "#F4F6FA" if k % 2 else "#C8473E"))
+    return shapes
+
+
 _DRAWINGS: dict[str, Callable[[_Frame, ObjectLook], list[Shape]]] = {
     "tree": _tree, "pine": _pine, "bush": _bush, "rock": _rock, "bench": _bench, "well": _well, "sign": _sign, "bridge": _bridge, "table": _table, "chair": _chair, "bed": _bed,
     "shelf": _shelf, "sofa": _sofa, "plant": _plant, "rug": _rug,
+    "console": _console, "server_rack": _server_rack, "projector_pad": _projector_pad, "whiteboard": _whiteboard,
+    "flower_arch": _flower_arch, "chess_table": _chess_table,
 }
+
+
+#: The kinds of objects with small lights the stage blinks (DESIGN.md §100.11).
+LIT_OBJECTS = ("server_rack", "console")
+
+
+def object_lights(item: IsoObject, base: float) -> list[Point3]:
+    """The small lights of ``item`` the stage blinks (world points, tile units): a server rack's
+    lights on each unit; a console's lights on its cabinets; none for other objects."""
+    f = _Frame(item, base)
+    if item.kind == "server_rack":
+        a0, a1, b1 = 0.1, f.width - 0.1, f.depth - 0.12
+        unit = (2.6 - 0.3) / RACK_UNITS
+        return [f.p(a0 + a * (a1 - a0), b1 + 0.002, 0.16 + k * unit + unit / 2 - 0.03) for k in range(RACK_UNITS) for a in RACK_LIGHTS]
+    if item.kind == "console":
+        w = f.width
+        return [f.p(a, 0.921, z) for a in (0.2, 0.3, w - 0.5, w - 0.4) for z in (0.6,)]
+    return []
 
 
 #: The radius (tile units) of the soft shadow under the objects that cast a round one.
@@ -472,4 +617,4 @@ def object_box(item: IsoObject, base: float) -> Box3:
     return Box3(item.column, item.row, base, item.column + item.width, item.row + item.depth, base + item.height)
 
 
-__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "OBJECT_COLORS", "ObjectLook", "object_box", "object_shapes"]
+__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "OBJECT_COLORS", "ObjectLook", "object_box", "object_lights", "object_shapes"]

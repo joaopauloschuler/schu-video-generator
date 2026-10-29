@@ -17,8 +17,8 @@ from vidgen import ambience, cli, listen, music, sfx
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs" / "music"
 #: What the committed page may weigh (page + MP3s + PNGs), see HANDOFF.md Step 183 (5.5 MB then;
-#: 6.3 MB with the two score beds of Step 190).
-BUDGET = 6_500_000
+#: 6.3 MB with the two score beds of Step 190; 6.6 MB with the story sounds and beds of Step 246).
+BUDGET = 6_800_000
 
 
 def test_clips_start_where_the_bed_shows_itself() -> None:

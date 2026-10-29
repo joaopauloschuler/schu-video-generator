@@ -466,7 +466,8 @@ def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
     ``speaking`` and, when they apply, ``face`` (its head's box), ``viseme`` (what its lip sync
     shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way), ``walked_in`` and
     ``holding`` (hand -> prop name, §69.27), ``sitting_on`` / ``leaning_on`` (a prop name, §69.28),
-    ``riding`` (the vehicle it rides, §69.52),
+    ``riding`` (the vehicle it rides, §69.52), ``hand_in_hand`` (whose hand it holds, §100.10),
+    ``hidden`` (a shot with ``clear`` hides it, §100.6),
     ``depth`` (how far back it stands on a stage, when not at the front, §69.44)."""
     keys: dict[str, Any] = {"facing": figure.facing, "speaking": figure.lip_sync_track is not None}
     depth = float(getattr(figure, "stage_depth", 0.0))
@@ -478,7 +479,8 @@ def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
             keys["face"] = [_r(min(b[0] for b in boxes)), _r(min(b[1] for b in boxes)), _r(max(b[2] for b in boxes)), _r(max(b[3] for b in boxes))]
     optional = {"viseme": figure.spoken_viseme, "looked_at": figure.looked_at, "passage": figure.passage, "walked_in": figure.walked_in,
                 "holding": dict(figure.holding) or None, "sitting_on": figure.sitting_on, "leaning_on": figure.leaning_on,
-                "riding": figure.riding}
+                "riding": figure.riding, "hand_in_hand": getattr(figure, "hand_in_hand", None),
+                "hidden": True if getattr(figure, "hidden_by_shot", False) else None}
     keys.update({key: value for key, value in optional.items() if value is not None})
     if getattr(figure, "iso_feet", None) is not None:   # on an iso place (DESIGN.md §89.11)
         keys.update(_iso_character_keys(walk, figure))

@@ -101,6 +101,13 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "sofa": ObjectKind(2, 1, 1.15, top=0.55),
     "plant": ObjectKind(1, 1, 1.5),
     "rug": ObjectKind(2, 2, 0.03, walkable=True, deck=0.02),
+    # a lab and a memory's props (DESIGN.md §100.11)
+    "console": ObjectKind(2, 1, 1.8, top=0.86),
+    "server_rack": ObjectKind(1, 1, 2.6),
+    "projector_pad": ObjectKind(1, 1, 0.13, walkable=True, deck=0.12),
+    "whiteboard": ObjectKind(2, 1, 2.1),
+    "flower_arch": ObjectKind(2, 1, 3.2),
+    "chess_table": ObjectKind(1, 1, 0.96, top=0.86),
 }
 
 

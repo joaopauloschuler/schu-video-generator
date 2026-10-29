@@ -120,7 +120,7 @@ def test_the_shot_key_in_words_or_as_a_mapping() -> None:
     assert ShotConfig.model_validate({"kind": "closeup", "of": "kit", "move": True}).of == ["kit"]
     assert BeatConfig(id="b1", text="Hi.", shot="wide").shot.action().shorthand() == {"action": "shot", "kind": "wide"}
     assert ShotConfig.model_validate("closeup kit").action().shorthand() == {"shot": ["kit"], "kind": "closeup"}
-    for bad, message in [("closeup", "names 1 character"), ("wide kit", "names no character"), ("two_shot kit kit", "twice"),
+    for bad, message in [("closeup", "names 1 to 3 characters"), ("over_shoulder a b c", "names 1 to 2"), ("wide kit", "names no character"), ("two_shot kit kit", "twice"),
                          ({"kind": "medium", "of": "kit", "run_time": 2}, "move: true"), ("zoomed kit", "kind")]:
         with pytest.raises(ValidationError, match=message):
             ShotConfig.model_validate(bad)

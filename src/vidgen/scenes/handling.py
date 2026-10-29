@@ -205,6 +205,9 @@ class _Handling(_Acting):
         if name is not None and name not in props:
             known = f"props: {', '.join(props)}" if props else "the scene has no props"
             problems.append((self.prop_option, f"'{name}' is not a prop of the scene ({known})"))
+        kinds = dict(zip(props, (p.prop for p in params.stage_props())))
+        if name is not None and kinds.get(name) in SCIFI_PROPS:   # a rift in space, a beam of light (§100.4)
+            problems.append((self.prop_option, f"'{name}' is a {kinds[name]}: it cannot be held or carried"))
         return problems
 
     def _move(self, scene: NarratedScene, prop: Prop, *, leave: float, arrive: float, to: Any,

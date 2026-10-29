@@ -609,6 +609,28 @@ class HologramConfig(_Strict):
     """The hologram's colour (a theme token or hex): light parts glow in it, dark parts (eyes, mouth, outline ink) are a deep shade of it."""
     opacity: float = Field(default=0.6, ge=0.2, le=1.0)
     """How solid the figure is (0.2-1): 1 hides what stands behind it, 0.2 is a faint ghost."""
+    flicker: bool = True
+    """Flicker now and then (short dips of its light, a few seconds apart); false: steady."""
+
+
+class IridescentConfig(_Strict):
+    """``iridescent:`` of a character as a mapping (DESIGN.md §100.9)."""
+
+    seconds: float = Field(default=12.0, ge=2.0, le=120.0)
+    """Seconds for its colours to go once round the rainbow (slow: 8-20)."""
+    strength: float = Field(default=0.8, ge=0.1, le=1.0)
+    """How much of the shifting colour shows over the colours it was drawn with (0.1-1)."""
+
+
+class AfterimageConfig(_Strict):
+    """``afterimages:`` of a character as a mapping (DESIGN.md §100.9)."""
+
+    spacing: float = Field(default=0.12, ge=0.05, le=1.0)
+    """Seconds between the copies it leaves while it moves."""
+    life: float = Field(default=0.6, ge=0.2, le=3.0)
+    """Seconds each copy takes to fade away."""
+    opacity: float = Field(default=0.35, ge=0.05, le=0.9)
+    """How strong a new copy is (a share of the figure's opacity)."""
 
 
 class CharacterEntry(_Strict):
@@ -632,13 +654,29 @@ class CharacterEntry(_Strict):
     cartoon_motion: MotionSetting | None = None
     """Animation principles for this character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; wins over the scene's and the video's; default lively."""
     hologram: Union[bool, HologramConfig] = False
-    """Draw the character as a hologram: true or {color, opacity}; a translucent figure in one glowing colour with bright edges, never darkened by the stage's light."""
+    """Draw the character as a hologram: true or {color, opacity, flicker}; a translucent figure in one glowing colour with bright edges, never darkened by the stage's light, flickering now and then."""
+    iridescent: Union[bool, IridescentConfig] = False
+    """Its skin and clothes shift colours like oil on water, slowly (bands of hue running up the figure): true or {seconds, strength}; on a stage."""
+    afterimages: Union[bool, AfterimageConfig] = False
+    """While it moves it leaves faint copies of itself that fade (a shimmering trail): true or {spacing, life, opacity}; on a stage."""
 
     def hologram_look(self) -> HologramConfig | None:
         """Its hologram settings (``None``: drawn as usual)."""
         if self.hologram is False:
             return None
         return HologramConfig() if self.hologram is True else self.hologram
+
+    def iridescent_look(self) -> IridescentConfig | None:
+        """Its iridescence (``None``: none)."""
+        if self.iridescent is False:
+            return None
+        return IridescentConfig() if self.iridescent is True else self.iridescent
+
+    def afterimage_look(self) -> AfterimageConfig | None:
+        """Its afterimages (``None``: none)."""
+        if self.afterimages is False:
+            return None
+        return AfterimageConfig() if self.afterimages is True else self.afterimages
 
 
 #: A host's height as a fraction of the frame's shorter side (DESIGN.md §71).
@@ -1971,7 +2009,7 @@ StingSetting = Annotated[Union[StingKind, StingCue], AfterValidator(_sting)]
 ShotKind = Literal["wide", "two_shot", "medium", "over_shoulder", "closeup"]
 #: How many characters each framing names: (fewest, most); fewer than the most are filled in
 #: when the shot is framed (:func:`vidgen.cartoon.shots.shot_figures`).
-SHOT_NAMES: dict[str, tuple[int, int]] = {"wide": (0, 0), "two_shot": (0, 2), "medium": (1, 1), "over_shoulder": (1, 2), "closeup": (1, 1)}
+SHOT_NAMES: dict[str, tuple[int, int]] = {"wide": (0, 0), "two_shot": (0, 2), "medium": (1, 3), "over_shoulder": (1, 2), "closeup": (1, 3)}
 
 
 def _name_or_names_schema(schema: dict[str, Any]) -> None:
@@ -1989,11 +2027,13 @@ class ShotConfig(_Strict):
     kind: ShotKind
     """wide (everyone, no zoom), two_shot (two characters, whole), medium (one from the hips up), over_shoulder (one seen past another, who stands cut by the frame's edge) or closeup (head and shoulders)."""
     of: list[Identifier] = Field(default_factory=list, json_schema_extra=_name_or_names_schema)
-    """The characters it frames: none for wide; two_shot two (default: the speaker and the one nearest it); medium and closeup one; over_shoulder the one seen, then the near one (default: the one it looks at, else the nearest)."""
+    """The characters it frames: none for wide; two_shot two (default: the speaker and the one nearest it); medium and closeup one, or two or three framed together (all their faces, with room above the highest head); over_shoulder the one seen, then the near one (default: the one it looks at, else the nearest)."""
     move: bool = False
     """true: the camera eases to the framing (and back after the beat) instead of cutting."""
     run_time: PositiveFloat | None = None
     """Seconds of the move with move: true (default 1.0)."""
+    clear: bool = False
+    """true: the other characters are hidden for this shot (none standing behind or beside the framed ones clutters it); they are back with the next beat's view."""
 
     @model_validator(mode="before")
     @classmethod
@@ -2027,6 +2067,8 @@ class ShotConfig(_Strict):
             data["move"] = True
         if self.run_time is not None:
             data["run_time"] = self.run_time
+        if self.clear:
+            data["clear"] = True
         return ActionConfig.model_validate(data)
 
 

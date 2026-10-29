@@ -705,6 +705,102 @@ def _sigh(s: Synth) -> np.ndarray:
     return (body + 0.25 * _normalized(hum)) * _bump(s.u, 0.2)
 
 
+# ----- story sounds (DESIGN.md §100.8): a lab, an alarm, a rift ------------------------------------------
+
+#: The alarm's two tones (Hz) and how long each sounds (s): whole cycles in each half, so a loop of
+#: whole periods repeats without a seam (the ambience's ``alarm`` bed).
+SIREN_TONES = (960.0, 780.0)
+SIREN_HALF = 0.45
+
+
+def siren(n: int, ratio: float = 1.0, brightness: float = 0.5, *, circular: bool = False) -> np.ndarray:
+    """A two-tone alarm ('hee-haw') of ``n`` samples: :data:`SIREN_TONES` (times ``ratio``)
+    alternating every :data:`SIREN_HALF` seconds, a buzzy tone (7 harmonics) with soft 15 ms
+    edges, low-passed at 4.5 kHz (``circular``: around a circle, for a loop of whole periods)."""
+    t = np.arange(n) / RATE
+    half = (t // SIREN_HALF).astype(int) % 2
+    freq = np.where(half == 0, SIREN_TONES[0], SIREN_TONES[1]) * ratio
+    tone = _harmonic_tone(_tone(freq, n), 0.45 + 0.3 * brightness, 7, 1.2)
+    into = (t % SIREN_HALF) / SIREN_HALF
+    edge = 0.015 / SIREN_HALF
+    gate = np.clip(into / edge, 0.0, 1.0) * np.clip((1.0 - into) / edge, 0.0, 1.0)
+    raw = tone * (0.25 + 0.75 * gate)
+    if circular:
+        return np.fft.irfft(np.fft.rfft(raw) * _lowpass(np.fft.rfftfreq(n, 1 / RATE), 4500 * ratio, 2), n)
+    return _filtered(raw, lambda f: _lowpass(f, 4500 * ratio, 2))
+
+
+def _alarm(s: Synth) -> np.ndarray:
+    # an alarm siren: two tones (~960 and ~780 Hz) alternating every 0.45 s, buzzy, held for the length
+    return siren(s.n, s.ratio, s.intensity) * _fades(s.n, 0.02, 0.05)
+
+
+def _crackle(s: Synth) -> np.ndarray:
+    # crackling energy: bursts of sharp electric snaps (impulses ringing a few ms, bright around
+    # 3-5 kHz) in seeded clusters, over a faint buzzing arc (a 100 Hz buzz that flares with them)
+    n = s.n
+    snaps = np.zeros(n)
+    rate = 250 + 250 * s.intensity
+    count = max(int(rate * s.duration), 1)
+    centres = s.rng.uniform(0.0, s.duration, max(int(5 * s.duration), 1))
+    for _ in range(count):
+        at = float(np.clip(s.rng.choice(centres) + s.rng.normal(0, 0.08), 0.0, s.duration - 0.005))
+        snaps[int(at * RATE)] += s.rng.choice((-1.0, 1.0)) * s.rng.uniform(0.3, 1.0)
+    ring = np.exp(-np.arange(int(0.006 * RATE)) / (0.0015 * RATE))
+    bright = _filtered(np.convolve(snaps, ring)[:n], lambda f: _band(f, 3800 * s.ratio, 0.8) + 0.4 * _band(f, 1500 * s.ratio, 0.6))
+    flare = _filtered(np.abs(snaps), lambda f: _lowpass(f, 12.0, 1))
+    flare /= max(float(np.max(flare)), 1e-9)
+    buzz = _harmonic_tone(_tone(100 * s.ratio, n), 0.7, 12, 0.8) * (0.15 + flare)
+    return _normalized(bright) + 0.12 * _normalized(buzz) * _fades(n, 0.01, 0.05)
+
+
+def _hum(s: Synth) -> np.ndarray:
+    # an electronic hum: a soft 110 Hz tone and its harmonics, a second voice a hair sharp beating
+    # slowly against it, a faint high whine (~3.5 kHz) and air; fading in and out
+    n = s.n
+    tone = _harmonic_tone(_tone(110 * s.ratio, n), 0.55, 8, 1.1) + 0.6 * _harmonic_tone(_tone(110.125 * s.ratio, n), 0.5, 6, 1.2)
+    whine = 0.04 * (0.5 + s.intensity) * np.sin(_tone(3520 * s.ratio, n))
+    air = 0.08 * _normalized(_filtered(s.rng.standard_normal(n), lambda f: _band(f, 900 * s.ratio, 1.2)))
+    return (_normalized(tone) + whine + air) * _fades(n, min(0.4, s.duration / 4), min(0.6, s.duration / 4))
+
+
+#: The crystal drone's partials: (Hz, amplitude, swell cycles over the sound) - a high, glassy
+#: chord (C6 G6 C7 E7 G7) that swells and fades in turn.
+DRONE_PARTIALS = ((1046.5, 1.0, 1.0), (1567.98, 0.7, 1.5), (2093.0, 0.55, 2.0), (2637.02, 0.35, 2.5), (3135.96, 0.25, 3.0))
+
+
+def _drone(s: Synth) -> np.ndarray:
+    # a crystalline singing drone over a deep rumble: glassy high partials (C6 G6 C7 E7 G7) with a
+    # slow shimmer, each swelling in its own time, above a rumble (noise under ~90 Hz and a 55 Hz hum)
+    t, u, n = s.t, s.u, s.n
+    glass = np.zeros(n)
+    for k, (freq, amp, cycles) in enumerate(DRONE_PARTIALS):
+        shimmer = 1 + 0.004 * np.sin(2 * np.pi * (4.5 + 0.7 * k) * t)
+        swell = 0.55 + 0.45 * np.sin(2 * np.pi * cycles * u + k)
+        glass += amp * swell * np.sin(_tone(freq * s.ratio * shimmer, n))
+    rumble = _normalized(_filtered(s.rng.standard_normal(n), lambda f: _lowpass(f, 90 * s.ratio, 2) * _highpass(f, 28.0, 2)))
+    low = np.sin(_tone(55 * s.ratio, n))
+    body = (0.55 + 0.25 * s.intensity) * _normalized(glass) + 0.6 * rumble + 0.35 * low
+    return body * _fades(n, min(1.2, s.duration / 3), min(1.5, s.duration / 3))
+
+
+def _slam(s: Synth) -> np.ndarray:
+    # a steel shutter slamming down: a heavy low impact (~75 Hz falling), a metallic clang of
+    # inharmonic partials ringing ~0.3 s, and a short rattle of slats (bright noise bursts)
+    t, n = s.t, s.n
+    scale = s.duration / 0.8
+    impact = np.sin(_tone(75 * s.ratio * (1 + 0.8 * np.exp(-t / 0.02)), n)) * _decay(t, 0.001, 0.09 * scale)
+    clang = _bell(n, 310 * s.ratio, s.intensity, 0.32 * scale, ((1.0, 1.0, 1.0), (2.32, 0.6, 0.7), (4.16, 0.4, 0.5), (6.39, 0.25, 0.35)))
+    rattle = np.zeros(n)
+    for k in range(6):
+        a = int((0.03 + 0.045 * k) * scale * RATE)
+        if a >= n:
+            break
+        m = n - a
+        rattle[a:] += (0.8 - 0.1 * k) * _normalized(_filtered(s.rng.standard_normal(m), lambda f: _band(f, 2600 * s.ratio, 0.7))) * _decay(np.arange(m) / RATE, 0.0005, 0.012)
+    return 1.1 * impact + 0.55 * _normalized(clang) + (0.2 + 0.25 * s.intensity) * rattle
+
+
 @dataclass(frozen=True)
 class BuiltinSound:
     """A built-in sound: its generator, default ``duration`` and allowed range (s), and a precise
@@ -957,6 +1053,36 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "semitones from B-flat3 to G3, each opening and closing like a wah mute; the last "
             "one long, sagging and wobbling.",
             "a failure or a let-down, played for laughs (beat sting: sad)",
+        ),
+        BuiltinSound(
+            "alarm", _alarm, 2.7, (0.9, 12.0),
+            "An alarm siren, 'hee-haw': two buzzy tones, ~960 and ~780 Hz, alternating every 0.45 s "
+            "for the whole length.",
+            "an alarm going off (a stage's alarm action plays it as a bed while it runs: foley), a warning",
+        ),
+        BuiltinSound(
+            "crackle", _crackle, 1.5, (0.3, 8.0),
+            "Crackling energy: clusters of sharp electric snaps (bright, around 3-5 kHz) over a faint "
+            "100 Hz buzz that flares with them.",
+            "sparks, a short circuit, a rift or a force field crackling",
+        ),
+        BuiltinSound(
+            "hum", _hum, 3.0, (0.5, 15.0),
+            "A soft electronic hum: a 110 Hz tone with its harmonics and a second voice beating slowly "
+            "against it, a faint ~3.5 kHz whine and air, fading in and out.",
+            "a machine or a screen powering up, a lab or a spaceship (the hum bed holds it under a scene)",
+        ),
+        BuiltinSound(
+            "drone", _drone, 6.0, (1.5, 20.0),
+            "A crystalline singing drone: a high glassy chord (C6 G6 C7 E7 G7) shimmering slowly, each "
+            "note swelling in turn, over a deep rumble (noise under ~90 Hz and a 55 Hz hum); slow fades.",
+            "awe, a magical or otherworldly place, a doorway to another world",
+        ),
+        BuiltinSound(
+            "slam", _slam, 0.8, (0.3, 2.0),
+            "A steel shutter slamming down: a heavy low impact (~75 Hz falling), a metallic clang ringing "
+            "~0.3 s and a short rattle of slats.",
+            "shutters or a metal door slamming (a stage's shutters action plays it: foley), a heavy impact",
         ),
     )
 }

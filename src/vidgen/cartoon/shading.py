@@ -19,6 +19,7 @@ import numpy as np
 from manim import Ellipse, Mobject, VGroup, VMobject
 from pydantic import BaseModel, ConfigDict, Field
 
+from vidgen.cartoon.alarm import AlarmSpan, alarm_changing, alarm_grade, alarm_settled
 from vidgen.cartoon.lighting import (
     DEFAULT_STRENGTH,
     LIGHT_PRESETS,
@@ -126,6 +127,8 @@ class StageLight:
         self.changes: list[LightChange] = []
         self.strikes: list[Strike] = []
         self.storms: list[RainStorm] = []
+        #: the alarms that pulse the light (DESIGN.md §100.7)
+        self.alarms: list[AlarmSpan] = []
         self.flash_share = FLASH_SHARE
         #: how bright the lightning lights the set now (0..1)
         self.flash = 0.0
@@ -177,6 +180,8 @@ class StageLight:
         self.flash = flash_level(self.strikes_until(now), now) if (self.strikes or self.storms) and not self.flat else 0.0
         if self.flash > 0:
             grade = flash_grade(grade, self.flash, share=self.flash_share)
+        if self.alarms and not self.flat:
+            grade = alarm_grade(grade, self.alarms, now)
         if grade != self.grade:
             self.grade = grade
             for listener in self._listeners:
@@ -185,15 +190,18 @@ class StageLight:
     def changing(self, start: float, end: float) -> bool:
         """Whether the light changes (or lightning flashes) between scene times ``start`` and
         ``end``."""
-        return light_changing(self.changes, start, end) or (not self.flat and flashing(self.strikes_until(end), start, end))
+        if light_changing(self.changes, start, end):
+            return True
+        return not self.flat and (flashing(self.strikes_until(end), start, end) or alarm_changing(self.alarms, start, end))
 
     def settled(self, now: float) -> bool:
-        """Whether every change and every flash is over at scene time ``now`` (and no rain field
-        with lightning still falls)."""
+        """Whether every change, every flash and every alarm is over at scene time ``now`` (and no
+        rain field with lightning still falls)."""
         changes = all(change.end <= now and (change.seconds > 0 or change.start < now) for change in self.changes)
         if self.flat:
             return changes
-        return changes and all(s.end <= now for s in self.strikes) and all(storm.over(now) for storm in self.storms)
+        return (changes and all(s.end <= now for s in self.strikes) and all(storm.over(now) for storm in self.storms)
+                and alarm_settled(self.alarms, now))
 
 
 class StarField(VGroup):

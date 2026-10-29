@@ -319,6 +319,13 @@ from vidgen.cartoon.living import (  # noqa: E402
 )
 from vidgen.cartoon.living_drawing import LivingProp, PropGlow, PropSteam  # noqa: E402
 from vidgen.cartoon.hologram import HOLOGRAM_COLOR, apply_hologram, is_hologram, unmark_lit  # noqa: E402
+from vidgen.cartoon.alarm import ALARM_COLOR, ALARM_PERIOD, SHUTTER_CLOSE_SECONDS, AlarmSpan, alarm_grade, alarm_spans, shutter_level  # noqa: E402
+from vidgen.cartoon.apparition import MATERIALISE_SECONDS, flicker_level, iridescent_rgb, materialise_levels  # noqa: E402
+from vidgen.cartoon.figure_fx import Afterimages, FigureAlpha, HandHold, Iridescence, Materialise, figure_alpha  # noqa: E402
+from vidgen.cartoon.holo_display import DISPLAY_PATTERNS, display_frame  # noqa: E402
+from vidgen.cartoon.iso_overlays import IsoBlinkers, IsoShutters  # noqa: E402
+from vidgen.cartoon.portal import PORTAL_VIEWS, portal_view  # noqa: E402
+from vidgen.cartoon.vignette import FLASHBACK_SATURATION, FLASHBACK_STRENGTH, FLASHBACK_TINT, VIGNETTE_COLOR, VIGNETTE_OPACITY, CameraVignette, flashback_grade  # noqa: E402
 from vidgen.cartoon.nature import (  # noqa: E402
     BIRD_SPAN,
     FLOCK_COUNT,
@@ -583,8 +590,8 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
 from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
 from vidgen.world.iso_view import Box3, draw_order, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
-from vidgen.cartoon.iso_objects import OBJECT_COLORS, ObjectLook, object_box  # noqa: E402
-from vidgen.cartoon.iso_scenery import IsoColors  # noqa: E402
+from vidgen.cartoon.iso_objects import LIT_OBJECTS, OBJECT_COLORS, ObjectLook, object_box, object_lights  # noqa: E402
+from vidgen.cartoon.iso_scenery import IsoColors, window_faces  # noqa: E402
 from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view  # noqa: E402
 from vidgen.cartoon.iso_pictures import GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
@@ -1089,6 +1096,39 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "apply_hologram",
     "is_hologram",
     "unmark_lit",
+    "ALARM_COLOR",
+    "ALARM_PERIOD",
+    "SHUTTER_CLOSE_SECONDS",
+    "AlarmSpan",
+    "alarm_grade",
+    "alarm_spans",
+    "shutter_level",
+    "MATERIALISE_SECONDS",
+    "flicker_level",
+    "iridescent_rgb",
+    "materialise_levels",
+    "Afterimages",
+    "FigureAlpha",
+    "HandHold",
+    "Iridescence",
+    "Materialise",
+    "figure_alpha",
+    "DISPLAY_PATTERNS",
+    "display_frame",
+    "IsoBlinkers",
+    "IsoShutters",
+    "PORTAL_VIEWS",
+    "portal_view",
+    "CameraVignette",
+    "FLASHBACK_SATURATION",
+    "FLASHBACK_STRENGTH",
+    "FLASHBACK_TINT",
+    "VIGNETTE_COLOR",
+    "VIGNETTE_OPACITY",
+    "flashback_grade",
+    "LIT_OBJECTS",
+    "object_lights",
+    "window_faces",
     "glow_box",
     "hand_angles",
     "parse_clock_time",

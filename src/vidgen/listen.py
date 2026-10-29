@@ -152,6 +152,10 @@ SOUND_ROWS: tuple[SoundRow, ...] = (
         "sfx-rides", "Vehicles, a rocket and thunder", 9.4,
         ((0.3, "engine", 0.0, None), (2.0, "brakes", 0.0, None), (3.0, "burner", 0.0, None), (4.6, "launch", 0.0, None), (6.1, "thunder", 0.0, None)),
     ),
+    SoundRow(
+        "sfx-story", "A lab, an alarm and a rift", 10.6,
+        ((0.3, "hum", 0.0, 1.6), (2.1, "alarm", 0.0, 1.8), (4.1, "slam", 0.0, None), (5.1, "crackle", 0.0, 1.2), (6.5, "drone", 0.0, 3.8)),
+    ),
 )
 #: The ambience clip: each bed for this long (s), cross-faded into the next.
 AMBIENCE_PART_SECONDS = 3.5

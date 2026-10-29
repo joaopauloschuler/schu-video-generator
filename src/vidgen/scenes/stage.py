@@ -20,6 +20,7 @@ from vidgen.api import *
 from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image
 from .stage_iso import IsoStaging, _moving_block, iso_particle_problem
+from .stage_story import FlashbackSetting, StoryStaging
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -47,6 +48,13 @@ PORTAL_SEAL_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
     ("swoosh", {"gain": -2.0, "duration": 0.9, "pitch": -3.0}),
     ("thud", {"gain": -4.0, "duration": 0.5}),
 )
+#: A hologram display switching on (a soft hum and a chime as its panel opens) and off (a short
+#: hum down): (sound, its params, ``delay``: seconds after the switch) each (DESIGN.md §100.10).
+DISPLAY_ON_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
+    ("hum", {"gain": -10.0, "duration": 1.6}),
+    ("chime", {"gain": -14.0, "pitch": 12.0, "duration": 1.2, "delay": 0.45}),
+)
+DISPLAY_OFF_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (("hum", {"gain": -13.0, "duration": 0.7, "pitch": -5.0}),)
 #: Lightning (DESIGN.md §69.61): a bolt's core width (Manim stroke width) and how far it zigzags
 #: (frame heights); the band left free above the sky's path for the sun and moon (frame heights).
 BOLT_WIDTH = 4.0
@@ -117,7 +125,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can, flower; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; indoors: blackboard, school_desk, shelf_with_goods, till, wardrobe; on a platform level: key (opens a locked door, level.locks); vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can, flower; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; indoors: blackboard, school_desk, shelf_with_goods, till, wardrobe; on a platform level: key (opens a locked door, level.locks); vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket; science fiction: portal (a rift that opens), hologram_display (a projector with a floating panel of light)."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -143,13 +151,17 @@ class StageProp(SceneParams):
     against: Literal["wall"] | None = None
     """wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it."""
     on: bool = False
-    """A tv, a lamp, a fireplace, a kettle or a phone: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams, a phone rings and shakes; the switch_on / switch_off actions change it)."""
+    """A tv, a lamp, a fireplace, a kettle, a phone, a portal or a hologram_display: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams, a phone rings and shakes, a portal is open, a display shows its panel; the switch_on / switch_off actions change it)."""
     time: str | None = None
     """A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning."""
     speed: float | None = Field(None, gt=0.0, le=MAX_CLOCK_SPEED)
     """A clock: how fast it runs, clock seconds per second (1 real time, the default; 60 a minute a second; up to 3600); with time or speed the clock runs."""
     fruit: bool = False
     """A tree: true hangs a few fruits on it (the drop_fruit action lets one fall)."""
+    view: Literal[PORTAL_VIEWS] | None = None  # type: ignore[valid-type]
+    """A portal: the place seen through it while it is open, instead of its swirling inside: coast (a sea coast at dusk, the sun setting), stars (a night sky) or meadow (green hills by day)."""
+    pattern: Literal[DISPLAY_PATTERNS] = "fractal"  # type: ignore[valid-type]
+    """A hologram_display: what its floating panel shows while on: fractal (curves of light turning and breathing), data (bars, a wave, a gauge) or text (lines being written)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -185,6 +197,10 @@ class StageProp(SceneParams):
             parse_clock_time(self.time)
         if self.fruit and self.prop != "tree":
             raise ValueError(f"fruit is for a tree, not {self.prop or 'an svg prop'}")
+        if self.view is not None and self.prop != "portal":
+            raise ValueError(f"view is for a portal (the place seen through it), not {self.prop or 'an svg prop'}")
+        if "pattern" in self.model_fields_set and self.prop != "hologram_display":
+            raise ValueError(f"pattern is for a hologram_display, not {self.prop or 'an svg prop'}")
         return self
 
     def runs(self) -> bool:
@@ -549,7 +565,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -611,6 +627,10 @@ class StageIso(SceneParams):
     """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
     name_tags: bool = True
     """While a character speaks and is small on screen (a wide view), a tag with its name over its head shows who speaks (not with a speech bubble); false: none."""
+    wide: Literal["auto", "fill"] | Annotated[float, Field(ge=1.0, le=2.5)] = "auto"
+    """How the wide (establishing) view frames the place: auto (the whole room in a landscape frame; outdoors the place fills the frame, its tips cut); fill (a room fills the frame too: its spots, objects and characters kept, the walls' far corners may be cut); or a number from 1 to 2.5: that many times closer than the whole place (kept on the characters)."""
+    shutters: bool = False
+    """An indoor place: true starts with steel shutters down over its windows (the shutters action opens and closes them)."""
 
     @model_validator(mode="after")
     def _parses(self) -> "StageIso":
@@ -665,7 +685,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(IsoStaging, NarratedScene):
+class Stage(IsoStaging, StoryStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -789,8 +809,8 @@ class Stage(IsoStaging, NarratedScene):
         """false: the characters do not breathe, sway or blink in this scene."""
         foley: bool | None = None
         """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols; on a level also landings, coins and stars picked up, a key unlocking a door, a blocker stepping aside), and the ambience: false for none in this scene; default: the video's foley (on)."""
-        ambience: bool | Literal["auto", "birdsong", "city", "room_tone", "crickets"] | list[Literal["birdsong", "city", "room_tone", "crickets"]] | None = None
-        """A sound bed under the whole scene while foley is on: birdsong, city (street sounds), room_tone, crickets, or a list of them; auto (or true): chosen from the set: room_tone in a room (an indoor iso place too), birdsong outdoors while the light is day or morning and it does not rain, on an iso place outdoors crickets while the light is sunset or night; false: none; default: the video's ambience (auto). Rain and a burning fire play their own beds whatever this says."""
+        ambience: bool | Literal["auto", "birdsong", "city", "room_tone", "crickets", "hum"] | list[Literal["birdsong", "city", "room_tone", "crickets", "hum"]] | None = None
+        """A sound bed under the whole scene while foley is on: birdsong, city (street sounds), room_tone, crickets, hum (an electronic hum: a lab, a ship), or a list of them; auto (or true): chosen from the set: room_tone in a room (an indoor iso place too), birdsong outdoors while the light is day or morning and it does not rain, on an iso place outdoors crickets while the light is sunset or night; false: none; default: the video's ambience (auto). Rain and a burning fire play their own beds whatever this says."""
         auto_direct: AutoDirectSetting | None = None
         """Automatic directing in this scene: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up (true, false or {looks, reactions, gestures, closeups, effects}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
         cartoon_motion: MotionSetting | None = None
@@ -809,6 +829,8 @@ class Stage(IsoStaging, NarratedScene):
         """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against, on, time, speed, fruit}."""
         particles: list[StageParticles] = []
         """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles, lightning, settle, settled}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; rain with lightning: true flashes lightning with thunder at seeded times; snow with settle: true lands on the ground and the props, where a white layer grows; for one beat use the particles action."""
+        flashback: bool | FlashbackSetting | None = None
+        """A memory's look: true or {tint, strength, saturation, vignette, color}: the set and the characters in faded, warm colours (like an old photograph, over its light) and a soft dark frame at the edges of the view; bubbles, tags and captions stay clear."""
         light: LightSetting = "day"
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene; default day (on an iso place where it rains from the start: an overcast tint)."""
         shadows: bool = True
@@ -1769,6 +1791,7 @@ class Stage(IsoStaging, NarratedScene):
         fires = [live for live in getattr(self, "living", {}).values() if live.kind == "fireplace"] if self._foley_on() else []
         beds += [{"bed": "fire", "start": round(a, 6), "end": round(b, 6)} for live in fires for a, b in on_spans(live.on, live.switches, end)]
         beds += [{"bed": bed, "start": round(a, 6), "end": round(b, 6)} for bed, a, b in self.set_beds([s for s in spans if s[1] > s[0]], end)]
+        beds += self.alarm_beds(end)   # the siren while an alarm runs (§100.7)
         if beds:
             data["ambience"] = beds
         return data
@@ -1987,6 +2010,7 @@ class Stage(IsoStaging, NarratedScene):
             if is_hologram(figure):
                 unmark_lit(figure)
         self._start_living(living)
+        self._start_story()   # flickers, iridescence, afterimages, materialising, a lab's lights (§100.9)
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
         backdrop += self._level_story()   # coins and stars float in front of the tiles, not graded by the light
@@ -2060,6 +2084,7 @@ class Stage(IsoStaging, NarratedScene):
         self.add(*self.particles)
         if self.light is not None:
             self.light.on_change(self._show_light)
+        in_front += self._flashback_vignette()   # over the set and the characters (§100.12)
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
         self._ring_sounds()
@@ -2096,13 +2121,13 @@ class Stage(IsoStaging, NarratedScene):
         """The light at the start (``light``) and, when it grades anything or a ``light`` action
         changes it, the :class:`StageLight` that grades the set as the camera draws it."""
         #: the light from the start, and whether any light of the scene has stars
-        self.base_light = resolve_light(self.params.light, self.theme)
+        self.base_light = self.flashback_look(resolve_light(self.params.light, self.theme))   # a memory's look over it (§100.12)
         #: (scene time, light preset or ``None`` for a tint) from the start: where the light
         #: counts as changed for the ambience (half-way through each change, DESIGN.md §69.62)
         self.light_marks: list[tuple[float, str | None]] = [(0.0, self.params.light if isinstance(self.params.light, str) else None)]
         changes = [resolve_light(use.setting(), self.theme) for use in self.action_uses("light")]
         self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
-        flashes = self._lightning_used()
+        flashes = self._lightning_used() or bool(self.action_uses("alarm"))
         #: the stage's light (``None``: the set as drawn, nothing changes it)
         #: (a draft's is flat: nothing graded, no flashes, the changes at their times, §74)
         self.light: StageLight | None = (
@@ -2135,7 +2160,7 @@ class Stage(IsoStaging, NarratedScene):
         if move_sun and isinstance(setting, str):
             for body in self.sky_bodies:
                 body.moves.append(PathMove(float(start), max(float(seconds), 0.0), place_for(body.kind, setting)))
-        self._lit().change(resolve_light(setting, self.theme), start, seconds)
+        self._lit().change(self.flashback_look(resolve_light(setting, self.theme)), start, seconds)
         self._watch_light()
 
     def _lit(self) -> StageLight:
@@ -2454,6 +2479,7 @@ class Stage(IsoStaging, NarratedScene):
             self.living[name] = LivingProp(
                 self.props[name], start=prop.clock_start() if prop.runs() else None, speed=prop.speed or 1.0, on=prop.on,
                 seed=motion_seed(self.spec.id, name), movable=name in movable, wind=wind if prop.prop in ("fireplace", "kettle") else None,
+                pattern=prop.pattern,
             )
         #: the scene updater, kept: Manim removes an updater by identity
         self._living_updater = self._living_step
@@ -2471,7 +2497,7 @@ class Stage(IsoStaging, NarratedScene):
         fog = getattr(self, "fog", None)
         return [
             *getattr(self, "living", {}).values(), *getattr(self, "flocks", []), *getattr(self, "snow_layers", []), *([fog] if fog is not None else []),
-            *getattr(self, "rainbows", []),
+            *getattr(self, "rainbows", []), *getattr(self, "story_things", []),
         ]
 
     def _living_step(self, dt: float) -> None:
@@ -2491,7 +2517,10 @@ class Stage(IsoStaging, NarratedScene):
             fog.update(now)
         for rainbow in self.rainbows:
             rainbow.update(now)
-        settled = all(layer.done(now) for layer in [*self.snow_layers, *self.rainbows]) and (fog is None or not fog.moves)
+        things = getattr(self, "story_things", [])   # shutters, a lab's lights (§100.7, §100.11)
+        for thing in things:
+            thing.update_to(now)
+        settled = all(layer.done(now) for layer in [*self.snow_layers, *self.rainbows, *things]) and (fog is None or not fog.moves)
         if not self.living and all(flock.done(now) for flock in self.flocks) and settled:
             self.remove_updater(self._living_updater)
 
@@ -2507,8 +2536,11 @@ class Stage(IsoStaging, NarratedScene):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
         if not names or not self._foley_on():
             return
-        if any(self.living[name].kind not in ("fireplace", "portal", *(("phone",) if on else ())) for name in names):
+        if any(self.living[name].kind not in ("fireplace", "portal", "hologram_display", *(("phone",) if on else ())) for name in names):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
+        if any(self.living[name].kind == "hologram_display" for name in names):   # it hums up and chimes, or hums down (§100.10)
+            for sound, params in (DISPLAY_ON_SOUNDS if on else DISPLAY_OFF_SOUNDS):
+                self.sfx(sound, max(float(time), 0.0) + params.get("delay", 0.0), **{k: v for k, v in params.items() if k != "delay"})
         if on and any(self.living[name].kind == "fireplace" for name in names):
             self.sfx("burner", max(float(time), 0.0), gain=FIRE_LIGHT_GAIN, duration=FIRE_LIGHT_SECONDS)
         if any(self.living[name].kind == "portal" for name in names):   # it tears open or seals (§100.4)
@@ -2754,7 +2786,7 @@ class Stage(IsoStaging, NarratedScene):
         return draw_prop(
             prop.prop, height=height, theme=self.theme, name=name, main=prop.color, detail=prop.detail,
             facing=prop.facing, character_height=height / prop.height_factor(), shape="open" if prop.open else None,
-            living=living, fruit=prop.fruit,
+            living=living, fruit=prop.fruit, view=prop.view,
         )
 
     def _backdrop(self, layers: list[Mobject], heads: float | None = None) -> list[Mobject]:

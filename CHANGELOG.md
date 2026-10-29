@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–245)
+## Unreleased (Steps 193–246)
 
 ### Story-cartoon features (Phase Z, Steps 245–248)
 
@@ -21,6 +21,28 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   crack into a crackling, swirling, pulsing rift with a glow (`switch_on`) and seals again
   (`switch_off`), with its sounds; on a plain stage or at a spot of an iso place, where a
   character can step out of it (`enter` with `door:` its spot).
+- **Framing** (Step 246). `iso: {wide: fill}` (or a zoom 1–2.5) brings a room's wide view
+  closer; `shot: closeup ana ben` (and `medium`) frames two or three characters' faces together;
+  `shot: {..., clear: true}` hides the characters a shot does not frame for its beat.
+- **Holograms appear and flicker** (Step 246). `- materialise: guide` (a flickering wireframe,
+  then solid; the character waits unseen until then) and `- dematerialise: guide`; holograms
+  flicker now and then (`hologram: {flicker: false}` for a steady one).
+- **Visitors** (Step 246). `iridescent: true` (skin and clothes shifting colours like oil on
+  water) and `afterimages: true` (faint copies trailing a move) on a character.
+- **Hand in hand** (Step 246). `- {hold_hands: ana, with: ben}` keeps two characters holding
+  hands wherever they stand or walk; `- let_go_hands: ana`.
+- **Alarms and shutters** (Step 246). `- alarm: start` / `stop`: a dark room under a red light
+  pulsing like a beacon, with a siren; what the light never grades keeps shining.
+  `- shutters: close` / `open` slams steel shutters over an iso room's windows (`iso: {shutters:
+  true}` starts them down).
+- **A lab and a memory** (Step 246). Iso objects `console` (glowing screens), `server_rack`
+  (blinking lights), `projector_pad`, `whiteboard`, `flower_arch`, `chess_table`; a
+  `hologram_display` prop (a floating panel of light: `fractal`, `data` or `text`); a portal's
+  `view` (`coast`, `stars`, `meadow`); `flashback: true` on a stage (faded warm colours and a
+  soft vignette).
+- **Sounds** (Step 246). Built-in `alarm`, `crackle`, `hum`, `drone` (a crystalline singing
+  drone) and `slam`; ambience beds `hum` (`ambience: hum`) and `alarm` (under an alarm). The
+  Listen page has a row for them. Gallery showcase `iso_lab`.
 
 ### Particle physics (Phase Y, Steps 237–244)
 

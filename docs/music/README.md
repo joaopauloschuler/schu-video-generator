@@ -72,7 +72,7 @@ try variations, pin notes for an AI agent to answer, and save it into your proje
 
 ## Sound effects
 
-36 sounds, synthesised when the video is joined: `- sfx: whoosh` in a beat, a scene's `sfx:` list, or
+41 sounds, synthesised when the video is joined: `- sfx: whoosh` in a beat, a scene's `sfx:` list, or
 played by cartoon actions (foley: footsteps by surface, doors, pickups, rides). Each clip
 plays several sounds at the times listed, 8 dB louder than in a mix; together they
 play every built-in sound.
@@ -85,16 +85,17 @@ play every built-in sound.
 | Door, phone, bell | 0.3 s `knock`, 1.5 s `unlock`, 2.1 s `creak`, 3.6 s `phone`, 5.2 s `bell` | <img src="media/sfx-home.png" width="240" alt="Spectrogram: Door, phone, bell"> | [▶ listen (6.6 s)](media/sfx-home.mp3) |
 | Cartoon foley and voice sounds | 0.3 s `boing`, 1.2, 1.6, 2 s `coin` (pitch 0, +2, +4), 2.7 s `twinkle`, 3.9 s `splash`, 5 s `beep`, 5.9 s `gasp`, 6.7 s `sigh` | <img src="media/sfx-cartoon.png" width="240" alt="Spectrogram: Cartoon foley and voice sounds"> | [▶ listen (8.2 s)](media/sfx-cartoon.mp3) |
 | Vehicles, a rocket and thunder | 0.3 s `engine`, 2 s `brakes`, 3 s `burner`, 4.6 s `launch`, 6.1 s `thunder` | <img src="media/sfx-rides.png" width="240" alt="Spectrogram: Vehicles, a rocket and thunder"> | [▶ listen (9.4 s)](media/sfx-rides.mp3) |
+| A lab, an alarm and a rift | 0.3 s `hum`, 2.1 s `alarm`, 4.1 s `slam`, 5.1 s `crackle`, 6.5 s `drone` | <img src="media/sfx-story.png" width="240" alt="Spectrogram: A lab, an alarm and a rift"> | [▶ listen (10.6 s)](media/sfx-story.mp3) |
 
 ## Ambience beds
 
-6 beds, played under cartoon scenes while the rain falls, a fire burns, or a set calls for them
+8 beds, played under cartoon scenes while the rain falls, a fire burns, or a set calls for them
 (birds by day, crickets at night, a city street, a room's tone). The clip plays each for
-3.5 s, in this order: `rain`, `fire`, `birdsong`, `city`, `room_tone`, `crickets`.
+3.5 s, in this order: `rain`, `fire`, `birdsong`, `city`, `room_tone`, `crickets`, `hum`, `alarm`.
 
 <img src="media/ambience.png" width="480" alt="Spectrogram: the six ambience beds in turn">
 
-[▶ listen (21.5 s)](media/ambience.mp3)
+[▶ listen (28.5 s)](media/ambience.mp3)
 
 ## Composed music
 

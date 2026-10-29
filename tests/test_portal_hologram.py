@@ -86,7 +86,7 @@ def test_shape_stays_in_its_box_and_crackles() -> None:
 
 
 def test_the_portal_is_a_switched_prop() -> None:
-    assert SCIFI_PROPS == ("portal",) and "portal" in PROP_KINDS and "portal" in SWITCHED_PROPS and "portal" in LIVING_KINDS
+    assert SCIFI_PROPS == ("portal", "hologram_display") and "portal" in PROP_KINDS and "portal" in SWITCHED_PROPS and "portal" in LIVING_KINDS
     assert "portal" in GLOWS and "portal" in FLOATING_IN_PLACE
     params = stage_params(props=[{"prop": "portal", "on": True}], characters=["pip"])
     assert params.props[0].on
@@ -97,7 +97,8 @@ def test_the_portal_is_a_switched_prop() -> None:
 def test_living_portal_opens_glows_and_is_not_graded() -> None:
     theme = Theme()
     prop = draw_prop("portal", height=3.0, theme=theme, main="#33CC99", living=True)
-    assert prop.height == pytest.approx(3.0) and all(living_parts(prop, part) for part in PORTAL_PARTS)
+    assert prop.height == pytest.approx(3.0) and all(living_parts(prop, part) for part in PORTAL_PARTS if part != "portal_view")
+    assert not living_parts(prop, "portal_view")   # no view: its swirling inside (Step 246)
     mark_lit(prop)
     live = LivingProp(prop)
     inside = living_parts(prop, "portal_inside")[0]

@@ -30,6 +30,10 @@ ISO_REVEAL_SECONDS = 0.8
 #: the lamp's middle (tile units) and fades out by the second (its pool on the ground has a
 #: radius of 1.1; the lantern stands high, so it lights a body a little beyond), DESIGN.md §89.13.
 ISO_LAMP_REACH = (1.0, 2.2)
+#: A lab object's blinking lights (DESIGN.md §100.11): the second colour (an amber besides the
+#: object's own) and a light's radius (tile widths).
+LAB_AMBER = "#FFB547"
+LAB_LIGHT_SIZE = 0.035
 
 
 @dataclass
@@ -343,7 +347,32 @@ class IsoStaging:
             if picture is not None:
                 shown.append(holder)
         self.add_camera_listener(self._iso_show_view)
-        return shown
+        return shown + self._iso_story_overlays(place, looks)
+
+    def _iso_story_overlays(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
+        """The steel shutters over a room's windows when the place starts with them down or a
+        ``shutters`` action moves them (DESIGN.md §100.7), and the blinking lights of its lab
+        objects (§100.11), drawn over the place's pictures; each is one of :attr:`story_things`."""
+        p = self.params
+        #: things over the place that move by themselves (shutters, lights)
+        self.story_things: list[Any] = []
+        #: the room's shutters (``None``: none)
+        self.iso_shutters: IsoShutters | None = None
+        faces = window_faces(place)
+        if faces and (p.iso.shutters or self.action_uses("shutters")):
+            windows = [[self.iso_view.point(*corner) for corner in face] for face in faces]
+            self.iso_shutters = IsoShutters(windows, closed=p.iso.shutters, stroke=1.5)
+            self.story_things.append(self.iso_shutters)
+        lights: list[tuple[float, float]] = []
+        colors: list[str] = []
+        for item in place.objects:
+            if item.kind in LIT_OBJECTS:
+                for k, point in enumerate(object_lights(item, place.floor_z(item.column, item.row))):
+                    lights.append(self.iso_view.point(*point))
+                    colors.append((looks[item.name].detail, LAB_AMBER, looks[item.name].detail)[k % 3] if item.kind == "server_rack" else LAB_AMBER)
+        if lights and not self.is_draft:
+            self.story_things.append(IsoBlinkers(lights, colors, LAB_LIGHT_SIZE * self.iso_view.unit, seed=motion_seed(self.spec.id, "lab_lights")))
+        return list(self.story_things)
 
     def _iso_arrivals(self, place: Any) -> list[Box3]:
         """In a tall frame, what the wide view keeps in view besides the characters: a character
@@ -375,7 +404,7 @@ class IsoStaging:
         place = self.params.iso.parsed()
         count = len(self.params.iso.objects)
         placed = [item.name for item in place.objects[len(place.objects) - count:]] if count else []
-        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed)
+        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed, fit=self.params.iso.wide)
 
     def iso_wide_shot(self, names: list[str]) -> ShotView:
         """``shot: wide`` on the place: the wide view keeping the characters ``names`` (those on

@@ -1833,6 +1833,12 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley); on an iso place a `lamp` lights, a `house`'s windows glow (they stay bright at `light: sunset` / `night`) | when someone in the story switches it on or lights the fire; when a call comes |
 | `switch_off` | on a `stage`: a `tv`, `lamp`, `kettle` or `fireplace` goes off, a `phone` stops ringing (`- switch_off: lamp`) | when someone in the story switches it off or answers |
 | `knock` | on a `stage`: someone knocks three times on a door (`- knock: front`; a room's door or a `door` prop; nobody needs to stand there) | a visitor in the story; the door then `open`s with a creak |
+| `alarm` | on a `stage`: an alarm goes off (`- alarm: start`) or stops (`- alarm: stop`): the set darkens under a red light pulsing like a beacon, a siren plays; portals, holograms and screens keep shining (`color`, `period`) | a security system, a red alert |
+| `shutters` | on an indoor iso place: steel shutters slam down over its windows (`- shutters: close`, a slam) or roll up (`- shutters: open`) | with an alarm; a lockdown |
+| `materialise` | on a `stage`: a character appears as a hologram does, a flickering wireframe, then solid (`- materialise: guide`; it waits unseen until then) | a projection switched on; best on `hologram: true` |
+| `dematerialise` | on a `stage`: a character vanishes the same way backwards (`- dematerialise: guide`) | a projection switched off |
+| `hold_hands` | on a `stage`: a character takes another's hand (`- {hold_hands: ana, with: ben}`); they hold hands wherever they stand or walk | walk both in the same beat to places side by side to go hand in hand |
+| `let_go_hands` | on a `stage`: a character lets go of the hand it holds (`- let_go_hands: ana`; the other too) | before an arm gestures again |
 | `let_go` | on a `stage`: a character lets go of the balloons it holds; they float away (`- let_go: pip`) | gone for the scene |
 | `pour` | on a `stage`: a character pours with the watering can it holds (`- pour: kit`, 2 s) | watering a plant |
 | `drop_fruit` | on a `stage`: a fruit falls from a tree with `fruit: true`, bounces, thuds (`- drop_fruit: tree`; `to: pip`: on pip's head, stars) | a comic moment; the character stands under the tree |
@@ -1868,7 +1874,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
-| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back; on an iso place `wide` is the place's wide view and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
+| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`; `closeup ana ben`: two or three faces together; `{kind: closeup, of: kit, clear: true}` hides the others for the beat); the next beat without one cuts back; on an iso place `wide` is the place's wide view and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
 | `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
 | `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
 | `host_react` | with a `host:`: the host's expression for this beat (`- host_react: happy`; `effect: sparkle` adds a symbol) | on a result or a surprise |
@@ -2266,7 +2272,7 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes, a balloon's burner roars, a toy rocket fizzes off; a door creaks as it opens or closes; water splashes; on a platform `level` a jump lands softly, each coin goes `coin` and each star `twinkle`, a key `unlock`s a locked door, a blocker shuffles aside; on an iso place footsteps by what the feet walk on: grass, a path, boards, a bridge, stone), timed to the action,
   and rain plays a rain sound bed. Each stage also plays a quiet bed of its set: birdsong
   outdoors by day (not at night, not in rain), a room tone in a room; `ambience: city` on a stage
-  names the street sounds instead (or `birdsong`, `room_tone`, a list), `ambience: false` none.
+  names the street sounds instead (or `birdsong`, `room_tone`, `hum` for a lab or a ship, a list), `ambience: false` none.
   `foley: false` (top level or a stage) turns all of them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice; under composed music the music's own instruments play it, in its key. One or two per
@@ -2531,8 +2537,23 @@ and give each scene `set: village`.
 - Science fiction and magic: a `portal` prop at a spot tears open with `switch_on` (a crackling,
   glowing rift; `switch_off` seals it); a character comes out of it with `- {enter: visitor,
   door: rift}` (the portal's spot) and walks to its own spot in front. A character with `hologram: true` is a glowing,
-  translucent projection (an AI, a ghost) that no `light` darkens; give it an `effect: echo` on
-  its voice.
+  translucent projection (an AI, a ghost) that no `light` darkens and that flickers now and then;
+  give it an `effect: echo` on its voice. `- materialise: guide` makes it appear (a flickering
+  wireframe, then solid; it waits unseen until then), `- dematerialise: guide` vanish.
+- A lab: `objects` `console` (glowing screens; a `hologram_display` prop at its spot floats a
+  panel of light over it: `pattern: fractal`, `data` or `text`), `server_rack` (blinking lights),
+  `projector_pad` (a glowing platform a hologram stands on), `whiteboard`. A portal's `view:
+  coast` (or `stars`, `meadow`) shows another place inside it. `- alarm: start` darkens the room
+  under a pulsing red light with a siren (`stop` ends it), `- shutters: close` slams steel
+  shutters over the windows; `ambience: hum` gives a lab its hum.
+- Visitors: `iridescent: true` (skin shifting colours like oil on water) and `afterimages: true`
+  (faint copies trailing a move) on a character, a `scale` of 1.4–1.5 on the stage to stand
+  taller. Two characters `- {hold_hands: ana, with: ben}` (they stay hand in hand as they walk
+  side by side; `let_go_hands`).
+- Framing: `iso: {wide: fill}` (or a number 1–2.5) brings a room's wide view closer;
+  `shot: closeup ana ben` frames two faces together, `{kind: closeup, of: guide, clear: true}`
+  hides everyone else for the beat. A memory: `flashback: true` on a stage (faded warm colours,
+  a soft vignette), with `flower_arch` and `chess_table` objects, and an iris in and out.
 
 ```yaml
 characters:
@@ -3134,7 +3155,9 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `step_grass`, `step_gravel`, `step_wood`, `step_stone`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `unlock`, `coin`, `twinkle`, `splash` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `step_grass`, `step_gravel`, `step_wood`, `step_stone`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `unlock`, `coin`, `twinkle`, `splash`; for a lab or another world
+`alarm` (a two-tone siren), `crackle` (sparks, crackling energy), `hum` (a machine powering up),
+`drone` (a crystalline singing drone: awe, another world), `slam` (a steel shutter); and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 

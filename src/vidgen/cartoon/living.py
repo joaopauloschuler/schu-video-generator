@@ -23,7 +23,7 @@ from functools import lru_cache
 
 #: The props a ``switch_on`` / ``switch_off`` action and the stage key ``on`` act on (a phone
 #: that is on rings, DESIGN.md §69.56).
-SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "phone", "tv", "portal")
+SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "phone", "tv", "portal", "hologram_display")
 #: The props that can move by themselves: a running clock and the switched ones.
 LIVING_KINDS: tuple[str, ...] = ("clock", *SWITCHED_PROPS)
 #: The attribute naming a living part of a prop's drawing (``hour``, ``minute``, ``second``,
@@ -78,6 +78,7 @@ GLOWS: dict[str, GlowSpec] = {
     "tv": GlowSpec(0.0, 0.7, 0.8, "#A8D8FF", 0.3),
     "fireplace": GlowSpec(0.0, 0.32, 1.05, "#FFA94D", 0.5),
     "portal": GlowSpec(0.0, 0.5, 0.75, "#C9A8FF", 0.5),   # in the portal's own rim colour (§100.4)
+    "hologram_display": GlowSpec(0.0, 0.69, 0.7, "#5FD8FF", 0.32),   # in the panel's own colour (§100.10)
 }
 
 #: A fireplace's flames (prop units, as drawn facing right): the middle of each outer tongue's

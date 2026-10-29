@@ -45,12 +45,15 @@ def _apart_in_depth(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 def _riding_together(a: dict[str, Any], b: dict[str, Any]) -> bool:
     """Whether two characters ride the same vehicle (one behind the other in a car or a bus,
-    DESIGN.md §69.52)."""
+    DESIGN.md §69.52), or hold hands (side by side on purpose, §100.10)."""
+    if a.get("hand_in_hand") == b.get("name") or b.get("hand_in_hand") == a.get("name"):
+        return True
     return a.get("riding") is not None and a.get("riding") == b.get("riding")
 
 
 def _figures(ctx: StillContext) -> list[dict[str, Any]]:
-    return [obj for obj in ctx.objects if obj["kind"] == "character"]
+    """The characters of a still (not those a shot with ``clear`` hides, DESIGN.md §100.6)."""
+    return [obj for obj in ctx.objects if obj["kind"] == "character" and not obj.get("hidden")]
 
 
 def _in_view(ctx: StillContext, obj: dict[str, Any]) -> bool:
@@ -182,7 +185,8 @@ def character_overlap(ctx: StillContext, settings: CharacterOverlapRule) -> Iter
     two at depths :data:`DEPTH_APART` or more apart (one stands behind the other), nor two riding
     the same vehicle."""
     beat = ctx.frame.get("beat")
-    resting = [obj for obj in _figures(ctx) if not obj.get("passage") and (beat is None or obj.get("walked_in") != beat)]
+    resting = [obj for obj in _figures(ctx) if not obj.get("passage") and (beat is None or obj.get("walked_in") != beat)
+               and _in_view(ctx, obj)]   # not two waiting off stage to enter (Step 246)
     for a, b in combinations(resting, 2):
         if _apart_in_depth(a, b) or _riding_together(a, b):
             continue

@@ -90,7 +90,7 @@ ISO_WIDE_BODY_ROOM = 0.25
 
 
 def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float,
-              bodies: Sequence[Box3] = (), placed: Collection[str] = ()) -> tuple[float, tuple[float, float]]:
+              bodies: Sequence[Box3] = (), placed: Collection[str] = (), fit: str | float = "auto") -> tuple[float, tuple[float, float]]:
     """The wide (establishing) camera view of the place (DESIGN.md §89.13): ``(view width,
     centre)`` in Manim units. The place's picture is diamond-shaped, so fitted whole
     (:func:`iso_view`, the frame) it leaves wide empty corners; the wide view magnifies that fit
@@ -103,14 +103,21 @@ def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: 
     portrait frame keeps just the bodies: a Short shows the part of the place where they stand
     rather than the whole place small in the middle. At most :data:`ISO_WIDE_MAX` times the
     whole place's fit, at least that fit; centred on the place's middle, moved as little as keeps
-    what must be seen in view, inside the frame (the camera's bounds)."""
+    what must be seen in view, inside the frame (the camera's bounds).
+
+    ``fit`` (the place's ``wide``, DESIGN.md §100.6): ``auto`` as above; ``fill`` lets a room's
+    walls be cut too (the floor, its spots, objects and characters fill the frame); a number is
+    the magnification over the whole place's fit itself (at least 1), moved as little as keeps
+    the ``bodies`` in view."""
     left, top, right, bottom = place_bounds(place)
     room = 1 - 2 * ISO_MARGIN
     unit = view.unit
     fill = max(frame_width * room / ((right - left) * unit), frame_height * room / ((bottom - top) * unit))
     keep = [_padded(box.picture_bounds(), ISO_WIDE_BODY_ROOM) for box in bodies]
+    if not isinstance(fit, str):
+        return _zoomed_view(place, view, frame_width, frame_height, keep, max(float(fit), 1.0))
     if frame_width >= frame_height:
-        if place.indoor:
+        if place.indoor and fit != "fill":
             keep.append((left, top, right, bottom))
         keep += [object_box(item, place.floor_z(item.column, item.row)).picture_bounds() for item in place.objects if item.name in placed]
         for spot in place.spots:
@@ -127,6 +134,24 @@ def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: 
         u = _between(u, k_right + pad_u - half_u, k_left - pad_u + half_u)
         v = _between(v, k_bottom + pad_v - half_v, k_top - pad_v + half_v)
     scale = max(scale, 1.0)
+    width, height = frame_width / scale, frame_height / scale
+    x, y = (u - view.u0) * unit, -(v - view.v0) * unit
+    half_w, half_h = frame_width / 2, frame_height / 2
+    return width, (_between(x, -half_w + width / 2, half_w - width / 2), _between(y, -half_h + height / 2, half_h - height / 2))
+
+
+def _zoomed_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float,
+                 keep: Sequence[tuple[float, float, float, float]], scale: float) -> tuple[float, tuple[float, float]]:
+    """The wide view at ``scale`` times the whole place's fit: centred on the place's middle,
+    moved as little as keeps the ``keep`` bounds (picture tile widths) in view, inside the frame."""
+    left, top, right, bottom = place_bounds(place)
+    unit = view.unit
+    u, v = (left + right) / 2, (top + bottom) / 2
+    half_u, half_v = frame_width / scale / unit / 2, frame_height / scale / unit / 2
+    if keep:
+        pad_u, pad_v = ISO_MARGIN * 2 * half_u, ISO_MARGIN * 2 * half_v
+        u = _between(u, max(b[2] for b in keep) + pad_u - half_u, min(b[0] for b in keep) - pad_u + half_u)
+        v = _between(v, max(b[3] for b in keep) + pad_v - half_v, min(b[1] for b in keep) - pad_v + half_v)
     width, height = frame_width / scale, frame_height / scale
     x, y = (u - view.u0) * unit, -(v - view.v0) * unit
     half_w, half_h = frame_width / 2, frame_height / 2
