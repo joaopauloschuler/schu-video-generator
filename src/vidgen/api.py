@@ -120,6 +120,7 @@ from vidgen.terms import Term, active_terms, find_term, term_spans, using_terms 
 from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
 from vidgen.carry import carry_move  # noqa: E402
 from vidgen.voices import speaker_color, speaker_label, speaker_prefix  # noqa: E402
+from vidgen.voice_effects import VOICE_EFFECTS, VoiceEffect, effect_filter, voice_effect  # noqa: E402
 from vidgen.translation import TextRef, TranslatableStr  # noqa: E402
 from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
@@ -263,8 +264,10 @@ from vidgen.cartoon.reframe import (  # noqa: E402
 )
 from vidgen.cartoon.props import (  # noqa: E402
     FLAT_PROPS,
+    FLOATING_IN_PLACE,
     FRUIT_INDEX,
     FURNITURE,
+    SCIFI_PROPS,
     PROP_GRIPS,
     PROP_HANGS,
     PROP_HEIGHTS,
@@ -315,6 +318,7 @@ from vidgen.cartoon.living import (  # noqa: E402
     tv_picture,
 )
 from vidgen.cartoon.living_drawing import LivingProp, PropGlow, PropSteam  # noqa: E402
+from vidgen.cartoon.hologram import HOLOGRAM_COLOR, apply_hologram, is_hologram, unmark_lit  # noqa: E402
 from vidgen.cartoon.nature import (  # noqa: E402
     BIRD_SPAN,
     FLOCK_COUNT,
@@ -837,6 +841,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "speaker_color",
     "speaker_label",
     "speaker_prefix",
+    "VOICE_EFFECTS",
+    "VoiceEffect",
+    "effect_filter",
+    "voice_effect",
     "SfxEvent",
     "SfxParams",
     "StingCue",
@@ -1056,6 +1064,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "layer_half_extent",
     "layer_transform",
     "FLAT_PROPS",
+    "FLOATING_IN_PLACE",
+    "SCIFI_PROPS",
     "FURNITURE",
     "PROP_GRIPS",
     "PROP_HANGS",
@@ -1075,6 +1085,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "SWITCHED_PROPS",
     "LivingProp",
     "PropGlow",
+    "HOLOGRAM_COLOR",
+    "apply_hologram",
+    "is_hologram",
+    "unmark_lit",
     "glow_box",
     "hand_angles",
     "parse_clock_time",

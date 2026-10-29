@@ -225,6 +225,24 @@ class EmotionConfig(_Strict):
 #: ``emotion:``: a built-in emotion's name or ``{like, speed, pitch, gain, pauses}``.
 EmotionSetting = Union[EmotionName, EmotionConfig]
 
+#: The voice effects (:data:`vidgen.voice_effects.VOICE_EFFECTS`; a test keeps the two equal).
+VoiceEffectName = Literal["deep", "high", "robot", "radio", "chorus", "echo", "hall", "otherworldly"]
+
+
+class VoiceEffectConfig(_Strict):
+    """``effect:`` as a mapping: presets with their strength and a pitch of your own (DESIGN.md §100.2)."""
+
+    use: Union[VoiceEffectName, list[VoiceEffectName]] = Field(default_factory=list)
+    """The preset or presets (deep, high, robot, radio, chorus, echo, hall, otherworldly); none: only the pitch."""
+    pitch: float | None = Field(default=None, ge=-12.0, le=12.0)
+    """Pitch shift in semitones (-12 to 12; the length is kept); default deep's -4, high's +4, otherworldly's -3, else 0."""
+    amount: float | None = Field(default=None, ge=0.0, le=1.0)
+    """How strong the echo, hall, chorus and robot are (0-1); default 0.5."""
+
+
+#: ``effect:``: a preset's name, a list of presets, or ``{use, pitch, amount}``.
+VoiceEffectSetting = Union[VoiceEffectName, list[VoiceEffectName], VoiceEffectConfig]
+
 #: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
 TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
 #: Keys of ``voice:`` used only by some providers (the others ignore them).
@@ -314,6 +332,8 @@ class VoiceConfig(_Strict):
     """kokoro only: where the model runs: cpu, cuda (an NVIDIA GPU) or auto (a GPU if PyTorch sees one); does not change the audio hash."""
     emotion: EmotionSetting | None = None
     """How this voice's beats feel unless a beat says otherwise: a built-in emotion (excited, sad, whisper...) or {like, speed, pitch, gain, pauses}; ElevenLabs and OpenRouter models with instructions use only its name; not inherited by voices:."""
+    effect: VoiceEffectSetting | None = None
+    """A sound effect on this voice's audio, for any provider: deep, high, robot, radio, chorus, echo, hall or otherworldly, a list of them, or {use, pitch, amount}; not inherited by voices:."""
     dub: dict[LanguageTag, DubSetting] | None = None
     """This voice in other languages, by language tag: {pt: pf_dora} or {pt: {voice: pm_alex, speed: 0.9}}; used in videos (variants) of that language; without one, a Kokoro voice of another language is replaced by one of the video's language of the same kind (feminine / masculine)."""
     label: str | None = Field(default=None, min_length=1)
@@ -373,6 +393,8 @@ class VoiceEntry(_Strict):
     """kokoro: language of this speaker's voice (a, b, e, f, h, i, j, p, z); default the first letter of its voice, else the base voice's."""
     emotion: EmotionSetting | None = None
     """How this speaker's beats feel unless a beat says otherwise (excited, sad, whisper... or {like, speed, pitch, gain, pauses}); not inherited from the base voice."""
+    effect: VoiceEffectSetting | None = None
+    """A sound effect on this speaker's audio: deep, high, robot, radio, chorus, echo, hall or otherworldly, a list of them, or {use, pitch, amount}; not inherited from the base voice."""
     dub: dict[LanguageTag, DubSetting] | None = None
     """This speaker's voice in other languages, by language tag ({pt: pf_dora}); default: the base voice's dub when this voice keeps the base voice, else chosen automatically (Kokoro: a voice of the video's language of the same kind)."""
     label: str | None = Field(default=None, min_length=1)
@@ -580,6 +602,15 @@ class PartPoseEntry(_Strict):
         return (float(self.scale), float(self.scale)) if isinstance(self.scale, (int, float)) else (float(self.scale[0]), float(self.scale[1]))
 
 
+class HologramConfig(_Strict):
+    """``hologram:`` of a character as a mapping (DESIGN.md §100.3)."""
+
+    color: ColorRef = "#5FD8FF"
+    """The hologram's colour (a theme token or hex): light parts glow in it, dark parts (eyes, mouth, outline ink) are a deep shade of it."""
+    opacity: float = Field(default=0.6, ge=0.2, le=1.0)
+    """How solid the figure is (0.2-1): 1 hides what stands behind it, 0.2 is a faint ghost."""
+
+
 class CharacterEntry(_Strict):
     """One entry of ``characters:`` (DESIGN.md §69): a cartoon character declared once and used
     by any scene."""
@@ -600,6 +631,14 @@ class CharacterEntry(_Strict):
     """Breathe, sway the head slightly and blink every 2 to 6 s on its own; false: hold still between actions."""
     cartoon_motion: MotionSetting | None = None
     """Animation principles for this character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; wins over the scene's and the video's; default lively."""
+    hologram: Union[bool, HologramConfig] = False
+    """Draw the character as a hologram: true or {color, opacity}; a translucent figure in one glowing colour with bright edges, never darkened by the stage's light."""
+
+    def hologram_look(self) -> HologramConfig | None:
+        """Its hologram settings (``None``: drawn as usual)."""
+        if self.hologram is False:
+            return None
+        return HologramConfig() if self.hologram is True else self.hologram
 
 
 #: A host's height as a fraction of the frame's shorter side (DESIGN.md §71).

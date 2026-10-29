@@ -239,7 +239,21 @@ def price_tts(plan: TTSPlan, *, lookup: Callable[[list[str]], dict[str, Any]] | 
 
 def describe_voice(voice: VoiceConfig) -> str:
     """``openrouter mistralai/voxtral-mini-tts-2603, voice en_paul_neutral`` / ``kokoro af_heart
-    (lang a, American English), speed 1, cpu`` / an ElevenLabs voice id (as the dry run names it)."""
+    (lang a, American English), speed 1, cpu`` / an ElevenLabs voice id (as the dry run names it),
+    with ``, effect deep+chorus+hall (pitch -3)`` when the voice has an effect (DESIGN.md §100.2)."""
+    from vidgen.voice_effects import voice_effect
+
+    effect = voice_effect(voice.effect)
+    text = _describe_engine(voice)
+    if effect is None:
+        return text
+    named = "+".join(effect.names)
+    if effect.pitch:
+        named = f"{named} (pitch {effect.pitch:+g})" if named else f"pitch {effect.pitch:+g}"
+    return f"{text}, effect {named}"
+
+
+def _describe_engine(voice: VoiceConfig) -> str:
     if voice.provider == "kokoro":
         from vidgen.kokoro_voices import lang_name
 

@@ -151,7 +151,9 @@ src/vidgen/
                           # rocket paths, smoke, §69.53; no manim), water.py (a stage's water,
                           # §69.53), living.py (clock hands, a tv's picture and flicker, glows,
                           # switches, what is redrawn over moving parts, §69.54; no manim),
-                          # living_drawing.py (LivingProp, PropGlow, PropSteam, §69.54-55),
+                          # living_drawing.py (LivingProp, PropGlow, PropSteam, §69.54-55; a portal's
+                          # parts, §100.4), portal.py (a portal opening, crackling, sealing, §100.4;
+                          # no manim), hologram.py (hologram characters, §100.3),
                           # nature.py (fruit spots, a dropped fruit's fall and bounce, flocks of
                           # birds, §69.55; no manim), nature_drawing.py (Flock, FallenFruit,
                           # FruitDrop, hit_stars, §69.55), small_props.py (balloons floating away,
@@ -228,6 +230,8 @@ src/vidgen/
   kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, weighted blends, validate warnings (§68, §72)
   tts/prosody.py          # an emotion applied to speech: pauses by word timings, soft-limited gain, pitch filter (§72)
   emotions.py             # emotion: the table (speed, pitch, gain, pauses), manner words (§72; no manim)
+  voice_effects.py        # voice effects: presets, VoiceEffect, the ffmpeg filter chain (§100.2; no manim)
+  tts/effects.py          # EffectProvider: any provider's audio through a voice's effect (§100.2)
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
                           # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
@@ -19131,3 +19135,146 @@ gallery `kinematics` 9.3 s in 7.7 s / 384 MB, `decay_chain` 4.7 s in 6.2 s / 357
 and `lint` on kphi3 (1 warning, as before), radioactive-decay, mars-transfer, cystic-fibrosis
 (4 info), iso-story, higgs-discovery (3 warnings, the chart's known ones): no errors, no particle
 findings. Gallery entries unchanged (no gallery scene uses `vertex_rule`).
+
+
+## 100. Story-cartoon features (Phase Z, Steps 245–248)
+
+Reference: docs/CONFIG.md "Voice effects (`effect`)", "Holograms (`hologram`)", "Portals
+(`portal`)". A private story cartoon (a lab at night, a newly conscious AI as a hologram, a rift
+in space, visitors from another world, a farewell; narrated with several Kokoro voices) drives
+generic features for every author. The story project lives in the scratchpad and is never
+committed; docs and samples use neutral content.
+
+### 100.1 The phase (plan) and the gap analysis (Step 245)
+
+- **245**: the adapted script (shot list, speakers, voices, camera, light, sounds, music; private),
+  a test render of an iso lab, the gap list below, this plan, and the first features: voice
+  effects (§100.2), hologram characters (§100.3), portals (§100.4).
+- **246**: the rest of the gaps: a hologram's materialise entrance (wireframe → solid, flicker)
+  and an occasional flicker; a hologram display prop (a projector with a floating translucent
+  panel of moving patterns and text lines); a view through a portal (a picture or a simple scene
+  inside it); alarm lighting (a pulsing coloured light) and window shutters on an iso room; the
+  sounds `alarm`, `crackle`, `hum`, `drone`, `slam`; iridescent characters (an oil-on-water
+  colour shift) and afterimages; hand in hand (two characters holding hands, standing and
+  walking); lab objects on an iso place (console, server rack, projector pad); props for memory
+  vignettes (chess board, flower arch) and a flashback look if tints are not enough.
+- **247**: the story video (private): build, previews, stills, iteration, final 16:9 1080p (9:16
+  if it reads well), lint clean, −16 LUFS.
+- **248**: review with fixes (story fidelity, stills of every shot, audio, compatibility).
+
+**What vidgen did already** (test render: an iso indoor lab at `light: night`, a table, shelves, a
+rug as a pad, a lamp, three characters, a closeup and a red `light` tint; 6.3 s of video in
+10.9 s at 854 × 480): the lab as an iso room with windows and a door; per-speaker Kokoro voices
+with labels and name tags; emotions (frightened, crying, blushing, laughing; `emotion` on lines);
+`enter` / `exit` through a spot (`door:`) that fades a character in or out (stepping out of a
+rift); a cold or red tint with the `light` action; lights dimming; gestures (wave); interruptions;
+iris transitions and tints for memory vignettes; music cues per scene range.
+
+**Gaps per need** (generic names): voice effects for non-human speakers; a hologram figure and a
+hologram display; a portal / rift with a view through it; pulsing alarm light; window shutters;
+sounds (alarm, crackle, hum, singing drone, slam); iridescent skin and afterimages; hand in hand;
+lab furniture on an iso place; props for memory vignettes; a flashback look.
+
+### 100.2 Voice effects (Step 245)
+
+- **Config**: `effect` on `VoiceConfig` and `VoiceEntry`: `VoiceEffectSetting` = a preset name
+  (`VoiceEffectName`, = `voice_effects.VOICE_EFFECTS`, a test keeps them equal), a list of names,
+  or `VoiceEffectConfig {use, pitch (−12..12), amount (0..1)}`. `voices.SPEAKER_FIELDS` gains
+  `effect`: a named voice does not inherit the base voice's (like `emotion`).
+- **Model** (`vidgen/voice_effects.py`, no manim, no ffmpeg run): `voice_effect(setting) ->
+  VoiceEffect | None` (`names` in the fixed order of `VOICE_EFFECTS`, combined presets expanded:
+  `otherworldly` = deep −3 + chorus + hall; `deep` / `high` become the `pitch` (−4 / +4) unless
+  given), `VoiceEffect.spec()` (in the hash), `tail` (s added: `TAILS` echo 0.35, hall 0.9,
+  chorus 0.1), `effect_filter(effect)`: an ffmpeg chain — resample to 48 kHz mono, `apad` (the
+  tail minus what the filters add themselves: `aecho` / `chorus` play out their longest delay,
+  `DELAYS`), the pitch (`asetrate` + `aresample` + `atempo`, the length kept), then robot
+  (`afftfilt` with every phase set to 0: the voice's pitch replaced by the frame rate, 48000 / 256
+  = 187.5 Hz, a flat buzz; a 6 / 11 ms comb; +12.5 dB; with the robot the pitch shift comes after
+  it, moving the buzz), radio (320–3200 Hz band, compressor, +5.5 dB), chorus (3 voices), echo
+  (110 / 230 ms), hall (8 taps 37–347 ms), `amount` scaling the wet decays; last
+  `alimiter=0.89`. The gains were measured on Kokoro lines so each preset stays within about
+  1 dB of the dry voice (`am_echo`: source −25.6 LUFS; deep −26.4, robot −24.9, radio −26.1, hall
+  −25.8, otherworldly −25.5). Robot measured: median 188 Hz, interquartile range 2 Hz (dry 106 /
+  38 Hz). `afftfilt`, `chorus`, `aecho`, `apad pad_dur` and `alimiter` are in every ffmpeg the
+  project supports (4.2+).
+- **Applying it** (`vidgen/tts/effects.py`): `get_provider` wraps the provider of a voice with an
+  effect in `EffectProvider(inner, effect)`: `synthesize` / `synthesize_timed` call the inner
+  provider and run the audio through the chain (`with_effect`: `convert_to_mp3(..., filters=)`,
+  re-encoded); timings and Kokoro's phonemes are the inner provider's (no effect moves the speech);
+  everything else (`name`, `timings_included`, `last_phonemes`, `reported_cost`, `requests`) is
+  passed through by `__getattr__`. `cache_key` = sha1(inner key | "effect" | spec): a voice
+  without an effect keeps every hash (pinned keys unchanged); a different effect re-voices only
+  that voice's beats; `audio_fields` includes it, so a variant with another effect gets its own
+  audio folder. Decided over doing it at mix time: the beat's MP3 is then what is heard
+  (`readback`, the visemes' duration, `narration_speed`, the tail in the beat's length), and
+  the mix stays unchanged.
+- **Dry run**: `describe_voice` adds `, effect chorus+hall (pitch -3)`.
+- **Public**: `vidgen.api` adds `VOICE_EFFECTS`, `VoiceEffect`, `effect_filter`, `voice_effect`.
+- **Not done**: an effect per beat (it is per voice; a second named voice with the same `voice`
+  does it); a true convolution reverb (taps are enough for a cartoon's hall).
+
+### 100.3 Hologram characters (Step 245)
+
+- **Config**: `CharacterEntry.hologram: bool | HologramConfig {color: ColorRef = "#5FD8FF",
+  opacity 0.2–1 = 0.6}`; `hologram_look()` gives the settings or `None`.
+- **Drawing** (`cartoon/hologram.py`): `build_character` ends with `apply_hologram(figure, color,
+  opacity)` when set: every family member's fill becomes `hologram_fill(original, tint)` — the
+  tint scaled by the original's Rec. 709 lightness from `DARK_SHARE` 0.28 (black) to
+  `BRIGHT_SHARE` 1.15 (white), clipped — at `opacity` × its fill opacity, and every outline the
+  tint `EDGE_WHITE` 0.55 of the way to white at 0.95 × its opacity (`family=False`, so a group's
+  own style never spreads over its members). Hidden shapes (mouths, eyes, the front view) are
+  recoloured too: their styles are kept while they have no points (§69.22), so every expression
+  and viseme shows as a hologram. The figure carries `hologram = (color, opacity)`.
+  `is_hologram`. Decided over a separate glow / scanline overlay: the figure's own parts move,
+  speak and act; an overlay would have to follow every part (Step 246 may add a flicker as a
+  living thing that changes only during a flicker).
+- **Stage**: after `mark_lit`, `unmark_lit(figure)` for holograms (the light grade skips them, as
+  it skips a lit lamp) and `mark_shaded` leaves them out.
+- **Public**: `vidgen.api` adds `HOLOGRAM_COLOR`, `apply_hologram`, `is_hologram`, `unmark_lit`.
+- **Seen**: an iso lab at night, a hologram with a light grey look (skin `#F0F0F0`, clothes
+  `#C8C8C8`): cyan, eyes and mouth readable in a closeup, arms showing the body through them.
+
+### 100.4 Portals (Step 245)
+
+- **The prop** `portal` (`SCIFI_PROPS`, new group in `PROP_KINDS`; 1.5 characters tall; colours
+  `#C9A8FF` rim / glow, `#1B1240` inside; `FLOATING_IN_PLACE`: no shadow, no snow on top). Its
+  static drawing (`_portal`) is an invisible box as large as the open portal with its sparks
+  (`portal.EXTENT`, so it is placed and sized the same open or sealed) and a faint zig-zag seam
+  (a thin filled band, tagged `seam`: its colour is the glow's).
+- **Switched** like a lamp (`SWITCHED_PROPS` and `LIVING_KINDS` gain it): `on`, `switch_on` /
+  `switch_off`; validation messages list it. Living overlays (`living_drawing._portal_overlays`,
+  `PORTAL_PARTS`): the inside (detail), two depth rings (detail mixed 30 % / 60 % towards main),
+  three swirl arms, the rim (main, 3.2 × outline) and its white core, six sparks — all without
+  points until placed; `GLOWS["portal"]` in the seam's colour.
+- **Maths** (`cartoon/portal.py`, no manim): `openness(on, switches, now)` (a ramp from where it
+  was: `OPEN_SECONDS` 1.6 to open, `CLOSE_SECONDS` 1.0 to seal), `opening_size(level)` (the crack
+  reaches full height in `CRACK_SHARE` 0.4 at `CRACK_WIDTH` 4 % wide, then widens), `changing`
+  (open, opening or sealing at either end, or switched between), `portal_shape(level, now, seed)`
+  → `PortalShape` (inside oval, a jagged rim of `RIM_POINTS` 36 with new jags `CRACKLE_RATE` 14
+  times a second, ±`JAG` 7 %, depth rings, swirls turning `SWIRL_SPEED` 0.9 rad/s, sparks living
+  `SPARK_SECONDS` 0.28 s, a pulse of 3 % every 1.8 s, a glow strength flickering by `_noise`);
+  seeded by the stage's `motion_seed`, so every render is the same.
+- **`LivingProp`** for a portal: `_open(now)` places the parts (`closed_curve` for the ovals,
+  corners for the rim, swirls and sparks) through the prop's anchor, or clears them while
+  sealed; `changing` from `portal.changing`, so a sealed portal stays in Manim's static image and
+  an open one redraws its parts, its glow and what is drawn over them. The parts and the glow are
+  unlit (the generic living rule).
+- **Stage**: `switch_props` plays `PORTAL_OPEN_SOUNDS` (a whoosh 1.4 s pitched −5 at −2 dB and a
+  thunder rumble 2.5 s at intensity 0.2, pitched −4, −8 dB) or `PORTAL_SEAL_SOUNDS` (a swoosh and
+  a thud), no click. `ISO_ITEMS` gains the portal: it stands at a spot (`iso_item_point`, its
+  `item_box` by its height), drawn in order with the characters; `enter` / `exit` with `door:` its
+  spot fade a character in or out there (it walks to its own `at`: put that in front).
+- **Public**: `vidgen.api` adds `SCIFI_PROPS`, `FLOATING_IN_PLACE`.
+- **Seen** (the iso lab, red tint, `scale: 1.4`): the rift glows over the tint, crackles and turns,
+  a character comes out to its spot in front; a closeup fills the frame with the rim and swirls.
+  Render: a 21.3 s test scene with the portal open about 9 s, a hologram, three characters and
+  two closeups in 27.9 s at 854 × 480.
+- **Not done**: a view through it (Step 246); `pick_up` of a portal is not refused; its glow, unlit,
+  can look a little darker than a strongly tinted dark sky around it.
+
+### 100.5 Compatibility (Step 245)
+
+Every branch is new and opt-in: no voice without `effect` is wrapped (hashes unchanged), no
+character without `hologram` is recoloured or unmarked, the portal is a new prop kind.
+`switch_props` keeps the click for every other kind. Phase Q baseline 31/31 identical; the
+existing tests whose messages list the switched props were updated (they now name `portal`).

@@ -85,7 +85,7 @@ def test_grips_and_the_spout() -> None:
 
 @pytest.mark.parametrize(("params", "message"), [
     ({"props": [{"prop": "cake", "open": True}]}, "open is for props that open (door, umbrella, book, letter, gift), not cake"),
-    ({"props": [{"prop": "vase", "on": True}]}, "on is for props that switch on (fireplace, kettle, lamp, phone, tv), not vase"),
+    ({"props": [{"prop": "vase", "on": True}]}, "on is for props that switch on (fireplace, kettle, lamp, phone, tv, portal), not vase"),
 ])
 def test_bad_params(params: dict[str, Any], message: str) -> None:
     with pytest.raises(ValidationError, match=re.escape(message)):

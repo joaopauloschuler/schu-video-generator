@@ -1464,6 +1464,40 @@ baseline frames when shared code changes). DESIGN §99. Steps 237–244.
 - [x] Physics: every PDG 2024 value and quantum number re-checked (the Step 237 `# check` marks resolved; sin²θ_W, the CKM magnitudes, the Z / W / K⁺ branching ratios confirmed; the Higgs YR4 predictions and Γ_H stay marked for the owner); fix: two real particles merging into one lighter one (e⁺e⁻ → γ, p p̄ → γ, p p̄ → π⁰) now forbidden; fix: the Z's "invisible" fraction is not given to a single νν̄ pair in decay chains; `tests/test_phase_y_review.py` (hand computations of p*, thresholds, βγcτ, m_γγ, track radius and sign, Asimov / counting / p-values, σ⁰_had, 24 reactions and 29 vertices)
 - [x] Fixes: `feynman` with `vertex_rule` is laid out for the whole frame before the first card and after the last (larger, not only centred; 9:16 too); a live `plot` / `mass_spectrum` readout keeps 64 drawn lines, not one per frame (a 57 s spectrum 622 → 392 MB); example MP4s re-rendered; Phase Q baseline 31/31
 
+## Phase Z — Story-cartoon features (a private story cartoon drives them)
+
+Goal: the owner's private short story told as a narrated isometric cartoon (5–7 min, Kokoro
+voices), and the generic features it needs, in vidgen for every author: per-speaker voice
+effects, holograms, portals / rifts, alarm lighting, iridescent characters, multi-voice dialogue
+polish, story sounds. The story project stays in the scratchpad: nothing of it is committed
+(features use neutral samples). Additive and opt-in: existing projects, scenes, gallery frames,
+audio and the studio unchanged (Phase Q's 31 baseline frames when shared code changes). DESIGN
+§100. Steps 245–248.
+
+### Step 245 — Adaptation, gap analysis, first features
+- [x] The adapted script (private, scratchpad): shot list with narration and dialogue per speaker, Kokoro voice per character, camera, staging, light, sounds and music; a test render of an iso lab; the gap list per shot (DESIGN §100.1)
+- [x] Phase Z plan here and DESIGN §100
+- [x] Voice effects: `effect:` on `voice:` and `voices:` (`deep`, `high`, `robot`, `radio`, `chorus`, `echo`, `hall`, `otherworldly`, lists, `{use, pitch, amount}`), any provider, ffmpeg after synthesis, in the hash only when set, not inherited by named voices (DESIGN §100.2)
+- [x] Hologram characters: `hologram: true | {color, opacity}` on a character: translucent, one glowing colour, bright edges, never graded by the stage's light (DESIGN §100.3)
+- [x] Portals: the `portal` prop (switched: `on`, `switch_on` opens it from a crack, `switch_off` seals it; crackling rim, sparks, swirls, pulse, unlit glow; sounds), at a spot of an iso place too, no shadow (DESIGN §100.4)
+- [x] Tests `tests/test_voice_effects.py`, `tests/test_portal_hologram.py`; CONFIG sections, guide (copied to `AGENTS.md`); Phase Q baseline 31/31
+
+### Step 246 — Remaining story-cartoon features
+- [ ] Hologram materialise entrance (wireframe → solid, flicker) and an occasional flicker; a hologram display prop (a projector with a floating translucent panel: moving patterns, text lines)
+- [ ] A view through a portal (a picture or a simple scene inside it); `pick_up` of a portal refused
+- [ ] Alarm lighting (a pulsing coloured light) and window shutters on an iso room (close / open with a slam)
+- [ ] Built-in sounds: `alarm`, `crackle`, `hum`, `drone` (crystal singing), `slam`
+- [ ] Iridescent characters (oil-on-water colour shift) and afterimages behind moving characters
+- [ ] Hand in hand: two characters holding hands, standing and walking together
+- [ ] Lab objects on an iso place (console desk with screens, server rack, projector pad); props for the memories (a chess board, a flower arch) as needed; a flashback vignette look if tints are not enough
+- [ ] Tests, CONFIG, guide (`AGENTS.md`), neutral gallery entries within the budget (16.5 MB)
+
+### Step 247 — The story video
+- [ ] Build the private story project (scratchpad), render previews, look at stills, iterate; Kokoro narration with the chosen voices and effects; music cues and sounds; lint clean; final 16:9 1080p (and 9:16 if it reads well)
+
+### Step 248 — Review of Phase Z
+- [ ] Story fidelity, visual quality (stills of every shot, 16:9 / 9:16), audio (distinct voices, levels, −16 LUFS), compatibility (Phase Q baseline), tests, docs; final render
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

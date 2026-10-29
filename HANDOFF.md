@@ -22563,3 +22563,89 @@ appears; the `calculation` in 16:9 leaves space below until its steps arrive (by
 How to test: `tests/test_phase_y_review.py`, `tests/test_feynman.py`, `tests/test_detector.py`,
 `tests/test_spectrum.py`; stills `s243/proj/build/preview/storyboard/scenes/production-1.png`
 (16:9) and `s243/proj/build/preview_short/storyboard/scenes/production-1.png` (9:16).
+
+## Step 245 — Story-cartoon features: plan, gap analysis, voice effects, holograms, portals
+
+Phase Z: a private story project (a narrated isometric cartoon, 5–7 min, Kokoro voices) drives
+generic features. The story, its adapted script and its project stay in the scratchpad
+(`story-qeh/`); nothing of them is in the repo.
+
+What was done
+- **Adaptation and gap analysis** (private): the script with a shot list (narration and dialogue
+  per speaker, camera, staging, light, sounds, music) and the gap list per shot; a test render of
+  an iso lab. Generic summary and the phase plan: DESIGN §100.1, tasklist Phase Z (Steps
+  245–248).
+- **Voice effects** (DESIGN §100.2): `effect:` on `voice:` / `voices:` — `deep`, `high`, `robot`,
+  `radio`, `chorus`, `echo`, `hall`, `otherworldly`, a list, or `{use, pitch, amount}`; any
+  provider, applied after synthesis with ffmpeg (`EffectProvider` wraps the provider); in the
+  hash only when set; not inherited by named voices; each preset about as loud as the dry voice
+  (measured); `echo` / `hall` / `chorus` add a 0.35 / 0.9 / 0.1 s tail.
+- **Hologram characters** (§100.3): `hologram: true | {color, opacity}` on a character —
+  colours mapped through the hologram colour by lightness, translucent fills, bright edges, never
+  graded by the stage's light or soft shading; character PNGs and sheets show it.
+- **Portals** (§100.4): the `portal` prop (new `SCIFI_PROPS`), switched like a lamp: opens from a
+  crack into a crackling, swirling, pulsing oval with sparks and an unlit glow; seals back to a
+  seam; whoosh + rumble / swoosh + thud; no shadow (`FLOATING_IN_PLACE`); stands at a spot of an
+  iso place (`ISO_ITEMS`), and `enter` / `exit` with `door:` its spot step through it.
+
+Files
+- New: `src/vidgen/voice_effects.py`, `src/vidgen/tts/effects.py`, `src/vidgen/cartoon/hologram.py`,
+  `src/vidgen/cartoon/portal.py`, `tests/test_voice_effects.py` (9), `tests/test_portal_hologram.py` (12).
+- Changed: `config.py` (`VoiceEffectName`, `VoiceEffectConfig`, `effect` on `VoiceConfig` /
+  `VoiceEntry`, `HologramConfig`, `CharacterEntry.hologram` + `hologram_look()`), `voices.py`
+  (`SPEAKER_FIELDS`), `tts/__init__.py` (`get_provider` wraps), `tts/run.py` (`describe_voice`),
+  `cartoon/character.py` (`build_character`), `cartoon/props.py` (portal, `SCIFI_PROPS`,
+  `FLOATING_IN_PLACE`), `cartoon/living.py` (`SWITCHED_PROPS`, `GLOWS`), `cartoon/living_drawing.py`
+  (portal parts, `LivingProp` portal branch), `scenes/stage.py` (hologram unlit, portal sounds,
+  shadows / snow tops, `ISO_ITEMS`), `api.py`; tests whose messages list the switched props
+  (`test_cartoon_living`, `test_cartoon_small_props`, `test_cartoon_fire_nature`) and the prop
+  count (`test_cartoon_props`: 70); docs: CONFIG (Voice effects, Holograms, Portals, tables),
+  the guide (Sound and Iso topics; copied to `AGENTS.md`), README, CHANGELOG, DESIGN §2 / §100,
+  tasklist.
+
+Public interfaces: `vidgen.api` adds `VOICE_EFFECTS`, `VoiceEffect`, `effect_filter`,
+`voice_effect`, `HOLOGRAM_COLOR`, `apply_hologram`, `is_hologram`, `unmark_lit`, `SCIFI_PROPS`,
+`FLOATING_IN_PLACE`. Config: `voice.effect`, `voices.<n>.effect`, `characters[].hologram`, prop
+`portal` (with `on`, `switch_on`, `switch_off`).
+
+Decisions
+- Effects at synthesis time (in the beat's MP3 and its hash), not in the mix: what is heard is the
+  MP3 (readback, the beat's length with the tail, visemes).
+- Robot = zero-phase FFT (`afftfilt`), a flat 187.5 Hz buzz that a `pitch` moves (applied after
+  it); measured interquartile pitch range 2 Hz (dry: 38 Hz).
+- Hologram as a recolouring of the figure (it keeps every action, viseme and expression), not an
+  overlay; the flicker and the materialise entrance are left for Step 246.
+- The portal is a switched living prop (reusing the lamp / fireplace machinery: redrawn only
+  while open, opening or sealing; unlit parts and glow), usable on flat stages and iso places.
+
+Voice choices for the story (checked with the Kokoro in `kvenv312`; all downloaded into
+`hfhome`): narrator `bm_fable` (0.9), heroine `af_heart` (0.9), hero `am_michael` (0.9), the
+AI `af_nicole` (0.85, `echo`), the visitor `am_onyx` (0.8, `otherworldly`), the building's
+security voice `am_echo` (1.0, `{use: robot, pitch: -5}`).
+
+Checks
+- Tests (one file at a time): test_voice_effects 9, test_portal_hologram 12 (2 renders),
+  test_cartoon_living 27, test_cartoon_props 92, test_cartoon_small_props 18,
+  test_cartoon_fire_nature 20, test_cartoon_character 22, test_cartoon_stage 24,
+  test_cartoon_lighting 8, test_cartoon_sheet 9, test_iso_staging 32, test_voices +
+  test_emotions + test_tts_kokoro 74 (+1 skipped), test_emotions_providers 8, test_tts 35,
+  test_config 21, test_api 10, test_schema 71, test_docs 73, test_guide 90, test_gallery 19 (not
+  render), test_builtin_scenes 174 (not render), test_mcp 20 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check245`).
+- Real Kokoro run of the test project (6 beats, effects `echo` and `otherworldly`); preview
+  storyboard of the iso lab with a hologram, a portal opening / a visitor stepping out / sealing,
+  under a red tint: 21.3 s of video in 27.9 s (854 × 480).
+
+Left for Step 246 (DESIGN §100.1): hologram materialise entrance and flicker; a hologram display
+prop (floating translucent panel with moving patterns and text lines); a view through a portal
+(a picture or simple scene inside it) and refusing `pick_up` of a portal; alarm lighting (pulsing
+light) and window shutters on an iso room; sounds `alarm`, `crackle`, `hum`, `drone`, `slam`;
+iridescent characters and afterimages; hand in hand; lab objects on an iso place (console,
+server rack, projector pad); memory-vignette props (chess board, flower arch) and a flashback
+look; gallery entries (none added: 15.7 of 16.5 MB; a portal / hologram still could go into the
+props or robots sheet). Noted: the portal's unlit glow can look slightly darker than a strongly
+tinted dark sky around it.
+
+How to test: `tests/test_voice_effects.py`, `tests/test_portal_hologram.py`; stills (scratchpad)
+`s245/t1/build/preview/storyboard/scenes/lab-1.png`, `lab-2.png` (the iso lab, hologram, portal),
+`s245/vega.png` (a hologram character).

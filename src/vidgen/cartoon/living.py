@@ -5,7 +5,8 @@ A wall ``clock`` that runs turns its hands from the scene clock (:func:`clock_se
 flickers (:func:`tv_picture`); a ``lamp`` that is on glows (:data:`GLOWS`, :func:`glow_rings`); a
 ``fireplace`` that is on burns, its flames flickering and leaning with the wind
 (:func:`flame_shapes`, :func:`fire_flicker`); a ``kettle`` that is on steams (:func:`steam_puffs`);
-a ``phone`` that is on rings in bursts, shaking (:func:`ring_shake`, DESIGN.md §69.56).
+a ``phone`` that is on rings in bursts, shaking (:func:`ring_shake`, DESIGN.md §69.56); a
+``portal`` that is on is open, crackling and glowing (:mod:`vidgen.cartoon.portal`, §100.4).
 These are on or off from the start and the ``switch_on`` / ``switch_off`` actions change them
 (:func:`switched_on`, :func:`on_spans`). Only what changes is redrawn on each frame: the moving
 parts and what is drawn over them (:func:`redrawn_members`); the rest of the set stays in Manim's
@@ -22,7 +23,7 @@ from functools import lru_cache
 
 #: The props a ``switch_on`` / ``switch_off`` action and the stage key ``on`` act on (a phone
 #: that is on rings, DESIGN.md §69.56).
-SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "phone", "tv")
+SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "phone", "tv", "portal")
 #: The props that can move by themselves: a running clock and the switched ones.
 LIVING_KINDS: tuple[str, ...] = ("clock", *SWITCHED_PROPS)
 #: The attribute naming a living part of a prop's drawing (``hour``, ``minute``, ``second``,
@@ -76,6 +77,7 @@ GLOWS: dict[str, GlowSpec] = {
     "lamp": GlowSpec(0.0, 0.86, 0.42, "#FFD67A", 0.55),
     "tv": GlowSpec(0.0, 0.7, 0.8, "#A8D8FF", 0.3),
     "fireplace": GlowSpec(0.0, 0.32, 1.05, "#FFA94D", 0.5),
+    "portal": GlowSpec(0.0, 0.5, 0.75, "#C9A8FF", 0.5),   # in the portal's own rim colour (§100.4)
 }
 
 #: A fireplace's flames (prop units, as drawn facing right): the middle of each outer tongue's

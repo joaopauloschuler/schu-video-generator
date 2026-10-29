@@ -37,6 +37,16 @@ FIRE_LIGHT_SECONDS = 0.8
 PHONE_RING_GAIN = -6.0
 #: The level of a ``knock`` on a door (dB).
 KNOCK_GAIN = -3.0
+#: A portal tearing open (a rushing whoosh over a low rumble) and sealing (a falling swoosh and a
+#: soft thud): (sound, its params) each (DESIGN.md §100.4).
+PORTAL_OPEN_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
+    ("whoosh", {"gain": -2.0, "duration": 1.4, "pitch": -5.0}),
+    ("thunder", {"gain": -8.0, "duration": 2.5, "intensity": 0.2, "pitch": -4.0}),
+)
+PORTAL_SEAL_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
+    ("swoosh", {"gain": -2.0, "duration": 0.9, "pitch": -3.0}),
+    ("thud", {"gain": -4.0, "duration": 0.5}),
+)
 #: Lightning (DESIGN.md §69.61): a bolt's core width (Manim stroke width) and how far it zigzags
 #: (frame heights); the band left free above the sky's path for the sun and moon (frame heights).
 BOLT_WIDTH = 4.0
@@ -55,8 +65,8 @@ LEVEL_MAX_PIXELS = 24_000_000
 #: the view and stay there as the camera moves (they are as far as the sky).
 LEVEL_STAR_SKY = 0.45
 #: The props an iso place takes: small things to hold, give and put down (DESIGN.md §89.10); its
-#: big things are its ready-made objects.
-ISO_ITEMS: tuple[str, ...] = (*SMALL_PROPS, "key", "ball", "cup", "box", "basket", "umbrella", "laptop", "napkin", "shell", "mushroom")
+#: big things are its ready-made objects. A portal stands at a spot too (DESIGN.md §100.4).
+ISO_ITEMS: tuple[str, ...] = (*SMALL_PROPS, "key", "ball", "cup", "box", "basket", "umbrella", "laptop", "napkin", "shell", "mushroom", *SCIFI_PROPS)
 #: The light of an iso place where it rains from the start and no ``light`` is given (DESIGN.md
 #: §89.12): the overcast tint the docs give for a rainy day, so the rain reads as rain.
 ISO_RAIN_LIGHT: tuple[str, float] = ("#6B7890", 0.45)
@@ -1627,7 +1637,7 @@ class Stage(IsoStaging, NarratedScene):
             self._tops: dict[str, TopLine] | None = {}
             for name in sorted(fixed):
                 prop = self.props[name]
-                if prop.kind in (*FLAT_PROPS, *WATER_VEHICLES, *AIR_VEHICLES, "umbrella") or prop.held_by is not None:
+                if prop.kind in (*FLAT_PROPS, *FLOATING_IN_PLACE, *WATER_VEHICLES, *AIR_VEHICLES, "umbrella") or prop.held_by is not None:
                     continue
                 line = prop_top_line(prop)
                 if line is not None:
@@ -1972,7 +1982,10 @@ class Stage(IsoStaging, NarratedScene):
         if p.iso is not None:   # a lamp's light falls on who stands near it (§89.13)
             self.iso_lamplight()
         if self.drawing.shading == "soft":   # the characters' and props' fills (DESIGN.md §79)
-            mark_shaded(*(mob for _, mob in on_stage))
+            mark_shaded(*(mob for _, mob in on_stage if not is_hologram(mob)))
+        for figure in self.cast.values():   # a hologram glows the same in any light (DESIGN.md §100.3)
+            if is_hologram(figure):
+                unmark_lit(figure)
         self._start_living(living)
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
@@ -2494,10 +2507,13 @@ class Stage(IsoStaging, NarratedScene):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
         if not names or not self._foley_on():
             return
-        if any(self.living[name].kind not in ("fireplace", *(("phone",) if on else ())) for name in names):
+        if any(self.living[name].kind not in ("fireplace", "portal", *(("phone",) if on else ())) for name in names):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
         if on and any(self.living[name].kind == "fireplace" for name in names):
             self.sfx("burner", max(float(time), 0.0), gain=FIRE_LIGHT_GAIN, duration=FIRE_LIGHT_SECONDS)
+        if any(self.living[name].kind == "portal" for name in names):   # it tears open or seals (§100.4)
+            for sound, params in (PORTAL_OPEN_SOUNDS if on else PORTAL_SEAL_SOUNDS):
+                self.sfx(sound, max(float(time), 0.0), **params)
 
     def knock_on(self, patterns: list[str], time: float) -> None:
         """Someone knocks on the doors matching ``patterns`` at scene ``time`` (the ``knock``
@@ -2667,7 +2683,7 @@ class Stage(IsoStaging, NarratedScene):
         for place_at in placements:
             name = place_at.name
             if place_at.kind == "prop":
-                if lifts[name] > 0 or name in doors or self.props[name].kind in (*FLAT_PROPS, *WATER_VEHICLES):
+                if lifts[name] > 0 or name in doors or self.props[name].kind in (*FLAT_PROPS, *FLOATING_IN_PLACE, *WATER_VEHICLES):
                     continue  # hangs in the sky or on a wall, is part of the room's wall, lies flat or floats
                 prop = self.props[name]
                 widths = {shape: prop.shape_width(shape) * PROP_SHADOW_WIDTH for shape in prop.shapes}

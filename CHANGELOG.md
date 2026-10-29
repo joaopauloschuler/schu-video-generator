@@ -5,7 +5,22 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–244)
+## Unreleased (Steps 193–245)
+
+### Story-cartoon features (Phase Z, Steps 245–248)
+
+- **Voice effects** (Step 245). `effect:` on `voice:` or a named voice of `voices:` runs that
+  speaker's lines through `deep`, `high`, `robot` (a flat, metallic monotone), `radio`, `chorus`,
+  `echo`, `hall` or `otherworldly` (deep, many-voiced, in a hall), a list of them, or `{use,
+  pitch, amount}`, with any provider (ffmpeg after synthesis). A voice without one keeps every
+  audio hash; named voices do not inherit it.
+- **Hologram characters** (Step 245). `hologram: true` (or `{color, opacity}`) on a character
+  draws it as a translucent figure in one glowing colour with bright edges, which the stage's
+  `light` never darkens.
+- **Portals** (Step 245). A `portal` prop: switched like a lamp, it tears open from a glowing
+  crack into a crackling, swirling, pulsing rift with a glow (`switch_on`) and seals again
+  (`switch_off`), with its sounds; on a plain stage or at a spot of an iso place, where a
+  character can step out of it (`enter` with `door:` its spot).
 
 ### Particle physics (Phase Y, Steps 237–244)
 

@@ -2528,6 +2528,11 @@ and give each scene `set: village`.
   puddles with ripples), `{kind: snow, settle: true}` (the ground, roofs and treetops turn white;
   `settled: 30` starts it white). A `run_to` leaves speed lines along its diagonal.
   Footsteps follow the ground (grass, path, boards, a bridge), birdsong by day, crickets at night.
+- Science fiction and magic: a `portal` prop at a spot tears open with `switch_on` (a crackling,
+  glowing rift; `switch_off` seals it); a character comes out of it with `- {enter: visitor,
+  door: rift}` (the portal's spot) and walks to its own spot in front. A character with `hologram: true` is a glowing,
+  translucent projection (an AI, a ghost) that no `light` darkens; give it an `effect: echo` on
+  its voice.
 
 ```yaml
 characters:
@@ -3068,6 +3073,22 @@ ElevenLabs models, a sentence added to the `instructions` of OpenRouter models t
 voice: {provider: kokoro, voice: af_heart}       # speed: 1.0, lang: a, device: cpu (defaults)
 voices:
   guest: {voice: am_michael, label: Guest}         # same provider; another voice
+```
+
+**Voice effects.** A speaker who is not an ordinary person gets an `effect:` on its voice, for
+any provider: `robot` is a flat, metallic monotone (`{use: robot, pitch: -6}` lowers its buzz);
+`otherworldly` is deep, many-voiced and in a hall (aliens, spirits, giants); `echo` is a
+loudspeaker in a room (a ship's computer); `radio` a phone or a walkie-talkie; also `hall`,
+`chorus`, `deep`, `high`, or a list. Pick a distinct base voice too (a deep `am_onyx` under
+`otherworldly`), and keep the narrator plain. `echo`, `hall` and `chorus` add a short tail after
+the line.
+
+```yaml
+voice: {provider: kokoro, voice: bm_fable}         # the narrator, plain
+voices:
+  ship: {voice: af_nicole, label: Ship, effect: echo}
+  stranger: {voice: am_onyx, label: Stranger, effect: otherworldly}
+  gate_bot: {voice: am_echo, label: Gate, effect: {use: robot, pitch: -6}}
 ```
 
 **Writing good `instructions`** (OpenRouter models that read them, e.g. Gemini TTS: the dry run

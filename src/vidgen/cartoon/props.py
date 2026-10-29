@@ -90,11 +90,13 @@ OUTDOOR_PROPS: tuple[str, ...] = (
 INDOOR_PROPS: tuple[str, ...] = ("blackboard", "school_desk", "shelf_with_goods", "till", "wardrobe")
 #: The story props of a platform level (DESIGN.md §86.8): a key (to hold, give, and open a locked door with).
 STORY_PROPS: tuple[str, ...] = ("key",)
+#: Science-fiction props (DESIGN.md §100.4): a portal that opens in space.
+SCIFI_PROPS: tuple[str, ...] = ("portal",)
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
     "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin", "kettle",
-    *SMALL_PROPS, *FURNITURE, *OUTDOOR_PROPS, *INDOOR_PROPS, *STORY_PROPS, *VEHICLE_KINDS,
+    *SMALL_PROPS, *FURNITURE, *OUTDOOR_PROPS, *INDOOR_PROPS, *STORY_PROPS, *VEHICLE_KINDS, *SCIFI_PROPS,
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
@@ -108,6 +110,7 @@ PROP_HEIGHTS: dict[str, float] = {
     "shop": 1.7, "bench": 0.32, "bus_stop": 1.35, "road": 0.12, "path": 0.08, "fountain": 0.75, "flowers": 0.28,
     "fence": 0.42, "beach_umbrella": 1.3, "shell": 0.06, "pine": 1.9, "mushroom": 0.13, "log": 0.16,
     "blackboard": 0.5, "school_desk": 0.4, "shelf_with_goods": 0.95, "till": 0.26, "wardrobe": 1.1, "key": 0.3,
+    "portal": 1.5,
     **{kind: spec.height for kind, spec in VEHICLES.items()},
 }
 #: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
@@ -115,6 +118,8 @@ PROP_HEIGHTS: dict[str, float] = {
 PROP_HANGS: dict[str, float] = {"picture": 0.5, "clock": 0.85, "blackboard": 0.42}
 #: Props lying flat on the floor, which cast no shadow (a rug, a road, a path).
 FLAT_PROPS: frozenset[str] = frozenset({"rug", "road", "path"})
+#: Props that float in the air where they stand (no shadow, no snow on top): a portal.
+FLOATING_IN_PLACE: frozenset[str] = frozenset(SCIFI_PROPS)
 #: Props drawn in more than one shape: kind -> its shape names, the first drawn unless the stage
 #: asks for another (``open: true``); the ``open`` / ``close`` actions switch them.
 PROP_SHAPES: dict[str, tuple[str, ...]] = {
@@ -168,6 +173,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "log": ("secondary", "highlight"),
     "blackboard": ("secondary", "#2F5A46"), "school_desk": ("secondary", "dim"), "shelf_with_goods": ("secondary", "accent"),
     "till": ("accent", "highlight"), "wardrobe": ("secondary", "highlight"), "key": ("#E0B33A", "#6B4E1E"),
+    "portal": ("#C9A8FF", "#1B1240"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
@@ -1483,6 +1489,25 @@ def _key(p: _Paint) -> list[VMobject]:
     ]
 
 
+def _portal(p: _Paint) -> list[VMobject]:
+    """A sealed portal (DESIGN.md §100.4): a faint zig-zag seam in the air where it opens, in an
+    invisible box as large as the open portal with its sparks (so it is placed and sized the same
+    open or sealed); it opens as a prop that moves by itself (:mod:`vidgen.cartoon.portal`)."""
+    from vidgen.cartoon.portal import CENTRE, EXTENT, HALF_HEIGHT
+
+    left, bottom, right, top = EXTENT
+    box = Rectangle(width=right - left, height=top - bottom).move_to([(left + right) / 2, (bottom + top) / 2, 0.0])
+    box.set_fill(opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+    cx, cy = CENTRE
+    ys = np.linspace(cy - 0.6 * HALF_HEIGHT, cy + 0.6 * HALF_HEIGHT, 9)
+    zig = [(cx + (0.012 if k % 2 else -0.012), float(y)) for k, y in enumerate(ys)]
+    half = 0.004   # a sliver: the zig-zag line drawn as a thin filled band
+    seam = _poly([(x - half, y) for x, y in zig] + [(x + half, y) for x, y in reversed(zig)], p.main, p, outline=False)
+    seam.set_fill(opacity=0.6)
+    setattr(seam, LIVING_PART, "seam")   # its colour is the portal's glow's
+    return [box, seam]
+
+
 _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]]]] = {
     "table": _table, "chair": _chair, "tree": _tree, "bush": _bush, "house": _house, "door": _door,
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
@@ -1497,7 +1522,7 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
     "flowers": _flowers, "fence": _fence, "beach_umbrella": _beach_umbrella, "shell": _shell, "pine": _pine,
     "mushroom": _mushroom, "log": _log,
     "blackboard": _blackboard, "school_desk": _school_desk, "shelf_with_goods": _shelf_with_goods, "till": _till,
-    "wardrobe": _wardrobe, "key": _key,
+    "wardrobe": _wardrobe, "key": _key, "portal": _portal,
 }
 
 
@@ -1644,6 +1669,8 @@ def read_svg_seat_and_lean(path: Path, *, where: str) -> tuple[tuple[float, floa
 
 __all__ = [
     "FLAT_PROPS",
+    "FLOATING_IN_PLACE",
+    "SCIFI_PROPS",
     "FRUIT_INDEX",
     "FURNITURE",
     "INDOOR_PROPS",

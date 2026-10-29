@@ -1026,6 +1026,7 @@ voice:
   lang: null                        # kokoro: language letter (a, b, e, f, h, i, j, p, z); null: from voice / language
   device: cpu                       # kokoro: cpu, cuda or auto
   emotion: null                     # how this voice's beats feel (excited, sad, whisper...); every provider
+  effect: null                      # a sound effect on the voice (hall, robot, otherworldly...): see "Voice effects"
   dub: null                         # this voice in other languages, {pt: pf_dora}: see "Dubbing"
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
@@ -1393,6 +1394,7 @@ scenes:
 | `label` | the name (`dr_ana` → `Dr ana`) | the speaker's name in subtitles and captions; not inherited from `voice.label` |
 | `color` | palette colour by position | the speaker's colour in captions (`speakers: color` / `both` / the `name` tag); not inherited |
 | `emotion` | none | how this speaker's beats feel unless a beat says otherwise ([voices with feeling](#voices-with-feeling-emotion)); not inherited from `voice.emotion` |
+| `effect` | none | a sound effect on this speaker's voice ([voice effects](#voice-effects-effect)): a hall, a robot, a radio, a voice from another world; not inherited from `voice.effect` |
 | `dub` | none | this speaker's voice in other languages (`{pt: pf_dora}`); without one: the base voice's when this voice keeps it, else chosen automatically ([dubbing](#dubbing-dub---all-languages)) |
 
 - **Names**: letters, digits and `_`; `default` is reserved for the base voice. An unknown name in
@@ -1426,6 +1428,54 @@ scenes:
   project entries: write a variant (`pronunciation:` in it) when a voice of another language needs
   other spoken forms.
 
+### Voice effects (`effect`)
+
+A voice can sound through an effect: a robot's flat buzz, a big hall, a loudspeaker's echo, a
+radio, a giant or a being from another world. `effect` on a voice (`voice:` or a named voice of
+`voices:`) runs every beat of that voice through it after it is spoken, with any provider
+(Kokoro, ElevenLabs, OpenRouter): it is plain audio processing with ffmpeg, nothing is sent to
+the provider.
+
+```yaml
+voices:
+  ship_ai: {voice: af_nicole, label: Ship, effect: echo}            # through the ship's speakers
+  guard: {voice: am_onyx, label: Guard, effect: otherworldly}       # deep, many-voiced, in a hall
+  door_bot: {voice: am_echo, label: Door, effect: {use: robot, pitch: -6}}   # a flat, low robot
+  caller: {voice: bf_emma, effect: [radio, echo]}                   # presets combine
+```
+
+| preset | what it does |
+|---|---|
+| `deep` | 4 semitones lower (a larger, darker voice); the length is kept |
+| `high` | 4 semitones higher (a smaller, brighter voice) |
+| `robot` | a flat, metallic monotone: the voice's own pitch replaced by a steady buzz (187.5 Hz; a `pitch` moves the buzz: `-6` about 133 Hz) |
+| `radio` | a narrow band (320–3200 Hz), compressed, like a radio or a phone |
+| `chorus` | several slightly detuned copies: a voice of many |
+| `echo` | a short echo, as from a loudspeaker in a room |
+| `hall` | a large hall's reverberation |
+| `otherworldly` | `deep` (3 semitones lower), `chorus` and `hall` together: a resonant voice not of this world |
+
+| key (`effect` as a mapping) | default | |
+|---|---|---|
+| `use` | none | a preset or a list of presets; none: only the `pitch` |
+| `pitch` | the presets' (`deep` −4, `high` +4, `otherworldly` −3, else 0) | semitones, −12 to 12; the length is kept |
+| `amount` | `0.5` | 0–1: how strong the echo, hall, chorus and robot are |
+
+- **Order**: presets combine in a fixed order (the pitch, then the robot, the radio band, the
+  chorus, the echo and the hall; with the robot the pitch comes after it), so `[deep, hall]` and
+  `[hall, deep]` are the same. Each preset keeps the voice about as loud as without it (measured
+  on Kokoro lines), and a limiter keeps the peaks under full scale.
+- **Length**: the speech keeps its timing, so captions and lip sync stay on the words; `echo`,
+  `hall` and `chorus` add a short tail after the last word for the reflections to ring out
+  (0.35 s, 0.9 s, 0.1 s), and the beat is that much longer.
+- **Audio hash**: a voice without an `effect` keeps every hash; with one, the effect is part of
+  its beats' hash, so changing it re-voices only that voice's beats (a variant with another effect
+  gets its own audio folder). Like `emotion`, a named voice does not inherit the base voice's
+  `effect`. `vidgen tts --dry-run` names it (`voice guard (kokoro am_onyx ..., effect chorus+hall
+  (pitch -3))`).
+- **With `emotion`**: an emotion shapes how the line is spoken; the effect is applied after it.
+  Both may be given.
+
 ## Characters (`characters:`)
 
 Cartoon characters, declared once at the top level and used by any scene that draws characters:
@@ -1456,6 +1506,7 @@ characters:
 | `expressions` | `{}` | the character's own expressions, like `poses` |
 | `idle` | `true` | breathe, sway the head slightly and blink every 2 to 6 s on its own ([below](#idle-motion)); `false`: hold still between actions |
 | `cartoon_motion` | none (the scene's, else the video's: `lively`) | this character's [animation principles](#animation-principles-cartoon_motion): `lively`, `calm` or `none`; wins over the scene's and the video's |
+| `hologram` | `false` | `true` or `{color, opacity}`: draw it as a [hologram](#holograms-hologram), a translucent figure in one glowing colour that the stage's light never darkens |
 
 The **generator** draws every character from simple shapes (circles, ellipses, rounded
 rectangles, polygons, lines), so each figure is an original drawing:
@@ -1626,6 +1677,40 @@ Only one piece goes on top of the head: `hat`, `cap`, `crown`, `wizard_hat` and 
 each other (a config error); glasses, a bow, a scarf and a cape go with any of them.
 
 ![Robots (box, screen, round and on wheels) and the costume pieces, from the side and the front](gallery/media/robots.png)
+
+#### Holograms (`hologram`)
+
+`hologram: true` draws a character as a projection of light: a ship's computer, a message from
+far away, a ghostly guide. Every part keeps its shape and moves, speaks and acts as usual; its
+colours are mapped through the hologram's colour by how light they are (light cloth and skin
+glow in it, dark eyes, brows and mouth become a deep shade of it, so the face still reads), the
+fills turn translucent and the outlines a bright, nearly white tint of the colour.
+
+```yaml
+characters:
+  - name: vega
+    voice: vega_voice
+    hologram: true                                   # cyan, #5FD8FF, 60 % solid
+    look: {body: tall, hair: short, eyes: oval}
+    colors: {skin: "#F0F0F0", clothes: "#C8C8C8"}    # light colours glow brightest
+  - name: echo
+    hologram: {color: "#FFB45F", opacity: 0.4}        # an amber, fainter ghost
+```
+
+| key (`hologram` as a mapping) | default | |
+|---|---|---|
+| `color` | `#5FD8FF` | the hologram's colour (a theme token or hex) |
+| `opacity` | `0.6` | 0.2–1: how solid the figure is (1 hides what is behind it, 0.2 is a faint ghost) |
+
+- **Light**: a stage's [`light`](#light-and-shadows-light-shadows) does not grade a hologram (it
+  shines the same by day, at night and under a coloured tint), nor does the soft
+  [shading](#drawing-style-drawing).
+- **Looks**: give a hologram light, plain colours (`skin` and `clothes` near white or grey) for
+  the brightest glow; the generator's dark ink becomes the deep shade. `vidgen character NAME
+  --png` and `vidgen character-sheet` show it as a hologram.
+- It enters and leaves like any character; `enter` / `exit` through a `door:` (a spot of an
+  [iso place](#isometric-places-iso) too) fade it in and out where it stands, as if the projection
+  were switched on.
 
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
@@ -9980,7 +10065,7 @@ never leaves the stage.
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10416,7 +10501,7 @@ they hide what is behind them.
   `flower`, `book`, `cake`, `cup`, `ball`, `basket`, `umbrella`... or an svg), standing `at` a
   spot: on the ground, or on the table, bench, chair, bed, sofa, rock or well (its rim) standing
   there. They are cut-outs like the characters, hidden by what stands in front of them, and handed
-  about with the stage's actions:
+  about with the stage's actions. A [`portal`](#portals-portal) stands at a spot the same way:
 
   ```yaml
   props:
@@ -10685,9 +10770,9 @@ Three props move by themselves (outdoors too):
 switch it at `at` of the beat (at once, with a `click` while `foley` is on). The lit screen, the
 lantern and the glows are never graded by the stage's light, so they shine at night. Other props
 take no `on`, `time` or `speed` (a config error) except a [`fireplace` or a
-`kettle`](#fireplaces-and-kettles-on-switch_on) and a ringing [`phone`](#everyday-small-props-let_go-pour),
-and the actions refuse them ("'sofa' cannot be switched on or off (props that can: fireplace,
-kettle, lamp, phone, tv)").
+`kettle`](#fireplaces-and-kettles-on-switch_on), a ringing [`phone`](#everyday-small-props-let_go-pour)
+and a [`portal`](#portals-portal), and the actions refuse them ("'sofa' cannot be switched on or
+off (props that can: fireplace, kettle, lamp, phone, tv, portal)").
 
 Render cost: only the moving parts leave Manim's static picture of the set (the hands; the
 picture and the glow of a tv; a lamp's lantern and glow only in the animation where it is
@@ -10750,6 +10835,63 @@ Render cost: as for a tv, the flames, the glow and the steam leave Manim's stati
 they burn or steam, with what is drawn over them. Measured on the room above at 854×480, 260
 frames: 16 415 Cairo draws and 6.6–7.1 s with both off, 31 846 draws and 10.4–11.4 s with both
 on all along (the large translucent glow costs the most).
+
+##### Portals (`portal`)
+
+A `portal` is a rift in space that tears open, crackles and seals: a doorway to another world, a
+time hole, a magic gate. It floats where it stands (1.5 characters tall, its oval a little above
+the ground; no shadow), indoors or out, on a plain stage or at a spot of an
+[iso place](#isometric-places-iso). It is switched like a lamp: `on: true` starts it open,
+`- switch_on: <portal>` opens it and `- switch_off: <portal>` seals it, at `at` of the beat.
+
+- **Opening** (1.6 s): a thin glowing crack grows to its full height in the air, then splits
+  open into an oval. **Open**, its rim crackles (a jagged edge in `color`, with a bright core, new
+  jags 14 times a second), sparks fly off the rim, three swirls turn inside a deep `detail` colour
+  with lighter depth rings, the whole pulses gently, and a soft glow in the rim's colour lies
+  around it. **Sealing** (1 s) is the opening backwards, down to a faint seam. Seeded: the same in
+  every render.
+- **Light**: the rim, the inside and the glow are never graded by the stage's light: at night or
+  under a red alarm tint the portal still shines in its own colours.
+- **Colours**: `color` the rim and the glow (default `#C9A8FF`, a pale violet), `detail` the inside
+  (default `#1B1240`, deep space); e.g. `{color: "#7FE7FF", detail: "#0B2A3F"}` for an icy blue one.
+- **Sounds** (foley): opening plays a low, rushing `whoosh` over a soft, deep `thunder` rumble;
+  sealing a falling `swoosh` and a soft `thud`. No click.
+- **Stepping through**: on an iso place a character can come out of it or go into it with `enter`
+  / `exit` and `door:` the portal's spot: it fades in there and walks to its own `at` (put that
+  spot in front of the portal, or it stands inside it, hidden), or walks there and fades out.
+- **Size**: `scale` (1.4 for a portal a tall character walks through).
+
+```yaml
+- id: lab
+  type: stage
+  params:
+    light: night
+    iso:
+      place: indoor
+      map: |
+        ########
+        #....r.#
+        #.a..g.#
+        #......#
+        ##+#####
+      spots: {r: rift, g: in_front, a: desk}
+    props:
+      - {prop: portal, name: rift_1, at: rift, scale: 1.4}
+    characters:
+      - {name: ada, at: desk}
+      - {name: visitor, at: in_front}
+  beats:
+    - text: "Then, with a crackle, the air itself tore open."
+      actions: [{switch_on: rift_1, at: 0.4}]
+    - text: "And someone stepped out."
+      actions: [{enter: visitor, door: rift}]          # out of the rift, to its own spot in front
+    - text: "A moment later, the rift was gone."
+      actions: [{switch_off: rift_1, at: 0.3}]
+```
+
+Render cost: like a fireplace's flames, the portal's parts and glow are redrawn on every frame
+while it is open, opening or sealing (with what is drawn over them); a sealed portal stays in
+Manim's static picture.
 
 #### Fruit falling from a tree (`fruit`, `drop_fruit`)
 
@@ -10881,7 +11023,7 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can flower`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can flower`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket`; [science fiction](#portals-portal): `portal` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -10894,7 +11036,7 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella`, `door`, `book`, `letter` or `gift` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room), [small props](#everyday-small-props-let_go-pour)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
-| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle` or `phone` only: `true` starts it switched on (a phone: ringing). vidgen and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
+| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle`, `phone` or `portal` only: `true` starts it switched on (a phone: ringing; a portal: open). vidgen and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
 | `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
 | `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
 | `fruit` | `false` | `tree` only: `true` hangs four fruits on it ([`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) lets one fall) |

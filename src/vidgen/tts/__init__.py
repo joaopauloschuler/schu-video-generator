@@ -47,8 +47,19 @@ class TTSProvider(Protocol):
 
 def get_provider(voice: VoiceConfig, emotion: Prosody | None = None) -> TTSProvider:
     """The provider for ``voice.provider`` (ElevenLabs, OpenRouter: DESIGN.md §66, or Kokoro on
-    this computer: §68) speaking with ``emotion`` (Kokoro §72, the others §73). Constructing one
-    loads no model and needs no key."""
+    this computer: §68) speaking with ``emotion`` (Kokoro §72, the others §73), through the
+    voice's ``effect`` when it has one (§100.2). Constructing one loads no model and needs no key."""
+    provider = _plain_provider(voice, emotion)
+    if voice.effect is None:
+        return provider
+    from vidgen.tts.effects import EffectProvider
+    from vidgen.voice_effects import voice_effect
+
+    effect = voice_effect(voice.effect)
+    return provider if effect is None else EffectProvider(provider, effect)
+
+
+def _plain_provider(voice: VoiceConfig, emotion: Prosody | None) -> TTSProvider:
     if voice.provider == "elevenlabs":
         from vidgen.tts.elevenlabs import ElevenLabsProvider
 

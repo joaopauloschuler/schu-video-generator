@@ -18,7 +18,9 @@ import math
 from collections.abc import Callable
 
 import numpy as np
-from manim import Circle, Mobject, VGroup, VMobject
+from dataclasses import replace
+
+from manim import Circle, ManimColor, Mobject, VGroup, VMobject, interpolate_color
 
 from vidgen.cartoon.character import OUTLINE_WIDTH, one_pixel_stroke
 from vidgen.cartoon.living import (
@@ -50,6 +52,9 @@ from vidgen.cartoon.living import (
     tv_picture,
     union_box,
 )
+from vidgen.cartoon.portal import changing as portal_changing
+from vidgen.cartoon.portal import openness as portal_openness
+from vidgen.cartoon.portal import portal_shape
 from vidgen.cartoon.props import Prop, _circle, _ellipse, _line, _Paint, _poly, _rect
 from vidgen.cartoon.room import darker
 from vidgen.cartoon.shading import LIT, mark_lit
@@ -129,6 +134,8 @@ def living_overlays(kind: str, paint: _Paint) -> list[VMobject]:
             tag(_circle(0.0, 0.6, 0.09, paint.detail, paint, outline=False), "screen"),
             *rings,
         ]
+    if kind == "portal":
+        return _portal_overlays(paint)
     if kind == "fireplace":
         flames: list[VMobject] = []
         for shape in flame_shapes(0.0, 0):
@@ -139,6 +146,33 @@ def living_overlays(kind: str, paint: _Paint) -> list[VMobject]:
             flames.append(tag(flame, "flame"))
         return flames
     return []
+
+
+#: A portal's parts (DESIGN.md §100.4), drawn in this order: the inside, its depth rings, the
+#: swirls, the rim's glowing edge and bright core, the sparks.
+PORTAL_PARTS: tuple[str, ...] = ("portal_inside", "portal_ring", "portal_swirl", "portal_rim", "portal_core", "portal_spark")
+#: How far the inside's depth rings go from the inside's colour towards the rim's.
+PORTAL_RING_MIX = (0.3, 0.6)
+
+
+def _portal_overlays(paint: _Paint) -> list[VMobject]:
+    """A portal's moving parts, without points yet (:class:`LivingProp` places them on every
+    frame): the inside in ``detail``, two depth rings mixed towards ``main``, the swirl arms, the
+    rim in ``main`` with a light core, the sparks."""
+    from vidgen.cartoon.portal import DEPTH_RINGS, SPARKS, SWIRL_ARMS
+
+    def blank(part: str) -> VMobject:
+        return tag(VMobject().set_fill(opacity=0.0).set_stroke(width=0.0, opacity=0.0), part)
+
+    light = paint.light(paint.main)
+    members = [blank("portal_inside").set_fill(paint.detail, opacity=1.0)]
+    for mix in PORTAL_RING_MIX[: len(DEPTH_RINGS)]:
+        members.append(blank("portal_ring").set_fill(interpolate_color(ManimColor(paint.detail), ManimColor(paint.main), mix).to_hex(), opacity=0.5))
+    members += [blank("portal_swirl").set_stroke(light, width=1.6 * OUTLINE_WIDTH, opacity=0.55) for _ in range(SWIRL_ARMS)]
+    members.append(blank("portal_rim").set_stroke(paint.main, width=3.2 * OUTLINE_WIDTH, opacity=1.0))
+    members.append(blank("portal_core").set_stroke("#FFFFFF", width=1.1 * OUTLINE_WIDTH, opacity=0.9))
+    members += [blank("portal_spark").set_stroke(light, width=1.4 * OUTLINE_WIDTH, opacity=1.0) for _ in range(SPARKS)]
+    return members
 
 
 def living_parts(prop: Prop, part: str) -> list[VMobject]:
@@ -247,7 +281,12 @@ class LivingProp:
         self._rings = _Shown(self.rings)
         anchor = prop.anchor
         self._body = [(m, prop.drawn_points(m.points)) for m in prop.family_members_with_points() if m is not anchor] if self.kind == "phone" else []
+        #: A portal's moving parts by name (DESIGN.md §100.4; empty for other props).
+        self.portal = {part: living_parts(prop, part) for part in PORTAL_PARTS} if self.kind == "portal" else {}
         spec = GLOWS.get(self.kind)
+        seam = living_parts(prop, "seam")
+        if spec is not None and seam:   # a portal glows in its own rim colour
+            spec = replace(spec, color=seam[0].get_fill_color().to_hex())
         #: Its glow (``None``: a clock, a kettle or a phone), drawn right behind it.
         self.glow = PropGlow(spec, name=f"{prop.name}_glow") if spec is not None else None
         #: A kettle's steam (``None``: another prop), drawn right in front of it.
@@ -271,6 +310,8 @@ class LivingProp:
         television while it is on, a lamp when switched (or moved while on)."""
         if self.kind == "clock":
             return True
+        if self.kind == "portal":   # while open, opening or sealing (§100.4)
+            return portal_changing(self.on, self.switches, start, end)
         if switch_between(self.switches, start, end):
             return True
         on = on_between(self.on, self.switches, start, end)
@@ -278,12 +319,13 @@ class LivingProp:
 
     def movers(self) -> list[Mobject]:
         """The mobjects it changes on every frame: the hands, or the picture / lantern / flames
-        and the glow, or the steam, or a ringing phone's whole drawing."""
+        and the glow, or the steam, or a ringing phone's whole drawing, or a portal's parts."""
         if self.kind == "clock":
             return [m for members in self.hands.values() for m in members]
         if self.kind == "phone":
             return [m for m, _ in self._body]
-        return [*self.overlays, *(m for m in (self.glow, self.steam) if m is not None)]
+        portal = [m for members in self.portal.values() for m in members]
+        return [*self.overlays, *portal, *(m for m in (self.glow, self.steam) if m is not None)]
 
     def region(self, start: float = 0.0, end: float = math.inf) -> Box:
         """The box of what it may change (Manim units): the prop, its glow and its steam (the same
@@ -323,6 +365,9 @@ class LivingProp:
             self._rings.show(ring_burst(now, since))
             self._shake(ring_shake(now, since))
             return
+        if self.kind == "portal":
+            self._open(now)
+            return
         on = self.is_on(now)
         self._shown.show(on)
         strength = 1.0 if on else 0.0
@@ -338,6 +383,37 @@ class LivingProp:
             self._steam(now if on else None)
         if self.glow is not None:
             self.glow.place(*self._glow_place(), strength)
+
+    def _open(self, now: float) -> None:
+        """A portal as it is at scene time ``now`` (DESIGN.md §100.4): sealed (no points, no
+        glow), opening, open (crackling, swirling, sparking, pulsing) or sealing."""
+        shape = portal_shape(portal_openness(self.on, self.switches, now), now, self.seed)
+        members = [m for part in PORTAL_PARTS for m in self.portal[part]]
+        if shape is None:
+            for member in members:
+                member.points = np.zeros((0, 3))
+            if self.glow is not None:
+                self.glow.place(*self._glow_place(), 0.0)
+            return
+
+        def placed(points: tuple[tuple[float, float], ...]) -> np.ndarray:
+            return self.prop.prop_points(np.array([[x, y, 0.0] for x, y in points]))
+
+        def closed(points: tuple[tuple[float, float], ...]) -> np.ndarray:
+            return self.prop.prop_points(closed_curve(np.array(points, dtype=float)))
+
+        self.portal["portal_inside"][0].points = closed(shape.inside)
+        for ring, outline in zip(self.portal["portal_ring"], shape.rings):
+            ring.points = closed(outline)
+        for arm, line in zip(self.portal["portal_swirl"], shape.swirls):
+            arm.set_points_as_corners(placed(line))
+        jagged = [*shape.rim, shape.rim[0]]
+        for rim in (*self.portal["portal_rim"], *self.portal["portal_core"]):
+            rim.set_points_as_corners(placed(tuple(jagged)))
+        for spark, (start, end) in zip(self.portal["portal_spark"], shape.sparks):
+            spark.set_points_as_corners(placed((start, end)))
+        if self.glow is not None:
+            self.glow.place(*self._glow_place(), shape.glow)
 
     def _burn(self, now: float) -> None:
         """The flames as they are at scene time ``now``, leaning with the wind."""
@@ -386,4 +462,4 @@ class LivingProp:
                 hand.set_points_as_corners(np.array([centre, [x, y, 0.0]]))
 
 
-__all__ = ["CLOCK_CENTRE", "HAND_LENGTHS", "LivingProp", "PropGlow", "PropSteam", "living_overlays", "living_parts", "tag"]
+__all__ = ["CLOCK_CENTRE", "HAND_LENGTHS", "PORTAL_PARTS", "LivingProp", "PropGlow", "PropSteam", "living_overlays", "living_parts", "tag"]

@@ -179,7 +179,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `meet`, `after:`), hand small things about, open doors, light lamps and make flowers bloom;
   shots and `follow` make them large, name tags show who speaks in wide views, evening, night
   and rain set the mood, footsteps follow the ground ([docs](docs/CONFIG.md#isometric-places-iso),
-  [example](examples/iso-story)).
+  [example](examples/iso-story)). For science fiction and magic: a `portal` that tears open,
+  crackles and seals ([docs](docs/CONFIG.md#portals-portal)) and `hologram` characters
+  ([docs](docs/CONFIG.md#holograms-hologram)).
 - **Isometric diagrams**: `iso_diagram` draws architecture and data flow as blocks in the same
   view (servers, databases, flat platforms, stacks of layers, group plates, connectors along a
   grid) with flat, readable labels, fitted to 16:9 and 9:16; blocks grow in on the word that names
@@ -374,6 +376,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   your own speed, pitch, loudness and pauses) on a beat or a voice; Kokoro changes how the line
   is spoken, ElevenLabs and OpenRouter get tags, settings or instructions
   ([reference](docs/CONFIG.md#voices-with-feeling-emotion)).
+- **Voice effects**: `effect: robot` (or `hall`, `echo`, `radio`, `otherworldly`...) on a speaker's
+  voice for robots, ship computers, phone calls and beings from another world, with any provider
+  ([reference](docs/CONFIG.md#voice-effects-effect)).
 - **Sound effects**: thirty-six synthesised sounds (whoosh, swoosh, pop, click, tick, typing,
   riser, chime, success, error, thud; footsteps on five surfaces, door knocks, creaks and locks,
   coins, vehicles, thunder, voice sounds and music stings for cartoons; free to use in your videos,
