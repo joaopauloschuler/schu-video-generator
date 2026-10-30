@@ -1504,7 +1504,7 @@ class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
     unit: Literal["auto", "words", "characters"] = "auto"
-    """What is counted: words, characters (letters and digits), or auto: words for languages vidgen has a word rate for (en, pt, es, fr, de, it; also a video without language), else characters."""
+    """What is counted: words, characters (letters and digits), or auto: words for languages schu-video-generator has a word rate for (en, pt, es, fr, de, it; also a video without language), else characters."""
     min_rate: PositiveFloat | None = None
     """Slowest acceptable rate per second in the unit; default the language's (English 1.8 words = 108 a minute; characters 8)."""
     max_rate: PositiveFloat | None = None
@@ -3014,7 +3014,7 @@ class VideoConfig(_Strict):
     pronunciation_file: str | list[str] | None = None
     """YAML/JSON file(s) (relative to the project) with more pronunciation entries; `pronunciation:` entries win over them."""
     pronunciation_defaults: bool = True
-    """Use vidgen's built-in pronunciation list of each beat's TTS engine and language (e.g. kokoro-en-us: epoch, README, JSON); project entries win over it and term: null removes one; `vidgen list-pronunciation` shows it. false: only the project's entries."""
+    """Use schu-video-generator's built-in pronunciation list of each beat's TTS engine and language (e.g. kokoro-en-us: epoch, README, JSON); project entries win over it and term: null removes one; `vidgen list-pronunciation` shows it. false: only the project's entries."""
     language: LanguageTag | None = None
     """Language of the narration and on-screen text (BCP-47: en, pt-BR, es...): caption cutting, narration-speed lint, ElevenLabs language_code, the MP4's audio language; default: English rules, no language sent."""
     translations: str | None = Field(default=None, min_length=1)

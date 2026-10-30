@@ -33,7 +33,7 @@ class CrisprScene(NarratedScene):
     non-target strand, the sgRNA's 20-nt spacer paired with the target strand (R-loop), the blunt
     double-strand break 3 bp upstream of the PAM, and its outcome: NHEJ with a small indel (a
     frameshift knockout on a coding sequence) or HDR copying a donor's edit — both written in
-    HGVS with their protein change when ``coding_first`` says where the reading frame is. vidgen
+    HGVS with their protein change when ``coding_first`` says where the reading frame is. schu-video-generator
     finds every guide with a PAM in the target; a spacer without a PAM, with another enzyme's PAM
     or of the wrong length is refused with the guides that would work.
 
@@ -54,9 +54,9 @@ class CrisprScene(NarratedScene):
         cas: Literal["SpCas9", "SaCas9"] = "SpCas9"
         """The nuclease: SpCas9 (PAM NGG, 20-nt spacer) or SaCas9 (PAM NNGRRT, 21–23 nt)."""
         spacer: str | None = None
-        """The sgRNA's spacer 5′→3′ (U or T): it repeats the protospacer on the non-target strand, and its PAM is checked. Default: a guide vidgen finds."""
+        """The sgRNA's spacer 5′→3′ (U or T): it repeats the protospacer on the non-target strand, and its PAM is checked. Default: a guide schu-video-generator finds."""
         guide: int | None = None
-        """Instead of spacer: the n-th guide vidgen finds in the target (by cut position, from 1)."""
+        """Instead of spacer: the n-th guide schu-video-generator finds in the target (by cut position, from 1)."""
         repair: Literal["nhej", "hdr", "none"] = "nhej"
         """What follows the break: nhej (a small indel), hdr (a donor template's edit) or none (the break only)."""
         indel: int | None = None

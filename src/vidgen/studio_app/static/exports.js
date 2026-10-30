@@ -117,7 +117,7 @@ async function exportAudio() {
       const r = await api.exportFile(ctx.state.score.version, options);
       download(r.url, r.name);
       note("ex-audio-note", `Downloaded <code>${escapeHtml(r.name)}</code>: ${ctx.clock(r.seconds)}, ${r.loudness.toFixed(1)} LUFS, true peak ${r.true_peak.toFixed(1)} dBTP
-        (rendered by vidgen in ${r.export_seconds.toFixed(1)} s).`, "ok");
+        (rendered by schu-video-generator in ${r.export_seconds.toFixed(1)} s).`, "ok");
     } catch (err) {
       note("ex-audio-note", escapeHtml(err.message), "error");
     }

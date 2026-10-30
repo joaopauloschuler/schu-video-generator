@@ -371,7 +371,7 @@ def as_mp3(data: bytes, content_type: str | None, requested: str, ffmpeg: str | 
             raise VidgenError("OpenRouter returned an empty audio stream")
         return convert_to_mp3(data, ["-f", "s16le", "-ar", str(pcm_rate(content_type)), "-ac", "1"], ffmpeg)
     preview = data[:200].decode("utf-8", errors="replace").strip()
-    raise VidgenError(f"OpenRouter returned no audio vidgen can read ({content_type or 'no content type'}): {preview}")
+    raise VidgenError(f"OpenRouter returned no audio schu-video-generator can read ({content_type or 'no content type'}): {preview}")
 
 
 def with_prosody(mp3: bytes, emotion: Prosody, ffmpeg: str | None = None) -> bytes:

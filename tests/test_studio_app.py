@@ -224,7 +224,7 @@ def request(srv: StudioServer, method: str, path: str, body: Any = None, headers
 
 def test_server_serves_the_page_and_the_api(server: StudioServer) -> None:
     status, headers, body = request(server, "GET", "/")
-    assert status == 200 and headers["content-type"].startswith("text/html") and b"vidgen studio" in body
+    assert status == 200 and headers["content-type"].startswith("text/html") and b"<title>schu-video-generator studio</title>" in body
     assert "default-src 'self'" in headers["content-security-policy"]
     for name in ("app.js", "api.js", "player.js", "yaml_view.js", "studio.css", "favicon.svg"):
         status, headers, _ = request(server, "GET", f"/static/{name}")

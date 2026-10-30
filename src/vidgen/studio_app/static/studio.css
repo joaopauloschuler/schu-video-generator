@@ -752,6 +752,11 @@ body[data-offline] .studio { opacity: .6; }
   #yaml-toggle { display: none; }
 }
 
+/* the project's name is long: below this width the top bar keeps the logo only */
+@media (max-width: 1060px) {
+  .brand span { display: none; }
+}
+
 /* ----- narrow windows: one column, the page scrolls ----------------------------------- */
 @media (max-width: 980px) {
   .studio { height: auto; min-height: 100vh; }

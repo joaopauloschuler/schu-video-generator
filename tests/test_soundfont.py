@@ -56,7 +56,7 @@ def test_another_symusic_version_is_refused(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(synth, "symusic_version", lambda: "0.6.0")
     with pytest.raises(VidgenError, match=r"needs symusic 0\.5\.9, and 0\.6\.0 is installed.*\[music\]"):
         synth.require_symusic()
-    assert "0.6.0 installed, but vidgen needs 0.5.9" in synth.symusic_status()
+    assert "0.6.0 installed, but schu-video-generator needs 0.5.9" in synth.symusic_status()
 
 
 def test_the_extra_pins_symusic_and_no_soundfont_ships() -> None:

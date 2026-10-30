@@ -61,7 +61,7 @@ MODEL_ENV = "VIDGEN_STUDIO_MODEL"
 PROVIDER_TIMEOUT = 180.0
 
 INSTRUCTION = (
-    "A person is shaping a piece of music written as a vidgen score file (YAML). They listened to it and pinned "
+    "A person is shaping a piece of music written as a schu-video-generator score file (YAML). They listened to it and pinned "
     "notes at moments of the piece (bar, beat, section). For each open note, change the score to address it: "
     "one focused change per note when you can, in the section and bar the note names. Keep everything else as "
     "it is, comments included. Write one line per note explaining what you changed and why (or why you changed "
@@ -73,7 +73,7 @@ REPLY_FORMAT = (
     "block; then one line per note, `n1: what you changed and why`."
 )
 MCP_STEPS = (
-    "Answer through vidgen's MCP tools: studio_read (this) -> change the score -> studio_check with the new score "
+    "Answer through schu-video-generator's MCP tools: studio_read (this) -> change the score -> studio_check with the new score "
     "(the check, as the person will see it) -> studio_propose(session, score, explanations={note id: one line}, "
     "summary). The proposal appears in the studio as a new version the person A/Bs and keeps or discards."
 )

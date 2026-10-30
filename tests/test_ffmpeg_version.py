@@ -35,7 +35,7 @@ def test_version_of_the_ffmpeg_on_path() -> None:
 
 def test_hint_only_for_an_old_ffmpeg(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ff, "ffmpeg_version", lambda exe: (4, 2))
-    assert "ffmpeg 4.2 is too old: vidgen needs ffmpeg 4.4 or newer" in ff.version_hint("ffmpeg")
+    assert "ffmpeg 4.2 is too old: schu-video-generator needs ffmpeg 4.4 or newer" in ff.version_hint("ffmpeg")
     with pytest.raises(VidgenError, match=r"(?s)failed while testing.*4\.2 is too old"):
         ff.run_ffmpeg(ff.find_ffmpeg(), ["-i", str(tmp_path / "missing.mp4"), str(tmp_path / "out.mp4")], "testing")
     for version in [(4, 4), (7, 1), None]:

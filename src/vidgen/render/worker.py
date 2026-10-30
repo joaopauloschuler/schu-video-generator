@@ -316,7 +316,7 @@ class _LevelFormatter(logging.Formatter):
 
 def build_parser() -> argparse.ArgumentParser:
     """Arguments of ``python -m vidgen.render.worker``."""
-    parser = argparse.ArgumentParser(prog="python -m vidgen.render.worker", description="Render one vidgen scene.")
+    parser = argparse.ArgumentParser(prog="python -m vidgen.render.worker", description="Render one schu-video-generator scene.")
     parser.add_argument("project", help="project directory or config file")
     parser.add_argument("scene_id")
     parser.add_argument("--quality", choices=("final", "preview", "draft"), default="final")

@@ -54,7 +54,7 @@ class TerminalStep(SceneParams):
     command: str | None = None
     """What is typed at the prompt (several lines are typed one after the other)."""
     output: str | None = None
-    """What the command prints, written by you (vidgen runs nothing); shown after the command."""
+    """What the command prints, written by you (schu-video-generator runs nothing); shown after the command."""
     clear: bool = False
     """Clear the screen before this step: it starts a new page at the top of the window."""
     output_color: ThemeColor | None = None

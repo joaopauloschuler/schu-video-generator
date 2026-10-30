@@ -1237,7 +1237,7 @@ def cmd_list_icons(args: argparse.Namespace) -> CommandResult:
         raise VidgenError("--theme draws the --sheet in a theme's colours; add --sheet PNG")
     if args.sheet:
         filters = [f"search '{args.search}'" if args.search else "", f"category {args.category}" if args.category else ""]
-        title = f"vidgen icons: {len(found)}" + "".join(f", {f}" for f in filters if f)
+        title = f"schu-video-generator icons: {len(found)}" + "".join(f", {f}" for f in filters if f)
         theme = sheet_theme(args.project, args.theme) if args.theme is not None else None
         if theme is not None:
             title += f", theme {theme.preset or 'project'}"
@@ -1906,7 +1906,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--render-dir", metavar="DIR", help="also write every sound at its defaults as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_sfx)
 
-    p = sub.add_parser("list-pronunciation", help="list vidgen's built-in pronunciation entries (per TTS engine and language) and, in a project, what they change")
+    p = sub.add_parser("list-pronunciation", help="list schu-video-generator's built-in pronunciation entries (per TTS engine and language) and, in a project, what they change")
     project_arg(p)
     p.set_defaults(func=cmd_list_pronunciation)
 
@@ -1946,7 +1946,7 @@ def build_parser() -> argparse.ArgumentParser:
         "check: the folder for <name>-check.png and <name>-demo.mp3 (default: .); "
         "template: the .yaml to write (default: <bed>.yaml here); page: the page's folder (default: docs/music)",
     )
-    p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with vidgen)")
+    p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with schu-video-generator)")
     p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file (or a piece's or bed's name): a side-by-side table and a two-row spectrogram")
     p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists")
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")

@@ -1563,6 +1563,9 @@ Phase AA done.
 ### Step 255 — The project name in docs and comments
 - [x] Prose that names the project says `schu-video-generator` (Markdown, Python comments and docstrings, YAML comments, static-file comments); the command, the Python package, identifiers, keys, cache folders, logger names and runtime strings keep `vidgen`
 
+### Step 256 — The project name in runtime messages
+- [x] Messages, help texts, schema titles/descriptions, MCP descriptions, the studio page and the generated Listen / gallery pages say `schu-video-generator` where they name the project; commands, the package, identifiers, keys, the cache folder and the MCP server's name keep `vidgen`; `docs/music/README.md` and `docs/gallery/` (index, `crispr`, `terminal`) regenerated; tests and quoted docs updated
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

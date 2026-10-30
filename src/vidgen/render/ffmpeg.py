@@ -69,7 +69,7 @@ def version_hint(ffmpeg: str) -> str:
     if version is None or version >= MIN_VERSION:
         return ""
     return (
-        f"\nffmpeg {version[0]}.{version[1]} is too old: vidgen needs ffmpeg {MIN_VERSION[0]}.{MIN_VERSION[1]} "
+        f"\nffmpeg {version[0]}.{version[1]} is too old: schu-video-generator needs ffmpeg {MIN_VERSION[0]}.{MIN_VERSION[1]} "
         "or newer (crossfades, pushes and wipes use `xfade`, sound effects `amix=normalize`). Install "
         "a newer ffmpeg, see https://ffmpeg.org/download.html"
     )

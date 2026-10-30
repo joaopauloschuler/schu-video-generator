@@ -197,7 +197,7 @@ class _Skipped:
             which = note_name(low) if low == high else f"{note_name(low)} to {note_name(high)}"
             out.append(
                 f"tracks.{track}: {len(notes)} note{'s' if len(notes) != 1 else ''} in section '{section}' left out ({which}, "
-                f"{_hz(low):.0f}{'' if low == high else f'-{_hz(high):.0f}'} Hz; vidgen plays {LOWEST_HZ:.0f} Hz to {HIGHEST_HZ / 1000:.0f} kHz): "
+                f"{_hz(low):.0f}{'' if low == high else f'-{_hz(high):.0f}'} Hz; schu-video-generator plays {LOWEST_HZ:.0f} Hz to {HIGHEST_HZ / 1000:.0f} kHz): "
                 "change the track's octave or transpose"
             )
         return out

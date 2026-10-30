@@ -484,7 +484,7 @@ def parse_pedigree(individuals: Any, couples: Any = None, where: str = "params")
     if any(nsgc) and not use_nsgc:
         odd = [pid for pid, m in zip(people, nsgc) if not m]
         raise VidgenError(f"{where}.individuals: some ids are in NSGC form (II-3) and some are not ({', '.join(odd[:4])}): "
-                          f"use NSGC ids for everyone (vidgen then keeps your numbering) or for no one (vidgen numbers the chart)")
+                          f"use NSGC ids for everyone (schu-video-generator then keeps your numbering) or for no one (schu-video-generator numbers the chart)")
     ped = Pedigree(people, tuple(out_couples), gen, frozenset(married_in), use_nsgc)
     if use_nsgc:
         _check_nsgc(ped, where)

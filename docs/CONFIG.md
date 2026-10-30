@@ -3830,7 +3830,7 @@ Ctrl+C in the terminal stops it.
   2. Any chat assistant: **Copy prompt**, paste it there, then **Paste reply** with its whole
      answer (the score in a ```yaml block, `n1: …` lines, an optional `summary:` line).
   3. OpenRouter (optional, **costs money**): with `OPENROUTER_API_KEY` set in the environment
-     (as for OpenRouter pictures and voices; vidgen never stores it) and a model typed on the
+     (as for OpenRouter pictures and voices; schu-video-generator never stores it) and a model typed on the
      page or given by `VIDGEN_STUDIO_MODEL` (e.g. `VIDGEN_STUDIO_MODEL=vendor/model`), **Send**
      asks for confirmation (the server refuses a send that was not confirmed), sends the
      hand-off to OpenRouter only and turns the reply into a proposal. The key is read when

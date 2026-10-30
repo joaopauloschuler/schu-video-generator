@@ -201,7 +201,7 @@ def commented_yaml(
         out.append("")
     text = "\n".join(out).rstrip("\n") + "\n"
     if yaml.safe_load(text) != config:  # a bug in the writer, never the user's fault
-        raise AssertionError("vidgen wrote YAML that does not load back to the config it meant")
+        raise AssertionError("schu-video-generator wrote YAML that does not load back to the config it meant")
     return text
 
 

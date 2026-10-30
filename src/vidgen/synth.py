@@ -65,7 +65,7 @@ def symusic_status() -> str:
     if version is None:
         return f"not installed: {INSTALL_COMMAND}"
     if version != SYMUSIC_VERSION:
-        return f"{version} installed, but vidgen needs {SYMUSIC_VERSION}: {INSTALL_COMMAND}"
+        return f"{version} installed, but schu-video-generator needs {SYMUSIC_VERSION}: {INSTALL_COMMAND}"
     return version
 
 

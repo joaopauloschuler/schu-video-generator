@@ -70,7 +70,7 @@ def run_studio(project_root: Path | None, port: int = 0, open_browser: bool = Tr
     app.studio.mkdir(parents=True, exist_ok=True)
     other = _running_session(app.studio)  # another studio still running on this folder
     write_open_marker(app.studio, server.url, None)
-    say(f"vidgen studio: {server.url}")
+    say(f"schu-video-generator studio: {server.url}")
     say(f"sessions: {app.studio / 'sessions'}")
     cleaned = clean_studio(app.studio, other)
     if cleaned["bytes"]:

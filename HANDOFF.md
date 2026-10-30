@@ -23489,3 +23489,78 @@ updating the tests that match those messages.
 How to test: `tests/test_guide.py`, `tests/test_docs.py`, `tests/test_gallery.py -m "not render"`,
 `tests/test_mcp.py`, `tests/test_music_templates.py`, `tests/test_listen.py`,
 `tests/test_packaging.py`.
+
+## Step 256 — The project name in runtime messages
+
+What was done (owner-approved follow-up to Step 255): string literals the program shows or writes
+that name the project now say **schu-video-generator** instead of "vidgen" — 65 strings in 32
+files under `src/vidgen/` (including the `templates/minimal/gitignore` header that `vidgen init`
+writes and the studio's static page and JS):
+- CLI: the icon sheet's title (`schu-video-generator icons: N`), the `list-pronunciation` help, the
+  `--narration` help; field docstrings in `config.py` (schema descriptions: `count_by`, the
+  built-in pronunciation switch); JSON Schema titles / description / `$comment` (`schema.py`:
+  "schu-video-generator video.yaml", "schu-video-generator scene").
+- Messages and errors: runtime (`current_project()` / `current_theme()`), ffmpeg too old, the
+  worker's argparse description, `plan_yaml`'s self-check, pedigree numbering hints, the image
+  generation hint, "… never stores the key" (OpenAI / OpenRouter images, ElevenLabs), OpenRouter
+  TTS "no audio … can read", SVG sanitiser errors and warnings, the symusic version hint, the
+  SoundFont mismatch hint ("update schu-video-generator"), studio check / render / score-file
+  messages, the studio agent's prompt, the studio's save and export texts, the studio's start-up
+  line ("schu-video-generator studio: URL").
+- Scene param docs: `crispr` (class doc, `spacer`, `guide`) and `terminal` (`steps.output`).
+- MCP: the guide tool's and resource's descriptions, the music check `narration` field, the
+  `vidgen-mcp` argparse description.
+- Generated pages: the Listen page (`listen.py`: title, intro, score-pieces paragraph) and the
+  gallery's index line (`gallery.py`).
+- Studio page: `<title>` and top bar ("schu-video-generator **studio**"), "rendered by
+  schu-video-generator", the export level option, the welcome hint, the narration toggle's tooltip;
+  JS: the key note and the MCP agent line (`notes.js`), the export's done message (`exports.js`).
+  The longer name made the top bar's last button touch the edge at 990–1060 px; `studio.css`
+  hides the name (keeps the logo) below 1060 px (measured with Playwright: no overflow at 1920,
+  1400, 1280, 1024, 990 px).
+
+Kept as `vidgen` on purpose:
+- the command and anything telling the user what to type: `vidgen studio` (offline banner, api.js
+  offline message), `vidgen music check` (studio check verdict / tooltip), `--version` output
+  (`vidgen X.Y`: the command's version), "vidgen's commands" in the `mcp` help (the command's
+  sub-commands), `vidgen <cmd> --dry-run` inside the key hints;
+- "vidgen's cache" (`cli.py` studio / soundfont help, `config.py` `soundfont` doc): the folder is
+  named `vidgen`;
+- identifiers: `vidgen://schema` / `vidgen://guide` resource URIs, `vidgen-mcp`, localStorage keys
+  (`vidgen-studio-*`, `vidgen-slides:*`), the worker's `prog`, the slides deck's CSS / JS comments
+  (`vidgen slides` = the command);
+- the gallery work project's `title: vidgen gallery` (never shown; changing it would only make
+  every gallery render stale);
+- spoken text: `tools/live_check_openrouter.py` `TTS_TEXT` ("… OpenRouter narration in vidgen.")
+  — the name is awkward to speak and it is a live-check tool; on-screen texts of examples
+  (`examples/gallery/video.yaml` "vidgen gallery");
+- README's screenshot alt text "vidgen studio: …" (describes the committed screenshot, which still
+  shows the old title; update it with the next screenshot).
+
+Generated files regenerated through their code paths: `docs/music/README.md` with `vidgen music
+page --out <scratch>` (only the three text lines differ; the README copied, media untouched);
+`docs/gallery/README.md`, `crispr.md`, `terminal.md` with `gallery.write_index` / `write_page`
+(the functions `vidgen gallery` runs after rendering; no render, only the changed lines differ). No
+schema JSON is committed.
+
+Tests changed with the strings: `test_schema` (title), `test_soundfont` (symusic hint), `test_api`,
+`test_regions`, `test_registry` (runtime errors), `test_vector_images` (SVG messages),
+`test_tts_openrouter`, `test_ffmpeg_version`, `test_studio_ui` (page title), `test_studio_app` (the
+page's `<title>`). Docs quoting the output: `examples/gps-time-of-flight/README.md` (music check
+lines), `docs/CONFIG.md` (the studio's key note).
+
+Behaviour: text only. `crispr.py` / `terminal.py` docstrings change the source digest, so their
+renders count as stale once; no on-screen text changed (Phase Q baseline not needed).
+
+Files: `src/vidgen/{cli,config,gallery,listen,mcp_server,plan_yaml,runtime,schema,soundfont,svgclean,synth}.py`,
+`genetics/{pedigree,pedigree_layout}.py`, `imagegen/{__init__,openai,openrouter}.py`,
+`render/{ffmpeg,worker}.py`, `scenes/{crispr,terminal}.py`, `studio/{check,render,score_file}.py`,
+`studio_app/{__init__,agent,exports}.py`, `studio_app/static/{index.html,notes.js,exports.js,studio.css}`,
+`templates/minimal/gitignore`, `tts/{elevenlabs,openrouter}.py`; generated docs above; tests above;
+`CHANGELOG.md`, `tasklist.md`.
+
+How to test: `tests/test_schema.py`, `test_soundfont.py`, `test_api.py`, `test_registry.py`,
+`test_regions.py`, `test_vector_images.py`, `test_tts_openrouter.py`, `test_ffmpeg_version.py`,
+`test_listen.py`, `test_gallery.py -m "not render"`, `test_studio_app.py`, `test_studio_ui.py`,
+`test_studio_check.py`, `test_studio_agent.py`, `test_docs.py`, `test_guide.py`, `test_mcp.py`
+(run from the repo root or with `-o pythonpath=.` for the tests importing `tests.*`).

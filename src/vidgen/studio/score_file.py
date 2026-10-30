@@ -215,7 +215,7 @@ def parse_music_score(data: Any, origin: str = "score") -> MusicScore:
     if data is None:
         r.add("score", "the file is empty")
     if "version" in top and top["version"] != FORMAT_VERSION:
-        r.add("version", f"this vidgen reads score files of version {FORMAT_VERSION}, got {top['version']!r}")
+        r.add("version", f"this schu-video-generator reads score files of version {FORMAT_VERSION}, got {top['version']!r}")
     for name in ("key", "tempo", "tracks"):
         if name not in top and data is not None:
             r.add(name, "missing" + {"key": " (e.g. key: A minor)", "tempo": " (quarter notes per minute, e.g. tempo: 112)", "tracks": ""}[name])

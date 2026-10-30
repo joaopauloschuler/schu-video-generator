@@ -446,10 +446,10 @@ def _analyse(
             row["brighter_db"] = round(_band_level(frames, "bright", mid, z) - _band_level(frames, "bright", a, mid), 2)
         section_rows.append(row)
     if original is None:
-        findings.append(Finding("loudness", "ok", f"{lufs:.1f} LUFS integrated (vidgen plays music at -28 LUFS at volume 0)"))
+        findings.append(Finding("loudness", "ok", f"{lufs:.1f} LUFS integrated (schu-video-generator plays music at -28 LUFS at volume 0)"))
     else:
         file_lufs = integrated_loudness(original)
-        findings.append(Finding("loudness", "ok", f"the file is {file_lufs:.1f} LUFS; vidgen plays it at -28 LUFS (volume 0), as measured here"))
+        findings.append(Finding("loudness", "ok", f"the file is {file_lufs:.1f} LUFS; schu-video-generator plays it at -28 LUFS (volume 0), as measured here"))
     if steady > LIMITS["steadiness_db"]:
         findings.append(Finding("steadiness", "fix", f"the 3 s loudness swings {steady:.1f} dB (10th to 95th percentile; limit {LIMITS['steadiness_db']:g}): "
                                 "under a voice the quiet parts vanish and the loud ones push", _steady_fixes(score, section_rows)))
@@ -465,7 +465,7 @@ def _analyse(
         facts["clipped_runs"] = runs
         if runs > LIMITS["clipped_runs"]:
             findings.append(Finding("clipping", "fix", f"{runs} run{'s' if runs > 1 else ''} of samples at full scale: the file was clipped when it was made "
-                                    "(vidgen turns it down to -28 LUFS but cannot undo clipping)", ["export it again with 1-2 dB of headroom"]))
+                                    "(schu-video-generator turns it down to -28 LUFS but cannot undo clipping)", ["export it again with 1-2 dB of headroom"]))
         else:
             findings.append(Finding("clipping", "ok", "no clipping"))
 
@@ -876,7 +876,7 @@ def _seam_fixes(stems: _Stems | None) -> list[str]:
 
 def _steady_fixes(score: MusicScore | None, rows: list[dict[str, Any]]) -> list[str]:
     if score is None or len(rows) < 2:
-        return ["a gentler arrangement or a compressor; vidgen does not level music within a piece"]
+        return ["a gentler arrangement or a compressor; schu-video-generator does not level music within a piece"]
     loud = max(rows, key=lambda r: r["lufs"])
     quiet = [r for r in rows if loud["lufs"] - r["lufs"] >= 6] or [min(rows, key=lambda r: r["lufs"])]
     names = [r["name"] for r in quiet]
@@ -1081,7 +1081,7 @@ def add_demo(report: MusicCheck, voice: np.ndarray, narration: str, tail: float 
 def demo_finding(facts: dict[str, Any], narration: str) -> Finding:
     """What the demo measured, in words."""
     clear = facts["voice_clear_db"]
-    text = (f"under {narration} with vidgen's default ducking ({DUCK[0]:g} dB): voice {facts['voice_lufs']} LUFS, music under it "
+    text = (f"under {narration} with schu-video-generator's default ducking ({DUCK[0]:g} dB): voice {facts['voice_lufs']} LUFS, music under it "
             f"{facts['music_under_voice_lufs']} LUFS; the voice's range stands {clear:.1f} dB over the music's")
     if clear < LIMITS["voice_clear_db"]:
         return Finding("narration", "fix", text + f" (it should be at least {LIMITS['voice_clear_db']:g} dB: words will be hard to follow)",

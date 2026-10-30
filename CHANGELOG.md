@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–254)
+## Unreleased (Steps 193–256)
+
+### The project name in messages (Steps 255–256)
+
+- Messages, help texts, schema titles and descriptions, the studio page ("schu-video-generator
+  studio"), the Listen page and the gallery's index call the project `schu-video-generator`; the
+  command (`vidgen render`, `vidgen studio`) and the Python package stay `vidgen`.
 
 ### Shorts with a HUD; review of Phase AA (Step 254)
 

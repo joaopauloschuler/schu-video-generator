@@ -81,7 +81,7 @@ def test_text_helpers_use_current_theme(active: Project) -> None:
 
 
 def test_text_helpers_need_context() -> None:
-    with pytest.raises(VidgenError, match="no active vidgen theme"):
+    with pytest.raises(VidgenError, match="no active schu-video-generator theme"):
         api.T("x")
 
 

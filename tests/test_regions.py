@@ -214,7 +214,7 @@ def test_readable_size_follows_the_project_lint_setting(make_project, landscape:
     runtime.set_context(project)
     assert readable_size(margin=1.0) == pytest.approx(readable_size(fraction=0.035, margin=1.0))
     runtime.clear_context()
-    with pytest.raises(VidgenError, match="no active vidgen theme"):
+    with pytest.raises(VidgenError, match="no active schu-video-generator theme"):
         readable_size()
     assert readable_size("Inter") == pytest.approx(readable_size("Inter", fraction=0.025))
 

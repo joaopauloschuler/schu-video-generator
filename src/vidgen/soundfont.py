@@ -99,7 +99,7 @@ def mismatch_message(what: str, size_bytes: int, sha256: str | None) -> str:
     got = f"{size_bytes:,} bytes" + (f", sha256 {sha256}" if sha256 else "")
     return (
         f"{what} is not the expected {NAME} ({got}; expected {SIZE_BYTES:,} bytes, sha256 {SHA256}); "
-        f"it was not used. The file at {URL} may have changed upstream: update vidgen, {_override_hint()}"
+        f"it was not used. The file at {URL} may have changed upstream: update schu-video-generator, {_override_hint()}"
     )
 
 

@@ -80,7 +80,7 @@ def test_page_loads_the_open_session(studio: tuple[StudioApp, StudioServer], pag
     app.load(text=TINY)
     page.goto(server.url)
     wait_rendered(page)
-    assert page.title() == "vidgen studio"
+    assert page.title() == "schu-video-generator studio"
     assert page.locator("#preset-list li").count() == 17
     assert page.locator("#timeline .section").count() == 2
     assert page.locator("#tracks .track").count() == 2
