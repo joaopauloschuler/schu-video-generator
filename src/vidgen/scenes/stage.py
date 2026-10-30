@@ -587,7 +587,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood, telescope, satellite_dish, charging_station, crate_stack, airlock (2 x 1), printer_3d, hazard_sign, fire_extinguisher."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -601,9 +601,9 @@ class IsoObjectParam(SceneParams):
     detail: ThemeColor | None = None
     """Its second colour (a house's roof, a lamp's light, flower heads...)."""
     open: bool | None = None
-    """A house: true starts its door open; flowers: false starts them in bud; a laptop: false starts it closed; a lab_fridge: true starts its door open (the open / close actions change it later)."""
+    """A house: true starts its door open; flowers: false starts them in bud; a laptop: false starts it closed; a lab_fridge or an airlock: true starts its door open (the open / close actions change it later)."""
     on: bool | None = None
-    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge, coffee_machine, grow_rack, specimen_tank, chemistry_bench, distillation_rig, lab_fridge or fume_hood: true starts it working (switch_on / switch_off change it)."""
+    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge, coffee_machine, grow_rack, specimen_tank, chemistry_bench, distillation_rig, lab_fridge, fume_hood, satellite_dish, charging_station, airlock or printer_3d: true starts it working (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
     height: float | None = Field(None, ge=2.0, le=30.0)
@@ -614,6 +614,8 @@ class IsoObjectParam(SceneParams):
     """A tower: glowing bands of algae farms up its sides, pulsing softly."""
     time: str | None = Field(None, pattern=r"^([01]?\d|2[0-3]):[0-5]\d$")
     """A wall_clock: the time its hands show, "HH:MM" (default 10:10)."""
+    kind: str | None = None
+    """A hazard_sign: biohazard (default), radiation or authorised (a staff-only board)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -624,12 +626,16 @@ class IsoObjectParam(SceneParams):
             close = difflib.get_close_matches(data["object"], list(OBJECT_KINDS), n=1, cutoff=0.6)
             hint = f"; did you mean {close[0]}?" if close else ""
             raise ValueError(f"unknown object '{data['object']}'{hint} (objects: {', '.join(OBJECT_KINDS)})")
+        if isinstance(data, dict) and isinstance(data.get("kind"), str) and data["kind"] not in HAZARD_SIGNS:
+            close = difflib.get_close_matches(data["kind"], list(HAZARD_SIGNS), n=1, cutoff=0.6)
+            hint = f"; did you mean {close[0]}?" if close else ""
+            raise ValueError(f"unknown hazard_sign kind '{data['kind']}'{hint} (kinds: {', '.join(HAZARD_SIGNS)})")
         return data
 
     @model_validator(mode="after")
     def _states(self) -> "IsoObjectParam":
         if self.open is not None and self.object not in OPENING_KINDS:
-            raise ValueError(f"open is for a house (its door), flowers (in bloom or in bud), a laptop or a lab_fridge, not {_a(self.object)}")
+            raise ValueError(f"open is for a house (its door), flowers (in bloom or in bud), a laptop, a lab_fridge or an airlock, not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
             raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), or one of {', '.join(sorted(SWITCHED_KINDS - {'house', 'lamp', 'tower'}))}, "
                              f"not {_a(self.object)}")
@@ -638,6 +644,8 @@ class IsoObjectParam(SceneParams):
                 raise ValueError(f"{option} is for a tower, not {_a(self.object)}")
         if self.time is not None and self.object != "wall_clock":
             raise ValueError(f"time is for a wall_clock, not {_a(self.object)}")
+        if self.kind is not None and self.object != "hazard_sign":
+            raise ValueError(f"kind is for a hazard_sign, not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
@@ -647,7 +655,7 @@ class IsoObjectParam(SceneParams):
 
     def placing(self) -> ObjectPlacing:
         at = self.at if isinstance(self.at, str) else (self.at.column, self.at.row)
-        features = tuple(name for name in ("screen", "garden") if getattr(self, name))
+        features = tuple(name for name in ("screen", "garden") if getattr(self, name)) + ((self.kind,) if self.kind else ())
         return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail,
                              self.height, features, self.time)
 

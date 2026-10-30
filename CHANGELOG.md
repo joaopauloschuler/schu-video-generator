@@ -5,9 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–259)
+## Unreleased (Steps 193–260)
 
-### More lab objects (Steps 258–259)
+### More lab objects (Steps 258–260)
+
+- Iso objects `telescope`, `satellite_dish` (turns), `charging_station` (bars fill), `crate_stack`, `airlock` (`open`, a flashing beacon), `printer_3d` (prints layer by layer), `hazard_sign` (`kind:`) and `fire_extinguisher`; the coffee machine now reads as one (light body, big mug), and a laptop's or kiosk's text no longer reads mirrored facing right.
 
 - Iso objects `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge` (`open`) and `fume_hood`, with glowing liquids, bubbles, drips, mist and vapour when on; a working object's motion now also shows behind another object and over a character standing behind it.
 

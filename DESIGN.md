@@ -20061,8 +20061,8 @@ of cut scenes. Phase Q baseline 31/31 identical.
 
 ## 103. More iso lab and sci-fi objects (Phase AB, Steps 258–260)
 
-Phase AB adds 26 iso objects (`OBJECT_KINDS`, drawn in `cartoon/iso_objects.py` like §100.11's),
-each 1 x 1 by default (a chemistry bench 2 x 1), `color` / `detail` honoured, and an `on` state where it works. Docs stay
+Phase AB adds 24 iso objects (`OBJECT_KINDS`, drawn in `cartoon/iso_objects.py` like §100.11's),
+each 1 x 1 by default (a chemistry bench and an airlock 2 x 1), `color` / `detail` honoured, and an `on` state where it works. Docs stay
 lean: one "Other objects" list in CONFIG and the guide.
 
 - **Step 258**: `laptop` (on a small desk; `open`, default open: `OPENING_KINDS`), `terminal_kiosk`,
@@ -20096,6 +20096,20 @@ lean: one "Other objects" list in CONFIG and the guide.
   body front picture that shows the object, else after `_iso_gadget_home`: a character right
   behind a working object no longer hides its motion.
 
-Public surface: object kinds above; `IsoObjectParam.time`; `WALL_KINDS`; `ObjectLook.moving`;
-`Motion`, `MOVING_KINDS`, `object_motion`, `object_working`, `clock_hands`; `IsoGadgets`,
-`Gadget`. Additive.
+- **Step 260**: `telescope`, `satellite_dish` (the stage turns its dish slowly, side to side,
+  facing the viewer), `charging_station` (its four bars fill over and over), `crate_stack` (hazard
+  stripes; `top` for small things), `airlock` (2 x 1, a bulkhead with a round hatch; also in
+  `OPENING_KINDS`: open, the door slid into the wall and a dark tunnel; on, its beacon flashes),
+  `printer_3d` (a vase grows layer by layer under a moving head), `hazard_sign` (`kind`:
+  `IsoObjectParam.kind` -> the placing's `features`, `OBJECT_FEATURES["hazard_sign"]` =
+  `HAZARD_SIGNS`, did-you-mean on a typo), `fire_extinguisher`.
+- **Review (260)**: the coffee machine is a light drip machine (head over a big mug with a
+  handle, a coffee window on its side, a stream while on; steam drifts out from under the head);
+  screen text on a laptop and a kiosk facing right reads from the left (`_reading`). All 24
+  objects (the plan said 26; the three batches list 24) use the shared shading, outline widths
+  and palette; heights are 0.85–2.5 tiles (a character is 2). A preview of a room with all of
+  them working: about 3–4 s of rendering per second of video (one `IsoGadgets` per working object).
+
+Public surface: object kinds above; `IsoObjectParam.time`, `IsoObjectParam.kind`; `WALL_KINDS`;
+`HAZARD_SIGNS`; `ObjectLook.moving`; `Motion`, `MOVING_KINDS`, `object_motion`, `object_working`,
+`clock_hands`; `IsoGadgets`, `Gadget`. Additive.

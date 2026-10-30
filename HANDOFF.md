@@ -23623,3 +23623,26 @@ How to test: `tests/test_docs.py` (73 passed).
 - Tests: `tests/test_lab_objects.py` (8 logic + 2 small renders); 258's render test now expects
   the covered quantum core to move. Phase Q baseline 31/31 identical. Contact sheet (private):
   scratchpad `s259/objects.png` (plus `closeup.png`).
+
+## Step 260 — Lab objects III and the Phase AB review
+
+- Built: iso objects `telescope`, `satellite_dish` (dish turns slowly while on), `charging_station`
+  (four bars fill while on), `crate_stack` (hazard stripes; `top`), `airlock` (2 x 1; `open`: the
+  door slides into the wall, a dark tunnel; on: its beacon flashes), `printer_3d` (a vase grows
+  layer by layer under a moving head while on), `hazard_sign` (`kind: biohazard | radiation |
+  authorised`, stored as the placing's `features`, `HAZARD_SIGNS`), `fire_extinguisher` (DESIGN §103).
+- Review of all 24 objects (the plan said 26, its three batches list 24): the coffee machine is now
+  a light drip machine with a big white mug under its spout, a coffee window and a stream while on
+  (steam drifts out from under the head); a laptop's and a kiosk's screen text facing right reads
+  from the left (`_reading`). Shading, outline widths and palette are the shared ones; heights
+  0.85–2.5 tiles. A preview (854 x 480, 15 fps) of one room with all 24 working renders 5.1 s of
+  video in 16.5 s (day) / 22.1 s (night). `vidgen validate` / `lint` say "did you mean telescope?"
+  and "did you mean radiation?" on typos.
+- Files: `cartoon/iso_objects.py`, `world/iso.py` (kinds, `HAZARD_SIGNS`, airlock opens and
+  switches), `scenes/stage.py` (`kind` key, messages), `scenes/handling.py`, `api.py`; the one
+  "Other objects" list in CONFIG and the guide; tests `tests/test_lab_objects.py` (+4 logic, +1 render).
+- Known gaps: the airlock is decoration (characters do not walk through it); hazard signs do not
+  glow at night; the dish's struts can read as a fan when seen face-on in its sweep.
+- Tests: `test_lab_objects.py` 15 passed; iso files, `test_guide`, `test_api`, `test_mcp`,
+  `test_schema`, `test_docs`, `test_city_hud_echo` passed. Phase Q baseline 31/31 identical.
+  Contact sheets (private): scratchpad `s260/objects.png`, `s260/all26.png`.

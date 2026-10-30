@@ -1581,7 +1581,9 @@ Phase AA done.
 - [x] `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge` (`open`), `fume_hood`; liquids glow when on, bubbles / steam / drips / mist / fan; a working object behind another object or in front of a character keeps its motion (cover pictures, gadgets after front pictures); tests in `test_lab_objects.py`
 
 ### Step 260 — Lab objects III and review
-- [ ] `telescope`, `satellite_dish`, `charging_station`, `crate_stack`, `airlock`, `printer_3d`, `hazard_sign` (`kind`), `fire_extinguisher`; a critical review of all 26 (style, sizes, on/off, night, performance, tests)
+- [x] `telescope`, `satellite_dish` (turns), `charging_station` (bars fill), `crate_stack`, `airlock` (2 x 1, `open`, beacon), `printer_3d` (prints layer by layer), `hazard_sign` (`kind`), `fire_extinguisher`; a critical review of all of them (24: the batches list 24, not 26): coffee machine redrawn light with a big mug, laptop / kiosk text no longer mirrored facing right, style / sizes / on-off / night checked, a room with all working previews at ~3–4 s per video second; tests in `test_lab_objects.py`
+
+Phase AB done.
 
 ---
 

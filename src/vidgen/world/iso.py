@@ -127,20 +127,30 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "distillation_rig": ObjectKind(1, 1, 1.9),
     "lab_fridge": ObjectKind(1, 1, 2.3),
     "fume_hood": ObjectKind(1, 1, 2.5),
+    "telescope": ObjectKind(1, 1, 1.85),
+    "satellite_dish": ObjectKind(1, 1, 2.0),
+    "charging_station": ObjectKind(1, 1, 1.8),
+    "crate_stack": ObjectKind(1, 1, 1.32, top=1.32),
+    "airlock": ObjectKind(2, 1, 2.5),
+    "printer_3d": ObjectKind(1, 1, 1.8),
+    "hazard_sign": ObjectKind(1, 1, 1.65),
+    "fire_extinguisher": ObjectKind(1, 1, 0.85),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
 #: Extras an object of a kind may have (``features`` of a placing), DESIGN.md §102.2: a tower's
-#: big info ``screen`` on its front and its glowing algae-farm bands (``garden``).
-OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden")}
+#: big info ``screen`` on its front and its glowing algae-farm bands (``garden``); a hazard sign's
+#: kind (one of them, §103; default ``biohazard``).
+HAZARD_SIGNS: tuple[str, ...] = ("biohazard", "radiation", "authorised")
+OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), "hazard_sign": HAZARD_SIGNS}
 
 
 #: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
 #: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
-OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge"})
+OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge", "airlock"})
 SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
                                             "coffee_machine", "grow_rack", "specimen_tank", "chemistry_bench", "distillation_rig",
-                                            "lab_fridge", "fume_hood"})
+                                            "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock"})
 
@@ -603,6 +613,7 @@ __all__ = [
     "FLOOR",
     "GARDEN_WALL_HEIGHT",
     "GROUND_SYMBOLS",
+    "HAZARD_SIGNS",
     "INDOOR",
     "ISO_CHARACTER_HEIGHT",
     "MAX_COLUMNS",

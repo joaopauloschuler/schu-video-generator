@@ -2624,8 +2624,11 @@ and give each scene `set: village`.
   `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (`at` a cell of a back wall,
   `time: "03:27"`), `grow_rack`, `terrarium`, `specimen_tank` (`color` its liquid; a `detail`
   colour adds a floating shape), `chemistry_bench` (2 x 1), `distillation_rig`, `lab_fridge`
-  (`open`), `fume_hood`; `on: true` / `switch_on` makes all but the microscope, stool, clock and
-  terrarium work.
+  (`open`), `fume_hood`, `telescope`, `satellite_dish`, `charging_station`, `crate_stack`,
+  `airlock` (2 x 1, `open`), `printer_3d`, `hazard_sign` (`kind: biohazard | radiation |
+  authorised`), `fire_extinguisher`; `on: true` / `switch_on` makes the laptop, kiosk, core,
+  arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
+  airlock (its beacon) and printer work.
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a

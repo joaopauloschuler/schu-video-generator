@@ -1,4 +1,4 @@
-"""More iso lab and sci-fi objects (Steps 258–259, DESIGN.md §103): footprints, states, a wall
+"""More iso lab and sci-fi objects (Steps 258–260, DESIGN.md §103): footprints, states, a wall
 clock's time and wall, the moving parts of working objects, validation; one small render of each
 batch."""
 
@@ -183,4 +183,79 @@ def test_the_glassware_renders_and_moves_over_who_stands_behind(make_project, tm
     assert cover is not None and dict(cover.submobjects[-1].picture[1])[rig].on
     end = float(scene.renderer.time)
     assert places["lab_fridge"][0].gadgets[0].working(end) and tank.gadgets[0].working(end)
+    assert len(frames) > 5 and np.any(frames[-1] != frames[3])
+
+
+# ----- Step 260: space, workshop and safety objects ------------------------------------------------------
+
+NEW_3 = ("telescope", "satellite_dish", "charging_station", "crate_stack", "airlock", "printer_3d", "hazard_sign", "fire_extinguisher")
+WORKSHOP_MOVING = ("satellite_dish", "charging_station", "airlock", "printer_3d")
+
+
+def test_workshop_objects_have_footprints_colours_and_states() -> None:
+    for kind in NEW_3:
+        assert kind in OBJECT_KINDS and kind in OBJECT_COLORS and OBJECT_KINDS[kind].height <= 2.5
+        assert (OBJECT_KINDS[kind].width, OBJECT_KINDS[kind].depth) == ((2, 1) if kind == "airlock" else (1, 1))
+    assert set(WORKSHOP_MOVING) <= SWITCHED_KINDS and set(WORKSHOP_MOVING) <= set(MOVING_KINDS)
+    assert not {"telescope", "crate_stack", "hazard_sign", "fire_extinguisher"} & SWITCHED_KINDS
+    assert "airlock" in OPENING_KINDS and not default_state("airlock").open and OBJECT_KINDS["crate_stack"].top is not None
+
+
+def test_workshop_objects_draw_and_move() -> None:
+    placings = [ObjectPlacing(kind, (2 + (k % 3) * 3, 2 + (k // 3) * 2), facing="right" if k % 2 else "left") for k, kind in enumerate(NEW_3)]
+    place = place_objects(parse_iso_map(WIDE, place="indoor"), tuple(placings))
+    for item in place.objects:
+        off = object_shapes(item, _look(item.kind), 0.0, ObjectState())
+        assert off and not any(getattr(s, "glow", False) for s in off), item.kind
+        if item.kind in WORKSHOP_MOVING:
+            on = object_shapes(item, _look(item.kind), 0.0, ObjectState(on=True))
+            assert any(getattr(s, "glow", False) for s in on), item.kind
+            still = object_shapes(item, _look(item.kind, True), 0.0, ObjectState(on=True))   # its moving parts left to the stage
+            early, late = (object_motion(item, _look(item.kind), 0.0, t, ObjectState(on=True)) for t in (0.2, 3.1))
+            assert len(still) <= len(on) and early and len(early) == len(late) and [(p.points, p.opacity) for p in early] != [(p.points, p.opacity) for p in late]
+    airlock = place.object("airlock")
+    assert object_shapes(airlock, _look("airlock"), 0.0, ObjectState(open=True)) != object_shapes(airlock, _look("airlock"), 0.0, ObjectState())
+    signs = [place_objects(parse_iso_map(WIDE, place="indoor"), (ObjectPlacing("hazard_sign", (2, 2), features=(kind,)),)).object("hazard_sign")
+             for kind in ("biohazard", "radiation", "authorised")]
+    assert len({repr(object_shapes(sign, _look("hazard_sign"), 0.0)) for sign in signs}) == 3
+    with pytest.raises(VidgenError, match="its extras: biohazard, radiation, authorised"):
+        place_objects(parse_iso_map(WIDE, place="indoor"), (ObjectPlacing("hazard_sign", (2, 2), features=("toxic",)),))
+
+
+def test_screen_text_reads_from_the_left_facing_either_way() -> None:
+    place = place_objects(parse_iso_map(WIDE, place="indoor"), (ObjectPlacing("laptop", (2, 2)), ObjectPlacing("laptop", (5, 2), facing="right")))
+    for item in place.objects:   # the longest and the shortest line (neither indented) start at the same left edge
+        lines = [s for s in object_shapes(item, _look("laptop"), 0.0, ObjectState(open=True, on=True)) if getattr(s, "glow", False)][1:]
+        lefts = [min(x - y for x, y, _ in s.points) for s in lines]
+        assert abs(lefts[5] - lefts[0]) < 0.1, item.facing
+
+
+def test_workshop_keys_validate() -> None:
+    good = stage_params(iso={**ISO, "objects": [{"object": "hazard_sign", "at": "desk", "kind": "radiation"}, {"object": "airlock", "at": "kiosk", "open": True}]})
+    assert good.iso.objects[0].placing().features == ("radiation",) and good.iso.objects[1].state().open
+    for bad, message in (({"object": "hazard_sign", "at": "desk", "kind": "radiaton"}, "did you mean radiation"),
+                         ({"object": "laptop", "at": "desk", "kind": "radiation"}, "kind is for a hazard_sign"),
+                         ({"object": "crate_stack", "at": "desk", "on": True}, "on is for"), ({"object": "telescop", "at": "desk"}, "did you mean telescope")):
+        with pytest.raises(ValidationError, match=message):
+            stage_params(iso={**ISO, "objects": [bad]})
+
+
+@pytest.mark.render
+def test_the_workshop_objects_render_and_move(make_project, tmp_path: Path, monkeypatch) -> None:
+    extensions.load_builtins()
+    monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
+    room = "###########\n#.a..t.s..#\n#.........#\n#.c.d.p.h.#\n#.......f.#\n#....x....#\n#####+#####"
+    spots = {"a": "lock", "t": "scope", "s": "dish", "c": "charge", "d": "crates", "p": "printer", "h": "sign", "f": "fire", "x": "here"}
+    kinds = ("airlock", "telescope", "satellite_dish", "charging_station", "crate_stack", "printer_3d", "hazard_sign", "fire_extinguisher")
+    objects = [{"object": kind, "at": spot, **({"on": True} if kind in SWITCHED_KINDS else {})} for kind, spot in zip(kinds, spots.values())]
+    objects[6]["kind"] = "radiation"
+    params = {"light": "night", "iso": {"place": "indoor", "map": room, "spots": spots, "objects": objects},
+              "characters": [{"name": "pip", "at": "here"}]}
+    beats = [{"text": "The station keeps working at night.", "actions": [{"open": "airlock", "at": 0.5}]}]
+    scenes = [{"id": "home", "type": "stage", "params": params, "beats": beats}]
+    scene, frames = frames_of(Project.load(make_project(minimal_config(characters=CAST, scenes=scenes))), tmp_path / "lab", monkeypatch)
+    places = {scene.iso_scenery.pieces[k].name: gadget for gadget, k, _ in scene._iso_gadget_places}
+    assert set(places) == set(WORKSHOP_MOVING)
+    end = float(scene.renderer.time)
+    assert all(gadget.gadgets[0].working(end) for gadget in places.values())
     assert len(frames) > 5 and np.any(frames[-1] != frames[3])
