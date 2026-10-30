@@ -1,6 +1,6 @@
 """Make the short video clip used by ``examples/gallery`` (``assets/clip.webm``) with ffmpeg.
 
-Not shipped with vidgen; a maintainer tool. The picture is ffmpeg's own ``testsrc2`` test
+Not shipped with schu-video-generator; a maintainer tool. The picture is ffmpeg's own ``testsrc2`` test
 pattern (colour bars, a moving gradient band and a frame counter; generated, so free of any
 licence), the sound a quiet two-note chord, encoded as VP9 + Opus in WebM so the file stays
 small (~150 KB). Run from the repository root::

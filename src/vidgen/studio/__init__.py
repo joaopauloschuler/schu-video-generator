@@ -1,5 +1,5 @@
 """Music agents can write (Phase S, DESIGN.md §93): score files in YAML — key, tempo, sections,
-chords, tracks of step patterns with effects — rendered with vidgen's own synthesizer.
+chords, tracks of step patterns with effects — rendered with schu-video-generator's own synthesizer.
 
 Self-contained: it uses only :mod:`vidgen.music`'s building blocks, :mod:`vidgen.sfx`,
 :mod:`vidgen.loudness` and :mod:`vidgen.errors`, never video, scene or render code, so it can

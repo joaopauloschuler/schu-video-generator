@@ -45,12 +45,17 @@ def _apart_in_depth(a: dict[str, Any], b: dict[str, Any]) -> bool:
 
 def _riding_together(a: dict[str, Any], b: dict[str, Any]) -> bool:
     """Whether two characters ride the same vehicle (one behind the other in a car or a bus,
-    DESIGN.md §69.52)."""
+    DESIGN.md §69.52), or hold hands (side by side on purpose, §100.10), or kiss (§102.15)."""
+    if a.get("hand_in_hand") == b.get("name") or b.get("hand_in_hand") == a.get("name"):
+        return True
+    if a.get("kissing") == b.get("name") or b.get("kissing") == a.get("name"):
+        return True
     return a.get("riding") is not None and a.get("riding") == b.get("riding")
 
 
 def _figures(ctx: StillContext) -> list[dict[str, Any]]:
-    return [obj for obj in ctx.objects if obj["kind"] == "character"]
+    """The characters of a still (not those a shot with ``clear`` hides, DESIGN.md §100.6)."""
+    return [obj for obj in ctx.objects if obj["kind"] == "character" and not obj.get("hidden")]
 
 
 def _in_view(ctx: StillContext, obj: dict[str, Any]) -> bool:
@@ -182,7 +187,8 @@ def character_overlap(ctx: StillContext, settings: CharacterOverlapRule) -> Iter
     two at depths :data:`DEPTH_APART` or more apart (one stands behind the other), nor two riding
     the same vehicle."""
     beat = ctx.frame.get("beat")
-    resting = [obj for obj in _figures(ctx) if not obj.get("passage") and (beat is None or obj.get("walked_in") != beat)]
+    resting = [obj for obj in _figures(ctx) if not obj.get("passage") and (beat is None or obj.get("walked_in") != beat)
+               and _in_view(ctx, obj)]   # not two waiting off stage to enter (Step 246)
     for a, b in combinations(resting, 2):
         if _apart_in_depth(a, b) or _riding_together(a, b):
             continue
@@ -340,7 +346,9 @@ def facing_away(ctx: StillContext, settings: FacingAwayRule) -> Iterator[Issue]:
 def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[Issue]:
     """A speaking character's face is hidden by something drawn in front of it (a character or
     prop nearer the camera, a foreground layer; not an effect symbol or a motion effect, nor the
-    vehicle it rides, whose windows show it, DESIGN.md §69.52): the viewer cannot see who talks."""
+    vehicle it rides, whose windows show it, DESIGN.md §69.52, nor an overlay that keeps off
+    faces, a ``hud``, which ``overlay_face`` checks, §102.19): the viewer cannot see who talks."""
+    own_check = {str(o["id"]) for o in ctx.frame.get("overlays", []) if o.get("faces")}
     for speaker in _figures(ctx):
         if not speaker.get("speaking") or not speaker.get("face"):
             continue
@@ -349,7 +357,8 @@ def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[I
         fronts = [
             obj for obj in ctx.objects
             if obj["order"] > speaker["order"] and not is_text(obj) and obj["kind"] not in ("particles", "effect", "motion_effect")
-            and obj.get("bubble") is None and obj.get("name_tag") is None and intersection(object_box(obj), face) is not None
+            and obj.get("bubble") is None and obj.get("name_tag") is None and str(obj.get("overlay")) not in own_check
+            and intersection(object_box(obj), face) is not None
             and not (obj["kind"] == "prop" and speaker.get("riding") is not None and obj.get("name") == speaker.get("riding"))
         ]
         if not fronts:

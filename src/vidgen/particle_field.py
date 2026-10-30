@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from vidgen.cartoon.rain import (
     PUDDLE_FLAT,
     SPLASH_OPACITY,
+    IsoRainGround,
     RainGround,
     drop_floors,
     drop_landings,
@@ -66,6 +67,22 @@ RainGroundSource = Callable[[], RainGround]
 #: Fill of a puddle (a grey blue, half seen through).
 PUDDLE_COLOR = "#7393B8"
 PUDDLE_OPACITY = 0.55
+#: Glowing particles (``glow: true``, DESIGN.md §102.4): the core is the colour this far towards
+#: white, the halo an outline of this width in the colour at this opacity, and the kind's opacity
+#: is raised this many times (at most 1).
+GLOW_CORE = 0.45
+GLOW_HALO_WIDTH = 3.0
+GLOW_HALO_OPACITY = 0.4
+GLOW_BOOST = 1.6
+
+
+def glow_colors(color: str) -> tuple[str, str]:
+    """``(core, halo)`` of a glowing particle of ``color`` (a hex): its core towards white, its
+    halo the colour itself."""
+    from manim import ManimColor
+
+    core = ManimColor(color).interpolate(ManimColor("#FFFFFF"), GLOW_CORE)
+    return core.to_hex(), ManimColor(color).to_hex()
 
 
 class ParticleSettings(BaseModel):
@@ -89,6 +106,8 @@ class ParticleSettings(BaseModel):
     """With settle: seconds of snowfall already lying when it starts (24 or more: the full layer at density 1)."""
     lightning: bool | Annotated[float, Field(ge=2.0, le=120.0)] = False
     """Rain on a stage: true flashes lightning while it rains, about every 8 s at seeded times and places, mostly with a bolt, thunder following by the distance (with foley); a number is the seconds between strikes on average."""
+    glow: bool = False
+    """true: the particles shine: a bright core and a soft halo in their colour, more opaque (neon rain at night, glowing motes)."""
 
     @field_validator("area")
     @classmethod
@@ -137,8 +156,13 @@ class ParticleField(VGroup):
         ground: RainGroundSource | None = None,
         seed: int = 1,
         drawn: bool = True,
+        glow: bool = False,
     ) -> None:
         super().__init__()
+        #: whether they shine: a light core, a halo in their colour, more opaque (§102.4)
+        self.glow = glow
+        #: the camera's zoom the halos' width was set for
+        self._halo_zoom = 1.0
         #: False for a draft's field (DESIGN.md §74): no particles and no updater; it keeps its
         #: start, its fade out and its end (a rain bed and storms follow them)
         self.drawn = drawn
@@ -160,12 +184,19 @@ class ParticleField(VGroup):
         unit = particle_shape(spec.shape)
         self._unit = unit.points.copy()
         ring = spec.shape == "ring"
+        #: how much more opaque glowing particles are than the kind's own (1: as the kind)
+        self._boost = min(GLOW_BOOST, 1.0 / max(spec.opacity, 1e-9)) if glow else 1.0
         for k in range(len(seeds)):
             particle = VMobject()
             particle.points = self._unit.copy()
             color = colors[int(seeds.color[k]) % len(colors)]
-            particle.set_fill(color, opacity=0.15 if ring else 1.0)
-            particle.set_stroke(color, width=RING_WIDTH if ring else 0.0, opacity=1.0 if ring else 0.0)
+            if glow:   # a light core with a halo of the colour round it (§102.4)
+                core, halo = glow_colors(color)
+                particle.set_fill(core, opacity=0.15 if ring else 1.0)
+                particle.set_stroke(halo, width=max(GLOW_HALO_WIDTH, RING_WIDTH if ring else 0.0), opacity=GLOW_HALO_OPACITY)
+            else:
+                particle.set_fill(color, opacity=0.15 if ring else 1.0)
+                particle.set_stroke(color, width=RING_WIDTH if ring else 0.0, opacity=1.0 if ring else 0.0)
             self.add(particle)
         #: the particles, one per seed (the field may also hold its splashes)
         self.drops: list[VMobject] = list(self.submobjects)
@@ -179,8 +210,13 @@ class ParticleField(VGroup):
             self._circle = Circle(radius=1.0, num_components=9).points.copy()
             self.splashes = VMobject()
             self.splashes.points = np.zeros((0, 3))
-            self.splashes.set_fill(colors[0], opacity=1.0)
-            self.splashes.set_stroke(colors[0], width=0.0, opacity=0.0)
+            if glow:
+                core, halo = glow_colors(colors[0])
+                self.splashes.set_fill(core, opacity=1.0)
+                self.splashes.set_stroke(halo, width=GLOW_HALO_WIDTH * 0.6, opacity=0.0)
+            else:
+                self.splashes.set_fill(colors[0], opacity=1.0)
+                self.splashes.set_stroke(colors[0], width=0.0, opacity=0.0)
             self.add(self.splashes)
         self.draw_at(self.start)
         if drawn:
@@ -212,7 +248,7 @@ class ParticleField(VGroup):
         xs = left + (x + states.x * w) * view_width
         ys = top - (y + states.y * h) * view_height
         cos, sin = np.cos(states.angle), np.sin(states.angle)
-        shown = states.opacity * level
+        shown = np.minimum(states.opacity * self._boost, 1.0) * level
         ground = self.ground() if self.ground is not None else None
         if ground is not None and self.splashes is not None:
             shown = shown * self._draw_splashes(ground, xs, ys, states, short, level)
@@ -222,6 +258,12 @@ class ParticleField(VGroup):
             seen, lift = rest_flakes(ys - size, floor, particle_kind(self.seeds.kind).fall * np.abs(self.seeds.speed) * short)
             shown, ys = shown * seen, ys + lift
         unit = self._unit
+        if self.glow and abs(zoom - self._halo_zoom) > 1e-6:   # a halo as wide on screen through a zoom (strokes scale with the view)
+            self._halo_zoom = zoom
+            for particle in self.drops:
+                particle.stroke_width = GLOW_HALO_WIDTH * zoom
+            if self.splashes is not None:
+                self.splashes.stroke_width = GLOW_HALO_WIDTH * 0.6 * zoom
         for k, particle in enumerate(self.drops):
             size = states.size[k] * short
             px = unit[:, 0] * size * states.flip[k]
@@ -250,12 +292,16 @@ class ParticleField(VGroup):
         landed = drop_landings(tip_y, floor, spec.fall * self.seeds.speed * short, slant)
         idx = np.nonzero(landed.splashing)[0]
         shapes = splash_shapes(landed.age[idx], self._spread[idx], splash_depth_scale(floor[idx], ground)) * short
+        if isinstance(ground, IsoRainGround):   # plain rings: two droplets over a ring read as a tiny face close up (§102.9)
+            shapes = shapes[:, :1]
         centres = np.stack([tip_x[idx] - landed.back[idx], floor[idx]], axis=1)[:, None, :] + shapes[:, :, :2]
         circle = self._circle[None, None, :, :2] * shapes[:, :, None, 2:] + centres[:, :, None, :]
         points = np.zeros((circle.shape[0] * circle.shape[1] * circle.shape[2], 3))
         points[:, :2] = circle.reshape(-1, 2)
         self.splashes.points = points
-        self.splashes.fill_rgbas[:, 3] = SPLASH_OPACITY * level
+        self.splashes.fill_rgbas[:, 3] = min(SPLASH_OPACITY * self._boost, 1.0) * level
+        if self.glow:
+            self.splashes.stroke_rgbas[:, 3] = GLOW_HALO_OPACITY * level
         return landed.falling.astype(float)
 
     def fade_out_animation(self, **kwargs: Any) -> Animation:
@@ -398,6 +444,7 @@ def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) 
         ground=_ground_of(scene, kind, settings) if drawn else None,
         seed=settings.seed,
         drawn=drawn,
+        glow=settings.glow,
     )
     top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)
     field.set_z_index(top + 1)

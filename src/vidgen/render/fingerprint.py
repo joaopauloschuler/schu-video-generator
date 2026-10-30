@@ -4,7 +4,8 @@ The worker records :func:`scene_fingerprint` in the scene's timings (``render.fi
 ``vidgen storyboard`` reuses a scene's stills only while the fingerprint still matches.
 
 What counts: the scene's config (type, params, beats; not ``lint_ignore``), every other config
-section except ``scenes``, ``variants`` and ``lint`` (theme, narration, format...) but including
+section except ``scenes``, ``variants``, ``lint`` and a ``cut`` (already applied to the scenes;
+DESIGN.md §101) (theme, narration, format...) but including
 ``lint.rules.min_font.min_size`` (``vidgen.regions.readable_size`` lays text out by it), the narration MP3s of the scene's
 beats (size and modification time), the source of vidgen itself (with its bundled fonts and
 icons) and of
@@ -171,7 +172,7 @@ def _next_transition(project: Project, scene_id: str) -> Any:
 
 
 def scene_fingerprint(project: Project, scene_id: str) -> str:
-    """A hex digest of everything (that vidgen knows of) the render of ``scene_id`` depends on."""
+    """A hex digest of everything (that schu-video-generator knows of) the render of ``scene_id`` depends on."""
     spec = project.scene(scene_id)
     # Lint settings cannot change pixels or timing (except the readable text size scenes use):
     # editing them must not make renders stale.
@@ -195,6 +196,11 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # a draft's size and frame rate: only drafts use them, checked like any format (§74)
         "draft",
     }
+    if project.config.cut is not None:
+        # a cut (§101) is already applied to the scenes (and its hook to the overlays, its end
+        # card to the scenes): a change for one scene must not re-render the others. Left in
+        # (null) without a cut, so other projects' renders stay current.
+        excluded.add("cut")
     config = project.config.model_dump(mode="json", exclude=excluded)
     assets = project.root / "assets"
     data: dict[str, Any] = {

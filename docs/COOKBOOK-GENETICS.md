@@ -1,7 +1,7 @@
 # Cookbook: genetics at university level
 
 Craft notes for lectures, medical and biology students and science channels explaining heredity
-with vidgen's genetics scene types (DESIGN §96): what to choose, how to write the notation, how to
+with schu-video-generator's genetics scene types (DESIGN §96): what to choose, how to write the notation, how to
 keep every number exact, how to read a pedigree aloud, and how to speak about families. The
 reference for every key is `docs/CONFIG.md` ([`cross`](CONFIG.md#cross),
 [`pedigree`](CONFIG.md#pedigree), [`linkage_map`](CONFIG.md#linkage_map),
@@ -36,7 +36,7 @@ then a Punnett square that explains the 2/3, then the chart again with the genot
 
 - **Pedigrees: NSGC.** Squares male, circles female, diamonds unknown; affected filled; a carrier a
   dot (`carrier_style: half` for the half-shaded textbook symbol); the proband's arrow with P;
-  generations in Roman numerals, people numbered left to right (`II-3`). Write NSGC ids and vidgen
+  generations in Roman numerals, people numbered left to right (`II-3`). Write NSGC ids and schu-video-generator
   checks they read left to right as drawn; a partner from outside stands beside the relative.
 - **Karyotypes: ISCN.** Count, sex chromosomes, then the changes in chromosome order:
   `47,XY,+21`, `46,XX,del(5)(p15.2)`, `46,XY,t(9;22)(q34;q11.2)`. Never `5p-`, never `47,+21,XY`.
@@ -44,7 +44,7 @@ then a Punnett square that explains the 2/3, then the chart again with the genot
   `c.35del`; the protein in parentheses (predicted): `p.(Glu7Val)`, `p.(Phe508del)`,
   `p.(Gly12Valfs*2)`. HGVS counts the initiator Met as residue 1, so the legacy names are one lower
   (Glu6Val, ΔF508 is the same residue). Use an old name only as "legacy" or "traditionally called".
-  Deletions take the 3′-most position (`c.1521_1523del`, not `c.1520_1522del`): vidgen refuses the
+  Deletions take the 3′-most position (`c.1521_1523del`, not `c.1520_1522del`): schu-video-generator refuses the
   other with the reason.
 - **Genes: HGNC**, italic (*CFTR*, *HBB*); proteins roman (CFTR, β-globin); mouse genes `Trp53`.
 - **Alleles**: dominant capital, recessive lower case (`A` / `a`), superscripts (`I^A`, `X^H X^h`,

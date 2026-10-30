@@ -136,7 +136,8 @@ class SceneContext:
     whose cue starts in this scene (:func:`vidgen.lint.music_rule.music_issues`; filled when
     ``music_check`` runs), ``science`` the scene's scientific-accuracy findings
     (:class:`vidgen.lint.science_rule.ScienceIssue`; filled when a ``science_*``, ``genetics_*``,
-    ``calc_*`` or ``plot_*`` rule runs).
+    ``calc_*`` or ``plot_*`` rule runs), ``video_seconds`` / ``shorts_max`` the planned length of a
+    Short and its ``max_seconds`` (set on the video's last scene when ``shorts_length`` runs).
     """
 
     scene_id: str
@@ -151,6 +152,8 @@ class SceneContext:
     narration: Any = None
     music_issues: list[tuple[str, str | None]] = field(default_factory=list)
     science: list[Any] = field(default_factory=list)
+    video_seconds: float | None = None
+    shorts_max: float | None = None
 
     def spoken_text(self, beat: dict[str, Any]) -> str:
         """What the narrator says for an activity-file beat."""
@@ -190,6 +193,8 @@ class Rule:
     default: str
     doc: str
     check: Check
+    #: A still rule that also checks the mid-beat stills a layout dump has (not only beat ends).
+    mid_beat: bool = False
 
     def settings(self, rules_config: Any) -> RuleConfig:
         """This rule's settings from :class:`vidgen.config.LintRules`."""
@@ -200,8 +205,9 @@ class Rule:
 RULES: dict[str, Rule] = {}
 
 
-def rule(name: str, *, scope: Scope = "still", default: str = "warning") -> Callable[[Check], Check]:
-    """Register ``check`` as the rule ``name`` (its docstring's first line is the rule's doc)."""
+def rule(name: str, *, scope: Scope = "still", default: str = "warning", mid_beat: bool = False) -> Callable[[Check], Check]:
+    """Register ``check`` as the rule ``name`` (its docstring's first line is the rule's doc);
+    ``mid_beat``: a still rule that also checks mid-beat stills."""
     if name not in LINT_RULES:
         raise ValueError(f"lint rule {name!r} is not in vidgen.config.LINT_RULES")
     if default not in SEVERITIES:
@@ -209,7 +215,7 @@ def rule(name: str, *, scope: Scope = "still", default: str = "warning") -> Call
 
     def register(check: Check) -> Check:
         doc = (check.__doc__ or "").strip().splitlines()[0] if check.__doc__ else ""
-        RULES[name] = Rule(name, scope, default, doc, check)
+        RULES[name] = Rule(name, scope, default, doc, check, mid_beat)
         return check
 
     return register

@@ -1,5 +1,6 @@
 """``card``: a cartoon title card (an episode title, "Later that day…", an end card)."""
 
+import dataclasses
 from typing import Any, Literal
 
 import numpy as np
@@ -62,6 +63,10 @@ class Card(NarratedScene):
         p = self.params
         width, height = float(config.frame_width), float(config.frame_height)
         layout = card_layout(width, height, style=p.style, subtitle=bool(p.subtitle))
+        clear = self.safe_area if self.project.config.shorts_zones is not None else None
+        if clear is not None:   # a Short: the words keep out of the app's buttons (DESIGN.md §101)
+            room = clear.width
+            layout = dataclasses.replace(layout, text_width=min(layout.text_width, room), subtitle_width=min(layout.subtitle_width, room))
         color = self.theme.color(p.color)
         light = burst_ray_color(color)
         fill, outline = card_text_inks(color, light) if p.style == "burst" else card_text_inks(color)
@@ -80,7 +85,7 @@ class Card(NarratedScene):
                 fit_text(p.subtitle, layout.subtitle_width, layout.subtitle_height, size="subtitle", color=fill, weight=BOLD), outline
             )
             parts.add(subtitle)
-        parts.arrange(DOWN, buff=layout.gap).move_to(ORIGIN)
+        parts.arrange(DOWN, buff=layout.gap).move_to(ORIGIN if clear is None else np.array([clear.center[0], clear.center[1], 0.0]))
 
         steps: list = []
         own = self.target("text", text, entrance=lambda: [self._pop(text)])

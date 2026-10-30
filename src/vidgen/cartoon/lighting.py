@@ -69,11 +69,15 @@ class LightGrade:
     glow: RGB = (0.0, 0.0, 0.0)
     stars: float = 0.0
     shadow: float = 1.0
+    #: How much of each colour's saturation is kept before the multiply (1: all; a flashback's
+    #: faded colours less, DESIGN.md §100.12).
+    saturation: float = 1.0
 
     @property
     def changes_colors(self) -> bool:
         """Whether it changes any colour (``day`` does not)."""
-        return any(abs(m - 1.0) > 1e-9 for m in self.multiply) or any(abs(g) > 1e-9 for g in self.glow)
+        return (any(abs(m - 1.0) > 1e-9 for m in self.multiply) or any(abs(g) > 1e-9 for g in self.glow)
+                or abs(self.saturation - 1.0) > 1e-9)
 
     @cached_property
     def arrays(self) -> tuple[np.ndarray, np.ndarray | None]:
@@ -112,7 +116,8 @@ def blend_grades(a: LightGrade, b: LightGrade, share: float) -> LightGrade:
 
     multiply = tuple(mix(x, y) for x, y in zip(a.multiply, b.multiply))
     glow = tuple(mix(x, y) for x, y in zip(a.glow, b.glow))
-    return LightGrade(multiply, glow, mix(a.stars, b.stars), mix(a.shadow, b.shadow))  # type: ignore[arg-type]
+    saturation = a.saturation if a.saturation == b.saturation else mix(a.saturation, b.saturation)
+    return LightGrade(multiply, glow, mix(a.stars, b.stars), mix(a.shadow, b.shadow), saturation)  # type: ignore[arg-type]
 
 
 #: A lamp's light on what stands near it (an iso place's lamp at night, DESIGN.md §89.13): its
@@ -135,11 +140,25 @@ def lamp_lit(base: LightGrade, share: float) -> LightGrade:
     return blend_grades(base, tint_grade(*LAMP_LIGHT), lift)
 
 
+def lifted(grade: LightGrade, share: float) -> LightGrade:
+    """``grade`` lifted ``share`` 0..1 of the way back to the colours as drawn: a fill light on
+    what it grades (a stage's ``fill_light`` on its characters, a visitor's own ``glow``,
+    DESIGN.md §100.15). Its stars, shadows and saturation are kept; 0 returns ``grade`` itself."""
+    s = min(max(float(share), 0.0), 1.0)
+    if s <= 1e-9:
+        return grade
+    multiply = tuple(m + (1.0 - m) * s for m in grade.multiply)
+    glow = tuple(g * (1.0 - s) for g in grade.glow)
+    return LightGrade(multiply, glow, grade.stars, grade.shadow, grade.saturation)  # type: ignore[arg-type]
+
+
 def grade_rgbas(rgbas: np.ndarray, grade: LightGrade) -> np.ndarray:
     """RGBA rows (components 0..1) with the grade applied; alpha unchanged; a new array."""
     graded = np.array(rgbas, dtype=float, copy=True)
     multiply, glow = grade.arrays
     colors = graded[..., :3]
+    if grade.saturation != 1.0:
+        _desaturate(colors, grade.saturation)
     colors *= multiply
     if glow is not None:
         colors += glow
@@ -150,8 +169,22 @@ def grade_rgbas(rgbas: np.ndarray, grade: LightGrade) -> np.ndarray:
 def grade_pixels(pixels: np.ndarray, grade: LightGrade) -> np.ndarray:
     """An 8-bit RGB or RGBA picture with the grade applied; alpha unchanged; a new array."""
     graded = pixels.astype(np.float32)
+    if grade.saturation != 1.0:
+        _desaturate(graded[..., :3], grade.saturation)
     graded[..., :3] = graded[..., :3] * np.asarray(grade.multiply, dtype=np.float32) + 255 * np.asarray(grade.glow, dtype=np.float32)
     return np.clip(np.rint(graded), 0, 255).astype(pixels.dtype)
+
+
+#: Rec. 709 luma weights (a colour's grey, for :attr:`LightGrade.saturation`).
+LUMA = (0.2126, 0.7152, 0.0722)
+
+
+def _desaturate(colors: np.ndarray, keep: float) -> None:
+    """Move ``colors`` (rows of RGB, in place) towards their grey, keeping ``keep`` of their
+    saturation."""
+    grey = colors @ np.asarray(LUMA, dtype=colors.dtype)
+    colors *= keep
+    colors += (1.0 - keep) * grey[..., None]
 
 
 @dataclass(frozen=True)

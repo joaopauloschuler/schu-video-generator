@@ -2,10 +2,159 @@
 
 The project and its pip distribution are `schu-video-generator`; the command and the Python
 package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in `HANDOFF.md`
-("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
+("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–244)
+## Unreleased (Steps 193–256)
+
+### The project name in messages (Steps 255–256)
+
+- Messages, help texts, schema titles and descriptions, the studio page ("schu-video-generator
+  studio"), the Listen page and the gallery's index call the project `schu-video-generator`; the
+  command (`vidgen render`, `vidgen studio`) and the Python package stay `vidgen`.
+
+### Shorts with a HUD; review of Phase AA (Step 254)
+
+- A cut can leave out one of a scene's own overlays (`overlays: {readout: {drop: true}}`), e.g.
+  one timed on a beat the cut leaves out.
+- A `hud` in a Short keeps its heart and scan meters above the captions (they stood on the same
+  line) and out of the app's parts with `compact` too.
+- Lint `shorts_safe_area` checks a `hud` by its texts and panels only, as `overlay_face` does
+  (its frame's lines over the whole picture counted as covering every face).
+- Changing a cut's `beats` no longer re-renders every scene of the cut, only the one it changes.
+
+### Wavy hair, neon strip lights, a kiss holding hands (Phase AA, Step 253)
+
+- **`hair: wavy`**: long locks waving past the jaw and ending in curls, the chin and chest left
+  clear (`long` hair reads as a block in a close-up).
+- **`iso.wall_lights`**: neon strips glowing along a room's walls (one colour, or one per back
+  wall), lit at night.
+- A `kiss` between two characters holding hands lets go of the hands first (before, the pair
+  drifted out of the frame).
+- A lab object's blinking lights hide behind a character standing in front of it.
+- Lint `hidden_speaker` no longer counts a `hud`'s frame as hiding a speaker (`overlay_face`
+  checks the HUD).
+
+### A kiss, floating formulas, a scanner, sliding doors (Phase AA, Step 252)
+
+- **The `hud` keeps off faces**: its alert and readout lines go to the free corner covering the
+  least of a character's face, moving only when a face comes under them (`avoid_faces`, on by
+  default); `compact: true` for close-ups. It is drawn in pieces (its frame once, the meters on
+  every frame): about half the render cost of Step 251. New lint rule **`overlay_face`** (a HUD's
+  text or plate over a face, outside Shorts).
+- **`kiss`** action: two characters turn, lean in until their faces touch, close their eyes and
+  lean back; a small burst of hearts and sparkles (`hearts`, `color`).
+- **Display patterns** `equations` (formulas written, formula butterflies fluttering up out of
+  the panel) and `timelines` (a branching tree, two figures meeting in a panel at each tip).
+- **Small props** `scanner` (a live readout that can spike off its scale: `scan: {level, to,
+  at}`), `takeout`, `crystal` (glowing while on).
+- **Accessories** `medal` and `pendant` (glowing, pulsing, shining at night).
+- **Iso places**: `doors: slide` (steel doors sliding open with a hiss) and `haze` (shimmering
+  air with sparkles over a spot, `from` to fade it in). Rain on an iso place splashes in plain
+  rings (no droplets that read as a tiny face in a close-up).
+- Lint `look_alike` no longer compares an `echo` with anyone (another self, alike on purpose).
+
+### A city at night, glowing particles, a HUD, echoes (Phase AA, Step 251)
+
+- **Towers** on an iso place: the `tower` object, a tall building with rows of windows (a seeded
+  share lit), neon trims in its `detail` colour and a blinking antenna light; `height` (2–30
+  tiles), `size`, `screen: true` (an info screen whose lines of text crawl up), `garden: true`
+  (glowing algae-farm bands); `on: false` / `switch_on` for its windows. With `light: night` a
+  neon skyline; towers may reach out of the wide view.
+- **Traffic** over an iso place: `iso.traffic` lanes of hover pods gliding between two spots at
+  a height, looping or (with `at`) crossing once; glowing rims, canopies with a rider, light
+  trails; hidden behind buildings.
+- **Glowing particles**: `glow: true` on any particles (a light core, a halo in the colour, more
+  opaque): neon rain.
+- **The `hud` overlay**: a heads-up display over the frame for a scene (brackets and scan lines,
+  a blinking alert, readout lines, a heart monitor with a rising rate and skipped beats, a
+  scanner meter spiking off its scale).
+- **Echo characters**: `echo: true` (or `{color, opacity, flicker}`) draws a character as a
+  translucent other self that keeps its own colours, its outlines glowing; it appears with
+  `materialise`.
+
+### Shorts from a longer video (Phase Z2, Steps 249–250)
+
+- **Karaoke captions in a Short** (Step 250) show a phrase of about three to five words on one
+  line (`body` size, at most 5 words; title-size words fit only one or two in the narrow clear
+  part), a small margin (`lift: 0.03`) above the app's texts. Options given still win.
+- **`zoom` with `cut: true`** (Step 250) jumps to the zoomed view; at `at: 0` of a scene's first
+  beat the scene opens on it (no second of the wide view while the set fades in, e.g. under a
+  Short's hook).
+- **`shorts_safe_area`** (Step 250) checks a face against every caption of the line being
+  spoken (a longer caption of the line covering a face is found from any still of it), also on
+  mid-beat stills (lint renders 3 stills per beat in a Short), and reports an overlay over 10 %
+  of a face (`min_cover`).
+- **A cut leaves a character out** (Step 250): `params: {characters: [{name: x, drop: true}]}`
+  (also props and layers), e.g. someone who only arrives in a later beat.
+- **The hook** (Step 250) gets a little smaller (down to 0.8 × the title size) when that keeps it
+  on two lines.
+
+- **Cuts** (Step 249). `cut:` (usually in a variant, one per Short or teaser) keeps chosen scenes
+  (whole, some beats by id, or `{from, to}`; a scene may come twice under another id) and
+  changes them for this cut: a scene's `params` (characters, props and layers merged by name)
+  and other keys, beats by id (`cut.beats`: a shot, actions, an emotion). Beats keep their ids,
+  so the full video's narration audio is reused. `hook:` adds a hook caption and `end_card:` a
+  closing card ("Full video on the channel" under the title).
+- **The `hook` overlay** (Step 249): big bold text on a plate near the top over the first
+  seconds, popping in and fading out.
+- **Shorts** (Step 249). `shorts: true` (or `{max_seconds, bottom, right, top, left}`) keeps
+  captions, lower thirds and the hook out of the parts of the frame the phone app covers (bottom
+  20 %, right 15 %); lint rules `shorts_safe_area` (text or a face there, a caption over a face)
+  and `shorts_length` (over 60 s, an error); `vidgen validate` warns about a Short that is not
+  vertical or too long.
+- **`zoom` with `hold: true`** (Step 249) stays zoomed in after its beat (a scene ending on a
+  close view), until a later camera move.
+- **`audio.bitrate`** (Step 249): the AAC bitrate (default 192k as before); a loud Short's mix
+  kept its true peak at 256k (192k pushed it from −1.9 to +1.9 dBTP).
+- In a Short the scenes' safe area leaves out the app's parts, and a `card`'s words keep to the
+  clear part.
+
+### Story-cartoon features (Phase Z, Steps 245–248)
+
+- **Voice effects** (Step 245). `effect:` on `voice:` or a named voice of `voices:` runs that
+  speaker's lines through `deep`, `high`, `robot` (a flat, metallic monotone), `radio`, `chorus`,
+  `echo`, `hall` or `otherworldly` (deep, many-voiced, in a hall), a list of them, or `{use,
+  pitch, amount}`, with any provider (ffmpeg after synthesis). A voice without one keeps every
+  audio hash; named voices do not inherit it.
+- **Hologram characters** (Step 245). `hologram: true` (or `{color, opacity}`) on a character
+  draws it as a translucent figure in one glowing colour with bright edges, which the stage's
+  `light` never darkens.
+- **Portals** (Step 245). A `portal` prop: switched like a lamp, it tears open from a glowing
+  crack into a crackling, swirling, pulsing rift with a glow (`switch_on`) and seals again
+  (`switch_off`), with its sounds; on a plain stage or at a spot of an iso place, where a
+  character can step out of it (`enter` with `door:` its spot).
+- **Framing** (Step 246). `iso: {wide: fill}` (or a zoom 1–2.5) brings a room's wide view
+  closer; `shot: closeup ana ben` (and `medium`) frames two or three characters' faces together;
+  `shot: {..., clear: true}` hides the characters a shot does not frame for its beat.
+- **Holograms appear and flicker** (Step 246). `- materialise: guide` (a flickering wireframe,
+  then solid; the character waits unseen until then) and `- dematerialise: guide`; holograms
+  flicker now and then (`hologram: {flicker: false}` for a steady one).
+- **Visitors** (Step 246). `iridescent: true` (skin and clothes shifting colours like oil on
+  water) and `afterimages: true` (faint copies trailing a move) on a character.
+- **Hand in hand** (Step 246). `- {hold_hands: ana, with: ben}` keeps two characters holding
+  hands wherever they stand or walk; `- let_go_hands: ana`.
+- **Alarms and shutters** (Step 246). `- alarm: start` / `stop`: a dark room under a red light
+  pulsing like a beacon, with a siren; what the light never grades keeps shining.
+  `- shutters: close` / `open` slams steel shutters over an iso room's windows (`iso: {shutters:
+  true}` starts them down).
+- **A lab and a memory** (Step 246). Iso objects `console` (glowing screens), `server_rack`
+  (blinking lights), `projector_pad`, `whiteboard`, `flower_arch`, `chess_table`; a
+  `hologram_display` prop (a floating panel of light: `fractal`, `data` or `text`); a portal's
+  `view` (`coast`, `stars`, `meadow`); `flashback: true` on a stage (faded warm colours and a
+  soft vignette).
+- **Sounds** (Step 246). Built-in `alarm`, `crackle`, `hum`, `drone` (a crystalline singing
+  drone) and `slam`; ambience beds `hum` (`ambience: hum`) and `alarm` (under an alarm). The
+  Listen page has a row for them. Gallery showcase `iso_lab`.
+- **Light on the characters** (Step 247). `fill_light: 0–1` on a stage: a soft light on the
+  characters alone, so faces read at night or under an alarm while the set stays dark. An
+  iridescent visitor shines partly by its own light (`iridescent: {glow}`, default 0.5).
+- **Hand in hand, side by side** (Step 247). Two holding hands step in close enough for their
+  joined hands to show, and walking together (same `run_time`) they go side by side.
+- **Review** (Step 248). A `shot` inside a `zoom`'s `until` holds for its beat, then the zoom
+  resumes (the camera no longer pulls back during the shot). Voice effects are level-matched to
+  the dry voice (the robot was about 5 dB louder). `vidgen render --max-scenes N` renders a long
+  project in steps (stops without joining while scenes are left; run it again to go on).
 
 ### Particle physics (Phase Y, Steps 237–244)
 
@@ -608,7 +757,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   types and five showcases (a plant cell, the sodium pump, a MEK inhibitor, mitosis, the
   respiratory chain); gallery stills are now palette PNGs (about 40 % of their size, the room for
   the showcases). Fixes found on the way: a cell route's transcription caption no longer mentions
-  vidgen's molecule scene; a zoomed `cell` view and a gene close-up no longer report their cropped
+  schu-video-generator's molecule scene; a zoomed `cell` view and a gene close-up no longer report their cropped
   world as `off_frame`; the close-up's "schematic: not to scale" is at the readable size, in the
   safe area and clear of the protein's readout in 9:16.
 - **Review of Phase U** (Step 211): drawings use the frame better — molecule scenes put three or
@@ -638,7 +787,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   chords; sections dragged, looped and edited; tracks with mute / solo, volume, pan, steps
   text; an inspector with every instrument's settings as sliders, effects as chips, per-section
   changes and a step grid) or by typing the YAML; problems show inline with the command line's
-  did-you-mean messages while the last good render keeps playing. The sound is always vidgen's
+  did-you-mean messages while the last good render keeps playing. The sound is always schu-video-generator's
   own renderer: an edit renders only the tracks it changes and plays on from the same moment,
   also under the narration sample. See `docs/CONFIG.md`, "Music studio".
 - **Check, versions, A/B, export** (Step 197): `vidgen music check` after each render (verdict,
@@ -709,11 +858,11 @@ Changes that affect projects made with 0.2.0:
   TTS, captions and readback. Beats with asterisks get new audio hashes. Other beats keep
   theirs.
 - **The first render after upgrading renders every scene again**: the scene cache key includes
-  the vidgen version.
+  the schu-video-generator version.
 - **`--jobs` accepts `auto`** (Step 117). A bad value now gives the error `invalid value: 'x'
   (a whole number, or auto)` instead of argparse's message.
 - **A Kokoro voice of another language is dubbed** (Step 143): in a video (or variant) whose
-  `language:` is not the Kokoro voice's, vidgen now picks a Kokoro voice of the video's language
+  `language:` is not the Kokoro voice's, schu-video-generator now picks a Kokoro voice of the video's language
   of the same kind (female / male) instead of reading the text with the wrong pronunciation and
   only warning. `vidgen validate` prints the choice (`dub [pt]: ...`). Write `lang:` on the voice
   to keep it on purpose, or `dub: {LANG: VOICE}` to choose. Those beats get new audio.
@@ -723,7 +872,7 @@ Changes that affect projects made with 0.2.0:
   1.5 s before it appears). `vidgen lint --fail-on warning` may now fail on a project that passed:
   show the label on the word (`{reveal: ..., at: "@word"}`), or set
   `lint.rules.said_before_shown: {severity: off}`.
-- **Built-in pronunciation entries** (Step 165): vidgen now respells some words for some voices
+- **Built-in pronunciation entries** (Step 165): schu-video-generator now respells some words for some voices
   in every project (`vidgen list-pronunciation` lists them): Kokoro's English voices say `README`
   as `readme`, `JSON` as `Jason`, `YAML` as `yammel`, `ReLU` as `ray loo` and more, and its
   American voices `epoch` as `E pock`. The audio hash covers the spoken text, so **existing Kokoro
@@ -923,13 +1072,13 @@ matters only for projects made with development builds between Steps 67 and 131)
   once there is audio and estimated from the text before; an unknown word is a `vidgen validate`
   error that lists the beat's words like it (156).
 - One colour per concept: `terms: {loss: primary, gradient: "#E07A5F", "learning rate": {color:
-  tertiary, tex: '\eta'}}` colours those words in every text vidgen writes (titles, bullets, chart
+  tertiary, tex: '\eta'}}` colours those words in every text schu-video-generator writes (titles, bullets, chart
   and diagram labels, callouts, karaoke captions) and their symbols in equations; `terms: false`
   opts a scene out; lint `concept_colors` (157).
 - `code_morph`: version A of a listing morphs into version B (kept tokens glide, new lines grow
-  in, removed ones fade out; the diff is vidgen's), at a beat or on a word (158).
+  in, removed ones fade out; the diff is schu-video-generator's), at a beat or on a word (158).
 - `terminal`: commands typed at a prompt and the output you write appearing, beside a code
-  listing or after a code scene (`carry`); vidgen runs nothing (159).
+  listing or after a code scene (`carry`); schu-video-generator runs nothing (159).
 - `function_plot`: functions written as maths and parsed safely (no `eval`), a dot tracing a
   curve with its tangent and a live label, shaded areas with their signed value, the `trace`
   action (160); points, vectors (sums, scaling), braces, angle marks, dimension lines, and the
@@ -1017,11 +1166,11 @@ matters only for projects made with development builds between Steps 67 and 131)
 - A Listen page, [`docs/music/README.md`](docs/music/README.md), made by `vidgen music page`:
   a 15 s MP3 clip and a spectrogram of every bed (from the lift for `breakthrough`, `ascent` and
   `horizon`), clips that play all 36 sound effects and the six ambience beds, and two composed
-  moods; all made by vidgen itself and byte-identical when made again. The README leads with
+  moods; all made by schu-video-generator itself and byte-identical when made again. The README leads with
   the music and sound synthesis and links it (183).
 - Score files: music written in YAML (key, tempo, time signature, named sections, a progression
   in Roman numerals or chord names, tracks of step patterns such as `"x... x..."`, `"1358 5315"`
-  with `accent: "3+3+2"` or `"E5 - - . G5"`), played by vidgen's own instruments as a seamless
+  with `accent: "3+3+2"` or `"E5 - - . G5"`), played by schu-video-generator's own instruments as a seamless
   loop or a one-shot at −28 LUFS; every mistake reported at once with did-you-mean. `vidgen music
   render SCORE.yaml --out FILE.wav` (184).
 - Score files gain an instrument library of 26 (gated snare, analog bass, square pluck, soft lead,
@@ -1038,7 +1187,7 @@ matters only for projects made with development builds between Steps 67 and 131)
   in words — loudness and steadiness, peaks and clipping, the tempo heard, the loop's seam, how
   much sits in the voice's range, bass weight, harsh highs, the key, whether the lift lifts and
   the build builds — with advice that names the tracks and score keys to change, a spectrogram
-  with the sections marked and a 20 s demo under a narration sample with vidgen's ducking;
+  with the sections marked and a 20 s demo under a narration sample with schu-video-generator's ducking;
   `--compare` puts two versions side by side (187).
 - Project pieces: a score file in `assets/music/my_theme.yaml` plays like a bed with `music:
   my_theme` (or `source: assets/music/my_theme.yaml`), rendered when the video is joined and

@@ -1,8 +1,8 @@
-# kphi3: a paper video built with vidgen extensions
+# kphi3: a paper video built with schu-video-generator extensions
 
 "Saving 77% of the Parameters in Large Language Models" (3:51, 1920x1080 @ 30 fps), ported from
 a one-off Manim project. All eight scenes are **custom scene types** in `extensions/`, written
-with nothing but `vidgen.api`; vidgen itself knows nothing about this video. The narration
+with nothing but `vidgen.api`; schu-video-generator itself knows nothing about this video. The narration
 MP3s are committed in `audio/`, so you can render it without an ElevenLabs key.
 
 The paper: João Paulo Schwarz Schuler and Alejandra Rojas Gómez, *Saving 77% of the Parameters
@@ -34,7 +34,7 @@ The text uses the Inter font.
 | original | here |
 |---|---|
 | `script.json` (voice, scenes, beats) | `video.yaml`: same voice, model and voice settings, the same 27 beat ids and texts; scene classes became `type: kphi_*` scenes with `params` |
-| `audio/*.mp3`, `*.hash` | `audio/`, copied unchanged (vidgen accepts the old hash format, so nothing is regenerated) |
+| `audio/*.mp3`, `*.hash` | `audio/`, copied unchanged (schu-video-generator accepts the old hash format, so nothing is regenerated) |
 | `common.py`: colors, font | `theme:` in `video.yaml` (`base`, `k2`, `k3` model colors, `highlight` = gold, `accent`, `palette` = group colors) |
 | `common.py`: `T`, `MT`, `column`, `edges`, `dense_pairs`, `grouped_pairs`, `counter` | the same helpers from `vidgen.api` (colors as theme tokens) |
 | `common.py`: `NarratedScene`, `narrate()` | vidgen's `NarratedScene` (`with self.narrate(0) as d:` takes a beat index) |

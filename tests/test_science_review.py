@@ -24,7 +24,7 @@ try:
     from scipy import constants as sp_constants
     from scipy import integrate as sp_integrate
     from scipy import optimize as sp_optimize
-except ImportError:   # scipy is not a dependency of vidgen: the reference comparisons skip
+except ImportError:   # scipy is not a dependency of schu-video-generator: the reference comparisons skip
     sp_constants = sp_integrate = sp_optimize = None
 
 needs_scipy = pytest.mark.skipif(sp_optimize is None, reason="scipy not installed (reference values only)")

@@ -17,7 +17,7 @@
 #   vidgen tts examples/mars-transfer                # Kokoro: local and free (the kokoro extra)
 #   vidgen render examples/mars-transfer [--preview] [--variant short]
 #
-# Numbers (all computed by vidgen from its model; DESIGN §98): orbit radii are JPL Table 1's
+# Numbers (all computed by schu-video-generator from its model; DESIGN §98): orbit radii are JPL Table 1's
 # semi-major axes (Earth 1.00000261 AU, Mars 1.52371034 AU) on circles; GM☉ IAU 2015 nominal.
 # Hohmann: Δv₁ 2.945 km/s, Δv₂ 2.649 km/s (heliocentric), 258.9 d, Mars 44.3° ahead at departure,
 # synodic period 779.9 d. Departure from a 300 km circular orbit: v∞ = Δv₁ gives 3.59 km/s
@@ -155,7 +155,7 @@ scenes:
     type: orbit
     params:
       title: "The Earth and Mars on 28 October 2026"
-      date: "2026-10-28"                 # quoted: `vidgen schema` checks a string (vidgen reads both)
+      date: "2026-10-28"                 # quoted: `vidgen schema` checks a string (schu-video-generator reads both)
       bodies:
         - {preset: earth, trail: 0.3}
         - {preset: mars, trail: 0.2}

@@ -3,7 +3,7 @@
 // at that moment: the server records its bar, beat, section and the version heard. Notes show as
 // pins on the lane and in the Notes tab (edit, resolve, delete; click to play from a little
 // before). "Ask an agent" writes a hand-off into the session folder; an agent answers through
-// vidgen's MCP (the page polls the session and the proposal appears), a chat assistant through
+// schu-video-generator's MCP (the page polls the session and the proposal appears), a chat assistant through
 // Copy prompt / Paste reply, or OpenRouter when a key is set. A proposal is a new version to A/B
 // against the one it was made from, then keep or discard; one with problems can only be dismissed.
 
@@ -296,7 +296,7 @@ function drawHandoff() {
   const p = handoff.provider;
   const answered = (ctx.state.proposals || []).some((x) => x.request === r.id);
   const kb = (new Blob([handoff.prompt]).size / 1024).toFixed(1);
-  const why = !p.key_set ? `set ${p.key_env} (your OpenRouter key; vidgen never stores it) and start the studio again` : "";
+  const why = !p.key_set ? `set ${p.key_env} (your OpenRouter key; schu-video-generator never stores it) and start the studio again` : "";
   const made = typeof r.created === "string" ? r.created.slice(11, 16) : "";
   box.hidden = false;
   box.innerHTML = `
@@ -305,7 +305,7 @@ function drawHandoff() {
       <button class="btn small" id="ask-again"></button>
       Answer it with:</p>
     <ol class="ways">
-      <li><b>An agent through vidgen's MCP</b> (<code>vidgen mcp</code>): ask it to <i>answer my studio notes</i>; it uses
+      <li><b>An agent through schu-video-generator's MCP</b> (<code>vidgen mcp</code>): ask it to <i>answer my studio notes</i>; it uses
         <code>studio_read</code> and <code>studio_propose</code>, and the proposal appears above the tracks.
         <span class="waiting${answered ? " done" : ""}">${answered ? "answered" : "waiting for a proposal…"}</span></li>
       <li><b>Any chat assistant</b>: <button class="btn small" id="copy-prompt">Copy prompt</button> (${kb} KB), paste it there,

@@ -74,7 +74,7 @@ momentum.yaml` (the template written by `vidgen music template momentum`) gives 
 Time of Flight: B minor, 108 BPM, 4/4, 24 bars = 53.3 s (a loop)
 verdict: fine under narration
 
-  ok   loudness     -28.0 LUFS integrated (vidgen plays music at -28 LUFS at volume 0)
+  ok   loudness     -28.0 LUFS integrated (schu-video-generator plays music at -28 LUFS at volume 0)
   ok   steadiness   the 3 s loudness stays within 5.1 dB (10th to 95th percentile)
   ok   peaks        true peak -15.5 dBTP, 12.5 dB over the loudness
   ok   tempo        heard 72.1 BPM = 2/3 of the score's 108 (accents or figures grouped in threes, such as 3+3+2, make the onsets repeat in threes; the same beat, fine)
@@ -85,7 +85,7 @@ verdict: fine under narration
   ok   key          97 % of the pitched sound on the key's notes (the chroma fits B minor best, 0.85); every part fits every chord (at least 76 %)
   ok   sections     the build builds: its second half +0.9 dB, +3.3 dB brighter
   ok   sections     the lift lifts: +2.4 dB louder and +10.2 dB brighter than the build
-  ok   narration    under narration_sample.mp3 with vidgen's default ducking (12 dB): voice -21.37 LUFS, music under it -42.16 LUFS; the voice's range stands 23.8 dB over the music's
+  ok   narration    under narration_sample.mp3 with schu-video-generator's default ducking (12 dB): voice -21.37 LUFS, music under it -42.16 LUFS; the voice's range stands 23.8 dB over the music's
 
 sections (LUFS; brightness = level above 2 kHz):
   intro      bars   1-4      0.0 s   -31.3 LUFS  brightness  -68.8 dB

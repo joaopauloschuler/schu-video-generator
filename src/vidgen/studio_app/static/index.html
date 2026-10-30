@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>vidgen studio</title>
+<title>schu-video-generator studio</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/studio.css">
 <script type="module" src="/static/app.js"></script>
@@ -11,7 +11,7 @@
 <body>
 <div class="studio" id="studio">
   <header class="topbar">
-    <div class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5a2.5 2.5 0 1 1-2-2.45V5l11-2v11.5a2.5 2.5 0 1 1-2-2.45V6.4L9 7.7z"/></svg><span>vidgen <b>studio</b></span></div>
+    <div class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5a2.5 2.5 0 1 1-2-2.45V5l11-2v11.5a2.5 2.5 0 1 1-2-2.45V6.4L9 7.7z"/></svg><span>schu-video-generator <b>studio</b></span></div>
     <div class="picker">
       <button class="btn select" id="preset-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="preset-list">
         <span class="dim">Preset</span> <span id="preset-name">…</span> <span class="caret" aria-hidden="true">▾</span>
@@ -39,7 +39,7 @@
           <span class="dim small">the version's text as written, comments kept</span>
         </div>
         <div class="ex-group">
-          <h3>Audio <span class="dim">rendered by vidgen</span></h3>
+          <h3>Audio <span class="dim">rendered by schu-video-generator</span></h3>
           <div class="ex-row">
             <label for="ex-format">Format</label>
             <select id="ex-format" class="field"><option value="wav">WAV (16-bit, 48 kHz)</option><option value="mp3">MP3</option></select>
@@ -52,7 +52,7 @@
           <div class="ex-row">
             <label for="ex-level">Level</label>
             <select id="ex-level" class="field">
-              <option value="video">video level: −28 LUFS (as vidgen plays it at volume 0)</option>
+              <option value="video">video level: −28 LUFS (as schu-video-generator plays it at volume 0)</option>
               <option value="listening">listening level: −16 LUFS (as heard here)</option>
             </select>
           </div>
@@ -99,10 +99,10 @@
     <p class="dim small">On a Mac, <kbd>⌘</kbd> works for <kbd>Ctrl</kbd>.</p>
   </section>
   <aside class="first-hint" id="hint" aria-labelledby="hint-title" hidden>
-    <h2 id="hint-title">Welcome to vidgen studio</h2>
+    <h2 id="hint-title">Welcome to schu-video-generator studio</h2>
     <ol>
       <li>Pick a <b>preset</b> (a built-in bed) and press <kbd>Space</kbd> to listen.</li>
-      <li>Change <b>one thing</b>: a track's pattern, a slider, the tempo. Each change is a new version, rendered by vidgen.</li>
+      <li>Change <b>one thing</b>: a track's pattern, a slider, the tempo. Each change is a new version, rendered by schu-video-generator.</li>
       <li>Read the <b>Check</b> at the bottom, then <b>A/B</b> it against the original.</li>
       <li>Pin <b>notes</b> with <kbd>N</kbd>, <b>Ask an agent</b>, try <b>Variations</b>, then <b>Export</b>.</li>
     </ol>
@@ -134,7 +134,7 @@
         <select id="loop" aria-label="Loop"><option value="">whole</option></select>
       </label>
       <button class="btn add-note" id="add-note" title="Pin a listening note at this moment (N)">+ note <kbd>N</kbd></button>
-      <label class="narration" title="Hear it under the narration sample with vidgen's default ducking (−12 dB while the voice speaks), as in a video"><input type="checkbox" id="narration"> under narration</label>
+      <label class="narration" title="Hear it under the narration sample with schu-video-generator's default ducking (−12 dB while the voice speaks), as in a video"><input type="checkbox" id="narration"> under narration</label>
       <input type="range" class="seek" id="seek" min="0" max="1000" value="0" step="1" aria-label="Position">
       <span class="time" id="time">0:00 / 0:00</span>
       <span class="render-badge" id="render-badge" hidden>rendering…</span>

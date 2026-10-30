@@ -122,6 +122,9 @@ class OverlayLayer:
         self._intervals = [o.interval() for o in self._all]
         self._cache: dict[tuple[int, Hashable], _Patch] = {}
         self._camera: Camera | None = None
+        for overlay in self._all:
+            if overlay.avoids_faces:
+                overlay.faces = self.face_boxes
         #: Frames at the scene's start written without overlays, their overlays going to
         #: ``head_path`` instead (:meth:`split_head`).
         self.head = 0
@@ -169,7 +172,35 @@ class OverlayLayer:
         out = []
         for overlay, mob, state in zip(self._all, self._all_mobjects, self.states(frame)):
             if mob is not None and state is not None:
-                out.append((overlay, overlay.pose(mob, state), overlay.settled(state)))
+                out.append((overlay, overlay.posed_whole(mob, state), overlay.settled(state)))
+        return out
+
+    def face_boxes(self) -> list[tuple[float, float, float, float]]:
+        """The boxes ``(left, bottom, right, top)`` of the heads of the scene's characters on
+        screen now, in the overlays' whole-frame units (DESIGN.md §102.8): those drawn, not
+        hidden by a shot and not faded out (a hologram not yet materialised)."""
+        from manim import config
+
+        scene = self.scene
+        cast = getattr(scene, "cast", None)
+        if not cast:
+            return []
+        camera = scene.camera
+        center = np.asarray(getattr(camera, "frame_center", np.zeros(3)), dtype=float)[:2]
+        zoom = float(config.frame_width) / float(getattr(camera, "frame_width", config.frame_width))
+        drawn = {id(m) for m in scene.mobjects}
+        out: list[tuple[float, float, float, float]] = []
+        for figure in cast.values():
+            if id(figure) not in drawn or getattr(figure, "hidden_by_shot", False) or float(getattr(figure, "shown", 1.0)) < 0.3:
+                continue
+            if not figure.has_part("head"):
+                continue
+            points = [m.points for m in figure.parts["head"].get_family() if len(m.points)]
+            if not points:
+                continue
+            xy = np.concatenate(points)[:, :2]
+            low, high = (xy.min(axis=0) - center) * zoom, (xy.max(axis=0) - center) * zoom
+            out.append((float(low[0]), float(low[1]), float(high[0]), float(high[1])))
         return out
 
     # ----- drawing -----------------------------------------------------------------------------
@@ -235,18 +266,25 @@ class OverlayLayer:
             np.rint(keep[r0:r1, c0:c1]).astype(np.uint16)[:, :, None],
         )
 
-    def _patch(self, k: int, state: Hashable) -> _Patch:
-        """Overlay ``k`` drawn in ``state`` (cached)."""
-        key = (k, state)
+    def _patch(self, k: int, state: Hashable, piece: int | None = None) -> _Patch:
+        """Overlay ``k`` (its ``piece``, when drawn in pieces) drawn in ``state`` (cached)."""
+        key = (k, state) if piece is None else (k, (piece, state))
         patch = self._cache.get(key)
         if patch is None:
             mobject = self._all_mobjects[k]
             assert mobject is not None
-            patch = self._draw(self._all[k].pose(mobject, state))
+            overlay = self._all[k]
+            patch = self._draw(overlay.pose(mobject, state) if piece is None else overlay.pose_piece(mobject, piece, state))
             if len(self._cache) >= CACHE_SIZE * len(self._all):
                 self._cache.pop(next(iter(self._cache)))
             self._cache[key] = patch
         return patch
+
+    def _patches(self, k: int, state: Hashable) -> list[_Patch]:
+        """Overlay ``k`` drawn in ``state``: one patch, or one per shown piece (DESIGN.md §102.8)."""
+        if not self._all[k].pieces:
+            return [self._patch(k, state)]
+        return [self._patch(k, s, piece) for piece, s in enumerate(state) if s is not None]   # type: ignore[arg-type]
 
     def composite(self, frame: np.ndarray, states: tuple[Hashable | None, ...]) -> np.ndarray:
         """``frame`` (H x W x 4 RGBA) with the overlays drawn in ``states`` on top, in order (a
@@ -255,14 +293,20 @@ class OverlayLayer:
         for k, state in enumerate(states):
             if state is None or self._all_mobjects[k] is None:
                 continue
-            patch = self._patch(k, state)
-            if patch.box is None:
-                continue
-            if out is frame:
-                out = np.array(frame, copy=True)
-            y0, y1, x0, x1 = patch.box
-            under = out[y0:y1, x0:x1, :3].astype(np.uint16)
-            out[y0:y1, x0:x1, :3] = (patch.color + (under * patch.keep + 127) // 255).clip(0, 255).astype(np.uint8)
+            for patch in self._patches(k, state):
+                out = self._blend(out, frame, patch)
+        return out
+
+    @staticmethod
+    def _blend(out: np.ndarray, frame: np.ndarray, patch: _Patch) -> np.ndarray:
+        """``patch`` drawn over ``out`` (copied from ``frame`` first, when it is still the frame)."""
+        if patch.box is None:
+            return out
+        if out is frame:
+            out = np.array(frame, copy=True)
+        y0, y1, x0, x1 = patch.box
+        under = out[y0:y1, x0:x1, :3].astype(np.uint16)
+        out[y0:y1, x0:x1, :3] = (patch.color + (under * patch.keep + 127) // 255).clip(0, 255).astype(np.uint8)
         return out
 
     def rgba(self, states: tuple[Hashable | None, ...], height: int, width: int) -> np.ndarray:
@@ -274,14 +318,14 @@ class OverlayLayer:
         for k, state in enumerate(states):
             if state is None or self._all_mobjects[k] is None:
                 continue
-            patch = self._patch(k, state)
-            if patch.box is None:
-                continue
-            y0, y1, x0, x1 = patch.box
-            assert patch.color is not None and patch.keep is not None
-            factor = patch.keep.astype(np.float32) / 255.0
-            color[y0:y1, x0:x1] = patch.color + color[y0:y1, x0:x1] * factor
-            keep[y0:y1, x0:x1] = keep[y0:y1, x0:x1] * factor
+            for patch in self._patches(k, state):
+                if patch.box is None:
+                    continue
+                y0, y1, x0, x1 = patch.box
+                assert patch.color is not None and patch.keep is not None
+                factor = patch.keep.astype(np.float32) / 255.0
+                color[y0:y1, x0:x1] = patch.color + color[y0:y1, x0:x1] * factor
+                keep[y0:y1, x0:x1] = keep[y0:y1, x0:x1] * factor
         alpha = 255.0 - keep
         out = np.zeros((height, width, 4), dtype=np.uint8)
         shown = alpha[:, :, 0] > 0

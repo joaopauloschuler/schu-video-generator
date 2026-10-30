@@ -3,7 +3,7 @@
 A particle-physics explainer (eleven scenes, about 3 min 49 s with Kokoro narration) built on the
 Phase Y scene types (`standard_model`, `feynman`, `branching`, `detector`, `mass_spectrum`) with a
 `calculation` and a `plot` (DESIGN §99). Masses, widths, branching ratios and significances on
-screen come from vidgen's particle model, and the narration says the same numbers (`vidgen lint`'s
+screen come from schu-video-generator's particle model, and the narration says the same numbers (`vidgen lint`'s
 `particle_*` rules check it). Every event is **simulated** and labelled so. The craft:
 [the particle-physics cookbook](../../docs/COOKBOOK-PARTICLES.md).
 

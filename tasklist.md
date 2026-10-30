@@ -1,4 +1,4 @@
-# vidgen task list — features for AI-authored videos
+# schu-video-generator task list — features for AI-authored videos
 
 Legend: `- [ ]` not done · `- [~]` partially done · `- [x]` done
 
@@ -256,7 +256,7 @@ Rules that apply to every step:
 - [x] (from Step 22) `vidgen tts --json` (and, from Step 55, `vidgen imagegen --json`: the commands without it); human `vidgen validate` still stops at the first variant that does not load (`--json` lists them all) (also `vidgen init --json` and `validate --json` `images`; human validate now lists every broken variant)
 
 ### Step 60 — Final review
-- [x] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md (end-to-end as an agent with the CLI and over MCP, consistency pass, wheel + sdist installed in fresh venvs with and without extras; version 0.2.0; "Release notes: vidgen 0.2.0" in HANDOFF.md, DESIGN §63. Also found and fixed: `vidgen render` re-rendered scenes the storyboard had just rendered → incremental render with `--force`; map data notices missing from the wheel; `translate-template --language`; `init`'s next-step line)
+- [x] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md (end-to-end as an agent with the CLI and over MCP, consistency pass, wheel + sdist installed in fresh venvs with and without extras; version 0.2.0; "Release notes: schu-video-generator 0.2.0" in HANDOFF.md, DESIGN §63. Also found and fixed: `vidgen render` re-rendered scenes the storyboard had just rendered → incremental render with `--force`; map data notices missing from the wheel; `translate-template --language`; `init`'s next-step line)
 - [~] (from Step 59) MCP server: files a project's `video.yaml` names are now confined to `--root` (`VIDGEN_CONFINE_ROOT`) and cancelling on Windows kills the process tree (`taskkill /T`, untested here); left: trimming large documents, a real client session — see Backlog
 - [~] (from Step 58) `code` highlight band contrast fixed (adaptive band, examples/plan lints clean); `vidgen plan`: stat labels without the subject, ranges are not stats, bare web addresses are links, placeholder beats say the whole item; left: truncated prose bullets, English-only icon search, more cues — see Backlog
 - [ ] (from Step 57) Gallery 9:16 stills (`code_walkthrough`, `image` `contain`, wide `world`), mid-beat stills, project-type render test — see Backlog
@@ -791,8 +791,8 @@ walking and jumping planned from the author's intent, story props, sounds, a cam
 the hero), designed so that simple computer games could reuse the world and its rules later
 (games are not in scope). Three layers kept apart: the world model (levels, characters, items as
 plain data), the rules (movement, jumps, collisions, pickups: deterministic, driven by scripted
-inputs) and the renderers (vidgen / Manim now); the world and the rules never import Manim. Built
-on the cartoon `stage` (a `level:` param, not a new scene type; DESIGN §86), in vidgen's flat
+inputs) and the renderers (schu-video-generator / Manim now); the world and the rules never import Manim. Built
+on the cartoon `stage` (a `level:` param, not a new scene type; DESIGN §86), in schu-video-generator's flat
 cartoon style; the hero and the story are original. Same rules as Phases H–N.
 
 ### Step 150 — Phase plan, world model, ASCII levels and static rendering
@@ -810,7 +810,7 @@ cartoon style; the hero and the story are original. Same rules as Phases H–N.
 
 ### Step 152 — Story props and reactions
 - [x] Key and door, coins or stars to collect, friendly blockers (a grumpy snail that moves when asked nicely), as world items with rules (pickups, doors that open, blockers that move) (`vidgen/world/items.py`, `story_props.py`, obstacles and pickups in `moves.py`: `$` coins and `*` stars on the map picked up on the way and mid-jump; `door` props in the way until opened, `level.locks` (a locked door opens only `by` the key's holder next to it, new `key` prop); `level.blockers` (any character) until `step_aside`; `vidgen validate` replays them naming the beat; the snail is any cast member, e.g. a turtle: no snail species)
-- [x] Reactions (surprise, joy, landing wobble) with vidgen's existing actions and lip sync; pick-up steps timed to their lines (`react: {when: pickup | land | arrive, expression, effect}` on `walk_to` / `run_to` / `jump`: the expression eases on during the move, an effect symbol pops; `pick_up`, `open`, `step_aside` keep the beat `at` timing; the landing wobble is Step 151's)
+- [x] Reactions (surprise, joy, landing wobble) with schu-video-generator's existing actions and lip sync; pick-up steps timed to their lines (`react: {when: pickup | land | arrive, expression, effect}` on `walk_to` / `run_to` / `jump`: the expression eases on during the move, an effect symbol pops; `pick_up`, `open`, `step_aside` keep the beat `at` timing; the landing wobble is Step 151's)
 - [x] Tests: item rules without rendering, one tiny render (`tests/test_platform_props.py`); Step 151 gaps closed: `walk_to` / `run_to` to a tile, `vidgen direct` and the prop replay place a tile
 
 ### Step 153 — Sound effects
@@ -851,12 +851,12 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 - [x] Tests (`tests/test_terms.py`: matching, config, validate, fit_text / T / callout / series / TeX colours, lint, one tiny render with the opt-out)
 
 ### Step 158 — Code that morphs between versions
-- [x] In the code scene(s): version A, then a morph to version B (unchanged tokens glide into place, new lines grow in, removed lines fade out), timed to beats and words (Step 156); the diff computed by vidgen (`difflib`), not the author (a new scene type `code_morph`: `versions` (code strings or `{code | path, highlight}`), version i at beat i, `{reveal: version2, at: "@word"}` on a word; `diff_code`: lines by text without indentation, edited lines paired by token similarity, moved and re-indented lines glide; `highlight: changed`; DESIGN §87.4; `code_walkthrough` does not morph: Backlog)
+- [x] In the code scene(s): version A, then a morph to version B (unchanged tokens glide into place, new lines grow in, removed lines fade out), timed to beats and words (Step 156); the diff computed by schu-video-generator (`difflib`), not the author (a new scene type `code_morph`: `versions` (code strings or `{code | path, highlight}`), version i at beat i, `{reveal: version2, at: "@word"}` on a word; `diff_code`: lines by text without indentation, edited lines paired by token similarity, moved and re-indented lines glide; `highlight: changed`; DESIGN §87.4; `code_walkthrough` does not morph: Backlog)
 - [x] The phone readability rules of the existing code scenes still apply (one size and wrap width for every version through `code`'s fitting, `_fit_listings`)
 - [x] Tests (`tests/test_code_morph.py`: the diff, params and checks, targets, files, tiny renders in 16:9 and 9:16 and on a word; the builtin / coverage / translation samples; the gallery page)
 
 ### Step 159 — Terminal scene
-- [x] A terminal window with commands typed (typing effect) and their output appearing, timed to beats / words; the output is the author's (vidgen never runs commands) (a new scene type `terminal`: `steps` (a command, or `{command, output, clear, output_color}`), step i at beat i, a block cursor, `typing_speed`, `prompt`, `language`; `{reveal: output2, at: "@word"}` / `command2` on a word, a `reveal` of a command typing for its typing time (`NarratedScene.entrance_time`); `clear` starts a new page in the same window; DESIGN §87.5)
+- [x] A terminal window with commands typed (typing effect) and their output appearing, timed to beats / words; the output is the author's (schu-video-generator never runs commands) (a new scene type `terminal`: `steps` (a command, or `{command, output, clear, output_color}`), step i at beat i, a block cursor, `typing_speed`, `prompt`, `language`; `{reveal: output2, at: "@word"}` / `command2` on a word, a `reveal` of a command typing for its typing time (`NarratedScene.entrance_time`); `clear` starts a new page in the same window; DESIGN §87.5)
 - [x] The code scenes' look and themes; works beside code (a split) or after a code scene (a carry / match cut if cheap) (`code`'s window, font, Pygments style and fitting; `code: {code | path, language, highlight}` beside it, left or above, whichever gives larger text (above in 9:16), one font size; `carry: ["listing -> code"]` after a `code` / `code_morph` scene glides the listing into place; no split with other scene types: Backlog)
 - [x] Tests (`tests/test_terminal.py`: session rows, params and checks, targets, the code file, tiny renders in 16:9 and 9:16, on words, `clear`; the builtin / coverage / translation samples; the gallery page)
 
@@ -889,7 +889,7 @@ guide (+ `AGENTS.md`), and works in 16:9 and 9:16 (DESIGN §87). Same rules as P
 ## After Phase P
 
 Owner's request after Phase P: pronunciation fixes that every project needs (Kokoro's American
-voices say "epoch" like "epic") should ship with vidgen instead of being copied into each project.
+voices say "epoch" like "epic") should ship with schu-video-generator instead of being copied into each project.
 
 ### Step 165 — Built-in pronunciation dictionary
 - [x] Default lists as data files in the `pronunciation_file` format, per engine and language (`src/vidgen/data/pronunciation/kokoro-en.yaml` for every English Kokoro voice, `kokoro-en-us.yaml` over it); the list of a beat follows its effective voice (Kokoro: the language its G2P reads with; other providers: the video's language; dubbed voices their own); DESIGN §88
@@ -904,7 +904,7 @@ voices say "epoch" like "epic") should ship with vidgen instead of being copied 
 Goal: isometric *environments* for cartoon stories, to tell ideas and stories clearly: a place
 written as an ASCII map with heights (floor, walls, raised blocks, steps, water and grass; letters
 are named spots), ready-made objects, indoor rooms with two cut-away walls and outdoor places,
-drawn once into pictures in vidgen's flat cartoon style with theme colours. The characters stay
+drawn once into pictures in schu-video-generator's flat cartoon style with theme colours. The characters stay
 the 2D cut-outs they are (side and front views, expressions, actions, lip sync), standing upright
 in it, hidden by what is in front of them. No platforming in iso (no jumps, no gravity); a side
 walk cycle sliding along a diagonal is accepted. An `iso:` param on the cartoon `stage`, like
@@ -1027,7 +1027,7 @@ naming the conflict and the alternative. Same rules as Phases H–Q.
 Goal: give AI agents tools to create music the way the Steps 179 / 181 agents did, without
 editing vidgen's Python: a YAML score format, an instrument library, templates from the built-in
 beds, analysis reports (agents cannot listen), and using the pieces in videos. Built inside
-vidgen as a self-contained module (`src/vidgen/studio/`, no video / scene / render imports) so it
+schu-video-generator as a self-contained module (`src/vidgen/studio/`, no video / scene / render imports) so it
 can become its own package. Additive and opt-in: the 14 beds and every existing project's audio
 stay byte-identical. Steps 184–191 (Step 190, two score pieces as built-in beds, was added after
 the owner listened to them; the review moved to 191); Step 192, a follow-up, makes Step 189's
@@ -1053,10 +1053,10 @@ advice; a human makes the final choice (DESIGN §93).
 
 ### Step 187 — Analysis
 - [x] `vidgen music check <score|audio> [--narration FILE] [--compare OTHER] [--out DIR] [--json]`: a report in words and JSON — loudness and steadiness, true peak, clipping, tempo vs the score (×2, ×½, ×⅔... accepted and said so), loop-seam click, voice-range (300 Hz–3 kHz) share and loudest bars, bass weight, harsh highs, section energy (does the lift lift? does the build build?), key fit; a score is played track by track so each problem names its tracks (`studio/check.py`, `render_music_stems`; `vidgen.api`: `check_music_score`, `check_music_audio`, `music_check_text`, `MusicCheck`; DESIGN §93.9)
-- [x] Spectrogram PNG with section marks and a voice-range lane; a 20 s demo MP3 under a shipped Kokoro narration sample (`studio/data/narration_sample.mp3`) with vidgen's default ducking; plain-language advice naming score keys; `--compare` side-by-side table and two-row spectrogram; limits calibrated on the 14 beds and their templates (all fine) and on deliberately bad scores (all flagged)
+- [x] Spectrogram PNG with section marks and a voice-range lane; a 20 s demo MP3 under a shipped Kokoro narration sample (`studio/data/narration_sample.mp3`) with schu-video-generator's default ducking; plain-language advice naming score keys; `--compare` side-by-side table and two-row spectrogram; limits calibrated on the 14 beds and their templates (all fine) and on deliberately bad scores (all flagged)
 
 ### Step 188 — Using it in videos
-- [x] Project pieces `assets/music/*.yaml` used like beds (`music: my_theme`, `{source: my_theme, volume: -2}`, the path form `source: assets/music/x.yaml`), rendered at the join and cached in `build/music` (key: the file's bytes + renderer and vidgen versions); a bed's name that is also a piece is a problem; `list-music` (origin `score`), `validate` (the score's `where: what` problems, did-you-mean across beds and pieces, unused broken pieces as warnings), `lint` (rule `music_check`, cached) include them; `timings.json` `kind: score` (`music_pieces.py`, DESIGN §93.10)
+- [x] Project pieces `assets/music/*.yaml` used like beds (`music: my_theme`, `{source: my_theme, volume: -2}`, the path form `source: assets/music/x.yaml`), rendered at the join and cached in `build/music` (key: the file's bytes + renderer and schu-video-generator versions); a bed's name that is also a piece is a problem; `list-music` (origin `score`), `validate` (the score's `where: what` problems, did-you-mean across beds and pieces, unused broken pieces as warnings), `lint` (rule `music_check`, cached) include them; `timings.json` `kind: score` (`music_pieces.py`, DESIGN §93.10)
 - [x] MCP tools `music_template`, `music_patches`, `music_render`, `music_check` (the spectrogram as a picture); author guide recipe "Making music" (start from a template, change one thing at a time, check, compare, look at the spectrogram, room for the voice, let a human choose) + `AGENTS.md`; CONFIG "Project pieces"; existing projects' mixes byte-identical (beds, files, composed)
 
 ### Step 189 — Example and craft notes
@@ -1082,13 +1082,13 @@ advice; a human makes the final choice (DESIGN §93).
 Goal: `vidgen studio [PROJECT] [--port N] [--no-browser]` starts a small local web app
 (127.0.0.1 only) and opens it in the browser. People load any of the 17 built-in beds as an
 editable score file, change it, listen, check it and export YAML / MP3 / WAV or save it into a
-project's `assets/music/`. The sound is always vidgen's own renderer; the browser only plays the
-rendered audio. A compact "mini DAW" in vidgen's look (dark theme, light option). Additive: the
+project's `assets/music/`. The sound is always schu-video-generator's own renderer; the browser only plays the
+rendered audio. A compact "mini DAW" in schu-video-generator's look (dark theme, light option). Additive: the
 beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN §94).
 
 ### Step 193 — Architecture and skeleton
 - [x] Phase T plan here and DESIGN §94 for the whole phase: modules, server and its guards, sessions and versions on disk, the JSON API (including the calls of Steps 194–199), the render cache and the Step 196 stem plan, the page, how MCP reaches an open session (Step 198), variations (Step 199)
-- [x] `vidgen studio`: a standard-library HTTP server on 127.0.0.1 (a free port by default), opens the browser, Ctrl+C stops it; sessions in the project's `build/studio/` or vidgen's cache folder; JSON API: presets with one-line descriptions, patches, load a preset or text, validate (problems with lines and did-you-mean), render whole or one section (cached by the notes), audio with range requests; Host / Origin / JSON guards, allow-listed files (`src/vidgen/studio_app/`)
+- [x] `vidgen studio`: a standard-library HTTP server on 127.0.0.1 (a free port by default), opens the browser, Ctrl+C stops it; sessions in the project's `build/studio/` or schu-video-generator's cache folder; JSON API: presets with one-line descriptions, patches, load a preset or text, validate (problems with lines and did-you-mean), render whole or one section (cached by the notes), audio with range requests; Host / Origin / JSON guards, allow-listed files (`src/vidgen/studio_app/`)
 - [x] The page as package data (vanilla JS modules, no build, no CDN, bundled fonts): top bar with the preset picker, song strip, transport (play / pause / stop / seek), timeline with sections and playhead, track list, read-only inspector, the highlighted score file; placeholders for the later parts; load a preset and play its render
 - [x] Tests: `tests/test_studio_app.py` (API logic and the HTTP server), `tests/test_studio_ui.py` (`ui`: headless Chromium through Playwright — the page loads, a preset loads, play streams audio); screenshots looked at
 
@@ -1140,7 +1140,7 @@ beds, templates, mixes, the Listen page and every command stay unchanged (DESIGN
 
 Goal: 2D cell-biology presentations for lectures, science channels and researchers explaining
 their work: more detail and precise terms, scientifically correct (stylised, never wrong), in
-vidgen's clean flat style, easy for AI authors to write right in YAML (validated with clear
+schu-video-generator's clean flat style, easy for AI authors to write right in YAML (validated with clear
 errors and did-you-mean, linted where useful), in 16:9 and 9:16. Built in the three-layer design
 of Phases O–R: a cell world (plain data and rules in real units, no manim; `vidgen/cellworld/`),
 renderers apart (`vidgen/cell_vector.py`, `scenes/cell.py`). Additive and opt-in: existing
@@ -1217,7 +1217,7 @@ when shared code changes). DESIGN §95. Steps 202–211.
 Goal: genetics videos for lectures, medical and biology students and science channels: precise
 terms and standard notation (NSGC pedigrees, ISCN karyotypes, HGVS variants, HGNC symbols),
 scientifically exact — ratios, probabilities, gametes, map distances and frequencies computed
-by a model, not drawn by hand —, in vidgen's flat style, easy for AI authors to write right in
+by a model, not drawn by hand —, in schu-video-generator's flat style, easy for AI authors to write right in
 YAML (validated with did-you-mean, linted), in 16:9 and 9:16. Built like Phase U: a model without
 manim (`vidgen/genetics/`), renderers and scene types apart; reuses Phase U (DNA and gene
 drawing, chromosomes and meiosis with crossing over, the genetic code, gene naming per species,
@@ -1283,7 +1283,7 @@ instead of each domain scene drawing its own axes (log and symlog scales, scient
 units on axes, broken axes, error bars and bands, fits with residuals, histograms with fits,
 panels sharing an axis, annotations tied to data, data from CSV or simulations, live plots), and
 worked calculations with units (a `calculation` scene and a lint of narrated numbers), in
-vidgen's style, readable on phones in 16:9 and 9:16, easy for AI authors to write right in YAML
+schu-video-generator's style, readable on phones in 16:9 and 9:16, easy for AI authors to write right in YAML
 (validated with did-you-mean, linted, documented). Additive and opt-in: existing projects, chart
 and domain scenes, gallery frames, audio and the studio unchanged unless a step deliberately moves
 a scene onto the core (with before / after; Phase Q's 31 baseline frames when shared code
@@ -1297,7 +1297,7 @@ changes). DESIGN §97. Steps 222–228.
 - [~] Not yet (planned): error bars, bands, fits, histograms, annotations (223); live series (224); units engine and `calculation` (225); lint (226); adoption by domain scenes, example, `science` guide topic, cookbook (227)
 
 ### Step 223 — Data features
-- [x] Error bars (symmetric / asymmetric, x and y, from numbers, lists, columns or `sqrt`; their meaning `sd`, `sem`, `ci95`, `range`, `poisson` in the legend), confidence and prediction bands, fitted curves (linear, polynomial, exponential, power, logistic, Gaussian and Breit–Wigner with a polynomial background, a custom expression with named parameters via `mathexpr.parse_model`) with parameters ± standard errors, R², χ²/ν (weighted with y errors, x errors by effective variance), a residual panel (plain or normalized); histograms (rules `auto`, `sturges`, `fd`, `scott`, `sqrt`, `integers`, a count, edges; counts or density; √N errors; bars, step or points) with distributions fitted by maximum likelihood (normal, exponential, Poisson) or peaks fitted to the counts; annotations tied to data (`label`, `arrow`, `hline`, `vline`, `xrange`, `yrange`, `note`) placed clear of data and each other, deterministically; actions `fit` and `annotate`, `reveal` for series and `errors:<name>`. Fitting in numpy (no scipy: it comes with manim, but vidgen does not import it; tests compare with it when installed)
+- [x] Error bars (symmetric / asymmetric, x and y, from numbers, lists, columns or `sqrt`; their meaning `sd`, `sem`, `ci95`, `range`, `poisson` in the legend), confidence and prediction bands, fitted curves (linear, polynomial, exponential, power, logistic, Gaussian and Breit–Wigner with a polynomial background, a custom expression with named parameters via `mathexpr.parse_model`) with parameters ± standard errors, R², χ²/ν (weighted with y errors, x errors by effective variance), a residual panel (plain or normalized); histograms (rules `auto`, `sturges`, `fd`, `scott`, `sqrt`, `integers`, a count, edges; counts or density; √N errors; bars, step or points) with distributions fitted by maximum likelihood (normal, exponential, Poisson) or peaks fitted to the counts; annotations tied to data (`label`, `arrow`, `hline`, `vline`, `xrange`, `yrange`, `note`) placed clear of data and each other, deterministically; actions `fit` and `annotate`, `reveal` for series and `errors:<name>`. Fitting in numpy (no scipy: it comes with manim, but schu-video-generator does not import it; tests compare with it when installed)
 - [x] Reviewer's notes on 222: plot text at least `body` in 16:9 (`caption`, the large scale, in 9:16); axes end just past the data when the next tick is far (the plot fills its area); legends, fit boxes and notes without a free spot move beside (16:9) or above (9:16) the figure; a dashed series' legend swatch is dashed; legend entries come with their series; a line stops at an axis break
 - [x] Tests `tests/test_plot_fit.py` (quantiles, fits against closed forms and scipy, bands, histogram rules against numpy, maximum-likelihood distributions, value ± error, tight ends, breaks, placement determinism) and `tests/test_plot.py` (params errors, resolution, targets, actions, renders 16:9 / 9:16); CONFIG, guide, gallery entry regenerated
 
@@ -1338,7 +1338,7 @@ changes). DESIGN §97. Steps 222–228.
 ## Phase X — Orbital mechanics
 
 Goal: orbital-mechanics videos at university level (and for science YouTube): real physics,
-exactly computed, honest about scale, in vidgen's flat style, 16:9 and 9:16. Built on Phase W
+exactly computed, honest about scale, in schu-video-generator's flat style, 16:9 and 9:16. Built on Phase W
 (the plot core for axes, equal aspect and trails; its integrators; `vidgen.quantities` with the
 IAU / CODATA constants; `calculation` scenes; the lint framework), re-implementing none of it.
 Additive and opt-in: existing projects, scenes, gallery frames, audio and the studio unchanged
@@ -1407,7 +1407,7 @@ circular orbits for Hohmann). DESIGN §98. Steps 229–236.
 Goal: particle-physics videos at university level (and for science YouTube): the Standard Model,
 Feynman diagrams in proper notation with conservation laws checked at every vertex, relativistic
 kinematics, detectors and event displays, and resonances emerging from data — exact where it can
-be computed, honest where it is schematic, in vidgen's flat style, 16:9 and 9:16. Built on Phase W
+be computed, honest where it is schematic, in schu-video-generator's flat style, 16:9 and 9:16. Built on Phase W
 (histograms and peak fits, live plots, `calculation` scenes, `vidgen.quantities`, the lint
 framework) and re-implementing none of it. Values from the Particle Data Group (PDG 2024),
 computed rather than hard-coded (thresholds, Q values, p*, decay lengths, significances); data in
@@ -1463,6 +1463,111 @@ baseline frames when shared code changes). DESIGN §99. Steps 237–244.
 - [x] Critical review with fixes, including a physics-accuracy pass (PDG values, conservation logic, vertex rules, kinematics), compatibility, render performance, the phase's and related suites, `tests/test_mcp.py` in full
 - [x] Physics: every PDG 2024 value and quantum number re-checked (the Step 237 `# check` marks resolved; sin²θ_W, the CKM magnitudes, the Z / W / K⁺ branching ratios confirmed; the Higgs YR4 predictions and Γ_H stay marked for the owner); fix: two real particles merging into one lighter one (e⁺e⁻ → γ, p p̄ → γ, p p̄ → π⁰) now forbidden; fix: the Z's "invisible" fraction is not given to a single νν̄ pair in decay chains; `tests/test_phase_y_review.py` (hand computations of p*, thresholds, βγcτ, m_γγ, track radius and sign, Asimov / counting / p-values, σ⁰_had, 24 reactions and 29 vertices)
 - [x] Fixes: `feynman` with `vertex_rule` is laid out for the whole frame before the first card and after the last (larger, not only centred; 9:16 too); a live `plot` / `mass_spectrum` readout keeps 64 drawn lines, not one per frame (a 57 s spectrum 622 → 392 MB); example MP4s re-rendered; Phase Q baseline 31/31
+
+## Phase Z — Story-cartoon features (a private story cartoon drives them)
+
+Goal: the owner's private short story told as a narrated isometric cartoon (5–7 min, Kokoro
+voices), and the generic features it needs, in schu-video-generator for every author: per-speaker voice
+effects, holograms, portals / rifts, alarm lighting, iridescent characters, multi-voice dialogue
+polish, story sounds. The story project stays in the scratchpad: nothing of it is committed
+(features use neutral samples). Additive and opt-in: existing projects, scenes, gallery frames,
+audio and the studio unchanged (Phase Q's 31 baseline frames when shared code changes). DESIGN
+§100. Steps 245–248.
+
+### Step 245 — Adaptation, gap analysis, first features
+- [x] The adapted script (private, scratchpad): shot list with narration and dialogue per speaker, Kokoro voice per character, camera, staging, light, sounds and music; a test render of an iso lab; the gap list per shot (DESIGN §100.1)
+- [x] Phase Z plan here and DESIGN §100
+- [x] Voice effects: `effect:` on `voice:` and `voices:` (`deep`, `high`, `robot`, `radio`, `chorus`, `echo`, `hall`, `otherworldly`, lists, `{use, pitch, amount}`), any provider, ffmpeg after synthesis, in the hash only when set, not inherited by named voices (DESIGN §100.2)
+- [x] Hologram characters: `hologram: true | {color, opacity}` on a character: translucent, one glowing colour, bright edges, never graded by the stage's light (DESIGN §100.3)
+- [x] Portals: the `portal` prop (switched: `on`, `switch_on` opens it from a crack, `switch_off` seals it; crackling rim, sparks, swirls, pulse, unlit glow; sounds), at a spot of an iso place too, no shadow (DESIGN §100.4)
+- [x] Tests `tests/test_voice_effects.py`, `tests/test_portal_hologram.py`; CONFIG sections, guide (copied to `AGENTS.md`); Phase Q baseline 31/31
+
+### Step 246 — Remaining story-cartoon features
+- [x] Hologram `materialise` / `dematerialise` (a flickering wireframe, then solid; waits unseen until then) and a flicker (`hologram.flicker`); the `hologram_display` prop (a projector with a floating panel: `pattern: fractal | data | text`, scan lines, beam, glow) (DESIGN §100.9, §100.10)
+- [x] A view through a portal (`view: coast | stars | meadow`); `pick_up` / `hold`... of a portal or a display refused (§100.13)
+- [x] `alarm: start | stop` (a dark room under a pulsing red light, `color`, `period`; the `alarm` bed) and `shutters: close | open` on an iso room (`iso.shutters`) (§100.7)
+- [x] Built-in sounds `alarm`, `crackle`, `hum`, `drone`, `slam`; beds `hum` (a set bed) and `alarm` (§100.8)
+- [x] `iridescent` and `afterimages` on a character (§100.9)
+- [x] `hold_hands` / `let_go_hands` (standing and walking; lint lets them stand close) (§100.10)
+- [x] Iso objects `console`, `server_rack` (blinking lights), `projector_pad`, `whiteboard`, `flower_arch`, `chess_table`; `flashback` on a stage (faded warm colours, a vignette) (§100.11, §100.12)
+- [x] Reviewer's notes on the 245 stills: `iso.wide: fill | <zoom>` (a room fills the frame), `closeup` / `medium` of 2–3 characters and `shot.clear` (§100.6); tall visitors are a `scale` (1.4–1.5)
+- [x] Tests `tests/test_story_fx.py`; CONFIG, guide (`AGENTS.md`), README; the Listen page (a story row, two beds); gallery showcase `iso_lab` (16.1 of 16.5 MB); Phase Q baseline 31/31
+
+### Step 247 — The story video
+- [x] Build the private story project (scratchpad), render previews, look at stills, iterate; Kokoro narration with the chosen voices and effects; music cues and sounds; lint clean (0 errors); final 16:9 1080p, 7:12, −16.4 LUFS (9:16 not made: the iso wides read too small in a tall frame)
+- [x] Generic fixes from the reviewer's notes (§100.15): a stage's `fill_light` (faces readable in a dark light), an iridescent visitor's own `glow` (default 0.5), holding hands steps the two in close and keeps them side by side while they walk; tests `tests/test_story_light_hands.py`; CONFIG, guide; Phase Q baseline 31/31
+
+### Step 248 — Review of Phase Z
+- [x] Story fidelity, visual quality (stills of every shot, 16:9; 9:16 not made, see Step 247), audio (distinct voices, levels, −16 LUFS), compatibility (Phase Q baseline 31/31), tests, docs; final render (16:9 1080p, 7:12) and a delivery copy under 28 MB (720p)
+- [x] Generic fixes (DESIGN §100.16): a `shot` inside a `zoom`'s `until` wins for its beat, then the zoom resumes; voice effects level-matched to the dry voice; `render --max-scenes N` (a long render in steps); `tests/test_actions.py` lists of built-in actions repaired
+
+## Phase Z2 — Vertical Shorts from a story project
+
+Goal: seven YouTube Shorts (9:16, under 60 s, a hook in the first second, burned-in word-synced
+captions, an end card) cut from the private story video, and the generic features for cutting
+Shorts out of any longer video. The story project and its Shorts stay in the scratchpad. DESIGN
+§101. Steps 249–250.
+
+### Step 249 — Generic Shorts support; Shorts 1–3
+- [x] `cut:` (scenes whole or some beats, `{from, to}`, a scene twice under another id; changes per scene and per beat; beat ids and audio kept), the `hook` overlay, a cut's `end_card` (DESIGN §101.1, §101.2)
+- [x] `shorts:` (overlays keep out of the app's zones), lint `shorts_safe_area` / `shorts_length`, validate warnings; `zoom` `hold: true`
+- [x] Tests `tests/test_cuts_shorts.py`; CONFIG, guide (`AGENTS.md`), README, CHANGELOG; Phase Q baseline
+- [x] Shorts 1–3 of the private story (scratchpad): re-staged for 9:16, rendered, stills checked
+
+### Step 250 — Shorts 4–7 and review
+- [x] Review fixes, generic (DESIGN §101.4): karaoke captions in a Short show a phrase of 3–5 words on one line (`body`, `max_words` 5, `max_lines` 1) a small margin above the app's texts; `zoom` `cut: true` (at 0 of a scene's first beat the scene opens framed); a cut's `{name, drop: true}` leaves a character / prop / layer out; the hook shrinks (to 0.8 × title) to stay on 2 lines; lint `shorts_safe_area` checks every caption of the line (`reach`), mid-beat stills in a Short (3 per beat) and `min_cover` (0.1) for overlays over faces
+- [x] Tests `tests/test_cuts_shorts.py` (+7); CONFIG, guide, CHANGELOG; Phase Q baseline 31/31
+- [x] Shorts 1–3 re-rendered with the fixes; Shorts 4–6 and the teaser built and rendered; all seven reviewed (stills of every beat, captions, hooks, levels, durations, sizes) with contact sheets (scratchpad)
+
+## Phase AA — A second story cartoon: a neon city, an implant's view, other timelines
+
+Goal: the owner's second private short story (a first-person cyberpunk noir romance at night)
+told as a narrated isometric cartoon (5–7 min, Kokoro voices: the narrator is the hero), then
+Shorts cut from it; and the generic features it needs, for every author: a city of towers at
+night with traffic in the air and glowing rain, a heads-up display over the frame (alerts,
+readouts, a heart monitor, a scanner), characters' other selves overlapping the present, a
+kiss, floating holographic formulas and many timelines on a display, a handheld scanner, a
+haze over a spot, small props and a medal. The story project stays in the scratchpad: nothing of
+it is committed (features use neutral samples). Additive and opt-in; Phase Q's 31 baseline
+frames when shared code changes. DESIGN §102. Steps 251–254.
+
+### Step 251 — Adaptation, gap analysis, first features
+- [x] The adapted script (private, scratchpad): shot list with lines per speaker, Kokoro voices (narrator = hero, a heroine, a synthetic voice in the head with `[robot, radio]`), camera, staging, light, sounds, music cues (`enigma`, `neon`, `beacon`, `calm`); test renders of a neon city and a lab; the gap list per shot (DESIGN §102.1)
+- [x] Phase AA plan here and DESIGN §102
+- [x] Towers: the iso `tower` object (`height`, `size`, lit window grids, neon trims, antenna light; `screen` with crawling lines, `garden` algae bands; `on`, `switch_on`); towers may reach out of the wide view (DESIGN §102.2)
+- [x] Traffic: `iso.traffic` lanes of hover pods (looping or crossing once with `at`; glowing rims, riders, trails; hidden behind buildings) (§102.3)
+- [x] Glowing particles: `glow: true` on any particles (a light core, a halo kept as wide on screen through a zoom, more opaque) (§102.4)
+- [x] The `hud` overlay (scene-timed like a lower third: frame, `alert`, `lines`, `heart` with `to` / `skips`, `scan` with `to` above 1 off scale) (§102.5)
+- [x] Echo characters: `echo: true | {color, opacity, flicker}` (translucent, own colours, glowing outlines, unlit, flickering; with `materialise`) (§102.6)
+- [x] Tests `tests/test_city_hud_echo.py`; CONFIG, guide (`AGENTS.md`), CHANGELOG; Phase Q baseline 31/31; no gallery entry (16.1 of 16.5 MB: a rainy city's GIFs would not fit)
+
+### Step 252 — Remaining features and a test cut
+- [x] The review of 251's stills: the `hud` keeps its alert and lines off faces (free corners, `avoid_faces`, `compact`), is drawn in pieces (about half 251's extra render time), lint `overlay_face`; rain on an iso place splashes in plain rings (DESIGN §102.8-§102.9)
+- [x] A `kiss` action (turn, lean in, faces touch, eyes closed, a burst of hearts and sparkles; 16:9 and 9:16); display patterns `equations` (formulas written, formula butterflies) and `timelines` (a branching tree, two figures meeting in a panel at each tip); a handheld `scanner` small prop (a live readout spiking off its scale, `scan`); small props `takeout` and `crystal`; a `medal` accessory; a glowing, pulsing `pendant`; a `haze` over a spot; sliding room doors (`doors: slide`, a hiss) (§102.10-§102.15)
+- [~] A closer look at a pod's rider: not needed for now (a `zoom` on the lane's end spot with `size: 1.4` reads); revisit in 253 if the city shots need it
+- [x] Tests `tests/test_kiss_display_props.py`; CONFIG, guide (`AGENTS.md`), README, CHANGELOG; Phase Q baseline 31/31; a private test cut of key shots (16:9 and 9:16), stills checked; lint `look_alike` skips echoes
+
+### Step 253 — The story video
+- [x] Build the private project, preview every shot, iterate; final 16:9 1080p and a delivery copy under 28 MB; contact sheet (scratchpad)
+- [x] Generic fixes from the build: `hair: wavy`; `iso.wall_lights` (neon strips on a room's walls); a `kiss` lets go of held hands (the pair drifted off); a lab's blinking lights hide behind a character in front; lint `hidden_speaker` leaves a `hud` to `overlay_face` (DESIGN §102.17-§102.19); tests `test_wavy_hair.py`, `test_wall_lights_kiss.py`; Phase Q baseline 31/31
+- [~] A closer look at a pod's rider: still not needed (the city shots are wides and tower zooms)
+
+### Step 254 — Shorts and review
+- [x] 5–7 Shorts (9:16, hooks, captions, end card, < 60 s, < 28 MB, ~−14 LUFS) in the scratchpad; a critical review of the film and of the Phase AA features (tests, docs, Phase Q baseline, `tests/test_mcp.py` fully)
+- [x] Seven Shorts (18–52 s, 3.8–20.4 MB, −14.2 to −14.4 LUFS, −1.7 to −1.8 dBTP) with contact sheets (scratchpad, private)
+- [x] Fixes from the review (DESIGN §102.20): a cut drops a scene's own overlay (`overlays: {id: {drop: true}}`); a `hud`'s meters above a Short's captions; `compact` moves the HUD's top edge out (it moved it in); `shorts_safe_area` checks a HUD by its texts and panels; a change in `cut.beats` re-renders only that scene; tests in `test_cuts_shorts.py`, `test_kiss_display_props.py`; CONFIG, guide (`AGENTS.md`), README, CHANGELOG
+- [~] Lint does not check a `hook` while it shows (noted in CONFIG / the guide: look at the still at 1 s)
+
+Phase AA done.
+
+### Step 255 — The project name in docs and comments
+- [x] Prose that names the project says `schu-video-generator` (Markdown, Python comments and docstrings, YAML comments, static-file comments); the command, the Python package, identifiers, keys, cache folders, logger names and runtime strings keep `vidgen`
+
+### Step 256 — The project name in runtime messages
+- [x] Messages, help texts, schema titles/descriptions, MCP descriptions, the studio page and the generated Listen / gallery pages say `schu-video-generator` where they name the project; commands, the package, identifiers, keys, the cache folder and the MCP server's name keep `vidgen`; `docs/music/README.md` and `docs/gallery/` (index, `crispr`, `terminal`) regenerated; tests and quoted docs updated
+
+### Step 257 — The studio screenshot with the new name
+- [x] `docs/images/studio.png` taken again with Step 200's recipe (1440 × 900, 160 colours, 73 KB; same state), the top bar reads "schu-video-generator studio"; the README's alt text says so
 
 ---
 
@@ -1538,7 +1643,7 @@ errors, an accuracy lint, docs, a gallery section, an example and a review.
   exist); misfolding and amyloid aggregation
 - [ ] Real structures: load a protein from a PDB file (Protein Data Bank data is free to use) and
   draw it as a rotating cartoon ribbon, with AlphaFold confidence colours
-- Effort: medium for the schematic version; large for real 3D ribbons (vidgen draws in 2D today;
+- Effort: medium for the schematic version; large for real 3D ribbons (schu-video-generator draws in 2D today;
   Manim can do 3D)
 
 ### Other content areas
@@ -1560,7 +1665,7 @@ errors, an accuracy lint, docs, a gallery section, an example and a review.
 - [ ] Score pieces that follow the video's timings (like composed music), with builds and lifts
   landing on chosen scenes automatically
 - [ ] A sound-effects designer in the studio (the same editing loop, for effects)
-- [ ] Split music and sound into their own package, with vidgen depending on it
+- [ ] Split music and sound into their own package, with schu-video-generator depending on it
 
 ### Reach and polish
 - [ ] Brand kits: a theme, fonts, intro/outro and music saved once and reused across videos

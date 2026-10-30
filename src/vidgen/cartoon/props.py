@@ -80,7 +80,9 @@ FURNITURE: tuple[str, ...] = (
     "fireplace",
 )
 #: The everyday small props (DESIGN.md §69.56): things to hold, give, open and put on a table.
-SMALL_PROPS: tuple[str, ...] = ("cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can", "flower")
+SMALL_PROPS: tuple[str, ...] = (
+    "cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can", "flower", "scanner", "takeout", "crystal",
+)
 #: The outdoor props the built-in sets use (DESIGN.md §76): a street, a park, a beach, a forest.
 OUTDOOR_PROPS: tuple[str, ...] = (
     "shop", "bench", "bus_stop", "road", "path", "fountain", "flowers", "fence", "beach_umbrella", "shell", "pine",
@@ -90,11 +92,13 @@ OUTDOOR_PROPS: tuple[str, ...] = (
 INDOOR_PROPS: tuple[str, ...] = ("blackboard", "school_desk", "shelf_with_goods", "till", "wardrobe")
 #: The story props of a platform level (DESIGN.md §86.8): a key (to hold, give, and open a locked door with).
 STORY_PROPS: tuple[str, ...] = ("key",)
+#: Science-fiction props (DESIGN.md §100.4, §100.10): a portal that opens in space, a hologram display.
+SCIFI_PROPS: tuple[str, ...] = ("portal", "hologram_display")
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
     "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin", "kettle",
-    *SMALL_PROPS, *FURNITURE, *OUTDOOR_PROPS, *INDOOR_PROPS, *STORY_PROPS, *VEHICLE_KINDS,
+    *SMALL_PROPS, *FURNITURE, *OUTDOOR_PROPS, *INDOOR_PROPS, *STORY_PROPS, *VEHICLE_KINDS, *SCIFI_PROPS,
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
@@ -104,10 +108,11 @@ PROP_HEIGHTS: dict[str, float] = {
     "sofa": 0.36, "armchair": 0.38, "bed": 0.34, "bookshelf": 0.9, "counter": 0.5, "fridge": 0.95,
     "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42, "fireplace": 0.75, "kettle": 0.15,
     "cake": 0.22, "muffin": 0.08, "book": 0.13, "phone": 0.13, "letter": 0.08, "gift": 0.2, "balloons": 1.1, "vase": 0.32,
-    "watering_can": 0.22, "flower": 0.22,
+    "watering_can": 0.22, "flower": 0.22, "scanner": 0.17, "takeout": 0.12, "crystal": 0.09,
     "shop": 1.7, "bench": 0.32, "bus_stop": 1.35, "road": 0.12, "path": 0.08, "fountain": 0.75, "flowers": 0.28,
     "fence": 0.42, "beach_umbrella": 1.3, "shell": 0.06, "pine": 1.9, "mushroom": 0.13, "log": 0.16,
     "blackboard": 0.5, "school_desk": 0.4, "shelf_with_goods": 0.95, "till": 0.26, "wardrobe": 1.1, "key": 0.3,
+    "portal": 1.5, "hologram_display": 1.0,
     **{kind: spec.height for kind, spec in VEHICLES.items()},
 }
 #: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
@@ -115,6 +120,8 @@ PROP_HEIGHTS: dict[str, float] = {
 PROP_HANGS: dict[str, float] = {"picture": 0.5, "clock": 0.85, "blackboard": 0.42}
 #: Props lying flat on the floor, which cast no shadow (a rug, a road, a path).
 FLAT_PROPS: frozenset[str] = frozenset({"rug", "road", "path"})
+#: Props that float in the air where they stand (no shadow, no snow on top): a portal.
+FLOATING_IN_PLACE: frozenset[str] = frozenset(SCIFI_PROPS)
 #: Props drawn in more than one shape: kind -> its shape names, the first drawn unless the stage
 #: asks for another (``open: true``); the ``open`` / ``close`` actions switch them.
 PROP_SHAPES: dict[str, tuple[str, ...]] = {
@@ -134,6 +141,7 @@ WATERING_SPOUT = (0.7, 0.64)
 PROP_GRIPS: dict[tuple[str, str | None], tuple[float, float]] = {
     ("basket", None): (0.0, 0.94), ("umbrella", "open"): (0.0, 0.16),
     ("balloons", None): BALLOON_KNOT, ("watering_can", None): WATERING_GRIP, ("key", None): (0.0, 0.8), ("flower", None): (0.0, 0.3),
+    ("scanner", None): (0.0, 0.16),
 }
 #: Height of an SVG prop relative to a character's, before its own ``scale``.
 SVG_PROP_HEIGHT = 0.5
@@ -158,7 +166,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "cake": ("accent", "highlight"), "muffin": ("secondary", "accent"), "book": ("primary", "highlight"),
     "phone": ("#2B2F3A", "primary"), "letter": ("#FBF8EF", "accent"), "gift": ("primary", "highlight"),
     "balloons": ("accent", "highlight"), "vase": ("primary", "accent"), "watering_can": ("tertiary", "highlight"),
-    "flower": ("accent", "highlight"),
+    "flower": ("accent", "highlight"), "scanner": ("#3A4150", "#0E2A33"), "takeout": ("#F4F1E8", "#D8403A"), "crystal": ("#7FE8FF", "#2E3340"),
     "bicycle": ("primary", "accent"), "car": ("accent", "highlight"), "bus": ("highlight", "primary"),
     "boat": ("highlight", "accent"), "hot_air_balloon": ("accent", "secondary"), "toy_rocket": ("primary", "accent"),
     "shop": ("primary", "accent"), "bench": ("secondary", "dim"), "bus_stop": ("primary", "dim"),
@@ -168,6 +176,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "log": ("secondary", "highlight"),
     "blackboard": ("secondary", "#2F5A46"), "school_desk": ("secondary", "dim"), "shelf_with_goods": ("secondary", "accent"),
     "till": ("accent", "highlight"), "wardrobe": ("secondary", "highlight"), "key": ("#E0B33A", "#6B4E1E"),
+    "portal": ("#C9A8FF", "#1B1240"), "hologram_display": ("#5FD8FF", "#3A3F4B"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
@@ -822,6 +831,51 @@ def _phone(p: _Paint) -> list[VMobject]:
         _poly([(-0.2, 0.86), (-0.04, 0.86), (-0.2, 0.62)], p.light(p.detail), p, outline=False),
         _rect(-0.07, 0.925, 0.07, 0.945, p.light(p.main), p, outline=False),
         _circle(0.0, 0.05, 0.025, p.light(p.main), p, outline=False),
+    ]
+
+
+#: A handheld scanner's screen (prop units: left, bottom, right, top; DESIGN.md §102.13), where a
+#: switched-on scanner shows its readout (:mod:`vidgen.cartoon.living_drawing`).
+SCANNER_SCREEN = (-0.21, 0.52, 0.21, 0.88)
+
+
+def _scanner(p: _Paint) -> list[VMobject]:
+    """A handheld scanner, its screen towards the viewer: a rounded body over a grip, a dark
+    screen (lit with a live readout when switched on), a sensor nub on top, two buttons."""
+    x0, y0, x1, y1 = SCANNER_SCREEN
+    return [
+        _rect(-0.11, 0.0, 0.11, 0.34, p.dark(p.main), p, radius=0.04),
+        _rect(-0.3, 0.3, 0.3, 0.97, p.main, p, radius=0.08),
+        _rect(-0.08, 0.95, 0.08, 1.0, p.dark(p.main), p, radius=0.02),
+        _rect(x0, y0, x1, y1, p.detail, p, radius=0.03),
+        _circle(-0.1, 0.41, 0.045, p.light(p.main), p, outline=False),
+        _circle(0.1, 0.41, 0.045, p.light(p.main), p, outline=False),
+    ]
+
+
+def _takeout(p: _Paint) -> list[VMobject]:
+    """A takeout box of noodles: a folded paper box wider at the top with its flaps up, a wire
+    handle, a round mark in ``detail`` and two chopsticks sticking out."""
+    return [
+        _line(-0.18, 0.95, 0.12, 1.0, "#C9A46A", 1.6 * OUTLINE_WIDTH),
+        _line(-0.05, 0.92, 0.3, 0.98, "#C9A46A", 1.6 * OUTLINE_WIDTH),
+        _poly([(-0.32, 0.0), (0.32, 0.0), (0.42, 0.72), (-0.42, 0.72)], p.main, p),
+        _poly([(-0.42, 0.72), (-0.1, 0.72), (-0.2, 0.9), (-0.47, 0.84)], p.dark(p.main), p),
+        _poly([(0.42, 0.72), (0.1, 0.72), (0.2, 0.9), (0.47, 0.84)], p.dark(p.main), p),
+        _circle(0.0, 0.36, 0.13, p.detail, p, outline=False),
+        _line(-0.3, 0.72, 0.0, 0.98, p.dark(p.main), 1.2 * OUTLINE_WIDTH),
+        _line(0.3, 0.72, 0.0, 0.98, p.dark(p.main), 1.2 * OUTLINE_WIDTH),
+    ]
+
+
+def _crystal(p: _Paint) -> list[VMobject]:
+    """A data crystal: a tall six-sided shard in ``main`` (a lighter facet catching the light)
+    standing in a small dark holder in ``detail``; switched on, its core glows (a light inside)."""
+    return [
+        _rect(-0.3, 0.0, 0.3, 0.14, p.detail, p, radius=0.03),
+        _poly([(-0.2, 0.12), (-0.24, 0.62), (0.0, 1.0), (0.24, 0.62), (0.2, 0.12)], p.main, p),
+        _poly([(-0.02, 0.12), (-0.04, 0.62), (0.0, 1.0), (0.24, 0.62), (0.2, 0.12)], p.light(p.main), p, outline=False),
+        _line(0.0, 1.0, -0.03, 0.14, p.dark(p.main), 0.8 * OUTLINE_WIDTH),
     ]
 
 
@@ -1483,6 +1537,43 @@ def _key(p: _Paint) -> list[VMobject]:
     ]
 
 
+def _portal(p: _Paint) -> list[VMobject]:
+    """A sealed portal (DESIGN.md §100.4): a faint zig-zag seam in the air where it opens, in an
+    invisible box as large as the open portal with its sparks (so it is placed and sized the same
+    open or sealed); it opens as a prop that moves by itself (:mod:`vidgen.cartoon.portal`)."""
+    from vidgen.cartoon.portal import CENTRE, EXTENT, HALF_HEIGHT
+
+    left, bottom, right, top = EXTENT
+    box = Rectangle(width=right - left, height=top - bottom).move_to([(left + right) / 2, (bottom + top) / 2, 0.0])
+    box.set_fill(opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+    cx, cy = CENTRE
+    ys = np.linspace(cy - 0.6 * HALF_HEIGHT, cy + 0.6 * HALF_HEIGHT, 9)
+    zig = [(cx + (0.012 if k % 2 else -0.012), float(y)) for k, y in enumerate(ys)]
+    half = 0.004   # a sliver: the zig-zag line drawn as a thin filled band
+    seam = _poly([(x - half, y) for x, y in zig] + [(x + half, y) for x, y in reversed(zig)], p.main, p, outline=False)
+    seam.set_fill(opacity=0.6)
+    setattr(seam, LIVING_PART, "seam")   # its colour is the portal's glow's
+    return [box, seam]
+
+
+def _hologram_display(p: _Paint) -> list[VMobject]:
+    """A hologram display switched off (DESIGN.md §100.10): a low round projector in ``detail``
+    with a lens of ``main`` colour, in an invisible box as large as its panel of light (placed and
+    sized the same on or off); the panel is a prop that moves by itself
+    (:mod:`vidgen.cartoon.holo_display`)."""
+    from vidgen.cartoon.holo_display import LENS, PANEL
+
+    left, _, right, top = PANEL
+    box = Rectangle(width=right - left, height=top).move_to([(left + right) / 2, top / 2, 0.0])
+    box.set_fill(opacity=0.0).set_stroke(width=0.0, opacity=0.0)
+    x, y, half = LENS
+    lens = _ellipse(x, y + 0.005, half * 0.7, 0.018, p.main, p, outline=False)
+    lens.set_fill(opacity=0.7)
+    setattr(lens, LIVING_PART, "seam")   # its colour is the display's glow's
+    return [box, _ellipse(x, 0.035, half * 1.6, 0.035, p.dark(p.detail), p), _rect(x - half * 1.3, 0.035, x + half * 1.3, y, p.detail, p, radius=0.02),
+            _ellipse(x, y, half * 1.3, 0.03, p.light(p.detail), p), lens]
+
+
 _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]]]] = {
     "table": _table, "chair": _chair, "tree": _tree, "bush": _bush, "house": _house, "door": _door,
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
@@ -1497,7 +1588,8 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
     "flowers": _flowers, "fence": _fence, "beach_umbrella": _beach_umbrella, "shell": _shell, "pine": _pine,
     "mushroom": _mushroom, "log": _log,
     "blackboard": _blackboard, "school_desk": _school_desk, "shelf_with_goods": _shelf_with_goods, "till": _till,
-    "wardrobe": _wardrobe, "key": _key,
+    "wardrobe": _wardrobe, "key": _key, "portal": _portal, "hologram_display": _hologram_display,
+    "scanner": _scanner, "takeout": _takeout, "crystal": _crystal,
 }
 
 
@@ -1554,6 +1646,7 @@ def draw_prop(
     shape: str | None = None,
     living: bool = False,
     fruit: bool = False,
+    view: str | None = None,
 ) -> Prop:
     """A built-in prop ``kind`` ``height`` Manim units tall, its feet at the origin, coloured
     ``main`` / ``detail`` (theme tokens or #hex; default :data:`PROP_COLORS`). Outlines are as
@@ -1561,7 +1654,8 @@ def draw_prop(
     ``shape``: which of its :data:`PROP_SHAPES` it shows (default: the first). ``living``: a
     clock, television, lamp, fireplace or kettle that moves by itself gets its moving parts and an
     anchor (:func:`~vidgen.cartoon.living_drawing.living_overlays`, DESIGN.md §69.54, §69.55).
-    ``fruit``: a tree carries a few fruits (:func:`_fruits`)."""
+    ``fruit``: a tree carries a few fruits (:func:`_fruits`). ``view``: the place a living portal shows
+    inside it (DESIGN.md §100.13)."""
     if kind not in _DRAWERS and kind not in VEHICLES:
         raise VidgenError(f"unknown prop '{kind}' (props: {', '.join(PROP_KINDS)})")
     if height <= 0:
@@ -1583,7 +1677,7 @@ def draw_prop(
         from vidgen.cartoon.living_drawing import living_overlays
 
         front = FIREPLACE_FRONT if kind == "fireplace" else 0   # flames burn behind the front logs
-        drawn = [*drawn[: len(drawn) - front], *living_overlays(kind, paint), *drawn[len(drawn) - front :]]
+        drawn = [*drawn[: len(drawn) - front], *living_overlays(kind, paint, view=view), *drawn[len(drawn) - front :]]
     if fruit and kind == "tree" and isinstance(drawn, list):
         drawn = [*drawn, *_fruits(paint)]
     prop = Prop(
@@ -1644,6 +1738,8 @@ def read_svg_seat_and_lean(path: Path, *, where: str) -> tuple[tuple[float, floa
 
 __all__ = [
     "FLAT_PROPS",
+    "FLOATING_IN_PLACE",
+    "SCIFI_PROPS",
     "FRUIT_INDEX",
     "FURNITURE",
     "INDOOR_PROPS",

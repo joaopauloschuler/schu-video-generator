@@ -1,5 +1,5 @@
-/* vidgen studio (DESIGN.md §94.5): a compact "mini DAW" in vidgen's look — the dark_tech theme's
-   colours (light: light_academic's), Inter and JetBrains Mono from vidgen's bundled fonts. */
+/* vidgen studio (DESIGN.md §94.5): a compact "mini DAW" in schu-video-generator's look — the dark_tech theme's
+   colours (light: light_academic's), Inter and JetBrains Mono from schu-video-generator's bundled fonts. */
 @font-face { font-family: "Inter"; src: url("/fonts/Inter-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Inter"; src: url("/fonts/Inter-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
 @font-face { font-family: "JetBrains Mono"; src: url("/fonts/JetBrainsMonoNL-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
@@ -750,6 +750,11 @@ body[data-offline] .studio { opacity: .6; }
   .work[data-pane="inspector"] > .yaml, .work:not([data-pane="inspector"]) > .inspector { display: none; }
   .yaml h2 .tab { display: none; }
   #yaml-toggle { display: none; }
+}
+
+/* the project's name is long: below this width the top bar keeps the logo only */
+@media (max-width: 1060px) {
+  .brand span { display: none; }
 }
 
 /* ----- narrow windows: one column, the page scrolls ----------------------------------- */

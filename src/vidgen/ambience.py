@@ -26,12 +26,12 @@ import numpy as np
 
 from vidgen.config import DuckConfig
 from vidgen.loudness import integrated_loudness
-from vidgen.sfx import RATE, _band, _highpass, _lowpass, _tone
+from vidgen.sfx import RATE, SIREN_HALF, _band, _highpass, _lowpass, _tone, siren
 
 #: The ambience beds a scene's timings may name (``ambience: [{bed, start, end}]``).
-AMBIENCE_BEDS = ("rain", "fire", "birdsong", "city", "room_tone", "crickets")
-#: The beds of a set (DESIGN.md §69.62, §89.11): what a stage's ``ambience`` may name.
-SET_BEDS = ("birdsong", "city", "room_tone", "crickets")
+AMBIENCE_BEDS = ("rain", "fire", "birdsong", "city", "room_tone", "crickets", "hum", "alarm")
+#: The beds of a set (DESIGN.md §69.62, §89.11, §100.8): what a stage's ``ambience`` may name.
+SET_BEDS = ("birdsong", "city", "room_tone", "crickets", "hum")
 #: Integrated loudness (LUFS) of the rain bed before ducking: 4 dB under the music's
 #: (:data:`vidgen.music.MUSIC_LEVEL` -28), so about 11 dB under narration in its pauses.
 RAIN_LEVEL = -32.0
@@ -328,6 +328,52 @@ def crickets_loop() -> np.ndarray:
     return _leveled(out, CRICKETS_LEVEL)
 
 
+#: The alarm bed (DESIGN.md §100.8): its level (a siren is loud in the room, but it must not
+#: mask the lines), its ducking under the narration, its fades and its loop (whole siren periods).
+ALARM_LEVEL = -31.0
+ALARM_DUCK = DuckConfig(depth=7.0, attack=0.3, release=0.8, hold=1.0, clips=False)
+ALARM_FADE_IN = 0.15
+ALARM_FADE_OUT = 0.6
+ALARM_LOOP_SECONDS = 10 * 2 * SIREN_HALF
+
+
+@lru_cache(maxsize=1)
+def alarm_loop() -> np.ndarray:
+    """The alarm bed's seamless loop (a stage's ``alarm`` action, DESIGN.md §100.8): float32
+    ``(n, 2)`` at :data:`RATE`, :data:`ALARM_LEVEL` integrated loudness, read-only: the built-in
+    ``alarm`` siren (:func:`~vidgen.sfx.siren`, whole cycles of both tones per half, so it loops
+    without a seam), the right channel 11 ms behind the left (a room's width)."""
+    n = int(round(ALARM_LOOP_SECONDS * RATE))
+    wave = siren(n, circular=True)
+    delay = int(0.011 * RATE)
+    return _leveled(np.stack([wave, np.roll(wave, delay)], axis=1), ALARM_LEVEL)
+
+
+#: The hum bed (a lab, a ship): level (a little over the room tone), no ducking, its loop.
+HUM_LEVEL = -42.0
+HUM_DUCK = ROOM_TONE_DUCK
+HUM_LOOP_SECONDS = 8.0
+
+
+@lru_cache(maxsize=1)
+def hum_loop() -> np.ndarray:
+    """The hum bed's seamless loop (``ambience: hum``): float32 ``(n, 2)`` at :data:`RATE`,
+    :data:`HUM_LEVEL` integrated loudness, read-only. A soft 110 Hz electronic tone with its
+    harmonics and a second voice at 110.125 Hz (one slow beat per loop: whole cycles, no seam), a
+    faint ~3.5 kHz whine and air noise filtered around a circle, a little different per channel."""
+    n = int(HUM_LOOP_SECONDS * RATE)
+    rng = np.random.default_rng(zlib.crc32(b"ambience:hum"))
+    t = np.arange(n) / RATE
+    channels = []
+    for side in range(2):
+        tone = sum((0.55 ** (h - 1)) / h ** 1.1 * np.sin(2 * math.pi * 110.0 * h * t + side * 0.3 * h) for h in range(1, 9))
+        second = sum((0.5 ** (h - 1)) / h ** 1.2 * np.sin(2 * math.pi * 110.125 * h * t) for h in range(1, 7))
+        whine = 0.03 * np.sin(2 * math.pi * 3520.0 * t + side)
+        air = _circular(rng.standard_normal(n), lambda f: _band(f, 900.0, 1.2))
+        channels.append(tone + 0.6 * second + whine + 0.08 * air)
+    return _leveled(np.stack(channels, axis=1), HUM_LEVEL)
+
+
 #: The lights (presets) by day, when birds sing outdoors.
 DAYLIGHT: frozenset[str] = frozenset({"day", "morning"})
 #: The lights (presets) when crickets chirp outdoors on an iso place: the evening and the night.
@@ -399,6 +445,8 @@ BEDS: dict[str, AmbienceBed] = {
     "city": AmbienceBed(city_loop, CITY_DUCK, SET_FADE_IN, SET_FADE_OUT),
     "room_tone": AmbienceBed(room_tone_loop, ROOM_TONE_DUCK, SET_FADE_IN, SET_FADE_OUT),
     "crickets": AmbienceBed(crickets_loop, CRICKETS_DUCK, SET_FADE_IN, SET_FADE_OUT),
+    "hum": AmbienceBed(hum_loop, HUM_DUCK, SET_FADE_IN, SET_FADE_OUT),
+    "alarm": AmbienceBed(alarm_loop, ALARM_DUCK, ALARM_FADE_IN, ALARM_FADE_OUT),
 }
 
 

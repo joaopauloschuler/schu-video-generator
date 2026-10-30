@@ -53,7 +53,7 @@ def fills(prop: Prop) -> set[str]:
 
 
 def test_tables_cover_every_prop() -> None:
-    assert len(PROP_KINDS) == 69 and len(set(PROP_KINDS)) == 69 and set(FURNITURE) <= set(PROP_KINDS)
+    assert len(PROP_KINDS) == 74 and len(set(PROP_KINDS)) == 74 and set(FURNITURE) <= set(PROP_KINDS)   # portal: Step 245; hologram_display: 246; scanner, takeout, crystal: 252
     assert set(PROP_HEIGHTS) == set(PROP_COLORS) == set(_DRAWERS) | set(VEHICLE_KINDS) == set(PROP_KINDS)   # vehicles: Steps 118, 119; fireplace, kettle: Step 121; small props: Step 122; key: Step 152; flower: Step 168
     assert set(PROP_LIFTS) <= set(PROP_KINDS) and set(PROP_SHAPES) <= set(PROP_KINDS)
     assert all(kind in PROP_KINDS and (shape is None or shape in PROP_SHAPES[kind]) for kind, shape in PROP_GRIPS)

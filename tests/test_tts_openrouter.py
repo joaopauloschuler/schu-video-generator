@@ -283,7 +283,7 @@ def test_audio_kinds() -> None:
     assert ortts.audio_kind(PCM, "audio/pcm", "pcm") == "pcm"
     assert ortts.audio_kind(b'{"error": 1}', "application/json", "pcm") == "unknown"
     assert ortts.pcm_rate("audio/pcm;rate=16000") == 16000 and ortts.pcm_rate(None) == 24000
-    with pytest.raises(VidgenError, match="no audio vidgen can read"):
+    with pytest.raises(VidgenError, match="no audio schu-video-generator can read"):
         ortts.as_mp3(b"<html>oops</html>", "text/html", "mp3")
 
 

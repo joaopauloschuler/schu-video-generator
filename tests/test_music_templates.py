@@ -120,7 +120,7 @@ def test_every_bed_has_a_template_that_reads() -> None:
     for t in catalog:
         bed = music.BUILTIN_BEDS[t["name"]]
         text = music_template_text(t["name"])
-        assert text.startswith(f"# {t['title'].split(' (')[0]}: a score-file template of vidgen's built-in bed `{t['name']}`")
+        assert text.startswith(f"# {t['title'].split(' (')[0]}: a score-file template of schu-video-generator's built-in bed `{t['name']}`")
         assert sum(line.lstrip().startswith("#") for line in text.splitlines()) >= 5  # comments explain the parts
         assert t["tempo"] == (bed.tempo or 64) and t["seconds"] == pytest.approx(bed.seconds, rel=1e-3)
         assert t["key"].split()[0] == bed.key.replace("F-sharp", "F#").split()[0]

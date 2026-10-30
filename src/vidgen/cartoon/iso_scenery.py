@@ -48,7 +48,9 @@ WINDOW_TOP = 2.15
 
 @dataclass(frozen=True)
 class IsoColors:
-    """The ground's and the walls' colours (``#rrggbb``); objects take their own (``ObjectLook``)."""
+    """The ground's and the walls' colours (``#rrggbb``); objects take their own (``ObjectLook``).
+    ``doors``: how a room's map doors look and open: ``swing`` (wooden, swinging into the room)
+    or ``slide`` (steel panels sliding apart, DESIGN.md §102.11)."""
 
     grass: str = "#A5D67E"
     earth: str = "#B98A5E"
@@ -59,6 +61,27 @@ class IsoColors:
     tiles: str = "#EDE7DB"
     wall: str = "#EDE1CC"
     cut: str = "#8A664A"
+    doors: str = "swing"
+    strips: tuple[str, str] | None = None   # neon strips: the left back wall's, the right one's (§102.18)
+
+
+#: Neon strip lights along a room's standing walls (``wall_lights``, DESIGN.md §102.18): the
+#: glowing tube's band and the softer glow round it (tile units over the wall's base).
+STRIP_CORE = (2.66, 2.74)
+STRIP_HALO = (2.58, 2.82)
+
+
+def _strip_light(side: str, start: float, end: float, x1: float, y1: float, base: float, color: str, wall: str) -> list[Shape]:
+    """A neon strip along a wall's face (``s``: from x ``start`` to ``end`` at y ``y1``; ``e``:
+    from y ``end`` to ``start`` at x ``x1``) near its top: a halo between the wall's colour and
+    the strip's, the bright tube in it; both lights the stage's light does not dim."""
+    def band(z0: float, z1: float) -> tuple:
+        if side == "s":
+            return ((start, y1, base + z0), (end, y1, base + z0), (end, y1, base + z1), (start, y1, base + z1))
+        return ((x1, end, base + z0), (x1, start, base + z0), (x1, start, base + z1), (x1, end, base + z1))
+
+    return [Poly(band(*STRIP_HALO), mix(wall, color, 0.45), False, True),
+            Poly(band(*STRIP_CORE), mix(color, "#FFFFFF", 0.3), False, True)]
 
 
 @dataclass(frozen=True)
@@ -292,11 +315,16 @@ def _wall(place: IsoPlace, colors: IsoColors, column: int, row: int, *, name: st
             shapes.append(Poly(((cx1, fy1, base), (cx1, fy0, base), (cx1, fy0, base + SKIRTING), (cx1, fy1, base + SKIRTING)), shade(skirting, 0.12),
                                (False, "n" not in joined, True, "s" not in joined)))
         ground = place.ground(column, row)
+        if colors.strips is not None:
+            if inside["s"]:   # a wall along a row: the right back wall
+                shapes += _strip_light("s", fx0, fx1, cx1, cy1, base, colors.strips[1], colors.wall)
+            if inside["e"]:   # a wall along a column: the left back wall
+                shapes += _strip_light("e", fy0, fy1, cx1, cy1, base, colors.strips[0], colors.wall)
         for side in ("s", "e"):
             if inside[side] and ground == WINDOW:
                 shapes += _wall_window(side, column, row, cx1, cy1, base)
             elif inside[side] and ground == DOOR:
-                shapes += _wall_door(side, column, row, cx1, cy1, base, door_open)
+                shapes += _wall_door(side, column, row, cx1, cy1, base, door_open, colors.doors)
     elif not place.indoor:
         for side in ("s", "e"):   # stone courses on the faces that show
             if side in joined:
@@ -339,9 +367,60 @@ def _wall_window(side: str, column: int, row: int, x1: float, y1: float, base: f
             Poly(sill, shade(FRAME, 0.15))]
 
 
-def _wall_door(side: str, column: int, row: int, x1: float, y1: float, base: float, is_open: bool = False) -> list[Shape]:
+def window_faces(place: IsoPlace) -> list[tuple[tuple[float, float, float], ...]]:
+    """The frame of each window of a room that shows into it (DESIGN.md §100.7: shutters close
+    over them): four world points each, bottom left, bottom right, top right, top left as seen;
+    none outdoors."""
+    if not place.indoor:
+        return []
+    found = []
+    for row in range(place.rows):
+        for column in range(place.columns):
+            if place.ground(column, row) != WINDOW or place.is_cut(column, row) or place.wall_height(column, row) <= 0.0:
+                continue
+            near = {"e": (column + 1, row), "s": (column, row + 1)}
+            inset = {side: 0.0 if place.ground(*near[side]) == VOID else WALL_INSET for side in near}
+            x1, y1 = column + 1 - inset["e"], row + 1 - inset["s"]
+            for side in ("s", "e"):
+                ground = place.ground(*near[side])
+                if ground not in WALLS and ground != VOID:
+                    found.append(_on_face(side, column, row, x1, y1, place.floor_z(column, row), 0.14, 0.86, WINDOW_SILL, WINDOW_TOP))
+    return found
+
+
+#: A sliding door (``doors: slide``, DESIGN.md §102.11): its steel frame, its two panels, the
+#: light over it and the glowing seam where its panels meet, a keypad's light beside it.
+SLIDE_FRAME = "#4A505E"
+SLIDE_PANEL = "#9AA3B2"
+SLIDE_LIGHT = "#5FE8FF"
+SLIDE_KEYPAD = "#7CFF9E"
+
+
+def _slide_door(side: str, column: int, row: int, x1: float, y1: float, base: float, is_open: bool) -> list[Shape]:
+    """A sliding door on a standing wall's face: a steel frame with a light strip over it; closed,
+    two steel panels meeting at a glowing seam; open, a dark doorway with the panels' edges
+    showing at its sides (slid into the wall); a keypad's light on the wall beside it."""
+    top = DOOR_HEIGHT - 0.25
+    frame = _on_face(side, column, row, x1, y1, base, 0.1, 0.9, 0.0, top + 0.1)
+    opening = _on_face(side, column, row, x1, y1, base, 0.16, 0.84, 0.0, top)
+    light = _on_face(side, column, row, x1, y1, base, 0.2, 0.8, top + 0.14, top + 0.22)
+    keypad = _on_face(side, column, row, x1, y1, base, 0.9, 0.97, 1.0, 1.22)
+    shapes: list[Shape] = [Poly(frame, SLIDE_FRAME), Poly(light, SLIDE_LIGHT, False, True), Poly(keypad, SLIDE_KEYPAD, False, True)]
+    if is_open:
+        return [*shapes, Poly(opening, DOORWAY),
+                Poly(_on_face(side, column, row, x1, y1, base, 0.16, 0.21, 0.0, top), SLIDE_PANEL),
+                Poly(_on_face(side, column, row, x1, y1, base, 0.79, 0.84, 0.0, top), SLIDE_PANEL)]
+    return [*shapes,
+            Poly(_on_face(side, column, row, x1, y1, base, 0.16, 0.5, 0.0, top), SLIDE_PANEL),
+            Poly(_on_face(side, column, row, x1, y1, base, 0.5, 0.84, 0.0, top), shade(SLIDE_PANEL, 0.08)),
+            Poly(_on_face(side, column, row, x1, y1, base, 0.49, 0.51, 0.05, top - 0.05), SLIDE_LIGHT, False, True)]
+
+
+def _wall_door(side: str, column: int, row: int, x1: float, y1: float, base: float, is_open: bool = False, style: str = "swing") -> list[Shape]:
     """A door on a standing wall's face; open: a dark doorway and the leaf swung into the room on
-    its hinge at the doorway's left edge (as seen)."""
+    its hinge at the doorway's left edge (as seen). ``style`` ``slide``: :func:`_slide_door`."""
+    if style == "slide":
+        return _slide_door(side, column, row, x1, y1, base, is_open)
     door = _on_face(side, column, row, x1, y1, base, 0.15, 0.85, 0.0, DOOR_HEIGHT - 0.25)
     if is_open:
         hinge_low, hinge_high = door[0], door[3]
@@ -381,4 +460,4 @@ def place_pieces(place: IsoPlace, colors: IsoColors, looks: Mapping[str, ObjectL
     return pieces
 
 
-__all__ = ["SLAB_DEPTH", "WATER_DEPTH", "IsoColors", "IsoPiece", "ground_shapes", "place_pieces"]
+__all__ = ["SLAB_DEPTH", "WATER_DEPTH", "IsoColors", "IsoPiece", "ground_shapes", "place_pieces", "window_faces"]

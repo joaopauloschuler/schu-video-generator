@@ -27,7 +27,7 @@ AUDIO_BITRATE = "192k"
 #: Quality of the video when the join has to encode it (crossfades, DESIGN.md §49): visually
 #: lossless next to the scenes' own encoding (Manim: CRF 23).
 VIDEO_CRF = "18"
-#: Oldest ffmpeg vidgen supports: 4.3 has no ``amix=normalize``, 4.2 no ``xfade`` (tested with
+#: Oldest ffmpeg schu-video-generator supports: 4.3 has no ``amix=normalize``, 4.2 no ``xfade`` (tested with
 #: 4.4, 5.1, 6.1, 7.0, 7.1 and 8.1; README "Install").
 MIN_VERSION = (4, 4)
 
@@ -69,7 +69,7 @@ def version_hint(ffmpeg: str) -> str:
     if version is None or version >= MIN_VERSION:
         return ""
     return (
-        f"\nffmpeg {version[0]}.{version[1]} is too old: vidgen needs ffmpeg {MIN_VERSION[0]}.{MIN_VERSION[1]} "
+        f"\nffmpeg {version[0]}.{version[1]} is too old: schu-video-generator needs ffmpeg {MIN_VERSION[0]}.{MIN_VERSION[1]} "
         "or newer (crossfades, pushes and wipes use `xfade`, sound effects `amix=normalize`). Install "
         "a newer ffmpeg, see https://ffmpeg.org/download.html"
     )
@@ -266,9 +266,10 @@ def join(
     overlays: list[tuple[Path, int]] | None = None,
     metadata: Path | None = None,
     language: str | None = None,
+    audio_bitrate: str = AUDIO_BITRATE,
 ) -> None:
-    """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC)
-    into ``dst`` with the concat demuxer. ``language``: an ISO 639-2 code (``por``) written as
+    """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC
+    at ``audio_bitrate``) into ``dst`` with the concat demuxer. ``language``: an ISO 639-2 code (``por``) written as
     the audio stream's ``language`` tag (DESIGN.md §54).
 
     ``sfx``: a WAV as long as the whole video (the sound effects track, DESIGN.md §47), added
@@ -345,7 +346,7 @@ def join(
             *inputs,
             *filters,
             "-map", video_map, "-map", audio_map,
-            *video_codec, "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
+            *video_codec, "-c:a", "aac", "-b:a", audio_bitrate, "-ar", str(AUDIO_RATE),
             *tagging,
             "-movflags", "+faststart",
         ],

@@ -1,5 +1,5 @@
 """``terminal``: a terminal window in which commands are typed and their output appears, step by
-step with the beats. The commands and their output are the author's: vidgen never runs anything."""
+step with the beats. The commands and their output are the author's: schu-video-generator never runs anything."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -54,7 +54,7 @@ class TerminalStep(SceneParams):
     command: str | None = None
     """What is typed at the prompt (several lines are typed one after the other)."""
     output: str | None = None
-    """What the command prints, written by you (vidgen runs nothing); shown after the command."""
+    """What the command prints, written by you (schu-video-generator runs nothing); shown after the command."""
     clear: bool = False
     """Clear the screen before this step: it starts a new page at the top of the window."""
     output_color: ThemeColor | None = None

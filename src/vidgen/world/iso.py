@@ -101,13 +101,27 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "sofa": ObjectKind(2, 1, 1.15, top=0.55),
     "plant": ObjectKind(1, 1, 1.5),
     "rug": ObjectKind(2, 2, 0.03, walkable=True, deck=0.02),
+    # a lab and a memory's props (DESIGN.md §100.11)
+    "console": ObjectKind(2, 1, 1.8, top=0.86),
+    "server_rack": ObjectKind(1, 1, 2.6),
+    "projector_pad": ObjectKind(1, 1, 0.13, walkable=True, deck=0.12),
+    "whiteboard": ObjectKind(2, 1, 2.1),
+    "flower_arch": ObjectKind(2, 1, 3.2),
+    "chess_table": ObjectKind(1, 1, 0.96, top=0.86),
+    # a city's tall buildings (DESIGN.md §102.2): its height is the placing's own
+    "tower": ObjectKind(2, 2, 9.0),
 }
+#: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
+TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
+#: Extras an object of a kind may have (``features`` of a placing), DESIGN.md §102.2: a tower's
+#: big info ``screen`` on its front and its glowing algae-farm bands (``garden``).
+OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden")}
 
 
 #: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
 #: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
 OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door"})
-SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp"})
+SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower"})
 
 
 @dataclass(frozen=True)
@@ -123,8 +137,8 @@ class ObjectState:
 
 def default_state(kind: str) -> ObjectState:
     """The state of an object of ``kind`` unless the scene says otherwise: there, closed and off;
-    flowers in bloom."""
-    return ObjectState(open=kind == "flowers")
+    flowers in bloom; a tower's windows lit (§102.2)."""
+    return ObjectState(open=kind == "flowers", on=kind == "tower")
 
 
 @dataclass(frozen=True)
@@ -165,6 +179,8 @@ class IsoObject:
     links: tuple[str, ...] = ()
     color: str | None = None
     detail: str | None = None
+    #: its extras (:data:`OBJECT_FEATURES`: a tower's ``screen``, ``garden``)
+    features: tuple[str, ...] = ()
 
     def cells(self) -> list[tuple[int, int]]:
         """The cells it stands on, back to front."""
@@ -179,7 +195,9 @@ class IsoObject:
 class ObjectPlacing:
     """An object a scene asks for: its kind, where (a spot's name, or a cell ``(column, row)``
     as the author reads the map: from the top left, from 1), its own name, facing, footprint
-    (``size``: columns by rows, ``None``: the kind's) and colours (theme tokens or ``#hex``)."""
+    (``size``: columns by rows, ``None``: the kind's), colours (theme tokens or ``#hex``), its
+    ``height`` (tile units; :data:`TALL_KINDS` only, ``None``: the kind's) and its extras
+    (``features``, :data:`OBJECT_FEATURES`)."""
 
     kind: str
     at: str | tuple[int, int]
@@ -188,6 +206,8 @@ class ObjectPlacing:
     size: tuple[int, int] | None = None
     color: str | None = None
     detail: str | None = None
+    height: float | None = None
+    features: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -512,10 +532,20 @@ def place_objects(place: IsoPlace, placings: Sequence[ObjectPlacing]) -> IsoPlac
         width, depth = placing.size if placing.size is not None else (kind.width, kind.depth)
         if placing.size is None and placing.facing == "right":
             width, depth = depth, width
+        if placing.height is not None:
+            low, high = TALL_KINDS.get(placing.kind, (None, None))
+            if low is None or high is None:
+                raise VidgenError(f"objects[{k}]: height is for a {' or '.join(TALL_KINDS)}, not {placing.kind}")
+            if not low <= placing.height <= high:
+                raise VidgenError(f"objects[{k}]: a {placing.kind}'s height is {low:g} to {high:g} tiles, not {placing.height:g}")
+        unknown = [f for f in placing.features if f not in OBJECT_FEATURES.get(placing.kind, ())]
+        if unknown:
+            allowed = ", ".join(OBJECT_FEATURES.get(placing.kind, ())) or "none"
+            raise VidgenError(f"objects[{k}]: {placing.kind} has no {', '.join(unknown)} (its extras: {allowed})")
         counts[placing.kind] += 1
         name = placing.name or (placing.kind if counts[placing.kind] == 1 else f"{placing.kind}_{counts[placing.kind]}")
-        added.append(IsoObject(name, placing.kind, column, row, width, depth, kind.height, placing.facing,
-                               color=placing.color, detail=placing.detail))
+        added.append(IsoObject(name, placing.kind, column, row, width, depth, kind.height if placing.height is None else float(placing.height),
+                               placing.facing, color=placing.color, detail=placing.detail, features=tuple(placing.features)))
     return _with_objects(place, added)
 
 
@@ -531,6 +561,7 @@ __all__ = [
     "ISO_CHARACTER_HEIGHT",
     "MAX_COLUMNS",
     "MAX_ROWS",
+    "OBJECT_FEATURES",
     "OBJECT_KINDS",
     "OPENING_KINDS",
     "OBJECT_SYMBOLS",
@@ -540,6 +571,7 @@ __all__ = [
     "STANDABLE",
     "STEP_HEIGHT",
     "SWITCHED_KINDS",
+    "TALL_KINDS",
     "VOID",
     "WALL",
     "WALLS",

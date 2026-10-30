@@ -21,6 +21,20 @@ Corner = Literal["top_left", "top_right", "bottom_left", "bottom_right"]
 Placement = Literal["bottom_left", "bottom", "bottom_right", "top_left", "top", "top_right"]
 
 
+def scene_at(value: float | str) -> float | str:
+    """An overlay's ``at`` in its scene, checked: seconds (not negative), a beat id or a spoken
+    word (``"@word"``); ``ValueError`` otherwise."""
+    if is_word_anchor(value):
+        parse_word_anchor(str(value), beat_allowed=True)
+        return str(value).strip()
+    if isinstance(value, str):
+        if not value or not all(ch.isalnum() or ch == "_" for ch in value):
+            raise ValueError(f"at: a number of seconds, a beat id or a spoken word (\"@word\"), got {value!r}")
+    elif value < 0:
+        raise ValueError("at must not be negative")
+    return value
+
+
 @overlay("lower_third")
 class LowerThird(Overlay):
     """A name and title on a plate in the lower third of the frame (the way a speaker or a place
@@ -76,15 +90,7 @@ class LowerThird(Overlay):
         @field_validator("at")
         @classmethod
         def _at(cls, value: float | str) -> float | str:
-            if is_word_anchor(value):
-                parse_word_anchor(str(value), beat_allowed=True)
-                return str(value).strip()
-            if isinstance(value, str):
-                if not value or not all(ch.isalnum() or ch == "_" for ch in value):
-                    raise ValueError(f"at: a number of seconds, a beat id or a spoken word (\"@word\"), got {value!r}")
-            elif value < 0:
-                raise ValueError("at must not be negative")
-            return value
+            return scene_at(value)
 
     @classmethod
     def validate_project(cls, options: Any, project: Any, scenes: Sequence[str]) -> list[str]:
@@ -136,6 +142,8 @@ class LowerThird(Overlay):
         safe = safe_area()
         portrait = orientation() == "portrait"
         area = Region(safe.x0, safe.y0 + PORTRAIT_LIFT * safe.height, safe.x1, safe.y1) if portrait else safe
+        if self.context.project.config.shorts_zones is not None:   # a Short: out of the app's buttons (§101)
+            area = shorts_area(self.context.project)
         pad_x, pad_y, bar_w, gap = 0.3, 0.2, 0.09, 0.25
         width = area.width * (1.0 if portrait else o.max_width) - 2 * pad_x - bar_w
         lines = [readable_text(o.name, Region(0, 0, width, 2.0), size=o.name_size, color=o.name_color, weight=BOLD, align="left", role="heading")]
@@ -178,6 +186,106 @@ class LowerThird(Overlay):
 
     def settled(self, state: Hashable) -> bool:
         """Fully in (not sliding)."""
+        return float(state) >= 1  # type: ignore[arg-type]
+
+
+#: The hook's default text size: this times the theme's ``title`` size.
+HOOK_SCALE = 1.25
+#: Without a ``size``, the hook's text gets smaller (down to :data:`HOOK_MIN_SCALE` times the
+#: theme's ``title`` size) when that keeps it to this many lines (a narrow Short wraps a short
+#: question onto three or four lines).
+HOOK_LINES = 2
+HOOK_MIN_SCALE = 0.8
+#: Padding (units) between the hook's text and the edge of its plate.
+HOOK_PAD = (0.34, 0.24)
+
+
+@overlay("hook")
+class Hook(Overlay):
+    """A big caption over the first seconds of a video (a Short's hook, DESIGN.md §101): bold
+    text on a plate near the top of the safe area (of a Short: out of the app's buttons),
+    popping in at ``at`` and gone ``seconds`` later. A cut's ``hook:`` adds one."""
+
+    layer = 11   # over the captions
+
+    class Options(OverlayOptions):
+        text: TranslatableStr = Field(min_length=1)
+        """The hook's words (a question or a promise; a few words read in a second)."""
+        at: float = Field(0.0, ge=0)
+        """When it pops in: seconds into the video."""
+        seconds: float = Field(3.0, gt=0)
+        """How long it shows, its pop in and fade out included."""
+        position: Literal["top", "center"] = "top"
+        """Where in the safe area: top or center."""
+        size: ThemeSize | None = None
+        """Text size; default 1.25 times the theme's title size, smaller (down to 0.8 times it) when that keeps it to 2 lines."""
+        color: ThemeColor | None = None
+        """Text colour; default the theme's text or background colour, whichever reads on the plate."""
+        background: ThemeColor | None = "primary"
+        """Plate colour (null: no plate, the text gets an outline in the theme background)."""
+        background_opacity: float = Field(0.92, ge=0, le=1)
+        """Plate opacity."""
+        max_width: float = Field(0.92, gt=0, le=1)
+        """Widest it may be, as a share of the safe width; longer text wraps."""
+        enter: float = Field(0.25, ge=0)
+        """Seconds of its pop in."""
+        exit: float = Field(0.4, ge=0)
+        """Seconds of its fade out."""
+
+    def window(self) -> tuple[float, float]:
+        """From ``at`` for ``seconds``."""
+        return self.options.at, self.options.at + self.options.seconds
+
+    def build(self) -> Mobject:
+        o = self.options
+        theme = current_theme()
+        area = shorts_area(self.context.project)
+        pad_x, pad_y = HOOK_PAD
+        color = o.color or (text_color_on(o.background) if o.background is not None else "text")
+        width = o.max_width * area.width - 2 * pad_x
+
+        def build_text(size: float) -> Mobject:
+            return readable_text(o.text, Region(0, 0, width, area.height / 3), size=size, color=color, weight=BOLD, align="center", role="heading")
+
+        if o.size is not None:
+            text = build_text(float(theme.size(o.size)))
+        else:   # the largest size from HOOK_SCALE down to HOOK_MIN_SCALE x title that keeps it to HOOK_LINES lines
+            title = float(theme.size("title"))
+            text = build_text(HOOK_SCALE * title)
+            scale = HOOK_SCALE
+            while len(text.submobjects) > HOOK_LINES and scale > HOOK_MIN_SCALE + 1e-9:
+                scale = max(HOOK_MIN_SCALE, round(scale - 0.05, 2))
+                smaller = build_text(scale * title)
+                if len(smaller.submobjects) <= HOOK_LINES:
+                    text = smaller
+        if o.background is None:
+            text.set_stroke(theme.background, width=max(size / 6, 3), background=True)
+            group: Mobject = VGroup(text)
+        else:
+            plate = RoundedRectangle(corner_radius=0.18, width=text.width + 2 * pad_x, height=text.height + 2 * pad_y)
+            plate.set_fill(resolve_color(o.background), opacity=o.background_opacity).set_stroke(width=0).move_to(text)
+            group = VGroup(plate, text)
+        if o.position == "top":   # a little below the top edge: under the app's top bar
+            group.move_to(area.center)
+            group.align_to(area.center + UP * (area.height / 2 - 0.06 * area.height), UP)
+        else:
+            place(group, area, fit="none", align="center")
+        return group
+
+    def state(self, t: float) -> Hashable | None:
+        """Progress of the pop in / fade out (0..1, 1 while fully in)."""
+        start, end = self.interval()
+        p = self.transition(t, start, end, self.options.enter, self.options.exit)
+        return round(p, 3) if p > 0 else None
+
+    def pose(self, mobject: Mobject, state: Hashable) -> Mobject:
+        p = float(state)  # type: ignore[arg-type]
+        if p >= 1:
+            return mobject
+        return with_opacity(mobject, p).scale(0.85 + 0.15 * p)
+
+    def settled(self, state: Hashable) -> bool:
+        """Fully in (not popping or fading)."""
         return float(state) >= 1  # type: ignore[arg-type]
 
 

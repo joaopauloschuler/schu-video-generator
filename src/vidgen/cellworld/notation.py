@@ -1,6 +1,6 @@
 """Chemical notation for labels (DESIGN.md §95.9): ions and small molecules typeset with their
 charges as superscripts and counts as subscripts — ``Ca2+`` is Ca²⁺, ``Cl-`` is Cl⁻, ``H2O`` is
-H₂O, ``Pi`` is Pᵢ, ``F_o`` is Fₒ — as Pango markup (what vidgen's text pipeline draws:
+H₂O, ``Pi`` is Pᵢ, ``F_o`` is Fₒ — as Pango markup (what schu-video-generator's text pipeline draws:
 ``<sup>``, ``<sub>``, ``<i>``) and as plain Unicode for places without markup (the video
 description, error messages). No manim."""
 

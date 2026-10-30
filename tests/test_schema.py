@@ -264,7 +264,7 @@ def test_all_option_bundles_every_type(capsys: pytest.CaptureFixture[str], monke
 def test_default_is_the_whole_config(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
     doc = cli_schema([], capsys)
-    assert doc["title"] == "vidgen video.yaml" and doc["required"] == ["title", "scenes"]
+    assert doc["title"] == "schu-video-generator video.yaml" and doc["required"] == ["title", "scenes"]
     assert doc["$schema"] == schema.DIALECT
 
 

@@ -1,7 +1,7 @@
 // Exports (DESIGN.md §94.15): the current version as its score file (YAML), as audio (WAV or MP3:
 // once, N loops or N seconds; at a video's level or the listening level), or saved into the
 // project's assets/music/<name>.yaml (then `music: <name>` plays it in a video). The server
-// renders with vidgen's own renderer and writes into the session; the browser downloads it.
+// renders with schu-video-generator's own renderer and writes into the session; the browser downloads it.
 
 import { api } from "./api.js";
 import { escapeHtml } from "./yaml_view.js";
@@ -117,7 +117,7 @@ async function exportAudio() {
       const r = await api.exportFile(ctx.state.score.version, options);
       download(r.url, r.name);
       note("ex-audio-note", `Downloaded <code>${escapeHtml(r.name)}</code>: ${ctx.clock(r.seconds)}, ${r.loudness.toFixed(1)} LUFS, true peak ${r.true_peak.toFixed(1)} dBTP
-        (rendered by vidgen in ${r.export_seconds.toFixed(1)} s).`, "ok");
+        (rendered by schu-video-generator in ${r.export_seconds.toFixed(1)} s).`, "ok");
     } catch (err) {
       note("ex-audio-note", escapeHtml(err.message), "error");
     }

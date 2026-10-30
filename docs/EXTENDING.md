@@ -1,7 +1,7 @@
-# Extending vidgen from your project
+# Extending schu-video-generator from your project
 
 Every project can add its own **scene types**, **helpers**, **theme tokens**, **hooks**,
-**per-beat actions** and **overlays** in its `extensions/` folder. Nothing in vidgen has to change, and a finished extension can later be
+**per-beat actions** and **overlays** in its `extensions/` folder. Nothing in schu-video-generator has to change, and a finished extension can later be
 promoted into the core library unchanged.
 
 ```
@@ -14,7 +14,7 @@ my_video/
     _scratch.py      # names starting with "_" are NOT imported
 ```
 
-vidgen imports every `*.py` file and every package in `extensions/` (sorted by name) whenever it
+schu-video-generator imports every `*.py` file and every package in `extensions/` (sorted by name) whenever it
 loads the project (`validate`, `list-scenes`, `tts`, `render`). Check your work with:
 
 ```
@@ -23,7 +23,7 @@ vidgen list-scenes       # every scene type, where it comes from, its params
 ```
 
 Import everything from **`vidgen.api`** only: it re-exports all of `from manim import *` plus the
-vidgen names. Anything else in vidgen is internal. (`vidgen` is the Python package of the
+schu-video-generator names. Anything else in schu-video-generator is internal. (`vidgen` is the Python package of the
 schu-video-generator distribution; installing it gives both the package and the `vidgen`
 command.)
 
@@ -92,7 +92,7 @@ Timing rules:
   automatically; `self.hold()` holds earlier.
 - If you override `tear_down`, call `super().tear_down()`.
 
-Frame size and vertical videos: vidgen makes the **shorter side of the frame 8 Manim units**
+Frame size and vertical videos: schu-video-generator makes the **shorter side of the frame 8 Manim units**
 (square pixels). A 16:9 render is 14.22 x 8 units (Manim's default); a 9:16 variant such as
 `format: {width: 1080, height: 1920}` is 8 x 14.22. Lay out with `self.frame_width`,
 `self.frame_height` (same as Manim's `config.frame_width` / `config.frame_height`) and
@@ -861,7 +861,7 @@ def reveal_steps(cls, params):
   `with self.narrate(...)` block has ended (or, for a silent scene, at `duration - outro`), so
   a scene reads best in stills when each beat ends showing what it explained. Capturing only
   observes the frames written; it never changes timing. `self.capture` is the active
-  capture object, or `None` (internal: vidgen's own tools attach to it). Check your scene
+  capture object, or `None` (internal: schu-video-generator's own tools attach to it). Check your scene
   with `vidgen storyboard --scene ID` (add `--variant vertical` for 9:16): it shows those
   stills with their narration. Its reuse of stills tracks the `.py` files of your extension
   folders and `assets/`; if your scene reads other files, use `--force` after changing them.
@@ -963,7 +963,7 @@ C_K2 = current_theme().color("k2")        # module-level theme access is fine
 ```
 
 Then `self.text("x", color="k2")`, `T("x", "huge", "k3")`. Values in `video.yaml`
-(`theme.colors.k2: ...`) always win over registered defaults, which win over vidgen's built-ins.
+(`theme.colors.k2: ...`) always win over registered defaults, which win over schu-video-generator's built-ins.
 
 **Theme presets** (docs/CONFIG.md "Theme presets"). A project can add its own preset, e.g. a
 brand look, and select it in `video.yaml` with `theme: {preset: acme}`:
@@ -1369,7 +1369,7 @@ scene that shows the narration its own way):
   a coloured plate (it stays in its readable ink). `active_terms()` gives the scene's terms
   (`Term(name, color, tex)`, colours as `#RRGGBB`; empty with `terms: false` on the scene),
   `term_spans(text, terms) -> [(start, end, term)]` and `find_term(text, terms)` find them as
-  vidgen does (whole words, any case, plurals; for `MarkupText` or a picture of your own), and
+  schu-video-generator does (whole words, any case, plurals; for `MarkupText` or a picture of your own), and
   `with using_terms(terms):` changes them for the text built inside (e.g. only those that read
   on your plate). An equation of your own colours `term.tex` parts itself.
 - **Maths expressions** (docs/CONFIG.md `function_plot`): `parse_expression(text, known=None)

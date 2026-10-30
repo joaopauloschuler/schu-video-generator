@@ -37,7 +37,7 @@ from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
-from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
+from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays, shorts_area
 from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, IRIS_TRANSITIONS, BeatConfig, SceneConfig, SfxCue, StingCue, TransitionConfig, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.imagegen import GenerateImage, generated_image
@@ -1141,7 +1141,7 @@ class NarratedScene(MovingCameraScene):
     def frame_width(self) -> float:
         """Width of the visible frame in Manim units (``config.frame_width``).
 
-        vidgen sets the shorter side to 8 units with square pixels: 16:9 gives 14.22 x 8,
+        schu-video-generator sets the shorter side to 8 units with square pixels: 16:9 gives 14.22 x 8,
         9:16 (vertical variants) gives 8 x 14.22. Lay out relative to these values rather than
         assuming Manim's landscape defaults.
         """
@@ -1240,8 +1240,11 @@ class NarratedScene(MovingCameraScene):
     @property
     def safe_area(self) -> regions.Region:
         """The frame minus this scene's margins, as a :class:`~vidgen.regions.Region`, shrunk to
-        stay clear of overlays drawn with ``reserve: true`` (DESIGN.md §41)."""
+        stay clear of overlays drawn with ``reserve: true`` (DESIGN.md §41) and, in a Short, of
+        the parts of the frame the app covers (§101)."""
         area = regions.safe_area(self.margin_x, self.margin_y)
+        if self.project.config.shorts_zones is not None:
+            area = shorts_area(self.project, area)
         for box in getattr(self, "_reserved", ()):
             area = avoid(area, box)
         return area

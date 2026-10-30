@@ -60,7 +60,7 @@ def missing_key_message(command: str = "imagegen") -> str:
         "(https://openrouter.ai/keys):\n"
         f"  Windows:      setx {API_KEY_ENV} your_key   (then open a new terminal)\n"
         f"  Linux/macOS:  export {API_KEY_ENV}=your_key\n"
-        f"vidgen never stores the key; `vidgen {command} --dry-run` works without it."
+        f"schu-video-generator never stores the key; `vidgen {command} --dry-run` works without it."
     )
 
 

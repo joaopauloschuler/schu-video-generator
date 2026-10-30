@@ -31,7 +31,7 @@ def missing_key_message() -> str:
         f"the environment variable {API_KEY_ENV} is not set. Set it to your OpenAI API key:\n"
         f"  Windows:      setx {API_KEY_ENV} your_key   (then open a new terminal)\n"
         f"  Linux/macOS:  export {API_KEY_ENV}=your_key\n"
-        "vidgen never stores the key; `vidgen imagegen --dry-run` works without it."
+        "schu-video-generator never stores the key; `vidgen imagegen --dry-run` works without it."
     )
 
 

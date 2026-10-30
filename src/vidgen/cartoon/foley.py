@@ -87,6 +87,10 @@ EFFECT_SOUNDS: dict[str, tuple[str, float, dict[str, float]]] = {
 DOOR_OPEN_CREAK: tuple[float, dict[str, float]] = (-8.0, {"duration": 0.9})
 DOOR_CLOSE_CREAK: tuple[float, dict[str, float]] = (-10.0, {"duration": 0.5, "pitch": 2.0})
 DOOR_SHUT: tuple[float, dict[str, float]] = (-6.0, {"duration": 0.3, "pitch": 5.0})
+#: A sliding door (DESIGN.md §102.11): the hiss as its panels slide (open or shut; gain dB,
+#: params) and the soft thud as they meet.
+DOOR_HISS: tuple[float, dict[str, float]] = (-9.0, {"duration": 0.6, "pitch": 9.0})
+DOOR_SLIDE_SHUT: tuple[float, dict[str, float]] = (-12.0, {"duration": 0.2, "pitch": 3.0})
 #: A boat setting off: a soft, low splash (gain dB, params).
 BOAT_SPLASH: tuple[float, dict[str, float]] = (-12.0, {"duration": 0.9, "pitch": -3.0, "intensity": 0.3})
 #: A watering can's water landing: a long, soft, high splash of droplets (gain dB, pitch,
@@ -285,15 +289,19 @@ def handling_cues(action: str, start: float, seconds: float) -> list[FoleyCue]:
     return [FoleyCue(start + share * seconds, sound, gain, params)]
 
 
-def place_change_cues(kind: str, opening: bool | None, shown: bool | None, start: float, seconds: float) -> list[FoleyCue]:
+def place_change_cues(kind: str, opening: bool | None, shown: bool | None, start: float, seconds: float, *, sliding: bool = False) -> list[FoleyCue]:
     """The sounds of a change of an iso place's object of ``kind`` from scene time ``start`` over
     ``seconds`` (DESIGN.md §89.11): a house's or a room's door opening (a creak) or closing (a
-    shorter creak and a thud as it shuts, as :func:`door_cues`), flowers blooming (a soft twinkle),
-    an object appearing (a twinkle); a lamp's click is the switch's."""
+    shorter creak and a thud as it shuts, as :func:`door_cues`; a ``sliding`` room door hisses,
+    and closing meets with a soft thud, §102.11), flowers blooming (a soft twinkle), an object
+    appearing (a twinkle); a lamp's click is the switch's."""
     if shown is True:
         return [FoleyCue(start, "twinkle", APPEAR_SOUND[0], APPEAR_SOUND[1])]
     if opening is None:
         return []
+    if kind == "door" and sliding:
+        hiss = [FoleyCue(start, "swoosh", DOOR_HISS[0], DOOR_HISS[1])]
+        return hiss if opening else [*hiss, FoleyCue(start + RESHAPE_SHARE * seconds, "thud", DOOR_SLIDE_SHUT[0], DOOR_SLIDE_SHUT[1])]
     if kind == "flowers":
         return [FoleyCue(start, "twinkle", BLOOM_SOUND[0], BLOOM_SOUND[1])] if opening else []
     if kind in ("house", "door"):

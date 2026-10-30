@@ -13,7 +13,7 @@ A video's ``language:`` (``en``, ``pt-BR``...; top level or per variant) chooses
 - the ``language_code`` sent to ElevenLabs for models that accept one;
 - the language tag of the final MP4's audio stream (ISO 639-2).
 
-A video without ``language:`` follows the English rules (what vidgen did before languages
+A video without ``language:`` follows the English rules (what schu-video-generator did before languages
 existed) and sends no language to the TTS. No manim import.
 """
 
@@ -70,7 +70,7 @@ def language_matches(entry: str, video: str | None) -> bool:
 
 @dataclass(frozen=True)
 class LanguageRules:
-    """What vidgen knows of a language: ``name`` (for messages), the words a phrase starts with
+    """What schu-video-generator knows of a language: ``name`` (for messages), the words a phrase starts with
     (``conjunctions``, ``prepositions``: a cue may begin there), the words that lean on the next
     one (``clinging``: a cue should not end there), the narration speed range in words per second
     (``None``: measured in characters per second), whether a final ``e`` is silent, the ISO
@@ -90,7 +90,7 @@ class LanguageRules:
 
     @property
     def known(self) -> bool:
-        """True when vidgen has word lists for the language (else only punctuation counts)."""
+        """True when schu-video-generator has word lists for the language (else only punctuation counts)."""
         return bool(self.clinging)
 
 

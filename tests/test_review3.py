@@ -28,7 +28,7 @@ def _db(x: np.ndarray) -> float:
 
 @pytest.mark.skipif(not KPHI3_MP3.is_file(), reason="no kphi3 audio")
 def test_mono_narration_plays_at_its_own_level_on_both_channels() -> None:
-    """Manim's own MP3 conversion upmixed mono narration 3 dB down; vidgen hands it a WAV."""
+    """Manim's own MP3 conversion upmixed mono narration 3 dB down; schu-video-generator hands it a WAV."""
 
     class Recorder:
         def add_sound(self, path: str) -> None:

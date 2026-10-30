@@ -3,7 +3,7 @@ answer â€” a whole new score and one line per note on what it changed and why â€
 **proposal**: a new version (``origin: agent``, never the current one until the person keeps
 it) to A/B against the version it was made from.
 
-vidgen has no LLM of its own. A hand-off (``request.json`` in the session folder: the score,
+schu-video-generator has no LLM of its own. A hand-off (``request.json`` in the session folder: the score,
 the open notes, the last check, what changed since the parent version, the instruction) is
 answered in one of three ways, all ending in :func:`make_proposal` (validated like every
 version; an invalid one is shown with its problems and can never be kept):
@@ -13,7 +13,7 @@ version; an invalid one is shown with its problems and can never be kept):
   into a proposal when the page polls (:func:`ingest_inbox`);
 - the person copies the prompt into any chat assistant and pastes the reply
   (:func:`parse_reply`);
-- optionally OpenRouter, the LLM provider vidgen already uses, with ``OPENROUTER_API_KEY`` from
+- optionally OpenRouter, the LLM provider schu-video-generator already uses, with ``OPENROUTER_API_KEY`` from
   the environment, as the image and TTS providers read it (:func:`ask_openrouter`).
 
 The second half of the module is what the MCP tools call (:func:`agent_sessions`,
@@ -61,7 +61,7 @@ MODEL_ENV = "VIDGEN_STUDIO_MODEL"
 PROVIDER_TIMEOUT = 180.0
 
 INSTRUCTION = (
-    "A person is shaping a piece of music written as a vidgen score file (YAML). They listened to it and pinned "
+    "A person is shaping a piece of music written as a schu-video-generator score file (YAML). They listened to it and pinned "
     "notes at moments of the piece (bar, beat, section). For each open note, change the score to address it: "
     "one focused change per note when you can, in the section and bar the note names. Keep everything else as "
     "it is, comments included. Write one line per note explaining what you changed and why (or why you changed "
@@ -73,7 +73,7 @@ REPLY_FORMAT = (
     "block; then one line per note, `n1: what you changed and why`."
 )
 MCP_STEPS = (
-    "Answer through vidgen's MCP tools: studio_read (this) -> change the score -> studio_check with the new score "
+    "Answer through schu-video-generator's MCP tools: studio_read (this) -> change the score -> studio_check with the new score "
     "(the check, as the person will see it) -> studio_propose(session, score, explanations={note id: one line}, "
     "summary). The proposal appears in the studio as a new version the person A/Bs and keeps or discards."
 )

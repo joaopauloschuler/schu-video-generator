@@ -331,7 +331,7 @@ def layout_pedigree(ped: Pedigree, where: str = "params.individuals") -> Layout:
                 drawn = ", ".join(p for p in r if not ped.people[p].proposed)
                 raise VidgenError(f"{where}: generation {roman(g + 1)} is drawn {drawn} (left to right: sibships in birth order, "
                                   f"a partner from outside beside the relative): number them left to right as drawn, or use "
-                                  f"other ids and let vidgen number the chart")
+                                  f"other ids and let schu-video-generator number the chart")
         labels = {p: p for p in ped.people}
     else:
         for g, r in enumerate(order):

@@ -22,6 +22,19 @@ from vidgen.render.worker import scene_activity_path, scene_layout_path
 FAIL_ON: tuple[str, ...] = ("error", "warning", "info", "never")
 #: The rule that runs only when asked (``--readback``): it transcribes the narration.
 UNCLEAR_SPEECH = "unclear_speech"
+#: Stills per beat lint renders for a Short (``shorts:``): the rules with ``mid_beat`` (what the
+#: app covers, captions over faces) also see the beat while the camera and captions change.
+SHORTS_STILLS = 3
+
+
+def _stills_current(project: Project, preview: bool, scene_id: str, per_beat: int) -> bool:
+    """Whether the scene's stills can be reused: any count per beat (e.g. from ``vidgen
+    storyboard``), but more than one when lint wants mid-beat stills (``per_beat`` > 1)."""
+    from vidgen.storyboard import stills_current
+
+    if not stills_current(project, preview, scene_id, None):
+        return False
+    return per_beat == 1 or not stills_current(project, preview, scene_id, 1)
 
 
 @dataclass
@@ -108,15 +121,19 @@ def _scene_findings(
     beat_stills: dict[str | None, Path] = {}
     still_rules = [name for name in rules if RULES[name].scope == "still"]
     for frame in layout["frames"]:
-        if frame["k"] != frame["n"]:
-            continue  # mid-beat stills show animations in progress; lint the settled beat ends
-        stills += 1
+        end = frame["k"] == frame["n"]
+        # mid-beat stills show animations in progress: only rules that ask for them (§101.4)
+        frame_rules = still_rules if end else [name for name in still_rules if RULES[name].mid_beat]
+        if not end and not frame_rules:
+            continue
+        stills += 1 if end else 0
         moving = {o["id"] for o in frame.get("overlays", []) if not o.get("settled", True)}  # sliding in or out
         objects = [o for o in frame["objects"] if o["opacity"] >= lint.min_opacity and o.get("overlay") not in moving]
         still = Path(os.path.normpath(path.parent / frame["still"]))
-        beat_stills.setdefault(frame["beat"], still)
+        if end:
+            beat_stills.setdefault(frame["beat"], still)
         skips = {o["id"]: set(o.get("skip", ())) for o in frame.get("overlays", [])}
-        for name in still_rules:
+        for name in frame_rules:
             entry = RULES[name]
             settings = entry.settings(lint.rules)
             if settings.severity == "off":
@@ -218,6 +235,12 @@ def _timing_findings(
 
     if any(n in names and getattr(lint.rules, n).severity != "off" for n in PARTICLE_RULES):
         ctx.science = ctx.science + particle_issues(project, scene_id, lint.rules)
+    zones = project.config.shorts_zones
+    if "shorts_length" in names and zones is not None and scene_id == project.config.scenes[-1].id:
+        from vidgen.videoplan import VideoPlan
+
+        ctx.video_seconds = VideoPlan(project, project.render_format(preview).fps).duration
+        ctx.shorts_max = zones.max_seconds
     narration_rules = [n for n in ("said_before_shown", "unsaid_reveal") if n in names and getattr(lint.rules, n).severity != "off"]
     if narration_rules and layout is not None and activity["beats"]:
         from vidgen.lint.narration_rule import narration_picture
@@ -322,14 +345,15 @@ def lint_project(
     """Check the beat-end stills of ``project`` (loaded with its variant) with the lint rules.
 
     Stills and layout dumps are reused when current (any number of stills per beat, e.g. from
-    ``vidgen storyboard``); otherwise the scene is rendered with one still per beat. ``scenes``
+    ``vidgen storyboard``); otherwise the scene is rendered with one still per beat (a Short:
+    :data:`SHORTS_STILLS`, so the ``mid_beat`` rules see the beat as it goes). ``scenes``
     / ``rules`` restrict what is checked; ``fail_on`` overrides the config's ``lint.fail_on``;
     ``force`` renders the selected scenes again. The ``unclear_speech`` rule runs only with
     ``readback`` (or when ``rules`` names it): the selected scenes' beats are then transcribed
     as ``vidgen readback`` does (cached transcripts reused; progress lines to ``log``).
     """
     from vidgen.render.pipeline import render_scenes
-    from vidgen.storyboard import scene_starts, stills_current
+    from vidgen.storyboard import scene_starts
 
     known = [s.id for s in project.config.scenes]
     unknown = [sid for sid in scenes or [] if sid not in known]
@@ -351,8 +375,9 @@ def lint_project(
     if UNCLEAR_SPEECH in names and project.config.lint.rules.unclear_speech.severity != "off":
         speech_flags = _speech_flags(project, selected, log)
 
-    to_render = [sid for sid in selected if force or not stills_current(project, preview, sid, None)]
-    runs = render_scenes(project, preview, to_render, jobs=jobs, frames=1)
+    per_beat = SHORTS_STILLS if project.config.shorts_zones is not None else 1   # a Short: mid-beat stills too (§101.4)
+    to_render = [sid for sid in selected if force or not _stills_current(project, preview, sid, per_beat)]
+    runs = render_scenes(project, preview, to_render, jobs=jobs, frames=per_beat)
     result = LintResult(
         format=project.render_format(preview),
         preview=preview,

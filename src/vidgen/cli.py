@@ -224,7 +224,7 @@ def cmd_cast(args: argparse.Namespace) -> CommandResult:
     if args.provider == "kokoro" and not args.narrator:
         voice["voice"] = "bf_emma"   # vidgen screenplay's narrator
     cast = random_cast(args.random, args.seed, species=species, voice=voice, language=language)
-    for entry in cast.characters:   # what vidgen wrote must load (a bug otherwise, never the user's fault)
+    for entry in cast.characters:   # what schu-video-generator wrote must load (a bug otherwise, never the user's fault)
         CharacterEntry.model_validate(entry)
     command = f"vidgen cast --random {args.random} --seed {args.seed}" + (f" --species {' '.join(species)}" if species != ["human"] else "")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -421,8 +421,10 @@ def validate_warnings(project: Project) -> list[str]:
     character that lacks the parts they need (§69.11), front views asked of SVG characters
     (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
     line of their own voice (§69.34), dubbed voices that lose their kind or merge (§80) and
-    composed music without the ``music`` extra or the SoundFont (§85)."""
+    composed music without the ``music`` extra or the SoundFont (§85), and a Short that is not
+    vertical or longer than its ``max_seconds`` (§101)."""
     from vidgen.carry import carry_warnings
+    from vidgen.cuts import shorts_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
     from vidgen.cartoon.host import host_warnings
     from vidgen.chapter_export import chapter_warnings
@@ -457,6 +459,7 @@ def validate_warnings(project: Project) -> list[str]:
         + dub_warnings(project)
         + music_warnings(project.config)
         + piece_warnings(project.config, project.root)
+        + shorts_warnings(project)
     )
 
 
@@ -748,6 +751,7 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
         jobs=args.jobs,
         frames=frames,
         force=args.force,
+        max_scenes=args.max_scenes,
     )
     if args.json:
         return jsonout.render_document(project, result, args.preview or args.draft, time.monotonic() - started)
@@ -1233,7 +1237,7 @@ def cmd_list_icons(args: argparse.Namespace) -> CommandResult:
         raise VidgenError("--theme draws the --sheet in a theme's colours; add --sheet PNG")
     if args.sheet:
         filters = [f"search '{args.search}'" if args.search else "", f"category {args.category}" if args.category else ""]
-        title = f"vidgen icons: {len(found)}" + "".join(f", {f}" for f in filters if f)
+        title = f"schu-video-generator icons: {len(found)}" + "".join(f", {f}" for f in filters if f)
         theme = sheet_theme(args.project, args.theme) if args.theme is not None else None
         if theme is not None:
             title += f", theme {theme.preset or 'project'}"
@@ -1281,7 +1285,7 @@ def cmd_list_sfx(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_list_pronunciation(args: argparse.Namespace) -> CommandResult:
-    """Print vidgen's built-in pronunciation lists (DESIGN.md §88): every list, or in a project
+    """Print schu-video-generator's built-in pronunciation lists (DESIGN.md §88): every list, or in a project
     the lists its beats' voices use, with what the project replaces or removes and the beats
     each entry changes."""
     from vidgen.pronunciation import builtin_list_names, builtin_listing
@@ -1902,7 +1906,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--render-dir", metavar="DIR", help="also write every sound at its defaults as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_sfx)
 
-    p = sub.add_parser("list-pronunciation", help="list vidgen's built-in pronunciation entries (per TTS engine and language) and, in a project, what they change")
+    p = sub.add_parser("list-pronunciation", help="list schu-video-generator's built-in pronunciation entries (per TTS engine and language) and, in a project, what they change")
     project_arg(p)
     p.set_defaults(func=cmd_list_pronunciation)
 
@@ -1942,7 +1946,7 @@ def build_parser() -> argparse.ArgumentParser:
         "check: the folder for <name>-check.png and <name>-demo.mp3 (default: .); "
         "template: the .yaml to write (default: <bed>.yaml here); page: the page's folder (default: docs/music)",
     )
-    p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with vidgen)")
+    p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with schu-video-generator)")
     p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file (or a piece's or bed's name): a side-by-side table and a two-row spectrogram")
     p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists")
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
@@ -2015,6 +2019,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
     p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
+    p.add_argument(
+        "--max-scenes", type=int, metavar="N",
+        help="render at most N scenes in this run, then stop without joining if more are left (run again to go on; "
+        "finished scenes are kept): a long project in steps",
+    )
     output_dir_arg(p)
     all_languages_arg(p)
     p.set_defaults(func=cmd_render)

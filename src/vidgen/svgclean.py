@@ -5,7 +5,7 @@ scene go through :func:`sanitize_svg`, which returns a cleaned copy and what it 
 
 - **Removed**: ``<script>``, ``<foreignObject>``, embedded rasters (``<image>``), ``<filter>``
   and ``filter=`` (blur, shadows), masks and clip paths (``mask=`` / ``clip-path=``: shapes they
-  hid may show), ``<text>`` (generators letter poorly: put words on screen with vidgen),
+  hid may show), ``<text>`` (generators letter poorly: put words on screen with schu-video-generator),
   animation elements, event attributes (``onload=``...), links to other files. A document
   declaring XML entities is refused.
 - **Flattened**: a gradient fill or stroke becomes the average colour of its stops (a pattern:
@@ -419,9 +419,9 @@ def sanitize_svg(
     import svgelements as se
 
     if len(data) > MAX_BYTES:
-        raise VidgenError(f"{where}: the SVG is {len(data) / 1e6:.0f} MB; vidgen loads SVGs up to {MAX_BYTES // 1_000_000} MB")
+        raise VidgenError(f"{where}: the SVG is {len(data) / 1e6:.0f} MB; schu-video-generator loads SVGs up to {MAX_BYTES // 1_000_000} MB")
     if re.search(rb"<!ENTITY", data, re.IGNORECASE):
-        raise VidgenError(f"{where}: the SVG declares XML entities, which vidgen does not load")
+        raise VidgenError(f"{where}: the SVG declares XML entities, which schu-video-generator does not load")
     try:
         root = ET.fromstring(data)
     except ET.ParseError as exc:
@@ -517,7 +517,7 @@ def sanitize_svg(
         smallest = sorted(shapes, key=lambda s: s.area)[: count - max_shapes]
         drop(smallest)
         warnings.append(
-            f"{where}: {count} shapes, more than the {max_shapes} vidgen draws: the {len(smallest)} smallest were dropped "
+            f"{where}: {count} shapes, more than the {max_shapes} schu-video-generator draws: the {len(smallest)} smallest were dropped "
             "(set simplify: true, or a percentage of the picture's area, to drop small details yourself)"
         )
     total = sum(s.segments for s in shapes)
@@ -533,12 +533,12 @@ def sanitize_svg(
                 continue
             shape.segments = max(1, math.ceil(shape.segments / k))
         warnings.append(
-            f"{where}: {total} curve segments, more than the {max_segments} vidgen draws: paths keep 1 point in {k} "
+            f"{where}: {total} curve segments, more than the {max_segments} schu-video-generator draws: paths keep 1 point in {k} "
             "(set simplify: true to drop small details instead)"
         )
         total = sum(s.segments for s in shapes)
     if not shapes:
-        raise VidgenError(f"{where}: the SVG draws nothing vidgen can show (after removing {', '.join(sorted(removed)) or 'nothing'})")
+        raise VidgenError(f"{where}: the SVG draws nothing schu-video-generator can show (after removing {', '.join(sorted(removed)) or 'nothing'})")
     insert_box(root, box)
     return CleanSvg(serialize(root), box, len(shapes), total, tuple(warnings), tuple(notes))
 

@@ -157,7 +157,8 @@ class LayoutRecorder:
                 **(scene.layout_keys(captured.beat_id) if hasattr(scene, "layout_keys") else {}),
                 "objects": objects,
                 "overlays": [
-                    {"id": overlay.id, "type": overlay.config.type, "settled": settled, "skip": list(overlay.lint_skip)}
+                    {"id": overlay.id, "type": overlay.config.type, "settled": settled, "skip": list(overlay.lint_skip),
+                     **({"faces": True} if overlay.avoids_faces else {})}
                     for overlay, _, settled in shown
                 ],
             }
@@ -242,8 +243,11 @@ class LayoutRecorder:
                 overlay=overlay.id,
             )
             self._walk(walk, mob, [f"overlay:{overlay.id}"], 0, in_code=False)
+            reach = _reach_px(scene, mob)
             for obj in walk.objects:
                 obj["overlay"] = overlay.id
+                if reach is not None:
+                    obj["reach"] = reach
             objects += walk.objects
         return objects
 
@@ -256,7 +260,17 @@ class LayoutRecorder:
         safe = scene.safe_area
         x0, x1 = (safe.x0 + config.frame_width / 2) * sx, (safe.x1 + config.frame_width / 2) * sx
         y0, y1 = (config.frame_height / 2 - safe.y1) * sy, (config.frame_height / 2 - safe.y0) * sy
+        shorts: dict[str, Any] = {}
+        project = getattr(scene, "project", None)
+        if project is not None and project.config.shorts_zones is not None:   # a Short (DESIGN.md §101)
+            from vidgen.overlays import shorts_area
+            from vidgen.regions import frame_region
+
+            clear = shorts_area(project, frame_region())
+            shorts = {"shorts": [_r((clear.x0 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - clear.y1) * sy),
+                                 _r((clear.x1 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - clear.y0) * sy)]}
         return {
+            **shorts,
             "version": LAYOUT_VERSION,
             "scene": scene.spec.id,
             "type": scene.spec.type,
@@ -455,6 +469,22 @@ class LayoutRecorder:
         walk.objects.append(item)
 
 
+def _reach_px(scene: NarratedScene, mob: Mobject) -> list[float] | None:
+    """In a Short (DESIGN.md §101.4), an overlay mobject's ``overlay_reach`` (units: where that
+    overlay goes over the moments around this one, e.g. all captions of the line being spoken) as
+    a pixel box of the whole frame; ``None`` elsewhere or without one."""
+    from manim import config
+
+    reach = getattr(mob, "overlay_reach", None)
+    project = getattr(scene, "project", None)
+    if reach is None or project is None or project.config.shorts_zones is None:
+        return None
+    sx, sy = config.pixel_width / config.frame_width, config.pixel_height / config.frame_height
+    x0, y0, x1, y1 = (float(v) for v in reach)
+    return [_r((x0 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - y1) * sy),
+            _r((x1 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - y0) * sy)]
+
+
 def intersection_box(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, float, float, float] | None:
     """The overlap of two boxes ``(x0, y0, x1, y1)`` (``None``: apart)."""
     x0, y0, x1, y1 = max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
@@ -466,7 +496,9 @@ def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
     ``speaking`` and, when they apply, ``face`` (its head's box), ``viseme`` (what its lip sync
     shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way), ``walked_in`` and
     ``holding`` (hand -> prop name, §69.27), ``sitting_on`` / ``leaning_on`` (a prop name, §69.28),
-    ``riding`` (the vehicle it rides, §69.52),
+    ``riding`` (the vehicle it rides, §69.52), ``hand_in_hand`` (whose hand it holds, §100.10),
+    ``kissing`` (whom it kisses, §102.15),
+    ``hidden`` (a shot with ``clear`` hides it, §100.6),
     ``depth`` (how far back it stands on a stage, when not at the front, §69.44)."""
     keys: dict[str, Any] = {"facing": figure.facing, "speaking": figure.lip_sync_track is not None}
     depth = float(getattr(figure, "stage_depth", 0.0))
@@ -478,7 +510,8 @@ def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
             keys["face"] = [_r(min(b[0] for b in boxes)), _r(min(b[1] for b in boxes)), _r(max(b[2] for b in boxes)), _r(max(b[3] for b in boxes))]
     optional = {"viseme": figure.spoken_viseme, "looked_at": figure.looked_at, "passage": figure.passage, "walked_in": figure.walked_in,
                 "holding": dict(figure.holding) or None, "sitting_on": figure.sitting_on, "leaning_on": figure.leaning_on,
-                "riding": figure.riding}
+                "riding": figure.riding, "hand_in_hand": getattr(figure, "hand_in_hand", None), "kissing": getattr(figure, "kissing", None),
+                "hidden": True if getattr(figure, "hidden_by_shot", False) else None}
     keys.update({key: value for key, value in optional.items() if value is not None})
     if getattr(figure, "iso_feet", None) is not None:   # on an iso place (DESIGN.md §89.11)
         keys.update(_iso_character_keys(walk, figure))

@@ -443,6 +443,10 @@ class Zoom(Action):
         """plot scenes: zoom the plot's axes to x from..to (in data units) instead of moving the camera."""
         y: tuple[float, float] | None = None
         """plot scenes: zoom the plot's axes to y from..to (in data units) instead of moving the camera."""
+        hold: bool = False
+        """Stay zoomed in after the beat (a scene ending on a close view: a cliffhanger) until a later camera move; an until then changes nothing."""
+        cut: bool = False
+        """Cut to the zoomed view (no camera move); at 0 in a scene's first beat the scene opens on it (no wide view first)."""
 
         @model_validator(mode="after")
         def _region(self) -> "Zoom.Options":
@@ -491,13 +495,33 @@ class Zoom(Action):
         width, height = fw / factor, fh / factor
         center = view_center_within(scene.camera_bounds(), group.get_center()[:2], width, height)
         self.before = camera_view(scene)
+        self.shot = getattr(scene, "camera_shot", None)
+        if self.options.cut:   # a cut: the view is there at once (DESIGN.md §101.4)
+            scene.camera.frame.set_width(width).move_to(np.array([*center, 0.0]))
+            return []
         return [MoveCamera(scene, width, np.array([*center, 0.0]))]
 
+    def opens_scene(self) -> bool:
+        """A ``cut`` zoom at a scene's very start frames the scene from its first frame."""
+        return self.options.cut and not self._region()
+
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Back to the view before the zoom (nothing to do when the camera is there)."""
+        """Back to the view before the zoom (nothing to do when the camera is there).
+
+        A ``shot`` that took the camera after the zoom (a beat inside its ``until`` with a shot
+        of its own) wins: the camera stays on the shot, and the view the shot goes back to
+        becomes the one before the zoom (the zoomed view resumes after a shot's beat while the
+        zoom lasts)."""
         if getattr(self, "region", False):
             return scene.zoom_back()  # type: ignore[attr-defined]
-        return move_camera_back(scene, getattr(self, "before", None))
+        if self.options.hold:   # stays zoomed in (DESIGN.md §101)
+            return []
+        before, shot = getattr(self, "before", None), getattr(scene, "camera_shot", None)
+        if before is not None and shot is not None and shot is not getattr(self, "shot", None):
+            if getattr(self, "shot", None) is None and scene.shot_home is not None:
+                scene.shot_home = (before, scene.shot_home[1])
+            return []
+        return move_camera_back(scene, before)
 
 
 class MoveCamera(Transform):

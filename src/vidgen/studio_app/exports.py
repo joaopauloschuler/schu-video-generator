@@ -32,10 +32,10 @@ MAX_LOOPS = 64
 MAX_SECONDS = 600
 #: The fade-out at the end of an N-seconds export (s; shorter for a short one).
 FADE_OUT_SECONDS = 2.0
-#: Levels: name -> (LUFS, words). A video's music level (vidgen plays it at volume 0), or the
+#: Levels: name -> (LUFS, words). A video's music level (schu-video-generator plays it at volume 0), or the
 #: studio's listening level (the Listen page's -16 LUFS), its true peak kept at most -1 dBTP.
 LEVELS: dict[str, tuple[float, str]] = {
-    "video": (-28.0, "video level: −28 LUFS, as vidgen plays music at volume 0 (for a video or another editor)"),
+    "video": (-28.0, "video level: −28 LUFS, as schu-video-generator plays music at volume 0 (for a video or another editor)"),
     "listening": (-16.0, "listening level: −16 LUFS, as the studio plays it (peaks kept under −1 dBTP)"),
 }
 LISTENING_PEAK_DBTP = -1.0
@@ -195,7 +195,7 @@ def save_to_project(root: Path | None, name: str, text: str, overwrite: bool = F
         raise VidgenError(f"save to project: '{name}' is a name Windows keeps for a device; pick another, e.g. {name}_theme")
     if name in BUILTIN_BEDS:
         raise VidgenError(
-            f"save to project: '{name}' is a built-in bed's name; a piece with it would make music: {name} ambiguous (vidgen reports that as a "
+            f"save to project: '{name}' is a built-in bed's name; a piece with it would make music: {name} ambiguous (schu-video-generator reports that as a "
             f"problem). Pick another name, e.g. {name}_mine"
         )
     folder = root / PROJECT_MUSIC_DIR

@@ -254,9 +254,9 @@ def test_hooks_isolated_and_reset(project: Project) -> None:
 
 
 def test_runtime_unset_errors() -> None:
-    with pytest.raises(VidgenError, match="no active vidgen project"):
+    with pytest.raises(VidgenError, match="no active schu-video-generator project"):
         runtime.current_project()
-    with pytest.raises(VidgenError, match="no active vidgen theme"):
+    with pytest.raises(VidgenError, match="no active schu-video-generator theme"):
         runtime.current_theme()
     assert not runtime.has_context()
 

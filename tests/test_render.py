@@ -359,6 +359,22 @@ def test_keep_going_reports_failures_at_end(small: Callable[..., Path], capsys: 
     assert (root / "build/final/scenes/ok.mp4").is_file() and not (root / "output" / "out.mp4").exists()
 
 
+@pytest.mark.render
+@pytest.mark.slow
+def test_max_scenes_renders_a_project_in_steps(small: Callable[..., Path], capsys: pytest.CaptureFixture[str]) -> None:
+    cards = [{"id": sid, "type": "text_card", "params": {"text": sid}, "duration": 0.4} for sid in ("a", "b", "c")]
+    root = small(scenes=cards)
+    assert main(["render", str(root), "--no-audio", "--max-scenes", "2"]) == 1
+    err = capsys.readouterr().err
+    assert "rendered 2 scene(s) (a, b); 1 still to render (c): the video was not joined" in err
+    assert (root / "build/final/scenes/b.mp4").is_file() and not (root / "build/final/scenes/c.mp4").exists()
+    assert not (root / "output" / "out.mp4").exists()
+    result = render_project(Project.load(root), no_audio=True, max_scenes=2)   # goes on: the rest fits
+    assert result.rendered == ["c"] and result.reused == ["a", "b"] and result.output.is_file()
+    assert main(["render", str(root), "--max-scenes", "0"]) == 1
+    assert "--max-scenes must be at least 1" in capsys.readouterr().err
+
+
 # ----- no rendering -------------------------------------------------------------------------------
 
 

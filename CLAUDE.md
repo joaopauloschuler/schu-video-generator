@@ -1,7 +1,7 @@
 # Conventions for working on schu-video-generator
 
 > **Who this is for:** agents **developing schu-video-generator itself** (its code, tests and
-> docs). To **make videos with vidgen**, read `AGENTS.md` instead (the author guide; also
+> docs). To **make videos with schu-video-generator**, read `AGENTS.md` instead (the author guide; also
 > `vidgen guide`). The project and pip distribution are `schu-video-generator`; the command and the
 > Python package stay `vidgen` (use `vidgen.DIST_NAME` in install hints). When you
 > change a command, scene type or param that `AGENTS.md` names, update the guide in

@@ -41,7 +41,7 @@ from vidgen.plotcore.annotate import best_box, box_cost, place_on_hline
 try:
     from scipy import optimize as sp_optimize
     from scipy import stats as sp_stats
-except ImportError:   # scipy is not a dependency of vidgen: the closed-form tests still run
+except ImportError:   # scipy is not a dependency of schu-video-generator: the closed-form tests still run
     sp_optimize = sp_stats = None
 
 needs_scipy = pytest.mark.skipif(sp_optimize is None, reason="scipy not installed (reference values only)")

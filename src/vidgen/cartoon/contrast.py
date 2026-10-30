@@ -209,7 +209,8 @@ def min_contrast(candidate: LookFeatures, others: Sequence[LookFeatures]) -> flo
 def character_pairs(config: VideoConfig, theme: Theme | None) -> list[tuple[str, PairContrast]]:
     """``(scene id, pair)`` for each two generated characters on the video's stages (in the
     order they first appear), with the scene where the later of the two first appears
-    (characters drawn from an SVG file are not compared)."""
+    (characters drawn from an SVG file are not compared, nor an echo with anyone: it is someone's
+    other self on purpose, and its tint sets it apart; DESIGN.md §102.6)."""
     entries = {entry.name: entry for entry in config.characters}
     first_scene: dict[str, str] = {}
     for scene in config.scenes:
@@ -222,7 +223,7 @@ def character_pairs(config: VideoConfig, theme: Theme | None) -> list[tuple[str,
     found = []
     for x, y in combinations(order, 2):
         fx, fy = features[x], features[y]
-        if fx is None or fy is None:
+        if fx is None or fy is None or entries[x].echo_look() is not None or entries[y].echo_look() is not None:
             continue
         found.append((first_scene[y], compare(x, fx, y, fy)))
     return found

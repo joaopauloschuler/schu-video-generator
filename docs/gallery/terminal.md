@@ -39,7 +39,7 @@ From the author guide (`vidgen guide scenes`):
 |---|---|---|---|
 | `steps` | `list[str \| TerminalStep]` | required | The session in order: each a command (a string) or {command, output, clear, output_color}; step i plays at beat i. |
 | `steps.command` | `str \| None` |  | What is typed at the prompt (several lines are typed one after the other). |
-| `steps.output` | `str \| None` |  | What the command prints, written by you (vidgen runs nothing); shown after the command. |
+| `steps.output` | `str \| None` |  | What the command prints, written by you (schu-video-generator runs nothing); shown after the command. |
 | `steps.clear` | `bool` | `False` | Clear the screen before this step: it starts a new page at the top of the window. |
 | `steps.output_color` | `color \| None` |  | Colour of the output (e.g. an error); default: the style's colour for program output. |
 | `prompt` | `str` | `'$'` | The prompt before each command ('' for none), e.g. '>>>' or 'PS C:\>'. |

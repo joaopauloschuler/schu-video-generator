@@ -1,6 +1,6 @@
 """Draw the fake app screenshot used by ``examples/gallery`` (``assets/app.png``) with Pillow.
 
-Not shipped with vidgen; a maintainer tool. The picture is a generic task-planner dashboard
+Not shipped with schu-video-generator; a maintainer tool. The picture is a generic task-planner dashboard
 (no real product or brand) in flat colours, so the PNG stays small. Run from the repository
 root::
 

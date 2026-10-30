@@ -1,7 +1,7 @@
 """Make the screen-recording-like clip the scene gallery shows for ``video_clip``
 (``src/vidgen/data/gallery/clip.webm``) with ffmpeg.
 
-Not shipped with vidgen; a maintainer tool. The picture is the gallery's sample app screenshot
+Not shipped with schu-video-generator; a maintainer tool. The picture is the gallery's sample app screenshot
 (``data/gallery/app.png``, made by ``tools/make_screenshot.py``) with a slow camera move from the
 whole window in on the "Tasks completed" chart, as a screen recording zooming in would look;
 silent, VP9 in WebM (~100 KB). Run from the repository root::

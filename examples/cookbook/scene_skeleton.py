@@ -1,4 +1,4 @@
-"""Skeleton of a custom vidgen scene. Copy to <project>/extensions/ together with fx.py, rename
+"""Skeleton of a custom schu-video-generator scene. Copy to <project>/extensions/ together with fx.py, rename
 the scene (``@scene("...")`` must be unique in the project) and fill it in."""
 from vidgen.api import *
 

@@ -1298,6 +1298,16 @@ def build_character(
         )
         wheels = entry.look.species == "robot" and entry.look.robot_look().moves_on == "wheels"
         built.species_motion = species_motion(entry.look.species, wheels=wheels)
+    hologram = entry.hologram_look()
+    if hologram is not None:   # a translucent figure in one glowing colour (DESIGN.md §100.3)
+        from vidgen.cartoon.hologram import apply_hologram
+
+        apply_hologram(built, resolve_color(hologram.color, theme), hologram.opacity)
+    echo = entry.echo_look()
+    if echo is not None:   # a translucent other self in its own colours (DESIGN.md §102.6)
+        from vidgen.cartoon.echo import apply_echo
+
+        apply_echo(built, resolve_color(echo.color, theme), echo.opacity)
     return built.start_idle() if entry.idle else built
 
 

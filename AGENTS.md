@@ -1,8 +1,8 @@
-# vidgen author guide: making great videos with vidgen
+# schu-video-generator author guide: making great videos with schu-video-generator
 
-> **Who this is for:** AI agents (and people) who **use** vidgen to make videos and slide decks.
-> If you are working **on vidgen itself** (its Python code, tests, docs), read `CLAUDE.md` in the
-> schu-video-generator repository instead. This guide ships with vidgen: `vidgen guide` prints all
+> **Who this is for:** AI agents (and people) who **use** schu-video-generator to make videos and slide decks.
+> If you are working **on schu-video-generator itself** (its Python code, tests, docs), read `CLAUDE.md` in the
+> schu-video-generator repository instead. This guide ships with schu-video-generator: `vidgen guide` prints all
 > of it, `vidgen guide TOPIC` one part, `vidgen guide --list` the topics.
 > The project and pip package are called schu-video-generator;
 > the command and the Python package are `vidgen`.
@@ -34,7 +34,7 @@ thumbnail, GIFs, translations, rights to your content), `troubleshooting` (valid
 <!-- topic: start (also: rules, intro, quickstart) -->
 ## Start here: the rules at a glance
 
-You cannot watch the video. vidgen gives you eyes (`vidgen storyboard`: contact sheets to open
+You cannot watch the video. schu-video-generator gives you eyes (`vidgen storyboard`: contact sheets to open
 as images) and a critic (`vidgen lint`: layout and timing problems as JSON). Use both after
 every change, and follow these rules:
 
@@ -170,7 +170,9 @@ only the scenes that changed (`render` reuses the storyboard's renders of the sa
 `--force` renders everything, e.g. after editing a file outside `assets/`); `--jobs N` renders
 several at once, and `--jobs auto` picks N from the available memory (1.5 GB per job) and the CPU
 cores and prints why; never run two vidgen commands at once, and run Kokoro `tts` alone; preview
-while iterating.
+while iterating. Under a time limit per command, `render --max-scenes N` renders N scenes and
+stops (not joined while more are left); run it again until it joins — finished scenes are kept,
+also when a run is interrupted.
 
 **JSON everywhere.** Every command but `mcp` takes `--json` (`validate`, `list-scenes`,
 `schema`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `plan`, `init`, ...): one document on
@@ -202,7 +204,7 @@ question the viewer wants answered, or the end result ("This chart took 4 second
 `stat`, `text_card` and a short `title` work; a silent intro card or a logo does not.
 
 **Beats.** One beat = one thought the viewer hears while one thing happens on screen.
-- 1–2 sentences, 6–15 words. vidgen times beats from their word count until the audio exists
+- 1–2 sentences, 6–15 words. schu-video-generator times beats from their word count until the audio exists
   (`narration.words_per_second`, 2.6), and lint's `narration_speed` expects 1.8–3.5 words/s
   (English; other languages have their own range).
 - A beat over ~20 words is two beats: split it, and give each half its own reveal.
@@ -277,6 +279,71 @@ scenes:
   instead. `vidgen direct --variant social` lists the camera's moves. Give the 9:16 variant
   `character_size: large` (top level, or a stage's param; `small` / `medium` / `large`, default
   `medium`): characters measured against the narrow width are small on a phone; text keeps its size.
+
+**Shorts cut from a longer video.** One variant per Short: `cut:` keeps some scenes and beats of
+the full video (their ids and audio stay, so nothing is voiced again) and changes what 9:16
+needs; `shorts: true` keeps captions, lower thirds and the hook out of the app's buttons (bottom
+20 %, right 15 %) and turns on two lint rules (`shorts_safe_area`: text or a face where the app
+covers the frame, a caption over a face; `shorts_length`: over 60 s).
+
+```yaml
+characters: [{name: kit}, {name: pip}]
+scenes:                                   # the full video (shortened)
+  - id: workshop
+    type: stage
+    params: {characters: [kit, pip]}
+    beats: [{text: "Kit built a kite big enough for a cat."}]
+  - id: rescue
+    type: stage
+    params: {characters: [kit, {name: pip, at: 0.8}]}
+    beats:
+      - {text: "Then the wind came."}
+      - {text: "It lifted Pip off the ground!"}
+      - {text: "Kit ran after the string."}
+variants:
+  short1:
+    format: {width: 1080, height: 1920}
+    preview: {width: 360, height: 640}
+    shorts: true                          # or {max_seconds, bottom, right, top, left}
+    audio: {target_lufs: -14, bitrate: 256k}   # Shorts play louder; 256k keeps the AAC's peaks down
+    music: {source: horizon, volume: -5}  # music cues naming left-out scenes: give the cut its own
+    overlays: [{type: captions, style: karaoke, speakers: color}]
+    cut:
+      scenes:
+        - workshop                                     # a whole scene
+        - {scene: rescue, beats: [rescue_b2]}          # or beats: {from: rescue_b2, to: rescue_b3}
+        - {scene: rescue, id: rescue_end, beats: [rescue_b3], params: {light: sunset}}  # again, renamed
+      beats:                                           # changes for 9:16, by beat id
+        rescue_b2: {shot: {kind: closeup, of: [kit, pip], clear: true}}
+        rescue_b3:
+          actions: [{zoom: [kit, pip], scale: 2, at: 0.4, hold: true}]   # end on the close view
+      hook: "Can a kite carry a cat?"                  # big text over the first 3 s
+      end_card: "Full video on the channel"            # + the title; or {text, title, seconds, type: card, params}
+```
+
+- **Re-stage for 9:16**: wide iso views and two-shots of people far apart are tiny in a tall
+  frame. Give each kept beat a `closeup` / `medium` of one to three characters, or a `zoom` (in
+  9:16 about 1.5× the scale you would use in 16:9); `zoom ... hold: true` stays zoomed after its
+  beat (no zoom-out before a cut or at the end); `at: 0, cut: true` in a scene's first beat opens
+  the scene already framed (the hook is not over a wide view). A beat's `actions` in `cut.beats`
+  replace its list.
+- Karaoke captions in a Short show a phrase of about 3–5 words on one line (`body` size), a
+  little above the app's texts; lint checks every caption of a line against the faces.
+- Leaving beats out leaves out their actions too: start the scene where the kept beats need the
+  characters (`params: {characters: [{name: kit, at: door}]}`, merged by name; `{name: pip,
+  drop: true}` leaves one out, e.g. someone who only arrives later, or a sliver at the frame's
+  edge in a close view), and give an `until` that named a left-out beat a beat of the cut
+  (validate says which). A scene overlay timed on a left-out beat: `overlays: {readout: {drop:
+  true}}` in the scene's entry. A scene whose last beat brings in new characters can be split in
+  two entries (the second with another `id`), each with its own cast.
+- A zoom never leaves the stage: near its edge a high `scale` pushes the targets aside; leave
+  `scale` out (as close as they fit) or zoom on fewer targets.
+- Keep hooks to two lines (about 25 characters): a longer one covers a face near the top during
+  the first seconds, and lint does not check the hook while it shows (look at the still at 1 s).
+  A `hud` in a Short keeps its meters above the captions by itself.
+- `vidgen storyboard --variant short1 --per-beat 2` and `vidgen lint --variant short1`, then
+  `vidgen render --variant short1` (`--max-scenes` keeps each run short; a change in `cut.beats`
+  re-renders only that scene, a new hook every scene).
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
@@ -740,7 +807,7 @@ A `cross` scene works a genetic cross out exactly (DESIGN §96: the cross engine
       actions: [{count: phenotypes}, {ratio: phenotypes, at: "@nine"}]
 ```
 
-A `pedigree` scene draws a family chart in standard human pedigree nomenclature (NSGC: square male, circle female, diamond sex unknown; affected filled, a carrier a dot — `carrier_style: half` for the half-shaded heterozygote —, deceased struck, the proband's arrow with P, double line for consanguinity, MZ / DZ twins, adoption brackets, a miscarriage triangle, a proposed child dashed with ?) laid out by generation (Roman numerals, individuals numbered left to right, sibships in birth order, partners from outside beside the relative), and works its genetics out exactly (DESIGN §96.8): which modes of inheritance fit (AD, AR, XD, XR, Y-linked, mitochondrial; an excluded one with its reason, e.g. *father-to-son: a son's X comes from his mother*), the genotypes the chart forces (obligate carriers), carrier probabilities by Bayes' rule on the whole chart (2/3 for an unaffected sibling under AR), and the risk for a proposed child with its factors (2/3 × 1/25 × 1/4 = 1/150). Write each person as a line — `"II-3: female affected deceased of I-1 + I-2"`, flags `carrier`, `proband`, `consultand`, `proposed`, `miscarriage`, `adopted in`, `twin II-4 MZ`, `spouse II-5`, `age 45 y` last — or as a mapping (`{id, sex, affected, parents: [I-1, I-2], twin: {with, kind}}`). Use NSGC ids (`II-3`, numbered left to right as drawn: a partner from outside stands beside the relative) or any names (vidgen numbers the chart). The analysis assumes a rare allele (people marrying in do not carry it: `rare: false` or `carrier_frequency: 1/25` for a common one) and full penetrance (`penetrance: 0.8` lets a dominant trait skip a generation). `mode` sets the mode for genotypes and risk (default: the only one that fits; `preset: hemophilia_a` gives X-linked recessive with H / h). The actions: `analyse: modes` (one by one, the people a reason names ringed; `mode:XR` for one), `deduce: genotypes` (`carriers`, `generation:II`, `person:II-3`), `risk: risk`; `reveal: "generation:II"` or `"person:II-3"` brings people in on a word, `highlight` marks them. Checked with the reason: a child with two fathers, a cycle, twins who are not siblings, numbers that do not read left to right, a male carrier under X-linked inheritance, genotypes or risk when several modes fit and none is stated.
+A `pedigree` scene draws a family chart in standard human pedigree nomenclature (NSGC: square male, circle female, diamond sex unknown; affected filled, a carrier a dot — `carrier_style: half` for the half-shaded heterozygote —, deceased struck, the proband's arrow with P, double line for consanguinity, MZ / DZ twins, adoption brackets, a miscarriage triangle, a proposed child dashed with ?) laid out by generation (Roman numerals, individuals numbered left to right, sibships in birth order, partners from outside beside the relative), and works its genetics out exactly (DESIGN §96.8): which modes of inheritance fit (AD, AR, XD, XR, Y-linked, mitochondrial; an excluded one with its reason, e.g. *father-to-son: a son's X comes from his mother*), the genotypes the chart forces (obligate carriers), carrier probabilities by Bayes' rule on the whole chart (2/3 for an unaffected sibling under AR), and the risk for a proposed child with its factors (2/3 × 1/25 × 1/4 = 1/150). Write each person as a line — `"II-3: female affected deceased of I-1 + I-2"`, flags `carrier`, `proband`, `consultand`, `proposed`, `miscarriage`, `adopted in`, `twin II-4 MZ`, `spouse II-5`, `age 45 y` last — or as a mapping (`{id, sex, affected, parents: [I-1, I-2], twin: {with, kind}}`). Use NSGC ids (`II-3`, numbered left to right as drawn: a partner from outside stands beside the relative) or any names (schu-video-generator numbers the chart). The analysis assumes a rare allele (people marrying in do not carry it: `rare: false` or `carrier_frequency: 1/25` for a common one) and full penetrance (`penetrance: 0.8` lets a dominant trait skip a generation). `mode` sets the mode for genotypes and risk (default: the only one that fits; `preset: hemophilia_a` gives X-linked recessive with H / h). The actions: `analyse: modes` (one by one, the people a reason names ringed; `mode:XR` for one), `deduce: genotypes` (`carriers`, `generation:II`, `person:II-3`), `risk: risk`; `reveal: "generation:II"` or `"person:II-3"` brings people in on a word, `highlight` marks them. Checked with the reason: a child with two fathers, a cycle, twins who are not siblings, numbers that do not read left to right, a male carrier under X-linked inheritance, genotypes or risk when several modes fit and none is stated.
 
 ```yaml
 # genetics
@@ -794,7 +861,7 @@ A `karyotype` scene draws a human karyotype from its ISCN notation (DESIGN §96.
     - text: "Forty-seven, X Y, plus twenty-one: Down syndrome."
 ```
 
-A `mutation` scene works a sequence variant out on a real coding sequence with the genetic code (DESIGN §96.13): the reference codons with their amino acids (the initiator Met is residue 1) and the variant row made from them — a base swaps, or bases leave or come in and the rest slide through the fixed codon frame, so a frameshift regroups every codon after it and reaches its premature stop. Give a reference window (`gene: HBB`, `CFTR`, `GJB2`: real coding sequence with its exons and transcript), your own `sequence:` (with `first:`, `exons:`, `length:` when you want splice sites and nonsense-mediated decay), or a gene like a `molecule` scene's (`gene: {protein: MVHL…, introns: 1}`). The `variant:` is HGVS on the coding DNA (`c.20A>T`, `c.1521_1523delCTT`, `c.35delG`, `c.35dup`, `c.76_77insT`, `c.76_77delinsTT`, `c.92+1G>A`); vidgen computes the protein change (`p.(Glu7Val)`, `p.(Phe508del)`, `p.(Arg553*)`, `p.(Gly12Valfs*2)`, `p.?` for a splice site with the exon skipped or the intron retained), the class and the notes (side chains, the frame, nonsense-mediated decay), and checks a `p:` you write against the sequence. Use `legacy:` for the old name (ΔF508, Glu6Val: HGVS counts the initiator Met, so HbS is `c.20A>T p.(Glu7Val)`). A list of variants plays one after another; `mutate: variant` puts one on a word. Checked with the reason: a change that is not HGVS, a reference base that is not there, a description that is not the canonical one (the 3′ rule), a stated `p.` that does not follow, `p.R553X` and `ΔF508`.
+A `mutation` scene works a sequence variant out on a real coding sequence with the genetic code (DESIGN §96.13): the reference codons with their amino acids (the initiator Met is residue 1) and the variant row made from them — a base swaps, or bases leave or come in and the rest slide through the fixed codon frame, so a frameshift regroups every codon after it and reaches its premature stop. Give a reference window (`gene: HBB`, `CFTR`, `GJB2`: real coding sequence with its exons and transcript), your own `sequence:` (with `first:`, `exons:`, `length:` when you want splice sites and nonsense-mediated decay), or a gene like a `molecule` scene's (`gene: {protein: MVHL…, introns: 1}`). The `variant:` is HGVS on the coding DNA (`c.20A>T`, `c.1521_1523delCTT`, `c.35delG`, `c.35dup`, `c.76_77insT`, `c.76_77delinsTT`, `c.92+1G>A`); schu-video-generator computes the protein change (`p.(Glu7Val)`, `p.(Phe508del)`, `p.(Arg553*)`, `p.(Gly12Valfs*2)`, `p.?` for a splice site with the exon skipped or the intron retained), the class and the notes (side chains, the frame, nonsense-mediated decay), and checks a `p:` you write against the sequence. Use `legacy:` for the old name (ΔF508, Glu6Val: HGVS counts the initiator Met, so HbS is `c.20A>T p.(Glu7Val)`). A list of variants plays one after another; `mutate: variant` puts one on a word. Checked with the reason: a change that is not HGVS, a reference base that is not there, a description that is not the canonical one (the 3′ rule), a stated `p.` that does not follow, `p.R553X` and `ΔF508`.
 
 ```yaml
 # genetics
@@ -811,7 +878,7 @@ A `mutation` scene works a sequence variant out on a real coding sequence with t
     - text: "Glutamic acid becomes valine: sickle-cell haemoglobin."
 ```
 
-A `crispr` scene shows Cas9 editing a target (DESIGN §96.14): the DNA with every base, the sgRNA's 20-nt spacer (21–23 for SaCas9) pairing with the target strand, the PAM (`NGG`; `NNGRRT` for SaCas9) right after the protospacer's 3′ end on the other strand, the R-loop, the blunt double-strand break 3 bp upstream of the PAM, and the repair: `nhej` (a small indel — `indel: +1` is the commonest, and an indel that is not a multiple of 3 is a frameshift knockout) or `hdr` (a donor carrying `edit:`). Leave `spacer` out and vidgen picks a guide from the PAMs it finds (`guide: 2` for the n-th); with `coding_first:` (the `c.` number of the target's first base) the outcome is written in HGVS with its protein change. `scan`, `cleave` and `repair` put the steps on words. Checked with the reason: a spacer that is not in the target or has no PAM after it (with the guides that would work), the wrong length for the enzyme, a spacer written with its PAM, a target without any PAM.
+A `crispr` scene shows Cas9 editing a target (DESIGN §96.14): the DNA with every base, the sgRNA's 20-nt spacer (21–23 for SaCas9) pairing with the target strand, the PAM (`NGG`; `NNGRRT` for SaCas9) right after the protospacer's 3′ end on the other strand, the R-loop, the blunt double-strand break 3 bp upstream of the PAM, and the repair: `nhej` (a small indel — `indel: +1` is the commonest, and an indel that is not a multiple of 3 is a frameshift knockout) or `hdr` (a donor carrying `edit:`). Leave `spacer` out and schu-video-generator picks a guide from the PAMs it finds (`guide: 2` for the n-th); with `coding_first:` (the `c.` number of the target's first base) the outcome is written in HGVS with its protein change. `scan`, `cleave` and `repair` put the steps on words. Checked with the reason: a spacer that is not in the target or has no PAM after it (with the guides that would work), the wrong length for the enzyme, a spacer written with its PAM, a target without any PAM.
 
 ```yaml
 # genetics
@@ -1745,7 +1812,7 @@ colour-blind-safe palette (except `dark_tech`'s blue and purple for deuteranopes
 preset if that matters).
 
 **One colour per concept.** Give the few concepts an explainer keeps coming back to a colour of
-their own, once, at the top of `video.yaml`; vidgen then draws those words in that colour
+their own, once, at the top of `video.yaml`; schu-video-generator then draws those words in that colour
 wherever they are written (titles, bullets, cards, chart and diagram labels, captions, a
 callout naming one, a `line_chart` series named after one) and their TeX parts in equations:
 
@@ -1795,7 +1862,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `highlight` | make the thing the voice names stand out (`style: color`, `box`, `underline`, `fill`, `flash`) | one target per beat |
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
-| `zoom` | look closer at a detail, then come back; on a `plot`, `x: [from, to]` / `y: [...]` zoom its axes to that region of the data instead of moving the camera | at most one per scene |
+| `zoom` | look closer at a detail, then come back (`hold: true`: stay close, e.g. a Short's last shot; `cut: true`: jump there, at 0 of a scene's first beat the scene opens on it); on a `plot`, `x: [from, to]` / `y: [...]` zoom its axes to that region of the data instead of moving the camera | at most one per scene |
 | `pan` | on a `stage`: move the camera to a character or a mark (`to: right`); on an iso place to a spot (`to: well`) across and up the picture, moving in from the wide view | on a stage wider than the frame (`width: 2`), or on an iso place to look at a thing |
 | `follow` | on a `stage`: keep the camera on a character as it moves (on a platform `level` gently, up and down too; `level: {follow: hero}` follows from the start; on an iso place it zooms in first, to a plain stage's size) | one at a time |
 | `reveal` | bring a later element in early; on an iso place an object with `shown: false` appears (a bridge over the pond) | rarely: the default order is usually right |
@@ -1824,7 +1891,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `switch_view` | on a `detector` scene: turn the transverse view (x–y, across the beam) into the longitudinal one (r–z, along it) or back (`- action: switch_view`, `to: rz` / `xy`); rings, tracks, towers and hits morph | "seen from the side" |
 | `trace` | on a `function_plot`: move a dot along its curve (`- trace: dot1`, `to: 2`; its value label and tangent follow), an area's right end, a point (`to: [x, y]`) or a vector's tip (`to: [x, y]`, or `scale: 2`), everything drawn from them following; on a `number_line`: a point (`to: 4`); on a `line_chart`: a cursor dot along a series (`- trace: series1`, `to: 4`, the line's value over it) | one movement per beat, timed to the word that says it |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
-| `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
+| `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `glow: true` to make them shine, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |
 | `blow_away` | on a `stage`: the wind blows a light prop away, tumbling, out of a hand too (`- blow_away: napkin`; `to:` a mark to land there, else off the stage) | a gust in the story; napkin, umbrella, ball, cup, basket, box, letter, balloons only |
 | `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s; `move_sun: true` moves a `sun` / `moon` prop across the sky, shadows turning) | when time passes in the story |
@@ -1833,6 +1900,13 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley); on an iso place a `lamp` lights, a `house`'s windows glow (they stay bright at `light: sunset` / `night`) | when someone in the story switches it on or lights the fire; when a call comes |
 | `switch_off` | on a `stage`: a `tv`, `lamp`, `kettle` or `fireplace` goes off, a `phone` stops ringing (`- switch_off: lamp`) | when someone in the story switches it off or answers |
 | `knock` | on a `stage`: someone knocks three times on a door (`- knock: front`; a room's door or a `door` prop; nobody needs to stand there) | a visitor in the story; the door then `open`s with a creak |
+| `alarm` | on a `stage`: an alarm goes off (`- alarm: start`) or stops (`- alarm: stop`): the set darkens under a red light pulsing like a beacon, a siren plays; portals, holograms and screens keep shining (`color`, `period`) | a security system, a red alert |
+| `shutters` | on an indoor iso place: steel shutters slam down over its windows (`- shutters: close`, a slam) or roll up (`- shutters: open`) | with an alarm; a lockdown |
+| `materialise` | on a `stage`: a character appears as a hologram does, a flickering wireframe, then solid (`- materialise: guide`; it waits unseen until then) | a projection switched on, another self appearing; best on `hologram: true` or `echo: true` |
+| `dematerialise` | on a `stage`: a character vanishes the same way backwards (`- dematerialise: guide`) | a projection switched off |
+| `hold_hands` | on a `stage`: a character takes another's hand (`- {hold_hands: ana, with: ben}`); they hold hands wherever they stand or walk | walk both in the same beat to places side by side to go hand in hand |
+| `let_go_hands` | on a `stage`: a character lets go of the hand it holds (`- let_go_hands: ana`; the other too) | before an arm gestures again |
+| `kiss` | on a `stage`: two characters kiss (`- {kiss: ana, with: ben}`, 3 s): they turn, lean in until their faces touch, eyes closed, a small burst of hearts and sparkles, then lean back (`hearts`, `color`) | stand them a step apart; a `two_shot` |
 | `let_go` | on a `stage`: a character lets go of the balloons it holds; they float away (`- let_go: pip`) | gone for the scene |
 | `pour` | on a `stage`: a character pours with the watering can it holds (`- pour: kit`, 2 s) | watering a plant |
 | `drop_fruit` | on a `stage`: a fruit falls from a tree with `fruit: true`, bounces, thuds (`- drop_fruit: tree`; `to: pip`: on pip's head, stars) | a comic moment; the character stands under the tree |
@@ -1868,7 +1942,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
-| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back; on an iso place `wide` is the place's wide view and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
+| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`; `closeup ana ben`: two or three faces together; `{kind: closeup, of: kit, clear: true}` hides the others for the beat); the next beat without one cuts back; on an iso place `wide` is the place's wide view and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
 | `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
 | `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
 | `host_react` | with a `host:`: the host's expression for this beat (`- host_react: happy`; `effect: sparkle` adds a symbol) | on a result or a surprise |
@@ -1978,7 +2052,7 @@ the chart. Keep it small: 2–3 characters, one set per scene, 30–90 s.
 (`look: {svg: ...}`, `docs/CONFIG.md` "Characters"). Never imitate a known character, mascot,
 brand figure or logo: not its silhouette and colours, its name or catchphrase, an SVG traced
 from it, nor "in the style of" a studio in a `generate:` prompt or `cartoon_style`. If someone
-asks for one, say vidgen makes original characters and offer one with the same role.
+asks for one, say schu-video-generator makes original characters and offer one with the same role.
 - Tell them apart at a glance: a different `body` (`round`, `tall`, `pear`, `triangle`...),
   hair (`ponytail`, `braids`, `afro`, or bald with `facial_hair: beard`), one signature item
   each (`hat`, `cap`, `bow`, `scarf`, `glasses`, `backpack`...), an `outfit` (`dress`,
@@ -2027,7 +2101,8 @@ asks for one, say vidgen makes original characters and offer one with the same r
   the frame (`width: 2`), the camera goes along with `follow`.
 - **Light and mood**: `light: morning | sunset | night | indoor` (or `{tint, strength}`) grades
   the whole set and the characters, never the bubbles or text; `night` adds stars on a colour
-  background. Time passing is a `- light: night` action (it fades, 2 s). Characters and props on
+  background. Time passing is a `- light: night` action (it fades, 2 s); `fill_light: 0.4` keeps
+  the characters' faces readable in a dark light (the set stays dark). Characters and props on
   the ground get soft shadows on their own (`shadows: false` for none). `wind: breeze | windy |
   gale` (or 0..1; negative blows left) sways trees and bushes, makes scarves, long hair, ears and
   hats trail and particles drift; `- wind: gale` fades it in a beat. From `windy` on it shows
@@ -2073,7 +2148,10 @@ asks for one, say vidgen makes original characters and offer one with the same r
   and a gift `open` / `close` like an umbrella (held in front, not overhead). A `phone` that is on
   rings (`on: true` or `- switch_on: phone`; it shakes in bursts with a trill, `- switch_off:
   phone` answers it). Held balloons rise behind the head; `- let_go: pip` floats them away for
-  good. `- pour: kit` tilts the watering can kit holds and water drops fall.
+  good. `- pour: kit` tilts the watering can kit holds and water drops fall. A `scanner` that is on
+  shows a live readout (`scan: {level: 0.4, to: 1.6, at: 3}`: above 1 it goes off its scale,
+  flashing red; `- {hold: max, to: scanner}` to carry it); `takeout` boxes and glowing data
+  `crystal`s (`on: true`) clutter a desk.
 - **Ready-made sets**: `set: city_street`, `park`, `beach`, `forest` or `snowy_hills` on a stage
   scene gives a whole outdoor set without `sets:` (backdrop, props, light, ambience: a street
   sounds like a city, a park and a forest have birdsong by day). Put two characters on its
@@ -2266,7 +2344,7 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes, a balloon's burner roars, a toy rocket fizzes off; a door creaks as it opens or closes; water splashes; on a platform `level` a jump lands softly, each coin goes `coin` and each star `twinkle`, a key `unlock`s a locked door, a blocker shuffles aside; on an iso place footsteps by what the feet walk on: grass, a path, boards, a bridge, stone), timed to the action,
   and rain plays a rain sound bed. Each stage also plays a quiet bed of its set: birdsong
   outdoors by day (not at night, not in rain), a room tone in a room; `ambience: city` on a stage
-  names the street sounds instead (or `birdsong`, `room_tone`, a list), `ambience: false` none.
+  names the street sounds instead (or `birdsong`, `room_tone`, `hum` for a lab or a ship, a list), `ambience: false` none.
   `foley: false` (top level or a stage) turns all of them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice; under composed music the music's own instruments play it, in its key. One or two per
@@ -2528,6 +2606,57 @@ and give each scene `set: village`.
   puddles with ripples), `{kind: snow, settle: true}` (the ground, roofs and treetops turn white;
   `settled: 30` starts it white). A `run_to` leaves speed lines along its diagonal.
   Footsteps follow the ground (grass, path, boards, a bridge), birdsong by day, crickets at night.
+- Science fiction and magic: a `portal` prop at a spot tears open with `switch_on` (a crackling,
+  glowing rift; `switch_off` seals it); a character comes out of it with `- {enter: visitor,
+  door: rift}` (the portal's spot) and walks to its own spot in front. A character with `hologram: true` is a glowing,
+  translucent projection (an AI, a ghost) that no `light` darkens and that flickers now and then;
+  give it an `effect: echo` on its voice. `- materialise: guide` makes it appear (a flickering
+  wireframe, then solid; it waits unseen until then), `- dematerialise: guide` vanish.
+- A lab: `objects` `console` (glowing screens; a `hologram_display` prop at its spot floats a
+  panel of light over it: `pattern: fractal`, `data`, `text`, `equations` (formulas written, and
+  formula butterflies fluttering up) or `timelines` (a branching tree, two figures meeting in a
+  small panel at each tip; `scale: 1.5` to read them)), `server_rack` (blinking lights),
+  `projector_pad` (a glowing platform a hologram stands on), `whiteboard`. A portal's `view:
+  coast` (or `stars`, `meadow`) shows another place inside it. `- alarm: start` darkens the room
+  under a pulsing red light with a siren (`stop` ends it), `- shutters: close` slams steel
+  shutters over the windows; `ambience: hum` gives a lab its hum.
+- Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
+  `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
+  character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a
+  `two_shot` with a human). Two characters `- {hold_hands: ana, with: ben}` step in close
+  enough for the joined hands to show; walk both in one beat with the same `run_time` and they
+  go side by side (`let_go_hands`). At night give the stage `fill_light: 0.4` so faces read.
+- Framing: `iso: {wide: fill}` (or a number 1–2.5) brings a room's wide view closer;
+  `shot: closeup ana ben` frames two faces together, `{kind: closeup, of: guide, clear: true}`
+  hides everyone else for the beat. A memory: `flashback: true` on a stage (faded warm colours,
+  a soft vignette), with `flower_arch` and `chess_table` objects, and an iris in and out.
+- A city at night: `objects` `tower` (`height` 2–30 tiles, `size` its footprint; lit window
+  grids, neon trims in `detail`, a blinking antenna; `screen: true` a crawling info screen,
+  `garden: true` glowing algae bands) on the blocks between path streets, `light: night`, and
+  `traffic: [{from: west, to: east, height: 3, count: 3, seconds: 7, color: "#FF2E8B"}]` under
+  `iso:` for hover pods gliding over the streets (`at: 1.0` with `count: 1`: one pod crosses once;
+  a `pan` to the end spot with the same `run_time` follows it). `wide: 1.6`–`2.5` lets the towers
+  reach out of the top of the frame. Neon rain: `particles: [{kind: rain, glow: true, color:
+  ["#5FFFE0", "#4FA8FF"]}]` (`glow` works on any particles).
+- Other selves: a character with `echo: true` (or `{color, opacity}`) is a translucent other
+  self that keeps its own costume, its outlines glowing (a timeline, a memory, a dream); stand
+  it beside the one it echoes and bring it with `- materialise: ana_captain`. Accessories
+  `medal` (gold, on a ribbon in `colors.accessory`) and `pendant` (a stone glowing and pulsing in
+  `colors.accessory`, bright at night) dress a laureate or a keeper of a secret.
+- Romance: `- {kiss: ana, with: ben, run_time: 3}` (two standing a step apart: they turn, lean in
+  until their faces touch, close their eyes, a small burst of hearts and sparkles, then lean
+  back); frame it with a `two_shot`. It lets go of held hands first. Stand a pair side by side on
+  the picture: cells on a diagonal of the map (`{column: 5, row: 6}` and `{column: 6, row: 5}`)
+  are at the same height on screen. Actions of a beat at different `at` play one after another,
+  so two couples kissing at once share one `at`. Long hair that reads in a close-up: `hair: wavy`.
+- A strange door: `iso: {doors: slide}` (steel doors sliding open with a hiss on `- open:
+  door_1`) and `haze: [{at: door_in}]` (shimmering air with sparkles over a spot). A room at
+  night: dark `colors: {wall, floor}`, `light: night`, `fill_light: 0.45` and `wall_lights:
+  ["#5FE8FF", "#FF2E8B"]` (neon strips along its walls).
+- Inside someone's head: a scene's `overlays: {implant: {type: hud, at: office_b2, duration: 6,
+  alert: "INCOMING ALERT", lines: ["SIGNAL: SECTOR 7"], heart: {bpm: 70, to: 128, at: 1.5,
+  skips: 3}, scan: {level: 0.4, to: 1.6, at: 3}}}` draws a HUD over the frame (brackets, a
+  blinking alert, readouts, a heart monitor, a scanner meter spiking off its scale).
 
 ```yaml
 characters:
@@ -2666,7 +2795,7 @@ a carrier test, 16:9 and 9:16).
 A story across levels (family → gene → variant → test → population) uses one scene per level and
 says when it moves ("Back in the family", "At the level of the sequence").
 
-**Notation** (vidgen checks it): pedigrees in NSGC symbols with generations in Roman numerals and
+**Notation** (schu-video-generator checks it): pedigrees in NSGC symbols with generations in Roman numerals and
 people numbered left to right (`II-3`); karyotypes in ISCN (`47,XY,+21`, `46,XX,t(9;22)(q34;q11.2)`;
 sex chromosomes first, changes in order); variants in HGVS on the coding DNA (`c.1521_1523del`,
 `p.(Phe508del)` — HGVS counts the initiator Met, so HbS is `p.(Glu7Val)`; say "legacy Glu6Val" or
@@ -2979,6 +3108,9 @@ scenes:
 - `lower_third` once, when a person or place first appears (5 s).
 - `watermark` small and faint, or not at all.
 - `captions` for social and muted viewing (`vidgen guide social`).
+- `hud` on a scene where the story is seen through an implant or a visor (`at`, `duration`,
+  `alert`, `lines`, `heart`, `scan`), not as decoration. Its alert and lines move to a free
+  corner by themselves, off the faces; in a close-up use `compact: true` (lint `overlay_face`).
 Lint's `overlay_overlap` reports an overlay over scene text: give it `reserve: true` or move it.
 
 **Transitions** (`transition:` per scene = the way into it, or video-wide). Default: cuts (every
@@ -3031,7 +3163,7 @@ before a real run. Then listen to one beat (`vidgen tts --beat ID`, `vidgen read
 voicing the whole video. One provider per video: named `voices:` change `voice` / `instructions`
 / `speed`, not `provider`; try another provider in a variant (it gets its own `audio/<variant>/`).
 If the account requires Zero Data Retention, pick a model with a ZDR endpoint (most TTS models
-have one; vidgen's error lists them when a model is refused). A real run ends with what
+have one; schu-video-generator's error lists them when a model is refused). A real run ends with what
 OpenRouter charged, or `cost not reported by openrouter yet (...)` when its cost records lag:
 the audio is stored all the same.
 
@@ -3070,6 +3202,22 @@ voices:
   guest: {voice: am_michael, label: Guest}         # same provider; another voice
 ```
 
+**Voice effects.** A speaker who is not an ordinary person gets an `effect:` on its voice, for
+any provider: `robot` is a flat, metallic monotone (`{use: robot, pitch: -6}` lowers its buzz);
+`otherworldly` is deep, many-voiced and in a hall (aliens, spirits, giants); `echo` is a
+loudspeaker in a room (a ship's computer); `radio` a phone or a walkie-talkie; also `hall`,
+`chorus`, `deep`, `high`, or a list. Pick a distinct base voice too (a deep `am_onyx` under
+`otherworldly`), and keep the narrator plain. `echo`, `hall` and `chorus` add a short tail after
+the line.
+
+```yaml
+voice: {provider: kokoro, voice: bm_fable}         # the narrator, plain
+voices:
+  ship: {voice: af_nicole, label: Ship, effect: echo}
+  stranger: {voice: am_onyx, label: Stranger, effect: otherworldly}
+  gate_bot: {voice: am_echo, label: Gate, effect: {use: robot, pitch: -6}}
+```
+
 **Writing good `instructions`** (OpenRouter models that read them, e.g. Gemini TTS: the dry run
 notes when a model ignores them). Describe the speaker and the delivery in a few words, not the
 content: who (a warm, unhurried explainer; a curious guest), pace and pauses (slight pause before
@@ -3094,7 +3242,7 @@ how it is **said** with `pronunciation:` (applied to the TTS text only). Run
 what the voice still gets wrong, and the words it says unclearly (`unclear`: probability below
 0.5 or a pause over 0.5 s inside a sentence; `doubtful`: below 0.75). For an unclear name or
 term, respell it in `pronunciation:`; for another word, try another voice, speed or `emotion:`.
-vidgen already respells some words for some voices (built-in lists, e.g. Kokoro's American
+schu-video-generator already respells some words for some voices (built-in lists, e.g. Kokoro's American
 voices say `epoch` as `E pock`, `README` as `readme`, `JSON` as `Jason`): `vidgen list-pronunciation`
 shows them; `vidgen validate` prints the beats they change (`pronounce: ...`). Your entry for the
 same term wins, `term: null` drops one, `pronunciation_defaults: false` turns them off.
@@ -3113,7 +3261,9 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `step_grass`, `step_gravel`, `step_wood`, `step_stone`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `unlock`, `coin`, `twinkle`, `splash` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `step_grass`, `step_gravel`, `step_wood`, `step_stone`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `unlock`, `coin`, `twinkle`, `splash`; for a lab or another world
+`alarm` (a two-tone siren), `crackle` (sparks, crackling energy), `hum` (a machine powering up),
+`drone` (a crystalline singing drone: awe, another world), `slam` (a steel shutter); and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 
@@ -3189,7 +3339,7 @@ win). `vidgen list-music` describes each mood and instrument in words.
   (the next scene returns to the cue's mood); add `volume: -3` under rain or a busy scene. Use it
   where the story turns (calm → tense at the storm, sleepy at night), not on every scene.
 - **Pauses before punchlines.** `music_pause: true` on a beat stops the music just before the
-  line, until the next bar line after it; vidgen does this by itself before a `card` scene and
+  line, until the next bar line after it; schu-video-generator does this by itself before a `card` scene and
   before a short last line (≤ 8 words), whose closing chord then lands as the line ends.
   `music_pause: false` turns either off.
 - **Stings** (`sting: reveal | comic | sad`) are played by the music's own instruments, in its key.
@@ -3501,7 +3651,7 @@ scenes:
 
 - **Generated pictures** (`image` `generate:`): `vidgen imagegen --dry-run` shows prompts and
   cost; placeholders render until you run `vidgen imagegen`. Describe a scene, never text,
-  charts or logos (vidgen draws those better), and set one `imagegen: {style: ...}` for the
+  charts or logos (schu-video-generator draws those better), and set one `imagegen: {style: ...}` for the
   whole video.
 - **Cartoon backgrounds** (`stage` `generate:`): see "The set" in `vidgen guide cartoons`.
 - **Choosing an image provider**: `openai` (the default; `OPENAI_API_KEY`, gpt-image-1) is one
@@ -3513,14 +3663,14 @@ scenes:
   `problem:` / `note:` it prints before a real run. Keep one provider and model per video so the
   pictures match; changing them makes every picture "missing" (new pictures, new cost). If the
   account requires Zero Data Retention, choose a model with a ZDR endpoint (e.g.
-  `bytedance-seed/seedream-5-0-flash`); vidgen's error lists them when a model is refused.
+  `bytedance-seed/seedream-5-0-flash`); schu-video-generator's error lists them when a model is refused.
 - **Vector (SVG) pictures** (`generate: {prompt, format: svg}` with `imagegen.svg_model`, e.g.
   `recraft/recraft-v4.1-vector`, ~$0.08; or an `.svg` file as `path`): drawn as shapes, so
   `draw: true` traces then fills them and `recolor: theme` paints them in the theme's colours.
   Worth it for flat illustrations, icons and diagram-like art (few flat colours; ask for
   "flat illustration, simple shapes, few colours"); not for photos or soft lighting (thousands
   of shapes, capped and thinned: worse than a PNG). Text in an SVG is removed — keep words in
-  vidgen's captions. No SVG model has a ZDR endpoint (2026-10-08).
+  schu-video-generator's captions. No SVG model has a ZDR endpoint (2026-10-08).
 
 ### Your content and third-party services
 
@@ -3636,6 +3786,9 @@ install; `vidgen validate` warns when it is missing.
 | `significance_claim` | a p-value said as the chance the result is wrong, a σ the spectrum does not reach | "background alone would fluctuate this high once in N tries"; the scene's σ |
 | `simulated_label` | simulated data called real, or a spectrum / event display without "simulated" on screen | say "simulated"; keep it in the label or caption |
 | `particle_units` (info) | masses both in GeV and GeV/c² on screen | one convention throughout |
+| `shorts_safe_area` | in a Short (`shorts:`), text or a face where the app covers the frame (bottom 20 %, right 15 %), or a caption / the hook over a face | a closer `shot` or `zoom` with the faces higher; move the scene's text inwards |
+| `overlay_face` | a `hud`'s text or plate over a character's face (outside Shorts) | frame the face away from the corners, `compact: true`, fewer `lines` |
+| `shorts_length` (error) | a Short longer than `shorts.max_seconds` (60) | leave out beats or scenes in `cut:`, a shorter `end_card` |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

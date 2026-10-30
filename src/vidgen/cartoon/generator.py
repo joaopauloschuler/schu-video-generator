@@ -31,6 +31,7 @@ from vidgen.cartoon.character import OUTLINE_WIDTH, TRAIL_ATTRIBUTE, CharacterPa
 from vidgen.cartoon.clothes import LIMB_WIDTH, body_shapes, limb_colors, shoe
 from vidgen.cartoon.primitives import (
     TRAIL_WEIGHTS,
+    Point,
     arc_points,
     filled,
     outer_hair,
@@ -249,6 +250,51 @@ def _braid(x: float, top: float, r: float) -> VGroup:
     return VGroup(*lobes, tie)
 
 
+#: Wavy hair (DESIGN.md §102.17): how far below the head's middle its locks fall (× the head
+#: radius) and how many waves run down each side.
+WAVY_LENGTH, WAVY_WAVES = 1.95, 2.5
+
+
+def _wavy_side(r: float, cx: float, cy: float, side: float, outer: float, inner: float) -> list[Point]:
+    """One lock of wavy hair, from the temple down its outer edge (waving, flaring out), round
+    three curls at its end and up its inner edge; ``side`` -1 left, 1 right (× ``r`` from ``cx``)."""
+    steps = 14
+    down = []
+    for k in range(steps + 1):
+        t = k / steps
+        x = outer + 0.16 * t + 0.08 * math.sin(WAVY_WAVES * 2 * PI * t)
+        down.append((cx + side * x * r, cy - t * WAVY_LENGTH * r))
+    end_out, end_in = outer + 0.16, inner
+    curls = []
+    for k in range(1, 12):
+        s = k / 12
+        x = end_out + (end_in - end_out) * s
+        curls.append((cx + side * x * r, cy - (WAVY_LENGTH + 0.1 * abs(math.sin(3 * PI * s))) * r))
+    up = []
+    for k in range(steps + 1):
+        t = 1.0 - k / steps
+        if t * WAVY_LENGTH < 0.8:   # under the head from here on (hidden behind the face)
+            break
+        x = inner + 0.05 * math.sin(WAVY_WAVES * 2 * PI * t + 0.6)
+        up.append((cx + side * x * r, cy - t * WAVY_LENGTH * r))
+    return [*down, *curls, *up]
+
+
+def _wavy_outline(f: Frame) -> list[Point]:
+    """Wavy hair behind the head: a cap over the top and long waving locks falling past the jaw,
+    ending in curls, both sides from the front (the chin and the chest left clear between them),
+    down the back from the side."""
+    r, cx, cy = f.p.head_radius, f.head_x, f.head_y
+    if f.front:
+        top = arc_points(cx, cy, [1.1 * r] * 25, 0, 180)
+        left = _wavy_side(r, cx, cy, -1.0, 1.1, 0.62)
+        right = _wavy_side(r, cx, cy, 1.0, 1.1, 0.62)
+        return [*top, *left, (cx, cy - 0.5 * r), *reversed(right)]
+    top = arc_points(cx, cy, [1.1 * r] * 21, 25, 180)
+    back = _wavy_side(r, cx, cy, -1.0, 1.1, 0.35)
+    return [*top, *back, (cx + 0.3 * r, cy - 0.5 * r)]
+
+
 def _hair_back(look: CharacterLook, f: Frame) -> list[VMobject]:
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     if look.hair == "long":
@@ -256,6 +302,8 @@ def _hair_back(look: CharacterLook, f: Frame) -> list[VMobject]:
         ends = [(-1.12, -1.28), (0.0, -1.38), (1.12, -1.28)] if f.front else [(-1.15, -1.3), (-0.5, -1.4), (1.05, -1.25)]
         hair = polygon([*top, *((cx + a * r, cy + b * r) for a, b in ends)])
         return [trailing(hair, (cx, cy + 0.4 * r), "long")]
+    if look.hair == "wavy":
+        return [trailing(polygon(_wavy_outline(f)), (cx, cy + 0.4 * r), "long")]
     if look.hair == "bun":
         bun_x = cx if f.front else cx - 0.15 * r
         return [trailing(Circle(radius=0.38 * r).move_to([bun_x, cy + 1.18 * r, 0]), (bun_x, cy + 0.85 * r), "bun")]

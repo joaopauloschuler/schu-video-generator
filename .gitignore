@@ -219,7 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# vidgen project outputs (narration audio under audio/ is NOT ignored: the kphi3 example's
+# schu-video-generator project outputs (narration audio under audio/ is NOT ignored: the kphi3 example's
 # MP3s and hashes are committed)
 **/build/
 **/media/

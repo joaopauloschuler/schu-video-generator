@@ -20,6 +20,7 @@ from vidgen.api import *
 from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image
 from .stage_iso import IsoStaging, _moving_block, iso_particle_problem
+from .stage_story import FlashbackSetting, StoryStaging
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -37,6 +38,23 @@ FIRE_LIGHT_SECONDS = 0.8
 PHONE_RING_GAIN = -6.0
 #: The level of a ``knock`` on a door (dB).
 KNOCK_GAIN = -3.0
+#: A portal tearing open (a rushing whoosh over a low rumble) and sealing (a falling swoosh and a
+#: soft thud): (sound, its params) each (DESIGN.md §100.4).
+PORTAL_OPEN_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
+    ("whoosh", {"gain": -2.0, "duration": 1.4, "pitch": -5.0}),
+    ("thunder", {"gain": -8.0, "duration": 2.5, "intensity": 0.2, "pitch": -4.0}),
+)
+PORTAL_SEAL_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
+    ("swoosh", {"gain": -2.0, "duration": 0.9, "pitch": -3.0}),
+    ("thud", {"gain": -4.0, "duration": 0.5}),
+)
+#: A hologram display switching on (a soft hum and a chime as its panel opens) and off (a short
+#: hum down): (sound, its params, ``delay``: seconds after the switch) each (DESIGN.md §100.10).
+DISPLAY_ON_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (
+    ("hum", {"gain": -10.0, "duration": 1.6}),
+    ("chime", {"gain": -14.0, "pitch": 12.0, "duration": 1.2, "delay": 0.45}),
+)
+DISPLAY_OFF_SOUNDS: tuple[tuple[str, dict[str, float]], ...] = (("hum", {"gain": -13.0, "duration": 0.7, "pitch": -5.0}),)
 #: Lightning (DESIGN.md §69.61): a bolt's core width (Manim stroke width) and how far it zigzags
 #: (frame heights); the band left free above the sky's path for the sun and moon (frame heights).
 BOLT_WIDTH = 4.0
@@ -55,8 +73,8 @@ LEVEL_MAX_PIXELS = 24_000_000
 #: the view and stay there as the camera moves (they are as far as the sky).
 LEVEL_STAR_SKY = 0.45
 #: The props an iso place takes: small things to hold, give and put down (DESIGN.md §89.10); its
-#: big things are its ready-made objects.
-ISO_ITEMS: tuple[str, ...] = (*SMALL_PROPS, "key", "ball", "cup", "box", "basket", "umbrella", "laptop", "napkin", "shell", "mushroom")
+#: big things are its ready-made objects. A portal stands at a spot too (DESIGN.md §100.4).
+ISO_ITEMS: tuple[str, ...] = (*SMALL_PROPS, "key", "ball", "cup", "box", "basket", "umbrella", "laptop", "napkin", "shell", "mushroom", *SCIFI_PROPS)
 #: The light of an iso place where it rains from the start and no ``light`` is given (DESIGN.md
 #: §89.12): the overcast tint the docs give for a rainy day, so the rain reads as rain.
 ISO_RAIN_LIGHT: tuple[str, float] = ("#6B7890", 0.45)
@@ -100,6 +118,23 @@ class StageCharacter(SceneParams):
         return {"anyOf": [{"type": "string", "pattern": IDENTIFIER_PATTERN}, handler(core_schema)]}
 
 
+class ScannerReading(SceneParams):
+    """A switched-on scanner's readout (DESIGN.md §102.13)."""
+
+    level: float = Field(0.35, ge=0.0, le=2.0)
+    """Its reading at the start, a share of its scale."""
+    to: float | None = Field(None, ge=0.0, le=2.0)
+    """The reading it moves to from at (above 1: off its scale, the screen flashing red); none: steady."""
+    at: float = Field(0.0, ge=0.0)
+    """Seconds into the scene when the reading changes."""
+    wave: Literal["organic", "steady"] = "organic"
+    """organic (a living, irregular wave) or steady (a regular one)."""
+
+    def meter(self) -> ScanMeter:
+        """The reading as the HUD's :class:`~vidgen.hud.ScanMeter` (scene seconds)."""
+        return ScanMeter(self.level, self.to, self.at, self.wave)
+
+
 class StageProp(SceneParams):
     """A prop on the stage: a built-in one (``prop``) or an SVG file (``svg``). A plain string is
     a built-in prop's name."""
@@ -107,7 +142,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can, flower; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; indoors: blackboard, school_desk, shelf_with_goods, till, wardrobe; on a platform level: key (opens a locked door, level.locks); vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can, flower; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; outdoors: shop, bench, bus_stop, road, path, fountain, flowers, fence, beach_umbrella, shell, pine, mushroom, log; indoors: blackboard, school_desk, shelf_with_goods, till, wardrobe; on a platform level: key (opens a locked door, level.locks); vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket; science fiction: portal (a rift that opens), hologram_display (a projector with a floating panel of light)."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -133,13 +168,19 @@ class StageProp(SceneParams):
     against: Literal["wall"] | None = None
     """wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it."""
     on: bool = False
-    """A tv, a lamp, a fireplace, a kettle or a phone: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams, a phone rings and shakes; the switch_on / switch_off actions change it)."""
+    """A tv, a lamp, a fireplace, a kettle, a phone, a portal or a hologram_display: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams, a phone rings and shakes, a portal is open, a display shows its panel; the switch_on / switch_off actions change it)."""
     time: str | None = None
     """A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning."""
     speed: float | None = Field(None, gt=0.0, le=MAX_CLOCK_SPEED)
     """A clock: how fast it runs, clock seconds per second (1 real time, the default; 60 a minute a second; up to 3600); with time or speed the clock runs."""
     fruit: bool = False
     """A tree: true hangs a few fruits on it (the drop_fruit action lets one fall)."""
+    view: Literal[PORTAL_VIEWS] | None = None  # type: ignore[valid-type]
+    """A portal: the place seen through it while it is open, instead of its swirling inside: coast (a sea coast at dusk, the sun setting), stars (a night sky) or meadow (green hills by day)."""
+    pattern: Literal[DISPLAY_PATTERNS] = "fractal"  # type: ignore[valid-type]
+    """A hologram_display: what its floating panel shows while on: fractal (curves of light turning and breathing), data (bars, a wave, a gauge), text (lines being written), equations (formulas being written, and formula butterflies fluttering up out of the panel) or timelines (a tree of branching timelines, a small panel at each tip in which two figures come together)."""
+    scan: ScannerReading | None = None
+    """A scanner: its readout while on, {level, to, at, wave} (at in seconds into the scene; to above 1 sends it off its scale, flashing red); default a steady low reading."""
 
     @model_validator(mode="before")
     @classmethod
@@ -175,6 +216,12 @@ class StageProp(SceneParams):
             parse_clock_time(self.time)
         if self.fruit and self.prop != "tree":
             raise ValueError(f"fruit is for a tree, not {self.prop or 'an svg prop'}")
+        if self.view is not None and self.prop != "portal":
+            raise ValueError(f"view is for a portal (the place seen through it), not {self.prop or 'an svg prop'}")
+        if "pattern" in self.model_fields_set and self.prop != "hologram_display":
+            raise ValueError(f"pattern is for a hologram_display, not {self.prop or 'an svg prop'}")
+        if self.scan is not None and self.prop != "scanner":
+            raise ValueError(f"scan is for a scanner, not {self.prop or 'an svg prop'}")
         return self
 
     def runs(self) -> bool:
@@ -539,7 +586,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims)."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -554,10 +601,16 @@ class IsoObjectParam(SceneParams):
     """Its second colour (a house's roof, a lamp's light, flower heads...)."""
     open: bool | None = None
     """A house: true starts its door open; flowers: false starts them in bud (the open / close actions change it later)."""
-    on: bool = False
-    """A lamp: true starts it lit; a house: its windows lit (switch_on / switch_off change it)."""
+    on: bool | None = None
+    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default) (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
+    height: float | None = Field(None, ge=2.0, le=30.0)
+    """A tower: how tall it is, in tiles (2-30; a character is 2 tiles tall); default 9."""
+    screen: bool = False
+    """A tower: a big info screen on its front whose lines of text crawl up."""
+    garden: bool = False
+    """A tower: glowing bands of algae farms up its sides, pulsing softly."""
 
     @model_validator(mode="before")
     @classmethod
@@ -571,17 +624,61 @@ class IsoObjectParam(SceneParams):
         if self.open is not None and self.object not in OPENING_KINDS:
             raise ValueError(f"open is for a house (its door) or flowers (in bloom or in bud), not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
-            raise ValueError(f"on is for a lamp or a house (its windows lit), not {_a(self.object)}")
+            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), not {_a(self.object)}")
+        for option in ("height", "screen", "garden"):
+            if getattr(self, option) and self.object != "tower":
+                raise ValueError(f"{option} is for a tower, not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
         """How it is at the start (DESIGN.md §89.10)."""
         start = default_state(self.object)
-        return ObjectState(self.shown, start.open if self.open is None else self.open, self.on)
+        return ObjectState(self.shown, start.open if self.open is None else self.open, start.on if self.on is None else self.on)
 
     def placing(self) -> ObjectPlacing:
         at = self.at if isinstance(self.at, str) else (self.at.column, self.at.row)
-        return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail)
+        features = tuple(name for name in ("screen", "garden") if getattr(self, name))
+        return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail,
+                             self.height, features)
+
+
+class IsoTrafficLane(SceneParams):
+    """A traffic lane over an iso place (DESIGN.md §102.3): hover pods gliding from one spot to
+    another, high over the ground."""
+
+    start: Identifier | IsoCellRef = Field(alias="from")
+    """Where the pods come from: a spot of the map, or {column, row}."""
+    to: Identifier | IsoCellRef
+    """Where they go: a spot, or {column, row}."""
+    height: float = Field(3.0, ge=0.5, le=30.0)
+    """How high over the ground they fly (tiles; a character is 2 tiles tall)."""
+    count: int = Field(3, ge=1, le=12)
+    """How many pods are on the lane at a time (or cross it, with at)."""
+    seconds: float = Field(6.0, ge=1.0, le=120.0)
+    """Seconds a pod takes along the lane."""
+    color: ThemeColor = "#5FE8FF"
+    """The pods' glowing rim, glow and light trail (a theme token or #hex)."""
+    size: float = Field(1.0, ge=0.4, le=3.0)
+    """The pods' size (1: a little shorter than a tile is wide)."""
+    at: float | None = Field(None, ge=0.0)
+    """Seconds into the scene when the first pod sets off to cross the lane once (the others follow, seconds / count apart), easing in and out; none: the pods loop along it all the time."""
+
+
+class IsoHazeParam(SceneParams):
+    """Shimmering air over a spot of an iso place (DESIGN.md §102.12)."""
+
+    at: Identifier | IsoCellRef
+    """Where it shimmers: a spot of the map, or {column, row} (its cell's middle)."""
+    width: float = Field(1.2, ge=0.3, le=6.0)
+    """How wide it is (tiles)."""
+    height: float = Field(2.6, ge=0.5, le=12.0)
+    """How high it rises (tiles; a character is 2 tiles tall)."""
+    color: ThemeColor = "#BFE8FF"
+    """Its faint glow and sparkles (a theme token or #hex)."""
+    strength: float = Field(0.6, ge=0.1, le=1.0)
+    """How strongly it shows (0.1 barely, 1 strongly)."""
+    start: float = Field(0.0, ge=0.0, alias="from")
+    """Seconds into the scene when it fades in (0: there from the start)."""
 
 
 class StageIso(SceneParams):
@@ -596,19 +693,83 @@ class StageIso(SceneParams):
     spots: dict[Annotated[str, Field(pattern=r"^[A-Za-z]$")], Identifier] = {}
     """Names for the map's letters, e.g. {w: well, d: door}; a letter without one is named by itself. Characters stand at spots (at: well); next to an object standing there."""
     objects: list[IsoObjectParam] = []
-    """Ready-made objects: {object, at, name, facing, size, color, detail, open, on, shown}, e.g. {object: house, at: home}."""
+    """Ready-made objects: {object, at, name, facing, size, color, detail, open, on, shown; a tower's height, screen, garden}, e.g. {object: house, at: home}."""
     colors: dict[Literal["grass", "earth", "path", "water", "stone", "floor", "tiles", "wall", "cut"], ThemeColor] = {}
     """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
     name_tags: bool = True
     """While a character speaks and is small on screen (a wide view), a tag with its name over its head shows who speaks (not with a speech bubble); false: none."""
+    wide: Literal["auto", "fill"] | Annotated[float, Field(ge=1.0, le=2.5)] = "auto"
+    """How the wide (establishing) view frames the place: auto (the whole room in a landscape frame; outdoors the place fills the frame, its tips cut); fill (a room fills the frame too: its spots, objects and characters kept, the walls' far corners may be cut); or a number from 1 to 2.5: that many times closer than the whole place (kept on the characters)."""
+    shutters: bool = False
+    """An indoor place: true starts with steel shutters down over its windows (the shutters action opens and closes them)."""
+    traffic: list[IsoTrafficLane] = []
+    """Outdoors: lanes of hover pods gliding over the place, {from, to, height, count, seconds, color, size, at} each (a city's traffic; with at, they cross once)."""
+    doors: Literal["swing", "slide"] = "swing"
+    """How the map's doors (+ in a room's back wall) look and open: swing (a wooden door swinging into the room, a creak) or slide (a steel door whose panels slide apart, a glowing seam and light over it, a hiss)."""
+    haze: list[IsoHazeParam] = []
+    """Shimmering air over spots of the place, {at, width, height, color, strength, from} each: a heat-haze ripple with faint sparkles (strange air round a door, over a vent)."""
+    wall_lights: ThemeColor | Annotated[list[ThemeColor], Field(min_length=1, max_length=2)] | None = None
+    """An indoor place: neon strip lights along the top of its standing walls, glowing whatever the light (a corridor or a club at night): a colour, or two (the left back wall's, the right one's)."""
+
+    def wall_light_colors(self) -> tuple[str, str] | None:
+        """The strip lights' colours (DESIGN.md §102.18): the left back wall's (a wall along a
+        column of the map) and the right one's (along a row); ``None`` without strips."""
+        if self.wall_lights is None:
+            return None
+        found = [self.wall_lights] if isinstance(self.wall_lights, str) else list(self.wall_lights)
+        return (found[0], found[-1])
 
     @model_validator(mode="after")
     def _parses(self) -> "StageIso":
         try:
-            self.parsed()
+            place = self.parsed()
         except VidgenError as exc:
             raise ValueError(str(exc)) from None
+        if self.traffic and self.place == "indoor":
+            raise ValueError("traffic flies over an outdoor place, not indoors")
+        if self.wall_lights is not None and self.place != "indoor":
+            raise ValueError("wall_lights run along a room's walls: give them to an indoor place")
+        spots = {spot.name for spot in place.spots}
+        for k, lane in enumerate(self.traffic):
+            for key, end in (("from", lane.start), ("to", lane.to)):
+                if isinstance(end, str) and end not in spots:
+                    raise ValueError(f"traffic[{k}].{key}: the place has no spot '{end}' (spots: {', '.join(sorted(spots)) or 'none'})")
+                if not isinstance(end, str) and (end.column > place.columns or end.row > place.rows):
+                    raise ValueError(f"traffic[{k}].{key}: row {end.row}, column {end.column} is outside the map ({place.rows} rows, {place.columns} columns)")
+            if lane.start == lane.to:
+                raise ValueError(f"traffic[{k}]: from and to are the same place")
+        for k, haze in enumerate(self.haze):
+            if isinstance(haze.at, str) and haze.at not in spots:
+                raise ValueError(f"haze[{k}].at: the place has no spot '{haze.at}' (spots: {', '.join(sorted(spots)) or 'none'})")
+            if not isinstance(haze.at, str) and (haze.at.column > place.columns or haze.at.row > place.rows):
+                raise ValueError(f"haze[{k}].at: row {haze.at.row}, column {haze.at.column} is outside the map ({place.rows} rows, {place.columns} columns)")
         return self
+
+    def haze_foot(self, haze: IsoHazeParam) -> tuple[float, float, float]:
+        """The world point (tile units) a haze rises from: its cell's middle on the floor
+        (DESIGN.md §102.12)."""
+        place = self.parsed()
+        if isinstance(haze.at, str):
+            spot = place.spot(haze.at)
+            column, row = spot.column, spot.row
+        else:
+            column, row = haze.at.column - 1, haze.at.row - 1
+        return (column + 0.5, row + 0.5, place.floor_z(column, row))
+
+    def lane_ends(self, lane: IsoTrafficLane) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+        """The world points (tile units) a traffic lane runs between: the middles of its cells,
+        ``height`` over the ground at its start (DESIGN.md §102.3)."""
+        place = self.parsed()
+
+        def cell(end: Any) -> tuple[int, int]:
+            if isinstance(end, str):
+                spot = place.spot(end)
+                return spot.column, spot.row
+            return end.column - 1, end.row - 1
+
+        (c0, r0), (c1, r1) = cell(lane.start), cell(lane.to)
+        z = place.floor_z(c0, r0) + lane.height
+        return (c0 + 0.5, r0 + 0.5, z), (c1 + 0.5, r1 + 0.5, z)
 
     def parsed(self) -> IsoPlace:
         """The world's :class:`~vidgen.world.iso.IsoPlace` with its objects (:class:`VidgenError`
@@ -655,7 +816,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(IsoStaging, NarratedScene):
+class Stage(IsoStaging, StoryStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -779,8 +940,8 @@ class Stage(IsoStaging, NarratedScene):
         """false: the characters do not breathe, sway or blink in this scene."""
         foley: bool | None = None
         """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols; on a level also landings, coins and stars picked up, a key unlocking a door, a blocker stepping aside), and the ambience: false for none in this scene; default: the video's foley (on)."""
-        ambience: bool | Literal["auto", "birdsong", "city", "room_tone", "crickets"] | list[Literal["birdsong", "city", "room_tone", "crickets"]] | None = None
-        """A sound bed under the whole scene while foley is on: birdsong, city (street sounds), room_tone, crickets, or a list of them; auto (or true): chosen from the set: room_tone in a room (an indoor iso place too), birdsong outdoors while the light is day or morning and it does not rain, on an iso place outdoors crickets while the light is sunset or night; false: none; default: the video's ambience (auto). Rain and a burning fire play their own beds whatever this says."""
+        ambience: bool | Literal["auto", "birdsong", "city", "room_tone", "crickets", "hum"] | list[Literal["birdsong", "city", "room_tone", "crickets", "hum"]] | None = None
+        """A sound bed under the whole scene while foley is on: birdsong, city (street sounds), room_tone, crickets, hum (an electronic hum: a lab, a ship), or a list of them; auto (or true): chosen from the set: room_tone in a room (an indoor iso place too), birdsong outdoors while the light is day or morning and it does not rain, on an iso place outdoors crickets while the light is sunset or night; false: none; default: the video's ambience (auto). Rain and a burning fire play their own beds whatever this says."""
         auto_direct: AutoDirectSetting | None = None
         """Automatic directing in this scene: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up (true, false or {looks, reactions, gestures, closeups, effects}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
         cartoon_motion: MotionSetting | None = None
@@ -799,8 +960,12 @@ class Stage(IsoStaging, NarratedScene):
         """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against, on, time, speed, fruit}."""
         particles: list[StageParticles] = []
         """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles, lightning, settle, settled}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; rain with lightning: true flashes lightning with thunder at seeded times; snow with settle: true lands on the ground and the props, where a white layer grows; for one beat use the particles action."""
+        flashback: bool | FlashbackSetting | None = None
+        """A memory's look: true or {tint, strength, saturation, vignette, color}: the set and the characters in faded, warm colours (like an old photograph, over its light) and a soft dark frame at the edges of the view; bubbles, tags and captions stay clear."""
         light: LightSetting = "day"
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene; default day (on an iso place where it rains from the start: an overcast tint)."""
+        fill_light: float = Field(0.0, ge=0.0, le=1.0)
+        """A soft light on the characters only, so faces stay readable in a dark light (night, an alarm, a dim tint): 0 none (graded like the set), 1 the characters as drawn whatever the light; 0.3-0.5 keeps the mood. A lamp's light adds to it."""
         shadows: bool = True
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
         wind: WindSetting = 0.0
@@ -1627,7 +1792,7 @@ class Stage(IsoStaging, NarratedScene):
             self._tops: dict[str, TopLine] | None = {}
             for name in sorted(fixed):
                 prop = self.props[name]
-                if prop.kind in (*FLAT_PROPS, *WATER_VEHICLES, *AIR_VEHICLES, "umbrella") or prop.held_by is not None:
+                if prop.kind in (*FLAT_PROPS, *FLOATING_IN_PLACE, *WATER_VEHICLES, *AIR_VEHICLES, "umbrella") or prop.held_by is not None:
                     continue
                 line = prop_top_line(prop)
                 if line is not None:
@@ -1759,6 +1924,7 @@ class Stage(IsoStaging, NarratedScene):
         fires = [live for live in getattr(self, "living", {}).values() if live.kind == "fireplace"] if self._foley_on() else []
         beds += [{"bed": "fire", "start": round(a, 6), "end": round(b, 6)} for live in fires for a, b in on_spans(live.on, live.switches, end)]
         beds += [{"bed": bed, "start": round(a, 6), "end": round(b, 6)} for bed, a, b in self.set_beds([s for s in spans if s[1] > s[0]], end)]
+        beds += self.alarm_beds(end)   # the siren while an alarm runs (§100.7)
         if beds:
             data["ambience"] = beds
         return data
@@ -1972,8 +2138,13 @@ class Stage(IsoStaging, NarratedScene):
         if p.iso is not None:   # a lamp's light falls on who stands near it (§89.13)
             self.iso_lamplight()
         if self.drawing.shading == "soft":   # the characters' and props' fills (DESIGN.md §79)
-            mark_shaded(*(mob for _, mob in on_stage))
+            mark_shaded(*(mob for _, mob in on_stage if not (is_hologram(mob) or is_echo(mob))))
+        for figure in self.cast.values():   # a hologram or an echo glows the same in any light (DESIGN.md §100.3, §102.6)
+            if is_hologram(figure) or is_echo(figure):
+                unmark_lit(figure)
+        self._fill_lights()   # faces readable in the dark, visitors shining (§100.15)
         self._start_living(living)
+        self._start_story()   # flickers, iridescence, afterimages, materialising, a lab's lights (§100.9)
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
         backdrop += self._level_story()   # coins and stars float in front of the tiles, not graded by the light
@@ -2047,6 +2218,7 @@ class Stage(IsoStaging, NarratedScene):
         self.add(*self.particles)
         if self.light is not None:
             self.light.on_change(self._show_light)
+        in_front += self._flashback_vignette()   # over the set and the characters (§100.12)
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
         self._ring_sounds()
@@ -2083,13 +2255,13 @@ class Stage(IsoStaging, NarratedScene):
         """The light at the start (``light``) and, when it grades anything or a ``light`` action
         changes it, the :class:`StageLight` that grades the set as the camera draws it."""
         #: the light from the start, and whether any light of the scene has stars
-        self.base_light = resolve_light(self.params.light, self.theme)
+        self.base_light = self.flashback_look(resolve_light(self.params.light, self.theme))   # a memory's look over it (§100.12)
         #: (scene time, light preset or ``None`` for a tint) from the start: where the light
         #: counts as changed for the ambience (half-way through each change, DESIGN.md §69.62)
         self.light_marks: list[tuple[float, str | None]] = [(0.0, self.params.light if isinstance(self.params.light, str) else None)]
         changes = [resolve_light(use.setting(), self.theme) for use in self.action_uses("light")]
         self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
-        flashes = self._lightning_used()
+        flashes = self._lightning_used() or bool(self.action_uses("alarm"))
         #: the stage's light (``None``: the set as drawn, nothing changes it)
         #: (a draft's is flat: nothing graded, no flashes, the changes at their times, §74)
         self.light: StageLight | None = (
@@ -2122,7 +2294,7 @@ class Stage(IsoStaging, NarratedScene):
         if move_sun and isinstance(setting, str):
             for body in self.sky_bodies:
                 body.moves.append(PathMove(float(start), max(float(seconds), 0.0), place_for(body.kind, setting)))
-        self._lit().change(resolve_light(setting, self.theme), start, seconds)
+        self._lit().change(self.flashback_look(resolve_light(setting, self.theme)), start, seconds)
         self._watch_light()
 
     def _lit(self) -> StageLight:
@@ -2441,6 +2613,7 @@ class Stage(IsoStaging, NarratedScene):
             self.living[name] = LivingProp(
                 self.props[name], start=prop.clock_start() if prop.runs() else None, speed=prop.speed or 1.0, on=prop.on,
                 seed=motion_seed(self.spec.id, name), movable=name in movable, wind=wind if prop.prop in ("fireplace", "kettle") else None,
+                pattern=prop.pattern, scan=prop.scan.meter() if prop.scan is not None else None,
             )
         #: the scene updater, kept: Manim removes an updater by identity
         self._living_updater = self._living_step
@@ -2458,7 +2631,7 @@ class Stage(IsoStaging, NarratedScene):
         fog = getattr(self, "fog", None)
         return [
             *getattr(self, "living", {}).values(), *getattr(self, "flocks", []), *getattr(self, "snow_layers", []), *([fog] if fog is not None else []),
-            *getattr(self, "rainbows", []),
+            *getattr(self, "rainbows", []), *getattr(self, "story_things", []),
         ]
 
     def _living_step(self, dt: float) -> None:
@@ -2478,7 +2651,10 @@ class Stage(IsoStaging, NarratedScene):
             fog.update(now)
         for rainbow in self.rainbows:
             rainbow.update(now)
-        settled = all(layer.done(now) for layer in [*self.snow_layers, *self.rainbows]) and (fog is None or not fog.moves)
+        things = getattr(self, "story_things", [])   # shutters, a lab's lights (§100.7, §100.11)
+        for thing in things:
+            thing.update_to(now)
+        settled = all(layer.done(now) for layer in [*self.snow_layers, *self.rainbows, *things]) and (fog is None or not fog.moves)
         if not self.living and all(flock.done(now) for flock in self.flocks) and settled:
             self.remove_updater(self._living_updater)
 
@@ -2494,10 +2670,16 @@ class Stage(IsoStaging, NarratedScene):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
         if not names or not self._foley_on():
             return
-        if any(self.living[name].kind not in ("fireplace", *(("phone",) if on else ())) for name in names):
+        if any(self.living[name].kind not in ("fireplace", "portal", "hologram_display", *(("phone",) if on else ())) for name in names):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
+        if any(self.living[name].kind == "hologram_display" for name in names):   # it hums up and chimes, or hums down (§100.10)
+            for sound, params in (DISPLAY_ON_SOUNDS if on else DISPLAY_OFF_SOUNDS):
+                self.sfx(sound, max(float(time), 0.0) + params.get("delay", 0.0), **{k: v for k, v in params.items() if k != "delay"})
         if on and any(self.living[name].kind == "fireplace" for name in names):
             self.sfx("burner", max(float(time), 0.0), gain=FIRE_LIGHT_GAIN, duration=FIRE_LIGHT_SECONDS)
+        if any(self.living[name].kind == "portal" for name in names):   # it tears open or seals (§100.4)
+            for sound, params in (PORTAL_OPEN_SOUNDS if on else PORTAL_SEAL_SOUNDS):
+                self.sfx(sound, max(float(time), 0.0), **params)
 
     def knock_on(self, patterns: list[str], time: float) -> None:
         """Someone knocks on the doors matching ``patterns`` at scene ``time`` (the ``knock``
@@ -2667,7 +2849,7 @@ class Stage(IsoStaging, NarratedScene):
         for place_at in placements:
             name = place_at.name
             if place_at.kind == "prop":
-                if lifts[name] > 0 or name in doors or self.props[name].kind in (*FLAT_PROPS, *WATER_VEHICLES):
+                if lifts[name] > 0 or name in doors or self.props[name].kind in (*FLAT_PROPS, *FLOATING_IN_PLACE, *WATER_VEHICLES):
                     continue  # hangs in the sky or on a wall, is part of the room's wall, lies flat or floats
                 prop = self.props[name]
                 widths = {shape: prop.shape_width(shape) * PROP_SHADOW_WIDTH for shape in prop.shapes}
@@ -2738,7 +2920,7 @@ class Stage(IsoStaging, NarratedScene):
         return draw_prop(
             prop.prop, height=height, theme=self.theme, name=name, main=prop.color, detail=prop.detail,
             facing=prop.facing, character_height=height / prop.height_factor(), shape="open" if prop.open else None,
-            living=living, fruit=prop.fruit,
+            living=living, fruit=prop.fruit, view=prop.view,
         )
 
     def _backdrop(self, layers: list[Mobject], heads: float | None = None) -> list[Mobject]:

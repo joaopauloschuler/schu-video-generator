@@ -1,6 +1,6 @@
 # Cookbook: orbital mechanics videos
 
-Craft notes for videos about orbits, spaceflight and the Solar System with vidgen's
+Craft notes for videos about orbits, spaceflight and the Solar System with schu-video-generator's
 [`orbit`](CONFIG.md#orbit) scene type (DESIGN §98), worked numbers in a
 [`calculation`](CONFIG.md#calculation) and Kepler's third law in a [`plot`](CONFIG.md#plot). The
 scene computes everything it draws — positions in correct timing, speeds, Δv, transfer times,

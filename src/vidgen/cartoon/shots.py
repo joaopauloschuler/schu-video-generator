@@ -41,6 +41,8 @@ LOOK_ROOM = 0.1
 SUBJECT_AT = 0.66
 #: Share of the view kept free on each side of the figures of a two-shot.
 TWO_SHOT_PADDING = 0.1
+#: Share of the view kept free at each side of a close-up or medium shot of several characters.
+GROUP_PADDING = 0.08
 #: Half a generated figure's width in its heights (also the planner's predicted stills, DESIGN.md §69.24).
 FIGURE_HALF_WIDTH = 0.21
 #: The tightest framing (the layers are sized for zooms up to :data:`MAX_ZOOM`).
@@ -154,6 +156,8 @@ def frame_shot(
         room = 1 - 2 * TWO_SHOT_PADDING
         scale = min(room * frame_width / max(x1 - x0, 1e-6), room * frame_height / max(y1 - y0, 1e-6))
         return _within(bounds, (x0 + x1) / 2, (y0 + y1) / 2, _clamp(scale, 1.0, MAX_SHOT_SCALE), frame_width, frame_height)
+    if kind in ("closeup", "medium") and len(subjects) > 1:
+        return _within(bounds, *_group(subjects, kind, frame_width, frame_height), frame_width, frame_height)
     subject = subjects[0]
     if kind == "over_shoulder" and near is not None:
         scale, _, _ = _one(subject, "over_shoulder", frame_width, frame_height)
@@ -169,6 +173,24 @@ def frame_shot(
     framing = "medium" if kind == "over_shoulder" else kind
     scale, y, view_width = _one(subject, framing, frame_width, frame_height)
     return _within(bounds, subject.x + _sign(subject.facing) * LOOK_ROOM * view_width, y, scale, frame_width, frame_height)
+
+
+def _group(subjects: Sequence[ShotFigure], kind: str, frame_width: float, frame_height: float) -> tuple[float, float, float]:
+    """``(centre x, centre y, scale)`` of a ``closeup`` or ``medium`` of several characters
+    (DESIGN.md §100.6): each one's :data:`SHOT_SPANS` (its head and shoulders, or hips up) and
+    its figure's width, all in the view with :data:`GROUP_PADDING` at the sides, no tighter
+    than :data:`SHOT_MIN_WIDTHS` of the tallest; the highest head keeps its room above it (the
+    view's top is there), centred across."""
+    below, above = SHOT_SPANS[kind]
+    tops = [s.head_top + above * s.height for s in subjects]
+    bottoms = [s.head_top - below * s.height for s in subjects]
+    x0 = min(s.x - FIGURE_HALF_WIDTH * s.height for s in subjects)
+    x1 = max(s.x + FIGURE_HALF_WIDTH * s.height for s in subjects)
+    tallest = max(s.height for s in subjects)
+    width = max((x1 - x0) / (1 - 2 * GROUP_PADDING), SHOT_MIN_WIDTHS[kind] * tallest)
+    height = max(tops) - min(bottoms)
+    scale = _clamp(min(frame_height / max(height, 1e-6), frame_width / max(width, 1e-6)), 1.0, MAX_SHOT_SCALE)
+    return (x0 + x1) / 2, max(tops) - frame_height / scale / 2, scale
 
 
 def _within(bounds: Bounds, x: float, y: float, scale: float, frame_width: float, frame_height: float) -> ShotView:
@@ -208,6 +230,8 @@ def shot_figures(
             looked = looked_at.get(subject.name)
             near = looked if looked in present and looked != subject.name else nearest
         return Shot("over_shoulder", (subject.name,), near)
+    if kind in ("closeup", "medium") and len(chosen) > 1:   # several framed together (§100.6)
+        return Shot(kind, tuple(chosen[:3]))
     return Shot(kind, (subject.name,))
 
 
@@ -261,6 +285,7 @@ def portrait_shot(view: ShotView, shot: Shot, present: Mapping[str, ShotFigure],
 
 
 __all__ = [
+    "GROUP_PADDING",
     "LOOK_ROOM",
     "PORTRAIT_EDGE",
     "PORTRAIT_ROOM",

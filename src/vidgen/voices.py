@@ -3,7 +3,8 @@
 A project's base ``voice:`` narrates every beat unless a scene or a beat names another voice
 from ``voices:``. A named voice is the base voice with the keys it gives changed (``settings``
 merge value by value); its ``label`` and ``color`` name the speaker in subtitles and captions
-and are never inherited, nor is its ``emotion`` (that speaker's default feeling, DESIGN.md §72). The name ``default`` means the base voice (e.g. a beat back to the
+and are never inherited, nor are its ``emotion`` (that speaker's default feeling, DESIGN.md §72)
+and its ``effect`` (§100.2). The name ``default`` means the base voice (e.g. a beat back to the
 narrator inside a scene of another voice).
 
 The audio of a beat is hashed with its effective voice (``provider.cache_key`` of that voice),
@@ -32,7 +33,7 @@ DISPLAY_FIELDS = frozenset({"label", "color"})
 #: Fields of a voice that say where it runs, not what it sounds like (not compared for audio).
 RUNTIME_FIELDS = frozenset({"device"})
 #: Fields of a voice that belong to that speaker: a named voice does not inherit them.
-SPEAKER_FIELDS = frozenset({"emotion"})
+SPEAKER_FIELDS = frozenset({"emotion", "effect"})
 #: Fields of a voice that name other voices (``dub``, DESIGN.md §80): applied while resolving,
 #: never part of the resolved voice.
 DUB_FIELDS = frozenset({"dub"})
@@ -292,9 +293,12 @@ def voice_color_problems(config: VideoConfig, theme: Theme) -> list[Problem]:
 
 def voice_warnings(config: VideoConfig, origins: Mapping[str, Origin] | None = None) -> list[str]:
     """Named voices no scene or beat uses (``vidgen validate`` warns). A voice written in an
-    included file (``origins``, §69.35) is not reported: a shared cast's episode may leave some out."""
+    included file (``origins``, §69.35) is not reported: a shared cast's episode may leave some out;
+    nor is any in a cut (``cut:``, §101), which leaves out the lines of some on purpose."""
     from vidgen.includes import origin_of
 
+    if config.cut is not None:
+        return []
     used = set(beat_voice_names(config).values())
     return [
         f"voices: '{name}' is not used by any scene or beat"

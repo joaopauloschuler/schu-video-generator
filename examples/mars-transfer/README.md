@@ -23,7 +23,7 @@ vidgen render examples/mars-transfer [--variant short]
 | `sky` | `orbit` (date) | the Earth and Mars on 28 October 2026 from JPL's approximate elements: Mars 64° ahead, the next window around early December 2026, the opposition of 19 February 2027, windows every 780 days (about 26 months), the one after in early 2029 |
 | `recap` | `bullets` | every path an orbit; Hohmann 2.94 + 2.65 km/s, 259 days; leave when Mars leads by 44°; a window every 780 days |
 
-**Numbers.** All computed by vidgen (`vidgen.orbits`; DESIGN §98): the orbit radii are the
+**Numbers.** All computed by schu-video-generator (`vidgen.orbits`; DESIGN §98): the orbit radii are the
 semi-major axes of JPL's Table 1 (Earth–Moon barycentre 1.00000261 AU, Mars 1.52371034 AU) taken as
 circles, GM☉ the IAU 2015 nominal value. Hohmann: Δv₁ = 2.945 km/s, Δv₂ = 2.649 km/s (relative to
 the Sun), 258.9 days, Mars 44.3° ahead at departure, synodic period 779.9 days (25.6 months). From

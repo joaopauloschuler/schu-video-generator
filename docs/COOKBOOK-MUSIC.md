@@ -22,7 +22,7 @@ Contents: [room for the voice](#1-room-for-the-voice) ·
 
 ## 1. Room for the voice
 
-The voice lives between **300 Hz and 3 kHz**; vidgen plays music at −28 LUFS and ducks it 12 dB
+The voice lives between **300 Hz and 3 kHz**; schu-video-generator plays music at −28 LUFS and ducks it 12 dB
 while someone speaks, and still a busy part in that band blurs the words. The check measures
 the share of the music in that band (the beds: 7–63 %, limit 72 %), the loudest bar there (limit
 −26 dB) and, in its demo under a narration sample, how far the voice stands over the music

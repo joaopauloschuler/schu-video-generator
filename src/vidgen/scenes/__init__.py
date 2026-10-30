@@ -11,15 +11,16 @@ put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_i
 ``shot_action``: shot;
 ``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``math_axes``: trace; ``switch_action``:
 switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: lightning,
-rainbow; ``knock_action``: knock; ``hide_action``: hide; ``iso_actions``: build, raise, lower, explode, collapse, flow,
+rainbow; ``knock_action``: knock; ``hide_action``: hide; ``story_actions``: alarm, shutters, materialise,
+dematerialise, hold_hands, let_go_hands, kiss; ``iso_actions``: build, raise, lower, explode, collapse, flow,
 focus, relabel; ``cell_actions``: zoom_to; ``molecule_actions``: set_state, transport, diffuse, osmosis,
 action_potential; ``gene_actions``: transcribe, cap, splice, polyadenylate, export, translate, target_er,
 glycosylate, fold, to_golgi, secrete; ``pathway_actions``: signal, inhibit, knockout, drug, amplify; ``cycle_actions``: advance, checkpoint; ``cross_actions``: form_gametes, fill, count, ratio, chi_square; ``pedigree_actions``: deduce, analyse, risk; ``linkage_actions``: cross_over, measure;
 ``karyotype_actions``: rearrange; ``plot_actions``: fit, annotate, grow; ``calculation_actions``: substitute, compute,
 convert; ``orbit_actions``: sweep, launch, burn, flyby, pause, coast; ``standard_model_actions``: antiparticles, couplings; ``feynman_actions``: travel, vertex_rule, swap_channel; ``kinematics_actions``: boost; ``detector_actions``: switch_view; ``host_actions``: host_point, host_look, host_react, host_move,
 host_enter, host_exit) and the
-built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
-chapter_indicator; ``captions``: captions).
+built-in overlays (``overlays``: lower_third, hook, watermark; ``progress``: progress_bar,
+chapter_indicator; ``captions``: captions; ``hud``: hud).
 """
 
 from vidgen.scenes import (  # noqa: F401
@@ -64,6 +65,7 @@ from vidgen.scenes import (  # noqa: F401
     hide_action,
     histogram,
     host_actions,
+    hud,
     icon_grid,
     image,
     karyotype,
@@ -115,6 +117,7 @@ from vidgen.scenes import (  # noqa: F401
     standard_model_actions,
     stat,
     storm_action,
+    story_actions,
     switch_action,
     table,
     terminal,

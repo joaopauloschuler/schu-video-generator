@@ -270,7 +270,7 @@ def test_iso_props_and_object_states() -> None:
         ({"props": [{"prop": "gift", "at": "left"}]}, "props\\[0\\].at: on an iso place a small thing stands at a spot"),
         ({"props": [{"prop": "gift", "at": "table", "depth": 0.3}]}, "remove depth"),
         ({"props": [{"prop": "gift", "name": "well", "at": "table"}]}, "'well' is also the name of an object"),
-        ({"objects": [{"object": "well", "at": "well", "on": True}]}, "on is for a lamp or a house"),
+        ({"objects": [{"object": "well", "at": "well", "on": True}]}, "on is for a lamp, a house or a tower"),
         ({"objects": [{"object": "bench", "at": "well", "open": True}]}, "open is for a house"),
     ],
 )

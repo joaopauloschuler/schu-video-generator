@@ -2,7 +2,7 @@
 
 Helper modules, example custom scenes and starter configs that go with the
 [video cookbook](../../docs/COOKBOOK.md). Copy the files you need into a project. Nothing here is
-imported by vidgen itself.
+imported by schu-video-generator itself.
 
 ## Files
 
@@ -32,7 +32,7 @@ vidgen validate
 vidgen storyboard
 ```
 
-- **Imports.** vidgen imports every `*.py` file in `extensions/` as one package, so the example files
+- **Imports.** schu-video-generator imports every `*.py` file in `extensions/` as one package, so the example files
   import each other with relative imports (`from .fx import ...`, `from .science_helpers import
   ...`, `from .vertical import ...`). Keep the helper next to the scenes that need it (see the
   "needs" column). Renaming a helper means updating those imports.

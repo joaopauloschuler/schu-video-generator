@@ -33,9 +33,9 @@ from vidgen.studio.theory import note_name
 #: The narration sample the demo plays when no ``--narration`` is given: two original lines
 #: spoken by Kokoro (``af_heart``, Apache-2.0), 20 s with the music alone at the end.
 NARRATION_SAMPLE = Path(__file__).parent / "data" / "narration_sample.mp3"
-#: The level vidgen's narration sits at (integrated, as stereo; DESIGN §48: the kphi3 MP3s).
+#: The level schu-video-generator's narration sits at (integrated, as stereo; DESIGN §48: the kphi3 MP3s).
 NARRATION_LUFS = -21.5
-#: vidgen's default ducking (``DuckConfig()``: depth dB, attack s, release s, hold s); a test
+#: schu-video-generator's default ducking (``DuckConfig()``: depth dB, attack s, release s, hold s); a test
 #: keeps them equal.
 DUCK = (12.0, 0.4, 1.0, 1.5)
 #: The demo's final level, as a video's mix (``audio.target_lufs``, ``audio.true_peak``).
@@ -387,8 +387,8 @@ def check_music_score(
 
 
 def check_music_audio(samples: np.ndarray, name: str, loop: bool = True, hop: int | None = None) -> MusicCheck:
-    """Check an audio file's ``samples`` (any level; measured as vidgen plays it, at -28 LUFS).
-    ``loop``: check the seam too (vidgen loops a music file that is shorter than its cue)."""
+    """Check an audio file's ``samples`` (any level; measured as schu-video-generator plays it, at -28 LUFS).
+    ``loop``: check the seam too (schu-video-generator loops a music file that is shorter than its cue)."""
     import time
 
     began = time.perf_counter()
@@ -446,10 +446,10 @@ def _analyse(
             row["brighter_db"] = round(_band_level(frames, "bright", mid, z) - _band_level(frames, "bright", a, mid), 2)
         section_rows.append(row)
     if original is None:
-        findings.append(Finding("loudness", "ok", f"{lufs:.1f} LUFS integrated (vidgen plays music at -28 LUFS at volume 0)"))
+        findings.append(Finding("loudness", "ok", f"{lufs:.1f} LUFS integrated (schu-video-generator plays music at -28 LUFS at volume 0)"))
     else:
         file_lufs = integrated_loudness(original)
-        findings.append(Finding("loudness", "ok", f"the file is {file_lufs:.1f} LUFS; vidgen plays it at -28 LUFS (volume 0), as measured here"))
+        findings.append(Finding("loudness", "ok", f"the file is {file_lufs:.1f} LUFS; schu-video-generator plays it at -28 LUFS (volume 0), as measured here"))
     if steady > LIMITS["steadiness_db"]:
         findings.append(Finding("steadiness", "fix", f"the 3 s loudness swings {steady:.1f} dB (10th to 95th percentile; limit {LIMITS['steadiness_db']:g}): "
                                 "under a voice the quiet parts vanish and the loud ones push", _steady_fixes(score, section_rows)))
@@ -465,7 +465,7 @@ def _analyse(
         facts["clipped_runs"] = runs
         if runs > LIMITS["clipped_runs"]:
             findings.append(Finding("clipping", "fix", f"{runs} run{'s' if runs > 1 else ''} of samples at full scale: the file was clipped when it was made "
-                                    "(vidgen turns it down to -28 LUFS but cannot undo clipping)", ["export it again with 1-2 dB of headroom"]))
+                                    "(schu-video-generator turns it down to -28 LUFS but cannot undo clipping)", ["export it again with 1-2 dB of headroom"]))
         else:
             findings.append(Finding("clipping", "ok", "no clipping"))
 
@@ -876,7 +876,7 @@ def _seam_fixes(stems: _Stems | None) -> list[str]:
 
 def _steady_fixes(score: MusicScore | None, rows: list[dict[str, Any]]) -> list[str]:
     if score is None or len(rows) < 2:
-        return ["a gentler arrangement or a compressor; vidgen does not level music within a piece"]
+        return ["a gentler arrangement or a compressor; schu-video-generator does not level music within a piece"]
     loud = max(rows, key=lambda r: r["lufs"])
     quiet = [r for r in rows if loud["lufs"] - r["lufs"] >= 6] or [min(rows, key=lambda r: r["lufs"])]
     names = [r["name"] for r in quiet]
@@ -985,7 +985,7 @@ def _build_fixes(score: MusicScore | None, stems: _Stems | None, name: str, span
 
 def duck_gain_db(spans: Sequence[tuple[float, float]], frames: int, depth: float = DUCK[0], attack: float = DUCK[1], release: float = DUCK[2],
                  hold: float = DUCK[3]) -> np.ndarray:
-    """vidgen's ducking curve (``vidgen.mix.duck_curve``) in dB per 10 ms frame: ``-depth``
+    """schu-video-generator's ducking curve (``vidgen.mix.duck_curve``) in dB per 10 ms frame: ``-depth``
     while the voice speaks or pauses for less than ``hold``, raised-cosine ramps of ``attack``
     seconds before and ``release`` after."""
     if depth == 0 or not spans:
@@ -1023,7 +1023,7 @@ def speech_spans(voice: np.ndarray) -> list[tuple[float, float]]:
 
 
 def load_narration(path: Path | None) -> tuple[np.ndarray, str]:
-    """A narration track (stereo float64) and its name: ``path`` as it is (vidgen plays narration at
+    """A narration track (stereo float64) and its name: ``path`` as it is (schu-video-generator plays narration at
     its own level) or the shipped sample."""
     source = path or NARRATION_SAMPLE
     voice = np.asarray(decode_audio(source), dtype=np.float64)
@@ -1032,7 +1032,7 @@ def load_narration(path: Path | None) -> tuple[np.ndarray, str]:
 
 
 def narration_demo(music: np.ndarray, voice: np.ndarray, tail: float = 0.0) -> tuple[np.ndarray, dict[str, float]]:
-    """The music (looped from its start, at volume 0: -28 LUFS) under ``voice`` with vidgen's
+    """The music (looped from its start, at volume 0: -28 LUFS) under ``voice`` with schu-video-generator's
     default ducking, a 1.5 s fade-in and a 2 s fade-out, then set to the video's level (-16
     LUFS, true peak at most -1.5 dBTP). Returns the stereo mix and what was measured while the
     voice speaks: its loudness, the music's, and how far the voice's 300 Hz-3 kHz stands over
@@ -1081,7 +1081,7 @@ def add_demo(report: MusicCheck, voice: np.ndarray, narration: str, tail: float 
 def demo_finding(facts: dict[str, Any], narration: str) -> Finding:
     """What the demo measured, in words."""
     clear = facts["voice_clear_db"]
-    text = (f"under {narration} with vidgen's default ducking ({DUCK[0]:g} dB): voice {facts['voice_lufs']} LUFS, music under it "
+    text = (f"under {narration} with schu-video-generator's default ducking ({DUCK[0]:g} dB): voice {facts['voice_lufs']} LUFS, music under it "
             f"{facts['music_under_voice_lufs']} LUFS; the voice's range stands {clear:.1f} dB over the music's")
     if clear < LIMITS["voice_clear_db"]:
         return Finding("narration", "fix", text + f" (it should be at least {LIMITS['voice_clear_db']:g} dB: words will be hard to follow)",

@@ -30,6 +30,10 @@ ISO_REVEAL_SECONDS = 0.8
 #: the lamp's middle (tile units) and fades out by the second (its pool on the ground has a
 #: radius of 1.1; the lantern stands high, so it lights a body a little beyond), DESIGN.md §89.13.
 ISO_LAMP_REACH = (1.0, 2.2)
+#: A lab object's blinking lights (DESIGN.md §100.11): the second colour (an amber besides the
+#: object's own) and a light's radius (tile widths).
+LAB_AMBER = "#FFB547"
+LAB_LIGHT_SIZE = 0.035
 
 
 @dataclass
@@ -301,7 +305,9 @@ class IsoStaging:
             x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
             center = view_center_within(self.camera_bounds(), (x, center[1]), width, width * self.frame_height / self.frame_width)
         self.camera.frame.scale(width / self.camera.frame.width).move_to([*center, 0.0])   # the wide view (§89.13)
-        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()})
+        lights = p.iso.wall_light_colors()
+        strips = None if lights is None else (resolve_color(lights[0], self.theme), resolve_color(lights[1], self.theme))
+        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors, strips=strips)
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
                                          for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
                  for item in place.objects}
@@ -343,7 +349,83 @@ class IsoStaging:
             if picture is not None:
                 shown.append(holder)
         self.add_camera_listener(self._iso_show_view)
-        return shown
+        return shown + self._iso_story_overlays(place, looks)
+
+    def _iso_story_overlays(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
+        """The steel shutters over a room's windows when the place starts with them down or a
+        ``shutters`` action moves them (DESIGN.md §100.7), and the blinking lights of its lab
+        objects (§100.11), drawn over the place's pictures; each is one of :attr:`story_things`."""
+        p = self.params
+        #: things over the place that move by themselves (shutters, lights)
+        self.story_things: list[Any] = []
+        #: the room's shutters (``None``: none)
+        self.iso_shutters: IsoShutters | None = None
+        faces = window_faces(place)
+        if faces and (p.iso.shutters or self.action_uses("shutters")):
+            windows = [[self.iso_view.point(*corner) for corner in face] for face in faces]
+            self.iso_shutters = IsoShutters(windows, closed=p.iso.shutters, stroke=1.5)
+            self.story_things.append(self.iso_shutters)
+        lights: list[tuple[float, float]] = []
+        colors: list[str] = []
+        boxes: list[Box3] = []
+        for item in place.objects:
+            if item.kind in LIT_OBJECTS:
+                for k, point in enumerate(object_lights(item, place.floor_z(item.column, item.row))):
+                    lights.append(self.iso_view.point(*point))
+                    boxes.append(object_box(item, place.floor_z(item.column, item.row)))
+                    if item.kind == "tower":
+                        colors.append(TOWER_ANTENNA_LIGHT)
+                    else:
+                        colors.append((looks[item.name].detail, LAB_AMBER, looks[item.name].detail)[k % 3] if item.kind == "server_rack" else LAB_AMBER)
+        if lights and not self.is_draft:
+            self.story_things.append(IsoBlinkers(lights, colors, LAB_LIGHT_SIZE * self.iso_view.unit, seed=motion_seed(self.spec.id, "lab_lights"),
+                                                 hidden=lambda k: self._iso_light_hidden(lights[k], boxes[k])))
+        if not self.is_draft:
+            self.story_things += self._iso_city(place, looks)
+        if p.iso.haze and not self.is_draft:   # shimmering air over spots (§102.12)
+            spots = []
+            for haze in p.iso.haze:
+                x, y, z = p.iso.haze_foot(haze)
+                spots.append(HazeSpot(self.iso_view.point(x, y, z), self.iso_view.point(x, y, z + haze.height), haze.width * self.iso_view.unit,
+                                      resolve_color(haze.color, self.theme), haze.strength, haze.start))
+            self.story_things.append(IsoHaze(spots, seed=motion_seed(self.spec.id, "haze")))
+        return list(self.story_things)
+
+    def _iso_city(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
+        """A city's moving parts over the place (DESIGN.md §102.2, §102.3): the crawling lines of
+        its towers' info screens (those no other object hides) and the hover pods of its
+        ``traffic`` lanes."""
+        p = self.params
+        things: list[Mobject] = []
+        screens, colors, seeds = [], [], []
+        boxes = [(item, object_box(item, place.floor_z(item.column, item.row))) for item in place.objects]
+        for item, box in boxes:
+            corners = tower_screen(item, place.floor_z(item.column, item.row))
+            if corners is None:
+                continue
+            picture = [iso_point(*corner) for corner in corners]
+            left, right = min(u for u, _ in picture), max(u for u, _ in picture)
+            top, bottom = min(v for _, v in picture), max(v for _, v in picture)
+
+            def covers(other: Any, other_box: Any) -> bool:
+                l, t, r, b = other_box.picture_bounds()
+                return in_front(other_box, box) is True and l < right and r > left and t < bottom and b > top
+
+            if any(other is not item and covers(other, other_box) for other, other_box in boxes):
+                continue   # another building stands in front of it: its picture shows the screen as it is
+            screens.append([self.iso_view.point(*corner) for corner in corners])
+            colors.append(screen_color(looks[item.name].detail))
+            seeds.append(screen_seed(item.name))
+        if screens:
+            things.append(IsoScreens(screens, colors, seeds=seeds))
+        lanes = []
+        for lane in p.iso.traffic:
+            start, end = p.iso.lane_ends(lane)
+            lanes.append(PodLane(self.iso_view.point(*start), self.iso_view.point(*end), lane.seconds, lane.count,
+                                 resolve_color(lane.color, self.theme), POD_LENGTH * lane.size * self.iso_view.unit, lane.at, (start, end)))
+        if lanes:   # a pod behind a building is hidden by it
+            things.append(IsoTraffic(lanes, [(box, box_outline(box)) for _, box in boxes]))
+        return things
 
     def _iso_arrivals(self, place: Any) -> list[Box3]:
         """In a tall frame, what the wide view keeps in view besides the characters: a character
@@ -375,7 +457,7 @@ class IsoStaging:
         place = self.params.iso.parsed()
         count = len(self.params.iso.objects)
         placed = [item.name for item in place.objects[len(place.objects) - count:]] if count else []
-        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed)
+        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed, fit=self.params.iso.wide)
 
     def iso_wide_shot(self, names: list[str]) -> ShotView:
         """``shot: wide`` on the place: the wide view keeping the characters ``names`` (those on
@@ -455,6 +537,19 @@ class IsoStaging:
     def _iso_body(self, mob: Mobject) -> Box3:
         """The box a character or small thing stands in on the place now (tile units)."""
         return self._iso_box(mob.name, mob.iso_feet)
+
+    def _iso_light_hidden(self, point: tuple[float, float], box: Box3) -> bool:
+        """Whether a character on screen stands in front of the object a blinking light belongs
+        to (its ``box``) and covers the light at ``point`` (on screen) now (DESIGN.md §102.19)."""
+        x, y = point
+        for figure in getattr(self, "cast", {}).values():
+            if getattr(figure, "iso_feet", None) is None or getattr(figure, "hidden_by_shot", False):
+                continue
+            if in_front(self._iso_body(figure), box) is not True:
+                continue
+            if figure.get_left()[0] <= x <= figure.get_right()[0] and figure.get_bottom()[1] <= y <= figure.get_top()[1]:
+                return True
+        return False
 
     def _iso_bodies(self) -> dict[str, Mobject]:
         """The characters and the small things standing on the place (not held), by name."""
@@ -675,7 +770,8 @@ class IsoStaging:
             self._iso_lamps[name][1].append((float(start), max(float(seconds), 1e-3), 1.0 if state.on and state.shown else 0.0))
         if self._foley_on():   # a door's creak, a bloom, an appearance (§89.11)
             kind = self.iso_scenery.pieces[k].kind or "door"
-            for cue in place_change_cues(kind, fields.get("open"), fields.get("shown"), float(start), float(seconds)):
+            sliding = kind == "door" and self.params.iso.doors == "slide"   # a sliding door hisses (§102.11)
+            for cue in place_change_cues(kind, fields.get("open"), fields.get("shown"), float(start), float(seconds), sliding=sliding):
                 self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **cue.params)
         if not any(f is self._iso_change_updater for f in self.updaters):
             self.add_updater(self._iso_change_updater)

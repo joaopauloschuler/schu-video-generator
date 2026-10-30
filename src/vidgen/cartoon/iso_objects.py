@@ -15,6 +15,24 @@ import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from vidgen.cartoon.iso_city import (
+    SCREEN_TEXT,
+    TOWER_ANTENNA,
+    TOWER_COLUMN,
+    TOWER_DARK_GLASS,
+    TOWER_FIRST,
+    TOWER_FLOOR,
+    TOWER_GARDEN_COLOR,
+    TOWER_INSET,
+    TOWER_WINDOW,
+    garden_bands,
+    screen_box,
+    screen_color,
+    screen_lines,
+    screen_seed,
+    window_color,
+    window_lit,
+)
 from vidgen.cartoon.iso_drawing import Blobs, Disc, Line, Poly, Shape, Upright, box_shapes, mix, shade
 from vidgen.world.iso import IsoObject, ObjectState, default_state
 from vidgen.world.iso_view import ISO_RISE, Box3, Point3
@@ -29,6 +47,9 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "table": ("secondary", "secondary"), "chair": ("accent", "accent"), "bed": ("primary", "#F4F6FA"),
     "shelf": ("secondary", "accent"), "sofa": ("primary", "highlight"), "plant": ("tertiary", "accent"),
     "rug": ("accent", "highlight"),
+    "console": ("#8A93A3", "#5FD8FF"), "server_rack": ("#3A3F4B", "#48E07A"), "projector_pad": ("#5A6272", "#5FD8FF"),
+    "whiteboard": ("#B9BFC9", "#3B6FB6"), "flower_arch": ("#F2A7C3", "#FFFFFF"), "chess_table": ("#9C6B47", "#2B2F3A"),
+    "tower": ("#2A3050", "#FF2E8B"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -64,6 +85,7 @@ class _Frame:
     from its base; facing right mirrors it (``x`` and ``y`` swap)."""
 
     def __init__(self, item: IsoObject, base: float) -> None:
+        self.item = item
         self.swap = item.facing == "right"
         self.x0, self.y0, self.base = item.column, item.row, base
         self.width, self.depth = (item.depth, item.width) if self.swap else (item.width, item.depth)
@@ -431,10 +453,230 @@ def _rug(f: _Frame, look: ObjectLook) -> list[Shape]:
             Disc(f.p((a0 + a1) / 2, (b0 + b1) / 2, z), min(a1 - a0, b1 - b0) * 0.2, look.main, False)]
 
 
+# ----- a lab and a memory's props (DESIGN.md §100.11) -------------------------------------------------
+
+#: Dark casings (a monitor's frame, a rack's front), a screen's lines and a lab light's off look.
+CASING = "#2B2F3A"
+SCREEN_LINE = "#E8FBFF"
+LED_OFF = "#3D4350"
+#: The screens' faces as drawn on a console: (a from, a to) of each monitor, as shares of the width.
+CONSOLE_SCREENS = ((0.06, 0.34), (0.37, 0.63), (0.66, 0.94))
+#: A server rack's units: how many, and the lights on each (a across the front).
+RACK_UNITS = 6
+RACK_LIGHTS = (0.22, 0.32, 0.42)
+
+
+def _glow_rect(f: _Frame, a0: float, a1: float, b: float, z0: float, z1: float, color: str) -> Poly:
+    """A lit rectangle on a face at ``b`` (a screen): not dimmed by the stage's light."""
+    return f.poly([(a0, b, z0), (a1, b, z0), (a1, b, z1), (a0, b, z1)], color, False, True)
+
+
+def _console(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A lab desk: two cabinets under a long top, a keyboard, and a row of monitors along its
+    back whose screens glow in the detail colour with lines of text (lit at night too)."""
+    w = f.width
+    steel = look.main
+    shapes = f.box(0.08, 0.3, 0.0, 0.62, 0.92, 0.78, shade(steel, 0.1)) + f.box(w - 0.62, 0.3, 0.0, w - 0.08, 0.92, 0.78, shade(steel, 0.1))
+    shapes += f.box(0.04, 0.22, 0.78, w - 0.04, 0.98, 0.86, steel)
+    for share0, share1 in CONSOLE_SCREENS:
+        a0, a1 = share0 * w, share1 * w
+        shapes += f.box(a0, 0.28, 0.86, a1, 0.36, 1.78, CASING)
+        shapes.append(_glow_rect(f, a0 + 0.05, a1 - 0.05, 0.36, 0.93, 1.71, look.detail))
+        for k, z in enumerate((1.6, 1.48, 1.36, 1.24, 1.12)):
+            reach = a0 + 0.1 + (a1 - a0 - 0.2) * (0.9 - 0.17 * ((k * 3 + round(share0 * 10)) % 4))
+            shapes.append(_glow_rect(f, a0 + 0.1, reach, 0.361, z, z + 0.035, SCREEN_LINE))
+    shapes += f.box(0.3 * w, 0.55, 0.86, 0.7 * w, 0.8, 0.9, CASING)
+    return shapes
+
+
+def _server_rack(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A tall dark cabinet of server units, each with a vent and a row of small lights (dark in
+    the picture; the stage blinks them, :func:`object_lights`)."""
+    a0, a1, b0, b1 = 0.1, f.width - 0.1, 0.12, f.depth - 0.12
+    top = 2.6
+    shapes = f.box(a0, b0, 0.0, a1, b1, top, look.main)
+    shapes.append(f.poly([(a0 + 0.06, b1, 0.12), (a1 - 0.06, b1, 0.12), (a1 - 0.06, b1, top - 0.1), (a0 + 0.06, b1, top - 0.1)], shade(look.main, 0.35), False))
+    unit = (top - 0.3) / RACK_UNITS
+    for k in range(RACK_UNITS):
+        z = 0.16 + k * unit
+        shapes.append(f.poly([(a0 + 0.1, b1, z), (a1 - 0.1, b1, z), (a1 - 0.1, b1, z + unit - 0.06), (a0 + 0.1, b1, z + unit - 0.06)], shade(look.main, 0.15)))
+        for g in range(3):
+            shapes.append(Line((f.p(a1 - 0.45 + g * 0.1, b1, z + 0.08), f.p(a1 - 0.45 + g * 0.1, b1, z + unit - 0.14)), shade(look.main, 0.5), 0.6))
+        for a in RACK_LIGHTS:
+            shapes.append(Disc(f.p(a0 + a * (a1 - a0), b1, z + unit / 2 - 0.03), 0.035, LED_OFF, False, holds_snow=False))
+    return shapes
+
+
+def _projector_pad(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A round, low platform with a glowing ring and an emitter in its middle (a hologram stands
+    on it)."""
+    x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+    z = f.base
+    radius = min(f.width, f.depth) * 0.45
+    return [Upright(x, y, z, z + 0.12, radius, look.main), Disc((x, y, z + 0.121), radius * 0.86, look.detail, False, glow=True, holds_snow=False),
+            Disc((x, y, z + 0.122), radius * 0.74, shade(look.main, 0.25), False, holds_snow=False),
+            Disc((x, y, z + 0.123), radius * 0.18, mix(look.detail, "#FFFFFF", 0.5), False, glow=True, holds_snow=False)]
+
+
+def _whiteboard(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A whiteboard on two legs with a tray, scribbled with a diagram in the detail colour."""
+    w = f.width
+    b = f.depth / 2
+    shapes: list[Shape] = []
+    for a in (0.2, w - 0.2):
+        shapes += f.box(a - 0.04, b - 0.04, 0.0, a + 0.04, b + 0.04, 2.1, shade(look.main, 0.3))
+    shapes += f.box(0.12, b - 0.03, 0.75, w - 0.12, b + 0.03, 2.1, shade(look.main, 0.1))
+    face = b + 0.031
+    shapes.append(f.poly([(0.16, face, 0.79), (w - 0.16, face, 0.79), (w - 0.16, face, 2.06), (0.16, face, 2.06)], "#F7F8FA", False))
+    shapes += f.box(0.2, b, 0.72, w - 0.2, b + 0.12, 0.76, shade(look.main, 0.2))
+    ink = look.detail
+    shapes.append(Line((f.p(0.35, face, 1.25), f.p(0.6, face, 1.7), f.p(0.85, face, 1.35), f.p(1.1, face, 1.85)), ink, 1.2))
+    for k, z in enumerate((1.9, 1.7, 1.5, 1.3, 1.1)):
+        shapes.append(Line((f.p(w * 0.58, face, z), f.p(w * (0.88 - 0.05 * (k % 3)), face, z)), shade(ink, 0.2), 0.9))
+    shapes.append(Line((f.p(0.32, face, 0.95), f.p(w * 0.5, face, 0.95)), "#E2574C", 1.0))
+    return shapes
+
+
+def _flower_arch(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """An arch of flowers across its width (a wedding, a garden gate): two posts wound with
+    leaves and a curved top, flowers in the main and detail colours along it."""
+    w = f.width
+    b = f.depth / 2
+    shapes: list[Shape] = []
+    leaves = "#5BA35B"
+    top = 2.6
+    for a in (0.15, w - 0.15):
+        shapes.append(Upright(*f.p(a, b, 0.0)[:2], f.base, f.base + top, 0.07, "#F4F6FA"))
+    curve = [(0.15 + (w - 0.3) * t, b, top + 0.55 * math.sin(math.pi * t)) for t in [k / 12 for k in range(13)]]
+    shapes.append(Line(tuple(f.p(*q) for q in curve), "#F4F6FA", 3.0))
+    spots = [(0.15, b, z) for z in (0.6, 1.1, 1.6, 2.1)] + [(w - 0.15, b, z) for z in (0.6, 1.1, 1.6, 2.1)] + curve[1:-1:2] + [curve[0], curve[-1]]
+    centres = tuple(f.p(*q) for q in spots)
+    shapes.append(Blobs(centres, (0.17,) * len(centres), leaves))
+    for k, centre in enumerate(centres):
+        shapes.append(Blobs(((centre[0] + 0.05, centre[1] - 0.05, centre[2] + 0.05),), (0.09,), look.main if k % 2 else look.detail, False))
+    return shapes
+
+
+def _chess_table(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A small table with a board of squares on top and a few round pieces on it."""
+    a0, a1, b0, b1 = 0.15, f.width - 0.15, 0.15, f.depth - 0.15
+    back, front = _legs(f, a0 + 0.06, b0 + 0.06, a1 - 0.06, b1 - 0.06, 0.8, shade(WOOD, 0.1), 0.08)
+    shapes = back + front + f.box(a0, b0, 0.8, a1, b1, 0.86, look.main)
+    n = 6
+    for i in range(n):
+        for j in range(n):
+            if (i + j) % 2:
+                continue
+            u0, u1 = a0 + 0.05 + (a1 - a0 - 0.1) * i / n, a0 + 0.05 + (a1 - a0 - 0.1) * (i + 1) / n
+            v0, v1 = b0 + 0.05 + (b1 - b0 - 0.1) * j / n, b0 + 0.05 + (b1 - b0 - 0.1) * (j + 1) / n
+            shapes.append(f.poly([(u0, v0, 0.861), (u1, v0, 0.861), (u1, v1, 0.861), (u0, v1, 0.861)], look.detail, False))
+    for k, (u, v) in enumerate(((0.3, 0.3), (0.55, 0.35), (0.7, 0.65), (0.4, 0.7))):
+        centre = f.p(a0 + (a1 - a0) * u, b0 + (b1 - b0) * v, 0.87)
+        shapes.append(Upright(centre[0], centre[1], centre[2], centre[2] + 0.1, 0.05, "#F4F6FA" if k % 2 else "#C8473E"))
+    return shapes
+
+
+# ----- a city's towers (DESIGN.md §102.2) --------------------------------------------------------------
+
+#: The width (tile units) of a tower's neon trims, and the frame round its info screen.
+TOWER_TRIM = 0.05
+TOWER_SCREEN_FRAME = 0.05
+
+
+def _face_rect(f: _Frame, face: str, u0: float, u1: float, z0: float, z1: float, color: str, *, glow: bool = False) -> Poly:
+    """A rectangle on a tower's ``front`` face (``u`` across it as ``a``) or its ``side`` face
+    (``u`` from its front corner back), from height ``z0`` to ``z1``: a window, a band, a screen."""
+    if face == "front":
+        b = f.depth - TOWER_INSET
+        return f.poly([(u0, b, z0), (u1, b, z0), (u1, b, z1), (u0, b, z1)], color, False, glow)
+    a = f.width - TOWER_INSET
+    return f.poly([(a, f.depth - u0, z0), (a, f.depth - u1, z0), (a, f.depth - u1, z1), (a, f.depth - u0, z1)], color, False, glow)
+
+
+def _tower(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A tall building of a city at night: its walls in the main colour, rows of windows on its
+    two faces (a seeded share lit while it is on, each in a warm or cool light; the rest dark
+    glass), neon trims up its front corners and round its roof in the detail colour, optionally
+    a big info screen on its front (``screen``; the stage crawls lines of text on it) and glowing
+    algae-farm bands up its faces (``garden``), and an antenna on its roof (its light blinks)."""
+    item = f.item
+    h = item.height
+    i = TOWER_INSET
+    shapes = f.box(i, i, 0.0, f.width - i, f.depth - i, h, look.main)
+    neon = look.detail
+    screen = screen_box(h) if "screen" in item.features else None
+    bands = garden_bands(h) if "garden" in item.features else []
+    for face, span in (("front", f.width), ("side", f.depth)):
+        lo, hi = i, span - i
+        cols = max(1, int((hi - lo - 0.12) / TOWER_COLUMN))
+        start = lo + (hi - lo - cols * TOWER_COLUMN) / 2 + (TOWER_COLUMN - TOWER_WINDOW[0]) / 2
+        dark = f.front(TOWER_DARK_GLASS) if face == "front" else f.side(TOWER_DARK_GLASS)
+        hidden: tuple[float, float, float, float] | None = None
+        if screen is not None and face == "front":
+            hidden = (lo + screen[0] * (hi - lo), lo + screen[1] * (hi - lo), screen[2], screen[3])
+        row, z = 0, TOWER_FIRST
+        while z + TOWER_WINDOW[1] <= h - 0.35:
+            z1 = z + TOWER_WINDOW[1]
+            if not any(b0 - 0.05 < z1 and z < b1 + 0.05 for b0, b1 in bands):
+                for col in range(cols):
+                    u0 = start + col * TOWER_COLUMN
+                    u1 = u0 + TOWER_WINDOW[0]
+                    if hidden is not None and hidden[0] - 0.08 < u1 and u0 < hidden[1] + 0.08 and hidden[2] - 0.1 < z1 and z < hidden[3] + 0.1:
+                        continue
+                    lit = state.on and window_lit(item.name, face, row, col)
+                    shapes.append(_face_rect(f, face, u0, u1, z, z1, window_color(item.name, face, row, col) if lit else dark, glow=lit))
+            row, z = row + 1, z + TOWER_FLOOR
+        for b0, b1 in bands:   # an algae farm: a glowing band with the darker frames of its tanks
+            shapes.append(_face_rect(f, face, lo + 0.02, hi - 0.02, b0, b1, TOWER_GARDEN_COLOR, glow=True))
+            for k in range(1, 6):
+                u = lo + (hi - lo) * k / 6
+                shapes.append(_face_rect(f, face, u - 0.018, u + 0.018, b0, b1, mix(TOWER_GARDEN_COLOR, "#06301F", 0.55), glow=True))
+        # neon: up the face's outer edge and along its top
+        outer = (lo, lo + TOWER_TRIM) if face == "front" else (hi - TOWER_TRIM, hi)
+        shapes.append(_face_rect(f, face, *outer, 0.0, h, neon, glow=True))
+        shapes.append(_face_rect(f, face, lo, hi, h - 0.16, h - 0.16 + TOWER_TRIM * 1.4, neon, glow=True))
+    shapes.append(_face_rect(f, "front", f.width - i - TOWER_TRIM, f.width - i, 0.0, h, neon, glow=True))   # the front corner
+    if screen is not None:
+        lo, hi = i, f.width - i
+        u0, u1 = lo + screen[0] * (hi - lo), lo + screen[1] * (hi - lo)
+        z0, z1 = screen[2], screen[3]
+        shapes.append(_face_rect(f, "front", u0 - TOWER_SCREEN_FRAME, u1 + TOWER_SCREEN_FRAME, z0 - TOWER_SCREEN_FRAME, z1 + TOWER_SCREEN_FRAME, CASING))
+        shapes.append(_face_rect(f, "front", u0, u1, z0, z1, screen_color(neon), glow=True))
+        for up, length in screen_lines(0.0, screen_seed(item.name)):   # the lines as they start (the stage crawls them)
+            zz = z0 + (z1 - z0) * up
+            shapes.append(_face_rect(f, "front", u0 + 0.06, u0 + 0.06 + (u1 - u0 - 0.12) * length, zz - 0.03, zz + 0.03, SCREEN_TEXT, glow=True))
+    x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+    shapes.append(Upright(x, y, f.base + h, f.base + h + TOWER_ANTENNA, 0.035, shade(look.main, 0.2)))
+    return shapes
+
+
 _DRAWINGS: dict[str, Callable[[_Frame, ObjectLook], list[Shape]]] = {
     "tree": _tree, "pine": _pine, "bush": _bush, "rock": _rock, "bench": _bench, "well": _well, "sign": _sign, "bridge": _bridge, "table": _table, "chair": _chair, "bed": _bed,
     "shelf": _shelf, "sofa": _sofa, "plant": _plant, "rug": _rug,
+    "console": _console, "server_rack": _server_rack, "projector_pad": _projector_pad, "whiteboard": _whiteboard,
+    "flower_arch": _flower_arch, "chess_table": _chess_table,
 }
+
+
+#: The kinds of objects with small lights the stage blinks (DESIGN.md §100.11, §102.2).
+LIT_OBJECTS = ("server_rack", "console", "tower")
+
+
+def object_lights(item: IsoObject, base: float) -> list[Point3]:
+    """The small lights of ``item`` the stage blinks (world points, tile units): a server rack's
+    lights on each unit; a console's lights on its cabinets; a tower's on its antenna's tip;
+    none for other objects."""
+    f = _Frame(item, base)
+    if item.kind == "tower":
+        return [f.p(f.width / 2, f.depth / 2, item.height + TOWER_ANTENNA)]
+    if item.kind == "server_rack":
+        a0, a1, b1 = 0.1, f.width - 0.1, f.depth - 0.12
+        unit = (2.6 - 0.3) / RACK_UNITS
+        return [f.p(a0 + a * (a1 - a0), b1 + 0.002, 0.16 + k * unit + unit / 2 - 0.03) for k in range(RACK_UNITS) for a in RACK_LIGHTS]
+    if item.kind == "console":
+        w = f.width
+        return [f.p(a, 0.921, z) for a in (0.2, 0.3, w - 0.5, w - 0.4) for z in (0.6,)]
+    return []
 
 
 #: The radius (tile units) of the soft shadow under the objects that cast a round one.
@@ -449,7 +691,21 @@ SHADOW_OPACITY = 0.16
 #: shadow under each.
 BED_KINDS = ("flowers", "bush")
 #: The objects drawn by their state too (DESIGN.md §89.10).
-_STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {"house": _house, "flowers": _flowers, "lamp": _lamp}
+_STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {"house": _house, "flowers": _flowers, "lamp": _lamp,
+                                                                                 "tower": _tower}
+
+
+def tower_screen(item: IsoObject, base: float) -> tuple[Point3, Point3, Point3, Point3] | None:
+    """The corners of a tower's info screen (world points: bottom left, bottom right, top right,
+    top left as seen), or ``None`` when it has none (DESIGN.md §102.2)."""
+    if item.kind != "tower" or "screen" not in item.features:
+        return None
+    f = _Frame(item, base)
+    lo, hi = TOWER_INSET, f.width - TOWER_INSET
+    s0, s1, z0, z1 = screen_box(item.height)
+    u0, u1 = lo + s0 * (hi - lo), lo + s1 * (hi - lo)
+    b = f.depth - TOWER_INSET
+    return f.p(u0, b, z0), f.p(u1, b, z0), f.p(u1, b, z1), f.p(u0, b, z1)
 
 
 def object_shapes(item: IsoObject, look: ObjectLook, base: float, state: ObjectState | None = None) -> list[Shape]:
@@ -472,4 +728,5 @@ def object_box(item: IsoObject, base: float) -> Box3:
     return Box3(item.column, item.row, base, item.column + item.width, item.row + item.depth, base + item.height)
 
 
-__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "OBJECT_COLORS", "ObjectLook", "object_box", "object_shapes"]
+__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "OBJECT_COLORS", "ObjectLook", "object_box", "object_lights", "object_shapes",
+           "tower_screen"]

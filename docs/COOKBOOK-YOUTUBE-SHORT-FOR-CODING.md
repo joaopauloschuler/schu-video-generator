@@ -1,7 +1,7 @@
 # Cookbook: a YouTube Short about code
 
 How to make a 30–50 s vertical video that shows a piece of source code and what it does, with
-vidgen. The numbers below come from a Short that went through two visual rounds, real narration,
+schu-video-generator. The numbers below come from a Short that went through two visual rounds, real narration,
 a readback check and a final render. The general craft (hooks, QA, credits, voices) is in
 [COOKBOOK.md](COOKBOOK.md) (§15 for vertical shorts); `vidgen guide social` and `vidgen guide
 workflow` give the rules at a glance. This page is about what is special to **code on a phone**.
@@ -38,7 +38,7 @@ workflow` give the rules at a glance. This page is about what is special to **co
 
 ## 3. Layout of the vertical frame
 
-Measured on the final 1080x1920 frames (vidgen's frame is 8 units wide, 135 px per unit):
+Measured on the final 1080x1920 frames (schu-video-generator's frame is 8 units wide, 135 px per unit):
 
 | band | pixels from the top | what goes there |
 |---|---|---|
@@ -106,7 +106,7 @@ window bar "top_words.py · line 7" lets a viewer find it in the repository.
 
 **Wrapping rules.**
 - Colour first, then wrap: lex the whole file, then split the coloured text. Wrapping first makes
-  a comment's continuation lex as code (an apostrophe opens a string). vidgen's `code` and
+  a comment's continuation lex as code (an apostrophe opens a string). schu-video-generator's `code` and
   `code_walkthrough` do this (they colour before wrapping and break at token boundaries).
 - Break after a space, else at a token boundary; never start a row with `)`, `;` or `,`; cut a
   word only when it is longer than a row (then after `/`, `-`, `.` or `_`).
@@ -127,7 +127,7 @@ title: check the storyboard.
 | use when | 16:9, or a Short whose lines are ≤ 32 columns | most code Shorts |
 
 A project-local scene type, `extensions/code_focus.py`, using only `vidgen.api` (plus Pygments,
-which vidgen installs). It shows step *i* at beat *i*: the step's lines on a full-width plate,
+which schu-video-generator installs). It shows step *i* at beat *i*: the step's lines on a full-width plate,
 large, and the note under it. It validates and lints clean (0 findings) on the example below:
 
 ```python
@@ -263,7 +263,7 @@ a dim backdrop for the hook. See [EXTENDING.md](EXTENDING.md) for the scene API.
 in `extensions/` re-renders every scene, so batch your edits.
 
 **Code that changes: `code_morph`.** To show a fix, a refactor or an optimisation, write the
-versions and let vidgen find the difference: what both share glides into place, new lines grow
+versions and let schu-video-generator find the difference: what both share glides into place, new lines grow
 in, removed lines fade out. Mark the new lines with `highlight: changed` and morph on the word
 that names the change:
 
@@ -286,7 +286,7 @@ The versions share one font size and wrap width (`code`'s phone rules), so keep 
 short: a morph reads best when 1–3 lines change. Write every version as real code (§10).
 
 **The output: `terminal`.** A terminal window types each step's command at a prompt and then
-shows the output **you** write (vidgen runs nothing): step *i* at beat *i*, or the output on a
+shows the output **you** write (schu-video-generator runs nothing): step *i* at beat *i*, or the output on a
 word (`{reveal: output1, at: "@prints"}`). `code: {path: ..., highlight: 7}` shows the listing
 above it in 9:16; after a `code` or `code_morph` scene, `carry: ["listing -> code"]` with
 `transition: cut` glides the listing into place. Keep a session to a few rows: one command and
@@ -307,7 +307,7 @@ its output fill a phone frame best. Label output that is not from a real run (§
 - **Type**: Inter for words, JetBrains Mono for code (the defaults). Headings ~78 px, labels in
   the benefits list bold.
 - **One colour per concept**: give the two or three ideas the Short is about a colour each, once,
-  in `terms:` (`terms: {cache: primary, recursion: secondary}`). vidgen paints those words
+  in `terms:` (`terms: {cache: primary, recursion: secondary}`). schu-video-generator paints those words
   in every title, note, chart label and caption (karaoke too), so the viewer links "blue" to
   *cache* across scenes; code listings keep their syntax colours. Use colours other than the
   `highlight` gold (that is the "look here" colour and the spoken word in the captions), and at
@@ -398,7 +398,7 @@ pronunciation:
 
 ## 9. Music and loudness
 
-Use one of vidgen's built-in generated beds (synthesised, not MIDI), chosen by the video's tone:
+Use one of schu-video-generator's built-in generated beds (synthesised, not MIDI), chosen by the video's tone:
 
 ```yaml
 music: {source: momentum, volume: -2} # recommended: presentations, documentaries
@@ -422,11 +422,11 @@ music: {source: bright, volume: -2}   # calm, cinematic scenes
   All of these are bass-heavy (57–78 % of their power under 150 Hz) and Shorts are mostly heard on
   phone speakers, which drop most of that: listen on a phone, and fall back to `pulse` if the bed
   sounds thin.
-- `volume: -2` sits well under the voice, and vidgen ducks the bed by 12 dB while the voice
+- `volume: -2` sits well under the voice, and schu-video-generator ducks the bed by 12 dB while the voice
   speaks. Every bed loops without a seam, so it fits a video of any length.
 - Prefer the beds to composed music (`music: {compose: <mood>}`): on narrated Shorts the beds
   sounded clearly better. Beds need no SoundFont and no music credit.
-- The final mix is normalised to **−16 LUFS** integrated with a **true peak ≤ −1 dBTP** (vidgen's
+- The final mix is normalised to **−16 LUFS** integrated with a **true peak ≤ −1 dBTP** (schu-video-generator's
   defaults: `audio: {target_lufs: -16, true_peak: -1.5}`). The example Short with `pulse`:
   −16.0 LUFS, true peak −1.9 dBTP. `vidgen render` prints these numbers.
 - Changing only the music re-renders no scenes (the mix happens at the join), so trying both beds

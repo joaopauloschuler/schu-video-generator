@@ -1,6 +1,6 @@
 # Cookbook: particle-physics videos
 
-Craft notes for videos about elementary particles, collisions and discoveries with vidgen's
+Craft notes for videos about elementary particles, collisions and discoveries with schu-video-generator's
 particle-physics scene types (DESIGN §99): the chart [`standard_model`](CONFIG.md#standard_model),
 Feynman diagrams [`feynman`](CONFIG.md#feynman), momentum pictures
 [`kinematics`](CONFIG.md#kinematics), event displays [`detector`](CONFIG.md#detector), simulated
@@ -56,7 +56,7 @@ calculation, 25 s on the spectrum and 25 s on five sigma.
 ## 3. Units
 
 - **Natural units are the field's language.** Particle physicists set c = 1 and write masses,
-  momenta and energies all in GeV ("the Higgs boson's mass is 125 GeV"). vidgen's pictures write
+  momenta and energies all in GeV ("the Higgs boson's mass is 125 GeV"). schu-video-generator's pictures write
   the full units (masses in GeV/c², momenta in GeV/c: the chart, the readouts, `kinematics`) so a
   student sees the dimensions. Either is right; **pick one per sentence** and, in a `calculation`
   in natural units, say so in a symbol's meaning ("photon 1, c = 1"). `particle_units` (info)
@@ -73,7 +73,7 @@ calculation, 25 s on the spectrum and 25 s on five sigma.
 
 ## 4. Honesty
 
-| what | the rule | how vidgen helps |
+| what | the rule | how schu-video-generator helps |
 |---|---|---|
 | simulated data | always called simulated, on screen and in the narration | `mass_spectrum` labels its legend and caption "simulated data" (with the seed); the detector's label says "simulated event"; `simulated_label` flags "real data" said of them |
 | the detector | schematic: generic sizes, no experiment's geometry or logo | the label "schematic detector"; say "a schematic detector" |

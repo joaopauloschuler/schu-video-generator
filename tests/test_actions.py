@@ -42,6 +42,28 @@ def project_with(make_project, scenes: list[dict[str, Any]], **overrides: Any) -
 # ----- config ---------------------------------------------------------------------------------------
 
 
+#: Every built-in action, in name order (update when an action is added: the registry, the
+#: unknown-action message and the schema's enum all list them).
+BUILTIN_ACTIONS = [
+    "action_potential", "advance", "alarm", "amplify", "analyse", "annotate", "antiparticles", "birds",
+    "blow_away", "boost", "build", "burn", "callout", "cap", "checkpoint", "chi_square", "cleave", "close",
+    "coast", "collapse", "compute", "convert", "corotate", "count", "couplings", "cross_over", "deduce",
+    "dematerialise", "diffuse", "dim", "drop_fruit", "drug", "effect", "emote", "endocytosis", "enter",
+    "exit", "exocytosis", "explode", "export", "fill", "fit", "flow", "flyby", "focus", "fold", "follow",
+    "form_gametes", "gesture", "get_in", "get_out", "give", "glycosylate", "grow", "hide", "highlight",
+    "hold", "hold_hands", "host_enter", "host_exit", "host_look", "host_move", "host_point", "host_react",
+    "inertial", "inhibit", "jump", "keyframes", "kiss", "knock", "knockout", "launch", "lean_on", "let_go",
+    "let_go_hands", "light", "lightning", "look_at", "lower", "materialise", "measure", "meet", "motor_walk",
+    "move_along", "mutate", "open", "osmosis", "pan", "particles", "pause", "pick_up", "polyadenylate",
+    "pose", "pour", "put_down", "rainbow", "raise", "ratio", "react", "rearrange", "regional", "relabel",
+    "repair", "resample", "reveal", "ride_to", "risk", "run", "run_to", "say", "scan", "secrete",
+    "set_state", "sfx", "shot", "shutters", "signal", "simulate", "sit_on", "splice", "stand_up",
+    "step_aside", "substitute", "swap_channel", "sweep", "switch_off", "switch_on", "switch_view",
+    "target_er", "throw", "to_golgi", "trace", "transcribe", "transform", "translate", "transport", "travel",
+    "turn", "vertex_rule", "walk_to", "wander", "wind", "zoom", "zoom_to",
+]
+
+
 def test_canonical_and_shorthand_forms_are_equivalent() -> None:
     canonical = ActionConfig.model_validate({"action": "highlight", "target": "item3", "color": "accent", "at": 0.5})
     short = ActionConfig.model_validate({"highlight": "item3", "color": "accent", "at": 0.5})
@@ -95,7 +117,7 @@ def test_until_must_be_a_later_beat_of_the_scene() -> None:
 
 def test_builtin_actions_are_registered() -> None:
     extensions.load_builtins()
-    assert registry.action_names() == ["action_potential", "advance", "amplify", "analyse", "annotate", "birds", "blow_away", "build", "callout", "cap", "checkpoint", "chi_square", "cleave", "close", "collapse", "compute", "convert", "count", "cross_over", "deduce", "diffuse", "dim", "drop_fruit", "drug", "effect", "emote", "endocytosis", "enter", "exit", "exocytosis", "explode", "export", "fill", "fit", "flow", "focus", "fold", "follow", "form_gametes", "gesture", "get_in", "get_out", "give", "glycosylate", "grow", "hide", "highlight", "hold", "host_enter", "host_exit", "host_look", "host_move", "host_point", "host_react", "inhibit", "jump", "keyframes", "knock", "knockout", "lean_on", "let_go", "light", "lightning", "look_at", "lower", "measure", "meet", "motor_walk", "move_along", "mutate", "open", "osmosis", "pan", "particles", "pick_up", "polyadenylate", "pose", "pour", "put_down", "rainbow", "raise", "ratio", "react", "rearrange", "regional", "relabel", "repair", "resample", "reveal", "ride_to", "risk", "run", "run_to", "say", "scan", "secrete", "set_state", "sfx", "shot", "signal", "simulate", "sit_on", "splice", "stand_up", "step_aside", "substitute", "switch_off", "switch_on", "target_er", "throw", "to_golgi", "trace", "transcribe", "transform", "translate", "transport", "turn", "walk_to", "wander", "wind", "zoom", "zoom_to"]
+    assert registry.action_names() == BUILTIN_ACTIONS
     assert all(a.builtin for a in registry.all_actions())
     assert registry.find_action("dim").cls.reversible and not registry.find_action("reveal").cls.reversible
     assert "did you mean 'highlight'" in registry.unknown_action_message("higlight")
@@ -196,11 +218,13 @@ def test_validate_reports_bad_actions(make_project) -> None:
     assert "targets: heading, item1, item:Write the beats" in by_location[f"{at}[0].target"][0]
     assert "forms: heading, item<N>, item:<text>" in by_location[f"{at}[0].target"][0]
     assert by_location[f"{at}[1].action"] == [
-        "unknown action 'higlight'; did you mean 'highlight' or 'light'? (known actions: action_potential, advance, amplify, analyse, annotate, birds, blow_away, build, callout, cap, checkpoint, chi_square, cleave, close, collapse, compute, convert, count, cross_over, deduce, diffuse, dim, drop_fruit, drug, effect, emote, endocytosis, enter, exit, exocytosis, explode, export, fill, fit, flow, focus, fold, follow, form_gametes, gesture, get_in, get_out, give, glycosylate, grow, hide, highlight, hold, host_enter, host_exit, host_look, host_move, host_point, host_react, inhibit, jump, keyframes, knock, knockout, lean_on, let_go, light, lightning, look_at, lower, measure, meet, motor_walk, move_along, mutate, open, osmosis, pan, particles, pick_up, polyadenylate, pose, pour, put_down, rainbow, raise, ratio, react, rearrange, regional, relabel, repair, resample, reveal, ride_to, risk, run, run_to, say, scan, secrete, set_state, sfx, shot, signal, simulate, sit_on, splice, stand_up, step_aside, substitute, switch_off, switch_on, target_er, throw, to_golgi, trace, transcribe, transform, translate, transport, turn, walk_to, wander, wind, zoom, zoom_to)"
+        "unknown action 'higlight'; did you mean 'highlight' or 'light'? (known actions: " + ", ".join(BUILTIN_ACTIONS) + ")"
     ]
     assert "less than or equal to 1" in by_location[f"{at}[2].opacity"][0]
     assert by_location[f"{at}[2].colour"] == ["unknown option 'colour' (known: opacity)"]
-    assert by_location[f"{at}[3].until"] == ["action 'reveal' cannot be undone; until works with: amplify, callout, checkpoint, collapse, dim, drug, effect, emote, explode, focus, follow, highlight, host_look, host_point, host_react, inhibit, keyframes, knockout, look_at, lower, move_along, pan, particles, pose, raise, react, relabel, say, set_state, signal, trace, turn, zoom, zoom_to"]
+    reversible = [e.name for e in registry.all_actions() if e.cls.reversible]
+    assert {"dim", "highlight", "pan", "zoom", "look_at"} <= set(reversible) and "reveal" not in reversible
+    assert by_location[f"{at}[3].until"] == ["action 'reveal' cannot be undone; until works with: " + ", ".join(reversible)]
     assert "unknown theme color 'nope'" in by_location[f"{at}[4].color"][0]
     assert "unknown target 'item*x'" in by_location[f"{at}[5].target"][0]
     assert by_location[f"{at}[6].target"] == ["action 'dim' needs a target"]
@@ -240,7 +264,7 @@ def test_schema_describes_both_forms_and_options() -> None:
         doc = schema.config_schema(registry.all(), [Theme()])
     validator = jsonschema.Draft202012Validator(doc)
     defs = doc["$defs"]
-    assert defs["ActionConfig"]["properties"]["action"]["enum"] == ["action_potential", "advance", "amplify", "analyse", "annotate", "birds", "blow_away", "build", "callout", "cap", "checkpoint", "chi_square", "cleave", "close", "collapse", "compute", "convert", "count", "cross_over", "deduce", "diffuse", "dim", "drop_fruit", "drug", "effect", "emote", "endocytosis", "enter", "exit", "exocytosis", "explode", "export", "fill", "fit", "flow", "focus", "fold", "follow", "form_gametes", "gesture", "get_in", "get_out", "give", "glycosylate", "grow", "hide", "highlight", "hold", "host_enter", "host_exit", "host_look", "host_move", "host_point", "host_react", "inhibit", "jump", "keyframes", "knock", "knockout", "lean_on", "let_go", "light", "lightning", "look_at", "lower", "measure", "meet", "motor_walk", "move_along", "mutate", "open", "osmosis", "pan", "particles", "pick_up", "polyadenylate", "pose", "pour", "put_down", "rainbow", "raise", "ratio", "react", "rearrange", "regional", "relabel", "repair", "resample", "reveal", "ride_to", "risk", "run", "run_to", "say", "scan", "secrete", "set_state", "sfx", "shot", "signal", "simulate", "sit_on", "splice", "stand_up", "step_aside", "substitute", "switch_off", "switch_on", "target_er", "throw", "to_golgi", "trace", "transcribe", "transform", "translate", "transport", "turn", "walk_to", "wander", "wind", "zoom", "zoom_to"]
+    assert defs["ActionConfig"]["properties"]["action"]["enum"] == BUILTIN_ACTIONS
     assert {"action.dim", "action.highlight", "action.reveal", "ActionShorthand"} <= set(defs)
 
     def ok(*acts: dict[str, Any]) -> bool:

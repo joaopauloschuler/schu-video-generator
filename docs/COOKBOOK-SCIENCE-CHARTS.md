@@ -1,7 +1,7 @@
 # Cookbook: scientific plots and worked calculations
 
 Craft notes for physics, chemistry, biology and engineering videos that show data and work out
-numbers with vidgen's science scene types (DESIGN §97): [`plot`](CONFIG.md#plot) (measurements and
+numbers with schu-video-generator's science scene types (DESIGN §97): [`plot`](CONFIG.md#plot) (measurements and
 models on scientific axes: error bars, fits with their uncertainties, residuals, histograms,
 simulations drawn as they run) and [`calculation`](CONFIG.md#calculation) (a formula, the values
 put in with their units, the result with its significant figures). The author guide has the short

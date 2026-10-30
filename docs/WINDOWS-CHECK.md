@@ -1,6 +1,6 @@
 # Windows check for 0.3.0
 
-vidgen 0.3.0 was built and tested on Linux only. This checklist tests it on Windows in about
+schu-video-generator 0.3.0 was built and tested on Linux only. This checklist tests it on Windows in about
 30 minutes, plus the Kokoro download. Run the steps in PowerShell from a copy of the
 repository. Write down what each step prints, especially anything marked **report**.
 There is no `vidgen doctor` command: the steps below do that job.

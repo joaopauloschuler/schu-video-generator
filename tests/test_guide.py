@@ -68,7 +68,7 @@ def test_the_guide_is_package_data() -> None:
 
 
 def test_both_agent_files_say_who_they_are_for() -> None:
-    assert "**use** vidgen" in GUIDE[:600] and "CLAUDE.md" in GUIDE[:600]
+    assert "**use** schu-video-generator" in GUIDE[:600] and "CLAUDE.md" in GUIDE[:600]
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     assert "AGENTS.md" in claude[:600] and "vidgen guide" in claude[:600]
     assert "vidgen guide" in (ROOT / "README.md").read_text(encoding="utf-8")

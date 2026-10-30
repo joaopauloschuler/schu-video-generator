@@ -225,6 +225,24 @@ class EmotionConfig(_Strict):
 #: ``emotion:``: a built-in emotion's name or ``{like, speed, pitch, gain, pauses}``.
 EmotionSetting = Union[EmotionName, EmotionConfig]
 
+#: The voice effects (:data:`vidgen.voice_effects.VOICE_EFFECTS`; a test keeps the two equal).
+VoiceEffectName = Literal["deep", "high", "robot", "radio", "chorus", "echo", "hall", "otherworldly"]
+
+
+class VoiceEffectConfig(_Strict):
+    """``effect:`` as a mapping: presets with their strength and a pitch of your own (DESIGN.md §100.2)."""
+
+    use: Union[VoiceEffectName, list[VoiceEffectName]] = Field(default_factory=list)
+    """The preset or presets (deep, high, robot, radio, chorus, echo, hall, otherworldly); none: only the pitch."""
+    pitch: float | None = Field(default=None, ge=-12.0, le=12.0)
+    """Pitch shift in semitones (-12 to 12; the length is kept); default deep's -4, high's +4, otherworldly's -3, else 0."""
+    amount: float | None = Field(default=None, ge=0.0, le=1.0)
+    """How strong the echo, hall, chorus and robot are (0-1); default 0.5."""
+
+
+#: ``effect:``: a preset's name, a list of presets, or ``{use, pitch, amount}``.
+VoiceEffectSetting = Union[VoiceEffectName, list[VoiceEffectName], VoiceEffectConfig]
+
 #: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
 TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
 #: Keys of ``voice:`` used only by some providers (the others ignore them).
@@ -314,6 +332,8 @@ class VoiceConfig(_Strict):
     """kokoro only: where the model runs: cpu, cuda (an NVIDIA GPU) or auto (a GPU if PyTorch sees one); does not change the audio hash."""
     emotion: EmotionSetting | None = None
     """How this voice's beats feel unless a beat says otherwise: a built-in emotion (excited, sad, whisper...) or {like, speed, pitch, gain, pauses}; ElevenLabs and OpenRouter models with instructions use only its name; not inherited by voices:."""
+    effect: VoiceEffectSetting | None = None
+    """A sound effect on this voice's audio, for any provider: deep, high, robot, radio, chorus, echo, hall or otherworldly, a list of them, or {use, pitch, amount}; not inherited by voices:."""
     dub: dict[LanguageTag, DubSetting] | None = None
     """This voice in other languages, by language tag: {pt: pf_dora} or {pt: {voice: pm_alex, speed: 0.9}}; used in videos (variants) of that language; without one, a Kokoro voice of another language is replaced by one of the video's language of the same kind (feminine / masculine)."""
     label: str | None = Field(default=None, min_length=1)
@@ -373,6 +393,8 @@ class VoiceEntry(_Strict):
     """kokoro: language of this speaker's voice (a, b, e, f, h, i, j, p, z); default the first letter of its voice, else the base voice's."""
     emotion: EmotionSetting | None = None
     """How this speaker's beats feel unless a beat says otherwise (excited, sad, whisper... or {like, speed, pitch, gain, pauses}); not inherited from the base voice."""
+    effect: VoiceEffectSetting | None = None
+    """A sound effect on this speaker's audio: deep, high, robot, radio, chorus, echo, hall or otherworldly, a list of them, or {use, pitch, amount}; not inherited from the base voice."""
     dub: dict[LanguageTag, DubSetting] | None = None
     """This speaker's voice in other languages, by language tag ({pt: pf_dora}); default: the base voice's dub when this voice keeps the base voice, else chosen automatically (Kokoro: a voice of the video's language of the same kind)."""
     label: str | None = Field(default=None, min_length=1)
@@ -414,10 +436,10 @@ class CharacterColors(_Strict):
 BodyShape = Literal["round", "tall", "square", "bean", "pear", "triangle"]
 EyeStyle = Literal["dot", "oval", "round", "sleepy"]
 NoseStyle = Literal["none", "dot", "round", "triangle"]
-HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly", "ponytail", "braids", "afro"]
+HairStyle = Literal["none", "short", "spiky", "long", "wavy", "bun", "curly", "ponytail", "braids", "afro"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
 Accessory = Literal[
-    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape",
+    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape", "medal", "pendant",
 ]
 ProportionStyle = Literal["adult", "kid", "tall_kid"]
 Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
@@ -438,6 +460,8 @@ SHELLED_SPECIES: frozenset[str] = frozenset({"turtle", "snail"})
 HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat"})
 #: Accessories worn on top of the head: a look wears at most one of them.
 TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat")
+#: Accessories hanging round the neck: a look wears at most one of them (DESIGN.md §102.14).
+NECK_ACCESSORIES: tuple[str, ...] = ("necklace", "medal", "pendant")
 RobotHead = Literal["box", "round"]
 RobotFace = Literal["eyes", "screen"]
 RobotMoves = Literal["legs", "wheels"]
@@ -476,11 +500,11 @@ class CharacterLook(_Strict):
     nose: NoseStyle = "none"
     """Nose: none, dot, round or triangle."""
     hair: HairStyle = "none"
-    """Hair: none, short, spiky, long, bun, curly, ponytail, braids or afro (colour: colors.hair)."""
+    """Hair: none, short, spiky, long, wavy (long waving locks past the shoulders), bun, curly, ponytail, braids or afro (colour: colors.hair)."""
     ears: EarStyle = "none"
     """Ears: none, round, pointy or floppy (skin colour)."""
     accessories: list[Accessory] = Field(default_factory=list)
-    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat)."""
+    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace, medal (a gold medal on a ribbon in the accessory colour), pendant (a glowing, pulsing pendant on a cord, in the accessory colour) and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat; one of necklace, medal, pendant)."""
     proportions: ProportionStyle = "adult"
     """adult, kid (big head, short body and legs) or tall_kid (lankier); pair a kid with the stage's scale (e.g. 0.7)."""
     outfit: Outfit = "plain"
@@ -510,6 +534,9 @@ class CharacterLook(_Strict):
         if len(on_top) > 1:
             listed = f"{', '.join(on_top[:-1])} and {on_top[-1]} are {'both' if len(on_top) == 2 else 'all'}"
             raise ValueError(f"{listed} worn on top of the head: choose one")
+        round_neck = [a for a in NECK_ACCESSORIES if a in value]
+        if len(round_neck) > 1:
+            raise ValueError(f"{' and '.join(round_neck)} both hang round the neck: choose one")
         return value
 
     @model_validator(mode="after")
@@ -580,6 +607,51 @@ class PartPoseEntry(_Strict):
         return (float(self.scale), float(self.scale)) if isinstance(self.scale, (int, float)) else (float(self.scale[0]), float(self.scale[1]))
 
 
+class HologramConfig(_Strict):
+    """``hologram:`` of a character as a mapping (DESIGN.md §100.3)."""
+
+    color: ColorRef = "#5FD8FF"
+    """The hologram's colour (a theme token or hex): light parts glow in it, dark parts (eyes, mouth, outline ink) are a deep shade of it."""
+    opacity: float = Field(default=0.6, ge=0.2, le=1.0)
+    """How solid the figure is (0.2-1): 1 hides what stands behind it, 0.2 is a faint ghost."""
+    flicker: bool = True
+    """Flicker now and then (short dips of its light, a few seconds apart); false: steady."""
+
+
+class EchoConfig(_Strict):
+    """``echo:`` of a character as a mapping (DESIGN.md §102.6)."""
+
+    color: ColorRef = "#B48CFF"
+    """The echo's colour (a theme token or hex): its outlines glow in a light tint of it and its colours lean a little towards it."""
+    opacity: float = Field(default=0.5, ge=0.2, le=0.9)
+    """How solid the figure is (0.2-0.9): 0.2 a faint ghost, 0.9 nearly solid."""
+    flicker: bool = True
+    """Flicker softly now and then (as a hologram does); false: steady."""
+
+
+class IridescentConfig(_Strict):
+    """``iridescent:`` of a character as a mapping (DESIGN.md §100.9)."""
+
+    seconds: float = Field(default=12.0, ge=2.0, le=120.0)
+    """Seconds for its colours to go once round the rainbow (slow: 8-20)."""
+    strength: float = Field(default=0.8, ge=0.1, le=1.0)
+    """How much of the shifting colour shows over the colours it was drawn with (0.1-1)."""
+    glow: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much it shines by its own light: 0 graded by the stage's light like anyone (muted at
+    night or under an alarm), 1 never darkened (like a hologram); default 0.5."""
+
+
+class AfterimageConfig(_Strict):
+    """``afterimages:`` of a character as a mapping (DESIGN.md §100.9)."""
+
+    spacing: float = Field(default=0.12, ge=0.05, le=1.0)
+    """Seconds between the copies it leaves while it moves."""
+    life: float = Field(default=0.6, ge=0.2, le=3.0)
+    """Seconds each copy takes to fade away."""
+    opacity: float = Field(default=0.35, ge=0.05, le=0.9)
+    """How strong a new copy is (a share of the figure's opacity)."""
+
+
 class CharacterEntry(_Strict):
     """One entry of ``characters:`` (DESIGN.md §69): a cartoon character declared once and used
     by any scene."""
@@ -600,6 +672,44 @@ class CharacterEntry(_Strict):
     """Breathe, sway the head slightly and blink every 2 to 6 s on its own; false: hold still between actions."""
     cartoon_motion: MotionSetting | None = None
     """Animation principles for this character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; wins over the scene's and the video's; default lively."""
+    hologram: Union[bool, HologramConfig] = False
+    """Draw the character as a hologram: true or {color, opacity, flicker}; a translucent figure in one glowing colour with bright edges, never darkened by the stage's light, flickering now and then."""
+    iridescent: Union[bool, IridescentConfig] = False
+    """Its skin and clothes shift colours like oil on water, slowly (bands of hue running up the figure): true or {seconds, strength}; on a stage."""
+    afterimages: Union[bool, AfterimageConfig] = False
+    """While it moves it leaves faint copies of itself that fade (a shimmering trail): true or {spacing, life, opacity}; on a stage."""
+    echo: Union[bool, EchoConfig] = False
+    """Draw the character as an echo, its other self from another timeline or a memory: true or {color, opacity, flicker}; translucent, keeping its own colours (a uniform, a medal), its outlines glowing in the echo's colour, never darkened by the stage's light; appear with materialise."""
+
+    @model_validator(mode="after")
+    def _one_look(self) -> "CharacterEntry":
+        if self.echo is not False and self.hologram is not False:
+            raise ValueError("a character is a hologram or an echo, not both (remove one)")
+        return self
+
+    def hologram_look(self) -> HologramConfig | None:
+        """Its hologram settings (``None``: drawn as usual)."""
+        if self.hologram is False:
+            return None
+        return HologramConfig() if self.hologram is True else self.hologram
+
+    def iridescent_look(self) -> IridescentConfig | None:
+        """Its iridescence (``None``: none)."""
+        if self.iridescent is False:
+            return None
+        return IridescentConfig() if self.iridescent is True else self.iridescent
+
+    def afterimage_look(self) -> AfterimageConfig | None:
+        """Its afterimages (``None``: none)."""
+        if self.afterimages is False:
+            return None
+        return AfterimageConfig() if self.afterimages is True else self.afterimages
+
+    def echo_look(self) -> EchoConfig | None:
+        """Its echo settings (``None``: drawn as usual)."""
+        if self.echo is False:
+            return None
+        return EchoConfig() if self.echo is True else self.echo
 
 
 #: A host's height as a fraction of the frame's shorter side (DESIGN.md §71).
@@ -847,6 +957,9 @@ LINT_RULES: tuple[str, ...] = (
     "significance_claim",
     "simulated_label",
     "particle_units",
+    "shorts_safe_area",
+    "overlay_face",
+    "shorts_length",
 )
 RuleName = Literal[
     "off_frame",
@@ -927,6 +1040,9 @@ RuleName = Literal[
     "significance_claim",
     "simulated_label",
     "particle_units",
+    "shorts_safe_area",
+    "overlay_face",
+    "shorts_length",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1388,7 +1504,7 @@ class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
     unit: Literal["auto", "words", "characters"] = "auto"
-    """What is counted: words, characters (letters and digits), or auto: words for languages vidgen has a word rate for (en, pt, es, fr, de, it; also a video without language), else characters."""
+    """What is counted: words, characters (letters and digits), or auto: words for languages schu-video-generator has a word rate for (en, pt, es, fr, de, it; also a video without language), else characters."""
     min_rate: PositiveFloat | None = None
     """Slowest acceptable rate per second in the unit; default the language's (English 1.8 words = 108 a minute; characters 8)."""
     max_rate: PositiveFloat | None = None
@@ -1467,6 +1583,28 @@ class UnclearSpeechRule(RuleConfig):
         if self.min_probability > self.doubtful_probability:
             raise ValueError("min_probability must not be larger than doubtful_probability")
         return self
+
+
+class ShortsSafeAreaRule(RuleConfig):
+    """``shorts_safe_area``: in a Short (``shorts:``), text or a character's face where the phone app covers the frame (its buttons and texts), or an overlay (a caption, the hook) over a face (DESIGN.md §101)."""
+
+    tolerance: Fraction = 0.01
+    """How far (fraction of the frame's shorter side) text may reach into the covered parts unflagged."""
+    min_face: Fraction = 0.25
+    """Share of a face's box under the app's parts from which it is reported."""
+    min_cover: Fraction = 0.1
+    """Share of a face's box under an overlay (a caption, the hook) from which it is reported."""
+
+
+class OverlayFaceRule(RuleConfig):
+    """``overlay_face``: an overlay that keeps off faces (a ``hud``) whose text or plate covers a character's face anyway (DESIGN.md §102.8)."""
+
+    min_cover: Fraction = 0.15
+    """Share of a face's box under the overlay's texts and plates from which it is reported."""
+
+
+class ShortsLengthRule(RuleConfig):
+    """``shorts_length``: a Short (``shorts:``) longer than its ``max_seconds`` (DESIGN.md §101)."""
 
 
 class LintRules(_Strict):
@@ -1628,6 +1766,12 @@ class LintRules(_Strict):
     """Simulated data called real, or not labelled simulated on screen (default: warning)."""
     particle_units: ParticleUnitsRule = Field(default_factory=ParticleUnitsRule)
     """Masses written both in GeV and GeV/c² on screen (default: info)."""
+    shorts_safe_area: ShortsSafeAreaRule = Field(default_factory=ShortsSafeAreaRule)
+    """In a Short (shorts:), text or a face where the app covers the frame, or an overlay over a face (default: warning)."""
+    overlay_face: OverlayFaceRule = Field(default_factory=OverlayFaceRule)
+    """A hud's text or plate over a character's face, outside Shorts (default: warning)."""
+    shorts_length: ShortsLengthRule = Field(default_factory=ShortsLengthRule)
+    """A Short (shorts:) longer than its max_seconds (default: error)."""
 
 
 class LintConfig(_Strict):
@@ -1932,7 +2076,7 @@ StingSetting = Annotated[Union[StingKind, StingCue], AfterValidator(_sting)]
 ShotKind = Literal["wide", "two_shot", "medium", "over_shoulder", "closeup"]
 #: How many characters each framing names: (fewest, most); fewer than the most are filled in
 #: when the shot is framed (:func:`vidgen.cartoon.shots.shot_figures`).
-SHOT_NAMES: dict[str, tuple[int, int]] = {"wide": (0, 0), "two_shot": (0, 2), "medium": (1, 1), "over_shoulder": (1, 2), "closeup": (1, 1)}
+SHOT_NAMES: dict[str, tuple[int, int]] = {"wide": (0, 0), "two_shot": (0, 2), "medium": (1, 3), "over_shoulder": (1, 2), "closeup": (1, 3)}
 
 
 def _name_or_names_schema(schema: dict[str, Any]) -> None:
@@ -1950,11 +2094,13 @@ class ShotConfig(_Strict):
     kind: ShotKind
     """wide (everyone, no zoom), two_shot (two characters, whole), medium (one from the hips up), over_shoulder (one seen past another, who stands cut by the frame's edge) or closeup (head and shoulders)."""
     of: list[Identifier] = Field(default_factory=list, json_schema_extra=_name_or_names_schema)
-    """The characters it frames: none for wide; two_shot two (default: the speaker and the one nearest it); medium and closeup one; over_shoulder the one seen, then the near one (default: the one it looks at, else the nearest)."""
+    """The characters it frames: none for wide; two_shot two (default: the speaker and the one nearest it); medium and closeup one, or two or three framed together (all their faces, with room above the highest head); over_shoulder the one seen, then the near one (default: the one it looks at, else the nearest)."""
     move: bool = False
     """true: the camera eases to the framing (and back after the beat) instead of cutting."""
     run_time: PositiveFloat | None = None
     """Seconds of the move with move: true (default 1.0)."""
+    clear: bool = False
+    """true: the other characters are hidden for this shot (none standing behind or beside the framed ones clutters it); they are back with the next beat's view."""
 
     @model_validator(mode="before")
     @classmethod
@@ -1988,6 +2134,8 @@ class ShotConfig(_Strict):
             data["move"] = True
         if self.run_time is not None:
             data["run_time"] = self.run_time
+        if self.clear:
+            data["clear"] = True
         return ActionConfig.model_validate(data)
 
 
@@ -2223,6 +2371,8 @@ class AudioConfig(_Strict):
     """Integrated loudness (EBU R128 / BS.1770) of a normalised mix: -16 for web and social, -23 / -24 for broadcast."""
     true_peak: float = Field(default=-1.5, ge=-9, le=0)
     """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
+    bitrate: Literal["128k", "160k", "192k", "256k", "320k"] = "192k"
+    """AAC bitrate of the video's audio; a loud mix (a Short at -14 LUFS) keeps its true peak better at 256k or 320k (the encoder's overshoot is smaller)."""
 
 
 class ChaptersConfig(_Strict):
@@ -2750,6 +2900,78 @@ class SceneConfig(_Strict):
         return not self.beats
 
 
+class CutBeatRange(_Strict):
+    """A run of a scene's beats in a cut (``{from, to}``, both included; DESIGN.md §101)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: Identifier | None = Field(default=None, alias="from")
+    """The first beat kept (default: the scene's first)."""
+    to: Identifier | None = None
+    """The last beat kept (default: the scene's last)."""
+
+
+class CutScene(BaseModel):
+    """A scene of a cut (DESIGN.md §101): ``{scene, beats, ...}``; any other key (``params``,
+    ``set``, ``id``, ``transition``, ``music``, ``overlays``...) changes the scene in this cut."""
+
+    model_config = ConfigDict(extra="allow", use_attribute_docstrings=True)
+
+    scene: Identifier
+    """The id of a scene of the video."""
+    beats: list[Identifier] | CutBeatRange | None = None
+    """The beats kept: a list of beat ids (in the order shown) or {from, to}; default: all."""
+
+
+class CutEndCard(_Strict):
+    """The card a cut ends on (DESIGN.md §101)."""
+
+    text: str = Field(min_length=1)
+    """The line under the title, e.g. "Full story on the channel"."""
+    title: str | None = Field(default=None, min_length=1)
+    """The card's title; default the video's title."""
+    seconds: float = Field(3.0, gt=0, le=30)
+    """How long the card shows."""
+    type: Literal["end_card", "card"] = "end_card"
+    """The scene type: end_card (title and line) or card (a cartoon title card: title as text, line as subtitle)."""
+    id: Identifier = "cut_end"
+    """The scene's id."""
+    params: dict[str, Any] = Field(default_factory=dict)
+    """More params of the scene (colours, style...)."""
+    transition: Any = None
+    """The transition into the card (default the video's)."""
+
+
+class CutConfig(_Strict):
+    """``cut:`` (DESIGN.md §101): a shorter video made of chosen scenes and beats of this one —
+    usually set in a variant, one variant per cut (Shorts, teasers)."""
+
+    scenes: list[Identifier | CutScene] = Field(min_length=1)
+    """The scenes shown, in order: a scene id, or {scene, beats, ...changes}; a scene may come twice with another id."""
+    beats: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
+    """Changes to beats of the cut by beat id (shot, actions, emotion...): mappings merge, lists replace."""
+    hook: str | dict[str, Any] | None = None
+    """A big caption over the first seconds (the hook overlay): its text, or {text, seconds, position, ...}."""
+    end_card: str | CutEndCard | None = None
+    """A card at the end: its line (title: the video's title), or {text, title, seconds, type, id, params, transition}."""
+
+
+class ShortsConfig(_Strict):
+    """``shorts:`` (DESIGN.md §101): the video is a vertical Short: the parts of the frame the
+    phone app covers with its own buttons and text, and the longest it may be."""
+
+    max_seconds: float = Field(60.0, gt=0)
+    """The longest the video may be (lint shorts_length, vidgen validate)."""
+    bottom: float = Field(0.2, ge=0, lt=0.5)
+    """Share of the frame's height at the bottom covered by the app (title, channel, description)."""
+    right: float = Field(0.15, ge=0, lt=0.5)
+    """Share of the frame's width at the right covered by the app (like, comment, share buttons)."""
+    top: float = Field(0.0, ge=0, lt=0.5)
+    """Share of the frame's height at the top to keep clear (a search or menu bar)."""
+    left: float = Field(0.0, ge=0, lt=0.5)
+    """Share of the frame's width at the left to keep clear."""
+
+
 class VideoConfig(_Strict):
     """The whole ``video.yaml``."""
 
@@ -2792,7 +3014,7 @@ class VideoConfig(_Strict):
     pronunciation_file: str | list[str] | None = None
     """YAML/JSON file(s) (relative to the project) with more pronunciation entries; `pronunciation:` entries win over them."""
     pronunciation_defaults: bool = True
-    """Use vidgen's built-in pronunciation list of each beat's TTS engine and language (e.g. kokoro-en-us: epoch, README, JSON); project entries win over it and term: null removes one; `vidgen list-pronunciation` shows it. false: only the project's entries."""
+    """Use schu-video-generator's built-in pronunciation list of each beat's TTS engine and language (e.g. kokoro-en-us: epoch, README, JSON); project entries win over it and term: null removes one; `vidgen list-pronunciation` shows it. false: only the project's entries."""
     language: LanguageTag | None = None
     """Language of the narration and on-screen text (BCP-47: en, pt-BR, es...): caption cutting, narration-speed lint, ElevenLabs language_code, the MP4's audio language; default: English rules, no language sent."""
     translations: str | None = Field(default=None, min_length=1)
@@ -2843,8 +3065,19 @@ class VideoConfig(_Strict):
     """Motion effects on stage scenes, added on their own while cartoon_motion is lively or calm (smaller): dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture; false: none (a stage's motion_effects param wins)."""
     drawing: DrawingConfig | None = None
     """How the cartoons are drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: stage scenes and the host; a stage's drawing param wins key by key; default: normal, flat, none (as drawn)."""
+    cut: CutConfig | None = None
+    """A shorter video made of chosen scenes and beats (usually in a variant): {scenes, beats, hook, end_card}; the scenes keep their beat ids (and audio)."""
+    shorts: bool | ShortsConfig | None = None
+    """The video is a vertical Short: true or {max_seconds, bottom, right, top, left}; overlays keep out of the app's buttons, lint checks the length and what the app covers."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
+
+    @property
+    def shorts_zones(self) -> ShortsConfig | None:
+        """``shorts`` as settings (``true``: the defaults), ``None`` when the video is no Short."""
+        if self.shorts is True:
+            return ShortsConfig()
+        return self.shorts or None
 
     @field_validator("variants")
     @classmethod

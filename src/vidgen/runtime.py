@@ -46,8 +46,8 @@ def current_project() -> Project:
     """The active project. Raises :class:`VidgenError` if no project is active."""
     if _project is None:
         raise VidgenError(
-            "no active vidgen project: current_project() is only available while a project is "
-            "loaded (in extensions and scenes run by vidgen)"
+            "no active schu-video-generator project: current_project() is only available while a project is "
+            "loaded (in extensions and scenes run by schu-video-generator)"
         )
     return _project
 
@@ -56,8 +56,8 @@ def current_theme() -> Theme:
     """The active theme. Raises :class:`VidgenError` if no project is active."""
     if _theme is None:
         raise VidgenError(
-            "no active vidgen theme: current_theme() is only available while a project is "
-            "loaded (in extensions and scenes run by vidgen)"
+            "no active schu-video-generator theme: current_theme() is only available while a project is "
+            "loaded (in extensions and scenes run by schu-video-generator)"
         )
     return _theme
 

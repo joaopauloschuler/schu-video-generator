@@ -45,7 +45,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
 | `terms` | `{}` | one colour per concept: `{loss: tertiary, gradient: "#E07A5F"}` (theme colour tokens or hex), or `{term: {color, tex}}`; the term is drawn in its colour wherever it is on-screen text, its `tex` parts in equations; see [one colour per concept](#one-colour-per-concept-terms) |
 | `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
-| `pronunciation_defaults` | `true` | use vidgen's [built-in pronunciation list](#built-in-pronunciation-lists) of each beat's TTS engine and language (`false`: only the project's entries) |
+| `pronunciation_defaults` | `true` | use schu-video-generator's [built-in pronunciation list](#built-in-pronunciation-lists) of each beat's TTS engine and language (`false`: only the project's entries) |
 | `language` | none (English rules) | the video's language, a BCP-47 tag (`en`, `pt-BR`, `es-419`): caption and SRT line breaks, the `narration_speed` lint, ElevenLabs `language_code`, the MP4's audio language; see [languages and translations](#languages-and-translations) |
 | `translations` | none | a translation file (YAML, `vidgen translate-template`) whose texts replace beat texts and on-screen texts, usually in a variant; see [languages and translations](#languages-and-translations) |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
@@ -70,6 +70,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `ambience` | `true` | a sound bed chosen from each `stage` scene's set while foley is on: a room tone in a room (and on an indoor iso place), birdsong outdoors while the light is `day` or `morning` and it does not rain, crickets outdoors on an [iso place](#isometric-places-iso) while it is `sunset` or `night`; `false`: none unless a stage's `ambience` param names one; see [ambience](#ambience-and-door-sounds-ambience-knock) |
 | `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
 | `reframe` | none | on `stage` scenes wider than the frame: `speaker` moves the camera to whoever speaks (a 9:16 frame then crops the stage laid out as wide as the 16:9 one), `none` leaves the camera to the beats' own camera actions; none: `speaker` when a stage's characters do not fit in one view; a stage's `reframe` wins; see [vertical cartoons](#vertical-cartoons-reframe) |
+| `cut` | none | a shorter video made of chosen scenes and beats of this one (usually in a variant: one per Short or teaser): `{scenes, beats, hook, end_card}`; the beats keep their ids and audio; see [cuts and Shorts](#cuts-and-shorts-cut-shorts) |
+| `shorts` | none | the video is a vertical Short: `true` or `{max_seconds: 60, bottom: 0.2, right: 0.15, top: 0, left: 0}`: captions, lower thirds and the hook keep out of the parts the phone app covers, lint checks them (`shorts_safe_area`) and the length (`shorts_length`); see [cuts and Shorts](#cuts-and-shorts-cut-shorts) |
 | `character_size` | none (`medium`) | how big the characters are on `stage` scenes: `small` (a wide landscape, for cinema), `medium` (TV / YouTube) or `large` (big characters, for phones and Shorts); on a platform level the tiles and props scale with them; captions, on-screen text and speech bubbles keep their size; a stage's `character_size` or `size` wins; a variant may change it; see [character size](#character-size-character_size) |
 | `scenes` | required | the scenes in order, at least one |
 
@@ -573,7 +575,91 @@ variants:
 ```
 
 Renders of a variant go to `build/<final|preview>_<variant>/`. Audio sharing rules are under
-[narration audio](#narration-audio-elevenlabs).
+[narration audio](#narration-audio-elevenlabs). A variant that shows only some scenes and beats
+(a Short, a teaser) is easier written as a [`cut`](#cuts-and-shorts-cut-shorts) than as a new
+`scenes` list.
+
+### Cuts and Shorts (`cut`, `shorts`)
+
+A **cut** is a shorter video made of chosen scenes and beats of the full one — usually one
+variant per Short or teaser. The cut's beats keep their ids (a beat without an `id` keeps
+`<scene>_b<n>` of the full video), so their narration audio is the full video's: nothing is
+voiced again unless the cut changes a line's text, voice or emotion.
+
+```yaml
+variants:
+  short1:
+    format: {width: 1080, height: 1920}
+    preview: {width: 360, height: 640}
+    shorts: true
+    audio: {target_lufs: -14, bitrate: 256k}
+    music: {source: horizon, volume: -5}
+    overlays: [{type: captions, style: karaoke, speakers: color}]
+    cut:
+      scenes:
+        - workshop                                         # a whole scene
+        - {scene: rescue, beats: [rescue_b2, rescue_b3]}   # some beats, in this order
+        - {scene: rescue, beats: {from: rescue_b5, to: rescue_b6}}   # a run of beats ...
+          # (a scene shown twice needs another id: {scene: rescue, id: rescue_end, ...})
+        - {scene: finale, params: {light: night, characters: [{name: kit, at: door}]}, transition: crossfade}
+      beats:                                               # changes by beat id
+        rescue_b2: {shot: {kind: closeup, of: [kit, pip], clear: true}}
+        rescue_b6: {actions: [{zoom: kite, scale: 3, at: 0.4, hold: true}]}
+      hook: "Can a kite carry a cat?"
+      end_card: "Full video on the channel"
+```
+
+`cut:` keys:
+
+| key | default | |
+|---|---|---|
+| `scenes` | required | the scenes shown, in order: a scene id (the whole scene), or `{scene, beats, ...}`: `beats` a list of beat ids (shown in that order) or `{from, to}` (both included; either may be left out); any other key changes the scene in this cut: `params` merge into the scene's params (mappings key by key; `characters`, `props` and `layers` entries by name, as a [set's](#shared-casts-and-sets-include-and-sets); `{name: ben, drop: true}` leaves that one out of the cut; an empty list clears), anything else (`id`, `set`, `transition`, `music`, `overlays`, `duration`...) is merged (mappings) or replaced; `overlays: {readout: {drop: true}}` leaves one of the scene's own overlays out (one timed `at` a beat the cut leaves out). A scene may come twice with another `id`. The first scene's transition is dropped (the scene it came from is not in the cut) unless its entry gives one |
+| `beats` | `{}` | changes to the cut's beats by beat id (`shot`, `actions`, `emotion`, `voice`, `text`...): mappings merge, lists (a beat's `actions`) replace |
+| `hook` | none | a [`hook`](#hook) overlay: its text, or its options (`{text, seconds, position, size, ...}`) |
+| `end_card` | none | a card at the end: its line, with the video's `title` above it; or `{text, title, seconds: 3, type: end_card \| card, id: cut_end, params, transition}` (`card`: a [cartoon title card](#card) with the title as its text and the line as its subtitle; `params` are more of the scene's params) |
+
+What a cut leaves out is gone with its actions: a stage scene starts as its params say, so put the
+characters where the kept beats need them (`params: {characters: [{name: kit, at: door}]}`), and
+give the actions that need it again (a left-out beat's `alarm: start`). An `until` naming a beat
+the cut leaves out, a first beat with `overlap` / `interrupt`, a music cue `from` / `to` a
+left-out scene are reported by `vidgen validate` with the variant's name: change them in
+`cut.beats` or give the variant its own `music`. `vidgen validate` checks every cut; a scene or
+beat id the video does not have is reported at `cut...`. Named voices a cut leaves unused are not
+reported. Other problems of a cut's scenes are reported at their place in the cut (`scenes[0]`
+is the cut's first scene).
+
+**Shorts.** `shorts: true` (or `{max_seconds: 60, bottom: 0.2, right: 0.15, top: 0, left: 0}`:
+shares of the frame) says the video is a vertical Short. The phone app puts its title, channel
+and description over the bottom of the frame and its buttons down the right side:
+
+- [captions](#captions), [lower thirds](#lower_third) and the [hook](#hook) keep out of those
+  parts (bottom captions sit a small margin, `lift: 0.03`, above the bottom part; a `lift`
+  replaces it). `karaoke` captions show a short phrase on one line in a Short — up to five
+  words in `body` size, the spoken word highlighted (`max_words`, `max_lines`, `size` change it);
+  title-size words fit only one or two at a time in the narrow clear part;
+- the scenes' safe area leaves them out too, so built-in scenes lay their text out of them, and a
+  [`card`](#card)'s words keep to the clear part (its colour and burst still fill the frame);
+- a [`hud`](#hud)'s meters stand above the captions (a band of 13 % of the clear part's height
+  over its bottom edge) and never in the app's parts, `compact` too;
+- `vidgen lint` checks three stills per beat with `shorts_safe_area` (text or a face in those parts,
+  an overlay over a face — for captions, any caption of the line being spoken, not only the
+  one in the still; for an overlay that keeps off faces, a `hud`, only its texts and panels) and the length with `shorts_length` (an error over `max_seconds`);
+- `vidgen validate` warns when the format is not vertical or the planned length is over
+  `max_seconds`.
+
+Re-stage for 9:16 in `cut.beats`: a wide view of a room, or a two-shot of characters far apart,
+is small in a tall frame. Give the kept beats closer framings — a `closeup` / `medium` of one to
+three characters, a `zoom` on the characters and props that matter (`hold: true` keeps it to the
+end of the scene, so a scene can end on a close view; `at: 0, cut: true` in a scene's first beat
+opens the scene on the close view, so the hook is not shown over a wide establishing view) — and look at `vidgen storyboard --variant
+short1 --per-beat 2`. Shorts are usually mixed louder than long videos (`audio: {target_lufs:
+-14, bitrate: 256k}`: at that loudness the AAC encode at 192k can push the peaks over 0 dBTP). Render long variants in steps with `vidgen render --variant short1 --max-scenes N`.
+A change in `cut.beats` re-renders only the scene it changes; a change of the `hook` (an overlay
+over the whole video) re-renders every scene of the cut, so settle the hooks before the final
+renders. The hook is not checked by `lint` while it shows: look at a still at about 1 s (a hook
+of two lines covers less of a face near the top than one of three or four). Busy scenes (rain,
+many lights) make larger files: re-encode one over a size budget (`ffmpeg -c:v libx264 -crf 23
+-c:a copy`).
 
 ## Shared casts and sets (`include:` and `sets:`)
 
@@ -656,7 +742,7 @@ sets:
 
 ### Ready-made sets (`set: city_street`)
 
-vidgen comes with sets of its own. A `set: NAME` that the project's `sets:` (with its includes)
+schu-video-generator comes with sets of its own. A `set: NAME` that the project's `sets:` (with its includes)
 does not define uses the built-in set of that name; a project set of the same name wins. The
 scene's params override a built-in set by the same rules as any set (above): `light: night`
 replaces, `marks` merge, `props: [{name: shop_2, color: tertiary}]` changes the second shop,
@@ -690,7 +776,7 @@ forest's: `pine`, `pine_2`, `tree`, `tree_2`, `pine_3`, `tree_3`, `bush`, `log`,
 are shown under [Props](#props). `vidgen validate` reports an unknown set with the project's and the
 built-in names (`unknown set 'beech'; did you mean 'beach'? sets: none (...); built-in sets:
 classroom, kitchen, shop, living_room, bedroom, city_street, park, beach, forest, snowy_hills`). A
-built-in set is part of the scene's params, so a newer vidgen that changes a set renders the
+built-in set is part of the scene's params, so a newer schu-video-generator that changes a set renders the
 scenes using it again.
 
 ### Ready-made rooms (`set: classroom`)
@@ -777,7 +863,7 @@ WCAG AA (`warning: theme contrast: colors.dim #6B7280 on background #0E1116: 3.9
 
 ### Fonts
 
-vidgen ships three open-licence font families (SIL OFL 1.1; licences in
+schu-video-generator ships three open-licence font families (SIL OFL 1.1; licences in
 `src/vidgen/data/fonts/`, list in `THIRD_PARTY_NOTICES.md`) and registers them for its own
 renders, so they need **no installation** on Windows, macOS or Linux: **Inter** (sans; Regular,
 Bold, Italic), **Source Serif 4** (serif; Regular, Bold, Italic) and **JetBrains Mono NL**
@@ -918,7 +1004,7 @@ scenes:
 | `terms.<term>.color` | colour | the same, in the long form |
 | `terms.<term>.tex` | str \| list | TeX parts of equations that stand for the term (`L`, `'\nabla L'`), each whole TeX tokens with balanced braces; coloured in [`equation`](#equation) and [`equation_derivation`](#equation_derivation) steps that contain them |
 
-- **Where**: all text the scenes write with vidgen's text helpers: titles, bullets, cards,
+- **Where**: all text the scenes write with schu-video-generator's text helpers: titles, bullets, cards,
   quotes, tables, chart titles, axis labels, legends and category labels, diagram and process
   labels, timeline entries, captions (karaoke too: the spoken word still takes the highlight
   while it is said), lower thirds; a `line_chart` series whose whole name is a term is drawn in
@@ -953,7 +1039,7 @@ scenes:
 
 ## Icons
 
-vidgen ships 200 line icons (from [Lucide](https://lucide.dev), ISC licence), 25 in each
+schu-video-generator ships 200 line icons (from [Lucide](https://lucide.dev), ISC licence), 25 in each
 category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and interface),
 `nature`, `education`, chosen for what explainer videos show; the full list with aliases and
 tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
@@ -1026,6 +1112,7 @@ voice:
   lang: null                        # kokoro: language letter (a, b, e, f, h, i, j, p, z); null: from voice / language
   device: cpu                       # kokoro: cpu, cuda or auto
   emotion: null                     # how this voice's beats feel (excited, sad, whisper...); every provider
+  effect: null                      # a sound effect on the voice (hall, robot, otherworldly...): see "Voice effects"
   dub: null                         # this voice in other languages, {pt: pf_dora}: see "Dubbing"
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
@@ -1045,7 +1132,7 @@ turning it on does not re-voice anything; `vidgen tts --force` fetches the timin
 beats (paid again).
 
 `language_code` is ElevenLabs' language enforcement (an ISO 639-1 code such as `pt`). By default
-(`null`: auto) vidgen sends the video's [`language`](#languages-and-translations) to the models
+(`null`: auto) schu-video-generator sends the video's [`language`](#languages-and-translations) to the models
 that accept one (`eleven_turbo_v2_5`, `eleven_flash_v2_5`; others reject the field, and
 `eleven_multilingual_v2` detects the language from the text). A code sends it with any model,
 `false` never sends one. When a code is sent it is part of the audio hash (re-voicing those
@@ -1092,7 +1179,7 @@ the model and the estimated cost of the run (from OpenRouter's public model list
 offline: "price unknown"). The estimate uses the highest price of the model's providers, so the
 real charge can be lower (Kokoro's cheapest provider asks $0.00000062 per character). A real run
 then prints what OpenRouter reports it charged: OpenRouter writes each request's cost record a
-few seconds after the audio, so vidgen asks again for up to 15 s; when the records are still
+few seconds after the audio, so schu-video-generator asks again for up to 15 s; when the records are still
 missing it says `cost not reported by openrouter yet (why; see https://openrouter.ai/activity)`
 — the audio is stored all the same, and the activity page shows the cost later.
 
@@ -1111,16 +1198,16 @@ voice: ...}}}`); its audio then goes to `audio/<variant>/` like any other voice 
   language; MAI-Voice voices carry their locale). `instructions` can name the language or accent
   ("Brazilian Portuguese, São Paulo accent") on models that read them.
 - Not supported: voice cloning from reference audio (`input_references`) and multi-speaker input
-  (one request voicing several speakers): vidgen voices one beat per request.
+  (one request voicing several speakers): schu-video-generator voices one beat per request.
 
-**Audio.** vidgen asks for MP3 (`response_format: mp3`); models that return only raw PCM (Gemini
+**Audio.** schu-video-generator asks for MP3 (`response_format: mp3`); models that return only raw PCM (Gemini
 TTS: 16-bit mono 24 kHz) are asked for PCM and converted to MP3 with ffmpeg, so `audio/` always
 holds `<beat_id>.mp3` + `<beat_id>.hash`. The hash covers the spoken text (pronunciation applied)
 and `provider`, `model`, `voice`, `instructions` and `speed`: changing any of them re-voices that
 voice's beats. ElevenLabs projects keep their hashes.
 
 **Checks.** `provider: openrouter` without `model`, or a model id without `/`, is a config error.
-`vidgen validate` warns (no network, OpenRouter's list bundled with vidgen, dated) about a model
+`vidgen validate` warns (no network, OpenRouter's list bundled with schu-video-generator, dated) about a model
 not in the list (with a suggestion), a `voice` the model does not list and a missing `voice` for a
 model that lists some; lists may be incomplete, so these are warnings. `vidgen tts --dry-run` and
 a real run check OpenRouter's live list: a model it does not have is refused before any paid
@@ -1163,7 +1250,7 @@ voice:
 | `device` | `cpu` | `cuda`: an NVIDIA GPU (needs a CUDA build of PyTorch); `auto`: the GPU if PyTorch sees one. Not in the audio hash |
 | `label`, `color`, `timestamps` | | as in [`voice:`](#voice-voice) (`timestamps` is not needed: English timings are always stored) |
 
-**Languages and voices** (Kokoro-82M v1.0, 54 voices, list bundled with vidgen, dated 2026-10-09;
+**Languages and voices** (Kokoro-82M v1.0, 54 voices, list bundled with schu-video-generator, dated 2026-10-09;
 grades from the model's [VOICES.md](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)):
 
 | `lang` | language | from `language:` | default voice | other voices |
@@ -1188,7 +1275,7 @@ Linux, macOS), so no system package is needed normally.
 (327 MB, SHA256 `496dba11...`) plus ~0.5 MB per voice used, into the Hugging Face cache
 (`~/.cache/huggingface/hub`, on Windows `%USERPROFILE%\.cache\huggingface\hub`; `HF_HOME` or
 `HF_HUB_CACHE` move it). English voices also make misaki install spaCy's `en_core_web_sm`
-(12.8 MB) with pip on first use. vidgen bundles none of these. After that no network is needed
+(12.8 MB) with pip on first use. schu-video-generator bundles none of these. After that no network is needed
 (`HF_HUB_OFFLINE=1` makes sure nothing is asked). `vidgen tts --dry-run` says whether the
 download is still to come.
 
@@ -1203,7 +1290,7 @@ nothing and `vidgen tts` prints a command that installs it anyway (it worked on 
 install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4" "spacy>=3.8,<4"
 "spacy-curated-transformers<0.4"`.
 
-**Word timings.** For English (`lang` a / b) Kokoro says when each word is spoken: vidgen stores
+**Word timings.** For English (`lang` a / b) Kokoro says when each word is spoken: schu-video-generator stores
 them as `audio/<beat_id>.align.json` for every beat (free, so `timestamps` is not needed) and
 burned-in [`captions`](#captions) and the SRT time every word from them (through the
 pronunciation, as with ElevenLabs). Other languages have no timings: word times are estimated
@@ -1312,7 +1399,7 @@ scenes:
 #### `emotion` with ElevenLabs and OpenRouter
 
 These providers take words or settings rather than numbers, so they use the emotion's **name**
-(a mapping's `like`); its numbers count only where vidgen changes the audio itself.
+(a mapping's `like`); its numbers count only where schu-video-generator changes the audio itself.
 
 | `emotion` | ElevenLabs `eleven_v3` tag | other ElevenLabs models: stability, style | OpenRouter instruction (added) |
 |---|---|---|---|
@@ -1344,7 +1431,7 @@ These providers take words or settings rather than numbers, so they use the emot
   documents them for): the sentence above is added after the voice's own `instructions`
   (`instructions: Warm narrator` → `Warm narrator. Speak sadly: ...`). The hash gains the
   emotion's name and sentence.
-- **Other OpenRouter models** take no instructions: vidgen changes the returned audio with the
+- **Other OpenRouter models** take no instructions: schu-video-generator changes the returned audio with the
   emotion's numbers instead, as for Kokoro but without the pauses (OpenRouter returns no word
   timings): the speed (ffmpeg `atempo`, the pitch kept), the pitch (the length kept) and the
   loudness (a boost soft-limited). The hash gains the name, speed, pitch and gain. `vidgen
@@ -1393,6 +1480,7 @@ scenes:
 | `label` | the name (`dr_ana` → `Dr ana`) | the speaker's name in subtitles and captions; not inherited from `voice.label` |
 | `color` | palette colour by position | the speaker's colour in captions (`speakers: color` / `both` / the `name` tag); not inherited |
 | `emotion` | none | how this speaker's beats feel unless a beat says otherwise ([voices with feeling](#voices-with-feeling-emotion)); not inherited from `voice.emotion` |
+| `effect` | none | a sound effect on this speaker's voice ([voice effects](#voice-effects-effect)): a hall, a robot, a radio, a voice from another world; not inherited from `voice.effect` |
 | `dub` | none | this speaker's voice in other languages (`{pt: pf_dora}`); without one: the base voice's when this voice keeps it, else chosen automatically ([dubbing](#dubbing-dub---all-languages)) |
 
 - **Names**: letters, digits and `_`; `default` is reserved for the base voice. An unknown name in
@@ -1426,6 +1514,55 @@ scenes:
   project entries: write a variant (`pronunciation:` in it) when a voice of another language needs
   other spoken forms.
 
+### Voice effects (`effect`)
+
+A voice can sound through an effect: a robot's flat buzz, a big hall, a loudspeaker's echo, a
+radio, a giant or a being from another world. `effect` on a voice (`voice:` or a named voice of
+`voices:`) runs every beat of that voice through it after it is spoken, with any provider
+(Kokoro, ElevenLabs, OpenRouter): it is plain audio processing with ffmpeg, nothing is sent to
+the provider.
+
+```yaml
+voices:
+  ship_ai: {voice: af_nicole, label: Ship, effect: echo}            # through the ship's speakers
+  guard: {voice: am_onyx, label: Guard, effect: otherworldly}       # deep, many-voiced, in a hall
+  door_bot: {voice: am_echo, label: Door, effect: {use: robot, pitch: -6}}   # a flat, low robot
+  caller: {voice: bf_emma, effect: [radio, echo]}                   # presets combine
+```
+
+| preset | what it does |
+|---|---|
+| `deep` | 4 semitones lower (a larger, darker voice); the length is kept |
+| `high` | 4 semitones higher (a smaller, brighter voice) |
+| `robot` | a flat, metallic monotone: the voice's own pitch replaced by a steady buzz (187.5 Hz; a `pitch` moves the buzz: `-6` about 133 Hz) |
+| `radio` | a narrow band (320–3200 Hz), compressed, like a radio or a phone |
+| `chorus` | several slightly detuned copies: a voice of many |
+| `echo` | a short echo, as from a loudspeaker in a room |
+| `hall` | a large hall's reverberation |
+| `otherworldly` | `deep` (3 semitones lower), `chorus` and `hall` together: a resonant voice not of this world |
+
+| key (`effect` as a mapping) | default | |
+|---|---|---|
+| `use` | none | a preset or a list of presets; none: only the `pitch` |
+| `pitch` | the presets' (`deep` −4, `high` +4, `otherworldly` −3, else 0) | semitones, −12 to 12; the length is kept |
+| `amount` | `0.5` | 0–1: how strong the echo, hall, chorus and robot are |
+
+- **Order**: presets combine in a fixed order (the pitch, then the robot, the radio band, the
+  chorus, the echo and the hall; with the robot the pitch comes after it), so `[deep, hall]` and
+  `[hall, deep]` are the same. The effect's audio is level-matched to the dry voice (the same
+  integrated loudness, within 1 dB; at most ±15 dB of correction), and a limiter keeps the
+  peaks under full scale.
+- **Length**: the speech keeps its timing, so captions and lip sync stay on the words; `echo`,
+  `hall` and `chorus` add a short tail after the last word for the reflections to ring out
+  (0.35 s, 0.9 s, 0.1 s), and the beat is that much longer.
+- **Audio hash**: a voice without an `effect` keeps every hash; with one, the effect is part of
+  its beats' hash, so changing it re-voices only that voice's beats (a variant with another effect
+  gets its own audio folder). Like `emotion`, a named voice does not inherit the base voice's
+  `effect`. `vidgen tts --dry-run` names it (`voice guard (kokoro am_onyx ..., effect chorus+hall
+  (pitch -3))`).
+- **With `emotion`**: an emotion shapes how the line is spoken; the effect is applied after it.
+  Both may be given.
+
 ## Characters (`characters:`)
 
 Cartoon characters, declared once at the top level and used by any scene that draws characters:
@@ -1456,6 +1593,8 @@ characters:
 | `expressions` | `{}` | the character's own expressions, like `poses` |
 | `idle` | `true` | breathe, sway the head slightly and blink every 2 to 6 s on its own ([below](#idle-motion)); `false`: hold still between actions |
 | `cartoon_motion` | none (the scene's, else the video's: `lively`) | this character's [animation principles](#animation-principles-cartoon_motion): `lively`, `calm` or `none`; wins over the scene's and the video's |
+| `hologram` | `false` | `true` or `{color, opacity}`: draw it as a [hologram](#holograms-hologram), a translucent figure in one glowing colour that the stage's light never darkens |
+| `echo` | `false` | `true` or `{color, opacity, flicker}`: draw it as an [echo](#echo-characters-echo), a translucent other self that keeps its own colours, its outlines glowing |
 
 The **generator** draws every character from simple shapes (circles, ellipses, rounded
 rectangles, polygons, lines), so each figure is an original drawing:
@@ -1466,10 +1605,10 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `head_size` | `1.0` | head size relative to the default head, 0.6 to 1.6 |
 | `eyes` | `dot` | `dot`, `oval` or `round` (white with a pupil), `sleepy` (half closed) |
 | `nose` | `none` | `none`, `dot`, `round`, `triangle` |
-| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
+| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `wavy` (long locks waving past the jaw, ending in curls; the chin and chest left clear), `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
 | `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
 | `facial_hair` | `none` | `none`, `moustache`, `beard` (with a moustache; the mouth stays seen); colour `colors.hair` |
-| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace` (on the body), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, and only one of `hat`, `cap`, `crown`, `wizard_hat`, `party_hat` |
+| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace`, `medal` (a gold medal on a ribbon in `colors.accessory`), `pendant` (a stone in `colors.accessory` on a dark cord, glowing at night and pulsing like a slow heartbeat) (on the body), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, only one of `hat`, `cap`, `crown`, `wizard_hat`, `party_hat`, and one of `necklace`, `medal`, `pendant` |
 | `proportions` | `adult` | `adult`, `kid` (a big head on a short body and legs), `tall_kid` (lankier, a smaller head than a kid's); the figure is as tall as any other, so make a kid smaller with the stage's `scale` (about 0.7 for a `kid`, 0.85 for a `tall_kid`) |
 | `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
 | `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
@@ -1626,6 +1765,134 @@ Only one piece goes on top of the head: `hat`, `cap`, `crown`, `wizard_hat` and 
 each other (a config error); glasses, a bow, a scarf and a cape go with any of them.
 
 ![Robots (box, screen, round and on wheels) and the costume pieces, from the side and the front](gallery/media/robots.png)
+
+#### Holograms (`hologram`)
+
+`hologram: true` draws a character as a projection of light: a ship's computer, a message from
+far away, a ghostly guide. Every part keeps its shape and moves, speaks and acts as usual; its
+colours are mapped through the hologram's colour by how light they are (light cloth and skin
+glow in it, dark eyes, brows and mouth become a deep shade of it, so the face still reads), the
+fills turn translucent and the outlines a bright, nearly white tint of the colour.
+
+```yaml
+characters:
+  - name: vega
+    voice: vega_voice
+    hologram: true                                   # cyan, #5FD8FF, 60 % solid
+    look: {body: tall, hair: short, eyes: oval}
+    colors: {skin: "#F0F0F0", clothes: "#C8C8C8"}    # light colours glow brightest
+  - name: echo
+    hologram: {color: "#FFB45F", opacity: 0.4}        # an amber, fainter ghost
+```
+
+| key (`hologram` as a mapping) | default | |
+|---|---|---|
+| `color` | `#5FD8FF` | the hologram's colour (a theme token or hex) |
+| `opacity` | `0.6` | 0.2–1: how solid the figure is (1 hides what is behind it, 0.2 is a faint ghost) |
+| `flicker` | `true` | on a stage it flickers now and then: a short, jagged dip of its light every 2–5 s (seeded, the same in every render) over a faint shimmer; `false`: steady |
+
+- **Light**: a stage's [`light`](#light-and-shadows-light-shadows) does not grade a hologram (it
+  shines the same by day, at night and under a coloured tint), nor does the soft
+  [shading](#drawing-style-drawing).
+- **Looks**: give a hologram light, plain colours (`skin` and `clothes` near white or grey) for
+  the brightest glow; the generator's dark ink becomes the deep shade. `vidgen character NAME
+  --png` and `vidgen character-sheet` show it as a hologram.
+- It enters and leaves like any character; `enter` / `exit` through a `door:` (a spot of an
+  [iso place](#isometric-places-iso) too) fade it in and out where it stands, as if the projection
+  were switched on.
+- **Materialising**: `- materialise: vega` makes it appear where it stands as a projection does:
+  its outlines first, a flickering wireframe (the first 40 % of `run_time`, default 2.2 s), then
+  its fills come in, still flickering, until it stands whole (a rising shimmer and a soft chime,
+  foley). A character whose first `materialise` / `dematerialise` is a `materialise` waits
+  unseen at its spot until then. `- dematerialise: vega` is the same backwards (a falling
+  swoosh): it is gone afterwards, until a `materialise`. Both work on any stage character; they
+  read best on a hologram or an [echo](#echo-characters-echo).
+
+```yaml
+beats:
+  - text: "Then the projector hummed, and a figure of light took shape on the pad."
+    actions: [{materialise: vega, at: 0.3}]     # vega waits unseen at its spot until then
+  - text: "And as quickly as it came, it was gone."
+    actions: [{dematerialise: vega, at: 0.2, run_time: 1.5}]
+```
+
+#### Iridescent skins and afterimages (`iridescent`, `afterimages`)
+
+Two looks for visitors from elsewhere, on a stage:
+
+- **`iridescent: true`** (or `{seconds, strength, glow}`) makes a character's skin and clothes shift
+  colours like oil on water: bands of hue running up the figure, drifting once round the rainbow
+  in `seconds` (default 12; slow reads best), mixed in by `strength` (0.1–1, default 0.8). Its
+  outlines, dark features and white eye-whites keep their colours; pale colours get a sheen
+  (at least half saturated). It shines partly by its own light: `glow` (0–1, default 0.5) is how
+  much of the stage's light it shrugs off (0: graded like anyone, muted at night or under an
+  alarm; 1: never darkened, like a hologram), so the colours stay vivid in a dark room.
+- **`afterimages: true`** (or `{spacing, life, opacity}`) leaves faint copies of the character
+  where it was while it moves (a walk, an entrance, a keyframe move): one every `spacing` s
+  (default 0.12) once it has moved a little, each starting at `opacity` (default 0.35) of the
+  figure and fading over `life` s (default 0.6), drawn just behind it. Nothing while it stands
+  still.
+- A tall, slender visitor: `look: {body: tall, head_size: 0.8}` and a `scale` on the stage
+  (`1.5`–`1.8`: towering over the others, which a `two_shot` with a human shows; on an iso place a character's `scale` is its size).
+- Render cost: an iridescent character is recoloured on every frame; afterimages are copies of
+  the figure (a few at a time). A draft render shows neither.
+
+```yaml
+characters:
+  - name: wanderer
+    iridescent: true                       # or {seconds: 8, strength: 1}
+    afterimages: true                      # or {spacing: 0.1, life: 0.8, opacity: 0.3}
+    look: {body: tall, head_size: 0.8, eyes: round}
+    colors: {skin: "#B7C8F0", clothes: "#8C7BD6"}
+scenes:
+  - id: arrival
+    type: stage
+    params: {characters: [{name: wanderer, at: right, scale: 1.45}]}
+    beats:
+      - text: "The stranger crossed the hall in a shimmer of colours."
+        actions: [{walk_to: wanderer, to: left}]
+```
+
+#### Echo characters (`echo`)
+
+`echo: true` draws a character as an **echo**: a self from another timeline, a memory or a
+dream seen overlapping the present. Unlike a [hologram](#holograms-hologram), which recolours
+everything in one tint, an echo keeps its own colours (a uniform stays a uniform, a gold medal
+gold), leaning a little towards the echo's colour; its fills are translucent and its outlines
+glow in a light tint of the colour. Declare the other self as its own character (its own look:
+another outfit, a medal, a lab coat) and stand it beside the one it echoes.
+
+```yaml
+characters:
+  - name: ana
+    look: {body: pear, hair: long, outfit: plain}
+    colors: {clothes: "#3C6E71"}
+  - name: ana_captain                     # the same person in another life
+    echo: true                            # violet, #B48CFF, half seen through
+    look: {body: pear, hair: long, outfit: coat}
+    colors: {clothes: "#2B3350", trim: "#C9D2E8"}
+scenes:
+  - id: crossing
+    type: stage
+    params: {characters: [{name: ana, at: left}, {name: ana_captain, at: 0.62}]}
+    beats:
+      - text: "For a moment she saw herself as she might have been."
+        actions: [{materialise: ana_captain, at: 0.3}]   # it waits unseen until then
+      - text: "Then the other life was gone."
+        actions: [{dematerialise: ana_captain, at: 0.4}]
+```
+
+| key (`echo` as a mapping) | default | |
+|---|---|---|
+| `color` | `#B48CFF` | the echo's colour (a theme token or hex): its outlines glow in a light tint of it, its colours lean a little towards it |
+| `opacity` | `0.5` | 0.2–0.9: how solid it is (0.2 a faint ghost) |
+| `flicker` | `true` | on a stage it flickers softly now and then, as a hologram does; `false`: steady |
+
+- **Light**: a stage's light does not darken an echo (it shines the same at night); no soft
+  shading, no `fill_light` needed. A character is a hologram or an echo, not both.
+- **Appearing**: `materialise` / `dematerialise` (above) bring it and take it away; `enter` /
+  `exit` through a `door:` fade it in and out. Several echoes of the same moment (a couple in
+  other lives) are several echo characters standing side by side.
 
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
@@ -1793,7 +2060,7 @@ piece): an own pose's `legs:` does nothing on them (validate warns), use `leg_le
 ### Characters from SVG files
 
 `look: {svg: assets/sprout.svg}` draws the character from your own SVG file (or one made with a
-`generate: {format: svg}` model), drawn **facing right**. vidgen sanitises it as it does an SVG
+`generate: {format: svg}` model), drawn **facing right**. schu-video-generator sanitises it as it does an SVG
 picture (scripts, filters, raster images and text are removed; gradients become one colour; see
 the `image` scene) and splits it into parts by **element ids**:
 
@@ -1977,7 +2244,7 @@ recording what it was generated from (and, with `voice.timestamps`, `audio/<beat
 its character timings, with the text and a hash of the MP3 they belong to, so a stale file is
 ignored).
 
-**API key.** vidgen reads the key only from the environment variable `ELEVENLABS_API_KEY`;
+**API key.** schu-video-generator reads the key only from the environment variable `ELEVENLABS_API_KEY`;
 it never stores it in the config, audio, build files, logs or error messages.
 
 - Windows: `setx ELEVENLABS_API_KEY your_key` once, then open a new terminal.
@@ -2063,7 +2330,7 @@ pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a
 
 ### Built-in pronunciation lists
 
-vidgen ships pronunciation entries for words a TTS engine gets wrong, one list per engine and
+schu-video-generator ships pronunciation entries for words a TTS engine gets wrong, one list per engine and
 language, and every project uses them automatically. Respellings are engine-specific: Kokoro's
 American English voices say "epoch" like "epic", so their list says `E pock`; a British Kokoro
 voice already says it right, and ElevenLabs could be made worse by a respelling, so their lists
@@ -2088,7 +2355,7 @@ leave it out.
   about built-in entries that match no beat. `vidgen tts --dry-run` adds `(built-in: epoch)` to the
   `says:` line, and a run adds `built-in pronunciation: epoch` to each beat it generated for it.
 - **Audio of existing projects.** The audio hash covers the spoken text, so a Kokoro English beat
-  whose text has a word of the list (an `epoch`, a `JSON`) is **stale** once you update vidgen:
+  whose text has a word of the list (an `epoch`, a `JSON`) is **stale** once you update schu-video-generator:
   `vidgen validate` counts it in `audio:`, `vidgen tts` regenerates only those beats (the other
   beats keep their hash), and `vidgen render` uses the old MP3 until then. To keep the old audio,
   set `pronunciation_defaults: false` or remove the entry (`epoch: null`).
@@ -2269,7 +2536,7 @@ scenes:
 
 | key | default | |
 |---|---|---|
-| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY`; or `openrouter` (many image models through [OpenRouter](#openrouter-provider-provider-openrouter), key in `OPENROUTER_API_KEY`). vidgen never stores a key |
+| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY`; or `openrouter` (many image models through [OpenRouter](#openrouter-provider-provider-openrouter), key in `OPENROUTER_API_KEY`). schu-video-generator never stores a key |
 | `model` | `gpt-image-1` | openai: `gpt-image-1`, `dall-e-3` or `dall-e-2`; another name is sent as is (with gpt-image-1's sizes, no cost estimate). openrouter: **required**, an OpenRouter model id `author/name` (e.g. `bytedance-seed/seedream-4.5`) |
 | `size` | `auto` | `WIDTHxHEIGHT` sent to the provider, or `auto`: the model's landscape / portrait / square size for the video's format or the `generate.aspect` (gpt-image-1: `1536x1024`, `1024x1536`, `1024x1024`; dall-e-3: `1792x1024`, `1024x1792`, `1024x1024`; dall-e-2: `1024x1024`). openrouter: `auto` sends an aspect ratio instead (below) |
 | `quality` | none (by model) | gpt-image-1: `low`, `medium`, `high` (default `medium`); dall-e-3: `standard`, `hd` (default `standard`); none for dall-e-2. openrouter: `auto`, `low`, `medium`, `high`, `xhigh`, `max` for models that have it (not sent by default) |
@@ -2345,12 +2612,12 @@ Windows: `setx OPENROUTER_API_KEY your_key`, then a new terminal; Linux / macOS:
 OPENROUTER_API_KEY=your_key`). `openai` stays the default: projects without `provider:
 openrouter` and their stored pictures are unchanged.
 
-- **Size.** With `size: auto` vidgen sends an `aspect_ratio`: the one nearest the video's format
+- **Size.** With `size: auto` schu-video-generator sends an `aspect_ratio`: the one nearest the video's format
   (`16:9`, `9:16`, `1:1`, `4:3`, ...), or `16:9` / `9:16` / `1:1` for a `generate.aspect` that
   differs from the video's; plus `resolution` when set. A model without that ratio uses its
   nearest (the dry run says so) and the scene's `fit` crops or pads. `size: WIDTHxHEIGHT` is
   sent as is instead (OpenRouter fits it to the model).
-- **What each model takes.** Before the first paid request vidgen reads the model's public record
+- **What each model takes.** Before the first paid request schu-video-generator reads the model's public record
   (free) and refuses, with a message, a model OpenRouter does not have, a `quality` or
   `resolution` the model does not take, a model that makes only vector (SVG) pictures for a
   `png` picture (and one that makes none for `format: svg`) and models that only edit an input
@@ -2368,7 +2635,7 @@ openrouter` and their stored pictures are unchanged.
 - **Privacy settings (Zero Data Retention).** If your OpenRouter account requires Zero Data
   Retention (or excludes providers that may keep or train on prompts), choose a model with a
   ZDR endpoint: OpenRouter refuses the others (HTTP 404, "no endpoints ... matching your data
-  policy") and vidgen then says so, links <https://openrouter.ai/settings/privacy> and lists the
+  policy") and schu-video-generator then says so, links <https://openrouter.ai/settings/privacy> and lists the
   image models that have a ZDR endpoint (from OpenRouter's public list
   `https://openrouter.ai/api/v1/endpoints/zdr`; on 2026-10-08 e.g.
   `bytedance-seed/seedream-5-0-flash`, `bytedance-seed/seedream-4.5`, the Gemini, Krea and MAI
@@ -2388,7 +2655,7 @@ would generate 7e9b5bf8aff6f7b2.png for harbour (16:9, openrouter bytedance-seed
 dry run: 1 picture(s) to generate, estimated $0.040 (OpenRouter prices of 2026-10-08); 0 up to date
 ```
 
-vidgen identifies itself to OpenRouter with the optional app headers (`HTTP-Referer`: the
+schu-video-generator identifies itself to OpenRouter with the optional app headers (`HTTP-Referer`: the
 project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`). OpenRouter's terms and
 each upstream model's provider policies apply to what you generate.
 
@@ -2417,13 +2684,13 @@ scenes:
 - **Models** (OpenRouter's public list of 2026-10-08; text prompt in, SVG out, `$` per picture):
   `recraft/recraft-v4.1-vector` and `recraft/recraft-v4-vector` ($0.08),
   `recraft/recraft-v4.1-pro-vector` and `recraft/recraft-v4-pro-vector` ($0.30). None has a
-  Zero Data Retention endpoint: an account requiring ZDR cannot use them (vidgen's error says
+  Zero Data Retention endpoint: an account requiring ZDR cannot use them (schu-video-generator's error says
   so). `vidgen imagegen --dry-run` shows the live price and refuses a model that makes no SVG;
   `vidgen validate` warns about a `format: svg` model not known to make SVG.
 - **Requests** send `output_format: svg` and an aspect ratio (no `quality` / `resolution`:
   vectors have none); the cache key includes the format, so PNG keys are unchanged.
 - **Sanitised before drawing**: scripts, embedded HTML, embedded raster pictures, filters
-  (blur, shadows), masks / clip paths, text (put words on screen with vidgen), animation and
+  (blur, shadows), masks / clip paths, text (put words on screen with schu-video-generator), animation and
   links to other files are removed; gradients and patterns become one colour (the average of the
   stops). At most 1500 shapes are drawn (the smallest beyond it are dropped) and 60 000 curve
   segments (paths are thinned): each with a warning, so a huge SVG cannot stall a render. The
@@ -2436,11 +2703,11 @@ scenes:
 
 **Writing prompts.** Image generators draw letters, numbers, charts and logos poorly (garbled
 words, made-up values): `vidgen validate` warns when a prompt quotes text or asks for a sign,
-label, title, logo, chart or diagram. Put words on screen with vidgen (a caption, a title, a
+label, title, logo, chart or diagram. Put words on screen with schu-video-generator (a caption, a title, a
 callout) and data in its chart scenes; ask the generator for the picture only (`negative: text`
 helps). Use one project `style` so the pictures of a video match.
 
-**Responsible use.** vidgen adds no content filter of its own: the provider's usage policies
+**Responsible use.** schu-video-generator adds no content filter of its own: the provider's usage policies
 apply and its safety system may refuse a prompt (the error says so). Do not generate pictures
 of real people or brands that could mislead, and say that pictures are generated when that
 matters to the viewer. The `revised_prompt` in the sidecar shows what the model made of the
@@ -2630,7 +2897,7 @@ language's own document. The MCP tools `render` and `lint` take `all_languages`.
 ## Sound effects (`sfx`)
 
 Short sounds under the narration: a whoosh as a card slides in, a pop per item, a tick per step.
-vidgen synthesises its own set (no recordings; free to use in your videos, including
+schu-video-generator synthesises its own set (no recordings; free to use in your videos, including
 commercially; no attribution needed; [listen](music/README.md#sound-effects) to all of them) and
 mixes them, sample-exact, into the video's sound when the scenes are joined. Three ways to place one:
 
@@ -2701,6 +2968,11 @@ writes them as WAV files to listen to):
 | `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
 | `sting_comic` | 1.1 s (0.6–3) | "ba-dum-tss": two falling tom hits and a splashy cymbal | after a punchline (`sting: comic`) |
 | `sting_sad` | 2.2 s (1.2–5) | "wah wah wah waaah": four muted brass notes falling B♭3 → G3, the last long and wobbling | a let-down played for laughs (`sting: sad`) |
+| `alarm` | 2.7 s (0.9–12) | an alarm siren, "hee-haw": two buzzy tones, ~960 and ~780 Hz, alternating every 0.45 s | an alarm going off (a stage's [`alarm`](#alarms-and-shutters-alarm-shutters) plays it as a bed while it runs) |
+| `crackle` | 1.5 s (0.3–8) | crackling energy: clusters of sharp electric snaps (bright, ~3–5 kHz) over a faint 100 Hz buzz that flares with them | sparks, a short circuit, a rift crackling |
+| `hum` | 3 s (0.5–15) | a soft electronic hum: a 110 Hz tone with harmonics and a slowly beating second voice, a faint ~3.5 kHz whine, fading in and out | a machine or a screen powering up (a [hologram display](#hologram-displays-hologram_display) switching on) |
+| `drone` | 6 s (1.5–20) | a crystalline singing drone: a high glassy chord (C6 G6 C7 E7 G7) shimmering, each note swelling in turn, over a deep rumble; slow fades | awe, an otherworldly place, a doorway to another world |
+| `slam` | 0.8 s (0.3–2) | a steel shutter slamming down: a heavy low impact (~75 Hz falling), a metallic clang ringing ~0.3 s and a short rattle of slats | [shutters](#alarms-and-shutters-alarm-shutters) closing, a metal door, a heavy impact |
 
 | key | default | |
 |---|---|---|
@@ -2909,7 +3181,7 @@ its defaults as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-sfx---json).
 
 ### `vidgen list-pronunciation`
 
-`vidgen list-pronunciation [PROJECT] [--json]` prints vidgen's [built-in pronunciation
+`vidgen list-pronunciation [PROJECT] [--json]` prints schu-video-generator's [built-in pronunciation
 lists](#built-in-pronunciation-lists): with no project (and none in the current folder) every
 list; in a project the lists its beats' voices use, with how many beats use each, every entry
 (`term -> spoken form`, `(any case)`), what the project does to it (`replaced by the project:
@@ -2920,9 +3192,9 @@ list; in a project the lists its beats' voices use, with how many beats use each
 ## Background music (`music`)
 
 A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
-vidgen generates seventeen beds itself (no recordings, no samples; free to use in your videos,
+schu-video-generator generates seventeen beds itself (no recordings, no samples; free to use in your videos,
 including commercially; no attribution needed; [listen](music/README.md) to a clip of each);
-any audio file FFmpeg reads works too, and so does music vidgen composes for the video in a mood
+any audio file FFmpeg reads works too, and so does music schu-video-generator composes for the video in a mood
 ([composed music](#composed-music-compose)).
 
 ```yaml
@@ -3199,13 +3471,13 @@ each author-made piece that became a bed (`time_of_flight`: how it was made, the
 log, a link to the bed's clip — no second copy); six clips that together play all the built-in
 sound effects (96 kbps mono) and one of the six ambience beds in turn; and, when the `music` extra
 and the SoundFont are there (the page never downloads it), the first 15 s of the `curious` and
-`playful` moods. Every clip is made by vidgen itself, so the page can be made again: the same
-vidgen, FFmpeg (with libmp3lame), Pillow and symusic give byte-identical files. Takes about two
+`playful` moods. Every clip is made by schu-video-generator itself, so the page can be made again: the same
+schu-video-generator, FFmpeg (with libmp3lame), Pillow and symusic give byte-identical files. Takes about two
 minutes (the beds take most of it). JSON: see [below](#vidgen-music---json).
 
 ### Score files (`vidgen music render`)
 
-A **score file** is a piece of music written in YAML and played by vidgen's own synthesizer (the
+A **score file** is a piece of music written in YAML and played by schu-video-generator's own synthesizer (the
 instruments of the built-in beds): key, tempo, time signature, named sections, a chord
 progression and tracks of step patterns, with effects. `vidgen music render SCORE.yaml [--out
 FILE.wav|FILE.mp3] [--json]` writes it as a WAV or an MP3 (default `<score>.wav` in the current
@@ -3369,7 +3641,7 @@ Each line is `ok`, `note` or `FIX`:
 
 | topic | what is measured | flagged when |
 |---|---|---|
-| loudness | integrated LUFS (an audio file is measured as vidgen plays it, at −28 LUFS) | — |
+| loudness | integrated LUFS (an audio file is measured as schu-video-generator plays it, at −28 LUFS) | — |
 | steadiness | 3 s loudness, 10th to 95th percentile | it swings more than 8 dB |
 | peaks | true peak and how far it stands over the loudness | more than 19 dB over (single hits jump out) |
 | clipping | audio files: runs of samples at full scale | any |
@@ -3395,8 +3667,8 @@ riser is a hint, too quiet to count). Change one thing, check again, compare (`-
 let a human listen and choose.
 
 The demo plays the piece from its start at volume 0 (−28 LUFS) under the narration — a 20 s
-sample shipped with vidgen (two lines spoken by Kokoro's `af_heart`), or `--narration FILE` at its
-own level — ducked by vidgen's default (12 dB, 0.4 s attack, 1 s release, 1.5 s hold), set to the
+sample shipped with schu-video-generator (two lines spoken by Kokoro's `af_heart`), or `--narration FILE` at its
+own level — ducked by schu-video-generator's default (12 dB, 0.4 s attack, 1 s release, 1.5 s hold), set to the
 video's −16 LUFS. The spectrogram (30 Hz–16 kHz, the same level scale for every piece) marks the
 sections and the voice range's edges, with a lane under it showing each bar's voice-range level
 against the limit (red above). `--compare OTHER` checks a second score or audio file, prints a
@@ -3426,7 +3698,7 @@ music:                                          # the piece follows the video: i
   with did-you-mean across the beds and the pieces.
 - **Rendering.** The piece is rendered when the video's audio is mixed (the same place as a bed:
   drafts and animatics too, not storyboards or scenes) at −28 LUFS like a bed, and kept in
-  `build/music/piece-<key>.npy`; the key is the file's bytes, vidgen's version and the studio
+  `build/music/piece-<key>.npy`; the key is the file's bytes, schu-video-generator's version and the studio
   renderer's version, so an unchanged piece is not rendered again and any edit is. Changing it
   re-renders no scene. Notes it cannot play are logged as warnings.
 - **Loop or one pass.** A `loop: true` piece (the default) under a looping cue repeats seamlessly
@@ -3457,7 +3729,7 @@ locally on your own computer (offline, nothing uploaded unless you ask an online
 it in your web browser: load any of the 17 built-in beds as an editable score file
 (its template), change it with controls or by typing, listen, check, keep versions, pin
 listening notes for an AI agent, try variations, and export the piece or save it into a
-project. The sound is always vidgen's own renderer, the one videos use; the page only plays the
+project. The sound is always schu-video-generator's own renderer, the one videos use; the page only plays the
 rendered audio (a WAV, 12 dB louder than in a mix: −16 LUFS, the same for every version).
 Ctrl+C in the terminal stops it.
 
@@ -3490,7 +3762,7 @@ Ctrl+C in the terminal stops it.
 - **Where it listens**: `http://127.0.0.1:<port>/`, reachable only from your own computer
   (not from other machines on the network). `--port N` picks the
   port (default: a free one, printed); `--no-browser` only prints the address. It needs no
-  internet connection (the page and its fonts ship with vidgen).
+  internet connection (the page and its fonts ship with schu-video-generator).
 - **Where it keeps its work**: with a project (`PROJECT`, or the current folder when it holds a
   `video.yaml`), in `<project>/build/studio/`; without one, in `studio/` in vidgen's cache folder
   (`VIDGEN_CACHE_DIR`, else `%LOCALAPPDATA%\vidgen` on Windows, `~/Library/Caches/vidgen` on
@@ -3502,7 +3774,7 @@ Ctrl+C in the terminal stops it.
 - **Listening while editing**: an edit renders again only the tracks it changes (the others'
   sound is kept in the studio's memory, up to 768 MB) and plays on from the same moment;
   mute / solo and **under narration** (the piece under the narration sample `vidgen music
-  check` uses, with vidgen's default ducking, as in a video) change what plays, never the
+  check` uses, with schu-video-generator's default ducking, as in a video) change what plays, never the
   score. The meters show each track's own audio. A long piece whose tracks do not fit in those
   768 MB together (a 5-minute track is 235 MB) is rendered one track at a time and only what
   fits is kept, so its edits take longer (a 5-minute piece of nine tracks: about 70 s, 2.3 GB at
@@ -3527,7 +3799,7 @@ Ctrl+C in the terminal stops it.
   next to it says which one is playing.
 - **Export**: the score file (YAML, as written), or audio — WAV (16-bit, 48 kHz) or MP3, the
   piece once, N loops (a loop) or N seconds (looped as a video loops it, with a 2 s fade-out;
-  at most 10 minutes either way — a video loops its music by itself), at the **video level** (−28 LUFS, how vidgen plays music at volume 0) or the **listening
+  at most 10 minutes either way — a video loops its music by itself), at the **video level** (−28 LUFS, how schu-video-generator plays music at volume 0) or the **listening
   level** (−16 LUFS, peaks under −1 dBTP). The file is made in the session's `exports/` and the
   browser downloads it. **Save to the project** writes `assets/music/<name>.yaml` (lower-case
   letters, digits, `_`, `-`; not a name Windows keeps for a device, such as `con` or `nul`), which a video plays with `music: <name>` (the snippet can be
@@ -3558,7 +3830,7 @@ Ctrl+C in the terminal stops it.
   2. Any chat assistant: **Copy prompt**, paste it there, then **Paste reply** with its whole
      answer (the score in a ```yaml block, `n1: …` lines, an optional `summary:` line).
   3. OpenRouter (optional, **costs money**): with `OPENROUTER_API_KEY` set in the environment
-     (as for OpenRouter pictures and voices; vidgen never stores it) and a model typed on the
+     (as for OpenRouter pictures and voices; schu-video-generator never stores it) and a model typed on the
      page or given by `VIDGEN_STUDIO_MODEL` (e.g. `VIDGEN_STUDIO_MODEL=vendor/model`), **Send**
      asks for confirmation (the server refuses a send that was not confirmed), sends the
      hand-off to OpenRouter only and turns the reply into a proposal. The key is read when
@@ -3640,8 +3912,9 @@ audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
 | `normalize` | `auto` | scale the final mix to `target_lufs`: `true`, `false`, or `auto` = only when the video has music (a narration-only video keeps the narration's own level, that of its MP3s). Never while no beat has its narration MP3 yet (a preview timed from word counts would lift the music to the target on its own) |
 | `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
 | `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
+| `bitrate` | `192k` | AAC bitrate of the video's audio: `128k`, `160k`, `192k`, `256k`, `320k`. A loud, dense mix (a Short at −14 LUFS) can come out of FFmpeg's AAC encoder at 192k several dB over `true_peak` (measured: −1.9 dBTP in the mix, +1.9 in the MP4); at 256k it stayed at −1.6. Check the MP4 (`ffmpeg -i out.mp4 -af ebur128=peak=true -f null -`) |
 
-When the mix is written (music, or `normalize: true`) vidgen measures the sum, applies one gain to
+When the mix is written (music, or `normalize: true`) schu-video-generator measures the sum, applies one gain to
 reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
 MP3s' level (a mono MP3 at full level on both channels; ElevenLabs voices measure about −21.4
 LUFS), so reaching −16 lifts it ~5 dB and the limiter shaves speech peaks by a few dB. Without music and with `normalize: auto` / `false` the narration and effects are joined as
@@ -3650,7 +3923,8 @@ before (FFmpeg sums them), and the loudness is only measured. `vidgen render` pr
 calm)`), and `timings.json` / `render --json` carry `mix`: `{mixed, normalized, target_lufs,
 true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` (measured on the
 mix before the AAC encode; the limiter aims 0.4 dB under `true_peak` because the encode can
-raise the peak by ~0.2 dB, so the MP4 stays under it).
+raise the peak by ~0.2 dB, so the MP4 stays under it — a dense mix can be raised more, see
+`bitrate`).
 
 ### `vidgen list-music`
 
@@ -3675,7 +3949,7 @@ recorded instruments:
   each `compose:` cue plays its mood's built-in bed instead; `vidgen music preview` stops with an
   error naming it.
 - **The SoundFont**: by default **GeneralUser GS 2.0.3** (32.3 MB, General MIDI instruments and
-  drum kits). vidgen does not ship it: the first composed render (or `vidgen soundfont fetch`)
+  drum kits). schu-video-generator does not ship it: the first composed render (or `vidgen soundfont fetch`)
   downloads it from
   `https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2` into
   vidgen's cache folder, `soundfonts/GeneralUser-GS.sf2` under: `VIDGEN_CACHE_DIR` if set, else
@@ -3780,7 +4054,7 @@ with no `direction` follows each variant's frame: left in the 16:9 video, up in 
 
 The irises are drawn inside the scenes' renders, like a `fade_color` (the colour covers the
 picture outside the circle, the overlays stay on top), so the join stays a cut there and no
-FFmpeg filter is involved: they work with every FFmpeg vidgen supports (checked with 6.1, 7.1
+FFmpeg filter is involved: they work with every FFmpeg schu-video-generator supports (checked with 6.1, 7.1
 and 8.1), and storyboards and stills show them.
 
 - **Speech never overlaps.** A transition covers only the *silent end* of the scene before it:
@@ -4831,7 +5105,7 @@ come out smaller than 0.3 units logs a warning to split it. `null` values are em
 A world map — the 177 countries of Natural Earth's 1:110m admin-0 map (public domain, bundled;
 see THIRD_PARTY_NOTICES.md) in the Equal Earth projection — with highlighted countries, a
 choropleth, pins and flight-path arcs. Borders are Natural Earth's *de facto* representation
-(e.g. Kosovo, N. Cyprus, Somaliland and W. Sahara are shapes of their own); vidgen takes no
+(e.g. Kosovo, N. Cyprus, Somaliland and W. Sahara are shapes of their own); schu-video-generator takes no
 position on disputed boundaries. Countries are named by ISO 3166
 alpha-2 or alpha-3 code (`DE`, `DEU`), English name or a common alias (`USA`, `UK`, `Holland`,
 `Ivory Coast`, `Czech Republic`...); case and accents do not matter, typos get a "did you mean".
@@ -6886,7 +7160,7 @@ with arrow tips, round ticks and plain-text labels (no LaTeX needed).
   `^` (or `**`) for powers, the constants `pi`, `e`, `tau` and the functions `sin`, `cos`,
   `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `exp`, `ln` / `log` (natural), `log10`,
   `log2`, `sqrt`, `abs`, `floor`, `ceil`, `sign`, `min(a, b)`, `max(a, b)`. The variable is `x`.
-  vidgen parses them with its own small parser: nothing is run as code. `f(x) = x^2` names the
+  schu-video-generator parses them with its own small parser: nothing is run as code. `f(x) = x^2` names the
   function (else they are `f`, `g`, `h`, ... in order); a later function may use an earlier one
   (`g(x) = f(x) + 1`). Where a function is undefined (`sqrt` of a negative, `1/x` at 0) or leaves
   the y range, the curve breaks: asymptotes are drawn as separate pieces.
@@ -7183,7 +7457,7 @@ those lines.
 ### `code_morph`
 
 Code that changes on screen: version 1 of a listing shows with beat 1, and at beat *i* it morphs
-into version *i*. vidgen finds what changed (Python's `difflib`, line by line, then token by
+into version *i*. schu-video-generator finds what changed (Python's `difflib`, line by line, then token by
 token within an edited line), so you write only the versions: what both versions share
 (unchanged lines, and the unchanged tokens of an edited line) glides to its new place, new
 lines grow in from their left end, new tokens of an edited line fade in, removed lines and
@@ -7346,7 +7620,7 @@ keeps a big file's walkthrough to the part it talks about.
 ### `terminal`
 
 A terminal window in which commands are typed and their output appears. **You write the
-output**: vidgen never runs a command. Step *i* of `steps` plays at beat *i* (the window comes
+output**: schu-video-generator never runs a command. Step *i* of `steps` plays at beat *i* (the window comes
 in with step 1): the command is typed at the prompt, a block cursor moving along
 (`typing_speed` characters per second; faster when the beat is too short for it), a moment
 later its output appears row by row and the prompt comes back, the cursor waiting after it.
@@ -8126,7 +8400,7 @@ colours follow the order of the blocks, which changes when one is left out).
 ### `cell`
 
 A cell in **physical scale** for cell-biology lectures and research explainers: a cross-section
-of an animal cell, a plant cell or a bacterium (as in a thin-section micrograph, in vidgen's flat
+of an animal cell, a plant cell or a bacterium (as in a thin-section micrograph, in schu-video-generator's flat
 style) with its compartments (cytosol, nucleoplasm, perinuclear space, ER lumen, cis / medial /
 trans Golgi lumens, mitochondrial intermembrane space and matrix, lysosome, peroxisome and
 endosome insides, vacuole, chloroplast stroma and thylakoid lumen, periplasm), the membranes
@@ -8980,7 +9254,7 @@ synthase before any protons were pumped; a pathway advanced backwards.
 ### `cross`
 
 A genetic cross at university level (Griffiths *Introduction to Genetic Analysis*, Hartwell
-*Genetics: From Genes to Genomes*), worked out exactly by vidgen's cross engine (DESIGN §96: exact
+*Genetics: From Genes to Genomes*), worked out exactly by schu-video-generator's cross engine (DESIGN §96: exact
 fractions, segregation, independent assortment, crossing over at the recombination frequency,
 X and Y segregating in males, lethal classes removed) and drawn from it, so no ratio on screen can
 disagree with the cross:
@@ -9019,7 +9293,7 @@ disagree with the cross:
 - **The chi-square test** (`observed`, `chi_square`): observed counts of the phenotype classes
   against the expected ones (N × the exact share): a table of O, E and (O − E)²/E, then χ², the
   degrees of freedom (classes − 1), the p-value (the upper regularized gamma function, computed
-  by vidgen), the critical value at `alpha` and the verdict (*p ≥ α: consistent with 9 : 3 : 3 : 1*,
+  by schu-video-generator), the critical value at `alpha` and the verdict (*p ≥ α: consistent with 9 : 3 : 3 : 1*,
   or *p < α: reject*); a note when an expected count is below 5.
 - **Notes** under the drawing, from the model: the parental and recombinant gamete frequencies and
   the recombination frequency of a linked parent (or *no crossing over* — Drosophila males), the
@@ -9148,7 +9422,7 @@ counselling lessons:
   beside the relative (male left of female when nothing else decides); each family a block as wide
   as its widest generation, so lines do not cross; relatives who marry each other are moved to the
   facing edges of their sibships, up to the common ancestors, so their mating line crosses nothing.
-  With NSGC ids (`II-3`) vidgen keeps your numbering and checks it reads left to right as drawn
+  With NSGC ids (`II-3`) schu-video-generator keeps your numbering and checks it reads left to right as drawn
   (else it says the drawn order); with other ids (`mum`, `kid1`) it numbers the chart. Wide
   families shrink to fit (9:16: the chart on top, the panel under it).
 - **Analysis** (`analyse`): each mode of inheritance — autosomal dominant (AD) and recessive (AR),
@@ -9566,7 +9840,7 @@ CRISPR–Cas9 genome editing on a target sequence (DESIGN §96.14; `vidgen.genet
   the view is the reverse complement of what you wrote).
 - **The guide**: the sgRNA's spacer (20 nt for SpCas9, 21–23 for SaCas9) repeats the protospacer on
   the non-target strand; the **PAM** (`NGG` for SpCas9, `NNGRRT` for SaCas9) lies right after the
-  protospacer's 3′ end on that strand. vidgen finds every guide with a PAM in the target: leave
+  protospacer's 3′ end on that strand. schu-video-generator finds every guide with a PAM in the target: leave
   `spacer` out for the one nearest the middle, give `guide: 2` for the n-th, or write your own
   `spacer`.
 - **What plays**: the enzyme comes in, stops at the PAMs it passes, settles on the right one; the
@@ -9600,7 +9874,7 @@ CRISPR–Cas9 genome editing on a target sequence (DESIGN §96.14; `vidgen.genet
 | `title` | text | in the header band |
 | `target` | | the top strand 5′→3′, 26–80 bp |
 | `cas` | `SpCas9` | `SaCas9` (PAM `NNGRRT`, 21–23 nt spacer) |
-| `spacer` | a guide vidgen finds | the sgRNA's spacer 5′→3′ (U or T) |
+| `spacer` | a guide schu-video-generator finds | the sgRNA's spacer 5′→3′ (U or T) |
 | `guide` | | instead of `spacer`: the n-th candidate guide (by cut position) |
 | `repair` | `nhej` | `hdr`, `none` |
 | `indel` | `+1` | NHEJ: the indel at the cut (+1 … +12, −1 … −12) |
@@ -9972,6 +10246,7 @@ never leaves the stage.
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene; on an [iso place](#isometric-places-iso) where it rains from the start, the rainy day's tint |
+| `fill_light` | float 0–1 | `0` | a soft [fill light](#light-and-shadows-light-shadows) on the characters only, so faces stay readable in a dark light (night, an alarm, a dim tint): 0 none, 1 the characters as drawn whatever the light; 0.3–0.5 keeps the mood |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `drawing` | mapping | none (the video's `drawing`) | this scene's [drawing style](#drawing-style-drawing): `{outline, shading, texture, seed}`; the keys given win over the video's `drawing` |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
@@ -9980,7 +10255,7 @@ never leaves the stage.
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10151,7 +10426,7 @@ params:
 
 ##### Walking and jumping on a level
 
-On a level the moving actions follow the tiles. The author says where a character goes; vidgen
+On a level the moving actions follow the tiles. The author says where a character goes; schu-video-generator
 plans the way (DESIGN.md §86.7) and `vidgen validate` refuses a move that cannot be made, naming
 the beat and why.
 
@@ -10185,7 +10460,7 @@ beats:
 - **Clouds** (`~`) are one-way: a character stands on top, walks through a cloud at its own height
   and jumps up through it from below, but a jump that falls onto a cloud lands there (an arc that
   would cross a cloud's top on the way down is refused). Ground (`#`) and platforms (`=`) are solid.
-- **Jumping** (`jump` with `to`: a spot, a mark or an x, or a tile `{column, row}`): vidgen first
+- **Jumping** (`jump` with `to`: a spot, a mark or an x, or a tile `{column, row}`): schu-video-generator first
   walks the character to the best take-off point on its own floor (the shortest jump, at least a
   tile across when it can, then the shortest walk), then it crouches, flies an arc that clears the
   tiles (the lowest of a few heights tried, from 0.75 tiles over the higher end), lands, squashes
@@ -10354,7 +10629,15 @@ they hide what is behind them.
 - **`objects`**: ready-made objects `{object, at, name, facing, size, color, detail}`: outdoors
   `house` (3 x 3 cells), `tree`, `pine`, `bush`, `rock`, `flowers`, `fence`, `bench` (2 x 1),
   `lamp`, `well`, `sign`, `bridge` (1 x 3, over water: walked on); indoors `table` (2 x 1),
-  `chair`, `bed` (1 x 2), `shelf` (2 x 1), `sofa` (2 x 1), `plant`, `rug` (2 x 2: walked on).
+  `chair`, `bed` (1 x 2), `shelf` (2 x 1), `sofa` (2 x 1), `plant`, `rug` (2 x 2: walked on); a
+  lab's `console` (2 x 1: a desk with three monitors whose screens glow with lines of text, its
+  top takes small things and a [`hologram_display`](#hologram-displays-hologram_display)),
+  `server_rack` (a tall dark cabinet whose small lights blink), `projector_pad` (a round glowing
+  platform: walked on, a hologram stands on it) and `whiteboard` (2 x 1, a diagram on it); and
+  for a memory or a garden a `flower_arch` (2 x 1, posts and an arch wound with leaves and
+  flowers) and a `chess_table` (a small table with a board and pieces); for a city a `tower`
+  (2 x 2, 9 tiles tall: see **A city at night** below). The screens, the
+  pad's ring and the rack's lights glow: no `light` darkens them.
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
   front looks to the viewer's lower left) or `right` (lower right; its footprint turns: a bench
@@ -10388,6 +10671,10 @@ they hide what is behind them.
   view moves the least it needs), and when the tightest zoom leaves the view taller than the
   characters (a close-up: the characters are small on a place) they are centred up and down
   rather than the heads put at the top. `shot: wide` in 9:16 keeps the same spots in view.
+  **`wide`** changes how close the wide view is: `auto` (as above), `fill` (a room fills a
+  landscape frame too: its spots, placed objects and characters are kept, the far corners of its
+  walls may be cut) or a number from 1 to 2.5 (that many times closer than the whole place,
+  moved to keep the characters in view): `iso: {place: indoor, wide: fill, map: ...}`.
 - **`colors`**: `grass`, `earth` (the slab and the sides of raised grass), `path`, `water`,
   `stone` (raised blocks and garden walls outdoors), `floor`, `tiles`, `wall`, `cut` (the top of
   the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the
@@ -10416,7 +10703,7 @@ they hide what is behind them.
   `flower`, `book`, `cake`, `cup`, `ball`, `basket`, `umbrella`... or an svg), standing `at` a
   spot: on the ground, or on the table, bench, chair, bed, sofa, rock or well (its rim) standing
   there. They are cut-outs like the characters, hidden by what stands in front of them, and handed
-  about with the stage's actions:
+  about with the stage's actions. A [`portal`](#portals-portal) stands at a spot the same way:
 
   ```yaml
   props:
@@ -10444,6 +10731,9 @@ they hide what is behind them.
   - `reveal` an object that is not there (`shown: false`): a bridge appears over the pond, a
     present under the tree; `hide` takes one away (`- hide: rock`). Nobody walks on a bridge
     before it is there (or after it went).
+  - `- shutters: close` slams steel shutters down over a room's windows (each window that shows
+    into the room; 0.5 s, a `slam`); `- shutters: open` rolls them up again (1.4 s). `iso:
+    {shutters: true}` starts with them down. See [Alarms and shutters](#alarms-and-shutters-alarm-shutters).
 
   The object's new look fades in over its old one, for the action's `run_time`.
 - **Moving.** On an iso place the characters go from cell to cell on the map, round what is in
@@ -10504,8 +10794,9 @@ they hide what is behind them.
     two cells, fully in the cell next to it): in the dark they are drawn warm and bright, fading
     as they walk away or the lamp goes off; by day it changes nothing.
   - `particles: [rain]` (or the `particles` action) rains over the place: seen from above, the
-    drops land anywhere on its ground in view, with a small splash, but not on the characters
-    (no splash on a face). A scene where it rains from the start and that gives no `light` gets
+    drops land anywhere on its ground in view, with a small splash (a plain ring: no droplets
+    that could read as a tiny face in a close-up), but not on the characters (no splash on a
+    face). A scene where it rains from the start and that gives no `light` gets
     the rainy day's tint by itself, so it does not look like a sunny day with drops; rain that
     starts during a scene (the `particles` action) goes with a `light` action, e.g. `- {action:
     light, tint: "#5D6A84", strength: 0.5, run_time: 3}`. Rain does not fall under what keeps
@@ -10524,6 +10815,76 @@ they hide what is behind them.
     `density: 1` (`settled: 30` starts it white) and stays when the snow stops. Its colour is
     snow white (`color` colours the flakes only).
   - A **run** (or a fast walk) leaves its **speed lines** along the walk's diagonal on screen.
+- **A city at night.** `tower` objects are tall buildings: walls in `color` (default a night
+  blue-grey, `#2A3050`), rows of windows on both faces of which a seeded share is lit (warm and
+  cool lights; `on: false` starts them dark, `switch_on` / `switch_off` change them), neon trims
+  up the front corners and round the roof in `detail` (default `#FF2E8B`), and an antenna whose
+  red light blinks. `height` is its height in tiles (2–30; a character is 2 tiles tall; default
+  9), `size` its footprint (default 2 x 2); `screen: true` puts a big info screen on its front
+  whose lines of text crawl up, `garden: true` glowing bands of algae farms up its faces. The
+  windows, trims, screens and farms glow (no `light` darkens them), so `light: night` makes a
+  neon skyline. Towers may reach out of the top of the wide view (they do not shrink the place to
+  fit them whole; `wide: 1.5`–`2.5` fills the frame with the streets). **`traffic`** lanes send
+  hover pods gliding over the place: `{from, to, height, count, seconds, color, size, at}` —
+  between two spots (or `{column, row}` cells) at `height` tiles over the ground (default 3),
+  `count` pods (default 3) taking `seconds` each (default 6), looping all along, each a small
+  capsule with a glowing rim in `color` (default `#5FE8FF`), a light canopy with a rider's head,
+  a headlight, a glow under it and a light trail. With `at` (seconds into the scene) they cross
+  once instead, the first setting off then, easing in and out: a hero's ride, which a `pan` to
+  the lane's end spot with the same `run_time` follows. A pod behind a building is hidden by it;
+  the pods are drawn behind the characters. Outdoors only.
+
+  ```yaml
+  iso:
+    wide: 1.6
+    map: |
+      ................
+      ................
+      ::::::::::::::::
+      a..............b
+      ::::::::::::::::
+      ......m.........
+      ................
+    spots: {a: west, b: east, m: plaza}
+    colors: {grass: "#23263A", path: "#30344A", earth: "#151826"}
+    objects:
+      - {object: tower, at: {column: 2, row: 1}, height: 12, screen: true}
+      - {object: tower, at: {column: 6, row: 1}, height: 8, detail: "#00C8FF", garden: true}
+      - {object: tower, at: {column: 10, row: 6}, size: [3, 2], height: 6, detail: "#39FF9C"}
+    traffic:
+      - {from: west, to: east, height: 3.5, count: 3, seconds: 7, color: "#FF2E8B"}
+      - {from: west, to: east, height: 2.5, count: 1, seconds: 6, at: 1.0, color: "#F4FF3A", size: 1.4}   # crosses once
+  particles: [{kind: rain, glow: true, color: ["#5FFFE0", "#4FA8FF", "#7CFF9E"]}]   # neon rain
+  ```
+- **Sliding doors and shimmering air.** `doors: slide` draws a room's map doors (`+`) as steel
+  doors: a frame with a light strip over it, a keypad's light beside it, two panels meeting at a
+  glowing seam; `open` slides them apart into the wall (a dark doorway, the panels' edges at its
+  sides) with a hiss instead of a creak (closing: a hiss and a soft thud as they meet). `doors:
+  swing` (default) keeps the wooden doors. **`haze`** shimmers over spots of the place:
+  `{at, width, height, color, strength, from}` — a spot or `{column, row}` (its cell's middle), a
+  column `width` tiles wide (1.2) and `height` tiles high (2.6) of faint ribbons of light wavering
+  up it like a heat mirage, swaying more the higher they go, small sparkles drifting up through
+  them and a soft glow on the floor, in `color` (default `#BFE8FF`), `strength` 0.1–1 (0.6); with
+  `from` (seconds into the scene) it fades in then. It shines at night and is drawn behind the
+  characters (who may stand in it): strange air round a door, a vent, a spot where reality thins.
+
+  ```yaml
+  iso:
+    place: indoor
+    doors: slide
+    map: |
+      ######+#####
+      #.....d....#
+      #.m........#
+      ############
+    spots: {d: door_in, m: hall}
+    haze: [{at: door_in, width: 1.6, height: 2.8}]
+  ```
+- **Neon strip lights.** `wall_lights: "#FF2E8B"` (or two colours: `[left, right]`, the left
+  back wall's and the right one's) runs a glowing strip along the top of a room's standing walls
+  (indoors only), lit whatever the `light`: with dark `colors: {wall, floor}` and `light: night`
+  a corridor or a club at night that still reads. A lab object's blinking lights hide behind a
+  character standing in front of it.
 - **Sound** ([foley](#foley-and-music-stings), on by default): footsteps by what the feet walk on
   (grass, a sandy path, wooden boards or a bridge, stone steps and tiles, a rug), a door's creak
   and thud, a soft sound as a small thing is picked up, given or put down, a lamp's click, a
@@ -10685,9 +11046,9 @@ Three props move by themselves (outdoors too):
 switch it at `at` of the beat (at once, with a `click` while `foley` is on). The lit screen, the
 lantern and the glows are never graded by the stage's light, so they shine at night. Other props
 take no `on`, `time` or `speed` (a config error) except a [`fireplace` or a
-`kettle`](#fireplaces-and-kettles-on-switch_on) and a ringing [`phone`](#everyday-small-props-let_go-pour),
-and the actions refuse them ("'sofa' cannot be switched on or off (props that can: fireplace,
-kettle, lamp, phone, tv)").
+`kettle`](#fireplaces-and-kettles-on-switch_on), a ringing [`phone`](#everyday-small-props-let_go-pour)
+and a [`portal`](#portals-portal), and the actions refuse them ("'sofa' cannot be switched on or
+off (props that can: fireplace, kettle, lamp, phone, tv, portal)").
 
 Render cost: only the moving parts leave Manim's static picture of the set (the hands; the
 picture and the glow of a tv; a lamp's lantern and glow only in the animation where it is
@@ -10750,6 +11111,101 @@ Render cost: as for a tv, the flames, the glow and the steam leave Manim's stati
 they burn or steam, with what is drawn over them. Measured on the room above at 854×480, 260
 frames: 16 415 Cairo draws and 6.6–7.1 s with both off, 31 846 draws and 10.4–11.4 s with both
 on all along (the large translucent glow costs the most).
+
+##### Portals (`portal`)
+
+A `portal` is a rift in space that tears open, crackles and seals: a doorway to another world, a
+time hole, a magic gate. It floats where it stands (1.5 characters tall, its oval a little above
+the ground; no shadow), indoors or out, on a plain stage or at a spot of an
+[iso place](#isometric-places-iso). It is switched like a lamp: `on: true` starts it open,
+`- switch_on: <portal>` opens it and `- switch_off: <portal>` seals it, at `at` of the beat.
+
+- **Opening** (1.6 s): a thin glowing crack grows to its full height in the air, then splits
+  open into an oval. **Open**, its rim crackles (a jagged edge in `color`, with a bright core, new
+  jags 14 times a second), sparks fly off the rim, three swirls turn inside a deep `detail` colour
+  with lighter depth rings, the whole pulses gently, and a soft glow in the rim's colour lies
+  around it. **Sealing** (1 s) is the opening backwards, down to a faint seam. Seeded: the same in
+  every render.
+- **Light**: the rim, the inside and the glow are never graded by the stage's light: at night or
+  under a red alarm tint the portal still shines in its own colours.
+- **Colours**: `color` the rim and the glow (default `#C9A8FF`, a pale violet), `detail` the inside
+  (default `#1B1240`, deep space); e.g. `{color: "#7FE7FF", detail: "#0B2A3F"}` for an icy blue one.
+- **Sounds** (foley): opening plays a low, rushing `whoosh` over a soft, deep `thunder` rumble;
+  sealing a falling `swoosh` and a soft `thud`. No click.
+- **Stepping through**: on an iso place a character can come out of it or go into it with `enter`
+  / `exit` and `door:` the portal's spot: it fades in there and walks to its own `at` (put that
+  spot in front of the portal, or it stands inside it, hidden), or walks there and fades out.
+- **Size**: `scale` (1.4 for a portal a tall character walks through).
+- **A view through it**: `view: coast` (a sea coast at dusk: violet to gold sky, the sun low over
+  the water with glints shimmering on it, a cliff), `stars` (a night sky, the stars twinkling, a
+  moon) or `meadow` (green hills under a blue sky) shows that place inside the oval instead of
+  its swirling depths, fading in as it opens; its bands ripple a little, as if seen through
+  shimmering air, and faint swirls still turn over it. Like the rest of the portal it is never
+  graded by the light.
+- It cannot be picked up, held or carried (`pick_up`, `hold`... say so).
+
+```yaml
+- id: lab
+  type: stage
+  params:
+    light: night
+    iso:
+      place: indoor
+      map: |
+        ########
+        #....r.#
+        #.a..g.#
+        #......#
+        ##+#####
+      spots: {r: rift, g: in_front, a: desk}
+    props:
+      - {prop: portal, name: rift_1, at: rift, scale: 1.4}
+    characters:
+      - {name: ada, at: desk}
+      - {name: visitor, at: in_front}
+  beats:
+    - text: "Then, with a crackle, the air itself tore open."
+      actions: [{switch_on: rift_1, at: 0.4}]
+    - text: "And someone stepped out."
+      actions: [{enter: visitor, door: rift}]          # out of the rift, to its own spot in front
+    - text: "A moment later, the rift was gone."
+      actions: [{switch_off: rift_1, at: 0.3}]
+```
+
+Render cost: like a fireplace's flames, the portal's parts and glow are redrawn on every frame
+while it is open, opening or sealing (with what is drawn over them); a sealed portal stays in
+Manim's static picture.
+
+##### Hologram displays (`hologram_display`)
+
+A `hologram_display` is a small projector throwing a floating, translucent panel of light: a
+lab's screen, a ship's star map, a wizard's scrying glass. It stands at a spot like a small thing
+(on an iso place on a `console`, a `table` or the floor; on a plain stage at a mark, with a
+`lift` to stand on a desk) and is switched like a television: `on: true`, `- switch_on: screen`
+(the panel grows out of the beam with a flicker, a soft `hum` and a chime) and `- switch_off:
+screen`. Its panel (about a character tall over the projector, 0.9 wide) shows its **`pattern`**:
+
+- `fractal` (default): curves of light turning and breathing, a spiral winding in and out;
+- `data`: bars rising and falling, a wave running along the top, a ring gauge turning;
+- `text`: lines being written one after another, then scrolling on (a message being composed);
+- `equations`: three rows of formulas written symbol by symbol (sums, integrals, roots, psi, pi),
+  and formula "butterflies" — a symbol between two beating wings of light — fluttering up out of
+  the panel one after another and drifting away in the glow above it (floating equations);
+- `timelines`: a tree of timelines growing from the panel's foot, branching three times, a small
+  panel at each of its eight tips in which two small figures come together and pulse as they
+  meet, each at its own moment (the same meeting in many lives).
+
+The floating formulas reach a little above and beside the panel; a `scale` of 1.4–1.6 makes the
+symbols and the figures readable in a medium shot. Scan lines drift up the panel, a beam joins it to the lens, a soft glow lies around it, and it
+flickers a little; `color` is the light (default `#5FD8FF`), `detail` the projector. It is never
+graded by the stage's light and cannot be picked up or carried.
+
+```yaml
+props:
+  - {prop: hologram_display, name: screen, at: desk, "on": true, pattern: fractal}
+  - {prop: hologram_display, name: letter_screen, at: desk_2, pattern: text, color: "#9DFFB0"}
+  - {prop: hologram_display, name: array, at: pad, "on": true, pattern: timelines, scale: 1.5}
+```
 
 #### Fruit falling from a tree (`fruit`, `drop_fruit`)
 
@@ -10881,7 +11337,7 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can flower`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can flower scanner takeout crystal`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [outdoors](#ready-made-sets-set-city_street): `shop bench bus_stop road path fountain flowers fence beach_umbrella shell pine mushroom log`; [indoors](#ready-made-rooms-set-classroom): `blackboard school_desk shelf_with_goods till wardrobe`; [on a level](#story-props-on-a-level-keys-doors-coins-stars-blockers): `key`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket`; [science fiction](#portals-portal): `portal` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -10894,10 +11350,11 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella`, `door`, `book`, `letter` or `gift` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room), [small props](#everyday-small-props-let_go-pour)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
-| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle` or `phone` only: `true` starts it switched on (a phone: ringing). vidgen and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
+| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle`, `phone`, `portal`, `hologram_display`, `scanner` or `crystal` only: `true` starts it switched on (a phone: ringing; a portal: open; a scanner: its readout lit; a crystal: glowing). schu-video-generator and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
 | `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
 | `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
 | `fruit` | `false` | `tree` only: `true` hangs four fruits on it ([`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) lets one fall) |
+| `scan` | none | `scanner` only: its readout while on, `{level: 0.35, to, at: 0, wave: organic}` (`at` in seconds into the scene; `to` above 1 sends it off its scale, flashing red; [small props](#everyday-small-props-let_go-pour)) |
 
 A picnic set: a `basket` (0.2 of a character, held by its handle), a `napkin` (small: 0.05, a
 checked cloth lying flat) and an `umbrella` (0.6), drawn closed or open.
@@ -11251,8 +11708,9 @@ scenes:
 
 ##### Everyday small props (`let_go`, `pour`)
 
-Ten small things to hold, give, put down and set on a table (`lift`, as for any prop on
-furniture), drawn from simple shapes in the theme's colours:
+Thirteen small things to hold, give, put down and set on a table (`lift`, as for any prop on
+furniture), drawn from simple shapes in the theme's colours (the last three in their own:
+`color` / `detail` change them):
 
 ![The small props in the default theme](gallery/media/small_props.png)
 
@@ -11268,7 +11726,19 @@ furniture), drawn from simple shapes in the theme's colours:
 | `vase` | 0.32 | a vase with three flowers |
 | `watering_can` | 0.22 | held by its handle; `pour` waters |
 | `flower` | 0.22 | one flower picked with its stem and a leaf, held by its stem: to give |
+| `scanner` | 0.17 | a handheld scanner held by its grip; `on: true` or `- switch_on: scanner` lights its screen with a live **readout** (below) |
+| `takeout` | 0.12 | a folded paper box of noodles with its flaps up, a wire handle and chopsticks (clutter on a desk) |
+| `crystal` | 0.09 | a data crystal: a six-sided shard in a small dark holder; `on: true` makes its core glow, pulsing softly |
 
+- A **scanner that is on** shows its reading on its screen: a bar filled to the reading and a
+  live wave above it, scaled by it, in cyan. **`scan: {level, to, at, wave}`** (on the prop) sets
+  the reading at the start (`level`, a share of its scale, 0.35), the one it moves to from `at`
+  seconds into the scene (`to`), and the wave (`organic`, irregular and living, or `steady`);
+  above 1 it is **off its scale**: bar and wave flash red and the wave jitters. Its screen and a
+  small glow shine at night. Held (`- {hold: max, to: scanner}`), it goes with its holder. A
+  [`hud`](#hud)'s `scan` meter can show the same reading over the frame.
+- A **crystal that is on** glows from inside (a light core and a soft glow in its colour) and is
+  never darkened by the stage's light: data crystals scattered on a desk at night.
 - A **book, a letter or a gift** opens and closes like an umbrella (`- open: gift`, `open: true`
   in `props`), standing or in a hand; held open, it stays in front of its holder (only an open
   umbrella goes overhead).
@@ -11318,6 +11788,64 @@ scenes:
           - {pick_up: kit, to: gift}
           - {open: gift, at: 0.5}
           - {switch_off: phone, at: 0.8}
+```
+
+#### Holding hands (`hold_hands`, `let_go_hands`)
+
+**`- {hold_hands: ana, with: ben}`** has two characters of a stage take each other's hand: each
+one's hand nearer the other reaches (0.4 s) for a point between their shoulders, a little lower,
+and they keep holding hands from then on wherever they stand or walk, the arms following every
+frame. Standing further apart than their arms reach (two neighbouring spots of an iso place),
+they step in towards each other across the picture as the hands reach, close enough for the
+joined hands to show between them (never on top of each other); they keep that place when they
+let go. To walk hand in hand, walk both in the same beat to places side by side (`- {walk_to:
+ana, to: 0.4}`, `- {walk_to: ben, to: 0.55}`; on an iso place to two neighbouring spots), with
+the same `run_time` so they set off and arrive together: while both walk, the second keeps its
+place beside the first (side by side, not one behind the other on their routes).
+**`- let_go_hands: ana`** ends it (the
+other lets go too): the arms come back to their sides. While holding, the holding arm takes no
+other action (a `gesture` or `pick_up` with it is overridden); the other arm is free. Generated
+characters only (an SVG character's arms do not bend).
+
+```yaml
+beats:
+  - text: "She took his hand, and they walked on together."
+    actions:
+      - {hold_hands: ana, with: ben, at: 0.1}
+      - {walk_to: ana, to: 0.6, at: 0.3}
+      - {walk_to: ben, to: 0.75, at: 0.3}
+  - text: "At the gate they let go."
+    actions: [{let_go_hands: ana, at: 0.5}]
+```
+
+#### A kiss (`kiss`)
+
+**`- {kiss: ana, with: ben}`** has two characters of a stage kiss, a tasteful cartoon kiss: they
+turn to each other, lean in (their bodies tilt forward at the waist, the taller one a little
+more, their feet staying on the ground), step in until their faces touch — across the picture,
+and up or down a little so their heads are level (on an [iso place](#isometric-places-iso) two
+standing side by side on the map stand on a slant) — close their eyes, hold, and lean back to
+where they stood by the end of `run_time` (default 3 s: about 0.7 s in, 0.6 s back). As their
+faces meet a small burst of hearts and sparkles rises from there, with a soft chime (foley).
+Stand them a step apart (neighbouring cells, or marks close together) and frame them with a
+two-shot or a close-up; it works in 16:9 and 9:16. Generated characters only (it tilts the
+body and closes the eyes). Lint lets two kissing characters stand close (`character_overlap`).
+Hands either of them holds are let go as the kiss starts (`hold_hands` again after it). Actions
+of a beat with different `at` play one after another while an earlier one still runs, so two
+couples kissing at once share one `at`.
+
+| option | default | |
+|---|---|---|
+| `with` | required | the other character of the scene |
+| `hearts` | `true` | the burst of hearts and sparkles; `false`: none |
+| `color` | `#FF5C8A` | the hearts' colour (a theme token or hex) |
+
+```yaml
+beats:
+  - text: "And then, at last, she kissed him."
+    shot: {kind: two_shot, of: [ana, ben]}
+    actions:
+      - {kiss: ana, with: ben, at: 0.2, run_time: 3.2}
 ```
 
 #### Sitting and leaning
@@ -11502,9 +12030,14 @@ leave it; lint `off_stage` says so).
 |---|---|---|
 | `wide` | none | every character on the stage, no zoom (the middle of them on a wide stage) |
 | `two_shot` | none, one or two | two characters, whole, with a margin; default: the beat's speaker and the character nearest it (one name: that one and the nearest) |
-| `medium` | one | the character from about the hips up, with more room on the side it faces |
+| `medium` | one to three | one character from about the hips up, with more room on the side it faces; two or three framed together from the hips up |
 | `over_shoulder` | one, optionally the near one | the character seen past the *near* one (default: the one it last looked at, else the nearest), who stands at the other edge, cut by the frame. The nearer they stand, the tighter the shot (at most a close-up) |
-| `closeup` | one | its head and shoulders, with more room on the side it faces |
+| `closeup` | one to three | its head and shoulders, with more room on the side it faces; two or three: all their heads and shoulders together, centred, the view's top just above the highest head (on an iso place, where one stands further back and higher, both faces still show whole) |
+
+**`clear: true`** (`shot: {kind: closeup, of: [ana, ben], clear: true}`) hides every character
+the shot does not frame for that beat, so nobody standing behind or beside the framed ones (a
+leg poking in over a head, half a figure at the edge) clutters it; they are back with the next
+beat's view (or the next shot).
 
 `shot: closeup kit` (the kind, then the names) or `shot: {kind: closeup, of: kit, move: true,
 run_time: 1.2}`: `move: true` eases to the framing (1.0 s, or `run_time`) instead of cutting, and
@@ -11534,6 +12067,10 @@ beats:
     shot: closeup kit
   - text: "They looked at each other."  # no shot: back to the view before the shots
 ```
+
+A `zoom` whose `until` spans beats with shots of their own gives way to them: each such beat
+shows its shot, the next beat without a shot returns to the zoomed view, and the zoom ends (the
+camera going back to the view before it) when its `until` beat starts.
 
 #### Vertical cartoons (`reframe`)
 
@@ -11574,7 +12111,7 @@ variants:
 #### Automatic directing (`auto_direct`)
 
 With `auto_direct: true` (top level, a stage's param or a beat's key; the nearest one wins; off
-by default) vidgen adds acting actions to a stage's beats so a dialogue looks directed without
+by default) schu-video-generator adds acting actions to a stage's beats so a dialogue looks directed without
 writing each look (a [host](#a-host-beside-any-scene-host) beside other scene types directs
 itself too: [automatic host directing](#automatic-host-directing)):
 
@@ -11622,7 +12159,7 @@ itself too: [automatic host directing](#automatic-host-directing)):
   on the stage; none in a beat with a written `effect`. The symbol is added also for a written
   `emote` / `react` (it adds to the face; the action itself is unchanged).
 - **Lint-safe.** Before adding a look, an arm gesture (`point`, `wave`, `shrug`) or a close-up,
-  vidgen predicts the beat's still from the stage's layout (no rendering) with and without it and
+  schu-video-generator predicts the beat's still from the stage's layout (no rendering) with and without it and
   runs the lint rules `off_stage` and `facing_away` on both; an action that would add a finding is
   left out (an arm out of the view, a speaker turned from the one it talks to, a close-up that cuts
   the speaker or leaves only a character behind it in view). Automatic actions draw no bubble, so
@@ -11965,6 +12502,7 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 | `area` | the whole frame | `[x, y, w, h]`: fractions 0–1 of the visible frame from its top-left corner (smoke from a chimney: `[0.6, 0.1, 0.08, 0.5]`); particles fade out near its edges |
 | `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF`, leaves `#7BAE4E #C9A23A #C2703D`, streaks `#FFFFFF` |
 | `seed` | `1` | another number gives other positions |
+| `glow` | `false` | `true`: they shine — a light core (the colour towards white) with a soft halo in the colour, more opaque than the kind's own, the halo as wide on screen through a zoom (neon rain at night: `{kind: rain, glow: true, color: ["#5FFFE0", "#4FA8FF"]}`; splashes glow too). Any kind. Particles are never darkened by the stage's light, glowing or not |
 | `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground); on an iso place on its grass and paths, with ripples: [Isometric places](#isometric-places-iso)) |
 | `lightning` | `false` | rain on a `stage` only: `true` flashes [lightning](#lightning-and-thunder-lightning) while it rains, at seeded times about every 8 s, with thunder; a number (2–120) is the seconds between strikes on average |
 | `settle` | `false` | snow on a `stage` only: `true` lands it on the ground and on the props, where a white layer grows while it snows ([Snow that settles](#snow-that-settles-settle); on an iso place on its ground, roofs and tops: [Isometric places](#isometric-places-iso)) |
@@ -12178,6 +12716,19 @@ particles keep their colours too.
 | `indoor` | warm lamplight, a little dimmer |
 | `{tint, strength}` | a light of your own: every colour multiplied towards `tint` (a theme token or `#hex`) by `strength` (0 = no change, 1 = fully, default `0.5`) |
 
+**`fill_light`** (0–1, default 0) adds a soft light on the characters alone, as a film lights
+its actors apart from the set: each character is graded that share of the way back to its own
+colours, so faces and expressions read at `night`, under an [alarm](#alarms-and-shutters-alarm-shutters) or in
+a dim tint while the room stays dark (a lamp's light on an iso place adds to it; holograms are
+never graded). `fill_light: 0.45` with `light: night` keeps a dark-skinned face readable; 1 shows
+the characters as drawn.
+
+```yaml
+- id: late_lab
+  type: stage
+  params: {light: night, fill_light: 0.45, characters: [pip, kit]}
+```
+
 The `light` [beat action](#beat-actions) changes the light during the scene: `- light: night`
 (or `tint` + `strength`) fades from the light at its `at` over `run_time` seconds (default `2`)
 and lasts until another `light` action; the stars fade in and out with it. Everything on the
@@ -12235,6 +12786,70 @@ light sets how dark they are (`night` faint). The layout dump leaves shadows and
     - text: "And the first stars came out."
       actions:
         - {light: night, at: 0.2, run_time: 3}
+```
+
+#### Alarms and shutters (`alarm`, `shutters`)
+
+**`- alarm: start`** sets an alarm off on a stage at `at` of the beat; **`- alarm: stop`** ends
+it. While it runs the set is a dark room lit by a red light that rises and falls, like a beacon
+sweeping by: dark between the pulses, glowing in the alarm's `color` (default `#FF2A1F`) at
+their top, one pulse every `period` seconds (default 1.6). It comes in over 0.4 s and gives the
+light back over 0.8 s after `stop` (a scene's own `light` then holds again). What the light never
+grades keeps shining over it: a [portal](#portals-portal), a [hologram](#holograms-hologram), a
+lit screen or lamp, a lab's lights. A siren (the `alarm` ambience bed: two tones, ducked under
+the lines) plays while it runs (foley). A draft render keeps the light flat (the siren still
+plays).
+
+**`- shutters: close`** slams steel shutters down over the windows of an
+[indoor iso place](#isometric-places-iso) (each `%` in a back wall: 0.5 s, accelerating, a
+metallic `slam` as they hit), **`- shutters: open`** rolls them up again (1.4 s, a low swoosh);
+`iso: {shutters: true}` starts with them down. They are graded by the light like the walls.
+
+```yaml
+beats:
+  - text: "A siren wailed. Metal shutters came down over every window of the tower."
+    actions:
+      - {alarm: start, at: 0.1}                # or {alarm: start, color: "#FF8A1F", period: 1.2}
+      - {shutters: close, at: 0.3}
+  - text: "Then, as suddenly, it was quiet."
+    actions:
+      - {alarm: stop, at: 0.2}
+      - {shutters: open, at: 0.5}
+```
+
+#### Flashbacks (`flashback`)
+
+**`flashback: true`** on a stage gives it a memory's look: the set and the characters in faded,
+warm colours, like an old photograph (40 % of their saturation, multiplied towards a warm sepia
+`#E8C08A`, the darks lifted a little), over whatever `light` it has; and a soft, warm-dark
+**vignette** framing the view (clear in the middle, darker towards the edges and corners),
+which stays on the camera's view as it moves. Speech bubbles, name tags and captions stay clear.
+Pair it with an iris in and out (`transition: {type: iris_in}`, `iris_out` on the scene after)
+and a gentle music cue.
+
+| key (`flashback` as a mapping) | default | |
+|---|---|---|
+| `tint` | `#E8C08A` | the warm colour the set is graded towards |
+| `strength` | `0.45` | how strongly (0–1) |
+| `saturation` | `0.4` | the share of the colours' saturation kept (0: grey, 1: all) |
+| `vignette` | `0.7` | how dark the frame is in the corners (0: no vignette) |
+| `color` | `#2A1C12` | the vignette's colour |
+
+```yaml
+- id: summer_garden
+  type: stage
+  transition: {type: iris_in, character: ana}
+  params:
+    background: ["#9CCBEA", "#E4F3FB"]
+    flashback: true                       # or {saturation: 0.6, vignette: 0.5}
+    iso:
+      map: |
+        ..........
+        ..a.......
+        ...e..c...
+      spots: {a: arch, e: ana_spot, c: chess}
+      objects: [{object: flower_arch, at: arch}, {object: chess_table, at: chess}]
+    characters: [{name: ana, at: ana_spot}]
 ```
 
 #### Drawing style (`drawing`)
@@ -12382,6 +12997,11 @@ seeded, seamless loops, no recordings):
 | `city` | street sounds: a low traffic rumble, three or four cars passing (1–2 s swells around 600 Hz) and a far murmur of people; a 16 s loop | −35 | 5 dB |
 | `room_tone` | the air of a quiet room: soft low noise (40–250 Hz) with a faint hiss; an 8 s loop | −46 | no |
 | `crickets` | a warm night outdoors: four crickets, each at its own pitch (3.8–5.2 kHz), place and steady rate (1.3–2.6 chirps a second, each three or four quick pulses), over a faint low night air; a 12 s loop | −37 | 4 dB |
+| `hum` | a lab, a ship's bridge: a soft electronic 110 Hz tone with its harmonics and a second voice beating slowly against it, a faint ~3.5 kHz whine and air; an 8 s loop | −42 | no |
+
+An **`alarm`** bed (the two-tone siren of the `alarm` sound, an alternating ~960 / ~780 Hz,
+−31 LUFS, ducking 7 dB under the voice, 0.15 s in, 0.6 s out) plays by itself while a stage's
+[alarm](#alarms-and-shutters-alarm-shutters) runs; it is not a set bed.
 
 The levels are integrated loudness before ducking (the music: −28, the rain: −32); each bed fades
 in over 2 s from the scene's start and out over 1.5 s ending at its end, and the same bed in the
@@ -12393,7 +13013,7 @@ change](#light-and-shadows-light-shadows) counts half-way through its fade; not 
 `night`, `indoor` or a tint), never while it [rains](#rain-on-the-ground) and only 2 s after the
 rain stops, and not for less than 2 s; on an [iso place](#isometric-places-iso) outdoors also
 `crickets` while it is `sunset` or `night` (by the same rules), and an indoor iso place plays the
-`room_tone`; nothing else. The `city` bed is never chosen: name it.
+`room_tone`; nothing else. The `city` and `hum` beds are never chosen: name them (`ambience: hum`).
 A stage's **`ambience`** param names the bed for the whole scene (`ambience: city`, `ambience:
 [city, birdsong]` for a park in town) or turns it off (`false`); the top-level `ambience: false`
 turns the automatic choice off for the video (a stage that names a bed still plays it).
@@ -12517,7 +13137,7 @@ point at it with a callout (also at any spot of the frame). Actions are listed u
 
 **Syntax.** The canonical form is a mapping with `action` and the keys below, plus the
 action's options. The shorthand `{ACTION: TARGET, ...options}` (as `- dim: item2`) is the
-same thing; write the action name as the first key (if a tool sorted the keys, vidgen finds
+same thing; write the action name as the first key (if a tool sorted the keys, schu-video-generator finds
 the one key that names an action).
 
 | key | default | |
@@ -12609,7 +13229,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
-| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets); on a [`plot`](#plot): `x`, `y` (`[from, to]` in data units) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. With `x` / `y` on a `plot` (targets `axes`, `panel<N>` or a series' panel) the camera stays: the plot's axes ease to that region of the data and back (x zooms every panel sharing it, residual panels too); its annotations step aside meanwhile. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets), `hold` (`false`), `cut` (`false`); on a [`plot`](#plot): `x`, `y` (`[from, to]` in data units) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). `hold: true` stays zoomed in after the beat, until a later `zoom`, `pan`, `follow` or shot moves the camera (a scene ending on a close view, a Short's last shot; a later beat's shot returns to the held view); its `until` then changes nothing. `cut: true` jumps to the zoomed view (no camera move); at `at: 0` of a scene's first beat the scene opens on it — its first frame is already framed, where a zoom otherwise starts after the set has faded in (about a second of the wide view). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. With `x` / `y` on a `plot` (targets `axes`, `panel<N>` or a series' panel) the camera stays: the plot's axes ease to that region of the data and back (x zooms every panel sharing it, residual panels too); its annotations step aside meanwhile. |
 | `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in; on an iso place `to` is a spot, the camera moves up and down too, and from the wide view it moves in (at least twice as close as the whole place). Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
@@ -12804,7 +13424,7 @@ Keys every overlay entry has (any other key is an option of its type):
 
 | key | default | |
 |---|---|---|
-| `type` | required | `lower_third`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
+| `type` | required | `lower_third`, `hook`, `hud`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
 | `id` | the type | the name a scene's `overlays:` refers to; when several entries share a type and have no `id`, they are `<type>1`, `<type>2`, ... (ids must be unique) |
 | `scenes` | `all` | the scenes it is drawn on: `all` or a list of scene ids |
 | `exclude` | `[]` | scenes it is not drawn on |
@@ -12851,7 +13471,8 @@ A name and a title on a plate in the lower third of the frame, sliding in at a m
 and out after `duration` seconds. It belongs to a scene (`scene`, default the first scene the
 entry is drawn on) and starts `at` seconds into it or at one of its beats; it goes by the end of
 that scene unless `across_cuts`. It is placed in the safe area (in 9:16 raised by 12 % of the
-safe height: phone apps put their controls over the bottom), at least at the readable text size,
+safe height: phone apps put their controls over the bottom; in a [Short](#cuts-and-shorts-cut-shorts)
+out of the parts the app covers), at least at the readable text size,
 and slides in from the side it is aligned to (from below / above when centred). It makes way for
 the scene's other overlays that reserve room: where it would meet bottom `captions` (or another
 overlay with `reserve: true`) it moves above them (with the 0.2 gap), in 16:9 and 9:16 alike.
@@ -12872,6 +13493,96 @@ overlay with `reserve: true`) it moves above them (with the 0.2 gap), in 16:9 an
 | `name_color`, `title_color` | `text`, `dim` | |
 | `name_size`, `title_size` | `body`, `caption` | |
 | `enter`, `exit` | `0.5`, `0.4` | seconds of the slide in and out |
+
+### `hook`
+
+A big caption over the first seconds of a video — a Short's hook, the question or promise that
+keeps a viewer from swiping on: bold text on a plate near the top of the safe area (in a
+[Short](#cuts-and-shorts-cut-shorts), below the top part the app covers and left of its buttons),
+popping in at `at` and fading out `seconds` later, over the captions. A [cut](#cuts-and-shorts-cut-shorts)'s
+`hook:` adds one (id `hook`).
+
+| param | default | |
+|---|---|---|
+| `text` | required | the hook's words: a few, read in a second |
+| `at` | `0` | when it pops in: seconds into the video |
+| `seconds` | `3` | how long it shows, its pop in and fade out included |
+| `position` | `top` | `top` or `center` of the safe area |
+| `size` | 1.25 × `title` | text size (wraps onto more lines rather than shrinking); without `size`, a hook that would wrap onto 3 or more lines gets the largest size down to 0.8 × `title` that keeps it to 2 |
+| `color` | auto | text colour; default the theme's text or background colour, whichever reads on the plate |
+| `background`, `background_opacity` | `primary`, `0.92` | the plate; `background: null` for none (the text gets an outline in the background colour) |
+| `max_width` | `0.92` | widest it may be, share of the safe width |
+| `enter`, `exit` | `0.25`, `0.4` | seconds of its pop in and fade out |
+
+```yaml
+overlays:
+  - {type: hook, text: "What if the kite could fly itself?", seconds: 2.5}
+```
+
+### `hud`
+
+A heads-up display over the frame: what an implant, a helmet's visor or a robot's eye shows. Thin
+corner brackets and faint scan lines over the frame (`frame`), a blinking warning on a dark plate
+at the top (`alert`), readout lines in a monospaced font appearing one after another at the top
+left (`lines`), a heart monitor at the bottom left (`heart`: the rate, a beating heart, a
+scrolling trace; the rate rises or falls, beats can be skipped, shown in the warning colour
+while skipping or racing) and a scanner's meter at the bottom right (`scan`: its reading as a
+bar and a live wave; above 1 it is off its scale and flashes `off_scale` in the warning colour).
+It belongs to a scene like a [lower third](#lower_third) (`scene`, `at`, `duration`), boots in
+with a flicker and fades out; usually written on the scene that needs it. In a
+[Short](#cuts-and-shorts-cut-shorts) it keeps out of the app's parts and its meters stand above
+the captions (`compact` there makes them smaller, not closer to the edges). Drawn under the captions
+and the hook; lint does not check its contrast (its text stands on dark plates or has a dark
+edge).
+
+**It keeps off faces** (`avoid_faces`, on by default): at each frame it knows where the
+characters' heads are on screen, and the alert and the readout lines go to the free place
+covering the least of a face — the alert at the top centre, top right, top left or bottom centre
+(above the meters), the lines at the top left or right (under the alert when it is up there too)
+or above a meter — moving only when a face comes under them (a shot, a zoom, a walk), so they do
+not hop about. In a close-up where every place touches the face, `compact: true` makes texts and
+meters smaller and closer to the frame's edges. Lint [`overlay_face`](#lint-vidgen-lint) warns when its text
+or a plate still covers a face (outside Shorts; in a Short `shorts_safe_area` does, the same
+way: the frame's thin lines over the whole picture do not count).
+
+| param | default | |
+|---|---|---|
+| `scene` | first scene drawn on | the scene it belongs to |
+| `at` | `0` | when it comes on: seconds after its scene's start, a beat id of that scene, or a word its narration says (`"@alert"`) |
+| `duration` | `5.0` | seconds shown, its boot in and fade out included |
+| `across_cuts` | `false` | stay on over the following scenes until `duration` is over |
+| `color` | `#5FFFE0` | its lines, brackets and readouts |
+| `warning` | `#FF3B5C` | the alert, a racing or skipping heart, an off-scale reading |
+| `frame` | `true` | corner brackets and scan lines over the frame |
+| `alert` | none | a blinking warning at the top (`INCOMING ALERT`) |
+| `lines` | `[]` | readout lines at the top left, one every `line_seconds`, each flickering in |
+| `line_seconds` | `0.6` | seconds between the lines appearing |
+| `heart` | none | `{bpm: 72, to, at: 0, skips: 0, label: BPM}`: the rate at the start, the rate it eases to from `at` (seconds after the HUD comes on), how many beats are skipped right at `at` |
+| `scan` | none | `{level: 0.35, to, at: 0, wave: organic, label: SCAN, off_scale: OFF SCALE}`: the reading (a share of the scale; above 1 off the scale), the one it moves to from `at`, an `organic` (irregular, living) or `steady` wave |
+| `opacity` | `0.92` | how strongly it shows over the scene |
+| `avoid_faces` | `true` | keep the alert and the lines off the characters' faces (each to the free place covering the least of a face); `false`: always the alert at the top centre, the lines at the top left |
+| `compact` | `false` | smaller texts and meters, closer to the frame's edges (for close-ups) |
+| `enter`, `exit` | `0.4`, `0.35` | seconds of its boot in and fade out |
+
+```yaml
+scenes:
+  - id: office
+    type: stage
+    params: {...}
+    beats: [...]
+    overlays:
+      implant:
+        type: hud
+        at: office_b2
+        duration: 7
+        alert: "INCOMING ALERT"
+        lines: ["SIGNAL: SECTOR 7", "STATUS: ARMED"]
+        heart: {bpm: 70, to: 128, at: 1.5, skips: 3}
+        scan: {level: 0.4, to: 1.6, at: 3}
+```
+
+Render cost: it is drawn in pieces — its frame once, its texts when they change, only the small
+meters on every frame (a test scene of 6 s at 854 x 480 takes 25 s with it, 20 s without).
 
 ### `watermark`
 
@@ -12970,7 +13681,8 @@ without audio) is shared among the words by syllables (numbers by their spoken w
 by letters), with pauses after sentence ends and commas. The SRT uses the same word times.
 
 **Placement.** In the safe area at the `bottom` (in 9:16 raised by 12 % of the safe height:
-phone apps put their controls over the bottom), `top` or `center`, centred, at least the
+phone apps put their controls over the bottom; in a [Short](#cuts-and-shorts-cut-shorts) just
+above the part the app covers and left of its buttons, no lift), `top` or `center`, centred, at least the
 readable text size, the text no wider than `max_width`. At the top or bottom it **reserves** its
 band (`max_lines` lines high) by default, so the scenes lay out above / below it; centred it
 does not (lint's `overlay_overlap` reports scene text under it; or set `reserve: false` and
@@ -12984,16 +13696,16 @@ a warning).
 |---|---|---|
 | `style` | `subtitles` | `subtitles` or `karaoke` (`words`) |
 | `position` | `bottom` | `bottom`, `top` or `center` (of the safe area) |
-| `size` | `body`; karaoke `title` | text size (at least the readable size) |
+| `size` | `body`; karaoke `title` (in a Short `body`) | text size (at least the readable size) |
 | `bold` | `false`; karaoke `true` | |
-| `max_lines` | `2` | lines per caption (1-3) |
-| `max_words` | none; karaoke `3` | words per caption |
+| `max_lines` | `2` (karaoke in a Short `1`) | lines per caption (1-3) |
+| `max_words` | none; karaoke `3` (in a Short `5`) | words per caption (in a [Short](#cuts-and-shorts-cut-shorts) karaoke shows a phrase of about three to five words on one line) |
 | `max_width` | `0.8`; karaoke `0.9` | widest the text may be, share of the safe width (9:16: `1`) |
 | `color` | auto | text colour; default the theme's `text` or background colour, whichever reads better on the plate |
 | `highlight` | `highlight` | karaoke: the word being spoken |
 | `pop` | `1.12` | karaoke: scale of the word being spoken (`1`: none); limited so it never touches its neighbours |
 | `background`, `background_opacity` | `surface`, `0.8` | the plate; `background: null` for none (the text then gets an outline in the background colour) |
-| `lift` | `0`; 9:16 `0.12` | bottom captions: raised by this share of the safe height |
+| `lift` | `0`; 9:16 `0.12`; a Short `0.03` | bottom captions: raised by this share of the safe height (of a Short: of the part the app leaves clear) |
 | `speakers` | `subtitles.speakers` | who speaks ([multiple voices](#multiple-voices-voices)): `name` (a `Label:` tag in the speaker's colour before a beat whose speaker changed), `color` (each speaker's words in its colour), `both`, or `off` |
 | `genes` | `true` | gene symbols in italics (protein names stay roman): the symbols the video's cell-biology scenes declare as genes — a `cell` or `molecule` scene's `gene.name`, a molecule's `gene`, a `pathway`'s gene nodes — wherever the narration writes them, except where the next word makes it the protein ("SERPINA1 protein", "EGFR kinase"); `false`: as written |
 
@@ -13050,7 +13762,7 @@ What only `vidgen validate` checks: unique scene and beat ids, action targets an
 beats, files referenced by params
 (images, code, logos), the checks written in Python (`validate_project`, pydantic validators,
 e.g. "values has one entry per label") and loading the extensions. A schema-valid config can
-still fail `vidgen validate`. The reverse happens only for values vidgen converts, such as
+still fail `vidgen validate`. The reverse happens only for values schu-video-generator converts, such as
 the string `"30"` for a number: write values with their real type (tests check both
 directions on the examples and on common mistakes).
 
@@ -13063,7 +13775,7 @@ and prints a warning. `--scene` with an unknown type is an error (exit code 1).
 
 `vidgen render`, `storyboard`, `lint`, `thumbnail`, `slides` and `gallery` take `--jobs N`
 (`-j N`): the number of scenes rendered at once, each in its own worker process (default 1).
-`--jobs auto` lets vidgen choose:
+`--jobs auto` lets schu-video-generator choose:
 
     jobs = min(available memory ÷ 1.5 GB, CPU cores), at least 1
 
@@ -13322,13 +14034,13 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `prop_overlap` | warning | two props standing on the floor whose boxes share at least `min_overlap` of the narrower one's width, at depths less than 0.15 apart: drawn over each other, like a [room](#rooms-room)'s door over the sofa against the wall. Not reported: a prop in front of another (depths 0.15 or more apart, like an armchair before the sofa), one lifted onto another (`lift`: a basket on the counter) or hanging on the wall above it (a picture, a clock), a rug under them, a held prop (the layout dump's `raised`, `flat`, `held_by`). Fix: another `at` for one of them (a door: its x in the room's `doors`), a smaller `scale`, or a `depth` that puts one in front |
 | `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too), of the smaller of two bubbles, or of an [effect symbol](#effect-symbols-effect)'s box. Fix: a shorter `bubble` text, the characters further apart, or the two lines (or the line and the effect) in different beats |
 | `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
-| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. On an [iso place](#isometric-places-iso) it measures what really covers the speaker's eyes and mouth (the opaque pixels of the place in front of it: a lamp post across the face, not the empty corners of a tree's picture) and reports at `min_hidden_features` (`0.25`) of their box, naming the pieces of the place (`lamp`, `tree_2`). Fix: move one of them, or a smaller `depth` for the speaker; on an iso place walk it to a spot where nothing stands in front of it, or a shot that frames it from where it shows |
+| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol, nor a `hud`, which `overlay_face` checks). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. On an [iso place](#isometric-places-iso) it measures what really covers the speaker's eyes and mouth (the opaque pixels of the place in front of it: a lamp post across the face, not the empty corners of a tree's picture) and reports at `min_hidden_features` (`0.25`) of their box, naming the pieces of the place (`lamp`, `tree_2`). Fix: move one of them, or a smaller `depth` for the speaker; on an iso place walk it to a spot where nothing stands in front of it, or a shot that frames it from where it shows |
 | `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. On an [iso place](#isometric-places-iso) a speaker whose name tag shows (or that has a speech bubble) is not reported for a line of at most `max_tagged_words` (`12`) words: the tag shows who says a short line. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
 | `offscreen_action` | warning | on an [iso place](#isometric-places-iso): something a beat does — a walk (`walk_to`, `run_to`, `meet`, `wander`, `enter`, `exit`), a small thing picked up, given or put down, a door, lamp or flowers changing, an object appearing or going — that the camera mostly does not show while it happens: on fewer than `min_seen` (`0.5`) of its frames is at least half of it in view (or enough of it to fill a quarter of the view: a house in a close-up). Fix: a wider shot (`shot: wide`), a `pan` or `follow` to it, or do it in a beat whose shot shows it |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's, area's, point's, vector's or mark's `color` or a `number_line` point's, interval's or jump's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
-| `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared. Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
-| `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
+| `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared, nor an [echo](#echo-characters-echo) (another self, alike on purpose). Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
+| `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages schu-video-generator has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` (or, when the next beat [overlaps](#overlapping-lines-overlap-interrupt) it, than the time until that beat) by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
 | `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps; a walk or a jump on a [platform level](#walking-and-jumping-on-a-level) sped up more than `max_speedup` times to fit its beat |
@@ -13384,6 +14096,9 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `significance_claim` | warning | the p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists", "the chance it is a fluke"): it is the chance that background alone fluctuates this high; a "one in N" or a percentage that does not match the σ said (one- or two-sided); in a [`mass_spectrum`](#mass_spectrum) scene a σ said for the bump that it does not compute (its expected Asimov significance with all events and its likelihood-ratio fit; "so far", "already" accept anything along the filling; the 5σ convention itself is not compared); `sigmas` (0.5) |
 | `simulated_label` | warning | simulated data called real ("real collision data", "data from the LHC", "CMS data") in a `mass_spectrum`, `detector` or simulated `plot` scene, or such a picture whose screen does not say "simulated" (a `detector` `label` without it; a `plot` of the `mass_spectrum` or `decay_times` model without "simulated" in a series name, the title or the caption) |
 | `particle_units` | info | masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video: write them one way |
+| `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_cover` (0.1) of a face — for captions, any caption of the line being spoken (the layout dump's `reach` of the caption), not only the one in the still; for an overlay that keeps off faces (a `hud`) only its texts and panels' plates count, not its frame's lines over the whole picture. Beat-end and mid-beat stills: in a Short, `vidgen lint` renders 3 stills per beat (stills of a storyboard with 2 or more per beat are reused), so a face under the captions while a zoom is held part-way through a beat is found too. Faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
+| `overlay_face` | warning | outside a Short, a [`hud`](#hud)'s text or panel plate covering at least `min_cover` (0.15) of a character's face (the HUD places its texts clear of faces by itself; this catches what it could not: a close-up with a face in every corner). Fix: frame the face away from the corners (a shot or zoom), `compact: true`, fewer `lines` |
+| `shorts_length` | error | a Short planned longer than `shorts.max_seconds` (60): reported on the video's last scene. Fix: fewer beats or scenes in the `cut`, a shorter end card |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -13470,6 +14185,9 @@ lint:
     significance_claim: {sigmas: 0.5}       # how far a σ said for a spectrum may be from what it computes
     simulated_label: {}
     particle_units: {}                      # default severity info
+    shorts_safe_area: {tolerance: 0.01, min_face: 0.25, min_cover: 0.1}   # in a Short only; shares of a face's box (under the app's parts / an overlay)
+    overlay_face: {min_cover: 0.15}         # a hud's text or plate over a face (share of the face's box); not in a Short
+    shorts_length: {}                       # default severity error; in a Short only
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -13725,7 +14443,7 @@ above). A scene is rendered again (with stills, in worker processes like `vidgen
 if its stills are missing, were taken at another `--per-beat` count or format, or are stale:
 each render records a fingerprint of what the scene depends on (its config entry, the other
 config sections except `scenes`/`variants`/`lint`, its beats' MP3s, the project's extension code,
-the files under `assets/`, and vidgen's own rendering code; with [overlays](#overlays), also
+the files under `assets/`, and schu-video-generator's own rendering code; with [overlays](#overlays), also
 every scene's beats, MP3s and type, which place the scene in the video; the transition into the
 next scene; with [`carry`](#continuity-carrying-objects-into-the-next-scene-carry), what the next
 scene carries out of it and, for a carrying scene, the fingerprint of the scene before), and a
@@ -13735,7 +14453,7 @@ reads from outside `assets/` are not tracked: use `--force`. The storyboard does
 video; `vidgen render` does. It dispatches `post_scene` for the scenes it renders, not
 `pre_render`/`post_render`.
 
-**`vidgen render` uses the same fingerprints** (since vidgen 0.2): it renders only the scenes
+**`vidgen render` uses the same fingerprints** (since schu-video-generator 0.2): it renders only the scenes
 whose render is missing, was made at another format or without the narration it now needs, or
 is stale, and joins them with the current renders of the others (`render --json` lists each
 scene's `status`: `rendered` or `reused`). So `vidgen render --preview` after a storyboard or a
@@ -13787,7 +14505,7 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
 - **Samples.** A built-in type's sample is its snippet in the author guide's `scenes` topic
   (`AGENTS.md`, `vidgen guide scenes`; the first of the type, one without `generate:` preferred),
   so the guide and the gallery show the same YAML and a test keeps the committed pages in step
-  with the guide. Files a snippet names under `assets/` are stand-ins shipped with vidgen (a
+  with the guide. Files a snippet names under `assets/` are stand-ins shipped with schu-video-generator (a
   landscape picture for `image`, an app screenshot for other pictures, a short screen recording
   for clips). Another name of the same type (`flowchart` for `diagram`) is listed, not rendered
   again. Run in a project (or given `PROJECT`), the project's own scene types are shown too, each
@@ -13817,7 +14535,7 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
   its start, so a page shows the finished picture before the GIF plays (and between loops). A GIF
   over 150 KB is made again at 5, then 4 fps. The index shows each GIF in a `<picture>` whose
   still replaces it for viewers who ask for reduced motion. Nothing in the files depends on the
-  time or the machine: the same vidgen writes the same files.
+  time or the machine: the same schu-video-generator writes the same files.
 
 | option | |
 |---|---|
@@ -13988,7 +14706,7 @@ exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everyt
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
 
-**Stability.** `version` is the version of these shapes (currently **1**), not of vidgen. Keys
+**Stability.** `version` is the version of these shapes (currently **1**), not of schu-video-generator. Keys
 are only added within a version; removing or renaming a key or changing a value's type bumps
 it. Times are seconds (floats), paths are absolute strings, absent values are `null`.
 
@@ -14254,7 +14972,7 @@ difference between two palette colours).
 | `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
-| `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: vidgen wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
+| `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: schu-video-generator wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
 | `chapters` | list | the chapters as written into the MP4 and the YouTube list (empty without chapters): `{title, number, scene, start, end, index, count, card, intro}` — `number` as written (`null`: none), `scene` the scene it starts at, `start` / `end` seconds in the video, `index` its position in this list (1-based) of `count`, `card` whether it starts with a `chapter` card, `intro` whether it is the chapter added at 0:00 before the first one; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
 
@@ -14262,7 +14980,10 @@ difference between two palette colours).
 narrated), with their `scene`, and YouTube's chapter rules the list breaks (`chapters: ...`). On failure, `error.details` is `{failed, rendered}`: `failed`
 lists `{scene, exit_code, output_tail}` (the last 60 lines of the worker's output; exit code 1
 for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids rendered before
-(or, with `--keep-going`, besides) the failures.
+(or, with `--keep-going`, besides) the failures. With `--max-scenes N`, a run that leaves scenes
+to render is not joined: it fails with `error.details` `{rendered, remaining, render_seconds}`
+(the next run goes on with `remaining`; finished scenes' renders are kept, as after an
+interrupted run).
 
 ### `vidgen storyboard --json`
 
@@ -14427,7 +15148,7 @@ name, acronym or number; else `null`) and `entry`; `suggestion`.
 
 ### `vidgen guide --json`
 
-The author guide for AI agents (`AGENTS.md`, shipped with vidgen; `vidgen guide [TOPIC] [--list]`).
+The author guide for AI agents (`AGENTS.md`, shipped with schu-video-generator; `vidgen guide [TOPIC] [--list]`).
 
 | key | type | |
 |---|---|---|

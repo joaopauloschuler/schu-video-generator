@@ -625,7 +625,7 @@ def surface_at(place: IsoPlace, column: int, row: int) -> str:
     """What the cell is underfoot (:data:`SURFACES`)."""
     item = place.object_at(column, row)
     if item is not None and item.walkable:
-        return "rug" if item.kind == "rug" else "bridge"
+        return {"rug": "rug", "projector_pad": "stone"}.get(item.kind, "bridge")
     ground = place.ground(column, row)
     if ground == BLOCK:
         return "stone"

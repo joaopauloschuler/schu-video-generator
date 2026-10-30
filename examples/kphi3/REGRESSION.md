@@ -1,4 +1,4 @@
-# Regression: vidgen port vs the original kphi3 video
+# Regression: schu-video-generator port vs the original kphi3 video
 
 Reference: `kphi3_paper_video/kphi3_video.mp4` (original one-off project: `scenes.py` +
 `render.py`, 1920x1080 @ 30 fps, 6932 frames, 231.07 s).
@@ -31,7 +31,7 @@ starts at 0.021 s (AAC priming from its old concat). SSIM and PSNR come from ffm
 
 ## Scene durations
 
-| scene | original | frames | vidgen | frames | diff | predicted from beat rounding |
+| scene | original | frames | schu-video-generator | frames | diff | predicted from beat rounding |
 |---|---|---|---|---|---|---|
 | S1Title → `title` | 15.167 s | 455 | 15.233 s | 457 | +2 | +2 |
 | S2Sparsity → `sparsity` | 28.233 s | 847 | 28.267 s | 848 | +1 | +1 |
@@ -43,7 +43,7 @@ starts at 0.021 s (AAC priming from its old concat). SSIM and PSNR come from ffm
 | S8Conclusion → `conclusion` | 25.133 s | 754 | 25.200 s | 756 | +2 | +2 |
 | **total** | **231.067 s** | **6932** | **231.467 s** | **6944** | **+12** | **+12** |
 
-12 of the 27 beats are one frame longer in vidgen (those whose `rest × 30` has a fractional part
+12 of the 27 beats are one frame longer in schu-video-generator (those whose `rest × 30` has a fractional part
 ≥ 0.5: s1_b1, s1_b2, s2_b1, s3_b3, s4_b5, s5_b3, s6_b2, s6_b3, s7_b1, s7_b3, s8_b2, s8_b3). The
 prediction matches every scene exactly, so the animation timeline inside each beat is
 frame-for-frame the original's.
@@ -66,7 +66,7 @@ at about 53 dB). The port now colors the glyph slice like the original (`color_g
 The narration onset was located by cross-correlating each beat's MP3 with the soundtrack (8 kHz
 mono) around where the frame timeline says the beat starts:
 
-| beat | original: audio vs its frames | vidgen: audio vs its frames |
+| beat | original: audio vs its frames | schu-video-generator: audio vs its frames |
 |---|---|---|
 | s2_b1 | +44 ms | 0 ms |
 | s4_b1 | +51 ms | 0 ms |
@@ -75,11 +75,11 @@ mono) around where the frame timeline says the beat starts:
 
 The original's narration starts 42–61 ms after the frame time. 21 ms of that is the video
 stream's start offset; the rest is the per-segment AAC priming of its concat, which
-vidgen's PCM concat avoids (DESIGN §5.2, Step 4). vidgen's narration is in sync to within 1 ms.
+schu-video-generator's PCM concat avoids (DESIGN §5.2, Step 4). schu-video-generator's narration is in sync to within 1 ms.
 
 ## Remaining differences
 
-- +1 frame on 12 beats (+0.40 s in total): vidgen rounds each beat to the nearest frame, the
+- +1 frame on 12 beats (+0.40 s in total): schu-video-generator rounds each beat to the nearest frame, the
   original truncated. This is deliberate engine behaviour, not special-cased for this video.
 - Audio sync is better than the original (see above); the audio is AAC 192 kbps 48 kHz in both.
 - Subtitles (`kphi3_video.srt`) are new; the original had none.
@@ -90,7 +90,7 @@ The measurements above are of the Step 6 port. The Step 22 review made the examp
 `vidgen lint` (0 findings) with small visual changes; the frames are no longer bit-identical to
 the original:
 
-- `dim` is `#838B98` (vidgen's default) instead of the original `#6B7280`, which is 3.9:1 on the
+- `dim` is `#838B98` (schu-video-generator's default) instead of the original `#6B7280`, which is 3.9:1 on the
   background, below WCAG AA (4.5:1) for every dim label: dim text is slightly lighter.
 - `loss`: axis ticks and model names 16 → 20 pt, the footnote 18 → 22 pt and inside the safe
   area, both panels 0.2 units higher to make room.

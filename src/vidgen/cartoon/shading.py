@@ -19,6 +19,7 @@ import numpy as np
 from manim import Ellipse, Mobject, VGroup, VMobject
 from pydantic import BaseModel, ConfigDict, Field
 
+from vidgen.cartoon.alarm import AlarmSpan, alarm_changing, alarm_grade, alarm_settled
 from vidgen.cartoon.lighting import (
     DEFAULT_STRENGTH,
     LIGHT_PRESETS,
@@ -31,6 +32,7 @@ from vidgen.cartoon.lighting import (
     lamp_lit,
     light_at,
     light_changing,
+    lifted,
     light_grade,
     shadow_ellipse,
     tint_grade,
@@ -103,6 +105,17 @@ def mark_lamp_lit(mobject: Mobject, lamp: LampLit) -> None:
         setattr(member, LAMP_LIT, lamp)
 
 
+#: The attribute holding how much a fill light lifts what the light grades (0..1, DESIGN.md §100.15).
+LIGHT_LIFT = "light_lift"
+
+
+def mark_light_lift(mobject: Mobject, share: float) -> None:
+    """Let a fill light lift ``mobject`` and everything in it ``share`` (0..1) of the way from
+    the stage's light back to its colours as drawn (:func:`~vidgen.cartoon.lighting.lifted`)."""
+    for member in mobject.get_family():
+        setattr(member, LIGHT_LIFT, float(share))
+
+
 def mark_lit(*mobjects: Mobject) -> None:
     """Mark ``mobjects`` and everything in them as graded by the stage's light."""
     for mob in mobjects:
@@ -126,10 +139,14 @@ class StageLight:
         self.changes: list[LightChange] = []
         self.strikes: list[Strike] = []
         self.storms: list[RainStorm] = []
+        #: the alarms that pulse the light (DESIGN.md §100.7)
+        self.alarms: list[AlarmSpan] = []
         self.flash_share = FLASH_SHARE
         #: how bright the lightning lights the set now (0..1)
         self.flash = 0.0
         self._listeners: list[Callable[[LightGrade], None]] = []
+        #: grades lifted by a fill light, by (grade, share): made once (§100.15)
+        self._lifted: dict[tuple[LightGrade, float], LightGrade] = {}
         if flat:
             return
         fill, stroke, image = camera.get_fill_rgbas, camera.get_stroke_rgbas, camera.display_image_mobject
@@ -138,9 +155,20 @@ class StageLight:
         camera.display_image_mobject = lambda image_mobject, pixel_array: self._draw_image(image, image_mobject, pixel_array)
 
     def _grade_of(self, mob: Any) -> LightGrade:
-        """The grade of a lit ``mob``: the light's, with a lamp's light on it (§89.13)."""
+        """The grade of a lit ``mob``: the light's, with a lamp's light on it (§89.13), lifted
+        by a fill light (§100.15)."""
         lamp = getattr(mob, LAMP_LIT, None)
-        return self.grade if lamp is None else lamp.grade(self.grade)
+        grade = self.grade if lamp is None else lamp.grade(self.grade)
+        lift = getattr(mob, LIGHT_LIFT, 0.0)
+        if lift <= 0.0:
+            return grade
+        key = (grade, lift)
+        found = self._lifted.get(key)
+        if found is None:
+            if len(self._lifted) > 256:
+                self._lifted.clear()
+            found = self._lifted[key] = lifted(grade, lift)
+        return found
 
     def _graded(self, mob: Any, rgbas: np.ndarray) -> np.ndarray:
         if not self.grade.changes_colors or not getattr(mob, LIT, False):
@@ -177,6 +205,8 @@ class StageLight:
         self.flash = flash_level(self.strikes_until(now), now) if (self.strikes or self.storms) and not self.flat else 0.0
         if self.flash > 0:
             grade = flash_grade(grade, self.flash, share=self.flash_share)
+        if self.alarms and not self.flat:
+            grade = alarm_grade(grade, self.alarms, now)
         if grade != self.grade:
             self.grade = grade
             for listener in self._listeners:
@@ -185,15 +215,18 @@ class StageLight:
     def changing(self, start: float, end: float) -> bool:
         """Whether the light changes (or lightning flashes) between scene times ``start`` and
         ``end``."""
-        return light_changing(self.changes, start, end) or (not self.flat and flashing(self.strikes_until(end), start, end))
+        if light_changing(self.changes, start, end):
+            return True
+        return not self.flat and (flashing(self.strikes_until(end), start, end) or alarm_changing(self.alarms, start, end))
 
     def settled(self, now: float) -> bool:
-        """Whether every change and every flash is over at scene time ``now`` (and no rain field
-        with lightning still falls)."""
+        """Whether every change, every flash and every alarm is over at scene time ``now`` (and no
+        rain field with lightning still falls)."""
         changes = all(change.end <= now and (change.seconds > 0 or change.start < now) for change in self.changes)
         if self.flat:
             return changes
-        return changes and all(s.end <= now for s in self.strikes) and all(storm.over(now) for storm in self.storms)
+        return (changes and all(s.end <= now for s in self.strikes) and all(storm.over(now) for storm in self.storms)
+                and alarm_settled(self.alarms, now))
 
 
 class StarField(VGroup):

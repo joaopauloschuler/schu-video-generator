@@ -108,7 +108,7 @@ def test_unsafe_and_unsupported_parts_are_removed() -> None:
         (b'<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY a "x">]><svg/>', "declares XML entities"),
         (b"<html><body/></html>", "not an SVG file"),
         (b"<svg", "not a readable SVG"),
-        (svg('<text x="1" y="1">only words</text>'), "draws nothing vidgen can show"),
+        (svg('<text x="1" y="1">only words</text>'), "draws nothing schu-video-generator can show"),
         (b'<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>', "give the <svg> a viewBox"),
     ],
 )
@@ -121,13 +121,13 @@ def test_huge_svgs_are_capped_and_simplified() -> None:
     tiny = "".join(f'<rect x="{i % 50}" y="{i // 50}" width="0.5" height="0.5" fill="#123456"/>' for i in range(MAX_SHAPES + 200))
     data = svg('<rect width="100" height="100" fill="#ffffff"/>' + tiny)
     capped = sanitize_svg(data, where="big.svg")
-    assert capped.shapes == MAX_SHAPES and "1701 shapes, more than the 1500 vidgen draws: the 201 smallest were dropped" in capped.warnings[0]
+    assert capped.shapes == MAX_SHAPES and "1701 shapes, more than the 1500 schu-video-generator draws: the 201 smallest were dropped" in capped.warnings[0]
     assert 'fill="#ffffff"' in capped.data.decode()   # the big background stays
     simple = sanitize_svg(data, where="big.svg", simplify=True)
     assert simple.shapes == 1 and simple.warnings == () and "simplify dropped 1700 shape(s) smaller than 0.05% of the picture" in simple.notes[0]
     wiggle = "M0 0 " + " ".join(f"L {i % 100} {(i * 7) % 100}" for i in range(400)) + " Z"
     thinned = sanitize_svg(svg(f'<path d="{wiggle}" fill="#ff0000"/>'), where="w.svg", max_segments=100)
-    assert thinned.segments <= 100 and "401 curve segments, more than the 100 vidgen draws: paths keep 1 point in 5" in thinned.warnings[0]
+    assert thinned.segments <= 100 and "401 curve segments, more than the 100 schu-video-generator draws: paths keep 1 point in 5" in thinned.warnings[0]
 
 
 def test_theme_colors_keep_lightness() -> None:
@@ -421,6 +421,6 @@ def test_validate_checks_svg_files(make_project, capsys: pytest.CaptureFixture[s
     (root / "assets").mkdir(exist_ok=True)
     (root / "assets" / "bad.svg").write_bytes(svg("<text>words only</text>"))
     assert main(["validate", str(root)]) != 0
-    assert "draws nothing vidgen can show" in capsys.readouterr().err
+    assert "draws nothing schu-video-generator can show" in capsys.readouterr().err
     (root / "assets" / "bad.svg").write_bytes(HILLS.read_bytes())
     assert main(["validate", str(root)]) == 0

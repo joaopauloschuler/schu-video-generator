@@ -345,7 +345,7 @@ all built-ins at 160x90 and 90x160 @ 5 fps ≈ 10 s). Manual: `vidgen list-scene
 
 ## Step 6 — kphi3 migration
 What was built
-- `examples/kphi3/`: the paper video as a vidgen project. `video.yaml` (title, `output:
+- `examples/kphi3/`: the paper video as a schu-video-generator project. `video.yaml` (title, `output:
   kphi3_video`, 1920x1080@30, preview 854x480@15, theme with the original colors: standard
   tokens plus `base`/`k2`/`k3` model colors, `highlight` = gold, `palette` = group colors;
   voice = script.json + the original voice settings; pad 0.35, wps 2.6; 8 scenes with the
@@ -388,21 +388,21 @@ API gaps found (and fixes)
 
 Regression summary (details in examples/kphi3/REGRESSION.md)
 - Original per-scene lengths came from re-rendering the original `scenes.py` at 320x180@30 in
-  a temp copy (sum = 6932 frames = the original MP4 exactly). vidgen final render: 6944 frames
+  a temp copy (sum = 6932 frames = the original MP4 exactly). schu-video-generator final render: 6944 frames
   (231.47 s vs 231.07 s); per scene +2, +1, +1, +1, +1, +2, +2, +2 frames. The original
   `narrate()` was instrumented: it truncates the end-of-beat wait (`int(rest*fps)`, skipped if
-  ≤ 0.02 s) where vidgen rounds; the predicted per-scene difference matches exactly (12 beats
+  ≤ 0.02 s) where schu-video-generator rounds; the predicted per-scene difference matches exactly (12 beats
   with fractional part ≥ 0.5).
 - Frames: 81 pairs (early/mid/end of every beat, aligned for the rounding shift, extracted by
   frame index): 72 bit-identical, 9 at SSIM 1.0000 / PSNR 75–98 dB (encoder noise on still
   holds). Time-based seeking is off by one frame in the original, whose video stream starts at
   0.021 s.
-- Audio: narration onsets lag the original's frames by 42–61 ms; vidgen's within 1 ms.
+- Audio: narration onsets lag the original's frames by 42–61 ms; schu-video-generator's within 1 ms.
 - Final 1080p render: `vidgen render examples/kphi3 --jobs 2` 2 min 40 s; `--preview` 54 s.
   A copy is at /home/claude/work/kphi3_vidgen_render.mp4 (outside the repo).
 
 Decisions / deviations
-- vidgen's nearest-frame beat rounding was kept (no kphi-specific narrate); the +0.4 s total
+- schu-video-generator's nearest-frame beat rounding was kept (no kphi-specific narrate); the +0.4 s total
   is documented as the only timing difference.
 - Scene ids are descriptive (`title`, `sparsity`, …); beat ids keep the original `sN_bM` so the
   committed audio and hashes are reused.
@@ -447,7 +447,7 @@ Findings (severity — status)
 5. **Medium — fixed.** `video.json` saved with a BOM (Notepad) failed to parse; config files are
    read as `utf-8-sig`.
 6. **Medium — fixed.** Packaging: setuptools skips dot files, so the wheel had no
-   `templates/minimal/assets/.gitkeep` → `vidgen init` from an installed vidgen created no
+   `templates/minimal/assets/.gitkeep` → `vidgen init` from an installed schu-video-generator created no
    `assets/`. `init` now creates `assets/` and `extensions/` and writes a `.gitignore` (template
    file `gitignore`, renamed). Test that the template has no dot files.
 7. **Medium — fixed.** Extension robustness: invalid `beat_count` (e.g. `'two'`) gave a
@@ -727,7 +727,7 @@ Known gaps / TODOs
 - Stills are only taken by narrated beats via `narrate()` (incl. `narrate_all`, `timeline`,
   `reveal`) and for silent scenes; a scene that never calls `narrate` for its beats gets no
   stills for them (it already warns about un-narrated beats).
-- Only the Cairo renderer is supported (vidgen never selects OpenGL).
+- Only the Cairo renderer is supported (schu-video-generator never selects OpenGL).
 - No max for N; large N at final quality writes many 1080p PNGs (Step 11 storyboard will
   normally use preview).
 - Step 11: build contact sheets from `frames/index.json` + `timings.json` (beat texts); default
@@ -4538,7 +4538,7 @@ Public interfaces added/changed (compatible)
   on long words.
 
 Decisions / deviations
-- Narration converted by vidgen, not by patching Manim's `convert_audio`: one place, no
+- Narration converted by schu-video-generator, not by patching Manim's `convert_audio`: one place, no
   monkeypatching, and the WAV is what Manim's pydub mix reads anyway.
 - Clip sound keeps FFmpeg's standard −3 dB upmix for mono clips (it plays at a chosen `volume`
   under the narration); routed to Step 60 to revisit with the narration path.
@@ -4608,7 +4608,7 @@ Files
 Public interfaces added/changed (compatible)
 - Config: top-level `chapters`, `metadata`. `vidgen.api.video_chapters(..., intro=False)`,
   `Chapter.intro`. JSON (version 1): timings / `render --json` `chapters`, `outputs.chapters`.
-- The final MP4 now always gets its tags from vidgen's FFMETADATA file (title tag always
+- The final MP4 now always gets its tags from schu-video-generator's FFMETADATA file (title tag always
   written) and, with chapters, a data stream (`bin_data`, the chapter track) besides video and audio.
 
 Decisions / deviations
@@ -4856,7 +4856,7 @@ Known gaps / TODOs (routed to Step 60 in tasklist.md)
 - Languages without spaces (zh, ja) are cut into cues only at punctuation; their speed is
   measured in characters.
 - No machine translation (the file is for a person or an agent to fill in); the storyboard and
-  lint report texts of vidgen itself stay English.
+  lint report texts of schu-video-generator itself stay English.
 
 How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2009 passed, 1 skipped, ~10.7 min on 2 CPUs); step only:
 `pytest tests/test_translation.py`. Manual: `vidgen translate-template examples/minimal
@@ -5227,8 +5227,8 @@ at dawn"` to an `image` scene, `vidgen validate`, `vidgen imagegen --dry-run`, `
 
 ## Step 56 — AI author guide
 What was built
-- **`AGENTS.md`**: the author guide for AI agents (and people) who **use** vidgen to make videos
-  and decks — distinct from `CLAUDE.md` (agents developing vidgen); each file says so at its top
+- **`AGENTS.md`**: the author guide for AI agents (and people) who **use** schu-video-generator to make videos
+  and decks — distinct from `CLAUDE.md` (agents developing schu-video-generator); each file says so at its top
   and points to the other. ~1,000 lines (7,300 words) of Markdown, 12 topics:
   - `start`: 12 rules at a glance (hook in 5 s, one idea per scene, beats of 6–15 words, a visual
     change every 3–6 s, narration complements the picture, on-screen word limits, progressive
@@ -5297,7 +5297,7 @@ Decisions / deviations
   (scene list / partial config / top-level fragment + one scene; `assets/...` files copied from
   the examples by suffix), passes `validate_all` with no problems. Prose claims (thresholds,
   defaults) were checked by hand against CONFIG.md and the code, not by tests.
-- Guide numbers follow vidgen's own: 2.6 words/s estimate (the task's ≈ 2.5 is quoted as the
+- Guide numbers follow schu-video-generator's own: 2.6 words/s estimate (the task's ≈ 2.5 is quoted as the
   rule of thumb), `narration_speed` 1.8–3.5 (English), `dead_air` 6 s, `max_words` 40 (the
   guide recommends ≤ ~20).
 
@@ -5666,7 +5666,7 @@ to call `guide` with topic `workflow`, `plan` on an outline, `storyboard` (the s
 images), `tts` (dry run; a real run is refused without `confirm_cost`).
 
 ## Step 60 — Final review and release notes
-Final review of Steps 8–59, done as an AI author would use vidgen: every item routed to Step 60
+Final review of Steps 8–59, done as an AI author would use schu-video-generator: every item routed to Step 60
 triaged (bug / quality / nice-to-have), the real bugs fixed, a fresh end-to-end run from an
 outline (CLI and MCP), a consistency pass over commands / docs / `vidgen.api`, a packaging check,
 and these release notes. **Version bumped to 0.2.0.**
@@ -5761,9 +5761,9 @@ AGENTS.md copies identical (test). `build/..._bare` folders: kept as caches like
   `confinement_problems`; `ClipInfo.channels`; `scenes.code.readable_band`. `vidgen.api`
   unchanged.
 
-## Release notes: vidgen 0.2.0 (Steps 8–60)
+## Release notes: schu-video-generator 0.2.0 (Steps 8–60)
 
-vidgen 0.1 (Steps 0–7) rendered narrated Manim videos from `video.yaml` with eleven built-in
+schu-video-generator 0.1 (Steps 0–7) rendered narrated Manim videos from `video.yaml` with eleven built-in
 scene types, ElevenLabs narration and an extension system. 0.2 makes it a tool an AI agent can
 drive alone: it can **see** its video (stills, contact sheets, layout data), **check** it
 (lint), build from **tested parts** (28 scene types, actions, overlays) and **ship** every output.
@@ -6023,7 +6023,7 @@ Known gaps / TODOs (for Step 61b / 63)
 How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2279 passed, 1 skipped, 7:55);
 step only: `pytest tests/test_imagegen_openrouter.py tests/test_imagegen.py` (~6 s). Live (needs
 network; free without `--yes`): `python tools/live_check_openrouter.py` lists the 3 cheapest
-text-to-image models with vidgen's estimates and the dry run of one square picture with the
+text-to-image models with schu-video-generator's estimates and the dry run of one square picture with the
 cheapest; `OPENROUTER_API_KEY=... python tools/live_check_openrouter.py --yes [--model ID]`
 generates that one picture in a temporary project and prints the PNG / sidecar paths and the
 cost OpenRouter reported (the key is never printed).
@@ -6080,7 +6080,7 @@ image generation guide; no key used)
 - ZDR: 942 endpoints listed; image models with one: Seedream 4.5 / 5.0 flash / lite / pro,
   Gemini image models, Krea 2, MAI image 2.5 / 2.6, Tencent HY image 3.5, Ming image design.
   **No SVG model has a ZDR endpoint** (nor FLUX / Recraft raster), so an account requiring ZDR
-  cannot generate SVGs today (vidgen says so; `.svg` files as `path` still work).
+  cannot generate SVGs today (schu-video-generator says so; `.svg` files as `path` still work).
 - `tools/live_check_openrouter.py --zdr` (free part, run here): cheapest ZDR model
   `bytedance-seed/seedream-5-0-flash` $0.018 — matches the coordinator's working run.
   `--svg`: cheapest `recraft/recraft-v4-vector` / `-v4.1-vector` $0.08; `--svg --zdr`: none.
@@ -6116,7 +6116,7 @@ Decisions / deviations
   pictures could not share a video, since SVG models make only SVG.
 - **`.svg` files as `path`** (small, same code path): the only way to show vector art for an
   account that requires ZDR.
-- **Text is removed, not converted** (generated lettering is poor; captions are vidgen's job);
+- **Text is removed, not converted** (generated lettering is poor; captions are schu-video-generator's job);
   warned with that hint.
 - **Recolor keeps lightness**: nearest-hue theme colour with the picture's own lightness (a
   halfway blend made hills and sky one flat blue in the check render).
@@ -6139,7 +6139,7 @@ Known gaps / TODOs
   is reported, and what the sanitiser reports for a real Recraft SVG (shape count vs the cap).
 - Manim's SVG parser: `fill-rule: evenodd` holes and per-element caps / joins as it does them;
   `<style>` CSS classes are left to svgelements.
-- Recolor is per colour (not per region); text is dropped, not re-set as vidgen text.
+- Recolor is per colour (not per region); text is dropped, not re-set as schu-video-generator text.
 - `generate:` for `screenshot` / thumbnails still not done (Step 55 gap).
 
 How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2305 passed, 1 skipped, 7:31); step only:
@@ -6283,17 +6283,17 @@ What was reviewed
 Live checks (the coordinator, owner's key, account requiring Zero Data Retention, 2026-10-09)
 - **Images**: `recraft/recraft-v4.1-flash` and `black-forest-labs/flux.2-klein-4b` → OpenRouter's
   HTTP 404 data-policy error (`0 endpoints out of 1 requested are available matching your
-  guardrail restrictions and data policy ... ZDR violation (account settings)`); vidgen's
+  guardrail restrictions and data policy ... ZDR violation (account settings)`); schu-video-generator's
   message (privacy settings link + image models with a ZDR endpoint) is now pinned against
   that exact body (`conftest.LIVE_ZDR_404`). `bytedance-seed/seedream-5-0-flash` → a 1024x1024
-  PNG in 9.7 s, $0.018 charged and reported by vidgen (= the dry run's estimate).
+  PNG in 9.7 s, $0.018 charged and reported by schu-video-generator (= the dry run's estimate).
 - **TTS**: `hexgrad/kokoro-82m`, voice `af_alloy` → valid MP3 (24 kHz mono, 4.46 s) for a
   61-character beat; `google/gemini-3.8-flash-lite-tts`, voice `Kore` → PCM converted to MP3
   (4.68 s). For both the run printed "cost not reported by openrouter" (with Step 62's single
   1 s retry, i.e. BEFORE this step's wait change).
 - **Usage**: the key's total went from $1.517127 to $1.535165 across all live checks (≈ $0.018
   image + ≈ $0.00004 for both TTS beats together), so Kokoro's estimate of $0.000244 was ~6x the
-  charge (OpenRouter routed to its cheapest provider; vidgen estimates with the highest one).
+  charge (OpenRouter routed to its cheapest provider; schu-video-generator estimates with the highest one).
 - **SVG generation not run live**: no SVG model has a ZDR endpoint.
 
 Findings and fixes
@@ -6450,7 +6450,7 @@ How to test
 - Step only: `pytest tests/test_push_wipe_carry.py tests/test_transitions.py
   tests/test_ffmpeg_version.py tests/test_overlays.py`.
 - Another ffmpeg: put its folder first on PATH, e.g. `PATH=/opt/ffmpeg-7.1/bin:$PATH pytest
-  tests/test_push_wipe_carry.py -k "every_transition or frame_math"` (vidgen uses the ffmpeg
+  tests/test_push_wipe_carry.py -k "every_transition or frame_math"` (schu-video-generator uses the ffmpeg
   on PATH).
 - Manim 0.22: `python -m venv v22 && v22/bin/pip install -e ".[dev]" manim==0.22.0`, then
   `v22/bin/python -m pytest -q -m "not slow"`.
@@ -6518,7 +6518,7 @@ Real run (this workspace)
   weights fails here (both errors are now recognised by `explain`). The weights and voices
   af_heart / bf_emma / pf_dora were fetched from Kokoro-FastAPI's GitHub release / repository and
   verified (weights SHA256 = the model card's; voices = VOICES.md's prefixes), laid out as an HF
-  cache in the scratchpad and used with `HF_HUB_OFFLINE=1`, i.e. vidgen's normal code path.
+  cache in the scratchpad and used with `HF_HUB_OFFLINE=1`, i.e. schu-video-generator's normal code path.
 - Python 3.12 venv, `pip install -e ".[dev,kokoro]"` (torch 2.14.1, transformers 5.19, manim
   0.22): `vidgen validate` / `tts --dry-run` / `tts` (2 English + 1 Portuguese beats, `.align.json`
   for the English ones, 51 s in all incl. imports and first-use spaCy install) / `render --preview`
@@ -6561,7 +6561,7 @@ Decisions / deviations
 - English timings are always fetched (they cost nothing) — `timestamps` is irrelevant for Kokoro
   English and warns for other languages.
 - The extra carries `python_version < '3.13'` so `pip install ".[dev,kokoro]"` never fails on
-  3.13; vidgen then explains and prints the forced install.
+  3.13; schu-video-generator then explains and prints the forced install.
 - No `soundfile` dependency: the float samples are converted with numpy and encoded by ffmpeg
   (already required).
 - MCP: no `confirm_cost` for Kokoro (free); unknown / unloadable projects keep the guard.
@@ -7697,7 +7697,7 @@ Public interfaces
   that a wildcard target on a stage (`*`) now also matches parts for `dim` / `highlight` / `zoom`.
 
 Decisions / deviations
-- Ease names: no author-facing ease names existed in vidgen; the scenes use Manim's rate
+- Ease names: no author-facing ease names existed in schu-video-generator; the scenes use Manim's rate
   functions in code, so `ease:` takes those names (not `there_and_back`-style ones, which end
   where they start), plus the `cartoon_motion` words `lively` / `calm`. Default `smooth`.
 - Keys and paths do not apply `cartoon_motion` on their own (`ease: lively` does).
@@ -8207,7 +8207,7 @@ What was done
   three renders at 848x480 gave identical partial files. Standalone PyAV / ffmpeg encodes of the
   same frames are identical every time, so it looks like libx264 reading uninitialised padding of
   a non-mod-16 frame in a long-lived process. Not fixed (Manim's encoder options are not reachable
-  from vidgen; a new preview size would change every preview): Backlog.
+  from schu-video-generator; a new preview size would change every preview): Backlog.
 - Docs: DESIGN §6.4 gains the Step 71 (visemes) and Step 75 (props) export lines that were
   missing; §69.18 (example changes), §69.20 (the cause), new §69.21; EXTENDING's particle line
   says `self.play(fade_out(field))` (`fade_out` returns an animation). Checked, no change needed:
@@ -9433,7 +9433,7 @@ Files touched
 
 Decisions / deviations
 - Paths inside an included file are relative to that file (a shared folder is self-contained);
-  the loader rewrites them, so the rest of vidgen sees project-relative paths.
+  the loader rewrites them, so the rest of schu-video-generator sees project-relative paths.
 - Included files may hold only characters / voices / sets (+ include), as the task names;
   theme, voice and the rest stay per episode.
 - A problem's location is rewritten to where the value is written instead of carrying the
@@ -12235,7 +12235,7 @@ What was built
 - Two new built-in music beds in `src/vidgen/music.py`, made like `calm` / `pulse` / `bright`
   (numpy only, no recordings, no samples, seeded `crc32("music:<name>")`, rendered circularly so
   the loop tiles without a seam, `_finish`ed to `MUSIC_LEVEL` −28 LUFS integrated). Melodies are
-  original, written for vidgen as data in the module (no known tune, lullaby or theme).
+  original, written for schu-video-generator as data in the module (no known tune, lullaby or theme).
   - `cartoon`: 45 s, 24 bars of 4/4 at 128 BPM, G major. `_CARTOON_BARS` (`_CartoonBar`: chord,
     voicing, bass on beats 1 / 3 + optional pickup, melody in eight eighth slots) as six 4-bar
     phrases (A, A' to the dominant, B syncopated, A an octave up, C call and response with the
@@ -12359,7 +12359,7 @@ Fixes (tests in `tests/test_phase_l_review.py`, each failing at HEAD 7194db3 in 
   the stage), so the gift showed at the room's right edge; such a holder now stands a further half
   its width plus the prop's width outwards.
 - Example-level: the fireplace's key is written `"on": true` (PyYAML, a YAML 1.1 reader, reads a
-  bare `on` as the key `true`, which `tests/test_schema.py`'s JSON Schema check refused; vidgen
+  bare `on` as the key `true`, which `tests/test_schema.py`'s JSON Schema check refused; schu-video-generator
   itself takes both). CONFIG's `on` row says so.
 
 Docs
@@ -13657,7 +13657,7 @@ Public interfaces added/changed (compatible; `vidgen.api` unchanged)
 - The config dump gains `soundfont: null`, but it is excluded from scene fingerprints: no re-render.
 
 Decisions / deviations
-- vidgen had no cache folder of its own (Kokoro's model sits in the Hugging Face cache); the new
+- schu-video-generator had no cache folder of its own (Kokoro's model sits in the Hugging Face cache); the new
   one follows each platform's convention, `VIDGEN_CACHE_DIR` moves it (tests use it).
 - symusic's own `BuiltInSF` downloader (pySmartDL, no hash check) is not used.
 - `fetch` follows `main` as the task list says; the sha256 pin turns an upstream change into a
@@ -14053,7 +14053,7 @@ continuation (`model's sampling defaults`) became a string literal at the apostr
   `code_walkthrough` lexes the whole file before taking the `excerpt`. Groups (source line ->
   rows) are unchanged, so highlights, `focus`, actions, `line<N>` / `lines:<a-b>` targets and the
   line numbers (first piece only) still address source lines.
-- Second symptom (a faint "weights" behind "One reply" at 26–30 s of the preview): a vidgen bug.
+- Second symptom (a faint "weights" behind "One reply" at 26–30 s of the preview): a schu-video-generator bug.
   `CodeWalkthrough._go` faded the old note out and the new one in at the same time; in the bottom
   bar they share one place, so both were half visible for the whole change. Now the old note
   fades out in the first half (`pie.window(0, 0.5)`) and the new one in the second half.
@@ -14951,7 +14951,7 @@ What was built
 - **`terminal`**, a new scene type (`src/vidgen/scenes/terminal.py`, DESIGN §87.5): a terminal
   window in which step *i*'s command is typed at beat *i* (a block cursor moving along,
   `typing_speed` 18 characters/s, faster when the beat is short), then its output appears row by
-  row and the prompt comes back. The output is the author's: vidgen runs nothing. `steps`: a
+  row and the prompt comes back. The output is the author's: schu-video-generator runs nothing. `steps`: a
   command (a string) or `{command, output, clear, output_color}`; an output-only step is a
   program still printing (no prompt before it); `clear` starts a new page in the same window.
   `prompt` (`$`, `""`, `>>>`), `language` (`bash`; `pycon`...), `prompt_color` (`accent`), and
@@ -15046,7 +15046,7 @@ What was built
   follow), or an area's right end moves (its value follows); 2 s, `until:` moves it back; on a
   word with `at: "@word"` (Step 156). `reveal` of `dot<N>`, `tangent<N>`, `area<N>`,
   `function<N>` on a word works; such an item's own beat holds.
-- **Labels placed by vidgen**: curve labels where they cover no curve, axis, tick label or other
+- **Labels placed by schu-video-generator**: curve labels where they cover no curve, axis, tick label or other
   label (else the nearest free spot); dot labels on the side above the curve, clear of the
   others; area labels inside the area where they fit, else above it. Curve, dot and area labels
   sit on a plate in the background colour (readable on the grid and on area fills).
@@ -15483,7 +15483,7 @@ How to test
 ## Step 165 — Built-in pronunciation dictionary
 
 What was built
-- **Built-in lists** shipped with vidgen (DESIGN §88): `src/vidgen/data/pronunciation/kokoro-en.yaml`
+- **Built-in lists** shipped with schu-video-generator (DESIGN §88): `src/vidgen/data/pronunciation/kokoro-en.yaml`
   (every English Kokoro voice, 21 entries) and `kokoro-en-us.yaml` (American voices, +3), in the
   `pronunciation_file` format, each entry commented with misaki's phonemes before and after.
   The list a beat uses follows its effective voice: Kokoro by the language its G2P reads with
@@ -16012,7 +16012,7 @@ Known gaps / for Step 171
   use `zoom` for pointing at a thing.
 - The 9:16 variant validates and lints clean, but its wide views show the village small in the
   middle of the frame (fit by width, Step 168's gap); the lines all have shots.
-- A bare `on: true` in `iso.objects` works for vidgen but fails the JSON Schema check (YAML 1.1
+- A bare `on: true` in `iso.objects` works for schu-video-generator but fails the JSON Schema check (YAML 1.1
   reads it as a key `true`); the example quotes it, as CONFIG advises for props.
 
 How to test
@@ -17797,7 +17797,7 @@ What was built (DESIGN §94)
   text → a new session, version 1), `validate` (problems as `{where, message, line}`: the
   score's did-you-mean messages, the line found from `where` with `yaml.compose`; YAML syntax
   errors with their line), `score`, `render` (whole or one section; cached by
-  `render_key` = SHA-256 of the YAML data + `STUDIO_RENDER_VERSION` + vidgen version, so comments
+  `render_key` = SHA-256 of the YAML data + `STUDIO_RENDER_VERSION` + schu-video-generator version, so comments
   do not re-render; a 16-bit WAV at +12 dB = the Listen page's −16 LUFS for every version; a
   section is cut bit-exact from the whole render), `audio_file` (names checked by pattern).
 - **`StudioServer`** (`studio_app/server.py`): routes, JSON envelope `{ok, result|error}`, static
@@ -18037,7 +18037,7 @@ What was built (DESIGN §94.14)
   Small additive helpers: `music._level_gain` (`_finish` takes a gain), `loudness.measure` /
   `integrated_loudness` take `threads`.
 - **Stem cache** (`studio_app/stems.py`): keys of exactly what a track hears (shared song data,
-  its spec, a duck's trigger's hit inputs, renderer and vidgen version); in memory, LRU past
+  its spec, a duck's trigger's hit inputs, renderer and schu-video-generator version); in memory, LRU past
   768 MB, room made before rendering; a plain-volume change scales a kept stem; each stem's
   power per 50 ms for the meters. `StudioApp.render` mixes from it and reports `timing`;
   mute / solo remix kept stems (one-shot tails kept, Step 194's gap closed).
@@ -20720,7 +20720,7 @@ actions `fit`, `annotate`; `plot` params `fits`, `annotations`, series error / h
 `label_size` default now auto. No config key, no dependency.
 
 Decisions
-- No scipy: it is installed with manim but vidgen does not import it; own LM + quantiles match
+- No scipy: it is installed with manim but schu-video-generator does not import it; own LM + quantiles match
   `curve_fit` / `scipy.stats` in the tests (to 1e-3 of a standard error; quantiles to 1e-9).
 - With y errors the covariance is absolute and bands use the normal quantile; without, scaled by
   the residual variance with Student's t (curve_fit's conventions, stated in CONFIG).
@@ -22563,3 +22563,1021 @@ appears; the `calculation` in 16:9 leaves space below until its steps arrive (by
 How to test: `tests/test_phase_y_review.py`, `tests/test_feynman.py`, `tests/test_detector.py`,
 `tests/test_spectrum.py`; stills `s243/proj/build/preview/storyboard/scenes/production-1.png`
 (16:9) and `s243/proj/build/preview_short/storyboard/scenes/production-1.png` (9:16).
+
+## Step 245 — Story-cartoon features: plan, gap analysis, voice effects, holograms, portals
+
+Phase Z: a private story project (a narrated isometric cartoon, 5–7 min, Kokoro voices) drives
+generic features. The story, its adapted script and its project stay in the scratchpad
+(`story-qeh/`); nothing of them is in the repo.
+
+What was done
+- **Adaptation and gap analysis** (private): the script with a shot list (narration and dialogue
+  per speaker, camera, staging, light, sounds, music) and the gap list per shot; a test render of
+  an iso lab. Generic summary and the phase plan: DESIGN §100.1, tasklist Phase Z (Steps
+  245–248).
+- **Voice effects** (DESIGN §100.2): `effect:` on `voice:` / `voices:` — `deep`, `high`, `robot`,
+  `radio`, `chorus`, `echo`, `hall`, `otherworldly`, a list, or `{use, pitch, amount}`; any
+  provider, applied after synthesis with ffmpeg (`EffectProvider` wraps the provider); in the
+  hash only when set; not inherited by named voices; each preset about as loud as the dry voice
+  (measured); `echo` / `hall` / `chorus` add a 0.35 / 0.9 / 0.1 s tail.
+- **Hologram characters** (§100.3): `hologram: true | {color, opacity}` on a character —
+  colours mapped through the hologram colour by lightness, translucent fills, bright edges, never
+  graded by the stage's light or soft shading; character PNGs and sheets show it.
+- **Portals** (§100.4): the `portal` prop (new `SCIFI_PROPS`), switched like a lamp: opens from a
+  crack into a crackling, swirling, pulsing oval with sparks and an unlit glow; seals back to a
+  seam; whoosh + rumble / swoosh + thud; no shadow (`FLOATING_IN_PLACE`); stands at a spot of an
+  iso place (`ISO_ITEMS`), and `enter` / `exit` with `door:` its spot step through it.
+
+Files
+- New: `src/vidgen/voice_effects.py`, `src/vidgen/tts/effects.py`, `src/vidgen/cartoon/hologram.py`,
+  `src/vidgen/cartoon/portal.py`, `tests/test_voice_effects.py` (9), `tests/test_portal_hologram.py` (12).
+- Changed: `config.py` (`VoiceEffectName`, `VoiceEffectConfig`, `effect` on `VoiceConfig` /
+  `VoiceEntry`, `HologramConfig`, `CharacterEntry.hologram` + `hologram_look()`), `voices.py`
+  (`SPEAKER_FIELDS`), `tts/__init__.py` (`get_provider` wraps), `tts/run.py` (`describe_voice`),
+  `cartoon/character.py` (`build_character`), `cartoon/props.py` (portal, `SCIFI_PROPS`,
+  `FLOATING_IN_PLACE`), `cartoon/living.py` (`SWITCHED_PROPS`, `GLOWS`), `cartoon/living_drawing.py`
+  (portal parts, `LivingProp` portal branch), `scenes/stage.py` (hologram unlit, portal sounds,
+  shadows / snow tops, `ISO_ITEMS`), `api.py`; tests whose messages list the switched props
+  (`test_cartoon_living`, `test_cartoon_small_props`, `test_cartoon_fire_nature`) and the prop
+  count (`test_cartoon_props`: 70); docs: CONFIG (Voice effects, Holograms, Portals, tables),
+  the guide (Sound and Iso topics; copied to `AGENTS.md`), README, CHANGELOG, DESIGN §2 / §100,
+  tasklist.
+
+Public interfaces: `vidgen.api` adds `VOICE_EFFECTS`, `VoiceEffect`, `effect_filter`,
+`voice_effect`, `HOLOGRAM_COLOR`, `apply_hologram`, `is_hologram`, `unmark_lit`, `SCIFI_PROPS`,
+`FLOATING_IN_PLACE`. Config: `voice.effect`, `voices.<n>.effect`, `characters[].hologram`, prop
+`portal` (with `on`, `switch_on`, `switch_off`).
+
+Decisions
+- Effects at synthesis time (in the beat's MP3 and its hash), not in the mix: what is heard is the
+  MP3 (readback, the beat's length with the tail, visemes).
+- Robot = zero-phase FFT (`afftfilt`), a flat 187.5 Hz buzz that a `pitch` moves (applied after
+  it); measured interquartile pitch range 2 Hz (dry: 38 Hz).
+- Hologram as a recolouring of the figure (it keeps every action, viseme and expression), not an
+  overlay; the flicker and the materialise entrance are left for Step 246.
+- The portal is a switched living prop (reusing the lamp / fireplace machinery: redrawn only
+  while open, opening or sealing; unlit parts and glow), usable on flat stages and iso places.
+
+Voice choices for the story (checked with the Kokoro in `kvenv312`; all downloaded into
+`hfhome`): narrator `bm_fable` (0.9), heroine `af_heart` (0.9), hero `am_michael` (0.9), the
+AI `af_nicole` (0.85, `echo`), the visitor `am_onyx` (0.8, `otherworldly`), the building's
+security voice `am_echo` (1.0, `{use: robot, pitch: -5}`).
+
+Checks
+- Tests (one file at a time): test_voice_effects 9, test_portal_hologram 12 (2 renders),
+  test_cartoon_living 27, test_cartoon_props 92, test_cartoon_small_props 18,
+  test_cartoon_fire_nature 20, test_cartoon_character 22, test_cartoon_stage 24,
+  test_cartoon_lighting 8, test_cartoon_sheet 9, test_iso_staging 32, test_voices +
+  test_emotions + test_tts_kokoro 74 (+1 skipped), test_emotions_providers 8, test_tts 35,
+  test_config 21, test_api 10, test_schema 71, test_docs 73, test_guide 90, test_gallery 19 (not
+  render), test_builtin_scenes 174 (not render), test_mcp 20 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check245`).
+- Real Kokoro run of the test project (6 beats, effects `echo` and `otherworldly`); preview
+  storyboard of the iso lab with a hologram, a portal opening / a visitor stepping out / sealing,
+  under a red tint: 21.3 s of video in 27.9 s (854 × 480).
+
+Left for Step 246 (DESIGN §100.1): hologram materialise entrance and flicker; a hologram display
+prop (floating translucent panel with moving patterns and text lines); a view through a portal
+(a picture or simple scene inside it) and refusing `pick_up` of a portal; alarm lighting (pulsing
+light) and window shutters on an iso room; sounds `alarm`, `crackle`, `hum`, `drone`, `slam`;
+iridescent characters and afterimages; hand in hand; lab objects on an iso place (console,
+server rack, projector pad); memory-vignette props (chess board, flower arch) and a flashback
+look; gallery entries (none added: 15.7 of 16.5 MB; a portal / hologram still could go into the
+props or robots sheet). Noted: the portal's unlit glow can look slightly darker than a strongly
+tinted dark sky around it.
+
+How to test: `tests/test_voice_effects.py`, `tests/test_portal_hologram.py`; stills (scratchpad)
+`s245/t1/build/preview/storyboard/scenes/lab-1.png`, `lab-2.png` (the iso lab, hologram, portal),
+`s245/vega.png` (a hologram character).
+
+## Step 246 — Story-cartoon features: framing, alarms, labs, holograms, visitors, memories
+
+The rest of Phase Z's gap list, plus a reviewer's notes on the 245 test stills (the room filled
+~60 % of the frame; close-ups cropped badly; the visitor did not read tall or iridescent; the
+alarm was a salmon tint; the lab looked like a living room). All generic, opt-in, neutral
+samples; the private story project stays in the scratchpad.
+
+What was built (DESIGN §100.6–§100.14)
+- **Framing**: `iso: {wide: fill}` (or 1–2.5) — a room's wide view fills the frame (~80 % instead
+  of ~60 %); `closeup` / `medium` of 2–3 characters (`shot: closeup ana ben`: all faces, headroom
+  over the highest head, centred); `shot: {..., clear: true}` hides the characters the shot does
+  not frame for its beat (no legs poking in). Tall visitors: `scale: 1.4–1.5` (works already).
+- **Alarm and shutters**: `- alarm: start | stop` (`color`, `period`): a dark room under a red
+  light pulsing like a beacon (a new `StageLight.alarms` grade over the light), a two-tone siren
+  bed while it runs; unlit things (portal, holograms, screens) keep shining. `- shutters: close
+  | open` on an indoor iso place's windows (`iso.shutters: true` starts them down), with a slam.
+- **Holograms**: `materialise` / `dematerialise` actions (a flickering wireframe, then solid; the
+  character waits unseen until its first materialise); holograms flicker now and then
+  (`hologram.flicker`, default on). One `FigureAlpha` per character holds every opacity factor.
+- **Visitors**: `iridescent: true | {seconds, strength}` (oil-on-water hue bands drifting up the
+  figure) and `afterimages: true | {spacing, life, opacity}` (fading copies while it moves).
+- **Hand in hand**: `- {hold_hands: ana, with: ben}` / `- let_go_hands: ana`; the hands meet
+  every frame, standing or walking side by side; lint lets the pair stand close.
+- **Lab and memory objects**: iso `console` (glowing screens), `server_rack` (blinking lights),
+  `projector_pad`, `whiteboard`, `flower_arch`, `chess_table`; the `hologram_display` prop
+  (`pattern: fractal | data | text`, grows out of its beam, a hum and a chime); a portal's
+  `view: coast | stars | meadow`; portals and displays cannot be picked up.
+- **Flashback**: `flashback: true | {...}` on a stage: faded warm colours (`LightGrade.saturation`,
+  new) and a soft vignette over the camera's view.
+- **Sounds**: `alarm`, `crackle`, `hum`, `drone`, `slam` (procedural, numpy); beds `hum` (named:
+  `ambience: hum`) and `alarm`. The Listen page (`docs/music`) regenerated: a `sfx-story` row, the
+  two beds in the ambience clip (6.6 MB; its budget test 6.5 → 6.8 MB).
+- **Gallery**: showcase `iso_lab` ("The night shift": a hologram materialises on a pad, screens,
+  blinking racks, shutters, a rift with a starry sky); 16.1 of 16.5 MB. The alarm itself is left
+  out of it: its pulsing doubled the GIFs past `CLIP_MAX_BYTES`.
+
+Files
+- New: `cartoon/alarm.py`, `cartoon/apparition.py`, `cartoon/figure_fx.py`, `cartoon/holo_display.py`,
+  `cartoon/iso_overlays.py`, `cartoon/vignette.py`, `scenes/stage_story.py`, `scenes/story_actions.py`,
+  `data/gallery/showcases/iso_lab.yaml`, `tests/test_story_fx.py` (20: 2 renders), docs/gallery
+  `iso_lab.*`, docs/music `sfx-story.*`.
+- Changed: `sfx.py` (5 sounds, `siren`), `ambience.py` (2 beds), `listen.py` (row), `config.py`
+  (shot names 1–3, `ShotConfig.clear`, `HologramConfig.flicker`, `IridescentConfig`,
+  `AfterimageConfig`, `CharacterEntry.iridescent/afterimages`), `cartoon/lighting.py`
+  (`saturation`), `cartoon/storm.py`, `cartoon/shading.py` (alarms), `cartoon/shots.py`
+  (`_group`), `cartoon/iso_stage.py` (`fit`), `cartoon/iso_objects.py`, `cartoon/iso_scenery.py`
+  (`window_faces`), `world/iso.py`, `world/iso_moves.py`, `cartoon/props.py`, `cartoon/living.py`,
+  `cartoon/living_drawing.py`, `cartoon/portal.py` (`portal_view`), `scenes/stage.py`
+  (`StoryStaging`, params `flashback`, iso `wide` / `shutters`, prop `view` / `pattern`,
+  display sounds, alarm beds), `scenes/stage_iso.py` (`_iso_story_overlays`), `scenes/shot_action.py`,
+  `scenes/handling.py`, `scenes/__init__.py`, `introspect.py` (`hand_in_hand`, `hidden`),
+  `lint/cartoon_rules.py`, `gallery.py`, `api.py`; docs CONFIG, guide (copied to `AGENTS.md`),
+  README (41 sounds), CHANGELOG, DESIGN §2 / §100, tasklist; tests whose lists or counts grew
+  (`test_cartoon_shots`, `test_portal_hologram`, `test_cartoon_living`, `test_cartoon_fire_nature`,
+  `test_cartoon_small_props`, `test_cartoon_props` 71, `test_cartoon_sounds`, `test_listen`).
+
+Public interfaces: see DESIGN §100.14 (`vidgen.api` adds the alarm, apparition, figure-effect,
+display, portal-view, flashback and lab-object names).
+
+Decisions
+- Alarm as a light grade (not an overlay): it darkens and reddens exactly what the light grades,
+  so portals, holograms and screens shine over it; the 245 note about the portal's glow under a
+  dark tint no longer matters in the dark phase.
+- Group close-ups extend `closeup` / `medium` (1–3 names) instead of changing `two_shot` (which
+  frames whole figures): existing shots are unchanged.
+- One opacity owner per character (`FigureAlpha`) for clear shots, flicker and materialise.
+  A flicker pauses while its character walks through a door (that walk fades it).
+- Afterimages are inserted into the playing animation's `moving_mobjects` too: Manim draws only
+  those during a `play`.
+- Iridescence is graded by the light like any character: at `light: night` it is muted (the
+  stills show it, but softly). Lighter night tints help (247).
+- Hands: no joint route for two walkers; walk both in one beat to neighbouring spots.
+- Lint: characters wholly out of view (two waiting off stage to enter through the same door) no
+  longer count for `character_overlap`.
+
+Checks
+- Tests (one file at a time): test_story_fx 20 (2 renders), test_cartoon_shots 14,
+  test_portal_hologram 12, test_cartoon_living + fire_nature 47, test_cartoon_small_props +
+  props 111, test_sfx 146, test_listen 11, test_iso_place 54, test_iso_staging, test_iso_mood,
+  test_cartoon_stage (84 together), test_cartoon_lighting / storm / config / api 54, test_schema 71,
+  test_docs 73, test_guide 90, test_cartoon_character / sheet / effects / foley / voice_sounds /
+  sounds 109, robots / vehicles / water_air / platform_sounds 113, test_builtin_scenes / mcp /
+  gallery / phase_o_review / step177 221 (not render), test_gallery 19 (not render), lint /
+  depth / moving / phase_h_review / builtin_sets / directing 136, test_introspect 15 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check246`).
+- End-to-end (scratchpad `s246/cut`, private): two scenes of key shots with Kokoro (narrator,
+  heroine, hero, the lab AI with `echo`, the visitor `otherworldly`, the building's voice
+  `robot`): a hologram materialising on its pad, a two-face close-up with `clear` and held
+  hands, the alarm (dark / red pulse), shutters, the rift opening onto the coast, two tall
+  iridescent visitors stepping out, a visitor's close-up, a zoom into the rift. 57.6 s of video:
+  storyboard 16:9 in 32.6 + 78.1 s, 9:16 in 24.9 + 58.2 s (854 × 480 / 270 × 480). Lint: 0
+  errors, 6 warnings (the test cut's own staging: look_alike visitors, a rushed entrance, a slow
+  line, facing).
+
+Left for 247 / known gaps
+- Night faces are dark (dark skin especially): a screen or display does not light the
+  characters near it (a lamp does on an iso place); a lighter custom night tint helps.
+- In 9:16 a tall portal at the frame's edge can be cut a little (the wide view keeps bodies and
+  spots, a portal's box is narrow); place it inward.
+- A shot is framed where the characters stand at the beat's start: walk first, then the
+  close-up.
+- Afterimages and iridescence are skipped in draft renders; the gallery GIF leaves the alarm out.
+
+How to test: `tests/test_story_fx.py`; stills (scratchpad, private)
+`s246/cut/build/preview/storyboard/scenes/awakening-1.png`, `awakening-2.png`, `alarm-1.png`,
+`alarm-2.png`, `alarm-3.png` (16:9) and `s246/cut/build/preview_short/storyboard/video-1.png`,
+`video-2.png` (9:16); feature stills `s246/t1/build/preview/storyboard/scenes/memory-1.png`
+(flashback), `s246/t2/build/preview/storyboard/scenes/fx-1.png` (afterimages, hand in hand,
+text display, dematerialise); gallery `docs/gallery/media/iso_lab-16x9.png`.
+
+## Step 247 — The story video, light on the characters, hands that show
+
+A private story project (an isometric cartoon, narrator + five character voices) was built,
+previewed and rendered in the scratchpad (`story-qeh/proj`, never committed). The reviewer's
+notes on the 246 test cut (night faces dark, darker skin especially; the visitors not reading
+tall and their iridescence muted; held hands not visible, one character in front of the other)
+led to three generic fixes, all opt-in or on features new in 246 (DESIGN §100.15).
+
+What was built
+- **`fill_light`** (stage param 0–1, default 0): a soft light on the characters alone —
+  `lighting.lifted(grade, share)` (a grade moved back towards the colours as drawn), applied by
+  `StageLight._grade_of` to members marked with `shading.mark_light_lift` (after a lamp's light;
+  cached per grade and share). `StoryStaging._fill_lights` marks each non-hologram character.
+- **`iridescent.glow`** (0–1, default 0.5): an iridescent visitor shines partly by its own
+  light (the same lift), so its colours stay vivid at night or under an alarm.
+- **Hands that show** (`HandHold._keep_close`): two holding hands further apart than their arms
+  reach step in across the picture until the hands meet (never closer than 0.42 of the taller
+  one's height at the feet); while both walk, the second keeps its place beside the first, so
+  they go side by side (walks with the same `run_time`).
+- **Tall visitors**: `scale` does apply on an iso place (checked in layout, shots, two-shots);
+  1.45 next to a `tall` human read human-sized, so the docs now suggest 1.5–1.8 and a
+  `two_shot` with a human (the story uses 1.75 / 1.7).
+
+Files
+- New: `tests/test_story_light_hands.py` (5).
+- Changed: `cartoon/lighting.py` (`lifted`), `cartoon/shading.py` (`LIGHT_LIFT`,
+  `mark_light_lift`, `StageLight._grade_of` / `_lifted`), `cartoon/figure_fx.py` (`HandHold`:
+  `_keep_close`, `HAND_REACH`, `HAND_MIN_GAP`, `HAND_MIN_APART`), `config.py`
+  (`IridescentConfig.glow`), `scenes/stage.py` (`fill_light`, `_fill_lights` call),
+  `scenes/stage_story.py` (`_fill_lights`), `api.py` (`lifted`, `mark_light_lift`); docs CONFIG
+  (stage table, Light and shadows, Iridescent skins, Holding hands), guide (copied to
+  `AGENTS.md`), CHANGELOG, DESIGN §100.15, tasklist.
+
+Public interfaces: `vidgen.api` adds `lifted`, `mark_light_lift`. Config: stage `fill_light`;
+`characters[].iridescent.glow`.
+
+Decisions
+- A fill light as a lift of the stage's grade per character (the lamp mechanism), not a light
+  source in the scene: it follows every light change, alarm pulse and flash, and costs one
+  cached grade per (grade, share).
+- Iridescent `glow` defaults to 0.5 (not 0): new in 246, no committed render shows it.
+- Holding hands moves the figures across the picture only; the iso cells, draw order and
+  `iso_feet` stay the walks' (neighbouring cells side by side are 1.7 tiles apart, far more than
+  arms reach).
+
+The story video (private, scratchpad)
+- 16 scenes (title, 13 iso stage scenes — the lab at night, four flashback memory vignettes —,
+  end card), 54 beats; Kokoro: narrator `bm_fable` 1.0, heroine `af_heart` 0.95, hero
+  `am_michael` 0.95, the lab AI `af_nicole` 1.2 + `echo`, the visitor `am_onyx` 0.9 +
+  `otherworldly`, the building's voice `am_echo` + `{robot, pitch -5}`; music `enigma`, `lullaby`,
+  `calm` at −4/−5 dB; sounds (alarm bed, slams, crackle, drone, riser, chime, whoosh, typing).
+- Final 16:9 1080p30: 7:12 (432.1 s), 96.6 MB, −16.4 LUFS integrated, true peak −1.9 dBTP.
+  Median pitch of one line each: narrator 126 Hz, heroine 191, hero 129 (another accent), AI
+  154 (with echo), visitor 80 (deep, chorus, hall), building 140 (a flat buzz); speech levels
+  within 2 dB except the robot (+5 dB, one line).
+- Render: scenes at 1080p take 5–18× real time (the alarm scenes the most: every frame regraded);
+  peak RSS 1.1–1.4 GB per process (two scenes in parallel under the 3 GB cap). A long scene would
+  pass the 10-minute tool limit, so the three longest were split in two (beats keep their ids,
+  so their audio is reused) and rendered with `storyboard --final --scene ... --jobs 2`; then
+  `vidgen render` joined them (447 s, mostly the music and the mix). Kokoro TTS: 54 beats in
+  205 s, peak 2.8 GB.
+- Lint: 0 errors, 17 warnings (narration speed of a few short or slow lines, a rushed entrance,
+  facing while a character looks at a display, the heroine and her memory self look alike — on
+  purpose, and walk overlaps where four characters step into a portal and fade out).
+- 9:16 not made: the iso wides keep every character in view and show the room small in a tall
+  frame; close-ups read well, but a vertical cut would need its own staging.
+
+Checks
+- Tests (one file at a time or two): test_story_light_hands 5, test_story_fx 20 (2 renders),
+  test_cartoon_lighting + test_config + test_api 39, test_schema 71, test_docs + test_guide 163,
+  test_cartoon_stage + test_portal_hologram 36, test_iso_mood + test_cartoon_storm +
+  test_introspect 44 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check247`).
+
+Known gaps / for 248
+- A `zoom` with `until` across a beat that has its own `shot` moves the camera back during that
+  shot (and a later beat without a shot returns to the zoomed view); the story uses `until` the
+  next beat only. Worth a lint warning or a fix.
+- `render` of a long project renders every stale scene in one call; scenes over ~60 s of video
+  at 1080p with many characters pass a 10-minute run (split scenes, or a resumable render).
+- Kokoro reads a few short lines fast (whisper / excited) and the AI slow; the robot voice is
+  louder than the others.
+
+How to test: `tests/test_story_light_hands.py`; stills (scratchpad, private)
+`story-qeh/proj/build/final/storyboard/scenes/*.png` (1080p), `story-qeh/proj/build/preview/
+storyboard/scenes/*.png`, the contact sheet `story-qeh/contact.png`; the video (MP4 and SRT)
+in `story-qeh/proj/output/`.
+
+## Step 248 — Review of Phase Z: zoom and shots, level-matched effects, renders in steps
+
+A critical review of the private story video (every shot at 1080p, speech levels per voice, the
+mix) and of the issues Step 247 left. Generic fixes in schu-video-generator (DESIGN §100.16); the story
+project itself (scratchpad, never committed) was fixed and rendered again.
+
+What was built
+- **A shot inside a zoom's `until`** (`Zoom.revert` in `scenes/actions.py`): the shot holds for
+  its beat, the next beat without a shot returns to the zoomed view, and the zoom ends at its
+  `until` beat; before, the camera pulled back during the shot and later returned to the zoom.
+  The zoom remembers the shot on screen when it starts; a zoom started inside a shot is undone
+  as before.
+- **Level-matched voice effects** (`tts/effects.py`: `level_match`, `with_effect`): the effect's
+  audio is brought to the dry voice's integrated loudness (within ±`MATCH_LIMIT` 15 dB), then
+  limited. The effect spec gains `level: matched` (voices with an effect are voiced again once).
+- **`vidgen render --max-scenes N`** (pipeline `render_project(max_scenes=)`, CLI, MCP
+  `render.max_scenes`): renders at most N of the scenes to render and stops without joining
+  while more are left (a `VidgenError` naming them, `details.rendered` / `remaining`); the next
+  run goes on. Docs: README, CONFIG (`--json` error details), the guide (copied to `AGENTS.md`).
+- **`tests/test_actions.py`**: one `BUILTIN_ACTIONS` list for the three tests that listed the
+  built-in actions by hand (failing since Phase X); the reversible actions come from the registry.
+
+Files
+- Changed: `src/vidgen/scenes/actions.py`, `src/vidgen/tts/effects.py`, `src/vidgen/voice_effects.py`
+  (`MATCH_LIMIT`, spec), `src/vidgen/render/pipeline.py`, `src/vidgen/cli.py`,
+  `src/vidgen/mcp_server.py`, guide + `AGENTS.md`, README, `docs/CONFIG.md` (voice effects,
+  shots, render JSON), CHANGELOG, DESIGN §100.16, tasklist; tests `test_cartoon_shots.py` (+1
+  render), `test_voice_effects.py` (+1), `test_render.py` (+1 render), `test_actions.py`.
+
+Public interfaces: CLI `render --max-scenes N`; MCP `render(max_scenes=)`;
+`render_project(..., max_scenes=None)`; `vidgen.tts.effects.level_match`;
+`vidgen.voice_effects.MATCH_LIMIT`. Behaviour: a zoom over a shot (above); effect loudness.
+
+Decisions
+- Resuming inside one scene was not built: manim would have to replay the scene's state up to a
+  beat, and skipped animations do not reproduce it exactly (updaters get one step). A scene
+  longer than a time limit is still split in two (beat ids keep their audio); a project of many
+  scenes renders in steps with `--max-scenes`.
+- `test_actions.py` keeps an explicit list for the registry check (a guard that new actions are
+  meant), and builds the message / enum expectations from it.
+
+The story video (private, scratchpad) — what the review found and changed
+- Fidelity: every beat of the story in order, names right (both doctors, the sister, the
+  student, the father, the visitors, the coast; the time and date line). No change needed.
+- Shots: key beats moved from tiny wides to closer framings (the AI materialising: a zoom on the
+  three; the hand found hers: a medium with the hands; the triumph: a two-shot; the visitors
+  stepping out: a zoom on the rift; the choice offered: a medium of the visitor and the pair; the
+  pair stepping through: a zoom on the rift with the visitors following); a two-face close-up
+  for a line said to the other; the student memory restaged (the student no longer cut by the
+  frame); the wedding memory's flashback lighter so the blue dress reads; warmer expressions
+  on the romantic and compassionate lines; the coast through the rift larger.
+- Title card in the story's night colours (it was a bright blue burst); end card line brighter.
+- Audio: speech outliers evened with an emotion's `gain` (two whispers were 8.5 dB under the
+  narrator, an excited line 3.8 over; a few narrator / hero lines +2–3); the robot voice +5 →
+  +0.4 dB by the generic fix; per-voice medians now within 2 dB of the narrator; music alone
+  about −27/−28 LUFS against speech about −16; a quieter drone.
+- Renders: 1080p scenes at 6–18× real time, rendered with `render --frames --jobs 2
+  --max-scenes 2..4` in seven runs under 10 minutes each, then joined (the join under a minute
+  this time). Final 16:9 1080p30: 7:12 (432.1 s), 98.9 MB, −16.3 LUFS, true peak −1.9 dBTP.
+  Delivery copy: H.264 720p two-pass `-preset slow -tune animation` 365 kb/s + AAC 128 kb/s,
+  27.3 MB (1080p at the same size showed blocks in the dark gradients; 720p looked cleaner).
+
+Checks
+- Tests (one or two files at a time): test_cartoon_shots 15, test_voice_effects 10,
+  test_actions 28, test_render 18, test_mcp 20, test_docs + test_guide 163, test_json_output +
+  test_tts + test_api 68 (+1 skipped), test_cli + test_schema + test_story_fx 101,
+  test_actions_coverage + test_platform_camera 127, test_iso_staging + test_cartoon_parallax 82,
+  test_step177 + test_introspect + test_callout_action 34 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check248`).
+
+Known gaps
+- A single scene longer than a command's time limit must still be split by hand.
+- Wide iso views of a whole room keep the characters small; the story uses closer shots for the
+  beats that matter. No 9:16 cut (see Step 247).
+- The heroine's and the hero's voices sit about 2 dB under the narrator (Kokoro's voices); lint was not
+  re-run on the story after the shot changes (validate is clean).
+
+How to test: `tests/test_cartoon_shots.py -k zoom`, `tests/test_voice_effects.py`,
+`tests/test_render.py -k max_scenes`, `tests/test_actions.py`; stills (scratchpad, private)
+`story-qeh/proj/build/final/storyboard/scenes/*.png`, the contact sheet
+`story-qeh/contact.png`; the videos in `story-qeh/proj/output/`.
+
+## Step 249 — Shorts from a longer video: cuts, hooks, the Shorts safe area
+
+Phase Z2 (Steps 249–250) cuts vertical Shorts out of a private story video. This step built the
+generic support (DESIGN §101) and Shorts 1–3 of the story (scratchpad, never committed).
+
+What existed: variants (lists replace, so a variant had to repeat the whole `scenes`), karaoke
+captions (word-synced), shots / zooms, `reframe`, cards, `render --max-scenes`.
+
+What was built
+- **`cut:`** (`src/vidgen/cuts.py`, `apply_cut` on the raw config in `Project._load`, before sets
+  and validation; base config and variants): `scenes` (an id, or `{scene, beats: [ids] | {from,
+  to}, ...changes}`; a scene twice under another `id`), `beats` (changes by beat id: mappings
+  merge, lists replace), `hook` (adds the `hook` overlay), `end_card` (a silent `end_card` or
+  `card` scene `cut_end`). Beat ids are written out first, so a cut reuses the full video's
+  audio. Scene `params` merge like a set's (characters / props / layers by name). The first
+  scene's transition is dropped unless the entry gives one. Errors at `cut...`.
+- **`hook` overlay** (`scenes/overlays.py`): big bold text on a `primary` plate near the top,
+  `at` / `seconds` (default 0 / 3), pops in, fades out.
+- **`shorts:`** (`true | {max_seconds, bottom, right, top, left}`; defaults 60 s, 20 %, 15 %):
+  `overlays.shorts_area`; captions (no lift), lower thirds, the hook, every scene's safe area and
+  the `card`'s words keep out of the app's parts; the layout dump header gets `shorts` (px);
+  lint `shorts_safe_area` (text / a face in the covered parts, an overlay over a face) and
+  `shorts_length` (error; on the last scene, planned length); validate warns (not vertical, too
+  long). Unused voices are not warned about in a cut.
+- **`zoom` `hold: true`**: no zoom-out after the beat (avoids a flash of the wide view before a
+  cut or at a scene's end).
+- **`audio.bitrate`** (128k–320k, default 192k): FFmpeg's AAC at 192k pushed the −14 LUFS
+  Short's true peak from −1.9 (mix WAV) to +1.9 dBTP; 256k: −1.6.
+
+Files
+- New: `src/vidgen/cuts.py`, `src/vidgen/lint/shorts_rule.py`, `tests/test_cuts_shorts.py` (18, 1 render).
+- Changed: `config.py` (`CutConfig`, `CutScene`, `CutBeatRange`, `CutEndCard`, `ShortsConfig`,
+  `VideoConfig.cut/shorts/shorts_zones`, `AudioConfig.bitrate`, `ShortsSafeAreaRule`,
+  `ShortsLengthRule`, `LINT_RULES`), `project.py`, `overlays.py` (`shorts_area`),
+  `scenes/overlays.py` (`Hook`; lower third in a Short), `scenes/captions.py`, `scenes/card.py`,
+  `scene.py` (safe area), `scenes/actions.py` (`hold`), `introspect.py`, `lint/{__init__,rules,run}.py`,
+  `render/{ffmpeg,pipeline}.py`, `voices.py`, `cli.py` (validate warnings), `api.py`; tests
+  `test_overlays.py` (overlay list), `test_particle_lint.py` (rule order); docs CONFIG (top level,
+  Variants → "Cuts and Shorts", `hook`, captions / lower third placement, zoom `hold`,
+  `audio.bitrate`, lint rules), guide (social topic, actions table, lint table; copied to
+  `AGENTS.md`), README, CHANGELOG, DESIGN §101, tasklist (Phase Z2).
+
+Public interfaces: `vidgen.api` adds `apply_cut`, `shorts_area`. Config: `cut`, `shorts`,
+`audio.bitrate`, overlay `hook`, zoom `hold`, lint rules `shorts_safe_area`, `shorts_length`.
+
+Decisions
+- Cuts rewrite the raw config (no new pipeline stage); left-out beats are not "fast-forwarded"
+  (manim cannot replay a scene's state exactly, §100.16): a cut states where characters start.
+- `shorts` is a property of the output, separate from `cut` (a Short need not be a cut).
+- The bitrate is opt-in (default unchanged): existing projects' audio is identical.
+
+The story's Shorts (private, scratchpad `story-qeh/`)
+- Variants `short1`–`short3` in `story-qeh/proj/video.yaml` (1080×1920, `shorts: true`,
+  `audio: {target_lufs: -14, bitrate: 256k}`, music `enigma` −5 dB, karaoke captions with
+  `speakers: color, max_lines: 1`, hooks, end card "Full story on the channel" under the title in
+  the story's card colours). Re-staged in `cut.beats`: zooms ×1.5–2 of the 16:9 ones with
+  `hold`, closeups / mediums of one to three characters, a zoom centred on the pair so their
+  hands show above the captions, two long scenes split in two cut entries (each renders in one
+  run; the second starts with the characters where the first left them).
+- Results (`story-qeh/shorts/short1_*.mp4` … `short3_*.mp4`): Short 1 43.6 s, 6.3 MB, −14.5 LUFS,
+  −1.6 dBTP; Short 2 39.0 s, 10.5 MB, −14.9 LUFS, −1.7 dBTP; Short 3 47.7 s, 9.5 MB, −14.8 LUFS,
+  −1.8 dBTP. Contact sheets `story-qeh/shorts/shortN_contact.png` (the hook at
+  1 s, one frame per beat, the end card). Lint (preview): short1 2 narration-speed warnings
+  (from the film), short2 clean, short3 one `facing_away` (the visitor speaks to the pair out of
+  the frame, on purpose).
+- Render times at 1080×1920: 6–18× real time (the alarm scenes 23×: 15 s in 347 s), two scenes in
+  parallel with `render --variant shortN --jobs 2 --max-scenes 2`, then the rest and the join.
+
+Checks
+- Tests (one or two files at a time): test_cuts_shorts 18 (1 render), test_docs + test_guide 164,
+  test_schema + test_config + test_api 102, test_schema 71 (again after `bitrate`), test_project +
+  test_voices 41, test_overlays + test_captions 46, test_lint + test_iso_diagram_actions +
+  test_particle_lint 170, test_cartoon_lint + test_timing_lint 148, genetics / accuracy / calc /
+  orbit / narration lint 146, test_music_pieces + test_actions + test_introspect 44,
+  test_cartoon_shots + test_introspect 30, test_json_output + test_mcp 39, test_cli 10,
+  test_cartoon_cards + test_scene 52 (with test_cuts_shorts), test_render + test_robustness 48 —
+  all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check249`, run twice).
+
+Known gaps / for Step 250
+- `off_stage` reports the characters of a beat's `shot` when a `zoom` in the same beat moves
+  the camera away from them (avoid: two `hold` zooms instead of a shot plus a zoom).
+- A zoom `at: 0` in a scene's first beat still shows the wide view for about the first second
+  (the hook frame shows the establishing wide; fine, but check if a Short should open close).
+- In portrait a two-character `closeup` frames about like a `medium` (the narrow width needs
+  both bodies); use a `zoom` for a tighter face shot.
+- Scene renders of a variant are redone after code changes (no reuse across schu-video-generator versions).
+- Hook text over 3 lines (short2) reads, but shorter hooks look better.
+
+How to test: `tests/test_cuts_shorts.py`; stills (scratchpad, private)
+`story-qeh/shorts/short1_contact.png`, `short2_contact.png`, `short3_contact.png`;
+storyboards `story-qeh/proj/build/preview_shortN/storyboard/`.
+
+## Step 250 — Shorts review fixes; Shorts 4–7
+
+Phase Z2's second step: fixes from a review of the first three Shorts (generic, DESIGN §101.4),
+then the remaining Shorts of a private story project (scratchpad only, never committed).
+
+What was built (generic)
+- Karaoke captions in a Short: a phrase of about 3–5 words on one line (`SHORTS_KARAOKE`:
+  `size: body`, `max_lines: 1`, `max_words: 5` when not given), a small margin (`lift` 0.03)
+  above the app's area. The "low caption" reported in one beat was in fact at the same place as
+  the others (plate bottom on the 80 % line, measured on the video); the margin makes it clear.
+- Lint `shorts_safe_area`: faces are checked against an overlay's `reach` (captions: every
+  caption of the line being spoken; a still shows only one, which is why a longer caption over a
+  face was missed), also on mid-beat stills (`Rule.mid_beat`; lint renders 3 stills per beat in a
+  Short), and `min_cover` (0.1) for an overlay over a face (0.25 was too lax for a chin + mouth).
+- `zoom` `cut: true`: jump to the view; at `at: 0` of a scene's first beat the scene opens on it
+  (`Action.opens_scene`, applied before the set's entrance) — the hook is no longer over the
+  establishing wide view for the first second.
+- A cut's params entry `{name: x, drop: true}` leaves a character / prop / layer out.
+- The hook shrinks (1.25 → 0.8 × title) when that keeps it on two lines.
+
+Files: `scenes/captions.py`, `scenes/overlays.py` (hook), `scenes/actions.py` (zoom `cut`),
+`actions.py` (`opens_scene`, `start_beat`), `cuts.py` (`drop`), `introspect.py` (`reach`),
+`lint/rules.py` (`mid_beat`), `lint/run.py` (`SHORTS_STILLS`, `_stills_current`),
+`lint/shorts_rule.py`, `config.py` (`min_cover`); tests `test_cuts_shorts.py` (+7: reach,
+min_cover, karaoke defaults and phrase lengths, `_mark_reach`, drop, cut zoom opens framed
+(render, with / without), hook on 2 lines and 3 stills per beat in the render test); CONFIG
+(Cuts and Shorts, captions table, hook `size`, zoom row, lint row and settings), guide (+
+`AGENTS.md`), CHANGELOG, DESIGN §101.4, tasklist.
+
+Public interfaces: `Action.opens_scene()`; `rule(..., mid_beat=)` / `Rule.mid_beat`; config zoom
+`cut`, `lint.rules.shorts_safe_area.min_cover`, cut params `drop`; layout dump `reach` (Shorts).
+
+Decisions
+- Shorts-only defaults, so other videos (and the Phase Q baseline) are unchanged.
+- A first-beat `shot:` still starts after the stage's entrance (changing it would move existing
+  frames); Shorts use `zoom ... cut: true` for the opening view.
+- Lint's caption check is per line, not per frame: the reach is the union of the line's captions
+  (conservative); the camera between stills is covered by the mid-beat stills.
+
+The private story's Shorts (scratchpad `story-qeh/shorts/`; variants `short1`–`short7` in
+`story-qeh/proj/video.yaml`; −14 LUFS target, 256k AAC; contact sheets `shortN_contact.png`
+with the first frame, the hook at 1 s, two frames per beat and the end card):
+- 1 43.6 s 6.1 MB −14.5 LUFS −1.6 dBTP; 2 39.0 s 11.0 MB −14.9 / −1.7; 3 47.7 s 9.5 MB
+  −14.8 / −1.8; 4 35.9 s 5.4 MB −14.5 / −1.8; 5 46.9 s 10.9 MB −14.7 / −1.4; 6 36.4 s 9.8 MB
+  −14.7 / −1.8; 7 (teaser) 16.4 s 4.3 MB −15.0 / −1.8.
+- Every scene opens framed (zoom `cut`), hooks shortened to 2–3 lines, characters who would
+  stand at the frame's edge under the captions dropped from that cut (`drop`).
+- Render times at 1080×1920: 6–32× real time (two scenes in parallel); each render command under
+  10 minutes with `--max-scenes`.
+- Lint (preview, 3 stills per beat): remaining warnings are a sliver of a face at a frame edge
+  (one beat each in Shorts 2 and 3, Short 6's visitors walking into the portal),
+  narration speed (from the film), `walk_overlap` (all exit through one door, as in the film),
+  `look_alike` (a character and its younger self), `facing_away` (as in Step 249).
+- Intermediates (build dirs of the Shorts, joined copies in `proj/output/`) deleted.
+
+Checks: test_cuts_shorts 23 (3 render), test_schema 71, test_docs + test_guide + test_config +
+test_api 195, test_captions + test_overlays 46, test_actions + test_introspect +
+test_cartoon_shots 58, test_lint + test_particle_lint + test_timing_lint 163, test_cartoon_lint
++ test_json_output + docs/guide 197, test_speech_flags + test_narration_rule + test_readback +
+test_callout_action 73 — all passing. Phase Q baseline 31/31 identical (run twice).
+
+Known gaps
+- Hook text still wraps at ~12 characters per line at 1.25 × title in a Short (the clear part is
+  narrow); long hooks keep three lines.
+- A first-beat `shot:` shows the wide view during the entrance (use a `zoom ... cut`).
+- A caption's reach is per line; a narrow caption never over a face can still be reported when a
+  wide one of the same line would be.
+
+How to test: `tests/test_cuts_shorts.py`; stills (scratchpad, private)
+`story-qeh/shorts/short1_contact.png` … `short7_contact.png`.
+
+## Step 251 — A city at night, glowing particles, a HUD, echoes (Phase AA plan)
+
+Phase AA (Steps 251–254): a second private story cartoon (a first-person noir romance at night in
+a city of towers; the narrator is the hero) drives generic features. The story, its adapted
+script and its project stay in the scratchpad (`story-qc/`); nothing of them is in the repo.
+
+What was done
+- **Adaptation and gap analysis** (private): the script (11 parts, about 1000 spoken words,
+  about 6:25 estimated) with shots, lines per speaker, Kokoro voices (narrator and hero
+  `am_fenrir`, heroine `af_bella`, the synthetic voice in the head `bf_emma` with
+  `[robot, radio]`; checked with `vidgen tts`), camera, staging, light, sounds, music cues
+  (`enigma`, `neon`, `beacon`, `calm`) and the gap list per shot; test renders of a city of
+  houses with coloured rain, then of the new city, a lab with an echo and the HUD (16:9 and 9:16).
+  Generic summary and the plan: DESIGN §102.1, tasklist Phase AA.
+- **Towers** (DESIGN §102.2): the iso object `tower` (`height` 2–30, `size`, lit window grids,
+  neon trims in `detail`, a blinking antenna light; `screen: true` an info screen whose lines
+  crawl up, `garden: true` glowing algae bands; `on` / `switch_on` for its windows, lit by
+  default). Towers may reach out of the wide view.
+- **Traffic** (§102.3): `iso.traffic` lanes of hover pods (`from`, `to`, `height`, `count`,
+  `seconds`, `color`, `size`, `at`: looping, or crossing once from `at`, eased), each a capsule
+  with a glowing rim, a canopy with a rider, a headlight, a glow and a trail; hidden behind
+  buildings (`pod_hidden`); drawn behind the characters.
+- **Glowing particles** (§102.4): `glow: true` on any particles (a light core, a halo in the
+  colour kept as wide on screen through a zoom, more opaque; splashes too).
+- **The `hud` overlay** (§102.5): a scene-timed heads-up display (`at` / `duration` like a lower
+  third): brackets and scan lines, a blinking `alert`, readout `lines`, a `heart` monitor (rate
+  easing to `to`, `skips` beats skipped, warning colour while racing or skipping), a `scan` meter
+  (a live wave; above 1 off its scale, `off_scale` flashing).
+- **Echo characters** (§102.6): `echo: true | {color, opacity, flicker}`: a translucent other
+  self keeping its own colours, outlines glowing in the echo's colour, unlit, flickering; appears
+  with `materialise`.
+
+Files
+- New: `src/vidgen/cartoon/iso_city.py`, `src/vidgen/cartoon/echo.py`, `src/vidgen/hud.py`,
+  `src/vidgen/scenes/hud.py`, `tests/test_city_hud_echo.py` (12: 2 renders).
+- Changed: `world/iso.py` (tower kind, `TALL_KINDS`, `OBJECT_FEATURES`, placing `height` /
+  `features`, tower lit by default), `cartoon/iso_objects.py` (`_tower`, `tower_screen`, the
+  antenna light, `LIT_OBJECTS`), `cartoon/iso_overlays.py` (`IsoScreens`, `IsoTraffic`, `PodLane`),
+  `cartoon/iso_stage.py` (`wide_view` lets tall objects be cut), `cartoon/character.py`
+  (`apply_echo`), `config.py` (`EchoConfig`, `CharacterEntry.echo`, `echo_look`, hologram /
+  echo exclusive), `particle_field.py` (`glow`, `glow_colors`, halo width by zoom),
+  `scenes/stage.py` (`IsoObjectParam.height/screen/garden`, `on: None`, `IsoTrafficLane`,
+  `StageIso.traffic` / `lane_ends`, echoes unlit), `scenes/stage_iso.py` (`_iso_city`: screens,
+  traffic, tower lights), `scenes/stage_story.py` (echo flicker, no fill light; screens and pods
+  unlit), `scenes/overlays.py` (`scene_at`), `scenes/__init__.py` (`hud`), `api.py`; tests whose
+  lists or messages grew (`test_story_fx`, `test_iso_staging`, `test_overlays`); docs CONFIG
+  (A city at night, `glow`, Echo characters, `hud`, iso keys, character keys), guide (copied to
+  `AGENTS.md`), README, CHANGELOG, DESIGN §2 / §102, tasklist.
+
+Public interfaces: see DESIGN §102.7. Config: iso object `tower` (`height`, `screen`, `garden`),
+`iso.traffic`, particles `glow`, overlay `hud`, `characters[].echo`.
+
+Decisions
+- Towers are iso objects (drawn into the place's pictures, ordered with everything) with their
+  moving parts (screen lines, antenna lights) as story things over the pictures, like a lab's
+  blinking lights; a screen another object hides is left still.
+- Pods are a story thing behind the characters with a cheap outline test for what hides them,
+  not drawn into the per-character front pictures. No rider character in a pod (252 if the city
+  shots need a closer look); a `pan` with the same `run_time` follows the hero's pod.
+- The HUD is an overlay (fixed to the screen, through camera moves, timed in its scene) rather
+  than stage actions; its pose reuses the built parts and makes only the moving ones per frame.
+- An echo is a recolouring like a hologram's (it keeps every action, viseme and expression),
+  keeping the costume's colours; several echoes are several characters.
+- No gallery entry: 16.1 of 16.5 MB; a rainy neon city's GIFs would not fit.
+
+Checks
+- Tests (one or two files at a time): test_city_hud_echo 12 (2 renders), test_story_fx +
+  test_iso_place 74, test_iso_staging 32, test_particles + test_cartoon_rain (with iso_staging)
+  70, test_overlays (not render 16; lower third renders 5), test_schema + test_config + test_api
+  102, test_docs + test_extensions 98, test_docs + test_guide 164, test_json_output +
+  test_portal_hologram + test_cartoon_character 57, test_builtin_scenes 174 (not render),
+  test_cartoon_snow_fog + test_actions_coverage + test_review2 + test_custom_scene_example 34,
+  test_mcp 18 (not render), test_cartoon_storm + test_particle_lint + test_cartoon_lighting 153 —
+  all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check251`).
+- Test renders (scratchpad `s251/t2`, preview 854 × 480): the city (6 towers, 3 lanes, glowing
+  rain, a pan) 11.2 s in 21.3 s; the lab with an echo and the HUD 5.9 s in 28.3 s (19.6 s
+  without the HUD); 9:16 (360 × 640) 18.4 s and 25.6 s.
+
+Left for Step 252 (DESIGN §102.1): `kiss`; display patterns `equations` and `timelines`; a
+`scanner` small prop; small props `takeout`, `crystal`; a `medal` accessory; a glowing pendant;
+a `haze` over a spot; a sliding room door; a closer pod / rider shot if needed. Noted: rain
+splashes on an iso ground read like small faces in a close-up; the HUD's lines sit at the top
+left (frame a speaker away from them).
+
+How to test: `tests/test_city_hud_echo.py`; stills (scratchpad, private)
+`s251/t2/build/preview/frames/city/city_b1-1.png`, `s251/t2/build/preview/frames/lab/lab_b2-1.png`,
+`s251/t2/build/preview_vertical/frames/lab/lab_b2-1.png`; the script `story-qc/script.md`.
+
+## Step 252 — A kiss, floating formulas, a scanner, sliding doors; a HUD off the faces
+
+The remaining generic features of Phase AA's gap list, the review of 251's stills, and a private
+test cut of four key shots of the story (scratchpad `s252/t1`, never committed).
+
+What was done
+- **The HUD keeps off faces** (DESIGN §102.8): the overlay layer tells an overlay that
+  `avoids_faces` where the characters' heads are on screen at each frame; the `hud` puts its
+  alert (top centre / right / left, bottom centre) and its lines (top left / right, above a
+  meter) in the free place covering the least of a face, staying put while it stays clear.
+  `avoid_faces: false` keeps 251's places, `compact: true` shrinks texts and meters. Lint
+  **`overlay_face`** warns when its text or a plate still covers a face (outside Shorts).
+- **Overlays in pieces** (§102.8): `Overlay.pieces` / `pose_piece`; the layer caches each piece.
+  The HUD's frame is drawn once, only the meters every frame: 251's lab scene 24.7 s (was 30.3 s;
+  19.6 s without the HUD).
+- **Plain splashes** on an iso place (§102.9): a ring only (two droplets over a ring read as a
+  tiny face in a close-up). Flat stages unchanged.
+- **Display patterns** `equations` and `timelines` (§102.10).
+- **Sliding doors** `iso: {doors: slide}` with a hiss, and a **`haze`** over spots (§102.11-12).
+- **Small props** `scanner` (live readout, `scan: {level, to, at, wave}`, off its scale in red),
+  `takeout`, `crystal` (glowing while on) (§102.13).
+- **Accessories** `medal`, `pendant` (glowing, pulsing, unlit) (§102.14).
+- **`kiss`** action (§102.15): turn, lean in, faces touch (also levelling heads on an iso slant),
+  eyes closed, a burst of hearts and sparkles, a chime; lean back by the end.
+- Lint `look_alike` skips echoes (another self is alike on purpose) (§102.16).
+- **Test cut** (private, `s252/t1`, Kokoro: narrator/hero `am_fenrir`, heroine `af_bella`, the
+  synthetic voice `bf_emma` + `[robot, radio]`): the office alert with the HUD (texts moved off
+  the hero's face in the close-up), the corridor with a haze and a sliding door opening on the
+  heroine (scanner off its scale, her pendant glowing in the two-shot), the surge with echoes
+  (medal on the echo) and floating formulas, the kiss with the timelines display; 16:9 and 9:16
+  storyboards checked. Render times at 854 × 480: 20.8 s, 35.1 s, 20.0 s, 25.3 s for 9.6 s,
+  15.9 s, 9.8 s, 9.3 s of video; peak 0.56 GB.
+
+Files
+- New: `src/vidgen/cartoon/haze.py`, `src/vidgen/cartoon/kiss.py`, `tests/test_kiss_display_props.py` (14: 2 renders).
+- Changed: `overlays.py` (`avoids_faces`, `pieces`, `faces`, `pose_piece`, `posed_whole`),
+  `overlay_layer.py` (`face_boxes`, piece patches), `hud.py` (`face_cover`, `pick_place`),
+  `scenes/hud.py` (places, pieces, `avoid_faces`, `compact`), `lint/shorts_rule.py`
+  (`overlay_face`), `config.py` (`OverlayFaceRule`, rule names, accessories `medal`/`pendant`,
+  `NECK_ACCESSORIES`), `introspect.py` (overlay `faces`, character `kissing`),
+  `lint/cartoon_rules.py` (kissing pairs stand close), `cartoon/contrast.py` (echoes),
+  `particle_field.py` (plain iso splashes), `cartoon/holo_display.py` and `living_drawing.py`
+  (patterns; scanner and crystal drawing and readout), `cartoon/living.py` (switched props,
+  glows, `crystal_pulse`), `cartoon/props.py` (scanner, takeout, crystal), `cartoon/clothes.py`
+  and `primitives.py` (medal, pendant), `cartoon/figure_fx.py` (`PendantPulse`, `KissPlan`,
+  `KissMotion`, `KissBurst`), `cartoon/iso_scenery.py` (`IsoColors.doors`, slide doors),
+  `cartoon/iso_overlays.py` (`IsoHaze`, `HazeSpot`), `cartoon/foley.py` (door hiss),
+  `scenes/stage.py` (`ScannerReading`, `StageProp.scan`, `IsoHazeParam`, `StageIso.doors` /
+  `haze` / `haze_foot`), `scenes/stage_iso.py` (haze, doors' style, hiss), `scenes/stage_story.py`
+  (pendant pulses, `kiss`), `scenes/story_actions.py` (`kiss`), `scenes/__init__.py`, `api.py`;
+  tests whose expectations grew (`test_particle_lint`, `test_story_fx`, `test_cartoon_props`,
+  `test_cartoon_living`, `test_cartoon_small_props`, `test_cartoon_fire_nature`); docs CONFIG,
+  guide (copied to `AGENTS.md`), README, CHANGELOG, DESIGN §2 / §102, tasklist.
+
+Public interfaces: DESIGN §102.16. Config: `hud` `avoid_faces`, `compact`; lint `overlay_face`;
+`pattern: equations | timelines`; props `scanner` (+ `scan`), `takeout`, `crystal`; accessories
+`medal`, `pendant`; `iso.doors`, `iso.haze`; action `kiss`.
+
+Decisions
+- Faces are read live from the scene's characters at each frame (cheap), not planned per beat;
+  the placement keeps its place while clear, so texts move at cuts and zooms, not every frame.
+- Overlay pieces are a general layer feature (any overlay may use them); only the HUD does now.
+- The kiss is two animations sharing one plan on its own clock (a scene may play an action's
+  animations in a shorter run time); it steps the pair along the picture and levels their
+  heads, kept apart from where the stage puts them (as holding hands).
+- A sliding door opens by the place's crossfade (it is part of its wall's picture).
+- No gallery entry (the gallery budget; a neutral sample is in the docs).
+
+Checks
+- Tests (one or two files at a time): test_kiss_display_props 14 (2 renders), test_city_hud_echo
+  12, test_particle_lint + test_story_fx 150, test_overlays + test_schema + test_config +
+  test_api 128, test_docs + test_guide 164, test_cartoon_small_props + test_cartoon_props 114,
+  test_cartoon_living + test_cartoon_fire_nature 47, test_cartoon_character + test_cartoon_foley
+  29, test_iso_place + test_iso_staging 86, test_cartoon_rain + test_particles + test_iso_weather
+  51, test_introspect + test_cartoon_lint + test_cuts_shorts 48, test_lint + test_extensions 48,
+  test_iso_story + test_json_output 29, test_mcp 18 (not render), test_builtin_scenes 174 (not
+  render), test_random_cast + test_phase_l_review + test_docs 94, test_phase_k_review 8 — all
+  passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check252`).
+- `vidgen lint` of the test cut: no `overlay_face` (the HUD found free places); the rest are the
+  test cut's own staging and pacing (fast narration, two characters close).
+
+Notes for Step 253
+- HUD: give close-ups the face at the frame's middle; in 9:16 the lines may touch the top of the
+  hair (only spots of the head box); `compact: true` there.
+- Kiss: stand the pair on neighbouring cells of one map row (or marks close together), a
+  `two_shot` before it; `run_time` 3–3.5 s; it ends by itself (the pose comes back).
+- Pendant: shows best in a two-shot or close-up (the stone hangs low on the chest); medal on an
+  echo reads in a medium shot.
+- Echoes of one person no longer trip `look_alike`; give each a distinct echo `color`.
+- Display: `scale: 1.4–1.6` on the array for `equations` / `timelines`; zoom on it to read the
+  timelines' small panels.
+- Haze: put it at the spot right in front of the door (the cell next to the `+`); the heroine can
+  `enter` through `door: <that spot>` after `- open: door_1`.
+- Pods: no rider close-up built; a `zoom` on the hero lane's end spot with `size: 1.4`.
+
+How to test: `tests/test_kiss_display_props.py`; stills (scratchpad, private)
+`s252/t1/build/preview/storyboard/scenes/{office,door,surge,kiss}-1.png`, `door-2.png`,
+`s252/t1/build/preview_vertical/storyboard/video-1.png`, `video-2.png`.
+
+## Step 253 — The story video; wavy hair, neon strip lights, a kiss holding hands
+
+The private story project of Phase AA built in full (scratchpad `story-qc/proj`, never
+committed), previewed shot by shot, rendered at 1080p; generic fixes found on the way.
+
+What was built (generic, DESIGN §102.17-§102.19)
+- **`hair: wavy`**: long locks waving past the jaw, ending in curls, the chin and chest left
+  clear (front: two locks; side: down the back). The `long` hair's square block read as a helmet
+  in close-ups. Not added to `random_cast.HAIR` (random casts unchanged).
+- **`iso.wall_lights`** (`colour | [left, right]`, indoor only): neon strips along the top of a
+  room's standing walls, never dimmed by the light (`IsoColors.strips`, `_strip_light`); a dark
+  corridor at night with `colors: {wall, floor}` + `light: night` + `fill_light`.
+- **A `kiss` lets go of held hands first**: `HandHold` and `KissPlan` each took the other's step
+  for a stage move and the pair drifted out of the frame (both vanished from the two-shot).
+- **A lab's blinking lights hide behind a character** standing in front of the object
+  (`IsoBlinkers(hidden=)`, `IsoStaging._iso_light_hidden`).
+- **Lint `hidden_speaker`** leaves out overlays that keep off faces (a `hud`'s frame covered the
+  whole picture: every speaker under a HUD was "hidden"); `overlay_face` checks them.
+- Tests that were already failing or that the new hair value unsettled: `test_actions.py`
+  (`kiss` missing from `BUILTIN_ACTIONS` since Step 252), `test_cartoon_outfits.py` (the sampler
+  now drew `medal` + `necklace`; it keeps one thing round the neck).
+
+Files
+- New: `tests/test_wavy_hair.py` (6), `tests/test_wall_lights_kiss.py` (8: 3 renders).
+- Changed: `cartoon/generator.py` (`WAVY_LENGTH`, `WAVY_WAVES`, `_wavy_side`, `_wavy_outline`),
+  `config.py` (`HairStyle`), `cartoon/iso_scenery.py` (`IsoColors.strips`, `STRIP_CORE`,
+  `STRIP_HALO`, `_strip_light`), `scenes/stage.py` (`StageIso.wall_lights`,
+  `wall_light_colors`), `scenes/stage_iso.py` (strips, light boxes, `_iso_light_hidden`),
+  `cartoon/iso_overlays.py` (`IsoBlinkers.hidden`), `scenes/story_actions.py` (kiss lets go),
+  `lint/cartoon_rules.py` (`hidden_speaker`); tests `test_actions.py`, `test_cartoon_outfits.py`;
+  docs CONFIG (hair, iso keys, neon strips, kiss, lint table), guide (copied to `AGENTS.md`),
+  CHANGELOG, DESIGN §102.17-§102.19, tasklist.
+
+Public interfaces: config `look.hair: wavy`, `iso.wall_lights`; `IsoColors.strips`;
+`IsoBlinkers(..., hidden=None)`. Behaviour: kiss and held hands; lab lights; `hidden_speaker`.
+
+The story video (private, scratchpad)
+- 17 scenes (title card, office ×2, a flashback, the city, the corridor, the door, the lab ×9 —
+  surge ×3, array ×2, kiss ×2, the timelines, dawn —, end card), 44 beats; Kokoro: narrator and
+  hero `am_fenrir` 1.0 (his lines a named voice), heroine `af_bella`, the system `bf_emma` 0.95
+  + `[robot, radio]`; music `enigma`, `neon`, `enigma`, `beacon`, `calm` at −6/−7 dB.
+- Review notes of 252 applied: the heroine and her other selves wear `wavy` hair; the corridor is
+  dark with neon strips, glowing sliding doors and the haze; the timelines display is framed by
+  zooms when the narration is about it. Key beats in closer shots (the door reveal, the touch on
+  the arm, the echoes, "We have to report this", the intertwined fingers, the kiss, the last
+  line). Two couples of echoes kiss together (one `at`: the action runner plays actions of a
+  beat one after another while one still runs).
+- Final 16:9 1080p30: 7:02 (422.4 s), 106.0 MB, −16.1 LUFS, true peak −1.9 dBTP; speech per
+  voice within 0.2 dB of the narrator (−22.7 to −22.9 LUFS medians, set with emotion `gain`);
+  music alone about −31 LUFS. Delivery copy 720p two-pass x264 `-preset slow -tune animation`
+  370 kb/s + AAC 128 kb/s: 27.0 MB. Lint: 0 errors, 12 warnings (narration speed of a few short
+  lines, look-alike holograms, the touch's overlap, on purpose).
+- Render: 1080p scenes 3.7–15× real time (the rainy city and the corridor the slowest), peak
+  1.9 GB per scene, so one at a time (two in parallel were killed at the 3 GB cap), in runs of
+  `render --frames --max-scenes 1..2` under 10 minutes; the join about 7 minutes. Previews
+  (854 × 480) 1.0–3.5× real time with `--jobs 2`.
+
+Checks
+- Tests: test_wavy_hair 6, test_wall_lights_kiss 8 (3 renders), test_kiss_display_props +
+  test_story_fx 34, test_cartoon_lint + test_wall_lights_kiss 17, test_docs + test_guide 164,
+  test_schema + test_config + test_api 102, test_cartoon_outfits + test_actions 85,
+  test_iso_place + test_iso_staging 86, test_city_hud_echo + test_portal_hologram +
+  test_story_light_hands 29, test_lint + test_cartoon_effects + test_cartoon_motion_effects +
+  test_builtin_sets 136, test_mcp (not render, with test_actions), test_wavy_hair +
+  test_cartoon_character + test_introspect + test_cartoon_living 70 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check253`).
+
+Notes for Step 254 (Shorts)
+- The 1080p scene clips are kept (`story-qc/proj/build/final/scenes`); a cut re-renders its own
+  9:16 scenes. Beat ids: `office_b1`…, `door_b1` (the reveal), `surge2_b1` (the touch),
+  `surge2_b3` (the echoes), `array2_b2` ("We have to report this"), `kiss_b1` (fingers),
+  `kiss_b4` (the kiss), `kiss2_b1` (the echo kisses and timelines), `ending_b4` (last line).
+- Lab pairs stand side by side on the screen on a map anti-diagonal (`left_array` (5,6) /
+  `right_array` (6,5)); in 9:16 use zooms with `cut: true, hold: true` as in the previous Shorts.
+- A HUD in a Short: `compact: true`; `hidden_speaker` no longer flags its frame.
+- Changing any beat's audio made every scene stale here (17 re-rendered): settle voices before the
+  1080p renders.
+
+How to test: `tests/test_wavy_hair.py`, `tests/test_wall_lights_kiss.py`; (private, scratchpad)
+the film (16:9 MP4 + SRT) and the delivery copy in `story-qc/proj/output/`,
+the contact sheet `story-qc/contact.png`, stills
+`story-qc/proj/build/preview/storyboard/`.
+
+## Step 254 — Shorts of the story; review of Phase AA
+
+Phase AA's last step: vertical Shorts cut from the private story video (scratchpad only, never
+committed) and a critical review of the phase's generic features, with fixes (DESIGN §102.20).
+
+What was built (generic)
+- **A cut drops a scene's own overlay**: `cut.scenes[i].overlays: {<id>: {drop: true}}` (a
+  scene overlay timed `at` a left-out beat was an error, and `false` only turns off video-wide
+  overlays). `cuts._drop_overlays`, `cuts.DROP`.
+- **A `hud` in a Short keeps its meters above the captions** (`SHORTS_CAPTION_BAND` 0.13 of the
+  Shorts area's height; the heart and scan meters stood on the captions' line) and `compact`
+  there does not inset towards the app's parts.
+- **`hud` `compact` outside Shorts**: the top edge moved down by the inset (`y1 - inset`),
+  against the contract (§102.8: every margin halved); now `y1 + inset`. Only compact HUDs change.
+- **Lint `shorts_safe_area` with a HUD**: in a Short the HUD's frame (scan lines over the whole
+  picture) counted as covering 100 % of every face; overlays that keep off faces are now checked
+  by their texts and panels only (helpers shared with `overlay_face`).
+- **Render fingerprints of a cut**: the `cut:` itself was part of every scene's fingerprint, so
+  any change in `cut.beats` re-rendered every scene of the variant (seen: a one-beat change
+  re-rendered three 1080p scenes). `cut` is left out when there is one (it is already applied to
+  the scenes); without a cut the dump is unchanged, so other projects' renders stay current.
+
+Review of Phase AA (no change needed unless listed above)
+- Tests of the phase files (one or two at a time): test_city_hud_echo + test_kiss_display_props
+  27 (incl. 5 renders), test_wavy_hair + test_wall_lights_kiss 13, test_cuts_shorts 27 (+4: a
+  cut drops an overlay, fingerprints of a cut, a HUD in `shorts_safe_area`, a HUD's meters in a
+  Short (render)), test_kiss_display_props +1 (compact edges, render), test_overlays + test_lint
+  49, test_particle_lint + test_captions 150, test_storyboard + test_includes 45,
+  test_cuts_shorts + test_transitions 47, test_docs + test_guide 164, **tests/test_mcp.py fully:
+  20 passed (147 s)** — all passing.
+- Docs: CONFIG (Cuts and Shorts: overlay `drop`, HUD meters, lint with a HUD, what re-renders,
+  hook length, size budget; `hud` section; lint table), guide (Shorts: overlay drop, splitting a
+  scene, zoom at a stage's edge, hook length, HUD; copied to `AGENTS.md`), README (wall lights,
+  wavy hair from 253 were missing; HUD meters in Shorts), CHANGELOG (Step 254), DESIGN §102.20.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check254`, run twice: after the HUD/lint/
+  fingerprint changes and after the `compact` fix).
+- Render performance at 1080 × 1920 (one scene at a time, peak RSS 1.6 GB): 4.8–7.8× real time
+  for rooms with two characters, 9.8–12.6× with several echo characters or the rainy city with
+  traffic, 3.4× on a city held on one tower; each render command under 6 minutes with
+  `--max-scenes 1–3`. Previews (360 × 640) 1.6–3.2×.
+
+The story's Shorts (private, scratchpad `story-qc/shorts/`; variants `short1`–`short7` in
+`story-qc/proj/video.yaml`, `shorts: true`, `audio: {target_lufs: -14, bitrate: 256k}`, karaoke
+captions with speaker colours, a hook, an end card "Full story on the channel" under the title in
+the film's card colours; contact sheets `shortN_contact.png`: first frame, the hook at 1 s, two
+frames per beat, the end card, guides at 80 % / 85 %):
+- 1 36.6 s 6.9 MB −14.3 LUFS −1.7 dBTP; 2 35.4 s 20.4 MB −14.4 / −1.7 (rain: 29.7 MB from the
+  render, re-encoded CRF 23 with the audio copied); 3 45.4 s 6.8 MB −14.3 / −1.7; 4 48.1 s 7.1 MB
+  −14.2 / −1.8; 5 41.0 s 6.7 MB −14.2 / −1.7; 6 52.0 s 10.9 MB −14.4 / −1.7; 7 (teaser) 18.2 s
+  3.8 MB −14.4 / −1.8.
+- Staging: every scene opens framed (`zoom ... cut: true, hold: true`) or on a close shot;
+  characters at a frame edge dropped (`drop`), a scene split in two entries so the echoes of the
+  second have their own cast; hooks kept to two lines (a 3–4 line hook covered a face at 1 s).
+- Lint (preview, 3 stills per beat): no errors; warnings left are narration speed of a few short
+  lines (from the film), one `rushed_animation` (a held prop and a pose in a 2.3 s line), a
+  `character_overlap` (the touch, on purpose), slivers of an echo at a frame edge in the echoes
+  shot, a compact meter label under the readable size in preview.
+- Intermediates deleted (build dirs of the Shorts and the previews, joined copies); kept: the film
+  outputs, the Shorts, the project, the audio.
+
+Files: `src/vidgen/cuts.py`, `src/vidgen/scenes/hud.py`, `src/vidgen/lint/shorts_rule.py`,
+`src/vidgen/render/fingerprint.py`; tests `tests/test_cuts_shorts.py`,
+`tests/test_kiss_display_props.py`; docs `docs/CONFIG.md`, `src/vidgen/data/guide/AGENTS.md`,
+`AGENTS.md`, `README.md`, `CHANGELOG.md`, `DESIGN.md` §102.20, `tasklist.md` (Phase AA done).
+
+Public interfaces: cut entry `overlays: {<id>: {drop: true}}`; `vidgen.scenes.hud.SHORTS_CAPTION_BAND`.
+Behaviour changes: HUD meters in a Short; HUD `compact` top edge; `shorts_safe_area` with a HUD;
+fingerprints of a cut's scenes (renders of a cut variant made before this step count as stale once).
+
+Known gaps
+- Lint does not check the hook while it shows (it fades out before the first mid-beat still of a
+  long first beat); documented (look at the still at 1 s, keep hooks to two lines).
+- A zoom near a wide stage's edge stays on the stage, so a high `scale` pushes its targets aside
+  (leave `scale` out, or zoom on fewer targets).
+- A new hook re-renders every scene of a cut (a video-wide overlay).
+- schu-video-generator has no video bitrate / CRF setting; a busy Short over a size budget is re-encoded by hand.
+
+How to test: `tests/test_cuts_shorts.py`, `tests/test_kiss_display_props.py`; (private,
+scratchpad) `story-qc/shorts/short1_final_warning.mp4` … `short7_teaser.mp4` and
+`story-qc/shorts/short1_contact.png` … `short7_contact.png`.
+
+## Step 255 — The project name in docs and comments
+
+What was done: prose that names the project as a whole now says **schu-video-generator** instead
+of "vidgen": Markdown (README, DESIGN, HANDOFF, CHANGELOG, tasklist, docs/, examples' READMEs,
+both identical `AGENTS.md` copies), Python comments and docstrings (src, tests, tools, examples),
+YAML comments (examples, the 17 bed templates' header lines) and comments in the studio's static
+JS / CSS, `.gitignore`, `src/vidgen/data/geo/LICENSE` and the minimal template's
+`extensions/example.py.txt`. Each candidate was reviewed by hand (scratchpad scripts listed the
+standalone prose mentions outside code spans / fences; ~440 changed). An AST comparison with
+HEAD shows no code change in any `.py` file besides two test literals, and every changed YAML file
+loads to the same data.
+
+Kept as `vidgen` on purpose: the command (`vidgen render`, "vidgen commands"), the Python package
+and its code (imports, "vidgen's registries", "vidgen source", `VidgenError`, "vidgen log
+warnings" = the `vidgen` logger), the MCP server, the cache folder ("vidgen's cache": the folder is
+named `vidgen`), JSON keys (`"vidgen": version`), quotes of runtime messages or old headings,
+on-screen values in example configs (titles, kickers, watermark texts), and the generated pages
+`docs/gallery/*.md` and `docs/music/README.md` (they must match what `vidgen gallery` /
+`vidgen music page` write; `tests/test_listen.py` checks the page header).
+
+Tests changed with the text: `tests/test_guide.py` (`"**use** schu-video-generator"` in the guide's
+head), `tests/test_music_templates.py` (the bed templates' first line); DESIGN §93.8's quote of
+that line.
+
+Behaviour: none. Comment edits in render-input modules change the source digest, so scene renders
+made before this step count as stale once (re-rendered on the next `render` / `storyboard`).
+
+Known gaps / TODO for the owner: runtime strings that still call the project "vidgen" were not
+changed (the step was limited to docs and comments). They are help texts and messages in
+`cli.py` (contact-sheet title, `mcp` / `list-pronunciation` / `music check` help), field
+docstrings in `config.py` (schema descriptions), the gallery's title and index line
+(`gallery.py`), pedigree messages, image-generation / TTS key hints and errors, the Listen page
+text (`listen.py`), MCP tool and resource descriptions (`mcp_server.py`), runtime / worker
+messages, the crispr / terminal param texts, JSON Schema titles (`schema.py`), studio check and
+score-file messages, the studio agent prompt, SVG sanitiser messages, the symusic hint and the
+studio page (`index.html`: "vidgen studio" title, "rendered by vidgen", "Welcome to vidgen
+studio"). Changing them means regenerating `docs/gallery/` and `docs/music/README.md` and
+updating the tests that match those messages.
+
+How to test: `tests/test_guide.py`, `tests/test_docs.py`, `tests/test_gallery.py -m "not render"`,
+`tests/test_mcp.py`, `tests/test_music_templates.py`, `tests/test_listen.py`,
+`tests/test_packaging.py`.
+
+## Step 256 — The project name in runtime messages
+
+What was done (owner-approved follow-up to Step 255): string literals the program shows or writes
+that name the project now say **schu-video-generator** instead of "vidgen" — 65 strings in 32
+files under `src/vidgen/` (including the `templates/minimal/gitignore` header that `vidgen init`
+writes and the studio's static page and JS):
+- CLI: the icon sheet's title (`schu-video-generator icons: N`), the `list-pronunciation` help, the
+  `--narration` help; field docstrings in `config.py` (schema descriptions: `count_by`, the
+  built-in pronunciation switch); JSON Schema titles / description / `$comment` (`schema.py`:
+  "schu-video-generator video.yaml", "schu-video-generator scene").
+- Messages and errors: runtime (`current_project()` / `current_theme()`), ffmpeg too old, the
+  worker's argparse description, `plan_yaml`'s self-check, pedigree numbering hints, the image
+  generation hint, "… never stores the key" (OpenAI / OpenRouter images, ElevenLabs), OpenRouter
+  TTS "no audio … can read", SVG sanitiser errors and warnings, the symusic version hint, the
+  SoundFont mismatch hint ("update schu-video-generator"), studio check / render / score-file
+  messages, the studio agent's prompt, the studio's save and export texts, the studio's start-up
+  line ("schu-video-generator studio: URL").
+- Scene param docs: `crispr` (class doc, `spacer`, `guide`) and `terminal` (`steps.output`).
+- MCP: the guide tool's and resource's descriptions, the music check `narration` field, the
+  `vidgen-mcp` argparse description.
+- Generated pages: the Listen page (`listen.py`: title, intro, score-pieces paragraph) and the
+  gallery's index line (`gallery.py`).
+- Studio page: `<title>` and top bar ("schu-video-generator **studio**"), "rendered by
+  schu-video-generator", the export level option, the welcome hint, the narration toggle's tooltip;
+  JS: the key note and the MCP agent line (`notes.js`), the export's done message (`exports.js`).
+  The longer name made the top bar's last button touch the edge at 990–1060 px; `studio.css`
+  hides the name (keeps the logo) below 1060 px (measured with Playwright: no overflow at 1920,
+  1400, 1280, 1024, 990 px).
+
+Kept as `vidgen` on purpose:
+- the command and anything telling the user what to type: `vidgen studio` (offline banner, api.js
+  offline message), `vidgen music check` (studio check verdict / tooltip), `--version` output
+  (`vidgen X.Y`: the command's version), "vidgen's commands" in the `mcp` help (the command's
+  sub-commands), `vidgen <cmd> --dry-run` inside the key hints;
+- "vidgen's cache" (`cli.py` studio / soundfont help, `config.py` `soundfont` doc): the folder is
+  named `vidgen`;
+- identifiers: `vidgen://schema` / `vidgen://guide` resource URIs, `vidgen-mcp`, localStorage keys
+  (`vidgen-studio-*`, `vidgen-slides:*`), the worker's `prog`, the slides deck's CSS / JS comments
+  (`vidgen slides` = the command);
+- the gallery work project's `title: vidgen gallery` (never shown; changing it would only make
+  every gallery render stale);
+- spoken text: `tools/live_check_openrouter.py` `TTS_TEXT` ("… OpenRouter narration in vidgen.")
+  — the name is awkward to speak and it is a live-check tool; on-screen texts of examples
+  (`examples/gallery/video.yaml` "vidgen gallery");
+- README's screenshot alt text "vidgen studio: …" (describes the committed screenshot, which still
+  shows the old title; update it with the next screenshot).
+
+Generated files regenerated through their code paths: `docs/music/README.md` with `vidgen music
+page --out <scratch>` (only the three text lines differ; the README copied, media untouched);
+`docs/gallery/README.md`, `crispr.md`, `terminal.md` with `gallery.write_index` / `write_page`
+(the functions `vidgen gallery` runs after rendering; no render, only the changed lines differ). No
+schema JSON is committed.
+
+Tests changed with the strings: `test_schema` (title), `test_soundfont` (symusic hint), `test_api`,
+`test_regions`, `test_registry` (runtime errors), `test_vector_images` (SVG messages),
+`test_tts_openrouter`, `test_ffmpeg_version`, `test_studio_ui` (page title), `test_studio_app` (the
+page's `<title>`). Docs quoting the output: `examples/gps-time-of-flight/README.md` (music check
+lines), `docs/CONFIG.md` (the studio's key note).
+
+Behaviour: text only. `crispr.py` / `terminal.py` docstrings change the source digest, so their
+renders count as stale once; no on-screen text changed (Phase Q baseline not needed).
+
+Files: `src/vidgen/{cli,config,gallery,listen,mcp_server,plan_yaml,runtime,schema,soundfont,svgclean,synth}.py`,
+`genetics/{pedigree,pedigree_layout}.py`, `imagegen/{__init__,openai,openrouter}.py`,
+`render/{ffmpeg,worker}.py`, `scenes/{crispr,terminal}.py`, `studio/{check,render,score_file}.py`,
+`studio_app/{__init__,agent,exports}.py`, `studio_app/static/{index.html,notes.js,exports.js,studio.css}`,
+`templates/minimal/gitignore`, `tts/{elevenlabs,openrouter}.py`; generated docs above; tests above;
+`CHANGELOG.md`, `tasklist.md`.
+
+How to test: `tests/test_schema.py`, `test_soundfont.py`, `test_api.py`, `test_registry.py`,
+`test_regions.py`, `test_vector_images.py`, `test_tts_openrouter.py`, `test_ffmpeg_version.py`,
+`test_listen.py`, `test_gallery.py -m "not render"`, `test_studio_app.py`, `test_studio_ui.py`,
+`test_studio_check.py`, `test_studio_agent.py`, `test_docs.py`, `test_guide.py`, `test_mcp.py`
+(run from the repo root or with `-o pythonpath=.` for the tests importing `tests.*`).
+
+## Step 257 — The studio screenshot with the new name
+
+What was done (owner-approved follow-up to Step 256): `docs/images/studio.png` taken again so its
+top bar reads "schu-video-generator studio", with Step 200's recipe unchanged
+(`<scratchpad>/s257/readme_shot.py`, a copy of `s200/readme_shot.py` writing to the scratchpad
+first): an in-process `StudioApp` + `start_in_thread` in an empty project, headless Chromium at
+1440 × 900, dark theme, momentum loaded, two listening notes, an agent's proposal (`agent_propose`,
+tempo 118), the ostinato selected, paused at 0:20, then quantised to 160 colours (median cut, no
+dither). Same size and state as before (1440 × 900; 74,357 → 74,665 bytes); compared side by side:
+only the name and the hand-off's clock time differ, no sideways scroll (scrollWidth 1440). The
+README's alt text now starts "schu-video-generator studio: …"; `docs/CONFIG.md`'s caption ("The
+studio: …") names no project and is unchanged. No other file references the picture.
+
+Files: `docs/images/studio.png`, `README.md`, `tasklist.md`.
+
+How to test: `tests/test_docs.py` (73 passed).

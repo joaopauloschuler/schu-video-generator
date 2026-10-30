@@ -1,6 +1,6 @@
 """Build the bundled world map ``src/vidgen/data/geo/world-110m.json`` from npm packages.
 
-Not shipped with vidgen; a maintainer tool. Sources (both pinned, fetched with ``npm pack``):
+Not shipped with schu-video-generator; a maintainer tool. Sources (both pinned, fetched with ``npm pack``):
 
 - ``world-atlas`` 2.0.2 (ISC, Mike Bostock): ``countries-110m.json``, the Natural Earth 1:110m
   admin-0 countries (public domain) as TopoJSON; each country has its ISO 3166-1 *numeric* code

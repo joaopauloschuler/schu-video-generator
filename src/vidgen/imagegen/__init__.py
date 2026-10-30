@@ -471,7 +471,7 @@ def imagegen_warnings(project: Project, images: list[SceneImage] | None = None) 
         if reason is not None:
             out.append(
                 f"{image.location}.prompt: {reason}; image generators render text poorly - put words on screen "
-                "with vidgen (a caption, title or callout) and charts with its chart scenes"
+                "with schu-video-generator (a caption, title or callout) and charts with its chart scenes"
             )
     out += vector_warnings(images)
     missing = [i for i in images if not i.request.exists]

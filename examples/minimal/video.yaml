@@ -1,4 +1,4 @@
-# A config-only vidgen project: the core built-in scene types, no extensions.
+# A config-only schu-video-generator project: the core built-in scene types, no extensions.
 # The newer scene types (stat, chapter, comparison, table, timeline, diagram, process, network,
 # scatter, histogram, pie, heatmap, map, screenshot, video_clip, equation_derivation,
 # code_walkthrough) are shown in examples/gallery.
