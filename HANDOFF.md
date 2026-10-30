@@ -23670,3 +23670,32 @@ How to test: `tests/test_docs.py` (73 passed).
   `test_guide`, `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo`, the lamplight tests
   of `test_phase_q_review` passed. Phase Q baseline 31/31 identical. Contact sheet (private):
   scratchpad `s261/objects.png` (plus `closeup.png`, `zoom.png`).
+
+## Step 262 — Home II, café and shop objects (Phase AC)
+
+- Built: iso objects `bathtub` (2 x 1), `wardrobe` (2 x 1; `open`: both doors swing out, a mirror
+  inside one, clothes on hangers, a shelf, shoes), `crib` (with a mobile), `cafe_table` (2 x 1: a
+  round table between two bistro chairs, cups, a flower), `counter` (2 x 1, `top`),
+  `cash_register` (on a piece of counter), `display_case` (2 x 1, `kind: cakes | jewels`),
+  `market_stall` (2 x 1, striped awning, fruit crates, chalk board), `vending_machine` (on: its
+  window, sign and buttons glow, a pool of light in front) (DESIGN §104). Nothing moves.
+- Files: new `cartoon/iso_shop.py` (drawings; `motion` returns nothing); `cartoon/iso_objects.py`
+  (colours, `MORE_MODULES`); `world/iso.py` (kinds, `DISPLAY_CASES`, `OBJECT_STYLES`, wardrobe
+  opens, vending machine switches); `scenes/stage.py` (`kind` checked per object through
+  `OBJECT_STYLES`, messages, docstrings); `scenes/handling.py` (open message); `api.py`; the one
+  "Other objects" list in CONFIG and the guide; tests in `tests/test_iso_objects_more.py`.
+- Decisions: `kind` is now general: `OBJECT_STYLES` (object -> its kinds) feeds both validation
+  (did-you-mean per object: "unknown display_case kind 'jewls'; did you mean jewels?") and
+  `OBJECT_FEATURES`; a `kind` on another object says "kind is for a hazard_sign or a
+  display_case". The café table's chairs are part of the object (nobody sits on them). The cash
+  register stands on its own counter piece (objects do not stack), coloured like `counter`'s
+  default so the two line up.
+- Known gaps: the vending machine does not light characters (not in `LAMPLIGHT_KINDS`); the
+  wardrobe's open doors reach out of its footprint (like the lab fridge's); the display case is
+  not lit at night; the crib reads small and busy at preview size.
+- For later batches: add the module to `MORE_MODULES`; a new `kind:` object only needs an entry in
+  `OBJECT_STYLES`; scratchpad `s262/closeup.py` (states incl. `open` and kinds) and `crop.py`.
+- Tests: `test_iso_objects_more.py` 8 passed; `test_lab_objects`, `test_iso_place`, `test_guide`,
+  `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo` passed. No shared drawing code
+  changed (Phase Q baseline not affected). Contact sheets (private): scratchpad
+  `s262/objects.png`, `s262/closeup.png`.

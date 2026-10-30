@@ -621,7 +621,7 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_move_problems,
     level_world,
 )
-from vidgen.world.iso import HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
+from vidgen.world.iso import DISPLAY_CASES, HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
 from vidgen.world.iso_view import Box3, draw_order, in_front, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
 from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, LIT_OBJECTS, MOVING_KINDS, OBJECT_COLORS, ObjectLook, object_box, object_lights, object_motion, object_working, tower_screen  # noqa: E402
@@ -1542,6 +1542,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "ISO_CHARACTER_HEIGHT",
     "OBJECT_KINDS",
     "HAZARD_SIGNS",
+    "DISPLAY_CASES",
+    "OBJECT_STYLES",
     "IsoPlace",
     "ObjectPlacing",
     "parse_iso_map",

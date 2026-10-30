@@ -10645,10 +10645,13 @@ they hide what is behind them.
   `lab_fridge` (`open`), `fume_hood`, `telescope`, `satellite_dish`, `charging_station`,
   `crate_stack`, `airlock` (2 x 1, `open`), `printer_3d`, `hazard_sign` (`kind: biohazard |
   radiation | authorised`), `fire_extinguisher`, `fireplace` (2 x 1), `kitchen_counter`
-  (2 x 1), `stove`, `sink`, `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1);
-  `on: true` / `switch_on` makes the laptop, kiosk, core, arm, centrifuge, coffee machine,
-  rack, tank, bench, rig, fridge, hood, dish, charging station, airlock (its beacon), printer,
-  fireplace, stove, floor lamp and TV work (a lit fireplace or floor lamp lights who stands near).
+  (2 x 1), `stove`, `sink`, `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1),
+  `bathtub` (2 x 1), `wardrobe` (2 x 1, `open`), `crib`, `cafe_table` (2 x 1, two chairs),
+  `counter` (2 x 1), `cash_register`, `display_case` (2 x 1, `kind: cakes | jewels`),
+  `market_stall` (2 x 1), `vending_machine`; `on: true` / `switch_on` makes the laptop, kiosk,
+  core, arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging
+  station, airlock (its beacon), printer, fireplace, stove, floor lamp, TV and vending machine
+  work (a lit fireplace or floor lamp lights who stands near).
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
   front looks to the viewer's lower left) or `right` (lower right; its footprint turns: a bench

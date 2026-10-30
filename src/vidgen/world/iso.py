@@ -145,6 +145,16 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "floor_lamp": ObjectKind(1, 1, 2.05),
     "tv": ObjectKind(1, 1, 1.48),
     "piano": ObjectKind(2, 1, 1.66, top=1.66),
+    # home II, café and shop objects (§104)
+    "bathtub": ObjectKind(2, 1, 1.15),
+    "wardrobe": ObjectKind(2, 1, 2.42, top=2.42),
+    "crib": ObjectKind(1, 1, 1.85),
+    "cafe_table": ObjectKind(2, 1, 1.3, top=0.94),
+    "counter": ObjectKind(2, 1, 1.25, top=1.12),
+    "cash_register": ObjectKind(1, 1, 1.8),
+    "display_case": ObjectKind(2, 1, 1.4, top=1.4),
+    "market_stall": ObjectKind(2, 1, 2.66),
+    "vending_machine": ObjectKind(1, 1, 2.15),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
@@ -152,16 +162,20 @@ TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
 #: big info ``screen`` on its front and its glowing algae-farm bands (``garden``); a hazard sign's
 #: kind (one of them, §103; default ``biohazard``).
 HAZARD_SIGNS: tuple[str, ...] = ("biohazard", "radiation", "authorised")
-OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), "hazard_sign": HAZARD_SIGNS}
+#: A display case's kinds (§104; default ``cakes``).
+DISPLAY_CASES: tuple[str, ...] = ("cakes", "jewels")
+#: The objects with a ``kind`` (one of these, the first the default): a hazard sign, a display case.
+OBJECT_STYLES: dict[str, tuple[str, ...]] = {"hazard_sign": HAZARD_SIGNS, "display_case": DISPLAY_CASES}
+OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), **OBJECT_STYLES}
 
 
 #: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
 #: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
-OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge", "airlock"})
+OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge", "airlock", "wardrobe"})
 SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
                                             "coffee_machine", "grow_rack", "specimen_tank", "chemistry_bench", "distillation_rig",
                                             "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d",
-                                            "fireplace", "stove", "floor_lamp", "tv"})
+                                            "fireplace", "stove", "floor_lamp", "tv", "vending_machine"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock"})
 
@@ -621,6 +635,7 @@ __all__ = [
     "CUT_WALL_HEIGHT",
     "DOOR",
     "DOOR_HEIGHT",
+    "DISPLAY_CASES",
     "FLOOR",
     "GARDEN_WALL_HEIGHT",
     "GROUND_SYMBOLS",
@@ -631,6 +646,7 @@ __all__ = [
     "MAX_ROWS",
     "OBJECT_FEATURES",
     "OBJECT_KINDS",
+    "OBJECT_STYLES",
     "OPENING_KINDS",
     "OBJECT_SYMBOLS",
     "OUTDOOR",

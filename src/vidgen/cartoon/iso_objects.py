@@ -64,6 +64,9 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "fireplace": ("#B5655A", "#E9E2D3"), "kitchen_counter": ("#86B6A2", "#EEE6D8"), "stove": ("#EEF0F3", "#E2574C"),
     "sink": ("#7FA7C9", "#E6EAF0"), "bookshelf_tall": ("#9C6B47", "#3B6FB6"), "armchair": ("#D9774B", "#F2D6A2"),
     "floor_lamp": ("#F2D6A2", "#3A3F4B"), "tv": ("#2B2F3A", "#6EC6FF"), "piano": ("#2E2A33", "#F2C14E"),
+    "bathtub": ("#F4F6FA", "#7FC8E8"), "wardrobe": ("#B07A4F", "#7FA7C9"), "crib": ("#F4F6FA", "#F2A7C3"),
+    "cafe_table": ("#3A3F4B", "#F4F1EA"), "counter": ("#B07A4F", "#EEE6D8"), "cash_register": ("#E6EAF0", "#E2574C"),
+    "display_case": ("#F2E6D8", "#F2A7C3"), "market_stall": ("#E2574C", "#F4F6FA"), "vending_machine": ("#E2574C", "#6EC6FF"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -1986,8 +1989,11 @@ _STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] =
 #: The kinds drawn by another module of :mod:`vidgen.cartoon` (DESIGN.md §104): its name. Each
 #: such module has ``DRAWINGS`` (by frame, look and state) and ``motion(frame, look, now)``; it
 #: is imported when first needed (it builds on this module's helpers).
-MORE_MODULES: dict[str, str] = {kind: "iso_home" for kind in ("fireplace", "kitchen_counter", "stove", "sink", "bookshelf_tall", "armchair",
-                                                               "floor_lamp", "tv", "piano")}
+MORE_MODULES: dict[str, str] = {
+    **{kind: "iso_home" for kind in ("fireplace", "kitchen_counter", "stove", "sink", "bookshelf_tall", "armchair", "floor_lamp", "tv", "piano")},
+    **{kind: "iso_shop" for kind in ("bathtub", "wardrobe", "crib", "cafe_table", "counter", "cash_register", "display_case", "market_stall",
+                                     "vending_machine")},
+}
 #: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
 LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace"})
 

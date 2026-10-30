@@ -20137,3 +20137,17 @@ while on). Docs stay lean: the one "Other objects" list in CONFIG and the guide.
   as before).
 
 Public surface: the kinds above; `MORE_MODULES`, `LAMPLIGHT_KINDS` (also in `vidgen.api`). Additive.
+
+- **Step 262 (home II, café, shop)**: drawn in `iso_shop.py`. `bathtub` (2 x 1; enamel `color`,
+  water `detail`, foam, a duck), `wardrobe` (2 x 1, `top`; in `OPENING_KINDS`: open, both doors
+  swing out 105 degrees, clothes in `detail` and others inside), `crib` (barred sides as lines, a
+  blanket in `detail`, a mobile; 1.85 tall), `cafe_table` (2 x 1, `top`; `color` the iron, `detail`
+  the marble top; two bistro chairs), `counter` (2 x 1, `top`), `cash_register` (on a counter
+  piece), `display_case` (2 x 1, `top`; `kind`: cakes or jewels on velvet), `market_stall` (2 x 1;
+  awning stripes `color` / `detail`), `vending_machine` (switched: window, sign and buttons glow,
+  a pool of light). None move. Heights 1.15–2.66 tiles.
+- **Kinds**: `OBJECT_STYLES` (object -> its kinds, the first the default: `hazard_sign` ->
+  `HAZARD_SIGNS`, `display_case` -> `DISPLAY_CASES`) checks `IsoObjectParam.kind` per object and
+  is part of `OBJECT_FEATURES`.
+
+Public surface (262): the kinds above; `DISPLAY_CASES`, `OBJECT_STYLES` (also in `vidgen.api`). Additive.
