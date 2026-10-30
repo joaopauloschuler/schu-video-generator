@@ -53,6 +53,9 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "laptop": ("#B9BFC9", "#5FD8FF"), "terminal_kiosk": ("#8A93A3", "#5FD8FF"), "quantum_core": ("#4A5266", "#A98BFF"),
     "robot_arm": ("#F2A33A", "#3A3F4B"), "microscope": ("#F4F6FA", "#3A3F4B"), "centrifuge": ("#E6EAF0", "#5FD8FF"),
     "coffee_machine": ("#3A3F4B", "#E2574C"), "lab_stool": ("#4C8DD6", "#B9BFC9"), "wall_clock": ("#3A3F4B", "#E2574C"),
+    "grow_rack": ("#B9BFC9", "#E86BFF"), "terrarium": ("#4FB65E", "#FF9BE0"), "specimen_tank": ("#3FE0C8", "#24464F"),
+    "chemistry_bench": ("#5BE37A", "#FF5FA2"), "distillation_rig": ("#FF8A3D", "#5FD8FF"), "lab_fridge": ("#F4F6FA", "#7FD8FF"),
+    "fume_hood": ("#C9CED6", "#9DF5C4"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -1000,17 +1003,495 @@ def _wall_box(item: IsoObject, base: float) -> Box3:
     return Box3(min(x0, x1), min(y0, y1), z0, max(x0, x1), max(y0, y1), z1)
 
 
+# ----- plants, glassware and liquids (DESIGN.md §103, Step 259) ------------------------------------------
+
+#: Extra liquid colours of the glassware after its main (``color``) and detail ones, a dark metal,
+#: a pot's terracotta, soil, a lit glass's highlight and the pale of mist and vapour.
+LIQUIDS = ("#4CB8FF", "#FFC23D", "#B07CFF")
+METAL = "#5A6272"
+POT = "#C8734A"
+SOIL = "#6B4A2E"
+SHINE = "#FFFFFF"
+MIST = "#E6F6FF"
+#: Seconds a bubble takes to rise through a specimen tank, a drip to fall in a distillation rig,
+#: a puff of mist or vapour to fade, and a fume hood's fan to turn once.
+BUBBLE_SECONDS = 2.4
+DRIP_SECONDS = 1.1
+MIST_SECONDS = 2.6
+FAN_SECONDS = 0.6
+
+
+def _liquid(color: str, on: bool) -> str:
+    """A liquid's fill: brighter while its object works (then it glows, not dimmed by the light)."""
+    return mix(color, SHINE, 0.18) if on else color
+
+
+def _profile(base: Point3, points: list[tuple[float, float]], fill: str, ink: bool = True, glow: bool = False) -> Poly:
+    """A cut-out facing the viewer (a flask, a tube): ``points`` across (``du``) and up (``dv``)
+    the picture from ``base`` (tile widths)."""
+    return Poly(tuple(_screen(base, du, dv) for du, dv in points), fill, ink, glow)
+
+
+def _arc(du: float, dv: float, rx: float, ry: float, start: float, end: float, steps: int = 12) -> list[tuple[float, float]]:
+    """Points of an elliptic arc round (``du``, ``dv``) from angle ``start`` to ``end`` (radians)."""
+    return [(du + rx * math.cos(start + (end - start) * k / steps), dv + ry * math.sin(start + (end - start) * k / steps)) for k in range(steps + 1)]
+
+
+def _cylinder(x: float, y: float, z0: float, z1: float, radius: float, fill: str, *, ink: bool = True, glow: bool = False,
+              lid: str | None = None) -> list[Shape]:
+    """An upright cylinder as flat shapes (glass, a liquid): its body and, with ``lid``, its top
+    in that colour."""
+    front = [(x + radius * math.cos(t), y + radius * math.sin(t), z0) for t in [-math.pi / 4 + math.pi * k / 16 for k in range(17)]]
+    back = [(x + radius * math.cos(t), y + radius * math.sin(t), z1) for t in [3 * math.pi / 4 + math.pi * k / 16 for k in range(17)]]
+    shapes: list[Shape] = [Poly(tuple(front + back), fill, ink, glow)]
+    if lid is not None:
+        shapes.append(Poly(_flat_circle((x, y, z1), radius, 24), lid, ink, glow))
+    return shapes
+
+
+def _flask(base: Point3, size: float, liquid: str, level: float, on: bool) -> list[Shape]:
+    """A conical flask standing at ``base``, ``size`` its height on the picture (tile widths),
+    filled to ``level`` of its body with ``liquid`` (glowing while ``on``)."""
+    b, n, shoulder = 0.42 * size, 0.1 * size, 0.62 * size
+    glass = _profile(base, [(-b, 0.0), (b, 0.0), (n, shoulder), (n, size), (-n, size), (-n, shoulder)], GLASS)
+    top = shoulder * level
+    width = b - (b - n) * level
+    fluid = _profile(base, [(-b + 0.015, 0.012), (b - 0.015, 0.012), (width - 0.012, top), (-width + 0.012, top)], _liquid(liquid, on), False, on)
+    return [glass, fluid, _profile(base, [(-b * 0.55, 0.06 * size), (-b * 0.42, 0.06 * size), (-n * 0.4, shoulder * 0.95), (-n * 0.7, shoulder * 0.95)],
+                                    mix(GLASS, SHINE, 0.7), False),
+            _profile(base, [(-n * 1.3, size), (n * 1.3, size), (n * 1.3, size + 0.02), (-n * 1.3, size + 0.02)], GLASS)]
+
+
+def _round_flask(base: Point3, radius: float, neck: float, liquid: str, level: float, on: bool) -> list[Shape]:
+    """A round-bottomed flask: a ball of ``radius`` (tile widths) whose bottom is at ``base``, a
+    neck ``neck`` long, filled to ``level`` (share of the ball from its bottom) with ``liquid``."""
+    n = radius * 0.3
+    shapes: list[Shape] = [_profile(base, [(-n, radius), (n, radius), (n, 2 * radius + neck), (-n, 2 * radius + neck)], GLASS),
+                           _profile(base, _arc(0.0, radius, radius, radius, 0.0, 2 * math.pi, 24)[:-1], GLASS)]
+    cut = math.asin(min(max(1.0 - 2.0 * level, -0.99), 0.99))   # the surface's angle below the middle
+    shapes.append(_profile(base, _arc(0.0, radius, radius * 0.9, radius * 0.9, -math.pi - cut, cut, 16), _liquid(liquid, on), False, on))
+    shapes.append(_profile(base, _arc(-radius * 0.35, radius * 1.35, radius * 0.22, radius * 0.16, 0.0, 2 * math.pi, 10)[:-1], mix(GLASS, SHINE, 0.7), False))
+    return shapes
+
+
+def _tube(base: Point3, height: float, liquid: str, on: bool) -> list[Shape]:
+    """A test tube standing at ``base`` (its round bottom), ``height`` tall on the picture, half full."""
+    r = 0.028
+    glass = _profile(base, [*_arc(0.0, r, r, r, math.pi, 2 * math.pi, 6), (r, height), (-r, height)], GLASS)
+    fluid = _profile(base, [*_arc(0.0, r, r * 0.7, r * 0.7, math.pi, 2 * math.pi, 6), (r * 0.7, height * 0.55), (-r * 0.7, height * 0.55)],
+                     _liquid(liquid, on), False, on)
+    return [glass, fluid]
+
+
+def _grow_rack(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """An open rack of three shelves with potted plants, its back to the wall, a grow light under
+    each shelf above them: purple-pink (the detail colour) and washing the plants' tier in its
+    light when on, dark when off."""
+    w = f.width
+    a0, a1, b0, b1 = 0.08, w - 0.08, 0.14, f.depth - 0.22
+    frame, light = look.main, look.detail
+    tiers = (0.1, 0.85, 1.6, 2.3)
+    shapes = f.box(a0, b0 - 0.04, 0.0, a1, b0, tiers[-1] + 0.06, shade(frame, 0.45))
+    for k in range(3):
+        z, z_next = tiers[k], tiers[k + 1]
+        wash = mix(light, "#2B2F3A", 0.45) if state.on else shade(frame, 0.55)
+        shapes.append(f.poly([(a0 + 0.02, b0 + 0.001, z + 0.06), (a1 - 0.02, b0 + 0.001, z + 0.06), (a1 - 0.02, b0 + 0.001, z_next),
+                              (a0 + 0.02, b0 + 0.001, z_next)], wash, False, state.on))
+        shapes += f.box(a0, b0, z, a1, b1, z + 0.06, frame)
+        if state.on:   # the shelf lit by the grow light over it
+            shapes.append(f.poly([(a0 + 0.03, b0 + 0.02, z + 0.061), (a1 - 0.03, b0 + 0.02, z + 0.061), (a1 - 0.03, b1 - 0.02, z + 0.061),
+                                  (a0 + 0.03, b1 - 0.02, z + 0.061)], mix(light, SHINE, 0.3), False, True))
+        for j, share in enumerate((0.2, 0.5, 0.8)):
+            a = a0 + (a1 - a0) * share
+            b = (b0 + b1) / 2 + (0.05 if j % 2 else -0.03)
+            pot = f.p(a, b, z + 0.06)
+            shapes += [Upright(pot[0], pot[1], pot[2], pot[2] + 0.2, 0.08, POT), Disc((pot[0], pot[1], pot[2] + 0.2), 0.065, SOIL, False, holds_snow=False)]
+            leaves = mix(mix(look.main, "#3FA34D", 0.85), light, 0.22) if state.on else "#4C9A55"
+            top = _screen((pot[0], pot[1], pot[2] + 0.2), 0.0, 0.0)
+            spread = 0.07 + 0.02 * ((k + j) % 2)
+            shapes.append(Blobs(tuple(_screen(top, du, dv) for du, dv in ((0.0, 0.17), (-spread, 0.1), (spread, 0.1), (0.0, 0.07))), (0.08, 0.06, 0.06, 0.06),
+                                leaves))
+            if (k + j) % 3 == 0:   # a few ripe ones
+                shapes.append(Blobs((_screen(top, 0.03, 0.12),), (0.025,), "#E2574C", False))
+        shapes += f.box(a0 + 0.06, b1 - 0.14, z_next - 0.05, a1 - 0.06, b1 - 0.04, z_next, CASING)
+        shapes.append(_indicator(f, a0 + 0.08, a1 - 0.08, b1 - 0.039, z_next - 0.045, z_next - 0.005, mix(light, SHINE, 0.45), state.on))
+    shapes += f.box(a0, b0, tiers[-1], a1, b1, tiers[-1] + 0.06, frame)
+    for a in (a0, a1 - 0.05):
+        shapes += f.box(a, b1 - 0.05, 0.0, a + 0.05, b1, tiers[-1] + 0.06, shade(frame, 0.1))
+    return shapes
+
+
+def _terrarium(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A glass dome on a round stand with a little garden inside: moss, a leafy plant in the main
+    colour and tiny flowers in the detail colour that glow faintly (at night too)."""
+    x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+    z = f.base
+    floor = z + 0.78
+    radius = 0.3
+    across, low = radius * math.sqrt(2) / 2, radius * math.sqrt(2) / 4
+    centre = (x, y, floor)
+    shapes: list[Shape] = [Upright(x, y, z, z + 0.12, 0.26, METAL), Upright(x, y, z + 0.12, floor - 0.06, 0.07, METAL),
+                           Upright(x, y, floor - 0.08, floor, radius + 0.03, shade(METAL, 0.1))]
+    dome = [*_arc(0.0, 0.0, across, 0.55, 0.0, math.pi, 16), *_arc(0.0, 0.0, across, low, math.pi, 2 * math.pi, 12)[1:-1]]
+    shapes.append(_profile(centre, dome, mix(GLASS, look.detail, 0.12)))
+    shapes.append(Disc((x, y, floor + 0.005), radius * 0.92, SOIL, False, holds_snow=False))
+    shapes.append(Disc((x, y, floor + 0.01), radius * 0.85, look.detail, False, 0.28, glow=True, holds_snow=False))
+    shapes.append(Blobs(tuple(_screen(centre, du, 0.02) for du in (-0.12, 0.0, 0.12)), (0.06, 0.07, 0.06), "#5E9E4E", False))
+    leaves = mix(look.main, "#2F6B3A", 0.1)
+    shapes.append(Line((_screen(centre, 0.0, 0.0), _screen(centre, 0.0, 0.2)), shade(leaves, 0.3), 1.6))
+    shapes.append(Blobs(tuple(_screen(centre, du, dv) for du, dv in ((0.0, 0.3), (-0.09, 0.22), (0.09, 0.22), (-0.04, 0.14), (0.06, 0.15))),
+                        (0.08, 0.065, 0.065, 0.06, 0.06), leaves))
+    for du, dv in ((-0.13, 0.08), (0.14, 0.1), (0.05, 0.36), (-0.07, 0.04)):
+        shapes.append(Poly(_round(_screen(centre, du, dv), 0.026, look.detail).points, look.detail, False, True))
+        shapes.append(Poly(_round(_screen(centre, du, dv), 0.01, SHINE).points, SHINE, False, True))
+    shapes.append(Line(tuple(_screen(centre, du, dv) for du, dv in _arc(0.0, 0.0, across * 0.78, 0.45, math.pi * 0.62, math.pi * 0.85, 6)),
+                       mix(GLASS, SHINE, 0.8), 2.2))
+    return shapes
+
+
+def _tank_parts(f: _Frame) -> tuple[float, float, float, float, float]:
+    """A specimen tank's middle (x, y), its liquid's bottom and top and the glass's radius."""
+    x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+    return x, y, f.base + 0.36, f.base + 2.0, 0.3
+
+
+def _specimen_tank(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A tall glass cylinder of liquid (the main colour, glowing when on; the stage bubbles it)
+    on a metal base with a status light, a cap and a pipe; a dark shape floats in it when the
+    placing gives a ``detail`` colour."""
+    x, y, bottom, top, radius = _tank_parts(f)
+    z = f.base
+    liquid = _liquid(look.main, state.on)
+    shapes: list[Shape] = [Upright(x, y, z, z + 0.32, radius + 0.06, METAL)]
+    shapes.append(_round((x + (radius + 0.06) * 0.7, y + (radius + 0.06) * 0.7, z + 0.17), 0.035, DISPLAY_GREEN if state.on else LED_OFF, True, state.on))
+    shapes += _cylinder(x, y, z + 0.32, z + 2.12, radius, GLASS)
+    shapes += _cylinder(x, y, bottom, top, radius * 0.9, liquid, ink=False, glow=state.on, lid=mix(liquid, SHINE, 0.25))
+    if f.item.detail is not None:   # a floating silhouette
+        body = mix(look.detail, look.main, 0.2)
+        middle = (x, y, (bottom + top) / 2 + 0.1)
+        shapes += [_ribbon(_screen(middle, -0.03, -0.05), _screen(middle, -0.1, -0.32), 0.025, body),
+                   _ribbon(_screen(middle, 0.03, -0.05), _screen(middle, 0.08, -0.33), 0.025, body),
+                   _ribbon(_screen(middle, -0.04, 0.12), _screen(middle, -0.13, -0.02), 0.022, body),
+                   _ribbon(_screen(middle, 0.04, 0.12), _screen(middle, 0.13, 0.0), 0.022, body)]
+        shapes.append(Blobs((_screen(middle, 0.0, 0.07), _screen(middle, 0.0, -0.03), _screen(middle, 0.0, 0.24)), (0.065, 0.06, 0.075), body))
+    shapes.append(Poly((_screen((x, y, z + 0.42), -radius * 0.55, 0.0), _screen((x, y, z + 0.42), -radius * 0.38, 0.0),
+                        _screen((x, y, z + 2.02), -radius * 0.38, 0.0), _screen((x, y, z + 2.02), -radius * 0.55, 0.0)), mix(GLASS, SHINE, 0.65), False))
+    shapes += [Upright(x, y, z + 2.1, z + 2.3, radius + 0.04, METAL), Upright(x, y, z + 2.3, z + 2.45, 0.07, shade(METAL, 0.15))]
+    return shapes
+
+
+def _bench_vessels(f: _Frame) -> list[tuple[str, Point3, float, int]]:
+    """A chemistry bench's glassware on its top, back to front: (what, where it stands, its size
+    on the picture, its liquid's colour: an index into the bench's palette)."""
+    w = f.width
+    top = 0.86
+    found = [("rack", f.p(0.24 * w, 0.34, top), 0.22 * w, 0), ("flask", f.p(0.52 * w, 0.4, top), 0.5, 0),
+             ("round", f.p(0.8 * w, 0.36, top), 0.15, 1), ("beaker", f.p(0.3 * w, 0.74, top), 0.26, 2), ("flask", f.p(0.66 * w, 0.76, top), 0.32, 3)]
+    return sorted(found, key=lambda v: v[1][0] + v[1][1])
+
+
+def _bench_palette(look: ObjectLook) -> tuple[str, ...]:
+    return (look.main, look.detail, *LIQUIDS)
+
+
+def _chemistry_bench(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A lab bench with a dark top: a test-tube rack, flasks and a beaker of liquids in the main,
+    detail and a few more colours, glowing when on (the stage bubbles and steams them)."""
+    w = f.width
+    shapes = _cabinet(f)
+    shapes += f.box(0.04, 0.14, 0.8, w - 0.04, f.depth - 0.03, 0.86, "#3A3F4B")
+    palette = _bench_palette(look)
+    on = state.on
+    for what, base, size, color in _bench_vessels(f):
+        if what == "rack":
+            a_from, a_to = 0.24 * w - size, 0.24 * w + size
+            shapes += f.box(a_from, 0.27, 0.86, a_to, 0.41, 0.9, WOOD)
+            count = 4
+            for k in range(count):
+                a = a_from + (a_to - a_from) * (k + 0.5) / count
+                shapes += _tube(f.p(a, 0.34, 0.9), 0.36, palette[(k + 1) % len(palette)], on)
+            shapes += f.box(a_from, 0.29, 1.08, a_to, 0.39, 1.12, WOOD)
+            for a in (a_from, a_to - 0.04):
+                shapes += f.box(a, 0.31, 0.9, a + 0.04, 0.37, 1.12, shade(WOOD, 0.1))
+        elif what == "flask":
+            shapes += _flask(base, size, palette[color], 0.55, on)
+        elif what == "round":
+            shapes.append(Disc((base[0], base[1], base[2] + 0.005), 0.13, "#8A93A3", True, holds_snow=False))
+            shapes += _round_flask(base, size, 0.18, palette[color], 0.55, on)
+        else:   # a beaker with a scale
+            r = size * 0.42
+            shapes.append(_profile(base, [(-r, 0.0), (r, 0.0), (r, size), (r + 0.02, size + 0.02), (-r, size + 0.01)], GLASS))
+            shapes.append(_profile(base, [(-r + 0.012, 0.012), (r - 0.012, 0.012), (r - 0.012, size * 0.6), (-r + 0.012, size * 0.6)],
+                                   _liquid(palette[color], on), False, on))
+            for k in range(3):
+                shapes.append(Line((_screen(base, r * 0.3, size * (0.3 + 0.2 * k)), _screen(base, r * 0.75, size * (0.3 + 0.2 * k))), SHINE, 0.8))
+    return shapes
+
+
+def _rig_parts(f: _Frame) -> tuple[Point3, Point3, Point3, Point3]:
+    """A distillation rig's boiling flask's bottom, the condenser's start and end, and the
+    receiving flask's base (world points)."""
+    boil = f.p(0.18, 0.6, 1.02)
+    start = _screen(boil, 0.0, 0.5)
+    catch = f.p(0.84, 0.46, 0.86)
+    return boil, start, _screen(catch, 0.04, 0.52), catch
+
+
+def _distillation_rig(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A distillation rig on a bench cabinet: a burner under a round flask of the main colour's
+    liquid on a ring stand, a slanting condenser with a coil (the detail colour) down to a conical
+    flask catching the distillate (detail). When on the liquids glow, the burner's flame burns and
+    the stage drips the distillate and boils the flask."""
+    shapes = _cabinet(f)
+    boil, start, end, catch = _rig_parts(f)
+    on = state.on
+    post = f.p(0.14, 0.3, 0.0)
+    shapes += [Disc((post[0], post[1], f.base + 0.81), 0.1, METAL, True, holds_snow=False), Upright(post[0], post[1], f.base + 0.8, f.base + 1.85, 0.025, METAL)]
+    shapes.append(Line((f.p(0.14, 0.3, 1.62), _screen(start, 0.0, -0.1)), METAL, 1.8))
+    burner = f.p(0.18, 0.6, 0.8)
+    shapes += [Upright(burner[0], burner[1], burner[2], burner[2] + 0.06, 0.1, METAL), Upright(burner[0], burner[1], burner[2] + 0.06, burner[2] + 0.12, 0.035, "#8A93A3")]
+    if on and not look.moving:   # a still flame (the stage flickers it)
+        shapes.append(_profile(_screen(burner, 0.0, 0.07), [(-0.035, 0.0), (0.035, 0.0), (0.0, 0.11)], "#FF9A3D", False, True))
+    ring = f.p(0.18, 0.6, 1.04)
+    shapes.append(Line(_flat_circle(ring, 0.12, 16) + (_flat_circle(ring, 0.12, 16)[0],), METAL, 1.2))
+    shapes += _round_flask(_screen(boil, 0.0, -0.04), 0.15, 0.24, look.main, 0.6, on)
+    shapes += _flask(catch, 0.42, look.detail, 0.35, on)
+    shapes.append(_ribbon(start, end, 0.05, GLASS))
+    coil = []
+    for k in range(25):
+        s = k / 24
+        p = (start[0] + (end[0] - start[0]) * s, start[1] + (end[1] - start[1]) * s, start[2] + (end[2] - start[2]) * s)
+        coil.append(_screen(p, 0.0, 0.028 * math.sin(s * math.pi * 14)))
+    shapes.append(Line(tuple(coil), mix(look.detail, SHINE, 0.2) if on else shade(look.detail, 0.15), 1.3))
+    for s in (0.12, 0.88):   # the jacket's hose nozzles
+        p = (start[0] + (end[0] - start[0]) * s, start[1] + (end[1] - start[1]) * s, start[2] + (end[2] - start[2]) * s)
+        shapes.append(_ribbon(p, _screen(p, 0.0, 0.07), 0.015, METAL))
+    return shapes
+
+
+def _fridge_bottles(f: _Frame, a0: float, a1: float, b: float, z0: float, z1: float, look: ObjectLook, lit: bool) -> list[Shape]:
+    """A fridge's inside on the face at ``b``: dark (lit pale in the detail colour when ``lit``),
+    shelves and rows of coloured sample bottles."""
+    inside = mix(look.detail, SHINE, 0.65) if lit else "#2E3A48"
+    shapes: list[Shape] = [f.poly([(a0, b, z0), (a1, b, z0), (a1, b, z1), (a0, b, z1)], inside, False, lit)]
+    colors = (*LIQUIDS, "#E2574C", "#48E07A")
+    rows = 3
+    for row in range(rows):
+        z = z0 + (z1 - z0) * row / rows + 0.02
+        shapes.append(f.poly([(a0, b + 0.001, z), (a1, b + 0.001, z), (a1, b + 0.001, z + 0.025), (a0, b + 0.001, z + 0.025)], "#B9BFC9", False))
+        count = 4
+        for k in range(count):
+            a = a0 + (a1 - a0) * (k + 0.5) / count
+            color = colors[(row * 2 + k) % len(colors)]
+            height = 0.22 + 0.06 * ((row + k) % 2)
+            shapes.append(f.poly([(a - 0.04, b + 0.002, z + 0.025), (a + 0.04, b + 0.002, z + 0.025), (a + 0.04, b + 0.002, z + height),
+                                  (a - 0.04, b + 0.002, z + height)], mix(color, SHINE, 0.15) if lit else shade(color, 0.25), True, lit))
+            shapes.append(f.poly([(a - 0.025, b + 0.002, z + height), (a + 0.025, b + 0.002, z + height), (a + 0.025, b + 0.002, z + height + 0.05),
+                                  (a - 0.025, b + 0.002, z + height + 0.05)], "#F4F6FA", True))
+    return shapes
+
+
+def _fridge_box(f: _Frame) -> tuple[float, float, float, float, float]:
+    """A lab fridge's body: a from, a to, b at its back and front, its height."""
+    return 0.1, f.width - 0.1, 0.14, f.depth - 0.1, 2.25
+
+
+def _lab_fridge(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A tall lab fridge: its body in the main colour, a glass door showing shelves of coloured
+    sample bottles (lit pale in the detail colour while on or open), a handle, a display and
+    vents; open, its door swung out towards the viewer (the stage pours cold mist from it)."""
+    a0, a1, b0, b1, h = _fridge_box(f)
+    body = look.main
+    lit = state.on or state.open
+    shapes = f.box(a0, b0, 0.0, a1, b1, h, body)
+    shapes.append(f.poly([(a0 + 0.05, b1, 0.05), (a1 - 0.05, b1, 0.05), (a1 - 0.05, b1, 0.18), (a0 + 0.05, b1, 0.18)], shade(body, 0.35), False))
+    for k in range(4):
+        z = 0.08 + k * 0.025
+        shapes.append(Line((f.p(a0 + 0.1, b1 + 0.001, z), f.p(a1 - 0.1, b1 + 0.001, z)), shade(body, 0.5), 0.7))
+    door0, door1 = 0.22, h - 0.08
+    shapes.append(_indicator(f, a0 + 0.08, a0 + 0.3, b1 + 0.001, door1 - 0.12, door1 - 0.04, look.detail, lit))
+    if not state.open:
+        shapes.append(f.poly([(a0 + 0.04, b1, door0), (a1 - 0.04, b1, door0), (a1 - 0.04, b1, door1 - 0.16), (a0 + 0.04, b1, door1 - 0.16)], f.front(body)))
+        shapes += _fridge_bottles(f, a0 + 0.1, a1 - 0.16, b1 + 0.002, door0 + 0.1, door1 - 0.26, look, lit)
+        shapes.append(f.poly([(a0 + 0.14, b1 + 0.004, door0 + 0.14), (a0 + 0.24, b1 + 0.004, door0 + 0.14), (a0 + 0.42, b1 + 0.004, door1 - 0.3),
+                              (a0 + 0.32, b1 + 0.004, door1 - 0.3)], mix(GLASS, SHINE, 0.5), False))
+        return shapes + f.box(a1 - 0.12, b1, door0 + 0.5, a1 - 0.08, b1 + 0.06, door1 - 0.5, "#8A93A3")
+    shapes += _fridge_bottles(f, a0 + 0.04, a1 - 0.04, b1 + 0.002, door0, door1 - 0.16, look, lit)
+    swing = (a1 - a0) * 0.85
+    out = (a0 - swing * 0.2, b1 + swing * 0.97)
+    leaf = [(a0, b1, door0), (out[0], out[1], door0), (out[0], out[1], door1 - 0.16), (a0, b1, door1 - 0.16)]
+    shapes.append(f.poly(leaf, mix(body, SHINE, 0.1)))
+    inner = [(a0 + (out[0] - a0) * s, b1 + (out[1] - b1) * s, z) for s, z in ((0.15, door0 + 0.12), (0.85, door0 + 0.12), (0.85, door1 - 0.28), (0.15, door1 - 0.28))]
+    shapes.append(f.poly(inner, mix(GLASS, "#2E3A48", 0.35), False))
+    return shapes
+
+
+def _hood_parts(f: _Frame) -> tuple[float, float, float, float]:
+    """A fume hood's chamber: a from, a to, b at its front, and its fan's middle height."""
+    return 0.08, f.width - 0.08, f.depth - 0.12, 2.27
+
+
+def _fan_blades(f: _Frame, a: float, b: float, z: float, radius: float, turn: float, fill: str) -> list[Motion]:
+    """A fan's three blades on the face at ``b`` round (``a``, ``z``), turned ``turn`` radians."""
+    blades = []
+    for k in range(3):
+        t = turn + 2 * math.pi * k / 3
+        points = [(a + r * math.cos(t + d), b, z + r * math.sin(t + d)) for r, d in ((0.02, -0.5), (radius, -0.35), (radius, 0.25), (0.02, 0.5))]
+        blades.append(Motion(tuple(f.p(*q) for q in points), fill, ink=False))
+    return blades
+
+
+def _fume_hood(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A fume hood: a cabinet in the main colour under a chamber with a glass sash in front (lit
+    pale in the detail colour while on, with glassware inside), a fan housing on top with a round
+    grille (the stage spins its fan and wafts vapour in the chamber while on) and a duct."""
+    a0, a1, front, fan_z = _hood_parts(f)
+    w = f.width
+    body = look.main
+    on = state.on
+    b0 = 0.14
+    shapes = f.box(a0, b0, 0.0, a1, front, 0.85, body)
+    shapes.append(Line((f.p(w / 2, front, 0.08), f.p(w / 2, front, 0.75)), shade(body, 0.35), 0.8))
+    shapes += f.box(a0, b0, 0.85, a1, front, 2.1, body)
+    inside = mix(look.detail, SHINE, 0.55) if on else "#3A4250"
+    shapes.append(f.poly([(a0 + 0.07, front + 0.001, 0.9), (a1 - 0.07, front + 0.001, 0.9), (a1 - 0.07, front + 0.001, 1.95), (a0 + 0.07, front + 0.001, 1.95)],
+                         inside, False, on))
+    shapes.append(_indicator(f, a1 - 0.2, a1 - 0.1, front + 0.001, 1.99, 2.05, DISPLAY_GREEN, on))
+    at = f.p(0.35 * w, front, 0.92)
+    shapes += _flask(_screen(at, 0.0, 0.0), 0.36, look.detail, 0.5, on)
+    shapes += _tube(_screen(f.p(0.62 * w, front, 0.92), 0.0, 0.0), 0.3, LIQUIDS[0], on)
+    shapes += _tube(_screen(f.p(0.7 * w, front, 0.92), 0.0, 0.0), 0.26, LIQUIDS[1], on)
+    sash = 1.5
+    shapes.append(f.poly([(a0 + 0.05, front + 0.004, sash), (a1 - 0.05, front + 0.004, sash), (a1 - 0.05, front + 0.004, sash + 0.06),
+                          (a0 + 0.05, front + 0.004, sash + 0.06)], shade(body, 0.2)))
+    for k in range(2):   # the glass's shine
+        u = 0.18 + 0.2 * k
+        shapes.append(f.poly([(a0 + u, front + 0.005, 0.95), (a0 + u + 0.06, front + 0.005, 0.95), (a0 + u + 0.22, front + 0.005, 1.45),
+                              (a0 + u + 0.16, front + 0.005, 1.45)], mix(GLASS, SHINE, 0.55), False))
+    shapes += f.box(a0 + 0.1, b0 + 0.08, 2.1, a1 - 0.1, front - 0.06, 2.42, shade(body, 0.08))
+    grille = front - 0.06
+    radius = 0.13
+    ring = tuple(f.p(w / 2 + radius * math.cos(t), grille + 0.001, fan_z + radius * math.sin(t)) for t in [2 * math.pi * k / 20 for k in range(20)])
+    shapes.append(Poly(ring, CASING))
+    shapes += [Poly(m.points, m.fill, m.ink) for m in _fan_blades(f, w / 2, grille + 0.002, fan_z, radius * 0.85, 0.4, "#8A93A3")]
+    duct = f.p(w / 2, (b0 + front) / 2 - 0.05, 0.0)
+    return shapes + [Upright(duct[0], duct[1], f.base + 2.42, f.base + 2.5, 0.09, "#8A93A3")]
+
+
 #: The objects with moving parts the stage draws over their pictures while they work (DESIGN.md §103).
-MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine")
+MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge",
+                "fume_hood")
+_LAB_MOVING = frozenset({"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"})
+#: The objects that work while open too (a lab fridge's cold mist).
+OPEN_WORKING = frozenset({"lab_fridge"})
 
 
-def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float) -> list[Motion]:
+def object_working(kind: str, state: ObjectState) -> bool:
+    """Whether an object of ``kind`` in ``state`` works (its moving parts move): there and on;
+    a lab fridge also while open."""
+    return state.shown and (state.on or (kind in OPEN_WORKING and state.open))
+
+
+def _bubble(point: Point3, radius: float, fill: str, opacity: float) -> Motion:
+    return Motion(_round(point, radius, fill).points, fill, opacity, False, True)
+
+
+def _rising(now: float, k: int, count: int, seconds: float) -> float:
+    """How far (0..1) the ``k``-th of ``count`` bubbles or puffs is along its way at ``now``."""
+    return (now / seconds + k / count + 0.13 * k) % 1.0
+
+
+def _fade(rise: float) -> float:
+    """A puff's or a bubble's opacity along its way: in quickly, out slowly."""
+    return min(1.0, rise * 6.0) * (1.0 - rise) ** 0.6
+
+
+def _lab_motion(f: _Frame, look: ObjectLook, now: float, state: ObjectState) -> list[Motion]:
+    """The moving parts of the Step 259 objects (:func:`object_motion`)."""
+    kind = f.item.kind
+    parts: list[Motion] = []
+    if kind == "specimen_tank":
+        x, y, bottom, top, radius = _tank_parts(f)
+        pale = mix(look.main, SHINE, 0.7)
+        for k in range(7):
+            rise = _rising(now, k, 7, BUBBLE_SECONDS)
+            sway = (0.5 * ((k * 0.37) % 1.0) - 0.25) * radius + 0.02 * math.sin(2 * math.pi * (rise * 2 + k * 0.3))
+            point = _screen((x, y, bottom + 0.1 + (top - bottom - 0.15) * rise), sway, 0.0)
+            parts.append(_bubble(point, 0.018 + 0.012 * (k % 3), pale, 0.9 * _fade(rise)))
+        return parts
+    if kind == "chemistry_bench":
+        palette = _bench_palette(look)
+        for what, base, size, color in _bench_vessels(f):
+            if what not in ("flask", "round"):
+                continue
+            pale = mix(palette[color], SHINE, 0.6)
+            inside = size * 0.3 if what == "flask" else size
+            for k in range(3):
+                rise = _rising(now, k, 3, 1.3)
+                point = _screen(base, (k - 1) * size * 0.12, 0.03 + inside * 0.9 * rise + (size if what == "round" else 0.0) * 0.1)
+                parts.append(_bubble(point, 0.012 + 0.006 * k, pale, _fade(rise)))
+            top = size + 0.03 if what == "flask" else 2 * size + 0.2
+            rise = _rising(now, 0, 1, STEAM_SECONDS * 1.2)
+            sway = 0.03 * math.sin(2 * math.pi * rise * 1.5)
+            parts.append(_bubble(_screen(base, sway, top + 0.5 * rise), 0.03 + 0.06 * rise, mix(palette[color], SHINE, 0.75), 0.55 * _fade(rise)))
+        return parts
+    if kind == "distillation_rig":
+        boil, _, end, catch = _rig_parts(f)
+        burner = f.p(0.18, 0.6, 0.8)
+        flicker = 0.5 + 0.5 * math.sin(2 * math.pi * now * 3.1) * math.sin(2 * math.pi * now * 1.7)
+        flame = _screen(burner, 0.0, 0.07)
+        parts += [Motion(tuple(_screen(flame, du, dv) for du, dv in ((-0.04, 0.0), (0.04, 0.0), (0.012 * flicker, 0.09 + 0.04 * flicker))), "#FF9A3D", 0.95, False, True),
+                  Motion(tuple(_screen(flame, du, dv) for du, dv in ((-0.02, 0.0), (0.02, 0.0), (0.0, 0.045 + 0.02 * flicker))), "#7FD0FF", 0.95, False, True)]
+        pale = mix(look.main, SHINE, 0.6)
+        for k in range(3):
+            rise = _rising(now, k, 3, 1.0)
+            parts.append(_bubble(_screen(boil, (k - 1) * 0.05, 0.0 + 0.16 * rise), 0.012 + 0.005 * k, pale, _fade(rise)))
+        drop = mix(look.detail, SHINE, 0.3)
+        fall = _screen(catch, 0.0, 0.44)
+        for k in range(2):
+            share = (now / DRIP_SECONDS + k / 2) % 1.0
+            grow, falling = min(share / 0.6, 1.0), max(share - 0.6, 0.0) / 0.4
+            point = (end[0] + (fall[0] - end[0]) * falling, end[1] + (fall[1] - end[1]) * falling, end[2] + (fall[2] - end[2]) * falling)
+            parts.append(_bubble(_screen(point, 0.0, -0.02), 0.012 + 0.01 * grow, drop, 1.0 if share < 0.98 else 0.0))
+        return parts
+    if kind == "lab_fridge":
+        a0, a1, b0, b1, h = _fridge_box(f)
+        for k in range(5):
+            rise = _rising(now, k, 5, MIST_SECONDS)
+            if state.open:   # it pours from the opening and down to the floor, out towards the viewer
+                point = f.p(a0 + (a1 - a0) * (0.2 + 0.15 * k), b1 + 0.05 + 0.5 * rise, max(0.1, 0.9 + 0.25 * (k % 3) - 1.0 * rise))
+            else:   # it seeps from under the door
+                point = f.p(a0 + (a1 - a0) * (0.15 + 0.18 * k), b1 + 0.05 + 0.35 * rise, 0.12 + 0.05 * rise)
+            parts.append(_bubble(point, 0.06 + 0.1 * rise, MIST, (0.55 if state.open else 0.4) * _fade(rise)))
+        return parts
+    if kind == "fume_hood":
+        a0, a1, front, fan_z = _hood_parts(f)
+        w = f.width
+        grille = front - 0.06
+        parts.append(Motion(tuple(f.p(w / 2 + 0.115 * math.cos(t), grille + 0.002, fan_z + 0.115 * math.sin(t)) for t in [2 * math.pi * k / 20 for k in range(20)]),
+                            CASING, ink=False))
+        parts += _fan_blades(f, w / 2, grille + 0.003, fan_z, 0.11, -2 * math.pi * now / FAN_SECONDS, "#C9CED6")
+        mouth = _screen(f.p(0.35 * w, front, 0.92), 0.0, 0.38)
+        vapour = mix(look.detail, SHINE, 0.4)
+        for k in range(3):
+            rise = _rising(now, k, 3, MIST_SECONDS)
+            sway = 0.03 * math.sin(2 * math.pi * (rise + k * 0.4))
+            parts.append(_bubble(_screen(mouth, sway + 0.06 * rise, 0.3 * rise), 0.03 + 0.05 * rise, vapour, 0.5 * _fade(rise)))
+        return parts
+    return parts
+
+
+def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float, state: ObjectState | None = None) -> list[Motion]:
     """The moving parts of a working ``item`` (one of :data:`MOVING_KINDS`) at scene time
     ``now``, drawn over its picture: a quantum core's pulsing halo, its bright core and sparks
     round its ring; a robot arm's arm swinging between its two poses; a centrifuge's spinning
-    rotor (over a dark window); a coffee machine's steam rising from the mug. The same number of
-    parts at any time (those not seen have opacity 0)."""
+    rotor (over a dark window); a coffee machine's steam rising from the mug; bubbles rising in
+    a specimen tank and a chemistry bench's flasks (with steam); a distillation rig's flame,
+    boiling and drips; a lab fridge's cold mist (``state``: from the opening while open); a fume
+    hood's fan and vapour. The same number of parts at any time (those not seen have opacity 0)."""
     f = _Frame(item, base)
+    if item.kind in _LAB_MOVING:
+        return _lab_motion(f, look, now, state or ObjectState(on=True))
     if item.kind == "quantum_core":
         centre, radius = _core_centre(f)
         beat = 0.5 - 0.5 * math.cos(2 * math.pi * now / CORE_PULSE_SECONDS)
@@ -1051,7 +1532,7 @@ _DRAWINGS: dict[str, Callable[[_Frame, ObjectLook], list[Shape]]] = {
     "shelf": _shelf, "sofa": _sofa, "plant": _plant, "rug": _rug,
     "console": _console, "server_rack": _server_rack, "projector_pad": _projector_pad, "whiteboard": _whiteboard,
     "flower_arch": _flower_arch, "chess_table": _chess_table,
-    "microscope": _microscope, "lab_stool": _lab_stool, "wall_clock": _wall_clock,
+    "microscope": _microscope, "lab_stool": _lab_stool, "wall_clock": _wall_clock, "terrarium": _terrarium,
 }
 
 
@@ -1078,7 +1559,8 @@ def object_lights(item: IsoObject, base: float) -> list[Point3]:
 
 #: The radius (tile units) of the soft shadow under the objects that cast a round one.
 SHADOW_RADII: dict[str, float] = {"tree": 0.45, "pine": 0.42, "bush": 0.48, "rock": 0.42, "lamp": 0.24, "well": 0.52, "sign": 0.22,
-                                  "plant": 0.32, "flowers": 0.36, "chair": 0.42, "lab_stool": 0.26, "quantum_core": 0.42, "robot_arm": 0.36}
+                                  "plant": 0.32, "flowers": 0.36, "chair": 0.42, "lab_stool": 0.26, "quantum_core": 0.42, "robot_arm": 0.36,
+                                  "terrarium": 0.3, "specimen_tank": 0.42}
 #: The shadows' colour and opacity (a tint of what lies under them).
 SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
@@ -1091,6 +1573,8 @@ BED_KINDS = ("flowers", "bush")
 _STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {
     "house": _house, "flowers": _flowers, "lamp": _lamp, "tower": _tower, "laptop": _laptop, "terminal_kiosk": _terminal_kiosk,
     "quantum_core": _quantum_core, "robot_arm": _robot_arm, "centrifuge": _centrifuge, "coffee_machine": _coffee_machine,
+    "grow_rack": _grow_rack, "specimen_tank": _specimen_tank, "chemistry_bench": _chemistry_bench, "distillation_rig": _distillation_rig,
+    "lab_fridge": _lab_fridge, "fume_hood": _fume_hood,
 }
 
 
@@ -1130,5 +1614,5 @@ def object_box(item: IsoObject, base: float) -> Box3:
     return Box3(item.column, item.row, base, item.column + item.width, item.row + item.depth, base + item.height)
 
 
-__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "MOVING_KINDS", "OBJECT_COLORS", "Motion", "ObjectLook", "clock_hands",
-           "object_box", "object_lights", "object_motion", "object_shapes", "tower_screen"]
+__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "MOVING_KINDS", "OBJECT_COLORS", "OPEN_WORKING", "Motion", "ObjectLook",
+           "clock_hands", "object_box", "object_lights", "object_motion", "object_shapes", "object_working", "tower_screen"]

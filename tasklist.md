@@ -1578,7 +1578,7 @@ Phase AA done.
 - [x] `laptop` (`open`), `terminal_kiosk`, `quantum_core` (pulses), `robot_arm` (swings), `microscope`, `centrifuge` (spins), `coffee_machine` (steam), `lab_stool`, `wall_clock` (on a back wall, `time`); moving parts drawn over the place while on (`IsoGadgets`); tests `test_lab_objects.py`; Phase AB plan here and DESIGN §103
 
 ### Step 259 — Lab objects II
-- [ ] `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge`, `fume_hood`
+- [x] `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge` (`open`), `fume_hood`; liquids glow when on, bubbles / steam / drips / mist / fan; a working object behind another object or in front of a character keeps its motion (cover pictures, gadgets after front pictures); tests in `test_lab_objects.py`
 
 ### Step 260 — Lab objects III and review
 - [ ] `telescope`, `satellite_dish`, `charging_station`, `crate_stack`, `airlock`, `printer_3d`, `hazard_sign` (`kind`), `fire_extinguisher`; a critical review of all 26 (style, sizes, on/off, night, performance, tests)

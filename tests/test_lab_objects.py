@@ -1,5 +1,6 @@
-"""More iso lab and sci-fi objects (Step 258, DESIGN.md §103): footprints, states, a wall clock's
-time and wall, the moving parts of working objects, validation; one small render of them all."""
+"""More iso lab and sci-fi objects (Steps 258–259, DESIGN.md §103): footprints, states, a wall
+clock's time and wall, the moving parts of working objects, validation; one small render of each
+batch."""
 
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from conftest import minimal_config
 from test_cartoon_living import frames_of
 from test_cartoon_stage import CAST, stage_params
 from vidgen import extensions, registry
-from vidgen.cartoon.iso_objects import MOVING_KINDS, OBJECT_COLORS, ObjectLook, clock_hands, object_box, object_motion, object_shapes
+from vidgen.cartoon.iso_objects import MOVING_KINDS, OBJECT_COLORS, ObjectLook, clock_hands, object_box, object_motion, object_shapes, object_working
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.world.iso import OBJECT_KINDS, OPENING_KINDS, SWITCHED_KINDS, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects
@@ -36,7 +37,7 @@ def test_new_objects_have_footprints_colours_and_states() -> None:
         assert OBJECT_KINDS[kind].width == OBJECT_KINDS[kind].depth == 1 and OBJECT_KINDS[kind].height <= 2.65   # under a back wall's top
     assert {"laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge", "coffee_machine"} <= SWITCHED_KINDS
     assert "laptop" in OPENING_KINDS and default_state("laptop").open and not default_state("laptop").on
-    assert OBJECT_KINDS["lab_stool"].top is not None and set(MOVING_KINDS) == {"quantum_core", "robot_arm", "centrifuge", "coffee_machine"}
+    assert OBJECT_KINDS["lab_stool"].top is not None and {"quantum_core", "robot_arm", "centrifuge", "coffee_machine"} <= set(MOVING_KINDS)
 
 
 def test_new_objects_draw_on_and_off_facing_both_ways() -> None:
@@ -54,7 +55,7 @@ def test_new_objects_draw_on_and_off_facing_both_ways() -> None:
 
 
 def test_moving_parts_move_and_keep_their_count() -> None:
-    place = _room([ObjectPlacing(kind, (2 + k * 2, 2)) for k, kind in enumerate(MOVING_KINDS)])
+    place = _room([ObjectPlacing(kind, (2 + k * 2, 2)) for k, kind in enumerate(("quantum_core", "robot_arm", "centrifuge", "coffee_machine"))])
     for item in place.objects:
         early, late = object_motion(item, _look(item.kind), 0.0, 0.2), object_motion(item, _look(item.kind), 0.0, 1.1)
         assert early and len(early) == len(late) and [p.points for p in early] != [p.points for p in late]
@@ -105,8 +106,81 @@ def test_the_lab_objects_render_and_move(make_project, tmp_path: Path, monkeypat
     beats = [{"text": "The lab hums at night.", "actions": [{"switch_off": "centrifuge", "at": 0.6}]}]
     scenes = [{"id": "home", "type": "stage", "params": params, "beats": beats}]
     scene, frames = frames_of(Project.load(make_project(minimal_config(characters=CAST, scenes=scenes))), tmp_path / "lab", monkeypatch)
-    gadgets = next(thing for thing in scene.story_things if type(thing).__name__ == "IsoGadgets")
-    assert len(gadgets.gadgets) == 3 and gadgets.glowing   # the core stands behind the coffee machine: its picture shows it still
+    places = scene._iso_gadget_places   # the core, the arm, the centrifuge, the coffee machine
+    assert len(places) == 4 and places[0][0].glowing
+    assert places[0][2] is not None   # the core stands behind the coffee machine: it moves under a picture of the machine
     end = float(scene.renderer.time)
-    assert gadgets.gadgets[0].working(end) and not gadgets.gadgets[1].working(end)   # the arm still swings; the centrifuge stopped
+    assert places[1][0].gadgets[0].working(end) and not places[2][0].gadgets[0].working(end)   # the arm still swings; the centrifuge stopped
+    assert len(frames) > 5 and np.any(frames[-1] != frames[3])
+
+
+# ----- Step 259: plants, glassware and liquids -----------------------------------------------------------
+
+NEW_2 = ("grow_rack", "terrarium", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood")
+WIDE = "###########\n" + "#.........#\n" * 6 + "#####+#####"
+
+
+def test_glassware_objects_have_footprints_colours_and_states() -> None:
+    for kind in NEW_2:
+        assert kind in OBJECT_KINDS and kind in OBJECT_COLORS and OBJECT_KINDS[kind].height <= 2.65
+        assert (OBJECT_KINDS[kind].width, OBJECT_KINDS[kind].depth) == ((2, 1) if kind == "chemistry_bench" else (1, 1))
+    assert set(NEW_2) - {"terrarium"} <= SWITCHED_KINDS and "terrarium" not in SWITCHED_KINDS
+    assert "lab_fridge" in OPENING_KINDS and not default_state("lab_fridge").open
+    assert {"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"} <= set(MOVING_KINDS)
+    assert object_working("lab_fridge", ObjectState(open=True)) and not object_working("fume_hood", ObjectState(open=True))
+    assert not object_working("specimen_tank", ObjectState(shown=False, on=True))
+
+
+def test_glassware_glows_when_on_and_moves() -> None:
+    placings = [ObjectPlacing(kind, (2 + (k % 3) * 3, 2 + (k // 3) * 2), facing="right" if k % 2 else "left") for k, kind in enumerate(NEW_2)]
+    place = place_objects(parse_iso_map(WIDE, place="indoor"), tuple(placings))
+    for item in place.objects:
+        off, on = (object_shapes(item, _look(item.kind), 0.0, ObjectState(on=state)) for state in (False, True))
+        assert off and on
+        if item.kind != "terrarium":   # its flowers glow faintly all the time
+            assert any(getattr(s, "glow", False) for s in on) and not any(getattr(s, "glow", False) for s in off), item.kind
+        if item.kind in MOVING_KINDS:
+            early, late = (object_motion(item, _look(item.kind), 0.0, t, ObjectState(on=True)) for t in (0.2, 1.1))
+            assert early and len(early) == len(late) and [p.points for p in early] != [p.points for p in late]
+    fridge = place.object("lab_fridge")
+    closed, opened = (object_motion(fridge, _look("lab_fridge"), 0.0, 0.5, ObjectState(open=state)) for state in (False, True))
+    assert [p.points for p in closed] != [p.points for p in opened]   # the mist pours from the opening
+    plain = place_objects(parse_iso_map(WIDE, place="indoor"), (ObjectPlacing("specimen_tank", (2, 2)),)).object("specimen_tank")
+    floating = place_objects(parse_iso_map(WIDE, place="indoor"), (ObjectPlacing("specimen_tank", (2, 2), detail="#203040"),)).object("specimen_tank")
+    assert len(object_shapes(floating, _look("specimen_tank"), 0.0)) > len(object_shapes(plain, _look("specimen_tank"), 0.0))   # detail: a silhouette
+
+
+def test_glassware_keys_validate() -> None:
+    good = stage_params(iso={**ISO, "objects": [{"object": "lab_fridge", "at": "desk", "open": True, "on": True}, {"object": "terrarium", "at": "kiosk"}]})
+    assert good.iso.objects[0].state() == ObjectState(True, True, True)
+    for bad, message in (({"object": "terrarium", "at": "desk", "on": True}, "on is for"), ({"object": "fume_hood", "at": "desk", "open": True}, "open is for"),
+                         ({"object": "grow_rak", "at": "desk"}, "did you mean grow_rack")):
+        with pytest.raises(ValidationError, match=message):
+            stage_params(iso={**ISO, "objects": [bad]})
+
+
+@pytest.mark.render
+def test_the_glassware_renders_and_moves_over_who_stands_behind(make_project, tmp_path: Path, monkeypatch) -> None:
+    extensions.load_builtins()
+    monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
+    room = "##########\n#...b....#\n#.g.s.f..#\n#.t.d....#\n#.c...h..#\n#......p.#\n####+#####"
+    spots = {"g": "grow", "s": "tank", "f": "fridge", "t": "terra", "d": "rig", "c": "bench", "h": "hood", "p": "here", "b": "back"}
+    kinds = {"grow": "grow_rack", "tank": "specimen_tank", "fridge": "lab_fridge", "terra": "terrarium", "rig": "distillation_rig",
+             "bench": "chemistry_bench", "hood": "fume_hood"}
+    objects = [{"object": kind, "at": spot} for spot, kind in kinds.items()]
+    params = {"light": "night", "iso": {"place": "indoor", "map": room, "spots": spots, "objects": objects},
+              "characters": [{"name": "pip", "at": "back"}]}   # right behind the specimen tank
+    beats = [{"text": "The lab wakes up at night.", "actions": [{"switch_on": [k for k in kinds.values() if k != "terrarium"]},
+                                                               {"open": "lab_fridge", "at": 0.5}]}]
+    scenes = [{"id": "home", "type": "stage", "params": params, "beats": beats}]
+    scene, frames = frames_of(Project.load(make_project(minimal_config(characters=CAST, scenes=scenes))), tmp_path / "lab", monkeypatch)
+    places = {scene.iso_scenery.pieces[k].name: (gadget, cover) for gadget, k, cover in scene._iso_gadget_places}
+    assert set(places) == {"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"}
+    tank, cover = places["specimen_tank"]
+    front = scene._iso_fronts["pip"][1]   # pip's front picture shows the tank: its bubbles are drawn after it
+    assert front is not None and scene.mobjects.index(tank) > scene.mobjects.index(front)
+    rig = scene.iso_scenery.index["distillation_rig"]   # the rig stands in front of the tank: its picture over the bubbles follows its switch
+    assert cover is not None and dict(cover.submobjects[-1].picture[1])[rig].on
+    end = float(scene.renderer.time)
+    assert places["lab_fridge"][0].gadgets[0].working(end) and tank.gadgets[0].working(end)
     assert len(frames) > 5 and np.any(frames[-1] != frames[3])

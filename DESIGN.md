@@ -20062,7 +20062,7 @@ of cut scenes. Phase Q baseline 31/31 identical.
 ## 103. More iso lab and sci-fi objects (Phase AB, Steps 258–260)
 
 Phase AB adds 26 iso objects (`OBJECT_KINDS`, drawn in `cartoon/iso_objects.py` like §100.11's),
-each 1 x 1 by default, `color` / `detail` honoured, and an `on` state where it works. Docs stay
+each 1 x 1 by default (a chemistry bench 2 x 1), `color` / `detail` honoured, and an `on` state where it works. Docs stay
 lean: one "Other objects" list in CONFIG and the guide.
 
 - **Step 258**: `laptop` (on a small desk; `open`, default open: `OPENING_KINDS`), `terminal_kiosk`,
@@ -20076,14 +20076,26 @@ lean: one "Other objects" list in CONFIG and the guide.
   look, base, now)` gives a fixed number of `Motion` polygons (world points, fill, opacity, ink,
   glow) — the core's pulsing halo, bright core and sparks on its ring; the arm swinging between
   `ARM_POSES`; the rotor turning over a dark window; steam puffs over the mug. The stage draws
-  them with one `IsoGadgets` living thing over the place while each is on and shown (its states
+  them with an `IsoGadgets` living thing over the place while each is on and shown (its states
   logged from the start and by `iso_change`: `_iso_state_log`); the glowing parts are left out of
-  the light grade. Not in a draft, and not for an object another object stands in front of on
-  screen (its picture shows it still). `ObjectLook.moving` tells the picture of a working robot
+  the light grade. Not in a draft. `ObjectLook.moving` tells the picture of a working robot
   arm to leave its arm to the overlay.
-- Known gap: a character standing behind a working object gets a front picture of it that is
-  drawn over the moving parts there (steam over a coffee machine's face hides while someone stands
-  right behind it).
+- **Step 259**: `grow_rack` (grow lights in the detail colour wash its shelves when on),
+  `terrarium` (its flowers glow faintly always; not switched), `specimen_tank` (`color` its liquid;
+  a floating silhouette only when the placing gives `detail`), `chemistry_bench` (2 x 1; liquids in
+  `color`, `detail` and `LIQUIDS`), `distillation_rig`, `lab_fridge` (also in `OPENING_KINDS`:
+  door swung out; it works while on *or* open: `OPEN_WORKING`, `object_working`), `fume_hood`.
+  Liquids glow (and brighten) while on; tank, bench, rig, fridge and hood are moving kinds
+  (bubbles, steam, flame and drips, cold mist, fan and vapour). `object_motion` takes the
+  object's `state`.
+- **Moving parts and what hides them (259, replacing 258's limits)**: one `IsoGadgets` per working
+  object. One another object covers on screen moves too, under a *cover* picture (an `IsoObject`
+  holder with `iso_scenery.front(its box)`) that follows the place's changes like a body's front
+  picture (`_iso_follow_change`). `_iso_place_gadgets` (run by `_iso_keep_order`, the draw-order
+  updater being on while there are gadgets) keeps each gadget and its cover right after the last
+  body front picture that shows the object, else after `_iso_gadget_home`: a character right
+  behind a working object no longer hides its motion.
 
 Public surface: object kinds above; `IsoObjectParam.time`; `WALL_KINDS`; `ObjectLook.moving`;
-`Motion`, `MOVING_KINDS`, `object_motion`, `clock_hands`; `IsoGadgets`, `Gadget`. Additive.
+`Motion`, `MOVING_KINDS`, `object_motion`, `object_working`, `clock_hands`; `IsoGadgets`,
+`Gadget`. Additive.

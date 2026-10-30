@@ -120,6 +120,13 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "coffee_machine": ObjectKind(1, 1, 1.65),
     "lab_stool": ObjectKind(1, 1, 0.75, top=0.72),
     "wall_clock": ObjectKind(1, 1, 2.65),
+    "grow_rack": ObjectKind(1, 1, 2.4),
+    "terrarium": ObjectKind(1, 1, 1.55),
+    "specimen_tank": ObjectKind(1, 1, 2.45),
+    "chemistry_bench": ObjectKind(2, 1, 1.45),
+    "distillation_rig": ObjectKind(1, 1, 1.9),
+    "lab_fridge": ObjectKind(1, 1, 2.3),
+    "fume_hood": ObjectKind(1, 1, 2.5),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
@@ -130,9 +137,10 @@ OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden")}
 
 #: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
 #: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
-OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop"})
+OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge"})
 SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
-                                            "coffee_machine"})
+                                            "coffee_machine", "grow_rack", "specimen_tank", "chemistry_bench", "distillation_rig",
+                                            "lab_fridge", "fume_hood"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock"})
 

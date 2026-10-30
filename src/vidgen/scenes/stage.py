@@ -587,7 +587,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall)."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -601,9 +601,9 @@ class IsoObjectParam(SceneParams):
     detail: ThemeColor | None = None
     """Its second colour (a house's roof, a lamp's light, flower heads...)."""
     open: bool | None = None
-    """A house: true starts its door open; flowers: false starts them in bud; a laptop: false starts it closed (the open / close actions change it later)."""
+    """A house: true starts its door open; flowers: false starts them in bud; a laptop: false starts it closed; a lab_fridge: true starts its door open (the open / close actions change it later)."""
     on: bool | None = None
-    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge or coffee_machine: true starts it working (switch_on / switch_off change it)."""
+    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge, coffee_machine, grow_rack, specimen_tank, chemistry_bench, distillation_rig, lab_fridge or fume_hood: true starts it working (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
     height: float | None = Field(None, ge=2.0, le=30.0)
@@ -629,10 +629,10 @@ class IsoObjectParam(SceneParams):
     @model_validator(mode="after")
     def _states(self) -> "IsoObjectParam":
         if self.open is not None and self.object not in OPENING_KINDS:
-            raise ValueError(f"open is for a house (its door), flowers (in bloom or in bud) or a laptop, not {_a(self.object)}")
+            raise ValueError(f"open is for a house (its door), flowers (in bloom or in bud), a laptop or a lab_fridge, not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
-            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), a laptop, terminal_kiosk, quantum_core, robot_arm, "
-                             f"centrifuge or coffee_machine, not {_a(self.object)}")
+            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), or one of {', '.join(sorted(SWITCHED_KINDS - {'house', 'lamp', 'tower'}))}, "
+                             f"not {_a(self.object)}")
         for option in ("height", "screen", "garden"):
             if getattr(self, option) and self.object != "tower":
                 raise ValueError(f"{option} is for a tower, not {_a(self.object)}")
@@ -1623,7 +1623,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         #: the scene updater keeping the draw order, kept: Manim removes an updater by identity
         self._order_updater = self._draw_order_step
         fronts = any(c.facing == "front" for c in self.params.characters) or any(u.options.to == "front" for u in self.action_uses("turn"))
-        if fronts:
+        if fronts or getattr(self, "_iso_gadget_places", None):   # a working object's parts over who stands behind it (§103)
             self._watch_draw_order()
 
     def _watch_draw_order(self) -> None:

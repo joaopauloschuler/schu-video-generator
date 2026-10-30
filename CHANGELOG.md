@@ -5,9 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–258)
+## Unreleased (Steps 193–259)
 
-### More lab objects (Step 258)
+### More lab objects (Steps 258–259)
+
+- Iso objects `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge` (`open`) and `fume_hood`, with glowing liquids, bubbles, drips, mist and vapour when on; a working object's motion now also shows behind another object and over a character standing behind it.
 
 - Iso objects `laptop`, `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`, `centrifuge`, `coffee_machine`, `lab_stool` and `wall_clock` (`time:`); the working ones switch on and move (a pulsing core, a swinging arm, a spinning rotor, steam).
 

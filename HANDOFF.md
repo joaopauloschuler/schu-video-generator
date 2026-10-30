@@ -23603,3 +23603,23 @@ How to test: `tests/test_docs.py` (73 passed).
 - Tests: `tests/test_lab_objects.py` (5 logic + 1 small render); `test_iso_place.py`
   (every object draws: a wall clock on a wall). Contact sheet (private):
   scratchpad `s258/objects.png`. Shared iso drawing code untouched for existing objects.
+
+## Step 259 — Lab objects II (Phase AB)
+
+- Built: iso objects `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench` (2 x 1),
+  `distillation_rig`, `lab_fridge` (`open`; works while on or open), `fume_hood` (DESIGN §103).
+  Liquids in `color` / `detail` / `LIQUIDS`, glowing while on; tank, bench, rig, fridge and hood
+  move (bubbles, steam, flame and drips, cold mist, fan and vapour). Both of 258's gaps fixed:
+  a working object another object covers now moves under a cover picture that follows the
+  place's changes, and its moving parts stay drawn after the front picture of a character
+  standing right behind it (`_iso_place_gadgets`, one `IsoGadgets` per working object).
+- Files: `cartoon/iso_objects.py` (drawings, `_lab_motion`, `object_working`, `object_motion`'s
+  `state`), `world/iso.py`, `scenes/stage_iso.py` (gadgets per object, covers, placing),
+  `scenes/stage.py` (draw-order updater on while there are gadgets; messages), `handling.py`,
+  `api.py`; one "Other objects" list in CONFIG and the guide.
+- Known gaps: glassware is flat cut-outs facing the viewer (fine at preview size); a gadget sits
+  after the last front picture showing its object, so with several characters around one object
+  its parts may be drawn over a character between it and that one (rare).
+- Tests: `tests/test_lab_objects.py` (8 logic + 2 small renders); 258's render test now expects
+  the covered quantum core to move. Phase Q baseline 31/31 identical. Contact sheet (private):
+  scratchpad `s259/objects.png` (plus `closeup.png`).
