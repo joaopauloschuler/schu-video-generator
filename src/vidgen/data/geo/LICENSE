@@ -1,4 +1,4 @@
-world-110m.json is made by vidgen's tools/make_world_map.py from the sources below
+world-110m.json is made by schu-video-generator's tools/make_world_map.py from the sources below
 (converted: antimeridian cuts, ring orientation, coordinates rounded to 0.01 degree; label points
 and aliases added).
 

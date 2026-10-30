@@ -3,7 +3,7 @@ own sounds in ``assets/sfx/``, loudness measurement and the video's SFX track.
 
 Built-in sounds are made by small deterministic generators (numpy only: noise from a seeded
 generator, filters applied in the frequency domain), so no recordings with licences ship with
-vidgen and each sound takes a few parameters (``duration``, ``pitch`` in semitones,
+schu-video-generator and each sound takes a few parameters (``duration``, ``pitch`` in semitones,
 ``intensity`` 0-1). Every sound gets the same finishing: a high-pass at 25 Hz, raised-cosine
 fades so it starts and ends at exactly zero, the mean removed (no DC offset), and a level set by
 loudness — the loudest 400 ms (BS.1770 K-weighted "momentary" loudness) at

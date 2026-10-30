@@ -27,7 +27,7 @@ AUDIO_BITRATE = "192k"
 #: Quality of the video when the join has to encode it (crossfades, DESIGN.md §49): visually
 #: lossless next to the scenes' own encoding (Manim: CRF 23).
 VIDEO_CRF = "18"
-#: Oldest ffmpeg vidgen supports: 4.3 has no ``amix=normalize``, 4.2 no ``xfade`` (tested with
+#: Oldest ffmpeg schu-video-generator supports: 4.3 has no ``amix=normalize``, 4.2 no ``xfade`` (tested with
 #: 4.4, 5.1, 6.1, 7.0, 7.1 and 8.1; README "Install").
 MIN_VERSION = (4, 4)
 

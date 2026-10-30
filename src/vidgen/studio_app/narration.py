@@ -1,5 +1,5 @@
 """The "under narration" toggle (DESIGN.md §94.14, Step 196): a render heard under the narration
-sample ``vidgen music check`` ships, with vidgen's default ducking (the check's
+sample ``vidgen music check`` ships, with schu-video-generator's default ducking (the check's
 :func:`vidgen.studio.check.duck_gain_db`), so a person hears whether the words stay clear.
 
 The voice is repeated from the piece's start over its whole length (the sample is 20 s: speech,
@@ -32,7 +32,7 @@ def _voice() -> tuple[np.ndarray, float]:
 
 def under_narration(music: np.ndarray) -> np.ndarray:
     """``music`` (float ``(n, 2)`` at −28 LUFS) under the narration sample repeated over it, with
-    vidgen's default ducking, both at the voice's gain (see the module): float64 ``(n, 2)``,
+    schu-video-generator's default ducking, both at the voice's gain (see the module): float64 ``(n, 2)``,
     not clipped."""
     from vidgen.studio.check import duck_gain_db, speech_spans
 

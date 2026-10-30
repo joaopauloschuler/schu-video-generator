@@ -1,5 +1,5 @@
-/* vidgen studio (DESIGN.md §94.5): a compact "mini DAW" in vidgen's look — the dark_tech theme's
-   colours (light: light_academic's), Inter and JetBrains Mono from vidgen's bundled fonts. */
+/* vidgen studio (DESIGN.md §94.5): a compact "mini DAW" in schu-video-generator's look — the dark_tech theme's
+   colours (light: light_academic's), Inter and JetBrains Mono from schu-video-generator's bundled fonts. */
 @font-face { font-family: "Inter"; src: url("/fonts/Inter-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Inter"; src: url("/fonts/Inter-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
 @font-face { font-family: "JetBrains Mono"; src: url("/fonts/JetBrainsMonoNL-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }

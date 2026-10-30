@@ -14,7 +14,7 @@ re-voices only the beats it changes; a beat no entry matches keeps its hash.
   the entry written first (a project's entries before built-in ones);
   :func:`pronunciation_warnings` reports entries that never match and entries that collide.
 - Built-in lists (DESIGN.md §88): ``data/pronunciation/<engine>-<dialect>.yaml`` files shipped
-  with vidgen, one per TTS engine and language (:func:`builtin_list_name`: ``kokoro-en-us`` for
+  with schu-video-generator, one per TTS engine and language (:func:`builtin_list_name`: ``kokoro-en-us`` for
   Kokoro's American English voices); :func:`build_pronunciation` puts a project's entries over
   them (``null`` removes one).
 
@@ -384,7 +384,7 @@ def builtin_files(name: str) -> list[str]:
 @lru_cache(maxsize=None)
 def builtin_entries(name: str) -> dict[str, PronunciationValue]:
     """The entries of the built-in list ``name`` (its :func:`builtin_files` merged in order;
-    empty when none ships). A broken shipped file is a :class:`VidgenError` (a vidgen bug)."""
+    empty when none ships). A broken shipped file is a :class:`VidgenError` (a schu-video-generator bug)."""
     import yaml
 
     folder = resources.files("vidgen").joinpath(_BUILTIN_DIR)

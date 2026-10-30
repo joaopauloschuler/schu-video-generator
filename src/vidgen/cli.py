@@ -224,7 +224,7 @@ def cmd_cast(args: argparse.Namespace) -> CommandResult:
     if args.provider == "kokoro" and not args.narrator:
         voice["voice"] = "bf_emma"   # vidgen screenplay's narrator
     cast = random_cast(args.random, args.seed, species=species, voice=voice, language=language)
-    for entry in cast.characters:   # what vidgen wrote must load (a bug otherwise, never the user's fault)
+    for entry in cast.characters:   # what schu-video-generator wrote must load (a bug otherwise, never the user's fault)
         CharacterEntry.model_validate(entry)
     command = f"vidgen cast --random {args.random} --seed {args.seed}" + (f" --species {' '.join(species)}" if species != ["human"] else "")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -1285,7 +1285,7 @@ def cmd_list_sfx(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_list_pronunciation(args: argparse.Namespace) -> CommandResult:
-    """Print vidgen's built-in pronunciation lists (DESIGN.md §88): every list, or in a project
+    """Print schu-video-generator's built-in pronunciation lists (DESIGN.md §88): every list, or in a project
     the lists its beats' voices use, with what the project replaces or removes and the beats
     each entry changes."""
     from vidgen.pronunciation import builtin_list_names, builtin_listing

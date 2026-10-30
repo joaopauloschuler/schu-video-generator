@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from vidgen.storyboard import StoryboardResult
     from vidgen.cartoon.still import CharacterSheet
 
-#: Version of the JSON document shapes (not of vidgen).
+#: Version of the JSON document shapes (not of schu-video-generator).
 SCHEMA_VERSION = 1
 
 ErrorKind = Literal["usage", "error", "internal"]

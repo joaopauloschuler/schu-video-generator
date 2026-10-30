@@ -172,7 +172,7 @@ def _next_transition(project: Project, scene_id: str) -> Any:
 
 
 def scene_fingerprint(project: Project, scene_id: str) -> str:
-    """A hex digest of everything (that vidgen knows of) the render of ``scene_id`` depends on."""
+    """A hex digest of everything (that schu-video-generator knows of) the render of ``scene_id`` depends on."""
     spec = project.scene(scene_id)
     # Lint settings cannot change pixels or timing (except the readable text size scenes use):
     # editing them must not make renders stale.

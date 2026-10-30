@@ -2,7 +2,7 @@
 
 An optional standalone check next to ``vidgen readback`` (it pads each clip with silence and
 prints the bare transcript). It is a stand-alone tool: run it from the project folder, do NOT put it in
-extensions/ (vidgen imports every .py file there).
+extensions/ (schu-video-generator imports every .py file there).
 
     pip install faster-whisper            # once; needs ffmpeg on PATH
     python whisper_check.py audio/*.mp3

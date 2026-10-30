@@ -741,7 +741,7 @@ scenes:
       - text: "And the update itself is plain gradient descent."
 
   - id: morph
-    type: code_morph         # version i at beat i; vidgen diffs the versions: shared tokens glide, new lines grow in
+    type: code_morph         # version i at beat i; schu-video-generator diffs the versions: shared tokens glide, new lines grow in
     params:
       title: "From a loop to a comprehension"
       versions:
@@ -762,7 +762,7 @@ scenes:
           - {reveal: version2, at: "@comprehension"}   # morph on the spoken word (1.5 s)
 
   - id: shell
-    type: terminal           # step i at beat i: the command is typed, then its output appears; vidgen runs nothing
+    type: terminal           # step i at beat i: the command is typed, then its output appears; schu-video-generator runs nothing
     transition: cut
     carry: ["listing -> code"]   # the morph's listing (the same code) glides into the code beside the terminal
     params:

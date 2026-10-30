@@ -373,7 +373,7 @@ def _store_visemes(project: Project, audio_dir: Path, beat_id: str, text: str, a
 
 def _store_missing_visemes(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> None:
     """Store a viseme track for each up-to-date beat without a current one (audio voiced before
-    the video had characters, or by an older vidgen)."""
+    the video had characters, or by an older schu-video-generator)."""
     from vidgen.cartoon.visemes import read_visemes, write_beat_visemes
 
     written = 0

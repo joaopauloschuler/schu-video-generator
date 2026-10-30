@@ -1,5 +1,5 @@
 """``terminal``: a terminal window in which commands are typed and their output appears, step by
-step with the beats. The commands and their output are the author's: vidgen never runs anything."""
+step with the beats. The commands and their output are the author's: schu-video-generator never runs anything."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field

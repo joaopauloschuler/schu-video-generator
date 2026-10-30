@@ -1,5 +1,5 @@
-# Skyline Lift: a score-file template of vidgen's built-in bed `skyline` (vidgen music template skyline).
-# This file IS the bed, not a re-creation: `music: skyline` plays this score rendered by vidgen,
+# Skyline Lift: a score-file template of schu-video-generator's built-in bed `skyline` (vidgen music template skyline).
+# This file IS the bed, not a re-creation: `music: skyline` plays this score rendered by schu-video-generator,
 # sample for sample. A pumping supersaw lift in D minor at 128 BPM. The intro is a filtered saw
 # cloud with pulsar ticks and radio static; the build opens the filter under a trance gate, with a
 # kick roll and a riser; the lift (30 s in) pumps the saws against the kick, with a rolling analog

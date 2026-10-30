@@ -51,7 +51,7 @@ def test_scenery_groups_are_not_reported_off_frame() -> None:
 
 
 def test_route_captions_speak_to_viewers() -> None:
-    """A cell route's caption is for the viewer: it no longer points at vidgen's molecule scene."""
+    """A cell route's caption is for the viewer: it no longer points at schu-video-generator's molecule scene."""
     import inspect
 
     from vidgen.cellworld import expression_route

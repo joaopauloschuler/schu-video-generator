@@ -19,15 +19,15 @@ show exactly the characters that were typed.
 
 ## Icons
 
-vidgen bundles icons from **Lucide** (https://lucide.dev) as package data in
+schu-video-generator bundles icons from **Lucide** (https://lucide.dev) as package data in
 `src/vidgen/data/icons/lucide/` (the SVG files unmodified, each keeps its `@license` comment),
 obtained from the npm package `lucide-static` 1.52.0. Lucide is under the **ISC License**,
 © Lucide Icons and Contributors; the icons Lucide derived from Feather are also under the
 **MIT License**, © 2013-present Cole Bemis. Both licence texts, and the list of the
 Feather-derived icons, are in `src/vidgen/data/icons/lucide/LICENSE`. The icon names, categories,
 search tags and aliases are in `src/vidgen/data/icons/manifest.json` (tags from Lucide's
-`tags.json` plus some added by vidgen; aliases are Lucide's old names of renamed icons plus a few
-vidgen synonyms); `tools/vendor_icons.py` re-creates the folder (200 icons) and the catalogue
+`tags.json` plus some added by schu-video-generator; aliases are Lucide's old names of renamed icons plus a few
+schu-video-generator synonyms); `tools/vendor_icons.py` re-creates the folder (200 icons) and the catalogue
 `docs/ICONS.md` from `tools/icon_set.json`.
 
 ## World map
@@ -38,7 +38,7 @@ The `map` scene draws countries from `src/vidgen/data/geo/world-110m.json`, made
 - **Natural Earth** 1:110m Cultural Vectors, Admin 0 – Countries (https://www.naturalearthdata.com).
   Natural Earth data is in the **public domain**; no permission is needed to use, modify or
   redistribute it. "Made with Natural Earth" is appreciated. Country borders are Natural Earth's
-  *de facto* representation; vidgen takes no position on disputed boundaries.
+  *de facto* representation; schu-video-generator takes no position on disputed boundaries.
 - obtained as TopoJSON from the npm package **`world-atlas`** 2.0.2 (`countries-110m.json`),
   © 2013-2019 Michael Bostock, **ISC License**:
 
@@ -73,7 +73,7 @@ notices ship with the data as `src/vidgen/data/geo/LICENSE`.
 
 ## Sound effects and music beds
 
-The built-in sound effects and the three music beds are synthesised by vidgen's own code (no
+The built-in sound effects and the three music beds are synthesised by schu-video-generator's own code (no
 recordings or samples); they are free to use in your videos, including commercially, with no
 attribution needed.
 
@@ -83,7 +83,7 @@ schu-video-generator's dependencies are installed by pip, not shipped in this pa
 their own licences. Notably:
 
 - **PyAV** (`av`): its binary wheels bundle FFmpeg builds that include GPL/LGPL components
-  (e.g. libx264/libx265). Using vidgen as installed is unaffected, but redistributing a frozen or
+  (e.g. libx264/libx265). Using schu-video-generator as installed is unaffected, but redistributing a frozen or
   bundled application (PyInstaller and the like) that includes these wheels inherits their
   GPL/LGPL obligations.
 - **fpdf2** (optional `pdf` extra, PDF slide decks) is under the **LGPL-3.0**.
@@ -97,7 +97,7 @@ their own licences. Notably:
   the `kokoro` package downloads them from Hugging Face on first use into the user's Hugging Face
   cache. The model card states that its training data was permissive / non-copyrighted audio
   (incl. CC BY audio from the Koniwa and SIWIS corpora, credited there); the licence sets no
-  conditions on the audio you generate with it. vidgen's bundled list of its voice names and grades
+  conditions on the audio you generate with it. schu-video-generator's bundled list of its voice names and grades
   (`vidgen/data/kokoro/voices.json`) is facts read from the model's repository on the date it names.
 
 - **symusic** (optional `music` extra, composed music; https://github.com/Yikai-Liao/symusic),
@@ -105,14 +105,14 @@ their own licences. Notably:
   **Prestosynth** (https://github.com/lzqlzzq/prestosynth), compiled into symusic: **MIT
   License**, © 2024 the Prestosynth authors. symusic's wheels also bundle two command-line
   programs from the abcMIDI package, `abc2midi` and `midi2abc` (in `symusic/bin/`; their licence
-  was not verified and is believed to be the GPL); vidgen never runs them, and redistributing a
+  was not verified and is believed to be the GPL); schu-video-generator never runs them, and redistributing a
   bundled application that includes symusic's wheels should check their terms.
 - **GeneralUser GS 2.0.3** (the SoundFont composed music is played with by default), by
   S. Christian Collins (https://www.schristiancollins.com/generaluser), **GeneralUser GS License
   v2.0**: it may
   be used "without restriction for your own music creation, private or commercial", the samples
   allow full use in music production including profit from the recordings, and no attribution is
-  required. It is **not bundled**: vidgen downloads it on first use from the author's GitHub
+  required. It is **not bundled**: schu-video-generator downloads it on first use from the author's GitHub
   repository (`mrbumpy409/GeneralUser-GS`, `GeneralUser-GS.sf2`, 32,319,396 bytes, SHA-256
   `9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe`) into vidgen's cache folder
   and checks it before use. The author asks that websites featuring it link to his website, not to
@@ -121,14 +121,14 @@ their own licences. Notably:
 
 ## Online services (optional, your own account)
 
-vidgen bundles no client library or content from these services; it calls their web APIs with
+schu-video-generator bundles no client library or content from these services; it calls their web APIs with
 your key only when you run the paid commands, and what they return is subject to their terms:
 ElevenLabs (narration, speech to text), OpenAI (Images API) and OpenRouter (image models of
 several providers, e.g. Black Forest Labs, ByteDance, Google, OpenAI, Recraft, and
 text-to-speech models, e.g. Mistral, Kokoro, Google, ElevenLabs, Microsoft — each model's
 provider terms apply too). The list of OpenRouter's TTS models, voices and prices bundled for
 offline checks (`vidgen/data/openrouter/tts_models.json`) is facts read from its public model
-list on the date it names. Requests to OpenRouter carry vidgen's optional app identification
+list on the date it names. Requests to OpenRouter carry schu-video-generator's optional app identification
 (`HTTP-Referer`: the project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`).
 
 ## Repository-only content (not in the pip package)

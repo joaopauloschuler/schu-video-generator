@@ -5,7 +5,7 @@ scene go through :func:`sanitize_svg`, which returns a cleaned copy and what it 
 
 - **Removed**: ``<script>``, ``<foreignObject>``, embedded rasters (``<image>``), ``<filter>``
   and ``filter=`` (blur, shadows), masks and clip paths (``mask=`` / ``clip-path=``: shapes they
-  hid may show), ``<text>`` (generators letter poorly: put words on screen with vidgen),
+  hid may show), ``<text>`` (generators letter poorly: put words on screen with schu-video-generator),
   animation elements, event attributes (``onload=``...), links to other files. A document
   declaring XML entities is refused.
 - **Flattened**: a gradient fill or stroke becomes the average colour of its stops (a pattern:

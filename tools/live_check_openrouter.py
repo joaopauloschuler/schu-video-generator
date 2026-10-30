@@ -1,24 +1,24 @@
 """Live check of the OpenRouter image and text-to-speech providers (Steps 61, 61b, 62) against the real API.
 
-Not shipped with vidgen and never run by the tests; a maintainer tool for a person with an
+Not shipped with schu-video-generator and never run by the tests; a maintainer tool for a person with an
 OpenRouter key. It
 
 1. fetches OpenRouter's public image-model list (free, no key) and prints the cheapest models
-   that take a text prompt, with their prices as vidgen estimates them (``--svg``: models that
+   that take a text prompt, with their prices as schu-video-generator estimates them (``--svg``: models that
    return SVG; ``--zdr``: only models with a Zero Data Retention endpoint, for accounts that
    require ZDR);
 2. without ``--yes``: prints the dry run of one picture with the cheapest model and stops (free);
-3. with ``--yes``: generates ONE small picture through vidgen's own code path
+3. with ``--yes``: generates ONE small picture through schu-video-generator's own code path
    (``vidgen.imagegen.run.run_imagegen`` with the ``openrouter`` provider) in a new temporary
-   project folder, then prints where the PNG (``--svg``: SVG, with what vidgen's sanitiser makes
+   project folder, then prints where the PNG (``--svg``: SVG, with what schu-video-generator's sanitiser makes
    of it) and its sidecar are and the cost OpenRouter reported.
 
 ``--tts`` checks narration instead (Step 62): it prices the text-to-speech models whose cost
 per character is listed (``--zdr``: only those with a ZDR endpoint), prints ``vidgen tts
---dry-run`` of ONE short beat with the cheapest, and with ``--yes`` voices it through vidgen's own
+--dry-run`` of ONE short beat with the cheapest, and with ``--yes`` voices it through schu-video-generator's own
 code path (``vidgen.tts.run.run_tts``) in a temporary project, then prints the MP3's path and
 duration, the ``X-Generation-Id`` and the cost OpenRouter reported; when no cost came within
-vidgen's own wait (15 s), it says why and keeps asking ``GET /generation`` for ``--wait``
+schu-video-generator's own wait (15 s), it says why and keeps asking ``GET /generation`` for ``--wait``
 seconds, printing each answer (to see how late the record comes, or what it lacks).
 
 ``--generation ID`` only asks ``GET /api/v1/generation?id=ID`` (needs the key; free) until the
@@ -35,9 +35,9 @@ Options:
   --generation ID  only probe one generation record's cost
   --wait S         seconds --generation (and --tts --yes without a cost) keep asking (default 60)
 
-The key is read only from the environment variable ``OPENROUTER_API_KEY`` (by vidgen, at the
+The key is read only from the environment variable ``OPENROUTER_API_KEY`` (by schu-video-generator, at the
 moment of the request); this script never prints or stores it: it only says whether it is
-set, and the error texts it prints come from vidgen, which removes the key from them (it is
+set, and the error texts it prints come from schu-video-generator, which removes the key from them (it is
 sent only as the ``Authorization`` header, which no error quotes). Run from the repository root::
 
     python tools/live_check_openrouter.py            # free: model list + dry run
@@ -119,7 +119,7 @@ def write_project(folder: Path, model: str, resolution: str | None, svg: bool = 
 
 
 def price_at_smallest(model: str, tmp: Path, svg: bool = False) -> tuple[float | None, str, str | None, orr.Lookup]:
-    """vidgen's estimate of one square picture at the model's smallest tier."""
+    """schu-video-generator's estimate of one square picture at the model's smallest tier."""
     lookup = orr.fetch_model_info(model, timeout=10)
     tier = smallest_tier(lookup) if isinstance(lookup, orr.ModelInfo) and not svg else None
     folder = tmp / model.replace("/", "__")
@@ -131,7 +131,7 @@ def price_at_smallest(model: str, tmp: Path, svg: bool = False) -> tuple[float |
 
 
 def report_svg(path: Path) -> None:
-    """What vidgen's sanitiser makes of a generated SVG."""
+    """What schu-video-generator's sanitiser makes of a generated SVG."""
     from vidgen.svgclean import sanitize_svg
 
     data = path.read_bytes()

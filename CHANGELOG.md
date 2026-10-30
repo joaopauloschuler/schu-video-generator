@@ -2,7 +2,7 @@
 
 The project and its pip distribution are `schu-video-generator`; the command and the Python
 package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in `HANDOFF.md`
-("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
+("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–254)
@@ -751,7 +751,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   types and five showcases (a plant cell, the sodium pump, a MEK inhibitor, mitosis, the
   respiratory chain); gallery stills are now palette PNGs (about 40 % of their size, the room for
   the showcases). Fixes found on the way: a cell route's transcription caption no longer mentions
-  vidgen's molecule scene; a zoomed `cell` view and a gene close-up no longer report their cropped
+  schu-video-generator's molecule scene; a zoomed `cell` view and a gene close-up no longer report their cropped
   world as `off_frame`; the close-up's "schematic: not to scale" is at the readable size, in the
   safe area and clear of the protein's readout in 9:16.
 - **Review of Phase U** (Step 211): drawings use the frame better — molecule scenes put three or
@@ -781,7 +781,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   chords; sections dragged, looped and edited; tracks with mute / solo, volume, pan, steps
   text; an inspector with every instrument's settings as sliders, effects as chips, per-section
   changes and a step grid) or by typing the YAML; problems show inline with the command line's
-  did-you-mean messages while the last good render keeps playing. The sound is always vidgen's
+  did-you-mean messages while the last good render keeps playing. The sound is always schu-video-generator's
   own renderer: an edit renders only the tracks it changes and plays on from the same moment,
   also under the narration sample. See `docs/CONFIG.md`, "Music studio".
 - **Check, versions, A/B, export** (Step 197): `vidgen music check` after each render (verdict,
@@ -852,11 +852,11 @@ Changes that affect projects made with 0.2.0:
   TTS, captions and readback. Beats with asterisks get new audio hashes. Other beats keep
   theirs.
 - **The first render after upgrading renders every scene again**: the scene cache key includes
-  the vidgen version.
+  the schu-video-generator version.
 - **`--jobs` accepts `auto`** (Step 117). A bad value now gives the error `invalid value: 'x'
   (a whole number, or auto)` instead of argparse's message.
 - **A Kokoro voice of another language is dubbed** (Step 143): in a video (or variant) whose
-  `language:` is not the Kokoro voice's, vidgen now picks a Kokoro voice of the video's language
+  `language:` is not the Kokoro voice's, schu-video-generator now picks a Kokoro voice of the video's language
   of the same kind (female / male) instead of reading the text with the wrong pronunciation and
   only warning. `vidgen validate` prints the choice (`dub [pt]: ...`). Write `lang:` on the voice
   to keep it on purpose, or `dub: {LANG: VOICE}` to choose. Those beats get new audio.
@@ -866,7 +866,7 @@ Changes that affect projects made with 0.2.0:
   1.5 s before it appears). `vidgen lint --fail-on warning` may now fail on a project that passed:
   show the label on the word (`{reveal: ..., at: "@word"}`), or set
   `lint.rules.said_before_shown: {severity: off}`.
-- **Built-in pronunciation entries** (Step 165): vidgen now respells some words for some voices
+- **Built-in pronunciation entries** (Step 165): schu-video-generator now respells some words for some voices
   in every project (`vidgen list-pronunciation` lists them): Kokoro's English voices say `README`
   as `readme`, `JSON` as `Jason`, `YAML` as `yammel`, `ReLU` as `ray loo` and more, and its
   American voices `epoch` as `E pock`. The audio hash covers the spoken text, so **existing Kokoro
@@ -1066,13 +1066,13 @@ matters only for projects made with development builds between Steps 67 and 131)
   once there is audio and estimated from the text before; an unknown word is a `vidgen validate`
   error that lists the beat's words like it (156).
 - One colour per concept: `terms: {loss: primary, gradient: "#E07A5F", "learning rate": {color:
-  tertiary, tex: '\eta'}}` colours those words in every text vidgen writes (titles, bullets, chart
+  tertiary, tex: '\eta'}}` colours those words in every text schu-video-generator writes (titles, bullets, chart
   and diagram labels, callouts, karaoke captions) and their symbols in equations; `terms: false`
   opts a scene out; lint `concept_colors` (157).
 - `code_morph`: version A of a listing morphs into version B (kept tokens glide, new lines grow
-  in, removed ones fade out; the diff is vidgen's), at a beat or on a word (158).
+  in, removed ones fade out; the diff is schu-video-generator's), at a beat or on a word (158).
 - `terminal`: commands typed at a prompt and the output you write appearing, beside a code
-  listing or after a code scene (`carry`); vidgen runs nothing (159).
+  listing or after a code scene (`carry`); schu-video-generator runs nothing (159).
 - `function_plot`: functions written as maths and parsed safely (no `eval`), a dot tracing a
   curve with its tangent and a live label, shaded areas with their signed value, the `trace`
   action (160); points, vectors (sums, scaling), braces, angle marks, dimension lines, and the
@@ -1160,11 +1160,11 @@ matters only for projects made with development builds between Steps 67 and 131)
 - A Listen page, [`docs/music/README.md`](docs/music/README.md), made by `vidgen music page`:
   a 15 s MP3 clip and a spectrogram of every bed (from the lift for `breakthrough`, `ascent` and
   `horizon`), clips that play all 36 sound effects and the six ambience beds, and two composed
-  moods; all made by vidgen itself and byte-identical when made again. The README leads with
+  moods; all made by schu-video-generator itself and byte-identical when made again. The README leads with
   the music and sound synthesis and links it (183).
 - Score files: music written in YAML (key, tempo, time signature, named sections, a progression
   in Roman numerals or chord names, tracks of step patterns such as `"x... x..."`, `"1358 5315"`
-  with `accent: "3+3+2"` or `"E5 - - . G5"`), played by vidgen's own instruments as a seamless
+  with `accent: "3+3+2"` or `"E5 - - . G5"`), played by schu-video-generator's own instruments as a seamless
   loop or a one-shot at −28 LUFS; every mistake reported at once with did-you-mean. `vidgen music
   render SCORE.yaml --out FILE.wav` (184).
 - Score files gain an instrument library of 26 (gated snare, analog bass, square pluck, soft lead,
@@ -1181,7 +1181,7 @@ matters only for projects made with development builds between Steps 67 and 131)
   in words — loudness and steadiness, peaks and clipping, the tempo heard, the loop's seam, how
   much sits in the voice's range, bass weight, harsh highs, the key, whether the lift lifts and
   the build builds — with advice that names the tracks and score keys to change, a spectrogram
-  with the sections marked and a 20 s demo under a narration sample with vidgen's ducking;
+  with the sections marked and a 20 s demo under a narration sample with schu-video-generator's ducking;
   `--compare` puts two versions side by side (187).
 - Project pieces: a score file in `assets/music/my_theme.yaml` plays like a bed with `music:
   my_theme` (or `source: assets/music/my_theme.yaml`), rendered when the video is joined and

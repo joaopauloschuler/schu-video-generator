@@ -393,7 +393,7 @@ def _overlay_defs(overlays: list[OverlayType], tokens: dict[str, list[str]]) -> 
 
 def _yaml_on_key(schema: dict[str, Any]) -> None:
     """YAML 1.1 (PyYAML, some editors' YAML-to-JSON) reads a bare key ``on`` as the boolean
-    ``true``, written ``"true"`` in JSON; vidgen takes it as ``on`` (a prop, an iso object), so
+    ``true``, written ``"true"`` in JSON; schu-video-generator takes it as ``on`` (a prop, an iso object), so
     the schema takes a ``"true"`` key wherever it takes a boolean ``on``."""
     for node in _walk(schema):
         props = node.get("properties")

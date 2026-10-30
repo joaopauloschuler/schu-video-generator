@@ -33,9 +33,9 @@ from vidgen.studio.theory import note_name
 #: The narration sample the demo plays when no ``--narration`` is given: two original lines
 #: spoken by Kokoro (``af_heart``, Apache-2.0), 20 s with the music alone at the end.
 NARRATION_SAMPLE = Path(__file__).parent / "data" / "narration_sample.mp3"
-#: The level vidgen's narration sits at (integrated, as stereo; DESIGN §48: the kphi3 MP3s).
+#: The level schu-video-generator's narration sits at (integrated, as stereo; DESIGN §48: the kphi3 MP3s).
 NARRATION_LUFS = -21.5
-#: vidgen's default ducking (``DuckConfig()``: depth dB, attack s, release s, hold s); a test
+#: schu-video-generator's default ducking (``DuckConfig()``: depth dB, attack s, release s, hold s); a test
 #: keeps them equal.
 DUCK = (12.0, 0.4, 1.0, 1.5)
 #: The demo's final level, as a video's mix (``audio.target_lufs``, ``audio.true_peak``).
@@ -387,8 +387,8 @@ def check_music_score(
 
 
 def check_music_audio(samples: np.ndarray, name: str, loop: bool = True, hop: int | None = None) -> MusicCheck:
-    """Check an audio file's ``samples`` (any level; measured as vidgen plays it, at -28 LUFS).
-    ``loop``: check the seam too (vidgen loops a music file that is shorter than its cue)."""
+    """Check an audio file's ``samples`` (any level; measured as schu-video-generator plays it, at -28 LUFS).
+    ``loop``: check the seam too (schu-video-generator loops a music file that is shorter than its cue)."""
     import time
 
     began = time.perf_counter()
@@ -985,7 +985,7 @@ def _build_fixes(score: MusicScore | None, stems: _Stems | None, name: str, span
 
 def duck_gain_db(spans: Sequence[tuple[float, float]], frames: int, depth: float = DUCK[0], attack: float = DUCK[1], release: float = DUCK[2],
                  hold: float = DUCK[3]) -> np.ndarray:
-    """vidgen's ducking curve (``vidgen.mix.duck_curve``) in dB per 10 ms frame: ``-depth``
+    """schu-video-generator's ducking curve (``vidgen.mix.duck_curve``) in dB per 10 ms frame: ``-depth``
     while the voice speaks or pauses for less than ``hold``, raised-cosine ramps of ``attack``
     seconds before and ``release`` after."""
     if depth == 0 or not spans:
@@ -1023,7 +1023,7 @@ def speech_spans(voice: np.ndarray) -> list[tuple[float, float]]:
 
 
 def load_narration(path: Path | None) -> tuple[np.ndarray, str]:
-    """A narration track (stereo float64) and its name: ``path`` as it is (vidgen plays narration at
+    """A narration track (stereo float64) and its name: ``path`` as it is (schu-video-generator plays narration at
     its own level) or the shipped sample."""
     source = path or NARRATION_SAMPLE
     voice = np.asarray(decode_audio(source), dtype=np.float64)
@@ -1032,7 +1032,7 @@ def load_narration(path: Path | None) -> tuple[np.ndarray, str]:
 
 
 def narration_demo(music: np.ndarray, voice: np.ndarray, tail: float = 0.0) -> tuple[np.ndarray, dict[str, float]]:
-    """The music (looped from its start, at volume 0: -28 LUFS) under ``voice`` with vidgen's
+    """The music (looped from its start, at volume 0: -28 LUFS) under ``voice`` with schu-video-generator's
     default ducking, a 1.5 s fade-in and a 2 s fade-out, then set to the video's level (-16
     LUFS, true peak at most -1.5 dBTP). Returns the stereo mix and what was measured while the
     voice speaks: its loudness, the music's, and how far the voice's 300 Hz-3 kHz stands over

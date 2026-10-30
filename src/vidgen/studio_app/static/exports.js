@@ -1,7 +1,7 @@
 // Exports (DESIGN.md §94.15): the current version as its score file (YAML), as audio (WAV or MP3:
 // once, N loops or N seconds; at a video's level or the listening level), or saved into the
 // project's assets/music/<name>.yaml (then `music: <name>` plays it in a video). The server
-// renders with vidgen's own renderer and writes into the session; the browser downloads it.
+// renders with schu-video-generator's own renderer and writes into the session; the browser downloads it.
 
 import { api } from "./api.js";
 import { escapeHtml } from "./yaml_view.js";

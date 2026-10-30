@@ -3,7 +3,7 @@
 // at that moment: the server records its bar, beat, section and the version heard. Notes show as
 // pins on the lane and in the Notes tab (edit, resolve, delete; click to play from a little
 // before). "Ask an agent" writes a hand-off into the session folder; an agent answers through
-// vidgen's MCP (the page polls the session and the proposal appears), a chat assistant through
+// schu-video-generator's MCP (the page polls the session and the proposal appears), a chat assistant through
 // Copy prompt / Paste reply, or OpenRouter when a key is set. A proposal is a new version to A/B
 // against the one it was made from, then keep or discard; one with problems can only be dismissed.
 

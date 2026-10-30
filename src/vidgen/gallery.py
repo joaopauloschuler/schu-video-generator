@@ -16,7 +16,7 @@ its last beat's end; its clip is the scene's render as a palette GIF.
 **Output** (default ``docs/gallery``): ``README.md`` (the index: every registered type by group,
 with its stills), ``<type>.md`` (what it is for, stills, clips, the YAML, params, targets,
 beats) and ``media/<type>-16x9.png|gif``, ``media/<type>-9x16.png|gif``. Nothing in them depends
-on the time or the machine, so regenerating with the same vidgen gives the same files.
+on the time or the machine, so regenerating with the same schu-video-generator gives the same files.
 """
 
 from __future__ import annotations

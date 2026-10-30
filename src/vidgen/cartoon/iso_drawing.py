@@ -1,4 +1,4 @@
-"""Drawing in the isometric view with Pillow (DESIGN.md §89.6), in vidgen's flat cartoon look:
+"""Drawing in the isometric view with Pillow (DESIGN.md §89.6), in schu-video-generator's flat cartoon look:
 filled shapes with the characters' ink outline. No manim.
 
 Shapes are given in the world (tile units, :mod:`vidgen.world.iso_view`) and drawn onto an

@@ -1,5 +1,5 @@
 """Step 159: the ``terminal`` scene type (commands typed at a prompt and their output shown, beat
-by beat or on a spoken word; the author writes the output, vidgen runs nothing), its session rows,
+by beat or on a spoken word; the author writes the output, schu-video-generator runs nothing), its session rows,
 params and targets, and tiny renders in 16:9 and 9:16, with a ``clear`` and the code beside it."""
 
 from __future__ import annotations

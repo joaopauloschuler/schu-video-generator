@@ -45,7 +45,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
 | `terms` | `{}` | one colour per concept: `{loss: tertiary, gradient: "#E07A5F"}` (theme colour tokens or hex), or `{term: {color, tex}}`; the term is drawn in its colour wherever it is on-screen text, its `tex` parts in equations; see [one colour per concept](#one-colour-per-concept-terms) |
 | `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
-| `pronunciation_defaults` | `true` | use vidgen's [built-in pronunciation list](#built-in-pronunciation-lists) of each beat's TTS engine and language (`false`: only the project's entries) |
+| `pronunciation_defaults` | `true` | use schu-video-generator's [built-in pronunciation list](#built-in-pronunciation-lists) of each beat's TTS engine and language (`false`: only the project's entries) |
 | `language` | none (English rules) | the video's language, a BCP-47 tag (`en`, `pt-BR`, `es-419`): caption and SRT line breaks, the `narration_speed` lint, ElevenLabs `language_code`, the MP4's audio language; see [languages and translations](#languages-and-translations) |
 | `translations` | none | a translation file (YAML, `vidgen translate-template`) whose texts replace beat texts and on-screen texts, usually in a variant; see [languages and translations](#languages-and-translations) |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
@@ -742,7 +742,7 @@ sets:
 
 ### Ready-made sets (`set: city_street`)
 
-vidgen comes with sets of its own. A `set: NAME` that the project's `sets:` (with its includes)
+schu-video-generator comes with sets of its own. A `set: NAME` that the project's `sets:` (with its includes)
 does not define uses the built-in set of that name; a project set of the same name wins. The
 scene's params override a built-in set by the same rules as any set (above): `light: night`
 replaces, `marks` merge, `props: [{name: shop_2, color: tertiary}]` changes the second shop,
@@ -776,7 +776,7 @@ forest's: `pine`, `pine_2`, `tree`, `tree_2`, `pine_3`, `tree_3`, `bush`, `log`,
 are shown under [Props](#props). `vidgen validate` reports an unknown set with the project's and the
 built-in names (`unknown set 'beech'; did you mean 'beach'? sets: none (...); built-in sets:
 classroom, kitchen, shop, living_room, bedroom, city_street, park, beach, forest, snowy_hills`). A
-built-in set is part of the scene's params, so a newer vidgen that changes a set renders the
+built-in set is part of the scene's params, so a newer schu-video-generator that changes a set renders the
 scenes using it again.
 
 ### Ready-made rooms (`set: classroom`)
@@ -863,7 +863,7 @@ WCAG AA (`warning: theme contrast: colors.dim #6B7280 on background #0E1116: 3.9
 
 ### Fonts
 
-vidgen ships three open-licence font families (SIL OFL 1.1; licences in
+schu-video-generator ships three open-licence font families (SIL OFL 1.1; licences in
 `src/vidgen/data/fonts/`, list in `THIRD_PARTY_NOTICES.md`) and registers them for its own
 renders, so they need **no installation** on Windows, macOS or Linux: **Inter** (sans; Regular,
 Bold, Italic), **Source Serif 4** (serif; Regular, Bold, Italic) and **JetBrains Mono NL**
@@ -1004,7 +1004,7 @@ scenes:
 | `terms.<term>.color` | colour | the same, in the long form |
 | `terms.<term>.tex` | str \| list | TeX parts of equations that stand for the term (`L`, `'\nabla L'`), each whole TeX tokens with balanced braces; coloured in [`equation`](#equation) and [`equation_derivation`](#equation_derivation) steps that contain them |
 
-- **Where**: all text the scenes write with vidgen's text helpers: titles, bullets, cards,
+- **Where**: all text the scenes write with schu-video-generator's text helpers: titles, bullets, cards,
   quotes, tables, chart titles, axis labels, legends and category labels, diagram and process
   labels, timeline entries, captions (karaoke too: the spoken word still takes the highlight
   while it is said), lower thirds; a `line_chart` series whose whole name is a term is drawn in
@@ -1039,7 +1039,7 @@ scenes:
 
 ## Icons
 
-vidgen ships 200 line icons (from [Lucide](https://lucide.dev), ISC licence), 25 in each
+schu-video-generator ships 200 line icons (from [Lucide](https://lucide.dev), ISC licence), 25 in each
 category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and interface),
 `nature`, `education`, chosen for what explainer videos show; the full list with aliases and
 tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
@@ -1132,7 +1132,7 @@ turning it on does not re-voice anything; `vidgen tts --force` fetches the timin
 beats (paid again).
 
 `language_code` is ElevenLabs' language enforcement (an ISO 639-1 code such as `pt`). By default
-(`null`: auto) vidgen sends the video's [`language`](#languages-and-translations) to the models
+(`null`: auto) schu-video-generator sends the video's [`language`](#languages-and-translations) to the models
 that accept one (`eleven_turbo_v2_5`, `eleven_flash_v2_5`; others reject the field, and
 `eleven_multilingual_v2` detects the language from the text). A code sends it with any model,
 `false` never sends one. When a code is sent it is part of the audio hash (re-voicing those
@@ -1179,7 +1179,7 @@ the model and the estimated cost of the run (from OpenRouter's public model list
 offline: "price unknown"). The estimate uses the highest price of the model's providers, so the
 real charge can be lower (Kokoro's cheapest provider asks $0.00000062 per character). A real run
 then prints what OpenRouter reports it charged: OpenRouter writes each request's cost record a
-few seconds after the audio, so vidgen asks again for up to 15 s; when the records are still
+few seconds after the audio, so schu-video-generator asks again for up to 15 s; when the records are still
 missing it says `cost not reported by openrouter yet (why; see https://openrouter.ai/activity)`
 — the audio is stored all the same, and the activity page shows the cost later.
 
@@ -1198,16 +1198,16 @@ voice: ...}}}`); its audio then goes to `audio/<variant>/` like any other voice 
   language; MAI-Voice voices carry their locale). `instructions` can name the language or accent
   ("Brazilian Portuguese, São Paulo accent") on models that read them.
 - Not supported: voice cloning from reference audio (`input_references`) and multi-speaker input
-  (one request voicing several speakers): vidgen voices one beat per request.
+  (one request voicing several speakers): schu-video-generator voices one beat per request.
 
-**Audio.** vidgen asks for MP3 (`response_format: mp3`); models that return only raw PCM (Gemini
+**Audio.** schu-video-generator asks for MP3 (`response_format: mp3`); models that return only raw PCM (Gemini
 TTS: 16-bit mono 24 kHz) are asked for PCM and converted to MP3 with ffmpeg, so `audio/` always
 holds `<beat_id>.mp3` + `<beat_id>.hash`. The hash covers the spoken text (pronunciation applied)
 and `provider`, `model`, `voice`, `instructions` and `speed`: changing any of them re-voices that
 voice's beats. ElevenLabs projects keep their hashes.
 
 **Checks.** `provider: openrouter` without `model`, or a model id without `/`, is a config error.
-`vidgen validate` warns (no network, OpenRouter's list bundled with vidgen, dated) about a model
+`vidgen validate` warns (no network, OpenRouter's list bundled with schu-video-generator, dated) about a model
 not in the list (with a suggestion), a `voice` the model does not list and a missing `voice` for a
 model that lists some; lists may be incomplete, so these are warnings. `vidgen tts --dry-run` and
 a real run check OpenRouter's live list: a model it does not have is refused before any paid
@@ -1250,7 +1250,7 @@ voice:
 | `device` | `cpu` | `cuda`: an NVIDIA GPU (needs a CUDA build of PyTorch); `auto`: the GPU if PyTorch sees one. Not in the audio hash |
 | `label`, `color`, `timestamps` | | as in [`voice:`](#voice-voice) (`timestamps` is not needed: English timings are always stored) |
 
-**Languages and voices** (Kokoro-82M v1.0, 54 voices, list bundled with vidgen, dated 2026-10-09;
+**Languages and voices** (Kokoro-82M v1.0, 54 voices, list bundled with schu-video-generator, dated 2026-10-09;
 grades from the model's [VOICES.md](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)):
 
 | `lang` | language | from `language:` | default voice | other voices |
@@ -1275,7 +1275,7 @@ Linux, macOS), so no system package is needed normally.
 (327 MB, SHA256 `496dba11...`) plus ~0.5 MB per voice used, into the Hugging Face cache
 (`~/.cache/huggingface/hub`, on Windows `%USERPROFILE%\.cache\huggingface\hub`; `HF_HOME` or
 `HF_HUB_CACHE` move it). English voices also make misaki install spaCy's `en_core_web_sm`
-(12.8 MB) with pip on first use. vidgen bundles none of these. After that no network is needed
+(12.8 MB) with pip on first use. schu-video-generator bundles none of these. After that no network is needed
 (`HF_HUB_OFFLINE=1` makes sure nothing is asked). `vidgen tts --dry-run` says whether the
 download is still to come.
 
@@ -1290,7 +1290,7 @@ nothing and `vidgen tts` prints a command that installs it anyway (it worked on 
 install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4" "spacy>=3.8,<4"
 "spacy-curated-transformers<0.4"`.
 
-**Word timings.** For English (`lang` a / b) Kokoro says when each word is spoken: vidgen stores
+**Word timings.** For English (`lang` a / b) Kokoro says when each word is spoken: schu-video-generator stores
 them as `audio/<beat_id>.align.json` for every beat (free, so `timestamps` is not needed) and
 burned-in [`captions`](#captions) and the SRT time every word from them (through the
 pronunciation, as with ElevenLabs). Other languages have no timings: word times are estimated
@@ -1399,7 +1399,7 @@ scenes:
 #### `emotion` with ElevenLabs and OpenRouter
 
 These providers take words or settings rather than numbers, so they use the emotion's **name**
-(a mapping's `like`); its numbers count only where vidgen changes the audio itself.
+(a mapping's `like`); its numbers count only where schu-video-generator changes the audio itself.
 
 | `emotion` | ElevenLabs `eleven_v3` tag | other ElevenLabs models: stability, style | OpenRouter instruction (added) |
 |---|---|---|---|
@@ -1431,7 +1431,7 @@ These providers take words or settings rather than numbers, so they use the emot
   documents them for): the sentence above is added after the voice's own `instructions`
   (`instructions: Warm narrator` → `Warm narrator. Speak sadly: ...`). The hash gains the
   emotion's name and sentence.
-- **Other OpenRouter models** take no instructions: vidgen changes the returned audio with the
+- **Other OpenRouter models** take no instructions: schu-video-generator changes the returned audio with the
   emotion's numbers instead, as for Kokoro but without the pauses (OpenRouter returns no word
   timings): the speed (ffmpeg `atempo`, the pitch kept), the pitch (the length kept) and the
   loudness (a boost soft-limited). The hash gains the name, speed, pitch and gain. `vidgen
@@ -2060,7 +2060,7 @@ piece): an own pose's `legs:` does nothing on them (validate warns), use `leg_le
 ### Characters from SVG files
 
 `look: {svg: assets/sprout.svg}` draws the character from your own SVG file (or one made with a
-`generate: {format: svg}` model), drawn **facing right**. vidgen sanitises it as it does an SVG
+`generate: {format: svg}` model), drawn **facing right**. schu-video-generator sanitises it as it does an SVG
 picture (scripts, filters, raster images and text are removed; gradients become one colour; see
 the `image` scene) and splits it into parts by **element ids**:
 
@@ -2244,7 +2244,7 @@ recording what it was generated from (and, with `voice.timestamps`, `audio/<beat
 its character timings, with the text and a hash of the MP3 they belong to, so a stale file is
 ignored).
 
-**API key.** vidgen reads the key only from the environment variable `ELEVENLABS_API_KEY`;
+**API key.** schu-video-generator reads the key only from the environment variable `ELEVENLABS_API_KEY`;
 it never stores it in the config, audio, build files, logs or error messages.
 
 - Windows: `setx ELEVENLABS_API_KEY your_key` once, then open a new terminal.
@@ -2330,7 +2330,7 @@ pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a
 
 ### Built-in pronunciation lists
 
-vidgen ships pronunciation entries for words a TTS engine gets wrong, one list per engine and
+schu-video-generator ships pronunciation entries for words a TTS engine gets wrong, one list per engine and
 language, and every project uses them automatically. Respellings are engine-specific: Kokoro's
 American English voices say "epoch" like "epic", so their list says `E pock`; a British Kokoro
 voice already says it right, and ElevenLabs could be made worse by a respelling, so their lists
@@ -2355,7 +2355,7 @@ leave it out.
   about built-in entries that match no beat. `vidgen tts --dry-run` adds `(built-in: epoch)` to the
   `says:` line, and a run adds `built-in pronunciation: epoch` to each beat it generated for it.
 - **Audio of existing projects.** The audio hash covers the spoken text, so a Kokoro English beat
-  whose text has a word of the list (an `epoch`, a `JSON`) is **stale** once you update vidgen:
+  whose text has a word of the list (an `epoch`, a `JSON`) is **stale** once you update schu-video-generator:
   `vidgen validate` counts it in `audio:`, `vidgen tts` regenerates only those beats (the other
   beats keep their hash), and `vidgen render` uses the old MP3 until then. To keep the old audio,
   set `pronunciation_defaults: false` or remove the entry (`epoch: null`).
@@ -2536,7 +2536,7 @@ scenes:
 
 | key | default | |
 |---|---|---|
-| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY`; or `openrouter` (many image models through [OpenRouter](#openrouter-provider-provider-openrouter), key in `OPENROUTER_API_KEY`). vidgen never stores a key |
+| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY`; or `openrouter` (many image models through [OpenRouter](#openrouter-provider-provider-openrouter), key in `OPENROUTER_API_KEY`). schu-video-generator never stores a key |
 | `model` | `gpt-image-1` | openai: `gpt-image-1`, `dall-e-3` or `dall-e-2`; another name is sent as is (with gpt-image-1's sizes, no cost estimate). openrouter: **required**, an OpenRouter model id `author/name` (e.g. `bytedance-seed/seedream-4.5`) |
 | `size` | `auto` | `WIDTHxHEIGHT` sent to the provider, or `auto`: the model's landscape / portrait / square size for the video's format or the `generate.aspect` (gpt-image-1: `1536x1024`, `1024x1536`, `1024x1024`; dall-e-3: `1792x1024`, `1024x1792`, `1024x1024`; dall-e-2: `1024x1024`). openrouter: `auto` sends an aspect ratio instead (below) |
 | `quality` | none (by model) | gpt-image-1: `low`, `medium`, `high` (default `medium`); dall-e-3: `standard`, `hd` (default `standard`); none for dall-e-2. openrouter: `auto`, `low`, `medium`, `high`, `xhigh`, `max` for models that have it (not sent by default) |
@@ -2612,12 +2612,12 @@ Windows: `setx OPENROUTER_API_KEY your_key`, then a new terminal; Linux / macOS:
 OPENROUTER_API_KEY=your_key`). `openai` stays the default: projects without `provider:
 openrouter` and their stored pictures are unchanged.
 
-- **Size.** With `size: auto` vidgen sends an `aspect_ratio`: the one nearest the video's format
+- **Size.** With `size: auto` schu-video-generator sends an `aspect_ratio`: the one nearest the video's format
   (`16:9`, `9:16`, `1:1`, `4:3`, ...), or `16:9` / `9:16` / `1:1` for a `generate.aspect` that
   differs from the video's; plus `resolution` when set. A model without that ratio uses its
   nearest (the dry run says so) and the scene's `fit` crops or pads. `size: WIDTHxHEIGHT` is
   sent as is instead (OpenRouter fits it to the model).
-- **What each model takes.** Before the first paid request vidgen reads the model's public record
+- **What each model takes.** Before the first paid request schu-video-generator reads the model's public record
   (free) and refuses, with a message, a model OpenRouter does not have, a `quality` or
   `resolution` the model does not take, a model that makes only vector (SVG) pictures for a
   `png` picture (and one that makes none for `format: svg`) and models that only edit an input
@@ -2635,7 +2635,7 @@ openrouter` and their stored pictures are unchanged.
 - **Privacy settings (Zero Data Retention).** If your OpenRouter account requires Zero Data
   Retention (or excludes providers that may keep or train on prompts), choose a model with a
   ZDR endpoint: OpenRouter refuses the others (HTTP 404, "no endpoints ... matching your data
-  policy") and vidgen then says so, links <https://openrouter.ai/settings/privacy> and lists the
+  policy") and schu-video-generator then says so, links <https://openrouter.ai/settings/privacy> and lists the
   image models that have a ZDR endpoint (from OpenRouter's public list
   `https://openrouter.ai/api/v1/endpoints/zdr`; on 2026-10-08 e.g.
   `bytedance-seed/seedream-5-0-flash`, `bytedance-seed/seedream-4.5`, the Gemini, Krea and MAI
@@ -2655,7 +2655,7 @@ would generate 7e9b5bf8aff6f7b2.png for harbour (16:9, openrouter bytedance-seed
 dry run: 1 picture(s) to generate, estimated $0.040 (OpenRouter prices of 2026-10-08); 0 up to date
 ```
 
-vidgen identifies itself to OpenRouter with the optional app headers (`HTTP-Referer`: the
+schu-video-generator identifies itself to OpenRouter with the optional app headers (`HTTP-Referer`: the
 project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`). OpenRouter's terms and
 each upstream model's provider policies apply to what you generate.
 
@@ -2684,13 +2684,13 @@ scenes:
 - **Models** (OpenRouter's public list of 2026-10-08; text prompt in, SVG out, `$` per picture):
   `recraft/recraft-v4.1-vector` and `recraft/recraft-v4-vector` ($0.08),
   `recraft/recraft-v4.1-pro-vector` and `recraft/recraft-v4-pro-vector` ($0.30). None has a
-  Zero Data Retention endpoint: an account requiring ZDR cannot use them (vidgen's error says
+  Zero Data Retention endpoint: an account requiring ZDR cannot use them (schu-video-generator's error says
   so). `vidgen imagegen --dry-run` shows the live price and refuses a model that makes no SVG;
   `vidgen validate` warns about a `format: svg` model not known to make SVG.
 - **Requests** send `output_format: svg` and an aspect ratio (no `quality` / `resolution`:
   vectors have none); the cache key includes the format, so PNG keys are unchanged.
 - **Sanitised before drawing**: scripts, embedded HTML, embedded raster pictures, filters
-  (blur, shadows), masks / clip paths, text (put words on screen with vidgen), animation and
+  (blur, shadows), masks / clip paths, text (put words on screen with schu-video-generator), animation and
   links to other files are removed; gradients and patterns become one colour (the average of the
   stops). At most 1500 shapes are drawn (the smallest beyond it are dropped) and 60 000 curve
   segments (paths are thinned): each with a warning, so a huge SVG cannot stall a render. The
@@ -2703,11 +2703,11 @@ scenes:
 
 **Writing prompts.** Image generators draw letters, numbers, charts and logos poorly (garbled
 words, made-up values): `vidgen validate` warns when a prompt quotes text or asks for a sign,
-label, title, logo, chart or diagram. Put words on screen with vidgen (a caption, a title, a
+label, title, logo, chart or diagram. Put words on screen with schu-video-generator (a caption, a title, a
 callout) and data in its chart scenes; ask the generator for the picture only (`negative: text`
 helps). Use one project `style` so the pictures of a video match.
 
-**Responsible use.** vidgen adds no content filter of its own: the provider's usage policies
+**Responsible use.** schu-video-generator adds no content filter of its own: the provider's usage policies
 apply and its safety system may refuse a prompt (the error says so). Do not generate pictures
 of real people or brands that could mislead, and say that pictures are generated when that
 matters to the viewer. The `revised_prompt` in the sidecar shows what the model made of the
@@ -2897,7 +2897,7 @@ language's own document. The MCP tools `render` and `lint` take `all_languages`.
 ## Sound effects (`sfx`)
 
 Short sounds under the narration: a whoosh as a card slides in, a pop per item, a tick per step.
-vidgen synthesises its own set (no recordings; free to use in your videos, including
+schu-video-generator synthesises its own set (no recordings; free to use in your videos, including
 commercially; no attribution needed; [listen](music/README.md#sound-effects) to all of them) and
 mixes them, sample-exact, into the video's sound when the scenes are joined. Three ways to place one:
 
@@ -3181,7 +3181,7 @@ its defaults as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-sfx---json).
 
 ### `vidgen list-pronunciation`
 
-`vidgen list-pronunciation [PROJECT] [--json]` prints vidgen's [built-in pronunciation
+`vidgen list-pronunciation [PROJECT] [--json]` prints schu-video-generator's [built-in pronunciation
 lists](#built-in-pronunciation-lists): with no project (and none in the current folder) every
 list; in a project the lists its beats' voices use, with how many beats use each, every entry
 (`term -> spoken form`, `(any case)`), what the project does to it (`replaced by the project:
@@ -3192,9 +3192,9 @@ list; in a project the lists its beats' voices use, with how many beats use each
 ## Background music (`music`)
 
 A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
-vidgen generates seventeen beds itself (no recordings, no samples; free to use in your videos,
+schu-video-generator generates seventeen beds itself (no recordings, no samples; free to use in your videos,
 including commercially; no attribution needed; [listen](music/README.md) to a clip of each);
-any audio file FFmpeg reads works too, and so does music vidgen composes for the video in a mood
+any audio file FFmpeg reads works too, and so does music schu-video-generator composes for the video in a mood
 ([composed music](#composed-music-compose)).
 
 ```yaml
@@ -3471,13 +3471,13 @@ each author-made piece that became a bed (`time_of_flight`: how it was made, the
 log, a link to the bed's clip — no second copy); six clips that together play all the built-in
 sound effects (96 kbps mono) and one of the six ambience beds in turn; and, when the `music` extra
 and the SoundFont are there (the page never downloads it), the first 15 s of the `curious` and
-`playful` moods. Every clip is made by vidgen itself, so the page can be made again: the same
-vidgen, FFmpeg (with libmp3lame), Pillow and symusic give byte-identical files. Takes about two
+`playful` moods. Every clip is made by schu-video-generator itself, so the page can be made again: the same
+schu-video-generator, FFmpeg (with libmp3lame), Pillow and symusic give byte-identical files. Takes about two
 minutes (the beds take most of it). JSON: see [below](#vidgen-music---json).
 
 ### Score files (`vidgen music render`)
 
-A **score file** is a piece of music written in YAML and played by vidgen's own synthesizer (the
+A **score file** is a piece of music written in YAML and played by schu-video-generator's own synthesizer (the
 instruments of the built-in beds): key, tempo, time signature, named sections, a chord
 progression and tracks of step patterns, with effects. `vidgen music render SCORE.yaml [--out
 FILE.wav|FILE.mp3] [--json]` writes it as a WAV or an MP3 (default `<score>.wav` in the current
@@ -3641,7 +3641,7 @@ Each line is `ok`, `note` or `FIX`:
 
 | topic | what is measured | flagged when |
 |---|---|---|
-| loudness | integrated LUFS (an audio file is measured as vidgen plays it, at −28 LUFS) | — |
+| loudness | integrated LUFS (an audio file is measured as schu-video-generator plays it, at −28 LUFS) | — |
 | steadiness | 3 s loudness, 10th to 95th percentile | it swings more than 8 dB |
 | peaks | true peak and how far it stands over the loudness | more than 19 dB over (single hits jump out) |
 | clipping | audio files: runs of samples at full scale | any |
@@ -3667,8 +3667,8 @@ riser is a hint, too quiet to count). Change one thing, check again, compare (`-
 let a human listen and choose.
 
 The demo plays the piece from its start at volume 0 (−28 LUFS) under the narration — a 20 s
-sample shipped with vidgen (two lines spoken by Kokoro's `af_heart`), or `--narration FILE` at its
-own level — ducked by vidgen's default (12 dB, 0.4 s attack, 1 s release, 1.5 s hold), set to the
+sample shipped with schu-video-generator (two lines spoken by Kokoro's `af_heart`), or `--narration FILE` at its
+own level — ducked by schu-video-generator's default (12 dB, 0.4 s attack, 1 s release, 1.5 s hold), set to the
 video's −16 LUFS. The spectrogram (30 Hz–16 kHz, the same level scale for every piece) marks the
 sections and the voice range's edges, with a lane under it showing each bar's voice-range level
 against the limit (red above). `--compare OTHER` checks a second score or audio file, prints a
@@ -3698,7 +3698,7 @@ music:                                          # the piece follows the video: i
   with did-you-mean across the beds and the pieces.
 - **Rendering.** The piece is rendered when the video's audio is mixed (the same place as a bed:
   drafts and animatics too, not storyboards or scenes) at −28 LUFS like a bed, and kept in
-  `build/music/piece-<key>.npy`; the key is the file's bytes, vidgen's version and the studio
+  `build/music/piece-<key>.npy`; the key is the file's bytes, schu-video-generator's version and the studio
   renderer's version, so an unchanged piece is not rendered again and any edit is. Changing it
   re-renders no scene. Notes it cannot play are logged as warnings.
 - **Loop or one pass.** A `loop: true` piece (the default) under a looping cue repeats seamlessly
@@ -3729,7 +3729,7 @@ locally on your own computer (offline, nothing uploaded unless you ask an online
 it in your web browser: load any of the 17 built-in beds as an editable score file
 (its template), change it with controls or by typing, listen, check, keep versions, pin
 listening notes for an AI agent, try variations, and export the piece or save it into a
-project. The sound is always vidgen's own renderer, the one videos use; the page only plays the
+project. The sound is always schu-video-generator's own renderer, the one videos use; the page only plays the
 rendered audio (a WAV, 12 dB louder than in a mix: −16 LUFS, the same for every version).
 Ctrl+C in the terminal stops it.
 
@@ -3762,7 +3762,7 @@ Ctrl+C in the terminal stops it.
 - **Where it listens**: `http://127.0.0.1:<port>/`, reachable only from your own computer
   (not from other machines on the network). `--port N` picks the
   port (default: a free one, printed); `--no-browser` only prints the address. It needs no
-  internet connection (the page and its fonts ship with vidgen).
+  internet connection (the page and its fonts ship with schu-video-generator).
 - **Where it keeps its work**: with a project (`PROJECT`, or the current folder when it holds a
   `video.yaml`), in `<project>/build/studio/`; without one, in `studio/` in vidgen's cache folder
   (`VIDGEN_CACHE_DIR`, else `%LOCALAPPDATA%\vidgen` on Windows, `~/Library/Caches/vidgen` on
@@ -3774,7 +3774,7 @@ Ctrl+C in the terminal stops it.
 - **Listening while editing**: an edit renders again only the tracks it changes (the others'
   sound is kept in the studio's memory, up to 768 MB) and plays on from the same moment;
   mute / solo and **under narration** (the piece under the narration sample `vidgen music
-  check` uses, with vidgen's default ducking, as in a video) change what plays, never the
+  check` uses, with schu-video-generator's default ducking, as in a video) change what plays, never the
   score. The meters show each track's own audio. A long piece whose tracks do not fit in those
   768 MB together (a 5-minute track is 235 MB) is rendered one track at a time and only what
   fits is kept, so its edits take longer (a 5-minute piece of nine tracks: about 70 s, 2.3 GB at
@@ -3799,7 +3799,7 @@ Ctrl+C in the terminal stops it.
   next to it says which one is playing.
 - **Export**: the score file (YAML, as written), or audio — WAV (16-bit, 48 kHz) or MP3, the
   piece once, N loops (a loop) or N seconds (looped as a video loops it, with a 2 s fade-out;
-  at most 10 minutes either way — a video loops its music by itself), at the **video level** (−28 LUFS, how vidgen plays music at volume 0) or the **listening
+  at most 10 minutes either way — a video loops its music by itself), at the **video level** (−28 LUFS, how schu-video-generator plays music at volume 0) or the **listening
   level** (−16 LUFS, peaks under −1 dBTP). The file is made in the session's `exports/` and the
   browser downloads it. **Save to the project** writes `assets/music/<name>.yaml` (lower-case
   letters, digits, `_`, `-`; not a name Windows keeps for a device, such as `con` or `nul`), which a video plays with `music: <name>` (the snippet can be
@@ -3914,7 +3914,7 @@ audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
 | `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
 | `bitrate` | `192k` | AAC bitrate of the video's audio: `128k`, `160k`, `192k`, `256k`, `320k`. A loud, dense mix (a Short at −14 LUFS) can come out of FFmpeg's AAC encoder at 192k several dB over `true_peak` (measured: −1.9 dBTP in the mix, +1.9 in the MP4); at 256k it stayed at −1.6. Check the MP4 (`ffmpeg -i out.mp4 -af ebur128=peak=true -f null -`) |
 
-When the mix is written (music, or `normalize: true`) vidgen measures the sum, applies one gain to
+When the mix is written (music, or `normalize: true`) schu-video-generator measures the sum, applies one gain to
 reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
 MP3s' level (a mono MP3 at full level on both channels; ElevenLabs voices measure about −21.4
 LUFS), so reaching −16 lifts it ~5 dB and the limiter shaves speech peaks by a few dB. Without music and with `normalize: auto` / `false` the narration and effects are joined as
@@ -3949,7 +3949,7 @@ recorded instruments:
   each `compose:` cue plays its mood's built-in bed instead; `vidgen music preview` stops with an
   error naming it.
 - **The SoundFont**: by default **GeneralUser GS 2.0.3** (32.3 MB, General MIDI instruments and
-  drum kits). vidgen does not ship it: the first composed render (or `vidgen soundfont fetch`)
+  drum kits). schu-video-generator does not ship it: the first composed render (or `vidgen soundfont fetch`)
   downloads it from
   `https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2` into
   vidgen's cache folder, `soundfonts/GeneralUser-GS.sf2` under: `VIDGEN_CACHE_DIR` if set, else
@@ -4054,7 +4054,7 @@ with no `direction` follows each variant's frame: left in the 16:9 video, up in 
 
 The irises are drawn inside the scenes' renders, like a `fade_color` (the colour covers the
 picture outside the circle, the overlays stay on top), so the join stays a cut there and no
-FFmpeg filter is involved: they work with every FFmpeg vidgen supports (checked with 6.1, 7.1
+FFmpeg filter is involved: they work with every FFmpeg schu-video-generator supports (checked with 6.1, 7.1
 and 8.1), and storyboards and stills show them.
 
 - **Speech never overlaps.** A transition covers only the *silent end* of the scene before it:
@@ -5105,7 +5105,7 @@ come out smaller than 0.3 units logs a warning to split it. `null` values are em
 A world map — the 177 countries of Natural Earth's 1:110m admin-0 map (public domain, bundled;
 see THIRD_PARTY_NOTICES.md) in the Equal Earth projection — with highlighted countries, a
 choropleth, pins and flight-path arcs. Borders are Natural Earth's *de facto* representation
-(e.g. Kosovo, N. Cyprus, Somaliland and W. Sahara are shapes of their own); vidgen takes no
+(e.g. Kosovo, N. Cyprus, Somaliland and W. Sahara are shapes of their own); schu-video-generator takes no
 position on disputed boundaries. Countries are named by ISO 3166
 alpha-2 or alpha-3 code (`DE`, `DEU`), English name or a common alias (`USA`, `UK`, `Holland`,
 `Ivory Coast`, `Czech Republic`...); case and accents do not matter, typos get a "did you mean".
@@ -7160,7 +7160,7 @@ with arrow tips, round ticks and plain-text labels (no LaTeX needed).
   `^` (or `**`) for powers, the constants `pi`, `e`, `tau` and the functions `sin`, `cos`,
   `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `exp`, `ln` / `log` (natural), `log10`,
   `log2`, `sqrt`, `abs`, `floor`, `ceil`, `sign`, `min(a, b)`, `max(a, b)`. The variable is `x`.
-  vidgen parses them with its own small parser: nothing is run as code. `f(x) = x^2` names the
+  schu-video-generator parses them with its own small parser: nothing is run as code. `f(x) = x^2` names the
   function (else they are `f`, `g`, `h`, ... in order); a later function may use an earlier one
   (`g(x) = f(x) + 1`). Where a function is undefined (`sqrt` of a negative, `1/x` at 0) or leaves
   the y range, the curve breaks: asymptotes are drawn as separate pieces.
@@ -7457,7 +7457,7 @@ those lines.
 ### `code_morph`
 
 Code that changes on screen: version 1 of a listing shows with beat 1, and at beat *i* it morphs
-into version *i*. vidgen finds what changed (Python's `difflib`, line by line, then token by
+into version *i*. schu-video-generator finds what changed (Python's `difflib`, line by line, then token by
 token within an edited line), so you write only the versions: what both versions share
 (unchanged lines, and the unchanged tokens of an edited line) glides to its new place, new
 lines grow in from their left end, new tokens of an edited line fade in, removed lines and
@@ -7620,7 +7620,7 @@ keeps a big file's walkthrough to the part it talks about.
 ### `terminal`
 
 A terminal window in which commands are typed and their output appears. **You write the
-output**: vidgen never runs a command. Step *i* of `steps` plays at beat *i* (the window comes
+output**: schu-video-generator never runs a command. Step *i* of `steps` plays at beat *i* (the window comes
 in with step 1): the command is typed at the prompt, a block cursor moving along
 (`typing_speed` characters per second; faster when the beat is too short for it), a moment
 later its output appears row by row and the prompt comes back, the cursor waiting after it.
@@ -8400,7 +8400,7 @@ colours follow the order of the blocks, which changes when one is left out).
 ### `cell`
 
 A cell in **physical scale** for cell-biology lectures and research explainers: a cross-section
-of an animal cell, a plant cell or a bacterium (as in a thin-section micrograph, in vidgen's flat
+of an animal cell, a plant cell or a bacterium (as in a thin-section micrograph, in schu-video-generator's flat
 style) with its compartments (cytosol, nucleoplasm, perinuclear space, ER lumen, cis / medial /
 trans Golgi lumens, mitochondrial intermembrane space and matrix, lysosome, peroxisome and
 endosome insides, vacuole, chloroplast stroma and thylakoid lumen, periplasm), the membranes
@@ -9254,7 +9254,7 @@ synthase before any protons were pumped; a pathway advanced backwards.
 ### `cross`
 
 A genetic cross at university level (Griffiths *Introduction to Genetic Analysis*, Hartwell
-*Genetics: From Genes to Genomes*), worked out exactly by vidgen's cross engine (DESIGN §96: exact
+*Genetics: From Genes to Genomes*), worked out exactly by schu-video-generator's cross engine (DESIGN §96: exact
 fractions, segregation, independent assortment, crossing over at the recombination frequency,
 X and Y segregating in males, lethal classes removed) and drawn from it, so no ratio on screen can
 disagree with the cross:
@@ -9293,7 +9293,7 @@ disagree with the cross:
 - **The chi-square test** (`observed`, `chi_square`): observed counts of the phenotype classes
   against the expected ones (N × the exact share): a table of O, E and (O − E)²/E, then χ², the
   degrees of freedom (classes − 1), the p-value (the upper regularized gamma function, computed
-  by vidgen), the critical value at `alpha` and the verdict (*p ≥ α: consistent with 9 : 3 : 3 : 1*,
+  by schu-video-generator), the critical value at `alpha` and the verdict (*p ≥ α: consistent with 9 : 3 : 3 : 1*,
   or *p < α: reject*); a note when an expected count is below 5.
 - **Notes** under the drawing, from the model: the parental and recombinant gamete frequencies and
   the recombination frequency of a linked parent (or *no crossing over* — Drosophila males), the
@@ -9422,7 +9422,7 @@ counselling lessons:
   beside the relative (male left of female when nothing else decides); each family a block as wide
   as its widest generation, so lines do not cross; relatives who marry each other are moved to the
   facing edges of their sibships, up to the common ancestors, so their mating line crosses nothing.
-  With NSGC ids (`II-3`) vidgen keeps your numbering and checks it reads left to right as drawn
+  With NSGC ids (`II-3`) schu-video-generator keeps your numbering and checks it reads left to right as drawn
   (else it says the drawn order); with other ids (`mum`, `kid1`) it numbers the chart. Wide
   families shrink to fit (9:16: the chart on top, the panel under it).
 - **Analysis** (`analyse`): each mode of inheritance — autosomal dominant (AD) and recessive (AR),
@@ -9840,7 +9840,7 @@ CRISPR–Cas9 genome editing on a target sequence (DESIGN §96.14; `vidgen.genet
   the view is the reverse complement of what you wrote).
 - **The guide**: the sgRNA's spacer (20 nt for SpCas9, 21–23 for SaCas9) repeats the protospacer on
   the non-target strand; the **PAM** (`NGG` for SpCas9, `NNGRRT` for SaCas9) lies right after the
-  protospacer's 3′ end on that strand. vidgen finds every guide with a PAM in the target: leave
+  protospacer's 3′ end on that strand. schu-video-generator finds every guide with a PAM in the target: leave
   `spacer` out for the one nearest the middle, give `guide: 2` for the n-th, or write your own
   `spacer`.
 - **What plays**: the enzyme comes in, stops at the PAMs it passes, settles on the right one; the
@@ -9874,7 +9874,7 @@ CRISPR–Cas9 genome editing on a target sequence (DESIGN §96.14; `vidgen.genet
 | `title` | text | in the header band |
 | `target` | | the top strand 5′→3′, 26–80 bp |
 | `cas` | `SpCas9` | `SaCas9` (PAM `NNGRRT`, 21–23 nt spacer) |
-| `spacer` | a guide vidgen finds | the sgRNA's spacer 5′→3′ (U or T) |
+| `spacer` | a guide schu-video-generator finds | the sgRNA's spacer 5′→3′ (U or T) |
 | `guide` | | instead of `spacer`: the n-th candidate guide (by cut position) |
 | `repair` | `nhej` | `hdr`, `none` |
 | `indel` | `+1` | NHEJ: the indel at the cut (+1 … +12, −1 … −12) |
@@ -10426,7 +10426,7 @@ params:
 
 ##### Walking and jumping on a level
 
-On a level the moving actions follow the tiles. The author says where a character goes; vidgen
+On a level the moving actions follow the tiles. The author says where a character goes; schu-video-generator
 plans the way (DESIGN.md §86.7) and `vidgen validate` refuses a move that cannot be made, naming
 the beat and why.
 
@@ -10460,7 +10460,7 @@ beats:
 - **Clouds** (`~`) are one-way: a character stands on top, walks through a cloud at its own height
   and jumps up through it from below, but a jump that falls onto a cloud lands there (an arc that
   would cross a cloud's top on the way down is refused). Ground (`#`) and platforms (`=`) are solid.
-- **Jumping** (`jump` with `to`: a spot, a mark or an x, or a tile `{column, row}`): vidgen first
+- **Jumping** (`jump` with `to`: a spot, a mark or an x, or a tile `{column, row}`): schu-video-generator first
   walks the character to the best take-off point on its own floor (the shortest jump, at least a
   tile across when it can, then the shortest walk), then it crouches, flies an arc that clears the
   tiles (the lowest of a few heights tried, from 0.75 tiles over the higher end), lands, squashes
@@ -11350,7 +11350,7 @@ with a `lift`) and a `wardrobe` (1.1; lean on its sides).
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella`, `door`, `book`, `letter` or `gift` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room), [small props](#everyday-small-props-let_go-pour)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
-| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle`, `phone`, `portal`, `hologram_display`, `scanner` or `crystal` only: `true` starts it switched on (a phone: ringing; a portal: open; a scanner: its readout lit; a crystal: glowing). vidgen and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
+| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle`, `phone`, `portal`, `hologram_display`, `scanner` or `crystal` only: `true` starts it switched on (a phone: ringing; a portal: open; a scanner: its readout lit; a crystal: glowing). schu-video-generator and its JSON Schema (`vidgen schema`) also take a bare `on: true`, which YAML 1.1 tools read as a key `true`; quoting it (`"on": true`) reads the same everywhere ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
 | `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
 | `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
 | `fruit` | `false` | `tree` only: `true` hangs four fruits on it ([`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) lets one fall) |
@@ -12111,7 +12111,7 @@ variants:
 #### Automatic directing (`auto_direct`)
 
 With `auto_direct: true` (top level, a stage's param or a beat's key; the nearest one wins; off
-by default) vidgen adds acting actions to a stage's beats so a dialogue looks directed without
+by default) schu-video-generator adds acting actions to a stage's beats so a dialogue looks directed without
 writing each look (a [host](#a-host-beside-any-scene-host) beside other scene types directs
 itself too: [automatic host directing](#automatic-host-directing)):
 
@@ -12159,7 +12159,7 @@ itself too: [automatic host directing](#automatic-host-directing)):
   on the stage; none in a beat with a written `effect`. The symbol is added also for a written
   `emote` / `react` (it adds to the face; the action itself is unchanged).
 - **Lint-safe.** Before adding a look, an arm gesture (`point`, `wave`, `shrug`) or a close-up,
-  vidgen predicts the beat's still from the stage's layout (no rendering) with and without it and
+  schu-video-generator predicts the beat's still from the stage's layout (no rendering) with and without it and
   runs the lint rules `off_stage` and `facing_away` on both; an action that would add a finding is
   left out (an arm out of the view, a speaker turned from the one it talks to, a close-up that cuts
   the speaker or leaves only a character behind it in view). Automatic actions draw no bubble, so
@@ -13137,7 +13137,7 @@ point at it with a callout (also at any spot of the frame). Actions are listed u
 
 **Syntax.** The canonical form is a mapping with `action` and the keys below, plus the
 action's options. The shorthand `{ACTION: TARGET, ...options}` (as `- dim: item2`) is the
-same thing; write the action name as the first key (if a tool sorted the keys, vidgen finds
+same thing; write the action name as the first key (if a tool sorted the keys, schu-video-generator finds
 the one key that names an action).
 
 | key | default | |
@@ -13762,7 +13762,7 @@ What only `vidgen validate` checks: unique scene and beat ids, action targets an
 beats, files referenced by params
 (images, code, logos), the checks written in Python (`validate_project`, pydantic validators,
 e.g. "values has one entry per label") and loading the extensions. A schema-valid config can
-still fail `vidgen validate`. The reverse happens only for values vidgen converts, such as
+still fail `vidgen validate`. The reverse happens only for values schu-video-generator converts, such as
 the string `"30"` for a number: write values with their real type (tests check both
 directions on the examples and on common mistakes).
 
@@ -13775,7 +13775,7 @@ and prints a warning. `--scene` with an unknown type is an error (exit code 1).
 
 `vidgen render`, `storyboard`, `lint`, `thumbnail`, `slides` and `gallery` take `--jobs N`
 (`-j N`): the number of scenes rendered at once, each in its own worker process (default 1).
-`--jobs auto` lets vidgen choose:
+`--jobs auto` lets schu-video-generator choose:
 
     jobs = min(available memory ÷ 1.5 GB, CPU cores), at least 1
 
@@ -14040,7 +14040,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's, area's, point's, vector's or mark's `color` or a `number_line` point's, interval's or jump's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
 | `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared, nor an [echo](#echo-characters-echo) (another self, alike on purpose). Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
-| `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
+| `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages schu-video-generator has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` (or, when the next beat [overlaps](#overlapping-lines-overlap-interrupt) it, than the time until that beat) by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
 | `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps; a walk or a jump on a [platform level](#walking-and-jumping-on-a-level) sped up more than `max_speedup` times to fit its beat |
@@ -14443,7 +14443,7 @@ above). A scene is rendered again (with stills, in worker processes like `vidgen
 if its stills are missing, were taken at another `--per-beat` count or format, or are stale:
 each render records a fingerprint of what the scene depends on (its config entry, the other
 config sections except `scenes`/`variants`/`lint`, its beats' MP3s, the project's extension code,
-the files under `assets/`, and vidgen's own rendering code; with [overlays](#overlays), also
+the files under `assets/`, and schu-video-generator's own rendering code; with [overlays](#overlays), also
 every scene's beats, MP3s and type, which place the scene in the video; the transition into the
 next scene; with [`carry`](#continuity-carrying-objects-into-the-next-scene-carry), what the next
 scene carries out of it and, for a carrying scene, the fingerprint of the scene before), and a
@@ -14453,7 +14453,7 @@ reads from outside `assets/` are not tracked: use `--force`. The storyboard does
 video; `vidgen render` does. It dispatches `post_scene` for the scenes it renders, not
 `pre_render`/`post_render`.
 
-**`vidgen render` uses the same fingerprints** (since vidgen 0.2): it renders only the scenes
+**`vidgen render` uses the same fingerprints** (since schu-video-generator 0.2): it renders only the scenes
 whose render is missing, was made at another format or without the narration it now needs, or
 is stale, and joins them with the current renders of the others (`render --json` lists each
 scene's `status`: `rendered` or `reused`). So `vidgen render --preview` after a storyboard or a
@@ -14505,7 +14505,7 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
 - **Samples.** A built-in type's sample is its snippet in the author guide's `scenes` topic
   (`AGENTS.md`, `vidgen guide scenes`; the first of the type, one without `generate:` preferred),
   so the guide and the gallery show the same YAML and a test keeps the committed pages in step
-  with the guide. Files a snippet names under `assets/` are stand-ins shipped with vidgen (a
+  with the guide. Files a snippet names under `assets/` are stand-ins shipped with schu-video-generator (a
   landscape picture for `image`, an app screenshot for other pictures, a short screen recording
   for clips). Another name of the same type (`flowchart` for `diagram`) is listed, not rendered
   again. Run in a project (or given `PROJECT`), the project's own scene types are shown too, each
@@ -14535,7 +14535,7 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
   its start, so a page shows the finished picture before the GIF plays (and between loops). A GIF
   over 150 KB is made again at 5, then 4 fps. The index shows each GIF in a `<picture>` whose
   still replaces it for viewers who ask for reduced motion. Nothing in the files depends on the
-  time or the machine: the same vidgen writes the same files.
+  time or the machine: the same schu-video-generator writes the same files.
 
 | option | |
 |---|---|
@@ -14706,7 +14706,7 @@ exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everyt
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
 
-**Stability.** `version` is the version of these shapes (currently **1**), not of vidgen. Keys
+**Stability.** `version` is the version of these shapes (currently **1**), not of schu-video-generator. Keys
 are only added within a version; removing or renaming a key or changing a value's type bumps
 it. Times are seconds (floats), paths are absolute strings, absent values are `null`.
 
@@ -14972,7 +14972,7 @@ difference between two palette colours).
 | `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
-| `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: vidgen wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
+| `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: schu-video-generator wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
 | `chapters` | list | the chapters as written into the MP4 and the YouTube list (empty without chapters): `{title, number, scene, start, end, index, count, card, intro}` — `number` as written (`null`: none), `scene` the scene it starts at, `start` / `end` seconds in the video, `index` its position in this list (1-based) of `count`, `card` whether it starts with a `chapter` card, `intro` whether it is the chapter added at 0:00 before the first one; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
 
@@ -15148,7 +15148,7 @@ name, acronym or number; else `null`) and `entry`; `suggestion`.
 
 ### `vidgen guide --json`
 
-The author guide for AI agents (`AGENTS.md`, shipped with vidgen; `vidgen guide [TOPIC] [--list]`).
+The author guide for AI agents (`AGENTS.md`, shipped with schu-video-generator; `vidgen guide [TOPIC] [--list]`).
 
 | key | type | |
 |---|---|---|

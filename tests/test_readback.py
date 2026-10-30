@@ -250,7 +250,7 @@ def test_faster_whisper_provider(fake_faster_whisper: type[FakeWhisper], tmp_pat
     provider.transcribe(beat)
     assert fake_faster_whisper.loaded == [("small.en", "cpu")]  # loaded once
     call = fake_faster_whisper.calls[0]
-    audio = call["audio"]  # decoded by vidgen, not the path (faster-whisper's decoder breaks on PyAV 19)
+    audio = call["audio"]  # decoded by schu-video-generator, not the path (faster-whisper's decoder breaks on PyAV 19)
     assert isinstance(audio, np.ndarray) and audio.ndim == 1 and audio.dtype == np.float32
     assert abs(len(audio) - SAMPLE_RATE) < 0.1 * SAMPLE_RATE and call["language"] == "en"
     assert call["word_timestamps"] is True and call["condition_on_previous_text"] is False

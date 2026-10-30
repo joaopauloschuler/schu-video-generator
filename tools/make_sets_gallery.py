@@ -2,7 +2,7 @@
 ``sets_indoors.png``): each set as a small thumbnail, two characters on its ``stand_left`` /
 ``stand_right`` marks, its name below.
 
-Not shipped with vidgen; a maintainer tool. It writes a project with one stage scene per set into
+Not shipped with schu-video-generator; a maintainer tool. It writes a project with one stage scene per set into
 ``--work`` (a scratch folder), renders its storyboard stills at preview size with ``vidgen
 storyboard --jobs 1`` (run it under the memory cap, CODING-AND-COMMUNICATION-GUIDE rule 7), and
 tiles each scene's first still into one 64-colour PNG. Run from the repository root::

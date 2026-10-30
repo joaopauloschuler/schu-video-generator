@@ -1,6 +1,6 @@
 # Cookbook: cell biology at university and research level
 
-Craft notes for lectures, science channels and researchers explaining their work with vidgen's
+Craft notes for lectures, science channels and researchers explaining their work with schu-video-generator's
 cell-biology scene types (DESIGN §95): what to choose, how much to show, how to keep it correct,
 and how to pace a script full of terms. The reference for every key is `docs/CONFIG.md`
 ([`cell`](CONFIG.md#cell), [`molecule`](CONFIG.md#molecule), [`pathway`](CONFIG.md#pathway),

@@ -6,7 +6,7 @@ background music like the built-in beds (§93.10).
 the project) names the file itself. A name that is both a built-in bed and a project piece is a
 problem (rename the piece, or use the path form). The piece is rendered by :mod:`vidgen.studio`
 when the video's audio is mixed and the render is kept in ``build/music`` under a key of the
-file's bytes, :data:`PIECE_RENDER_VERSION`, vidgen's version and the sample rate, so it is made
+file's bytes, :data:`PIECE_RENDER_VERSION`, schu-video-generator's version and the sample rate, so it is made
 once. A ``loop: true`` piece loops seamlessly (like a bed); a ``loop: false`` piece plays once,
 with its ending, and the cue's fades apply.
 """
@@ -241,7 +241,7 @@ def piece_warnings(config: VideoConfig, root: Path) -> list[str]:
 
 def piece_key(path: Path) -> str:
     """The cache key (SHA-256 hex) of a piece's render: the file's bytes,
-    :data:`PIECE_RENDER_VERSION`, vidgen's version and the sample rate."""
+    :data:`PIECE_RENDER_VERSION`, schu-video-generator's version and the sample rate."""
     from vidgen import __version__
 
     data = {

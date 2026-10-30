@@ -1,6 +1,6 @@
 """(Re)vendor icons from the ``lucide-static`` npm package into ``src/vidgen/data/icons``.
 
-Not shipped with vidgen; a maintainer tool. The icon list is ``tools/icon_set.json``::
+Not shipped with schu-video-generator; a maintainer tool. The icon list is ``tools/icon_set.json``::
 
     {"package": "lucide-static", "version": "1.52.0",
      "categories": {"tech": ["cpu", ...], "data": [...], ...},

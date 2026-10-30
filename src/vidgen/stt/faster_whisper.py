@@ -67,7 +67,7 @@ class FasterWhisperProvider:
     def _load(self) -> Any:
         if self._whisper is None:
             module = _module()
-            # its per-clip INFO lines would show between vidgen's progress lines wherever Manim
+            # its per-clip INFO lines would show between schu-video-generator's progress lines wherever Manim
             # has set up logging (vidgen lint --readback)
             logging.getLogger("faster_whisper").setLevel(logging.WARNING)
             try:

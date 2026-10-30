@@ -1,6 +1,6 @@
 """Bundled fonts and font roles (DESIGN.md §21).
 
-vidgen ships three SIL OFL font families as package data (``vidgen/data/fonts``, licences next
+schu-video-generator ships three SIL OFL font families as package data (``vidgen/data/fonts``, licences next
 to the files): Inter (sans), Source Serif 4 (serif) and JetBrains Mono NL (mono, without
 ligatures so code reads as typed). :func:`register_bundled_fonts` makes them known to Pango for
 this process, so no system install is needed; system fonts keep working, and a family that is

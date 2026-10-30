@@ -53,7 +53,7 @@ not plan for.
 **Problem.** `d`, `tmp`, `data2`, `do_it` force every reader to work out what the code holds.
 Worse is a name that was right before an edit and is wrong after it.
 
-**Rule.** A name states what the thing *is*, in vidgen's vocabulary:
+**Rule.** A name states what the thing *is*, in schu-video-generator's vocabulary:
 
 - **Domain words** are fixed: *project*, *scene*, *beat*, *variant*, *overlay*, *theme token*,
   *deliverable* (the MP4, SRT, chapter list and thumbnail in `output/`), *build* (cache in
@@ -276,7 +276,7 @@ model you already had.
 ## 14. Watch for colliding terms
 
 **Problem.** The same word means different things nearby, and the text never says so. Live
-collisions in vidgen:
+collisions in schu-video-generator:
 
 - **output** — the `output:` key (a base file name), the `output/` folder (`output_dir`), the
   `--output FILE` option of `export`, `slides` and `translate-template`, and "command output"

@@ -40,7 +40,7 @@ from vidgen.languages import language_rules, primary_language
 from vidgen.outline import Block, Code, Heading, Image, ListBlock, Math, Paragraph, Quote, Table, plain
 from vidgen.prose import compress, merge_short, narration_beats, sentence, split_long, split_sentences, words
 
-#: Words per second used for the estimate (vidgen's ``narration.words_per_second`` default).
+#: Words per second used for the estimate (schu-video-generator's ``narration.words_per_second`` default).
 WORDS_PER_SECOND = 2.6
 #: Seconds of silence after each beat (the init template's ``narration.pad``).
 PAD = 0.35

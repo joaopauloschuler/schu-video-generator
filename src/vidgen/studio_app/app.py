@@ -3,7 +3,7 @@ loading a score into a new session, checking score text, rendering a version (wh
 section) into the session's render cache. The HTTP layer (:mod:`vidgen.studio_app.server`)
 only translates requests to these calls and their results to JSON.
 
-The sound is always vidgen's own renderer (:func:`vidgen.studio.render_music_score`); the browser
+The sound is always schu-video-generator's own renderer (:func:`vidgen.studio.render_music_score`); the browser
 only plays the WAV files written here.
 """
 
@@ -184,7 +184,7 @@ def mute_tag(muted: Iterable[str]) -> str:
 
 def render_key(data: Any) -> str:
     """The render cache key of a score's data: the same notes (comments and layout aside), the
-    same renderer and vidgen version give the same key."""
+    same renderer and schu-video-generator version give the same key."""
     doc = {"score": data, "renderer": STUDIO_RENDER_VERSION, "vidgen": __version__}
     return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:20]
 

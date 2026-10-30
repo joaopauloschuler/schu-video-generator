@@ -42,12 +42,12 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   <a href="docs/gallery/code_morph.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/code_morph-16x9.png"><img src="docs/gallery/media/code_morph-16x9.gif" width="200" alt="Code morphing: a recursive function gains a cache decorator"></picture></a>
 </p>
 
-**Music and sound.** vidgen makes its own soundtrack; [listen to every bed and sound](docs/music/README.md)
+**Music and sound.** schu-video-generator makes its own soundtrack; [listen to every bed and sound](docs/music/README.md)
 (clips and spectrograms).
 
 - **17 synthesised music beds**: seamless loops from a calm pad to uplifting trance, mixed at
   −28 LUFS, the same music every time; `music: momentum` is all it takes. Three of them,
-  `tidewater`, `skyline` and `time_of_flight`, are written in vidgen's own score format.
+  `tidewater`, `skyline` and `time_of_flight`, are written in schu-video-generator's own score format.
 - **Music composed for your video** in 8 moods, played with real instruments (the GeneralUser GS
   SoundFont; optional `music` extra). It follows the video: a mood per scene, scene changes on bar
   lines, swells on reveals, a closing cadence.
@@ -80,7 +80,7 @@ grids or the YAML itself, listen under a narration sample, read the check, A/B a
 try four variations at a click, and export WAV / MP3 / YAML or save the piece into your project.
 Pin listening notes while it plays ("I want goosebumps at the turn") and **ask an agent**: an AI
 agent connected through `vidgen mcp` reads the notes and proposes a new version with one line per
-note, which you A/B and keep or discard. The sound is always vidgen's own renderer, the one your
+note, which you A/B and keep or discard. The sound is always schu-video-generator's own renderer, the one your
 videos use ([reference](docs/CONFIG.md#music-studio-vidgen-studio),
 [a person and an agent in the studio](docs/COOKBOOK-MUSIC.md#7-a-person-and-an-agent-in-the-studio)).
 
@@ -94,7 +94,7 @@ Everything is built around what an agent can and cannot do:
 - **Text in, video out.** A video is one `video.yaml` file: narration written as short *beats*
   and a *scene type* per scene. No timeline, no mouse; each beat's animation lasts exactly as long
   as its narration.
-- **The agent can't watch a video, so vidgen lets it check its work.** `vidgen storyboard`
+- **The agent can't watch a video, so schu-video-generator lets it check its work.** `vidgen storyboard`
   renders contact sheets of every beat as PNGs the agent can open, `vidgen lint` reports text cut
   off, too small or low-contrast and pacing problems as JSON, and `vidgen readback` checks how the
   narration was pronounced.
@@ -111,7 +111,7 @@ Point your agent at [AGENTS.md](AGENTS.md) (or connect it via MCP, see
 The project and pip package are called schu-video-generator;
 the command and the Python package are `vidgen` (`vidgen render`, `from vidgen.api import *`).
 
-Under the hood, vidgen voices the beats with ElevenLabs (or a TTS model on OpenRouter), animates every scene with
+Under the hood, schu-video-generator voices the beats with ElevenLabs (or a TTS model on OpenRouter), animates every scene with
 [Manim](https://www.manim.community/), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slide deck).
 
@@ -134,7 +134,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
-    braces, angle arcs and dimension lines), `number_line` (points, intervals, jumps such as +3), `code`, `code_morph` (one version of the code morphing into the next: vidgen diffs
+    braces, angle arcs and dimension lines), `number_line` (points, intervals, jumps such as +3), `code`, `code_morph` (one version of the code morphing into the next: schu-video-generator diffs
     them), `code_walkthrough` (a long file scrolling to the lines each beat explains),
     `terminal` (commands typed at a prompt and the output you write appearing, beside the code);
   - cartoons: `stage` (the video's `characters:` on a set: a picture, a generated picture or a
@@ -148,7 +148,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   with a GIF, its YAML, params and targets (`vidgen gallery` makes it, also for a project's own
   types).
 - **Made for AI authors**: [AGENTS.md](AGENTS.md), also built in as `vidgen guide`, tells an
-  agent how to make a good video with vidgen (see [For AI agents](#for-ai-agents)); `vidgen mcp`
+  agent how to make a good video with schu-video-generator (see [For AI agents](#for-ai-agents)); `vidgen mcp`
   gives an agent's client every command as an MCP tool, storyboards returned as images
   ([Use from an AI agent via MCP](#use-from-an-ai-agent-via-mcp)).
 - **From an outline to a draft**: `vidgen plan outline.md` turns a Markdown outline or a
@@ -284,7 +284,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
   `standard`, `large`; vertical video gets `large` automatically); `vidgen list-themes
   --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
-- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with vidgen (no install);
+- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with schu-video-generator (no install);
   presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
 - **Icons**: 200 built-in line icons (Lucide, ISC) in eight categories
   ([catalogue](docs/ICONS.md)), searchable by concept, recoloured by the
@@ -437,15 +437,15 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   other target), so the cut between them does not show
   ([reference](docs/CONFIG.md#continuity-carrying-objects-into-the-next-scene-carry)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
-  helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
+  helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching schu-video-generator.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
   previews; `render`, `storyboard` and `lint` re-render only the scenes whose inputs changed.
 - Windows, macOS and Linux; Python 3.10–3.13.
 
 ## For AI agents
 
-vidgen is meant to be driven by AI agents. An agent making a video should read
-**[AGENTS.md](AGENTS.md)** first — or run `vidgen guide` (the same guide, shipped with vidgen;
+schu-video-generator is meant to be driven by AI agents. An agent making a video should read
+**[AGENTS.md](AGENTS.md)** first — or run `vidgen guide` (the same guide, shipped with schu-video-generator;
 `vidgen guide --list` for its topics, `vidgen guide scenes` for one, `--json` for programs). It
 covers the working loop (write → `validate --json` → `storyboard`, and look at the PNGs → `lint
 --json` → fix → `tts --dry-run` → `tts` → `render`), pacing and on-screen text rules, a scene-type
@@ -503,7 +503,7 @@ package, so do not install both in the same environment.
 
 **ffmpeg**: version 4.4 or newer (tested with 4.4, 5.1, 6.1, 7.0, 7.1 and 8.1). Older ones lack
 filters the join uses (`xfade` for crossfades, pushes and wipes; `amix=normalize` for sound
-effects); vidgen names the version in its error when an older ffmpeg fails. (Copies of
+effects); schu-video-generator names the version in its error when an older ffmpeg fails. (Copies of
 schu-video-generator from before the fix failed crossfades, pushes and wipes on ffmpeg 7.0 /
 7.1, e.g. Debian 13's, with "frame rate 1/0 is invalid": update rather than install another
 ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
@@ -523,11 +523,11 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
    vidgen --version
    ```
    This installs Manim, pydantic, PyYAML and PyAV (pre-built wheels; no compiler needed).
-4. **Fonts**: nothing to install. vidgen bundles Inter (sans), Source Serif 4 (serif) and
+4. **Fonts**: nothing to install. schu-video-generator bundles Inter (sans), Source Serif 4 (serif) and
    JetBrains Mono NL (code), all SIL Open Font License (see `THIRD_PARTY_NOTICES.md`). Any
    installed font works too, e.g. `theme: {font: Segoe UI}`.
 5. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
-   a new terminal. vidgen reads the key only from this variable and never writes it anywhere.
+   a new terminal. schu-video-generator reads the key only from this variable and never writes it anywhere.
    With `voice: {provider: openrouter, model: ..., voice: ...}` narration goes through OpenRouter
    instead and needs the **OpenRouter API key** of step 9 (`OPENROUTER_API_KEY`), not this one.
 6. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
@@ -627,7 +627,7 @@ cuda}` uses it. The first `vidgen tts` downloads the model from Hugging Face (`k
 327 MB, plus ~0.5 MB per voice) into `~/.cache/huggingface/hub` (`HF_HOME` moves it) and, for
 English, spaCy's `en_core_web_sm` (13 MB, with pip); later runs need no network. espeak-ng comes
 bundled in the `espeakng-loader` wheel; `sudo apt install espeak-ng` does no harm and is the
-fallback named by vidgen's error if the bundled library cannot be loaded. Japanese / Chinese:
+fallback named by schu-video-generator's error if the bundled library cannot be loaded. Japanese / Chinese:
 `pip install "misaki[ja]"` / `"misaki[zh]"`.
 
 ### macOS
@@ -673,10 +673,10 @@ narration.
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
-| `vidgen list-pronunciation [PROJECT] [--json]` | vidgen's built-in pronunciation entries per TTS engine and language (Kokoro American English: `epoch`, `README`, `JSON`, ...); in a project, the lists its voices use, what the project replaces or removes and the beats each entry changes |
+| `vidgen list-pronunciation [PROJECT] [--json]` | schu-video-generator's built-in pronunciation entries per TTS engine and language (Kokoro American English: `epoch`, `README`, `JSON`, ...); in a project, the lists its voices use, what the project replaces or removes and the beats each entry changes |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood), the project's pieces (score files in `assets/music`: key, tempo, length, title, description) and its `assets/music` audio files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
 | `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to (needs the `music` extra) |
-| `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with vidgen's own instruments and writes a WAV or MP3; also takes a project piece's or a built-in bed's name ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
+| `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with schu-video-generator's own instruments and writes a WAV or MP3; also takes a project piece's or a built-in bed's name ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
 | `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
@@ -708,7 +708,7 @@ narration.
 to the current directory, puts them elsewhere; `export` and `slides` read them from there with
 the same flag); `build/` and `exports/` do not move.
 `render` renders only the scenes whose render is missing or out of date (their config, audio,
-assets, extensions or vidgen changed: the same check as `storyboard`), so a render after a
+assets, extensions or schu-video-generator changed: the same check as `storyboard`), so a render after a
 storyboard of the same format just joins. Options: `--force` renders every scene again;
 `--preview` uses the `preview` resolution; `--draft` makes a fast draft (about 8 fps, 240p, no
 idle motion, wind, shadows, particles or light grade, every timing and position kept;

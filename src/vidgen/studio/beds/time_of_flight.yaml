@@ -1,6 +1,6 @@
-# Time of Flight: a score-file template of vidgen's built-in bed `time_of_flight` (vidgen music template time_of_flight).
+# Time of Flight: a score-file template of schu-video-generator's built-in bed `time_of_flight` (vidgen music template time_of_flight).
 # This file IS the bed, not a re-creation: `music: time_of_flight` plays this score rendered by
-# vidgen, sample for sample. A tech-documentary loop in B minor at 108 BPM: a dark pad, an
+# schu-video-generator, sample for sample. A tech-documentary loop in B minor at 108 BPM: a dark pad, an
 # FM-pluck arpeggio behind a closed filter and satellite "pings" in the intro; kick, off-beat bass
 # and hats in the build while the pad and the arpeggio open, a riser into the lift; in the lift
 # the pad wide open, a clap on 2 and 4 and a soft lead; the settle closes back to the top.

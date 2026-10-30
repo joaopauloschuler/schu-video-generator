@@ -1,4 +1,4 @@
-"""Visual helpers for custom vidgen scenes: a dark-tech palette, glow halos, glowing dots,
+"""Visual helpers for custom schu-video-generator scenes: a dark-tech palette, glow halos, glowing dots,
 neurons, depth planes and stacks, drifting dust, pills, a header heading and run().
 
 Copy into <project>/extensions/ and import with ``from .fx import ...``."""

@@ -1,4 +1,4 @@
-"""The tiles of a platform level drawn once into pictures (DESIGN.md §86), in vidgen's flat
+"""The tiles of a platform level drawn once into pictures (DESIGN.md §86), in schu-video-generator's flat
 cartoon look: filled shapes with the characters' outline ink. No manim.
 
 :func:`level_shapes` lists the shapes in world (tile) units, back to front; :func:`draw_columns`

@@ -1141,7 +1141,7 @@ class NarratedScene(MovingCameraScene):
     def frame_width(self) -> float:
         """Width of the visible frame in Manim units (``config.frame_width``).
 
-        vidgen sets the shorter side to 8 units with square pixels: 16:9 gives 14.22 x 8,
+        schu-video-generator sets the shorter side to 8 units with square pixels: 16:9 gives 14.22 x 8,
         9:16 (vertical variants) gives 8 x 14.22. Lay out relative to these values rather than
         assuming Manim's landscape defaults.
         """

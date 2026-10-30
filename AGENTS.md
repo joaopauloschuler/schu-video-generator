@@ -1,8 +1,8 @@
-# vidgen author guide: making great videos with vidgen
+# schu-video-generator author guide: making great videos with schu-video-generator
 
-> **Who this is for:** AI agents (and people) who **use** vidgen to make videos and slide decks.
-> If you are working **on vidgen itself** (its Python code, tests, docs), read `CLAUDE.md` in the
-> schu-video-generator repository instead. This guide ships with vidgen: `vidgen guide` prints all
+> **Who this is for:** AI agents (and people) who **use** schu-video-generator to make videos and slide decks.
+> If you are working **on schu-video-generator itself** (its Python code, tests, docs), read `CLAUDE.md` in the
+> schu-video-generator repository instead. This guide ships with schu-video-generator: `vidgen guide` prints all
 > of it, `vidgen guide TOPIC` one part, `vidgen guide --list` the topics.
 > The project and pip package are called schu-video-generator;
 > the command and the Python package are `vidgen`.
@@ -34,7 +34,7 @@ thumbnail, GIFs, translations, rights to your content), `troubleshooting` (valid
 <!-- topic: start (also: rules, intro, quickstart) -->
 ## Start here: the rules at a glance
 
-You cannot watch the video. vidgen gives you eyes (`vidgen storyboard`: contact sheets to open
+You cannot watch the video. schu-video-generator gives you eyes (`vidgen storyboard`: contact sheets to open
 as images) and a critic (`vidgen lint`: layout and timing problems as JSON). Use both after
 every change, and follow these rules:
 
@@ -204,7 +204,7 @@ question the viewer wants answered, or the end result ("This chart took 4 second
 `stat`, `text_card` and a short `title` work; a silent intro card or a logo does not.
 
 **Beats.** One beat = one thought the viewer hears while one thing happens on screen.
-- 1–2 sentences, 6–15 words. vidgen times beats from their word count until the audio exists
+- 1–2 sentences, 6–15 words. schu-video-generator times beats from their word count until the audio exists
   (`narration.words_per_second`, 2.6), and lint's `narration_speed` expects 1.8–3.5 words/s
   (English; other languages have their own range).
 - A beat over ~20 words is two beats: split it, and give each half its own reveal.
@@ -807,7 +807,7 @@ A `cross` scene works a genetic cross out exactly (DESIGN §96: the cross engine
       actions: [{count: phenotypes}, {ratio: phenotypes, at: "@nine"}]
 ```
 
-A `pedigree` scene draws a family chart in standard human pedigree nomenclature (NSGC: square male, circle female, diamond sex unknown; affected filled, a carrier a dot — `carrier_style: half` for the half-shaded heterozygote —, deceased struck, the proband's arrow with P, double line for consanguinity, MZ / DZ twins, adoption brackets, a miscarriage triangle, a proposed child dashed with ?) laid out by generation (Roman numerals, individuals numbered left to right, sibships in birth order, partners from outside beside the relative), and works its genetics out exactly (DESIGN §96.8): which modes of inheritance fit (AD, AR, XD, XR, Y-linked, mitochondrial; an excluded one with its reason, e.g. *father-to-son: a son's X comes from his mother*), the genotypes the chart forces (obligate carriers), carrier probabilities by Bayes' rule on the whole chart (2/3 for an unaffected sibling under AR), and the risk for a proposed child with its factors (2/3 × 1/25 × 1/4 = 1/150). Write each person as a line — `"II-3: female affected deceased of I-1 + I-2"`, flags `carrier`, `proband`, `consultand`, `proposed`, `miscarriage`, `adopted in`, `twin II-4 MZ`, `spouse II-5`, `age 45 y` last — or as a mapping (`{id, sex, affected, parents: [I-1, I-2], twin: {with, kind}}`). Use NSGC ids (`II-3`, numbered left to right as drawn: a partner from outside stands beside the relative) or any names (vidgen numbers the chart). The analysis assumes a rare allele (people marrying in do not carry it: `rare: false` or `carrier_frequency: 1/25` for a common one) and full penetrance (`penetrance: 0.8` lets a dominant trait skip a generation). `mode` sets the mode for genotypes and risk (default: the only one that fits; `preset: hemophilia_a` gives X-linked recessive with H / h). The actions: `analyse: modes` (one by one, the people a reason names ringed; `mode:XR` for one), `deduce: genotypes` (`carriers`, `generation:II`, `person:II-3`), `risk: risk`; `reveal: "generation:II"` or `"person:II-3"` brings people in on a word, `highlight` marks them. Checked with the reason: a child with two fathers, a cycle, twins who are not siblings, numbers that do not read left to right, a male carrier under X-linked inheritance, genotypes or risk when several modes fit and none is stated.
+A `pedigree` scene draws a family chart in standard human pedigree nomenclature (NSGC: square male, circle female, diamond sex unknown; affected filled, a carrier a dot — `carrier_style: half` for the half-shaded heterozygote —, deceased struck, the proband's arrow with P, double line for consanguinity, MZ / DZ twins, adoption brackets, a miscarriage triangle, a proposed child dashed with ?) laid out by generation (Roman numerals, individuals numbered left to right, sibships in birth order, partners from outside beside the relative), and works its genetics out exactly (DESIGN §96.8): which modes of inheritance fit (AD, AR, XD, XR, Y-linked, mitochondrial; an excluded one with its reason, e.g. *father-to-son: a son's X comes from his mother*), the genotypes the chart forces (obligate carriers), carrier probabilities by Bayes' rule on the whole chart (2/3 for an unaffected sibling under AR), and the risk for a proposed child with its factors (2/3 × 1/25 × 1/4 = 1/150). Write each person as a line — `"II-3: female affected deceased of I-1 + I-2"`, flags `carrier`, `proband`, `consultand`, `proposed`, `miscarriage`, `adopted in`, `twin II-4 MZ`, `spouse II-5`, `age 45 y` last — or as a mapping (`{id, sex, affected, parents: [I-1, I-2], twin: {with, kind}}`). Use NSGC ids (`II-3`, numbered left to right as drawn: a partner from outside stands beside the relative) or any names (schu-video-generator numbers the chart). The analysis assumes a rare allele (people marrying in do not carry it: `rare: false` or `carrier_frequency: 1/25` for a common one) and full penetrance (`penetrance: 0.8` lets a dominant trait skip a generation). `mode` sets the mode for genotypes and risk (default: the only one that fits; `preset: hemophilia_a` gives X-linked recessive with H / h). The actions: `analyse: modes` (one by one, the people a reason names ringed; `mode:XR` for one), `deduce: genotypes` (`carriers`, `generation:II`, `person:II-3`), `risk: risk`; `reveal: "generation:II"` or `"person:II-3"` brings people in on a word, `highlight` marks them. Checked with the reason: a child with two fathers, a cycle, twins who are not siblings, numbers that do not read left to right, a male carrier under X-linked inheritance, genotypes or risk when several modes fit and none is stated.
 
 ```yaml
 # genetics
@@ -861,7 +861,7 @@ A `karyotype` scene draws a human karyotype from its ISCN notation (DESIGN §96.
     - text: "Forty-seven, X Y, plus twenty-one: Down syndrome."
 ```
 
-A `mutation` scene works a sequence variant out on a real coding sequence with the genetic code (DESIGN §96.13): the reference codons with their amino acids (the initiator Met is residue 1) and the variant row made from them — a base swaps, or bases leave or come in and the rest slide through the fixed codon frame, so a frameshift regroups every codon after it and reaches its premature stop. Give a reference window (`gene: HBB`, `CFTR`, `GJB2`: real coding sequence with its exons and transcript), your own `sequence:` (with `first:`, `exons:`, `length:` when you want splice sites and nonsense-mediated decay), or a gene like a `molecule` scene's (`gene: {protein: MVHL…, introns: 1}`). The `variant:` is HGVS on the coding DNA (`c.20A>T`, `c.1521_1523delCTT`, `c.35delG`, `c.35dup`, `c.76_77insT`, `c.76_77delinsTT`, `c.92+1G>A`); vidgen computes the protein change (`p.(Glu7Val)`, `p.(Phe508del)`, `p.(Arg553*)`, `p.(Gly12Valfs*2)`, `p.?` for a splice site with the exon skipped or the intron retained), the class and the notes (side chains, the frame, nonsense-mediated decay), and checks a `p:` you write against the sequence. Use `legacy:` for the old name (ΔF508, Glu6Val: HGVS counts the initiator Met, so HbS is `c.20A>T p.(Glu7Val)`). A list of variants plays one after another; `mutate: variant` puts one on a word. Checked with the reason: a change that is not HGVS, a reference base that is not there, a description that is not the canonical one (the 3′ rule), a stated `p.` that does not follow, `p.R553X` and `ΔF508`.
+A `mutation` scene works a sequence variant out on a real coding sequence with the genetic code (DESIGN §96.13): the reference codons with their amino acids (the initiator Met is residue 1) and the variant row made from them — a base swaps, or bases leave or come in and the rest slide through the fixed codon frame, so a frameshift regroups every codon after it and reaches its premature stop. Give a reference window (`gene: HBB`, `CFTR`, `GJB2`: real coding sequence with its exons and transcript), your own `sequence:` (with `first:`, `exons:`, `length:` when you want splice sites and nonsense-mediated decay), or a gene like a `molecule` scene's (`gene: {protein: MVHL…, introns: 1}`). The `variant:` is HGVS on the coding DNA (`c.20A>T`, `c.1521_1523delCTT`, `c.35delG`, `c.35dup`, `c.76_77insT`, `c.76_77delinsTT`, `c.92+1G>A`); schu-video-generator computes the protein change (`p.(Glu7Val)`, `p.(Phe508del)`, `p.(Arg553*)`, `p.(Gly12Valfs*2)`, `p.?` for a splice site with the exon skipped or the intron retained), the class and the notes (side chains, the frame, nonsense-mediated decay), and checks a `p:` you write against the sequence. Use `legacy:` for the old name (ΔF508, Glu6Val: HGVS counts the initiator Met, so HbS is `c.20A>T p.(Glu7Val)`). A list of variants plays one after another; `mutate: variant` puts one on a word. Checked with the reason: a change that is not HGVS, a reference base that is not there, a description that is not the canonical one (the 3′ rule), a stated `p.` that does not follow, `p.R553X` and `ΔF508`.
 
 ```yaml
 # genetics
@@ -878,7 +878,7 @@ A `mutation` scene works a sequence variant out on a real coding sequence with t
     - text: "Glutamic acid becomes valine: sickle-cell haemoglobin."
 ```
 
-A `crispr` scene shows Cas9 editing a target (DESIGN §96.14): the DNA with every base, the sgRNA's 20-nt spacer (21–23 for SaCas9) pairing with the target strand, the PAM (`NGG`; `NNGRRT` for SaCas9) right after the protospacer's 3′ end on the other strand, the R-loop, the blunt double-strand break 3 bp upstream of the PAM, and the repair: `nhej` (a small indel — `indel: +1` is the commonest, and an indel that is not a multiple of 3 is a frameshift knockout) or `hdr` (a donor carrying `edit:`). Leave `spacer` out and vidgen picks a guide from the PAMs it finds (`guide: 2` for the n-th); with `coding_first:` (the `c.` number of the target's first base) the outcome is written in HGVS with its protein change. `scan`, `cleave` and `repair` put the steps on words. Checked with the reason: a spacer that is not in the target or has no PAM after it (with the guides that would work), the wrong length for the enzyme, a spacer written with its PAM, a target without any PAM.
+A `crispr` scene shows Cas9 editing a target (DESIGN §96.14): the DNA with every base, the sgRNA's 20-nt spacer (21–23 for SaCas9) pairing with the target strand, the PAM (`NGG`; `NNGRRT` for SaCas9) right after the protospacer's 3′ end on the other strand, the R-loop, the blunt double-strand break 3 bp upstream of the PAM, and the repair: `nhej` (a small indel — `indel: +1` is the commonest, and an indel that is not a multiple of 3 is a frameshift knockout) or `hdr` (a donor carrying `edit:`). Leave `spacer` out and schu-video-generator picks a guide from the PAMs it finds (`guide: 2` for the n-th); with `coding_first:` (the `c.` number of the target's first base) the outcome is written in HGVS with its protein change. `scan`, `cleave` and `repair` put the steps on words. Checked with the reason: a spacer that is not in the target or has no PAM after it (with the guides that would work), the wrong length for the enzyme, a spacer written with its PAM, a target without any PAM.
 
 ```yaml
 # genetics
@@ -1812,7 +1812,7 @@ colour-blind-safe palette (except `dark_tech`'s blue and purple for deuteranopes
 preset if that matters).
 
 **One colour per concept.** Give the few concepts an explainer keeps coming back to a colour of
-their own, once, at the top of `video.yaml`; vidgen then draws those words in that colour
+their own, once, at the top of `video.yaml`; schu-video-generator then draws those words in that colour
 wherever they are written (titles, bullets, cards, chart and diagram labels, captions, a
 callout naming one, a `line_chart` series named after one) and their TeX parts in equations:
 
@@ -2052,7 +2052,7 @@ the chart. Keep it small: 2–3 characters, one set per scene, 30–90 s.
 (`look: {svg: ...}`, `docs/CONFIG.md` "Characters"). Never imitate a known character, mascot,
 brand figure or logo: not its silhouette and colours, its name or catchphrase, an SVG traced
 from it, nor "in the style of" a studio in a `generate:` prompt or `cartoon_style`. If someone
-asks for one, say vidgen makes original characters and offer one with the same role.
+asks for one, say schu-video-generator makes original characters and offer one with the same role.
 - Tell them apart at a glance: a different `body` (`round`, `tall`, `pear`, `triangle`...),
   hair (`ponytail`, `braids`, `afro`, or bald with `facial_hair: beard`), one signature item
   each (`hat`, `cap`, `bow`, `scarf`, `glasses`, `backpack`...), an `outfit` (`dress`,
@@ -2795,7 +2795,7 @@ a carrier test, 16:9 and 9:16).
 A story across levels (family → gene → variant → test → population) uses one scene per level and
 says when it moves ("Back in the family", "At the level of the sequence").
 
-**Notation** (vidgen checks it): pedigrees in NSGC symbols with generations in Roman numerals and
+**Notation** (schu-video-generator checks it): pedigrees in NSGC symbols with generations in Roman numerals and
 people numbered left to right (`II-3`); karyotypes in ISCN (`47,XY,+21`, `46,XX,t(9;22)(q34;q11.2)`;
 sex chromosomes first, changes in order); variants in HGVS on the coding DNA (`c.1521_1523del`,
 `p.(Phe508del)` — HGVS counts the initiator Met, so HbS is `p.(Glu7Val)`; say "legacy Glu6Val" or
@@ -3163,7 +3163,7 @@ before a real run. Then listen to one beat (`vidgen tts --beat ID`, `vidgen read
 voicing the whole video. One provider per video: named `voices:` change `voice` / `instructions`
 / `speed`, not `provider`; try another provider in a variant (it gets its own `audio/<variant>/`).
 If the account requires Zero Data Retention, pick a model with a ZDR endpoint (most TTS models
-have one; vidgen's error lists them when a model is refused). A real run ends with what
+have one; schu-video-generator's error lists them when a model is refused). A real run ends with what
 OpenRouter charged, or `cost not reported by openrouter yet (...)` when its cost records lag:
 the audio is stored all the same.
 
@@ -3242,7 +3242,7 @@ how it is **said** with `pronunciation:` (applied to the TTS text only). Run
 what the voice still gets wrong, and the words it says unclearly (`unclear`: probability below
 0.5 or a pause over 0.5 s inside a sentence; `doubtful`: below 0.75). For an unclear name or
 term, respell it in `pronunciation:`; for another word, try another voice, speed or `emotion:`.
-vidgen already respells some words for some voices (built-in lists, e.g. Kokoro's American
+schu-video-generator already respells some words for some voices (built-in lists, e.g. Kokoro's American
 voices say `epoch` as `E pock`, `README` as `readme`, `JSON` as `Jason`): `vidgen list-pronunciation`
 shows them; `vidgen validate` prints the beats they change (`pronounce: ...`). Your entry for the
 same term wins, `term: null` drops one, `pronunciation_defaults: false` turns them off.
@@ -3339,7 +3339,7 @@ win). `vidgen list-music` describes each mood and instrument in words.
   (the next scene returns to the cue's mood); add `volume: -3` under rain or a busy scene. Use it
   where the story turns (calm → tense at the storm, sleepy at night), not on every scene.
 - **Pauses before punchlines.** `music_pause: true` on a beat stops the music just before the
-  line, until the next bar line after it; vidgen does this by itself before a `card` scene and
+  line, until the next bar line after it; schu-video-generator does this by itself before a `card` scene and
   before a short last line (≤ 8 words), whose closing chord then lands as the line ends.
   `music_pause: false` turns either off.
 - **Stings** (`sting: reveal | comic | sad`) are played by the music's own instruments, in its key.
@@ -3651,7 +3651,7 @@ scenes:
 
 - **Generated pictures** (`image` `generate:`): `vidgen imagegen --dry-run` shows prompts and
   cost; placeholders render until you run `vidgen imagegen`. Describe a scene, never text,
-  charts or logos (vidgen draws those better), and set one `imagegen: {style: ...}` for the
+  charts or logos (schu-video-generator draws those better), and set one `imagegen: {style: ...}` for the
   whole video.
 - **Cartoon backgrounds** (`stage` `generate:`): see "The set" in `vidgen guide cartoons`.
 - **Choosing an image provider**: `openai` (the default; `OPENAI_API_KEY`, gpt-image-1) is one
@@ -3663,14 +3663,14 @@ scenes:
   `problem:` / `note:` it prints before a real run. Keep one provider and model per video so the
   pictures match; changing them makes every picture "missing" (new pictures, new cost). If the
   account requires Zero Data Retention, choose a model with a ZDR endpoint (e.g.
-  `bytedance-seed/seedream-5-0-flash`); vidgen's error lists them when a model is refused.
+  `bytedance-seed/seedream-5-0-flash`); schu-video-generator's error lists them when a model is refused.
 - **Vector (SVG) pictures** (`generate: {prompt, format: svg}` with `imagegen.svg_model`, e.g.
   `recraft/recraft-v4.1-vector`, ~$0.08; or an `.svg` file as `path`): drawn as shapes, so
   `draw: true` traces then fills them and `recolor: theme` paints them in the theme's colours.
   Worth it for flat illustrations, icons and diagram-like art (few flat colours; ask for
   "flat illustration, simple shapes, few colours"); not for photos or soft lighting (thousands
   of shapes, capped and thinned: worse than a PNG). Text in an SVG is removed — keep words in
-  vidgen's captions. No SVG model has a ZDR endpoint (2026-10-08).
+  schu-video-generator's captions. No SVG model has a ZDR endpoint (2026-10-08).
 
 ### Your content and third-party services
 

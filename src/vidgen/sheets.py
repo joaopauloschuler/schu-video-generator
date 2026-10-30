@@ -29,7 +29,7 @@ from vidgen.fonts import FONTS_DIR
 
 Font = ImageFont.FreeTypeFont | ImageFont.ImageFont
 
-#: Font files tried in order: vidgen's bundled Inter first, then names Pillow finds in the system
+#: Font files tried in order: schu-video-generator's bundled Inter first, then names Pillow finds in the system
 #: font folders on Windows/macOS/Linux.
 REGULAR_FONTS: tuple[str, ...] = (
     str(FONTS_DIR / "Inter" / "Inter-Regular.ttf"), "Inter-Regular.otf", "Inter-Regular.ttf", "DejaVuSans.ttf", "arial.ttf", "Arial.ttf",

@@ -1,9 +1,9 @@
-# Video cookbook: craft notes for vidgen videos
+# Video cookbook: craft notes for schu-video-generator videos
 
-Practical lessons from making long-form videos and vertical shorts with vidgen: a ~9-minute
+Practical lessons from making long-form videos and vertical shorts with schu-video-generator: a ~9-minute
 paper explainer (narrated with ElevenLabs), a ~3-minute software showcase (Kokoro), and a series
 of 9:16 shorts cut from them. The author guide (`AGENTS.md`, also printed by `vidgen guide`) and
-the config reference (`docs/CONFIG.md`) say what vidgen *can* do. This cookbook is about what made the
+the config reference (`docs/CONFIG.md`) say what schu-video-generator *can* do. This cookbook is about what made the
 videos *work*: hooks, pacing, sound, credits, labels, voice, and the QA loop. For a YouTube Short
 that shows source code, see [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md);
 for writing your own music as score files (room for the voice, builds and lifts, loops, genre
@@ -35,7 +35,7 @@ Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 | [`whisper_check.py`](../examples/cookbook/whisper_check.py) | stand-alone Whisper transcription, to check pronunciation |
 
 To use them, copy the helpers and scenes you need into `<project>/extensions/`. The files import
-each other relatively (`from .fx import ...`), which works because vidgen imports the
+each other relatively (`from .fx import ...`), which works because schu-video-generator imports the
 `extensions/` folder as one package. See the [examples README](../examples/cookbook/README.md).
 
 ---
@@ -350,7 +350,7 @@ Use -10 and below for repeated sounds (ticks, typing).
   - **GitHub repositories:** the repository licence covers its docs and images. Credit the repo.
 - To extract figures from a PDF you may reuse: `pdfimages -png paper.pdf fig` (embedded
   images) or `pdftoppm -r 300 -png paper.pdf page` (whole pages to crop).
-- **Sounds and music:** vidgen's built-in SFX and music beds are synthesized by vidgen, so they
+- **Sounds and music:** schu-video-generator's built-in SFX and music beds are synthesized by schu-video-generator, so they
   need no credit. Any external audio file needs its licence checked and a credits line.
 - **Narration voice:** name it in the credits when it's a local model (e.g. "Narration:
   Kokoro-82M (af_heart)").
@@ -613,12 +613,12 @@ Short-form craft:
 
 ## 16. Known issues and version notes
 
-- **`vidgen readback` and PyAV 19:** older vidgen releases let faster-whisper decode the audio,
+- **`vidgen readback` and PyAV 19:** older schu-video-generator releases let faster-whisper decode the audio,
   which fails on PyAV 19 (`TypeError: open() got an unexpected keyword argument
-  'metadata_errors'`). Fixed in current vidgen (it decodes the audio itself);
+  'metadata_errors'`). Fixed in current schu-video-generator (it decodes the audio itself);
   [`whisper_check.py`](../examples/cookbook/whisper_check.py) remains an optional standalone check.
-- **Version notes:** older vidgen releases had problems with transitions on ffmpeg 7.0/7.1 and
-  with Manim 0.22; both are fixed in current vidgen. Keep vidgen up to date.
+- **Version notes:** older schu-video-generator releases had problems with transitions on ffmpeg 7.0/7.1 and
+  with Manim 0.22; both are fixed in current schu-video-generator. Keep schu-video-generator up to date.
 - **The render cache:** a scene's render is reused while its inputs are unchanged. Editing *any*
   `.py` file in `extensions/` re-renders every scene, so batch extension edits; a full re-render
   of a 9-minute video takes a while.

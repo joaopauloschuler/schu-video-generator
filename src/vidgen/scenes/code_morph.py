@@ -1,6 +1,6 @@
 """``code_morph``: a listing that changes from one version of the code to the next. Lines and
 tokens both versions share glide to their new place, new lines grow in, removed lines fade out;
-vidgen finds what changed (``difflib``)."""
+schu-video-generator finds what changed (``difflib``)."""
 
 import difflib
 import re

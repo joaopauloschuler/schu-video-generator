@@ -1,4 +1,4 @@
-# Example project extension. vidgen imports every *.py file in extensions/ (this file ends in
+# Example project extension. schu-video-generator imports every *.py file in extensions/ (this file ends in
 # .txt, so it is NOT imported). Rename it to example.py to use it, then reference the scene
 # from video.yaml with `type: big_number`. See docs/EXTENDING.md.
 #

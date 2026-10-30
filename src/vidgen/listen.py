@@ -1,11 +1,11 @@
 """The Listen page (DESIGN.md §92): ``docs/music/README.md``, written by ``vidgen music page``.
 
-Every clip on it is made by vidgen itself: a 15 s MP3 and a spectrogram of each built-in music bed
+Every clip on it is made by schu-video-generator itself: a 15 s MP3 and a spectrogram of each built-in music bed
 (:data:`vidgen.music.BUILTIN_BEDS`), the pieces made with the score format that became beds
 (:data:`SCORE_PIECES`, Steps 189 and 192: how they were made, linking the bed's clip), rows of the
 built-in sound effects
 (:data:`vidgen.sfx.BUILTIN_SOUNDS`, every one of them) and of the ambience beds, and composed music
-in two moods when the ``music`` extra and the SoundFont are there. Deterministic: the same vidgen,
+in two moods when the ``music`` extra and the SoundFont are there. Deterministic: the same schu-video-generator,
 ffmpeg (libmp3lame), Pillow and symusic give the same files, so regenerating changes nothing.
 """
 

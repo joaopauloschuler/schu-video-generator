@@ -1126,7 +1126,7 @@ Anything not exported from `vidgen.api` is internal and may change.
   Standard library only (urllib).
 - **API key location**: read only from the environment variable `ELEVENLABS_API_KEY`
   (Windows: `setx ELEVENLABS_API_KEY your_key` once, then open a new terminal; Linux/macOS:
-  `export ELEVENLABS_API_KEY=...`). vidgen never stores the key: it is not a config field, and it
+  `export ELEVENLABS_API_KEY=...`). schu-video-generator never stores the key: it is not a config field, and it
   is never written to video.yaml, audio/, build/, logs, error messages, hook contexts or git.
   It is sent only as the `xi-api-key` header to api.elevenlabs.io. Only `vidgen tts` (without
   `--dry-run`) needs it; validate/render/dry-run work without it.
@@ -1252,7 +1252,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
 - **Dependencies**: `manim>=0.19` (the `code` scene uses the 0.19 `Code` API). Tested with
   Manim 0.19.1 / PyAV 13 on Python 3.10 and Manim 0.21 / PyAV 19 on Python 3.13; Manim 0.22
   (Step 64) also passes (its `SceneFileWriter.write_frame` takes the count as keyword-only
-  `repeat` instead of `num_frames`; `renderer.add_frame(frame, num_frames)`, which vidgen
+  `repeat` instead of `num_frames`; `renderer.add_frame(frame, num_frames)`, which schu-video-generator
   wraps, is unchanged).
 - **Config**: `format`/`preview` `width` and `height` must be even (Manim's H.264 writer
   crashed with a segfault on odd sizes). Config files may start with a UTF-8 BOM (Windows
@@ -1436,7 +1436,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
 - **Fingerprint** (`vidgen/render/fingerprint.py`, `scene_fingerprint(project, scene_id)`): a
   SHA-256 over the scene's config entry, the config minus `scenes`/`variants`/`lint` (Step 13; the entry without `lint_ignore` and, Step 39, `chapter`) (with the variant
   applied), the beats' MP3 size+mtime, the contents of the `.py` files of the extension folders,
-  size+mtime of the files under `<root>/assets`, the vidgen version and a digest of vidgen's own
+  size+mtime of the files under `<root>/assets`, the schu-video-generator version and a digest of vidgen's own
   source except `NOT_RENDER_INPUTS` (CLI, JSON, schema, sheets, storyboard, pipeline, ffmpeg,
   subtitles, tts: modules that cannot change pixels or timing; new modules count by default).
   The worker computes it before rendering and stores it as `render.fingerprint` in the scene's
@@ -2914,7 +2914,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   makes Manim treat it as moving (redrawn every frame; waits are not frozen), so it plays through
   `play` and `wait` alike. `Mobject.copy` (deepcopy) shares the playback (`_Playback.__deepcopy__`
   returns itself), so the copies `FadeIn` / `Transform` make show the same moving picture.
-- **Modulation.** Manim's animations and vidgen's `dim` / `highlight` actions change an image's
+- **Modulation.** Manim's animations and schu-video-generator's `dim` / `highlight` actions change an image's
   `pixel_array`. For a clip that array is a 1 x 2 *modulation* — a black and a white RGBA pixel —
   and every frame is mapped through it affinely (`out = black + frame * (white - black) / 255`,
   all four channels). Interpolations (`FadeIn`), alpha scaling (`dim`, `set_opacity`) and tints
@@ -4013,7 +4013,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   the player's own numbering).
 - Known limits: chapter titles are not translated per variant beyond what the variant's config
   says; a chapter's `number` is not shown in the outputs; YouTube also requires the list in the
-  description to be the video's own (vidgen only writes the file); the MP4 has no chapter
+  description to be the video's own (schu-video-generator only writes the file); the MP4 has no chapter
   thumbnails.
 
 ## 53. Refinements (Step 50, thumbnail and GIF / clip export)
@@ -4230,7 +4230,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   `decimal_mark` cannot be added); number formats and the map's country names are not
   localised; a map arc shorthand `"A -> B"`, `lint_ignore` object patterns and targets naming a
   translated point label (`point:<series>@<label>`) do not follow translations; languages
-  without spaces are cut at punctuation only; the storyboard / lint labels of vidgen itself stay
+  without spaces are cut at punctuation only; the storyboard / lint labels of schu-video-generator itself stay
   English.
 
 ## 55. Refinements (Step 52, slides export: HTML)
@@ -4323,7 +4323,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   Unicode text — pt-BR accents), writes outlines, page labels, document info / XMP and alt text,
   and embeds JPEG files as they are (`DCTDecode`, no re-encode). Its dependency fontTools (~5 MB
   wheel with compiled speed-ups, pure-Python fallback) and LGPL-3.0 licence are why it is an
-  extra, not a base dependency; vidgen does not bundle it. Without it, `make_slides_pdf` raises
+  extra, not a base dependency; schu-video-generator does not bundle it. Without it, `make_slides_pdf` raises
   `VidgenError('... pip install "schu-video-generator[pdf]" ...')` before rendering anything. Alternatives
   rejected: cairo's PDF surface (already installed with Manim) cannot load a font file through
   pycairo (fontconfig / Windows system fonts only) — the bundled Inter would not be guaranteed;
@@ -4397,7 +4397,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(audio,
     language, beam_size=5, word_timestamps=True, condition_on_previous_text=False,
     vad_filter=False)` (each beat on its own, so one mistake cannot carry over; no VAD so quiet
-    words are not cut). `audio` is the beat decoded by vidgen (`load_audio`: the ffmpeg
+    words are not cut). `audio` is the beat decoded by schu-video-generator (`load_audio`: the ffmpeg
     executable via `render.ffmpeg.decode_mono(path, 16000)`, 1-D float32, since Step 141; PyAV
     before), not the path: faster-whisper's own decoder passes `metadata_errors`, which PyAV 19
     removed. Each word keeps its `probability` (§78). Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
@@ -4550,8 +4550,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
 
 ## 59. Refinements (Step 56, the author guide for AI agents)
 
-- **Two agent files, two audiences**: `CLAUDE.md` is for agents developing vidgen; `AGENTS.md`
-  (repository root) is for agents **using** vidgen to make videos and decks. Each says so at its
+- **Two agent files, two audiences**: `CLAUDE.md` is for agents developing schu-video-generator; `AGENTS.md`
+  (repository root) is for agents **using** schu-video-generator to make videos and decks. Each says so at its
   top and points to the other.
 - **One source, shipped**: the guide is package data, `src/vidgen/data/guide/AGENTS.md`
   (`pyproject` package-data `data/guide/*`), so it is there after `pip install`; the root
@@ -4929,13 +4929,13 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     $0.014 per megapixel, gpt-image-2 $0.00003 per output token, recraft-v4.1-flash $0.007 per
     image.
   - `GET /models?output_modalities=image` (the general catalog) has per-token strings only
-    (`pricing.image_output` etc.), so vidgen uses the image-specific records above.
+    (`pricing.image_output` etc.), so schu-video-generator uses the image-specific records above.
   - The older route — `POST /chat/completions` with `modalities: ["image", "text"]` and
-    `image_config` — also exists; vidgen uses the dedicated `/images` endpoint (one picture,
+    `image_config` — also exists; schu-video-generator uses the dedicated `/images` endpoint (one picture,
     base64, a cost in the response).
   - App identification headers (optional): `HTTP-Referer` (the app's URL; creates the app's page
     in OpenRouter's rankings), `X-OpenRouter-Title` (display name; `X-Title` is the older alias),
-    `X-OpenRouter-Categories`. vidgen sends `HTTP-Referer:
+    `X-OpenRouter-Categories`. schu-video-generator sends `HTTP-Referer:
     https://github.com/joaopauloschuler/schu-video-generator` and `X-OpenRouter-Title:
     schu-video-generator` on every request (`openrouter.APP_HEADERS`).
 - **Config** `imagegen.provider: openai | openrouter` (`openai` stays the default; unknown values
@@ -5002,7 +5002,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   refusals, a run with costs and sidecars, refusals before any POST, an unreachable lookup not
   blocking.
 - **Live check** `tools/live_check_openrouter.py` (not shipped, not tested): lists the cheapest
-  text-to-image models with vidgen's estimates, then one picture's dry run; `--yes` generates
+  text-to-image models with schu-video-generator's estimates, then one picture's dry run; `--yes` generates
   that picture through `run_imagegen` in a temporary project and prints the PNG, sidecar and
   reported cost.
 - **Not done**: SVG output (Step 61b; done, §65); per-token prices (no tokens-per-picture data); input
@@ -5053,7 +5053,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   transforms): refuses > 20 MB, `<!ENTITY` declarations, non-SVG roots, unparsable XML, nothing
   drawable left. Removes (warning): `script`, `foreignObject`, `image`, `filter` (+ `filter=`),
   `mask` / `clipPath` (+ attributes; "shapes they hid may show"), `text` (with a hint to use
-  vidgen's captions), `use` / `href` to other files; silently: metadata, title, desc, animation
+  schu-video-generator's captions), `use` / `href` to other files; silently: metadata, title, desc, animation
   elements, gradients / patterns after flattening, `on*` attributes, other `url()` style
   properties. Flattens `fill` / `stroke` `url(#id)` (attribute or `style`) to the mean of the
   gradient's stops (following `href`), a pattern's first shape fill, else `#888888`. Manim
@@ -5101,7 +5101,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   layout object, scene renders (generated SVG drawn, file SVG with cover + Ken Burns) at
   160x90 / 90x160, validate of an `.svg` path.
 - **Not done**: `fill-rule: evenodd` holes and per-element `stroke-linecap` follow Manim's SVG
-  parser; text is removed, not converted to vidgen text; recolor is per colour, not per region;
+  parser; text is removed, not converted to schu-video-generator text; recolor is per colour, not per region;
   no SVG model can be used by an account that requires ZDR (none has a ZDR endpoint).
 
 
@@ -5220,7 +5220,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   printed "cost not reported": the `X-Generation-Id` header was there (the line is printed only
   for providers with ids), so `GET /generation` gave no `total_cost` within one 1 s retry. Key
   usage rose $0.000038 for both beats: Kokoro routed to its cheapest provider (61 × $0.00000062),
-  6x below vidgen's highest-provider estimate (an upper bound, as documented).
+  6x below schu-video-generator's highest-provider estimate (an upper bound, as documented).
 - **Cost lookup** (`OpenRouterTTSProvider.reported_cost(timeout, waits=COST_WAITS)`):
   OpenRouter writes generation records asynchronously, so every request whose record is not
   there yet — HTTP 404, 429 / 5xx / 524 / 529, unreachable, a record without a numeric
@@ -5334,13 +5334,13 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   video language (a / b both English: fine), `timestamps` with a language without timings, the
   extra or `misaki[ja]` / `[zh]` not installed.
 - **Packaging**: extra `kokoro = ["kokoro>=0.9.4; python_version < '3.13'"]` (on 3.13 the extra
-  installs nothing instead of failing a combined `.[dev,kokoro]`; vidgen explains); package data
+  installs nothing instead of failing a combined `.[dev,kokoro]`; schu-video-generator explains); package data
   `data/kokoro/*`. Nothing of Kokoro is bundled (THIRD_PARTY_NOTICES).
 - **Live** (this workspace, 2026-10-09): Hugging Face's file CDN and Xet hosts are blocked by
   the egress proxy, so the weights and three voices were fetched from Kokoro-FastAPI's GitHub
   release / repository and verified against the model card's SHA256 (weights) and VOICES.md's
   hash prefixes (af_heart `0ab5709b`, bf_emma `d0a423de`, pf_dora `07e4ff98`), then laid out as
-  an HF cache and used with `HF_HUB_OFFLINE=1` — vidgen's normal `hf_hub_download` path. Python
+  an HF cache and used with `HF_HUB_OFFLINE=1` — schu-video-generator's normal `hf_hub_download` path. Python
   3.12 venv with `pip install -e ".[dev,kokoro]"` (torch 2.14.1, transformers 5.19, manim 0.22):
   `vidgen tts` voiced 2 English + 1 Portuguese beats (MP3 24 kHz mono; `.align.json` for the
   English ones), a preview render's SRT kept the written words through the pronunciation;
@@ -5620,7 +5620,7 @@ A beat's **viseme track** says which mouth shape shows when; a character's mouth
   would pip-install it; other languages: `espeak.EspeakG2P` when `espeakng_loader` is importable),
   then `espeak` (the `espeak-ng` program on `PATH`: `-q --ipa -v <voice> <word>`, voice = the tag
   lower-cased, `en` -> `en-us`) — else `letters`. A word the G2P fails on or gives nothing for
-  uses its letters. Nothing is installed by vidgen; none is needed (tests mock them).
+  uses its letters. Nothing is installed by schu-video-generator; none is needed (tests mock them).
 - **Timing** (`TIMINGS`): Kokoro's token times (`kokoro`), else the words of
   `speech.beat_word_times(audio_dir, beat, spoken_text, 0, duration, language)` — the stored
   alignment (`alignment`: ElevenLabs timestamps or Kokoro's `.align.json`), else the estimate
@@ -6630,7 +6630,7 @@ time to save:
   not a multiple of 16 differently from run to run (most likely reading uninitialised padding
   next to the frame in a long-running process; a fresh process encoding the same frames gives
   the same bytes every time). Decoded frames of the variants are equally close to the raw frames.
-  Not fixed (Manim's encoder options are not reachable from vidgen; changing the preview size
+  Not fixed (Manim's encoder options are not reachable from schu-video-generator; changing the preview size
   would change every preview): compare renders by their frames before encoding, or at sizes that
   are multiples of 16. Backlog.
 
@@ -9595,7 +9595,7 @@ without them renders as before.
   `_circular_add`, `_finish`, `BUILTIN_BEDS`, `bed_loop`), `sfx._filtered` / `_band` /
   `_lowpass` for the noise tick. Both new beds are made the same way: numpy only, no recordings,
   no samples, seeded `crc32("music:<name>")`, rendered circularly, `_finish`ed to `MUSIC_LEVEL`
-  −28 LUFS integrated. Original melodies written for vidgen (no known tune, lullaby or theme).
+  −28 LUFS integrated. Original melodies written for schu-video-generator (no known tune, lullaby or theme).
 - **New voices** (`music.py`): `_pizzicato` (3 ms attack, harmonics 1–5 at 1 / .45 / .22 / .1 /
   .05, the upper ones decaying faster), `_music_box` (1.5 ms strike, a second tine 3.5 cents
   sharp at 0.3 for a slow shimmer, a faint octave, a short ping at 5.4×), `_woodblock` (60 ms,
@@ -10395,7 +10395,7 @@ listening test after Step 144); this section covers what has to be installed and
   `raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2`, `SIZE_BYTES`
   32,319,396, `SHA256` `9575028c…8cfe` (upstream publishes no checksum; computed by the research
   agent). Never in the wheel (no package data; a test checks `src/` holds no `.sf2` / `.sf3`).
-- **Cache folder** (`cache_dir()`; vidgen had none before: Kokoro's model lives in the Hugging
+- **Cache folder** (`cache_dir()`; schu-video-generator had none before: Kokoro's model lives in the Hugging
   Face cache): `VIDGEN_CACHE_DIR`, else `%LOCALAPPDATA%\vidgen` (Windows), `~/Library/Caches/vidgen`
   (macOS), `$XDG_CACHE_HOME/vidgen` or `~/.cache/vidgen`; the file is `soundfonts/GeneralUser-GS.sf2`.
 - **Download** (`fetch(force, url, progress)`): `httpapi.stream_get` streams 1 MB chunks (stopping
@@ -10414,7 +10414,7 @@ listening test after Step 144); this section covers what has to be installed and
 - **CLI** `vidgen soundfont fetch [--force]` and `vidgen soundfont info [PROJECT]` (path, origin,
   size, sha256, check, licence line, suggested credit, symusic state); no `--json` yet.
 - **Licences**: THIRD_PARTY_NOTICES lists symusic (MIT), Prestosynth (MIT), symusic's bundled
-  `abc2midi` / `midi2abc` (not run by vidgen; licence unverified) and GeneralUser GS (licence
+  `abc2midi` / `midi2abc` (not run by schu-video-generator; licence unverified) and GeneralUser GS (licence
   v2.0: free use in music, private or commercial; no attribution required). Suggested credit
   (`soundfont.CREDIT`, naming the SoundFont's author, S. Christian Collins, as its licence and
   README suggest) in THIRD_PARTY_NOTICES, CONFIG.md, the README and `vidgen soundfont info`.
@@ -10694,7 +10694,7 @@ in scope.
    motion (paths, arcs, events such as take-off, landing, pickup), deterministic, with a
    `VidgenError` when the input is impossible. A player's inputs could replace the script later;
    no physics engine, fixed paths and simple arcs only.
-3. **Renderers**: vidgen / Manim now (`vidgen/cartoon/level_stage.py` maps tile units to Manim
+3. **Renderers**: schu-video-generator / Manim now (`vidgen/cartoon/level_stage.py` maps tile units to Manim
    units, `vidgen/cartoon/level_drawing.py` draws the tiles, `scenes/stage.py` shows them).
 
 `vidgen.world` never imports Manim (a test imports it, `level_stage` and `level_drawing` in a
@@ -11155,8 +11155,8 @@ rules as Phases H–O: cheap tests, new public extension surface only through `v
 |---|---|---|
 | 156 | Actions timed to a spoken word | `at: "@word"` on any beat action and on `lower_third`; times from the beat's audio, else the estimate (§87.2) |
 | 157 | One colour per concept | a video-level `terms: {loss: accent, gradient: "#E07A5F"}` (theme colour names or hex) painting those words wherever they are on-screen text (TeX parts of equations, bullets, text cards, titles, captions / karaoke, chart and diagram labels, callout labels); per-scene opt-out; lint: too many concept colours (about 5), poor contrast on the theme background, a term coloured otherwise by a scene setting; cookbook §12 rule "same term, same colour" |
-| 158 | Code that morphs between versions | in the code scene(s) version A morphs to version B: unchanged tokens glide, new lines grow in, removed lines fade out; the diff is vidgen's (`difflib`), timed to beats and words (§87.2); the phone readability rules of the code scenes still apply |
-| 159 | Terminal scene | a terminal window typing commands and showing their output, given by the author (vidgen never runs a command), timed to beats / words; the code scenes' look and themes; usable beside code (a split) or after it (a carry / match cut if cheap) |
+| 158 | Code that morphs between versions | in the code scene(s) version A morphs to version B: unchanged tokens glide, new lines grow in, removed lines fade out; the diff is schu-video-generator's (`difflib`), timed to beats and words (§87.2); the phone readability rules of the code scenes still apply |
+| 159 | Terminal scene | a terminal window typing commands and showing their output, given by the author (schu-video-generator never runs a command), timed to beats / words; the code scenes' look and themes; usable beside code (a split) or after it (a carry / match cut if cheap) |
 | 160 | Maths, part 1: function plots | axes with f(x) from expressions evaluated safely (a small whitelisted parser, or sympy only if already a dependency; never `eval`), several functions, a dot moving along a curve with a live value, a tangent following the dot, shaded area between bounds, labels; driven by beat actions |
 | 161 | Maths, part 2: geometry basics | braces and angle arcs with labels, dimension lines, a number line (points, intervals, jumps), a coordinate plane with vectors (add, scale); a scene type or additions to Step 160's scene, decided and recorded there |
 | 162 | Charts that change between beats | the chart scenes take values per beat and animate between them (bars grow / shrink and re-sort, lines morph, a cursor dot sweeping a line, the axis rescaling); values stay the author's |
@@ -11274,7 +11274,7 @@ rules as Phases H–O: cheap tests, new public extension surface only through `v
   to share the window, the colouring and the fitting. Params: `versions` (at least two; each
   the code as a string, or `{code | path, highlight}`), and `code`'s `language`, `title`,
   `line_numbers`, `style`, `font`, `size`, `highlight_color`, `wrap`.
-- **The diff is vidgen's** (`diff_code`, `difflib`, no manim): lines are matched by their text
+- **The diff is schu-video-generator's** (`diff_code`, `difflib`, no manim): lines are matched by their text
   without indentation (`SequenceMatcher`, no autojunk); within a replaced block, lines are paired
   in order by a small dynamic programme maximising their token similarity (each pair at least
   `PAIR_RATIO` 0.5), so an edited line is one line, not one removed and one added; a line that
@@ -11318,7 +11318,7 @@ rules as Phases H–O: cheap tests, new public extension surface only through `v
 
 - **A scene type, `terminal`** (`scenes/terminal.py`), subclassing `CodeListing` for the window,
   colouring and fitting. `steps` (step *i* at beat *i*): `{command, output, clear,
-  output_color}` or a string (a command). vidgen never runs a command: the output is the
+  output_color}` or a string (a command). schu-video-generator never runs a command: the output is the
   author's. Params `prompt` (`$`), `language` (`bash`, the commands' lexer), `typing_speed`
   (18 characters/s), `code` (`{code | path, language, highlight}`: a listing beside it),
   `title`, `prompt_color` (`accent`) and `code`'s `line_numbers`, `style`, `font`, `size`,
@@ -11692,7 +11692,7 @@ Built as planned in §87.7; the changes and the details:
 
 Reference: docs/CONFIG.md "Built-in pronunciation lists". §45's dictionary was per project only;
 some words are read wrong by one engine in every project (Kokoro's American G2P, misaki, says
-"epoch" as /ˈɛpək/, like "epic"), so vidgen ships entries that every project uses.
+"epoch" as /ˈɛpək/, like "epic"), so schu-video-generator ships entries that every project uses.
 
 - **Data**: `src/vidgen/data/pronunciation/<engine>-<language>.yaml`, the format of a
   `pronunciation_file` (package data `data/pronunciation/*`). A list name is layered by its
@@ -12400,7 +12400,7 @@ the iso lint. Code: `cartoon/iso_drawing.py` (glow), `iso_pictures.py` (`GlowTil
   each other; a reservation of cells in time would change the routes of every existing walk and
   rarely matters with a story's few characters: time crossing walks apart, or `meet`).
 - **Schema**: `schema._yaml_on_key` adds a `"true"` property beside every boolean `on` (a prop, an
-  iso object): YAML 1.1 reads a bare `on` as `true`, JSON writes it `"true"`, vidgen takes it.
+  iso object): YAML 1.1 reads a bare `on` as `true`, JSON writes it `"true"`, schu-video-generator takes it.
 - **Messages**: a `jump` to a place on an iso place says to walk or run there; `character_size` /
   `size` names the shots; `on` / `open` on flowers reads "not flowers"; two objects on one cell
   say to move one.
@@ -13051,7 +13051,7 @@ to six prototypes (`music-candidates2/beds2.py`, outside the repo) and approved 
 
 ## 92. The Listen page (Step 183)
 
-The README leads with vidgen's own music and sound synthesis (a bold headline under the tagline,
+The README leads with schu-video-generator's own music and sound synthesis (a bold headline under the tagline,
 a "Music and sound" block after the gallery strip, written as a bold-titled paragraph rather than
 a `##` heading so the README's intro that follows it stays outside it) and links a page where
 people can hear it: `docs/music/README.md`, committed with its media.
@@ -13082,7 +13082,7 @@ people can hear it: `docs/music/README.md`, committed with its media.
   column of the mono mix; 4.5–45 KB each. The −10 dB top was chosen by looking: at −25 dB the
   beds' bass rows were a flat saturated band.
 - **Deterministic**: three runs (two in fresh processes) gave byte-identical files, composed clips
-  included. The bytes depend on the vidgen, FFmpeg / LAME, Pillow and symusic versions, as the
+  included. The bytes depend on the schu-video-generator, FFmpeg / LAME, Pillow and symusic versions, as the
   gallery's do; a regeneration elsewhere may change the MP3s without a change in the sound.
 - **Size**: 5.51 MB (14 bed clips 3.37 MB, 2 composed 0.48 MB, 6 effect clips 0.71 MB, ambience
   0.34 MB, spectrograms 0.6 MB); tested under 6.5 MB, bed and composed clips 200–320 KB, PNGs
@@ -13425,7 +13425,7 @@ did-you-mean, `music_template_text`, `music_template_catalog`).
   phrases, `lullaby`'s four), every part as a track at the bed's level (`volume` dB =
   `20 log10(bed level / instrument level)`), the bed's random choices (arpeggio figures per
   bar, `bright`'s bell) written out as the steps the bed played, and comments saying what each
-  part does and how to change it. Each file starts `# <Name>: a score-file template of vidgen's
+  part does and how to change it. Each file starts `# <Name>: a score-file template of schu-video-generator's
   built-in bed ...`.
 - **What differs**: the pads' random phases (another seed scheme), the noises' seeds (riser,
   clicks), some per-note levels (accents are ×1.5 or ×0.5, the beds use e.g. ×0.72; chosen to
@@ -13499,7 +13499,7 @@ chooses; the check only says what the numbers say.
   LUFS as `render_music_score` does (the same within 1e-5: another summing order; tested). The
   stems' bands are measured with the master filter's power response and the final gain applied.
   So every problem is put down to the tracks causing it, with the dB to change. An audio file is
-  measured as vidgen plays it (scaled to −28 LUFS), in 2 s blocks instead of bars.
+  measured as schu-video-generator plays it (scaled to −28 LUFS), in 2 s blocks instead of bars.
 - **Measures**: per 50 ms frame (4096-sample Hann; wrapped round for a loop) the power in 20–150
   Hz (bass), 300 Hz–3 kHz (voice range), 2–20 kHz (brightness), 5–20 kHz (highs) and all, per bar;
   K-weighted power once (integrated loudness, 3 s loudness every 0.5 s, sections, half-sections,
@@ -13538,9 +13538,9 @@ chooses; the check only says what the numbers say.
 - **Narration demo** (decision): the sample shipped as package data (`studio/data/
   narration_sample.mp3`, 160 KB, 20 s mono, 64 kbps): two original lines spoken by Kokoro
   (`af_heart`, speed 0.9; Kokoro-82M and its voices are Apache-2.0, so the recording can ship),
-  at 2.0–8.1 s and 10.6–15.8 s, set to −21.5 LUFS as stereo (the level vidgen's narration sits at,
+  at 2.0–8.1 s and 10.6–15.8 s, set to −21.5 LUFS as stereo (the level schu-video-generator's narration sits at,
   §48); made by `<scratchpad>/s187/make_narration.py`. `--narration FILE` uses another at its own
-  level (vidgen plays narration as recorded), up to 60 s, 3 s of music after it. The music plays
+  level (schu-video-generator plays narration as recorded), up to 60 s, 3 s of music after it. The music plays
   from its start at volume 0 with a 1.5 s fade-in and a 2 s fade-out, ducked by
   `check.duck_gain_db` — `mix.duck_curve` re-written in `studio` (which may not import `mix`)
   with `DuckConfig()`'s numbers (12 dB, 0.4 s, 1 s, 1.5 s hold; a test keeps both equal) over the
@@ -13885,7 +13885,7 @@ Goal: people (not only agents) make music with the score format. `vidgen studio 
 [--port N] [--no-browser]` starts a small web app on 127.0.0.1 and opens it in the browser:
 load any of the 17 built-in beds as an editable score file (its template, §93.8), change it,
 listen, check it, keep versions, export YAML / MP3 / WAV or save it into a project's
-`assets/music/`. **The sound is always vidgen's own renderer** (`vidgen.studio`, the one videos
+`assets/music/`. **The sound is always schu-video-generator's own renderer** (`vidgen.studio`, the one videos
 use); the browser only plays rendered audio and never synthesises sound itself.
 
 Terms (a collision, guide rule 14): **the studio** is this web app — the `vidgen studio`
@@ -14063,7 +14063,7 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
   time.
 - **The cache key** (`render_key`): SHA-256 of `{score: the YAML's data, renderer:
   STUDIO_RENDER_VERSION (1), vidgen: __version__}` — so comments and layout do not re-render,
-  and a new vidgen does. The cache lives in the session (no sharing between sessions in Step 193).
+  and a new schu-video-generator does. The cache lives in the session (no sharing between sessions in Step 193).
 - **A section** is cut from the whole render, bit-exact (`_slice_wav`), from the section's first
   sample for its bars (the last section of a one-pass piece keeps the tail): it sounds as in the
   piece, with the notes ringing on from before it. Step 196 decides whether rendering only the
@@ -14097,8 +14097,8 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
   `stepgrid.js` (the steps text read into cells) and `yaml_edit.js` (the score file typed); Step 197
   `versions.js` (versions, undo / redo, A/B), `check.js` (the check panel), `exports.js`; Step 198
   `notes.js` (notes, the Notes tab, Ask an agent, proposals, polling); Step 199 `variations.js`. Vanilla JS, no build step, no CDN, no external fonts (Inter and
-  JetBrains Mono come from vidgen's bundled fonts at `/fonts/...`), so it works offline.
-- **Look** (decision: vidgen's own): the `dark_tech` theme's colours (background `#0E1116`,
+  JetBrains Mono come from schu-video-generator's bundled fonts at `/fonts/...`), so it works offline.
+- **Look** (decision: schu-video-generator's own): the `dark_tech` theme's colours (background `#0E1116`,
   surface `#161B24`, text `#E8EAED`, dim `#838B98`, primary `#58C4DD`, the palette `#58C4DD
   #F2A541 #C792EA #83C167` for sections and tracks) and, for the light option (a toggle kept in
   `localStorage`, polished in Step 200), `light_academic`'s. Layout as agreed: top bar (brand,
@@ -14133,7 +14133,7 @@ Every answer is `{"ok": true, "result": ...}` or `{"ok": false, "error": "<messa
   read) when the page polls `/api/session`, so the proposal appears in the studio for the person
   to A/B. Why the disk: no port or token to discover, it works when the studio is closed (picked up
   when it opens), and the MCP server's root policy already confines what it may write.
-- **Optional provider**: "Ask an agent" with OpenRouter (the provider vidgen already supports,
+- **Optional provider**: "Ask an agent" with OpenRouter (the provider schu-video-generator already supports,
   key from `OPENROUTER_API_KEY`, sent through `httpapi.post_with_retries`), a model the person
   names; the prompt holds the score, the notes, the check report and the patches summary; the
   reply (YAML + one line per note) goes through the same validation as an MCP proposal. Never
@@ -14345,7 +14345,7 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
   `title`, `description`, `master`, `tracks`; the track's name and spec; for a track that ducks
   under another, that track's **hit inputs** only (`steps`, `accent`, `play`, `rest`, `only`,
   each section's `steps` / `accent`: when it hits, not how it sounds — the kick's volume does
-  not re-render the pad); `STEM_RENDER_VERSION` (1) and vidgen's version. A **volume-only
+  not re-render the pad); `STEM_RENDER_VERSION` (1) and schu-video-generator's version. A **volume-only
   change** of a track whose volume is one number (no curve, no section changing it:
   `plain_volume`) scales a kept rendered stem by the gain between them (every note is scaled
   by the volume and every effect after is linear) — 10 ms instead of the track's render; the
@@ -14366,7 +14366,7 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
   (fixes Step 194's gap). **Under narration** (`studio_app/narration.py`): `<name>.n.wav` from
   the render or listening mix (its WAV read back, at −28 LUFS): the shipped narration sample
   (`check.NARRATION_SAMPLE`, 20 s) repeated from the piece's start, the music ducked with
-  `check.duck_gain_db` (vidgen's default ducking) over `check.speech_spans`, voice and music at
+  `check.duck_gain_db` (schu-video-generator's default ducking) over `check.speech_spans`, voice and music at
   a video's balance, both raised by one gain that puts the voice's true peak at −1.5 dBTP
   (+3.5 dB; the same for every version: A/B under narration is level-matched). The status line
   says so. Sections and loops work as without it (`<name>.n-<section>.wav`).
@@ -14812,7 +14812,7 @@ about 11 MB of WAV per version rendered; 197 adds a limit).
 ## 95. Cell biology in physical scale (Phase U, Steps 202–211)
 
 Reference: docs/CONFIG.md `cell`. 2D cell-biology presentations at university and research
-level: precise, stylised but never wrong, in vidgen's flat style, written by AI agents in YAML,
+level: precise, stylised but never wrong, in schu-video-generator's flat style, written by AI agents in YAML,
 checked by `vidgen validate` (and from Step 209 by `vidgen lint`), in 16:9 and 9:16.
 
 ### 95.1 The phase (plan)
@@ -15661,7 +15661,7 @@ kind's range, counts, exaggerated glyphs.
 
 Genetics videos for lectures, medical and biology students and science channels: standard terms
 and notation, **computed rather than drawn by hand** (ratios, probabilities, gametes, map
-distances, frequencies come from a model), in vidgen's flat style, written by AI agents in YAML,
+distances, frequencies come from a model), in schu-video-generator's flat style, written by AI agents in YAML,
 checked by `vidgen validate` with did-you-mean errors and by `vidgen lint`, in 16:9 and 9:16.
 Built like Phase U (§95): a model with rules and no manim (`vidgen/genetics/`), renderers and
 scene types apart. Additive and opt-in: existing projects, scenes, gallery frames, audio and the
@@ -16886,7 +16886,7 @@ model undefined at the start. Distribution functions in `plotcore.stats` (normal
 Acklam + Newton; Student's t through the regularized incomplete beta, the quantile solved on the
 tail so 1 − p loses nothing; χ² survival through the incomplete gamma), ≤ 1e-9 from scipy.
 
-**Why no scipy.** scipy is installed wherever vidgen is (manim requires it), but vidgen does not
+**Why no scipy.** scipy is installed wherever schu-video-generator is (manim requires it), but schu-video-generator does not
 list it and the core must import without it (and fast); the fits above are short and match
 `scipy.optimize.curve_fit` to 1e-3 of a standard error (tests, when scipy is importable — else
 the closed-form tests run). No new dependency, nothing for the owner to install on Windows.
@@ -17497,7 +17497,7 @@ Public (additive): `plotcore.fit_curve(..., poisson=)`, `AxisSpec.ticks`,
 ## 98. Orbital mechanics (Phase X, Steps 229–236)
 
 Orbital-mechanics videos at university level (and for science YouTube): real physics, computed
-exactly, honest about scale, in vidgen's flat style, 16:9 and 9:16. The phase **builds on Phase
+exactly, honest about scale, in schu-video-generator's flat style, 16:9 and 9:16. The phase **builds on Phase
 W** and re-implements none of it: axes, equal aspect, ticks in AU / km and line clipping come from
 `vidgen.plotcore` / `vidgen.plot_draw` (§97.3); n-body motion from its integrators (`verlet`,
 `rk45`, §97.7); values with units and the IAU / CODATA constants from `vidgen.quantities`
@@ -19178,7 +19178,7 @@ committed; docs and samples use neutral content.
   if it reads well), lint clean, −16 LUFS.
 - **248**: review with fixes (story fidelity, stills of every shot, audio, compatibility).
 
-**What vidgen did already** (test render: an iso indoor lab at `light: night`, a table, shelves, a
+**What schu-video-generator did already** (test render: an iso indoor lab at `light: night`, a table, shelves, a
 rug as a pad, a lamp, three characters, a closeup and a red `light` tint; 6.3 s of video in
 10.9 s at 854 × 480): the lab as an iso room with windows and a door; per-speaker Kokoro voices
 with labels and name tags; emotions (frightened, crying, blushing, laughing; `emotion` on lines);
@@ -19558,7 +19558,7 @@ and of the issues Step 247 left. Generic fixes:
   against it; the unknown-action message and the schema's enum are built from it) and take the
   reversible ones from the registry.
 
-The story project (private) was changed, not vidgen, for what it alone needed: closer shots on
+The story project (private) was changed, not schu-video-generator, for what it alone needed: closer shots on
 the key beats, a title card in the story's colours, speech outliers evened out with an emotion's
 `gain`, a quieter drone. Compatibility: the zoom change only acts while a shot holds the camera
 (no committed project zooms across a shot); effects only for voices with an effect; Phase Q
@@ -19705,7 +19705,7 @@ content.
   and a delivery copy under 28 MB.
 - **254**: Shorts (9:16) cut from it and a critical review of the film and the features.
 
-**What vidgen did already** (test render: an outdoor iso place at `light: night` with two houses
+**What schu-video-generator did already** (test render: an outdoor iso place at `light: night` with two houses
 in neon colours, a lamp, a sign, path streets, rain with `color: [cyan, blue, green]`,
 `fill_light: 0.45`, two characters and a close-up; 10.8 s in 161.7 s at 854 × 480): night
 light, lit windows and lamps that glow, coloured rain with splashes and puddles, faces readable

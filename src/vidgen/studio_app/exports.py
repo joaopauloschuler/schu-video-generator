@@ -32,7 +32,7 @@ MAX_LOOPS = 64
 MAX_SECONDS = 600
 #: The fade-out at the end of an N-seconds export (s; shorter for a short one).
 FADE_OUT_SECONDS = 2.0
-#: Levels: name -> (LUFS, words). A video's music level (vidgen plays it at volume 0), or the
+#: Levels: name -> (LUFS, words). A video's music level (schu-video-generator plays it at volume 0), or the
 #: studio's listening level (the Listen page's -16 LUFS), its true peak kept at most -1 dBTP.
 LEVELS: dict[str, tuple[float, str]] = {
     "video": (-28.0, "video level: −28 LUFS, as vidgen plays music at volume 0 (for a video or another editor)"),

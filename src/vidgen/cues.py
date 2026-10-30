@@ -56,7 +56,7 @@ INNER_SENTENCE = 3.0
 def phrase_break_cost(before: str, after: str, language: str | None = None) -> float:
     """How bad a break between the words ``before`` and ``after`` is (0 after a sentence), in
     ``language`` (BCP-47; ``None``: English). Punctuation counts in every language; the word
-    lists (conjunctions, prepositions, clinging articles) only where vidgen has them (DESIGN.md
+    lists (conjunctions, prepositions, clinging articles) only where schu-video-generator has them (DESIGN.md
     §54): another language breaks plainly between any other words."""
     if _SENTENCE_END.search(before):
         return COST_SENTENCE

@@ -1,4 +1,4 @@
-"""Templates of the built-in beds (DESIGN.md §93.8, §93.12, §93.14): each of vidgen's 17 music beds
+"""Templates of the built-in beds (DESIGN.md §93.8, §93.12, §93.14): each of schu-video-generator's 17 music beds
 written as an editable score file to start a new piece from — for the 14 beds made in Python a
 close re-creation (not bit-identical); for ``tidewater``, ``skyline`` and ``time_of_flight`` the
 very score the bed is rendered from. They ship as package data in ``studio/beds/<bed>.yaml``; ``vidgen music template

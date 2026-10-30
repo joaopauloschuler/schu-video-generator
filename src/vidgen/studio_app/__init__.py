@@ -1,7 +1,7 @@
 """``vidgen studio``: a local music workstation in the browser (Phase T, DESIGN.md §94).
 
 A small web app on 127.0.0.1 where people load the built-in beds as editable score files,
-change them, listen and export. The sound is always vidgen's own renderer
+change them, listen and export. The sound is always schu-video-generator's own renderer
 (:mod:`vidgen.studio`, the score-file package — a different thing from this app, which is
 named ``studio_app`` for that reason); the browser only plays the rendered audio.
 """

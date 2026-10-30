@@ -374,7 +374,7 @@ class Project:
     def builtin_list(self, voice: VoiceConfig) -> str | None:
         """The built-in pronunciation list ``voice``'s text goes through
         (:func:`vidgen.pronunciation.builtin_list_name`); ``None`` with
-        ``pronunciation_defaults: false`` or when vidgen ships no entries for it."""
+        ``pronunciation_defaults: false`` or when schu-video-generator ships no entries for it."""
         if not self.config.pronunciation_defaults:
             return None
         name = builtin_list_name(voice, self.config.language)
