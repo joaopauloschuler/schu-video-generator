@@ -23365,3 +23365,84 @@ How to test: `tests/test_wavy_hair.py`, `tests/test_wall_lights_kiss.py`; (priva
 the film (16:9 MP4 + SRT) and the delivery copy in `story-qc/proj/output/`,
 the contact sheet `story-qc/contact.png`, stills
 `story-qc/proj/build/preview/storyboard/`.
+
+## Step 254 — Shorts of the story; review of Phase AA
+
+Phase AA's last step: vertical Shorts cut from the private story video (scratchpad only, never
+committed) and a critical review of the phase's generic features, with fixes (DESIGN §102.20).
+
+What was built (generic)
+- **A cut drops a scene's own overlay**: `cut.scenes[i].overlays: {<id>: {drop: true}}` (a
+  scene overlay timed `at` a left-out beat was an error, and `false` only turns off video-wide
+  overlays). `cuts._drop_overlays`, `cuts.DROP`.
+- **A `hud` in a Short keeps its meters above the captions** (`SHORTS_CAPTION_BAND` 0.13 of the
+  Shorts area's height; the heart and scan meters stood on the captions' line) and `compact`
+  there does not inset towards the app's parts.
+- **`hud` `compact` outside Shorts**: the top edge moved down by the inset (`y1 - inset`),
+  against the contract (§102.8: every margin halved); now `y1 + inset`. Only compact HUDs change.
+- **Lint `shorts_safe_area` with a HUD**: in a Short the HUD's frame (scan lines over the whole
+  picture) counted as covering 100 % of every face; overlays that keep off faces are now checked
+  by their texts and panels only (helpers shared with `overlay_face`).
+- **Render fingerprints of a cut**: the `cut:` itself was part of every scene's fingerprint, so
+  any change in `cut.beats` re-rendered every scene of the variant (seen: a one-beat change
+  re-rendered three 1080p scenes). `cut` is left out when there is one (it is already applied to
+  the scenes); without a cut the dump is unchanged, so other projects' renders stay current.
+
+Review of Phase AA (no change needed unless listed above)
+- Tests of the phase files (one or two at a time): test_city_hud_echo + test_kiss_display_props
+  27 (incl. 5 renders), test_wavy_hair + test_wall_lights_kiss 13, test_cuts_shorts 27 (+4: a
+  cut drops an overlay, fingerprints of a cut, a HUD in `shorts_safe_area`, a HUD's meters in a
+  Short (render)), test_kiss_display_props +1 (compact edges, render), test_overlays + test_lint
+  49, test_particle_lint + test_captions 150, test_storyboard + test_includes 45,
+  test_cuts_shorts + test_transitions 47, test_docs + test_guide 164, **tests/test_mcp.py fully:
+  20 passed (147 s)** — all passing.
+- Docs: CONFIG (Cuts and Shorts: overlay `drop`, HUD meters, lint with a HUD, what re-renders,
+  hook length, size budget; `hud` section; lint table), guide (Shorts: overlay drop, splitting a
+  scene, zoom at a stage's edge, hook length, HUD; copied to `AGENTS.md`), README (wall lights,
+  wavy hair from 253 were missing; HUD meters in Shorts), CHANGELOG (Step 254), DESIGN §102.20.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check254`, run twice: after the HUD/lint/
+  fingerprint changes and after the `compact` fix).
+- Render performance at 1080 × 1920 (one scene at a time, peak RSS 1.6 GB): 4.8–7.8× real time
+  for rooms with two characters, 9.8–12.6× with several echo characters or the rainy city with
+  traffic, 3.4× on a city held on one tower; each render command under 6 minutes with
+  `--max-scenes 1–3`. Previews (360 × 640) 1.6–3.2×.
+
+The story's Shorts (private, scratchpad `story-qc/shorts/`; variants `short1`–`short7` in
+`story-qc/proj/video.yaml`, `shorts: true`, `audio: {target_lufs: -14, bitrate: 256k}`, karaoke
+captions with speaker colours, a hook, an end card "Full story on the channel" under the title in
+the film's card colours; contact sheets `shortN_contact.png`: first frame, the hook at 1 s, two
+frames per beat, the end card, guides at 80 % / 85 %):
+- 1 36.6 s 6.9 MB −14.3 LUFS −1.7 dBTP; 2 35.4 s 20.4 MB −14.4 / −1.7 (rain: 29.7 MB from the
+  render, re-encoded CRF 23 with the audio copied); 3 45.4 s 6.8 MB −14.3 / −1.7; 4 48.1 s 7.1 MB
+  −14.2 / −1.8; 5 41.0 s 6.7 MB −14.2 / −1.7; 6 52.0 s 10.9 MB −14.4 / −1.7; 7 (teaser) 18.2 s
+  3.8 MB −14.4 / −1.8.
+- Staging: every scene opens framed (`zoom ... cut: true, hold: true`) or on a close shot;
+  characters at a frame edge dropped (`drop`), a scene split in two entries so the echoes of the
+  second have their own cast; hooks kept to two lines (a 3–4 line hook covered a face at 1 s).
+- Lint (preview, 3 stills per beat): no errors; warnings left are narration speed of a few short
+  lines (from the film), one `rushed_animation` (a held prop and a pose in a 2.3 s line), a
+  `character_overlap` (the touch, on purpose), slivers of an echo at a frame edge in the echoes
+  shot, a compact meter label under the readable size in preview.
+- Intermediates deleted (build dirs of the Shorts and the previews, joined copies); kept: the film
+  outputs, the Shorts, the project, the audio.
+
+Files: `src/vidgen/cuts.py`, `src/vidgen/scenes/hud.py`, `src/vidgen/lint/shorts_rule.py`,
+`src/vidgen/render/fingerprint.py`; tests `tests/test_cuts_shorts.py`,
+`tests/test_kiss_display_props.py`; docs `docs/CONFIG.md`, `src/vidgen/data/guide/AGENTS.md`,
+`AGENTS.md`, `README.md`, `CHANGELOG.md`, `DESIGN.md` §102.20, `tasklist.md` (Phase AA done).
+
+Public interfaces: cut entry `overlays: {<id>: {drop: true}}`; `vidgen.scenes.hud.SHORTS_CAPTION_BAND`.
+Behaviour changes: HUD meters in a Short; HUD `compact` top edge; `shorts_safe_area` with a HUD;
+fingerprints of a cut's scenes (renders of a cut variant made before this step count as stale once).
+
+Known gaps
+- Lint does not check the hook while it shows (it fades out before the first mid-beat still of a
+  long first beat); documented (look at the still at 1 s, keep hooks to two lines).
+- A zoom near a wide stage's edge stays on the stage, so a high `scale` pushes its targets aside
+  (leave `scale` out, or zoom on fewer targets).
+- A new hook re-renders every scene of a cut (a video-wide overlay).
+- vidgen has no video bitrate / CRF setting; a busy Short over a size budget is re-encoded by hand.
+
+How to test: `tests/test_cuts_shorts.py`, `tests/test_kiss_display_props.py`; (private,
+scratchpad) `story-qc/shorts/short1_final_warning.mp4` … `short7_teaser.mp4` and
+`story-qc/shorts/short1_contact.png` … `short7_contact.png`.

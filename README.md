@@ -187,7 +187,8 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `echo` characters (other selves overlapping the present) and a `hud` overlay (an implant's
   alerts, heart monitor and scanner over the frame, its texts keeping off faces); a cartoon
   `kiss`, holographic `equations` and `timelines`, a handheld `scanner`, a glowing `pendant`, a
-  `medal`, sliding doors and a shimmering `haze`.
+  `medal`, sliding doors and a shimmering `haze`, neon strip lights along a room's walls
+  (`wall_lights`) and `wavy` hair.
 - **Isometric diagrams**: `iso_diagram` draws architecture and data flow as blocks in the same
   view (servers, databases, flat platforms, stacks of layers, group plates, connectors along a
   grid) with flat, readable labels, fitted to 16:9 and 9:16; blocks grow in on the word that names
@@ -332,7 +333,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   character timings) ([reference](docs/CONFIG.md#captions)).
 - **Shorts cut from a longer video**: a variant's `cut:` keeps chosen scenes and beats (their
   audio reused), re-stages them for 9:16 by beat id, adds a hook caption over the first seconds
-  and an end card; `shorts: true` keeps captions and the hook out of the phone app's buttons and
+  and an end card; `shorts: true` keeps captions, the hook and a HUD's meters out of the phone app's buttons and
   lints the Shorts safe area and the 60 s limit
   ([reference](docs/CONFIG.md#cuts-and-shorts-cut-shorts)).
 - **Pronunciation dictionary**: `pronunciation: {K-Phi-3: kay fye three}` (plain, case-insensitive

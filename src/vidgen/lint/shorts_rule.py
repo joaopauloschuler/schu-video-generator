@@ -8,7 +8,8 @@ every caption of the line being spoken) stands for the overlay when faces are ch
 that a longer caption of the same line covers is found from any still of it. ``shorts_length`` is a scene rule: it reads the
 video's planned length (``SceneContext.video_seconds``), set on the video's last scene only.
 ``overlay_face`` (DESIGN.md §102.8) checks the overlays that keep off faces (a ``hud``) outside
-Shorts, from the same layout dump.
+Shorts, from the same layout dump: only their texts and panels' plates count (their frame's thin
+lines run over the whole picture); in a Short ``shorts_safe_area`` checks them that way too.
 """
 
 from __future__ import annotations
@@ -69,10 +70,12 @@ def shorts_safe_area(ctx: StillContext, settings: ShortsSafeAreaRule) -> Iterato
                 (obj,),
                 group=("shorts_text", obj.get("overlay")) if is_overlay(obj) else None,
             )
+    watched = _keeps_off_faces(ctx)
+    covering = _covering(ctx, watched)
     overlays: dict[str, list[Bbox]] = {}
     reaching: set[str] = set()
     for obj in ctx.objects:
-        if is_overlay(obj):   # its reach: where it goes around this moment (all captions of the line)
+        if is_overlay(obj) and str(obj["overlay"]) not in watched:   # its reach: where it goes around this moment (all captions of the line)
             box = tuple(float(v) for v in obj["reach"]) if obj.get("reach") else object_box(obj)
             overlays.setdefault(str(obj["overlay"]), []).append(box)   # type: ignore[arg-type]
             if obj.get("reach"):
@@ -104,18 +107,27 @@ def shorts_safe_area(ctx: StillContext, settings: ShortsSafeAreaRule) -> Iterato
                     limit=settings.min_cover,
                     group=("shorts_face", overlay),
                 )
+        for overlay, share in _face_cover(face, covering):
+            if share >= settings.min_cover:
+                yield Issue(
+                    f"overlay '{overlay}' covers {share:.0%} of the face of {describe(figure)}; "
+                    "frame the face away from the overlay's texts and panels (a shot, a zoom), or make it compact",
+                    face,
+                    (figure,),
+                    value=round(share, 3),
+                    limit=settings.min_cover,
+                    group=("shorts_face", overlay),
+                )
 
 
-@rule("overlay_face", mid_beat=True)
-def overlay_face(ctx: StillContext, settings: OverlayFaceRule) -> Iterator[Issue]:
-    """An overlay that keeps off faces (the layout dump's still ``overlays`` entry has ``faces``:
-    a ``hud``) whose text or plate covers a character's face anyway (DESIGN.md §102.8). In a
-    Short, ``shorts_safe_area`` reports every overlay over a face instead."""
-    if "shorts" in ctx.layout:
-        return
-    watched = {str(o["id"]) for o in ctx.frame.get("overlays", []) if o.get("faces")}
-    if not watched:
-        return
+def _keeps_off_faces(ctx: StillContext) -> set[str]:
+    """The overlays of this still that keep off faces (their layout entry has ``faces``: a ``hud``)."""
+    return {str(o["id"]) for o in ctx.frame.get("overlays", []) if o.get("faces")}
+
+
+def _covering(ctx: StillContext, watched: set[str]) -> dict[str, list[Bbox]]:
+    """The boxes of the ``watched`` overlays' texts and panels' plates (not their frame's thin
+    lines, which run over the whole picture), by overlay."""
     covering: dict[str, list[Bbox]] = {}
     for obj in ctx.objects:
         if not is_overlay(obj) or str(obj["overlay"]) not in watched:
@@ -124,17 +136,36 @@ def overlay_face(ctx: StillContext, settings: OverlayFaceRule) -> Iterator[Issue
         plate = obj["kind"] == "shape" and float(fill.get("opacity", 0.0)) >= 0.3   # a panel's plate, not the frame's lines
         if is_text(obj) and has_letters_or_digits(obj) or plate:
             covering.setdefault(str(obj["overlay"]), []).append(object_box(obj))
+    return covering
+
+
+def _face_cover(face: Bbox, covering: dict[str, list[Bbox]]) -> Iterator[tuple[str, float]]:
+    """Each overlay of ``covering`` and the share of ``face`` its boxes cover (at most 1)."""
+    for overlay, boxes in covering.items():
+        share = sum(area(shared) for shared in (intersection(face, box) for box in boxes) if shared is not None) / max(area(face), 1e-9)
+        yield overlay, min(share, 1.0)
+
+
+@rule("overlay_face", mid_beat=True)
+def overlay_face(ctx: StillContext, settings: OverlayFaceRule) -> Iterator[Issue]:
+    """An overlay that keeps off faces (the layout dump's still ``overlays`` entry has ``faces``:
+    a ``hud``) whose text or plate covers a character's face anyway (DESIGN.md §102.8). In a
+    Short, ``shorts_safe_area`` checks them (the same way) with the other overlays."""
+    if "shorts" in ctx.layout:
+        return
+    covering = _covering(ctx, _keeps_off_faces(ctx))
+    if not covering:
+        return
     for figure in _faces(ctx):
         face: Bbox = tuple(float(v) for v in figure["face"])   # type: ignore[assignment]
-        for overlay, boxes in covering.items():
-            share = sum(area(shared) for shared in (intersection(face, box) for box in boxes) if shared is not None) / max(area(face), 1e-9)
+        for overlay, share in _face_cover(face, covering):
             if share >= settings.min_cover:
                 yield Issue(
-                    f"overlay '{overlay}' covers {min(share, 1.0):.0%} of the face of {describe(figure)}; "
+                    f"overlay '{overlay}' covers {share:.0%} of the face of {describe(figure)}; "
                     "frame the face away from the corners (a shot, a zoom), make the overlay compact, or give it fewer lines",
                     face,
                     (figure,),
-                    value=round(min(share, 1.0), 3),
+                    value=round(share, 3),
                     limit=settings.min_cover,
                     group=("overlay_face", overlay),
                 )

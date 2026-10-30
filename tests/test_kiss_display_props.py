@@ -68,6 +68,18 @@ def test_the_hud_moves_its_texts_off_a_face_and_draws_in_pieces(make_project, tm
     assert len(layer.posed(14)[0][1].submobjects) == 3   # the frame, the texts, the heart
 
 
+@pytest.mark.render
+def test_a_compact_hud_stands_closer_to_every_edge(make_project, tmp_path: Path) -> None:
+    tops = {}
+    for compact in (False, True):
+        entry = {"type": "hud", "at": 0.0, "duration": 1.0, "alert": "ALERT", "heart": {"bpm": 80}, "compact": compact}
+        proj = project(make_project, [bullets("s", beats=1, overlays={"implant": entry})], [])
+        overlay = render(proj, "s", tmp_path / str(compact)).overlay_layer.overlays[0]
+        tops[compact] = (overlay._alert_boxes[0][3], overlay._heart_box[0], overlay._heart_box[1])
+    assert tops[True][0] > tops[False][0]   # the alert nearer the top (Step 254: it was moved down)
+    assert tops[True][1] < tops[False][1] and tops[True][2] < tops[False][2]   # the meter nearer the corner
+
+
 def _still(objects: list[dict[str, Any]], *, faces: bool = True, shorts: bool = False) -> StillContext:
     layout = {"width": 854, "height": 480, **({"shorts": [0, 0, 700, 380]} if shorts else {})}
     frame = {"overlays": [{"id": "implant", "type": "hud", "settled": True, "skip": [], **({"faces": True} if faces else {})}]}

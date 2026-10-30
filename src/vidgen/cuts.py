@@ -28,7 +28,8 @@ from vidgen.includes import Origin, entry_names
 #: Stage params whose list entries a cut's ``params`` changes by name (like a set's).
 NAMED_LISTS = ("characters", "props", "layers")
 #: The key of a ``characters`` / ``props`` / ``layers`` entry in a cut's ``params`` that leaves
-#: the scene's entry of that name out of the cut (``{name: visitor, drop: true}``).
+#: the scene's entry of that name out of the cut (``{name: visitor, drop: true}``); also of a
+#: scene overlay in a cut entry's ``overlays`` (``overlays: {readout: {drop: true}}``).
 DROP = "drop"
 #: The id of the overlay a cut's ``hook`` adds.
 HOOK_ID = "hook"
@@ -133,6 +134,14 @@ def _select_beats(scene: dict[str, Any], entry: CutScene, where: str, problems: 
     scene["beats"] = beats[first:last + 1]
 
 
+def _drop_overlays(scene: dict[str, Any]) -> None:
+    """Leave out (in place) the scene's overlays a cut marks ``{drop: true}`` (e.g. one timed on
+    a beat the cut leaves out)."""
+    overlays = scene.get("overlays")
+    if isinstance(overlays, Mapping):
+        scene["overlays"] = {k: v for k, v in overlays.items() if not (isinstance(v, Mapping) and v.get(DROP) is True)}
+
+
 def _end_card(data: Mapping[str, Any], spec: str | CutEndCard) -> dict[str, Any]:
     card = CutEndCard(text=spec) if isinstance(spec, str) else spec
     title = card.title or str(data.get("title") or "")
@@ -217,6 +226,7 @@ def apply_cut(data: Any, origins: Mapping[str, Origin] | None = None) -> tuple[A
                 scene["params"] = merge_params(scene["params"], value)
             else:
                 scene[key] = _merge(scene.get(key), value)
+        _drop_overlays(scene)
         chosen.append(scene)
         sources.append(index[entry.scene])
     seen: dict[str, int] = {}

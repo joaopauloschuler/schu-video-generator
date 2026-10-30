@@ -5,7 +5,17 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–253)
+## Unreleased (Steps 193–254)
+
+### Shorts with a HUD; review of Phase AA (Step 254)
+
+- A cut can leave out one of a scene's own overlays (`overlays: {readout: {drop: true}}`), e.g.
+  one timed on a beat the cut leaves out.
+- A `hud` in a Short keeps its heart and scan meters above the captions (they stood on the same
+  line) and out of the app's parts with `compact` too.
+- Lint `shorts_safe_area` checks a `hud` by its texts and panels only, as `overlay_face` does
+  (its frame's lines over the whole picture counted as covering every face).
+- Changing a cut's `beats` no longer re-renders every scene of the cut, only the one it changes.
 
 ### Wavy hair, neon strip lights, a kiss holding hands (Phase AA, Step 253)
 

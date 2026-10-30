@@ -20014,3 +20014,47 @@ room at night that still reads.
   overlap (two pairs materialising and kissing) share one `at`.
 - Public surface: config `look.hair: wavy`, `iso.wall_lights`; `IsoColors.strips`,
   `IsoBlinkers(hidden=)` (keyword, default `None`). Additive; Phase Q baseline 31/31 identical.
+
+### 102.20 Shorts of the story; review of Phase AA (Step 254)
+
+Seven vertical Shorts were cut from the private story video with §101's `cut:` variants. What
+they found, fixed generically:
+
+- **A cut drops a scene's own overlay**: a scene overlay timed `at` a beat the cut leaves out is
+  an error (`scene ... has no beat ...`), and `false` only turns off a video-wide overlay. A cut
+  entry's `overlays: {<id>: {drop: true}}` leaves the scene's overlay out (`cuts._drop_overlays`,
+  after the entry's changes are merged; the key is `cuts.DROP`, as for cast entries).
+- **A HUD in a Short keeps its meters above the captions**: in a Short (`shorts_zones`) the
+  HUD's area is the Shorts area raised by `SHORTS_CAPTION_BAND` (0.13 of its height: a one-line
+  karaoke phrase, its plate and margin), and `compact` there shrinks only (no inset towards the
+  edges, which would reach into the app's parts). Before, the heart and scan meters stood on the
+  captions' line.
+- **`compact` outside Shorts**: the top of the HUD's area moved down by the inset (`y1 - inset`)
+  where the contract (§102.8: "the safe margin halved") moves every edge out; now `y1 + inset`.
+  Only HUDs with `compact: true` change (new in this phase; no baseline frame has a HUD).
+- **Lint `shorts_safe_area` and a HUD**: in a Short the rule counted a HUD's frame (scan lines
+  over the whole picture) as an overlay covering every face. Overlays that keep off faces (the
+  still's `overlays` entry has `faces`) are now checked by their texts and panels' plates only,
+  the boxes `overlay_face` uses (`_keeps_off_faces`, `_covering`, `_face_cover`, shared by both
+  rules); other overlays as before (their union, captions by their `reach`).
+- **Render fingerprints and cuts**: the top-level config in a scene's fingerprint included the
+  `cut:` itself, so any change in `cut.beats` (or a scene entry) made every scene of the cut
+  stale. A cut is already applied to the scenes (its hook to `overlays`, its end card to the
+  scenes), so `cut` is left out of the fingerprint when there is one; without a cut the dump
+  keeps `cut: null`, so other projects' fingerprints (and renders) are unchanged. A new hook
+  still re-renders every scene (a video-wide overlay).
+
+Known gaps: lint does not check the hook while it shows (it is fading or the first mid-beat still
+comes after it; a hook of three or four lines covers a face near the top: look at the still at
+1 s, keep hooks to two lines); a zoom near a wide stage's edge is kept on the stage, so a high
+`scale` pushes the targets aside (leave `scale` out or zoom on fewer targets); a busy scene (rain,
+many lights) encodes larger (a Short of a rainy city was 29.7 MB at the default CRF; re-encoded
+at CRF 23 with the audio copied: 20.4 MB).
+
+Render performance at 1080 × 1920, one scene at a time, peak 1.6 GB: 4.8–7.8× real time for
+rooms with two characters (an office, the lab, the door), 9.8–12.6× for scenes with several echo
+characters or a rainy city with traffic, 3.4× for a city held on one tower; the end card ≈3×.
+
+Public surface: cut entry `overlays: {<id>: {drop: true}}`; `vidgen.scenes.hud.SHORTS_CAPTION_BAND`.
+Behaviour: HUD meters in a Short, `compact` top edge, `shorts_safe_area` with a HUD, fingerprints
+of cut scenes. Phase Q baseline 31/31 identical.

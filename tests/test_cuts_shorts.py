@@ -134,6 +134,29 @@ def test_a_variant_cut_shares_the_audio(make_project: Any) -> None:
     assert info.value.problems[0].variant == "short" and info.value.problems[0].location == "cut.scenes[0]"
 
 
+def test_a_cut_drops_a_scene_overlay() -> None:
+    story = _story()
+    story["scenes"][1]["overlays"] = {"label": {"type": "lower_third", "at": "park_b1", "title": "Ana"}, "watermark": False}
+    out = _cut(story, {"scenes": [{"scene": "park", "beats": ["wind"], "overlays": {"label": {"drop": True}}}]})
+    assert out["scenes"][0]["overlays"] == {"watermark": False}   # timed on a beat the cut leaves out
+    VideoConfig.model_validate(out)
+    kept = _cut(story, {"scenes": [{"scene": "park", "overlays": {"label": {"title": "Ana B."}}}]})
+    assert kept["scenes"][0]["overlays"]["label"] == {"type": "lower_third", "at": "park_b1", "title": "Ana B."}
+
+
+def test_a_change_for_one_scene_of_a_cut_keeps_the_others_renders(make_project: Any) -> None:
+    from vidgen.render.fingerprint import scene_fingerprint
+
+    def prints(shot: str) -> dict[str, str]:
+        cut = {"scenes": ["park", "sky"], "beats": {"sky_b1": {"emotion": shot}}}
+        root = make_project({**_story(), "variants": {"short": {"cut": cut}}}, folder=f"p_{shot}")
+        project = Project.load(root, variant="short")
+        return {sid: scene_fingerprint(project, sid) for sid in ("park", "sky")}
+
+    calm, excited = prints("calm"), prints("excited")
+    assert calm["park"] == excited["park"] and calm["sky"] != excited["sky"]
+
+
 def test_shorts_warnings(make_project: Any) -> None:
     root = make_project({**_story(), "shorts": {"max_seconds": 2}})
     warnings = shorts_warnings(Project.load(root))
@@ -202,6 +225,41 @@ def test_shorts_face_check_uses_the_reach_of_the_line() -> None:
     chin = {**short, "reach": [150, 1170, 850, 1300]}   # 15 % of the face (its chin): over min_cover 0.1
     assert any("covers 15% of the face" in i.message for i in check(_still([face, chin]), ShortsSafeAreaRule()))
     assert list(check(_still([face, chin]), ShortsSafeAreaRule(min_cover=0.2))) == []
+
+
+def test_an_overlay_that_keeps_off_faces_counts_its_texts_and_panels_only() -> None:
+    check = RULES["shorts_safe_area"].check
+    face = {"kind": "character", "name": "ana", "bbox": [300, 900, 700, 1900], "face": [400, 1000, 600, 1200], "path": "c", "class": "Figure", "opacity": 1}
+    lines = {"kind": "group", "bbox": [0, 0, 1080, 1920], "overlay": "implant", "fill": {"opacity": 0.0}, "path": "overlay:implant/g"}
+    alert = _text("ALERT", [380, 1100, 700, 1180], overlay="implant")
+    still = _still([face, lines])
+    still.frame["overlays"] = [{"id": "implant", "type": "hud", "settled": True, "faces": True}]
+    assert list(check(still, ShortsSafeAreaRule())) == []   # its frame's lines run over the whole picture
+    still = _still([face, lines, alert])
+    still.frame["overlays"] = [{"id": "implant", "type": "hud", "settled": True, "faces": True}]
+    found = [i.message for i in check(still, ShortsSafeAreaRule())]
+    assert len(found) == 1 and "overlay 'implant' covers 40% of the face of character 'ana'" in found[0]
+
+
+@pytest.mark.render
+def test_a_hud_in_a_short_keeps_its_meters_above_the_captions(make_project: Any, tmp_path: Path) -> None:
+    from manim import tempconfig
+    from test_overlays import bullets, project, render
+
+    from vidgen.overlays import shorts_area
+    from vidgen.render.worker import frame_size
+    from vidgen.scenes.hud import SHORTS_CAPTION_BAND
+
+    hud = {"type": "hud", "at": 0.0, "duration": 1.0, "heart": {"bpm": 80}, "scan": {"level": 0.5}, "compact": True}
+    proj = project(make_project, [bullets("s", beats=1, overlays={"implant": hud})], [],
+                   format={"width": 90, "height": 160, "fps": 5}, shorts=True)
+    overlay = render(proj, "s", tmp_path, size=(90, 160)).overlay_layer.overlays[0]
+    fw, fh = frame_size(90, 160)
+    with tempconfig({"pixel_width": 90, "pixel_height": 160, "frame_width": fw, "frame_height": fh}):
+        area = shorts_area(proj)
+    for box in (overlay._heart_box, overlay._scan_box):
+        assert box[1] == pytest.approx(area.y0 + SHORTS_CAPTION_BAND * area.height)   # above the captions
+        assert area.x0 - 1e-6 <= box[0] and box[2] <= area.x1 + 1e-6   # compact: still out of the app's parts
 
 
 def test_karaoke_in_a_short_shows_a_phrase_on_one_line() -> None:

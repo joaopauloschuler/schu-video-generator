@@ -331,10 +331,19 @@ variants:
   little above the app's texts; lint checks every caption of a line against the faces.
 - Leaving beats out leaves out their actions too: start the scene where the kept beats need the
   characters (`params: {characters: [{name: kit, at: door}]}`, merged by name; `{name: pip,
-  drop: true}` leaves one out, e.g. someone who only arrives later), and give an
-  `until` that named a left-out beat a beat of the cut (validate says which).
+  drop: true}` leaves one out, e.g. someone who only arrives later, or a sliver at the frame's
+  edge in a close view), and give an `until` that named a left-out beat a beat of the cut
+  (validate says which). A scene overlay timed on a left-out beat: `overlays: {readout: {drop:
+  true}}` in the scene's entry. A scene whose last beat brings in new characters can be split in
+  two entries (the second with another `id`), each with its own cast.
+- A zoom never leaves the stage: near its edge a high `scale` pushes the targets aside; leave
+  `scale` out (as close as they fit) or zoom on fewer targets.
+- Keep hooks to two lines (about 25 characters): a longer one covers a face near the top during
+  the first seconds, and lint does not check the hook while it shows (look at the still at 1 s).
+  A `hud` in a Short keeps its meters above the captions by itself.
 - `vidgen storyboard --variant short1 --per-beat 2` and `vidgen lint --variant short1`, then
-  `vidgen render --variant short1` (`--max-scenes` keeps each run short).
+  `vidgen render --variant short1` (`--max-scenes` keeps each run short; a change in `cut.beats`
+  re-renders only that scene, a new hook every scene).
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type

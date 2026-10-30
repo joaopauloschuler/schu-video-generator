@@ -40,6 +40,9 @@ PANEL_WIDTH = (0.3, 0.47)
 PANEL_HEIGHT = 0.18
 #: ``compact``: texts and panels this size, the safe margin halved.
 COMPACT = 0.72
+#: In a Short (``shorts:``): the share of the Shorts area's height above its bottom edge kept for
+#: the captions (a one-line phrase and its margin), so the meters stand above them.
+SHORTS_CAPTION_BAND = 0.13
 
 
 class HudHeart(OverlayOptions):
@@ -142,14 +145,17 @@ class Hud(Overlay):
         o = self.options
         frame = frame_region()
         portrait = orientation() == "portrait"
-        area = shorts_area(self.context.project) if self.context.project.config.shorts_zones is not None else safe_area()
+        in_short = self.context.project.config.shorts_zones is not None
+        area = shorts_area(self.context.project) if in_short else safe_area()
         short = min(frame.width, frame.height)
         color, warning = resolve_color(o.color), resolve_color(o.warning)
         self._color, self._warning = color, warning
         shrink = COMPACT if o.compact else 1.0
-        if o.compact:   # closer to the frame's edges
+        if in_short:   # the meters above the Short's captions, never into the app's parts
+            area = Region(area.x0, area.y0 + SHORTS_CAPTION_BAND * area.height, area.x1, area.y1)
+        elif o.compact:   # closer to the frame's edges
             inset = min(area.x0 - frame.x0, area.y0 - frame.y0, frame.x1 - area.x1, frame.y1 - area.y1) * 0.5
-            area = Region(area.x0 - inset, area.y0 - inset, area.x1 + inset, area.y1 - inset)
+            area = Region(area.x0 - inset, area.y0 - inset, area.x1 + inset, area.y1 + inset)
         #: the still piece: the frame's brackets and scan lines, the panels' plates
         still: list[Mobject] = self._frame_parts(frame, short, color) if o.frame else []
         width = area.width * PANEL_WIDTH[1 if portrait else 0] * shrink

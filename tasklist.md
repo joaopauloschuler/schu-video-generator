@@ -1553,7 +1553,12 @@ frames when shared code changes. DESIGN §102. Steps 251–254.
 - [~] A closer look at a pod's rider: still not needed (the city shots are wides and tower zooms)
 
 ### Step 254 — Shorts and review
-- [ ] 5–7 Shorts (9:16, hooks, captions, end card, < 60 s, < 28 MB, ~−14 LUFS) in the scratchpad; a critical review of the film and of the Phase AA features (tests, docs, Phase Q baseline, `tests/test_mcp.py` fully)
+- [x] 5–7 Shorts (9:16, hooks, captions, end card, < 60 s, < 28 MB, ~−14 LUFS) in the scratchpad; a critical review of the film and of the Phase AA features (tests, docs, Phase Q baseline, `tests/test_mcp.py` fully)
+- [x] Seven Shorts (18–52 s, 3.8–20.4 MB, −14.2 to −14.4 LUFS, −1.7 to −1.8 dBTP) with contact sheets (scratchpad, private)
+- [x] Fixes from the review (DESIGN §102.20): a cut drops a scene's own overlay (`overlays: {id: {drop: true}}`); a `hud`'s meters above a Short's captions; `compact` moves the HUD's top edge out (it moved it in); `shorts_safe_area` checks a HUD by its texts and panels; a change in `cut.beats` re-renders only that scene; tests in `test_cuts_shorts.py`, `test_kiss_display_props.py`; CONFIG, guide (`AGENTS.md`), README, CHANGELOG
+- [~] Lint does not check a `hook` while it shows (noted in CONFIG / the guide: look at the still at 1 s)
+
+Phase AA done.
 
 ---
 

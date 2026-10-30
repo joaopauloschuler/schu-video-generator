@@ -613,7 +613,7 @@ variants:
 
 | key | default | |
 |---|---|---|
-| `scenes` | required | the scenes shown, in order: a scene id (the whole scene), or `{scene, beats, ...}`: `beats` a list of beat ids (shown in that order) or `{from, to}` (both included; either may be left out); any other key changes the scene in this cut: `params` merge into the scene's params (mappings key by key; `characters`, `props` and `layers` entries by name, as a [set's](#shared-casts-and-sets-include-and-sets); `{name: ben, drop: true}` leaves that one out of the cut; an empty list clears), anything else (`id`, `set`, `transition`, `music`, `overlays`, `duration`...) is merged (mappings) or replaced. A scene may come twice with another `id`. The first scene's transition is dropped (the scene it came from is not in the cut) unless its entry gives one |
+| `scenes` | required | the scenes shown, in order: a scene id (the whole scene), or `{scene, beats, ...}`: `beats` a list of beat ids (shown in that order) or `{from, to}` (both included; either may be left out); any other key changes the scene in this cut: `params` merge into the scene's params (mappings key by key; `characters`, `props` and `layers` entries by name, as a [set's](#shared-casts-and-sets-include-and-sets); `{name: ben, drop: true}` leaves that one out of the cut; an empty list clears), anything else (`id`, `set`, `transition`, `music`, `overlays`, `duration`...) is merged (mappings) or replaced; `overlays: {readout: {drop: true}}` leaves one of the scene's own overlays out (one timed `at` a beat the cut leaves out). A scene may come twice with another `id`. The first scene's transition is dropped (the scene it came from is not in the cut) unless its entry gives one |
 | `beats` | `{}` | changes to the cut's beats by beat id (`shot`, `actions`, `emotion`, `voice`, `text`...): mappings merge, lists (a beat's `actions`) replace |
 | `hook` | none | a [`hook`](#hook) overlay: its text, or its options (`{text, seconds, position, size, ...}`) |
 | `end_card` | none | a card at the end: its line, with the video's `title` above it; or `{text, title, seconds: 3, type: end_card \| card, id: cut_end, params, transition}` (`card`: a [cartoon title card](#card) with the title as its text and the line as its subtitle; `params` are more of the scene's params) |
@@ -639,9 +639,11 @@ and description over the bottom of the frame and its buttons down the right side
   title-size words fit only one or two at a time in the narrow clear part;
 - the scenes' safe area leaves them out too, so built-in scenes lay their text out of them, and a
   [`card`](#card)'s words keep to the clear part (its colour and burst still fill the frame);
+- a [`hud`](#hud)'s meters stand above the captions (a band of 13 % of the clear part's height
+  over its bottom edge) and never in the app's parts, `compact` too;
 - `vidgen lint` checks three stills per beat with `shorts_safe_area` (text or a face in those parts,
   an overlay over a face — for captions, any caption of the line being spoken, not only the
-  one in the still) and the length with `shorts_length` (an error over `max_seconds`);
+  one in the still; for an overlay that keeps off faces, a `hud`, only its texts and panels) and the length with `shorts_length` (an error over `max_seconds`);
 - `vidgen validate` warns when the format is not vertical or the planned length is over
   `max_seconds`.
 
@@ -652,6 +654,12 @@ end of the scene, so a scene can end on a close view; `at: 0, cut: true` in a sc
 opens the scene on the close view, so the hook is not shown over a wide establishing view) — and look at `vidgen storyboard --variant
 short1 --per-beat 2`. Shorts are usually mixed louder than long videos (`audio: {target_lufs:
 -14, bitrate: 256k}`: at that loudness the AAC encode at 192k can push the peaks over 0 dBTP). Render long variants in steps with `vidgen render --variant short1 --max-scenes N`.
+A change in `cut.beats` re-renders only the scene it changes; a change of the `hook` (an overlay
+over the whole video) re-renders every scene of the cut, so settle the hooks before the final
+renders. The hook is not checked by `lint` while it shows: look at a still at about 1 s (a hook
+of two lines covers less of a face near the top than one of three or four). Busy scenes (rain,
+many lights) make larger files: re-encode one over a size budget (`ffmpeg -c:v libx264 -crf 23
+-c:a copy`).
 
 ## Shared casts and sets (`include:` and `sets:`)
 
@@ -13522,7 +13530,8 @@ while skipping or racing) and a scanner's meter at the bottom right (`scan`: its
 bar and a live wave; above 1 it is off its scale and flashes `off_scale` in the warning colour).
 It belongs to a scene like a [lower third](#lower_third) (`scene`, `at`, `duration`), boots in
 with a flicker and fades out; usually written on the scene that needs it. In a
-[Short](#cuts-and-shorts-cut-shorts) it keeps out of the app's parts. Drawn under the captions
+[Short](#cuts-and-shorts-cut-shorts) it keeps out of the app's parts and its meters stand above
+the captions (`compact` there makes them smaller, not closer to the edges). Drawn under the captions
 and the hook; lint does not check its contrast (its text stands on dark plates or has a dark
 edge).
 
@@ -13533,7 +13542,8 @@ covering the least of a face — the alert at the top centre, top right, top lef
 or above a meter — moving only when a face comes under them (a shot, a zoom, a walk), so they do
 not hop about. In a close-up where every place touches the face, `compact: true` makes texts and
 meters smaller and closer to the frame's edges. Lint [`overlay_face`](#lint-vidgen-lint) warns when its text
-or a plate still covers a face (outside Shorts; in a Short `shorts_safe_area` does).
+or a plate still covers a face (outside Shorts; in a Short `shorts_safe_area` does, the same
+way: the frame's thin lines over the whole picture do not count).
 
 | param | default | |
 |---|---|---|
@@ -14086,7 +14096,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `significance_claim` | warning | the p-value said as the chance the result is wrong or the particle exists ("five sigma means 99.99994 % sure the Higgs exists", "the chance it is a fluke"): it is the chance that background alone fluctuates this high; a "one in N" or a percentage that does not match the σ said (one- or two-sided); in a [`mass_spectrum`](#mass_spectrum) scene a σ said for the bump that it does not compute (its expected Asimov significance with all events and its likelihood-ratio fit; "so far", "already" accept anything along the filling; the 5σ convention itself is not compared); `sigmas` (0.5) |
 | `simulated_label` | warning | simulated data called real ("real collision data", "data from the LHC", "CMS data") in a `mass_spectrum`, `detector` or simulated `plot` scene, or such a picture whose screen does not say "simulated" (a `detector` `label` without it; a `plot` of the `mass_spectrum` or `decay_times` model without "simulated" in a series name, the title or the caption) |
 | `particle_units` | info | masses written both in GeV (natural units, c = 1) and GeV/c² on screen in one video: write them one way |
-| `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_cover` (0.1) of a face — for captions, any caption of the line being spoken (the layout dump's `reach` of the caption), not only the one in the still. Beat-end and mid-beat stills: in a Short, `vidgen lint` renders 3 stills per beat (stills of a storyboard with 2 or more per beat are reused), so a face under the captions while a zoom is held part-way through a beat is found too. Faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
+| `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_cover` (0.1) of a face — for captions, any caption of the line being spoken (the layout dump's `reach` of the caption), not only the one in the still; for an overlay that keeps off faces (a `hud`) only its texts and panels' plates count, not its frame's lines over the whole picture. Beat-end and mid-beat stills: in a Short, `vidgen lint` renders 3 stills per beat (stills of a storyboard with 2 or more per beat are reused), so a face under the captions while a zoom is held part-way through a beat is found too. Faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
 | `overlay_face` | warning | outside a Short, a [`hud`](#hud)'s text or panel plate covering at least `min_cover` (0.15) of a character's face (the HUD places its texts clear of faces by itself; this catches what it could not: a close-up with a face in every corner). Fix: frame the face away from the corners (a shot or zoom), `compact: true`, fewer `lines` |
 | `shorts_length` | error | a Short planned longer than `shorts.max_seconds` (60): reported on the video's last scene. Fix: fewer beats or scenes in the `cut`, a shorter end card |
 
