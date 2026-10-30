@@ -110,6 +110,16 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "chess_table": ObjectKind(1, 1, 0.96, top=0.86),
     # a city's tall buildings (DESIGN.md §102.2): its height is the placing's own
     "tower": ObjectKind(2, 2, 9.0),
+    # more lab and sci-fi objects (DESIGN.md §103): a wall_clock hangs on a room's back wall (its cell is the wall's)
+    "laptop": ObjectKind(1, 1, 1.25),
+    "terminal_kiosk": ObjectKind(1, 1, 2.0),
+    "quantum_core": ObjectKind(1, 1, 2.0),
+    "robot_arm": ObjectKind(1, 1, 1.5),
+    "microscope": ObjectKind(1, 1, 1.6),
+    "centrifuge": ObjectKind(1, 1, 1.2),
+    "coffee_machine": ObjectKind(1, 1, 1.65),
+    "lab_stool": ObjectKind(1, 1, 0.75, top=0.72),
+    "wall_clock": ObjectKind(1, 1, 2.65),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
@@ -120,8 +130,11 @@ OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden")}
 
 #: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
 #: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
-OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door"})
-SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower"})
+OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop"})
+SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
+                                            "coffee_machine"})
+#: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
+WALL_KINDS: frozenset[str] = frozenset({"wall_clock"})
 
 
 @dataclass(frozen=True)
@@ -137,8 +150,8 @@ class ObjectState:
 
 def default_state(kind: str) -> ObjectState:
     """The state of an object of ``kind`` unless the scene says otherwise: there, closed and off;
-    flowers in bloom; a tower's windows lit (§102.2)."""
-    return ObjectState(open=kind == "flowers", on=kind == "tower")
+    flowers in bloom; a laptop open; a tower's windows lit (§102.2)."""
+    return ObjectState(open=kind in ("flowers", "laptop"), on=kind == "tower")
 
 
 @dataclass(frozen=True)
@@ -181,6 +194,8 @@ class IsoObject:
     detail: str | None = None
     #: its extras (:data:`OBJECT_FEATURES`: a tower's ``screen``, ``garden``)
     features: tuple[str, ...] = ()
+    #: a wall_clock's time (``"HH:MM"``; ``None``: ten past ten)
+    time: str | None = None
 
     def cells(self) -> list[tuple[int, int]]:
         """The cells it stands on, back to front."""
@@ -208,6 +223,7 @@ class ObjectPlacing:
     detail: str | None = None
     height: float | None = None
     features: tuple[str, ...] = ()
+    time: str | None = None
 
 
 @dataclass(frozen=True)
@@ -499,7 +515,10 @@ def _with_objects(place: IsoPlace, objects: Sequence[IsoObject]) -> IsoPlace:
             if ground == VOID:
                 raise VidgenError(f"'{item.name}' ({item.width} x {item.depth} cells from map row {item.row + 1}, column "
                                   f"{item.column + 1}) reaches outside the place at {where}")
-            if ground in WALLS or (ground == WATER and not kind.over_water):
+            if item.kind in WALL_KINDS:
+                if ground != WALL or not place.wall_height(c, r) >= WALL_HEIGHT:
+                    raise VidgenError(f"'{item.name}' hangs on a room's standing wall: put it at a wall cell (#) of a back wall, not at {where}")
+            elif ground in WALLS or (ground == WATER and not kind.over_water):
                 raise VidgenError(f"'{item.name}' would stand on {'a wall' if ground in WALLS else 'water'} at {where}; "
                                   "move it, or make it smaller (size)")
             if (c, r) in occupied:
@@ -530,8 +549,11 @@ def place_objects(place: IsoPlace, placings: Sequence[ObjectPlacing]) -> IsoPlac
         else:
             column, row = placing.at[0] - 1, placing.at[1] - 1
         width, depth = placing.size if placing.size is not None else (kind.width, kind.depth)
-        if placing.size is None and placing.facing == "right":
+        facing = _wall_facing(place, placing.kind, column, row, placing.facing) if placing.kind in WALL_KINDS else placing.facing
+        if placing.size is None and facing == "right":
             width, depth = depth, width
+        if placing.time is not None and placing.kind != "wall_clock":
+            raise VidgenError(f"objects[{k}]: time is for a wall_clock, not {placing.kind}")
         if placing.height is not None:
             low, high = TALL_KINDS.get(placing.kind, (None, None))
             if low is None or high is None:
@@ -545,8 +567,24 @@ def place_objects(place: IsoPlace, placings: Sequence[ObjectPlacing]) -> IsoPlac
         counts[placing.kind] += 1
         name = placing.name or (placing.kind if counts[placing.kind] == 1 else f"{placing.kind}_{counts[placing.kind]}")
         added.append(IsoObject(name, placing.kind, column, row, width, depth, kind.height if placing.height is None else float(placing.height),
-                               placing.facing, color=placing.color, detail=placing.detail, features=tuple(placing.features)))
+                               facing, color=placing.color, detail=placing.detail, features=tuple(placing.features), time=placing.time))
     return _with_objects(place, added)
+
+
+def _wall_facing(place: IsoPlace, kind: str, column: int, row: int, facing: str) -> str:
+    """Which way an object hanging on the wall at (``column``, ``row``) faces: into the room in
+    front of the wall, ``left`` (the floor below it on the map) or ``right`` (the floor to its
+    right); ``facing`` when both are open."""
+    def open_(c: int, r: int) -> bool:
+        return place.ground(c, r) not in WALLS and place.ground(c, r) != VOID
+
+    below, right = open_(column, row + 1), open_(column + 1, row)
+    if below and right:
+        return facing
+    if below or right:
+        return "left" if below else "right"
+    raise VidgenError(f"a {kind} at map row {row + 1}, column {column + 1} hangs on a wall with the room's floor below it or to its right "
+                      "on the map; put it on such a wall cell")
 
 
 __all__ = [
@@ -576,6 +614,7 @@ __all__ = [
     "WALL",
     "WALLS",
     "WALL_HEIGHT",
+    "WALL_KINDS",
     "WATER",
     "WINDOW",
     "IsoCell",

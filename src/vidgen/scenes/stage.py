@@ -5,6 +5,7 @@ layers that move by their factor when the camera moves (§69.7), props (§69.8),
 props that move by themselves (§69.54), snow that settles and fog (§69.60), lightning, rainbows
 and the sun and moon moving across the sky (§69.61)."""
 
+import difflib
 import math
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -586,7 +587,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims)."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall)."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -600,9 +601,9 @@ class IsoObjectParam(SceneParams):
     detail: ThemeColor | None = None
     """Its second colour (a house's roof, a lamp's light, flower heads...)."""
     open: bool | None = None
-    """A house: true starts its door open; flowers: false starts them in bud (the open / close actions change it later)."""
+    """A house: true starts its door open; flowers: false starts them in bud; a laptop: false starts it closed (the open / close actions change it later)."""
     on: bool | None = None
-    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default) (switch_on / switch_off change it)."""
+    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge or coffee_machine: true starts it working (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
     height: float | None = Field(None, ge=2.0, le=30.0)
@@ -611,23 +612,32 @@ class IsoObjectParam(SceneParams):
     """A tower: a big info screen on its front whose lines of text crawl up."""
     garden: bool = False
     """A tower: glowing bands of algae farms up its sides, pulsing softly."""
+    time: str | None = Field(None, pattern=r"^([01]?\d|2[0-3]):[0-5]\d$")
+    """A wall_clock: the time its hands show, "HH:MM" (default 10:10)."""
 
     @model_validator(mode="before")
     @classmethod
     def _on_key(cls, data: Any) -> Any:
         if isinstance(data, dict) and True in data and "on" not in data:   # YAML 1.1 reads the bare key `on` as true
             data = {("on" if key is True else key): value for key, value in data.items()}
+        if isinstance(data, dict) and isinstance(data.get("object"), str) and data["object"] not in OBJECT_KINDS:
+            close = difflib.get_close_matches(data["object"], list(OBJECT_KINDS), n=1, cutoff=0.6)
+            hint = f"; did you mean {close[0]}?" if close else ""
+            raise ValueError(f"unknown object '{data['object']}'{hint} (objects: {', '.join(OBJECT_KINDS)})")
         return data
 
     @model_validator(mode="after")
     def _states(self) -> "IsoObjectParam":
         if self.open is not None and self.object not in OPENING_KINDS:
-            raise ValueError(f"open is for a house (its door) or flowers (in bloom or in bud), not {_a(self.object)}")
+            raise ValueError(f"open is for a house (its door), flowers (in bloom or in bud) or a laptop, not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
-            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), not {_a(self.object)}")
+            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), a laptop, terminal_kiosk, quantum_core, robot_arm, "
+                             f"centrifuge or coffee_machine, not {_a(self.object)}")
         for option in ("height", "screen", "garden"):
             if getattr(self, option) and self.object != "tower":
                 raise ValueError(f"{option} is for a tower, not {_a(self.object)}")
+        if self.time is not None and self.object != "wall_clock":
+            raise ValueError(f"time is for a wall_clock, not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
@@ -639,7 +649,7 @@ class IsoObjectParam(SceneParams):
         at = self.at if isinstance(self.at, str) else (self.at.column, self.at.row)
         features = tuple(name for name in ("screen", "garden") if getattr(self, name))
         return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail,
-                             self.height, features)
+                             self.height, features, self.time)
 
 
 class IsoTrafficLane(SceneParams):

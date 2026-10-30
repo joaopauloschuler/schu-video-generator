@@ -10638,6 +10638,10 @@ they hide what is behind them.
   flowers) and a `chess_table` (a small table with a board and pieces); for a city a `tower`
   (2 x 2, 9 tiles tall: see **A city at night** below). The screens, the
   pad's ring and the rack's lights glow: no `light` darkens them.
+  Other objects: `laptop` (`open: false` closed), `terminal_kiosk`, `quantum_core`, `robot_arm`,
+  `microscope`, `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (`at` a cell of a back
+  wall, `time: "03:27"`); `on: true` / `switch_on` makes the laptop, kiosk, core, arm, centrifuge
+  and coffee machine work.
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
   front looks to the viewer's lower left) or `right` (lower right; its footprint turns: a bench

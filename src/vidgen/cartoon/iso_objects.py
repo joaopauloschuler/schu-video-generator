@@ -34,8 +34,8 @@ from vidgen.cartoon.iso_city import (
     window_lit,
 )
 from vidgen.cartoon.iso_drawing import Blobs, Disc, Line, Poly, Shape, Upright, box_shapes, mix, shade
-from vidgen.world.iso import IsoObject, ObjectState, default_state
-from vidgen.world.iso_view import ISO_RISE, Box3, Point3
+from vidgen.world.iso import WALL_KINDS, IsoObject, ObjectState, default_state
+from vidgen.world.iso_view import ISO_RISE, Box3, Point3, iso_point
 
 #: Default (main, detail) colours of each object: theme tokens like the stage's props
 #: (:data:`~vidgen.cartoon.props.PROP_COLORS`), or a hex where no token fits every theme.
@@ -50,6 +50,9 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "console": ("#8A93A3", "#5FD8FF"), "server_rack": ("#3A3F4B", "#48E07A"), "projector_pad": ("#5A6272", "#5FD8FF"),
     "whiteboard": ("#B9BFC9", "#3B6FB6"), "flower_arch": ("#F2A7C3", "#FFFFFF"), "chess_table": ("#9C6B47", "#2B2F3A"),
     "tower": ("#2A3050", "#FF2E8B"),
+    "laptop": ("#B9BFC9", "#5FD8FF"), "terminal_kiosk": ("#8A93A3", "#5FD8FF"), "quantum_core": ("#4A5266", "#A98BFF"),
+    "robot_arm": ("#F2A33A", "#3A3F4B"), "microscope": ("#F4F6FA", "#3A3F4B"), "centrifuge": ("#E6EAF0", "#5FD8FF"),
+    "coffee_machine": ("#3A3F4B", "#E2574C"), "lab_stool": ("#4C8DD6", "#B9BFC9"), "wall_clock": ("#3A3F4B", "#E2574C"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -74,10 +77,13 @@ BOOK_COLORS: tuple[str, ...] = ("#E2574C", "#F6C945", "#5BA35B", "#4C8DD6", "#B4
 
 @dataclass(frozen=True)
 class ObjectLook:
-    """An object's resolved colours (``#rrggbb``)."""
+    """An object's resolved colours (``#rrggbb``); ``moving``: its moving parts are drawn over its
+    picture by the stage while it works (:func:`object_motion`), so the picture of it working
+    leaves them out (a robot arm's arm, DESIGN.md §103)."""
 
     main: str
     detail: str
+    moving: bool = False
 
 
 class _Frame:
@@ -650,11 +656,402 @@ def _tower(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     return shapes
 
 
+# ----- more lab and sci-fi objects (DESIGN.md §103) ------------------------------------------------------
+
+#: A lab bench's or a small desk's colour, a dark screen's and a working display's green.
+BENCH = "#C9CED6"
+DARK_SCREEN = "#1E2430"
+DISPLAY_GREEN = "#48E07A"
+#: Seconds of a robot arm's swing (there and back), a quantum core's pulse, a centrifuge's turn
+#: and a puff of a coffee machine's steam.
+ARM_SWING_SECONDS = 3.2
+CORE_PULSE_SECONDS = 2.0
+SPIN_SECONDS = 0.9
+STEAM_SECONDS = 1.8
+STEAM_PUFFS = 3
+#: The poses a robot arm swings between: its turn (degrees in its own frame), the upper arm's and
+#: the forearm's angle over the level.
+ARM_POSES = ((135.0, 80.0, -20.0), (-25.0, 55.0, -62.0))
+
+
+@dataclass(frozen=True)
+class Motion:
+    """A moving part of a working object at one moment (DESIGN.md §103): a flat polygon in the
+    world (tile units), its fill and opacity, outlined or not, and whether it is a light (not
+    dimmed by the stage's light)."""
+
+    points: tuple[Point3, ...]
+    fill: str
+    opacity: float = 1.0
+    ink: bool = True
+    glow: bool = False
+
+
+def _screen(p: Point3, du: float, dv: float) -> Point3:
+    """The world point ``du`` right of ``p`` on the picture and ``dv`` up it (tile widths)."""
+    x, y, z = p
+    return (x + du, y - du, z + dv / ISO_RISE)
+
+
+def _round(centre: Point3, radius: float, fill: str, ink: bool = True, glow: bool = False, steps: int = 20) -> Poly:
+    """A round shape facing the viewer (a sphere, a joint, a puff) around ``centre``, ``radius``
+    in tile widths."""
+    return Poly(tuple(_screen(centre, radius * math.cos(2 * math.pi * k / steps), radius * math.sin(2 * math.pi * k / steps)) for k in range(steps)),
+                fill, ink, glow)
+
+
+def _flat_circle(centre: Point3, radius: float, steps: int = 24, turn: float = 0.0) -> tuple[Point3, ...]:
+    """The points of a level circle round ``centre`` (tile units)."""
+    x, y, z = centre
+    return tuple((x + radius * math.cos(turn + 2 * math.pi * k / steps), y + radius * math.sin(turn + 2 * math.pi * k / steps), z) for k in range(steps))
+
+
+def _ribbon(p: Point3, q: Point3, half: float, fill: str, glow: bool = False) -> Poly:
+    """A band from ``p`` to ``q`` facing the viewer, ``half`` its width (tile widths): an arm's
+    segment, a tube."""
+    (u0, v0), (u1, v1) = iso_point(*p), iso_point(*q)
+    du, dup = u1 - u0, -(v1 - v0)
+    length = math.hypot(du, dup) or 1.0
+    su, sv = -dup / length * half, du / length * half
+    return Poly((_screen(p, su, sv), _screen(q, su, sv), _screen(q, -su, -sv), _screen(p, -su, -sv)), fill, True, glow)
+
+
+def _indicator(f: _Frame, a0: float, a1: float, b: float, z0: float, z1: float, color: str, on: bool) -> Poly:
+    """A small light on a face at ``b``: lit in ``color`` when ``on`` (not dimmed by the stage's
+    light), else dark."""
+    return _glow_rect(f, a0, a1, b, z0, z1, color) if on else f.poly([(a0, b, z0), (a1, b, z0), (a1, b, z1), (a0, b, z1)], LED_OFF, False)
+
+
+def _side_table(f: _Frame, color: str = BENCH, height: float = 0.78) -> list[Shape]:
+    """A small table filling the cell, its top at ``height``: what a laptop or a microscope stands on."""
+    a0, a1, b0, b1 = 0.1, f.width - 0.1, 0.16, f.depth - 0.08
+    back, front = _legs(f, a0 + 0.05, b0 + 0.05, a1 - 0.05, b1 - 0.05, height - 0.06, shade(color, 0.25), 0.06)
+    return back + front + f.box(a0, b0, height - 0.06, a1, b1, height, color)
+
+
+def _cabinet(f: _Frame, height: float = 0.8) -> list[Shape]:
+    """A lab bench's cabinet filling the cell with a door seam: what a benchtop machine stands on."""
+    a0, a1, b0, b1 = 0.08, f.width - 0.08, 0.18, f.depth - 0.06
+    shapes = f.box(a0, b0, 0.0, a1, b1, height, BENCH)
+    shapes.append(Line((f.p((a0 + a1) / 2, b1, 0.08), f.p((a0 + a1) / 2, b1, height - 0.1)), shade(BENCH, 0.35), 0.8))
+    shapes.append(Line((f.p(a0 + 0.04, b1, height - 0.06), f.p(a1 - 0.04, b1, height - 0.06)), shade(BENCH, 0.35), 0.8))
+    return shapes
+
+
+def _lid_point(hinge: tuple[float, float], top: tuple[float, float], a: float, s: float) -> tuple[float, float, float]:
+    """A point of a laptop's open lid: ``a`` across, ``s`` of the way from its hinge (b, z) to its top."""
+    return (a, hinge[0] + (top[0] - hinge[0]) * s, hinge[1] + (top[1] - hinge[1]) * s)
+
+
+def _laptop(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A laptop on a small desk: open, its screen glows in the detail colour with lines of code
+    when on (dark when off); closed, its lid lies on it."""
+    shapes = _side_table(f)
+    cx = f.width / 2
+    a0, a1, b0, b1, z = cx - 0.24, cx + 0.24, 0.42, 0.78, 0.78
+    shapes += f.box(a0, b0, z, a1, b1, z + 0.03, look.main)
+    if not state.open:
+        shapes += f.box(a0, b0, z + 0.03, a1, b1, z + 0.06, mix(look.main, "#FFFFFF", 0.15))
+        return shapes + [Disc(f.p(cx, (b0 + b1) / 2, z + 0.061), 0.04, shade(look.main, 0.3), False, holds_snow=False)]
+    shapes.append(f.poly([(a0 + 0.04, b0 + 0.04, z + 0.031), (a1 - 0.04, b0 + 0.04, z + 0.031), (a1 - 0.04, b0 + 0.22, z + 0.031),
+                          (a0 + 0.04, b0 + 0.22, z + 0.031)], shade(look.main, 0.4), False))
+    shapes.append(f.poly([(cx - 0.07, b0 + 0.26, z + 0.031), (cx + 0.07, b0 + 0.26, z + 0.031), (cx + 0.07, b1 - 0.03, z + 0.031),
+                          (cx - 0.07, b1 - 0.03, z + 0.031)], shade(look.main, 0.15), False))
+    hinge, top = (b0, z + 0.03), (b0 - 0.1, z + 0.44)
+    shapes.append(f.poly([_lid_point(hinge, top, a0, 0.0), _lid_point(hinge, top, a1, 0.0), _lid_point(hinge, top, a1, 1.0),
+                          _lid_point(hinge, top, a0, 1.0)], shade(look.main, 0.55)))
+    screen = DARK_SCREEN if not state.on else look.detail
+    shapes.append(f.poly([_lid_point(hinge, top, a0 + 0.03, 0.08), _lid_point(hinge, top, a1 - 0.03, 0.08), _lid_point(hinge, top, a1 - 0.03, 0.93),
+                          _lid_point(hinge, top, a0 + 0.03, 0.93)], screen, False, state.on))
+    if not state.on:
+        return shapes + [f.poly([_lid_point(hinge, top, a1 - 0.2, 0.9), _lid_point(hinge, top, a1 - 0.1, 0.9), _lid_point(hinge, top, a1 - 0.3, 0.12),
+                                 _lid_point(hinge, top, a1 - 0.4, 0.12)], mix(DARK_SCREEN, "#FFFFFF", 0.12), False)]
+    colors = (SCREEN_LINE, mix(look.detail, "#FFFFFF", 0.55), LIT_GLASS)
+    for k, s in enumerate((0.8, 0.68, 0.56, 0.44, 0.32, 0.2)):
+        indent = (0.0, 0.05, 0.1, 0.05, 0.1, 0.0)[k]
+        start = a0 + 0.07 + indent
+        end = start + (a1 - a0 - 0.18 - indent) * (0.9, 0.55, 0.75, 0.4, 0.65, 0.3)[k]
+        shapes.append(f.poly([_lid_point(hinge, top, start, s), _lid_point(hinge, top, end, s), _lid_point(hinge, top, end, s + 0.055),
+                              _lid_point(hinge, top, start, s + 0.055)], colors[k % 3], False, True))
+    return shapes
+
+
+def _terminal_kiosk(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A standing terminal: a base plate, a column, a keyboard shelf and a big screen that glows
+    in the detail colour with a header and lines of text when on."""
+    w, d = f.width, f.depth
+    cx = w / 2
+    shapes = f.box(0.18, 0.22, 0.0, w - 0.18, d - 0.12, 0.08, shade(look.main, 0.2))
+    shapes += f.box(cx - 0.09, 0.4, 0.08, cx + 0.09, 0.58, 1.12, look.main)
+    shapes.append(_indicator(f, cx - 0.04, cx + 0.04, 0.581, 0.85, 0.89, DISPLAY_GREEN, state.on))
+    shapes += f.box(0.1, 0.34, 1.1, w - 0.1, 0.46, 1.95, CASING)
+    a0, a1, z0, z1 = 0.16, w - 0.16, 1.16, 1.89
+    if state.on:
+        shapes.append(_glow_rect(f, a0, a1, 0.461, z0, z1, look.detail))
+        shapes.append(_glow_rect(f, a0, a1, 0.462, z1 - 0.09, z1, mix(look.detail, "#FFFFFF", 0.5)))
+        for k, zz in enumerate((1.68, 1.57, 1.46, 1.35, 1.24)):
+            shapes.append(_glow_rect(f, a0 + 0.06, a0 + 0.06 + (a1 - a0 - 0.12) * (0.85, 0.5, 0.7, 0.35, 0.6)[k], 0.462, zz, zz + 0.045, SCREEN_LINE))
+    else:
+        shapes.append(f.poly([(a0, 0.461, z0), (a1, 0.461, z0), (a1, 0.461, z1), (a0, 0.461, z1)], DARK_SCREEN, False))
+        shapes.append(f.poly([(a1 - 0.25, 0.462, z1 - 0.05), (a1 - 0.12, 0.462, z1 - 0.05), (a1 - 0.4, 0.462, z0 + 0.05), (a1 - 0.53, 0.462, z0 + 0.05)],
+                             mix(DARK_SCREEN, "#FFFFFF", 0.12), False))
+    shapes += f.box(0.16, 0.56, 0.92, w - 0.16, d - 0.1, 0.98, look.main)
+    shapes.append(f.poly([(0.22, 0.6, 0.981), (w - 0.22, 0.6, 0.981), (w - 0.22, d - 0.15, 0.981), (0.22, d - 0.15, 0.981)], CASING, False))
+    for b in (0.68, 0.76):
+        shapes.append(Line((f.p(0.24, b, 0.982), f.p(w - 0.24, b, 0.982)), "#4A5160", 0.6))
+    return shapes
+
+
+def _core_centre(f: _Frame) -> tuple[Point3, float]:
+    """A quantum core's sphere: its middle and radius (tile widths)."""
+    return f.p(f.width / 2, f.depth / 2, 1.08), 0.27 * min(f.width, f.depth, 1.4)
+
+
+def _quantum_core(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A glowing sphere in a cage of four posts on a round plinth, a ring round its middle; the
+    sphere dim when off (the stage pulses it when on, :func:`object_motion`)."""
+    x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+    z = f.base
+    centre, radius = _core_centre(f)
+    plinth = 0.42 * min(f.width, f.depth, 1.4)
+    shapes: list[Shape] = [Upright(x, y, z, z + 0.22, plinth, look.main),
+                           Disc((x, y, z + 0.221), plinth * 0.72, look.detail if state.on else shade(look.detail, 0.55), False, glow=state.on, holds_snow=False)]
+    reach = plinth * 0.72
+    posts = [(-reach, -reach), (reach, -reach), (-reach, reach), (reach, reach)]   # back first, the front post last
+    ring = [(x + radius * 1.3 * math.cos(t), y + radius * 1.3 * math.sin(t), centre[2]) for t in [2 * math.pi * k / 32 for k in range(33)]]
+    back = [p for p in ring if p[0] + p[1] <= x + y + 1e-9]
+    front = [p for p in ring if p[0] + p[1] >= x + y - 1e-9]
+    for dx, dy in posts[:3]:
+        shapes.append(Upright(x + dx, y + dy, z + 0.22, z + 1.92, 0.035, shade(look.main, 0.1)))
+    shapes.append(Line(tuple(sorted(back, key=lambda p: iso_point(*p)[0])), mix(look.detail, "#FFFFFF", 0.3), 1.6))
+    if state.on:
+        shapes.append(_round(centre, radius, look.detail, True, True))
+        shapes.append(_round(_screen(centre, -radius * 0.25, radius * 0.25), radius * 0.45, mix(look.detail, "#FFFFFF", 0.55), False, True))
+        shapes.append(_round(_screen(centre, -radius * 0.38, radius * 0.38), radius * 0.15, "#FFFFFF", False, True))
+    else:
+        shapes.append(_round(centre, radius, shade(look.detail, 0.55)))
+        shapes.append(_round(_screen(centre, -radius * 0.35, radius * 0.35), radius * 0.2, mix(shade(look.detail, 0.55), "#FFFFFF", 0.35), False))
+    shapes.append(Line(tuple(sorted(front, key=lambda p: iso_point(*p)[0])), mix(look.detail, "#FFFFFF", 0.3), 1.6))
+    dx, dy = posts[3]
+    shapes.append(Upright(x + dx, y + dy, z + 0.22, z + 1.92, 0.035, shade(look.main, 0.1)))
+    shapes.append(Upright(x, y, z + 1.86, z + 1.96, plinth * 0.9, look.main))
+    return shapes
+
+
+def _arm_pose(share: float) -> tuple[float, float, float]:
+    """A robot arm's pose ``share`` of the way from its first pose to its second (smoothly)."""
+    s = 0.5 - 0.5 * math.cos(math.pi * min(max(share, 0.0), 1.0))
+    return tuple(a + (b - a) * s for a, b in zip(*ARM_POSES))   # type: ignore[return-value]
+
+
+def _arm(f: _Frame, look: ObjectLook, share: float) -> list[Poly]:
+    """A robot arm's arm ``share`` of its swing: the upper arm, the forearm, the joints and a
+    two-fingered gripper."""
+    turn, upper, fore = (math.radians(v) for v in _arm_pose(share))
+    cx, cy = f.width / 2, f.depth / 2
+    da, db = math.cos(turn), math.sin(turn)
+
+    def at(reach: float, z: float) -> Point3:
+        return f.p(cx + reach * da, cy + reach * db, z)
+
+    shoulder_r, shoulder_z = 0.0, 0.62
+    elbow_r, elbow_z = shoulder_r + 0.58 * math.cos(upper), shoulder_z + 0.58 * math.sin(upper)
+    wrist_r, wrist_z = elbow_r + 0.44 * math.cos(fore), elbow_z + 0.44 * math.sin(fore)
+    tip_r, tip_z = wrist_r + 0.14 * math.cos(fore - 0.5), wrist_z + 0.14 * math.sin(fore - 0.5)
+    joint = look.detail
+    shoulder, elbow, wrist = at(shoulder_r, shoulder_z), at(elbow_r, elbow_z), at(wrist_r, wrist_z)
+    finger = [_ribbon(wrist, _screen(at(tip_r, tip_z), side * 0.05, 0.0), 0.018, joint) for side in (-1.0, 1.0)]
+    return [_ribbon(shoulder, elbow, 0.075, look.main), _round(shoulder, 0.09, joint), *finger, _ribbon(elbow, wrist, 0.055, f.front(look.main)),
+            _round(elbow, 0.07, joint), _round(wrist, 0.05, joint)]
+
+
+def _robot_arm(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """An industrial robot arm on a round base with a turret and a warning light (amber, lit when
+    on); its arm at rest, or left to the stage while it swings (``look.moving``)."""
+    x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+    z = f.base
+    shapes: list[Shape] = [Upright(x, y, z, z + 0.14, 0.34, look.detail), Upright(x, y, z + 0.14, z + 0.55, 0.17, look.main)]
+    shapes.append(_round(_screen(f.p(f.width / 2, f.depth / 2, 0.1), -0.22, 0.0), 0.04, LIT_GLASS if state.on else LED_OFF, True, state.on))
+    if look.moving and state.on:
+        return shapes
+    return shapes + list(_arm(f, look, 0.0))
+
+
+def _microscope(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A microscope on a small table: a base, a pillar, a stage with a slide, the objective, the
+    head and an eyepiece tilted towards the viewer."""
+    cx = f.width / 2
+    main, dark = look.main, look.detail
+    shapes = _side_table(f)
+    shapes += f.box(cx - 0.16, 0.42, 0.78, cx + 0.16, 0.76, 0.84, main)
+    shapes += f.box(cx - 0.05, 0.42, 0.84, cx + 0.05, 0.5, 1.4, main)
+    shapes.append(_round(f.p(cx + 0.07, 0.46, 1.1), 0.04, dark))
+    shapes.append(Disc(f.p(cx, 0.62, 0.841), 0.04, LAMP_GLOW, False, holds_snow=False))
+    shapes += f.box(cx - 0.13, 0.5, 1.0, cx + 0.13, 0.74, 1.04, dark)
+    shapes.append(f.poly([(cx - 0.08, 0.58, 1.041), (cx + 0.08, 0.58, 1.041), (cx + 0.08, 0.66, 1.041), (cx - 0.08, 0.66, 1.041)], GLASS, False))
+    shapes.append(Upright(*f.p(cx, 0.62, 0.0)[:2], f.base + 1.12, f.base + 1.32, 0.032, dark))
+    shapes += f.box(cx - 0.07, 0.42, 1.3, cx + 0.07, 0.68, 1.42, main)
+    eye0, eye1 = f.p(cx, 0.5, 1.42), f.p(cx, 0.6, 1.6)
+    return shapes + [_ribbon(eye0, eye1, 0.032, dark), _round(eye1, 0.036, shade(dark, 0.2))]
+
+
+def _centrifuge(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A benchtop centrifuge on a cabinet: a body with a round window in its lid showing the
+    rotor and its tubes (in the detail colour), a display on its front (green when on; the stage
+    spins the rotor, :func:`object_motion`)."""
+    shapes = _cabinet(f)
+    w = f.width
+    b0, b1 = 0.3, f.depth - 0.16
+    shapes += f.box(0.2, b0, 0.8, w - 0.2, b1, 1.12, look.main)
+    shapes.append(_indicator(f, 0.3, 0.55 * w, b1 + 0.001, 0.88, 0.99, DISPLAY_GREEN, state.on))
+    shapes.append(Disc(f.p(0.72 * w, b1 + 0.001, 0.94), 0.035, look.detail, True, holds_snow=False))
+    centre = f.p(w / 2, (b0 + b1) / 2, 1.121)
+    shapes.append(Disc(centre, 0.2, CASING, True, holds_snow=False))
+    return shapes + [Poly(m.points, m.fill, m.ink, m.glow) for m in _rotor(centre, look, 0.3)]
+
+
+def _rotor(centre: Point3, look: ObjectLook, turn: float) -> list[Motion]:
+    """A centrifuge's rotor turned ``turn`` (radians): three arms with a tube at each end and a hub."""
+    x, y, z = centre
+    parts: list[Motion] = []
+    for k in range(3):
+        t = turn + 2 * math.pi * k / 3
+        ca, sa = math.cos(t), math.sin(t)
+        na, nb = -sa * 0.025, ca * 0.025
+        tip = (x + 0.15 * ca, y + 0.15 * sa, z + 0.002)
+        parts.append(Motion(((x + na, y + nb, z + 0.002), (tip[0] + na, tip[1] + nb, z + 0.002), (tip[0] - na, tip[1] - nb, z + 0.002),
+                             (x - na, y - nb, z + 0.002)), "#8A93A3", ink=False))
+        parts.append(Motion(_flat_circle((tip[0], tip[1], z + 0.003), 0.04, 12), look.detail))
+    parts.append(Motion(_flat_circle((x, y, z + 0.004), 0.035, 12), "#D6DAE0"))
+    return parts
+
+
+def _coffee_machine(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A coffee machine on a cabinet: its body in the main colour, a bean hopper, a dark recess
+    with a spout, a drip tray with a tiny mug, a light in the detail colour (lit when on; the
+    stage puffs steam from the mug, :func:`object_motion`)."""
+    shapes = _cabinet(f)
+    w = f.width
+    b0, b1 = 0.24, f.depth - 0.3
+    shapes += f.box(0.22, b0, 0.8, w - 0.22, b1, 1.58, look.main)
+    shapes += f.box(0.3, b0 + 0.04, 1.58, 0.55, b0 + 0.24, 1.72, "#7A5536")
+    shapes.append(f.poly([(0.33, b1, 0.86), (w - 0.33, b1, 0.86), (w - 0.33, b1, 1.3), (0.33, b1, 1.3)], DARK_SCREEN, False))
+    shapes += f.box(w / 2 - 0.04, b1, 1.2, w / 2 + 0.04, b1 + 0.06, 1.28, "#8A93A3")
+    shapes.append(_indicator(f, 0.3, 0.42, b1 + 0.001, 1.4, 1.48, look.detail, state.on))
+    for a in (0.5, 0.6):
+        shapes.append(Disc(f.p(a * w, b1 + 0.001, 1.44), 0.03, "#D6DAE0", True, holds_snow=False))
+    shapes += f.box(0.32, b1, 0.8, w - 0.32, b1 + 0.14, 0.84, "#8A93A3")
+    mug = f.p(w / 2, b1 + 0.07, 0.0)
+    shapes += [Upright(mug[0], mug[1], f.base + 0.84, f.base + 0.98, 0.055, "#F4F6FA"), Disc((mug[0], mug[1], f.base + 0.981), 0.045, "#5A3A22", False)]
+    return shapes
+
+
+def _lab_stool(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A round lab stool: a flat base, a post with a foot ring and a padded seat in the main colour."""
+    x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+    z = f.base
+    frame = look.detail
+    ring = _flat_circle((x, y, z + 0.28), 0.17, 24)
+    return [Disc((x, y, z + 0.02), 0.22, frame, True, holds_snow=False), Upright(x, y, z + 0.02, z + 0.62, 0.035, shade(frame, 0.1)),
+            Line((*ring, ring[0]), shade(frame, 0.15), 1.8), Upright(x, y, z + 0.6, z + 0.72, 0.23, look.main)]
+
+
+#: A wall clock's face: its middle's height over the wall's base and its radius (tile units).
+CLOCK_HEIGHT = 2.2
+CLOCK_RADIUS = 0.32
+
+
+def clock_hands(time: str | None) -> tuple[float, float]:
+    """A clock's hour and minute hands' angles (degrees clockwise from twelve) for ``time``
+    (``"HH:MM"``; ``None``: ten past ten)."""
+    hours, minutes = (int(v) for v in (time or "10:10").split(":"))
+    return ((hours % 12) * 30.0 + minutes * 0.5, minutes * 6.0)
+
+
+def _wall_clock(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A round clock on the face of the wall it hangs on: a rim in the main colour, a white face
+    with twelve marks, its hour and minute hands at its ``time`` and a pin in the detail colour."""
+    face_b = f.depth + 0.02
+    cx = f.width / 2
+    radius = CLOCK_RADIUS * min(f.width, 1.6)
+    across = -1.0 if f.swap else 1.0   # as seen from the room, clockwise
+
+    def at(angle: float, r: float, lift: float = 0.0) -> Point3:
+        t = math.radians(angle)
+        return f.p(cx + across * r * math.sin(t), face_b + lift, CLOCK_HEIGHT + r * math.cos(t))
+
+    steps = [k * 360.0 / 28 for k in range(28)]
+    shapes: list[Shape] = [Poly(tuple(at(t, radius) for t in steps), look.main),
+                           Poly(tuple(at(t, radius * 0.84, 0.002) for t in steps), "#F7F8FA", False)]
+    for k in range(12):
+        inner = 0.62 if k % 3 == 0 else 0.7
+        shapes.append(Line((at(k * 30.0, radius * inner, 0.003), at(k * 30.0, radius * 0.76, 0.003)), CASING, 1.6 if k % 3 == 0 else 0.9))
+    hour, minute = clock_hands(f.item.time)
+    shapes.append(Line((at(0.0, 0.0, 0.004), at(hour, radius * 0.42, 0.004)), CASING, 3.0))
+    shapes.append(Line((at(0.0, 0.0, 0.005), at(minute, radius * 0.66, 0.005)), CASING, 2.0))
+    return shapes + [Poly(tuple(at(t, radius * 0.07, 0.006) for t in steps[::2]), look.detail, False)]
+
+
+def _wall_box(item: IsoObject, base: float) -> Box3:
+    """The box of an object hanging on a wall: a thin slab on the wall's face, round its height."""
+    f = _Frame(item, base)
+    radius = CLOCK_RADIUS * min(f.width, 1.6)
+    (x0, y0, z0), (x1, y1, z1) = f.p(0.0, f.depth, CLOCK_HEIGHT - radius - 0.05), f.p(f.width, f.depth + 0.06, CLOCK_HEIGHT + radius + 0.05)
+    return Box3(min(x0, x1), min(y0, y1), z0, max(x0, x1), max(y0, y1), z1)
+
+
+#: The objects with moving parts the stage draws over their pictures while they work (DESIGN.md §103).
+MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine")
+
+
+def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float) -> list[Motion]:
+    """The moving parts of a working ``item`` (one of :data:`MOVING_KINDS`) at scene time
+    ``now``, drawn over its picture: a quantum core's pulsing halo, its bright core and sparks
+    round its ring; a robot arm's arm swinging between its two poses; a centrifuge's spinning
+    rotor (over a dark window); a coffee machine's steam rising from the mug. The same number of
+    parts at any time (those not seen have opacity 0)."""
+    f = _Frame(item, base)
+    if item.kind == "quantum_core":
+        centre, radius = _core_centre(f)
+        beat = 0.5 - 0.5 * math.cos(2 * math.pi * now / CORE_PULSE_SECONDS)
+        parts = [Motion(_round(centre, radius * (1.25 + 0.3 * beat), look.detail).points, mix(look.detail, "#FFFFFF", 0.3), 0.22 + 0.22 * beat, False, True),
+                 Motion(_round(centre, radius * (0.42 + 0.14 * beat), "#FFFFFF").points, mix(look.detail, "#FFFFFF", 0.75), 0.45 + 0.4 * beat, False, True)]
+        x, y = f.p(f.width / 2, f.depth / 2, 0.0)[:2]
+        for k in range(3):
+            t = 2 * math.pi * (now / 1.6 + k / 3)
+            point = (x + radius * 1.3 * math.cos(t), y + radius * 1.3 * math.sin(t), centre[2])
+            seen = math.cos(t) + math.sin(t) > 0   # on the ring's near half
+            parts.append(Motion(_round(point, 0.035, "#FFFFFF").points, "#FFFFFF", 1.0 if seen else 0.0, False, True))
+        return parts
+    if item.kind == "robot_arm":
+        swing = (now % ARM_SWING_SECONDS) / ARM_SWING_SECONDS
+        share = 2 * swing if swing < 0.5 else 2 - 2 * swing
+        return [Motion(p.points, p.fill, 1.0, bool(p.ink), p.glow) for p in _arm(f, look, share)]
+    if item.kind == "centrifuge":
+        w, b0, b1 = f.width, 0.3, f.depth - 0.16
+        centre = f.p(w / 2, (b0 + b1) / 2, 1.121)
+        turn = 2 * math.pi * now / SPIN_SECONDS
+        return [Motion(_flat_circle(centre, 0.2), CASING), Motion(_flat_circle((centre[0], centre[1], centre[2] + 0.001), 0.17), look.detail, 0.25, False),
+                *_rotor(centre, look, turn)]
+    if item.kind == "coffee_machine":
+        top = f.p(f.width / 2, f.depth - 0.3 + 0.07, 1.0)
+        parts = []
+        for k in range(STEAM_PUFFS):
+            rise = (now / STEAM_SECONDS + k / STEAM_PUFFS) % 1.0
+            sway = 0.035 * math.sin(2 * math.pi * (rise + k * 0.37))
+            centre = _screen(top, sway, 0.08 + 0.6 * rise)
+            opacity = 0.9 * min(1.0, rise * 5.0) * (1.0 - rise) ** 0.7
+            parts.append(Motion(_round(centre, 0.05 + 0.08 * rise, "#FFFFFF").points, "#FFFFFF", opacity * 0.8, False, True))   # pale at night too
+        return parts
+    return []
+
+
 _DRAWINGS: dict[str, Callable[[_Frame, ObjectLook], list[Shape]]] = {
     "tree": _tree, "pine": _pine, "bush": _bush, "rock": _rock, "bench": _bench, "well": _well, "sign": _sign, "bridge": _bridge, "table": _table, "chair": _chair, "bed": _bed,
     "shelf": _shelf, "sofa": _sofa, "plant": _plant, "rug": _rug,
     "console": _console, "server_rack": _server_rack, "projector_pad": _projector_pad, "whiteboard": _whiteboard,
     "flower_arch": _flower_arch, "chess_table": _chess_table,
+    "microscope": _microscope, "lab_stool": _lab_stool, "wall_clock": _wall_clock,
 }
 
 
@@ -681,7 +1078,7 @@ def object_lights(item: IsoObject, base: float) -> list[Point3]:
 
 #: The radius (tile units) of the soft shadow under the objects that cast a round one.
 SHADOW_RADII: dict[str, float] = {"tree": 0.45, "pine": 0.42, "bush": 0.48, "rock": 0.42, "lamp": 0.24, "well": 0.52, "sign": 0.22,
-                                  "plant": 0.32, "flowers": 0.36, "chair": 0.42}
+                                  "plant": 0.32, "flowers": 0.36, "chair": 0.42, "lab_stool": 0.26, "quantum_core": 0.42, "robot_arm": 0.36}
 #: The shadows' colour and opacity (a tint of what lies under them).
 SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
@@ -691,8 +1088,10 @@ SHADOW_OPACITY = 0.16
 #: shadow under each.
 BED_KINDS = ("flowers", "bush")
 #: The objects drawn by their state too (DESIGN.md §89.10).
-_STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {"house": _house, "flowers": _flowers, "lamp": _lamp,
-                                                                                 "tower": _tower}
+_STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {
+    "house": _house, "flowers": _flowers, "lamp": _lamp, "tower": _tower, "laptop": _laptop, "terminal_kiosk": _terminal_kiosk,
+    "quantum_core": _quantum_core, "robot_arm": _robot_arm, "centrifuge": _centrifuge, "coffee_machine": _coffee_machine,
+}
 
 
 def tower_screen(item: IsoObject, base: float) -> tuple[Point3, Point3, Point3, Point3] | None:
@@ -724,9 +1123,12 @@ def object_shapes(item: IsoObject, look: ObjectLook, base: float, state: ObjectS
 
 
 def object_box(item: IsoObject, base: float) -> Box3:
-    """The box ``item`` stands in, for the draw order: its footprint, up to its height."""
+    """The box ``item`` stands in, for the draw order: its footprint, up to its height (an object
+    hanging on a wall: a thin slab on the wall's face)."""
+    if item.kind in WALL_KINDS:
+        return _wall_box(item, base)
     return Box3(item.column, item.row, base, item.column + item.width, item.row + item.depth, base + item.height)
 
 
-__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "OBJECT_COLORS", "ObjectLook", "object_box", "object_lights", "object_shapes",
-           "tower_screen"]
+__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "MOVING_KINDS", "OBJECT_COLORS", "Motion", "ObjectLook", "clock_hands",
+           "object_box", "object_lights", "object_motion", "object_shapes", "tower_screen"]

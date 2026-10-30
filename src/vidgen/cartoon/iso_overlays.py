@@ -10,11 +10,14 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from manim import Circle, VGroup, VMobject
 
 from vidgen.cartoon.alarm import shutter_level, shutters_changing
+from vidgen.cartoon.iso_drawing import ISO_OUTLINE
+from vidgen.config import CHARACTER_INK
 from vidgen.cartoon.iso_city import SCREEN_LINES, SCREEN_TEXT, lane_pods, pod_hidden, screen_lines
 from vidgen.cartoon.living import _unit
 from vidgen.world.iso_view import Box3
@@ -345,6 +348,79 @@ class IsoTraffic(VGroup):
         return x0 - pad, y0 - pad, x1 + pad, y1 + pad
 
 
+#: Manim units per unit of a stroke's width (Cairo's line width multiple).
+CAIRO_LINE_UNIT = 0.01
+
+
+@dataclass(frozen=True)
+class Gadget:
+    """A working object of an iso place for :class:`IsoGadgets` (DESIGN.md §103): its moving
+    ``parts`` at a scene time (:func:`~vidgen.cartoon.iso_objects.object_motion`; the same number
+    at any time), whether it works at a scene time (``working``) and whether it works at any time
+    between two (``busy``)."""
+
+    parts: Callable[[float], Sequence[Any]]
+    working: Callable[[float], bool]
+    busy: Callable[[float, float], bool]
+
+
+class IsoGadgets(VGroup):
+    """The moving parts of an iso place's working objects (DESIGN.md §103), drawn over the
+    place's pictures while each works: a robot arm swinging, a centrifuge's rotor spinning, a
+    quantum core pulsing, steam over a coffee mug. ``project`` puts a world point on screen;
+    ``unit``: a tile's width on screen (Manim units), for the outline as the place's
+    (``outline``: the drawing style's factor); ``region``: the box (on screen) they stay in. The
+    parts that are lights (:attr:`glowing`) are left out of the stage's light grade by the stage."""
+
+    def __init__(self, gadgets: Sequence[Gadget], project: Callable[[Any], Point], *, unit: float, region: Box, outline: float = 1.0) -> None:
+        super().__init__()
+        ink = CHARACTER_INK
+        stroke = ISO_OUTLINE * unit * outline / CAIRO_LINE_UNIT
+        self.name = "gadgets"
+        self.gadgets = list(gadgets)
+        self.project = project
+        self.box = region
+        #: each gadget's pieces, one per part, and the pieces of the parts that are lights
+        self.pieces: list[list[VMobject]] = []
+        self.glowing: list[VMobject] = []
+        for gadget in self.gadgets:
+            pieces = []
+            for part in gadget.parts(0.0):
+                piece = VMobject().set_fill(part.fill, opacity=0.0).set_stroke(ink, width=stroke if part.ink else 0.0, opacity=0.0)
+                pieces.append(piece)
+                if part.glow:
+                    self.glowing.append(piece)
+            self.pieces.append(pieces)
+            self.add(*pieces)
+        self.update_to(0.0)
+
+    def update_to(self, now: float) -> None:
+        """Draw every working object's parts as they are at scene time ``now`` (none while it
+        does not work)."""
+        for gadget, pieces in zip(self.gadgets, self.pieces):
+            parts = gadget.parts(now) if gadget.working(now) else []
+            for k, piece in enumerate(pieces):
+                part = parts[k] if k < len(parts) else None
+                if part is None or part.opacity <= 0.0:
+                    piece.points = np.zeros((0, 3))
+                    continue
+                corners = [np.array([*self.project(p), 0.0]) for p in part.points]
+                piece.set_points_as_corners([*corners, corners[0]])
+                piece.set_fill(part.fill, opacity=part.opacity).set_stroke(opacity=part.opacity if part.ink else 0.0)
+
+    def changing(self, start: float, end: float) -> bool:
+        return any(gadget.busy(start, end) for gadget in self.gadgets)
+
+    def done(self, now: float) -> bool:
+        return not any(gadget.busy(now, math.inf) for gadget in self.gadgets)
+
+    def movers(self) -> list[VMobject]:
+        return [self]
+
+    def region(self, start: float = 0.0, end: float = math.inf) -> Box:
+        return self.box
+
+
 @dataclass(frozen=True)
 class HazeSpot:
     """A haze on screen (DESIGN.md §102.12): its ``foot`` and ``top`` (Manim units), its
@@ -433,5 +509,5 @@ class IsoHaze(VGroup):
         return min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
 
 
-__all__ = ["BLINK_DUTY", "BLINK_SECONDS", "POD_HEIGHT", "SCREEN_LINE_THICKNESS", "SHUTTER_SLATS", "HazeSpot", "IsoBlinkers", "IsoHaze", "IsoScreens",
-           "IsoShutters", "IsoTraffic", "PodLane", "blink_on"]
+__all__ = ["BLINK_DUTY", "BLINK_SECONDS", "POD_HEIGHT", "SCREEN_LINE_THICKNESS", "SHUTTER_SLATS", "Gadget", "HazeSpot", "IsoBlinkers", "IsoGadgets", "IsoHaze",
+           "IsoScreens", "IsoShutters", "IsoTraffic", "PodLane", "blink_on"]

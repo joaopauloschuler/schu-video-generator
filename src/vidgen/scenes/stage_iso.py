@@ -308,8 +308,11 @@ class IsoStaging:
         lights = p.iso.wall_light_colors()
         strips = None if lights is None else (resolve_color(lights[0], self.theme), resolve_color(lights[1], self.theme))
         colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors, strips=strips)
+        #: the working objects whose moving parts are drawn over the place (DESIGN.md §103)
+        self._iso_moving = self._iso_moving_names(place)
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
-                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
+                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])),
+                                       moving=item.name in self._iso_moving)
                  for item in place.objects}
         density = 1.0 if self.is_draft else ISO_OVERSAMPLE
         states = p.iso.states()
@@ -382,6 +385,9 @@ class IsoStaging:
                                                  hidden=lambda k: self._iso_light_hidden(lights[k], boxes[k])))
         if not self.is_draft:
             self.story_things += self._iso_city(place, looks)
+        working = [item for item in place.objects if item.name in self._iso_moving]
+        if working:
+            self.story_things.append(self._iso_gadgets(place, looks, working))
         if p.iso.haze and not self.is_draft:   # shimmering air over spots (§102.12)
             spots = []
             for haze in p.iso.haze:
@@ -390,6 +396,58 @@ class IsoStaging:
                                       resolve_color(haze.color, self.theme), haze.strength, haze.start))
             self.story_things.append(IsoHaze(spots, seed=motion_seed(self.spec.id, "haze")))
         return list(self.story_things)
+
+    def _iso_moving_names(self, place: Any) -> set[str]:
+        """The objects of the place with moving parts (:data:`MOVING_KINDS`) that the stage
+        animates while they work (DESIGN.md §103): none in a draft; not one another object stands
+        in front of on screen (its picture shows it still)."""
+        if self.is_draft:
+            return set()
+        boxes = [(item, object_box(item, place.floor_z(item.column, item.row))) for item in place.objects]
+        found: set[str] = set()
+        for item, box in boxes:
+            if item.kind not in MOVING_KINDS:
+                continue
+            left, top, right, bottom = box.picture_bounds()
+
+            def covers(other_box: Any) -> bool:
+                l, t, r, b = other_box.picture_bounds()
+                return in_front(other_box, box) is True and l < right and r > left and t < bottom and b > top
+
+            if not any(other is not item and covers(other_box) for other, other_box in boxes):
+                found.add(item.name)
+        return found
+
+    def _iso_gadgets(self, place: Any, looks: dict[str, Any], items: list[Any]) -> IsoGadgets:
+        """The moving parts of the working objects ``items`` over the place (DESIGN.md §103), each
+        drawn while it is on and there: the state it starts in, then each change the scene makes
+        (:attr:`_iso_state_log`, kept by :meth:`iso_change`)."""
+        scenery = self.iso_scenery
+        #: each working object's states from scene times on: (time, state), in time order
+        self._iso_state_log: dict[str, list[tuple[float, ObjectState]]] = {
+            item.name: [(0.0, scenery.states[scenery.index[item.name]])] for item in items}
+        gadgets: list[Gadget] = []
+        corners: list[tuple[float, float]] = []
+        for item in items:
+            base = place.floor_z(item.column, item.row)
+            log = self._iso_state_log[item.name]
+
+            def working(now: float, log: list[tuple[float, ObjectState]] = log) -> bool:
+                state = [s for t, s in log if t <= now][-1] if log[0][0] <= now else log[0][1]
+                return state.on and state.shown
+
+            def busy(start: float, end: float, log: list[tuple[float, ObjectState]] = log, working: Callable[[float], bool] = working) -> bool:
+                return working(start) or any(start <= t <= end and s.on and s.shown for t, s in log)
+
+            def parts(now: float, item: Any = item, look: ObjectLook = looks[item.name], base: float = base) -> list[Any]:
+                return object_motion(item, look, base, now)
+
+            gadgets.append(Gadget(parts, working, busy))
+            box = object_box(item, base)
+            corners += [self.iso_view.point(x, y, z) for x in (box.x0, box.x1) for y in (box.y0, box.y1) for z in (box.z0, box.z1 + 1.0)]
+        pad = 0.2 * self.iso_view.unit
+        region = (min(x for x, _ in corners) - pad, min(y for _, y in corners) - pad, max(x for x, _ in corners) + pad, max(y for _, y in corners) + pad)
+        return IsoGadgets(gadgets, lambda point: self.iso_view.point(*point), unit=self.iso_view.unit, region=region, outline=self.drawing.outline_factor)
 
     def _iso_city(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
         """A city's moving parts over the place (DESIGN.md §102.2, §102.3): the crawling lines of
@@ -759,6 +817,12 @@ class IsoStaging:
             if holder not in self.mobjects:
                 self._iso_insert(holder)
         self._iso_changes.append(_IsoChange(name, state, float(start), max(float(seconds), 1e-3), old, new))
+        log = getattr(self, "_iso_state_log", {}).get(name)
+        if log is not None:   # a working object's moving parts follow it (§103)
+            log.append((float(start), state))
+            log.sort(key=lambda entry: entry[0])
+            if state.on and state.shown:
+                self._watch_living()
         if "shown" in fields:
             change = "reveal" if fields["shown"] else "hide"
         elif "open" in fields:

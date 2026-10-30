@@ -23581,3 +23581,25 @@ studio: …") names no project and is unchanged. No other file references the pi
 Files: `docs/images/studio.png`, `README.md`, `tasklist.md`.
 
 How to test: `tests/test_docs.py` (73 passed).
+
+## Step 258 — Lab objects I (Phase AB)
+
+- Built: iso objects `laptop`, `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`,
+  `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (DESIGN §103); the working ones switch
+  on, and the core, arm, centrifuge and coffee machine move while on (`IsoGadgets` overlay,
+  `object_motion`). The Phase AB plan in `tasklist.md`.
+- Files: `world/iso.py` (kinds, `WALL_KINDS`, `time`, wall placement), `cartoon/iso_objects.py`
+  (drawings, `Motion`, `object_motion`, `ObjectLook.moving`, wall box), `cartoon/iso_overlays.py`
+  (`IsoGadgets`), `scenes/stage.py` (`time` key, did-you-mean for an unknown object, messages),
+  `scenes/stage_iso.py` (`_iso_moving_names`, `_iso_gadgets`, state log), `scenes/stage_story.py`,
+  `scenes/switch_action.py`, `scenes/handling.py`, `api.py`; docs: one "Other objects" list in
+  `docs/CONFIG.md` and the guide (`AGENTS.md`).
+- Decisions: objects do not stack, so the laptop and microscope stand on their own small table
+  and the centrifuge and coffee machine on a bench cabinet; a wall clock is placed at a wall cell
+  (it takes no floor cell). A working object another object covers on screen keeps a still
+  picture (as a tower's screen).
+- Known gaps: a character standing right behind a working object hides part of its motion under
+  the object's front picture; a laptop's code lines are mirrored when it faces right.
+- Tests: `tests/test_lab_objects.py` (5 logic + 1 small render); `test_iso_place.py`
+  (every object draws: a wall clock on a wall). Contact sheet (private):
+  scratchpad `s258/objects.png`. Shared iso drawing code untouched for existing objects.

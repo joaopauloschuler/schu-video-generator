@@ -1569,6 +1569,20 @@ Phase AA done.
 ### Step 257 — The studio screenshot with the new name
 - [x] `docs/images/studio.png` taken again with Step 200's recipe (1440 × 900, 160 colours, 73 KB; same state), the top bar reads "schu-video-generator studio"; the README's alt text says so
 
+## Phase AB — More iso lab and sci-fi objects (DESIGN §103)
+
+26 new iso objects in the flat cartoon style, `on` states with gentle motion; docs: one short
+"Other objects" list in CONFIG and the guide.
+
+### Step 258 — Lab objects I
+- [x] `laptop` (`open`), `terminal_kiosk`, `quantum_core` (pulses), `robot_arm` (swings), `microscope`, `centrifuge` (spins), `coffee_machine` (steam), `lab_stool`, `wall_clock` (on a back wall, `time`); moving parts drawn over the place while on (`IsoGadgets`); tests `test_lab_objects.py`; Phase AB plan here and DESIGN §103
+
+### Step 259 — Lab objects II
+- [ ] `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge`, `fume_hood`
+
+### Step 260 — Lab objects III and review
+- [ ] `telescope`, `satellite_dish`, `charging_station`, `crate_stack`, `airlock`, `printer_3d`, `hazard_sign` (`kind`), `fire_extinguisher`; a critical review of all 26 (style, sizes, on/off, night, performance, tests)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

@@ -2619,7 +2619,11 @@ and give each scene `set: village`.
   `projector_pad` (a glowing platform a hologram stands on), `whiteboard`. A portal's `view:
   coast` (or `stars`, `meadow`) shows another place inside it. `- alarm: start` darkens the room
   under a pulsing red light with a siren (`stop` ends it), `- shutters: close` slams steel
-  shutters over the windows; `ambience: hum` gives a lab its hum.
+  shutters over the windows; `ambience: hum` gives a lab its hum. Other objects: `laptop`
+  (`open: false` closed), `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`,
+  `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (`at` a cell of a back wall,
+  `time: "03:27"`); `on: true` / `switch_on` makes the laptop, kiosk, core, arm, centrifuge and
+  coffee machine work.
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a

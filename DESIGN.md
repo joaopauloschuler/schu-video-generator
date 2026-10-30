@@ -20058,3 +20058,32 @@ characters or a rainy city with traffic, 3.4× for a city held on one tower; the
 Public surface: cut entry `overlays: {<id>: {drop: true}}`; `vidgen.scenes.hud.SHORTS_CAPTION_BAND`.
 Behaviour: HUD meters in a Short, `compact` top edge, `shorts_safe_area` with a HUD, fingerprints
 of cut scenes. Phase Q baseline 31/31 identical.
+
+## 103. More iso lab and sci-fi objects (Phase AB, Steps 258–260)
+
+Phase AB adds 26 iso objects (`OBJECT_KINDS`, drawn in `cartoon/iso_objects.py` like §100.11's),
+each 1 x 1 by default, `color` / `detail` honoured, and an `on` state where it works. Docs stay
+lean: one "Other objects" list in CONFIG and the guide.
+
+- **Step 258**: `laptop` (on a small desk; `open`, default open: `OPENING_KINDS`), `terminal_kiosk`,
+  `quantum_core`, `robot_arm`, `microscope` (on its own small table: objects do not stack),
+  `centrifuge` and `coffee_machine` (on a bench cabinet), `lab_stool` (`top` for small things),
+  `wall_clock` (`WALL_KINDS`: placed at a cell of a room's standing back wall, facing the floor
+  below or right of it; `_wall_box` is a thin slab on the wall's face; `time: "HH:MM"`, default
+  10:10, `IsoObject.time` / `ObjectPlacing.time`). The working ones are in `SWITCHED_KINDS`;
+  screens and lights are `glow` polygons when on.
+- **Moving parts** (`MOVING_KINDS`: core, arm, centrifuge, coffee machine): `object_motion(item,
+  look, base, now)` gives a fixed number of `Motion` polygons (world points, fill, opacity, ink,
+  glow) — the core's pulsing halo, bright core and sparks on its ring; the arm swinging between
+  `ARM_POSES`; the rotor turning over a dark window; steam puffs over the mug. The stage draws
+  them with one `IsoGadgets` living thing over the place while each is on and shown (its states
+  logged from the start and by `iso_change`: `_iso_state_log`); the glowing parts are left out of
+  the light grade. Not in a draft, and not for an object another object stands in front of on
+  screen (its picture shows it still). `ObjectLook.moving` tells the picture of a working robot
+  arm to leave its arm to the overlay.
+- Known gap: a character standing behind a working object gets a front picture of it that is
+  drawn over the moving parts there (steam over a coffee machine's face hides while someone stands
+  right behind it).
+
+Public surface: object kinds above; `IsoObjectParam.time`; `WALL_KINDS`; `ObjectLook.moving`;
+`Motion`, `MOVING_KINDS`, `object_motion`, `clock_hands`; `IsoGadgets`, `Gadget`. Additive.
