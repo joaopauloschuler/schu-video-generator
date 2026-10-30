@@ -22,7 +22,7 @@ from vidgen.cartoon.effect_symbols import crown_top, head_box
 from vidgen.cartoon.generator import EXPRESSION_ONLY, TRAIL_WEIGHTS, generate_parts, resolve_proportions
 from vidgen.cartoon.primitives import clip_to_box, dot_centres, span_at
 from vidgen.cartoon.transition import walking_state
-from vidgen.config import HEAD_ACCESSORIES, SEATED_BODY_SHAPE, SKIRTED_OUTFITS, TOP_OF_HEAD, CharacterColors, CharacterEntry, CharacterLook
+from vidgen.config import HEAD_ACCESSORIES, NECK_ACCESSORIES, SEATED_BODY_SHAPE, SKIRTED_OUTFITS, TOP_OF_HEAD, CharacterColors, CharacterEntry, CharacterLook
 from vidgen.lint.color import hex_rgb, relative_luminance
 from vidgen.project import Project
 from vidgen.theme import Theme
@@ -111,7 +111,8 @@ def sampled_looks(count: int, seed: int = 113) -> list[dict[str, Any]]:
         values: dict[str, Any] = {name: rng.choice(get_args(CharacterLook.model_fields[name].annotation)) for name in CHOICES}
         chosen = rng.sample(ACCESSORIES, rng.randint(0, 3))
         on_top = [a for a in chosen if a in TOP_OF_HEAD]
-        values["accessories"] = [a for a in chosen if a not in on_top[1:]]
+        round_neck = [a for a in chosen if a in NECK_ACCESSORIES]   # one thing round the neck
+        values["accessories"] = [a for a in chosen if a not in on_top[1:] and a not in round_neck[1:]]
         values["head_size"] = round(rng.uniform(0.7, 1.4), 2)
         if k % 3 == 0:
             values["seed"] = k

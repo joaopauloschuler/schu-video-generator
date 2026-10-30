@@ -162,8 +162,9 @@ class KissAction(_Acting):
     """The target character and `with` kiss (`- {kiss: ana, with: ben}`): they turn to each other,
     lean in and step close until their faces touch, close their eyes, hold, and lean back to where
     they stood by the end of `run_time` (default 3 s); a small burst of hearts and sparkles rises
-    as their faces meet (`hearts: false`: none), with a soft chime (foley). Stand them side by
-    side, a step apart (one row of an iso place, or a two-shot). Stage scenes only."""
+    as their faces meet (`hearts: false`: none), with a soft chime (foley). Hands either holds
+    are let go first (`hold_hands` again after it). Stand them side by side, a step apart (one
+    row of an iso place, or a two-shot). Stage scenes only."""
 
     class Options(ActionOptions):
         with_: str = Field(alias="with", pattern=r"^[A-Za-z0-9_]+$")
@@ -199,6 +200,12 @@ class KissAction(_Acting):
         seconds = float(self.config.run_time or self.run_time)
         anims: list[Animation] = []
         for character in _characters(scene, targets, "kiss")[:1]:
+            # hands held by either let go first (their arms back at their sides): a hold keeps
+            # stepping them to its own places, which a kiss's step in would fight (§102.19)
+            for figure, hand in scene.let_go_hands([character.name, self.options.with_]):
+                rest = {part: PartPose() for part in figure.reached_parts(hand, figure.hand_point(hand))}
+                state = figure.state()
+                figure.set_state(CharacterState(state.facing, {**state.parts, **rest}))
             anims += scene.kiss(character.name, self.options.with_, seconds=seconds, hearts=self.options.hearts,
                                 color=resolve_color(self.options.color, scene.theme))
         return anims

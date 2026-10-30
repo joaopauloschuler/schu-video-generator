@@ -52,7 +52,7 @@ BUILTIN_ACTIONS = [
     "exit", "exocytosis", "explode", "export", "fill", "fit", "flow", "flyby", "focus", "fold", "follow",
     "form_gametes", "gesture", "get_in", "get_out", "give", "glycosylate", "grow", "hide", "highlight",
     "hold", "hold_hands", "host_enter", "host_exit", "host_look", "host_move", "host_point", "host_react",
-    "inertial", "inhibit", "jump", "keyframes", "knock", "knockout", "launch", "lean_on", "let_go",
+    "inertial", "inhibit", "jump", "keyframes", "kiss", "knock", "knockout", "launch", "lean_on", "let_go",
     "let_go_hands", "light", "lightning", "look_at", "lower", "materialise", "measure", "meet", "motor_walk",
     "move_along", "mutate", "open", "osmosis", "pan", "particles", "pause", "pick_up", "polyadenylate",
     "pose", "pour", "put_down", "rainbow", "raise", "ratio", "react", "rearrange", "regional", "relabel",

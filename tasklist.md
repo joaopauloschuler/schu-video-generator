@@ -1548,7 +1548,9 @@ frames when shared code changes. DESIGN §102. Steps 251–254.
 - [x] Tests `tests/test_kiss_display_props.py`; CONFIG, guide (`AGENTS.md`), README, CHANGELOG; Phase Q baseline 31/31; a private test cut of key shots (16:9 and 9:16), stills checked; lint `look_alike` skips echoes
 
 ### Step 253 — The story video
-- [ ] Build the private project, preview every shot, iterate; final 16:9 1080p and a delivery copy under 28 MB; contact sheet (scratchpad)
+- [x] Build the private project, preview every shot, iterate; final 16:9 1080p and a delivery copy under 28 MB; contact sheet (scratchpad)
+- [x] Generic fixes from the build: `hair: wavy`; `iso.wall_lights` (neon strips on a room's walls); a `kiss` lets go of held hands (the pair drifted off); a lab's blinking lights hide behind a character in front; lint `hidden_speaker` leaves a `hud` to `overlay_face` (DESIGN §102.17-§102.19); tests `test_wavy_hair.py`, `test_wall_lights_kiss.py`; Phase Q baseline 31/31
+- [~] A closer look at a pod's rider: still not needed (the city shots are wides and tower zooms)
 
 ### Step 254 — Shorts and review
 - [ ] 5–7 Shorts (9:16, hooks, captions, end card, < 60 s, < 28 MB, ~−14 LUFS) in the scratchpad; a critical review of the film and of the Phase AA features (tests, docs, Phase Q baseline, `tests/test_mcp.py` fully)

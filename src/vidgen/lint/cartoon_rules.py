@@ -346,7 +346,9 @@ def facing_away(ctx: StillContext, settings: FacingAwayRule) -> Iterator[Issue]:
 def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[Issue]:
     """A speaking character's face is hidden by something drawn in front of it (a character or
     prop nearer the camera, a foreground layer; not an effect symbol or a motion effect, nor the
-    vehicle it rides, whose windows show it, DESIGN.md §69.52): the viewer cannot see who talks."""
+    vehicle it rides, whose windows show it, DESIGN.md §69.52, nor an overlay that keeps off
+    faces, a ``hud``, which ``overlay_face`` checks, §102.19): the viewer cannot see who talks."""
+    own_check = {str(o["id"]) for o in ctx.frame.get("overlays", []) if o.get("faces")}
     for speaker in _figures(ctx):
         if not speaker.get("speaking") or not speaker.get("face"):
             continue
@@ -355,7 +357,8 @@ def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[I
         fronts = [
             obj for obj in ctx.objects
             if obj["order"] > speaker["order"] and not is_text(obj) and obj["kind"] not in ("particles", "effect", "motion_effect")
-            and obj.get("bubble") is None and obj.get("name_tag") is None and intersection(object_box(obj), face) is not None
+            and obj.get("bubble") is None and obj.get("name_tag") is None and str(obj.get("overlay")) not in own_check
+            and intersection(object_box(obj), face) is not None
             and not (obj["kind"] == "prop" and speaker.get("riding") is not None and obj.get("name") == speaker.get("riding"))
         ]
         if not fronts:

@@ -708,6 +708,16 @@ class StageIso(SceneParams):
     """How the map's doors (+ in a room's back wall) look and open: swing (a wooden door swinging into the room, a creak) or slide (a steel door whose panels slide apart, a glowing seam and light over it, a hiss)."""
     haze: list[IsoHazeParam] = []
     """Shimmering air over spots of the place, {at, width, height, color, strength, from} each: a heat-haze ripple with faint sparkles (strange air round a door, over a vent)."""
+    wall_lights: ThemeColor | Annotated[list[ThemeColor], Field(min_length=1, max_length=2)] | None = None
+    """An indoor place: neon strip lights along the top of its standing walls, glowing whatever the light (a corridor or a club at night): a colour, or two (the left back wall's, the right one's)."""
+
+    def wall_light_colors(self) -> tuple[str, str] | None:
+        """The strip lights' colours (DESIGN.md §102.18): the left back wall's (a wall along a
+        column of the map) and the right one's (along a row); ``None`` without strips."""
+        if self.wall_lights is None:
+            return None
+        found = [self.wall_lights] if isinstance(self.wall_lights, str) else list(self.wall_lights)
+        return (found[0], found[-1])
 
     @model_validator(mode="after")
     def _parses(self) -> "StageIso":
@@ -717,6 +727,8 @@ class StageIso(SceneParams):
             raise ValueError(str(exc)) from None
         if self.traffic and self.place == "indoor":
             raise ValueError("traffic flies over an outdoor place, not indoors")
+        if self.wall_lights is not None and self.place != "indoor":
+            raise ValueError("wall_lights run along a room's walls: give them to an indoor place")
         spots = {spot.name for spot in place.spots}
         for k, lane in enumerate(self.traffic):
             for key, end in (("from", lane.start), ("to", lane.to)):

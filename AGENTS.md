@@ -2636,9 +2636,14 @@ and give each scene `set: village`.
   `colors.accessory`, bright at night) dress a laureate or a keeper of a secret.
 - Romance: `- {kiss: ana, with: ben, run_time: 3}` (two standing a step apart: they turn, lean in
   until their faces touch, close their eyes, a small burst of hearts and sparkles, then lean
-  back); frame it with a `two_shot`.
+  back); frame it with a `two_shot`. It lets go of held hands first. Stand a pair side by side on
+  the picture: cells on a diagonal of the map (`{column: 5, row: 6}` and `{column: 6, row: 5}`)
+  are at the same height on screen. Actions of a beat at different `at` play one after another,
+  so two couples kissing at once share one `at`. Long hair that reads in a close-up: `hair: wavy`.
 - A strange door: `iso: {doors: slide}` (steel doors sliding open with a hiss on `- open:
-  door_1`) and `haze: [{at: door_in}]` (shimmering air with sparkles over a spot).
+  door_1`) and `haze: [{at: door_in}]` (shimmering air with sparkles over a spot). A room at
+  night: dark `colors: {wall, floor}`, `light: night`, `fill_light: 0.45` and `wall_lights:
+  ["#5FE8FF", "#FF2E8B"]` (neon strips along its walls).
 - Inside someone's head: a scene's `overlays: {implant: {type: hud, at: office_b2, duration: 6,
   alert: "INCOMING ALERT", lines: ["SIGNAL: SECTOR 7"], heart: {bpm: 70, to: 128, at: 1.5,
   skips: 3}, scan: {level: 0.4, to: 1.6, at: 3}}}` draws a HUD over the frame (brackets, a

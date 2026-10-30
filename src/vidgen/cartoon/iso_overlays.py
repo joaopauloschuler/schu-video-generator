@@ -8,7 +8,7 @@ right after the place's pictures (behind the characters).
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -117,14 +117,18 @@ def blink_on(index: int, now: float, seed: int = 0) -> bool:
 
 class IsoBlinkers(VGroup):
     """Small lights at ``points`` (on screen) of ``radius``, in ``colors`` (one per light), each
-    blinking by :func:`blink_on` with a soft halo; never graded by the stage's light."""
+    blinking by :func:`blink_on` with a soft halo; never graded by the stage's light. ``hidden``:
+    whether light ``k`` is behind something now (a character standing in front of its object,
+    DESIGN.md §102.19): it is not drawn then."""
 
-    def __init__(self, points: Sequence[Point], colors: Sequence[str], radius: float, *, seed: int = 0) -> None:
+    def __init__(self, points: Sequence[Point], colors: Sequence[str], radius: float, *, seed: int = 0,
+                 hidden: Callable[[int], bool] | None = None) -> None:
         super().__init__()
         self.name = "lab_lights"
         self.points_xy = [(float(x), float(y)) for x, y in points]
         self.radius = radius
         self.seed = seed
+        self.hidden = hidden
         unit = Circle(radius=1.0).points
         self.lights: list[tuple[VMobject, VMobject]] = []
         for (x, y), color in zip(self.points_xy, colors):
@@ -139,7 +143,7 @@ class IsoBlinkers(VGroup):
     def update_to(self, now: float) -> None:
         """Light each one as it is at scene time ``now``."""
         for k, (halo, dot) in enumerate(self.lights):
-            lit = blink_on(k, now, self.seed)
+            lit = blink_on(k, now, self.seed) and not (self.hidden is not None and self.hidden(k))
             dot.set_fill(opacity=1.0 if lit else 0.0)
             halo.set_fill(opacity=LIGHT_HALO_OPACITY if lit else 0.0)
 

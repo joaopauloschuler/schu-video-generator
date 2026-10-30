@@ -23282,3 +23282,86 @@ Notes for Step 253
 How to test: `tests/test_kiss_display_props.py`; stills (scratchpad, private)
 `s252/t1/build/preview/storyboard/scenes/{office,door,surge,kiss}-1.png`, `door-2.png`,
 `s252/t1/build/preview_vertical/storyboard/video-1.png`, `video-2.png`.
+
+## Step 253 — The story video; wavy hair, neon strip lights, a kiss holding hands
+
+The private story project of Phase AA built in full (scratchpad `story-qc/proj`, never
+committed), previewed shot by shot, rendered at 1080p; generic fixes found on the way.
+
+What was built (generic, DESIGN §102.17-§102.19)
+- **`hair: wavy`**: long locks waving past the jaw, ending in curls, the chin and chest left
+  clear (front: two locks; side: down the back). The `long` hair's square block read as a helmet
+  in close-ups. Not added to `random_cast.HAIR` (random casts unchanged).
+- **`iso.wall_lights`** (`colour | [left, right]`, indoor only): neon strips along the top of a
+  room's standing walls, never dimmed by the light (`IsoColors.strips`, `_strip_light`); a dark
+  corridor at night with `colors: {wall, floor}` + `light: night` + `fill_light`.
+- **A `kiss` lets go of held hands first**: `HandHold` and `KissPlan` each took the other's step
+  for a stage move and the pair drifted out of the frame (both vanished from the two-shot).
+- **A lab's blinking lights hide behind a character** standing in front of the object
+  (`IsoBlinkers(hidden=)`, `IsoStaging._iso_light_hidden`).
+- **Lint `hidden_speaker`** leaves out overlays that keep off faces (a `hud`'s frame covered the
+  whole picture: every speaker under a HUD was "hidden"); `overlay_face` checks them.
+- Tests that were already failing or that the new hair value unsettled: `test_actions.py`
+  (`kiss` missing from `BUILTIN_ACTIONS` since Step 252), `test_cartoon_outfits.py` (the sampler
+  now drew `medal` + `necklace`; it keeps one thing round the neck).
+
+Files
+- New: `tests/test_wavy_hair.py` (6), `tests/test_wall_lights_kiss.py` (8: 3 renders).
+- Changed: `cartoon/generator.py` (`WAVY_LENGTH`, `WAVY_WAVES`, `_wavy_side`, `_wavy_outline`),
+  `config.py` (`HairStyle`), `cartoon/iso_scenery.py` (`IsoColors.strips`, `STRIP_CORE`,
+  `STRIP_HALO`, `_strip_light`), `scenes/stage.py` (`StageIso.wall_lights`,
+  `wall_light_colors`), `scenes/stage_iso.py` (strips, light boxes, `_iso_light_hidden`),
+  `cartoon/iso_overlays.py` (`IsoBlinkers.hidden`), `scenes/story_actions.py` (kiss lets go),
+  `lint/cartoon_rules.py` (`hidden_speaker`); tests `test_actions.py`, `test_cartoon_outfits.py`;
+  docs CONFIG (hair, iso keys, neon strips, kiss, lint table), guide (copied to `AGENTS.md`),
+  CHANGELOG, DESIGN §102.17-§102.19, tasklist.
+
+Public interfaces: config `look.hair: wavy`, `iso.wall_lights`; `IsoColors.strips`;
+`IsoBlinkers(..., hidden=None)`. Behaviour: kiss and held hands; lab lights; `hidden_speaker`.
+
+The story video (private, scratchpad)
+- 17 scenes (title card, office ×2, a flashback, the city, the corridor, the door, the lab ×9 —
+  surge ×3, array ×2, kiss ×2, the timelines, dawn —, end card), 44 beats; Kokoro: narrator and
+  hero `am_fenrir` 1.0 (his lines a named voice), heroine `af_bella`, the system `bf_emma` 0.95
+  + `[robot, radio]`; music `enigma`, `neon`, `enigma`, `beacon`, `calm` at −6/−7 dB.
+- Review notes of 252 applied: the heroine and her other selves wear `wavy` hair; the corridor is
+  dark with neon strips, glowing sliding doors and the haze; the timelines display is framed by
+  zooms when the narration is about it. Key beats in closer shots (the door reveal, the touch on
+  the arm, the echoes, "We have to report this", the intertwined fingers, the kiss, the last
+  line). Two couples of echoes kiss together (one `at`: the action runner plays actions of a
+  beat one after another while one still runs).
+- Final 16:9 1080p30: 7:02 (422.4 s), 106.0 MB, −16.1 LUFS, true peak −1.9 dBTP; speech per
+  voice within 0.2 dB of the narrator (−22.7 to −22.9 LUFS medians, set with emotion `gain`);
+  music alone about −31 LUFS. Delivery copy 720p two-pass x264 `-preset slow -tune animation`
+  370 kb/s + AAC 128 kb/s: 27.0 MB. Lint: 0 errors, 12 warnings (narration speed of a few short
+  lines, look-alike holograms, the touch's overlap, on purpose).
+- Render: 1080p scenes 3.7–15× real time (the rainy city and the corridor the slowest), peak
+  1.9 GB per scene, so one at a time (two in parallel were killed at the 3 GB cap), in runs of
+  `render --frames --max-scenes 1..2` under 10 minutes; the join about 7 minutes. Previews
+  (854 × 480) 1.0–3.5× real time with `--jobs 2`.
+
+Checks
+- Tests: test_wavy_hair 6, test_wall_lights_kiss 8 (3 renders), test_kiss_display_props +
+  test_story_fx 34, test_cartoon_lint + test_wall_lights_kiss 17, test_docs + test_guide 164,
+  test_schema + test_config + test_api 102, test_cartoon_outfits + test_actions 85,
+  test_iso_place + test_iso_staging 86, test_city_hud_echo + test_portal_hologram +
+  test_story_light_hands 29, test_lint + test_cartoon_effects + test_cartoon_motion_effects +
+  test_builtin_sets 136, test_mcp (not render, with test_actions), test_wavy_hair +
+  test_cartoon_character + test_introspect + test_cartoon_living 70 — all passing.
+- Phase Q baseline 31/31 identical (`phase-q-baseline/check253`).
+
+Notes for Step 254 (Shorts)
+- The 1080p scene clips are kept (`story-qc/proj/build/final/scenes`); a cut re-renders its own
+  9:16 scenes. Beat ids: `office_b1`…, `door_b1` (the reveal), `surge2_b1` (the touch),
+  `surge2_b3` (the echoes), `array2_b2` ("We have to report this"), `kiss_b1` (fingers),
+  `kiss_b4` (the kiss), `kiss2_b1` (the echo kisses and timelines), `ending_b4` (last line).
+- Lab pairs stand side by side on the screen on a map anti-diagonal (`left_array` (5,6) /
+  `right_array` (6,5)); in 9:16 use zooms with `cut: true, hold: true` as in the previous Shorts.
+- A HUD in a Short: `compact: true`; `hidden_speaker` no longer flags its frame.
+- Changing any beat's audio made every scene stale here (17 re-rendered): settle voices before the
+  1080p renders.
+
+How to test: `tests/test_wavy_hair.py`, `tests/test_wall_lights_kiss.py`; (private, scratchpad)
+the film (16:9 MP4 + SRT) and the delivery copy in `story-qc/proj/output/`,
+the contact sheet `story-qc/contact.png`, stills
+`story-qc/proj/build/preview/storyboard/`.

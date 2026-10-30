@@ -436,7 +436,7 @@ class CharacterColors(_Strict):
 BodyShape = Literal["round", "tall", "square", "bean", "pear", "triangle"]
 EyeStyle = Literal["dot", "oval", "round", "sleepy"]
 NoseStyle = Literal["none", "dot", "round", "triangle"]
-HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly", "ponytail", "braids", "afro"]
+HairStyle = Literal["none", "short", "spiky", "long", "wavy", "bun", "curly", "ponytail", "braids", "afro"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
 Accessory = Literal[
     "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape", "medal", "pendant",
@@ -500,7 +500,7 @@ class CharacterLook(_Strict):
     nose: NoseStyle = "none"
     """Nose: none, dot, round or triangle."""
     hair: HairStyle = "none"
-    """Hair: none, short, spiky, long, bun, curly, ponytail, braids or afro (colour: colors.hair)."""
+    """Hair: none, short, spiky, long, wavy (long waving locks past the shoulders), bun, curly, ponytail, braids or afro (colour: colors.hair)."""
     ears: EarStyle = "none"
     """Ears: none, round, pointy or floppy (skin colour)."""
     accessories: list[Accessory] = Field(default_factory=list)

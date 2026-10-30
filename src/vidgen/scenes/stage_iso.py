@@ -305,7 +305,9 @@ class IsoStaging:
             x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
             center = view_center_within(self.camera_bounds(), (x, center[1]), width, width * self.frame_height / self.frame_width)
         self.camera.frame.scale(width / self.camera.frame.width).move_to([*center, 0.0])   # the wide view (§89.13)
-        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors)
+        lights = p.iso.wall_light_colors()
+        strips = None if lights is None else (resolve_color(lights[0], self.theme), resolve_color(lights[1], self.theme))
+        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors, strips=strips)
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
                                          for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
                  for item in place.objects}
@@ -365,16 +367,19 @@ class IsoStaging:
             self.story_things.append(self.iso_shutters)
         lights: list[tuple[float, float]] = []
         colors: list[str] = []
+        boxes: list[Box3] = []
         for item in place.objects:
             if item.kind in LIT_OBJECTS:
                 for k, point in enumerate(object_lights(item, place.floor_z(item.column, item.row))):
                     lights.append(self.iso_view.point(*point))
+                    boxes.append(object_box(item, place.floor_z(item.column, item.row)))
                     if item.kind == "tower":
                         colors.append(TOWER_ANTENNA_LIGHT)
                     else:
                         colors.append((looks[item.name].detail, LAB_AMBER, looks[item.name].detail)[k % 3] if item.kind == "server_rack" else LAB_AMBER)
         if lights and not self.is_draft:
-            self.story_things.append(IsoBlinkers(lights, colors, LAB_LIGHT_SIZE * self.iso_view.unit, seed=motion_seed(self.spec.id, "lab_lights")))
+            self.story_things.append(IsoBlinkers(lights, colors, LAB_LIGHT_SIZE * self.iso_view.unit, seed=motion_seed(self.spec.id, "lab_lights"),
+                                                 hidden=lambda k: self._iso_light_hidden(lights[k], boxes[k])))
         if not self.is_draft:
             self.story_things += self._iso_city(place, looks)
         if p.iso.haze and not self.is_draft:   # shimmering air over spots (§102.12)
@@ -532,6 +537,19 @@ class IsoStaging:
     def _iso_body(self, mob: Mobject) -> Box3:
         """The box a character or small thing stands in on the place now (tile units)."""
         return self._iso_box(mob.name, mob.iso_feet)
+
+    def _iso_light_hidden(self, point: tuple[float, float], box: Box3) -> bool:
+        """Whether a character on screen stands in front of the object a blinking light belongs
+        to (its ``box``) and covers the light at ``point`` (on screen) now (DESIGN.md §102.19)."""
+        x, y = point
+        for figure in getattr(self, "cast", {}).values():
+            if getattr(figure, "iso_feet", None) is None or getattr(figure, "hidden_by_shot", False):
+                continue
+            if in_front(self._iso_body(figure), box) is not True:
+                continue
+            if figure.get_left()[0] <= x <= figure.get_right()[0] and figure.get_bottom()[1] <= y <= figure.get_top()[1]:
+                return True
+        return False
 
     def _iso_bodies(self) -> dict[str, Mobject]:
         """The characters and the small things standing on the place (not held), by name."""

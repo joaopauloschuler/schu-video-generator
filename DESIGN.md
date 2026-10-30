@@ -19974,3 +19974,43 @@ the scene (top z) and removed at the end, unlit.
   `test_cartoon_fire_nature` (the switched-props message).
 - Left: a closer look at a pod's rider (a `zoom` on the lane's end spot, `size: 1.4`, reads in
   the test renders; no rider character inside a pod).
+
+### 102.17 Wavy hair (Step 253)
+
+`look.hair: wavy` (`HairStyle`; not in `random_cast.HAIR`, so random casts stay as they were):
+long locks behind the head that wave as they fall past the jaw (`WAVY_LENGTH` 1.95 head radii
+below the head's middle, `WAVY_WAVES` 2.5 waves a side, flaring a little) and end in three
+curls (`generator._wavy_outline` / `_wavy_side`). From the front one lock on each side, the chin,
+the neck and the chest left clear between them (a pendant shows); from the side one mass down
+the back. One polygon in the hair colour behind the head, trailing like `long` hair. `long`
+is unchanged (its square block reads as a helmet in a close-up; `wavy` is the long hair that
+reads).
+
+### 102.18 Neon strip lights on a room's walls (Step 253)
+
+`iso.wall_lights: <colour> | [left, right]` (`StageIso.wall_lights`, indoor places only;
+`wall_light_colors()`): along each standing (not cut-away) wall face that looks into the room, a
+strip near the top (`STRIP_CORE` 2.66–2.74 tile units over the base) in a light tint of the
+colour inside a softer band mixed with the wall's colour (`STRIP_HALO`), both `Poly(glow=True)`
+so no `light` dims them (`iso_scenery._strip_light`, `IsoColors.strips`: the left back wall's,
+a wall along a map column, and the right one's, along a row). Part of the walls' pictures (no
+cost per frame). With dark `colors.wall` / `floor` and `light: night` it makes a corridor or a
+room at night that still reads.
+
+### 102.19 Fixes from building a story: a kiss holding hands, lights behind a body, overlays (Step 253)
+
+- A `kiss` between characters who hold hands lets go of the hands first (their arms back at their
+  sides, set at once before the kiss records its poses): `HandHold` and `KissPlan` each keep their
+  offset apart from where the stage puts a figure and took the other's step for a stage move,
+  so the pair drifted off the frame. `hold_hands` again after the kiss to hold them again.
+- A lab object's blinking lights (`IsoBlinkers(hidden=)`) are not drawn while a character stands
+  in front of the object (`in_front` of its box) and covers the light on screen
+  (`IsoStaging._iso_light_hidden`; a shot's hidden characters do not count).
+- Lint `hidden_speaker` leaves out the objects of overlays that keep off faces (a `hud`: the
+  still's `overlays` entry has `faces`), whose frame over the whole picture hid every speaker;
+  `overlay_face` checks those. Other overlays over a face still count.
+- Staging note (no code): actions of a beat at different `at` play one after another when an
+  earlier one is still running (the action runner waits for each phase), so actions that should
+  overlap (two pairs materialising and kissing) share one `at`.
+- Public surface: config `look.hair: wavy`, `iso.wall_lights`; `IsoColors.strips`,
+  `IsoBlinkers(hidden=)` (keyword, default `None`). Additive; Phase Q baseline 31/31 identical.

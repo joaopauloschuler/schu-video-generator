@@ -5,7 +5,19 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: vidgen 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–252)
+## Unreleased (Steps 193–253)
+
+### Wavy hair, neon strip lights, a kiss holding hands (Phase AA, Step 253)
+
+- **`hair: wavy`**: long locks waving past the jaw and ending in curls, the chin and chest left
+  clear (`long` hair reads as a block in a close-up).
+- **`iso.wall_lights`**: neon strips glowing along a room's walls (one colour, or one per back
+  wall), lit at night.
+- A `kiss` between two characters holding hands lets go of the hands first (before, the pair
+  drifted out of the frame).
+- A lab object's blinking lights hide behind a character standing in front of it.
+- Lint `hidden_speaker` no longer counts a `hud`'s frame as hiding a speaker (`overlay_face`
+  checks the HUD).
 
 ### A kiss, floating formulas, a scanner, sliding doors (Phase AA, Step 252)
 

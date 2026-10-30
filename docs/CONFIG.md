@@ -1597,7 +1597,7 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `head_size` | `1.0` | head size relative to the default head, 0.6 to 1.6 |
 | `eyes` | `dot` | `dot`, `oval` or `round` (white with a pupil), `sleepy` (half closed) |
 | `nose` | `none` | `none`, `dot`, `round`, `triangle` |
-| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
+| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `wavy` (long locks waving past the jaw, ending in curls; the chin and chest left clear), `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
 | `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
 | `facial_hair` | `none` | `none`, `moustache`, `beard` (with a moustache; the mouth stays seen); colour `colors.hair` |
 | `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace`, `medal` (a gold medal on a ribbon in `colors.accessory`), `pendant` (a stone in `colors.accessory` on a dark cord, glowing at night and pulsing like a slow heartbeat) (on the body), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, only one of `hat`, `cap`, `crown`, `wizard_hat`, `party_hat`, and one of `necklace`, `medal`, `pendant` |
@@ -10247,7 +10247,7 @@ never leaves the stage.
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10872,6 +10872,11 @@ they hide what is behind them.
     spots: {d: door_in, m: hall}
     haze: [{at: door_in, width: 1.6, height: 2.8}]
   ```
+- **Neon strip lights.** `wall_lights: "#FF2E8B"` (or two colours: `[left, right]`, the left
+  back wall's and the right one's) runs a glowing strip along the top of a room's standing walls
+  (indoors only), lit whatever the `light`: with dark `colors: {wall, floor}` and `light: night`
+  a corridor or a club at night that still reads. A lab object's blinking lights hide behind a
+  character standing in front of it.
 - **Sound** ([foley](#foley-and-music-stings), on by default): footsteps by what the feet walk on
   (grass, a sandy path, wooden boards or a bridge, stone steps and tiles, a rug), a door's creak
   and thud, a soft sound as a small thing is picked up, given or put down, a lamp's click, a
@@ -11817,6 +11822,9 @@ faces meet a small burst of hearts and sparkles rises from there, with a soft ch
 Stand them a step apart (neighbouring cells, or marks close together) and frame them with a
 two-shot or a close-up; it works in 16:9 and 9:16. Generated characters only (it tilts the
 body and closes the eyes). Lint lets two kissing characters stand close (`character_overlap`).
+Hands either of them holds are let go as the kiss starts (`hold_hands` again after it). Actions
+of a beat with different `at` play one after another while an earlier one still runs, so two
+couples kissing at once share one `at`.
 
 | option | default | |
 |---|---|---|
@@ -14016,7 +14024,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `prop_overlap` | warning | two props standing on the floor whose boxes share at least `min_overlap` of the narrower one's width, at depths less than 0.15 apart: drawn over each other, like a [room](#rooms-room)'s door over the sofa against the wall. Not reported: a prop in front of another (depths 0.15 or more apart, like an armchair before the sofa), one lifted onto another (`lift`: a basket on the counter) or hanging on the wall above it (a picture, a clock), a rug under them, a held prop (the layout dump's `raised`, `flat`, `held_by`). Fix: another `at` for one of them (a door: its x in the room's `doors`), a smaller `scale`, or a `depth` that puts one in front |
 | `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too), of the smaller of two bubbles, or of an [effect symbol](#effect-symbols-effect)'s box. Fix: a shorter `bubble` text, the characters further apart, or the two lines (or the line and the effect) in different beats |
 | `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
-| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. On an [iso place](#isometric-places-iso) it measures what really covers the speaker's eyes and mouth (the opaque pixels of the place in front of it: a lamp post across the face, not the empty corners of a tree's picture) and reports at `min_hidden_features` (`0.25`) of their box, naming the pieces of the place (`lamp`, `tree_2`). Fix: move one of them, or a smaller `depth` for the speaker; on an iso place walk it to a spot where nothing stands in front of it, or a shot that frames it from where it shows |
+| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol, nor a `hud`, which `overlay_face` checks). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. On an [iso place](#isometric-places-iso) it measures what really covers the speaker's eyes and mouth (the opaque pixels of the place in front of it: a lamp post across the face, not the empty corners of a tree's picture) and reports at `min_hidden_features` (`0.25`) of their box, naming the pieces of the place (`lamp`, `tree_2`). Fix: move one of them, or a smaller `depth` for the speaker; on an iso place walk it to a spot where nothing stands in front of it, or a shot that frames it from where it shows |
 | `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. On an [iso place](#isometric-places-iso) a speaker whose name tag shows (or that has a speech bubble) is not reported for a line of at most `max_tagged_words` (`12`) words: the tag shows who says a short line. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
 | `offscreen_action` | warning | on an [iso place](#isometric-places-iso): something a beat does — a walk (`walk_to`, `run_to`, `meet`, `wander`, `enter`, `exit`), a small thing picked up, given or put down, a door, lamp or flowers changing, an object appearing or going — that the camera mostly does not show while it happens: on fewer than `min_seen` (`0.5`) of its frames is at least half of it in view (or enough of it to fill a quarter of the view: a house in a close-up). Fix: a wider shot (`shot: wide`), a `pan` or `follow` to it, or do it in a beat whose shot shows it |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |

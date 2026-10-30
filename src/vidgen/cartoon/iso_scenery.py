@@ -62,6 +62,26 @@ class IsoColors:
     wall: str = "#EDE1CC"
     cut: str = "#8A664A"
     doors: str = "swing"
+    strips: tuple[str, str] | None = None   # neon strips: the left back wall's, the right one's (§102.18)
+
+
+#: Neon strip lights along a room's standing walls (``wall_lights``, DESIGN.md §102.18): the
+#: glowing tube's band and the softer glow round it (tile units over the wall's base).
+STRIP_CORE = (2.66, 2.74)
+STRIP_HALO = (2.58, 2.82)
+
+
+def _strip_light(side: str, start: float, end: float, x1: float, y1: float, base: float, color: str, wall: str) -> list[Shape]:
+    """A neon strip along a wall's face (``s``: from x ``start`` to ``end`` at y ``y1``; ``e``:
+    from y ``end`` to ``start`` at x ``x1``) near its top: a halo between the wall's colour and
+    the strip's, the bright tube in it; both lights the stage's light does not dim."""
+    def band(z0: float, z1: float) -> tuple:
+        if side == "s":
+            return ((start, y1, base + z0), (end, y1, base + z0), (end, y1, base + z1), (start, y1, base + z1))
+        return ((x1, end, base + z0), (x1, start, base + z0), (x1, start, base + z1), (x1, end, base + z1))
+
+    return [Poly(band(*STRIP_HALO), mix(wall, color, 0.45), False, True),
+            Poly(band(*STRIP_CORE), mix(color, "#FFFFFF", 0.3), False, True)]
 
 
 @dataclass(frozen=True)
@@ -295,6 +315,11 @@ def _wall(place: IsoPlace, colors: IsoColors, column: int, row: int, *, name: st
             shapes.append(Poly(((cx1, fy1, base), (cx1, fy0, base), (cx1, fy0, base + SKIRTING), (cx1, fy1, base + SKIRTING)), shade(skirting, 0.12),
                                (False, "n" not in joined, True, "s" not in joined)))
         ground = place.ground(column, row)
+        if colors.strips is not None:
+            if inside["s"]:   # a wall along a row: the right back wall
+                shapes += _strip_light("s", fx0, fx1, cx1, cy1, base, colors.strips[1], colors.wall)
+            if inside["e"]:   # a wall along a column: the left back wall
+                shapes += _strip_light("e", fy0, fy1, cx1, cy1, base, colors.strips[0], colors.wall)
         for side in ("s", "e"):
             if inside[side] and ground == WINDOW:
                 shapes += _wall_window(side, column, row, cx1, cy1, base)
