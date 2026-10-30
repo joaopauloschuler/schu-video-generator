@@ -13,7 +13,9 @@ from conftest import minimal_config
 from test_cartoon_living import frames_of
 from test_cartoon_stage import CAST, stage_params
 from vidgen import extensions, registry
+from vidgen.cartoon.iso_drawing import Disc
 from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, MORE_MODULES, MOVING_KINDS, OBJECT_COLORS, ObjectLook, object_motion, object_shapes
+from vidgen.cartoon.iso_town import SIGNAL_COLORS
 from vidgen.project import Project
 from vidgen.world.iso import (DISPLAY_CASES, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, ObjectPlacing, ObjectState, default_state,
                               parse_iso_map, place_objects)
@@ -158,3 +160,76 @@ def test_the_shop_objects_render(make_project, tmp_path: Path, monkeypatch) -> N
     scene, frames = frames_of(Project.load(make_project(minimal_config(characters=CAST, scenes=scenes))), tmp_path / "shop", monkeypatch)
     assert not scene._iso_gadget_places   # nothing here moves
     assert len(frames) > 5 and np.any(frames[-1] != frames[1])   # the wardrobe opens
+
+# ----- Step 263: town --------------------------------------------------------------------------------------
+
+TOWN = ("street_lamp", "traffic_light", "bus_stop", "mailbox", "fountain", "phone_booth", "car", "bicycle", "newsstand")
+TOWN_SIZES = {"bus_stop": (2, 1), "fountain": (2, 2), "car": (2, 1), "newsstand": (2, 1)}
+TOWN_WORKING = ("street_lamp", "traffic_light", "fountain", "phone_booth", "car")
+TOWN_MOVING = ("traffic_light", "fountain")
+
+
+def test_town_objects_have_footprints_colours_and_states() -> None:
+    for kind in TOWN:
+        assert kind in OBJECT_KINDS and kind in OBJECT_COLORS and MORE_MODULES[kind] == "iso_town" and OBJECT_KINDS[kind].height <= 4.0
+        assert (OBJECT_KINDS[kind].width, OBJECT_KINDS[kind].depth) == TOWN_SIZES.get(kind, (1, 1))
+        assert default_state(kind) == ObjectState() and kind not in OPENING_KINDS and kind not in OBJECT_STYLES
+    assert set(TOWN) & SWITCHED_KINDS == set(TOWN_WORKING) and set(TOWN) & set(MOVING_KINDS) == set(TOWN_MOVING)
+    assert set(TOWN) & LAMPLIGHT_KINDS == {"street_lamp", "phone_booth"}
+
+
+def test_town_objects_draw_light_up_and_move() -> None:
+    place = _placed(TOWN)
+    for item in place.objects:
+        off = object_shapes(item, _look(item.kind), 0.0, ObjectState())
+        assert off and not any(getattr(s, "glow", False) for s in off), item.kind
+        if item.kind in TOWN_WORKING:
+            on = object_shapes(item, _look(item.kind), 0.0, ObjectState(on=True))
+            assert len(on) > len(off) and (item.kind == "fountain" or any(getattr(s, "glow", False) for s in on)), item.kind   # its water is no light
+        if item.kind in TOWN_MOVING:
+            early, late = (object_motion(item, _look(item.kind), 0.0, t, ObjectState(on=True)) for t in (0.2, 4.3))
+            assert early and len(early) == len(late) and [(p.points, p.fill, p.opacity) for p in early] != [(p.points, p.fill, p.opacity) for p in late]
+    lights = place.object("traffic_light")   # red, then green, then amber
+    fills = [object_motion(lights, _look("traffic_light"), 0.0, t, ObjectState(on=True))[1].fill for t in (1.0, 5.0, 7.8)]
+    assert fills == list(SIGNAL_COLORS[k] for k in (0, 2, 1))
+
+
+def test_light_pools_are_warm() -> None:
+    """A lit lamp's pool is rings of warm light (red over green over blue), not a pale tint (DESIGN.md §104)."""
+    place = _placed(("street_lamp", "floor_lamp", "vending_machine", "phone_booth", "car"))
+    for item in place.objects:
+        pool = [s for s in object_shapes(item, _look(item.kind), 0.0, ObjectState(on=True)) if isinstance(s, Disc) and s.glow and s.opacity < 1]
+        assert len(pool) == 3, item.kind
+        for disc in pool:
+            r, g, b = (int(disc.fill[k:k + 2], 16) for k in (1, 3, 5))
+            assert r > g > b and r - b > 120, item.kind
+
+
+def test_town_keys_validate() -> None:
+    good = stage_params(iso={**ISO, "objects": [{"object": "street_lamp", "at": "here", "on": True}, {"object": "car", "at": "there", "color": "#E2574C"}]})
+    assert good.iso.objects[0].state().on and good.iso.objects[1].placing().color == "#E2574C"
+    for bad, message in (({"object": "mailbox", "at": "here", "on": True}, "on is for"), ({"object": "car", "at": "here", "open": True}, "open is for"),
+                         ({"object": "bicycle", "at": "here", "kind": "bmx"}, "kind is for a hazard_sign"),
+                         ({"object": "streetlamp", "at": "here"}, "did you mean street_lamp"), ({"object": "fountian", "at": "here"}, "did you mean fountain")):
+        with pytest.raises(ValidationError, match=message):
+            stage_params(iso={**ISO, "objects": [bad]})
+
+
+@pytest.mark.render
+def test_the_town_objects_render_move_and_light(make_project, tmp_path: Path, monkeypatch) -> None:
+    extensions.load_builtins()
+    monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
+    square = "..l..t..m..p\n:::y::::::::\n.s...f....n.\n............\n::::::::::::\n.c....b.....\n............"
+    spots = {"l": "lamp", "t": "lights", "m": "mail", "p": "booth", "y": "near", "s": "stop", "f": "fountain", "n": "news", "c": "car", "b": "bike"}
+    kinds = {"lamp": "street_lamp", "lights": "traffic_light", "mail": "mailbox", "booth": "phone_booth", "stop": "bus_stop", "fountain": "fountain",
+             "news": "newsstand", "car": "car", "bike": "bicycle"}
+    objects = [{"object": kind, "at": spot, **({"on": True} if kind in TOWN_WORKING else {})} for spot, kind in kinds.items()]
+    params = {"light": "night", "iso": {"place": "outdoor", "map": square, "spots": spots, "objects": objects},
+              "characters": [{"name": "pip", "at": "near"}]}
+    beats = [{"text": "The square at night.", "actions": [{"switch_off": "car", "at": 0.6}]}]
+    scenes = [{"id": "home", "type": "stage", "params": params, "beats": beats}]   # frames_of renders the scene "home"
+    scene, frames = frames_of(Project.load(make_project(minimal_config(characters=CAST, scenes=scenes))), tmp_path / "town", monkeypatch)
+    places = {scene.iso_scenery.pieces[k].name: gadget for gadget, k, _ in scene._iso_gadget_places}
+    assert set(places) == set(TOWN_MOVING)
+    assert set(scene._iso_lamps) == {"street_lamp", "phone_booth"} and scene._iso_lamp_share("pip") > 0.0   # pip stands by the lit street lamp
+    assert len(frames) > 5 and np.any(frames[-1] != frames[3])

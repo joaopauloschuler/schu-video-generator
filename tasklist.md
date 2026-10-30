@@ -1597,7 +1597,7 @@ cartoon style, `on` states with gentle motion where listed; docs: the one "Other
 - [x] `bathtub`, `wardrobe` (`open`), `crib`, `cafe_table` (with two chairs), `counter`, `cash_register`, `display_case` (`kind: cakes | jewels`), `market_stall` (awning, fruit crates), `vending_machine` (glows when on); drawings in `cartoon/iso_shop.py`; `kind` per object via `OBJECT_STYLES`
 
 ### Step 263 — Town
-- [ ] `street_lamp` (tall, lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (water when on), `phone_booth` (light), `car` (parked; headlights; `color`), `bicycle`, `newsstand`
+- [x] `street_lamp` (tall, lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (water when on), `phone_booth` (light), `car` (parked; headlights; `color`), `bicycle`, `newsstand`; drawings in `cartoon/iso_town.py`; warm night light pools for every lamp (`light_pool`)
 
 ### Step 264 — Nature I
 - [ ] `campfire` (flames, sparks, glow), `tent`, `log`, `stump`, `mushroom_ring` (faint glow at night), `pond` (lily pads, ripples), `scarecrow`, `beehive` (bees when on)

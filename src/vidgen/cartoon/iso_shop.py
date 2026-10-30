@@ -26,6 +26,7 @@ from vidgen.cartoon.iso_objects import (
     _indicator,
     _round,
     _screen,
+    light_pool,
 )
 from vidgen.world.iso import DISPLAY_CASES, ObjectState
 from vidgen.world.iso_view import Point3
@@ -485,8 +486,7 @@ def _vending_machine(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Sh
     a0, a1, b0, b1, h = 0.1, w - 0.1, 0.22, d - 0.1, 2.15
     on = state.on
     body = look.main
-    light = mix(look.detail, SHINE, 0.55)
-    shapes: list[Shape] = [Disc(f.p(w / 2, d + 0.1, 0.01), 0.62, light, False, 0.24, glow=True, holds_snow=False)] if on else []
+    shapes = light_pool(f.p(w / 2, d + 0.1, 0.01), 0.7, 0.8) if on else []
     shapes += f.box(a0, b0, 0.0, a1, b1, h, body)
     face = b1 + 0.002
     shapes.append(_plinth(f, a0 + 0.01, a1 - 0.01, b1, body, 0.1))

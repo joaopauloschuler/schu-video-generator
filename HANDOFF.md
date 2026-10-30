@@ -23699,3 +23699,36 @@ How to test: `tests/test_docs.py` (73 passed).
   `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo` passed. No shared drawing code
   changed (Phase Q baseline not affected). Contact sheets (private): scratchpad
   `s262/objects.png`, `s262/closeup.png`.
+
+## Step 263 — Town objects (Phase AC)
+
+- Built: iso objects `street_lamp` (lantern on a crook; lights), `traffic_light` (cycles red,
+  green, amber while on), `bus_stop` (2 x 1), `mailbox`, `fountain` (2 x 2; jet, falls, rings
+  while on), `phone_booth` (panes and sign glow), `car` (2 x 1; headlights, tail light, light on
+  the ground ahead), `bicycle`, `newsstand` (2 x 1) (DESIGN §104). A lit street lamp or phone booth
+  lights nearby characters (`LAMPLIGHT_KINDS`). Night light pools are now warm: a shared
+  `light_pool` (amber rings) for `lamp`, `floor_lamp`, `vending_machine` and the new lights — the
+  old pale tints over the night-graded ground read olive / grey (glow layer alpha-composited over
+  the blue-multiplied picture).
+- Files: new `cartoon/iso_town.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `LAMPLIGHT_KINDS`, shadows, `light_pool`, `LIGHT_POOL` now the warm amber,
+  `LIGHT_POOL_OPACITY` gone); `cartoon/iso_home.py`, `cartoon/iso_shop.py` (their pools);
+  `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`, `scenes/stage_iso.py` (docstrings);
+  the one "Other objects" list in CONFIG and the guide; tests `test_iso_objects_more.py` (+5),
+  `test_iso_staging.py` (the lamp's pool is now rings).
+- Decisions: the car stands side-on, its nose on the visible right side face (so facing left or
+  right both show the headlights); its light pool lies just outside its footprint. The fountain's
+  falls are only on its viewer side (moving parts are drawn over the picture, so falls behind the
+  column would show through it). The fountain's water is not self-lit at night.
+- Known gaps: in daylight a lit lamp's pool reads as a clear orange patch (the glow layer is
+  drawn over the day picture too, as before); the bicycle's wheels overlap in the iso view and it
+  reads small at preview size; nobody sits on the bus stop's bench; the car does not move.
+- For later batches: `iso_town` shows a moving object whose still picture (`look.moving` false)
+  stands in for its motion (traffic light red, fountain water at t=0.4). Use `light_pool` for any
+  new lit object (campfire, pumpkin, lighthouse...). Scratchpad `s263/closeup.py` draws close-ups
+  under the real night grade (`grade_rgbas`) with motion frames; `s263/pool.py` checks a pool's
+  night colour over several grounds.
+- Tests: `test_iso_objects_more.py` 13 passed; `test_iso_staging`, `test_lab_objects`,
+  `test_iso_place`, `test_iso_mood`, `test_guide`, `test_api`, `test_schema`, `test_docs`,
+  `test_city_hud_echo`, the lamplight tests of `test_phase_q_review` passed. Phase Q baseline 31/31
+  identical. Contact sheets (private): scratchpad `s263/objects.png`, `s263/closeup.png`.

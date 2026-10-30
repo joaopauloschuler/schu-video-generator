@@ -10648,10 +10648,13 @@ they hide what is behind them.
   (2 x 1), `stove`, `sink`, `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1),
   `bathtub` (2 x 1), `wardrobe` (2 x 1, `open`), `crib`, `cafe_table` (2 x 1, two chairs),
   `counter` (2 x 1), `cash_register`, `display_case` (2 x 1, `kind: cakes | jewels`),
-  `market_stall` (2 x 1), `vending_machine`; `on: true` / `switch_on` makes the laptop, kiosk,
-  core, arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging
-  station, airlock (its beacon), printer, fireplace, stove, floor lamp, TV and vending machine
-  work (a lit fireplace or floor lamp lights who stands near).
+  `market_stall` (2 x 1), `vending_machine`, `street_lamp`, `traffic_light`, `bus_stop` (2 x 1),
+  `mailbox`, `fountain` (2 x 2), `phone_booth`, `car` (2 x 1, `color` its body), `bicycle`,
+  `newsstand` (2 x 1); `on: true` / `switch_on` makes the laptop, kiosk, core, arm, centrifuge,
+  coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station, airlock (its
+  beacon), printer, fireplace, stove, floor lamp, TV, vending machine, street lamp, traffic light
+  (cycles), fountain, phone booth and car (headlights) work (a lit fireplace, floor lamp, street
+  lamp or phone booth lights who stands near).
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
   front looks to the viewer's lower left) or `right` (lower right; its footprint turns: a bench

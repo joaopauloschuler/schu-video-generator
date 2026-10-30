@@ -20151,3 +20151,21 @@ Public surface: the kinds above; `MORE_MODULES`, `LAMPLIGHT_KINDS` (also in `vid
   is part of `OBJECT_FEATURES`.
 
 Public surface (262): the kinds above; `DISPLAY_CASES`, `OBJECT_STYLES` (also in `vidgen.api`). Additive.
+
+- **Step 263 (town)**: drawn in `iso_town.py`. `street_lamp` (4.0 tall; a crook with a hanging
+  lantern, `detail` its glass off; on: glows, a pool under the lantern), `traffic_light` (moving:
+  red 3.6 s, green 3.6 s, amber 1.2 s, `SIGNAL_CYCLE`; a still picture shows red), `bus_stop`
+  (2 x 1; glass shelter, bench, advert in `detail`, round sign on a post), `mailbox` (pillar box),
+  `fountain` (2 x 2; moving while on: a jet, four falls on the viewer's side with drops, spreading
+  rings; its water is no light), `phone_booth` (on: panes and sign glow, a small pool), `car`
+  (2 x 1, side-on, its nose on the right side face; on: headlights, tail light, a pool ahead of it,
+  outside its footprint), `bicycle` (side-on with a basket in `detail`), `newsstand` (2 x 1;
+  magazines, papers, striped awning). `LAMPLIGHT_KINDS` adds `street_lamp` and `phone_booth`.
+- **Warm light pools**: `light_pool(centre, radius, strength)` in `iso_objects` (three glowing
+  rings of `LIGHT_POOL` #FF8F3A, the middle `POOL_CORE`, `POOL_RINGS` opacities) now draws every
+  lamp's pool: `lamp`, `floor_lamp`, `vending_machine` and the new ones. The old pale yellow (and the
+  vending machine's pale blue) at ~0.3 over the night-graded ground read olive / grey, because the
+  glow layer is alpha-composited over the blue-multiplied picture; a saturated amber stays warm on
+  grass, paths and floors. Changes the look of lit iso lamps (intended); Phase Q baseline unchanged.
+
+Public surface (263): the kinds above; `light_pool` (`iso_objects.__all__`). Additive.

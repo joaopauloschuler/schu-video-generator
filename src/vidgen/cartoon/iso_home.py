@@ -17,8 +17,6 @@ from vidgen.cartoon.iso_objects import (
     DARK_SCREEN,
     DISPLAY_GREEN,
     LED_OFF,
-    LIGHT_POOL,
-    LIGHT_POOL_OPACITY,
     LIT_CORE,
     LIT_GLASS,
     SHINE,
@@ -36,6 +34,7 @@ from vidgen.cartoon.iso_objects import (
     _rising,
     _round,
     _screen,
+    light_pool,
 )
 from vidgen.world.iso import ObjectState
 from vidgen.world.iso_view import ISO_RISE, Point3
@@ -352,7 +351,7 @@ def _floor_lamp(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     z = f.base
     on = state.on
     metal = look.detail
-    shapes: list[Shape] = [Disc((x, y, z + 0.01), LIGHT_POOL_RADIUS_FLOOR, LIGHT_POOL, False, LIGHT_POOL_OPACITY, glow=True, holds_snow=False)] if on else []
+    shapes = light_pool((x, y, z + 0.01), LIGHT_POOL_RADIUS_FLOOR) if on else []
     shapes += [Upright(x, y, z, z + 0.05, 0.19, metal), Upright(x, y, z + 0.05, z + 1.62, 0.022, shade(metal, 0.05))]
     cloth = mix(look.main, LIT_GLASS, 0.45) if on else look.main
     shapes.append(_cone(x, y, z + 1.55, z + 2.0, 0.32, 0.2, cloth, glow=on))

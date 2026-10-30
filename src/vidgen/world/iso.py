@@ -155,6 +155,16 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "display_case": ObjectKind(2, 1, 1.4, top=1.4),
     "market_stall": ObjectKind(2, 1, 2.66),
     "vending_machine": ObjectKind(1, 1, 2.15),
+    # town objects (§104)
+    "street_lamp": ObjectKind(1, 1, 4.0),
+    "traffic_light": ObjectKind(1, 1, 3.15),
+    "bus_stop": ObjectKind(2, 1, 2.9),
+    "mailbox": ObjectKind(1, 1, 1.52),
+    "fountain": ObjectKind(2, 2, 2.6),
+    "phone_booth": ObjectKind(1, 1, 2.65),
+    "car": ObjectKind(2, 1, 1.32),
+    "bicycle": ObjectKind(1, 1, 1.0),
+    "newsstand": ObjectKind(2, 1, 2.45),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
@@ -175,7 +185,8 @@ OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop",
 SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
                                             "coffee_machine", "grow_rack", "specimen_tank", "chemistry_bench", "distillation_rig",
                                             "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d",
-                                            "fireplace", "stove", "floor_lamp", "tv", "vending_machine"})
+                                            "fireplace", "stove", "floor_lamp", "tv", "vending_machine", "street_lamp", "traffic_light",
+                                            "fountain", "phone_booth", "car"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock"})
 
