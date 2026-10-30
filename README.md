@@ -86,7 +86,7 @@ videos use ([reference](docs/CONFIG.md#music-studio-vidgen-studio),
 
 <p align="center">
   <img src="docs/images/studio.png" width="720"
-       alt="vidgen studio: the momentum bed's sections on a timeline, its tracks, the inspector of the ostinato, two listening notes and an agent's proposal answering them">
+       alt="schu-video-generator studio: the momentum bed's sections on a timeline, its tracks, the inspector of the ostinato, two listening notes and an agent's proposal answering them">
 </p>
 
 Everything is built around what an agent can and cannot do:

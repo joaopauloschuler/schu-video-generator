@@ -1566,6 +1566,9 @@ Phase AA done.
 ### Step 256 — The project name in runtime messages
 - [x] Messages, help texts, schema titles/descriptions, MCP descriptions, the studio page and the generated Listen / gallery pages say `schu-video-generator` where they name the project; commands, the package, identifiers, keys, the cache folder and the MCP server's name keep `vidgen`; `docs/music/README.md` and `docs/gallery/` (index, `crispr`, `terminal`) regenerated; tests and quoted docs updated
 
+### Step 257 — The studio screenshot with the new name
+- [x] `docs/images/studio.png` taken again with Step 200's recipe (1440 × 900, 160 colours, 73 KB; same state), the top bar reads "schu-video-generator studio"; the README's alt text says so
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

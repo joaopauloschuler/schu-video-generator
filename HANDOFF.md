@@ -23564,3 +23564,20 @@ How to test: `tests/test_schema.py`, `test_soundfont.py`, `test_api.py`, `test_r
 `test_listen.py`, `test_gallery.py -m "not render"`, `test_studio_app.py`, `test_studio_ui.py`,
 `test_studio_check.py`, `test_studio_agent.py`, `test_docs.py`, `test_guide.py`, `test_mcp.py`
 (run from the repo root or with `-o pythonpath=.` for the tests importing `tests.*`).
+
+## Step 257 — The studio screenshot with the new name
+
+What was done (owner-approved follow-up to Step 256): `docs/images/studio.png` taken again so its
+top bar reads "schu-video-generator studio", with Step 200's recipe unchanged
+(`<scratchpad>/s257/readme_shot.py`, a copy of `s200/readme_shot.py` writing to the scratchpad
+first): an in-process `StudioApp` + `start_in_thread` in an empty project, headless Chromium at
+1440 × 900, dark theme, momentum loaded, two listening notes, an agent's proposal (`agent_propose`,
+tempo 118), the ostinato selected, paused at 0:20, then quantised to 160 colours (median cut, no
+dither). Same size and state as before (1440 × 900; 74,357 → 74,665 bytes); compared side by side:
+only the name and the hand-off's clock time differ, no sideways scroll (scrollWidth 1440). The
+README's alt text now starts "schu-video-generator studio: …"; `docs/CONFIG.md`'s caption ("The
+studio: …") names no project and is unchanged. No other file references the picture.
+
+Files: `docs/images/studio.png`, `README.md`, `tasklist.md`.
+
+How to test: `tests/test_docs.py` (73 passed).
