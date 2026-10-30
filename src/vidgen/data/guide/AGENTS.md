@@ -2626,9 +2626,11 @@ and give each scene `set: village`.
   colour adds a floating shape), `chemistry_bench` (2 x 1), `distillation_rig`, `lab_fridge`
   (`open`), `fume_hood`, `telescope`, `satellite_dish`, `charging_station`, `crate_stack`,
   `airlock` (2 x 1, `open`), `printer_3d`, `hazard_sign` (`kind: biohazard | radiation |
-  authorised`), `fire_extinguisher`; `on: true` / `switch_on` makes the laptop, kiosk, core,
-  arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
-  airlock (its beacon) and printer work.
+  authorised`), `fire_extinguisher`, `fireplace` (2 x 1), `kitchen_counter` (2 x 1), `stove`,
+  `sink`, `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1); `on: true` /
+  `switch_on` makes the laptop, kiosk, core, arm, centrifuge, coffee machine, rack, tank, bench,
+  rig, fridge, hood, dish, charging station, airlock (its beacon), printer, fireplace, stove,
+  floor lamp and TV work (a lit fireplace or floor lamp lights who stands near).
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a

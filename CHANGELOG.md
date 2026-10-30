@@ -5,7 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–260)
+## Unreleased (Steps 193–261)
+
+### More iso objects (Steps 261–267)
+
+- Home objects `fireplace` (flickering fire, warm light), `kitchen_counter`, `stove` (the pot steams), `sink`, `bookshelf_tall`, `armchair`, `floor_lamp` (lights), `tv` (plays a picture) and `piano`; a lit fireplace or floor lamp lights the characters near it.
 
 ### More lab objects (Steps 258–260)
 

@@ -20113,3 +20113,27 @@ lean: one "Other objects" list in CONFIG and the guide.
 Public surface: object kinds above; `IsoObjectParam.time`, `IsoObjectParam.kind`; `WALL_KINDS`;
 `HAZARD_SIGNS`; `ObjectLook.moving`; `Motion`, `MOVING_KINDS`, `object_motion`, `object_working`,
 `clock_hands`; `IsoGadgets`, `Gadget`. Additive.
+
+## 104. More iso objects: home, town, nature, school, fantasy, seasons (Phase AC, Steps 261–267)
+
+Phase AC adds 63 non-lab iso objects in §103's style and conventions (`color` / `detail`, `on` /
+`open` / `kind` only where they add value; working parts self-lit, moving parts drawn by the stage
+while on). Docs stay lean: the one "Other objects" list in CONFIG and the guide.
+
+- **Where they are drawn**: `cartoon/iso_objects.py` is long, so each batch's drawings live in a
+  module of their own under `vidgen.cartoon` (Step 261: `iso_home.py`). `MORE_MODULES` (kind ->
+  module name) tells `object_shapes` / `object_motion` where to look; such a module has
+  `DRAWINGS` (frame, look, state -> shapes) and `motion(frame, look, now)`, and builds on
+  `iso_objects`' frame and helpers (it is imported lazily, so there is no import cycle). Kinds,
+  footprints, colours, `SWITCHED_KINDS` and `MOVING_KINDS` stay in their usual tables.
+- **Step 261 (home I)**: `fireplace` (2 x 1; bricks `color`, stone `detail`; on: flames, embers,
+  sparks and warm light on the floor, flickering), `kitchen_counter` (2 x 1, `top`), `stove` (on:
+  oven window and the ring under the pot glow, the pot steams), `sink`, `bookshelf_tall` (`top`),
+  `armchair` (`top`), `floor_lamp` (on: the shade glows, a pool of light), `tv` (`detail` its
+  sky; on: a picture with a hill and a sun, a cloud sails across, a flicker), `piano` (2 x 1,
+  upright, `top`). Moving: fireplace, stove, TV. Heights 1.2–2.55 tiles.
+- **Lamplight**: `LAMPLIGHT_KINDS` (`lamp`, `floor_lamp`, `fireplace`): a lit one lights the
+  characters near it like a lamp (§89.13), from its footprint's middle (a lamp: its first cell's,
+  as before).
+
+Public surface: the kinds above; `MORE_MODULES`, `LAMPLIGHT_KINDS` (also in `vidgen.api`). Additive.

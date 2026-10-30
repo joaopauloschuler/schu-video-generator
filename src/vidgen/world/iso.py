@@ -135,6 +135,16 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "printer_3d": ObjectKind(1, 1, 1.8),
     "hazard_sign": ObjectKind(1, 1, 1.65),
     "fire_extinguisher": ObjectKind(1, 1, 0.85),
+    # home objects (DESIGN.md §104)
+    "fireplace": ObjectKind(2, 1, 2.4),
+    "kitchen_counter": ObjectKind(2, 1, 1.2, top=0.96),
+    "stove": ObjectKind(1, 1, 1.25),
+    "sink": ObjectKind(1, 1, 1.32),
+    "bookshelf_tall": ObjectKind(1, 1, 2.55, top=2.55),
+    "armchair": ObjectKind(1, 1, 1.2, top=0.58),
+    "floor_lamp": ObjectKind(1, 1, 2.05),
+    "tv": ObjectKind(1, 1, 1.48),
+    "piano": ObjectKind(2, 1, 1.66, top=1.66),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
@@ -150,7 +160,8 @@ OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), "h
 OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge", "airlock"})
 SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
                                             "coffee_machine", "grow_rack", "specimen_tank", "chemistry_bench", "distillation_rig",
-                                            "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d"})
+                                            "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d",
+                                            "fireplace", "stove", "floor_lamp", "tv"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock"})
 

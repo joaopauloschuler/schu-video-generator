@@ -944,9 +944,10 @@ class IsoStaging:
         #: each lamp's middle (tile units) and its light from the start: (scene time, seconds, level)
         self._iso_lamps: dict[str, tuple[tuple[float, float], list[tuple[float, float, float]]]] = {}
         for item in place.objects:
-            if item.kind == "lamp":
+            if item.kind in LAMPLIGHT_KINDS:   # a lamp, a floor lamp, a fireplace (§104)
                 state = scenery.states[scenery.index[item.name]]
-                self._iso_lamps[item.name] = ((item.column + 0.5, item.row + 0.5), [(0.0, 0.0, 1.0 if state.on and state.shown else 0.0)])
+                middle = (item.column + 0.5, item.row + 0.5) if item.kind == "lamp" else (item.column + item.width / 2, item.row + item.depth / 2)
+                self._iso_lamps[item.name] = (middle, [(0.0, 0.0, 1.0 if state.on and state.shown else 0.0)])
         if not self._iso_lamps:
             return
         self._iso_lamp_shares: dict[str, float] = {}

@@ -23646,3 +23646,27 @@ How to test: `tests/test_docs.py` (73 passed).
 - Tests: `test_lab_objects.py` 15 passed; iso files, `test_guide`, `test_api`, `test_mcp`,
   `test_schema`, `test_docs`, `test_city_hud_echo` passed. Phase Q baseline 31/31 identical.
   Contact sheets (private): scratchpad `s260/objects.png`, `s260/all26.png`.
+
+## Step 261 — Home objects I (Phase AC)
+
+- Built: iso objects `fireplace` (2 x 1), `kitchen_counter` (2 x 1), `stove`, `sink`,
+  `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1) (DESIGN §104). Switched: the
+  fireplace (flames, embers, sparks, warm floor light), stove (glowing oven and ring, steam),
+  floor lamp (glowing shade, pool of light) and TV (a picture, a cloud, a flicker); the fire,
+  steam and TV picture move (`IsoGadgets`). A lit fireplace or floor lamp lights nearby characters
+  like a lamp (`LAMPLIGHT_KINDS`). The Phase AC plan in `tasklist.md`.
+- Files: new `cartoon/iso_home.py` (drawings, `motion`); `cartoon/iso_objects.py` (colours,
+  `MORE_MODULES` dispatch, `LAMPLIGHT_KINDS`, `MOVING_KINDS`, shadow); `world/iso.py` (kinds,
+  `SWITCHED_KINDS`); `scenes/stage_iso.py` (lamplight kinds); `scenes/stage.py` (docstrings);
+  `api.py`; the one "Other objects" list in CONFIG and the guide; tests
+  `tests/test_iso_objects_more.py` (3 logic + 1 small render).
+- Decisions: the new drawings go in their own module per batch (iso_objects.py is ~2000 lines),
+  found through `MORE_MODULES`; later batches add their module there. Names do not clash: iso
+  objects are their own namespace (`objects:` of an iso place), apart from the 2D props `tv`,
+  `fireplace`, `armchair` (as `lamp` already was). A lamp keeps its lamplight point (first cell).
+- Known gaps: the TV's picture is fixed (no `kind`); nobody sits in the armchair (`top` holds
+  small things, like the sofa's); the fireplace's floor light is a flat tint (also over a rug).
+- Tests: `test_iso_objects_more.py` 4 passed; `test_lab_objects`, `test_iso_place`,
+  `test_guide`, `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo`, the lamplight tests
+  of `test_phase_q_review` passed. Phase Q baseline 31/31 identical. Contact sheet (private):
+  scratchpad `s261/objects.png` (plus `closeup.png`, `zoom.png`).

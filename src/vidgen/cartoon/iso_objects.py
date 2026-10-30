@@ -10,10 +10,12 @@ swap), so its front is the face to the lower right.
 
 from __future__ import annotations
 
+import importlib
 import math
 import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from types import ModuleType
 
 from vidgen.cartoon.iso_city import (
     SCREEN_TEXT,
@@ -59,6 +61,9 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "telescope": ("#F4F6FA", "#3B6FB6"), "satellite_dish": ("#E6EAF0", "#E2574C"), "charging_station": ("#E6EAF0", "#48E07A"),
     "crate_stack": ("#7A8699", "#B9BFC9"), "airlock": ("#8A93A3", "#F2A33A"), "printer_3d": ("#E6EAF0", "#FF8A3D"),
     "hazard_sign": ("#F6C945", "#2B2F3A"), "fire_extinguisher": ("#E2574C", "#2B2F3A"),
+    "fireplace": ("#B5655A", "#E9E2D3"), "kitchen_counter": ("#86B6A2", "#EEE6D8"), "stove": ("#EEF0F3", "#E2574C"),
+    "sink": ("#7FA7C9", "#E6EAF0"), "bookshelf_tall": ("#9C6B47", "#3B6FB6"), "armchair": ("#D9774B", "#F2D6A2"),
+    "floor_lamp": ("#F2D6A2", "#3A3F4B"), "tv": ("#2B2F3A", "#6EC6FF"), "piano": ("#2E2A33", "#F2C14E"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -1747,7 +1752,7 @@ def _fire_extinguisher(f: _Frame, look: ObjectLook) -> list[Shape]:
 
 #: The objects with moving parts the stage draws over their pictures while they work (DESIGN.md §103).
 MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge",
-                "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d")
+                "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d", "fireplace", "stove", "tv")
 _LAB_MOVING = frozenset({"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"})
 _WORKSHOP_MOVING = frozenset({"satellite_dish", "charging_station", "airlock", "printer_3d"})
 #: The objects that work while open too (a lab fridge's cold mist).
@@ -1881,9 +1886,12 @@ def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float, st
     a specimen tank and a chemistry bench's flasks (with steam); a distillation rig's flame,
     boiling and drips; a lab fridge's cold mist (``state``: from the opening while open); a fume
     hood's fan and vapour; a satellite dish turning, a charging station's bars filling, an
-    airlock's flashing beacon and a 3D print growing layer by layer under its moving head. The
-    same number of parts at any time (those not seen have opacity 0)."""
+    airlock's flashing beacon and a 3D print growing layer by layer under its moving head; a
+    fireplace's flames, a stove's steam and a TV's picture (§104). The same number of parts at
+    any time (those not seen have opacity 0)."""
     f = _Frame(item, base)
+    if item.kind in MORE_MODULES:
+        return _more(item.kind).motion(f, look, now)
     if item.kind in _WORKSHOP_MOVING:
         return _workshop_motion(f, look, now)
     if item.kind in _LAB_MOVING:
@@ -1957,7 +1965,8 @@ def object_lights(item: IsoObject, base: float) -> list[Point3]:
 #: The radius (tile units) of the soft shadow under the objects that cast a round one.
 SHADOW_RADII: dict[str, float] = {"tree": 0.45, "pine": 0.42, "bush": 0.48, "rock": 0.42, "lamp": 0.24, "well": 0.52, "sign": 0.22,
                                   "plant": 0.32, "flowers": 0.36, "chair": 0.42, "lab_stool": 0.26, "quantum_core": 0.42, "robot_arm": 0.36,
-                                  "terrarium": 0.3, "specimen_tank": 0.42, "telescope": 0.4, "hazard_sign": 0.22, "fire_extinguisher": 0.24}
+                                  "terrarium": 0.3, "specimen_tank": 0.42, "telescope": 0.4, "hazard_sign": 0.22, "fire_extinguisher": 0.24,
+                                  "floor_lamp": 0.26}
 #: The shadows' colour and opacity (a tint of what lies under them).
 SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
@@ -1974,6 +1983,18 @@ _STATEFUL: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] =
     "lab_fridge": _lab_fridge, "fume_hood": _fume_hood, "satellite_dish": _satellite_dish, "charging_station": _charging_station,
     "airlock": _airlock, "printer_3d": _printer_3d,
 }
+#: The kinds drawn by another module of :mod:`vidgen.cartoon` (DESIGN.md §104): its name. Each
+#: such module has ``DRAWINGS`` (by frame, look and state) and ``motion(frame, look, now)``; it
+#: is imported when first needed (it builds on this module's helpers).
+MORE_MODULES: dict[str, str] = {kind: "iso_home" for kind in ("fireplace", "kitchen_counter", "stove", "sink", "bookshelf_tall", "armchair",
+                                                               "floor_lamp", "tv", "piano")}
+#: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
+LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace"})
+
+
+def _more(kind: str) -> ModuleType:
+    """The module that draws ``kind`` (one of :data:`MORE_MODULES`)."""
+    return importlib.import_module(f"vidgen.cartoon.{MORE_MODULES[kind]}")
 
 
 def tower_screen(item: IsoObject, base: float) -> tuple[Point3, Point3, Point3, Point3] | None:
@@ -2001,6 +2022,8 @@ def object_shapes(item: IsoObject, look: ObjectLook, base: float, state: ObjectS
         return shadow + _fence(frame, look, item.links)
     if item.kind in _STATEFUL:
         return shadow + _STATEFUL[item.kind](frame, look, state)
+    if item.kind in MORE_MODULES:
+        return shadow + _more(item.kind).DRAWINGS[item.kind](frame, look, state)
     return shadow + _DRAWINGS[item.kind](frame, look)
 
 
@@ -2012,5 +2035,6 @@ def object_box(item: IsoObject, base: float) -> Box3:
     return Box3(item.column, item.row, base, item.column + item.width, item.row + item.depth, base + item.height)
 
 
-__all__ = ["BED_KINDS", "DOORWAY", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "MOVING_KINDS", "OBJECT_COLORS", "OPEN_WORKING", "Motion", "ObjectLook",
+__all__ = ["BED_KINDS", "DOORWAY", "LAMPLIGHT_KINDS", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "MORE_MODULES", "MOVING_KINDS", "OBJECT_COLORS",
+           "OPEN_WORKING", "Motion", "ObjectLook",
            "clock_hands", "object_box", "object_lights", "object_motion", "object_shapes", "object_working", "tower_screen"]

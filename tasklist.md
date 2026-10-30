@@ -1585,6 +1585,32 @@ Phase AA done.
 
 Phase AB done.
 
+## Phase AC — 63 more iso objects (DESIGN §104)
+
+Home, café, town, nature, school / office, fantasy, seasons and harbour objects in the same flat
+cartoon style, `on` states with gentle motion where listed; docs: the one "Other objects" list.
+
+### Step 261 — Home I
+- [x] `fireplace` (2 x 1; flames flicker, warm light), `kitchen_counter` (2 x 1), `stove` (pot steams), `sink`, `bookshelf_tall`, `armchair`, `floor_lamp` (lights), `tv` (picture, flicker), `piano` (2 x 1); a lit fireplace or floor lamp lights nearby characters; drawings in `cartoon/iso_home.py` (`MORE_MODULES`); tests `test_iso_objects_more.py`; Phase AC plan here and DESIGN §104
+
+### Step 262 — Home II and café
+- [ ] `bathtub`, `wardrobe` (`open`), `crib`, `cafe_table` (with two chairs), `counter`, `cash_register`, `display_case` (`kind: cakes | jewels`), `market_stall` (awning, fruit crates), `vending_machine` (glows when on)
+
+### Step 263 — Town
+- [ ] `street_lamp` (tall, lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (water when on), `phone_booth` (light), `car` (parked; headlights; `color`), `bicycle`, `newsstand`
+
+### Step 264 — Nature I
+- [ ] `campfire` (flames, sparks, glow), `tent`, `log`, `stump`, `mushroom_ring` (faint glow at night), `pond` (lily pads, ripples), `scarecrow`, `beehive` (bees when on)
+
+### Step 265 — Nature II, school and office
+- [ ] `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (iso), `desk_with_pc` (screen), `water_cooler` (bubble), `printer` (paper slides out), `globe` (spins), `trophy_shelf`
+
+### Step 266 — Fantasy and seasons I
+- [ ] `treasure_chest` (opens with a golden glow), `cauldron` (bubbling potion in `color`), `giant_crystal` (pulses), `throne`, `torch_sconce` (wall-mounted flame), `signpost`, `archway`, `statue`
+
+### Step 267 — Seasons II, harbour and review
+- [ ] `christmas_tree` (lights twinkle), `snowman`, `pumpkin` (glows), `gift_pile`, `balloon_bunch` (sways), `birthday_cake` (candles), `boat` (bobs on water), `dock`, `lighthouse` (beam at night), `train_car`, `rocket` (smoke / flame); a critical review of all 63 (style, sizes, on / off and night, performance, did-you-mean, the doc list), fixes, `test_mcp.py`
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
