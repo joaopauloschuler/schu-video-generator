@@ -2689,6 +2689,11 @@ and give each scene `set: village`.
   a `pan` to the end spot with the same `run_time` follows it). `wide: 1.6`–`2.5` lets the towers
   reach out of the top of the frame. Neon rain: `particles: [{kind: rain, glow: true, color:
   ["#5FFFE0", "#4FA8FF"]}]` (`glow` works on any particles).
+- Weather outdoors: rain with `puddles: true, settled: 12` (puddles full size from the start)
+  mirrors lit windows, lanterns and neon trims at night, wobbling while it rains; `fog: 0.6`
+  lies over the place in drifting bands, thicker further back; `wind: windy` (or `- wind:
+  gale`) bends trees, bushes, flowers and plants, swings scarecrows and balloon bunches and
+  slants the rain. All fade with `time_of_day`.
 - Other selves: a character with `echo: true` (or `{color, opacity}`) is a translucent other
   self that keeps its own costume, its outlines glowing (a timeline, a memory, a dream); stand
   it beside the one it echoes and bring it with `- materialise: ana_captain`. Accessories

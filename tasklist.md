@@ -1629,7 +1629,7 @@ a few lines per feature in CONFIG and the guide.
 - [x] `- {time_of_day: sunset, run_time: 6}` blending the light smoothly (day to night through a sunset, a sky of the time of day on stages without a background, stars coming out late, pools growing); lamps, windows, lit objects and cars' headlights (driven ones too) switch on one after another at dusk and off at dawn, fading (`auto_lights: false`, `auto_light: false` per object / lamp prop); iso places and the flat stage; works with `fill_light`; tests `test_time_of_day.py`
 
 ### Step 271 — Iso weather
-- [ ] Puddles reflecting lamps / towers / neon at night, drifting fog banks, `wind: {strength, direction}` bending trees and bushes, swaying balloons and flags, slanting rain; cheap and opt-in
+- [~] Puddles mirror lit windows, lanterns and neon trims at night (as strong as it is dark, fading with `time_of_day` and switches, wobbling in rain; `settled` starts them grown); the stage's `fog` on iso places in drifting bands by depth; the stage's `wind` (a signed level, not `{strength, direction}`: one wind on both stages) bends trees, pines, bushes, flowers, plants, swings scarecrows and balloon bunches (rain already slants, leaves drift); outdoors only; tests `test_iso_atmosphere.py`. Partial: no flag object to sway; characters are not mirrored
 
 ### Step 272 — Story to video draft
 - [ ] `vidgen story draft story.md [-o project/]`: scenes, dialogue and speakers, a cast with distinct Kokoro voices, iso / stage scenes with placeholder staging, beats, a `story_draft.md` report with TODOs; an MCP tool; tests on neutral sample texts

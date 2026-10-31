@@ -188,10 +188,11 @@ class SettledSnow:
 class FogBand(VGroup):
     """One band of fog: :data:`~vidgen.cartoon.fog.FOG_LAYERS` shapes in ``color``, ``opacity``
     where all overlap; ``stage_depth`` is where it lies (the stage draws it in front of everything
-    deeper)."""
+    deeper); ``shares``: the share of its fog each layer holds (an iso place's banks hold more,
+    §105.4)."""
 
-    def __init__(self, depth: float, color: str, opacity: float) -> None:
-        super().__init__(*[_filled(VMobject(), color, layer_opacity(opacity, share)) for share in FOG_LAYER_SHARES])
+    def __init__(self, depth: float, color: str, opacity: float, shares: Sequence[float] = FOG_LAYER_SHARES) -> None:
+        super().__init__(*[_filled(VMobject(), color, layer_opacity(opacity, share)) for share in shares])
         self.stage_depth = depth
         self.name = f"fog_{depth:g}"
 

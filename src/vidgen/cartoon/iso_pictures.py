@@ -236,6 +236,16 @@ class IsoPuddles(VGroup):
         self._draw()
         self.add_updater(lambda mob, dt: self._draw())
 
+    def size_at(self, now: float) -> float:
+        """How grown the puddles are at scene time ``now`` (0..1)."""
+        ended = self.ended()
+        return puddle_growth((now if ended is None else min(now, ended)) - self.start)
+
+    def raining(self, now: float) -> bool:
+        """Whether it rains on them at scene time ``now``."""
+        ended = self.ended()
+        return now >= self.start and (ended is None or now < ended)
+
     def _axes(self, radius: float) -> tuple[float, float]:
         """The half axes (Manim units) of a circle of ``radius`` (tile units) on the ground."""
         a = radius * math.sqrt(2) / 2 * self.view.unit

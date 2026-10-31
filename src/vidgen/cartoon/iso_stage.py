@@ -335,7 +335,8 @@ class IsoScenery:
     layer is in the base too (but a layered one), so where its edge meets the base no seam shows."""
 
     def __init__(self, place: IsoPlace, colors: IsoColors, looks: Mapping[str, ObjectLook], view: IsoView, pixels_per_unit: float,
-                 *, outline: float = 1.0, states: Mapping[str, ObjectState] | None = None, layered: Collection[str] = ()) -> None:
+                 *, outline: float = 1.0, states: Mapping[str, ObjectState] | None = None, layered: Collection[str] = (),
+                 apart: Collection[str] = ()) -> None:
         pieces = place_pieces(place, colors, looks)
         self.view = view
         self.bounds = place_bounds(place)
@@ -349,6 +350,9 @@ class IsoScenery:
         #: each piece's state now (a block or a wall: as drawn)
         self.states: dict[int, ObjectState] = {k: (states or {}).get(piece.name, default_state(piece.kind or "")) for k, piece in enumerate(self.pieces)}
         self.layered = tuple(k for k, piece in enumerate(self.pieces) if piece.name in layered)
+        #: the pieces the stage draws on their own (swaying in the wind, DESIGN.md §105.4): in no
+        #: picture, but on the top surface (they keep the rain off)
+        self.apart = frozenset(k for k, piece in enumerate(self.pieces) if piece.name in apart)
         self._images: OrderedDict[tuple[Any, ...], Image.Image | None] = OrderedDict()
         self._glows: dict[Picture, bool] = {}
         self._pools: dict[Picture, bool] = {}
@@ -406,13 +410,13 @@ class IsoScenery:
 
     def base(self) -> Picture:
         """The base picture: the ground and every piece there now but the layered ones."""
-        return (True, self._entries([k for k in self._own() if k not in self.layered]))
+        return (True, self._entries([k for k in self._own() if k not in self.layered and k not in self.apart]))
 
     def front(self, box: Box3, exclude: Collection[str] = (), first: int | None = None) -> Picture | None:
         """The front picture of a character standing in ``box`` (``None``: nothing hides it);
         ``exclude``: pieces left out (a driven vehicle's own piece, DESIGN.md §105); ``first``:
         a part (:meth:`part`) drawn first (the arm of the armchair it sits in, §105.2)."""
-        over = self.over(box)
+        over = tuple(k for k in self.over(box) if k not in self.apart)
         if exclude:
             over = tuple(k for k in over if self.pieces[k].name not in exclude)
         found = self._entries(over)
@@ -426,7 +430,7 @@ class IsoScenery:
         k = self.index[name]
         if not self.shown(k):
             return None
-        picture = (False, self._entries({k, *(j for j in self.over(self.pieces[k].box) if j != k)}))
+        picture = (False, self._entries({k, *(j for j in self.over(self.pieces[k].box) if j != k and j not in self.apart)}))
         self._layer_of[picture] = k
         return picture
 

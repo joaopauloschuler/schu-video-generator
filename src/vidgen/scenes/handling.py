@@ -610,7 +610,7 @@ class BlowAway(Action):
         if "<prop>" not in scene_cls.target_patterns:
             return [("target", "blow_away is for the props of a stage")]
         if getattr(params, "iso", None) is not None:
-            return [("action", "blow_away is not for an iso place (no wind there yet); hide an object, or put_down a prop")]
+            return [("action", "blow_away is not for an iso place (its wind sways the plants and balloons, it blows no prop away); hide an object, or put_down a prop")]
         kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         light = ", ".join(sorted(LIGHT_PROPS))
         problems: list[tuple[str, str]] = []

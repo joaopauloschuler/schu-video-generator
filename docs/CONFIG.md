@@ -10253,9 +10253,9 @@ never leaves the stage.
 | `water` | `true` \| mapping | none | a strip of [water](#water-and-air-vehicles-water-land) with waves at the front of the stage, for a `boat`: `true` (the whole width) or `{left, right, color}` (`left` / `right`: marks or x from 0 to 1; `color`: a theme token or #hex, default a clear blue); not in a `room` |
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds`, `fog` or outdoor particles |
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
-| `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
+| `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; on an iso place in bands across it; not in a `room` or an indoor iso place |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props`, `size` or `character_size` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10892,6 +10892,27 @@ they hide what is behind them.
     `density: 1` (`settled: 30` starts it white) and stays when the snow stops. Its colour is
     snow white (`color` colours the flakes only).
   - A **run** (or a fast walk) leaves its **speed lines** along the walk's diagonal on screen.
+  - **Reflections**: at night the puddles mirror the place's lights — lit windows, lamps'
+    lanterns, a phone booth, a tower's neon trims — where the mirror image falls (a light `h`
+    tiles up shows `h` under its foot, so a low light or a trim down to the ground shows in a
+    puddle in front of it), as strong as the light is dark (none by day; they fade with
+    `time_of_day` and with a light switched on or off) and wobbling while it rains. `settled: 12`
+    on the rain field starts the puddles full size (seconds of rain already fallen).
+  - **Fog** (`fog: true`, a density, or `{density, color, drift, seed}` as on a flat stage) lies
+    over the place in five bands across it, from its back edge to near its front: each drawn
+    in front of the characters standing further back, so the further back, the more fog; the
+    banks drift (and with the wind) and the light grades them. Outdoors only.
+  - **Wind** (`wind: windy`, a level −1..1, negative to the left; the `wind` action fades it):
+    trees, pines, bushes, flowers, plants, scarecrows and balloon bunches bend and sway in gusts,
+    rain slants, leaves and streaks drift, scarves and hats trail. The objects an action changes
+    stay still. Outdoors only; nothing sways in a `--draft`.
+
+  ```yaml
+  light: night
+  wind: windy
+  fog: {density: 0.5}
+  particles: [{kind: rain, puddles: true, settled: 12}]
+  ```
 - **A city at night.** `tower` objects are tall buildings: walls in `color` (default a night
   blue-grey, `#2A3050`), rows of windows on both faces of which a seeded share is lit (warm and
   cool lights; `on: false` starts them dark, `switch_on` / `switch_off` change them), neon trims
@@ -10979,7 +11000,7 @@ they hide what is behind them.
   mouth (a lamp post across the face is reported, the empty corner of a tree's picture is not),
   `small_speaker` as above, and `offscreen_action` names an action the camera mostly does not
   show while it happens (a walk outside a close-up, a door opening out of view).
-- **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `fog`, `width`,
+- **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `width`,
   `layers` (the background colour or picture shows around the place), big `props` (a tree, a
   sofa: use `objects`), a prop's `depth`, `lift` or `against`. A set (`set: park`) gives an iso place its sky, light, ambience and weather, not its
   props, layers or fog.
@@ -12583,7 +12604,7 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 | `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground); on an iso place on its grass and paths, with ripples: [Isometric places](#isometric-places-iso)) |
 | `lightning` | `false` | rain on a `stage` only: `true` flashes [lightning](#lightning-and-thunder-lightning) while it rains, at seeded times about every 8 s, with thunder; a number (2–120) is the seconds between strikes on average |
 | `settle` | `false` | snow on a `stage` only: `true` lands it on the ground and on the props, where a white layer grows while it snows ([Snow that settles](#snow-that-settles-settle); on an iso place on its ground, roofs and tops: [Isometric places](#isometric-places-iso)) |
-| `settled` | `0` | with `settle`: seconds of snowfall already lying when it starts, 0–600 (`24` or more: the full layer at density 1) |
+| `settled` | `0` | with `settle`: seconds of snowfall already lying when it starts, 0–600 (`24` or more: the full layer at density 1); rain with `puddles`: seconds of rain already fallen (`10` or more: the puddles full size from the start) |
 
 ```yaml
 - id: storm
@@ -12698,7 +12719,7 @@ the sky low down more than half); a number is the density (above 0, up to 1: a t
 mapping sets `density`, `color` (a theme token or #hex; default a pale grey blue `#DCE2EA`),
 `drift` (0–5, default 1; `0`: the waves stay still unless the wind blows, so the fog is drawn
 once per animation, not on every frame) and `seed` (the waves; default one from the scene). The fog is graded by the
-light (a blue-grey fog at night). A `room` refuses it. While its waves move, everything from the
+light (a blue-grey fog at night). A `room` (and an indoor iso place) refuses it; on an iso place it lies in bands across the place ([Isometric places](#isometric-places-iso)). While its waves move, everything from the
 backmost band on is redrawn on every frame (a scratch forest at preview: about 12 % more
 render time).
 
@@ -13354,7 +13375,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `time_of_day` | as the target: `- time_of_day: night` (`day`, `morning`, `sunset`, `night`, `indoor`); `auto_lights` (`true`), `move_sun` (on with a `sun` / `moon` prop outdoors) | on a `stage`: [a day passing](#light-and-shadows-light-shadows): the light fades from `at` over `run_time` seconds (`6`), with a sky of the time of day, day to night through a sunset; at dusk the lamps, windows, lit objects and headlights switch on by themselves (off at dawn). No `until`. |
 | `lightning` | as the target: where (`- lightning: right`, a mark or an x; optional); `distance` (`1` km), `bolt` (`true`), `seed` | on a `stage`: the set flashes and a bolt strikes from `at`, its thunder `distance` × ~3 s later (foley); in a room the windows flash; see [Lightning](#lightning-and-thunder-lightning). `run_time` is the flash (0.7 s); no `until`. |
 | `rainbow` | as the target: where its middle is (`- rainbow: centre`; optional); `width` (`0.75`), `opacity` (`0.55`), `hide` (`false`) | on a `stage` outdoors: a rainbow fades into the sky over `run_time` (`3`) from `at` and stays; `hide: true` fades the rainbows out; see [Rainbows](#rainbows-rainbow). No `until`. |
-| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`) and `lightning` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
+| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`) and `lightning` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage; with rain and `puddles`, seconds of rain already fallen) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |

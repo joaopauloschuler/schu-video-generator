@@ -131,8 +131,61 @@ def band_box(index: int, ground: float, left: float, right: float, frame_height:
     return (left, low, right, frame_height / 2)
 
 
+# ----- fog on an iso place (DESIGN.md §105.4) ------------------------------------------------------
+
+#: On an iso place a band lies along a line of the ground across the picture (the points as far
+#: back as ``x + y`` of the map), one at each share of :data:`FOG_DEPTHS` of the way from the
+#: place's front edge to its back edge; its banks reach this high above its line, the back
+#: band's haze this high (tile widths on the picture), and the waves and their drift are the flat
+#: stage's with this many tile widths for each of its frame heights.
+ISO_FOG_HEIGHT = 1.2
+ISO_FOG_HAZE_HEIGHT = 1.6
+ISO_FOG_SCALE = 6.0
+#: Seen from above, fog lies in banks over the ground: each band's banks hold more of its fog
+#: than on a flat stage (the haze first, as :data:`FOG_LAYER_SHARES`).
+ISO_FOG_LAYER_SHARES = (0.3, 0.35, 0.35)
+#: Seen from above, the place's fog lies between the viewer and much more ground than a flat
+#: stage's: a density counts this many times as thick.
+ISO_FOG_THICKER = 1.6
+
+
+def iso_fog_depths(front: float, back: float) -> tuple[float, ...]:
+    """The ground depth (``x + y``) of each band's line, back to front, on a place whose cells
+    reach from depth ``back`` (its back edge) to ``front``."""
+    return tuple(front - share * (front - back) for share in FOG_DEPTHS)
+
+
+def iso_band_outlines(index: int, base: float, left: float, right: float, top: float, unit: float, shift: float, seed: int) -> list[np.ndarray]:
+    """The layers of band ``index`` of an iso place's fog (Manim units, ``y`` up): its line on
+    screen at ``base``, from ``left`` to ``right``, its haze up to ``top``; ``unit``: a tile's
+    width on screen; its waves drifted by ``shift`` (as :func:`fog_shift`). As
+    :func:`band_outlines`: :data:`FOG_LAYERS` outlines, the haze first."""
+    scale = ISO_FOG_SCALE * unit
+    height = (ISO_FOG_HAZE_HEIGHT if index == 0 else ISO_FOG_HEIGHT) * unit
+    count = max(2, math.ceil((right - left) / (FOG_STEP * scale)) + 1)
+    xs = np.linspace(left, right, count)
+    wave = 1.0 + FOG_WAVE * _waves(xs / scale, shift, index, seed)
+    outlines = []
+    for layer, reach in enumerate(FOG_LAYER_REACH):
+        bottom = base - (FOG_LAYERS - 1 - layer) * FOG_FEATHER * scale
+        if reach is None:
+            outlines.append(np.array([[left, bottom], [right, bottom], [right, top], [left, top]]))
+            continue
+        tops = base + height * reach * wave
+        edge = np.stack([xs[::-1], tops[::-1]], axis=1)
+        outlines.append(np.concatenate([np.array([[left, bottom], [right, bottom]]), edge]))
+    return outlines
+
+
 __all__ = [
     "FOG_COLOR",
+    "ISO_FOG_HAZE_HEIGHT",
+    "ISO_FOG_HEIGHT",
+    "ISO_FOG_LAYER_SHARES",
+    "ISO_FOG_SCALE",
+    "ISO_FOG_THICKER",
+    "iso_band_outlines",
+    "iso_fog_depths",
     "FOG_DENSITY",
     "FOG_DEPTHS",
     "FOG_LAYERS",

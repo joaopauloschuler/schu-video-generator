@@ -530,6 +530,7 @@ from vidgen.cartoon.wind import (  # noqa: E402
     sway_degrees,
     trail_degrees,
     wind_level,
+    wind_phase,
     wind_seed,
 )
 from vidgen.cartoon.windblown import StageWind, SwayingProp  # noqa: E402
@@ -644,6 +645,10 @@ from vidgen.world.iso_seats import ISO_BEDS, ISO_SEAT_ACTIONS, ISO_SEATS, ISO_US
 from vidgen.cartoon.iso_drawing import shape_points  # noqa: E402
 from vidgen.world.iso_vehicles import ISO_VEHICLE_ACTIONS, LIFT_OFF_SECONDS, VEHICLE_ACTIONS, VEHICLE_SPEEDS, VehicleRoute, drive_seconds, middle_of, moved_item, moved_place, plan_vehicle, start_heading, track_cells  # noqa: E402
 from vidgen.cartoon.iso_driving import IsoDrive, IsoVehicle, rocket_smoke, track_shapes, vehicle_shapes  # noqa: E402
+from vidgen.cartoon.iso_weather import ISO_SWAYS, glow_outlines, iso_sway_degrees  # noqa: E402
+from vidgen.world.iso import VOID  # noqa: E402
+from vidgen.cartoon.fog import iso_fog_depths  # noqa: E402
+from vidgen.cartoon.iso_atmosphere import IsoFog, IsoReflections, IsoSwayer  # noqa: E402
 from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
 from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, FloorCells, picture_size, plate_shapes, ramped, slant  # noqa: E402
 from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
@@ -1361,6 +1366,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "sway_degrees",
     "trail_degrees",
     "wind_level",
+    "wind_phase",
     "wind_seed",
     "StageWind",
     "SwayingProp",
@@ -1661,6 +1667,14 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "rocket_smoke",
     "track_shapes",
     "vehicle_shapes",
+    "ISO_SWAYS",
+    "VOID",
+    "glow_outlines",
+    "iso_sway_degrees",
+    "iso_fog_depths",
+    "IsoFog",
+    "IsoReflections",
+    "IsoSwayer",
     "cell_of",
     "find_route",
     "plan_move",

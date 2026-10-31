@@ -20458,3 +20458,64 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
 - **Left for later**: a driven car's headlights switch at once (its sprite has no in-between); towers
   keep their windows as set; the `light` action switches nothing; the sky of a day passing is the
   window skies' gradient (no sun glow on the horizon); an iso place has no sun or moon to move.
+
+### 105.4 Iso weather: reflections, fog, wind (Step 271)
+
+- **Config** (no new keys but one use): an iso stage takes the stage's `fog` (refused there
+  before) and its `wind` / the `wind` action (which moved only particles and trailing pieces);
+  rain's `settled` also counts for `puddles` (seconds of rain already fallen: the puddles start
+  grown, on a flat stage too). Chosen over a `fog` particles kind or a `wind: {strength,
+  direction}` mapping: one fog and one wind on both stages (a signed level, ± on screen, as the
+  particles and the trailing pieces read it). Indoors (`place: indoor`) `fog`, `wind` and the
+  `wind` action are refused (as in a `room`). Reflections need nothing: rain with `puddles`.
+- **Rules** (`cartoon/iso_weather.py`, `cartoon/fog.py`, no manim): a light is a glowing `Poly`
+  or `Disc` of an object (not a pool, `glow_outlines`); its mirror image in a puddle at height
+  `z` is the outline mirrored to `2z - h` (`mirrored`: seen from above, a light `h` up shows
+  `h` under its foot, so low lights and trims down to the ground show in the puddles in front);
+  `puddle_lights` keeps the lights whose image reaches a puddle; `still_reflection` cuts it to
+  the puddle's ellipse (Sutherland–Hodgman, `clip_convex`), kept `REFLECTION_SHIMMER` inside
+  its edge, with points along its edges; `shimmered` wobbles it sideways while it rains (a wave
+  down the picture). Wind: `ISO_SWAYS` (tree, pine, bush, flowers, plant: the flat props'
+  `Sway`; scarecrow, balloon_bunch), `iso_sway_degrees` = the flat lean times `ISO_SWAY_SHARE`
+  0.55; `sway_rows` bends a sprite: each row shifts by the square of its height over the foot
+  (premultiplied, smooth between pixels). Fog: `iso_fog_depths` puts the five bands
+  (`FOG_DEPTHS` shares) from the place's back edge (`x + y`) to near its front;
+  `iso_band_outlines` is `band_outlines` in tile widths (`ISO_FOG_SCALE` 6 per frame height),
+  banks `ISO_FOG_HEIGHT` 1.2 high (haze 1.6); seen from above the banks hold more
+  (`ISO_FOG_LAYER_SHARES` 0.3/0.35/0.35) and a density counts `ISO_FOG_THICKER` 1.6 times.
+- **Drawing** (`cartoon/iso_atmosphere.py`): `IsoReflections` (a glow widened
+  `REFLECTION_HALO` at 0.35 of the opacity, then the image whitened `REFLECTION_WHITEN`) at
+  `REFLECTION_OPACITY × darkness × lit(owner)`, never graded, laid right over the puddles; each
+  cut once per puddle size step (`SIZE_STEP` 0.02), only the wobble per frame. `IsoFog`: a
+  `FogBand` per share (`iso_depth`), lit by the light, drifting with `fog_shift`. `IsoSwayer`: a
+  sprite of the object (`draw_sprite`, levels of detail as a vehicle's) padded for its lean and
+  bent each frame by the wind's force where it stands (gusts cross the place).
+- **Stage** (`scenes/stage_weather.py`, `IsoWeather`, part of `Stage`): with a wind that ever
+  blows, outdoors, not in a draft, the swaying kinds no action targets are `IsoScenery.apart`
+  (in no picture, still on the top surface: they keep the rain off) and drawn as swayers with a
+  cover picture of what stands in front (following the place's changes, `iso_covers`), placed
+  after the layers of the objects behind them and after the bodies they stand in front of
+  (`_iso_place_swayers`); a balloon bunch is not a working object then (drawn whole, bent). The
+  fog bands go right before the first body at their depth or nearer, else after the place's
+  bodies (`_iso_sort_fog`, from `_iso_keep_order` and the entrance). The lights' states are
+  logged from the start when puddles may lie (`_iso_glow_log`, from `iso_change`), so a lamp
+  switched (or switched by a `time_of_day`) fades its reflection; `night` is `darkness` of the
+  light now.
+- **Cost** (854x480, 15 fps preview, sample `s271/proj`): reflections +25 % on a rainy neon street
+  (23.8 s vs 19.1 s for 12.7 s of video), fog +4 % (15.3 vs 14.7 s), wind +34 % on a meadow with
+  seven swaying objects and leaves (11.0 vs 8.2 s). Nothing changes while nothing moves (things
+  that move by themselves: redrawn only while it rains, the light changes, the fog drifts, the
+  wind blows).
+- **Checked by eye** (`/home/claude/work/scratch/s271/sheet.png`): a rainy neon night street
+  (trims, lanterns and a phone booth in the puddles, wobbling), a foggy village from night to
+  morning (a character walking into it), a windy meadow (right, a gale to the left, calm; a
+  character hidden behind a swaying tree), 9:16 of all three.
+- **Public**: `vidgen.api` adds `ISO_SWAYS`, `VOID`, `glow_outlines`, `iso_sway_degrees`,
+  `iso_fog_depths`, `IsoFog`, `IsoReflections`, `IsoSwayer`, `wind_phase`; `IsoScenery(apart=)`,
+  `FogBand(shares=)`, `IsoPuddles.size_at` / `raining`. Additive: Phase Q baseline 31/31 and
+  iso-story `night` / `rowans_room` (25 stills) identical.
+- **Left for later**: characters and moving vehicles are not mirrored; reflections only of
+  glowing shapes (not of gadgets' lights, IsoScreens or the blinking antennas); fog over a front
+  house's roof is as thick as the base picture there (the bands layer the bodies, not the
+  place's pieces); swaying is a shear (a big balloon lean stretches the balloons); objects an
+  action changes, a snow cap on a swaying tree and flags (no flag object) do not sway.

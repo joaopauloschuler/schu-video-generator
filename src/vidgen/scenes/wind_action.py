@@ -52,6 +52,9 @@ class WindAction(Action):
             return [("action", f"wind is for stage scenes; a {scene_cls.__name__} scene has nothing to blow")]
         if getattr(params, "room", None) is not None:
             return [("action", "there is no wind in a room (the stage has room:)")]
+        iso = getattr(params, "iso", None)
+        if iso is not None and iso.place == "indoor":   # DESIGN.md §105.4
+            return [("action", "there is no wind inside an indoor place (iso place: indoor)")]
         return []
 
     def cue(self, scene: NarratedScene, time: float) -> None:

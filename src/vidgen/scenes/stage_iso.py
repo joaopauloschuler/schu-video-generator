@@ -329,9 +329,13 @@ class IsoStaging:
         patterns = self._iso_action_targets()
         names = [name for name in p.iso.changeable_names() if name not in driven]
         layered = [name for name in names if name in states or any(fnmatchcase(name, pattern) for pattern in patterns)]
+        changed = {name for name in names if any(fnmatchcase(name, pattern) for pattern in patterns)}
+        swaying = self._iso_swaying(place, changed | set(driven))   # in the wind, drawn on their own (§105.4)
+        layered = [name for name in layered if name not in swaying]
+        self._iso_still_looks(looks, swaying)
         pixels = config.pixel_height / self.frame_height
         self.iso_scenery = IsoScenery(place, colors, looks, self.iso_view, pixels * density, outline=self.drawing.outline_factor,
-                                      states=states, layered=layered)
+                                      states=states, layered=layered, apart=swaying)
         self._iso_density = density * pixels / (config.pixel_width / self.frame_width)
         #: each object's state once the changes planned so far are over, its picture group, and the changes
         self._iso_planned_states: dict[str, ObjectState] = {name: self.iso_scenery.states[self.iso_scenery.index[name]] for name in layered}
@@ -369,6 +373,8 @@ class IsoStaging:
         #: what a working object's moving parts follow when no character stands behind it (§103)
         self._iso_gadget_home = everything[min(gadgets) - 1] if gadgets else None
         self.story_things += list(getattr(self, "iso_vehicles", {}).values())   # a switch, a flame, a bob (§105)
+        everything += self._iso_make_swayers(swaying, density)   # the trees in the wind... (§105.4)
+        self._iso_glow_watch()   # the lights mirrored in puddles at night (§105.4)
         return everything
 
     def _iso_story_overlays(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
@@ -624,6 +630,8 @@ class IsoStaging:
                     tiles.show_view(frame)
         for vehicle in getattr(self, "iso_vehicles", {}).values():   # sharp in a close view (§105)
             vehicle.show_view(frame)
+        for swayer, _ in getattr(self, "iso_swayers", {}).values():   # §105.4
+            swayer.show_view(frame)
 
     def _iso_front(self, name: str, picture: Any) -> Mobject | None:
         """``name``'s front picture of ``picture`` (made once; ``None`` for no picture), graded by the light."""
@@ -713,6 +721,8 @@ class IsoStaging:
             self._shadows_first()
             changed = True
         changed |= self._iso_place_gadgets()
+        changed |= self._iso_place_swayers()   # the trees in the wind (§105.4)
+        changed |= self._iso_sort_fog()   # a walker may pass a fog band's depth (§105.4)
         if added and getattr(self, "animations", None):
             self.moving_mobjects = [*self.moving_mobjects, *(m for front in added for m in front.get_family())]
         return changed
@@ -761,9 +771,7 @@ class IsoStaging:
             if swapped is not None:
                 follows.append(_IsoFollow(change, *swapped))
                 added += [swapped[1]] if swapped[1] is not None else []
-        for _, _, cover in getattr(self, "_iso_gadget_places", []):   # what stands in front of a working object (§103)
-            if cover is None:
-                continue
+        for cover in self.iso_covers():   # what stands in front of a working object (§103) or a swaying one (§105.4)
             following = [f for f in self._iso_follows if f.parent is cover]
             current = following[-1].new if following else (cover.submobjects[-1] if cover.submobjects else None)
             picture = self.iso_scenery.front(cover.iso_box)
@@ -925,6 +933,7 @@ class IsoStaging:
             change = "switch_on" if fields.get("on") else "switch_off"
         if not auto:   # not a light a time_of_day switches by itself (§105.3)
             self.iso_watch(change, name, float(start), float(seconds), self._iso_object_box(name))
+        self.iso_glow_changed(name, start, seconds, state)   # its light mirrored in puddles (§105.4)
         if name in getattr(self, "_iso_lamps", {}):   # its light on the characters near it fades with it (§89.13)
             self._iso_lamps[name][1].append((float(start), max(float(seconds), 1e-3), 1.0 if state.on and state.shown else 0.0))
         if self._foley_on():   # a door's creak, a bloom, an appearance (§89.11)
@@ -1233,17 +1242,20 @@ class IsoStaging:
 
     def iso_lay_puddles(self, field: Any, settings: Any) -> None:
         """Puddles growing on the place's ground cells while the rain ``field`` falls (``settings``:
-        its seed), with ripples while it rains (:class:`IsoPuddles`, DESIGN.md §90.2), laid over
-        the place's pictures under the shadows and the characters."""
+        its seed; ``settled``: seconds of rain already fallen), with ripples while it rains
+        (:class:`IsoPuddles`, DESIGN.md §90.2), laid over the place's pictures under the shadows
+        and the characters; the place's lights mirrored in them at night (§105.4)."""
         scenery = self.iso_scenery
         boxes = [piece.box for k, piece in enumerate(scenery.pieces) if scenery.shown(k)]
         spots = iso_puddles(self.iso_place_now(), scenery.top_surface(), boxes, settings.seed)
         if not spots:
             return
-        puddles = IsoPuddles(spots, self.iso_view, start=field.start, ended=lambda: field.ended, clock=lambda: float(self.renderer.time))
+        puddles = IsoPuddles(spots, self.iso_view, start=field.start - settings.settled, ended=lambda: field.ended,
+                             clock=lambda: float(self.renderer.time))
         mark_lit(puddles)
         self.puddles.append(puddles)
         self._lay_on_ground(puddles)
+        self.iso_reflect(puddles)   # the lights mirrored in them at night (§105.4)
 
     def iso_settle_snow(self, field: Any, settings: Any) -> None:
         """Snow from the settling ``field`` lies on the place (``settings``: its density and

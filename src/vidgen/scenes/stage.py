@@ -25,6 +25,7 @@ from .stage_story import FlashbackSetting, StoryStaging
 from .stage_seats import IsoSeating
 from .stage_vehicles import IsoDriving
 from .stage_daylight import DayPassing
+from .stage_weather import IsoWeather
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -856,7 +857,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
+class Stage(IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -1011,7 +1012,7 @@ class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, Narrat
         shadows: bool = True
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
         wind: WindSetting = 0.0
-        """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); the wind action changes it during the scene, blow_away blows a light prop away."""
+        """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); on an iso place its trees, bushes, flowers, plants, scarecrows and balloon bunches sway (outdoors); the wind action changes it during the scene, blow_away blows a light prop away."""
         room: StageRoom | None = None
         """An indoor set instead of the sky and the ground: true, or {wall, wallpaper (plain, stripes, dots), floor, flooring (boards, tiles, plain), skirting, ceiling, depth, windows, doors}; windows show the sky of the stage's light, doors are door props whose names are marks (enter / exit through them); no wind, rain, snow, leaves or streaks inside."""
         water: WaterStrip | None = None
@@ -1019,7 +1020,7 @@ class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, Narrat
         birds: StageBirds | None = None
         """A flock of birds crossing the sky, flapping: true, a number of birds, or {count, direction, height, start, seconds, seed}; outdoors only (the birds action sends one later)."""
         fog: StageFogSetting | None = None
-        """Fog in translucent bands lying between the characters and props by depth, thicker further back (the sky most), drifting slowly and with the wind: true, a density from 0 to 1 (true: 0.5), or {density, color, drift, seed}; outdoors only."""
+        """Fog in translucent bands lying between the characters and props by depth, thicker further back (the sky most), drifting slowly and with the wind: true, a density from 0 to 1 (true: 0.5), or {density, color, drift, seed}; on an iso place in bands across the place; outdoors only."""
         drawing: DrawingConfig | None = None
         """How this scene is drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: the keys given win over the video's drawing."""
         level: StageLevel | None = None
@@ -1106,13 +1107,18 @@ class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, Narrat
             """An iso place is the whole set: no level, room, water, width, layers or flat props;
             characters stand at its spots, with no depth (DESIGN.md §89.7)."""
             assert self.iso is not None
-            given = [key for key in ("level", "room", "water", "fog") if getattr(self, key) is not None]
+            given = [key for key in ("level", "room", "water") if getattr(self, key) is not None]
             given += [key for key in ("width", "layers") if key in self.model_fields_set and getattr(self, key) not in ([], 1.0)]
             if given:
                 hints = {"level": "a side-view platform level is its own kind of stage", "room": "an indoor place is iso: {place: indoor}",
-                         "water": "water is ~ on the map", "fog": "fog lies in bands by depth on a flat stage",
+                         "water": "water is ~ on the map",
                          "width": "the whole place fits the frame", "layers": "the background colour or picture shows around the place"}
                 raise ValueError(f"an iso place cannot have {given[0]} ({hints[given[0]]}); remove it, or the iso")
+            if self.iso.place == "indoor":   # weather stays outdoors (DESIGN.md §105.4)
+                if self.fog is not None:
+                    raise ValueError("there is no fog inside an indoor place: remove fog (or use place: outdoor)")
+                if wind_level(self.wind) != 0.0:
+                    raise ValueError("there is no wind inside an indoor place: remove wind (or use place: outdoor)")
             spots = self.iso.parsed().spot_names()
             taken = set(self.iso.changeable_names()) | set(spots)
             for k, item in enumerate(self.particles):
@@ -1659,7 +1665,8 @@ class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, Narrat
         #: the scene updater keeping the draw order, kept: Manim removes an updater by identity
         self._order_updater = self._draw_order_step
         fronts = any(c.facing == "front" for c in self.params.characters) or any(u.options.to == "front" for u in self.action_uses("turn"))
-        if fronts or getattr(self, "_iso_gadget_places", None) or getattr(self, "iso_vehicles", None):   # a working object's parts (§103), a vehicle (§105)
+        if fronts or getattr(self, "_iso_gadget_places", None) or getattr(self, "iso_vehicles", None) or getattr(self, "iso_swayers", None):
+            # a working object's parts (§103), a vehicle (§105), a tree in the wind (§105.4)
             self._watch_draw_order()
 
     def _watch_draw_order(self) -> None:
@@ -1805,7 +1812,7 @@ class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, Narrat
             puddle_count(self.stage_width / self.frame_width), settings.seed, left, right, self.rain_ground(),
             min(self.frame_width, self.frame_height),
         )
-        puddles = Puddles(spots, start=field.start, ended=lambda: field.ended, clock=lambda: float(self.renderer.time))
+        puddles = Puddles(spots, start=field.start - settings.settled, ended=lambda: field.ended, clock=lambda: float(self.renderer.time))
         mark_lit(puddles)
         self.puddles.append(puddles)
         self._lay_on_ground(puddles)
@@ -1894,6 +1901,8 @@ class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, Narrat
         setting = self.params.fog
         if setting is None or self.is_draft:
             return None
+        if self.on_iso:   # in bands by depth over the place (§105.4)
+            return self._iso_fog(setting)
         left, right = self.camera_bounds()[:2]
         color = resolve_color(setting.color, self.theme) if setting.color is not None else FOG_COLOR
         wind = getattr(self, "particle_wind", None)
@@ -1914,6 +1923,8 @@ class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, Narrat
         fog = getattr(self, "fog", None)
         if fog is None:
             return False
+        if self.on_iso:
+            return self._iso_sort_fog()
         before = [id(m) for m in self.mobjects]
         bands = {id(b) for b in fog.bands}
         self.mobjects[:] = [m for m in self.mobjects if id(m) not in bands]
@@ -2588,6 +2599,8 @@ class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, Narrat
         self.blowing.wind.change(level, start, seconds)
         if not self.is_draft and not any(f is self._wind_updater for f in self.updaters):
             self.add_updater(self._wind_updater)
+        if getattr(self, "iso_swayers", None):   # the place's trees sway with it (§105.4)
+            self._watch_living()
 
     def _wind_step(self, dt: float) -> None:
         """Scene updater while the wind may move something: props and trailing pieces for now;

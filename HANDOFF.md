@@ -24013,3 +24013,54 @@ is in `tasklist.md`.
   scene_types or schema"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
   `rowans_room` (25 stills) identical. Private sheet `/home/claude/work/scratch/s270/sheet.png`;
   sample `s270/proj` (validate ok; lint: the sample cast's look-alike, a house cut at the edge).
+
+## Step 271 — Iso weather: reflections, fog, wind (Phase AD)
+
+- Built: on an iso place (outdoors) **reflections**: at night the puddles of rain with
+  `puddles: true` mirror the place's lights (lit windows, lanterns, a phone booth, towers' neon
+  trims: every glowing shape but pools) where the mirror image falls (a light `h` up shows `h`
+  under its foot), cut to the puddle with a soft glow, as strong as the light is dark
+  (`darkness`, none by day), fading with a light switched on or off (by an action or a
+  `time_of_day`), wobbling while it rains; rain's `settled` now also counts with `puddles`
+  (seconds of rain already fallen: puddles full size from the start; flat stage too).
+  **Fog**: the stage's `fog` (refused on iso before) lies over the place in five drifting bands
+  from its back edge to near its front, each drawn before the first body at its depth or nearer.
+  **Wind**: the stage's `wind` / the `wind` action bends trees, pines, bushes, flowers and plants
+  and swings scarecrows and balloon bunches in gusts (rain already slanted, leaves and streaks
+  drift, scarves trail). Indoors `fog`, `wind` and the `wind` action are refused (validate).
+- Files: new `cartoon/iso_atmosphere.py` (`IsoReflections`, `IsoFog`, `IsoSwayer`),
+  `scenes/stage_weather.py` (`IsoWeather`, part of `Stage`), `tests/test_iso_atmosphere.py`;
+  `cartoon/iso_weather.py` (reflection and sway rules), `cartoon/fog.py` (iso bands),
+  `cartoon/iso_stage.py` (`IsoScenery(apart=)`), `cartoon/iso_pictures.py`
+  (`IsoPuddles.size_at` / `raining`), `cartoon/weather_drawing.py` (`FogBand(shares=)`),
+  `particle_field.py` (`settle_problem`: `settled` with rain + puddles), `scenes/stage.py` (fog and
+  wind on iso, the fog's dispatch, `settled` puddles, order watch), `scenes/stage_iso.py`
+  (swaying objects apart and drawn, covers following changes, keep order, glow log, reflections),
+  `scenes/wind_action.py`, `scenes/handling.py` (blow_away message), `api.py`; docs CONFIG (iso
+  weather bullets, fog / iso / particles rows), the guide (+ `AGENTS.md`), DESIGN §105.4,
+  CHANGELOG, tasklist.
+- Public: `vidgen.api` adds `ISO_SWAYS`, `VOID`, `glow_outlines`, `iso_sway_degrees`,
+  `iso_fog_depths`, `IsoFog`, `IsoReflections`, `IsoSwayer`, `wind_phase`.
+- Decisions: the existing `fog` setting and the signed `wind` level (not a fog particle kind or
+  `wind: {strength, direction}`): one fog and one wind on both stages, ± on screen as particles
+  and trailing pieces read it. Swaying objects are left out of the pictures (still on the top
+  surface: they keep the rain off) and drawn as sprites bent per frame (a shear growing with
+  height), with a cover picture of what stands in front, after the bodies they hide; objects an
+  action changes stay still. Reflections follow mirror geometry (lamps' lanterns show in puddles
+  well in front of them; trims to the ground and low lights show near).
+- Cost (854x480 preview, 15 fps): reflections +25 % on the rainy street, fog +4 %, wind +34 % on
+  a meadow with seven swaying objects (nothing is redrawn while nothing moves).
+- Known gaps / later: characters and moving vehicles are not mirrored, nor gadgets' lights or
+  screens; fog over the place's pieces follows screen height (one base picture: a front roof
+  under several bands); swaying is a shear (a gale stretches balloons); no flag object;
+  a swaying tree gets no snow cap. Step 274 (ambient life): birds or walkers are bodies, so the
+  fog bands layer them and swaying trees hide them correctly.
+- Tests: new `test_iso_atmosphere.py` (14: rules, scenery, validation with did-you-mean, one
+  render) passed; `test_cartoon_snow_fog`, `test_cartoon_wind`, `test_cartoon_rain`,
+  `test_cartoon_storm`, `test_phase_r_review`, `test_iso_staging`, `test_iso_weather`,
+  `test_iso_mood`, `test_iso_place`, `test_iso_vehicles`, `test_iso_seats`, `test_time_of_day`,
+  `test_iso_moves`, `test_iso_story`, `test_iso_objects_more`, `test_api`, `test_docs`,
+  `test_guide`, `test_introspect`, `test_schema`, `test_actions_coverage`, `test_mcp -k "action or
+  list or scene_types or schema"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
+  `rowans_room` (25 stills) identical to Step 270's. Private sheet
+  `/home/claude/work/scratch/s271/sheet.png`; sample `s271/proj` (validate ok).
