@@ -1623,7 +1623,7 @@ a few lines per feature in CONFIG and the guide.
 - [x] `drive_to` (a `car` along path cells, turning at corners, round where its way ends; a `train_car` along its track, drawn along its line), `sail_to` (a `boat` across water), `lift_off` (a `rocket`: smoke, faster and faster, out of the view); `to` / `via` spots or cells, `speed`; drawn by the stage as moving sprites (a car driving away shows its tail, wheels turn, headlights with `switch_on`, a boat bobs); bodies of the place (front pictures, draw order by boxes); `follow` works; validate replays them with the walks; engine / brakes / launch sounds; tests `test_iso_vehicles.py`
 
 ### Step 269 — Sitting and using furniture
-- [ ] `sit` (chairs, benches, bus-stop bench, armchair, sofa, throne, stool, log / stump, café chairs, school_desk), `lie` (bed), `stand_up`, `warm_hands` at a campfire / fireplace (or a generic `use` with per-object poses); facing-aware seat points; lint for sitting on nothing / two on one seat
+- [x] `sit_on` an iso object (chair, bench, bus stop, armchair, sofa, throne, lab stool, log / stump, hay bale, rock, café table's two chairs, school desk, bed's edge), `lie_on` (bed), `stand_up`, a generic `use` with per-object poses (typing, warming the hands at a campfire / fireplace, a book from shelves, pressing at machines); facing-aware seat points, the object's near parts drawn over the sitter; `vidgen validate` checks sitting on nothing, two on one seat, too far, walking while seated; tests `test_iso_seats.py`
 
 ### Step 270 — A day passing in one scene
 - [ ] `- {time_of_day: sunset, run_time: 6}` blending the light smoothly; lamps and lit objects switch on at dusk (opt-out); sky / stars change; works with light pools and `fill_light`

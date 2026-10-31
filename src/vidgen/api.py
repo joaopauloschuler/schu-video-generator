@@ -631,7 +631,9 @@ from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX
 from vidgen.cartoon.iso_pictures import POOL_STRENGTH, GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
-from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
+from vidgen.cartoon.iso_motion import IsoSeatMove, IsoWalk  # noqa: E402
+from vidgen.world.iso_seats import ISO_BEDS, ISO_SEAT_ACTIONS, ISO_SEATS, ISO_USES, LIE_DEGREES, LIE_SCALE, LIE_SECONDS, SEAT_REACH, USE_SECONDS, IsoBed, IsoSeat, IsoUse, bed_facing, footprint_apart, in_regions, kinds_words, next_to, object_frame_point, object_uses_hint, seat_facing, seat_hips, seat_order, use_point  # noqa: E402
+from vidgen.cartoon.iso_drawing import shape_points  # noqa: E402
 from vidgen.world.iso_vehicles import ISO_VEHICLE_ACTIONS, LIFT_OFF_SECONDS, VEHICLE_ACTIONS, VEHICLE_SPEEDS, VehicleRoute, drive_seconds, middle_of, moved_item, moved_place, plan_vehicle, start_heading, track_cells  # noqa: E402
 from vidgen.cartoon.iso_driving import IsoDrive, IsoVehicle, rocket_smoke, track_shapes, vehicle_shapes  # noqa: E402
 from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
@@ -1600,6 +1602,31 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "WANDER_RADIUS",
     "WANDER_STOPS",
     "IsoWalk",
+    "IsoSeatMove",
+    "ISO_BEDS",
+    "ISO_SEAT_ACTIONS",
+    "ISO_SEATS",
+    "ISO_USES",
+    "LIE_DEGREES",
+    "LIE_SCALE",
+    "LIE_SECONDS",
+    "SEAT_REACH",
+    "USE_SECONDS",
+    "IsoBed",
+    "IsoSeat",
+    "IsoUse",
+    "bed_facing",
+    "footprint_apart",
+    "in_regions",
+    "kinds_words",
+    "next_to",
+    "object_frame_point",
+    "object_uses_hint",
+    "seat_facing",
+    "seat_hips",
+    "seat_order",
+    "use_point",
+    "shape_points",
     "ISO_VEHICLE_ACTIONS",
     "LIFT_OFF_SECONDS",
     "VEHICLE_ACTIONS",

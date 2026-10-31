@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 from collections import OrderedDict
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -356,6 +356,30 @@ class IsoScenery:
         self._layer_of: dict[Picture, int] = {}
         self._place = place
         self._surfaces: dict[tuple[tuple[int, ObjectState], ...], TopSurface] = {}
+        #: the parts of objects drawn over who sits or lies on them (DESIGN.md §105.2): pieces made
+        #: by :meth:`part`, after the place's own (in no picture but a front one), by their key
+        self._parts: dict[tuple[str, str], int | None] = {}
+
+    def part(self, name: str, key: str, keep: Callable[[Shape], bool]) -> int | None:
+        """A piece of the shapes of the object ``name`` (as it is now) that ``keep`` keeps (an
+        armchair's near arm, a bed's blanket: what hides who sits or lies there, DESIGN.md
+        §105.2), made once per ``key``: its index into :attr:`pieces`, for :meth:`front`'s
+        ``first``. ``None``: it keeps none."""
+        if (name, key) not in self._parts:
+            owner = self.index[name]
+            piece = self.pieces[owner]
+            shapes = tuple(shape for shape in piece.shapes_in(self.states[owner]) if keep(shape))
+            found = None
+            if shapes:
+                self.pieces.append(IsoPiece(f"{name}#{key}", piece.box, shapes, piece.kind))
+                found = len(self.pieces) - 1
+                self.states[found] = default_state(piece.kind or "")
+            self._parts[(name, key)] = found
+        return self._parts[(name, key)]
+
+    def _own(self) -> range:
+        """The indices of the place's own pieces (not the parts of :meth:`part`)."""
+        return range(len(self.pieces) - sum(1 for k in self._parts.values() if k is not None))
 
     @property
     def canvas(self) -> IsoCanvas:
@@ -375,22 +399,25 @@ class IsoScenery:
 
     def over(self, box: Box3) -> tuple[int, ...]:
         """Which pieces (indices into :attr:`pieces`) are drawn over a character standing in ``box``."""
-        return tuple(_over(self.pieces, box))
+        return tuple(_over(self.pieces[:len(self._own())], box))
 
     def _entries(self, ks: Collection[int]) -> tuple[tuple[int, ObjectState], ...]:
         return tuple((k, self.states[k]) for k in sorted(ks) if self.shown(k))
 
     def base(self) -> Picture:
         """The base picture: the ground and every piece there now but the layered ones."""
-        return (True, self._entries([k for k in range(len(self.pieces)) if k not in self.layered]))
+        return (True, self._entries([k for k in self._own() if k not in self.layered]))
 
-    def front(self, box: Box3, exclude: Collection[str] = ()) -> Picture | None:
+    def front(self, box: Box3, exclude: Collection[str] = (), first: int | None = None) -> Picture | None:
         """The front picture of a character standing in ``box`` (``None``: nothing hides it);
-        ``exclude``: pieces left out (a driven vehicle's own piece, DESIGN.md §105)."""
+        ``exclude``: pieces left out (a driven vehicle's own piece, DESIGN.md §105); ``first``:
+        a part (:meth:`part`) drawn first (the arm of the armchair it sits in, §105.2)."""
         over = self.over(box)
         if exclude:
             over = tuple(k for k in over if self.pieces[k].name not in exclude)
         found = self._entries(over)
+        if first is not None and self.shown(self.index[self.pieces[first].name.split("#")[0]]):
+            found = ((first, self.states[first]), *found)
         return (False, found) if found else None
 
     def layer(self, name: str) -> Picture | None:
@@ -399,7 +426,7 @@ class IsoScenery:
         k = self.index[name]
         if not self.shown(k):
             return None
-        picture = (False, self._entries({k, *(j for j in _over(self.pieces, self.pieces[k].box) if j != k)}))
+        picture = (False, self._entries({k, *(j for j in self.over(self.pieces[k].box) if j != k)}))
         self._layer_of[picture] = k
         return picture
 
@@ -478,7 +505,7 @@ class IsoScenery:
         """The place's :class:`~vidgen.cartoon.iso_weather.TopSurface` as it is now (the objects
         there now, in their states; made once per set of states): what keeps the rain off and
         where puddles may lie (DESIGN.md §90.2)."""
-        key = self._entries(range(len(self.pieces)))
+        key = self._entries(self._own())
         if key not in self._surfaces:
             self._surfaces[key] = top_surface(self._place, self.shapes((True, key)))
         return self._surfaces[key]

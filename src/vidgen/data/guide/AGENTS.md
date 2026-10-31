@@ -1936,9 +1936,11 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
 | `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head; `by: pip` reaches for it (a locked door on a `level` opens only by whoever holds its key); on an iso place a `house`'s door, a room's `door_1`, `flowers` (they bloom) | `open: true` in `props` starts it open |
 | `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand; on an iso place a house's or a room's door, flowers back to buds | |
-| `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
+| `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend; on an iso place on an object with seats (`armchair`, `bench`, `cafe_table`...) | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
-| `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
+| `stand_up` | on a `stage`: a character gets up from where it sits, leans or lies | |
+| `lie_on` | on an iso place: a character lies in a `bed` (`to: bed`), the blanket over it | next to the bed; `stand_up` before it walks |
+| `use` | on an iso place: a character types at a `laptop` / `desk_with_pc` / `console`, warms its hands at a `campfire` / `fireplace`, takes a book, presses at a machine (`to: laptop`, `run_time`) | next to the object, or seated next to it |
 | `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
@@ -2659,6 +2661,13 @@ and give each scene `set: village`.
   its row or column (its track is drawn there) until its middle is at `to`; `- lift_off: rocket`
   fires and rises out of the view. `speed` in tiles per second; `follow: car` keeps the camera on
   it; give the beat time for the way; `vidgen validate` names what is in the way.
+- Furniture: walk next to an object, then `- {sit_on: pip, to: armchair}` (chair, bench, sofa,
+  armchair, throne, lab_stool, log, stump, hay_bale, rock, bus_stop, cafe_table: two face each
+  other, school_desk, bed), `- {lie_on: pip, to: bed}`, `- {use: pip, to: laptop, run_time: 4}`
+  (types; warms its hands at a campfire or fireplace, takes a book from shelves, presses at a
+  machine or stove), `- stand_up: pip`. A seat faces out of the object's front (set its
+  `facing`); its near arm, a chair's back or a blanket is drawn over the sitter. Talking, faces
+  and looks work seated; walk only after `stand_up`.
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a

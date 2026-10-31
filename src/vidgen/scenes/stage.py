@@ -22,6 +22,7 @@ from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image
 from .stage_iso import IsoStaging, _moving_block, iso_particle_problem
 from .stage_story import FlashbackSetting, StoryStaging
+from .stage_seats import IsoSeating
 from .stage_vehicles import IsoDriving
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
@@ -837,7 +838,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(IsoDriving, IsoStaging, StoryStaging, NarratedScene):
+class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -909,7 +910,8 @@ class Stage(IsoDriving, IsoStaging, StoryStaging, NarratedScene):
     one). They sit on a chair, a rock, a box, a sofa, an armchair, a bed, a bench, a log or at a
     desk or a school desk with ``sit_on``, lean on a tree, a pine, a door, a sign, a bus stop, a
     counter, shelves or a wardrobe with ``lean_on``, and get up with
-    ``stand_up``. They ``get_in`` a car or a bus (or on a bicycle), ``ride_to`` a place in it with
+    ``stand_up``; on an iso place they sit on its chairs, benches, sofas, armchairs, stools, logs
+    and café tables, ``lie_on`` a bed and ``use`` a laptop, a fire, a shelf or a machine. They ``get_in`` a car or a bus (or on a bicycle), ``ride_to`` a place in it with
     its wheels turning (pedalling on a bicycle) and ``get_out``. ``water`` puts a strip of water
     with waves at the front, where a boat bobs and rides; a hot-air balloon rises, drifts with the
     wind and lands; a toy rocket launches with smoke and floats down under its parachute (or flies
@@ -928,6 +930,7 @@ class Stage(IsoDriving, IsoStaging, StoryStaging, NarratedScene):
     mid_still_actions = frozenset({
         "walk_to", "run_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
         "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out", "let_go", "pour", "drive_to", "sail_to", "lift_off",
+        "lie_on", "use",
     })
 
     @classmethod
@@ -1392,7 +1395,8 @@ class Stage(IsoDriving, IsoStaging, StoryStaging, NarratedScene):
             return tuple(n for n in names if any(fnmatchcase(n, p) for p in use.config.targets()))
 
         ordered = [u for _, u in sorted(enumerate(uses), key=lambda iu: (beats.index(iu[1].beat), iu[1].config.at, iu[0]))]
-        steps = [HandlingStep(u.location, u.config.action, matched(u), u.config.options) for u in ordered]
+        steps = [HandlingStep(u.location, u.config.action, matched(u), u.config.options) for u in ordered
+                 if not (iso and u.config.action in ISO_SEAT_ACTIONS)]   # on an iso place: its own replay (§105.2)
         left = -frame.stage_width / 2
         problems = holding_problems(
             steps,
@@ -1453,7 +1457,7 @@ class Stage(IsoDriving, IsoStaging, StoryStaging, NarratedScene):
         steps = []
         for use in ordered:
             action = use.config.action
-            if action not in ISO_MOVES | ISO_ITEM_ACTIONS | ISO_PLACE_CHANGES | ISO_VEHICLE_ACTIONS:
+            if action not in ISO_MOVES | ISO_ITEM_ACTIONS | ISO_PLACE_CHANGES | ISO_VEHICLE_ACTIONS | ISO_SEAT_ACTIONS:
                 continue
             names = objects if action in ISO_PLACE_CHANGES else characters
             if action in ISO_VEHICLE_ACTIONS:   # the vehicles it moves (§105)

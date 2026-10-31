@@ -182,6 +182,18 @@ def shape_bounds(shape: Shape) -> tuple[float, float, float, float]:
     return u0 - a, min(v0, v1) - b, u0 + a, max(v0, v1) + b
 
 
+def shape_points(shape: Shape) -> list[Point3]:
+    """The world points ``shape`` is drawn from: a polygon's or a line's corners, round shapes'
+    centres, an upright's foot."""
+    if isinstance(shape, (Poly, Line)):
+        return list(shape.points)
+    if isinstance(shape, Blobs):
+        return list(shape.centres)
+    if isinstance(shape, Disc):
+        return [shape.centre]
+    return [(shape.x, shape.y, shape.z0)]
+
+
 def _on_canvas(shape: Shape, canvas: IsoCanvas, pad: float) -> bool:
     """Whether ``shape`` (with ``pad`` tile widths around it for its outline) reaches onto ``canvas``."""
     left, top, right, bottom = shape_bounds(shape)
@@ -460,6 +472,7 @@ __all__ = [
     "draw_shapes",
     "shade",
     "shape_bounds",
+    "shape_points",
     "surface_normal",
     "upward",
 ]

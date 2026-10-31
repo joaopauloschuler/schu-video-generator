@@ -20356,3 +20356,59 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   U-turn flips the vehicle; moving vehicles and walkers do not avoid each other (as two walkers);
   no riders (`get_in` is the flat stage's); a train car is one car (no coupled cars); no
   reflections or wake trail behind a boat beyond its foam.
+
+### 105.2 Sitting, lying and using furniture (Step 269)
+
+- **Actions** (`scenes/sitting.py`): `sit_on` (the flat stage's, §69.28) takes an *object* of an
+  iso place too (`to` not a prop); `lie_on` (a bed) and `use` (`run_time`, default
+  `USE_SECONDS` 3) are iso only; `stand_up` stands up from any. Names reuse `sit_on` / `stand_up`
+  (one verb per posture on both stages); `use` instead of a verb per object (`warm_hands`,
+  `type`...): the object picks the pose. Who sits or lies where is the scene's `Postures`
+  (`Postures.lie`: a bed someone lies on takes nobody else; `PINNED_ACTIONS` + `wander`, `meet`).
+- **Rules** (`world/iso_seats.py`, no manim): `ISO_SEATS` (kind -> `IsoSeat`s: hips at `a`, `b`
+  shares of the footprint in the object's own frame, as `_Frame` draws it, `z` over its base; the
+  way the sitter `faces`: `front`, `back` (a school desk's chair), `+a` / `-a` (a café table's
+  chairs face each other); `front` regions), `ISO_BEDS` (`IsoBed`: across at `a`, the head's top
+  at `head`, the mattress `z`), `ISO_USES` (`IsoUse`: `style` `type` / `warm` / `read` / `reach`,
+  the object's own place for the hands). A facing-`right` object mirrors the frame, so seat
+  points and facings follow it (`seat_facing`: `left` / `right` on the picture; characters have
+  no back view, and every iso object faces the viewer, so a seat never faces away). `sit_on` takes
+  the free seat nearest the feet (`seat_order`); `use_point` puts the hands half way between the
+  object's place for them and the nearest point of its footprint (one beside a laptop reaches to
+  its side). Validate replays them in `iso_move_problems` (`ISO_SEAT_ACTIONS`,
+  `seat_step_problem`): the object must be within `SEAT_REACH` (1 cell, 8 neighbours) of the
+  character's cell (a seated character uses what is next to its seat), seats taken, a walk
+  before `stand_up`, `use` while lying; the hint gives the free cell to `walk_to` (`next_to`).
+  The action's own check names an unknown object (did you mean) or one with nothing to sit on,
+  lie on or use. The flat stage's holding replay leaves these steps to it on an iso place.
+- **Drawn** (`scenes/stage_seats.py`, `IsoSeating`; `IsoSeatMove` in `cartoon/iso_motion.py`, a
+  `BodyMove`): the feet go in the world to the floor under the seat (`iso_feet`, the shadow's
+  `ground_y` follow) and the body is `Character.seated` with the hips on the seat
+  (`view.height(z)`), facing the seat's way; standing up returns to the point it sat down from.
+  Lying turns the body `LIE_DEGREES` (atan 2: the map's axes on the picture) about the hips, its
+  face up, scales the figure `LIE_SCALE` 0.72 by its squash (a whole character is longer than a
+  cartoon bed on the picture) and folds the legs away under the blanket; its hips lie so far
+  along the bed that the head's top is at `head`. **Draw order**: the sitter's box is inside the
+  object's, so its front picture leaves the object out (`IsoScenery.front(exclude=)`, as a
+  vehicle's) and starts with the object's *part* in front of it (`IsoScenery.part`: the shapes of
+  the object, as `shape_points` lie wholly in the seat's `front` regions, made once per seat into
+  an extra piece in no picture but front ones; a region may stop at a height: a bus shelter's
+  posts, not its roof). What else stands in front of the sitter (a desk in front of a chair) is
+  drawn over it as for any body. The seat is on the figure (`iso_seat`) from the start of sitting
+  down and until the end of standing up (half in the object's box the whole object was drawn over
+  it). Lip sync, expressions and `look_at` (the head only, `is_posed`) work as on the flat stage.
+- **Use**: an `ArmMove` of the arms (`reached_parts` to the use point, both hands for `type` /
+  `warm`, the near one otherwise): in, small moves (`USE_STEP` per style, `USE_BOB`), back. A
+  standing user turns to the object (to its side when the object is straight behind or in front:
+  there is no back view); a seated one keeps its facing.
+- **Public**: `vidgen.api` adds `ISO_SEATS`, `ISO_BEDS`, `ISO_USES`, `ISO_SEAT_ACTIONS`,
+  `IsoSeat`, `IsoBed`, `IsoUse`, `LIE_DEGREES`, `LIE_SCALE`, `LIE_SECONDS`, `SEAT_REACH`,
+  `USE_SECONDS`, `bed_facing`, `footprint_apart`, `in_regions`, `kinds_words`, `next_to`,
+  `object_frame_point`, `object_uses_hint`, `seat_facing`, `seat_hips`, `seat_order`,
+  `use_point`, `IsoSeatMove`, `shape_points`; `Postures.lie`; `IsoScenery.part`,
+  `IsoScenery.front(first=)`. Additive: Phase Q baseline 31/31 and iso-story `night` /
+  `rowans_room` (25 stills) identical.
+- **Left for later**: no front view while seated (a seat facing the viewer shows the side view);
+  `use` is timed (the hands come back after `run_time`), not a held posture; no `lie_on` on a
+  sofa or the flat stage; a sitter's legs over a school desk's front are not hidden; a bean's
+  head reaches over a bus shelter's roof (drawn over it).

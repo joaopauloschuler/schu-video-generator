@@ -23925,3 +23925,47 @@ is in `tasklist.md`.
   identical; iso-story `night` and `rowans_room` (25 stills) identical to the code before. Private sheet: `/home/claude/work/scratch/s268/sheet.png` (day / night, motion,
   crops, 9:16); sample project `s268/proj` (`vidgen validate` and `vidgen lint` clean but a
   look-alike warning of the sample cast).
+
+## Step 269 — Sitting, lying and using furniture in iso (Phase AD)
+
+- Built: on an iso place `sit_on` takes an object with seats (`{sit_on: pip, to: armchair}`:
+  chair, bench, sofa, armchair, throne, lab_stool, log, stump, hay_bale, rock, bus_stop,
+  cafe_table's two chairs, school_desk, a bed's edge), `lie_on` a bed, `use` an object
+  (`{use: kit, to: laptop, run_time: 4}`: typing at a laptop / desk_with_pc / console / kiosk /
+  till / piano, warming the hands at a campfire / fireplace, a book from shelves, pressing at a
+  stove, sink, machine...), `stand_up` back to where it sat down from. Seats are facing-aware
+  (the object's frame, mirrored with its `facing`); the free seat nearest the feet is taken; the
+  sitter faces the seat's way (café chairs face each other, a school desk's chair its desk). Its
+  front picture leaves out the object and starts with the object's near *part* (an armchair's or
+  throne's arm, a chair's back, a bus shelter's pane and posts, a bed's blanket); a desk in
+  front is drawn over it as any piece. Lying: turned along the bed on the picture, face up, drawn
+  0.72 smaller, legs folded under the blanket. Lip sync, expressions, `look_at` work seated.
+  `vidgen validate` (the iso replay): nothing to sit on / lie on / use (did you mean), too far
+  (with the `walk_to` cell), a seat taken, a walk before `stand_up`, `use` while lying. The flat
+  stage's `sit_on` (props with seats, §69.28) is unchanged.
+- Files: new `world/iso_seats.py` (rules), `scenes/stage_seats.py` (`IsoSeating`, part of
+  `Stage`); `cartoon/iso_motion.py` (`IsoSeatMove`), `cartoon/iso_stage.py` (`IsoScenery.part`,
+  `front(first=)`, base / over / top surface without parts), `cartoon/iso_drawing.py`
+  (`shape_points`), `cartoon/seating.py` (`Postures.lie`, `PINNED_ACTIONS` + wander / meet),
+  `cartoon/directing.py` (lie_on, use), `scenes/sitting.py` (`LieOn`, `Use`, iso `sit_on` /
+  `stand_up`), `scenes/stage_iso.py` (seat fronts, redraw), `scenes/stage.py` (mixin, the iso
+  replay of the new actions, mid stills), `world/iso_moves.py` (replay), `api.py`; docs CONFIG
+  (iso **Sitting, lying and using objects**, action lists), the guide (+ `AGENTS.md`), DESIGN
+  §105.2, CHANGELOG, tasklist.
+- Public: see DESIGN §105.2 (`ISO_SEATS`, `ISO_BEDS`, `ISO_USES`, `IsoSeatMove`, `use_point`...).
+- Decisions: reused `sit_on` / `stand_up` (one verb on both stages); a generic `use` whose pose
+  the object picks instead of `warm_hands` & co.; `use` is timed (hands back after `run_time`),
+  composable with sitting; the seat goes on the figure from the start of sitting down (half in
+  the object's box the whole object hid it: a bus shelter's glass); a part region may stop at a
+  height (the shelter's posts, not its roof).
+- Known gaps / later: seated characters show their side view (no front-facing sit); no `lie_on`
+  for a sofa or the flat stage; a sitter's legs over a school desk's front are not hidden; a
+  bean's head pokes over a bus shelter's roof; Step 270 (a day passing) needs nothing from here.
+- Tests: new `test_iso_seats.py` (17: rules, parts, postures, checks, one render) passed;
+  `test_iso_moves`, `test_iso_vehicles`, `test_iso_staging`, `test_cartoon_seating`,
+  `test_cartoon_directing`, `test_iso_objects_more`, `test_iso_story`, `test_iso_mood`,
+  `test_iso_place`, `test_iso_weather`, `test_api`, `test_introspect`, `test_actions_coverage`,
+  `test_guide`, `test_docs`, `test_mcp -k "action or list or scene_types"` passed. Phase Q
+  baseline 31/31 identical; iso-story `night` / `rowans_room` (25 stills) identical to the code
+  before. Private sheet `/home/claude/work/scratch/s269/sheet.png`; sample `s269/proj` (validate
+  clean; lint: the sample cast's look-alike and its short beats' rushed walks).

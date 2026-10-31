@@ -702,6 +702,8 @@ class IsoStaging:
         figure = bodies.get(name)
         if figure is not None and getattr(figure, "iso_vehicle", False):
             new_picture = self._iso_vehicle_front(figure)   # not its own piece (§105)
+        elif figure is not None and getattr(figure, "iso_seat", None) is not None:
+            new_picture = self._iso_seat_front(figure)   # the arm of its armchair, not the armchair (§105.2)
         else:
             new_picture = None if figure is None else self.iso_scenery.front(self._iso_body(figure))
         if new_picture == picture:
@@ -818,7 +820,7 @@ class IsoStaging:
         if self.params.iso is None:
             return set()
         found: set[int] = set()
-        if any(isinstance(anim, (IsoWalk, IsoDrive)) for anim in animations):   # a vehicle driving too (§105)
+        if any(isinstance(anim, (IsoWalk, IsoDrive, IsoSeatMove)) for anim in animations):   # a vehicle driving, sitting down (§105)
             things: list[Mobject] = [*self._iso_bodies().values(), *(front for _, front in self._iso_fronts.values() if front is not None)]
             if getattr(self, "_moving_shadows", None) is not None:
                 things.append(self._moving_shadows)
