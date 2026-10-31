@@ -1600,7 +1600,7 @@ cartoon style, `on` states with gentle motion where listed; docs: the one "Other
 - [x] `street_lamp` (tall, lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (water when on), `phone_booth` (light), `car` (parked; headlights; `color`), `bicycle`, `newsstand`; drawings in `cartoon/iso_town.py`; warm night light pools for every lamp (`light_pool`)
 
 ### Step 264 — Nature I
-- [ ] `campfire` (flames, sparks, glow), `tent`, `log`, `stump`, `mushroom_ring` (faint glow at night), `pond` (lily pads, ripples), `scarecrow`, `beehive` (bees when on)
+- [x] `campfire` (flames, sparks, glow), `tent`, `log`, `stump`, `mushroom_ring` (faint glow at night), `pond` (lily pads, ripples), `scarecrow`, `beehive` (bees when on); drawings in `cartoon/iso_nature.py`; pools of light faint by day (their own picture, `pool_strength`)
 
 ### Step 265 — Nature II, school and office
 - [ ] `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (iso), `desk_with_pc` (screen), `water_cooler` (bubble), `printer` (paper slides out), `globe` (spins), `trophy_shelf`

@@ -20169,3 +20169,32 @@ Public surface (262): the kinds above; `DISPLAY_CASES`, `OBJECT_STYLES` (also in
   grass, paths and floors. Changes the look of lit iso lamps (intended); Phase Q baseline unchanged.
 
 Public surface (263): the kinds above; `light_pool` (`iso_objects.__all__`). Additive.
+
+- **Step 264 (nature)**: drawn in `iso_nature.py`. `campfire` (stones in `color`, leaning logs in
+  `detail` with charred tips; on: embers glow, a warm pool; moving: three flames and five sparks
+  rising; lights who stands near, `LAMPLIGHT_KINDS`), `tent` (2 x 2; ridge tent, open door with tied
+  flaps, `detail` trim and bedroll, poles and guy ropes), `log` (2 x 1, `top` 0.5; its body the
+  seen hull of its two end circles, a cut end with rings, moss in `detail`), `stump` (`top` 0.57;
+  rings, roots, a sprout), `mushroom_ring` (2 x 2; eleven mushrooms, their `detail` spots lights and
+  a faint mint `pool` on the grass: it glows at night only), `pond` (2 x 2; water in `detail` in a
+  sandy edge in `color`, lily pads and a lily, reeds and cattails; switched: `on` spreads three
+  ripple rings, cheap moving parts; off or still, two faint rings lie on it), `scarecrow` (cut-out
+  facing the viewer: shirt in `color`, straw hat in `detail`, a crow on the arm on its facing side),
+  `beehive` (a skep of straw coils on a stand in `detail`; on: five bees circle it, hidden while
+  behind the skep).
+- **Pools of light by day**: a pool (`light_pool`, the fireplace's floor light, the mushroom ring's
+  glow) is now a `Disc` marked `pool` (no longer `glow`), drawn only in its own picture
+  (`draw_shapes(pool=True)`: pools drawn, other shapes clear them, shadows skipped; the plain and
+  glow pictures leave pools out). The stage shows those tiles (`PoolTile`, between a picture's
+  tiles and its glow tiles) at `pool_strength(grade)` of their opacity (`lighting`: `POOL_DAY` 0.1
+  by day, `POOL_CURVE` 0.7 up to 1 at `LAMP_DARK`; night 1, sunset ~0.6, indoor ~0.45, morning
+  ~0.25), set on the camera by `StageLight` (`POOL_STRENGTH`; no light or a draft: by day). Before,
+  the pool was in the day picture and drawn again ungraded in the glow layer: a strong orange patch
+  by day. `POOL_RINGS` rose to 0.34 / 0.34 / 0.38 (drawn once now, not twice). A pool is drawn by the
+  base picture (its pieces) or by its piece's layer only, never by a character's front picture
+  (`IsoScenery.pool_shapes`), and pool tiles drop the tiles' 2-pixel overlap and meet on whole
+  pixels (`draw_tile` rounds): seen-through pixels drawn twice showed as stripes.
+
+Public surface (264): the kinds above; `Disc.pool`, `draw_shapes(pool=)`, `IsoScenery.pools` /
+`pool_shapes`, `PoolTile`, `POOL_STRENGTH`, `pool_strength`, `POOL_DAY`. Additive; Phase Q
+baseline 31/31 identical.

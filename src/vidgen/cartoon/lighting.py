@@ -140,6 +140,20 @@ def lamp_lit(base: LightGrade, share: float) -> LightGrade:
     return blend_grades(base, tint_grade(*LAMP_LIGHT), lift)
 
 
+#: A lamp's pool of light on the ground (an iso place's, DESIGN.md §104): how much of it shows by
+#: day, and the curve from there to full as the light darkens (:data:`LAMP_DARK` dark: full),
+#: so it is strong at night, gentle at sunset or indoors and barely seen by day.
+POOL_DAY = 0.1
+POOL_CURVE = 0.7
+
+
+def pool_strength(grade: LightGrade) -> float:
+    """How strongly (0..1) a lamp's pool of light shows under ``grade`` (the stage's light now):
+    :data:`POOL_DAY` by day, 1 in the dark."""
+    dark = min(max((1.0 - sum(grade.multiply) / 3) / LAMP_DARK, 0.0), 1.0)
+    return POOL_DAY + (1.0 - POOL_DAY) * dark ** POOL_CURVE
+
+
 def lifted(grade: LightGrade, share: float) -> LightGrade:
     """``grade`` lifted ``share`` 0..1 of the way back to the colours as drawn: a fill light on
     what it grades (a stage's ``fill_light`` on its characters, a visitor's own ``glow``,

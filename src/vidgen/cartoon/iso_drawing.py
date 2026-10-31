@@ -71,7 +71,9 @@ class Blobs:
 class Disc:
     """A flat circle lying in the world at height ``centre[2]`` (a well's water, a lamp's base):
     ``radius`` in tile units; with ``opacity`` under 1 it tints what is under it (a shadow, a
-    pool of light); ``glow`` and ``holds_snow`` as a :class:`Poly`'s."""
+    pool of light); ``glow`` and ``holds_snow`` as a :class:`Poly`'s; ``pool``: a lamp's pool
+    of light, drawn only in the picture of the pools (:func:`draw_shapes`), which the stage shows
+    as strong as its light is dark (DESIGN.md §104)."""
 
     centre: Point3
     radius: float
@@ -80,6 +82,7 @@ class Disc:
     opacity: float = 1.0
     glow: bool = False
     holds_snow: bool = True
+    pool: bool = False
 
 
 @dataclass(frozen=True)
@@ -262,14 +265,17 @@ def _above(points: Sequence[Point3], z: float) -> list[Point3]:
 
 
 def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 1.0, ink: str = CHARACTER_INK,
-                image: Image.Image | None = None, supersample: int = ISO_SUPERSAMPLE, glow: bool = False, snow: bool = False) -> Image.Image:
+                image: Image.Image | None = None, supersample: int = ISO_SUPERSAMPLE, glow: bool = False, snow: bool = False,
+                pool: bool = False) -> Image.Image:
     """An RGBA picture of ``shapes`` (painted in order) on ``canvas``, transparent elsewhere;
     ``outline`` multiplies :data:`ISO_OUTLINE`. Drawn ``supersample`` times larger and reduced
     with a box filter. With ``image`` (the canvas's size) the shapes go over it. ``glow``: a
     picture of the lights only (DESIGN.md §89.11): the shapes marked ``glow`` as drawn, every
     other shape (but a tint) clearing what it covers, so a light is seen only where the whole
     picture shows it. ``snow``: a picture of the snow lying on the shapes (DESIGN.md §90.3,
-    :func:`_snow`), each shape clearing the snow behind it."""
+    :func:`_snow`), each shape clearing the snow behind it. ``pool``: a picture of the pools of
+    light only (discs marked ``pool``), every other shape (but a tint) clearing what it covers;
+    the other pictures leave the pools out (DESIGN.md §104)."""
     ss = supersample
     big = Image.new("RGBA", (canvas.width * ss, canvas.height * ss), (0, 0, 0, 0))
     draw = ImageDraw.Draw(big)
@@ -288,7 +294,10 @@ def draw_shapes(shapes: Sequence[Shape], canvas: IsoCanvas, *, outline: float = 
         if snow:
             _snow(draw, shape, canvas, ss, width, line, ink)
             continue
-        clearing = glow and not getattr(shape, "glow", False)
+        is_pool = isinstance(shape, Disc) and shape.pool
+        if is_pool != pool and (is_pool or isinstance(shape, Disc) and shape.opacity < 1.0):
+            continue   # a pool only in the picture of the pools; a shadow hides no pool
+        clearing = (glow or pool) and not (is_pool if pool else getattr(shape, "glow", False))
         if clearing and isinstance(shape, Disc) and shape.opacity < 1.0:
             continue   # a shadow hides no light
         if clearing:

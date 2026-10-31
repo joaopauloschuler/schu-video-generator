@@ -100,7 +100,7 @@ def test_objects_are_drawn_open_and_lit() -> None:
     assert DOORWAY in _fills(object_shapes(house, look, 0.0, ObjectState(open=True)))
     assert LIT_GLASS in _fills(object_shapes(house, look, 0.0, ObjectState(on=True)))
     pool = [s for s in object_shapes(lamp, look, 0.0, ObjectState(on=True)) if isinstance(s, Disc) and s.fill == LIGHT_POOL]
-    assert pool and all(s.opacity < 1 and s.glow for s in pool) and not any(s.fill == LIGHT_POOL for s in object_shapes(lamp, look, 0.0) if isinstance(s, Disc))
+    assert pool and all(s.opacity < 1 and s.pool for s in pool) and not any(s.fill == LIGHT_POOL for s in object_shapes(lamp, look, 0.0) if isinstance(s, Disc))
     buds, bloom = object_shapes(flowers, look, 0.0, ObjectState(open=False)), object_shapes(flowers, look, 0.0)
     assert len(buds) < len(bloom) and object_shapes(flowers, look, 0.0, ObjectState(open=True)) == bloom   # buds have no hearts
 

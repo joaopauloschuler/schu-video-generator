@@ -23732,3 +23732,42 @@ How to test: `tests/test_docs.py` (73 passed).
   `test_iso_place`, `test_iso_mood`, `test_guide`, `test_api`, `test_schema`, `test_docs`,
   `test_city_hud_echo`, the lamplight tests of `test_phase_q_review` passed. Phase Q baseline 31/31
   identical. Contact sheets (private): scratchpad `s263/objects.png`, `s263/closeup.png`.
+
+## Step 264 — Nature objects; pools of light by day (Phase AC)
+
+- Built: iso objects `campfire` (flames and rising sparks while on, embers, a warm pool; lights
+  nearby characters via `LAMPLIGHT_KINDS`), `tent` (2 x 2), `log` (2 x 1, `top`), `stump` (`top`),
+  `mushroom_ring` (2 x 2; spots and a faint green glow on the grass at night), `pond` (2 x 2; lily
+  pads, reeds; `on` spreads ripples), `scarecrow`, `beehive` (bees circle it while on) (DESIGN
+  §104). Reviewer's fix first: a lit lamp's pool of light was a strong orange patch by day (it was
+  in the day picture and drawn again, ungraded, in the glow layer). Pools are now their own
+  picture (`Disc.pool`, `draw_shapes(pool=True)`, `PoolTile`) shown at `pool_strength(light)`:
+  1 at night, ~0.6 at sunset, ~0.45 indoors, 0.1 by day; never in a character's front picture,
+  no seams between tiles.
+- Files: new `cartoon/iso_nature.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `LAMPLIGHT_KINDS`, shadows, `light_pool` marks `pool`, `POOL_RINGS`);
+  `cartoon/iso_drawing.py` (`Disc.pool`, `draw_shapes(pool=)`); `cartoon/iso_stage.py`
+  (`pools`, `pool_shapes`, layer owners, `tile_image`/`picture` `pool=`); `cartoon/iso_pictures.py`
+  (`PoolTile`, `POOL_STRENGTH`, pool tiles in `show_view`, `draw_tile` fades them);
+  `cartoon/lighting.py` (`pool_strength`, `POOL_DAY`, `POOL_CURVE`); `cartoon/shading.py`
+  (`StageLight` sets the camera's pool strength); `cartoon/iso_home.py` (the fireplace's floor light
+  is a pool); `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`, `scenes/stage_iso.py`
+  (docstrings); the one "Other objects" list in CONFIG and the guide; tests
+  `test_iso_objects_more.py` (+5), `test_iso_staging.py` (pool discs are `pool`).
+- Decisions: the pond is switched (`on`: ripples) rather than always moving, so a still pond costs
+  nothing per frame. The mushroom ring's night glow is a mint pool (no switch needed: pools fade by
+  day). Without a stage light (plain `day`) or in a draft, pools show at the day strength. Night
+  pools are a little softer than in 263 (drawn once, not twice; rings raised to 0.34–0.38).
+- Known gaps: the fireplace's flickering floor glow (a moving part) is still drawn ungraded by
+  day; nobody sits on the log or stump (`top` holds small things); bees are small at preview size;
+  the tent cannot be entered; a layer picture equal to a front picture would draw a pool twice
+  (not seen).
+- For later batches: lit objects use `light_pool` (it now fades by day by itself); a glow on the
+  ground that should show only at night can be any `Disc(..., pool=True)`. Scratchpad
+  `s264/closeup.py` composes day (pools at day strength) and night like the stage; `s264/proj`
+  is a meadow test project; `s261/sheet.py` makes the sheet.
+- Tests: `test_iso_objects_more.py` 18 passed; `test_iso_staging`, `test_iso_mood`,
+  `test_lab_objects`, `test_iso_place`, `test_city_hud_echo`, `test_story_light_hands`,
+  `test_draft`, `test_guide`, `test_api`, `test_schema`, `test_docs`, the lamplight tests of
+  `test_phase_q_review` passed. Phase Q baseline 31/31 identical. Contact sheets (private):
+  scratchpad `s264/objects.png`, `s264/closeup.png`.

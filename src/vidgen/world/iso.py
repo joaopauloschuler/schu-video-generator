@@ -165,6 +165,15 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "car": ObjectKind(2, 1, 1.32),
     "bicycle": ObjectKind(1, 1, 1.0),
     "newsstand": ObjectKind(2, 1, 2.45),
+    # nature objects (§104)
+    "campfire": ObjectKind(1, 1, 1.0),
+    "tent": ObjectKind(2, 2, 2.0),
+    "log": ObjectKind(2, 1, 0.6, top=0.5),
+    "stump": ObjectKind(1, 1, 0.6, top=0.57),
+    "mushroom_ring": ObjectKind(2, 2, 0.35),
+    "pond": ObjectKind(2, 2, 0.8),
+    "scarecrow": ObjectKind(1, 1, 2.4),
+    "beehive": ObjectKind(1, 1, 1.45),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
@@ -186,7 +195,7 @@ SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", 
                                             "coffee_machine", "grow_rack", "specimen_tank", "chemistry_bench", "distillation_rig",
                                             "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d",
                                             "fireplace", "stove", "floor_lamp", "tv", "vending_machine", "street_lamp", "traffic_light",
-                                            "fountain", "phone_booth", "car"})
+                                            "fountain", "phone_booth", "car", "campfire", "pond", "beehive"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock"})
 

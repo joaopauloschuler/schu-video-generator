@@ -70,6 +70,8 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "street_lamp": ("#34404F", "#F7E7B0"), "traffic_light": ("#5A6272", "#F2C14E"), "bus_stop": ("#4C6A85", "#E2574C"),
     "mailbox": ("#D7322B", "#F2C14E"), "fountain": ("#D8D2C4", "#6FB8E0"), "phone_booth": ("#D7322B", "#F2C14E"),
     "car": ("#4C8DD6", "#CFE8F7"), "bicycle": ("#2EA38A", "#D9B07A"), "newsstand": ("#3E8E6A", "#F2C14E"),
+    "campfire": ("#9A958C", "#7A5236"), "tent": ("#E8833A", "#F4E3B5"), "log": ("#7A5236", "#5BA35B"), "stump": ("#7A5236", "#E9C99A"),
+    "mushroom_ring": ("#E2574C", "#F4F6FA"), "pond": ("#D2C29A", "#5FA8D3"), "scarecrow": ("#4C8DD6", "#E8C35A"), "beehive": ("#E2B54A", "#9C6B47"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -82,9 +84,10 @@ LIT_CORE = "#FFF6D0"
 #: The pool of light under a lit lamp (:func:`light_pool`, DESIGN.md §104): rings of a saturated
 #: warm amber (its middle lighter), each a tint of the ground: (share of the radius, opacity). A
 #: pale yellow, half seen through over the night's blue-graded ground, read olive; this stays warm.
+#: Drawn only in the picture of the pools, shown as strong as the light is dark (faint by day).
 LIGHT_POOL = "#FF8F3A"
 POOL_CORE = "#FFC062"
-POOL_RINGS = ((1.0, 0.18), (0.68, 0.18), (0.4, 0.2))
+POOL_RINGS = ((1.0, 0.34), (0.68, 0.34), (0.4, 0.38))
 LIGHT_POOL_RADIUS = 1.1
 #: Settling snow covers this share of each of a pine's tiers from its tip down (the tier above
 #: hides most of it, so the white shows as shoulders over a green fringe), and of a well's roof
@@ -146,9 +149,10 @@ class _Frame:
 
 def light_pool(centre: Point3, radius: float, strength: float = 1.0) -> list[Shape]:
     """A lit lamp's soft pool of warm light on the ground round ``centre`` (``radius`` in tile
-    units; ``strength`` scales it): :data:`POOL_RINGS` of lights (not dimmed at night)."""
+    units; ``strength`` scales it): :data:`POOL_RINGS` of discs marked ``pool`` (not dimmed at
+    night; the stage shows them as strong as its light is dark, faint by day)."""
     return [Disc((centre[0], centre[1], centre[2] + 0.0005 * k), radius * share, POOL_CORE if k == len(POOL_RINGS) - 1 else LIGHT_POOL, False,
-                 opacity * strength, glow=True, holds_snow=False) for k, (share, opacity) in enumerate(POOL_RINGS)]
+                 opacity * strength, holds_snow=False, pool=True) for k, (share, opacity) in enumerate(POOL_RINGS)]
 
 
 def _window(f: _Frame, u0: float, u1: float, z0: float, z1: float, *, front: float | None = None, side: float | None = None,
@@ -1768,7 +1772,8 @@ def _fire_extinguisher(f: _Frame, look: ObjectLook) -> list[Shape]:
 
 #: The objects with moving parts the stage draws over their pictures while they work (DESIGN.md §103).
 MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge",
-                "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d", "fireplace", "stove", "tv", "traffic_light", "fountain")
+                "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d", "fireplace", "stove", "tv", "traffic_light", "fountain",
+                "campfire", "pond", "beehive")
 _LAB_MOVING = frozenset({"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"})
 _WORKSHOP_MOVING = frozenset({"satellite_dish", "charging_station", "airlock", "printer_3d"})
 #: The objects that work while open too (a lab fridge's cold mist).
@@ -1903,8 +1908,9 @@ def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float, st
     boiling and drips; a lab fridge's cold mist (``state``: from the opening while open); a fume
     hood's fan and vapour; a satellite dish turning, a charging station's bars filling, an
     airlock's flashing beacon and a 3D print growing layer by layer under its moving head; a
-    fireplace's flames, a stove's steam, a TV's picture, a traffic light's lamps and a fountain's
-    water (§104). The same number of parts at
+    fireplace's flames, a stove's steam, a TV's picture, a traffic light's lamps, a fountain's
+    water, a campfire's flames and sparks, a pond's ripples and a hive's bees (§104). The same
+    number of parts at
     any time (those not seen have opacity 0)."""
     f = _Frame(item, base)
     if item.kind in MORE_MODULES:
@@ -1983,7 +1989,8 @@ def object_lights(item: IsoObject, base: float) -> list[Point3]:
 SHADOW_RADII: dict[str, float] = {"tree": 0.45, "pine": 0.42, "bush": 0.48, "rock": 0.42, "lamp": 0.24, "well": 0.52, "sign": 0.22,
                                   "plant": 0.32, "flowers": 0.36, "chair": 0.42, "lab_stool": 0.26, "quantum_core": 0.42, "robot_arm": 0.36,
                                   "terrarium": 0.3, "specimen_tank": 0.42, "telescope": 0.4, "hazard_sign": 0.22, "fire_extinguisher": 0.24,
-                                  "floor_lamp": 0.26, "street_lamp": 0.26, "traffic_light": 0.22, "mailbox": 0.3, "bicycle": 0.36}
+                                  "floor_lamp": 0.26, "street_lamp": 0.26, "traffic_light": 0.22, "mailbox": 0.3, "bicycle": 0.36,
+                                  "stump": 0.4, "scarecrow": 0.3, "beehive": 0.4}
 #: The shadows' colour and opacity (a tint of what lies under them).
 SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
@@ -2008,9 +2015,10 @@ MORE_MODULES: dict[str, str] = {
     **{kind: "iso_shop" for kind in ("bathtub", "wardrobe", "crib", "cafe_table", "counter", "cash_register", "display_case", "market_stall",
                                      "vending_machine")},
     **{kind: "iso_town" for kind in ("street_lamp", "traffic_light", "bus_stop", "mailbox", "fountain", "phone_booth", "car", "bicycle", "newsstand")},
+    **{kind: "iso_nature" for kind in ("campfire", "tent", "log", "stump", "mushroom_ring", "pond", "scarecrow", "beehive")},
 }
 #: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
-LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth"})
+LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire"})
 
 
 def _more(kind: str) -> ModuleType:

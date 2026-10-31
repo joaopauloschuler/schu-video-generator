@@ -115,7 +115,7 @@ def _fireplace(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     on = state.on
     shapes: list[Shape] = []
     if on:   # the warm light on the floor in front of it
-        shapes.append(Disc(f.p(cx, d + 0.25, 0.01), 0.85, FIRE_LIGHT, False, 0.26, glow=True, holds_snow=False))
+        shapes.append(Disc(f.p(cx, d + 0.25, 0.01), 0.85, FIRE_LIGHT, False, 0.45, holds_snow=False, pool=True))
     shapes += f.box(0.1, 0.08, 0.0, w - 0.1, b, 1.25, brick)
     mortar = shade(brick, 0.3)
     for k, z in enumerate((0.3, 0.55, 0.8, 1.05)):

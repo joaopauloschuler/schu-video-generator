@@ -5,9 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–263)
+## Unreleased (Steps 193–264)
 
 ### More iso objects (Steps 261–267)
+
+- Nature objects `campfire` (flames and sparks, lights who sits near), `tent`, `log`, `stump`, `mushroom_ring` (glows faintly at night), `pond` (ripples when on), `scarecrow` and `beehive` (bees when on); a lamp's pool of light is now faint by day and strong only at night.
 
 - Town objects `street_lamp` (lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (runs when on), `phone_booth` (lights), `car` (headlights), `bicycle` and `newsstand`; a lit street lamp or phone booth lights the characters near it, and every lamp's pool of light is now warm at night (it read olive or grey).
 
