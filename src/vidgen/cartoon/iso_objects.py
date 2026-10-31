@@ -72,6 +72,9 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "car": ("#4C8DD6", "#CFE8F7"), "bicycle": ("#2EA38A", "#D9B07A"), "newsstand": ("#3E8E6A", "#F2C14E"),
     "campfire": ("#9A958C", "#7A5236"), "tent": ("#E8833A", "#F4E3B5"), "log": ("#7A5236", "#5BA35B"), "stump": ("#7A5236", "#E9C99A"),
     "mushroom_ring": ("#E2574C", "#F4F6FA"), "pond": ("#D2C29A", "#5FA8D3"), "scarecrow": ("#4C8DD6", "#E8C35A"), "beehive": ("#E2B54A", "#9C6B47"),
+    "vegetable_patch": ("#A0703F", "#E2574C"), "wheelbarrow": ("#4FA36B", "#9C6B47"), "hay_bale": ("#E8C35A", "#B0563A"),
+    "school_desk": ("#D9A066", "#4C6A85"), "desk_with_pc": ("#D8C3A0", "#4C9BE0"), "water_cooler": ("#EEF1F5", "#7EC8F0"),
+    "printer": ("#E6EAF0", "#4CB8FF"), "globe": ("#4C8DD6", "#9C6B47"), "trophy_shelf": ("#7A5236", "#F2C14E"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -1773,7 +1776,7 @@ def _fire_extinguisher(f: _Frame, look: ObjectLook) -> list[Shape]:
 #: The objects with moving parts the stage draws over their pictures while they work (DESIGN.md §103).
 MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge",
                 "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d", "fireplace", "stove", "tv", "traffic_light", "fountain",
-                "campfire", "pond", "beehive")
+                "campfire", "pond", "beehive", "desk_with_pc", "water_cooler", "printer", "globe")
 _LAB_MOVING = frozenset({"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"})
 _WORKSHOP_MOVING = frozenset({"satellite_dish", "charging_station", "airlock", "printer_3d"})
 #: The objects that work while open too (a lab fridge's cold mist).
@@ -1909,9 +1912,9 @@ def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float, st
     hood's fan and vapour; a satellite dish turning, a charging station's bars filling, an
     airlock's flashing beacon and a 3D print growing layer by layer under its moving head; a
     fireplace's flames, a stove's steam, a TV's picture, a traffic light's lamps, a fountain's
-    water, a campfire's flames and sparks, a pond's ripples and a hive's bees (§104). The same
-    number of parts at
-    any time (those not seen have opacity 0)."""
+    water, a campfire's flames and sparks, a pond's ripples, a hive's bees, a line typed on a
+    computer, a water cooler's bubbles, a printed sheet and a globe's turning land (§104). The
+    same number of parts at any time (those not seen have opacity 0)."""
     f = _Frame(item, base)
     if item.kind in MORE_MODULES:
         return _more(item.kind).motion(f, look, now)
@@ -1990,7 +1993,7 @@ SHADOW_RADII: dict[str, float] = {"tree": 0.45, "pine": 0.42, "bush": 0.48, "roc
                                   "plant": 0.32, "flowers": 0.36, "chair": 0.42, "lab_stool": 0.26, "quantum_core": 0.42, "robot_arm": 0.36,
                                   "terrarium": 0.3, "specimen_tank": 0.42, "telescope": 0.4, "hazard_sign": 0.22, "fire_extinguisher": 0.24,
                                   "floor_lamp": 0.26, "street_lamp": 0.26, "traffic_light": 0.22, "mailbox": 0.3, "bicycle": 0.36,
-                                  "stump": 0.4, "scarecrow": 0.3, "beehive": 0.4}
+                                  "stump": 0.4, "scarecrow": 0.3, "beehive": 0.4, "wheelbarrow": 0.4, "water_cooler": 0.32, "globe": 0.36}
 #: The shadows' colour and opacity (a tint of what lies under them).
 SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
@@ -2016,6 +2019,8 @@ MORE_MODULES: dict[str, str] = {
                                      "vending_machine")},
     **{kind: "iso_town" for kind in ("street_lamp", "traffic_light", "bus_stop", "mailbox", "fountain", "phone_booth", "car", "bicycle", "newsstand")},
     **{kind: "iso_nature" for kind in ("campfire", "tent", "log", "stump", "mushroom_ring", "pond", "scarecrow", "beehive")},
+    **{kind: "iso_school" for kind in ("vegetable_patch", "wheelbarrow", "hay_bale", "school_desk", "desk_with_pc", "water_cooler", "printer",
+                                       "globe", "trophy_shelf")},
 }
 #: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
 LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire"})

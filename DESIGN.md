@@ -20198,3 +20198,21 @@ Public surface (263): the kinds above; `light_pool` (`iso_objects.__all__`). Add
 Public surface (264): the kinds above; `Disc.pool`, `draw_shapes(pool=)`, `IsoScenery.pools` /
 `pool_shapes`, `PoolTile`, `POOL_STRENGTH`, `pool_strength`, `POOL_DAY`. Additive; Phase Q
 baseline 31/31 identical.
+
+- **Step 265 (farm, school, office)**: drawn in `iso_school.py`. `vegetable_patch` (2 x 1; a
+  raised plank bed in `color`, staked tomatoes with fruit in `detail`, cabbages, carrots),
+  `wheelbarrow` (green tray with soil and a seedling, wheel at its nose, handles in `detail`),
+  `hay_bale` (2 x 1, `top` 0.72; straw texture, twine in `detail`), `school_desk` (an iso object,
+  apart from the 2D `school_desk` prop: a sloping lid, book box, steel frame in `detail`, its
+  chair in front of it so a pupil faces the room's back wall; no `top`, its desk is not at the
+  cell's middle), `desk_with_pc` (2 x 1; switched: the screen glows in `detail` with a window,
+  icons and a taskbar, the tower's light; moving: a line typed and a blinking cursor),
+  `water_cooler` (bottle in `detail`; moving: three bubbles rising), `printer` (an office printer,
+  apart from `printer_3d`; switched: its panel glows in `detail`; moving: a sheet slides out onto
+  its tray, past its footprint's front edge, then fades), `globe` (floor globe on a tripod in
+  `detail`, seas in `color`; moving: its land turns, `CONTINENTS` as (longitude, latitude)
+  outlines on a tilted axis, points round the back pressed onto its edge; off or still, its land
+  is in the picture), `trophy_shelf` (2 x 1, `top`; cups, statuettes, a medal, a plaque and a
+  star, gold in `detail`). None light characters. Heights 0.78–2.08 tiles.
+
+Public surface (265): the kinds above. Additive; no shared drawing code changed.

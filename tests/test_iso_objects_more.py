@@ -323,3 +323,65 @@ def test_the_nature_objects_render_move_and_light(make_project, tmp_path: Path, 
     assert set(scene._iso_lamps) == {"campfire"} and scene._iso_lamp_share("pip") > 0.0   # pip sits by the fire
     assert getattr(scene.renderer.camera, POOL_STRENGTH) == 1.0   # the pools at full strength at night
     assert len(frames) > 5 and np.any(frames[-1] != frames[3])
+
+
+# ----- Step 265: farm, school and office -----------------------------------------------------------------------
+
+SCHOOL = ("vegetable_patch", "wheelbarrow", "hay_bale", "school_desk", "desk_with_pc", "water_cooler", "printer", "globe", "trophy_shelf")
+SCHOOL_SIZES = {"vegetable_patch": (2, 1), "hay_bale": (2, 1), "desk_with_pc": (2, 1), "trophy_shelf": (2, 1)}
+SCHOOL_WORKING = ("desk_with_pc", "water_cooler", "printer", "globe")
+
+
+def test_school_objects_have_footprints_colours_and_states() -> None:
+    for kind in SCHOOL:
+        assert kind in OBJECT_KINDS and kind in OBJECT_COLORS and MORE_MODULES[kind] == "iso_school" and OBJECT_KINDS[kind].height <= 2.1
+        assert (OBJECT_KINDS[kind].width, OBJECT_KINDS[kind].depth) == SCHOOL_SIZES.get(kind, (1, 1))
+        assert default_state(kind) == ObjectState() and kind not in OPENING_KINDS and kind not in OBJECT_STYLES
+    assert set(SCHOOL) & SWITCHED_KINDS == set(SCHOOL) & set(MOVING_KINDS) == set(SCHOOL_WORKING)
+    assert not set(SCHOOL) & LAMPLIGHT_KINDS and OBJECT_KINDS["hay_bale"].top and OBJECT_KINDS["trophy_shelf"].top
+
+
+def test_school_objects_draw_light_up_and_move() -> None:
+    place = _placed(SCHOOL)
+    for item in place.objects:
+        off = object_shapes(item, _look(item.kind), 0.0, ObjectState())
+        assert off and not any(getattr(s, "glow", False) for s in off), item.kind
+        if item.kind in SCHOOL_WORKING:
+            on = object_shapes(item, _look(item.kind), 0.0, ObjectState(on=True))
+            moving = object_shapes(item, _look(item.kind, True), 0.0, ObjectState(on=True))
+            assert (on != off or item.kind == "globe") and len(moving) < len(on), item.kind   # a still globe: the same on or off
+            early, late = (object_motion(item, _look(item.kind), 0.0, t, ObjectState(on=True)) for t in (0.2, 1.3))
+            assert early and len(early) == len(late) and [(p.points, p.opacity) for p in early] != [(p.points, p.opacity) for p in late], item.kind
+    pc, globe = place.object("desk_with_pc"), place.object("globe")
+    assert any(getattr(s, "glow", False) for s in object_shapes(pc, _look("desk_with_pc"), 0.0, ObjectState(on=True)))   # its screen
+    still = object_shapes(globe, _look("globe", True), 0.0, ObjectState())   # off, its land is in its picture
+    assert len(still) == len(object_shapes(globe, _look("globe"), 0.0, ObjectState()))
+
+
+def test_school_keys_validate() -> None:
+    good = stage_params(iso={**ISO, "objects": [{"object": "globe", "at": "here", "on": True}, {"object": "school_desk", "at": "there"}]})
+    assert good.iso.objects[0].state().on and good.iso.objects[1].placing().kind == "school_desk"
+    for bad, message in (({"object": "hay_bale", "at": "here", "on": True}, "on is for"), ({"object": "printer", "at": "here", "open": True}, "open is for"),
+                         ({"object": "trophy_shelf", "at": "here", "kind": "gold"}, "kind is for a hazard_sign"),
+                         ({"object": "water_coler", "at": "here"}, "did you mean water_cooler"), ({"object": "desk_pc", "at": "here"}, "did you mean desk_with_pc")):
+        with pytest.raises(ValidationError, match=message):
+            stage_params(iso={**ISO, "objects": [bad]})
+
+
+@pytest.mark.render
+def test_the_school_objects_render_and_move(make_project, tmp_path: Path, monkeypatch) -> None:
+    extensions.load_builtins()
+    monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
+    room = "############\n#t..p..c...#\n#..........#\n#v...h..d..#\n#..........#\n#s.w..g.y..#\n####+#######"
+    spots = {"t": "trophies", "p": "printer", "c": "cooler", "v": "patch", "h": "hay", "d": "pc", "s": "desk", "w": "barrow", "g": "globe", "y": "near"}
+    kinds = {"trophies": "trophy_shelf", "printer": "printer", "cooler": "water_cooler", "patch": "vegetable_patch", "hay": "hay_bale",
+             "pc": "desk_with_pc", "desk": "school_desk", "barrow": "wheelbarrow", "globe": "globe"}
+    objects = [{"object": kind, "at": spot, **({"on": True} if kind in SCHOOL_WORKING else {})} for spot, kind in kinds.items()]
+    params = {"light": "night", "iso": {"place": "indoor", "map": room, "spots": spots, "objects": objects},
+              "characters": [{"name": "pip", "at": "near"}]}
+    beats = [{"text": "Late at the school office.", "actions": [{"switch_off": "printer", "at": 0.6}]}]
+    scenes = [{"id": "home", "type": "stage", "params": params, "beats": beats}]   # frames_of renders the scene "home"
+    scene, frames = frames_of(Project.load(make_project(minimal_config(characters=CAST, scenes=scenes))), tmp_path / "school", monkeypatch)
+    places = {scene.iso_scenery.pieces[k].name: gadget for gadget, k, _ in scene._iso_gadget_places}
+    assert set(places) == set(SCHOOL_WORKING) and not places["printer"].gadgets[0].working(float(scene.renderer.time))
+    assert not scene._iso_lamps and len(frames) > 5 and np.any(frames[-1] != frames[3])

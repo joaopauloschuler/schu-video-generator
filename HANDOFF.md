@@ -23771,3 +23771,31 @@ How to test: `tests/test_docs.py` (73 passed).
   `test_draft`, `test_guide`, `test_api`, `test_schema`, `test_docs`, the lamplight tests of
   `test_phase_q_review` passed. Phase Q baseline 31/31 identical. Contact sheets (private):
   scratchpad `s264/objects.png`, `s264/closeup.png`.
+
+## Step 265 — Farm, school and office objects (Phase AC)
+
+- Built: iso objects `vegetable_patch` (2 x 1), `wheelbarrow`, `hay_bale` (2 x 1, `top`),
+  `school_desk` (iso version with its chair), `desk_with_pc` (2 x 1; screen, typing), `water_cooler`
+  (bubbles), `printer` (a sheet slides out), `globe` (spins), `trophy_shelf` (2 x 1, `top`)
+  (DESIGN §104). Switched and moving: desk_with_pc, water_cooler, printer, globe.
+- Files: new `cartoon/iso_school.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, shadows, docstring); `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`
+  (docstrings); the one "Other objects" list in CONFIG and the guide (the 3D printer is now
+  called "3D printer" there); tests `test_iso_objects_more.py` (+4).
+- Decisions: iso objects are their own namespace, so `school_desk` (iso) lives beside the 2D
+  `school_desk` prop and `printer` beside `printer_3d`. The school desk's chair stands in front of
+  it (the pupil faces the room's back wall, where a whiteboard goes); it has no `top` (its desk is
+  not at the cell's middle, and `TOP_SPOTS` does not turn with `facing`). The globe's land is in
+  its picture unless it spins (`state.on and look.moving`: the stage marks every moving kind
+  `moving`, also while off — check that for any still picture of a later moving object).
+- Known gaps: nobody sits at the school desk; the globe shows a wide empty Pacific for part of a
+  turn and its land is dark at night; the printer's sheet is small at preview size and slides past
+  the footprint's front edge; nothing here lights characters.
+- For later batches: scratchpad `s265/closeup.py` (farm things on grass, the rest on a floor,
+  four motion frames), `s265/sheet.py` (times fit short scenes, a crop), `s265/stack.py` (sheets
+  one under another), `s265/crop.py`.
+- Tests: `test_iso_objects_more.py` 22 passed; `test_lab_objects`, `test_iso_place`,
+  `test_iso_staging`, `test_guide`, `test_docs`, `test_api`, `test_schema`, `test_city_hud_echo`
+  passed. No shared drawing code changed (Phase Q baseline not affected). Contact sheets
+  (private): scratchpad `s265/objects.png` (garden corner, then classroom office),
+  `s265/closeup.png`.

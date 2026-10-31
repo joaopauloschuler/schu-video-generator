@@ -1603,7 +1603,7 @@ cartoon style, `on` states with gentle motion where listed; docs: the one "Other
 - [x] `campfire` (flames, sparks, glow), `tent`, `log`, `stump`, `mushroom_ring` (faint glow at night), `pond` (lily pads, ripples), `scarecrow`, `beehive` (bees when on); drawings in `cartoon/iso_nature.py`; pools of light faint by day (their own picture, `pool_strength`)
 
 ### Step 265 — Nature II, school and office
-- [ ] `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (iso), `desk_with_pc` (screen), `water_cooler` (bubble), `printer` (paper slides out), `globe` (spins), `trophy_shelf`
+- [x] `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (iso), `desk_with_pc` (screen), `water_cooler` (bubble), `printer` (paper slides out), `globe` (spins), `trophy_shelf`; drawings in `cartoon/iso_school.py`
 
 ### Step 266 — Fantasy and seasons I
 - [ ] `treasure_chest` (opens with a golden glow), `cauldron` (bubbling potion in `color`), `giant_crystal` (pulses), `throne`, `torch_sconce` (wall-mounted flame), `signpost`, `archway`, `statue`

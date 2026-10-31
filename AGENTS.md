@@ -2633,12 +2633,15 @@ and give each scene `set: village`.
   `vending_machine`, `street_lamp`, `traffic_light`, `bus_stop` (2 x 1), `mailbox`, `fountain`
   (2 x 2), `phone_booth`, `car` (2 x 1, `color` its body), `bicycle`, `newsstand` (2 x 1),
   `campfire`, `tent` (2 x 2), `log` (2 x 1), `stump`, `mushroom_ring` (2 x 2), `pond` (2 x 2),
-  `scarecrow`, `beehive`; `on: true` / `switch_on` makes the laptop, kiosk, core, arm,
+  `scarecrow`, `beehive`, `vegetable_patch` (2 x 1), `wheelbarrow`, `hay_bale` (2 x 1),
+  `school_desk` (with its chair), `desk_with_pc` (2 x 1), `water_cooler`, `printer`, `globe`,
+  `trophy_shelf` (2 x 1); `on: true` / `switch_on` makes the laptop, kiosk, core, arm,
   centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
-  airlock (its beacon), printer, fireplace, stove, floor lamp, TV, vending machine, street lamp,
-  traffic light (cycles), fountain, phone booth, car (headlights), campfire, pond (ripples) and
-  beehive (bees) work (a lit fireplace, floor lamp, street lamp, phone booth or campfire lights
-  who stands near; pools of light show mostly at night).
+  airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV, vending machine, street
+  lamp, traffic light (cycles), fountain, phone booth, car (headlights), campfire, pond
+  (ripples), beehive (bees), desk_with_pc (its screen), water cooler (bubbles), printer (prints)
+  and globe (spins) work (a lit fireplace, floor lamp, street lamp, phone booth or campfire
+  lights who stands near; pools of light show mostly at night).
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a

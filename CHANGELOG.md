@@ -5,9 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–264)
+## Unreleased (Steps 193–265)
 
 ### More iso objects (Steps 261–267)
+
+- Farm, school and office objects `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (with its chair), `desk_with_pc` (screen and typing when on), `water_cooler` (bubbles when on), `printer` (prints when on), `globe` (spins when on) and `trophy_shelf`.
 
 - Nature objects `campfire` (flames and sparks, lights who sits near), `tent`, `log`, `stump`, `mushroom_ring` (glows faintly at night), `pond` (ripples when on), `scarecrow` and `beehive` (bees when on); a lamp's pool of light is now faint by day and strong only at night.
 
