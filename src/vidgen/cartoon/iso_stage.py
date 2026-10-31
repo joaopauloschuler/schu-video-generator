@@ -24,7 +24,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes
+from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes, shape_bounds
 from vidgen.cartoon.iso_objects import ObjectLook, object_box
 from vidgen.cartoon.iso_scenery import SLAB_DEPTH, IsoColors, IsoPiece, ground_shapes, place_pieces
 from vidgen.cartoon.iso_weather import TopSurface, top_surface
@@ -351,6 +351,9 @@ class IsoScenery:
         self.layered = tuple(k for k, piece in enumerate(self.pieces) if piece.name in layered)
         self._images: OrderedDict[tuple[Any, ...], Image.Image | None] = OrderedDict()
         self._glows: dict[Picture, bool] = {}
+        self._pools: dict[Picture, bool] = {}
+        #: each layer picture made: its layered piece (§104: the one whose pool of light it draws)
+        self._layer_of: dict[Picture, int] = {}
         self._place = place
         self._surfaces: dict[tuple[tuple[int, ObjectState], ...], TopSurface] = {}
 
@@ -392,13 +395,21 @@ class IsoScenery:
         k = self.index[name]
         if not self.shown(k):
             return None
-        return (False, self._entries({k, *(j for j in _over(self.pieces, self.pieces[k].box) if j != k)}))
+        picture = (False, self._entries({k, *(j for j in _over(self.pieces, self.pieces[k].box) if j != k)}))
+        self._layer_of[picture] = k
+        return picture
 
     def clip(self, picture: Picture) -> tuple[float, float, float, float] | None:
-        """The picture bounds (tile widths) a front or a layer covers (``None``: the whole canvas)."""
+        """The picture bounds (tile widths) a front or a layer covers (``None``: the whole canvas);
+        a layer's also the pool of light of its piece (one lying out from it: a torch sconce's on
+        the floor below its wall, §104)."""
         if picture[0]:
             return None
         bounds = [self.pieces[k].box.picture_bounds() for k, _ in picture[1]]
+        owner = self._layer_of.get(picture)
+        if owner is not None:
+            bounds += [shape_bounds(shape) for k, state in picture[1] if k == owner
+                       for shape in self.pieces[k].shapes_in(state) if getattr(shape, "pool", False)]
         return (min(b[0] for b in bounds) - FRONT_MARGIN, min(b[1] for b in bounds) - FRONT_MARGIN,
                 max(b[2] for b in bounds) + FRONT_MARGIN, max(b[3] for b in bounds) + FRONT_MARGIN)
 
@@ -439,6 +450,26 @@ class IsoScenery:
             self._glows[picture] = any(getattr(shape, "glow", False) for k, state in picture[1] for shape in self.pieces[k].shapes_in(state))
         return self._glows[picture]
 
+    def _pool_owner(self, picture: Picture, k: int) -> bool:
+        """Whether ``picture`` draws the pool of light of its piece ``k``: the base its pieces',
+        a layer its layered piece's; a character's front picture none (seen through, a pool
+        drawn in two pictures would show twice; and it lies on the ground, under the feet)."""
+        return picture[0] or self._layer_of.get(picture) == k
+
+    def pools(self, picture: Picture) -> bool:
+        """Whether ``picture`` shows a pool of light (under a lit lamp, DESIGN.md §104)."""
+        if picture not in self._pools:
+            self._pools[picture] = any(getattr(shape, "pool", False) for k, state in picture[1] if self._pool_owner(picture, k)
+                                       for shape in self.pieces[k].shapes_in(state))
+        return self._pools[picture]
+
+    def pool_shapes(self, picture: Picture) -> list[Shape]:
+        """What the picture of ``picture``'s pools of light draws: its shapes without the pools
+        it does not own (:meth:`_pool_owner`)."""
+        ground = list(self.ground) if picture[0] else []
+        return ground + [shape for k, state in picture[1] for shape in self.pieces[k].shapes_in(state)
+                         if self._pool_owner(picture, k) or not getattr(shape, "pool", False)]
+
     def top_surface(self) -> TopSurface:
         """The place's :class:`~vidgen.cartoon.iso_weather.TopSurface` as it is now (the objects
         there now, in their states; made once per set of states): what keeps the rain off and
@@ -449,16 +480,16 @@ class IsoScenery:
         return self._surfaces[key]
 
     def tile_image(self, picture: Picture, level: int, tile: tuple[int, int], canvas: IsoCanvas, *, glow: bool = False,
-                   snow: bool = False) -> Image.Image | None:
+                   snow: bool = False, pool: bool = False) -> Image.Image | None:
         """The tile ``tile`` of ``picture`` at ``level`` (its ``canvas`` from :meth:`tiles`),
         drawn once (``None``: nothing on it); ``glow``: of its lights only (DESIGN.md §89.11);
-        ``snow``: of the snow lying on it (§90.3)."""
-        key = (picture, level, tile, glow) if not snow else (picture, level, tile, glow, snow)
+        ``snow``: of the snow lying on it (§90.3); ``pool``: of its pools of light only (§104)."""
+        key = (picture, level, tile, glow) if not (snow or pool) else (picture, level, tile, glow, snow, pool)
         if key in self._images:
             self._images.move_to_end(key)
             return self._images[key]
-        image: Image.Image | None = draw_shapes(self.shapes(picture), canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow,
-                                                snow=snow)
+        shapes = self.pool_shapes(picture) if pool else self.shapes(picture)
+        image: Image.Image | None = draw_shapes(shapes, canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow, snow=snow, pool=pool)
         if image is not None and image.getbbox() is None:
             image = None
         self._images[key] = image
@@ -466,9 +497,10 @@ class IsoScenery:
             self._images.popitem(last=False)
         return image
 
-    def picture(self, picture: Picture, level: int = 0, *, glow: bool = False, snow: bool = False) -> tuple[IsoCanvas, Image.Image]:
+    def picture(self, picture: Picture, level: int = 0, *, glow: bool = False, snow: bool = False, pool: bool = False) -> tuple[IsoCanvas, Image.Image]:
         """The whole of ``picture`` at ``level`` as one image, on its part of the canvas (for tests
-        and stills; the stage draws tiles); ``glow``: of its lights only; ``snow``: of its snow."""
+        and stills; the stage draws tiles); ``glow``: of its lights only; ``snow``: of its snow;
+        ``pool``: of its pools of light."""
         c = self.level_canvas(level)
         clip = self.clip(picture)
         if clip is None:
@@ -477,7 +509,8 @@ class IsoScenery:
             x0, y0 = max(math.floor((clip[0] - c.left) * c.scale), 0), max(math.floor((clip[1] - c.top) * c.scale), 0)
             x1, y1 = min(math.ceil((clip[2] - c.left) * c.scale), c.width), min(math.ceil((clip[3] - c.top) * c.scale), c.height)
             part = IsoCanvas(c.scale, c.left + x0 / c.scale, c.top + y0 / c.scale, max(x1 - x0, 1), max(y1 - y0, 1))
-        return part, draw_shapes(self.shapes(picture), part, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow, snow=snow)
+        shapes = self.pool_shapes(picture) if pool else self.shapes(picture)
+        return part, draw_shapes(shapes, part, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow, snow=snow, pool=pool)
 
 
 #: How many places across the picture :func:`place_outline` measures the place's edges at.

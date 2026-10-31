@@ -23581,3 +23581,296 @@ studio: …") names no project and is unchanged. No other file references the pi
 Files: `docs/images/studio.png`, `README.md`, `tasklist.md`.
 
 How to test: `tests/test_docs.py` (73 passed).
+
+## Step 258 — Lab objects I (Phase AB)
+
+- Built: iso objects `laptop`, `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`,
+  `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (DESIGN §103); the working ones switch
+  on, and the core, arm, centrifuge and coffee machine move while on (`IsoGadgets` overlay,
+  `object_motion`). The Phase AB plan in `tasklist.md`.
+- Files: `world/iso.py` (kinds, `WALL_KINDS`, `time`, wall placement), `cartoon/iso_objects.py`
+  (drawings, `Motion`, `object_motion`, `ObjectLook.moving`, wall box), `cartoon/iso_overlays.py`
+  (`IsoGadgets`), `scenes/stage.py` (`time` key, did-you-mean for an unknown object, messages),
+  `scenes/stage_iso.py` (`_iso_moving_names`, `_iso_gadgets`, state log), `scenes/stage_story.py`,
+  `scenes/switch_action.py`, `scenes/handling.py`, `api.py`; docs: one "Other objects" list in
+  `docs/CONFIG.md` and the guide (`AGENTS.md`).
+- Decisions: objects do not stack, so the laptop and microscope stand on their own small table
+  and the centrifuge and coffee machine on a bench cabinet; a wall clock is placed at a wall cell
+  (it takes no floor cell). A working object another object covers on screen keeps a still
+  picture (as a tower's screen).
+- Known gaps: a character standing right behind a working object hides part of its motion under
+  the object's front picture; a laptop's code lines are mirrored when it faces right.
+- Tests: `tests/test_lab_objects.py` (5 logic + 1 small render); `test_iso_place.py`
+  (every object draws: a wall clock on a wall). Contact sheet (private):
+  scratchpad `s258/objects.png`. Shared iso drawing code untouched for existing objects.
+
+## Step 259 — Lab objects II (Phase AB)
+
+- Built: iso objects `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench` (2 x 1),
+  `distillation_rig`, `lab_fridge` (`open`; works while on or open), `fume_hood` (DESIGN §103).
+  Liquids in `color` / `detail` / `LIQUIDS`, glowing while on; tank, bench, rig, fridge and hood
+  move (bubbles, steam, flame and drips, cold mist, fan and vapour). Both of 258's gaps fixed:
+  a working object another object covers now moves under a cover picture that follows the
+  place's changes, and its moving parts stay drawn after the front picture of a character
+  standing right behind it (`_iso_place_gadgets`, one `IsoGadgets` per working object).
+- Files: `cartoon/iso_objects.py` (drawings, `_lab_motion`, `object_working`, `object_motion`'s
+  `state`), `world/iso.py`, `scenes/stage_iso.py` (gadgets per object, covers, placing),
+  `scenes/stage.py` (draw-order updater on while there are gadgets; messages), `handling.py`,
+  `api.py`; one "Other objects" list in CONFIG and the guide.
+- Known gaps: glassware is flat cut-outs facing the viewer (fine at preview size); a gadget sits
+  after the last front picture showing its object, so with several characters around one object
+  its parts may be drawn over a character between it and that one (rare).
+- Tests: `tests/test_lab_objects.py` (8 logic + 2 small renders); 258's render test now expects
+  the covered quantum core to move. Phase Q baseline 31/31 identical. Contact sheet (private):
+  scratchpad `s259/objects.png` (plus `closeup.png`).
+
+## Step 260 — Lab objects III and the Phase AB review
+
+- Built: iso objects `telescope`, `satellite_dish` (dish turns slowly while on), `charging_station`
+  (four bars fill while on), `crate_stack` (hazard stripes; `top`), `airlock` (2 x 1; `open`: the
+  door slides into the wall, a dark tunnel; on: its beacon flashes), `printer_3d` (a vase grows
+  layer by layer under a moving head while on), `hazard_sign` (`kind: biohazard | radiation |
+  authorised`, stored as the placing's `features`, `HAZARD_SIGNS`), `fire_extinguisher` (DESIGN §103).
+- Review of all 24 objects (the plan said 26, its three batches list 24): the coffee machine is now
+  a light drip machine with a big white mug under its spout, a coffee window and a stream while on
+  (steam drifts out from under the head); a laptop's and a kiosk's screen text facing right reads
+  from the left (`_reading`). Shading, outline widths and palette are the shared ones; heights
+  0.85–2.5 tiles. A preview (854 x 480, 15 fps) of one room with all 24 working renders 5.1 s of
+  video in 16.5 s (day) / 22.1 s (night). `vidgen validate` / `lint` say "did you mean telescope?"
+  and "did you mean radiation?" on typos.
+- Files: `cartoon/iso_objects.py`, `world/iso.py` (kinds, `HAZARD_SIGNS`, airlock opens and
+  switches), `scenes/stage.py` (`kind` key, messages), `scenes/handling.py`, `api.py`; the one
+  "Other objects" list in CONFIG and the guide; tests `tests/test_lab_objects.py` (+4 logic, +1 render).
+- Known gaps: the airlock is decoration (characters do not walk through it); hazard signs do not
+  glow at night; the dish's struts can read as a fan when seen face-on in its sweep.
+- Tests: `test_lab_objects.py` 15 passed; iso files, `test_guide`, `test_api`, `test_mcp`,
+  `test_schema`, `test_docs`, `test_city_hud_echo` passed. Phase Q baseline 31/31 identical.
+  Contact sheets (private): scratchpad `s260/objects.png`, `s260/all26.png`.
+
+## Step 261 — Home objects I (Phase AC)
+
+- Built: iso objects `fireplace` (2 x 1), `kitchen_counter` (2 x 1), `stove`, `sink`,
+  `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1) (DESIGN §104). Switched: the
+  fireplace (flames, embers, sparks, warm floor light), stove (glowing oven and ring, steam),
+  floor lamp (glowing shade, pool of light) and TV (a picture, a cloud, a flicker); the fire,
+  steam and TV picture move (`IsoGadgets`). A lit fireplace or floor lamp lights nearby characters
+  like a lamp (`LAMPLIGHT_KINDS`). The Phase AC plan in `tasklist.md`.
+- Files: new `cartoon/iso_home.py` (drawings, `motion`); `cartoon/iso_objects.py` (colours,
+  `MORE_MODULES` dispatch, `LAMPLIGHT_KINDS`, `MOVING_KINDS`, shadow); `world/iso.py` (kinds,
+  `SWITCHED_KINDS`); `scenes/stage_iso.py` (lamplight kinds); `scenes/stage.py` (docstrings);
+  `api.py`; the one "Other objects" list in CONFIG and the guide; tests
+  `tests/test_iso_objects_more.py` (3 logic + 1 small render).
+- Decisions: the new drawings go in their own module per batch (iso_objects.py is ~2000 lines),
+  found through `MORE_MODULES`; later batches add their module there. Names do not clash: iso
+  objects are their own namespace (`objects:` of an iso place), apart from the 2D props `tv`,
+  `fireplace`, `armchair` (as `lamp` already was). A lamp keeps its lamplight point (first cell).
+- Known gaps: the TV's picture is fixed (no `kind`); nobody sits in the armchair (`top` holds
+  small things, like the sofa's); the fireplace's floor light is a flat tint (also over a rug).
+- Tests: `test_iso_objects_more.py` 4 passed; `test_lab_objects`, `test_iso_place`,
+  `test_guide`, `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo`, the lamplight tests
+  of `test_phase_q_review` passed. Phase Q baseline 31/31 identical. Contact sheet (private):
+  scratchpad `s261/objects.png` (plus `closeup.png`, `zoom.png`).
+
+## Step 262 — Home II, café and shop objects (Phase AC)
+
+- Built: iso objects `bathtub` (2 x 1), `wardrobe` (2 x 1; `open`: both doors swing out, a mirror
+  inside one, clothes on hangers, a shelf, shoes), `crib` (with a mobile), `cafe_table` (2 x 1: a
+  round table between two bistro chairs, cups, a flower), `counter` (2 x 1, `top`),
+  `cash_register` (on a piece of counter), `display_case` (2 x 1, `kind: cakes | jewels`),
+  `market_stall` (2 x 1, striped awning, fruit crates, chalk board), `vending_machine` (on: its
+  window, sign and buttons glow, a pool of light in front) (DESIGN §104). Nothing moves.
+- Files: new `cartoon/iso_shop.py` (drawings; `motion` returns nothing); `cartoon/iso_objects.py`
+  (colours, `MORE_MODULES`); `world/iso.py` (kinds, `DISPLAY_CASES`, `OBJECT_STYLES`, wardrobe
+  opens, vending machine switches); `scenes/stage.py` (`kind` checked per object through
+  `OBJECT_STYLES`, messages, docstrings); `scenes/handling.py` (open message); `api.py`; the one
+  "Other objects" list in CONFIG and the guide; tests in `tests/test_iso_objects_more.py`.
+- Decisions: `kind` is now general: `OBJECT_STYLES` (object -> its kinds) feeds both validation
+  (did-you-mean per object: "unknown display_case kind 'jewls'; did you mean jewels?") and
+  `OBJECT_FEATURES`; a `kind` on another object says "kind is for a hazard_sign or a
+  display_case". The café table's chairs are part of the object (nobody sits on them). The cash
+  register stands on its own counter piece (objects do not stack), coloured like `counter`'s
+  default so the two line up.
+- Known gaps: the vending machine does not light characters (not in `LAMPLIGHT_KINDS`); the
+  wardrobe's open doors reach out of its footprint (like the lab fridge's); the display case is
+  not lit at night; the crib reads small and busy at preview size.
+- For later batches: add the module to `MORE_MODULES`; a new `kind:` object only needs an entry in
+  `OBJECT_STYLES`; scratchpad `s262/closeup.py` (states incl. `open` and kinds) and `crop.py`.
+- Tests: `test_iso_objects_more.py` 8 passed; `test_lab_objects`, `test_iso_place`, `test_guide`,
+  `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo` passed. No shared drawing code
+  changed (Phase Q baseline not affected). Contact sheets (private): scratchpad
+  `s262/objects.png`, `s262/closeup.png`.
+
+## Step 263 — Town objects (Phase AC)
+
+- Built: iso objects `street_lamp` (lantern on a crook; lights), `traffic_light` (cycles red,
+  green, amber while on), `bus_stop` (2 x 1), `mailbox`, `fountain` (2 x 2; jet, falls, rings
+  while on), `phone_booth` (panes and sign glow), `car` (2 x 1; headlights, tail light, light on
+  the ground ahead), `bicycle`, `newsstand` (2 x 1) (DESIGN §104). A lit street lamp or phone booth
+  lights nearby characters (`LAMPLIGHT_KINDS`). Night light pools are now warm: a shared
+  `light_pool` (amber rings) for `lamp`, `floor_lamp`, `vending_machine` and the new lights — the
+  old pale tints over the night-graded ground read olive / grey (glow layer alpha-composited over
+  the blue-multiplied picture).
+- Files: new `cartoon/iso_town.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `LAMPLIGHT_KINDS`, shadows, `light_pool`, `LIGHT_POOL` now the warm amber,
+  `LIGHT_POOL_OPACITY` gone); `cartoon/iso_home.py`, `cartoon/iso_shop.py` (their pools);
+  `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`, `scenes/stage_iso.py` (docstrings);
+  the one "Other objects" list in CONFIG and the guide; tests `test_iso_objects_more.py` (+5),
+  `test_iso_staging.py` (the lamp's pool is now rings).
+- Decisions: the car stands side-on, its nose on the visible right side face (so facing left or
+  right both show the headlights); its light pool lies just outside its footprint. The fountain's
+  falls are only on its viewer side (moving parts are drawn over the picture, so falls behind the
+  column would show through it). The fountain's water is not self-lit at night.
+- Known gaps: in daylight a lit lamp's pool reads as a clear orange patch (the glow layer is
+  drawn over the day picture too, as before); the bicycle's wheels overlap in the iso view and it
+  reads small at preview size; nobody sits on the bus stop's bench; the car does not move.
+- For later batches: `iso_town` shows a moving object whose still picture (`look.moving` false)
+  stands in for its motion (traffic light red, fountain water at t=0.4). Use `light_pool` for any
+  new lit object (campfire, pumpkin, lighthouse...). Scratchpad `s263/closeup.py` draws close-ups
+  under the real night grade (`grade_rgbas`) with motion frames; `s263/pool.py` checks a pool's
+  night colour over several grounds.
+- Tests: `test_iso_objects_more.py` 13 passed; `test_iso_staging`, `test_lab_objects`,
+  `test_iso_place`, `test_iso_mood`, `test_guide`, `test_api`, `test_schema`, `test_docs`,
+  `test_city_hud_echo`, the lamplight tests of `test_phase_q_review` passed. Phase Q baseline 31/31
+  identical. Contact sheets (private): scratchpad `s263/objects.png`, `s263/closeup.png`.
+
+## Step 264 — Nature objects; pools of light by day (Phase AC)
+
+- Built: iso objects `campfire` (flames and rising sparks while on, embers, a warm pool; lights
+  nearby characters via `LAMPLIGHT_KINDS`), `tent` (2 x 2), `log` (2 x 1, `top`), `stump` (`top`),
+  `mushroom_ring` (2 x 2; spots and a faint green glow on the grass at night), `pond` (2 x 2; lily
+  pads, reeds; `on` spreads ripples), `scarecrow`, `beehive` (bees circle it while on) (DESIGN
+  §104). Reviewer's fix first: a lit lamp's pool of light was a strong orange patch by day (it was
+  in the day picture and drawn again, ungraded, in the glow layer). Pools are now their own
+  picture (`Disc.pool`, `draw_shapes(pool=True)`, `PoolTile`) shown at `pool_strength(light)`:
+  1 at night, ~0.6 at sunset, ~0.45 indoors, 0.1 by day; never in a character's front picture,
+  no seams between tiles.
+- Files: new `cartoon/iso_nature.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `LAMPLIGHT_KINDS`, shadows, `light_pool` marks `pool`, `POOL_RINGS`);
+  `cartoon/iso_drawing.py` (`Disc.pool`, `draw_shapes(pool=)`); `cartoon/iso_stage.py`
+  (`pools`, `pool_shapes`, layer owners, `tile_image`/`picture` `pool=`); `cartoon/iso_pictures.py`
+  (`PoolTile`, `POOL_STRENGTH`, pool tiles in `show_view`, `draw_tile` fades them);
+  `cartoon/lighting.py` (`pool_strength`, `POOL_DAY`, `POOL_CURVE`); `cartoon/shading.py`
+  (`StageLight` sets the camera's pool strength); `cartoon/iso_home.py` (the fireplace's floor light
+  is a pool); `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`, `scenes/stage_iso.py`
+  (docstrings); the one "Other objects" list in CONFIG and the guide; tests
+  `test_iso_objects_more.py` (+5), `test_iso_staging.py` (pool discs are `pool`).
+- Decisions: the pond is switched (`on`: ripples) rather than always moving, so a still pond costs
+  nothing per frame. The mushroom ring's night glow is a mint pool (no switch needed: pools fade by
+  day). Without a stage light (plain `day`) or in a draft, pools show at the day strength. Night
+  pools are a little softer than in 263 (drawn once, not twice; rings raised to 0.34–0.38).
+- Known gaps: the fireplace's flickering floor glow (a moving part) is still drawn ungraded by
+  day; nobody sits on the log or stump (`top` holds small things); bees are small at preview size;
+  the tent cannot be entered; a layer picture equal to a front picture would draw a pool twice
+  (not seen).
+- For later batches: lit objects use `light_pool` (it now fades by day by itself); a glow on the
+  ground that should show only at night can be any `Disc(..., pool=True)`. Scratchpad
+  `s264/closeup.py` composes day (pools at day strength) and night like the stage; `s264/proj`
+  is a meadow test project; `s261/sheet.py` makes the sheet.
+- Tests: `test_iso_objects_more.py` 18 passed; `test_iso_staging`, `test_iso_mood`,
+  `test_lab_objects`, `test_iso_place`, `test_city_hud_echo`, `test_story_light_hands`,
+  `test_draft`, `test_guide`, `test_api`, `test_schema`, `test_docs`, the lamplight tests of
+  `test_phase_q_review` passed. Phase Q baseline 31/31 identical. Contact sheets (private):
+  scratchpad `s264/objects.png`, `s264/closeup.png`.
+
+## Step 265 — Farm, school and office objects (Phase AC)
+
+- Built: iso objects `vegetable_patch` (2 x 1), `wheelbarrow`, `hay_bale` (2 x 1, `top`),
+  `school_desk` (iso version with its chair), `desk_with_pc` (2 x 1; screen, typing), `water_cooler`
+  (bubbles), `printer` (a sheet slides out), `globe` (spins), `trophy_shelf` (2 x 1, `top`)
+  (DESIGN §104). Switched and moving: desk_with_pc, water_cooler, printer, globe.
+- Files: new `cartoon/iso_school.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, shadows, docstring); `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`
+  (docstrings); the one "Other objects" list in CONFIG and the guide (the 3D printer is now
+  called "3D printer" there); tests `test_iso_objects_more.py` (+4).
+- Decisions: iso objects are their own namespace, so `school_desk` (iso) lives beside the 2D
+  `school_desk` prop and `printer` beside `printer_3d`. The school desk's chair stands in front of
+  it (the pupil faces the room's back wall, where a whiteboard goes); it has no `top` (its desk is
+  not at the cell's middle, and `TOP_SPOTS` does not turn with `facing`). The globe's land is in
+  its picture unless it spins (`state.on and look.moving`: the stage marks every moving kind
+  `moving`, also while off — check that for any still picture of a later moving object).
+- Known gaps: nobody sits at the school desk; the globe shows a wide empty Pacific for part of a
+  turn and its land is dark at night; the printer's sheet is small at preview size and slides past
+  the footprint's front edge; nothing here lights characters.
+- For later batches: scratchpad `s265/closeup.py` (farm things on grass, the rest on a floor,
+  four motion frames), `s265/sheet.py` (times fit short scenes, a crop), `s265/stack.py` (sheets
+  one under another), `s265/crop.py`.
+- Tests: `test_iso_objects_more.py` 22 passed; `test_lab_objects`, `test_iso_place`,
+  `test_iso_staging`, `test_guide`, `test_docs`, `test_api`, `test_schema`, `test_city_hud_echo`
+  passed. No shared drawing code changed (Phase Q baseline not affected). Contact sheets
+  (private): scratchpad `s265/objects.png` (garden corner, then classroom office),
+  `s265/closeup.png`.
+
+## Step 266 — Fantasy objects (Phase AC)
+
+- Built: iso objects `treasure_chest` (`open`: lid back, gold and gems glow, a pool; sparkles
+  while open), `cauldron` (`color` its potion; on: fire, glow, bubbles, vapour), `giant_crystal`
+  (on: glows in its tint, pulses, tips twinkle), `throne` (`top`), `torch_sconce` (hangs on a
+  back wall like `wall_clock`; on: flickering flame, light on the wall, a pool on the floor),
+  `signpost`, `archway` (2 x 1), `statue` (DESIGN §104). A lit cauldron or torch lights nearby
+  characters (`LAMPLIGHT_KINDS`). Fix: a layer's clip now covers its piece's own pool of light
+  (a lit torch's pool was cut to a streak while it was in its switch layer; a car's too).
+- Files: new `cartoon/iso_fantasy.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `OPEN_WORKING`, `LAMPLIGHT_KINDS`, shadows, `_wall_box` per kind);
+  `cartoon/iso_stage.py` (`clip`); `world/iso.py` (kinds, `OPENING_KINDS`, `SWITCHED_KINDS`,
+  `WALL_KINDS`); `scenes/stage.py`, `scenes/handling.py` (docstrings, open messages); the one
+  "Other objects" list in CONFIG and the guide; tests `test_iso_objects_more.py` (+5),
+  `test_iso_place.py` (wall objects by `WALL_KINDS`).
+- Decisions: `giant_crystal` is its own name beside the small 2D `crystal` prop (separate
+  namespaces; "crystal" as an iso object says "did you mean giant_crystal?"). The chest works
+  while open (no `on`), like the lab fridge's mist. The crystal does not light characters
+  (lamplight is warm). `color` is the cauldron's potion (its iron is `detail`).
+- Known gaps: one cannot walk through the archway (not walkable, like `flower_arch`); nobody
+  sits on the throne (`top` holds small things); a torch sconce hangs only on a room's standing
+  wall (not outdoors, not on a garden wall); a layered lamp's pool still tints base objects
+  standing in it (as before); the crystal's halo reads as a soft bubble.
+- For the last batch: wall objects need an entry in `_wall_box` if their span differs from the
+  clock's; scratchpad `s266/closeup.py` (states incl. `open`, a wall behind wall objects),
+  `s266/pooltest.py` (a room's picture beside its pools' picture), `s266/proj_hall`,
+  `s266/proj_path` and `s266/baseline.sh`.
+- Tests: `test_iso_objects_more.py` 27 passed; `test_lab_objects`, `test_iso_staging`,
+  `test_iso_place`, `test_iso_mood`, `test_guide`, `test_docs`, `test_api`, `test_schema`,
+  `test_city_hud_echo`, the lamplight tests of `test_phase_q_review` passed. Phase Q baseline
+  31/31 identical. Contact sheets (private): scratchpad `s266/objects.png` (castle hall, then
+  forest path), `s266/closeup.png`.
+
+## Step 267 — Seasons, harbour and travel objects; Phase AC review (Phase AC)
+
+- Built: iso objects `christmas_tree` (lights twinkle when on), `snowman`, `pumpkin` (its face
+  glows and flickers when on), `gift_pile`, `balloon_bunch` (sways when on), `birthday_cake`
+  (candles burn when on), `boat` (2 x 1, floats: only on water; bobs and its lantern is lit when
+  on), `dock` (1 x 2, over water, walked on like a bridge), `lighthouse` (5.6 tall; lit lantern,
+  its beam sweeps when on), `train_car` (3 x 1), `rocket` (2 x 2; flame and smoke when on)
+  (DESIGN §104). Review fixes: moving light thrown on things (`Motion.pool`: fireplace floor
+  glow, torch wall light, crystal ground glow, beam, star glow) now fades by day like pools; the
+  stove's steam is soft see-through wisps; the vending machine reads clearly lit at night; the
+  crib is plainer; the bicycle bigger; the giant crystal's pulse brightens its shards (no round
+  halo); a gadget's redraw region covers where its parts reach.
+- Files: new `cartoon/iso_seasons.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, shadows, `Motion.pool`); `cartoon/iso_overlays.py` (`IsoGadgets(pool_strength=)`);
+  `cartoon/iso_home.py` (fire glow, steam), `iso_fantasy.py` (torch light, crystal pulse),
+  `iso_shop.py` (vending machine, crib), `iso_town.py` (bicycle); `world/iso.py` (kinds,
+  `ObjectKind.floats`, the floats check, `SWITCHED_KINDS`); `scenes/stage_iso.py`
+  (`GADGET_SAMPLES`, pool strength to the gadgets); `scenes/stage.py` (docstrings); `api.py`
+  (`POOL_DAY`, `POOL_STRENGTH`); the one "Other objects" list in CONFIG and the guide; tests
+  `test_iso_objects_more.py` (+6), `test_iso_place.py` (a boat is placed on water).
+- Decisions: the boat and the balloons move only while `on` (like the pond: a still one costs
+  nothing per frame); while they work the whole boat / bunch is drawn by the stage (left out of
+  the picture), else it is in the picture. A spot's letter is ground, so a boat takes
+  `at: {column, row}` on the `~` (the error says so). The dock's front-half posts reach into the
+  water (a dock on land there would show a short post below the ground). The lighthouse and
+  rocket do not light characters (no `LAMPLIGHT_KINDS`).
+- Performance: a preview of 19 working objects in one outdoor place renders 8.9 s of video in
+  21 s (one working object: 8.8 s, none: 5.3 s): about 5 ms per working object per frame, mostly
+  grading and resizing each working object's cover picture every frame (not cached; a grade cache
+  keyed on the picture could cut it, left for later since images' pixels can change in place).
+- Known gaps: by day the beam is faint but not gone (as pools); the boat does not sail and nobody
+  boards it; the train car does not move and has no lit windows; the snowman does not melt; the
+  dock, a walkable object, makes the bridge's footstep sound.
+- Tests: `test_iso_objects_more.py` 33 passed; `test_lab_objects`, all `test_iso_*`
+  (`place`, `staging`, `moves`, `mood`, `story`, `weather`, `diagram`, `diagram_actions`,
+  `web_page`), `test_guide`, `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo`, the
+  lamplight tests of `test_phase_q_review`, `test_mcp.py` (20) passed. Phase Q baseline 31/31
+  identical. Contact sheets (private): scratchpad `s267/objects.png` (winter party, then
+  harbour), `s267/all63.png` (all ten Phase AC places, day on and night on), `s267/closeup.png`.
+
+Phase AC done.

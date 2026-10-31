@@ -1569,6 +1569,50 @@ Phase AA done.
 ### Step 257 — The studio screenshot with the new name
 - [x] `docs/images/studio.png` taken again with Step 200's recipe (1440 × 900, 160 colours, 73 KB; same state), the top bar reads "schu-video-generator studio"; the README's alt text says so
 
+## Phase AB — More iso lab and sci-fi objects (DESIGN §103)
+
+26 new iso objects in the flat cartoon style, `on` states with gentle motion; docs: one short
+"Other objects" list in CONFIG and the guide.
+
+### Step 258 — Lab objects I
+- [x] `laptop` (`open`), `terminal_kiosk`, `quantum_core` (pulses), `robot_arm` (swings), `microscope`, `centrifuge` (spins), `coffee_machine` (steam), `lab_stool`, `wall_clock` (on a back wall, `time`); moving parts drawn over the place while on (`IsoGadgets`); tests `test_lab_objects.py`; Phase AB plan here and DESIGN §103
+
+### Step 259 — Lab objects II
+- [x] `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge` (`open`), `fume_hood`; liquids glow when on, bubbles / steam / drips / mist / fan; a working object behind another object or in front of a character keeps its motion (cover pictures, gadgets after front pictures); tests in `test_lab_objects.py`
+
+### Step 260 — Lab objects III and review
+- [x] `telescope`, `satellite_dish` (turns), `charging_station` (bars fill), `crate_stack`, `airlock` (2 x 1, `open`, beacon), `printer_3d` (prints layer by layer), `hazard_sign` (`kind`), `fire_extinguisher`; a critical review of all of them (24: the batches list 24, not 26): coffee machine redrawn light with a big mug, laptop / kiosk text no longer mirrored facing right, style / sizes / on-off / night checked, a room with all working previews at ~3–4 s per video second; tests in `test_lab_objects.py`
+
+Phase AB done.
+
+## Phase AC — 63 more iso objects (DESIGN §104)
+
+Home, café, town, nature, school / office, fantasy, seasons and harbour objects in the same flat
+cartoon style, `on` states with gentle motion where listed; docs: the one "Other objects" list.
+
+### Step 261 — Home I
+- [x] `fireplace` (2 x 1; flames flicker, warm light), `kitchen_counter` (2 x 1), `stove` (pot steams), `sink`, `bookshelf_tall`, `armchair`, `floor_lamp` (lights), `tv` (picture, flicker), `piano` (2 x 1); a lit fireplace or floor lamp lights nearby characters; drawings in `cartoon/iso_home.py` (`MORE_MODULES`); tests `test_iso_objects_more.py`; Phase AC plan here and DESIGN §104
+
+### Step 262 — Home II and café
+- [x] `bathtub`, `wardrobe` (`open`), `crib`, `cafe_table` (with two chairs), `counter`, `cash_register`, `display_case` (`kind: cakes | jewels`), `market_stall` (awning, fruit crates), `vending_machine` (glows when on); drawings in `cartoon/iso_shop.py`; `kind` per object via `OBJECT_STYLES`
+
+### Step 263 — Town
+- [x] `street_lamp` (tall, lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (water when on), `phone_booth` (light), `car` (parked; headlights; `color`), `bicycle`, `newsstand`; drawings in `cartoon/iso_town.py`; warm night light pools for every lamp (`light_pool`)
+
+### Step 264 — Nature I
+- [x] `campfire` (flames, sparks, glow), `tent`, `log`, `stump`, `mushroom_ring` (faint glow at night), `pond` (lily pads, ripples), `scarecrow`, `beehive` (bees when on); drawings in `cartoon/iso_nature.py`; pools of light faint by day (their own picture, `pool_strength`)
+
+### Step 265 — Nature II, school and office
+- [x] `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (iso), `desk_with_pc` (screen), `water_cooler` (bubble), `printer` (paper slides out), `globe` (spins), `trophy_shelf`; drawings in `cartoon/iso_school.py`
+
+### Step 266 — Fantasy and seasons I
+- [x] `treasure_chest` (opens with a golden glow), `cauldron` (bubbling potion in `color`), `giant_crystal` (pulses), `throne`, `torch_sconce` (wall-mounted flame), `signpost`, `archway`, `statue`; drawings in `cartoon/iso_fantasy.py`; a layer's clip covers its own pool of light
+
+### Step 267 — Seasons II, harbour and review
+- [x] `christmas_tree` (lights twinkle), `snowman`, `pumpkin` (glows), `gift_pile`, `balloon_bunch` (sways), `birthday_cake` (candles), `boat` (bobs on water), `dock`, `lighthouse` (beam at night), `train_car`, `rocket` (smoke / flame); a critical review of all 63 (style, sizes, on / off and night, performance, did-you-mean, the doc list), fixes, `test_mcp.py`; drawings in `cartoon/iso_seasons.py`; moving light on things (fire glow, torch light, beam) faint by day; stove steam, vending machine, crib, bicycle, crystal glow redone
+
+Phase AC done.
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

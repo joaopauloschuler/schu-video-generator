@@ -20058,3 +20058,227 @@ characters or a rainy city with traffic, 3.4× for a city held on one tower; the
 Public surface: cut entry `overlays: {<id>: {drop: true}}`; `vidgen.scenes.hud.SHORTS_CAPTION_BAND`.
 Behaviour: HUD meters in a Short, `compact` top edge, `shorts_safe_area` with a HUD, fingerprints
 of cut scenes. Phase Q baseline 31/31 identical.
+
+## 103. More iso lab and sci-fi objects (Phase AB, Steps 258–260)
+
+Phase AB adds 24 iso objects (`OBJECT_KINDS`, drawn in `cartoon/iso_objects.py` like §100.11's),
+each 1 x 1 by default (a chemistry bench and an airlock 2 x 1), `color` / `detail` honoured, and an `on` state where it works. Docs stay
+lean: one "Other objects" list in CONFIG and the guide.
+
+- **Step 258**: `laptop` (on a small desk; `open`, default open: `OPENING_KINDS`), `terminal_kiosk`,
+  `quantum_core`, `robot_arm`, `microscope` (on its own small table: objects do not stack),
+  `centrifuge` and `coffee_machine` (on a bench cabinet), `lab_stool` (`top` for small things),
+  `wall_clock` (`WALL_KINDS`: placed at a cell of a room's standing back wall, facing the floor
+  below or right of it; `_wall_box` is a thin slab on the wall's face; `time: "HH:MM"`, default
+  10:10, `IsoObject.time` / `ObjectPlacing.time`). The working ones are in `SWITCHED_KINDS`;
+  screens and lights are `glow` polygons when on.
+- **Moving parts** (`MOVING_KINDS`: core, arm, centrifuge, coffee machine): `object_motion(item,
+  look, base, now)` gives a fixed number of `Motion` polygons (world points, fill, opacity, ink,
+  glow) — the core's pulsing halo, bright core and sparks on its ring; the arm swinging between
+  `ARM_POSES`; the rotor turning over a dark window; steam puffs over the mug. The stage draws
+  them with an `IsoGadgets` living thing over the place while each is on and shown (its states
+  logged from the start and by `iso_change`: `_iso_state_log`); the glowing parts are left out of
+  the light grade. Not in a draft. `ObjectLook.moving` tells the picture of a working robot
+  arm to leave its arm to the overlay.
+- **Step 259**: `grow_rack` (grow lights in the detail colour wash its shelves when on),
+  `terrarium` (its flowers glow faintly always; not switched), `specimen_tank` (`color` its liquid;
+  a floating silhouette only when the placing gives `detail`), `chemistry_bench` (2 x 1; liquids in
+  `color`, `detail` and `LIQUIDS`), `distillation_rig`, `lab_fridge` (also in `OPENING_KINDS`:
+  door swung out; it works while on *or* open: `OPEN_WORKING`, `object_working`), `fume_hood`.
+  Liquids glow (and brighten) while on; tank, bench, rig, fridge and hood are moving kinds
+  (bubbles, steam, flame and drips, cold mist, fan and vapour). `object_motion` takes the
+  object's `state`.
+- **Moving parts and what hides them (259, replacing 258's limits)**: one `IsoGadgets` per working
+  object. One another object covers on screen moves too, under a *cover* picture (an `IsoObject`
+  holder with `iso_scenery.front(its box)`) that follows the place's changes like a body's front
+  picture (`_iso_follow_change`). `_iso_place_gadgets` (run by `_iso_keep_order`, the draw-order
+  updater being on while there are gadgets) keeps each gadget and its cover right after the last
+  body front picture that shows the object, else after `_iso_gadget_home`: a character right
+  behind a working object no longer hides its motion.
+
+- **Step 260**: `telescope`, `satellite_dish` (the stage turns its dish slowly, side to side,
+  facing the viewer), `charging_station` (its four bars fill over and over), `crate_stack` (hazard
+  stripes; `top` for small things), `airlock` (2 x 1, a bulkhead with a round hatch; also in
+  `OPENING_KINDS`: open, the door slid into the wall and a dark tunnel; on, its beacon flashes),
+  `printer_3d` (a vase grows layer by layer under a moving head), `hazard_sign` (`kind`:
+  `IsoObjectParam.kind` -> the placing's `features`, `OBJECT_FEATURES["hazard_sign"]` =
+  `HAZARD_SIGNS`, did-you-mean on a typo), `fire_extinguisher`.
+- **Review (260)**: the coffee machine is a light drip machine (head over a big mug with a
+  handle, a coffee window on its side, a stream while on; steam drifts out from under the head);
+  screen text on a laptop and a kiosk facing right reads from the left (`_reading`). All 24
+  objects (the plan said 26; the three batches list 24) use the shared shading, outline widths
+  and palette; heights are 0.85–2.5 tiles (a character is 2). A preview of a room with all of
+  them working: about 3–4 s of rendering per second of video (one `IsoGadgets` per working object).
+
+Public surface: object kinds above; `IsoObjectParam.time`, `IsoObjectParam.kind`; `WALL_KINDS`;
+`HAZARD_SIGNS`; `ObjectLook.moving`; `Motion`, `MOVING_KINDS`, `object_motion`, `object_working`,
+`clock_hands`; `IsoGadgets`, `Gadget`. Additive.
+
+## 104. More iso objects: home, town, nature, school, fantasy, seasons (Phase AC, Steps 261–267)
+
+Phase AC adds 63 non-lab iso objects in §103's style and conventions (`color` / `detail`, `on` /
+`open` / `kind` only where they add value; working parts self-lit, moving parts drawn by the stage
+while on). Docs stay lean: the one "Other objects" list in CONFIG and the guide.
+
+- **Where they are drawn**: `cartoon/iso_objects.py` is long, so each batch's drawings live in a
+  module of their own under `vidgen.cartoon` (Step 261: `iso_home.py`). `MORE_MODULES` (kind ->
+  module name) tells `object_shapes` / `object_motion` where to look; such a module has
+  `DRAWINGS` (frame, look, state -> shapes) and `motion(frame, look, now)`, and builds on
+  `iso_objects`' frame and helpers (it is imported lazily, so there is no import cycle). Kinds,
+  footprints, colours, `SWITCHED_KINDS` and `MOVING_KINDS` stay in their usual tables.
+- **Step 261 (home I)**: `fireplace` (2 x 1; bricks `color`, stone `detail`; on: flames, embers,
+  sparks and warm light on the floor, flickering), `kitchen_counter` (2 x 1, `top`), `stove` (on:
+  oven window and the ring under the pot glow, the pot steams), `sink`, `bookshelf_tall` (`top`),
+  `armchair` (`top`), `floor_lamp` (on: the shade glows, a pool of light), `tv` (`detail` its
+  sky; on: a picture with a hill and a sun, a cloud sails across, a flicker), `piano` (2 x 1,
+  upright, `top`). Moving: fireplace, stove, TV. Heights 1.2–2.55 tiles.
+- **Lamplight**: `LAMPLIGHT_KINDS` (`lamp`, `floor_lamp`, `fireplace`): a lit one lights the
+  characters near it like a lamp (§89.13), from its footprint's middle (a lamp: its first cell's,
+  as before).
+
+Public surface: the kinds above; `MORE_MODULES`, `LAMPLIGHT_KINDS` (also in `vidgen.api`). Additive.
+
+- **Step 262 (home II, café, shop)**: drawn in `iso_shop.py`. `bathtub` (2 x 1; enamel `color`,
+  water `detail`, foam, a duck), `wardrobe` (2 x 1, `top`; in `OPENING_KINDS`: open, both doors
+  swing out 105 degrees, clothes in `detail` and others inside), `crib` (barred sides as lines, a
+  blanket in `detail`, a mobile; 1.85 tall), `cafe_table` (2 x 1, `top`; `color` the iron, `detail`
+  the marble top; two bistro chairs), `counter` (2 x 1, `top`), `cash_register` (on a counter
+  piece), `display_case` (2 x 1, `top`; `kind`: cakes or jewels on velvet), `market_stall` (2 x 1;
+  awning stripes `color` / `detail`), `vending_machine` (switched: window, sign and buttons glow,
+  a pool of light). None move. Heights 1.15–2.66 tiles.
+- **Kinds**: `OBJECT_STYLES` (object -> its kinds, the first the default: `hazard_sign` ->
+  `HAZARD_SIGNS`, `display_case` -> `DISPLAY_CASES`) checks `IsoObjectParam.kind` per object and
+  is part of `OBJECT_FEATURES`.
+
+Public surface (262): the kinds above; `DISPLAY_CASES`, `OBJECT_STYLES` (also in `vidgen.api`). Additive.
+
+- **Step 263 (town)**: drawn in `iso_town.py`. `street_lamp` (4.0 tall; a crook with a hanging
+  lantern, `detail` its glass off; on: glows, a pool under the lantern), `traffic_light` (moving:
+  red 3.6 s, green 3.6 s, amber 1.2 s, `SIGNAL_CYCLE`; a still picture shows red), `bus_stop`
+  (2 x 1; glass shelter, bench, advert in `detail`, round sign on a post), `mailbox` (pillar box),
+  `fountain` (2 x 2; moving while on: a jet, four falls on the viewer's side with drops, spreading
+  rings; its water is no light), `phone_booth` (on: panes and sign glow, a small pool), `car`
+  (2 x 1, side-on, its nose on the right side face; on: headlights, tail light, a pool ahead of it,
+  outside its footprint), `bicycle` (side-on with a basket in `detail`), `newsstand` (2 x 1;
+  magazines, papers, striped awning). `LAMPLIGHT_KINDS` adds `street_lamp` and `phone_booth`.
+- **Warm light pools**: `light_pool(centre, radius, strength)` in `iso_objects` (three glowing
+  rings of `LIGHT_POOL` #FF8F3A, the middle `POOL_CORE`, `POOL_RINGS` opacities) now draws every
+  lamp's pool: `lamp`, `floor_lamp`, `vending_machine` and the new ones. The old pale yellow (and the
+  vending machine's pale blue) at ~0.3 over the night-graded ground read olive / grey, because the
+  glow layer is alpha-composited over the blue-multiplied picture; a saturated amber stays warm on
+  grass, paths and floors. Changes the look of lit iso lamps (intended); Phase Q baseline unchanged.
+
+Public surface (263): the kinds above; `light_pool` (`iso_objects.__all__`). Additive.
+
+- **Step 264 (nature)**: drawn in `iso_nature.py`. `campfire` (stones in `color`, leaning logs in
+  `detail` with charred tips; on: embers glow, a warm pool; moving: three flames and five sparks
+  rising; lights who stands near, `LAMPLIGHT_KINDS`), `tent` (2 x 2; ridge tent, open door with tied
+  flaps, `detail` trim and bedroll, poles and guy ropes), `log` (2 x 1, `top` 0.5; its body the
+  seen hull of its two end circles, a cut end with rings, moss in `detail`), `stump` (`top` 0.57;
+  rings, roots, a sprout), `mushroom_ring` (2 x 2; eleven mushrooms, their `detail` spots lights and
+  a faint mint `pool` on the grass: it glows at night only), `pond` (2 x 2; water in `detail` in a
+  sandy edge in `color`, lily pads and a lily, reeds and cattails; switched: `on` spreads three
+  ripple rings, cheap moving parts; off or still, two faint rings lie on it), `scarecrow` (cut-out
+  facing the viewer: shirt in `color`, straw hat in `detail`, a crow on the arm on its facing side),
+  `beehive` (a skep of straw coils on a stand in `detail`; on: five bees circle it, hidden while
+  behind the skep).
+- **Pools of light by day**: a pool (`light_pool`, the fireplace's floor light, the mushroom ring's
+  glow) is now a `Disc` marked `pool` (no longer `glow`), drawn only in its own picture
+  (`draw_shapes(pool=True)`: pools drawn, other shapes clear them, shadows skipped; the plain and
+  glow pictures leave pools out). The stage shows those tiles (`PoolTile`, between a picture's
+  tiles and its glow tiles) at `pool_strength(grade)` of their opacity (`lighting`: `POOL_DAY` 0.1
+  by day, `POOL_CURVE` 0.7 up to 1 at `LAMP_DARK`; night 1, sunset ~0.6, indoor ~0.45, morning
+  ~0.25), set on the camera by `StageLight` (`POOL_STRENGTH`; no light or a draft: by day). Before,
+  the pool was in the day picture and drawn again ungraded in the glow layer: a strong orange patch
+  by day. `POOL_RINGS` rose to 0.34 / 0.34 / 0.38 (drawn once now, not twice). A pool is drawn by the
+  base picture (its pieces) or by its piece's layer only, never by a character's front picture
+  (`IsoScenery.pool_shapes`), and pool tiles drop the tiles' 2-pixel overlap and meet on whole
+  pixels (`draw_tile` rounds): seen-through pixels drawn twice showed as stripes.
+
+Public surface (264): the kinds above; `Disc.pool`, `draw_shapes(pool=)`, `IsoScenery.pools` /
+`pool_shapes`, `PoolTile`, `POOL_STRENGTH`, `pool_strength`, `POOL_DAY`. Additive; Phase Q
+baseline 31/31 identical.
+
+- **Step 265 (farm, school, office)**: drawn in `iso_school.py`. `vegetable_patch` (2 x 1; a
+  raised plank bed in `color`, staked tomatoes with fruit in `detail`, cabbages, carrots),
+  `wheelbarrow` (green tray with soil and a seedling, wheel at its nose, handles in `detail`),
+  `hay_bale` (2 x 1, `top` 0.72; straw texture, twine in `detail`), `school_desk` (an iso object,
+  apart from the 2D `school_desk` prop: a sloping lid, book box, steel frame in `detail`, its
+  chair in front of it so a pupil faces the room's back wall; no `top`, its desk is not at the
+  cell's middle), `desk_with_pc` (2 x 1; switched: the screen glows in `detail` with a window,
+  icons and a taskbar, the tower's light; moving: a line typed and a blinking cursor),
+  `water_cooler` (bottle in `detail`; moving: three bubbles rising), `printer` (an office printer,
+  apart from `printer_3d`; switched: its panel glows in `detail`; moving: a sheet slides out onto
+  its tray, past its footprint's front edge, then fades), `globe` (floor globe on a tripod in
+  `detail`, seas in `color`; moving: its land turns, `CONTINENTS` as (longitude, latitude)
+  outlines on a tilted axis, points round the back pressed onto its edge; off or still, its land
+  is in the picture), `trophy_shelf` (2 x 1, `top`; cups, statuettes, a medal, a plaque and a
+  star, gold in `detail`). None light characters. Heights 0.78–2.08 tiles.
+
+Public surface (265): the kinds above. Additive; no shared drawing code changed.
+
+- **Step 266 (fantasy)**: drawn in `iso_fantasy.py`. `treasure_chest` (wood in `color`, bands
+  and lock in `detail`, a rounded lid; in `OPENING_KINDS`: open, its lid swings back, a heap of
+  coins and gems and the lid's inside glow, a warm pool; in `OPEN_WORKING`: while open a golden
+  halo pulses and sparkles twinkle up), `cauldron` (iron pot in `detail` on three legs over
+  logs, potion in `color`, a ladle; switched: fire, glowing potion and foam, a pool, lights
+  characters; moving: flames, bubbles bursting, vapour), `giant_crystal` (shards in `color` from
+  rocks in `detail`, leaning away from the middle facing either way; switched: they glow and a
+  pool in their tint lies round them; moving: a halo and heart pulse, tips twinkle; not in
+  `LAMPLIGHT_KINDS`, lamplight is warm), `throne` (`top` 0.62; velvet `color`, gilt `detail`,
+  stone step), `torch_sconce` (in `WALL_KINDS` like `wall_clock`: an iron plate and bracket in
+  `color`, a torch in `detail`; switched: a flame, a pool on the floor below the wall, lights
+  characters; moving: flame, its flickering light on the wall, sparks; its draw box a slab
+  `SCONCE_SPAN` out from the wall, the clock's unchanged), `signpost` (three arrow boards in
+  `color` on a post in `detail`), `archway` (2 x 1; stone pillars and a round arch of voussoirs
+  with a keystone, ivy in `detail`; not walkable, like `flower_arch`), `statue` (a bronze
+  `color` hero raising a sword on a `detail` plinth with a plaque). Heights 1.15–3.25 tiles.
+  Shared fix: a layer picture's clip (`IsoScenery.clip`) now also covers its own piece's pool of
+  light — a switched object is drawn in its layer, clipped to its box, and a pool lying out from
+  the box (the sconce's on the floor, a car's ahead of it) was cut to a streak.
+
+Public surface (266): the kinds above; `OPEN_WORKING` gains `treasure_chest`, `WALL_KINDS`
+`torch_sconce`, `LAMPLIGHT_KINDS` `cauldron` and `torch_sconce`. Additive; Phase Q baseline
+31/31 identical.
+
+- **Step 267 (seasons, harbour, travel)**: drawn in `iso_seasons.py`. `christmas_tree` (three
+  tiers in `color` with baubles, a garland of lights, a star in `detail`, a red pot; switched:
+  lights and star shine, a small pool; moving: lights twinkle in turn, a glow breathes round the
+  star), `snowman` (three snowballs on a drift, scarf `color`, top hat `detail`, a carrot nose
+  pointing the way it faces), `pumpkin` (ribbed, a carved face; switched: the face glows, a pool;
+  moving: the face flickers), `gift_pile` (four wrapped boxes, the biggest in `color`, ribbons and
+  bows in `detail`), `balloon_bunch` (five balloons, the first in `color`, strings to a weight in
+  `detail`; switched + moving: they sway; off or still, in the picture), `birthday_cake` (two
+  tiers on a little round table, icing `color`, top tier `detail`, four candles; switched: flames,
+  a pool; moving: they flicker), `boat` (2 x 1; `ObjectKind.floats`: every cell must be water,
+  "floats: put it on water (~)", with a hint when `at` is a spot, whose letter is ground; a
+  hull in `color`, deck, stripe, mast, mainsail and jib in `detail`, a pennant, a stern lantern;
+  its waterline at the water's surface (`-WATER_DEPTH`), foam where it meets the water; switched:
+  the lantern lit, a pool on the water; moving: the whole boat rises, pitches and rolls, so off
+  or still it is in the picture and working it is drawn only by the stage), `dock` (1 x 2,
+  walkable and `over_water` like `bridge`, `deck` 0.22: planks over posts, the front half's
+  posts reaching into the water, a coil of rope), `lighthouse` (5.6 tiles; banded tower in white
+  and `color`, gallery, glass lantern room, dome in `detail`; switched: lantern and windows lit;
+  moving: a beam sweeping round, fainter pointing away), `train_car` (3 x 1, side-on on a stretch
+  of track: windows, doors, a trim in `detail`, bogies), `rocket` (2 x 2; on a concrete pad with
+  hazard stripes beside an orange service tower; switched: an engine flame, a pool; moving: the
+  flame and smoke billowing over the pad, lit at night). None light characters. Heights
+  0.85–5.6 tiles.
+- **Review of the 63**: moving light thrown on things is now `Motion.pool` and shown as strong as
+  pools of light (`IsoGadgets(pool_strength=)`, the stage passes the camera's `POOL_STRENGTH`):
+  the fireplace's floor glow, the torch's light on its wall, the crystal's light on the ground,
+  the lighthouse's beam, the tree's star glow (they showed at full strength by day). A working
+  object's gadget region now also covers where its parts reach over `GADGET_SAMPLES` (a beam
+  leaves its box). Redrawn: the stove's steam (soft see-through S-wisps, not white dots), the
+  vending machine lit (a brighter window with a bright middle, light round it on its front, no
+  glare line when lit, a larger pool), the crib (fewer, thicker bars, no far-side bars, a bigger
+  star and moon), the bicycle (stretched to fill its cell, bigger wheels, thicker frame), the
+  crystal's pulse (its shards brighten from within; the round halo read as a bubble). Checked:
+  outlines and shading come from the shared helpers; heights 0.35–5.6 tiles against a
+  character's 2.0; pools are warm rings, faint by day; did-you-mean for names and kinds. A
+  preview of 19 working objects in one place: 8.9 s of video in 21 s (one working: 8.8 s; none:
+  5.3 s), about 5 ms per working object per frame.
+
+Public surface (267): the kinds above; `ObjectKind.floats`, `Motion.pool`,
+`IsoGadgets(pool_strength=)`, `POOL_DAY` and `POOL_STRENGTH` in `vidgen.api`. Additive; Phase Q
+baseline 31/31 identical.

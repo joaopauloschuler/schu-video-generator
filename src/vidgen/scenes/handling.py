@@ -476,7 +476,7 @@ class _Reshape(Action):
                 if name in objects:
                     if objects[name] not in OPENING_KINDS:
                         problems.append(("target", f"'{name}' (a {objects[name]}) cannot {action}; on an iso place a house (its door), "
-                                         "a door of a room's wall (door_1...) and flowers (they bloom, or close to buds) can"))
+                                         "a door of a room's wall (door_1...), flowers (they bloom, or close to buds), a laptop, a lab_fridge, an airlock, a wardrobe and a treasure_chest can"))
                 elif name not in kinds:
                     problems.append(("target", f"'{name}' is not a prop; {action} acts on props (- {action}: <prop>)"))
                 elif self.shape not in PROP_SHAPES.get(kinds[name] or "", ()):

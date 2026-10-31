@@ -34,6 +34,9 @@ ISO_LAMP_REACH = (1.0, 2.2)
 #: object's own) and a light's radius (tile widths).
 LAB_AMBER = "#FFB547"
 LAB_LIGHT_SIZE = 0.035
+#: The scene times at which a working object's moving parts are sampled for the region they stay
+#: in (its box, and wherever they reach: a lighthouse's sweeping beam, §104).
+GADGET_SAMPLES = tuple(k * 0.37 for k in range(40))
 
 
 @dataclass
@@ -308,8 +311,11 @@ class IsoStaging:
         lights = p.iso.wall_light_colors()
         strips = None if lights is None else (resolve_color(lights[0], self.theme), resolve_color(lights[1], self.theme))
         colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors, strips=strips)
+        #: the working objects whose moving parts are drawn over the place (DESIGN.md §103)
+        self._iso_moving = self._iso_moving_names(place)
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
-                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
+                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])),
+                                       moving=item.name in self._iso_moving)
                  for item in place.objects}
         density = 1.0 if self.is_draft else ISO_OVERSAMPLE
         states = p.iso.states()
@@ -349,7 +355,11 @@ class IsoStaging:
             if picture is not None:
                 shown.append(holder)
         self.add_camera_listener(self._iso_show_view)
-        return shown + self._iso_story_overlays(place, looks)
+        everything = shown + self._iso_story_overlays(place, looks)
+        gadgets = [everything.index(gadget) for gadget, _, _ in self._iso_gadget_places]
+        #: what a working object's moving parts follow when no character stands behind it (§103)
+        self._iso_gadget_home = everything[min(gadgets) - 1] if gadgets else None
+        return everything
 
     def _iso_story_overlays(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
         """The steel shutters over a room's windows when the place starts with them down or a
@@ -382,6 +392,24 @@ class IsoStaging:
                                                  hidden=lambda k: self._iso_light_hidden(lights[k], boxes[k])))
         if not self.is_draft:
             self.story_things += self._iso_city(place, looks)
+        #: each working object's moving parts, the piece it is and the picture of what stands in
+        #: front of it (``None``: nothing), kept after the front pictures showing it (§103)
+        self._iso_gadget_places: list[tuple[IsoGadgets, int, Mobject | None]] = []
+        self._iso_state_log: dict[str, list[tuple[float, ObjectState]]] = {}
+        covers: dict[int, Mobject] = {}
+        for item in place.objects:
+            if item.name in self._iso_moving:
+                gadget = self._iso_gadgets(place, looks, item)
+                self.story_things.append(gadget)
+                box = object_box(item, place.floor_z(item.column, item.row))
+                picture = self.iso_scenery.front(box)
+                cover = None
+                if picture is not None:   # it follows the changes of what it shows (_iso_follow_change)
+                    cover = IsoObject()
+                    cover.name, cover.iso_box = f"iso_cover_{item.name}", box
+                    cover.add(self._iso_tiles(picture, cover.name))
+                    covers[id(gadget)] = cover
+                self._iso_gadget_places.append((gadget, self.iso_scenery.index[item.name], cover))
         if p.iso.haze and not self.is_draft:   # shimmering air over spots (§102.12)
             spots = []
             for haze in p.iso.haze:
@@ -389,7 +417,71 @@ class IsoStaging:
                 spots.append(HazeSpot(self.iso_view.point(x, y, z), self.iso_view.point(x, y, z + haze.height), haze.width * self.iso_view.unit,
                                       resolve_color(haze.color, self.theme), haze.strength, haze.start))
             self.story_things.append(IsoHaze(spots, seed=motion_seed(self.spec.id, "haze")))
-        return list(self.story_things)
+        return [m for thing in self.story_things for m in (thing, *([covers[id(thing)]] if id(thing) in covers else []))]
+
+    def _iso_moving_names(self, place: Any) -> set[str]:
+        """The objects of the place with moving parts (:data:`MOVING_KINDS`) that the stage
+        animates while they work (DESIGN.md §103); none in a draft."""
+        if self.is_draft:
+            return set()
+        return {item.name for item in place.objects if item.kind in MOVING_KINDS}
+
+    def _iso_gadgets(self, place: Any, looks: dict[str, Any], item: Any) -> IsoGadgets:
+        """The moving parts of the working object ``item`` over the place (DESIGN.md §103), drawn
+        while it works: the state it starts in, then each change the scene makes
+        (:attr:`_iso_state_log`, kept by :meth:`iso_change`)."""
+        scenery = self.iso_scenery
+        base = place.floor_z(item.column, item.row)
+        #: each working object's states from scene times on: (time, state), in time order
+        log = self._iso_state_log[item.name] = [(0.0, scenery.states[scenery.index[item.name]])]
+
+        def state_at(now: float) -> ObjectState:
+            return [s for t, s in log if t <= now][-1] if log[0][0] <= now else log[0][1]
+
+        def working(now: float) -> bool:
+            return object_working(item.kind, state_at(now))
+
+        def busy(start: float, end: float) -> bool:
+            return working(start) or any(start <= t <= end and object_working(item.kind, s) for t, s in log)
+
+        def parts(now: float, look: ObjectLook = looks[item.name]) -> list[Any]:
+            return object_motion(item, look, base, now, state_at(now))
+
+        box = object_box(item, base)
+        corners = [self.iso_view.point(x, y, z) for x in (box.x0, box.x1 + 0.6) for y in (box.y0, box.y1 + 0.6) for z in (box.z0, box.z1 + 1.0)]
+        # and where its parts reach over a while (a lighthouse's beam sweeps far out of its box, §104)
+        corners += [self.iso_view.point(*p) for now in GADGET_SAMPLES for part in parts(now) for p in part.points]
+        pad = 0.2 * self.iso_view.unit
+        region = (min(x for x, _ in corners) - pad, min(y for _, y in corners) - pad, max(x for x, _ in corners) + pad, max(y for _, y in corners) + pad)
+        return IsoGadgets([Gadget(parts, working, busy)], lambda point: self.iso_view.point(*point), unit=self.iso_view.unit, region=region,
+                          outline=self.drawing.outline_factor, pool_strength=lambda: getattr(self.camera, POOL_STRENGTH, POOL_DAY))
+
+    def _iso_place_gadgets(self) -> bool:
+        """Keep each working object's moving parts (and the picture of what stands in front of
+        it) right after the last front picture on the scene that shows the object, so a character
+        standing behind it does not hide them (DESIGN.md §103); else right after the place's
+        pictures. Whether anything moved."""
+        places = getattr(self, "_iso_gadget_places", [])
+        home = getattr(self, "_iso_gadget_home", None)
+        if not places or home is None:
+            return False
+        before = [id(m) for m in self.mobjects]
+        for gadget, k, cover in reversed(places):
+            if gadget not in self.mobjects:
+                continue
+            group = [gadget, *([cover] if cover is not None and cover in self.mobjects else [])]
+            for m in group:
+                self.mobjects.remove(m)
+            hosts = [self.mobjects.index(front) for picture, front in self._iso_fronts.values()
+                     if front is not None and front in self.mobjects and any(j == k for j, _ in picture[1])]
+            if hosts:
+                at = max(hosts) + 1
+            elif home in self.mobjects:
+                at = self.mobjects.index(home) + 1
+            else:
+                at = len(self.mobjects)
+            self.mobjects[at:at] = group
+        return [id(m) for m in self.mobjects] != before
 
     def _iso_city(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
         """A city's moving parts over the place (DESIGN.md §102.2, §102.3): the crawling lines of
@@ -584,6 +676,7 @@ class IsoStaging:
             self.mobjects[:] = rest[:before] + [m for n in wanted for m in blocks[n]] + rest[before:]
             self._shadows_first()
             changed = True
+        changed |= self._iso_place_gadgets()
         if added and getattr(self, "animations", None):
             self.moving_mobjects = [*self.moving_mobjects, *(m for front in added for m in front.get_family())]
         return changed
@@ -627,6 +720,20 @@ class IsoStaging:
             if swapped is not None:
                 follows.append(_IsoFollow(change, *swapped))
                 added += [swapped[1]] if swapped[1] is not None else []
+        for _, _, cover in getattr(self, "_iso_gadget_places", []):   # what stands in front of a working object (§103)
+            if cover is None:
+                continue
+            following = [f for f in self._iso_follows if f.parent is cover]
+            current = following[-1].new if following else (cover.submobjects[-1] if cover.submobjects else None)
+            picture = self.iso_scenery.front(cover.iso_box)
+            if (current.picture if current is not None else None) == picture:
+                continue
+            new = None if picture is None else self._iso_tiles(picture, cover.name)
+            if new is not None:
+                at = cover.submobjects.index(current) if current in cover.submobjects else len(cover.submobjects)
+                cover.submobjects.insert(at, new)
+                added.append(new)
+            follows.append(_IsoFollow(change, current, new, cover))
         for follow in follows:
             if not self._iso_follow_on(follow):
                 self._iso_follow_step(follow, 0.0)
@@ -759,6 +866,12 @@ class IsoStaging:
             if holder not in self.mobjects:
                 self._iso_insert(holder)
         self._iso_changes.append(_IsoChange(name, state, float(start), max(float(seconds), 1e-3), old, new))
+        log = getattr(self, "_iso_state_log", {}).get(name)
+        if log is not None:   # a working object's moving parts follow it (§103)
+            log.append((float(start), state))
+            log.sort(key=lambda entry: entry[0])
+            if object_working(self.iso_scenery.pieces[self.iso_scenery.index[name]].kind or "", state):
+                self._watch_living()
         if "shown" in fields:
             change = "reveal" if fields["shown"] else "hide"
         elif "open" in fields:
@@ -836,9 +949,10 @@ class IsoStaging:
         #: each lamp's middle (tile units) and its light from the start: (scene time, seconds, level)
         self._iso_lamps: dict[str, tuple[tuple[float, float], list[tuple[float, float, float]]]] = {}
         for item in place.objects:
-            if item.kind == "lamp":
+            if item.kind in LAMPLIGHT_KINDS:   # a lamp, a floor lamp, a fireplace, a street lamp, a phone booth, a campfire (§104)
                 state = scenery.states[scenery.index[item.name]]
-                self._iso_lamps[item.name] = ((item.column + 0.5, item.row + 0.5), [(0.0, 0.0, 1.0 if state.on and state.shown else 0.0)])
+                middle = (item.column + 0.5, item.row + 0.5) if item.kind == "lamp" else (item.column + item.width / 2, item.row + item.depth / 2)
+                self._iso_lamps[item.name] = (middle, [(0.0, 0.0, 1.0 if state.on and state.shown else 0.0)])
         if not self._iso_lamps:
             return
         self._iso_lamp_shares: dict[str, float] = {}

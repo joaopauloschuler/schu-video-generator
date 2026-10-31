@@ -5,6 +5,7 @@ layers that move by their factor when the camera moves (§69.7), props (§69.8),
 props that move by themselves (§69.54), snow that settles and fog (§69.60), lightning, rainbows
 and the sun and moon moving across the sky (§69.61)."""
 
+import difflib
 import math
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -586,7 +587,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims)."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood, telescope, satellite_dish, charging_station, crate_stack, airlock (2 x 1), printer_3d, hazard_sign, fire_extinguisher; at home: fireplace (2 x 1), kitchen_counter (2 x 1), stove, sink, bookshelf_tall, armchair, floor_lamp, tv, piano (2 x 1), bathtub (2 x 1), wardrobe (2 x 1), crib; in a café or shop: cafe_table (2 x 1, with two chairs), counter (2 x 1), cash_register, display_case (2 x 1), market_stall (2 x 1), vending_machine; in town: street_lamp, traffic_light, bus_stop (2 x 1), mailbox, fountain (2 x 2), phone_booth, car (2 x 1), bicycle, newsstand (2 x 1); in nature: campfire, tent (2 x 2), log (2 x 1), stump, mushroom_ring (2 x 2), pond (2 x 2), scarecrow, beehive; on a farm, at school or in an office: vegetable_patch (2 x 1), wheelbarrow, hay_bale (2 x 1), school_desk, desk_with_pc (2 x 1), water_cooler, printer, globe, trophy_shelf (2 x 1); in a fantasy tale: treasure_chest, cauldron, giant_crystal, throne, torch_sconce (at a cell of a back wall), signpost, archway (2 x 1), statue; for seasons, a harbour and travel: christmas_tree, snowman, pumpkin, gift_pile, balloon_bunch, birthday_cake, boat (2 x 1, floats on water ~), dock (1 x 2, over water, walked on), lighthouse, train_car (3 x 1), rocket (2 x 2)."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -600,9 +601,9 @@ class IsoObjectParam(SceneParams):
     detail: ThemeColor | None = None
     """Its second colour (a house's roof, a lamp's light, flower heads...)."""
     open: bool | None = None
-    """A house: true starts its door open; flowers: false starts them in bud (the open / close actions change it later)."""
+    """A house: true starts its door open; flowers: false starts them in bud; a laptop: false starts it closed; a lab_fridge, an airlock or a wardrobe: true starts its door open; a treasure_chest: true starts its lid open (its gold glows; the open / close actions change it later)."""
     on: bool | None = None
-    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default) (switch_on / switch_off change it)."""
+    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge, coffee_machine, grow_rack, specimen_tank, chemistry_bench, distillation_rig, lab_fridge, fume_hood, satellite_dish, charging_station, airlock, printer_3d, fireplace (lit), stove, floor_lamp (lit), tv, vending_machine (lit), street_lamp (lit), traffic_light (cycles), fountain (runs), phone_booth (lit), car (headlights), campfire (lit), pond (ripples), beehive (bees out), desk_with_pc (its screen), water_cooler (bubbles), printer (prints), globe (spins), cauldron (bubbles over its fire), giant_crystal (glows), torch_sconce (lit), christmas_tree (lights twinkle), pumpkin (glows), balloon_bunch (sways), birthday_cake (candles burn), boat (bobs, its lantern lit), lighthouse (its beam sweeps) or rocket (fires): true starts it working (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
     height: float | None = Field(None, ge=2.0, le=30.0)
@@ -611,23 +612,42 @@ class IsoObjectParam(SceneParams):
     """A tower: a big info screen on its front whose lines of text crawl up."""
     garden: bool = False
     """A tower: glowing bands of algae farms up its sides, pulsing softly."""
+    time: str | None = Field(None, pattern=r"^([01]?\d|2[0-3]):[0-5]\d$")
+    """A wall_clock: the time its hands show, "HH:MM" (default 10:10)."""
+    kind: str | None = None
+    """A hazard_sign: biohazard (default), radiation or authorised (a staff-only board); a display_case: cakes (default) or jewels."""
 
     @model_validator(mode="before")
     @classmethod
     def _on_key(cls, data: Any) -> Any:
         if isinstance(data, dict) and True in data and "on" not in data:   # YAML 1.1 reads the bare key `on` as true
             data = {("on" if key is True else key): value for key, value in data.items()}
+        if isinstance(data, dict) and isinstance(data.get("object"), str) and data["object"] not in OBJECT_KINDS:
+            close = difflib.get_close_matches(data["object"], list(OBJECT_KINDS), n=1, cutoff=0.6)
+            hint = f"; did you mean {close[0]}?" if close else ""
+            raise ValueError(f"unknown object '{data['object']}'{hint} (objects: {', '.join(OBJECT_KINDS)})")
+        styles = OBJECT_STYLES.get(data.get("object")) if isinstance(data, dict) and isinstance(data.get("object"), str) else None
+        if styles and isinstance(data.get("kind"), str) and data["kind"] not in styles:
+            close = difflib.get_close_matches(data["kind"], list(styles), n=1, cutoff=0.6)
+            hint = f"; did you mean {close[0]}?" if close else ""
+            raise ValueError(f"unknown {data['object']} kind '{data['kind']}'{hint} (kinds: {', '.join(styles)})")
         return data
 
     @model_validator(mode="after")
     def _states(self) -> "IsoObjectParam":
         if self.open is not None and self.object not in OPENING_KINDS:
-            raise ValueError(f"open is for a house (its door) or flowers (in bloom or in bud), not {_a(self.object)}")
+            raise ValueError(f"open is for a house (its door), flowers (in bloom or in bud), a laptop, a lab_fridge, an airlock, a wardrobe or a treasure_chest, "
+                             f"not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
-            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), not {_a(self.object)}")
+            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), or one of {', '.join(sorted(SWITCHED_KINDS - {'house', 'lamp', 'tower'}))}, "
+                             f"not {_a(self.object)}")
         for option in ("height", "screen", "garden"):
             if getattr(self, option) and self.object != "tower":
                 raise ValueError(f"{option} is for a tower, not {_a(self.object)}")
+        if self.time is not None and self.object != "wall_clock":
+            raise ValueError(f"time is for a wall_clock, not {_a(self.object)}")
+        if self.kind is not None and self.object not in OBJECT_STYLES:
+            raise ValueError(f"kind is for a hazard_sign or a display_case, not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
@@ -637,9 +657,9 @@ class IsoObjectParam(SceneParams):
 
     def placing(self) -> ObjectPlacing:
         at = self.at if isinstance(self.at, str) else (self.at.column, self.at.row)
-        features = tuple(name for name in ("screen", "garden") if getattr(self, name))
+        features = tuple(name for name in ("screen", "garden") if getattr(self, name)) + ((self.kind,) if self.kind else ())
         return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail,
-                             self.height, features)
+                             self.height, features, self.time)
 
 
 class IsoTrafficLane(SceneParams):
@@ -1613,7 +1633,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         #: the scene updater keeping the draw order, kept: Manim removes an updater by identity
         self._order_updater = self._draw_order_step
         fronts = any(c.facing == "front" for c in self.params.characters) or any(u.options.to == "front" for u in self.action_uses("turn"))
-        if fronts:
+        if fronts or getattr(self, "_iso_gadget_places", None):   # a working object's parts over who stands behind it (§103)
             self._watch_draw_order()
 
     def _watch_draw_order(self) -> None:

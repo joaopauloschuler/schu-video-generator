@@ -5,7 +5,31 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–256)
+## Unreleased (Steps 193–267)
+
+### More iso objects (Steps 261–267)
+
+- Seasons, harbour and travel objects `christmas_tree` (twinkles when on), `snowman`, `pumpkin` (glows when on), `gift_pile`, `balloon_bunch` (sways when on), `birthday_cake` (candles when on), `boat` (floats on water, bobs when on), `dock` (walked on over water), `lighthouse` (its beam sweeps when on), `train_car` and `rocket` (fires when on); review: a fire's or torch's moving glow and a beam are faint by day, softer stove steam, a brighter vending machine at night, a plainer crib, a bigger bicycle, a crystal that glows from within.
+
+- Fantasy objects `treasure_chest` (opens with a golden glow), `cauldron` (bubbles over its fire when on), `giant_crystal` (glows and pulses when on), `throne`, `torch_sconce` (on a back wall; a flickering torch that lights who stands near), `signpost`, `archway` and `statue`; a switched lamp's pool of light is no longer cut off at the edge of its box.
+
+- Farm, school and office objects `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (with its chair), `desk_with_pc` (screen and typing when on), `water_cooler` (bubbles when on), `printer` (prints when on), `globe` (spins when on) and `trophy_shelf`.
+
+- Nature objects `campfire` (flames and sparks, lights who sits near), `tent`, `log`, `stump`, `mushroom_ring` (glows faintly at night), `pond` (ripples when on), `scarecrow` and `beehive` (bees when on); a lamp's pool of light is now faint by day and strong only at night.
+
+- Town objects `street_lamp` (lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (runs when on), `phone_booth` (lights), `car` (headlights), `bicycle` and `newsstand`; a lit street lamp or phone booth lights the characters near it, and every lamp's pool of light is now warm at night (it read olive or grey).
+
+- Home, café and shop objects `bathtub`, `wardrobe` (`open`), `crib`, `cafe_table` (with two chairs), `counter`, `cash_register`, `display_case` (`kind: cakes | jewels`), `market_stall` and `vending_machine` (glows when on).
+
+- Home objects `fireplace` (flickering fire, warm light), `kitchen_counter`, `stove` (the pot steams), `sink`, `bookshelf_tall`, `armchair`, `floor_lamp` (lights), `tv` (plays a picture) and `piano`; a lit fireplace or floor lamp lights the characters near it.
+
+### More lab objects (Steps 258–260)
+
+- Iso objects `telescope`, `satellite_dish` (turns), `charging_station` (bars fill), `crate_stack`, `airlock` (`open`, a flashing beacon), `printer_3d` (prints layer by layer), `hazard_sign` (`kind:`) and `fire_extinguisher`; the coffee machine now reads as one (light body, big mug), and a laptop's or kiosk's text no longer reads mirrored facing right.
+
+- Iso objects `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge` (`open`) and `fume_hood`, with glowing liquids, bubbles, drips, mist and vapour when on; a working object's motion now also shows behind another object and over a character standing behind it.
+
+- Iso objects `laptop`, `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`, `centrifuge`, `coffee_machine`, `lab_stool` and `wall_clock` (`time:`); the working ones switch on and move (a pulsing core, a swinging arm, a spinning rotor, steam).
 
 ### The project name in messages (Steps 255–256)
 

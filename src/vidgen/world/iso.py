@@ -67,7 +67,8 @@ MAX_ROWS = 48
 class ObjectKind:
     """A ready-made object: its footprint (``width`` columns by ``depth`` rows when facing left),
     its height (tile units), whether one can walk on it (a rug, a bridge; ``deck``: how high
-    over its base the feet stand on it) and the ground it may stand on (``water``: a bridge spans it); ``top``: how high over its base a
+    over its base the feet stand on it) and the ground it may stand on (``water``: a bridge spans it;
+    ``floats``: only water, a boat, §104); ``top``: how high over its base a
     small thing put on it stands (a table's top, a bench's seat; ``None``: nothing goes on it,
     DESIGN.md §89.10)."""
 
@@ -76,6 +77,7 @@ class ObjectKind:
     height: float
     walkable: bool = False
     over_water: bool = False
+    floats: bool = False
     deck: float = 0.0
     top: float | None = None
 
@@ -110,18 +112,127 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "chess_table": ObjectKind(1, 1, 0.96, top=0.86),
     # a city's tall buildings (DESIGN.md §102.2): its height is the placing's own
     "tower": ObjectKind(2, 2, 9.0),
+    # more lab and sci-fi objects (DESIGN.md §103): a wall_clock hangs on a room's back wall (its cell is the wall's)
+    "laptop": ObjectKind(1, 1, 1.25),
+    "terminal_kiosk": ObjectKind(1, 1, 2.0),
+    "quantum_core": ObjectKind(1, 1, 2.0),
+    "robot_arm": ObjectKind(1, 1, 1.5),
+    "microscope": ObjectKind(1, 1, 1.6),
+    "centrifuge": ObjectKind(1, 1, 1.2),
+    "coffee_machine": ObjectKind(1, 1, 1.65),
+    "lab_stool": ObjectKind(1, 1, 0.75, top=0.72),
+    "wall_clock": ObjectKind(1, 1, 2.65),
+    "grow_rack": ObjectKind(1, 1, 2.4),
+    "terrarium": ObjectKind(1, 1, 1.55),
+    "specimen_tank": ObjectKind(1, 1, 2.45),
+    "chemistry_bench": ObjectKind(2, 1, 1.45),
+    "distillation_rig": ObjectKind(1, 1, 1.9),
+    "lab_fridge": ObjectKind(1, 1, 2.3),
+    "fume_hood": ObjectKind(1, 1, 2.5),
+    "telescope": ObjectKind(1, 1, 1.85),
+    "satellite_dish": ObjectKind(1, 1, 2.0),
+    "charging_station": ObjectKind(1, 1, 1.8),
+    "crate_stack": ObjectKind(1, 1, 1.32, top=1.32),
+    "airlock": ObjectKind(2, 1, 2.5),
+    "printer_3d": ObjectKind(1, 1, 1.8),
+    "hazard_sign": ObjectKind(1, 1, 1.65),
+    "fire_extinguisher": ObjectKind(1, 1, 0.85),
+    # home objects (DESIGN.md §104)
+    "fireplace": ObjectKind(2, 1, 2.4),
+    "kitchen_counter": ObjectKind(2, 1, 1.2, top=0.96),
+    "stove": ObjectKind(1, 1, 1.25),
+    "sink": ObjectKind(1, 1, 1.32),
+    "bookshelf_tall": ObjectKind(1, 1, 2.55, top=2.55),
+    "armchair": ObjectKind(1, 1, 1.2, top=0.58),
+    "floor_lamp": ObjectKind(1, 1, 2.05),
+    "tv": ObjectKind(1, 1, 1.48),
+    "piano": ObjectKind(2, 1, 1.66, top=1.66),
+    # home II, café and shop objects (§104)
+    "bathtub": ObjectKind(2, 1, 1.15),
+    "wardrobe": ObjectKind(2, 1, 2.42, top=2.42),
+    "crib": ObjectKind(1, 1, 1.85),
+    "cafe_table": ObjectKind(2, 1, 1.3, top=0.94),
+    "counter": ObjectKind(2, 1, 1.25, top=1.12),
+    "cash_register": ObjectKind(1, 1, 1.8),
+    "display_case": ObjectKind(2, 1, 1.4, top=1.4),
+    "market_stall": ObjectKind(2, 1, 2.66),
+    "vending_machine": ObjectKind(1, 1, 2.15),
+    # town objects (§104)
+    "street_lamp": ObjectKind(1, 1, 4.0),
+    "traffic_light": ObjectKind(1, 1, 3.15),
+    "bus_stop": ObjectKind(2, 1, 2.9),
+    "mailbox": ObjectKind(1, 1, 1.52),
+    "fountain": ObjectKind(2, 2, 2.6),
+    "phone_booth": ObjectKind(1, 1, 2.65),
+    "car": ObjectKind(2, 1, 1.32),
+    "bicycle": ObjectKind(1, 1, 1.0),
+    "newsstand": ObjectKind(2, 1, 2.45),
+    # nature objects (§104)
+    "campfire": ObjectKind(1, 1, 1.0),
+    "tent": ObjectKind(2, 2, 2.0),
+    "log": ObjectKind(2, 1, 0.6, top=0.5),
+    "stump": ObjectKind(1, 1, 0.6, top=0.57),
+    "mushroom_ring": ObjectKind(2, 2, 0.35),
+    "pond": ObjectKind(2, 2, 0.8),
+    "scarecrow": ObjectKind(1, 1, 2.4),
+    "beehive": ObjectKind(1, 1, 1.45),
+    # farm, school and office objects (§104)
+    "vegetable_patch": ObjectKind(2, 1, 1.05),
+    "wheelbarrow": ObjectKind(1, 1, 0.9),
+    "hay_bale": ObjectKind(2, 1, 0.78, top=0.72),
+    "school_desk": ObjectKind(1, 1, 1.0),
+    "desk_with_pc": ObjectKind(2, 1, 1.62),
+    "water_cooler": ObjectKind(1, 1, 1.9),
+    "printer": ObjectKind(1, 1, 1.15),
+    "globe": ObjectKind(1, 1, 1.6),
+    "trophy_shelf": ObjectKind(2, 1, 2.08, top=2.08),
+    # fantasy objects (§104): a torch_sconce hangs on a room's back wall like a wall_clock
+    "treasure_chest": ObjectKind(1, 1, 1.15),
+    "cauldron": ObjectKind(1, 1, 1.35),
+    "giant_crystal": ObjectKind(1, 1, 2.75),
+    "throne": ObjectKind(1, 1, 2.35, top=0.62),
+    "torch_sconce": ObjectKind(1, 1, 2.6),
+    "signpost": ObjectKind(1, 1, 2.25),
+    "archway": ObjectKind(2, 1, 3.25),
+    "statue": ObjectKind(1, 1, 2.9),
+    # seasons, a harbour and travel (§104): a boat floats on water (~), a dock reaches over it
+    "christmas_tree": ObjectKind(1, 1, 3.1),
+    "snowman": ObjectKind(1, 1, 1.95),
+    "pumpkin": ObjectKind(1, 1, 0.85),
+    "gift_pile": ObjectKind(1, 1, 0.95),
+    "balloon_bunch": ObjectKind(1, 1, 2.75),
+    "birthday_cake": ObjectKind(1, 1, 1.55),
+    "boat": ObjectKind(2, 1, 2.6, over_water=True, floats=True),
+    "dock": ObjectKind(1, 2, 0.55, walkable=True, over_water=True, deck=0.22),
+    "lighthouse": ObjectKind(1, 1, 5.6),
+    "train_car": ObjectKind(3, 1, 2.05),
+    "rocket": ObjectKind(2, 2, 4.7),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
 #: Extras an object of a kind may have (``features`` of a placing), DESIGN.md §102.2: a tower's
-#: big info ``screen`` on its front and its glowing algae-farm bands (``garden``).
-OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden")}
+#: big info ``screen`` on its front and its glowing algae-farm bands (``garden``); a hazard sign's
+#: kind (one of them, §103; default ``biohazard``).
+HAZARD_SIGNS: tuple[str, ...] = ("biohazard", "radiation", "authorised")
+#: A display case's kinds (§104; default ``cakes``).
+DISPLAY_CASES: tuple[str, ...] = ("cakes", "jewels")
+#: The objects with a ``kind`` (one of these, the first the default): a hazard sign, a display case.
+OBJECT_STYLES: dict[str, tuple[str, ...]] = {"hazard_sign": HAZARD_SIGNS, "display_case": DISPLAY_CASES}
+OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), **OBJECT_STYLES}
 
 
 #: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
 #: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
-OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door"})
-SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower"})
+OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge", "airlock", "wardrobe", "treasure_chest"})
+SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
+                                            "coffee_machine", "grow_rack", "specimen_tank", "chemistry_bench", "distillation_rig",
+                                            "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d",
+                                            "fireplace", "stove", "floor_lamp", "tv", "vending_machine", "street_lamp", "traffic_light",
+                                            "fountain", "phone_booth", "car", "campfire", "pond", "beehive",
+                                            "desk_with_pc", "water_cooler", "printer", "globe", "cauldron", "giant_crystal", "torch_sconce",
+                                            "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket"})
+#: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
+WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce"})
 
 
 @dataclass(frozen=True)
@@ -137,8 +248,8 @@ class ObjectState:
 
 def default_state(kind: str) -> ObjectState:
     """The state of an object of ``kind`` unless the scene says otherwise: there, closed and off;
-    flowers in bloom; a tower's windows lit (§102.2)."""
-    return ObjectState(open=kind == "flowers", on=kind == "tower")
+    flowers in bloom; a laptop open; a tower's windows lit (§102.2)."""
+    return ObjectState(open=kind in ("flowers", "laptop"), on=kind == "tower")
 
 
 @dataclass(frozen=True)
@@ -181,6 +292,8 @@ class IsoObject:
     detail: str | None = None
     #: its extras (:data:`OBJECT_FEATURES`: a tower's ``screen``, ``garden``)
     features: tuple[str, ...] = ()
+    #: a wall_clock's time (``"HH:MM"``; ``None``: ten past ten)
+    time: str | None = None
 
     def cells(self) -> list[tuple[int, int]]:
         """The cells it stands on, back to front."""
@@ -208,6 +321,7 @@ class ObjectPlacing:
     detail: str | None = None
     height: float | None = None
     features: tuple[str, ...] = ()
+    time: str | None = None
 
 
 @dataclass(frozen=True)
@@ -499,9 +613,16 @@ def _with_objects(place: IsoPlace, objects: Sequence[IsoObject]) -> IsoPlace:
             if ground == VOID:
                 raise VidgenError(f"'{item.name}' ({item.width} x {item.depth} cells from map row {item.row + 1}, column "
                                   f"{item.column + 1}) reaches outside the place at {where}")
-            if ground in WALLS or (ground == WATER and not kind.over_water):
+            if item.kind in WALL_KINDS:
+                if ground != WALL or not place.wall_height(c, r) >= WALL_HEIGHT:
+                    raise VidgenError(f"'{item.name}' hangs on a room's standing wall: put it at a wall cell (#) of a back wall, not at {where}")
+            elif ground in WALLS or (ground == WATER and not kind.over_water):
                 raise VidgenError(f"'{item.name}' would stand on {'a wall' if ground in WALLS else 'water'} at {where}; "
                                   "move it, or make it smaller (size)")
+            elif kind.floats and ground != WATER:
+                spot = any(s.column == c and s.row == r for s in place.spots)
+                raise VidgenError(f"'{item.name}' floats: put it on water (~), every cell of it ({item.width} x {item.depth}); "
+                                  f"{where} is not water" + (" (a spot's letter is ground: give its at as {column, row} on the ~)" if spot else ""))
             if (c, r) in occupied:
                 raise VidgenError(f"'{item.name}' and '{occupied[(c, r)]}' would both stand at {where}; move one of them (its at)")
             if place.cell(c, r).steps != place.cell(item.column, item.row).steps:
@@ -515,7 +636,7 @@ def place_objects(place: IsoPlace, placings: Sequence[ObjectPlacing]) -> IsoPlac
     footprint's back cell, its top left on the map) or cell, named by its own name or its kind
     numbered after the map's (``house``, ``house_2``). :class:`VidgenError` naming the object and
     the cell for an unknown kind or spot, a footprint outside the place, on a wall, on water (but
-    a bridge), on two heights or on another object."""
+    a bridge or a dock), a boat not all on water, on two heights or on another object."""
     counts = Counter(o.kind for o in place.objects)
     added = []
     for k, placing in enumerate(placings):
@@ -530,8 +651,11 @@ def place_objects(place: IsoPlace, placings: Sequence[ObjectPlacing]) -> IsoPlac
         else:
             column, row = placing.at[0] - 1, placing.at[1] - 1
         width, depth = placing.size if placing.size is not None else (kind.width, kind.depth)
-        if placing.size is None and placing.facing == "right":
+        facing = _wall_facing(place, placing.kind, column, row, placing.facing) if placing.kind in WALL_KINDS else placing.facing
+        if placing.size is None and facing == "right":
             width, depth = depth, width
+        if placing.time is not None and placing.kind != "wall_clock":
+            raise VidgenError(f"objects[{k}]: time is for a wall_clock, not {placing.kind}")
         if placing.height is not None:
             low, high = TALL_KINDS.get(placing.kind, (None, None))
             if low is None or high is None:
@@ -545,8 +669,24 @@ def place_objects(place: IsoPlace, placings: Sequence[ObjectPlacing]) -> IsoPlac
         counts[placing.kind] += 1
         name = placing.name or (placing.kind if counts[placing.kind] == 1 else f"{placing.kind}_{counts[placing.kind]}")
         added.append(IsoObject(name, placing.kind, column, row, width, depth, kind.height if placing.height is None else float(placing.height),
-                               placing.facing, color=placing.color, detail=placing.detail, features=tuple(placing.features)))
+                               facing, color=placing.color, detail=placing.detail, features=tuple(placing.features), time=placing.time))
     return _with_objects(place, added)
+
+
+def _wall_facing(place: IsoPlace, kind: str, column: int, row: int, facing: str) -> str:
+    """Which way an object hanging on the wall at (``column``, ``row``) faces: into the room in
+    front of the wall, ``left`` (the floor below it on the map) or ``right`` (the floor to its
+    right); ``facing`` when both are open."""
+    def open_(c: int, r: int) -> bool:
+        return place.ground(c, r) not in WALLS and place.ground(c, r) != VOID
+
+    below, right = open_(column, row + 1), open_(column + 1, row)
+    if below and right:
+        return facing
+    if below or right:
+        return "left" if below else "right"
+    raise VidgenError(f"a {kind} at map row {row + 1}, column {column + 1} hangs on a wall with the room's floor below it or to its right "
+                      "on the map; put it on such a wall cell")
 
 
 __all__ = [
@@ -554,15 +694,18 @@ __all__ = [
     "CUT_WALL_HEIGHT",
     "DOOR",
     "DOOR_HEIGHT",
+    "DISPLAY_CASES",
     "FLOOR",
     "GARDEN_WALL_HEIGHT",
     "GROUND_SYMBOLS",
+    "HAZARD_SIGNS",
     "INDOOR",
     "ISO_CHARACTER_HEIGHT",
     "MAX_COLUMNS",
     "MAX_ROWS",
     "OBJECT_FEATURES",
     "OBJECT_KINDS",
+    "OBJECT_STYLES",
     "OPENING_KINDS",
     "OBJECT_SYMBOLS",
     "OUTDOOR",
@@ -576,6 +719,7 @@ __all__ = [
     "WALL",
     "WALLS",
     "WALL_HEIGHT",
+    "WALL_KINDS",
     "WATER",
     "WINDOW",
     "IsoCell",

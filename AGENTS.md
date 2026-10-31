@@ -2619,7 +2619,37 @@ and give each scene `set: village`.
   `projector_pad` (a glowing platform a hologram stands on), `whiteboard`. A portal's `view:
   coast` (or `stars`, `meadow`) shows another place inside it. `- alarm: start` darkens the room
   under a pulsing red light with a siren (`stop` ends it), `- shutters: close` slams steel
-  shutters over the windows; `ambience: hum` gives a lab its hum.
+  shutters over the windows; `ambience: hum` gives a lab its hum. Other objects: `laptop`
+  (`open: false` closed), `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`,
+  `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (`at` a cell of a back wall,
+  `time: "03:27"`), `grow_rack`, `terrarium`, `specimen_tank` (`color` its liquid; a `detail`
+  colour adds a floating shape), `chemistry_bench` (2 x 1), `distillation_rig`, `lab_fridge`
+  (`open`), `fume_hood`, `telescope`, `satellite_dish`, `charging_station`, `crate_stack`,
+  `airlock` (2 x 1, `open`), `printer_3d`, `hazard_sign` (`kind: biohazard | radiation |
+  authorised`), `fire_extinguisher`, `fireplace` (2 x 1), `kitchen_counter` (2 x 1), `stove`,
+  `sink`, `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1), `bathtub` (2 x 1),
+  `wardrobe` (2 x 1, `open`), `crib`, `cafe_table` (2 x 1, two chairs), `counter` (2 x 1),
+  `cash_register`, `display_case` (2 x 1, `kind: cakes | jewels`), `market_stall` (2 x 1),
+  `vending_machine`, `street_lamp`, `traffic_light`, `bus_stop` (2 x 1), `mailbox`, `fountain`
+  (2 x 2), `phone_booth`, `car` (2 x 1, `color` its body), `bicycle`, `newsstand` (2 x 1),
+  `campfire`, `tent` (2 x 2), `log` (2 x 1), `stump`, `mushroom_ring` (2 x 2), `pond` (2 x 2),
+  `scarecrow`, `beehive`, `vegetable_patch` (2 x 1), `wheelbarrow`, `hay_bale` (2 x 1),
+  `school_desk` (with its chair), `desk_with_pc` (2 x 1), `water_cooler`, `printer`, `globe`,
+  `trophy_shelf` (2 x 1), `treasure_chest` (`open`: gold glows), `cauldron` (`color` its
+  potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a back wall), `signpost`,
+  `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`, `gift_pile`,
+  `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock` (1 x 2, over
+  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); `on: true` /
+  `switch_on` makes the laptop, kiosk, core, arm,
+  centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
+  airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV, vending machine, street
+  lamp, traffic light (cycles), fountain, phone booth, car (headlights), campfire, pond
+  (ripples), beehive (bees), desk_with_pc (its screen), water cooler (bubbles), printer
+  (prints), globe (spins), cauldron (bubbles), giant crystal (glows), torch sconce, Christmas
+  tree (twinkles), pumpkin, balloons (sway), cake (candles), boat (bobs), lighthouse (its beam
+  sweeps) and rocket (fires) work (a lit fireplace, floor lamp, street lamp, phone booth,
+  campfire, cauldron or torch lights who stands near; pools of light and beams show mostly at
+  night).
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a
