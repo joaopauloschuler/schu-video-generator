@@ -75,6 +75,9 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "vegetable_patch": ("#A0703F", "#E2574C"), "wheelbarrow": ("#4FA36B", "#9C6B47"), "hay_bale": ("#E8C35A", "#B0563A"),
     "school_desk": ("#D9A066", "#4C6A85"), "desk_with_pc": ("#D8C3A0", "#4C9BE0"), "water_cooler": ("#EEF1F5", "#7EC8F0"),
     "printer": ("#E6EAF0", "#4CB8FF"), "globe": ("#4C8DD6", "#9C6B47"), "trophy_shelf": ("#7A5236", "#F2C14E"),
+    "treasure_chest": ("#9C5B2E", "#E8B83A"), "cauldron": ("#7BE36A", "#3A3F4B"), "giant_crystal": ("#A98BFF", "#6B6478"),
+    "throne": ("#B0303A", "#E8B83A"), "torch_sconce": ("#4A4F5B", "#9C6B47"), "signpost": ("#D9A066", "#7A5236"),
+    "archway": ("#C9C2B4", "#5BA35B"), "statue": ("#7CB8A4", "#B9B4AA"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -1048,10 +1051,15 @@ def _wall_clock(f: _Frame, look: ObjectLook) -> list[Shape]:
 
 
 def _wall_box(item: IsoObject, base: float) -> Box3:
-    """The box of an object hanging on a wall: a thin slab on the wall's face, round its height."""
+    """The box of an object hanging on a wall: a slab on the wall's face, round its height (a
+    clock's thin, a torch sconce's as deep as its torch reaches out, §104)."""
     f = _Frame(item, base)
-    radius = CLOCK_RADIUS * min(f.width, 1.6)
-    (x0, y0, z0), (x1, y1, z1) = f.p(0.0, f.depth, CLOCK_HEIGHT - radius - 0.05), f.p(f.width, f.depth + 0.06, CLOCK_HEIGHT + radius + 0.05)
+    if item.kind == "torch_sconce":
+        low, high, reach = _more(item.kind).SCONCE_SPAN
+    else:
+        radius = CLOCK_RADIUS * min(f.width, 1.6)
+        low, high, reach = CLOCK_HEIGHT - radius - 0.05, CLOCK_HEIGHT + radius + 0.05, 0.06
+    (x0, y0, z0), (x1, y1, z1) = f.p(0.0, f.depth, low), f.p(f.width, f.depth + reach, high)
     return Box3(min(x0, x1), min(y0, y1), z0, max(x0, x1), max(y0, y1), z1)
 
 
@@ -1776,16 +1784,17 @@ def _fire_extinguisher(f: _Frame, look: ObjectLook) -> list[Shape]:
 #: The objects with moving parts the stage draws over their pictures while they work (DESIGN.md §103).
 MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge",
                 "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d", "fireplace", "stove", "tv", "traffic_light", "fountain",
-                "campfire", "pond", "beehive", "desk_with_pc", "water_cooler", "printer", "globe")
+                "campfire", "pond", "beehive", "desk_with_pc", "water_cooler", "printer", "globe", "treasure_chest", "cauldron", "giant_crystal",
+                "torch_sconce")
 _LAB_MOVING = frozenset({"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"})
 _WORKSHOP_MOVING = frozenset({"satellite_dish", "charging_station", "airlock", "printer_3d"})
-#: The objects that work while open too (a lab fridge's cold mist).
-OPEN_WORKING = frozenset({"lab_fridge"})
+#: The objects that work while open too (a lab fridge's cold mist, a treasure chest's sparkles).
+OPEN_WORKING = frozenset({"lab_fridge", "treasure_chest"})
 
 
 def object_working(kind: str, state: ObjectState) -> bool:
     """Whether an object of ``kind`` in ``state`` works (its moving parts move): there and on;
-    a lab fridge also while open."""
+    a lab fridge or a treasure chest also while open."""
     return state.shown and (state.on or (kind in OPEN_WORKING and state.open))
 
 
@@ -1913,8 +1922,9 @@ def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float, st
     airlock's flashing beacon and a 3D print growing layer by layer under its moving head; a
     fireplace's flames, a stove's steam, a TV's picture, a traffic light's lamps, a fountain's
     water, a campfire's flames and sparks, a pond's ripples, a hive's bees, a line typed on a
-    computer, a water cooler's bubbles, a printed sheet and a globe's turning land (§104). The
-    same number of parts at any time (those not seen have opacity 0)."""
+    computer, a water cooler's bubbles, a printed sheet, a globe's turning land, an open chest's
+    sparkles, a cauldron's bubbles, a crystal's pulse and a torch's flame (§104). The same
+    number of parts at any time (those not seen have opacity 0)."""
     f = _Frame(item, base)
     if item.kind in MORE_MODULES:
         return _more(item.kind).motion(f, look, now)
@@ -1993,7 +2003,8 @@ SHADOW_RADII: dict[str, float] = {"tree": 0.45, "pine": 0.42, "bush": 0.48, "roc
                                   "plant": 0.32, "flowers": 0.36, "chair": 0.42, "lab_stool": 0.26, "quantum_core": 0.42, "robot_arm": 0.36,
                                   "terrarium": 0.3, "specimen_tank": 0.42, "telescope": 0.4, "hazard_sign": 0.22, "fire_extinguisher": 0.24,
                                   "floor_lamp": 0.26, "street_lamp": 0.26, "traffic_light": 0.22, "mailbox": 0.3, "bicycle": 0.36,
-                                  "stump": 0.4, "scarecrow": 0.3, "beehive": 0.4, "wheelbarrow": 0.4, "water_cooler": 0.32, "globe": 0.36}
+                                  "stump": 0.4, "scarecrow": 0.3, "beehive": 0.4, "wheelbarrow": 0.4, "water_cooler": 0.32, "globe": 0.36,
+                                  "cauldron": 0.42, "giant_crystal": 0.48, "signpost": 0.24}
 #: The shadows' colour and opacity (a tint of what lies under them).
 SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
@@ -2021,9 +2032,10 @@ MORE_MODULES: dict[str, str] = {
     **{kind: "iso_nature" for kind in ("campfire", "tent", "log", "stump", "mushroom_ring", "pond", "scarecrow", "beehive")},
     **{kind: "iso_school" for kind in ("vegetable_patch", "wheelbarrow", "hay_bale", "school_desk", "desk_with_pc", "water_cooler", "printer",
                                        "globe", "trophy_shelf")},
+    **{kind: "iso_fantasy" for kind in ("treasure_chest", "cauldron", "giant_crystal", "throne", "torch_sconce", "signpost", "archway", "statue")},
 }
 #: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
-LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire"})
+LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire", "cauldron", "torch_sconce"})
 
 
 def _more(kind: str) -> ModuleType:

@@ -20216,3 +20216,27 @@ baseline 31/31 identical.
   star, gold in `detail`). None light characters. Heights 0.78–2.08 tiles.
 
 Public surface (265): the kinds above. Additive; no shared drawing code changed.
+
+- **Step 266 (fantasy)**: drawn in `iso_fantasy.py`. `treasure_chest` (wood in `color`, bands
+  and lock in `detail`, a rounded lid; in `OPENING_KINDS`: open, its lid swings back, a heap of
+  coins and gems and the lid's inside glow, a warm pool; in `OPEN_WORKING`: while open a golden
+  halo pulses and sparkles twinkle up), `cauldron` (iron pot in `detail` on three legs over
+  logs, potion in `color`, a ladle; switched: fire, glowing potion and foam, a pool, lights
+  characters; moving: flames, bubbles bursting, vapour), `giant_crystal` (shards in `color` from
+  rocks in `detail`, leaning away from the middle facing either way; switched: they glow and a
+  pool in their tint lies round them; moving: a halo and heart pulse, tips twinkle; not in
+  `LAMPLIGHT_KINDS`, lamplight is warm), `throne` (`top` 0.62; velvet `color`, gilt `detail`,
+  stone step), `torch_sconce` (in `WALL_KINDS` like `wall_clock`: an iron plate and bracket in
+  `color`, a torch in `detail`; switched: a flame, a pool on the floor below the wall, lights
+  characters; moving: flame, its flickering light on the wall, sparks; its draw box a slab
+  `SCONCE_SPAN` out from the wall, the clock's unchanged), `signpost` (three arrow boards in
+  `color` on a post in `detail`), `archway` (2 x 1; stone pillars and a round arch of voussoirs
+  with a keystone, ivy in `detail`; not walkable, like `flower_arch`), `statue` (a bronze
+  `color` hero raising a sword on a `detail` plinth with a plaque). Heights 1.15–3.25 tiles.
+  Shared fix: a layer picture's clip (`IsoScenery.clip`) now also covers its own piece's pool of
+  light — a switched object is drawn in its layer, clipped to its box, and a pool lying out from
+  the box (the sconce's on the floor, a car's ahead of it) was cut to a streak.
+
+Public surface (266): the kinds above; `OPEN_WORKING` gains `treasure_chest`, `WALL_KINDS`
+`torch_sconce`, `LAMPLIGHT_KINDS` `cauldron` and `torch_sconce`. Additive; Phase Q baseline
+31/31 identical.

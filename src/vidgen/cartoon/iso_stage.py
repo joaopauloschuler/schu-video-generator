@@ -24,7 +24,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes
+from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes, shape_bounds
 from vidgen.cartoon.iso_objects import ObjectLook, object_box
 from vidgen.cartoon.iso_scenery import SLAB_DEPTH, IsoColors, IsoPiece, ground_shapes, place_pieces
 from vidgen.cartoon.iso_weather import TopSurface, top_surface
@@ -400,10 +400,16 @@ class IsoScenery:
         return picture
 
     def clip(self, picture: Picture) -> tuple[float, float, float, float] | None:
-        """The picture bounds (tile widths) a front or a layer covers (``None``: the whole canvas)."""
+        """The picture bounds (tile widths) a front or a layer covers (``None``: the whole canvas);
+        a layer's also the pool of light of its piece (one lying out from it: a torch sconce's on
+        the floor below its wall, §104)."""
         if picture[0]:
             return None
         bounds = [self.pieces[k].box.picture_bounds() for k, _ in picture[1]]
+        owner = self._layer_of.get(picture)
+        if owner is not None:
+            bounds += [shape_bounds(shape) for k, state in picture[1] if k == owner
+                       for shape in self.pieces[k].shapes_in(state) if getattr(shape, "pool", False)]
         return (min(b[0] for b in bounds) - FRONT_MARGIN, min(b[1] for b in bounds) - FRONT_MARGIN,
                 max(b[2] for b in bounds) + FRONT_MARGIN, max(b[3] for b in bounds) + FRONT_MARGIN)
 

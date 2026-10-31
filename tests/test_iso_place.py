@@ -36,6 +36,7 @@ from vidgen.world.iso import (
     VOID,
     WALL,
     WALL_HEIGHT,
+    WALL_KINDS,
     WATER,
     WINDOW,
     IsoCell,
@@ -286,8 +287,9 @@ def test_ground_and_pieces() -> None:
 def test_every_object_draws() -> None:
     place = parse_iso_map("\n".join(["." * 8] * 8))
     room = parse_iso_map("###\n#..\n#..", place="indoor")
-    for kind in OBJECT_KINDS:   # a wall clock hangs on a wall
-        found = place_objects(room if kind == "wall_clock" else place, [ObjectPlacing(kind, (2, 1) if kind == "wall_clock" else (1, 1))]).object(kind)
+    for kind in OBJECT_KINDS:   # a wall clock or a torch sconce hangs on a wall
+        on_wall = kind in WALL_KINDS
+        found = place_objects(room if on_wall else place, [ObjectPlacing(kind, (2, 1) if on_wall else (1, 1))]).object(kind)
         shapes = object_shapes(found, LOOKS[kind], 0.0)
         assert shapes, kind
     assert set(OBJECT_COLORS) == set(OBJECT_KINDS)

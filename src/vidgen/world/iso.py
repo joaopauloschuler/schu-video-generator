@@ -184,6 +184,15 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "printer": ObjectKind(1, 1, 1.15),
     "globe": ObjectKind(1, 1, 1.6),
     "trophy_shelf": ObjectKind(2, 1, 2.08, top=2.08),
+    # fantasy objects (§104): a torch_sconce hangs on a room's back wall like a wall_clock
+    "treasure_chest": ObjectKind(1, 1, 1.15),
+    "cauldron": ObjectKind(1, 1, 1.35),
+    "giant_crystal": ObjectKind(1, 1, 2.75),
+    "throne": ObjectKind(1, 1, 2.35, top=0.62),
+    "torch_sconce": ObjectKind(1, 1, 2.6),
+    "signpost": ObjectKind(1, 1, 2.25),
+    "archway": ObjectKind(2, 1, 3.25),
+    "statue": ObjectKind(1, 1, 2.9),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
@@ -200,15 +209,15 @@ OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), **
 
 #: The kinds of things that open (DESIGN.md §89.10): a house's door, flowers (closed: buds), and
 #: a ``door`` of the map in a room's standing wall; and those that switch on: a lamp, a house's windows.
-OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge", "airlock", "wardrobe"})
+OPENING_KINDS: frozenset[str] = frozenset({"house", "flowers", "door", "laptop", "lab_fridge", "airlock", "wardrobe", "treasure_chest"})
 SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", "terminal_kiosk", "quantum_core", "robot_arm", "centrifuge",
                                             "coffee_machine", "grow_rack", "specimen_tank", "chemistry_bench", "distillation_rig",
                                             "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d",
                                             "fireplace", "stove", "floor_lamp", "tv", "vending_machine", "street_lamp", "traffic_light",
                                             "fountain", "phone_booth", "car", "campfire", "pond", "beehive",
-                                            "desk_with_pc", "water_cooler", "printer", "globe"})
+                                            "desk_with_pc", "water_cooler", "printer", "globe", "cauldron", "giant_crystal", "torch_sconce"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
-WALL_KINDS: frozenset[str] = frozenset({"wall_clock"})
+WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce"})
 
 
 @dataclass(frozen=True)

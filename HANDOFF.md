@@ -23799,3 +23799,36 @@ How to test: `tests/test_docs.py` (73 passed).
   passed. No shared drawing code changed (Phase Q baseline not affected). Contact sheets
   (private): scratchpad `s265/objects.png` (garden corner, then classroom office),
   `s265/closeup.png`.
+
+## Step 266 — Fantasy objects (Phase AC)
+
+- Built: iso objects `treasure_chest` (`open`: lid back, gold and gems glow, a pool; sparkles
+  while open), `cauldron` (`color` its potion; on: fire, glow, bubbles, vapour), `giant_crystal`
+  (on: glows in its tint, pulses, tips twinkle), `throne` (`top`), `torch_sconce` (hangs on a
+  back wall like `wall_clock`; on: flickering flame, light on the wall, a pool on the floor),
+  `signpost`, `archway` (2 x 1), `statue` (DESIGN §104). A lit cauldron or torch lights nearby
+  characters (`LAMPLIGHT_KINDS`). Fix: a layer's clip now covers its piece's own pool of light
+  (a lit torch's pool was cut to a streak while it was in its switch layer; a car's too).
+- Files: new `cartoon/iso_fantasy.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `OPEN_WORKING`, `LAMPLIGHT_KINDS`, shadows, `_wall_box` per kind);
+  `cartoon/iso_stage.py` (`clip`); `world/iso.py` (kinds, `OPENING_KINDS`, `SWITCHED_KINDS`,
+  `WALL_KINDS`); `scenes/stage.py`, `scenes/handling.py` (docstrings, open messages); the one
+  "Other objects" list in CONFIG and the guide; tests `test_iso_objects_more.py` (+5),
+  `test_iso_place.py` (wall objects by `WALL_KINDS`).
+- Decisions: `giant_crystal` is its own name beside the small 2D `crystal` prop (separate
+  namespaces; "crystal" as an iso object says "did you mean giant_crystal?"). The chest works
+  while open (no `on`), like the lab fridge's mist. The crystal does not light characters
+  (lamplight is warm). `color` is the cauldron's potion (its iron is `detail`).
+- Known gaps: one cannot walk through the archway (not walkable, like `flower_arch`); nobody
+  sits on the throne (`top` holds small things); a torch sconce hangs only on a room's standing
+  wall (not outdoors, not on a garden wall); a layered lamp's pool still tints base objects
+  standing in it (as before); the crystal's halo reads as a soft bubble.
+- For the last batch: wall objects need an entry in `_wall_box` if their span differs from the
+  clock's; scratchpad `s266/closeup.py` (states incl. `open`, a wall behind wall objects),
+  `s266/pooltest.py` (a room's picture beside its pools' picture), `s266/proj_hall`,
+  `s266/proj_path` and `s266/baseline.sh`.
+- Tests: `test_iso_objects_more.py` 27 passed; `test_lab_objects`, `test_iso_staging`,
+  `test_iso_place`, `test_iso_mood`, `test_guide`, `test_docs`, `test_api`, `test_schema`,
+  `test_city_hud_echo`, the lamplight tests of `test_phase_q_review` passed. Phase Q baseline
+  31/31 identical. Contact sheets (private): scratchpad `s266/objects.png` (castle hall, then
+  forest path), `s266/closeup.png`.

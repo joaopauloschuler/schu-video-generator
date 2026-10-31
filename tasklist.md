@@ -1606,7 +1606,7 @@ cartoon style, `on` states with gentle motion where listed; docs: the one "Other
 - [x] `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (iso), `desk_with_pc` (screen), `water_cooler` (bubble), `printer` (paper slides out), `globe` (spins), `trophy_shelf`; drawings in `cartoon/iso_school.py`
 
 ### Step 266 — Fantasy and seasons I
-- [ ] `treasure_chest` (opens with a golden glow), `cauldron` (bubbling potion in `color`), `giant_crystal` (pulses), `throne`, `torch_sconce` (wall-mounted flame), `signpost`, `archway`, `statue`
+- [x] `treasure_chest` (opens with a golden glow), `cauldron` (bubbling potion in `color`), `giant_crystal` (pulses), `throne`, `torch_sconce` (wall-mounted flame), `signpost`, `archway`, `statue`; drawings in `cartoon/iso_fantasy.py`; a layer's clip covers its own pool of light
 
 ### Step 267 — Seasons II, harbour and review
 - [ ] `christmas_tree` (lights twinkle), `snowman`, `pumpkin` (glows), `gift_pile`, `balloon_bunch` (sways), `birthday_cake` (candles), `boat` (bobs on water), `dock`, `lighthouse` (beam at night), `train_car`, `rocket` (smoke / flame); a critical review of all 63 (style, sizes, on / off and night, performance, did-you-mean, the doc list), fixes, `test_mcp.py`

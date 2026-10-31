@@ -14,16 +14,18 @@ from test_cartoon_living import frames_of
 from test_cartoon_stage import CAST, stage_params
 from test_iso_staging import FH, FW, looks
 from vidgen import extensions, registry
-from vidgen.cartoon.iso_drawing import Disc, canvas_for, draw_shapes
-from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, MORE_MODULES, MOVING_KINDS, OBJECT_COLORS, ObjectLook, object_motion, object_shapes
+from vidgen.cartoon.iso_drawing import Disc, canvas_for, draw_shapes, shape_bounds
+from vidgen.cartoon.iso_objects import (LAMPLIGHT_KINDS, MORE_MODULES, MOVING_KINDS, OBJECT_COLORS, OPEN_WORKING, ObjectLook, object_box, object_motion,
+                                        object_shapes, object_working)
 from vidgen.cartoon.iso_pictures import POOL_STRENGTH
 from vidgen.cartoon.iso_scenery import IsoColors
 from vidgen.cartoon.iso_stage import IsoScenery, iso_view
 from vidgen.cartoon.lighting import POOL_DAY, light_grade, pool_strength
 from vidgen.cartoon.iso_town import SIGNAL_COLORS
+from vidgen.errors import VidgenError
 from vidgen.project import Project
-from vidgen.world.iso import (DISPLAY_CASES, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, ObjectPlacing, ObjectState, default_state,
-                              parse_iso_map, place_objects)
+from vidgen.world.iso import (DISPLAY_CASES, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, WALL_KINDS, ObjectPlacing, ObjectState,
+                              default_state, parse_iso_map, place_objects)
 
 WIDE = "###########\n" + "#.........#\n" * 6 + "#####+#####"
 
@@ -385,3 +387,90 @@ def test_the_school_objects_render_and_move(make_project, tmp_path: Path, monkey
     places = {scene.iso_scenery.pieces[k].name: gadget for gadget, k, _ in scene._iso_gadget_places}
     assert set(places) == set(SCHOOL_WORKING) and not places["printer"].gadgets[0].working(float(scene.renderer.time))
     assert not scene._iso_lamps and len(frames) > 5 and np.any(frames[-1] != frames[3])
+
+
+# ----- Step 266: fantasy ----------------------------------------------------------------------------------------
+
+FANTASY = ("treasure_chest", "cauldron", "giant_crystal", "throne", "torch_sconce", "signpost", "archway", "statue")
+FANTASY_WORKING = ("cauldron", "giant_crystal", "torch_sconce")
+HALL = "##########\n#........#\n#........#\n#........#\n#........#\n####+#####"
+
+
+def _fantasy_place():
+    placings = [ObjectPlacing(kind, (2 + (k % 3) * 3, 2 + (k // 3)), facing="right" if k % 2 else "left") for k, kind in enumerate(FANTASY) if kind != "torch_sconce"]
+    return place_objects(parse_iso_map(HALL, place="indoor"), (*placings, ObjectPlacing("torch_sconce", (4, 1))))
+
+
+def test_fantasy_objects_have_footprints_colours_and_states() -> None:
+    for kind in FANTASY:
+        assert kind in OBJECT_KINDS and kind in OBJECT_COLORS and MORE_MODULES[kind] == "iso_fantasy" and OBJECT_KINDS[kind].height <= 3.3
+        assert (OBJECT_KINDS[kind].width, OBJECT_KINDS[kind].depth) == ((2, 1) if kind == "archway" else (1, 1))
+        assert default_state(kind) == ObjectState() and kind not in OBJECT_STYLES
+    assert set(FANTASY) & SWITCHED_KINDS == set(FANTASY_WORKING) and set(FANTASY) & set(MOVING_KINDS) == {*FANTASY_WORKING, "treasure_chest"}
+    assert set(FANTASY) & OPENING_KINDS == {"treasure_chest"} and "treasure_chest" in OPEN_WORKING and "torch_sconce" in WALL_KINDS
+    assert set(FANTASY) & LAMPLIGHT_KINDS == {"cauldron", "torch_sconce"} and OBJECT_KINDS["throne"].top
+
+
+def test_fantasy_objects_draw_light_up_open_and_move() -> None:
+    place = _fantasy_place()
+    for item in place.objects:
+        off = object_shapes(item, _look(item.kind), 0.0, ObjectState())
+        assert off and not any(getattr(s, "glow", False) for s in off), item.kind
+        live = ObjectState(open=True) if item.kind == "treasure_chest" else ObjectState(on=True)
+        if item.kind in (*FANTASY_WORKING, "treasure_chest"):
+            on = object_shapes(item, _look(item.kind), 0.0, live)
+            moving = object_shapes(item, _look(item.kind, True), 0.0, live)   # what moves left to the stage (a crystal's pulse is only that)
+            assert any(getattr(s, "glow", False) for s in on) and (len(moving) < len(on) or item.kind == "giant_crystal"), item.kind
+            assert object_working(item.kind, live) and any(isinstance(s, Disc) and s.pool for s in on), item.kind   # light on the ground
+            early, late = (object_motion(item, _look(item.kind), 0.0, t, live) for t in (0.2, 1.3))
+            assert early and len(early) == len(late) and [(p.points, p.opacity) for p in early] != [(p.points, p.opacity) for p in late], item.kind
+    sconce = place.object("torch_sconce")   # a slab on the wall's face, as deep as its torch reaches out
+    box = object_box(sconce, 0.0)
+    assert (box.z0, box.z1) == (1.35, 2.7) and box.y1 - box.y0 == pytest.approx(0.38)
+    with pytest.raises(VidgenError, match="hangs on a room's standing wall"):
+        place_objects(parse_iso_map(HALL, place="indoor"), (ObjectPlacing("torch_sconce", (3, 3)),))
+
+
+def test_a_layer_shows_its_whole_pool_of_light() -> None:
+    """A switched object is drawn in its own layer, clipped to it: a torch sconce's pool lies on
+    the floor below its wall, outside its box, and was cut to a streak (DESIGN.md §104)."""
+    place = place_objects(parse_iso_map(HALL, place="indoor"), (ObjectPlacing("torch_sconce", (4, 1), name="torch"),))
+    scenery = IsoScenery(place, IsoColors(), looks(place), iso_view(place, FW, FH), 30.0, states={"torch": ObjectState(on=True)}, layered={"torch"})
+    layer = scenery.layer("torch")
+    left, top, right, bottom = scenery.clip(layer)
+    pool = [shape_bounds(s) for s in object_shapes(place.object("torch"), _look("torch_sconce"), 0.0, ObjectState(on=True)) if isinstance(s, Disc) and s.pool]
+    assert pool and all(left <= b[0] and top <= b[1] and b[2] <= right and b[3] <= bottom for b in pool)
+    assert bottom - top > object_box(place.object("torch"), 0.0).picture_bounds()[3] - object_box(place.object("torch"), 0.0).picture_bounds()[1] + 1.0
+
+
+def test_fantasy_keys_validate() -> None:
+    good = stage_params(iso={**ISO, "objects": [{"object": "treasure_chest", "at": "here", "open": True}, {"object": "cauldron", "at": "there", "on": True}]})
+    assert good.iso.objects[0].state().open and good.iso.objects[1].state().on
+    for bad, message in (({"object": "throne", "at": "here", "on": True}, "on is for"), ({"object": "cauldron", "at": "here", "open": True},
+                                                                                          "open is for .* or a treasure_chest"),
+                         ({"object": "statue", "at": "here", "kind": "knight"}, "kind is for a hazard_sign"),
+                         ({"object": "crystal", "at": "here"}, "did you mean giant_crystal"), ({"object": "treasure_chst", "at": "here"}, "did you mean treasure_chest")):
+        with pytest.raises(ValidationError, match=message):
+            stage_params(iso={**ISO, "objects": [bad]})
+
+
+@pytest.mark.render
+def test_the_fantasy_objects_render_open_move_and_light(make_project, tmp_path: Path, monkeypatch) -> None:
+    extensions.load_builtins()
+    monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
+    hall = "############\n#t...h...c.#\n#..........#\n#g..s..y.k.#\n#..........#\n#p.....a...#\n####+#######"
+    spots = {"t": "throne", "h": "chest", "c": "pot", "g": "crystal", "s": "statue", "y": "near", "k": "post", "p": "arch", "a": "spare"}
+    kinds = {"throne": "throne", "chest": "treasure_chest", "pot": "cauldron", "crystal": "giant_crystal", "statue": "statue", "post": "signpost",
+             "arch": "archway"}
+    objects = [{"object": kind, "at": spot, **({"on": True} if kind in FANTASY_WORKING else {})} for spot, kind in kinds.items()]
+    objects.append({"object": "torch_sconce", "at": {"column": 9, "row": 1}, "on": True})
+    params = {"light": "night", "iso": {"place": "indoor", "map": hall, "spots": spots, "objects": objects},
+              "characters": [{"name": "pip", "at": "near"}]}
+    beats = [{"text": "Treasure in the castle hall.", "actions": [{"open": "treasure_chest", "at": 0.3}, {"switch_off": "giant_crystal", "at": 0.6}]}]
+    scenes = [{"id": "home", "type": "stage", "params": params, "beats": beats}]   # frames_of renders the scene "home"
+    scene, frames = frames_of(Project.load(make_project(minimal_config(characters=CAST, scenes=scenes))), tmp_path / "hall", monkeypatch)
+    places = {scene.iso_scenery.pieces[k].name: gadget for gadget, k, _ in scene._iso_gadget_places}
+    end = float(scene.renderer.time)
+    assert set(places) == {*FANTASY_WORKING, "treasure_chest"} and places["treasure_chest"].gadgets[0].working(end)
+    assert not places["giant_crystal"].gadgets[0].working(end)
+    assert set(scene._iso_lamps) == {"cauldron", "torch_sconce"} and len(frames) > 5 and np.any(frames[-1] != frames[3])

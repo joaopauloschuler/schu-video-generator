@@ -2635,13 +2635,16 @@ and give each scene `set: village`.
   `campfire`, `tent` (2 x 2), `log` (2 x 1), `stump`, `mushroom_ring` (2 x 2), `pond` (2 x 2),
   `scarecrow`, `beehive`, `vegetable_patch` (2 x 1), `wheelbarrow`, `hay_bale` (2 x 1),
   `school_desk` (with its chair), `desk_with_pc` (2 x 1), `water_cooler`, `printer`, `globe`,
-  `trophy_shelf` (2 x 1); `on: true` / `switch_on` makes the laptop, kiosk, core, arm,
+  `trophy_shelf` (2 x 1), `treasure_chest` (`open`: gold glows), `cauldron` (`color` its
+  potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a back wall), `signpost`,
+  `archway` (2 x 1), `statue`; `on: true` / `switch_on` makes the laptop, kiosk, core, arm,
   centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
   airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV, vending machine, street
   lamp, traffic light (cycles), fountain, phone booth, car (headlights), campfire, pond
-  (ripples), beehive (bees), desk_with_pc (its screen), water cooler (bubbles), printer (prints)
-  and globe (spins) work (a lit fireplace, floor lamp, street lamp, phone booth or campfire
-  lights who stands near; pools of light show mostly at night).
+  (ripples), beehive (bees), desk_with_pc (its screen), water cooler (bubbles), printer
+  (prints), globe (spins), cauldron (bubbles), giant crystal (glows) and torch sconce work (a
+  lit fireplace, floor lamp, street lamp, phone booth, campfire, cauldron or torch lights who
+  stands near; pools of light show mostly at night).
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a

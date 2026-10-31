@@ -5,9 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–265)
+## Unreleased (Steps 193–266)
 
 ### More iso objects (Steps 261–267)
+
+- Fantasy objects `treasure_chest` (opens with a golden glow), `cauldron` (bubbles over its fire when on), `giant_crystal` (glows and pulses when on), `throne`, `torch_sconce` (on a back wall; a flickering torch that lights who stands near), `signpost`, `archway` and `statue`; a switched lamp's pool of light is no longer cut off at the edge of its box.
 
 - Farm, school and office objects `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (with its chair), `desk_with_pc` (screen and typing when on), `water_cooler` (bubbles when on), `printer` (prints when on), `globe` (spins when on) and `trophy_shelf`.
 
