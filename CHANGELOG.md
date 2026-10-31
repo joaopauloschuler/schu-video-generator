@@ -5,7 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–267)
+## Unreleased (Steps 193–268)
+
+### Phase AD: features without AI APIs (Steps 268–275)
+
+- Moving vehicles on iso places: `drive_to` drives a `car` along the paths (turning at corners, its tail and tail lights showing as it drives away, headlights with `switch_on`) or rolls a `train_car` along its track, `sail_to` sails a `boat` across the water (bobbing, a wake), `lift_off` sends a `rocket` up out of the view in smoke and flame; `to` / `via` spots or cells, `speed`; `follow` keeps the camera on one; engine, brakes and launch sounds; `vidgen validate` names what is in the way.
 
 ### More iso objects (Steps 261–267)
 

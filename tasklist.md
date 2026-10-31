@@ -1613,6 +1613,36 @@ cartoon style, `on` states with gentle motion where listed; docs: the one "Other
 
 Phase AC done.
 
+## Phase AD — Seven features without AI APIs (DESIGN §105)
+
+Deterministic only: no AI API calls in code, tests or the work (rules, heuristics, local data);
+where judgement helps, building blocks (CLI + MCP tools) for an agent driving vidgen. Docs lean:
+a few lines per feature in CONFIG and the guide.
+
+### Step 268 — Moving vehicles in iso
+- [x] `drive_to` (a `car` along path cells, turning at corners, round where its way ends; a `train_car` along its track, drawn along its line), `sail_to` (a `boat` across water), `lift_off` (a `rocket`: smoke, faster and faster, out of the view); `to` / `via` spots or cells, `speed`; drawn by the stage as moving sprites (a car driving away shows its tail, wheels turn, headlights with `switch_on`, a boat bobs); bodies of the place (front pictures, draw order by boxes); `follow` works; validate replays them with the walks; engine / brakes / launch sounds; tests `test_iso_vehicles.py`
+
+### Step 269 — Sitting and using furniture
+- [ ] `sit` (chairs, benches, bus-stop bench, armchair, sofa, throne, stool, log / stump, café chairs, school_desk), `lie` (bed), `stand_up`, `warm_hands` at a campfire / fireplace (or a generic `use` with per-object poses); facing-aware seat points; lint for sitting on nothing / two on one seat
+
+### Step 270 — A day passing in one scene
+- [ ] `- {time_of_day: sunset, run_time: 6}` blending the light smoothly; lamps and lit objects switch on at dusk (opt-out); sky / stars change; works with light pools and `fill_light`
+
+### Step 271 — Iso weather
+- [ ] Puddles reflecting lamps / towers / neon at night, drifting fog banks, `wind: {strength, direction}` bending trees and bushes, swaying balloons and flags, slanting rain; cheap and opt-in
+
+### Step 272 — Story to video draft
+- [ ] `vidgen story draft story.md [-o project/]`: scenes, dialogue and speakers, a cast with distinct Kokoro voices, iso / stage scenes with placeholder staging, beats, a `story_draft.md` report with TODOs; an MCP tool; tests on neutral sample texts
+
+### Step 273 — Shorts suggestions
+- [ ] `vidgen shorts suggest [project]`: scored 30–60 s windows with clean starts and ends, a hook line, `cut:` variants written to a file or the project; an MCP tool; tests
+
+### Step 274 — Ambient life
+- [ ] `ambient: {birds, walkers, cat, seed}` on an iso stage: birds, a cat, background walkers, butterflies / fireflies; avoid objects and main characters, never steal focus; deterministic by seed; cheap
+
+### Step 275 — Review of Phase AD
+- [ ] Compatibility (Phase Q baseline 31/31), each feature's tests and related suites, `test_mcp.py`, docs consistency, performance
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

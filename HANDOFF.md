@@ -23874,3 +23874,54 @@ How to test: `tests/test_docs.py` (73 passed).
   harbour), `s267/all63.png` (all ten Phase AC places, day on and night on), `s267/closeup.png`.
 
 Phase AC done.
+
+## Step 268 — Moving vehicles in iso (Phase AD)
+
+Phase AD (Steps 268–275, DESIGN §105): seven features with no AI API calls of any kind; the plan
+is in `tasklist.md`.
+
+- Built: actions `drive_to` (a `car` along path cells; a `train_car` along its track), `sail_to`
+  (a `boat` across water) and `lift_off` (a `rocket` up and out of the view) on an iso place's
+  objects: `{drive_to: car, to: shop, via: [corner], speed: 3}`, `{sail_to: boat, to: {column: 9,
+  row: 8}}`, `{drive_to: train_car, to: {column: 12, row: 1}}`, `- lift_off: rocket`. A car or a
+  boat turns at corners (four neighbours, a cost per turn, a U-turn where its way ends), stops with
+  its front at the goal (a spot off its way: the nearest cell within 2); a train car's track is the
+  line of its cells over level free ground (drawn there), its middle stops at `to`; a rocket's
+  engine fires (smoke over the pad), it rises faster and faster and is gone. Drawn by the stage as
+  a sprite moved across the place (heading, lit or not, wheel step, flame frame, boat wake): a car
+  driving away shows its tail and tail lights, `switch_on` lights headlights, a boat bobs and
+  leaves a wake. Vehicles are bodies of the place (front pictures, draw order with characters),
+  `follow: car` works, foley (engine, brakes, splash, launch roar), lint `offscreen_action` watches
+  them; `vidgen validate` replays them with the walks (walks later go round a parked car).
+- Files: new `world/iso_vehicles.py` (rules), `cartoon/iso_driving.py` (`IsoVehicle`, `IsoDrive`,
+  sprites, wake, track), `scenes/stage_vehicles.py` (`IsoDriving`, part of `Stage`),
+  `scenes/driving.py` (the actions); `cartoon/iso_town.py` (`car_shapes`: `reverse`, `spin`),
+  `cartoon/iso_seasons.py` (boat `reverse`, `train_track` / `train_body`, rocket pad / body /
+  `rocket_fire` / `launch_smoke`), `cartoon/iso_objects.py` (`ObjectLook.driven`),
+  `cartoon/iso_stage.py` (`IsoScenery.front(exclude=)`), `cartoon/foley.py` (`drive_cues`),
+  `world/iso_moves.py` (the replay), `scenes/stage_iso.py` (bodies, fronts, redraw, switch, view,
+  wide view in 9:16), `scenes/stage.py` (Stage bases, vehicles as targets, mid stills, the
+  replay's names, `_played`), `scenes/__init__.py`, `api.py`; docs CONFIG (iso **Vehicles that
+  move**, action lists), the guide (+ `AGENTS.md`: a bullet, the actions table), DESIGN §105,
+  CHANGELOG, tasklist (Phase AD plan).
+- Public: `vidgen.api` adds `ISO_VEHICLE_ACTIONS`, `LIFT_OFF_SECONDS`, `VEHICLE_ACTIONS`,
+  `VEHICLE_SPEEDS`, `VehicleRoute`, `drive_seconds`, `middle_of`, `moved_item`, `moved_place`,
+  `plan_vehicle`, `start_heading`, `track_cells`, `IsoDrive`, `IsoVehicle`, `rocket_smoke`,
+  `track_shapes`, `vehicle_shapes`; `ObjectLook.driven`, `IsoScenery.front(exclude=)`.
+- Decisions: sprites, not per-frame vector shapes (cheap, the place's exact look; a move in an iso
+  view is a shift of the picture); three fixed image slots whose pixels change (a swapped member
+  stayed drawn by Manim: a ghost car); a turn switches the drawing half-way across the corner cell
+  (no in-between angles); a parked car's footprint is always two grid cells; names `drive_to` /
+  `sail_to` / `lift_off` (`launch` is the orbit scene's). A vehicle is driven only when the scene
+  moves it: other scenes and parked cars are drawn as before.
+- Known gaps / later: no in-between angles at corners, a U-turn flips the vehicle; moving
+  vehicles and walkers do not avoid each other (as two walkers); one train car (no coupled cars);
+  no riders on iso vehicles; the rocket's smoke is drawn behind the rocket body; Step 270 (a day
+  passing) may switch headlights on at dusk via `iso_switch_vehicles`.
+- Tests: new `test_iso_vehicles.py` (20: rules, drawings, foley, checks, one render) passed;
+  `test_iso_objects_more`, `test_iso_moves`, `test_iso_staging`, `test_iso_story`, `test_iso_mood`,
+  `test_iso_place`, `test_iso_weather`, `test_cartoon_foley`, `test_api`, `test_guide`,
+  `test_docs`, `test_introspect`, `test_actions_coverage` passed. Phase Q baseline 31/31
+  identical; iso-story `night` and `rowans_room` (25 stills) identical to the code before. Private sheet: `/home/claude/work/scratch/s268/sheet.png` (day / night, motion,
+  crops, 9:16); sample project `s268/proj` (`vidgen validate` and `vidgen lint` clean but a
+  look-alike warning of the sample cast).

@@ -532,8 +532,15 @@ def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequenc
     Also (DESIGN.md §89.10): ``items`` (small thing -> its spot) picked up, given and put down
     by characters standing next to them (:data:`ISO_REACH`), and the objects ``hidden`` at the
     start or by a ``hide`` (not there until a ``reveal``): routes go round where they would stand
-    and do not cross a bridge that is not there."""
+    and do not cross a bridge that is not there. Vehicles moved by ``drive_to``, ``sail_to`` and
+    ``lift_off`` (DESIGN.md §105, :func:`~vidgen.world.iso_vehicles.vehicle_problems`) stand where
+    they stopped for the moves after them."""
+    from vidgen.world.iso_vehicles import ISO_VEHICLE_ACTIONS, moved_place, vehicle_problems
+
     cells: dict[str, Cell | None] = {name: None if name in entering else place.stand_cell(spot) for name, spot in starts.items()}
+    vehicles: dict[str, tuple[object, Cell]] = {}   # the vehicles moved so far: where they stand, the way they head (§105)
+    tracks: dict[str, list[Cell]] = {}
+    lifted: set[str] = set()
     spots = set(place.spot_names())
     things: dict[str, Cell | None] = {name: (place.spot(spot).column, place.spot(spot).row) for name, spot in (items or {}).items() if spot in spots}
     held: dict[str, list[str]] = {}
@@ -554,7 +561,13 @@ def iso_move_problems(place: IsoPlace, starts: Mapping[str, str], steps: Sequenc
         if step.action in ISO_PLACE_CHANGES:
             gone = (gone | set(step.names)) if step.action == "hide" else (gone - set(step.names))
             continue
-        now = place.without(gone)
+        if step.action in ISO_VEHICLE_ACTIONS:   # a car, a boat, a train car, a rocket (DESIGN.md §105)
+            crowd = {cell: who for who, cell in cells.items() if cell is not None}
+            for message in vehicle_problems(place.without(gone), step.action, step.names, step.options, vehicles=vehicles,  # type: ignore[arg-type]
+                                            crowd=crowd, tracks=tracks, gone=lifted):
+                problems.append((f"{step.location}.to", f"beat '{step.beat}': {message}"))
+            continue
+        now = moved_place(place.without(gone), {name: item for name, (item, _) in vehicles.items()})   # type: ignore[misc]
         if step.action in ISO_ITEM_ACTIONS:
             for who in step.names:
                 here = cells.get(who)

@@ -51,6 +51,7 @@ from vidgen.scenes import (  # noqa: F401
     detector_actions,
     diagram,
     dna_lab,
+    driving,
     effect_action,
     end_card,
     equation,

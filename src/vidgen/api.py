@@ -632,6 +632,8 @@ from vidgen.cartoon.iso_pictures import POOL_STRENGTH, GlowTile, IsoPuddles, Iso
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
 from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
+from vidgen.world.iso_vehicles import ISO_VEHICLE_ACTIONS, LIFT_OFF_SECONDS, VEHICLE_ACTIONS, VEHICLE_SPEEDS, VehicleRoute, drive_seconds, middle_of, moved_item, moved_place, plan_vehicle, start_heading, track_cells  # noqa: E402
+from vidgen.cartoon.iso_driving import IsoDrive, IsoVehicle, rocket_smoke, track_shapes, vehicle_shapes  # noqa: E402
 from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
 from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, FloorCells, picture_size, plate_shapes, ramped, slant  # noqa: E402
 from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
@@ -1598,6 +1600,23 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "WANDER_RADIUS",
     "WANDER_STOPS",
     "IsoWalk",
+    "ISO_VEHICLE_ACTIONS",
+    "LIFT_OFF_SECONDS",
+    "VEHICLE_ACTIONS",
+    "VEHICLE_SPEEDS",
+    "VehicleRoute",
+    "drive_seconds",
+    "middle_of",
+    "moved_item",
+    "moved_place",
+    "plan_vehicle",
+    "start_heading",
+    "track_cells",
+    "IsoDrive",
+    "IsoVehicle",
+    "rocket_smoke",
+    "track_shapes",
+    "vehicle_shapes",
     "cell_of",
     "find_route",
     "plan_move",

@@ -20282,3 +20282,77 @@ Public surface (266): the kinds above; `OPEN_WORKING` gains `treasure_chest`, `W
 Public surface (267): the kinds above; `ObjectKind.floats`, `Motion.pool`,
 `IsoGadgets(pool_strength=)`, `POOL_DAY` and `POOL_STRENGTH` in `vidgen.api`. Additive; Phase Q
 baseline 31/31 identical.
+
+## 105. Seven features without AI APIs (Phase AD, Steps 268–275)
+
+Owner's constraint: no AI API calls (no LLM or hosted model) in code, tests or the work itself:
+rules, heuristics and local data only; where judgement helps, building blocks (CLI, MCP tools) an
+agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and using furniture,
+270 a day passing in one scene, 271 iso weather (reflecting puddles, fog banks, wind), 272
+`vidgen story draft`, 273 `vidgen shorts suggest`, 274 ambient life, 275 review. Docs stay lean.
+
+### 105.1 Moving vehicles (Step 268)
+
+- **Actions** (`scenes/driving.py`): `drive_to` (a `car`, a `train_car`), `sail_to` (a `boat`),
+  `lift_off` (a `rocket`), on the place's objects; `to` a spot or `{column, row}`, `via` spots or
+  cells, `speed` (tiles per second; `VEHICLE_SPEEDS`: car 2.6, train 2.2, boat 1.1; a walker
+  about 1.4); a lift-off's `run_time` (`LIFT_OFF_SECONDS` 4). Named after `walk_to` / `ride_to`
+  (a verb per medium; `launch` is the orbit scene's). Timed like any move: `at`, word anchors;
+  `run_time_for` is the route's length over the speed plus `SET_OFF_SECONDS` 0.6.
+- **Rules** (`world/iso_vehicles.py`, no manim). A car (path cells only, one level) and a boat
+  (water) go cell to cell over the **four** neighbours (drawn side-on: no diagonals), a
+  cheapest-path search over (cell, heading) with `DRIVE_TURN_COST` 0.3 per turn and `UTURN_COST`
+  4 to turn round (where a way ends: a three-point turn, drawn as a flip). Its **middle** moves
+  from between its two cells through the middle of each edge it crosses: two whole cells on a
+  straight, across the corner cell at a turn (the heading switches half-way). It stops with its
+  front in the goal cell; a *spot* off its way (a door on the grass by the road, a pier on the
+  shore) becomes the nearest cell it can stop on within `GOAL_REACH` 2 (an explicit cell is taken
+  as written). A train car rolls along its **track**: the straight line of its cells, extended both
+  ways over level free floor or path (`track_cells`); its middle stops at `to`, on that line.
+  Characters standing in the way (`crowd`), objects, other ground and steps are named in the
+  error (`'car' cannot drive from row 2, column 3 to row 2, column 7: the way stops at row 2,
+  column 4: the bench at row 2, column 5`). A rocket rises `LIFT_HEIGHT` straight up (the stage
+  gives the height that leaves any view), `lift_share` from rest, faster and faster; ground moves
+  ease in and out (`drive_share`).
+- **Validate** replays them in `iso_move_problems` (`ISO_VEHICLE_ACTIONS`, `vehicle_problems`): the
+  vehicles where they stopped (`moved_place`), so later walks go round a parked car; a second
+  `lift_off` is refused. At render `iso_place_now` includes the vehicles' planned places.
+- **Drawn** (`cartoon/iso_driving.py`). A driven vehicle's `ObjectLook.driven` leaves it out of the
+  place's pictures (a car, a boat, a train car: nothing; a rocket: its pad and tower), and the
+  stage draws an `IsoVehicle`: a **sprite** of its shapes (drawn as the place's are, at the level
+  of detail the camera's zoom needs) moved across the screen. Iso has no perspective, so a move in
+  the world is a shift of the picture: one sprite per (heading, on, wheel step / flame frame)
+  serves the whole drive. Considered: vector polygons per frame like `IsoGadgets` (a car has ~60
+  shapes with lines and discs; sprites are cheaper and match the place's look exactly). The
+  sprite is three fixed image mobjects (picture, `PoolTile`, `GlowTile`, drawn by `draw_tile`)
+  whose pixels change: Manim keeps the members of a moving mobject from the animation's start, so
+  swapped members stayed drawn (a ghost car). Headings: the existing two frames (facing left /
+  right) and `reverse` for driving away up the picture (`car_shapes(..., reverse=True)`: the back
+  window, tail lights on the visible end; a boat's bow mirrored); `spin` draws spokes turning
+  with the distance driven (`SPOKE_STEPS`). The train car's body is `train_body`, its track
+  `track_shapes` added to the place's ground along `track_cells` (under everything standing on
+  it). A rocket's flame (`rocket_fire`, longer while lifting off) flickers in `FLAME_FRAMES`; its
+  smoke over the pad is an `IsoGadgets` (`rocket_smoke`: `launch_smoke` puffs, graded by the
+  light) while the engine fires and `SMOKE_AFTER` 2.5 s after it has gone (hidden once out of
+  the view: `IsoDrive(gone=)`).
+- **On the stage** (`scenes/stage_vehicles.py`, `IsoDriving`): the vehicle is a body of the place
+  like a character (`_iso_bodies`): it stands in a box (`IsoVehicle.box`, `VEHICLE_SIZES`), has a
+  front picture of the pieces in front of it (`IsoScenery.front(box, exclude=)`: not its own
+  piece, so a rocket's tower behind it is not drawn over it) and is sorted with the characters
+  (`_iso_keep_order`); `IsoDrive` redraws the bodies while it plays (`_iso_redrawn`). It is also
+  a living thing of the stage (`update_to`, `changing`...): a switch, a flame, a boat's bob show
+  without an animation. `switch_on` / `switch_off` switch it (`iso_switch_vehicles`); `follow`
+  follows it; lint `offscreen_action` watches its moves; foley `drive_cues` (engine, brakes for a
+  car or a train, a boat's splash, a launch's roar). A tall frame's wide view keeps the vehicles
+  and where their moves go in view (`_iso_vehicle_views`).
+- **Measured** (854 x 480 @ 15 fps, preview): a 18 x 10 town with a car, a train car, a boat and a
+  rocket all moving, two characters: 21.5 s of video in 17 s.
+- **Public**: `vidgen.api` adds `ISO_VEHICLE_ACTIONS`, `LIFT_OFF_SECONDS`, `VEHICLE_ACTIONS`,
+  `VEHICLE_SPEEDS`, `VehicleRoute`, `drive_seconds`, `middle_of`, `moved_item`, `moved_place`,
+  `plan_vehicle`, `start_heading`, `track_cells`, `IsoDrive`, `IsoVehicle`, `rocket_smoke`,
+  `track_shapes`, `vehicle_shapes`; `ObjectLook.driven`; `IsoScenery.front(exclude=)`. Additive:
+  a scene without these actions takes no new branch; Phase Q baseline 31/31 identical.
+- **Left for later**: a turn is a switch of the drawing at the corner (no in-between angles); a
+  U-turn flips the vehicle; moving vehicles and walkers do not avoid each other (as two walkers);
+  no riders (`get_in` is the flat stage's); a train car is one car (no coupled cars); no
+  reflections or wake trail behind a boat beyond its foam.

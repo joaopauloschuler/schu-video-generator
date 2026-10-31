@@ -1942,6 +1942,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
+| `drive_to` | on an iso place: a `car` drives along the path cells to `to` (a spot or `{column, row}`, `via` on the way); a `train_car` rolls along its track | a car arriving, leaving, passing by |
+| `sail_to` | on an iso place: a `boat` sails across the water to `to` (`via` on the way) | a boat setting off or coming in |
+| `lift_off` | on an iso place: a `rocket` fires and rises out of the view | a launch |
 | `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`; `closeup ana ben`: two or three faces together; `{kind: closeup, of: kit, clear: true}` hides the others for the beat); the next beat without one cuts back; on an iso place `wide` is the place's wide view and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
 | `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
 | `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
@@ -2650,6 +2653,12 @@ and give each scene `set: village`.
   sweeps) and rocket (fires) work (a lit fireplace, floor lamp, street lamp, phone booth,
   campfire, cauldron or torch lights who stands near; pools of light and beams show mostly at
   night).
+- Vehicles move: `- {drive_to: car, to: shop, via: [corner]}` drives a `car` along the path
+  cells (`:`), turning at corners (driving away its tail shows; `switch_on` its headlights);
+  `- {sail_to: boat, to: pier}` sails a `boat` across `~`; `drive_to` rolls a `train_car` along
+  its row or column (its track is drawn there) until its middle is at `to`; `- lift_off: rocket`
+  fires and rises out of the view. `speed` in tiles per second; `follow: car` keeps the camera on
+  it; give the beat time for the way; `vidgen validate` names what is in the way.
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a

@@ -22,6 +22,7 @@ from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image
 from .stage_iso import IsoStaging, _moving_block, iso_particle_problem
 from .stage_story import FlashbackSetting, StoryStaging
+from .stage_vehicles import IsoDriving
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -836,7 +837,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(IsoStaging, StoryStaging, NarratedScene):
+class Stage(IsoDriving, IsoStaging, StoryStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -926,7 +927,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
     mid_still_actions = frozenset({
         "walk_to", "run_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
-        "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out", "let_go", "pour",
+        "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out", "let_go", "pour", "drive_to", "sail_to", "lift_off",
     })
 
     @classmethod
@@ -1452,9 +1453,12 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         steps = []
         for use in ordered:
             action = use.config.action
-            if action not in ISO_MOVES | ISO_ITEM_ACTIONS | ISO_PLACE_CHANGES:
+            if action not in ISO_MOVES | ISO_ITEM_ACTIONS | ISO_PLACE_CHANGES | ISO_VEHICLE_ACTIONS:
                 continue
             names = objects if action in ISO_PLACE_CHANGES else characters
+            if action in ISO_VEHICLE_ACTIONS:   # the vehicles it moves (§105)
+                kinds = params.iso.object_kinds()
+                names = [n for n in objects if VEHICLE_ACTIONS.get(kinds.get(n, "")) == action]
             moved = tuple(n for n in names if any(fnmatchcase(n, pattern) for pattern in use.config.targets()))
             plan = use.action._iso_plan() if action in ISO_MOVES else dict(use.config.options)
             steps.append(IsoStep(use.location, use.beat, "walk_to" if action == "run_to" else action, moved,
@@ -1633,7 +1637,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         #: the scene updater keeping the draw order, kept: Manim removes an updater by identity
         self._order_updater = self._draw_order_step
         fronts = any(c.facing == "front" for c in self.params.characters) or any(u.options.to == "front" for u in self.action_uses("turn"))
-        if fronts or getattr(self, "_iso_gadget_places", None):   # a working object's parts over who stands behind it (§103)
+        if fronts or getattr(self, "_iso_gadget_places", None) or getattr(self, "iso_vehicles", None):   # a working object's parts (§103), a vehicle (§105)
             self._watch_draw_order()
 
     def _watch_draw_order(self) -> None:
@@ -2169,6 +2173,9 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         backdrop += [still] if still is not None else []
         backdrop += self._level_story()   # coins and stars float in front of the tiles, not graded by the light
         self._start_sky_path()
+        vehicles = list(getattr(self, "iso_vehicles", {}).items())   # the vehicles the scene moves: bodies of the place (§105)
+        mark_lit(*(vehicle for _, vehicle in vehicles))
+        on_stage = vehicles + on_stage
         # register back to front, so the fade-ins add them (and draw them) in that order
         targets = [self.target(name, mob) for name, mob in on_stage]
         for whole in targets:  # parts come on screen with their character (§69.14)
@@ -3469,6 +3476,8 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     if isinstance(anim, Ride):
         lands = 1.0 if anim.flies and anim.course.land else None   # a balloon or a toy rocket touching down (§69.53)
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind, lands=lands)
+    if isinstance(anim, IsoDrive):   # a vehicle on an iso place (§105)
+        return PlayedAction(action, start, seconds, vehicle=anim.kind)
     if isinstance(anim, ArcJump):   # on a level: it lands as its settle starts (DESIGN.md §86.9)
         return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift, lands=1.0 - anim.phases.after, pickups=_picked_kinds(anim))
     if isinstance(anim, Jump):

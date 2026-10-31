@@ -384,9 +384,13 @@ class IsoScenery:
         """The base picture: the ground and every piece there now but the layered ones."""
         return (True, self._entries([k for k in range(len(self.pieces)) if k not in self.layered]))
 
-    def front(self, box: Box3) -> Picture | None:
-        """The front picture of a character standing in ``box`` (``None``: nothing hides it)."""
-        found = self._entries(self.over(box))
+    def front(self, box: Box3, exclude: Collection[str] = ()) -> Picture | None:
+        """The front picture of a character standing in ``box`` (``None``: nothing hides it);
+        ``exclude``: pieces left out (a driven vehicle's own piece, DESIGN.md §105)."""
+        over = self.over(box)
+        if exclude:
+            over = tuple(k for k in over if self.pieces[k].name not in exclude)
+        found = self._entries(over)
         return (False, found) if found else None
 
     def layer(self, name: str) -> Picture | None:

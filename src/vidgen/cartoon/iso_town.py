@@ -386,19 +386,35 @@ def _newsstand(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
 # ----- vehicles: car, bicycle ------------------------------------------------------------------------------
 
 
-def _car(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+def _car(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool = False, spin: float | None = None) -> list[Shape]:
     """A small parked car (``color``) side-on, its nose to the viewer's right: a body with
     wheels, doors and a handle, a cabin with windows (``detail``), bumpers, a grille and
-    headlights; on, the headlights shine (light on the ground ahead) and the tail lights glow."""
+    headlights; on, the headlights shine (light on the ground ahead) and the tail lights glow.
+    ``reverse``: its tail to the viewer's right (driving away up the picture, DESIGN.md §105): the
+    rear window and the tail lights show there; ``spin``: its wheels' spokes turned so far
+    (radians; ``None``: plain hubcaps). Driven, the stage draws it (:func:`car_shapes`)."""
+    if look.driven:
+        return []
+    return car_shapes(f, look, state, reverse=reverse, spin=spin)
+
+
+def car_shapes(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool = False, spin: float | None = None) -> list[Shape]:
+    """The shapes of :func:`_car` (also for a car the stage drives)."""
     w, d = f.width, f.depth
     body = look.main
     on = state.on
+
+    def X(a: float) -> float:   # along the car: mirrored when its tail is to the right
+        return w - a if reverse else a
+
     a0, a1, b0, b1 = 0.1, w - 0.1, 0.2, 0.84
-    shapes = light_pool(f.p(a1 + 0.45, (b0 + b1) / 2, 0.01), 0.55, 0.9) if on else []
+    shapes = light_pool(f.p(X(a1 + 0.45), (b0 + b1) / 2, 0.01), 0.55, 0.9) if on else []
     shapes += f.box(a0, b0, 0.2, a1, b1, 0.68, body)
     c0, c1, low, high = b0 + 0.06, b1 - 0.06, 0.68, 1.28
-    rear, roof0, roof1, nose = 0.42, 0.66, 1.26, 1.54
-    shapes.append(f.poly([(rear, c0, low), (rear, c1, low), (roof0, c1, high), (roof0, c0, high)], shade(body, 0.2)))
+    rear, roof0, roof1, nose = X(0.42), X(0.66), X(1.26), X(1.54)
+    back_window = [(rear, c0, low), (rear, c1, low), (roof0, c1, high), (roof0, c0, high)]
+    if not reverse:   # the back window slopes away from the viewer
+        shapes.append(f.poly(back_window, shade(body, 0.2)))
     shapes.append(f.poly([(roof0, c0, high), (roof1, c0, high), (roof1, c1, high), (roof0, c1, high)], mix(body, SHINE, 0.1)))
     shapes.append(f.poly([(rear, c1, low), (nose, c1, low), (roof1, c1, high), (roof0, c1, high)], f.front(body)))
 
@@ -406,34 +422,50 @@ def _car(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
         return edge + rise * (z - low) / (high - low)
 
     glass = look.detail
-    w0, w1, pillar = low + 0.07, high - 0.07, 1.0
-    for u_rear, u_front in ((lambda z: along(rear, roof0 - rear, z) + 0.07, lambda z: pillar - 0.03),
-                            (lambda z: pillar + 0.03, lambda z: along(nose, roof1 - nose, z) - 0.07)):
+    w0, w1, pillar = low + 0.07, high - 0.07, X(1.0)
+    inward = -1.0 if reverse else 1.0   # from the ends of the cabin towards its middle
+    for u_rear, u_front in ((lambda z: along(rear, roof0 - rear, z) + 0.07 * inward, lambda z: pillar - 0.03 * inward),
+                            (lambda z: pillar + 0.03 * inward, lambda z: along(nose, roof1 - nose, z) - 0.07 * inward)):
         shapes.append(f.poly([(u_rear(w0), c1 + 0.001, w0), (u_front(w0), c1 + 0.001, w0), (u_front(w1), c1 + 0.001, w1), (u_rear(w1), c1 + 0.001, w1)],
                              f.front(glass)))
-    shapes.append(Line((f.p(0.62, c1 + 0.002, 0.8), f.p(0.74, c1 + 0.002, 1.12)), SHINE, 1.2))
-    shapes.append(f.poly([(nose, c1, low), (nose, c0, low), (roof1, c0, high), (roof1, c1, high)], f.side(body)))
-    shapes.append(f.poly([(nose - 0.035, c1 - 0.05, low + 0.05), (nose - 0.035, c0 + 0.05, low + 0.05), (roof1 + 0.025, c0 + 0.05, high - 0.04),
-                          (roof1 + 0.025, c1 - 0.05, high - 0.04)], f.side(mix(glass, SHINE, 0.15)), False))
+    shapes.append(Line((f.p(X(0.62), c1 + 0.002, 0.8), f.p(X(0.74), c1 + 0.002, 1.12)), SHINE, 1.2))
+    if not reverse:   # the windscreen on the end to the viewer's right
+        shapes.append(f.poly([(nose, c1, low), (nose, c0, low), (roof1, c0, high), (roof1, c1, high)], f.side(body)))
+        shapes.append(f.poly([(nose - 0.035, c1 - 0.05, low + 0.05), (nose - 0.035, c0 + 0.05, low + 0.05), (roof1 + 0.025, c0 + 0.05, high - 0.04),
+                              (roof1 + 0.025, c1 - 0.05, high - 0.04)], f.side(mix(glass, SHINE, 0.15)), False))
+    else:   # the back window there instead
+        shapes.append(f.poly([(rear, c1, low), (rear, c0, low), (roof0, c0, high), (roof0, c1, high)], f.side(body)))
+        shapes.append(f.poly([(rear - 0.035, c1 - 0.05, low + 0.05), (rear - 0.035, c0 + 0.05, low + 0.05), (roof0 + 0.025, c0 + 0.05, high - 0.04),
+                              (roof0 + 0.025, c1 - 0.05, high - 0.04)], f.side(mix(glass, SHINE, 0.15)), False))
     face = b1 + 0.001
-    shapes.append(Line((f.p(0.98, face, 0.24), f.p(0.98, face, 0.66)), shade(body, 0.3), 0.9))
-    shapes.append(Line((f.p(1.12, face + 0.001, 0.58), f.p(1.22, face + 0.001, 0.58)), TRIM, 2.2))
-    shapes.append(Line((f.p(0.7, face + 0.001, 0.58), f.p(0.8, face + 0.001, 0.58)), TRIM, 2.2))
-    shapes += f.box(1.42, b1, 0.7, 1.5, b1 + 0.07, 0.8, shade(body, 0.1))   # a mirror
+    shapes.append(Line((f.p(X(0.98), face, 0.24), f.p(X(0.98), face, 0.66)), shade(body, 0.3), 0.9))
+    shapes.append(Line((f.p(X(1.12), face + 0.001, 0.58), f.p(X(1.22), face + 0.001, 0.58)), TRIM, 2.2))
+    shapes.append(Line((f.p(X(0.7), face + 0.001, 0.58), f.p(X(0.8), face + 0.001, 0.58)), TRIM, 2.2))
+    shapes += f.box(min(X(1.42), X(1.5)), b1, 0.7, max(X(1.42), X(1.5)), b1 + 0.07, 0.8, shade(body, 0.1))   # a mirror
     shapes.append(_rect(f, a0, a1, face, 0.2, 0.28, TRIM, False))
     shapes.append(_side_rect(f, a1 + 0.001, b0, b1, 0.2, 0.3, f.side(TRIM), False))
     tail = "#FF4A3D" if on else TAIL
-    shapes.append(_rect(f, a0 + 0.01, a0 + 0.08, face + 0.001, 0.46, 0.6, tail, False, on))
-    for u0, u1 in ((b0 + 0.05, b0 + 0.17), (b1 - 0.17, b1 - 0.05)):
-        lamp = LIT_CORE if on else "#E6EAF0"
-        shapes.append(_side_rect(f, a1 + 0.002, u0, u1, 0.46, 0.58, lamp, True, on))
-    shapes.append(_side_rect(f, a1 + 0.002, b0 + 0.24, b1 - 0.24, 0.36, 0.5, CASING))
+    if not reverse:
+        shapes.append(_rect(f, a0 + 0.01, a0 + 0.08, face + 0.001, 0.46, 0.6, tail, False, on))
+        for u0, u1 in ((b0 + 0.05, b0 + 0.17), (b1 - 0.17, b1 - 0.05)):
+            lamp = LIT_CORE if on else "#E6EAF0"
+            shapes.append(_side_rect(f, a1 + 0.002, u0, u1, 0.46, 0.58, lamp, True, on))
+        shapes.append(_side_rect(f, a1 + 0.002, b0 + 0.24, b1 - 0.24, 0.36, 0.5, CASING))
+    else:   # its back: the tail lights, a headlight's edge at the front of its side
+        shapes.append(_rect(f, a0 + 0.01, a0 + 0.06, face + 0.001, 0.46, 0.58, LIT_CORE if on else "#E6EAF0", False, on))
+        for u0, u1 in ((b0 + 0.04, b0 + 0.2), (b1 - 0.2, b1 - 0.04)):
+            shapes.append(_side_rect(f, a1 + 0.002, u0, u1, 0.44, 0.6, tail, True, on))
     shapes.append(_side_rect(f, a1 + 0.003, b0 + 0.27, b1 - 0.27, 0.22, 0.29, PAPER, False))   # the number plate
-    for a in (0.44, w - 0.46):   # the near wheels in their arches
+    for a in (X(0.44), X(w - 0.46)):   # the near wheels in their arches
         shapes.append(f.poly([(a + 0.25 * math.cos(t), face + 0.001, 0.22 + 0.25 * math.sin(t)) for t in [math.pi * k / 12 for k in range(13)]],
                              shade(body, 0.5), False))
         shapes.append(f.poly(_face_circle(f, a, face + 0.002, 0.21, 0.21, 20), TYRE))
         shapes.append(f.poly(_face_circle(f, a, face + 0.003, 0.21, 0.1, 14), CHROME))
+        if spin is not None:   # spokes, turning as it rolls
+            for k in range(2):
+                t = spin + math.pi / 2 * k
+                shapes.append(Line((f.p(a + 0.095 * math.cos(t), face + 0.0035, 0.21 + 0.095 * math.sin(t)),
+                                    f.p(a - 0.095 * math.cos(t), face + 0.0035, 0.21 - 0.095 * math.sin(t))), TRIM, 1.3))
         shapes.append(f.poly(_face_circle(f, a, face + 0.004, 0.21, 0.035, 8), TRIM, False))
     return shapes
 

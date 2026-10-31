@@ -112,11 +112,14 @@ BOOK_COLORS: tuple[str, ...] = ("#E2574C", "#F6C945", "#5BA35B", "#4C8DD6", "#B4
 class ObjectLook:
     """An object's resolved colours (``#rrggbb``); ``moving``: its moving parts are drawn over its
     picture by the stage while it works (:func:`object_motion`), so the picture of it working
-    leaves them out (a robot arm's arm, DESIGN.md §103)."""
+    leaves them out (a robot arm's arm, DESIGN.md §103); ``driven``: a vehicle the stage moves
+    (DESIGN.md §105): the stage draws it, so the picture leaves it out (a car, a boat, a train
+    car on its track; a rocket's pad and tower stay)."""
 
     main: str
     detail: str
     moving: bool = False
+    driven: bool = False
 
 
 class _Frame:

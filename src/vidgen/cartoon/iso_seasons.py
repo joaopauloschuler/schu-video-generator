@@ -355,14 +355,18 @@ def _hull_half(a: float) -> float:
     return 0.3 if a <= 1.2 else 0.3 * math.sqrt(max(0.0, 1.0 - ((a - 1.2) / 0.72) ** 2))
 
 
-def _boat_parts(f: _Frame, look: ObjectLook, on: bool, lift: float, pitch: float, roll: float) -> list[Poly]:
+def _boat_parts(f: _Frame, look: ObjectLook, on: bool, lift: float, pitch: float, roll: float, reverse: bool = False) -> list[Poly]:
     """A small sailing boat afloat (rising ``lift``, pitching and rolling by those shares): its
     hull (``color``) and deck, a white stripe, a mast with a mainsail and a jib (``detail``), a
-    pennant, a lantern at the stern (lit when ``on``), then the foam where it meets the water."""
+    pennant, a lantern at the stern (lit when ``on``), then the foam where it meets the water.
+    ``reverse``: its bow to the viewer's left (sailing up the picture, DESIGN.md §105)."""
     wl = -WATER_DEPTH
 
+    def q(a: float, b: float, z: float) -> Point3:
+        return f.p(f.width - a if reverse else a, b, z)
+
     def p(a: float, b: float, z: float) -> Point3:
-        return f.p(a, b + roll * (z - wl), z + lift + pitch * (a - 1.0))
+        return q(a, b + roll * (z - wl), z + lift + pitch * (a - 1.0))
 
     def gunwale(a: float) -> float:
         return wl + 0.42 + 0.1 * max(0.0, (a - 1.2) / 0.72) ** 2
@@ -391,7 +395,7 @@ def _boat_parts(f: _Frame, look: ObjectLook, on: bool, lift: float, pitch: float
     shapes.append(_round(p(0.22, 0.5, gunwale(0.22) + 0.39), 0.05, LIT_GLASS if on else "#8A93A3", True, on, 12))
     rim = [(a, b + 0.0) for a, b in near] + [(a, b) for a, b in far if a > 1.45]
     out = [(a + (0.08 if a > 1.8 else 0.0), b + (0.08 if b >= 0.5 else -0.08)) for a, b in rim]
-    shapes.append(Poly(tuple([f.p(a, b, wl + 0.004) for a, b in rim] + [f.p(a, b, wl + 0.004) for a, b in reversed(out)]), FOAM, False))
+    shapes.append(Poly(tuple([q(a, b, wl + 0.004) for a, b in rim] + [q(a, b, wl + 0.004) for a, b in reversed(out)]), FOAM, False))
     return shapes
 
 
@@ -407,6 +411,8 @@ def _boat(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     (``color``), a deck, a mast and two sails (``detail``), a lantern at its stern; on, the lantern
     is lit (light on the water) and the boat bobs (the stage rocks it)."""
     on = state.on
+    if look.driven:   # the stage sails it (DESIGN.md §105)
+        return []
     shapes: list[Shape] = light_pool(f.p(0.25, 0.5, -WATER_DEPTH + 0.01), 0.8, 0.6) if on else []
     if not (on and look.moving):   # the stage rocks it while on
         shapes += _boat_parts(f, look, on, 0.0, 0.0, 0.0)
@@ -499,16 +505,31 @@ def _beam(f: _Frame, look: ObjectLook, now: float) -> list[Motion]:
 
 def _train_car(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     """A passenger carriage (``color``) side-on on a stretch of track: a row of windows with a
-    trim line (``detail``), doors at its ends, a rounded roof, two bogies with wheels."""
+    trim line (``detail``), doors at its ends, a rounded roof, two bogies with wheels. Driven, the
+    stage draws its track along the way it rolls and the carriage itself (DESIGN.md §105)."""
+    if look.driven:
+        return []
+    return train_track(f) + train_body(f, look)
+
+
+def train_track(f: _Frame) -> list[Shape]:
+    """A stretch of track along the frame's width: sleepers, then the rails."""
     w = f.width
-    body = look.main
-    a0, a1, b0, b1 = 0.14, w - 0.14, 0.22, 0.78
     shapes: list[Shape] = []
     for k in range(int((w - 0.26) / 0.4) + 1):   # sleepers, then the rails
         a = 0.1 + k * 0.4
         shapes += f.box(a, 0.12, 0.0, a + 0.16, 0.88, 0.05, "#7A5236")
     for b in (0.3, 0.7):
         shapes += f.box(0.0, b - 0.025, 0.05, w, b + 0.025, 0.1, "#8A93A3")
+    return shapes
+
+
+def train_body(f: _Frame, look: ObjectLook) -> list[Shape]:
+    """A train car's carriage on its bogies (:func:`_train_car` without its track)."""
+    w = f.width
+    body = look.main
+    a0, a1, b0, b1 = 0.14, w - 0.14, 0.22, 0.78
+    shapes: list[Shape] = []
     for c0 in (0.4, w - 1.0):   # the bogies: a frame and two wheels each on the near side
         shapes += f.box(c0, 0.3, 0.12, c0 + 0.6, 0.7, 0.36, CASING)
         for a in (c0 + 0.15, c0 + 0.45):
@@ -564,12 +585,24 @@ def _rocket(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     """A rocket (``color``, its nose, fins and band ``detail``) standing on a launch pad of
     concrete with hazard stripes beside an orange service tower; on, its engine fires (the stage
     makes the flame roar and smoke billow over the pad) and the fire lights the pad."""
-    w, d = f.width, f.depth
-    on = state.on
+    on = state.on and not look.driven
     x, y, z = _rocket_centre(f)
-    body, trim = look.main, look.detail
     shapes: list[Shape] = light_pool((x, y, z + 0.17), 1.7) if on else []
-    shapes += f.box(0.06, 0.06, 0.0, w - 0.06, d - 0.06, 0.16, CONCRETE)
+    shapes += _launch_pad(f, on)
+    if look.driven:   # the stage draws the rocket and lifts it off (DESIGN.md §105)
+        return shapes
+    shapes += rocket_body(f, look, on)
+    if on and not look.moving:   # the stage makes it roar and smoke
+        shapes += _rocket_fire(f, 0.4)
+    return shapes
+
+
+def _launch_pad(f: _Frame, on: bool) -> list[Shape]:
+    """A rocket's launch pad: concrete with hazard stripes, the flame trench (glowing while the
+    engine fires) and the orange service tower behind the rocket."""
+    w, d = f.width, f.depth
+    x, y, z = _rocket_centre(f)
+    shapes = f.box(0.06, 0.06, 0.0, w - 0.06, d - 0.06, 0.16, CONCRETE)
     shapes += _stripes(f, 0.1, w - 0.1, d - 0.06 + 0.001, 0.03, 0.13)
     shapes += _stripes(f, 0.1, d - 0.1, 0.0, 0.03, 0.13, side=w - 0.06 + 0.001)
     shapes.append(Disc((x, y, z + 0.161), 0.36, "#3A3F4B", True, holds_snow=False))
@@ -586,6 +619,15 @@ def _rocket(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     shapes.append(Line((f.p(a1, b1, 0.16), f.p(a1, b1, top)), tower, 2.6))
     shapes += f.box(a0 - 0.03, b0 - 0.03, top, a1 + 0.03, b1 + 0.03, top + 0.06, tower)
     shapes += f.box(w / 2 - 0.05, b1, 3.2, w / 2 + 0.05, d / 2 - ROCKET_RADIUS + 0.02, 3.28, tower)
+    return shapes
+
+
+def rocket_body(f: _Frame, look: ObjectLook, on: bool) -> list[Shape]:
+    """A rocket on its pad (:func:`_rocket` without the pad and tower): fins, nozzle, body bands
+    (``color``, ``detail``), nose cone and a round window (lit when ``on``)."""
+    x, y, z = _rocket_centre(f)
+    body, trim = look.main, look.detail
+    shapes: list[Shape] = []
     for t in (math.pi * 5 / 4, -math.pi / 4, math.pi * 3 / 4):   # fins behind and at the sides
         shapes.append(Poly(tuple((x + s * math.cos(t), y + s * math.sin(t), z + zz) for s, zz in ((0.26, 0.6), (0.58, 0.48), (0.58, 0.82), (0.26, 1.35))),
                            shade(trim, 0.12)))
@@ -598,9 +640,36 @@ def _rocket(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
                _round(_screen(window, -0.02, 0.02), 0.02, SHINE, False)]
     t = math.pi / 4   # the fin to the viewer
     shapes.append(Poly(tuple((x + s * math.cos(t), y + s * math.sin(t), z + zz) for s, zz in ((0.26, 0.6), (0.6, 0.46), (0.6, 0.82), (0.26, 1.38))), trim))
-    if on and not look.moving:   # the stage makes it roar and smoke
-        shapes += _rocket_fire(f, 0.4)
     return shapes
+
+
+def rocket_fire(f: _Frame, now: float, boost: float = 1.0) -> list[Poly]:
+    """A rocket's flame at ``now`` under its nozzle, ``boost`` times as long (a lift-off's roar)."""
+    flames = _rocket_fire(f, now)
+    if boost == 1.0:
+        return flames
+    x, y, z = _rocket_centre(f)
+    top = z + NOZZLE
+    return [Poly(tuple((px, py, top + (pz - top) * (boost if pz < top else 1.0)) for px, py, pz in p.points), p.fill, p.ink, p.glow) for p in flames]
+
+
+#: A lift-off's smoke: how many puffs and how long one takes to billow out (seconds).
+LAUNCH_PUFFS = 10
+LAUNCH_SMOKE_SECONDS = 2.6
+
+
+def launch_smoke(f: _Frame, now: float, strength: float) -> list[Motion]:
+    """A lift-off's smoke at ``now``: :data:`LAUNCH_PUFFS` big puffs billowing out over the pad
+    and the ground round it to both sides, rising and fading; ``strength`` (0..1) scales how
+    much shows (it dies away after the rocket has gone). Always the same number of parts."""
+    x, y, z = _rocket_centre(f)
+    parts = []
+    for k in range(LAUNCH_PUFFS):
+        rise = _rising(now, k, LAUNCH_PUFFS, LAUNCH_SMOKE_SECONDS)
+        way = (1.0 if k % 2 else -1.0) * (0.6 + 0.4 * ((k * 7) % 5) / 4)
+        point = _screen((x, y, z + 0.2), way * (0.15 + 0.85 * rise), 0.05 + 0.3 * rise + 0.08 * (k % 3))
+        parts.append(Motion(_round(point, 0.16 + 0.26 * rise, SMOKE).points, SMOKE, 0.75 * _fade(rise) * strength, False, False))   # graded by the light
+    return parts
 
 
 def _rocket_motion(f: _Frame, now: float) -> list[Motion]:
