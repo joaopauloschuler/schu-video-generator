@@ -67,7 +67,8 @@ MAX_ROWS = 48
 class ObjectKind:
     """A ready-made object: its footprint (``width`` columns by ``depth`` rows when facing left),
     its height (tile units), whether one can walk on it (a rug, a bridge; ``deck``: how high
-    over its base the feet stand on it) and the ground it may stand on (``water``: a bridge spans it); ``top``: how high over its base a
+    over its base the feet stand on it) and the ground it may stand on (``water``: a bridge spans it;
+    ``floats``: only water, a boat, §104); ``top``: how high over its base a
     small thing put on it stands (a table's top, a bench's seat; ``None``: nothing goes on it,
     DESIGN.md §89.10)."""
 
@@ -76,6 +77,7 @@ class ObjectKind:
     height: float
     walkable: bool = False
     over_water: bool = False
+    floats: bool = False
     deck: float = 0.0
     top: float | None = None
 
@@ -193,6 +195,18 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "signpost": ObjectKind(1, 1, 2.25),
     "archway": ObjectKind(2, 1, 3.25),
     "statue": ObjectKind(1, 1, 2.9),
+    # seasons, a harbour and travel (§104): a boat floats on water (~), a dock reaches over it
+    "christmas_tree": ObjectKind(1, 1, 3.1),
+    "snowman": ObjectKind(1, 1, 1.95),
+    "pumpkin": ObjectKind(1, 1, 0.85),
+    "gift_pile": ObjectKind(1, 1, 0.95),
+    "balloon_bunch": ObjectKind(1, 1, 2.75),
+    "birthday_cake": ObjectKind(1, 1, 1.55),
+    "boat": ObjectKind(2, 1, 2.6, over_water=True, floats=True),
+    "dock": ObjectKind(1, 2, 0.55, walkable=True, over_water=True, deck=0.22),
+    "lighthouse": ObjectKind(1, 1, 5.6),
+    "train_car": ObjectKind(3, 1, 2.05),
+    "rocket": ObjectKind(2, 2, 4.7),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
@@ -215,7 +229,8 @@ SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", 
                                             "lab_fridge", "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d",
                                             "fireplace", "stove", "floor_lamp", "tv", "vending_machine", "street_lamp", "traffic_light",
                                             "fountain", "phone_booth", "car", "campfire", "pond", "beehive",
-                                            "desk_with_pc", "water_cooler", "printer", "globe", "cauldron", "giant_crystal", "torch_sconce"})
+                                            "desk_with_pc", "water_cooler", "printer", "globe", "cauldron", "giant_crystal", "torch_sconce",
+                                            "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce"})
 
@@ -604,6 +619,10 @@ def _with_objects(place: IsoPlace, objects: Sequence[IsoObject]) -> IsoPlace:
             elif ground in WALLS or (ground == WATER and not kind.over_water):
                 raise VidgenError(f"'{item.name}' would stand on {'a wall' if ground in WALLS else 'water'} at {where}; "
                                   "move it, or make it smaller (size)")
+            elif kind.floats and ground != WATER:
+                spot = any(s.column == c and s.row == r for s in place.spots)
+                raise VidgenError(f"'{item.name}' floats: put it on water (~), every cell of it ({item.width} x {item.depth}); "
+                                  f"{where} is not water" + (" (a spot's letter is ground: give its at as {column, row} on the ~)" if spot else ""))
             if (c, r) in occupied:
                 raise VidgenError(f"'{item.name}' and '{occupied[(c, r)]}' would both stand at {where}; move one of them (its at)")
             if place.cell(c, r).steps != place.cell(item.column, item.row).steps:
@@ -617,7 +636,7 @@ def place_objects(place: IsoPlace, placings: Sequence[ObjectPlacing]) -> IsoPlac
     footprint's back cell, its top left on the map) or cell, named by its own name or its kind
     numbered after the map's (``house``, ``house_2``). :class:`VidgenError` naming the object and
     the cell for an unknown kind or spot, a footprint outside the place, on a wall, on water (but
-    a bridge), on two heights or on another object."""
+    a bridge or a dock), a boat not all on water, on two heights or on another object."""
     counts = Counter(o.kind for o in place.objects)
     added = []
     for k, placing in enumerate(placings):

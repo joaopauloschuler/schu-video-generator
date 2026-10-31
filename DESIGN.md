@@ -20240,3 +20240,45 @@ Public surface (265): the kinds above. Additive; no shared drawing code changed.
 Public surface (266): the kinds above; `OPEN_WORKING` gains `treasure_chest`, `WALL_KINDS`
 `torch_sconce`, `LAMPLIGHT_KINDS` `cauldron` and `torch_sconce`. Additive; Phase Q baseline
 31/31 identical.
+
+- **Step 267 (seasons, harbour, travel)**: drawn in `iso_seasons.py`. `christmas_tree` (three
+  tiers in `color` with baubles, a garland of lights, a star in `detail`, a red pot; switched:
+  lights and star shine, a small pool; moving: lights twinkle in turn, a glow breathes round the
+  star), `snowman` (three snowballs on a drift, scarf `color`, top hat `detail`, a carrot nose
+  pointing the way it faces), `pumpkin` (ribbed, a carved face; switched: the face glows, a pool;
+  moving: the face flickers), `gift_pile` (four wrapped boxes, the biggest in `color`, ribbons and
+  bows in `detail`), `balloon_bunch` (five balloons, the first in `color`, strings to a weight in
+  `detail`; switched + moving: they sway; off or still, in the picture), `birthday_cake` (two
+  tiers on a little round table, icing `color`, top tier `detail`, four candles; switched: flames,
+  a pool; moving: they flicker), `boat` (2 x 1; `ObjectKind.floats`: every cell must be water,
+  "floats: put it on water (~)", with a hint when `at` is a spot, whose letter is ground; a
+  hull in `color`, deck, stripe, mast, mainsail and jib in `detail`, a pennant, a stern lantern;
+  its waterline at the water's surface (`-WATER_DEPTH`), foam where it meets the water; switched:
+  the lantern lit, a pool on the water; moving: the whole boat rises, pitches and rolls, so off
+  or still it is in the picture and working it is drawn only by the stage), `dock` (1 x 2,
+  walkable and `over_water` like `bridge`, `deck` 0.22: planks over posts, the front half's
+  posts reaching into the water, a coil of rope), `lighthouse` (5.6 tiles; banded tower in white
+  and `color`, gallery, glass lantern room, dome in `detail`; switched: lantern and windows lit;
+  moving: a beam sweeping round, fainter pointing away), `train_car` (3 x 1, side-on on a stretch
+  of track: windows, doors, a trim in `detail`, bogies), `rocket` (2 x 2; on a concrete pad with
+  hazard stripes beside an orange service tower; switched: an engine flame, a pool; moving: the
+  flame and smoke billowing over the pad, lit at night). None light characters. Heights
+  0.85–5.6 tiles.
+- **Review of the 63**: moving light thrown on things is now `Motion.pool` and shown as strong as
+  pools of light (`IsoGadgets(pool_strength=)`, the stage passes the camera's `POOL_STRENGTH`):
+  the fireplace's floor glow, the torch's light on its wall, the crystal's light on the ground,
+  the lighthouse's beam, the tree's star glow (they showed at full strength by day). A working
+  object's gadget region now also covers where its parts reach over `GADGET_SAMPLES` (a beam
+  leaves its box). Redrawn: the stove's steam (soft see-through S-wisps, not white dots), the
+  vending machine lit (a brighter window with a bright middle, light round it on its front, no
+  glare line when lit, a larger pool), the crib (fewer, thicker bars, no far-side bars, a bigger
+  star and moon), the bicycle (stretched to fill its cell, bigger wheels, thicker frame), the
+  crystal's pulse (its shards brighten from within; the round halo read as a bubble). Checked:
+  outlines and shading come from the shared helpers; heights 0.35–5.6 tiles against a
+  character's 2.0; pools are warm rings, faint by day; did-you-mean for names and kinds. A
+  preview of 19 working objects in one place: 8.9 s of video in 21 s (one working: 8.8 s; none:
+  5.3 s), about 5 ms per working object per frame.
+
+Public surface (267): the kinds above; `ObjectKind.floats`, `Motion.pool`,
+`IsoGadgets(pool_strength=)`, `POOL_DAY` and `POOL_STRENGTH` in `vidgen.api`. Additive; Phase Q
+baseline 31/31 identical.

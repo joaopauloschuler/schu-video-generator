@@ -482,6 +482,7 @@ from vidgen.cartoon.lighting import (  # noqa: E402
     DEFAULT_STRENGTH,
     LIGHT_FADE_SECONDS,
     LIGHT_PRESETS,
+    POOL_DAY,
     PROP_SHADOW_WIDTH,
     SHADOW_WIDTH,
     STAR_HEAD_ROOM,
@@ -627,7 +628,7 @@ from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
 from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, LIT_OBJECTS, MOVING_KINDS, OBJECT_COLORS, ObjectLook, object_box, object_lights, object_motion, object_working, tower_screen  # noqa: E402
 from vidgen.cartoon.iso_scenery import IsoColors, window_faces  # noqa: E402
 from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view  # noqa: E402
-from vidgen.cartoon.iso_pictures import GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
+from vidgen.cartoon.iso_pictures import POOL_STRENGTH, GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
 from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
@@ -1291,6 +1292,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "DEFAULT_STRENGTH",
     "LIGHT_FADE_SECONDS",
     "LIGHT_PRESETS",
+    "POOL_DAY",
     "PROP_SHADOW_WIDTH",
     "SHADOW_WIDTH",
     "STAR_HEAD_ROOM",
@@ -1559,6 +1561,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "IsoScenery",
     "IsoTiles",
     "GlowTile",
+    "POOL_STRENGTH",
     "IsoPuddles",
     "IsoSnow",
     "IsoPuddle",

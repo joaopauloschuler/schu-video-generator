@@ -2637,14 +2637,19 @@ and give each scene `set: village`.
   `school_desk` (with its chair), `desk_with_pc` (2 x 1), `water_cooler`, `printer`, `globe`,
   `trophy_shelf` (2 x 1), `treasure_chest` (`open`: gold glows), `cauldron` (`color` its
   potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a back wall), `signpost`,
-  `archway` (2 x 1), `statue`; `on: true` / `switch_on` makes the laptop, kiosk, core, arm,
+  `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`, `gift_pile`,
+  `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock` (1 x 2, over
+  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); `on: true` /
+  `switch_on` makes the laptop, kiosk, core, arm,
   centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
   airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV, vending machine, street
   lamp, traffic light (cycles), fountain, phone booth, car (headlights), campfire, pond
   (ripples), beehive (bees), desk_with_pc (its screen), water cooler (bubbles), printer
-  (prints), globe (spins), cauldron (bubbles), giant crystal (glows) and torch sconce work (a
-  lit fireplace, floor lamp, street lamp, phone booth, campfire, cauldron or torch lights who
-  stands near; pools of light show mostly at night).
+  (prints), globe (spins), cauldron (bubbles), giant crystal (glows), torch sconce, Christmas
+  tree (twinkles), pumpkin, balloons (sway), cake (candles), boat (bobs), lighthouse (its beam
+  sweeps) and rocket (fires) work (a lit fireplace, floor lamp, street lamp, phone booth,
+  campfire, cauldron or torch lights who stands near; pools of light and beams show mostly at
+  night).
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a

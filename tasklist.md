@@ -1609,7 +1609,9 @@ cartoon style, `on` states with gentle motion where listed; docs: the one "Other
 - [x] `treasure_chest` (opens with a golden glow), `cauldron` (bubbling potion in `color`), `giant_crystal` (pulses), `throne`, `torch_sconce` (wall-mounted flame), `signpost`, `archway`, `statue`; drawings in `cartoon/iso_fantasy.py`; a layer's clip covers its own pool of light
 
 ### Step 267 — Seasons II, harbour and review
-- [ ] `christmas_tree` (lights twinkle), `snowman`, `pumpkin` (glows), `gift_pile`, `balloon_bunch` (sways), `birthday_cake` (candles), `boat` (bobs on water), `dock`, `lighthouse` (beam at night), `train_car`, `rocket` (smoke / flame); a critical review of all 63 (style, sizes, on / off and night, performance, did-you-mean, the doc list), fixes, `test_mcp.py`
+- [x] `christmas_tree` (lights twinkle), `snowman`, `pumpkin` (glows), `gift_pile`, `balloon_bunch` (sways), `birthday_cake` (candles), `boat` (bobs on water), `dock`, `lighthouse` (beam at night), `train_car`, `rocket` (smoke / flame); a critical review of all 63 (style, sizes, on / off and night, performance, did-you-mean, the doc list), fixes, `test_mcp.py`; drawings in `cartoon/iso_seasons.py`; moving light on things (fire glow, torch light, beam) faint by day; stove steam, vending machine, crib, bicycle, crystal glow redone
+
+Phase AC done.
 
 ---
 

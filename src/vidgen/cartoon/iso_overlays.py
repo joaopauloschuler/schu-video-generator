@@ -372,8 +372,11 @@ class IsoGadgets(VGroup):
     (``outline``: the drawing style's factor); ``region``: the box (on screen) they stay in. The
     parts that are lights (:attr:`glowing`) are left out of the stage's light grade by the stage."""
 
-    def __init__(self, gadgets: Sequence[Gadget], project: Callable[[Any], Point], *, unit: float, region: Box, outline: float = 1.0) -> None:
+    def __init__(self, gadgets: Sequence[Gadget], project: Callable[[Any], Point], *, unit: float, region: Box, outline: float = 1.0,
+                 pool_strength: Callable[[], float] = lambda: 1.0) -> None:
         super().__init__()
+        #: how strong the parts that are light thrown on things (``pool``) show now (§104)
+        self.pool_strength = pool_strength
         ink = CHARACTER_INK
         stroke = ISO_OUTLINE * unit * outline / CAIRO_LINE_UNIT
         self.name = "gadgets"
@@ -397,16 +400,21 @@ class IsoGadgets(VGroup):
     def update_to(self, now: float) -> None:
         """Draw every working object's parts as they are at scene time ``now`` (none while it
         does not work)."""
+        strength = None
         for gadget, pieces in zip(self.gadgets, self.pieces):
             parts = gadget.parts(now) if gadget.working(now) else []
             for k, piece in enumerate(pieces):
                 part = parts[k] if k < len(parts) else None
-                if part is None or part.opacity <= 0.0:
+                opacity = 0.0 if part is None else part.opacity
+                if part is not None and getattr(part, "pool", False):   # light on things: faint by day (§104)
+                    strength = self.pool_strength() if strength is None else strength
+                    opacity *= strength
+                if part is None or opacity <= 0.0:
                     piece.points = np.zeros((0, 3))
                     continue
                 corners = [np.array([*self.project(p), 0.0]) for p in part.points]
                 piece.set_points_as_corners([*corners, corners[0]])
-                piece.set_fill(part.fill, opacity=part.opacity).set_stroke(opacity=part.opacity if part.ink else 0.0)
+                piece.set_fill(part.fill, opacity=opacity).set_stroke(opacity=opacity if part.ink else 0.0)
 
     def changing(self, start: float, end: float) -> bool:
         return any(gadget.busy(start, end) for gadget in self.gadgets)

@@ -34,6 +34,9 @@ ISO_LAMP_REACH = (1.0, 2.2)
 #: object's own) and a light's radius (tile widths).
 LAB_AMBER = "#FFB547"
 LAB_LIGHT_SIZE = 0.035
+#: The scene times at which a working object's moving parts are sampled for the region they stay
+#: in (its box, and wherever they reach: a lighthouse's sweeping beam, §104).
+GADGET_SAMPLES = tuple(k * 0.37 for k in range(40))
 
 
 @dataclass
@@ -446,10 +449,12 @@ class IsoStaging:
 
         box = object_box(item, base)
         corners = [self.iso_view.point(x, y, z) for x in (box.x0, box.x1 + 0.6) for y in (box.y0, box.y1 + 0.6) for z in (box.z0, box.z1 + 1.0)]
+        # and where its parts reach over a while (a lighthouse's beam sweeps far out of its box, §104)
+        corners += [self.iso_view.point(*p) for now in GADGET_SAMPLES for part in parts(now) for p in part.points]
         pad = 0.2 * self.iso_view.unit
         region = (min(x for x, _ in corners) - pad, min(y for _, y in corners) - pad, max(x for x, _ in corners) + pad, max(y for _, y in corners) + pad)
         return IsoGadgets([Gadget(parts, working, busy)], lambda point: self.iso_view.point(*point), unit=self.iso_view.unit, region=region,
-                          outline=self.drawing.outline_factor)
+                          outline=self.drawing.outline_factor, pool_strength=lambda: getattr(self.camera, POOL_STRENGTH, POOL_DAY))
 
     def _iso_place_gadgets(self) -> bool:
         """Keep each working object's moving parts (and the picture of what stands in front of

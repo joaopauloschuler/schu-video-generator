@@ -474,3 +474,112 @@ def test_the_fantasy_objects_render_open_move_and_light(make_project, tmp_path: 
     assert set(places) == {*FANTASY_WORKING, "treasure_chest"} and places["treasure_chest"].gadgets[0].working(end)
     assert not places["giant_crystal"].gadgets[0].working(end)
     assert set(scene._iso_lamps) == {"cauldron", "torch_sconce"} and len(frames) > 5 and np.any(frames[-1] != frames[3])
+
+
+# ----- Step 267: seasons, harbour and travel; the review --------------------------------------------------------
+
+SEASONS = ("christmas_tree", "snowman", "pumpkin", "gift_pile", "balloon_bunch", "birthday_cake", "boat", "dock", "lighthouse", "train_car", "rocket")
+SEASONS_SIZES = {"boat": (2, 1), "dock": (1, 2), "train_car": (3, 1), "rocket": (2, 2)}
+SEASONS_WORKING = ("christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket")
+HARBOUR = "......\n......\n......\n~~~~~~\n~~~~~~\n~~~~~~"
+
+
+def _harbour():
+    placings = (ObjectPlacing("lighthouse", (1, 1)), ObjectPlacing("rocket", (2, 1)), ObjectPlacing("train_car", (4, 1)),
+                ObjectPlacing("christmas_tree", (4, 2)), ObjectPlacing("snowman", (5, 2)), ObjectPlacing("pumpkin", (6, 2), facing="right"),
+                ObjectPlacing("gift_pile", (1, 3)), ObjectPlacing("balloon_bunch", (2, 3)), ObjectPlacing("birthday_cake", (3, 3)),
+                ObjectPlacing("dock", (4, 3)), ObjectPlacing("boat", (5, 5), facing="left"))
+    return place_objects(parse_iso_map(HARBOUR, place="outdoor"), placings)
+
+
+def test_seasons_objects_have_footprints_colours_and_states() -> None:
+    for kind in SEASONS:
+        assert kind in OBJECT_KINDS and kind in OBJECT_COLORS and MORE_MODULES[kind] == "iso_seasons" and OBJECT_KINDS[kind].height <= 5.6
+        assert (OBJECT_KINDS[kind].width, OBJECT_KINDS[kind].depth) == SEASONS_SIZES.get(kind, (1, 1))
+        assert default_state(kind) == ObjectState() and kind not in OPENING_KINDS and kind not in OBJECT_STYLES
+    assert set(SEASONS) & SWITCHED_KINDS == set(SEASONS) & set(MOVING_KINDS) == set(SEASONS_WORKING) and not set(SEASONS) & LAMPLIGHT_KINDS
+    assert OBJECT_KINDS["boat"].floats and OBJECT_KINDS["dock"].walkable and OBJECT_KINDS["dock"].over_water and not OBJECT_KINDS["dock"].floats
+
+
+def test_seasons_objects_draw_light_up_and_move() -> None:
+    place = _harbour()
+    for item in place.objects:
+        off = object_shapes(item, _look(item.kind), 0.0, ObjectState())
+        assert off and not any(getattr(s, "glow", False) for s in off), item.kind
+        if item.kind in SEASONS_WORKING:
+            on = object_shapes(item, _look(item.kind), 0.0, ObjectState(on=True))
+            assert on != off or item.kind == "balloon_bunch", item.kind   # still balloons: the same on or off
+            early, late = (object_motion(item, _look(item.kind), 0.0, t, ObjectState(on=True)) for t in (0.2, 1.3))
+            assert early and len(early) == len(late) and [(p.points, p.opacity) for p in early] != [(p.points, p.opacity) for p in late], item.kind
+    for kind in ("balloon_bunch", "boat"):   # swaying, bobbing: drawn by the stage while on, still in the picture while off
+        item = place.object(kind)
+        assert len(object_shapes(item, _look(kind, True), 0.0, ObjectState(on=True))) < len(object_shapes(item, _look(kind, True), 0.0, ObjectState()))
+    for kind in ("pumpkin", "christmas_tree", "birthday_cake", "rocket"):   # lit: a warm pool of light
+        lit = object_shapes(place.object(kind), _look(kind), 0.0, ObjectState(on=True))
+        assert any(getattr(s, "glow", False) for s in lit) and len([s for s in lit if isinstance(s, Disc) and s.pool]) == 3, kind
+    beam = object_motion(place.object("lighthouse"), _look("lighthouse"), 0.0, 1.0, ObjectState(on=True))
+    assert all(p.pool and p.glow for p in beam)   # a beam: strong at night, faint by day
+
+
+def test_a_boat_floats_and_a_dock_is_walked_on() -> None:
+    place = _harbour()
+    assert place.is_standable(3, 3) and place.is_standable(3, 2) and place.stand_z(3, 3) == pytest.approx(OBJECT_KINDS["dock"].deck)
+    assert not place.is_standable(4, 4)   # the boat
+    for at, message in (((2, 3), "floats: put it on water"), ((5, 3), "floats: put it on water")):
+        with pytest.raises(VidgenError, match=message):
+            place_objects(parse_iso_map(HARBOUR, place="outdoor"), (ObjectPlacing("boat", at),))
+    with pytest.raises(VidgenError, match="a spot's letter is ground"):
+        place_objects(parse_iso_map("....\n~b~~\n~~~~", place="outdoor"), (ObjectPlacing("boat", "b"),))
+    with pytest.raises(VidgenError, match="would stand on water"):
+        place_objects(parse_iso_map(HARBOUR, place="outdoor"), (ObjectPlacing("snowman", (2, 5)),))
+
+
+def test_seasons_keys_validate() -> None:
+    good = stage_params(iso={**ISO, "objects": [{"object": "christmas_tree", "at": "here", "on": True}, {"object": "gift_pile", "at": "there"}]})
+    assert good.iso.objects[0].state().on and good.iso.objects[1].placing().kind == "gift_pile"
+    for bad, message in (({"object": "snowman", "at": "here", "on": True}, "on is for"), ({"object": "pumpkin", "at": "here", "open": True}, "open is for"),
+                         ({"object": "train_car", "at": "here", "kind": "sleeper"}, "kind is for a hazard_sign"),
+                         ({"object": "christmastree", "at": "here"}, "did you mean christmas_tree"),
+                         ({"object": "baloon_bunch", "at": "here"}, "did you mean balloon_bunch"), ({"object": "lighthous", "at": "here"}, "did you mean lighthouse")):
+        with pytest.raises(ValidationError, match=message):
+            stage_params(iso={**ISO, "objects": [bad]})
+
+
+def test_light_thrown_on_things_follows_the_light() -> None:
+    """Moving light thrown on things (a fireplace's glow on the floor, a torch's on its wall, a
+    lighthouse's beam) is marked ``pool`` and shown as strong as pools of light: faint by day (it
+    showed at full strength by day, DESIGN.md §104)."""
+    fire = place_objects(parse_iso_map(WIDE, place="indoor"), (ObjectPlacing("fireplace", (2, 2)),)).object("fireplace")
+    glow = object_motion(fire, _look("fireplace"), 0.0, 0.5, ObjectState(on=True))[0]
+    assert glow.pool and glow.glow
+    from vidgen.cartoon.iso_overlays import Gadget, IsoGadgets
+    parts = object_motion(fire, _look("fireplace"), 0.0, 0.5, ObjectState(on=True))
+    strength = [1.0]
+    gadgets = IsoGadgets([Gadget(lambda now: parts, lambda now: True, lambda a, b: True)], lambda p: (p[0], p[1]), unit=1.0, region=(0, 0, 1, 1),
+                         pool_strength=lambda: strength[0])
+    night = gadgets.pieces[0][0].get_fill_opacity()
+    strength[0] = POOL_DAY
+    gadgets.update_to(0.5)
+    assert gadgets.pieces[0][0].get_fill_opacity() == pytest.approx(night * POOL_DAY)
+    assert gadgets.pieces[0][1].get_fill_opacity() == pytest.approx(parts[1].opacity)   # a flame: not light on things
+
+
+@pytest.mark.render
+def test_the_seasons_objects_render_and_move(make_project, tmp_path: Path, monkeypatch) -> None:
+    extensions.load_builtins()
+    monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
+    shore = "l..r...t......\n..............\n.g.b.c.k.s.d..\n.....y........\n~~~~~~~~~~~~~~\n~~~~~~~~~~~~~~"
+    spots = {"l": "light", "r": "rocket", "t": "train", "g": "gifts", "b": "balloons", "c": "cake", "k": "pumpkin", "s": "snowman", "d": "dock",
+             "y": "near"}
+    kinds = {"light": "lighthouse", "rocket": "rocket", "train": "train_car", "gifts": "gift_pile", "balloons": "balloon_bunch", "cake": "birthday_cake",
+             "pumpkin": "pumpkin", "snowman": "snowman", "dock": "dock"}
+    objects = [{"object": kind, "at": spot, **({"on": True} if kind in SEASONS_WORKING else {})} for spot, kind in kinds.items()]
+    objects += [{"object": "christmas_tree", "at": {"column": 14, "row": 1}, "on": True}, {"object": "boat", "at": {"column": 4, "row": 6}, "on": True}]
+    params = {"light": "night", "iso": {"place": "outdoor", "map": shore, "spots": spots, "objects": objects},
+              "characters": [{"name": "pip", "at": "near"}]}
+    beats = [{"text": "A party by the harbour.", "actions": [{"switch_off": "rocket", "at": 0.6}]}]
+    scenes = [{"id": "home", "type": "stage", "params": params, "beats": beats}]   # frames_of renders the scene "home"
+    scene, frames = frames_of(Project.load(make_project(minimal_config(characters=CAST, scenes=scenes))), tmp_path / "harbour", monkeypatch)
+    places = {scene.iso_scenery.pieces[k].name: gadget for gadget, k, _ in scene._iso_gadget_places}
+    assert set(places) == set(SEASONS_WORKING) and not places["rocket"].gadgets[0].working(float(scene.renderer.time))
+    assert not scene._iso_lamps and len(frames) > 5 and np.any(frames[-1] != frames[3])

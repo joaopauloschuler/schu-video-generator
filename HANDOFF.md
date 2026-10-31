@@ -23832,3 +23832,45 @@ How to test: `tests/test_docs.py` (73 passed).
   `test_city_hud_echo`, the lamplight tests of `test_phase_q_review` passed. Phase Q baseline
   31/31 identical. Contact sheets (private): scratchpad `s266/objects.png` (castle hall, then
   forest path), `s266/closeup.png`.
+
+## Step 267 — Seasons, harbour and travel objects; Phase AC review (Phase AC)
+
+- Built: iso objects `christmas_tree` (lights twinkle when on), `snowman`, `pumpkin` (its face
+  glows and flickers when on), `gift_pile`, `balloon_bunch` (sways when on), `birthday_cake`
+  (candles burn when on), `boat` (2 x 1, floats: only on water; bobs and its lantern is lit when
+  on), `dock` (1 x 2, over water, walked on like a bridge), `lighthouse` (5.6 tall; lit lantern,
+  its beam sweeps when on), `train_car` (3 x 1), `rocket` (2 x 2; flame and smoke when on)
+  (DESIGN §104). Review fixes: moving light thrown on things (`Motion.pool`: fireplace floor
+  glow, torch wall light, crystal ground glow, beam, star glow) now fades by day like pools; the
+  stove's steam is soft see-through wisps; the vending machine reads clearly lit at night; the
+  crib is plainer; the bicycle bigger; the giant crystal's pulse brightens its shards (no round
+  halo); a gadget's redraw region covers where its parts reach.
+- Files: new `cartoon/iso_seasons.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, shadows, `Motion.pool`); `cartoon/iso_overlays.py` (`IsoGadgets(pool_strength=)`);
+  `cartoon/iso_home.py` (fire glow, steam), `iso_fantasy.py` (torch light, crystal pulse),
+  `iso_shop.py` (vending machine, crib), `iso_town.py` (bicycle); `world/iso.py` (kinds,
+  `ObjectKind.floats`, the floats check, `SWITCHED_KINDS`); `scenes/stage_iso.py`
+  (`GADGET_SAMPLES`, pool strength to the gadgets); `scenes/stage.py` (docstrings); `api.py`
+  (`POOL_DAY`, `POOL_STRENGTH`); the one "Other objects" list in CONFIG and the guide; tests
+  `test_iso_objects_more.py` (+6), `test_iso_place.py` (a boat is placed on water).
+- Decisions: the boat and the balloons move only while `on` (like the pond: a still one costs
+  nothing per frame); while they work the whole boat / bunch is drawn by the stage (left out of
+  the picture), else it is in the picture. A spot's letter is ground, so a boat takes
+  `at: {column, row}` on the `~` (the error says so). The dock's front-half posts reach into the
+  water (a dock on land there would show a short post below the ground). The lighthouse and
+  rocket do not light characters (no `LAMPLIGHT_KINDS`).
+- Performance: a preview of 19 working objects in one outdoor place renders 8.9 s of video in
+  21 s (one working object: 8.8 s, none: 5.3 s): about 5 ms per working object per frame, mostly
+  grading and resizing each working object's cover picture every frame (not cached; a grade cache
+  keyed on the picture could cut it, left for later since images' pixels can change in place).
+- Known gaps: by day the beam is faint but not gone (as pools); the boat does not sail and nobody
+  boards it; the train car does not move and has no lit windows; the snowman does not melt; the
+  dock, a walkable object, makes the bridge's footstep sound.
+- Tests: `test_iso_objects_more.py` 33 passed; `test_lab_objects`, all `test_iso_*`
+  (`place`, `staging`, `moves`, `mood`, `story`, `weather`, `diagram`, `diagram_actions`,
+  `web_page`), `test_guide`, `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo`, the
+  lamplight tests of `test_phase_q_review`, `test_mcp.py` (20) passed. Phase Q baseline 31/31
+  identical. Contact sheets (private): scratchpad `s267/objects.png` (winter party, then
+  harbour), `s267/all63.png` (all ten Phase AC places, day on and night on), `s267/closeup.png`.
+
+Phase AC done.

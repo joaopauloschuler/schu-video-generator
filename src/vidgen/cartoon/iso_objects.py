@@ -78,6 +78,10 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "treasure_chest": ("#9C5B2E", "#E8B83A"), "cauldron": ("#7BE36A", "#3A3F4B"), "giant_crystal": ("#A98BFF", "#6B6478"),
     "throne": ("#B0303A", "#E8B83A"), "torch_sconce": ("#4A4F5B", "#9C6B47"), "signpost": ("#D9A066", "#7A5236"),
     "archway": ("#C9C2B4", "#5BA35B"), "statue": ("#7CB8A4", "#B9B4AA"),
+    "christmas_tree": ("#3E9E5A", "#F6C945"), "snowman": ("#E2574C", "#2B2F3A"), "pumpkin": ("#F28A2E", "#5B8A3A"),
+    "gift_pile": ("#E2574C", "#F6C945"), "balloon_bunch": ("#E2574C", "#B9BFC9"), "birthday_cake": ("#F2A7C3", "#F4F6FA"),
+    "boat": ("#3B6FB6", "#F4F6FA"), "dock": ("#C69466", "#7A5236"), "lighthouse": ("#E2574C", "#2B2F3A"),
+    "train_car": ("#3E8E6A", "#F2C14E"), "rocket": ("#F4F6FA", "#E2574C"),
 }
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
@@ -715,13 +719,15 @@ ARM_POSES = ((135.0, 80.0, -20.0), (-25.0, 55.0, -62.0))
 class Motion:
     """A moving part of a working object at one moment (DESIGN.md §103): a flat polygon in the
     world (tile units), its fill and opacity, outlined or not, and whether it is a light (not
-    dimmed by the stage's light)."""
+    dimmed by the stage's light); ``pool``: light thrown on things (a fire's glow on the floor, a
+    lighthouse's beam), shown as strong as the stage's light is dark like a pool of light (§104)."""
 
     points: tuple[Point3, ...]
     fill: str
     opacity: float = 1.0
     ink: bool = True
     glow: bool = False
+    pool: bool = False
 
 
 def _screen(p: Point3, du: float, dv: float) -> Point3:
@@ -1785,7 +1791,7 @@ def _fire_extinguisher(f: _Frame, look: ObjectLook) -> list[Shape]:
 MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge",
                 "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d", "fireplace", "stove", "tv", "traffic_light", "fountain",
                 "campfire", "pond", "beehive", "desk_with_pc", "water_cooler", "printer", "globe", "treasure_chest", "cauldron", "giant_crystal",
-                "torch_sconce")
+                "torch_sconce", "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket")
 _LAB_MOVING = frozenset({"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"})
 _WORKSHOP_MOVING = frozenset({"satellite_dish", "charging_station", "airlock", "printer_3d"})
 #: The objects that work while open too (a lab fridge's cold mist, a treasure chest's sparkles).
@@ -1923,8 +1929,10 @@ def object_motion(item: IsoObject, look: ObjectLook, base: float, now: float, st
     fireplace's flames, a stove's steam, a TV's picture, a traffic light's lamps, a fountain's
     water, a campfire's flames and sparks, a pond's ripples, a hive's bees, a line typed on a
     computer, a water cooler's bubbles, a printed sheet, a globe's turning land, an open chest's
-    sparkles, a cauldron's bubbles, a crystal's pulse and a torch's flame (§104). The same
-    number of parts at any time (those not seen have opacity 0)."""
+    sparkles, a cauldron's bubbles, a crystal's pulse, a torch's flame, a tree's twinkling
+    lights, a pumpkin's flicker, swaying balloons, candle flames, a bobbing boat, a lighthouse's
+    beam and a rocket's flame and smoke (§104). The same number of parts at any time (those not
+    seen have opacity 0)."""
     f = _Frame(item, base)
     if item.kind in MORE_MODULES:
         return _more(item.kind).motion(f, look, now)
@@ -2004,7 +2012,8 @@ SHADOW_RADII: dict[str, float] = {"tree": 0.45, "pine": 0.42, "bush": 0.48, "roc
                                   "terrarium": 0.3, "specimen_tank": 0.42, "telescope": 0.4, "hazard_sign": 0.22, "fire_extinguisher": 0.24,
                                   "floor_lamp": 0.26, "street_lamp": 0.26, "traffic_light": 0.22, "mailbox": 0.3, "bicycle": 0.36,
                                   "stump": 0.4, "scarecrow": 0.3, "beehive": 0.4, "wheelbarrow": 0.4, "water_cooler": 0.32, "globe": 0.36,
-                                  "cauldron": 0.42, "giant_crystal": 0.48, "signpost": 0.24}
+                                  "cauldron": 0.42, "giant_crystal": 0.48, "signpost": 0.24, "christmas_tree": 0.5, "pumpkin": 0.36,
+                                  "balloon_bunch": 0.18, "birthday_cake": 0.44}
 #: The shadows' colour and opacity (a tint of what lies under them).
 SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
@@ -2033,6 +2042,8 @@ MORE_MODULES: dict[str, str] = {
     **{kind: "iso_school" for kind in ("vegetable_patch", "wheelbarrow", "hay_bale", "school_desk", "desk_with_pc", "water_cooler", "printer",
                                        "globe", "trophy_shelf")},
     **{kind: "iso_fantasy" for kind in ("treasure_chest", "cauldron", "giant_crystal", "throne", "torch_sconce", "signpost", "archway", "statue")},
+    **{kind: "iso_seasons" for kind in ("christmas_tree", "snowman", "pumpkin", "gift_pile", "balloon_bunch", "birthday_cake", "boat", "dock",
+                                        "lighthouse", "train_car", "rocket")},
 }
 #: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
 LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire", "cauldron", "torch_sconce"})

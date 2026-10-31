@@ -274,12 +274,18 @@ def _giant_crystal(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shap
 
 
 def _crystal_glow(f: _Frame, look: ObjectLook, now: float) -> list[Motion]:
-    """A glowing crystal at ``now``: a soft halo and a bright heart pulsing, then sparkles
-    twinkling at its shards' tips in turn."""
+    """A glowing crystal at ``now``: its light on the ground swelling, its shards brightening
+    from within as it pulses (each shard's faces lit over), then sparkles twinkling at their tips
+    in turn."""
     beat = 0.5 - 0.5 * math.cos(2 * math.pi * now / PULSE_SECONDS)
-    heart = _screen(f.p(0.5, 0.5, 0.12), 0.0, 0.7)
-    parts = [Motion(_round(heart, 0.5 + 0.08 * beat, look.main).points, mix(look.main, SHINE, 0.3), 0.1 + 0.14 * beat, False, True),
-             Motion(_round(heart, 0.16 + 0.05 * beat, SHINE).points, mix(look.main, SHINE, 0.7), 0.2 + 0.3 * beat, False, True)]
+    x, y, z = _middle(f)
+    parts = [Motion(_flat_circle((x, y, z + 0.015), 0.7 + 0.25 * beat, 28), mix(look.main, SHINE, 0.35), 0.12 + 0.16 * beat, False, True, pool=True)]
+    across = -1.0 if f.swap else 1.0
+    for a, b, half, height, lean in sorted(SHARDS, key=lambda s: s[0] + s[1]):
+        foot, tilt = f.p(a, b, 0.12), lean * across
+        low = height * 0.28   # over the rocks at its foot
+        heart = [(-half * 0.55 + tilt * 0.25, low), (half * 0.55 + tilt * 0.25, low),(half * 0.4 + tilt * 0.7, height * 0.72), (tilt, height * 0.95), (-half * 0.4 + tilt * 0.6, height * 0.7)]
+        parts.append(Motion(_profile(foot, heart, SHINE).points, mix(look.main, SHINE, 0.7), 0.1 + 0.4 * beat, False, True))
     for k, (a, b, half, height, lean) in enumerate(SHARDS):
         twinkle = max(0.0, math.sin(2 * math.pi * (now / (PULSE_SECONDS * 1.3) + k / len(SHARDS))))
         tip = _screen(f.p(a, b, 0.12), lean * (-1.0 if f.swap else 1.0), height)
@@ -362,7 +368,8 @@ def _torch_fire(f: _Frame, now: float) -> list[Motion]:
     cup = _screen(_sconce_cup(f), 0.0, 0.025)
     cx, face = f.width / 2, f.depth + 0.021
     glow = _flicker(now, 3)
-    parts = [Motion(tuple(f.p(*q) for q in _face_circle(f, cx, face, SCONCE_CUP[1] + 0.1, 0.36 + 0.04 * glow)), FIRE_LIGHT, 0.1 + 0.1 * glow, False, True)]
+    parts = [Motion(tuple(f.p(*q) for q in _face_circle(f, cx, face, SCONCE_CUP[1] + 0.1, 0.36 + 0.04 * glow)), FIRE_LIGHT, 0.14 + 0.12 * glow, False, True,
+                    pool=True)]   # faint by day like a pool of light
     lick = _flicker(now, 1)
     sway = 0.03 * math.sin(2 * math.pi * now * 1.4)
     for k, (du, half, height) in enumerate(TORCH_FLAMES):

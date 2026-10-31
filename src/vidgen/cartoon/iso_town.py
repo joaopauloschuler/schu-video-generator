@@ -443,35 +443,39 @@ def _bicycle(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     and a wicker basket (``detail``) over the front wheel."""
     b = 0.5
     frame = look.main
+    stretch, grow = 0.8 / 0.58, 1.2   # drawn on a 0.58-wide wheelbase, stretched to fill its cell and read at a small size
 
     def p(a: float, z: float, bb: float = b) -> Point3:
-        return f.p(a, bb, z)
+        return f.p(0.1 + (a - 0.22) * stretch, bb, z * grow)
 
     shapes: list[Shape] = []
-    hub_r, hub_f, r = (0.22, 0.22), (0.8, 0.22), 0.21
+    hub_r, hub_f, r = (0.22, 0.22), (0.8, 0.22), 0.25   # r: a wheel's radius as drawn
+
+    def rim(a: float, zc: float, radius: float, t: float) -> Point3:   # a point of a round wheel (not stretched)
+        return p(a + radius * math.cos(t) / stretch, zc + radius * math.sin(t) / grow)
+
     for a, zc in (hub_r, hub_f):
-        shapes.append(Line(tuple(p(a + r * math.cos(t), zc + r * math.sin(t)) for t in [2 * math.pi * k / 28 for k in range(29)]), TYRE, 2.8))
-        shapes.append(Line(tuple(p(a + (r - 0.03) * math.cos(t), zc + (r - 0.03) * math.sin(t)) for t in [2 * math.pi * k / 28 for k in range(29)]),
-                           CHROME, 0.9))
-        for k in range(6):
-            t = math.pi * k / 6
-            shapes.append(Line((p(a + (r - 0.03) * math.cos(t), zc + (r - 0.03) * math.sin(t)), p(a - (r - 0.03) * math.cos(t), zc - (r - 0.03) * math.sin(t))),
-                               "#B9BFC9", 0.5))
-        shapes.append(_round(p(a, zc), 0.02, CHROME))
+        shapes.append(Line(tuple(rim(a, zc, r, t) for t in [2 * math.pi * k / 28 for k in range(29)]), TYRE, 3.4))
+        shapes.append(Line(tuple(rim(a, zc, r - 0.04, t) for t in [2 * math.pi * k / 28 for k in range(29)]), CHROME, 1.0))
+        for k in range(4):
+            t = math.pi * k / 4
+            shapes.append(Line((rim(a, zc, r - 0.04, t), rim(a, zc, r - 0.04, t + math.pi)), "#B9BFC9", 0.6))
+        shapes.append(_round(p(a, zc), 0.025, CHROME))
     crank, seat, head_top, head_low = (0.48, 0.22), (0.4, 0.58), (0.72, 0.62), (0.74, 0.52)
     shapes.append(Line((p(0.44, 0.2, b + 0.02), p(0.38, 0.0, b + 0.1)), TRIM, 1.4))   # the stand
-    shapes.append(Line(tuple(p(crank[0] + 0.06 * math.cos(t), crank[1] + 0.06 * math.sin(t)) for t in [2 * math.pi * k / 14 for k in range(15)]), TRIM, 1.2))
+    shapes.append(Line(tuple(rim(*crank, 0.07, t) for t in [2 * math.pi * k / 14 for k in range(15)]), TRIM, 1.4))
     for pair in ((hub_r, crank), (hub_r, seat), (crank, seat), (seat, head_top), (crank, head_low), (head_top, head_low)):
-        shapes.append(Line((p(*pair[0]), p(*pair[1])), frame, 2.2))
-    shapes.append(Line((p(*head_low), p(*hub_f)), shade(frame, 0.15), 2.0))
-    shapes.append(Line((p(*crank), p(0.52, 0.14, b + 0.05)), TRIM, 1.6))
-    shapes.append(Line((p(0.49, 0.14, b + 0.05), p(0.56, 0.14, b + 0.05)), CASING, 2.0))   # a pedal
-    shapes.append(Line((p(*seat), p(0.385, 0.7)), CHROME, 1.6))
-    shapes.append(f.poly([(0.31, b, 0.71), (0.46, b, 0.73), (0.45, b, 0.69), (0.33, b, 0.68)], CASING))   # the saddle
-    shapes.append(Line((p(*head_top), p(0.7, 0.76)), CHROME, 1.6))
-    shapes.append(Line((p(0.7, 0.76, b - 0.17), p(0.7, 0.76, b + 0.17)), CASING, 2.2))   # the handlebars
-    shapes += f.box(0.78, b - 0.09, 0.56, 0.94, b + 0.09, 0.7, look.detail)
-    shapes.append(Line((f.p(0.78, b + 0.091, 0.63), f.p(0.94, b + 0.091, 0.63)), shade(look.detail, 0.3), 0.6))
+        shapes.append(Line((p(*pair[0]), p(*pair[1])), frame, 2.8))
+    shapes.append(Line((p(*head_low), p(*hub_f)), shade(frame, 0.15), 2.6))
+    shapes.append(Line((p(*crank), p(0.52, 0.14, b + 0.05)), TRIM, 1.8))
+    shapes.append(Line((p(0.49, 0.14, b + 0.05), p(0.56, 0.14, b + 0.05)), CASING, 2.4))   # a pedal
+    shapes.append(Line((p(*seat), p(0.385, 0.7)), CHROME, 1.8))
+    shapes.append(Poly((p(0.3, 0.71), p(0.47, 0.73), p(0.46, 0.68), p(0.32, 0.67)), CASING))   # the saddle
+    shapes.append(Line((p(*head_top), p(0.7, 0.76)), CHROME, 1.8))
+    shapes.append(Line((p(0.7, 0.76, b - 0.18), p(0.7, 0.76, b + 0.18)), CASING, 2.6))   # the handlebars
+    (x0, y0, z0), (x1, y1, z1) = p(0.76, 0.56, b - 0.1), p(0.9, 0.7, b + 0.1)   # the basket over the front wheel
+    shapes += box_shapes(min(x0, x1), min(y0, y1), z0, max(x0, x1), max(y0, y1), z1, look.detail)
+    shapes.append(Line((p(0.76, 0.63, b + 0.101), p(0.9, 0.63, b + 0.101)), shade(look.detail, 0.3), 0.8))
     return shapes
 
 

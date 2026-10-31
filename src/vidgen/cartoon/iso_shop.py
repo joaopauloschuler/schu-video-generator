@@ -182,21 +182,18 @@ def _crib(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     moon and a ball hanging over it."""
     w, d = f.width, f.depth
     wood = look.main
-    a0, a1, b0, b1 = 0.14, w - 0.14, 0.16, d - 0.12
-    post, base, rail = 0.06, 0.3, 0.88
+    a0, a1, b0, b1 = 0.08, w - 0.08, 0.12, d - 0.08
+    post, base, rail = 0.07, 0.3, 0.88
     bar = shade(wood, 0.3)
 
     def bar_line(a: float, b: float) -> Line:   # a thin bar: a line, so the bars do not ink over the bed
-        return Line((f.p(a, b, base), f.p(a, b, rail - 0.05)), bar, 1.1)
+        return Line((f.p(a, b, base), f.p(a, b, rail - 0.05)), bar, 1.6)
 
     shapes: list[Shape] = []
     shapes += f.box(a0, b0, 0.0, a0 + post, b0 + post, rail + 0.06, wood)
     shapes += f.box(a1 - post, b0, 0.0, a1, b0 + post, rail + 0.06, wood)
-    shapes += f.box(a0 + post, b0, base, a1 - post, b0 + 0.04, rail - 0.05, mix(wood, SHINE, 0.04))
+    shapes += f.box(a0 + post, b0, base, a1 - post, b0 + 0.04, rail - 0.05, mix(wood, SHINE, 0.04))   # its solid headboard
     shapes += f.box(a0 + post, b0, rail - 0.05, a1 - post, b0 + 0.04, rail, wood)
-    for k in range(1, 5):   # the far side's bars
-        b = b0 + (b1 - b0) * k / 5
-        shapes.append(bar_line(a0 + 0.03, b))
     shapes += f.box(a0 + post, b0 + 0.04, base - 0.06, a1 - post, b1 - 0.02, base, wood)
     shapes += f.box(a0 + 0.06, b0 + 0.05, base, a1 - 0.06, b1 - 0.04, base + 0.12, "#F7F4EC")
     shapes += f.box(a0 + 0.14, b0 + 0.08, base + 0.12, a1 - 0.14, b0 + 0.26, base + 0.2, "#FFFFFF")
@@ -206,11 +203,11 @@ def _crib(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
                _round(_screen(bear, 0.0, 0.13), 0.025, "#E9D3B5", False)]
     shapes += f.box(a0 + 0.06, b0 + 0.45, base + 0.12, a1 - 0.06, b1 - 0.03, base + 0.18, look.detail)
     shapes.append(Line((f.p(a0 + 0.06, b0 + 0.52, base + 0.181), f.p(a1 - 0.06, b0 + 0.52, base + 0.181)), mix(look.detail, SHINE, 0.45), 1.4))
-    for k in range(1, 6):   # the near side's bars
-        a = a0 + (a1 - a0) * k / 6
+    for k in range(1, 4):   # the near side's bars, few and plain to read at a small size
+        a = a0 + (a1 - a0) * k / 4
         shapes.append(bar_line(a, b1 - 0.025))
-    for k in range(1, 5):   # the right side's
-        b = b0 + (b1 - b0) * k / 5
+    for k in range(1, 4):   # the right side's
+        b = b0 + (b1 - b0) * k / 4
         shapes.append(bar_line(a1 - 0.025, b))
     shapes += f.box(a0 + post, b1 - 0.05, base - 0.06, a1 - post, b1, base, wood)
     shapes += f.box(a0 + post, b1 - 0.05, rail - 0.05, a1 - post, b1, rail, wood)
@@ -224,20 +221,18 @@ def _crib(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     top = z + 0.62
     hub = f.p(w / 2, d / 2, rail + 0.72)
     shapes += [Upright(x, y, z, top, 0.018, wood), Line(((x, y, top), hub), wood, 2.2)]
-    for k, color in enumerate(("#F6C945", "#7FC8E8", "#F2A7C3")):
-        t = 2 * math.pi * k / 3 + 0.5
+    for k, color in enumerate(("#F6C945", "#7FC8E8")):   # a star and a moon, big enough to read
+        t = math.pi * k + 0.8
         end = (hub[0] + 0.2 * math.cos(t), hub[1] + 0.2 * math.sin(t), hub[2] - 0.02)
-        toy = (end[0], end[1], end[2] - 0.22 - 0.05 * k)
-        shapes += [Line((hub, end), CHROME, 1.0), Line((end, toy), CHROME, 0.8)]
+        toy = (end[0], end[1], end[2] - 0.2 - 0.06 * k)
+        shapes += [Line((hub, end), CHROME, 1.2), Line((end, toy), CHROME, 1.0)]
         if k == 0:   # a star
-            shapes.append(Poly(tuple(_screen(toy, (0.075 if j % 2 == 0 else 0.032) * math.sin(math.pi * j / 5),
-                                             (0.075 if j % 2 == 0 else 0.032) * math.cos(math.pi * j / 5) - 0.06) for j in range(10)), color))
-        elif k == 1:   # a moon
-            shapes.append(Poly(tuple([_screen(toy, 0.065 * math.cos(t), 0.065 * math.sin(t) - 0.065) for t in [math.pi * (0.5 + j / 10) for j in range(11)]]
-                                     + [_screen(toy, 0.03 * math.cos(t), 0.055 * math.sin(t) - 0.065) for t in [math.pi * (1.5 - j / 10) for j in range(11)]]),
+            shapes.append(Poly(tuple(_screen(toy, (0.1 if j % 2 == 0 else 0.042) * math.sin(math.pi * j / 5),
+                                             (0.1 if j % 2 == 0 else 0.042) * math.cos(math.pi * j / 5) - 0.08) for j in range(10)), color))
+        else:   # a moon
+            shapes.append(Poly(tuple([_screen(toy, 0.085 * math.cos(t), 0.085 * math.sin(t) - 0.085) for t in [math.pi * (0.5 + j / 10) for j in range(11)]]
+                                     + [_screen(toy, 0.04 * math.cos(t), 0.07 * math.sin(t) - 0.085) for t in [math.pi * (1.5 - j / 10) for j in range(11)]]),
                                color))
-        else:
-            shapes.append(_round(_screen(toy, 0.0, -0.05), 0.05, color))
     return shapes
 
 
@@ -486,7 +481,7 @@ def _vending_machine(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Sh
     a0, a1, b0, b1, h = 0.1, w - 0.1, 0.22, d - 0.1, 2.15
     on = state.on
     body = look.main
-    shapes = light_pool(f.p(w / 2, d + 0.1, 0.01), 0.7, 0.8) if on else []
+    shapes = light_pool(f.p(w / 2, d + 0.2, 0.01), 1.05) if on else []
     shapes += f.box(a0, b0, 0.0, a1, b1, h, body)
     face = b1 + 0.002
     shapes.append(_plinth(f, a0 + 0.01, a1 - 0.01, b1, body, 0.1))
@@ -498,8 +493,12 @@ def _vending_machine(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Sh
     swoosh = [(a0 + 0.14 + (a1 - a0 - 0.28) * s, face + 0.001, sign[0] + 0.13 + 0.07 * math.sin(math.pi * 2 * s)) for s in [k / 10 for k in range(11)]]
     shapes.append(Line(tuple(f.p(*q) for q in swoosh), "#FFFFFF", 2.4))
     g0, g1, z0, z1 = a0 + 0.06, a0 + (a1 - a0) * 0.68, 0.62, sign[0] - 0.08
-    back = mix(look.detail, SHINE, 0.7) if on else "#2E3A48"
+    back = mix(look.detail, SHINE, 0.5) if on else "#2E3A48"
+    if on:   # light spilling round the lit window onto the machine's front
+        shapes.append(_rect(f, g0 - 0.04, g1 + 0.04, face - 0.0005, z0 - 0.05, z1 + 0.05, mix(look.detail, look.main, 0.35), False, True))
     shapes.append(_rect(f, g0, g1, face, z0, z1, back, True, on))
+    if on:   # the lit window's bright middle
+        shapes.append(_rect(f, g0 + 0.04, g1 - 0.04, face + 0.0005, z0 + 0.05, z1 - 0.05, mix(look.detail, SHINE, 0.82), False, True))
     rows, per = 4, 4
     for row in range(rows):
         z = z0 + 0.04 + (z1 - z0 - 0.06) * row / rows
@@ -510,7 +509,8 @@ def _vending_machine(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Sh
             fill = mix(color, SHINE, 0.12) if on else shade(color, 0.3)
             shapes.append(_rect(f, a - 0.04, a + 0.04, face + 0.002, z, z + 0.18, fill, True, on))
             shapes.append(_rect(f, a - 0.04, a + 0.04, face + 0.003, z + 0.13, z + 0.16, mix(fill, SHINE, 0.5), False, on))
-    shapes.append(Line((f.p(g0 + 0.06, face + 0.004, z0 + 0.1), f.p(g0 + 0.24, face + 0.004, z1 - 0.1)), mix(GLASS, SHINE, 0.7), 1.6))
+    if not on:   # a glare on the dark glass
+        shapes.append(Line((f.p(g0 + 0.06, face + 0.004, z0 + 0.1), f.p(g0 + 0.24, face + 0.004, z1 - 0.1)), mix(GLASS, SHINE, 0.7), 1.6))
     p0, p1 = g1 + 0.06, a1 - 0.06
     shapes.append(_indicator(f, p0, p1, face, z1 - 0.14, z1 - 0.02, DISPLAY_GREEN, on))
     for k in range(5):

@@ -89,7 +89,7 @@ def _fire(f: _Frame, now: float) -> list[Motion]:
     cx = f.width / 2
     glow = _flicker(now, 5)
     parts = [Motion(tuple(f.p(cx + 0.75 * math.cos(t), f.depth + 0.25 + 0.45 * math.sin(t), 0.012) for t in [2 * math.pi * k / 20 for k in range(20)]),
-                    FIRE_LIGHT, 0.12 + 0.12 * glow, False, True)]
+                    FIRE_LIGHT, 0.2 + 0.16 * glow, False, True, pool=True)]   # faint by day like a pool of light
     for k, (du, width, height) in enumerate(FLAMES):
         lick = _flicker(now, k)
         base = f.p(cx + du, b + 0.004, z0 + 0.1)
@@ -239,14 +239,25 @@ def _stove(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
     return shapes
 
 
+def _wisp(centre: Point3, length: float, half: float, bend: float) -> tuple[Point3, ...]:
+    """A soft wisp of steam round ``centre``: a narrow S-curved leaf ``length`` tall and ``half``
+    wide (tile widths), ``bend`` its sway."""
+    steps = 9
+    left = [(-half * math.sin(math.pi * s) + bend * math.sin(2 * math.pi * s), length * (s - 0.5)) for s in [k / steps for k in range(steps + 1)]]
+    right = [(half * math.sin(math.pi * s) + bend * math.sin(2 * math.pi * s), length * (s - 0.5)) for s in [1 - k / steps for k in range(1, steps)]]
+    return tuple(_screen(centre, du, dv) for du, dv in left + right)
+
+
 def _steam(f: _Frame, now: float) -> list[Motion]:
-    """Steam puffing from a stove's pot at ``now``: three puffs."""
+    """Steam rising from a stove's pot at ``now``: three soft, see-through wisps curling up and
+    widening as they fade."""
     x, y, z = _pot_spot(f)
     parts = []
     for k in range(3):
         rise = _rising(now, k, 3, POT_STEAM_SECONDS)
-        sway = 0.04 * math.sin(2 * math.pi * (rise + k * 0.37))
-        parts.append(_bubble(_screen((x, y, z + 0.32), sway, 0.05 + 0.5 * rise), 0.045 + 0.07 * rise, STEAM, 0.75 * _fade(rise)))
+        sway = 0.05 * math.sin(2 * math.pi * (rise + k * 0.37)) + (k - 1) * 0.04
+        centre = _screen((x, y, z + 0.32), sway, 0.14 + 0.42 * rise)
+        parts.append(Motion(_wisp(centre, 0.2 + 0.12 * rise, 0.035 + 0.035 * rise, 0.04 * (1 if k % 2 else -1)), STEAM, 0.42 * _fade(rise), False, True))
     return parts
 
 
