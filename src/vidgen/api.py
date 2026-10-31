@@ -649,6 +649,9 @@ from vidgen.cartoon.iso_weather import ISO_SWAYS, glow_outlines, iso_sway_degree
 from vidgen.world.iso import VOID  # noqa: E402
 from vidgen.cartoon.fog import iso_fog_depths  # noqa: E402
 from vidgen.cartoon.iso_atmosphere import IsoFog, IsoReflections, IsoSwayer  # noqa: E402
+from vidgen.story_text import Story, read_story  # noqa: E402
+from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
+from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
 from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, FloorCells, picture_size, plate_shapes, ramped, slant  # noqa: E402
 from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
@@ -1675,6 +1678,20 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "IsoFog",
     "IsoReflections",
     "IsoSwayer",
+    "Story",
+    "read_story",
+    "STORY_PLACES",
+    "StoryPlace",
+    "choose_place",
+    "light_cues",
+    "music_of",
+    "objects_named",
+    "weather_of",
+    "DraftOptions",
+    "StoryDraft",
+    "draft_story",
+    "report_markdown",
+    "story_yaml",
     "cell_of",
     "find_route",
     "plan_move",

@@ -24064,3 +24064,41 @@ is in `tasklist.md`.
   list or scene_types or schema"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
   `rowans_room` (25 stills) identical to Step 270's. Private sheet
   `/home/claude/work/scratch/s271/sheet.png`; sample `s271/proj` (validate ok).
+
+## Step 272 — A story in prose to a draft project (Phase AD)
+
+- Built: `vidgen story draft STORY.md|.txt [-o DIR] [--style iso|flat] [--format 16:9|9:16]
+  [--narrator VOICE] [--seed S] [--force] [--json]` and MCP tool `story_draft` (`input_path` or
+  `story_text`). Deterministic, no model: scenes (headings, `***` breaks, time cues), characters
+  (tags, titles, name lists, subjects; surnames merged; `Mum` / `Grandpa`), voice kinds (title, name
+  list, pronouns), first person (`My name is X`; the narrator gets the protagonist's voice),
+  dialogue attribution with a confidence and method (tag by name / pronoun / `I`, action beat,
+  alternation, last mention, narrator), emotions from tag verbs and adverbs, moves (walk / run /
+  enter / exit). Eleven ready-made iso places chosen by keywords (village, city, lab, office, home,
+  cafe, forest, harbour, castle, school, winter; `_night` sets with lights on; objects the story
+  names on free cells), light from time cues (later cues: `time_of_day`), weather (negated words
+  ignored), `fill_light` at night, staging at four spots, close-ups / two-shots, title and end
+  cards, a music bed from mood words, captions, `auto_direct`. Report `story_draft.md`: narration,
+  cast, scenes, attribution table (doubtful ones marked **check**), TODO checklist; YAML beats
+  with a doubtful speaker carry `# TODO:`.
+- Files: new `story_text.py`, `story_places.py`, `story_draft.py`, `tests/test_story_draft.py`;
+  `cli.py` (`cmd_story`, parser, JSON_COMMANDS), `jsonout.py` (`story_document`), `mcp_server.py`
+  (tool, instructions), `api.py`, `tests/test_mcp.py` (tool list, one test); docs CONFIG ("A story
+  in prose", MCP and `--json` lists), guide (+ `AGENTS.md`: "From a story in prose"), DESIGN §105.5,
+  CHANGELOG, tasklist.
+- Public: see DESIGN §105.5 (`read_story`, `draft_story`, `STORY_PLACES`...).
+- Decisions: reused `screenplay.assign_voices` / `_generated_looks` and `plan_yaml` writing; objects
+  the story names go on the place's set (later scenes there keep them; an iso mapping in params
+  would replace the whole object list); indoor places use `wide: fill` and keep the second spot row
+  off the bottom row (captions covered characters there); no cue keeps the scene before's night.
+- Known gaps / later: single curly quotes (British dialogue) not read; descriptive speakers (`said
+  the old man`) go to the narrator; places are placeholders, at most four characters per scene;
+  characters stand from the start unless an entering verb brings them in; `left` heuristics are
+  simple. Step 273 (shorts suggest) can use the drafted projects' dialogue beats (`voice:`) and
+  emotions for scoring.
+- Tests: `test_story_draft.py` (12) passed; `test_mcp -k "story or tools or list or instructions"`,
+  `test_api`, `test_cli`, `test_guide`, `test_docs`, `test_screenplay` passed. No shared rendering code
+  changed (Phase Q baseline not needed). Own samples `/home/claude/work/scratch/s272/stories/`
+  (third person with dialogue, first person, scene breaks with night / rain); all three drafts
+  validate; storyboard of the `signal` sample (silent, timed from text) at
+  `/home/claude/work/scratch/s272/sheet.png`.

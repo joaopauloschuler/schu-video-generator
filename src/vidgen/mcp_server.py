@@ -63,7 +63,8 @@ INSTRUCTIONS = """\
 schu-video-generator (the `vidgen` command) makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
 relative to the server's root folder; nothing outside it can be read or written.
 Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
-an outline), `screenplay` (a cartoon from a screenplay; `cast` writes a well-contrasted cast for it) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
+an outline), `screenplay` (a cartoon from a screenplay; `cast` writes a well-contrasted cast for it), `story_draft` (a story \
+cartoon drafted from prose, with a report of what to refine) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
 returns) -> `lint` -> fix -> repeat; then `tts` with dry_run=true (free), and only after the user \
 agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provider kokoro is local and \
 free: no confirm_cost); then `render`. `schema` with \
@@ -382,6 +383,37 @@ def build_server(root: Path) -> Any:
             source = Path(folder) / "screenplay.md"
             source.write_text(screenplay_text or "", encoding="utf-8")
             return answer(await call(ctx, args_of(["screenplay"], [str(source)], options)))
+
+    @tool("Draft a story cartoon project from a story in prose (no AI: rules and keyword tables): scenes from headings, "
+          "scene breaks and time cues; characters, voice kinds and distinct Kokoro voices; dialogue attributed to speakers "
+          "with a confidence; iso places (or flat sets), light, weather, objects and music from the story's words; "
+          "placeholder staging. Writes video.yaml and story_draft.md (every decision and a TODO list to refine it); "
+          "returns their paths and the report. Give input_path (a file under the root) or the text itself.", writes)
+    async def story_draft(
+        ctx: Context,
+        input_path: Annotated[str | None, Field(description="the story (.md or .txt) under the root")] = None,
+        story_text: Annotated[str | None, Field(description="the story itself (instead of input_path); Markdown")] = None,
+        out: Annotated[str | None, Field(description="project folder to create, or a .yaml file (default: named after the input; 'story' for story_text)")] = None,
+        style: Annotated[Literal["iso", "flat"], Field(description="iso places (default) or the flat stage's ready-made sets")] = "iso",
+        format: Annotated[Literal["16:9", "9:16"], Field(description="frame")] = "16:9",
+        narrator: Annotated[str | None, Field(description="the narrator's Kokoro voice (default bf_emma; told in the first person: the protagonist's)")] = None,
+        seed: Annotated[int, Field(description="seed of the random looks given once the built-in ones are used")] = 0,
+        force: Annotated[bool, Field(description="write into a non-empty folder / replace a config")] = False,
+    ) -> Any:
+        if (input_path is None) == (story_text is None):
+            raise ToolError("give either input_path or story_text")
+        options = {
+            "out": str(where(out, "out")) if out else None, "style": style, "format": format, "narrator": narrator,
+            "seed": seed, "force": force,
+        }
+        if input_path is not None:
+            return answer(await call(ctx, args_of(["story", "draft"], [str(where(input_path, "input_path"))], options)))
+        if options["out"] is None:
+            options["out"] = str(policy.root / "story")
+        with tempfile.TemporaryDirectory(prefix="vidgen-story-") as folder:
+            source = Path(folder) / "story.md"
+            source.write_text(story_text or "", encoding="utf-8")
+            return answer(await call(ctx, args_of(["story", "draft"], [str(source)], options)))
 
     @tool("Write a cast of original characters that differ clearly (silhouette, colours, accessories, voice kind and "
           "voice) as an include file: use it with include: in video.yaml or as screenplay's cast. The same seed gives "

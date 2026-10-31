@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from vidgen.plan_yaml import PlanResult
     from vidgen.random_cast import RandomCast
     from vidgen.screenplay import ScreenplayProject
+    from vidgen.story_draft import StoryDraft
     from vidgen.slides import SlidesResult
     from vidgen.slides_pdf import PdfResult
     from vidgen.thumbnail import ThumbnailResult
@@ -238,6 +239,45 @@ def screenplay_document(
         todo_count=draft.todo_count,
         notes=list(draft.notes),
         scenes=scenes,
+        problems=[p.to_json() for p in problems],
+    )
+
+
+def story_document(
+    project: Project, draft: StoryDraft, result: PlanResult, report: Path, problems: list[Problem], warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen story draft --json`` document: where the project and its report went, the
+    narration (person, narrator voice, music), the cast, each scene's place, light and characters,
+    every line of dialogue with its speaker and confidence, and the problems ``vidgen validate``
+    finds (``ok`` false when any). The report's text is included (``report_text``)."""
+    story = draft.story
+    return envelope(
+        "story",
+        not problems,
+        warnings,
+        project=_path(result.root),
+        config=_path(result.config),
+        report=_path(report),
+        report_text=report.read_text(encoding="utf-8"),
+        created=result.created,
+        title=draft.config["title"],
+        style=draft.options.style,
+        format=draft.options.fmt,
+        first_person=story.first_person,
+        narrator=draft.config["voice"]["voice"],
+        music=draft.music[0],
+        characters=[dict(row) for row in draft.cast],
+        scenes=[
+            {"id": s.id, "place": s.place, "light": s.light, "changes": s.changes, "weather": s.weather, "objects": s.objects, "characters": s.cast,
+             "off_stage": s.off_stage, "source_line": s.source_line, "reason": s.reason}
+            for s in draft.scenes
+        ],
+        dialogue=[
+            {"scene": a.scene, "beat": a.beat, "speaker": a.speaker, "confidence": round(a.confidence, 2), "method": a.method, "text": a.text}
+            for a in draft.attributions
+        ],
+        estimated_duration=round(project.estimated_duration(), 2),
+        todo_count=draft.todo_count,
         problems=[p.to_json() for p in problems],
     )
 

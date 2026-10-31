@@ -2293,6 +2293,14 @@ line. Undeclared characters get looks that differ from the others (`--species ca
 animals, `--seed` for other random ones). `docs/CONFIG.md` "Cartoons from a screenplay" has the
 whole format.
 
+**From a story in prose.** `vidgen story draft story.md -o DIR [--style iso|flat] [--format 9:16]
+[--narrator VOICE]` (MCP tool `story_draft`) drafts the whole project without AI: scenes at
+headings, `***` breaks and time cues, a cast with distinct Kokoro voices (first person: the narrator
+is the protagonist's voice), each quoted line given a speaker with a confidence, iso places, light,
+weather and objects from the story's words, placeholder walks and shots, title and end cards, a
+music bed. Read its `story_draft.md` first: fix the speakers marked **check** (`voice:` of those
+beats), the cast, then the places and walks (they are placeholders), and run the usual loop.
+
 **A series: one cast, shared sets.** Put the characters and their voices in `shared/cast.yaml`
 and the places in `shared/sets.yaml` (`sets: {meadow: {background, props, marks, light...}}`);
 each episode writes `include: [../shared/cast.yaml, ../shared/sets.yaml]` and a stage scene

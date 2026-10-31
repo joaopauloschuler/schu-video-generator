@@ -1632,7 +1632,7 @@ a few lines per feature in CONFIG and the guide.
 - [~] Puddles mirror lit windows, lanterns and neon trims at night (as strong as it is dark, fading with `time_of_day` and switches, wobbling in rain; `settled` starts them grown); the stage's `fog` on iso places in drifting bands by depth; the stage's `wind` (a signed level, not `{strength, direction}`: one wind on both stages) bends trees, pines, bushes, flowers, plants, swings scarecrows and balloon bunches (rain already slants, leaves drift); outdoors only; tests `test_iso_atmosphere.py`. Partial: no flag object to sway; characters are not mirrored
 
 ### Step 272 — Story to video draft
-- [ ] `vidgen story draft story.md [-o project/]`: scenes, dialogue and speakers, a cast with distinct Kokoro voices, iso / stage scenes with placeholder staging, beats, a `story_draft.md` report with TODOs; an MCP tool; tests on neutral sample texts
+- [x] `vidgen story draft story.md [-o project/] [--style iso|flat] [--format 9:16] [--narrator V]`: scenes (headings, breaks, time cues), dialogue and speakers with a confidence, a cast with distinct Kokoro voices (first person: the narrator is the protagonist's voice), eleven ready-made iso places (or flat sets) with light, weather and named objects, placeholder staging, beats, title and end cards, a music bed, a `story_draft.md` report with TODOs; MCP tool `story_draft`; tests `test_story_draft.py` on neutral sample texts
 
 ### Step 273 — Shorts suggestions
 - [ ] `vidgen shorts suggest [project]`: scored 30–60 s windows with clean starts and ends, a hook line, `cut:` variants written to a file or the project; an MCP tool; tests

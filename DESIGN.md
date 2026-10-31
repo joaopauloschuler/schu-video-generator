@@ -20519,3 +20519,60 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   house's roof is as thick as the base picture there (the bands layer the bodies, not the
   place's pieces); swaying is a shear (a big balloon lean stretches the balloons); objects an
   action changes, a snow cap on a swaying tree and flags (no flag object) do not sway.
+
+### 105.5 A story in prose to a draft project (Step 272)
+
+- **Command**: `vidgen story draft STORY [-o DIR|FILE] [--style iso|flat] [--format 16:9|9:16]
+  [--narrator VOICE] [--seed S] [--force] [--json]`; MCP tool `story_draft` (`input_path` or
+  `story_text`). Writes `video.yaml` (with `plan_yaml.commented_yaml` / `write_project`, as `plan`
+  and `screenplay` do) and `story_draft.md`; `--json` (`jsonout.story_document`) returns paths, the
+  report's text, cast, scenes and every line of dialogue with `speaker`, `confidence`, `method`.
+  A subcommand group (`story draft`) leaves room for later story tools. Never calls a model.
+- **Reading** (`story_text.py`, no manim): scenes at headings (the first H1 is the title), break
+  lines and paragraphs opening on a time cue (after two paragraphs of the scene); paragraphs
+  split where a line ends a sentence and the next opens one; quotes `"…"`, `“…”`, `«…»` (an
+  unclosed one runs to the paragraph's end). Characters: capitalised words that are speakers in a
+  tag, have a title (`TITLES`), are in the small name lists, or are the subject of a verb twice and
+  rarely after `in` / `at` / `to` (a place); `Mum` / `Grandpa` alone count (`FAMILY`); a word
+  always after another is its surname. Voice kind: title, then name lists, then pronouns in the
+  sentences that name only that character (and the next), at least 2 and twice the other kind.
+  First person: at least 3 first-person words outside quotes and one per 100 words; `My name is X`
+  names the protagonist (else id `me`). Attribution per quote, with a confidence: a tag next to it
+  (`said Mara` 0.95, `I said` 0.9, `she replied` 0.75: the last character of that kind mentioned,
+  the paragraph's narration before the quote counted first; a `he` before any man was named: the
+  first man the story names later, 0.5), the paragraph's other tagged quote, an action beat (the
+  subject of the paragraph's narration 0.6, several: the last 0.45), alternation of a two-person
+  exchange 0.5, the last character mentioned 0.3, else the narrator 0.1. Tags of at most 10 words
+  are dropped from the narration; quotes split by a tag merge (a trailing comma before a capital
+  becomes a full stop). Narration: sentence groups of at most `MAX_BEAT_WORDS` 25. Moves: a subject
+  (name, possessive phrase + name, pronoun, `I`) followed by a movement verb (`MOVE_VERBS`: walk,
+  run, enter, exit; `left the key on...` is not leaving).
+- **Places** (`story_places.py`): `PLACES`, eleven ready-made iso places (village, city, lab,
+  office, home, cafe, forest, harbour, castle, school, winter; 12–14 by 7–8 cells, outdoor and
+  indoor with `wide: fill`), each with four stand spots, walk goals, lights switched on at night
+  (a `<place>_night` set), three free cells for objects the story names (`OBJECT_WORDS`, one-cell
+  kinds, added to the place's set so later scenes there keep them) and its flat ready-made set
+  for `--style flat`. Chosen by keyword counts (a tie or no words: the scene before's). Light:
+  `LIGHT_WORDS`, clock times (`3 AM` night) and `three in the morning`; a cue in the scene's first
+  third sets it, later different cues become `time_of_day` actions (outdoors, at most two); no cue
+  keeps the scene before's night or evening unless the scene starts on a time cue; indoors only
+  night or indoor. Weather words (a word followed by `stopped`, `dropped`, `had gone`... does not
+  count): rain with puddles, snow settling, `fog: 0.5`, `wind: windy` (`gale` for gale / storm);
+  indoors a TODO. Music: the built-in bed with most mood words (`MUSIC_WORDS`, default cartoon).
+- **Draft** (`story_draft.py`): title card, the scenes, end card; up to four characters per scene at
+  the stand spots (others a TODO), an `enter` where a character first appears with an entering
+  verb, an `exit` only if it is not seen again in the scene; dialogue beats get the voice, the tag's
+  emotion, an `emote` for it, a close-up when emotional (`!` or an emotion), a two-shot when over
+  12 words; walks to the first free goal. Voices: `screenplay.assign_voices` / `_generated_looks`
+  (third person: narrator `bf_emma` or `--narrator`; first person: the protagonist's kind picked
+  first and used for both the narrator and its own `voices:` entry). Captions in the speakers'
+  colours, `auto_direct: true`, `soft_pastel`. Beats with a doubtful speaker (< 0.6) get a
+  `# TODO:`.
+- **Public**: `vidgen.api` adds `Story`, `read_story`, `STORY_PLACES`, `StoryPlace`, `choose_place`,
+  `light_cues`, `music_of`, `objects_named`, `weather_of`, `DraftOptions`, `StoryDraft`,
+  `draft_story`, `report_markdown`, `story_yaml`. Additive: no shared code changed beyond the CLI,
+  `jsonout` and the MCP server.
+- **Left for later**: single curly quotes (British dialogue) are not read as speech; a speaker
+  named only by a description (`said the old man`) is read by the narrator; places are
+  placeholders (no map built from the story); characters stand from the scene's start unless the
+  story brings them in; more than four characters in a scene are not placed.

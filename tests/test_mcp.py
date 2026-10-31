@@ -204,7 +204,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
-    "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview",
+    "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview", "story_draft",
     "music_template", "music_patches", "music_render", "music_check",
     "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
 }
@@ -509,6 +509,22 @@ def test_server_screenplay_writes_a_project(tmp_path: Path) -> None:
         assert "outside the folder" in error_text(await client.call_tool("cast", {"count": 2, "out": "../cast.yaml"}))
         cats = doc_of(await client.call_tool("screenplay", {"screenplay_text": text, "out": "cats", "species": ["cat"], "seed": 3}))
         assert cats["ok"] and "species: cat" in (tmp_path / "cats" / "video.yaml").read_text(encoding="utf-8")
+
+    run_session(tmp_path, body)
+
+
+def test_server_story_draft_writes_a_project_and_report(tmp_path: Path) -> None:
+    text = 'In the lab, Mara checked the console.\n\n"It is late," said Mara.\n\n"Go home," Theo replied.\n'
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("story_draft", {"story_text": text, "out": "tale", "style": "flat"}))
+        assert doc["command"] == "story" and doc["ok"] and [d["speaker"] for d in doc["dialogue"]] == ["mara", "theo"]
+        assert Path(doc["config"]) == (tmp_path / "tale" / "video.yaml").resolve() and "## TODO" in doc["report_text"]
+        assert (tmp_path / "tale" / "story_draft.md").is_file()
+        assert "give either" in error_text(await client.call_tool("story_draft", {"out": "tale"}))
+        (tmp_path / "story.txt").write_text(text, encoding="utf-8")
+        doc = doc_of(await client.call_tool("story_draft", {"input_path": "story.txt", "out": "tale2"}))
+        assert doc["ok"] and doc["scenes"][0]["place"] == "lab"
 
     run_session(tmp_path, body)
 

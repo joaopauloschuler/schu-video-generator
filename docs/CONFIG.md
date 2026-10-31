@@ -12408,6 +12408,28 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
 
 A sample is `examples/screenplay/humming_box.md`.
 
+#### A story in prose (`vidgen story draft`)
+
+`vidgen story draft STORY.md|.txt [-o DIR|FILE.yaml] [--style iso|flat] [--format 16:9|9:16] [--narrator VOICE] [--seed S] [--force] [--json]`
+(MCP tool `story_draft`) drafts a story cartoon from plain prose, deterministically (no AI): scenes
+at headings, scene breaks (`***`, `* * *`, `---`, a lone `#`) and paragraphs opening on a time cue
+(`The next morning`, `Later`, `That night`); characters (names used as speakers or subjects,
+titles such as `Doctor Vale`), their voice kind (title, a small list of names, the pronouns after
+them) and distinct Kokoro voices; dialogue in double quotes (straight, curly, `«»`) attributed by
+speech tag (`said Mara`, `she whispered`, `I said`), action beat, alternation or last mention, each
+with a confidence; told in the first person, the narrator speaks with the protagonist's voice. Each
+scene stands on a ready-made iso place chosen from its words (`village`, `city`, `lab`, `office`,
+`home`, `cafe`, `forest`, `harbour`, `castle`, `school`, `winter`; `--style flat`: the nearest
+ready-made set), with objects the story names on free cells, light from time cues (`3 AM`, `dawn`,
+`sunset`; a later cue fades with `time_of_day`, night adds `fill_light`), rain / fog / wind / snow,
+characters at the place's spots (`enter` where the story brings one in), beats of up to 25 words
+of narration or one line each (voice, emotion, a close-up on an emotional line, a two-shot on a long
+one, `walk_to` / `run_to` placeholder spots on movement verbs), a title card, an end card, a music
+bed from mood words, captions in the speakers' colours and `auto_direct`. Besides `video.yaml` it
+writes `story_draft.md`: every decision, each line's speaker with its confidence and method, and a
+TODO checklist (beats with a doubtful speaker carry a `# TODO:`). `--json` returns the paths, the
+report's text, the cast, the scenes and every line of dialogue (`speaker`, `confidence`, `method`).
+
 #### A random cast (`vidgen cast`)
 
 `vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE.yaml] [--provider kokoro|openrouter|elevenlabs]
@@ -14784,7 +14806,9 @@ list), `music_patches`, `music_render` (`score`: a path or a project piece's or 
 default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` given the same way,
 `narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
-(`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `cast` (`count`
+(`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
+(`vidgen story draft`: `input_path` or `story_text`, `out`, `style`, `format`, `narrator`, `seed`,
+`force`), `cast` (`count`
 for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`), and the studio's
 hand-offs (Step 198, "Music studio" above): `studio_sessions`, `studio_read` (`session`,
 `version`), `studio_check` (`session`, `score`, `compare`, `images`: `vidgen music check` of the
@@ -14838,7 +14862,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.

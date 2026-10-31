@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–271)
+## Unreleased (Steps 193–272)
 
 ### Phase AD: features without AI APIs (Steps 268–275)
 
@@ -13,6 +13,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 - Sitting, lying and using furniture on iso places: `sit_on` an object with seats (chair, bench, sofa, armchair, throne, lab stool, log, stump, hay bale, rock, bus stop, café table, school desk, bed), facing the way its seat does, its near arm, chair back or a desk in front drawn over the sitter; `lie_on` a bed (the blanket over it); `use` a laptop, PC, console, piano (typing), a campfire or fireplace (warming the hands), shelves or a machine; `stand_up`; `vidgen validate` names a seat taken, nothing to sit on, a character too far or walking before it stands up.
 - A day passing in one scene: `- {time_of_day: night, run_time: 6}` (`morning`, `day`, `sunset`, `night`, `indoor`) fades the light and a sky of the time of day (day to night through a sunset), the stars coming out once it is dark; at dusk the lamps, a house's windows, lit objects and cars' headlights switch on by themselves one after another, and off at dawn (`auto_lights: false`, or `auto_light: false` on an object, opts out); on iso places and the flat stage.
 - Iso weather: at night the puddles mirror lit windows, lanterns and neon trims (wobbling while it rains; rain's `settled` with `puddles` starts them full size); `fog` lies over an iso place in drifting bands, thicker further back; `wind` bends the trees, bushes, flowers and plants and swings scarecrows and balloon bunches in gusts. Outdoors only.
+- `vidgen story draft story.md -o DIR` (MCP tool `story_draft`): a story cartoon drafted from prose, without AI — scenes from headings, breaks and time cues, a cast with distinct Kokoro voices (told in the first person, the narrator speaks with the protagonist's voice), each quoted line given a speaker with a confidence, ready-made iso places (or flat sets with `--style flat`) with light, weather and objects from the story's words, placeholder walks and shots, title and end cards, a music bed; `story_draft.md` lists every decision and a TODO checklist.
 
 ### More iso objects (Steps 261–267)
 
