@@ -23969,3 +23969,47 @@ is in `tasklist.md`.
   baseline 31/31 identical; iso-story `night` / `rowans_room` (25 stills) identical to the code
   before. Private sheet `/home/claude/work/scratch/s269/sheet.png`; sample `s269/proj` (validate
   clean; lint: the sample cast's look-alike and its short beats' rushed walks).
+
+## Step 270 — A day passing in one scene (Phase AD)
+
+- Built: the `time_of_day` action on a `stage` (`- {time_of_day: night, run_time: 6}`: `morning`,
+  `day`, `sunset`, `night`, `indoor`; default fade 6 s; `auto_lights`, `move_sun`). It fades the
+  light as `light` does (grade, shadows, stars, pools of light growing, lamplight on characters,
+  `fill_light`), from daylight to night through a sunset (night to day through a morning), with a
+  sky of the time of day on a stage without `background` / picture (the rooms' window gradients;
+  stars come out late). Where the fade passes dusk (darker than `DUSK_DARK` 0.35; a sunset is past
+  it) the lights switch on by themselves one after another, fading in over 1.2 s, and off at dawn:
+  on iso places lamps, floor and street lamps, houses' windows, phone booths, vending machines,
+  lighthouses, christmas trees, pumpkins and cars' headlights (a driving car too); on the flat
+  stage `lamp` props. Opt out with `auto_lights: false` on the action or `auto_light: false` on an
+  iso object / a lamp prop. Did-you-mean on the preset, `auto_light` refused on other kinds.
+- Files: new `scenes/stage_daylight.py` (`DayPassing`, part of `Stage`), `tests/test_time_of_day.py`;
+  `cartoon/lighting.py` (`darkness`, `dusk_crossing`, `auto_switch_time`, `day_stages`, constants),
+  `scenes/light_action.py` (`TimeOfDay`, `Light.moves_sun`), `scenes/stage.py` (`auto_light` on
+  `IsoObjectParam` / `StageProp`, `StageIso.auto_lit`, `day_sky`, `_light_uses`, living lamps),
+  `scenes/stage_iso.py` (`iso_change(auto=)`, gadget fades, auto-lit objects layered),
+  `cartoon/iso_overlays.py` (`Gadget.level`), `cartoon/living_drawing.py` (`switch(fade=)`,
+  `_Shown.show(0..1)`), `world/iso.py` (`AUTO_LIGHT_KINDS`), `scenes/__init__.py`, `api.py`; docs
+  CONFIG (light section: **A day passing**, action tables), guide (+ `AGENTS.md`), DESIGN §105.3,
+  CHANGELOG, tasklist.
+- Public: `vidgen.api` adds `AUTO_LIGHT_KINDS`, `AUTO_SWITCH_SECONDS`, `DUSK_DARK`,
+  `TIME_OF_DAY_SECONDS`, `TWILIGHT_SHARE`, `auto_switch_time`, `darkness`, `day_stages`,
+  `dusk_crossing`.
+- Decisions: a new action rather than options on `light` (its defaults differ; `light` unchanged);
+  the switch is at the darkness the pools already use (one measure); automatic changes are not
+  watched by lint (`offscreen_action`) and make no click; towers keep their windows as set (lit by
+  day by default); the flat stage's light system allowed it (lamp props, sun/moon via `move_sun`).
+- Known gaps / later: a driven car's headlights switch at once (sprite, no in-between); no sun or
+  moon on iso places; the `light` action switches nothing; dawn switches off what the author
+  switched on too (unless `auto_light: false`). Step 271 (iso weather) can reuse `darkness` for
+  puddle reflections at night.
+- Tests: new `test_time_of_day.py` (15, one render) passed; `test_cartoon_lighting`,
+  `test_cartoon_living`, `test_iso_objects_more`, `test_iso_mood`, `test_iso_vehicles`,
+  `test_iso_staging`, `test_iso_place`, `test_iso_story`, `test_iso_moves`, `test_iso_weather`,
+  `test_iso_seats`, `test_cartoon_storm`, `test_portal_hologram`, `test_lab_objects`,
+  `test_cartoon_fire_nature`, `test_cartoon_small_props`, `test_story_fx`, `test_phase_l_review`,
+  the lamplight tests of `test_phase_q_review`, `test_api`, `test_schema`, `test_introspect`,
+  `test_actions_coverage`, `test_docs`, `test_guide`, `test_mcp -k "action or list or
+  scene_types or schema"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
+  `rowans_room` (25 stills) identical. Private sheet `/home/claude/work/scratch/s270/sheet.png`;
+  sample `s270/proj` (validate ok; lint: the sample cast's look-alike, a house cut at the edge).

@@ -479,7 +479,9 @@ from vidgen.cartoon.rain import (  # noqa: E402
     splash_shapes,
 )
 from vidgen.cartoon.lighting import (  # noqa: E402
+    AUTO_SWITCH_SECONDS,
     DEFAULT_STRENGTH,
+    DUSK_DARK,
     LIGHT_FADE_SECONDS,
     LIGHT_PRESETS,
     POOL_DAY,
@@ -487,11 +489,17 @@ from vidgen.cartoon.lighting import (  # noqa: E402
     SHADOW_WIDTH,
     STAR_HEAD_ROOM,
     STAR_SKY,
+    TIME_OF_DAY_SECONDS,
+    TWILIGHT_SHARE,
     LightChange,
     LightGrade,
     ShadowEllipse,
     Stars,
+    auto_switch_time,
     blend_grades,
+    darkness,
+    day_stages,
+    dusk_crossing,
     grade_pixels,
     grade_rgbas,
     lifted,
@@ -622,7 +630,7 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_move_problems,
     level_world,
 )
-from vidgen.world.iso import DISPLAY_CASES, HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
+from vidgen.world.iso import AUTO_LIGHT_KINDS, DISPLAY_CASES, HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
 from vidgen.world.iso_view import Box3, draw_order, in_front, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
 from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, LIT_OBJECTS, MOVING_KINDS, OBJECT_COLORS, ObjectLook, object_box, object_lights, object_motion, object_working, tower_screen  # noqa: E402
@@ -1293,7 +1301,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "reframe_path",
     "stage_base_width",
     "stage_reframes",
+    "AUTO_SWITCH_SECONDS",
     "DEFAULT_STRENGTH",
+    "DUSK_DARK",
     "LIGHT_FADE_SECONDS",
     "LIGHT_PRESETS",
     "POOL_DAY",
@@ -1301,11 +1311,17 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "SHADOW_WIDTH",
     "STAR_HEAD_ROOM",
     "STAR_SKY",
+    "TIME_OF_DAY_SECONDS",
+    "TWILIGHT_SHARE",
     "LightChange",
     "LightGrade",
     "ShadowEllipse",
     "Stars",
+    "auto_switch_time",
     "blend_grades",
+    "darkness",
+    "day_stages",
+    "dusk_crossing",
     "grade_pixels",
     "grade_rgbas",
     "light_at",
@@ -1580,6 +1596,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "ISO_FOLLOW_SIZE",
     "OPENING_KINDS",
     "SWITCHED_KINDS",
+    "AUTO_LIGHT_KINDS",
     "ObjectState",
     "default_state",
     "follow_width",

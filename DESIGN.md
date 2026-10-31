@@ -20412,3 +20412,49 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   `use` is timed (the hands come back after `run_time`), not a held posture; no `lie_on` on a
   sofa or the flat stage; a sitter's legs over a school desk's front are not hidden; a bean's
   head reaches over a bus shelter's roof (drawn over it).
+
+### 105.3 A day passing in one scene (Step 270)
+
+- **Action** (`scenes/light_action.py`, `TimeOfDay`): `- {time_of_day: sunset, run_time: 6}`
+  (`LIGHT_PRESETS`; `run_time` default `TIME_OF_DAY_SECONDS` 6), `auto_lights` (default true),
+  `move_sun` (default: on when the stage has a `sun` / `moon` prop outdoors). Not a `light` option:
+  a name of its own reads as what the author means (a day passing) and its defaults differ (a long
+  fade, lights and sun on by themselves); `light` is unchanged. Did-you-mean for the preset; one
+  per action; stage scenes only (`pass_time`); `move_sun: true` needs a sun or moon outdoors.
+- **Rules** (`cartoon/lighting.py`, no manim): `darkness(grade)` (one minus the mean `multiply`
+  over `LAMP_DARK`, the measure of the pools and the lamplight: day 0, morning 0.07, indoor 0.26,
+  sunset 0.45, night 1); dusk is `DUSK_DARK` 0.35 (a sunset is past it); `dusk_crossing` finds where
+  a smoothstep fade crosses it (bisection of the eased share) and whether lights go on or off;
+  `auto_switch_time` puts each light up to `AUTO_SPREAD` 0.9 s (at most `AUTO_SPREAD_SHARE` 0.2 of
+  the fade) early or late by a CRC of its name, inside the fade (no lights in one frame, the same in
+  every render); `day_stages`: from a light day (darkness <= 0.2) to `night` the fade goes through
+  `sunset` at `TWILIGHT_SHARE` 0.5, from night (>= 0.9) to `day` through `morning` (a straight
+  blend of day and night is a dull grey-blue).
+- **Stage** (`scenes/stage_daylight.py`, `DayPassing`, part of `Stage`): `pass_time` adds a
+  `change_light` per stage (so the stars, shadows, pools, ambience marks and sky bodies follow as
+  for `light`) and, with `auto_lights` and not to `indoor`, switches at the first crossing: on an
+  iso place each of `StageIso.auto_lit()` (`AUTO_LIGHT_KINDS`: lamp, floor_lamp, street_lamp, house,
+  phone_booth, vending_machine, lighthouse, christmas_tree, pumpkin, car; not towers, fires or
+  machines; not those placed with `auto_light: false`) by `iso_change(..., auto=True)` over
+  `AUTO_SWITCH_SECONDS` 1.2 and a driven car by `iso_switch_vehicles`; on the flat stage each
+  `lamp` prop (made living when a `time_of_day` may switch it) by `LivingProp.switch(fade=)`.
+  Those already so stay. The auto-lit objects are layered (`_iso_action_targets`) so they can
+  change. `iso_change(auto=True)`: lint's `offscreen_action` does not watch it, and a working
+  object's moving parts fade with it (`Gadget.level`, `_iso_gadget_fades`: going out it shows its
+  old state fading); a flat lamp's lantern and glow fade (`LivingProp._level`, `_Shown.show(0..1)`).
+- **Sky**: a stage with a `time_of_day` and no `background` or picture (outdoors; a room keeps its
+  windows) draws its `background` rectangle as the time of day's sky (`window_sky`, the rooms'
+  window gradients), not graded, faded with the light's changes (`sky_at`, `_show_light`), and its
+  stars at `grade.stars ** 2` (they come out once it is dark).
+- **Checked by eye** (`/home/claude/work/scratch/s270/sheet.png`): an iso village day -> night ->
+  morning (lights one after another, a lamp with `auto_light: false` dark, pools warm, stars late),
+  a city street at sunset then night with a car driving home (headlights on), the flat stage with a
+  sun and moon and a lamp fading in, a 9:16 village; frame-to-frame differences show no pop (the
+  largest outside the intro/outro are moving things and a pumpkin's own flicker).
+- **Public**: `vidgen.api` adds `AUTO_LIGHT_KINDS`, `AUTO_SWITCH_SECONDS`, `DUSK_DARK`,
+  `TIME_OF_DAY_SECONDS`, `TWILIGHT_SHARE`, `auto_switch_time`, `darkness`, `day_stages`,
+  `dusk_crossing`; config: `time_of_day` action, `auto_light` on iso objects and stage props.
+  Additive: Phase Q baseline 31/31 and iso-story `night` / `rowans_room` (25 stills) identical.
+- **Left for later**: a driven car's headlights switch at once (its sprite has no in-between); towers
+  keep their windows as set; the `light` action switches nothing; the sky of a day passing is the
+  window skies' gradient (no sun glow on the horizon); an iso place has no sun or moon to move.

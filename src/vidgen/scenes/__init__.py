@@ -9,7 +9,7 @@ transform; ``callout_action``: callout; ``sfx_action``: sfx;
 exit, gesture, jump, step_aside; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
 put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_in, ride_to, get_out;
 ``shot_action``: shot;
-``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``math_axes``: trace; ``switch_action``:
+``light_action``: light, time_of_day; ``wind_action``: wind; ``effect_action``: effect; ``math_axes``: trace; ``switch_action``:
 switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: lightning,
 rainbow; ``knock_action``: knock; ``hide_action``: hide; ``story_actions``: alarm, shutters, materialise,
 dematerialise, hold_hands, let_go_hands, kiss; ``iso_actions``: build, raise, lower, explode, collapse, flow,

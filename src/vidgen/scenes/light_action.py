@@ -2,7 +2,8 @@
 starting at ``at`` of the beat; written against ``vidgen.api`` only, like project actions. It draws
 nothing itself (``animates = False``): the runner cues it when its beat starts, and the stage
 fades its colour grade, stars and shadows over ``run_time`` seconds from then, whatever plays
-meanwhile."""
+meanwhile. The ``time_of_day`` action (DESIGN.md §105.3) is the same fade to a preset, longer by
+default, that also switches the lights on by themselves at dusk and off at dawn."""
 
 import difflib
 from typing import Any
@@ -68,7 +69,74 @@ class Light(Action):
             return [("move_sun", "move_sun moves the stage's sun or moon: add a sun or a moon prop (props: [sun])")]
         return []
 
+    def moves_sun(self, params: Any) -> bool:
+        """Whether it moves the stage's sun and moon (``move_sun``)."""
+        return self.options.move_sun
+
     def cue(self, scene: NarratedScene, time: float) -> None:
         """Start the fade at scene ``time`` (and the sun's move, with ``move_sun``)."""
         seconds = self.run_time if self.config.run_time is None else float(self.config.run_time)
         scene.change_light(self.setting(), time, seconds, move_sun=self.options.move_sun)
+
+
+def _outdoor_sky(params: Any) -> bool:
+    """Whether a stage has a sun or a moon prop under the open sky (not in a room)."""
+    return getattr(params, "room", None) is None and any(prop.prop in SKY_BODIES for prop in getattr(params, "props", []))
+
+
+@action("time_of_day")
+class TimeOfDay(Action):
+    """A day passing in one scene (DESIGN.md §105.3): `- {time_of_day: sunset, run_time: 6}`
+    (morning, day, sunset, night, indoor) fades the light from `at` of the beat over `run_time`
+    seconds (default 6): the sky, the ground, the shadows, the stars fading in or out, the pools
+    of light growing; as it passes dusk the lamps, a house's windows, lit objects and cars'
+    headlights switch on by themselves one after another (off again at dawn), unless
+    `auto_lights: false` (or `auto_light: false` on an object). A sun or moon prop moves along
+    the sky meanwhile. Stage scenes only."""
+
+    class Options(ActionOptions):
+        auto_lights: bool = True
+        """false: no light switches by itself at dusk or dawn (switch_on / switch_off them yourself)."""
+        move_sun: bool | None = None
+        """Whether the stage's sun and moon props move along the sky's arc meanwhile; default: when the stage has one outdoors."""
+
+    run_time = TIME_OF_DAY_SECONDS
+    needs_target = False
+    needs_visible = False
+    scene_targets = False
+    animates = False
+
+    def setting(self) -> str:
+        """The preset written as the action's target."""
+        names = self.config.targets()
+        return names[0] if names else ""
+
+    def problems(self) -> list[tuple[str, str]]:
+        """One known preset."""
+        names = self.config.targets()
+        if len(names) > 1:
+            return [("target", "one time of day per action (add a time_of_day action per change)")]
+        if not names:
+            return [("target", f"which time of day? write `- time_of_day: PRESET` ({', '.join(LIGHT_PRESETS)})")]
+        if names[0] not in LIGHT_PRESETS:
+            close = difflib.get_close_matches(names[0], LIGHT_PRESETS, n=1)
+            hint = f"; did you mean '{close[0]}'?" if close else ""
+            return [("target", f"unknown time of day '{names[0]}'{hint} (one of: {', '.join(LIGHT_PRESETS)})")]
+        return []
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        if not hasattr(scene_cls, "pass_time"):
+            return [("action", f"time_of_day is for stage scenes; a {scene_cls.__name__} scene has no set to light")]
+        if self.options.move_sun and not _outdoor_sky(params):
+            where = "outdoors, not in a room (the stage has room:)" if getattr(params, "room", None) is not None else "a sun or a moon prop (props: [sun])"
+            return [("move_sun", f"move_sun moves the stage's sun or moon: it needs {where}")]
+        return []
+
+    def moves_sun(self, params: Any) -> bool:
+        """Whether it moves the stage's sun and moon: ``move_sun``, by default when it has one outdoors."""
+        return self.options.move_sun if self.options.move_sun is not None else _outdoor_sky(params)
+
+    def cue(self, scene: NarratedScene, time: float) -> None:
+        """Start the fade at scene ``time``, the lights switching by themselves at dusk or dawn."""
+        seconds = self.run_time if self.config.run_time is None else float(self.config.run_time)
+        scene.pass_time(self.setting(), time, seconds, move_sun=self.moves_sun(scene.params), auto_lights=self.options.auto_lights)

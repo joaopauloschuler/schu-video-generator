@@ -1626,7 +1626,7 @@ a few lines per feature in CONFIG and the guide.
 - [x] `sit_on` an iso object (chair, bench, bus stop, armchair, sofa, throne, lab stool, log / stump, hay bale, rock, café table's two chairs, school desk, bed's edge), `lie_on` (bed), `stand_up`, a generic `use` with per-object poses (typing, warming the hands at a campfire / fireplace, a book from shelves, pressing at machines); facing-aware seat points, the object's near parts drawn over the sitter; `vidgen validate` checks sitting on nothing, two on one seat, too far, walking while seated; tests `test_iso_seats.py`
 
 ### Step 270 — A day passing in one scene
-- [ ] `- {time_of_day: sunset, run_time: 6}` blending the light smoothly; lamps and lit objects switch on at dusk (opt-out); sky / stars change; works with light pools and `fill_light`
+- [x] `- {time_of_day: sunset, run_time: 6}` blending the light smoothly (day to night through a sunset, a sky of the time of day on stages without a background, stars coming out late, pools growing); lamps, windows, lit objects and cars' headlights (driven ones too) switch on one after another at dusk and off at dawn, fading (`auto_lights: false`, `auto_light: false` per object / lamp prop); iso places and the flat stage; works with `fill_light`; tests `test_time_of_day.py`
 
 ### Step 271 — Iso weather
 - [ ] Puddles reflecting lamps / towers / neon at night, drifting fog banks, `wind: {strength, direction}` bending trees and bushes, swaying balloons and flags, slanting rain; cheap and opt-in

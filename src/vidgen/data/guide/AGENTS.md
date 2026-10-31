@@ -1895,6 +1895,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |
 | `blow_away` | on a `stage`: the wind blows a light prop away, tumbling, out of a hand too (`- blow_away: napkin`; `to:` a mark to land there, else off the stage) | a gust in the story; napkin, umbrella, ball, cup, basket, box, letter, balloons only |
 | `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s; `move_sun: true` moves a `sun` / `moon` prop across the sky, shadows turning) | when time passes in the story |
+| `time_of_day` | on a `stage`: a day passing (`- {time_of_day: night, run_time: 6}`, 6 s): the light and a sky of the time of day fade (day to night through a sunset), stars come out, and at dusk lamps, windows, lit objects and cars' headlights switch on by themselves one after another (off at dawn); `auto_lights: false`, or `auto_light: false` on an object, opts out; a `sun` / `moon` prop moves | evening falls or morning comes during a scene |
 | `lightning` | on a `stage`: the set flashes and a bolt strikes (`- lightning: right`; `distance: 2`: its thunder ~6 s later; in a room the windows flash) | a storm, a scare; rain with `lightning: true` strikes on its own |
 | `rainbow` | on a `stage` outdoors: a rainbow fades into the sky and stays (`- rainbow: centre`; `hide: true` fades it out) | after the rain |
 | `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley); on an iso place a `lamp` lights, a `house`'s windows glow (they stay bright at `light: sunset` / `night`) | when someone in the story switches it on or lights the fire; when a call comes |
@@ -2106,7 +2107,9 @@ asks for one, say schu-video-generator makes original characters and offer one w
   the frame (`width: 2`), the camera goes along with `follow`.
 - **Light and mood**: `light: morning | sunset | night | indoor` (or `{tint, strength}`) grades
   the whole set and the characters, never the bubbles or text; `night` adds stars on a colour
-  background. Time passing is a `- light: night` action (it fades, 2 s); `fill_light: 0.4` keeps
+  background. Time passing is a `- light: night` action (it fades, 2 s), or a whole evening in
+  one shot: `- {time_of_day: night, run_time: 6}` (the sky turns gold then dark, the lamps light
+  themselves at dusk; `time_of_day: morning` puts them out again); `fill_light: 0.4` keeps
   the characters' faces readable in a dark light (the set stays dark). Characters and props on
   the ground get soft shadows on their own (`shadows: false` for none). `wind: breeze | windy |
   gale` (or 0..1; negative blows left) sways trees and bushes, makes scarves, long hair, ears and

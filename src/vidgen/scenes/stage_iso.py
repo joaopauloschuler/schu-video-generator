@@ -283,9 +283,13 @@ class IsoStaging:
     # ----- the pictures (DESIGN.md §89.7, §89.10) ---------------------------------------------------
 
     def _iso_action_targets(self) -> list[str]:
-        """The target patterns of every action of the scene."""
+        """The target patterns of every action of the scene, and the lights a ``time_of_day``
+        may switch by itself (§105.3)."""
         uses = self._actions.uses if getattr(self, "_actions", None) is not None else []
-        return [pattern for use in uses for pattern in use.action.config.targets()]
+        found = [pattern for use in uses for pattern in use.action.config.targets()]
+        if any(use.options.auto_lights for use in self.action_uses("time_of_day")):
+            found += list(self.params.iso.auto_lit())
+        return found
 
     def _iso_scenery(self, placements: list[StagePlacement]) -> list[Mobject]:
         """An iso place drawn into pictures (DESIGN.md §89.7, §89.9, §89.10): returns the place's
@@ -402,6 +406,7 @@ class IsoStaging:
         #: front of it (``None``: nothing), kept after the front pictures showing it (§103)
         self._iso_gadget_places: list[tuple[IsoGadgets, int, Mobject | None]] = []
         self._iso_state_log: dict[str, list[tuple[float, ObjectState]]] = {}
+        self._iso_gadget_fades: dict[str, list[tuple[float, float]]] = {}
         covers: dict[int, Mobject] = {}
         smoke = dict((item.name, gadget) for gadget, item in ([] if self.is_draft else self._iso_rocket_smoke(place, looks)))   # §105
         for item in place.objects:
@@ -441,18 +446,37 @@ class IsoStaging:
         base = place.floor_z(item.column, item.row)
         #: each working object's states from scene times on: (time, state), in time order
         log = self._iso_state_log[item.name] = [(0.0, scenery.states[scenery.index[item.name]])]
+        #: the changes it fades over (a light switching by itself at dusk or dawn, §105.3): (start, seconds)
+        fades = self._iso_gadget_fades[item.name] = []
 
         def state_at(now: float) -> ObjectState:
             return [s for t, s in log if t <= now][-1] if log[0][0] <= now else log[0][1]
 
+        def fading(now: float) -> tuple[float, float] | None:
+            return next(((s, d) for s, d in fades if s <= now < s + d), None)
+
+        def shown_state(now: float) -> ObjectState:
+            fade = fading(now)
+            if fade is not None and not object_working(item.kind, state_at(now)):
+                return state_at(fade[0] - 1e-6)   # going out: as it was, fading
+            return state_at(now)
+
         def working(now: float) -> bool:
-            return object_working(item.kind, state_at(now))
+            return object_working(item.kind, shown_state(now))
+
+        def level(now: float) -> float:
+            fade = fading(now)
+            if fade is None:
+                return 1.0
+            share = smooth((now - fade[0]) / fade[1])
+            return share if object_working(item.kind, state_at(now)) else 1.0 - share
 
         def busy(start: float, end: float) -> bool:
-            return working(start) or any(start <= t <= end and object_working(item.kind, s) for t, s in log)
+            return (working(start) or any(start <= t <= end and object_working(item.kind, s) for t, s in log)
+                    or any(s < end and s + d > start for s, d in fades))
 
         def parts(now: float, look: ObjectLook = looks[item.name]) -> list[Any]:
-            return object_motion(item, look, base, now, state_at(now))
+            return object_motion(item, look, base, now, shown_state(now))
 
         box = object_box(item, base)
         corners = [self.iso_view.point(x, y, z) for x in (box.x0, box.x1 + 0.6) for y in (box.y0, box.y1 + 0.6) for z in (box.z0, box.z1 + 1.0)]
@@ -460,7 +484,7 @@ class IsoStaging:
         corners += [self.iso_view.point(*p) for now in GADGET_SAMPLES for part in parts(now) for p in part.points]
         pad = 0.2 * self.iso_view.unit
         region = (min(x for x, _ in corners) - pad, min(y for _, y in corners) - pad, max(x for x, _ in corners) + pad, max(y for _, y in corners) + pad)
-        return IsoGadgets([Gadget(parts, working, busy)], lambda point: self.iso_view.point(*point), unit=self.iso_view.unit, region=region,
+        return IsoGadgets([Gadget(parts, working, busy, level)], lambda point: self.iso_view.point(*point), unit=self.iso_view.unit, region=region,
                           outline=self.drawing.outline_factor, pool_strength=lambda: getattr(self.camera, POOL_STRENGTH, POOL_DAY))
 
     def _iso_place_gadgets(self) -> bool:
@@ -860,10 +884,12 @@ class IsoStaging:
 
     # ----- changes of the place (DESIGN.md §89.10) ---------------------------------------------------
 
-    def iso_change(self, name: str, start: float, seconds: float, **fields: bool) -> bool:
+    def iso_change(self, name: str, start: float, seconds: float, *, auto: bool = False, **fields: bool) -> bool:
         """Change the object (or map door) ``name`` from scene time ``start`` over ``seconds``:
         ``shown``, ``open``, ``on`` (:class:`~vidgen.world.iso.ObjectState`), after the changes
-        planned so far; its new picture fades in over the old one. Whether anything changes."""
+        planned so far; its new picture fades in over the old one. ``auto``: a light switching by
+        itself at dusk or dawn (§105.3): its moving parts fade too, and lint does not watch it.
+        Whether anything changes."""
         planned = self._iso_planned_states[name]
         state = replace(planned, **fields)
         if state == planned:
@@ -887,7 +913,9 @@ class IsoStaging:
         if log is not None:   # a working object's moving parts follow it (§103)
             log.append((float(start), state))
             log.sort(key=lambda entry: entry[0])
-            if object_working(self.iso_scenery.pieces[self.iso_scenery.index[name]].kind or "", state):
+            if auto:
+                self._iso_gadget_fades[name].append((float(start), max(float(seconds), 1e-3)))
+            if auto or object_working(self.iso_scenery.pieces[self.iso_scenery.index[name]].kind or "", state):
                 self._watch_living()
         if "shown" in fields:
             change = "reveal" if fields["shown"] else "hide"
@@ -895,7 +923,8 @@ class IsoStaging:
             change = "open" if fields["open"] else "close"
         else:
             change = "switch_on" if fields.get("on") else "switch_off"
-        self.iso_watch(change, name, float(start), float(seconds), self._iso_object_box(name))
+        if not auto:   # not a light a time_of_day switches by itself (§105.3)
+            self.iso_watch(change, name, float(start), float(seconds), self._iso_object_box(name))
         if name in getattr(self, "_iso_lamps", {}):   # its light on the characters near it fades with it (§89.13)
             self._iso_lamps[name][1].append((float(start), max(float(seconds), 1e-3), 1.0 if state.on and state.shown else 0.0))
         if self._foley_on():   # a door's creak, a bloom, an appearance (§89.11)

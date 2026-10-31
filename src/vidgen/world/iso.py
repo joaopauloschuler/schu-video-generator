@@ -231,6 +231,12 @@ SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", 
                                             "fountain", "phone_booth", "car", "campfire", "pond", "beehive",
                                             "desk_with_pc", "water_cooler", "printer", "globe", "cauldron", "giant_crystal", "torch_sconce",
                                             "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket"})
+#: The lights that a day passing (``time_of_day``, DESIGN.md §105.3) switches on at dusk and off at
+#: dawn by themselves: lamps, a house's windows, a phone booth, a vending machine, a lighthouse, a
+#: christmas tree's lights, a pumpkin's face and a car's headlights (not fires, machines or towers,
+#: whose windows are lit from the start).
+AUTO_LIGHT_KINDS: frozenset[str] = frozenset({"house", "lamp", "floor_lamp", "street_lamp", "phone_booth", "vending_machine", "lighthouse",
+                                              "christmas_tree", "pumpkin", "car"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
 WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce"})
 
@@ -690,6 +696,7 @@ def _wall_facing(place: IsoPlace, kind: str, column: int, row: int, facing: str)
 
 
 __all__ = [
+    "AUTO_LIGHT_KINDS",
     "BLOCK",
     "CUT_WALL_HEIGHT",
     "DOOR",

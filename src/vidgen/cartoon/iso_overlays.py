@@ -357,11 +357,13 @@ class Gadget:
     """A working object of an iso place for :class:`IsoGadgets` (DESIGN.md §103): its moving
     ``parts`` at a scene time (:func:`~vidgen.cartoon.iso_objects.object_motion`; the same number
     at any time), whether it works at a scene time (``working``) and whether it works at any time
-    between two (``busy``)."""
+    between two (``busy``); ``level``: how much of it shows at a scene time, 0..1 (a light coming
+    on or going out by itself at dusk or dawn fades, DESIGN.md §105.3; else 1)."""
 
     parts: Callable[[float], Sequence[Any]]
     working: Callable[[float], bool]
     busy: Callable[[float, float], bool]
+    level: Callable[[float], float] = lambda now: 1.0
 
 
 class IsoGadgets(VGroup):
@@ -403,9 +405,10 @@ class IsoGadgets(VGroup):
         strength = None
         for gadget, pieces in zip(self.gadgets, self.pieces):
             parts = gadget.parts(now) if gadget.working(now) else []
+            level = gadget.level(now) if parts else 0.0
             for k, piece in enumerate(pieces):
                 part = parts[k] if k < len(parts) else None
-                opacity = 0.0 if part is None else part.opacity
+                opacity = 0.0 if part is None else part.opacity * level
                 if part is not None and getattr(part, "pool", False):   # light on things: faint by day (§104)
                     strength = self.pool_strength() if strength is None else strength
                     opacity *= strength

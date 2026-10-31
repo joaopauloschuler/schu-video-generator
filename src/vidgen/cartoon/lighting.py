@@ -12,6 +12,7 @@ dark the shadows are (a factor of :data:`SHADOW_OPACITY`). Colours are sRGB comp
 
 from __future__ import annotations
 
+import zlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import cached_property
@@ -152,6 +153,80 @@ def pool_strength(grade: LightGrade) -> float:
     :data:`POOL_DAY` by day, 1 in the dark."""
     dark = min(max((1.0 - sum(grade.multiply) / 3) / LAMP_DARK, 0.0), 1.0)
     return POOL_DAY + (1.0 - POOL_DAY) * dark ** POOL_CURVE
+
+
+#: A day passing (the ``time_of_day`` action, DESIGN.md §105.3): its fade by default (seconds),
+#: how dark (:func:`darkness`) the light is where lamps switch on as it darkens (dusk; the
+#: ``sunset`` preset is past it) and off as it brightens (dawn), how long each light takes to
+#: come on or go out, and the most a light is early or late (seconds; a share of the fade at
+#: most), so a street's lamps come on one after another, never in one frame.
+TIME_OF_DAY_SECONDS = 6.0
+DUSK_DARK = 0.35
+AUTO_SWITCH_SECONDS = 1.2
+AUTO_SPREAD = 0.9
+AUTO_SPREAD_SHARE = 0.2
+
+
+#: A day passing from daylight straight to night goes through a sunset, and from night to full day
+#: through a morning: the share of the fade spent reaching it, and how dark the light it starts
+#: from must be (:func:`darkness`) at most (to night) or at least (to day).
+TWILIGHT_SHARE = 0.5
+TWILIGHT_FROM_DAY = 0.2
+TWILIGHT_FROM_NIGHT = 0.9
+
+
+def day_stages(before: LightGrade, preset: str) -> list[tuple[str, float]]:
+    """The presets a ``time_of_day`` fade from ``before`` to ``preset`` passes through, each with
+    the share of the fade at which it is reached: ``[("sunset", 0.5), ("night", 1.0)]`` from a
+    light day to night, ``[("morning", 0.5), ("day", 1.0)]`` from night to day, else
+    ``[(preset, 1.0)]``."""
+    dark = darkness(before)
+    if preset == "night" and dark <= TWILIGHT_FROM_DAY:
+        return [("sunset", TWILIGHT_SHARE), ("night", 1.0)]
+    if preset == "day" and dark >= TWILIGHT_FROM_NIGHT:
+        return [("morning", TWILIGHT_SHARE), ("day", 1.0)]
+    return [(preset, 1.0)]
+
+
+def darkness(grade: LightGrade) -> float:
+    """How dark ``grade`` is, 0 (day) .. 1 (night and darker): one minus its mean ``multiply``
+    over :data:`LAMP_DARK` (the measure of :func:`lamp_lit` and :func:`pool_strength`)."""
+    return min(max((1.0 - sum(grade.multiply) / 3) / LAMP_DARK, 0.0), 1.0)
+
+
+def _unsmooth(value: float) -> float:
+    """The share ``s`` 0..1 where smoothstep(``s``) is ``value`` (bisection)."""
+    low, high = 0.0, 1.0
+    for _ in range(40):
+        mid = (low + high) / 2
+        if _smooth(mid) < value:
+            low = mid
+        else:
+            high = mid
+    return (low + high) / 2
+
+
+def dusk_crossing(before: LightGrade, after: LightGrade, start: float, seconds: float) -> tuple[float, bool] | None:
+    """When a fade from ``before`` to ``after`` (from scene time ``start`` over ``seconds``,
+    eased as :func:`fade_at` eases it) crosses :data:`DUSK_DARK`, and whether the lights then go
+    on (dusk) or off (dawn); ``None`` when it does not cross."""
+    a, b = darkness(before), darkness(after)
+    if (a < DUSK_DARK) == (b < DUSK_DARK) or abs(b - a) < 1e-9:
+        return None
+    if seconds <= 0:
+        return float(start), b >= DUSK_DARK
+    share = _unsmooth((DUSK_DARK - a) / (b - a))
+    return float(start) + share * float(seconds), b >= DUSK_DARK
+
+
+def auto_switch_time(name: str, crossing: float, start: float, seconds: float) -> float:
+    """When the light ``name`` starts to switch for a dusk or dawn at scene time ``crossing``
+    during a fade from ``start`` over ``seconds``: early or late by up to :data:`AUTO_SPREAD`
+    (at most :data:`AUTO_SPREAD_SHARE` of the fade), the same for a name in every render, and
+    inside the fade."""
+    spread = min(AUTO_SPREAD, AUTO_SPREAD_SHARE * max(float(seconds), 0.0))
+    offset = (zlib.crc32(name.encode("utf-8")) % 1000 / 999 * 2 - 1) * spread
+    return min(max(crossing + offset, float(start)), float(start) + max(float(seconds), 0.0))
 
 
 def lifted(grade: LightGrade, share: float) -> LightGrade:

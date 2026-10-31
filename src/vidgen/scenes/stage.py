@@ -24,6 +24,7 @@ from .stage_iso import IsoStaging, _moving_block, iso_particle_problem
 from .stage_story import FlashbackSetting, StoryStaging
 from .stage_seats import IsoSeating
 from .stage_vehicles import IsoDriving
+from .stage_daylight import DayPassing
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -172,6 +173,8 @@ class StageProp(SceneParams):
     """wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it."""
     on: bool = False
     """A tv, a lamp, a fireplace, a kettle, a phone, a portal or a hologram_display: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams, a phone rings and shakes, a portal is open, a display shows its panel; the switch_on / switch_off actions change it)."""
+    auto_light: bool = True
+    """A lamp: false keeps it as it is when a time_of_day action passes dusk or dawn (by default it switches on at dusk and off at dawn by itself)."""
     time: str | None = None
     """A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning."""
     speed: float | None = Field(None, gt=0.0, le=MAX_CLOCK_SPEED)
@@ -213,6 +216,8 @@ class StageProp(SceneParams):
             raise ValueError(f"open is for props that open ({able}), not {self.prop or 'an svg prop'}")
         if self.on and self.prop not in SWITCHED_PROPS:
             raise ValueError(f"on is for props that switch on ({', '.join(SWITCHED_PROPS)}), not {self.prop or 'an svg prop'}")
+        if not self.auto_light and self.prop != "lamp":
+            raise ValueError(f"auto_light is for a lamp (a time_of_day switches it by itself), not {self.prop or 'an svg prop'}")
         if (self.time is not None or self.speed is not None) and self.prop != "clock":
             raise ValueError(f"time and speed are for a clock, not {self.prop or 'an svg prop'}")
         if self.time is not None:
@@ -608,6 +613,8 @@ class IsoObjectParam(SceneParams):
     """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge, coffee_machine, grow_rack, specimen_tank, chemistry_bench, distillation_rig, lab_fridge, fume_hood, satellite_dish, charging_station, airlock, printer_3d, fireplace (lit), stove, floor_lamp (lit), tv, vending_machine (lit), street_lamp (lit), traffic_light (cycles), fountain (runs), phone_booth (lit), car (headlights), campfire (lit), pond (ripples), beehive (bees out), desk_with_pc (its screen), water_cooler (bubbles), printer (prints), globe (spins), cauldron (bubbles over its fire), giant_crystal (glows), torch_sconce (lit), christmas_tree (lights twinkle), pumpkin (glows), balloon_bunch (sways), birthday_cake (candles burn), boat (bobs, its lantern lit), lighthouse (its beam sweeps) or rocket (fires): true starts it working (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
+    auto_light: bool = True
+    """A lamp, floor_lamp, street_lamp, house (its windows), phone_booth, vending_machine, lighthouse, christmas_tree, pumpkin or car (headlights): false keeps it as it is when a time_of_day action passes dusk or dawn (by default it switches on at dusk and off at dawn by itself)."""
     height: float | None = Field(None, ge=2.0, le=30.0)
     """A tower: how tall it is, in tiles (2-30; a character is 2 tiles tall); default 9."""
     screen: bool = False
@@ -639,6 +646,9 @@ class IsoObjectParam(SceneParams):
     def _states(self) -> "IsoObjectParam":
         if self.open is not None and self.object not in OPENING_KINDS:
             raise ValueError(f"open is for a house (its door), flowers (in bloom or in bud), a laptop, a lab_fridge, an airlock, a wardrobe or a treasure_chest, "
+                             f"not {_a(self.object)}")
+        if not self.auto_light and self.object not in AUTO_LIGHT_KINDS:
+            raise ValueError(f"auto_light is for the lights a time_of_day switches by itself ({', '.join(sorted(AUTO_LIGHT_KINDS))}), "
                              f"not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
             raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), or one of {', '.join(sorted(SWITCHED_KINDS - {'house', 'lamp', 'tower'}))}, "
@@ -809,6 +819,14 @@ class StageIso(SceneParams):
         placed = self.parsed().objects[-len(self.objects):] if self.objects else ()
         return {item.name: param.state() for param, item in zip(self.objects, placed) if param.state() != default_state(param.object)}
 
+    def auto_lit(self) -> dict[str, str]:
+        """The lights a ``time_of_day`` action switches by itself (DESIGN.md §105.3) by name:
+        their kinds (:data:`AUTO_LIGHT_KINDS`, not those placed with ``auto_light: false``)."""
+        place = self.parsed()
+        placed = place.objects[-len(self.objects):] if self.objects else ()
+        kept = {item.name for param, item in zip(self.objects, placed) if not param.auto_light}
+        return {item.name: item.kind for item in place.objects if item.kind in AUTO_LIGHT_KINDS and item.name not in kept}
+
     def changeable_names(self) -> list[str]:
         """The names an action may change or name: the objects and the doors that open."""
         return list(self.object_kinds())
@@ -838,7 +856,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
+class Stage(DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -2162,7 +2180,7 @@ class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
                 if prop.is_vehicle and VEHICLES[prop.kind].medium == "water":
                     self.water.float_boat(prop)
         # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
-        mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews))], *in_front, *(mob for _, mob in on_stage))
+        mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews)) and m is not self.day_sky], *in_front, *(mob for _, mob in on_stage))
         if p.iso is not None:   # a lamp's light falls on who stands near it (§89.13)
             self.iso_lamplight()
         if self.drawing.shading == "soft":   # the characters' and props' fills (DESIGN.md §79)
@@ -2290,7 +2308,7 @@ class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
         #: (scene time, light preset or ``None`` for a tint) from the start: where the light
         #: counts as changed for the ambience (half-way through each change, DESIGN.md §69.62)
         self.light_marks: list[tuple[float, str | None]] = [(0.0, self.params.light if isinstance(self.params.light, str) else None)]
-        changes = [resolve_light(use.setting(), self.theme) for use in self.action_uses("light")]
+        changes = [resolve_light(use.setting(), self.theme) for use in self._light_uses()]
         self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
         flashes = self._lightning_used() or bool(self.action_uses("alarm"))
         #: the stage's light (``None``: the set as drawn, nothing changes it)
@@ -2309,6 +2327,8 @@ class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
         self._bolt_paths: dict[int, list[np.ndarray]] = {}
         self.stars: StarField | None = None
         self.window_views: WindowViews | None = None
+        #: a day passing's sky (DESIGN.md §105.3; ``None``: the set's own background)
+        self.day_sky: Rectangle | None = None
         self.shadows: list[StageShadows] = []
         #: the scene updater while the light changes, kept: Manim removes an updater by identity,
         #: and each ``self._light_step`` is a new bound method
@@ -2320,7 +2340,7 @@ class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
         ``move_sun``: the suns and moons move along the sky's path to their places for the preset
         meanwhile (DESIGN.md §69.61)."""
         self.light_marks.append((float(start) + max(float(seconds), 0.0) / 2, setting if isinstance(setting, str) else None))
-        if self.window_views is not None:   # the sky outside fades with it (§69.42)
+        if self.window_views is not None or self.day_sky is not None:   # the sky outside fades with it (§69.42, §105.3)
             self._sky_changes.append(SkyChange(float(start), max(float(seconds), 0.0), window_sky(self._light_key(setting))))
         if move_sun and isinstance(setting, str):
             for body in self.sky_bodies:
@@ -2353,12 +2373,17 @@ class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
 
     def _show_light(self, grade: LightGrade) -> None:
         """The stars' brightness and the shadows' darkness for ``grade``, and the sky outside a
-        room's windows for the light now (lit by lightning, §69.61)."""
-        if self.stars is not None:
-            self.stars.set_level(grade.stars)
-        if self.window_views is not None:
+        room's windows or of a day passing for the light now (lit by lightning, §69.61, §105.3)."""
+        if self.stars is not None:   # in a day passing's sky they come out late, once it is dark (§105.3)
+            self.stars.set_level(grade.stars ** 2 if self.day_sky is not None else grade.stars)
+        if self.window_views is not None or self.day_sky is not None:
             sky = sky_at(self._sky_base, self._sky_changes, float(self.renderer.time))
-            self.window_views.show(flash_sky(sky, self.light.flash) if self.light is not None else sky)
+            sky = flash_sky(sky, self.light.flash) if self.light is not None else sky
+            if self.window_views is not None:
+                self.window_views.show(sky)
+            if self.day_sky is not None:
+                self.day_sky.set_fill([sky.top, sky.bottom], opacity=1.0)
+                self.day_sky.set_sheen_direction(DOWN)
         for group in self.shadows:
             group.set_strength(grade.shadow)
 
@@ -2451,7 +2476,7 @@ class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
         """With a ``light`` action that has ``move_sun`` (outdoors), every ``sun`` and ``moon``
         prop is a :class:`SkyBody`: placed on the sky's path where the light at the start puts it
         (a tint: as by day), moved by the light changes, and the shadows cast away from it."""
-        if self.params.room is not None or not any(use.options.move_sun for use in self.action_uses("light")):
+        if self.params.room is not None or not any(use.moves_sun(self.params) for use in self._light_uses()):
             return
         start = self.params.light if isinstance(self.params.light, str) else "day"
         for prop in self.props.values():
@@ -2620,12 +2645,15 @@ class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
 
     def _living_names(self) -> set[str]:
         """The props that move by themselves in this scene: running clocks, and the tvs and lamps
-        that are on at the start or that a ``switch_on`` names. Every other prop is drawn as before."""
+        that are on at the start or that a ``switch_on`` names (or, for lamps, a ``time_of_day`` may
+        switch, §105.3). Every other prop is drawn as before."""
         p = self.params
         patterns = [pattern for use in self.action_uses("switch_on") for pattern in use.config.targets()]
+        dusk = any(use.options.auto_lights for use in self.action_uses("time_of_day"))
         return {
             name for name, prop in zip(p.prop_names(), p.stage_props())
             if prop.runs() or (prop.prop in SWITCHED_PROPS and (prop.on or any(fnmatchcase(name, pat) for pat in patterns)))
+            or (dusk and prop.prop == "lamp" and prop.auto_light)
         }
 
     def _start_living(self, names: set[str]) -> None:
@@ -2975,6 +3003,11 @@ class Stage(IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
         elif p.background is not None or self.light is not None:   # a lit stage grades the theme's background too
             colors = p.background if isinstance(p.background, list) else [p.background or self.theme.background]
             sky = Rectangle(width=fw, height=fh, stroke_width=0)
+            if p.background is None and self.action_uses("time_of_day"):   # a day passing: the sky of the time of day (§105.3)
+                self._sky_base = window_sky(self._light_key(p.light))
+                self._sky_changes = []
+                self.day_sky = sky
+                colors = [self._sky_base.top, self._sky_base.bottom]
             sky.set_fill([resolve_color(c, self.theme) for c in colors], opacity=1.0)
             sky.set_sheen_direction(DOWN)  # a gradient runs from the first colour at the top
             sky.name = "background"

@@ -12843,6 +12843,42 @@ straight overhead they are as usual. It needs a `sun` or a `moon` prop and the s
         - {light: night, move_sun: true, run_time: 4}
 ```
 
+**A day passing (`time_of_day`)**: `- {time_of_day: sunset, run_time: 6}` (`morning`, `day`,
+`sunset`, `night`, `indoor`; `run_time` default `6`) is the same fade to a preset, made for a whole
+evening or dawn in one shot. A stage without a `background` or picture gets a sky of the time of
+day that fades along (blue by day, gold and pink at sunset, dark blue with stars at night); from
+daylight straight to `night` the fade goes through a sunset (from night to `day` through a
+morning); the stars come out late, once the sky is dark; a `sun` or `moon` prop moves along the
+sky (`move_sun`, default on when the stage has one outdoors). As the light passes **dusk**
+(darker than an evening, so a `sunset` is past it) the lights switch on by themselves, each a
+little early or late and fading in over 1.2 s: on an iso place `lamp`, `floor_lamp`,
+`street_lamp`, a `house`'s windows, `phone_booth`, `vending_machine`, `lighthouse`,
+`christmas_tree`, `pumpkin` and a `car`'s headlights (a driving one too), on the flat stage a
+`lamp` prop; at **dawn** they go out again (not on the way to `indoor`). Their pools of light grow
+with the dark (as with `light`), and characters near a lit lamp are lit by it. `auto_lights:
+false` on the action switches nothing; `auto_light: false` on an iso object or a lamp prop keeps
+that one as it is. `fill_light` and towers' windows work as with `light`.
+
+```yaml
+- id: dusk
+  type: stage
+  params:
+    iso:
+      map: |
+        ..........
+        ::::::::::
+        ....s.....
+      spots: {s: square}
+      objects:
+        - {object: street_lamp, at: {column: 3, row: 1}}
+        - {object: lamp, at: {column: 9, row: 3}, auto_light: false}
+    characters: [{name: dot, at: square}]
+  beats:
+    - text: "Evening came, and one by one the street lights came on."
+      actions:
+        - {time_of_day: night, run_time: 6}
+```
+
 `shadows` (default `true`) puts a soft shadow on the ground under each character and each prop
 standing on the ground (not under a cloud, sun or moon or another prop with a `lift`): an
 ellipse as wide as about half a character's height (a prop: nine tenths of its width), at the
@@ -13219,11 +13255,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `lie_on`, `use`, `step_aside`, `get_in`, `ride_to`, `get_out`, `drive_to`, `sail_to`, `lift_off`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `lie_on`, `use`, `step_aside`, `get_in`, `ride_to`, `get_out`, `drive_to`, `sail_to`, `lift_off`, `light`, `time_of_day`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6 (with `to` on a level: its run-up, crouch, flight and landing), `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `lie_on` 1.2, `use` 3.0, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `drive_to` / `sail_to` as long as the way needs at their `speed`, `lift_off` 4.0, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6), `let_go` by how far the balloons rise (1–6), `pour` 2.0; a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6 (with `to` on a level: its run-up, crouch, flight and landing), `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `lie_on` 1.2, `use` 3.0, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `drive_to` / `sail_to` as long as the way needs at their `speed`, `lift_off` 4.0, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `time_of_day` 6.0 (the fade), `blow_away` by the distance and the wind (0.6–6), `let_go` by how far the balloons rise (1–6), `pour` 2.0; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -13315,6 +13351,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
 | `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
 | `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`); `move_sun` (`false`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action; `move_sun: true` moves the sun and moon across the sky meanwhile, the shadows turning. Its "target" is the light, not a target of the scene; no `until`. |
+| `time_of_day` | as the target: `- time_of_day: night` (`day`, `morning`, `sunset`, `night`, `indoor`); `auto_lights` (`true`), `move_sun` (on with a `sun` / `moon` prop outdoors) | on a `stage`: [a day passing](#light-and-shadows-light-shadows): the light fades from `at` over `run_time` seconds (`6`), with a sky of the time of day, day to night through a sunset; at dusk the lamps, windows, lit objects and headlights switch on by themselves (off at dawn). No `until`. |
 | `lightning` | as the target: where (`- lightning: right`, a mark or an x; optional); `distance` (`1` km), `bolt` (`true`), `seed` | on a `stage`: the set flashes and a bolt strikes from `at`, its thunder `distance` × ~3 s later (foley); in a room the windows flash; see [Lightning](#lightning-and-thunder-lightning). `run_time` is the flash (0.7 s); no `until`. |
 | `rainbow` | as the target: where its middle is (`- rainbow: centre`; optional); `width` (`0.75`), `opacity` (`0.55`), `hide` (`false`) | on a `stage` outdoors: a rainbow fades into the sky over `run_time` (`3`) from `at` and stays; `hide: true` fades the rainbows out; see [Rainbows](#rainbows-rainbow). No `until`. |
 | `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`) and `lightning` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
