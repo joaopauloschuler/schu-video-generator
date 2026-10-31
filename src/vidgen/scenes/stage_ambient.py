@@ -11,6 +11,7 @@ scene uses, the vehicles' roads and tracks; they never speak, are no action targ
 in close shots (they never steal the focus). None in a draft.
 """
 
+import math
 from fnmatch import fnmatchcase
 from typing import Any
 
@@ -105,7 +106,27 @@ class IsoAmbience:
                 things |= set(item.cells())
         for name in getattr(self, "iso_vehicles", {}):
             things |= set(place.object(name).cells())
-        return cells, things
+        return cells, things | self._ambient_lanes(place)
+
+    def _ambient_lanes(self, place: Any) -> set[tuple[int, int]]:
+        """The water a sailing boat crosses (its routes, replayed as planned from where it
+        stands): ducks keep off it (DESIGN.md §105.8). A car's paths and a train's track are
+        :meth:`_ambient_roads`."""
+        lanes: set[tuple[int, int]] = set()
+        boats = {name: (place.object(name), None) for name, v in getattr(self, "iso_vehicles", {}).items() if v.kind == "boat"}
+        for use in self.action_uses("sail_to"):
+            for name in [n for n in boats if any(fnmatchcase(n, p) for p in use.config.targets())]:
+                item, heading = boats[name]
+                options = {"to": getattr(use.options, "to", None), "via": list(getattr(use.options, "via", None) or [])}
+                try:
+                    route = plan_vehicle(moved_place(place, {name: item}), name, "sail_to", options, heading=heading)
+                except VidgenError:
+                    continue   # validate says why
+                for a, b in zip(route.points, route.points[1:]):
+                    steps = max(int(math.dist(a, b) * 2), 1)
+                    lanes |= {(math.floor(a[0] + (b[0] - a[0]) * k / steps), math.floor(a[1] + (b[1] - a[1]) * k / steps)) for k in range(steps + 1)}
+                boats[name] = (moved_item(item, route.end_cells, route.end_heading), route.end_heading)
+        return lanes
 
     def _ambient_roads(self, place: Any) -> set[tuple[int, int]]:
         """Where nobody walks: the paths when a car drives on them, a train car's track."""

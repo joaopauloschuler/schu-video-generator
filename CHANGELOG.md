@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–274)
+## Unreleased (Steps 193–275)
 
 ### Phase AD: features without AI APIs (Steps 268–275)
 
@@ -16,6 +16,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 - `vidgen story draft story.md -o DIR` (MCP tool `story_draft`): a story cartoon drafted from prose, without AI — scenes from headings, breaks and time cues, a cast with distinct Kokoro voices (told in the first person, the narrator speaks with the protagonist's voice), each quoted line given a speaker with a confidence, ready-made iso places (or flat sets with `--style flat`) with light, weather and objects from the story's words, placeholder walks and shots, title and end cards, a music bed; `story_draft.md` lists every decision and a TODO checklist.
 - `vidgen shorts suggest [PROJECT] [--count N] [--min 30 --max 60] [--teaser] [--write]` (MCP tool `shorts_suggest`): Shorts suggested without AI — windows between beat boundaries timed by the narration (or the word count), scored by dialogue, questions, exclamations, emotional and action words, variety, a clean start and a strong last line (the film's ending marked down), each with a hook line of up to six words; `--teaser` about 15 s of the best lines ending on the title; `--write` adds them as `cut:` variants (9:16, karaoke captions, hook, end card, opening zooms) in `shorts.yaml`, included by the config. An included file may now hold `variants`. A story draft no longer names two objects `lamp`.
 - Ambient life on iso places: `ambient: {walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}` (or `ambient: true`) sets background walkers strolling the paths, birds pecking and flying off, a cat sitting and grooming, ducks on the water, butterflies by day and fireflies at night about the place, the same on every render; they keep away from the characters, never speak, hide in close shots and are drawn smaller and greyer (`muted`); indoors a cat and flies.
+- Review (Step 275): a car's headlights light the road ahead when it drives away up the picture too, and a car or a boat shows a turned in-between frame at corners; a pupil's legs go under the school desk; a setting sun or moon sinks behind the ground instead of fading beside the characters' feet; a rainy day turning to night switches the lamps on; trees bend visibly on a windy day and balloon bunches swing on their strings (a gale no longer stretches them); story drafts read British `‘…’` dialogue, make characters of described speakers (`said the old man`), give a line calling someone by name to the other speaker, choose the title card's look from the story's mood (dark and neon at night) and add a little ambient life outdoors; a Short starting mid-scene keeps the light the scene had reached; walkers have faces and take lamplight, ducks keep off a sailing boat's way; the JSON schema accepts a YAML 1.1 `on` key on iso objects again.
 
 ### More iso objects (Steps 261–267)
 

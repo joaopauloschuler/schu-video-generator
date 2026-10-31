@@ -211,6 +211,26 @@ def test_suggest_write_and_validate(tmp_path: Path) -> None:
     assert not again.config_changed and again.backups == (folder / "shorts.yaml.bak",)
 
 
+def test_a_mid_scene_start_restates_the_light(tmp_path: Path) -> None:
+    """Step 275: a Short opening after a left-out ``time_of_day`` starts in the light it left
+    (at once), its other moves noted; the variant validates."""
+    from vidgen.shorts_suggest import RESTATE_SECONDS, short_variant
+
+    config = _config()
+    config["scenes"][2]["beats"][0]["actions"].append({"time_of_day": "night", "run_time": 2})
+    folder = _project(tmp_path, config)
+    project = Project.load(folder)
+    beats, _ = timed_beats(project)
+    kept = [b for b in beats if b.scene == "mill" and b.index >= 2]
+    variant, notes = short_variant(project, kept, "Where is the flour?", 60.0)
+    actions = variant["cut"]["beats"][kept[0].id]["actions"]
+    assert actions[0] == {"time_of_day": "night", "at": 0, "run_time": RESTATE_SECONDS} and "zoom" in actions[1]
+    assert any("walk_to mira" in n for n in notes) and not any("time_of_day" in n for n in notes)
+    config["variants"] = {"short1": variant}
+    problems, variants = cli.validate_all(Project.load(_project(tmp_path, config)), keep_going=True)
+    assert problems == [] and variants["short1"] is not None
+
+
 def test_own_variant_names_are_kept(tmp_path: Path) -> None:
     config = _config()
     config["variants"] = {"short1": {"format": {"width": 1080, "height": 1920}}}

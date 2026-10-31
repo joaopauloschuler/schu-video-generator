@@ -1024,6 +1024,9 @@ class IsoStaging:
         self._iso_lamp_time = -1.0
         for name, mob in [*self.cast.items(), *getattr(self, "props", {}).items()]:
             mark_lamp_lit(mob, LampLit(lambda name=name: self._iso_lamp_share(name)))
+        for name, critter in getattr(self, "iso_critters", {}).items():   # background walkers and a cat too (§105.8)
+            if critter.kind in ("walker", "cat"):
+                mark_lamp_lit(critter, LampLit(lambda critter=critter: self._iso_lamp_at(critter.name, critter.iso_feet)))
 
     def _iso_lamp_level(self, name: str, now: float) -> float:
         """How lit the lamp ``name`` is at scene time ``now`` (0..1), fading with its switches."""
@@ -1039,16 +1042,20 @@ class IsoStaging:
         """How much lamplight falls on the character or small thing ``name`` now (a held thing:
         as on its holder), 0..1: the most of any lamp's, by the distance of its feet from the
         lamp (:data:`ISO_LAMP_REACH`) times how lit the lamp is."""
+        mob = self.cast[name] if name in self.cast else self.props.get(name)
+        holder = getattr(mob, "held_by", None)
+        if holder is not None and holder in self.cast:
+            mob = self.cast[holder]
+        return self._iso_lamp_at(name, getattr(mob, "iso_feet", None))
+
+    def _iso_lamp_at(self, name: str, feet: Any) -> float:
+        """How much lamplight falls on ``name`` standing with its feet at ``feet`` (tile units;
+        ``None``: none) now: the most of any lamp's (:meth:`_iso_lamp_share`), once per scene time."""
         now = float(self.renderer.time)
         if now != self._iso_lamp_time:
             self._iso_lamp_time, self._iso_lamp_shares = now, {}
         if name in self._iso_lamp_shares:
             return self._iso_lamp_shares[name]
-        mob = self.cast[name] if name in self.cast else self.props.get(name)
-        holder = getattr(mob, "held_by", None)
-        if holder is not None and holder in self.cast:
-            mob = self.cast[holder]
-        feet = getattr(mob, "iso_feet", None)
         share = 0.0
         if feet is not None:
             near, far = ISO_LAMP_REACH

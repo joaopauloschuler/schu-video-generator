@@ -423,20 +423,40 @@ ISO_SWAYS: dict[str, Sway] = {
     "flowers": SWAYS["flowers"],
     "plant": SWAYS["plant"],
     "scarecrow": Sway(3.0, 1.3, 0.3),
-    "balloon_bunch": Sway(20.0, 0.6, 0.05),
+    "balloon_bunch": Sway(14.0, 0.6, 0.05),
 }
-#: How much a swaying thing on an iso place leans of what a flat stage's prop does: seen from
-#: above at a slant, a full lean looks like a fall.
-ISO_SWAY_SHARE = 0.55
+#: The swaying things that swing as a whole about their foot (a bunch of balloons on its string
+#: turns; bent, a gale stretched it), DESIGN.md §105.8.
+ISO_SWINGS = frozenset({"balloon_bunch"})
+#: How a swaying thing on an iso place leans for a felt force (a flat stage's prop leans with
+#: it): ``ISO_SWAY_SHARE`` × its degrees × the felt force to the power ``ISO_SWAY_POWER``, so
+#: a breeze or a windy day bends trees as far as reads at a preview's size (Step 271's lean,
+#: 0.55 × the felt force, hardly showed) while a gale, seen from above at a slant, does not
+#: look like a fall (DESIGN.md §105.8).
+ISO_SWAY_SHARE = 1.0
+ISO_SWAY_POWER = 0.65
 
 
 def iso_sway_degrees(kind: str, force: float, seconds: float, phase: float = 0.0) -> float:
     """How far (degrees, to the right on screen; negative: left) the ``kind`` object
-    (:data:`ISO_SWAYS`) leans under the signed wind ``force`` at ``seconds``: as a flat stage's
-    prop (:func:`~vidgen.cartoon.wind.felt_force`, its own to-and-fro), times
-    :data:`ISO_SWAY_SHARE`."""
+    (:data:`ISO_SWAYS`) leans under the signed wind ``force`` at ``seconds``: its degrees times
+    the felt force (:func:`~vidgen.cartoon.wind.felt_force`) to the power
+    :data:`ISO_SWAY_POWER`, with its own to-and-fro."""
     sway = ISO_SWAYS[kind]
-    return ISO_SWAY_SHARE * sway.degrees * felt_force(force) * (1.0 + SWAY_WOBBLE * math.sin(2.0 * math.pi * sway.hz * seconds + phase))
+    felt = felt_force(force)
+    lean = math.copysign(abs(felt) ** ISO_SWAY_POWER, felt) if felt else 0.0
+    return ISO_SWAY_SHARE * sway.degrees * lean * (1.0 + SWAY_WOBBLE * math.sin(2.0 * math.pi * sway.hz * seconds + phase))
+
+
+def swing_pixels(pixels: np.ndarray, foot: float, centre: float, degrees: float) -> np.ndarray:
+    """``pixels`` (rows × columns × RGBA, uint8) turned ``degrees`` (its top to the right for a
+    positive angle) about the point (``centre`` column, ``foot`` row): a balloon bunch swinging
+    on its string. Premultiplied while turned (no dark fringe); equal to ``pixels`` at 0."""
+    if degrees == 0.0:
+        return pixels.copy()
+    image = Image.fromarray(pixels, "RGBA").convert("RGBa")
+    turned = image.rotate(-degrees, resample=Image.Resampling.BICUBIC, center=(centre, foot))
+    return np.array(turned.convert("RGBA"))
 
 
 def sway_rows(pixels: np.ndarray, foot: float, height: float, degrees: float, bend_from: float = 0.0) -> np.ndarray:
@@ -489,6 +509,9 @@ __all__ = [
     "shimmered",
     "still_reflection",
     "sway_rows",
+    "swing_pixels",
+    "ISO_SWINGS",
+    "ISO_SWAY_POWER",
     "IsoPuddle",
     "PUDDLE_GROUNDS",
     "PUDDLE_RADIUS",

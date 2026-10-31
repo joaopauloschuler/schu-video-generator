@@ -104,6 +104,29 @@ def test_swaying_kinds_are_objects_and_lean_with_the_wind() -> None:
     assert abs(iso_sway_degrees("balloon_bunch", 0.6, 0.0)) > abs(iso_sway_degrees("scarecrow", 0.6, 0.0))
 
 
+def test_a_windy_day_bends_trees_visibly_and_balloons_swing_whole() -> None:
+    """Step 275: on a windy day (0.6) a tree leans enough to read at a preview's size and a gale
+    does not throw it flat; a bunch of balloons swings about its foot (turned, not stretched)."""
+    from vidgen.cartoon.iso_weather import ISO_SWINGS, swing_pixels
+
+    assert 7.0 < iso_sway_degrees("tree", 0.6, 0.0) < 12.0 and iso_sway_degrees("tree", 1.0, 0.0) < 20.0
+    assert iso_sway_degrees("tree", 0.3, 0.0) > 3.0   # a breeze shows too
+    assert ISO_SWINGS == {"balloon_bunch"} and iso_sway_degrees("balloon_bunch", 1.0, 0.0) < 35.0
+    pixels = np.zeros((40, 30, 4), dtype=np.uint8)
+    pixels[5:12, 11:19] = (220, 60, 60, 255)   # a balloon over its string
+    pixels[12:40, 14:16] = (240, 240, 240, 255)
+    assert np.array_equal(swing_pixels(pixels, 40.0, 15.0, 0.0), pixels)
+    swung = swing_pixels(pixels, 40.0, 15.0, 20.0)
+    def columns(image: np.ndarray, rows: slice) -> tuple[float, float]:
+        alpha = image[rows, :, 3].astype(float).sum(axis=0)
+        found = np.flatnonzero(alpha > 128)
+        return float(found.min()), float(found.max())
+    left, right = columns(pixels, slice(5, 12))
+    left2, right2 = columns(swung, slice(0, 14))
+    assert left2 > left + 3 and (right2 - left2) == pytest.approx(right - left, abs=2)   # moved right, as wide: not stretched
+    assert columns(swung, slice(37, 40))[0] == pytest.approx(columns(pixels, slice(37, 40))[0], abs=1)   # the foot stays
+
+
 def test_bending_moves_the_top_and_keeps_the_foot() -> None:
     pixels = np.zeros((40, 30, 4), dtype=np.uint8)
     pixels[5:40, 12:16] = (90, 60, 30, 255)   # a trunk from its foot (row 40) up

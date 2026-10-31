@@ -20352,7 +20352,7 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   `plan_vehicle`, `start_heading`, `track_cells`, `IsoDrive`, `IsoVehicle`, `rocket_smoke`,
   `track_shapes`, `vehicle_shapes`; `ObjectLook.driven`; `IsoScenery.front(exclude=)`. Additive:
   a scene without these actions takes no new branch; Phase Q baseline 31/31 identical.
-- **Left for later**: a turn is a switch of the drawing at the corner (no in-between angles); a
+- **Left for later**: a turn shows one in-between angle (45°, §105.8), not a smooth turn; a
   U-turn flips the vehicle; moving vehicles and walkers do not avoid each other (as two walkers);
   no riders (`get_in` is the flat stage's); a train car is one car (no coupled cars); no
   reflections or wake trail behind a boat beyond its foam.
@@ -20410,8 +20410,8 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   `rowans_room` (25 stills) identical.
 - **Left for later**: no front view while seated (a seat facing the viewer shows the side view);
   `use` is timed (the hands come back after `run_time`), not a held posture; no `lie_on` on a
-  sofa or the flat stage; a sitter's legs over a school desk's front are not hidden; a bean's
-  head reaches over a bus shelter's roof (drawn over it).
+  sofa or the flat stage; a bean's head reaches over a bus shelter's roof (drawn over it). (A
+  school desk's sitter tucks its legs away since §105.8.)
 
 ### 105.3 A day passing in one scene (Step 270)
 
@@ -20517,7 +20517,7 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
 - **Left for later**: characters and moving vehicles are not mirrored; reflections only of
   glowing shapes (not of gadgets' lights, IsoScreens or the blinking antennas); fog over a front
   house's roof is as thick as the base picture there (the bands layer the bodies, not the
-  place's pieces); swaying is a shear (a big balloon lean stretches the balloons); objects an
+  place's pieces); swaying is a shear (balloon bunches swing whole since §105.8); objects an
   action changes, a snow cap on a swaying tree and flags (no flag object) do not sway.
 
 ### 105.5 A story in prose to a draft project (Step 272)
@@ -20572,8 +20572,8 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   `light_cues`, `music_of`, `objects_named`, `weather_of`, `DraftOptions`, `StoryDraft`,
   `draft_story`, `report_markdown`, `story_yaml`. Additive: no shared code changed beyond the CLI,
   `jsonout` and the MCP server.
-- **Left for later**: single curly quotes (British dialogue) are not read as speech; a speaker
-  named only by a description (`said the old man`) is read by the narrator; places are
+- **Left for later** (single curly quotes and described speakers: §105.8): a described
+  speaker's pronouns (`The mayor stood up. "...," she announced.`) still go to a named one; places are
   placeholders (no map built from the story); characters stand from the scene's start unless the
   story brings them in; more than four characters in a scene are not placed.
 
@@ -20626,9 +20626,8 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   (`jsonout.shorts_document`). Additive; `INCLUDABLE_KEYS` accepts one key more (its error message
   lists it). Fix found on the way: a story draft's added object of a kind the place already names
   (`lamp` by the harbour's street lamp) gets a numbered name (`story_places.StoryPlace.iso`).
-- **Left for later**: no restaging beyond the opening zoom (shots per beat, characters' starting
-  spots after left-out moves, a left-out `time_of_day`'s light are notes for the author / an
-  agent); a window never jumps over beats (only the teaser does); hooks are taken from the text,
+- **Left for later**: no restaging beyond the opening zoom and the light (§105.8; shots per beat,
+  characters' starting spots after left-out moves are notes for the author / an agent); a window never jumps over beats (only the teaser does); hooks are taken from the text,
   so a narrator's question can win when the dialogue has none; scores use word lists in English.
 
 ### 105.7 Ambient life (Step 274)
@@ -20694,7 +20693,58 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   `IsoTiles.clip`. Additive: Phase Q baseline 31/31 and iso-story `night` / `rowans_room` (25
   stills) identical.
 - **Left for later**: creatures do not react to the characters (birds do not flee a walker) nor
-  avoid each other or moving vehicles; walkers have no faces and no lamplight; they wait in a
+  avoid each other (moving vehicles' roads, tracks and boat lanes they do, §105.8); they wait in a
   cell only away from where characters stood at the start or walk to (not along their walks);
   no fish ripples; no sounds of their own (the birdsong bed plays); a creature is a fixed sprite
   per pose (no snow on it, not mirrored in puddles).
+
+### 105.8 Review of Phase AD (Step 275)
+
+Fixes from a look at each step's sheet; all additive, Phase Q baseline 31/31 and iso-story `night`
+/ `rowans_room` (25 stills) identical.
+
+- **Vehicles**: the headlights' pool was ahead in the world for all four headings but, driving away
+  up the picture, the car hid most of it (it read as beside the car): there it lies further on and
+  wider (`car_shapes(reverse=True)`: 1.0 tile past the nose, radius 0.75; a parked car unchanged).
+  Corners: in the middle half of a corner's leg (`VehicleRoute.turning`) a car or a boat is drawn
+  turned 45° (`turning_shapes`: the along-row sprite's shapes turned about its middle; at 45° one
+  of the faces drawn shows whole and the other edge-on, so no gaps), nose-on, tail-on or side-on
+  by the corner; U-turns still flip. The train behind a rocket's tower was checked: the track was
+  behind the pad, so the tower drawn over it is right (and a train in front of a rocket and a
+  tower is drawn over them).
+- **Seats**: `IsoSeat.tucked` (a school desk): the sitter's legs fold away (`iso_tucked`, as in
+  bed); seen through the chair's back they showed over the desk's front.
+- **Sky**: the sun did stay behind the set (it reads as in front when it set beside a
+  character's feet, fading); with a ground band (`_start_sky_path(ground)`) a sky body has a
+  `sink` (its height on the path): whole down to the horizon, it sinks behind the ground and is
+  gone `sink` under it. `time_of_day` from a light past dusk already (a rainy iso day's overcast,
+  §89.12) to a darker one switches the lights on at `DARK_SWITCH_SHARE` 0.25 of the fade (they
+  never switched: no dusk was crossed).
+- **Wind**: an iso lean is `ISO_SWAY_SHARE` 1.0 × degrees × felt force ^ `ISO_SWAY_POWER` 0.65
+  (was 0.55 × the felt force: a windy day bent a tree ~4°, now ~10°; a gale ~16°, was ~13°);
+  `ISO_SWINGS` (balloon bunches, `Sway` 14°) turn whole about their foot (`swing_pixels`,
+  premultiplied PIL rotation) instead of the shear.
+- **Story draft**: `quote_pattern` — single curly quotes are speech in a text without double
+  quotes or guillemets (an opening `‘` not inside a word, a `’` followed by a letter is an
+  apostrophe); `PERSON_NOUNS` — `said the old man` / `the girl asked` make a character
+  (`old_man`, `Character.described`, kind from the noun; `a girl called Rosa` names, no speech);
+  a line calling a character by name (start or end, `_addressed`) is the other one's of the
+  exchange when no tag or a guess under 0.6 says otherwise (0.55). `card_mood` / `CARD_LOOKS`:
+  the title card is `night` (dark, neon letters: opening or mostly at night, a mystery or neon
+  bed), `bedtime`, `cosy` (warm burst, two or more `COSY_WORDS`) or `quiet`; `DRAFT_AMBIENT`: a
+  modest `ambient` on the outdoor places (fireflies at night).
+- **Shorts**: a mid-scene start restates the light the left-out beats left (their last
+  `time_of_day` / `light` to a preset, `at: 0`, `RESTATE_SECONDS` 0.1) before the opening zoom.
+  Tried on a 3:54 drafted story (`s275/clock`, five scenes): the picks are the storm's dialogue,
+  the shop's opening and the lesson; the ending scene is held back as a spoiler.
+- **Ambient**: walkers get a face of dots (an eye under the hair's edge, a smile's end) and
+  `MUTED_SHARE` 0.35 (was 0.45); walkers and the cat take lamplight (`LampLit` by their feet,
+  `_iso_lamp_at`); ducks keep off a sailing boat's lanes (`_ambient_lanes`: its routes replayed).
+- **Schema** (from Step 251): an optional boolean `on` (`bool | None`) takes the YAML 1.1 `"true"`
+  key too (`test_phase_q_review` failed since then).
+- **Cost** (854x480 preview, 15 fps, `s275/wx`): a harbour at night with a car and a boat moving
+  and `time_of_day` 19.2 s for 15 s of video; with rain and puddles, a breeze and ten creatures
+  31.1 s (+62 %; most of it the light's fade grading every picture and the rain).
+- **Public**: `vidgen.api` adds `turning_shapes`, `ISO_SWINGS`, `swing_pixels`, `PERSON_NOUNS`,
+  `quote_pattern`, `CARD_LOOKS`, `DRAFT_AMBIENT`, `card_mood`; `VehicleRoute.turning`,
+  `IsoSeat.tucked`, `SkyBody(sink=)`.

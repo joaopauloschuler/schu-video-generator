@@ -350,7 +350,8 @@ variants:
   a strong last line; the ending marked down) and prints a table with a hook each. `--write` adds
   them as variants in `shorts.yaml` (included by the config, both backed up): 9:16, captions, hook,
   end card, a held `zoom ... cut` opening each stage scene. It is a draft: read its notes (a
-  mid-scene start loses earlier moves and light changes), then storyboard and restage as above.
+  mid-scene start keeps the light earlier beats set, not their moves), then storyboard and
+  restage as above.
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
@@ -2303,9 +2304,10 @@ whole format.
 **From a story in prose.** `vidgen story draft story.md -o DIR [--style iso|flat] [--format 9:16]
 [--narrator VOICE]` (MCP tool `story_draft`) drafts the whole project without AI: scenes at
 headings, `***` breaks and time cues, a cast with distinct Kokoro voices (first person: the narrator
-is the protagonist's voice), each quoted line given a speaker with a confidence, iso places, light,
-weather and objects from the story's words, placeholder walks and shots, title and end cards, a
-music bed. Read its `story_draft.md` first: fix the speakers marked **check** (`voice:` of those
+is the protagonist's voice), each quoted line (double quotes, or British `‘…’`) given a speaker with
+a confidence (`said the old man` adds an `old_man`), iso places with a little `ambient` life, light,
+weather and objects from the story's words, placeholder walks and shots, a title card in the
+story's mood, an end card, a music bed. Read its `story_draft.md` first: fix the speakers marked **check** (`voice:` of those
 beats), the cast, then the places and walks (they are placeholders), and run the usual loop.
 
 **A series: one cast, shared sets.** Put the characters and their voices in `shared/cast.yaml`
@@ -2707,13 +2709,14 @@ and give each scene `set: village`.
 - Weather outdoors: rain with `puddles: true, settled: 12` (puddles full size from the start)
   mirrors lit windows, lanterns and neon trims at night, wobbling while it rains; `fog: 0.6`
   lies over the place in drifting bands, thicker further back; `wind: windy` (or `- wind:
-  gale`) bends trees, bushes, flowers and plants, swings scarecrows and balloon bunches and
-  slants the rain. All fade with `time_of_day`.
+  gale`) bends trees, bushes, flowers and plants in gusts, swings scarecrows and balloon bunches
+  (on their strings) and slants the rain. All fade with `time_of_day`.
 - Life in the background: `ambient: {walkers: 3, birds: 4, cat: true, butterflies: true,
   fireflies: true, seed: 1}` on the stage (or `ambient: true`; also `ducks` on `~`, `flies`):
   passers-by stroll the paths, birds peck and fly off, a cat sits and grooms, butterflies by day,
   fireflies at night. They keep away from the characters, never speak, are no targets and hide
-  in close shots; walkers are `muted` (smaller, greyer) unless `muted: false`. Indoors a cat and
+  in close shots; walkers are `muted` (smaller, greyer) unless `muted: false`, and lamps light
+  them at night. Indoors a cat and
   flies only. They add render time: a handful is enough.
 - Other selves: a character with `echo: true` (or `{color, opacity}`) is a translucent other
   self that keeps its own costume, its outlines glowing (a timeline, a memory, a dream); stand

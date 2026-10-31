@@ -1641,7 +1641,7 @@ a few lines per feature in CONFIG and the guide.
 - [x] `ambient: {walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}` (or `true`) on an iso stage: walkers between spots and along paths (muted: smaller, greyer), birds pecking, hopping, flying off and back, a cat sitting and grooming, ducks on water, butterflies by day and fireflies at night (following `time_of_day`); away from the characters, their moves, the objects used, roads and tracks; hidden in close shots; no targets, never speaking; indoors a cat and flies; deterministic by seed; front pictures drawn only over each creature (cost +40–55 % on a dozen); tests `test_iso_ambient.py`
 
 ### Step 275 — Review of Phase AD
-- [ ] Compatibility (Phase Q baseline 31/31), each feature's tests and related suites, `test_mcp.py`, docs consistency, performance
+- [x] Compatibility (Phase Q baseline 31/31, iso-story stills identical), each feature's tests and related suites, `test_mcp.py` in full, docs consistency, performance (DESIGN §105.8). Fixes: headlights ahead when driving away, a turned in-between frame at corners, a pupil's legs under the school desk, the sun sinking behind the ground, lamps on from a rainy day to night, visible wind and swinging balloons, British quotes / described speakers / calls by name / a title card by mood / ambient in story drafts, the light restated in mid-scene Shorts, walkers with faces and lamplight, ducks off a boat's way, the schema's YAML `on` key
 
 ---
 

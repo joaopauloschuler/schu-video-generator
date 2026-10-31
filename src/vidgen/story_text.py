@@ -7,10 +7,12 @@ markers such as ``***`` or ``#``, paragraphs opening with a time cue: ``The next
 subjects, with titles: ``Doctor Vale``), their voice kind (a title, a built-in list of given
 names, the pronouns used after them) and whether it is told in the first person, then reads the
 scenes paragraph by paragraph into :class:`Line` s: narration in groups of sentences of at most
-:data:`MAX_BEAT_WORDS` words, and dialogue (straight or curly double quotes) attributed to a speaker
-with a confidence: a speech tag (``said Mara``, ``Mara asked``, ``she whispered``, ``I said``), a
-sentence of the paragraph whose subject is a character (an action beat), the alternation of a
-two-person exchange, then the last character mentioned. Speech tags are left out of the
+:data:`MAX_BEAT_WORDS` words, and dialogue (straight or curly double quotes; single curly quotes in a
+story without double ones) attributed to a speaker with a confidence: a speech tag (``said Mara``,
+``Mara asked``, ``she whispered``, ``I said``, ``said the old man``: a described speaker becomes a
+character), a sentence of the paragraph whose subject is a character (an action beat), the
+alternation of a two-person exchange, then the last character mentioned; a line calling a
+character by name is the other one's. Speech tags are left out of the
 narration. Sentences whose subject walks, runs, comes in or leaves become :class:`Move` s.
 """
 
@@ -92,6 +94,17 @@ FAMILY: dict[str, str] = {
     **{w: "feminine" for w in ("Mum", "Mom", "Mama", "Grandma", "Granny", "Auntie")},
     **{w: "masculine" for w in ("Dad", "Papa", "Grandpa")},
 }
+#: Nouns of a speaker named only by a description (``said the old man``, ``the girl asked``) and
+#: the voice kind they say (``None``: none): such a speaker becomes a character (``old_man``).
+PERSON_NOUNS: dict[str, str | None] = {
+    **{w: "masculine" for w in ("man", "boy", "gentleman", "king", "prince", "father", "grandfather", "brother", "uncle", "husband",
+                                "lord", "fisherman", "policeman", "postman", "fellow", "lad", "monk")},
+    **{w: "feminine" for w in ("woman", "girl", "lady", "queen", "princess", "mother", "grandmother", "sister", "aunt", "wife",
+                               "witch", "nun", "lass")},
+    **{w: None for w in ("child", "stranger", "guard", "driver", "keeper", "baker", "farmer", "soldier", "teacher", "nurse", "sailor",
+                         "shopkeeper", "innkeeper", "captain", "doctor", "robot", "ghost", "kid", "traveller", "traveler", "visitor",
+                         "neighbour", "neighbor", "waiter", "waitress", "clerk", "officer", "pilot", "wizard", "giant", "creature")},
+}
 #: Words after a capitalised word that make it a sentence's subject (with any word ending in -ed).
 SUBJECT_VERBS: frozenset[str] = frozenset("""
 was is had has could would will did didn't wasn't couldn't wouldn't can can't took gave went came saw felt knew
@@ -127,6 +140,16 @@ MOVE_VERBS: dict[str, str] = {
 _TITLE_RE = "|".join(sorted((re.escape(t) for t in TITLES), key=len, reverse=True))
 _CAP = re.compile(rf"\b(?:({_TITLE_RE})\.?\s+)?([A-Z][a-z]+(?:-[A-Z][a-z]+)?)(?:'s|’s)?\b(?!['’](?:t|re|ll|ve|d|m)\b)")
 _QUOTE = re.compile(r"“([^”]*)(?:”|$)|\"([^\"]*)(?:\"|$)|«([^»]*)(?:»|$)")
+#: With single curly quotes too (British dialogue, ``‘Go,’ she said.``): an opening ``‘`` not
+#: inside a word; ``’`` closes it only where no letter follows (``don’t``, ``it’s`` stay inside).
+_QUOTE_SINGLE = re.compile(_QUOTE.pattern + r"|(?<![\w‘’'])‘((?:[^’‘]|’(?=\w))*)(?:’(?!\w)|$)")
+
+
+def quote_pattern(text: str) -> re.Pattern[str]:
+    """The quotes that hold speech in ``text``: double quotes (straight, curly) and guillemets;
+    single curly quotes too when the text has no double quotes or guillemets at all (British
+    dialogue: there a ``‘`` opens speech; with double quotes it is a quote inside one)."""
+    return _QUOTE_SINGLE if "‘" in text and not re.search(r"[“\"«]", text) else _QUOTE
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 _BREAK = re.compile(r"^\s*(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,}|#|~{3,}|§|⁂|[oO•◆◇·]{1,3}|\*\s+\*\s+\*)\s*$")
 _TIME_CUE = re.compile(
@@ -165,6 +188,8 @@ class Character:
     effect_word: str | None = None
     lines: int = 0
     protagonist: bool = False
+    #: named only by a description (``the old man``): the words it is called by
+    described: str | None = None
 
 
 @dataclass
@@ -294,12 +319,13 @@ def sentences(text: str) -> list[str]:
     return [s.replace("\x00", ".").strip() for s in _SENTENCE_END.split(masked) if s.strip()]
 
 
-def segments(paragraph: str) -> list[tuple[bool, str]]:
+def segments(paragraph: str, quotes: re.Pattern[str] = _QUOTE) -> list[tuple[bool, str]]:
     """``(is a quote, text)`` pieces of a paragraph: quoted speech (straight, curly or guillemet
-    double quotes; an unclosed quote runs to the paragraph's end) and the narration between."""
+    double quotes, or ``quotes``: :func:`quote_pattern`; an unclosed quote runs to the
+    paragraph's end) and the narration between."""
     pieces: list[tuple[bool, str]] = []
     pos = 0
-    for match in _QUOTE.finditer(paragraph):
+    for match in quotes.finditer(paragraph):
         if match.start() > pos and paragraph[pos:match.start()].strip():
             pieces.append((False, paragraph[pos:match.start()].strip()))
         quoted = next(g for g in match.groups() if g is not None).strip()
@@ -343,7 +369,10 @@ def _could_name(word: str) -> bool:
 
 def name_words(character: Character) -> list[str]:
     """The words a character is called by in the text: its name, and each of its words that is
-    not a title (``Doctor Vale``: also ``Vale``)."""
+    not a title (``Doctor Vale``: also ``Vale``); a described one: its description (``old man``,
+    ``Old man``)."""
+    if character.described:
+        return [character.described, character.described[:1].upper() + character.described[1:]]
     own = [w for w in character.name.split() if w not in TITLES or w in FAMILY]
     return list(dict.fromkeys([character.name, *own]))
 
@@ -356,11 +385,35 @@ _VERBS_RE = _speech_verbs_re()
 _TAG_AFTER = re.compile(rf"\b({_VERBS_RE})\s+(?:({_TITLE_RE})\.?\s+)?([A-Z][a-z]+|he|she|they|I)\b")
 _TAG_BEFORE = re.compile(rf"(?:\b({_TITLE_RE})\.?\s+)?\b([A-Z][a-z]+|[Hh]e|[Ss]he|[Tt]hey|I)\s+(?:\w+ly\s+)?({_VERBS_RE})\b")
 _TAG_DESCRIBED = re.compile(rf"\b({_VERBS_RE})\s+(?:the|a|an|her|his|their|my)\s+([a-z]+(?:\s+[a-z]+)?)\b")
+_TAG_DESCRIBED_BEFORE = re.compile(rf"\b(?:[Tt]he|[Aa]n?|[Hh]er|[Hh]is|[Tt]heir|[Mm]y)\s+([a-z]+(?:\s+[a-z]+)?)\s+(?:\w+ly\s+)?({_VERBS_RE})\b")
+
+
+def described_speaker(phrase: str) -> str | None:
+    """The description a speech tag gives a speaker (``old man`` of ``said the old man``), cut to
+    the words ending on a person's noun (:data:`PERSON_NOUNS`); ``None``: no person (``said the
+    word``)."""
+    words = phrase.split()
+    for end in range(len(words), 0, -1):
+        if words[end - 1] in PERSON_NOUNS:
+            return " ".join(words[:end])
+    return None
+
+
+def _described_tags(text: str) -> list[tuple[str, str, int, int]]:
+    """``(description, verb, start, end)`` of each speech tag naming its speaker by a description."""
+    found = []
+    for pattern, verb_group, words_group in ((_TAG_DESCRIBED, 1, 2), (_TAG_DESCRIBED_BEFORE, 2, 1)):
+        for match in pattern.finditer(text):
+            phrase = described_speaker(match.group(words_group))
+            naming = match.group(verb_group) in ("called", "calls") and re.match(r"\s+[A-Z]", text[match.end():])
+            if phrase is not None and not naming:   # "a girl called Ivy" names her: no speech
+                found.append((phrase, match.group(verb_group), match.start(), match.end()))
+    return found
 
 
 def find_characters(text: str) -> dict[str, Character]:
     """The story's characters (see the module doc), most mentioned first."""
-    plain = _QUOTE.sub(" ", text)
+    plain = quote_pattern(text).sub(" ", text)
     counts: Counter[str] = Counter()
     subject: Counter[str] = Counter()
     placed: Counter[str] = Counter()
@@ -413,6 +466,13 @@ def find_characters(text: str) -> dict[str, Character]:
         surname = next((b for (a, b) in pairs if a == word and b in surnames), None)
         name = (titled.get(word) or word) + (f" {surname}" if surname else "")
         found[slug(word)] = Character(slug(word), name, n)
+    for phrase, _, _, _ in _described_tags(text):   # a speaker named by a description: "said the old man" (§105.8)
+        cid = slug(phrase)
+        if cid not in found:
+            noun = phrase.split()[-1]
+            mentions = len(re.findall(rf"\b{re.escape(phrase)}\b", text, re.IGNORECASE))
+            found[cid] = Character(cid, phrase[:1].upper() + phrase[1:], mentions, PERSON_NOUNS[noun],
+                                   f"description '{noun}'" if PERSON_NOUNS[noun] else "no hint", described=phrase)
     _voice_kinds(found, plain)
     _effects(found, text)
     return found
@@ -466,7 +526,7 @@ def _effects(found: dict[str, Character], text: str) -> None:
 def person_of(text: str) -> tuple[bool, str, str | None]:
     """Whether the narration (outside quotes) is in the first person, why, and the narrator's
     name if the story gives it (``My name is Lena``, ``I'm Lena``)."""
-    plain = _QUOTE.sub(" ", text)
+    plain = quote_pattern(text).sub(" ", text)
     first = len(_FIRST_PERSON.findall(plain))
     third = len(_THIRD_PERSON.findall(plain))
     words = max(_words(plain), 1)
@@ -492,6 +552,8 @@ class _State:
     patterns: list[tuple[re.Pattern[str], str]] = field(default_factory=list)
     #: the characters in the order the story first names them
     order: list[str] = field(default_factory=list)
+    #: the quotes that hold speech (:func:`quote_pattern`)
+    quotes: re.Pattern[str] = _QUOTE
 
     def ahead(self, word: str) -> str | None:
         """For ``he`` / ``she`` before any character of that kind was named (``a tall man`` who
@@ -557,20 +619,39 @@ def _tag_in(text: str, state: _State, where: str) -> tuple[str | None, str | Non
         if who is None:
             continue
         return who, emotion, f"tag '{match.group(0).strip()}' ({kind})"
+    for phrase, verb, start, end in _described_tags(sentence):   # "said the old man": a character of its own
+        if slug(phrase) in state.characters:
+            return slug(phrase), SPEECH_VERBS.get(verb), f"tag '{sentence[start:end].strip()}' (description)"
     described = _TAG_DESCRIBED.search(sentence)
     if described:
         return "?", SPEECH_VERBS.get(described.group(1)), f"tag '{described.group(0)}' names no character"
     return None
 
 
-_TAG_CONFIDENCE = {"name": 0.95, "first person": 0.9, "pronoun": 0.75, "pronoun, named later": 0.5}
+_TAG_CONFIDENCE = {"name": 0.95, "first person": 0.9, "description": 0.85, "pronoun": 0.75, "pronoun, named later": 0.5}
+
+
+#: Below this confidence a speaker guessed without a tag may give way to the other one of an
+#: exchange when the line calls the guessed one by name.
+DOUBTFUL_TAG = 0.6
+_CALL_OPENERS = r"(?:(?:Oh|Hey|Dear|Hi|Hello|Look|Listen|Quick|Please|Wait),?\s+)?"
+
+
+def _addressed(quote: str, state: _State) -> str | None:
+    """The character a line of dialogue calls by name: at its start (``Grandpa! The lamp is
+    out!``, ``Mara, look``) or at its end (``Come here, Mara!``); ``None``: none."""
+    for pattern, cid in state.patterns:
+        names = pattern.pattern
+        if re.match(rf"\s*{_CALL_OPENERS}{names}\s*[!,?.…]", quote) or re.search(rf",\s*{names}\s*[!?.…]*\s*$", quote):
+            return cid
+    return None
 
 
 def _is_tag(sentence: str) -> bool:
     """A speech tag sentence to leave out of the narration (``said Mara.``, ``Mara asked, smiling.``)."""
     if _words(sentence) > 10:
         return False
-    return bool(_TAG_AFTER.search(sentence) or _TAG_BEFORE.search(sentence) or _TAG_DESCRIBED.search(sentence))
+    return bool(_TAG_AFTER.search(sentence) or _TAG_BEFORE.search(sentence) or _TAG_DESCRIBED.search(sentence) or _described_tags(sentence))
 
 
 def _moves(text: str, state: _State) -> list[Move]:
@@ -620,7 +701,7 @@ def _subjects(text: str, state: _State) -> list[str]:
 
 def _read_paragraph(scene: StoryScene, number: int, paragraph: str, state: _State) -> None:
     """Add the paragraph's lines to ``scene`` (see :func:`read_story`)."""
-    pieces = segments(paragraph)
+    pieces = segments(paragraph, state.quotes)
     quotes = [k for k, (quoted, _) in enumerate(pieces) if quoted]
     speaker_of: dict[int, tuple[str | None, float, str, str | None]] = {}
     narration_text = " ".join(t for quoted, t in pieces if not quoted)
@@ -660,6 +741,16 @@ def _read_paragraph(scene: StoryScene, number: int, paragraph: str, state: _Stat
                 speaker_of[k] = (present[0], 0.3, "the last character mentioned (no tag)", emotion)
             else:
                 speaker_of[k] = (None, 0.1, "unknown: no tag, no character near", emotion)
+    # a line calling a character by name ("Grandpa! The lamp is out!") is not that one's, nor the
+    # narrator's: the other one of the exchange says it (§105.8)
+    for k in quotes:
+        who, confidence, how, emotion = speaker_of[k]
+        addressed = _addressed(pieces[k][1], state)
+        if addressed is None or (who is not None and confidence >= DOUBTFUL_TAG and (who != addressed or "tag" in how)):
+            continue
+        other = next((c for c in reversed([*state.recent, *state.speakers[-2:]]) if c != addressed), None)
+        if other is not None:
+            speaker_of[k] = (other, 0.55, f"calls {state.characters[addressed].name} by name: the other one of the exchange", emotion)
     # the lines, in order
     pending_quote: Line | None = None
     for k, (quoted, piece) in enumerate(pieces):
@@ -707,7 +798,7 @@ def read_story(text: str) -> Story:
             kind = "feminine" if own_name in FEMININE_NAMES else "masculine" if own_name in MASCULINE_NAMES else None
             characters[protagonist] = Character(protagonist, own_name or "Me", 0, kind, "name list" if kind else "no hint")
         characters[protagonist].protagonist = True
-    state = _State(characters, first_person, protagonist)
+    state = _State(characters, first_person, protagonist, quotes=quote_pattern(body))
     for character in characters.values():
         if character.protagonist and not own_name:
             continue

@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
 from manim import Animation, Group, ImageMobject, Mobject, linear
 
-from vidgen.cartoon.iso_drawing import IsoCanvas, Poly, Shape, canvas_for, draw_shapes, mix, shape_bounds
+from vidgen.cartoon.iso_drawing import Blobs, Disc, IsoCanvas, Line, Poly, Shape, canvas_for, draw_shapes, mix, shape_bounds
 from vidgen.cartoon.iso_objects import ObjectLook, _Frame, light_pool
 from vidgen.cartoon.iso_pictures import GlowTile, PoolTile
 from vidgen.cartoon.iso_seasons import BOB, BOB_SECONDS, FOAM, _boat_parts, launch_smoke, rocket_body, rocket_fire, train_body, train_track
@@ -84,13 +84,42 @@ def boat_wake(f: _Frame, reverse: bool) -> list[Shape]:
     return shapes
 
 
+def _turned(shape: Shape, cos: float, sin: float) -> Shape:
+    """``shape`` turned about the world's upright axis through the origin."""
+    def p(q: Point3) -> Point3:
+        return (q[0] * cos - q[1] * sin, q[0] * sin + q[1] * cos, q[2])
+    if isinstance(shape, (Poly, Line)):
+        return replace(shape, points=tuple(p(q) for q in shape.points))
+    if isinstance(shape, Disc):
+        return replace(shape, centre=p(shape.centre))
+    if isinstance(shape, Blobs):
+        return replace(shape, centres=tuple(p(q) for q in shape.centres))
+    x, y, _ = p((shape.x, shape.y, 0.0))
+    return replace(shape, x=x, y=y)
+
+
+def turning_shapes(kind: str, look: ObjectLook, turn: tuple[Cell, Cell], **settings: Any) -> list[Shape]:
+    """A car or a boat half-way round a corner (``turn``: the ways it heads before and after):
+    the one heading along the map's row turned 45 degrees to the diagonal between them. Seen
+    turned so, one of its faces drawn shows whole and the other edge-on (a box's faces drawn are
+    those to the viewer), so the picture has no gaps (DESIGN.md §105.8)."""
+    along_x = next(h for h in turn if h[1] == 0)
+    along_y = next(h for h in turn if h[0] == 0)
+    sign = along_x[0] * along_y[1]
+    shapes = vehicle_shapes(kind, look, heading=along_x, **settings)
+    c = math.sqrt(0.5)
+    return [_turned(s, c, sign * c) for s in shapes]
+
+
 def vehicle_shapes(kind: str, look: ObjectLook, *, heading: Cell, on: bool, spin: float | None = None, now: float = 0.0,
-                   boost: float = 1.0, wake: bool = False) -> list[Shape]:
+                   boost: float = 1.0, wake: bool = False, turn: tuple[Cell, Cell] | None = None) -> list[Shape]:
     """The shapes of a moving vehicle with its middle at the world's origin (on its base, ``z``
     0), heading ``heading``: a car side-on (driving away up the picture its tail shows, ``spin``
     its spokes), a boat (its bow the way it sails; ``wake``: its wake behind it), a train car's
     carriage (no track), a rocket without its pad (its flame at ``now``, ``boost`` times as long,
-    while ``on``)."""
+    while ``on``); ``turn``: a car or a boat half-way round a corner (:func:`turning_shapes`)."""
+    if turn is not None:
+        return turning_shapes(kind, look, turn, on=on, spin=spin, now=now, boost=boost, wake=wake)
     f = _Frame(frame_item(kind, heading), 0.0)
     plain = ObjectLook(look.main, look.detail)
     away = heading in ((-1, 0), (0, -1))
@@ -167,6 +196,8 @@ class IsoVehicle(Group):
         super().__init__()
         self.name, self.kind, self.look, self.view = name, kind, look, view
         self.point, self.heading = point, heading
+        #: half-way round a corner: the ways it heads before and after (drawn turned)
+        self.turn: tuple[Cell, Cell] | None = None
         #: how far it has driven (tile units): its wheels' turn
         self.rolled = 0.0
         #: its ``on`` from scene times on, in time order
@@ -197,10 +228,10 @@ class IsoVehicle(Group):
     def iso_feet(self) -> Point3:
         return self.point
 
-    def set_pose(self, point: Point3, heading: Cell, rolled: float | None = None) -> None:
+    def set_pose(self, point: Point3, heading: Cell, rolled: float | None = None, turn: tuple[Cell, Cell] | None = None) -> None:
         """Put its middle at ``point`` (tile units), heading ``heading``; ``rolled``: how far it
-        has driven (its wheels)."""
-        self.point, self.heading = point, heading
+        has driven (its wheels); ``turn``: half-way round a corner (drawn turned)."""
+        self.point, self.heading, self.turn = point, heading, turn
         if rolled is not None:
             self.rolled = rolled
 
@@ -234,6 +265,9 @@ class IsoVehicle(Group):
         on = self.on_at(now)
         settings: dict[str, Any] = {"heading": self.heading if self.kind != "rocket" else (0, 0), "on": on}
         key: tuple[Any, ...] = (settings["heading"], on)
+        if self.turn is not None and self.kind in ("car", "boat"):
+            settings["turn"] = self.turn
+            key += (self.turn,)
         if self.kind == "car":
             step = round(self.rolled / WHEEL_RADIUS / (math.pi / 2) * SPOKE_STEPS) % SPOKE_STEPS
             settings["spin"] = step * (math.pi / 2) / SPOKE_STEPS
@@ -358,11 +392,11 @@ class IsoDrive(Animation):
         share = lift_share(alpha) if self.kind == "rocket" else drive_share(alpha, max(float(self.run_time), 1e-6))
         distance = share * self.route.length
         point, heading = self.route.at(distance)
-        vehicle.set_pose(point, heading, self._rolled + distance)
+        vehicle.set_pose(point, heading, self._rolled + distance, self.route.turning(distance))
         if self.gone is not None and share >= self.gone:
             vehicle.shown = False
         vehicle.refresh(self.clock() if self.clock is not None else None)
 
 
 __all__ = ["FLAME_FRAMES", "LIFT_FLAME", "SPOKE_STEPS", "WAKE_LENGTH", "WAKE_SPREAD", "WHEEL_RADIUS", "IsoDrive", "IsoVehicle", "Sprite",
-           "boat_wake", "draw_sprite", "frame_item", "rocket_smoke", "track_shapes", "vehicle_shapes"]
+           "boat_wake", "draw_sprite", "frame_item", "rocket_smoke", "track_shapes", "turning_shapes", "vehicle_shapes"]

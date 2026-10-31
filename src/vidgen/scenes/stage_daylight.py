@@ -16,6 +16,10 @@ from typing import Any
 
 from vidgen.api import *
 
+#: Where in a fade that crosses no dusk but ends dark (from a dark light already) the lights
+#: switch on (a share of the fade).
+DARK_SWITCH_SHARE = 0.25
+
 
 class DayPassing:
     """The day-passing part of a ``stage`` (DESIGN.md §105.3)."""
@@ -35,12 +39,17 @@ class DayPassing:
         before = light_at(light.base, light.changes, start) if light is not None else self.base_light
         crossing = None
         done = 0.0
+        first = before
         for preset, share in day_stages(before, setting):
             begin, length = start + done * seconds, (share - done) * seconds
             self.change_light(preset, begin, length, move_sun=move_sun)
             after = self.flashback_look(resolve_light(preset, self.theme))
             crossing = crossing or dusk_crossing(before, after, begin, length)
             before, done = after, share
+        if crossing is None and setting != "indoor" and darkness(before) > max(DUSK_DARK, darkness(first) + 0.05):
+            # dark from the start (a rainy day's overcast light, §89.12) to darker: the lights come
+            # on early in the fade (no dusk is crossed; those already on stay), DESIGN.md §105.8
+            crossing = (start + DARK_SWITCH_SHARE * seconds, True)
         if not auto_lights or setting == "indoor" or crossing is None:
             return []
         return self._auto_switch(crossing[0], crossing[1], start, seconds)
@@ -70,4 +79,4 @@ class DayPassing:
         return switched
 
 
-__all__ = ["DayPassing"]
+__all__ = ["DARK_SWITCH_SHARE", "DayPassing"]

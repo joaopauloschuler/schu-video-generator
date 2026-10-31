@@ -132,6 +132,40 @@ def test_auto_light_opt_out_and_who_switches(make_project) -> None:
         StageProp(prop="tree", auto_light=False)
 
 
+def test_a_setting_sun_sinks_behind_the_ground() -> None:
+    """Step 275: with a ground band in front of the sky, the sun shows whole down to the horizon
+    and sinks behind the ground (it faded out above it, beside the characters' feet)."""
+    from manim import Circle
+
+    from vidgen.cartoon.sun_path import path_height
+    from vidgen.cartoon.weather_drawing import SkyBody
+
+    low = 0.995   # just over the horizon: path height ~0.016
+    assert 0.0 < path_height(low) < 0.05
+    for sink, expected in ((0.0, 0.0), (0.1, 1.0)):
+        sun = Circle(radius=0.2, fill_opacity=1.0)
+        body = SkyBody(sun, "sun", low, lambda x, h: (x, h), sink)
+        body.update(0.0)
+        assert sun.fill_rgbas[:, 3].max() == pytest.approx(expected, abs=0.05)
+    sun = Circle(radius=0.2, fill_opacity=1.0)
+    gone = SkyBody(sun, "sun", 1.06, lambda x, h: (x, h), 0.1)   # under the horizon by more than its height
+    gone.update(0.0)
+    assert sun.fill_rgbas[:, 3].max() == 0.0 and sun.get_center()[1] < -0.1
+
+
+@pytest.mark.render
+def test_lamps_come_on_when_a_rainy_day_turns_to_night(make_project, tmp_path: Path, monkeypatch) -> None:
+    """Step 275: a rainy iso day starts overcast, past dusk already: the lights still come on
+    early in a time_of_day to night."""
+    extensions.load_builtins()
+    monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
+    beats = [{"text": "Evening comes to the wet village.", "actions": [{"time_of_day": "night", "run_time": 2}]}]
+    project = village(make_project, beats, particles=[{"kind": "rain", "puddles": True}])
+    scene, _ = frames_of(project, tmp_path / "rain", monkeypatch)
+    assert darkness(scene.base_light) > DUSK_DARK   # overcast from the start
+    assert scene._iso_planned_states["street_lamp"].on and scene._iso_planned_states["house"].on
+
+
 @pytest.mark.render
 def test_a_day_passes_and_the_lights_come_on_by_themselves(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

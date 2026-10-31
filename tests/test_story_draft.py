@@ -220,6 +220,54 @@ def test_draft_first_person_flat_and_vertical() -> None:
     assert entering == [{"enter": "theo", "to": "middle", "side": "right", "at": 0.6}]
 
 
+BRITISH = """# The Lamp
+
+That night the wind rattled the cottage windows. Wren sat by the fire with Grandpa.
+
+‘Grandpa! The lamp on the hill is out!’
+
+Grandpa put down his net. ‘Then someone must light it, and I don’t think it’ll be the wind.’
+
+‘I’ll come with you,’ said Wren.
+
+At the top an old man was waiting with a box of matches. ‘You’re late,’ said the old man.
+
+‘We came as fast as we could,’ Grandpa replied. A girl called Rosa waved from the gate.
+"""
+
+
+def test_british_quotes_described_speakers_and_calls_by_name() -> None:
+    """Step 275: single curly quotes hold the speech of a story without double quotes (not the
+    apostrophes inside); ``said the old man`` makes a character; a line calling a character by
+    name is the other one's; ``a girl called Rosa`` names her, it is no speech."""
+    lines = dialogue(BRITISH)
+    assert [s for s, _, _ in lines] == ["wren", "grandpa", "wren", "old_man", "grandpa"]
+    assert lines[1][1] == "Then someone must light it, and I don’t think it’ll be the wind."
+    assert lines[0][2] == 0.55   # "Grandpa! ...": not Grandpa's, not the narrator's
+    story = read_story(BRITISH)
+    old = story.characters["old_man"]
+    assert old.name == "Old man" and old.kind == "masculine" and old.described == "old man" and "girl" not in story.characters
+    assert segments("It’s Kai’s turn, she said.") == [(False, "It’s Kai’s turn, she said.")]   # no quotes by default
+    mixed = dialogue('"He said ‘no’ to me," said Ada.\n')
+    assert mixed == [("ada", "He said ‘no’ to me.", 0.95)]   # with double quotes a ‘ is a quote inside one
+
+
+def test_title_card_and_life_follow_the_story() -> None:
+    """Step 275: a night story's title card is dark with neon letters, a cosy one's warm; outdoor
+    places get a little ambient life (fireflies at night), rooms none."""
+    from vidgen.story_draft import CARD_LOOKS, card_mood
+
+    draft = draft_story(read_story(BRITISH), DraftOptions())
+    card = draft.config["scenes"][0]["params"]
+    assert card["color"] == CARD_LOOKS["night"]["color"] and card["style"] == "frame"
+    village = draft.config["scenes"][1]
+    assert village["params"]["ambient"]["fireflies"] > 0 and "walkers" not in village["params"]["ambient"]
+    assert card_mood(["day"], "cartoon", "A cosy kitchen, warm tea and a blanket.") == "cosy"
+    assert card_mood(["day", "day"], "cartoon", "A sunny day.") is None and card_mood(["day"], "lullaby", "") == "bedtime"
+    lab = draft_story(read_story(BREAKS), DraftOptions()).config["scenes"][1]
+    assert "ambient" not in lab["params"]   # a room
+
+
 def run_cli(args: list[str], capsys: pytest.CaptureFixture[str]) -> tuple[int, dict[str, Any]]:
     code = cli.main([*args, "--json"])
     return code, json.loads(capsys.readouterr().out)

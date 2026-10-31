@@ -151,6 +151,17 @@ def test_every_kind_is_drawn_and_hides_when_not_seen() -> None:
     assert region[0] < region[2] and region[1] < region[3]
 
 
+def test_walkers_have_faces() -> None:
+    """Step 275: a background walker has a face of dots (an eye, a smile's end), muted or not."""
+    from vidgen.cartoon.iso_ambient import INK, critter_look, walker_shapes
+    from vidgen.cartoon.iso_drawing import Blobs
+
+    for muted in (True, False):
+        shapes = walker_shapes(critter_look("walker", 3, muted=muted), facing=1, swing=0.0)
+        dots = [s for s in shapes if isinstance(s, Blobs) and not s.ink and s.radii[0] < 0.03]
+        assert len(dots) == 2 and dots[0].fill == INK and shapes[-2:] == dots   # drawn over the head
+
+
 def test_a_front_picture_from_pieces_found_already() -> None:
     from vidgen.cartoon.iso_scenery import IsoColors
     from vidgen.cartoon.iso_stage import IsoScenery, iso_view
@@ -223,3 +234,37 @@ def test_ambient_life_on_a_village(make_project, tmp_path: Path, monkeypatch) ->
     assert all(c.shown == 0.0 for c in critters.values())   # the scene ends on a close-up: none shown
     assert "ambient_walker_1" not in scene.target_names(scene.params)   # no action targets
     assert len(frames) > 10 and max(np.abs(b.astype(int) - a.astype(int)).max() for a, b in zip(frames[2:8], frames[3:9])) > 0
+
+
+RIVER = """
+................
+~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
+::::::::::::::::
+......s.........
+..........g.....
+"""
+
+
+@pytest.mark.render
+def test_walkers_pick_up_lamplight_and_ducks_keep_off_a_boats_way(make_project, tmp_path: Path, monkeypatch) -> None:
+    """Step 275: at night a lamp lights the walkers and the cat near it as it lights the
+    characters; ducks never swim where a sailing boat goes."""
+    from vidgen.cartoon.shading import LAMP_LIT
+
+    extensions.load_builtins()
+    monkeypatch.setattr(registry.get("stage").cls, "outro", 0)
+    iso = {"map": RIVER, "spots": {"s": "square", "g": "gate"},
+           "objects": [{"object": "lamp", "at": {"column": 9, "row": 7}, "on": True}, {"object": "boat", "at": {"column": 1, "row": 2}}]}
+    beats = [{"text": "The boat sails down the river at night.", "actions": [{"sail_to": "boat", "to": {"column": 14, "row": 2}}]}]
+    project = ambient_project(make_project, beats, iso=iso, light="night", ambient={"walkers": 2, "cat": True, "ducks": 2, "seed": 2})
+    scene, _ = frames_of(project, tmp_path / "river", monkeypatch)
+    critters = scene.iso_critters
+    lit = {c.kind: getattr(c.slots[0], LAMP_LIT, None) is not None for c in critters.values()}
+    assert lit["walker"] and lit["cat"] and not lit["duck"]
+    lanes = scene._ambient_lanes(scene.params.iso.parsed())
+    assert {(c, 1) for c in range(2, 13)} <= lanes
+    ducks = [c for c in critters.values() if c.kind == "duck"]
+    assert ducks and all((int(p.point[0]), int(p.point[1])) not in lanes for d in ducks for p in d.plan.samples(0.0, 6.0))

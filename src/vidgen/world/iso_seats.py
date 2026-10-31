@@ -35,13 +35,15 @@ Region = tuple[float, ...]
 class IsoSeat:
     """One place to sit on an object: where the hips rest (``a``, ``b`` shares of the footprint,
     ``z`` tile units over the object's base), the way the sitter faces and the parts of the
-    object drawn over the sitter (``front`` regions)."""
+    object drawn over the sitter (``front`` regions); ``tucked``: the sitter's legs go under a
+    desk in front of it (not drawn: they showed over the desk's front, DESIGN.md §105.8)."""
 
     a: float
     b: float
     z: float
     faces: str = "front"
     front: tuple[Region, ...] = ()
+    tucked: bool = False
 
 
 @dataclass(frozen=True)
@@ -83,7 +85,7 @@ ISO_SEATS: dict[str, tuple[IsoSeat, ...]] = {
     "hay_bale": (IsoSeat(0.3, 0.55, 0.72), IsoSeat(0.7, 0.55, 0.72)),
     "rock": (IsoSeat(0.5, 0.55, 0.5),),
     "bus_stop": tuple(IsoSeat(a, 0.45, 0.55, front=((0.9, 0.0, 1.0, 1.0, 2.2), (0.0, 0.7, 1.0, 1.2, 2.2))) for a in (0.33, 0.67)),
-    "school_desk": (IsoSeat(0.5, 0.71, 0.48, faces="back", front=((0.0, 0.84, 1.0, 1.0),)),),
+    "school_desk": (IsoSeat(0.5, 0.71, 0.48, faces="back", front=((0.0, 0.84, 1.0, 1.0),), tucked=True),),
     "cafe_table": (IsoSeat(0.15, 0.5, 0.56, faces="+a", front=((0.27, 0.0, 1.0, 1.0),)), IsoSeat(0.85, 0.5, 0.56, faces="-a", front=((0.91, 0.0, 1.0, 1.0),))),
     "bed": (IsoSeat(0.75, 0.6, 0.58, faces="+a"),),
 }

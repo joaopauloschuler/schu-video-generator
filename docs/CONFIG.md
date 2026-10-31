@@ -682,7 +682,8 @@ skipped) to `shorts.yaml` next to the config and adds it to the config's `includ
 to the config; both files are backed up as `.bak` first). Each is 9:16 with `shorts: true`, `-14`
 LUFS, karaoke captions, the `cut` (scenes and beats), the hook, the end card "Full story on the
 channel" under the title, and a `zoom` with `cut: true, hold: true` opening each stage scene on its
-speakers (no `hold` when one of them walks later). The written variants validate; look at
+speakers (no `hold` when one of them walks later); a mid-scene start opens in the light the
+left-out beats' `time_of_day` / `light` left. The written variants validate; look at
 `vidgen storyboard --variant short1 --per-beat 2` and restage in `cut.beats` as above.
 
 ```yaml
@@ -10862,7 +10863,8 @@ they hide what is behind them.
   ```
 
   A `car` keeps to path cells and a `boat` to water, cell by cell along the map's rows and columns
-  (no diagonals), turning at corners and round where its way ends; each stops with its front in the
+  (no diagonals), turning at corners (drawn turned half-way round) and round where its way ends;
+  each stops with its front in the
   `to` cell (a spot off its way: the nearest cell it can reach, at most two away). A `train_car`
   rolls along the line of its cells as far as level free grass or path goes (its track is drawn
   there) and stops with its middle at `to`. A rocket's engine fires (smoke over the pad), it rises
@@ -10887,7 +10889,8 @@ they hide what is behind them.
 
   `sit_on` takes the free seat nearest the character (a bench, a sofa, a log, a hay bale, a bus
   stop and a café table seat two) and faces the way the seat does: out of the object's front (its
-  `facing`), at a `cafe_table` its two chairs face each other, at a `school_desk` the desk. The
+  `facing`), at a `cafe_table` its two chairs face each other, at a `school_desk` the desk (the
+  legs go under it). The
   parts of the object in front of the sitter are drawn over it (an armchair's or a throne's near
   arm, a chair's back, a bus shelter's near pane, a bed's blanket), and what stands in front of
   the object too (a desk in front of a chair). `use` works on a laptop, a desk's PC, a console, a
@@ -10942,8 +10945,8 @@ they hide what is behind them.
     in front of the characters standing further back, so the further back, the more fog; the
     banks drift (and with the wind) and the light grades them. Outdoors only.
   - **Wind** (`wind: windy`, a level −1..1, negative to the left; the `wind` action fades it):
-    trees, pines, bushes, flowers, plants, scarecrows and balloon bunches bend and sway in gusts,
-    rain slants, leaves and streaks drift, scarves and hats trail. The objects an action changes
+    trees, pines, bushes, flowers, plants and scarecrows bend and sway in gusts (balloon bunches
+    swing on their strings), rain slants, leaves and streaks drift, scarves and hats trail. The objects an action changes
     stay still. Outdoors only; nothing sways in a `--draft`.
 
   ```yaml
@@ -10960,9 +10963,10 @@ they hide what is behind them.
   bushes and trees at night, out at dusk), `flies`. `ambient: true` sets every kind that suits
   the place (`auto`). They never speak, are no action targets, keep off where the characters
   stand and go (they may pass near them, never stop there), the objects the scene uses, the
-  roads a `drive_to` car takes and a train's track, and hide in close shots (a zoom over about
-  1.5x the wide view: `shot: closeup`, `two_shot`, `follow`). `muted` (default `true`) draws the
-  walkers smaller and greyer; `seed` varies them (the same seed, the same life). Indoors only `cat`
+  roads a `drive_to` car takes, a train's track and a sailing boat's way, and hide in close shots
+  (a zoom over about 1.5x the wide view: `shot: closeup`, `two_shot`, `follow`). `muted` (default
+  `true`) draws the walkers smaller and greyer; walkers and the cat take lamplight at night as the
+  characters do; `seed` varies them (the same seed, the same life). Indoors only `cat`
   and `flies`; `ducks` need water; none in a `--draft`. They cost render time (a scene with a
   dozen: about +40–55 % in a preview).
 
@@ -12471,17 +12475,20 @@ A sample is `examples/screenplay/humming_box.md`.
 at headings, scene breaks (`***`, `* * *`, `---`, a lone `#`) and paragraphs opening on a time cue
 (`The next morning`, `Later`, `That night`); characters (names used as speakers or subjects,
 titles such as `Doctor Vale`), their voice kind (title, a small list of names, the pronouns after
-them) and distinct Kokoro voices; dialogue in double quotes (straight, curly, `«»`) attributed by
-speech tag (`said Mara`, `she whispered`, `I said`), action beat, alternation or last mention, each
-with a confidence; told in the first person, the narrator speaks with the protagonist's voice. Each
+them) and distinct Kokoro voices; dialogue in double quotes (straight, curly, `«»`; single curly
+`‘…’` in a story without double ones) attributed by speech tag (`said Mara`, `she whispered`, `I
+said`; `said the old man` makes a character `old_man`), action beat, alternation or last mention,
+each with a confidence (a line calling a character by name, `Grandpa! ...`, is the other one's);
+told in the first person, the narrator speaks with the protagonist's voice. Each
 scene stands on a ready-made iso place chosen from its words (`village`, `city`, `lab`, `office`,
 `home`, `cafe`, `forest`, `harbour`, `castle`, `school`, `winter`; `--style flat`: the nearest
 ready-made set), with objects the story names on free cells, light from time cues (`3 AM`, `dawn`,
 `sunset`; a later cue fades with `time_of_day`, night adds `fill_light`), rain / fog / wind / snow,
 characters at the place's spots (`enter` where the story brings one in), beats of up to 25 words
 of narration or one line each (voice, emotion, a close-up on an emotional line, a two-shot on a long
-one, `walk_to` / `run_to` placeholder spots on movement verbs), a title card, an end card, a music
-bed from mood words, captions in the speakers' colours and `auto_direct`. Besides `video.yaml` it
+one, `walk_to` / `run_to` placeholder spots on movement verbs), a modest `ambient` outdoors, a title
+card in the story's mood (dark and neon at night, warm when cosy), an end card, a music bed from
+mood words, captions in the speakers' colours and `auto_direct`. Besides `video.yaml` it
 writes `story_draft.md`: every decision, each line's speaker with its confidence and method, and a
 TODO checklist (beats with a doubtful speaker carry a `# TODO:`). `--json` returns the paths, the
 report's text, the cast, the scenes and every line of dialogue (`speaker`, `confidence`, `method`).
@@ -12948,8 +12955,9 @@ evening or dawn in one shot. A stage without a `background` or picture gets a sk
 day that fades along (blue by day, gold and pink at sunset, dark blue with stars at night); from
 daylight straight to `night` the fade goes through a sunset (from night to `day` through a
 morning); the stars come out late, once the sky is dark; a `sun` or `moon` prop moves along the
-sky (`move_sun`, default on when the stage has one outdoors). As the light passes **dusk**
-(darker than an evening, so a `sunset` is past it) the lights switch on by themselves, each a
+sky (`move_sun`, default on when the stage has one outdoors), behind the set, setting behind the
+ground. As the light passes **dusk** (darker than an evening, so a `sunset` is past it; from a
+light already that dark, such as a rainy day's, early in the fade) the lights switch on by themselves, each a
 little early or late and fading in over 1.2 s: on an iso place `lamp`, `floor_lamp`,
 `street_lamp`, a `house`'s windows, `phone_booth`, `vending_machine`, `lighthouse`,
 `christmas_tree`, `pumpkin` and a `car`'s headlights (a driving one too), on the flat stage a

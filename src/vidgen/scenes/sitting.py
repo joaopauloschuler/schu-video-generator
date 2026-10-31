@@ -150,10 +150,13 @@ class SitOn(_Posture):
         seat = scene.iso_seat(item.name, place)  # type: ignore[attr-defined]
         before = character.state()
         seated = character.seated(CharacterState(seat.facing, before.parts), scene.iso_view.height(seat.lift) / character.character_height)  # type: ignore[attr-defined]
+        soles = character.sole_points(seated) or None
+        if seat.tucked:   # its legs under the desk in front of it
+            seated = scene.iso_tucked(seated)  # type: ignore[attr-defined]
         _posed(scene)[character.name] = posture_parts(before)
         character.sitting_on = item.name
         return scene.iso_seat_move(character, [(1.0, posture_parts(seated))], seat, facing=seat.facing,  # type: ignore[attr-defined]
-                                   soles=character.sole_points(seated) or None)
+                                   soles=soles)
 
 
 @action("lie_on")

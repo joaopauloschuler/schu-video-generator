@@ -161,6 +161,33 @@ def test_vehicles_are_drawn_driving_away_and_left_out_of_the_place_when_driven()
     assert len(sailing) == len(still) + 3   # its wake: two arms and a trail, under the hull
 
 
+def test_headlights_light_the_road_ahead_and_corners_show_a_turned_car() -> None:
+    """Step 275: the pool of a car's headlights lies ahead of it for every heading (further on
+    driving away, where the car hides the road just ahead); half-way round a corner the car is
+    drawn turned to the diagonal."""
+    from vidgen.cartoon.iso_drawing import Disc
+
+    for heading in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        shapes = vehicle_shapes("car", LOOK, heading=heading, on=True, spin=0.0)
+        pool = next(s for s in shapes if isinstance(s, Disc) and s.pool)
+        ahead = pool.centre[0] * heading[0] + pool.centre[1] * heading[1]
+        side = pool.centre[0] * heading[1] - pool.centre[1] * heading[0]
+        assert ahead > 1.0 and abs(side) < 0.1
+        if heading in ((-1, 0), (0, -1)):
+            assert ahead > 1.8 and pool.radius > 0.7   # away up the picture: further and wider
+    place = town(ObjectPlacing("car", (2, 2)))
+    route = plan_vehicle(place, "car", "drive_to", {"to": {"column": 9, "row": 5}})   # east, then a right turn south
+    corner = next(k for k, (a, b) in enumerate(route.turns) if a != b)
+    start = sum(math.dist(a, b) for a, b in zip(route.points[:corner], route.points[1:corner + 1]))
+    leg = math.dist(route.points[corner], route.points[corner + 1])
+    assert route.turning(start + leg / 2) == ((1, 0), (0, 1))
+    assert route.turning(start + leg * 0.1) is None and route.turning(0.1) is None
+    turned = vehicle_shapes("car", LOOK, heading=(0, 1), on=True, turn=((1, 0), (0, 1)))
+    pool = next(s for s in turned if isinstance(s, Disc) and s.pool)
+    assert pool.centre[0] > 0.6 and pool.centre[1] > 0.6   # the road ahead along the diagonal
+    assert len(turned) == len(vehicle_shapes("car", LOOK, heading=(1, 0), on=True))
+
+
 def test_drives_sound_like_engines() -> None:
     sounds = {kind: [c.sound for c in foley_cues(PlayedAction("drive_to", 1.0, 3.0, vehicle=kind))] for kind in ("car", "train_car")}
     assert sounds == {"car": ["engine", "brakes"], "train_car": ["engine", "brakes"]}

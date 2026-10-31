@@ -25,8 +25,9 @@ How it works:
   ``cut`` (scenes and beats), the hook, an end card "Full story on the channel" under the title,
   and a ``zoom ... cut: true, hold: true`` opening every stage scene of the cut framed on its
   speakers (a wide 16:9 place is small in a tall frame; the hook is not shown over a wide view;
-  without ``hold`` when a framed character moves later, with a note). Notes list what left-out beats did
-  before a mid-scene start (moves, light changes) for the author to restate.
+  without ``hold`` when a framed character moves later, with a note). A mid-scene start restates
+  the light the left-out beats left (their last ``time_of_day`` / ``light``, at once); notes list
+  their other moves for the author to restate.
 - **Teaser** (:func:`teaser_beats`): about :data:`TEASER_SECONDS` of the best short beats across
   the film (not its ending), in film order, ending on a card with the title.
 - **Writing** (:func:`write_suggestions`): the variants go to a separate file (``shorts.yaml``)
@@ -448,8 +449,28 @@ def _moved(project: Project, beat: TimedBeat) -> list[str]:
     return out
 
 
+#: How long the light a left-out ``time_of_day`` / ``light`` set takes to come back at a cut's
+#: start (seconds: at once, the lights switching on by themselves fade in).
+RESTATE_SECONDS = 0.1
+
+
+def _left_out_light(project: Project, scene: str, first_index: int) -> dict[str, Any] | None:
+    """The light the beats of ``scene`` before ``first_index`` left (their last ``time_of_day``
+    or ``light`` to a preset), as an action restating it at once at a cut's start; ``None``:
+    none changed it (DESIGN.md §105.8)."""
+    found = None
+    for raw in (_raw_scene(project, scene).get("beats") or [])[:first_index]:
+        for action in (raw.get("actions") or []) if isinstance(raw, Mapping) else []:
+            if isinstance(action, Mapping):
+                kind, target = _action_target(action)
+                if kind in ("time_of_day", "light") and isinstance(target, str):
+                    found = {kind: target, "at": 0, "run_time": RESTATE_SECONDS}
+    return found
+
+
 def _left_out_notes(project: Project, scene: str, first_index: int) -> list[str]:
-    """What the beats of ``scene`` before ``first_index`` did that a cut starting there loses."""
+    """What the beats of ``scene`` before ``first_index`` did that a cut starting there loses (a
+    light change is restated: :func:`_left_out_light`)."""
     raw_beats = _raw_scene(project, scene).get("beats") or []
     notes = []
     for raw in raw_beats[:first_index]:
@@ -457,7 +478,7 @@ def _left_out_notes(project: Project, scene: str, first_index: int) -> list[str]
             if not isinstance(action, Mapping):
                 continue
             kind, target = _action_target(action)
-            if kind in MOVE_ACTIONS:
+            if kind in MOVE_ACTIONS and not (kind in ("time_of_day", "light") and isinstance(target, str)):
                 notes.append(f"{kind} {target}" if target is not None else kind)
     if not notes:
         return []
@@ -488,8 +509,12 @@ def _entries(project: Project, beats: Sequence[TimedBeat]) -> tuple[list[Any], d
             entries.append({"scene": group[0].scene, "beats": {"from": group[0].id}})
         else:
             entries.append({"scene": group[0].scene, "beats": {"from": group[0].id, "to": group[-1].id}})
+        opening: list[Any] = []
         if not group[0].first:
             notes.extend(_left_out_notes(project, group[0].scene, group[0].index))
+            light = _left_out_light(project, group[0].scene, group[0].index) if group[0].scene_type == "stage" else None
+            if light is not None:   # the light the left-out beats left, at once (§105.8)
+                opening.append(light)
         targets = _framing(project, group) if group[0].scene_type == "stage" else []
         if targets:
             moving = sorted({t for b in group for t in _moved(project, b) if t in targets})
@@ -498,7 +523,9 @@ def _entries(project: Project, beats: Sequence[TimedBeat]) -> tuple[list[Any], d
                 notes.append(f"{group[0].scene}: opens framed on {', '.join(targets)} for its first beat only (later moving: {', '.join(moving)}); check the framing")
             else:
                 zoom["hold"] = True
-            changes[group[0].id] = {"actions": [zoom, *_raw_actions(project, group[0])]}
+            opening.append(zoom)
+        if opening:
+            changes[group[0].id] = {"actions": [*opening, *_raw_actions(project, group[0])]}
     return entries, changes, notes
 
 

@@ -89,6 +89,18 @@ class VehicleRoute:
             distance -= leg
         raise AssertionError("unreachable")
 
+    def turning(self, distance: float) -> tuple[Cell, Cell] | None:
+        """The turn it is half-way through ``distance`` along (the ways it heads before and
+        after), or ``None``: in the middle half of a corner's leg it heads along the diagonal
+        between them (drawn turned, DESIGN.md §105.8); a U-turn has no in-between."""
+        for (a, b), (before, after) in zip(zip(self.points, self.points[1:]), self.turns):
+            leg = math.dist(a, b)
+            if distance <= leg + 1e-9:
+                square = before[0] * after[0] + before[1] * after[1] == 0 and before != (0, 0)
+                return (before, after) if square and leg > 0 and 0.25 <= distance / leg <= 0.75 else None
+            distance -= leg
+        return None
+
 
 def start_heading(item: IsoObject) -> Cell:
     """The way a vehicle standing as placed heads: its front faces left (the viewer's lower left),

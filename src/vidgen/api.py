@@ -655,6 +655,11 @@ from vidgen.story_text import Story, read_story  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
+# Phase AD review (Step 275, DESIGN.md §105.8)
+from vidgen.cartoon.iso_driving import turning_shapes  # noqa: E402
+from vidgen.cartoon.iso_weather import ISO_SWINGS, swing_pixels  # noqa: E402
+from vidgen.story_text import PERSON_NOUNS, quote_pattern  # noqa: E402
+from vidgen.story_draft import CARD_LOOKS, DRAFT_AMBIENT, card_mood  # noqa: E402
 from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
 from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, FloorCells, picture_size, plate_shapes, ramped, slant  # noqa: E402
 from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
@@ -1721,6 +1726,14 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "suggest_shorts",
     "write_suggestions",
     "shorts_yaml",
+    "turning_shapes",
+    "ISO_SWINGS",
+    "swing_pixels",
+    "PERSON_NOUNS",
+    "quote_pattern",
+    "CARD_LOOKS",
+    "DRAFT_AMBIENT",
+    "card_mood",
     "cell_of",
     "find_route",
     "plan_move",

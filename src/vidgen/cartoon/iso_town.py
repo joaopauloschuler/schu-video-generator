@@ -408,7 +408,10 @@ def car_shapes(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool
         return w - a if reverse else a
 
     a0, a1, b0, b1 = 0.1, w - 0.1, 0.2, 0.84
-    shapes = light_pool(f.p(X(a1 + 0.45), (b0 + b1) / 2, 0.01), 0.55, 0.9) if on else []
+    # its headlights' pool on the road ahead; driving away up the picture the car hides the ground
+    # just ahead of it, so the pool lies further on and wider (DESIGN.md §105.8)
+    reach, size = (1.0, 0.75) if reverse else (0.45, 0.55)
+    shapes = light_pool(f.p(X(a1 + reach), (b0 + b1) / 2, 0.01), size, 0.9) if on else []
     shapes += f.box(a0, b0, 0.2, a1, b1, 0.68, body)
     c0, c1, low, high = b0 + 0.06, b1 - 0.06, 0.68, 1.28
     rear, roof0, roof1, nose = X(0.42), X(0.66), X(1.26), X(1.54)

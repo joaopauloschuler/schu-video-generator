@@ -33,6 +33,7 @@ from vidgen.cartoon.iso_pictures import IsoPuddles
 from vidgen.cartoon.iso_stage import IsoView, canvas_center, detail_for
 from vidgen.cartoon.iso_weather import (
     ISO_SWAYS,
+    ISO_SWINGS,
     REFLECTION_HALO,
     REFLECTION_HALO_SHARE,
     REFLECTION_OPACITY,
@@ -45,6 +46,7 @@ from vidgen.cartoon.iso_weather import (
     shimmered,
     still_reflection,
     sway_rows,
+    swing_pixels,
 )
 from vidgen.cartoon.shading import LIT
 from vidgen.cartoon.weather_drawing import FogBand
@@ -197,7 +199,7 @@ class IsoSwayer(Group):
         self.level = 0
         self.degrees = 0.0
         self._now = 0.0
-        self._sprites: dict[int, tuple[np.ndarray, float, float, Box]] = {}
+        self._sprites: dict[int, tuple[np.ndarray, float, float, Box, float]] = {}
         self.slot = ImageMobject(_NOTHING.copy())
         self.slot.iso_tile = True   # drawn by the place's tile drawing (draw_tile)
         self.slot.scenery = True
@@ -205,9 +207,9 @@ class IsoSwayer(Group):
         self.add(self.slot)
         self._show(0.0, force=True)
 
-    def _sprite(self) -> tuple[np.ndarray, float, float, Box]:
+    def _sprite(self) -> tuple[np.ndarray, float, float, Box, float]:
         """Its picture at the level of detail now, padded each side for the lean: (pixels, foot
-        row, height in pixels, where it goes on screen: left, bottom, right, top)."""
+        row, height in pixels, where it goes on screen: left, bottom, right, top; foot column)."""
         if self.level not in self._sprites:
             sprite = draw_sprite(self.shapes, self.scale * 2**self.level, outline=self.outline)
             c, pixels = sprite.canvas, sprite.pixels[0]
@@ -224,7 +226,8 @@ class IsoSwayer(Group):
             cx, cy = canvas_center(c, self.view)
             width = padded.shape[1] / c.scale * self.view.unit
             tall = c.height / c.scale * self.view.unit
-            self._sprites[self.level] = (padded, foot, height, (cx - width / 2, cy - tall / 2, cx + width / 2, cy + tall / 2))
+            middle = (iso_point((box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, box.z0)[0] - c.left) * c.scale + pad   # its foot's column
+            self._sprites[self.level] = (padded, foot, height, (cx - width / 2, cy - tall / 2, cx + width / 2, cy + tall / 2), middle)
         return self._sprites[self.level]
 
     def _show(self, now: float, force: bool = False) -> None:
@@ -232,9 +235,12 @@ class IsoSwayer(Group):
         if not force and abs(degrees - self.degrees) < 0.05:
             return
         self.degrees = degrees
-        pixels, foot, height, (left, bottom, right, top) = self._sprite()
+        pixels, foot, height, (left, bottom, right, top), middle = self._sprite()
         slot = self.slot
-        slot.pixel_array = sway_rows(pixels, foot, height, degrees, ISO_SWAYS[self.kind].bend_from)
+        if self.kind in ISO_SWINGS:   # swung as a whole about its foot (DESIGN.md §105.8)
+            slot.pixel_array = swing_pixels(pixels, foot, middle, degrees)
+        else:
+            slot.pixel_array = sway_rows(pixels, foot, height, degrees, ISO_SWAYS[self.kind].bend_from)
         slot.orig_alpha_pixel_array = slot.pixel_array[:, :, 3].copy()
         slot.points = np.array([[left, top, 0.0], [right, top, 0.0], [left, bottom, 0.0], [right, bottom, 0.0]])
         slot.iso_pieces = ((self.name, (left, bottom, right, top)),)

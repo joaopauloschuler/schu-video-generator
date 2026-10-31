@@ -54,6 +54,44 @@ EMOTION_EXPRESSIONS: dict[str, str | None] = {
 }
 #: Latest ``at`` of an action the draft adds.
 LATEST_AT = 0.8
+#: The title card's look by the story's mood (DESIGN.md §105.8): dark with neon letters for a
+#: night story or a mystery, deep and soft for a bedtime story, warm for a cosy one, quiet for a
+#: sad one; otherwise the card's own (the theme's colour behind a burst of rays).
+CARD_LOOKS: dict[str, dict[str, str]] = {
+    "night": {"style": "frame", "color": "#141A33", "text_color": "#7CF4FF", "outline_color": "#FF4FA3"},
+    "bedtime": {"style": "frame", "color": "#2E2A4F", "text_color": "#FFE4A3", "outline_color": "#1B1830"},
+    "cosy": {"style": "burst", "color": "#E3924B"},
+    "quiet": {"style": "plain", "color": "#5B7083"},
+}
+#: A modest ambient life for the outdoor places, by day and at night (DESIGN.md §105.7, §105.8):
+#: a few passers-by and birds by day, fireflies on a green place at night.
+DRAFT_AMBIENT: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
+    "village": ({"walkers": 2, "birds": 2, "cat": True}, {"cat": True, "fireflies": 6}),
+    "city": ({"walkers": 3, "birds": 2}, {"walkers": 2}),
+    "forest": ({"birds": 3, "butterflies": 2}, {"fireflies": 8}),
+    "harbour": ({"walkers": 2, "birds": 3}, {"walkers": 1}),
+    "castle": ({"walkers": 1, "birds": 2}, {"fireflies": 4}),
+    "winter": ({"walkers": 1, "birds": 2}, {}),
+}
+#: Words of a cosy story (with a fire, tea and blankets): two or more make its card warm.
+COSY_WORDS: tuple[str, ...] = ("cosy", "cozy", "warm", "fireplace", "fire", "tea", "cocoa", "blanket", "snug", "kitchen", "soup", "candle",
+                               "candles", "baking", "hearth", "quilt")
+
+
+def card_mood(lights: Sequence[str], music: str, text: str) -> str | None:
+    """The mood of the story's title card (a key of :data:`CARD_LOOKS`; ``None``: the card's own
+    look): ``night`` when the story opens at night or most of its scenes are at night, or its
+    music is a mystery's or a neon city's; ``bedtime`` for a lullaby; ``cosy`` with two or more
+    :data:`COSY_WORDS`; ``quiet`` for a sad story."""
+    nights = sum(1 for light in lights if light == "night")
+    if (lights and lights[0] == "night") or nights * 2 > len(lights) or music in ("enigma", "neon"):
+        return "bedtime" if music == "lullaby" else "night"
+    if music == "lullaby":
+        return "bedtime"
+    words = {w.strip(".,;:!?\"'“”‘’()").lower() for w in text.split()}
+    if sum(1 for w in COSY_WORDS if w in words) >= 2:
+        return "cosy"
+    return "quiet" if music == "calm" else None
 
 
 @dataclass
@@ -359,7 +397,10 @@ def _scene(draft: StoryDraft, index: int, scene: StoryScene, previous: tuple[str
     if light == "night" or any(preset == "night" for _, preset, _ in changes):
         params["fill_light"] = FILL_NIGHT_INDOOR if place.indoor else FILL_NIGHT
     params.update(weather)
-    params["characters"] = [{"name": who, "at": stage.stands[who]} for who in on_stage]
+    life = DRAFT_AMBIENT.get(place.name, ({}, {}))[1 if light == "night" else 0] if not flat and not place.indoor else {}
+    if life:   # a little life in the background (§105.8)
+        params["ambient"] = {**life, "seed": draft.options.seed + index}
+    params["characters"] =[{"name": who, "at": stage.stands[who]} for who in on_stage]
     beats: list[dict[str, Any]] = []
     beat_notes: list[list[str]] = []
     change_at = {k: preset for k, preset, _ in changes}
@@ -405,6 +446,8 @@ def _scene(draft: StoryDraft, index: int, scene: StoryScene, previous: tuple[str
         scene_comments.append(f"weather: {'; '.join(weather_words)}")
     if extras:
         scene_comments.append(f"plan: objects the story names, added to the set {entry['set']}: {', '.join(notes.objects)}")
+    if "ambient" in params:
+        scene_comments.append("plan: a little background life (ambient: passers-by, birds, fireflies at night); remove it for a quiet place")
     if flat and place.flat_set != place.name:
         scene_comments.append(f"plan: the story's place reads as '{place.name}'; the nearest flat set is '{place.flat_set}'")
     if off_stage:
@@ -449,11 +492,17 @@ def draft_story(story: Story, options: DraftOptions | None = None) -> StoryDraft
     previous: tuple[str, str] | None = None
     used: set[str] = set()
     places: dict[str, str] = {}
+    lights: list[str] = []
     for index, scene in enumerate((s for s in story.scenes if s.lines), 1):
         entry, place, light = _scene(draft, index, scene, previous, voice_of, used)
         previous = (place, light)
+        lights.append(light)
         scenes.append(entry)
         places.setdefault(entry["set"], place)
+    mood = card_mood(lights, music, " ".join(line.text for s in story.scenes for line in s.lines))
+    if mood is not None:   # the card's look by the story's mood (§105.8)
+        scenes[0]["params"].update(CARD_LOOKS[mood])
+        draft.notes.append(f"title card: {mood} look ({', '.join(f'{k} {v}' for k, v in CARD_LOOKS[mood].items())})")
     sets = {} if options.style != "iso" else {
         name: {"iso": PLACES[place].iso(name.endswith("_night"), draft.added.get(place, ()))} for name, place in places.items()
     }

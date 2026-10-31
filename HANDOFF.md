@@ -24183,3 +24183,51 @@ is in `tasklist.md`.
   schema or scene_types"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
   `rowans_room` (25 stills) identical. Private sheet `/home/claude/work/scratch/s274/sheet.png`;
   sample `s274/proj` (validate ok; lint: only the sample cast's look-alike).
+
+## Step 275 — Review of Phase AD (Phase AD)
+
+- Findings and fixes (DESIGN §105.8): vehicles — the headlights' pool was ahead in the world for
+  all four headings, but driving away up the picture the car hid it: it lies further on and wider
+  there; a car or a boat is drawn turned 45° in the middle of a corner (`VehicleRoute.turning`,
+  `turning_shapes`); the train "behind the tower" was correct (its track lies behind the pad).
+  Seats — a school desk's sitter tucks its legs away (`IsoSeat.tucked`). Sky — the sun was behind
+  the set already but set fading beside a character's feet: with a ground band it now shows whole
+  and sinks behind the ground (`SkyBody(sink=)`); found: a rainy iso day (overcast, past dusk)
+  never switched its lamps on in a `time_of_day` to night — now early in the fade. Wind — iso
+  lean ~2.5x on a windy day (felt force ^ 0.65), balloons swing whole (`swing_pixels`). Story
+  draft — British `‘…’` quotes (only without double quotes), described speakers become
+  characters (`old_man`; `a girl called X` excluded), a line calling a character by name goes to
+  the other one (0.55), title card look by mood (`card_mood`), `DRAFT_AMBIENT` outdoors. Shorts —
+  a mid-scene start restates the last left-out `time_of_day` / `light` (tried on a 3:54 story,
+  ranking sensible). Ambient — walkers' dot faces, lamplight on walkers and the cat, ducks off a
+  sailing boat's lanes. Schema — an optional boolean `on` takes the YAML 1.1 `"true"` key (failing
+  `test_phase_q_review` since Step 251).
+- Files: `world/iso_vehicles.py`, `cartoon/iso_driving.py`, `cartoon/iso_town.py`,
+  `world/iso_seats.py`, `scenes/stage_seats.py`, `scenes/sitting.py`, `cartoon/weather_drawing.py`,
+  `scenes/stage.py`, `scenes/stage_daylight.py`, `cartoon/iso_weather.py`,
+  `cartoon/iso_atmosphere.py`, `story_text.py`, `story_draft.py`, `shorts_suggest.py`,
+  `cartoon/iso_ambient.py`, `scenes/stage_ambient.py`, `scenes/stage_iso.py`, `schema.py`,
+  `api.py`; tests (vehicles, seats, time_of_day, atmosphere, ambient, story_draft, shorts); docs
+  CONFIG, guide (+ `AGENTS.md`), DESIGN §105.8 (and the "left for later" lines it settles),
+  CHANGELOG, tasklist (Phase AD done).
+- Public: `vidgen.api` adds `turning_shapes`, `ISO_SWINGS`, `swing_pixels`, `PERSON_NOUNS`,
+  `quote_pattern`, `CARD_LOOKS`, `DRAFT_AMBIENT`, `card_mood`.
+- Performance (854x480 preview, 15 fps): a harbour at night with a car and a boat moving and a
+  `time_of_day` 19.2 s for 15 s of video; plus rain with puddles, a breeze and ten creatures
+  31.1 s (+62 %, mostly the light fade grading every picture, and the rain).
+- Known gaps: one in-between angle per corner, U-turns flip; a described speaker's pronouns
+  (`The mayor ... she announced`) go to a named character; walkers' faces are a pixel at preview
+  size; creatures still do not avoid each other or react; a Short still loses left-out walks.
+- Tests: `test_mcp.py` in full (22) passed; every Phase AD file (`test_iso_vehicles` 21,
+  `test_iso_seats` 18, `test_time_of_day` 17, `test_iso_atmosphere` 15, `test_story_draft` 14,
+  `test_shorts_suggest` 23, `test_iso_ambient` 11) and, one at a time, the iso / cartoon / story /
+  cuts suites (`test_iso_moves`, `_staging`, `_story`, `_mood`, `_place`, `_weather`,
+  `_objects_more`, `test_cartoon_lighting`, `_living`, `_storm`, `_wind`, `_rain`, `_snow_fog`,
+  `_seating`, `_directing`, `_foley`, `_stage`, `test_screenplay`, `test_cuts_shorts`,
+  `test_includes`, `test_json_output`, `test_cli`, `test_api`, `test_docs`, `test_guide`,
+  `test_introspect`, `test_schema`, `test_actions_coverage`, `test_phase_q_review`,
+  `test_phase_r_review`, `test_phase_l_review`, `test_lint`, `test_portal_hologram`,
+  `test_story_fx`, `test_lab_objects`) passed. Phase Q baseline 31/31 identical; iso-story
+  `night` / `rowans_room` (25 stills) identical. Private sheet
+  `/home/claude/work/scratch/s275/sheet.png`; samples `s275/veh`, `seat`, `sky`, `wx`, `lamps`,
+  stories `s275/stories/` (drafts `lampdraft`, `clock` with `shorts.yaml`).

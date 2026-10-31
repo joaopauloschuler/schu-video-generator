@@ -29,12 +29,13 @@ USE_IN = 0.45
 class SeatPlace:
     """Where a character sits or lies on an object: its feet (world, tile units), how high its
     hips rest over them (tile units), the way it faces, the object and its part's key (the part
-    drawn over it)."""
+    drawn over it); ``tucked``: its legs go under a desk (:meth:`IsoSeating.iso_tucked`)."""
 
     feet: tuple[float, float, float]
     lift: float
     facing: str
     seat: tuple[str, str]
+    tucked: bool = False
 
 
 class IsoSeating:
@@ -60,7 +61,7 @@ class IsoSeating:
         x, y, _ = seat_hips(item, base, seat)
         key = f"seat{place}"
         self._iso_part(item, base, seat.front, key)
-        return SeatPlace((x, y, base), seat.z, seat_facing(item, seat), (name, key))
+        return SeatPlace((x, y, base), seat.z, seat_facing(item, seat), (name, key), seat.tucked)
 
     def iso_bed(self, name: str, character: Character) -> SeatPlace:
         """Where ``character`` lies in the bed ``name``: its hips on the mattress so far along the
@@ -93,10 +94,16 @@ class IsoSeating:
         body = parts["body"]
         rise = self.iso_view.height(lift) / (LIE_SCALE * height) - hips
         parts["body"] = replace(body, angle=LIE_DEGREES, shift=(body.shift[0], body.shift[1] + rise))
+        return self.iso_tucked(CharacterState(before.facing, parts))
+
+    @staticmethod
+    def iso_tucked(state: CharacterState) -> CharacterState:
+        """``state`` with its legs folded away (under a blanket, under a school desk)."""
+        parts = dict(state.parts)
         for leg in ("legs", "leg_left", "leg_right"):
             if leg in parts:
                 parts[leg] = replace(parts[leg], scale=(0.05, 0.05))
-        return CharacterState(before.facing, parts)
+        return CharacterState(state.facing, parts)
 
     def iso_seat_move(self, character: Character, keys: Any, place: SeatPlace | None, *, end: Any = None, facing: str | None = None,
                       soles: Any = None, scale: float = 1.0, run_time: float = SIT_SECONDS) -> IsoSeatMove:

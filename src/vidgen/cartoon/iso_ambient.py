@@ -35,7 +35,7 @@ Box = tuple[float, float, float, float]
 #: 1.22 tile widths tall on the picture, a walker 1.02).
 MUTED_SCALE = 0.86
 MUTED_GREY = "#A3AAB3"
-MUTED_SHARE = 0.45
+MUTED_SHARE = 0.35
 #: Each kind's box for the draw order (tile units: half its width, its height).
 CRITTER_SIZES: dict[str, tuple[float, float]] = {"walker": (0.2, 1.7), "bird": (0.1, 0.25), "cat": (0.18, 0.5), "duck": (0.15, 0.3),
                                                  "butterfly": (0.08, 0.12), "firefly": (0.05, 0.08), "fly": (0.04, 0.05)}
@@ -123,7 +123,7 @@ def _shadow(radius: float, scale: float = 1.0) -> Disc:
 
 
 def walker_shapes(look: CritterLook, *, facing: int, swing: float) -> list[Shape]:
-    """A background walker side-on, ``swing`` (-1..1) through its stride."""
+    """A background walker side-on, ``swing`` (-1..1) through its stride, a face of dots."""
     s, f = look.scale, facing
     shirt, trousers, skin, hair = look.main, look.second, look.third, look.fourth
     leg = 0.1 * swing
@@ -137,6 +137,9 @@ def walker_shapes(look: CritterLook, *, facing: int, swing: float) -> list[Shape
     out.append(_round(0.01, 0.93, 0.115, skin, f, s))
     cap = [(0.01 + 0.122 * math.cos(a), 0.935 + 0.122 * math.sin(a)) for a in np.linspace(0.15, math.pi + 0.35, 9)]
     out.append(Poly(tuple(_b(u, v, f, s) for u, v in [*cap, (-0.08, 0.9)]), hair, holds_snow=False))
+    # a face of dots (side-on: an eye, a smile's end), DESIGN.md §105.8
+    out.append(_round(0.068, 0.905, 0.024, INK, f, s, ink=False))   # under the hair's edge
+    out.append(_round(0.068, 0.86, 0.014, mix(INK, skin, 0.35), f, s, ink=False))
     return out
 
 

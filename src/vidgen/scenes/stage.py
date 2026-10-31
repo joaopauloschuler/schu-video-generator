@@ -2277,8 +2277,8 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
         backdrop += self._level_story()   # coins and stars float in front of the tiles, not graded by the light
-        self._start_sky_path()
-        vehicles = list(getattr(self, "iso_vehicles", {}).items())   # the vehicles the scene moves: bodies of the place (§105)
+        self._start_sky_path(any(getattr(m, "name", None) == "ground" for m in backdrop))
+        vehicles =list(getattr(self, "iso_vehicles", {}).items())   # the vehicles the scene moves: bodies of the place (§105)
         mark_lit(*(vehicle for _, vehicle in vehicles))
         on_stage = vehicles + on_stage
         # register back to front, so the fade-ins add them (and draw them) in that order
@@ -2555,16 +2555,19 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         if self.rainbows:
             self._watch_living()
 
-    def _start_sky_path(self) -> None:
+    def _start_sky_path(self, ground: bool = False) -> None:
         """With a ``light`` action that has ``move_sun`` (outdoors), every ``sun`` and ``moon``
         prop is a :class:`SkyBody`: placed on the sky's path where the light at the start puts it
-        (a tint: as by day), moved by the light changes, and the shadows cast away from it."""
+        (a tint: as by day), moved by the light changes, and the shadows cast away from it.
+        ``ground``: a ground band hides the sky under the horizon (a body sinks behind it, §105.8)."""
         if self.params.room is not None or not any(use.moves_sun(self.params) for use in self._light_uses()):
             return
         start = self.params.light if isinstance(self.params.light, str) else "day"
+        room = self.frame_height / 2 - self._horizon_y() - SKY_TOP_ROOM * self.frame_height
         for prop in self.props.values():
             if prop.kind in SKY_BODIES and prop.held_by is None:
-                body = SkyBody(prop, prop.kind, place_for(prop.kind, start), self._sky_place)
+                sink = float(prop.height) / room if ground and room > 0 else 0.0
+                body = SkyBody(prop, prop.kind, place_for(prop.kind, start), self._sky_place, sink)
                 prop.stage_depth = 1.0   # it moves into the sky, behind everything (entrance)
                 self.sky_bodies.append(body)
         self._sky_step(float(self.renderer.time))

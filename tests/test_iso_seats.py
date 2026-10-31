@@ -161,6 +161,19 @@ def test_lying_and_using_need_an_iso_place(make_project) -> None:
     assert any("lie_on is for a bed of an iso place" in t for t in texts) and any("use is for the objects of an iso place" in t for t in texts), texts
 
 
+def test_a_pupils_legs_go_under_the_school_desk() -> None:
+    """Step 275: at a school desk the sitter's legs are tucked away (they showed over the desk's
+    front); other seats keep them."""
+    from vidgen.cartoon.character import CharacterState, PartPose
+    from vidgen.scenes.stage_seats import IsoSeating
+
+    assert ISO_SEATS["school_desk"][0].tucked and not any(seat.tucked for kind, seats in ISO_SEATS.items() if kind != "school_desk" for seat in seats)
+    state = CharacterState("right", {"body": PartPose(10.0), "legs": PartPose(5.0), "arm_left": PartPose()})
+    tucked = IsoSeating.iso_tucked(state)
+    assert tucked.parts["legs"].scale == (0.05, 0.05) and tucked.parts["legs"].angle == 5.0
+    assert tucked.parts["body"] == state.parts["body"] and tucked.facing == "right" and state.parts["legs"].scale == (1.0, 1.0)
+
+
 def test_a_good_evening_validates(make_project) -> None:
     beats = [{"text": "Pip sits and types.", "actions": [{"sit_on": "pip", "to": "armchair"}, {"use": "pip", "to": "laptop", "at": 0.5}]},
              {"text": "Then it gets up.", "actions": [{"stand_up": "pip"}, {"walk_to": "pip", "to": {"column": 6, "row": 2}, "at": 0.5}]},
