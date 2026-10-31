@@ -49,7 +49,14 @@ class StoryPlace:
     def iso(self, night: bool, added: Sequence[tuple[str, str, tuple[int, int]]] = ()) -> dict[str, Any]:
         """The ``iso:`` mapping of the place (see :meth:`objects_at`) with the objects ``added``
         (:func:`objects_named`)."""
-        objects = [*self.objects_at(night), *({"object": kind, "at": _cell(*cell)} for _, kind, cell in added)]
+        objects = self.objects_at(night)
+        names = {str(o.get("name") or o["object"]) for o in objects}
+        for _, kind, cell in added:
+            item: dict[str, Any] = {"object": kind, "at": _cell(*cell)}
+            if kind in names:   # an added lamp beside the place's street lamp named 'lamp'
+                item["name"] = next(f"{kind}_{n}" for n in range(2, 99) if f"{kind}_{n}" not in names)
+            names.add(str(item.get("name", kind)))
+            objects.append(item)
         room = {"place": "indoor", "wide": "fill"} if self.indoor else {}   # a room's wide view brought closer
         return {**room, "map": self.map, "spots": dict(self.spots), "objects": objects}
 

@@ -24102,3 +24102,41 @@ is in `tasklist.md`.
   (third person with dialogue, first person, scene breaks with night / rain); all three drafts
   validate; storyboard of the `signal` sample (silent, timed from text) at
   `/home/claude/work/scratch/s272/sheet.png`.
+
+## Step 273 — Shorts suggestions (Phase AD)
+
+- Built: `vidgen shorts suggest [PROJECT] [--count N] [--min 30 --max 60] [--teaser] [--spoilers]
+  [--end-card TEXT] [--write] [--out shorts.yaml] [--json]` and MCP tool `shorts_suggest`.
+  Deterministic: beats timed by the video's plan (MP3s, else words at `narration.words_per_second`),
+  windows of whole beats between `--min` and `--max` (end card included) inside runs of narrated
+  scenes, scored (dialogue share, questions, exclamations, emotional / action words, move actions,
+  variety, clean start, strong last line, length near 45 s, the ending marked down), picked with at
+  most 25 % overlap, a hook each (a question / exclamation shortened to ≤ 6 words, else a template);
+  `--teaser`: ~15 s of the best short beats across the film ending on a title card. Report: a table
+  (rank, variant, window, beats, secs, score, parts, hook) and notes. `--write`: variants
+  `short1..` / `teaser` (9:16, `shorts: true`, −14 LUFS, karaoke captions, `cut` with scenes /
+  beats, hook, end card "Full story on the channel" under the title, a `zoom ... cut: true, hold:
+  true` on the speakers opening each stage scene) in `shorts.yaml`, added to the config's
+  `include:` (backups `video.yaml.bak`, `shorts.yaml.bak`), then validated.
+- Files: new `shorts_suggest.py`, `tests/test_shorts_suggest.py`; `includes.py` (`variants` in
+  `INCLUDABLE_KEYS`), `cli.py` (`cmd_shorts`, parser, JSON_COMMANDS), `jsonout.py`
+  (`shorts_document`), `mcp_server.py` (tool, instructions), `api.py`, `story_places.py` (two
+  `lamp`s fix), tests `test_includes.py` (message), `test_story_draft.py` (+ the fix),
+  `test_mcp.py` (tool list, one test); docs CONFIG ("Suggested Shorts", include, MCP and `--json`
+  lists; `vidgen story --json` and `vidgen shorts --json` sections — the first was missing since
+  Step 272 and failed `test_json_output`), guide (+ `AGENTS.md`, Shorts bullet), DESIGN §105.6, CHANGELOG, tasklist.
+- Public: see DESIGN §105.6 (`suggest_shorts`, `write_suggestions`, `timed_beats`...).
+- Decisions: a separate generated file included by the config (the config's text and comments
+  kept; re-running replaces only `shorts.yaml`) — needed include files to accept `variants`; every
+  stage scene of a cut opens framed (the 16:9 iso place was tiny in 9:16 on the sample's sheet),
+  not only mid-scene starts; no `hold` when a framed character moves later.
+- Known gaps / later: restaging is limited to the opening zoom; a mid-scene start loses earlier
+  moves and `time_of_day` changes (listed as notes / `# TODO:` in shorts.yaml, not fixed); windows
+  are contiguous (only the teaser jumps); English word lists; story-draft dialogue tagged to the
+  narrator counts as narration (fewer dialogue points). Step 275: review with a longer sample.
+- Tests: `test_shorts_suggest.py` (22) passed; `test_story_draft`, `test_includes`, `test_mcp -k
+  "shorts or story or tools or list or instructions"`, `test_api`, `test_cli`, `test_docs`,
+  `test_guide`, `test_cuts_shorts`, `test_json_output` passed. No rendering code changed (Phase Q
+  baseline not needed). Own sample `/home/claude/work/scratch/s273/stories/lighthouse.md` drafted to
+  `s273/lighthouse` (validates with its 4 variants); storyboard of `short1` (silent, timed from
+  text, 360x640) at `/home/claude/work/scratch/s273/sheet.png`.

@@ -36,7 +36,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -249,6 +249,42 @@ def cmd_story(args: argparse.Namespace) -> CommandResult:
     for problem in problems:
         print(f"problem: {problem}", file=sys.stderr)
     print("next: read story_draft.md, then `vidgen validate`, `vidgen storyboard`, `vidgen lint`; `vidgen tts` when it reads well")
+    return 1 if problems else 0
+
+
+def cmd_shorts(args: argparse.Namespace) -> CommandResult:
+    """Suggest Shorts cut from the video, and write them as variants (DESIGN.md §105.6)."""
+    from vidgen.shorts_suggest import report_text, suggest_shorts, write_suggestions
+
+    project = Project.load(args.project)
+    found = suggest_shorts(
+        project, args.count, args.min, args.max, teaser=args.teaser, spoilers=args.spoilers, end_text=args.end_card,
+    )
+    written, problems = None, []
+    if args.write and (found.shorts or found.teaser):
+        written = write_suggestions(project, found, args.out)
+        project = Project.load(project.config_file)
+        problems, _ = validate_all(project, keep_going=True)
+    if args.json:
+        return jsonout.shorts_document(project, found, written, problems)
+    print(
+        f"{len(found.shorts)} Short(s) from {found.candidates} windows of {found.min_seconds:g}-{found.max_seconds:g} s "
+        f"(film {_format_seconds(found.film_seconds)}, timed by {found.timed_by})"
+    )
+    if not found.shorts and found.teaser is None:
+        print("no window fits: try other --min / --max")
+        return 0
+    print(report_text(found))
+    if written is not None:
+        print(f"wrote {written.file}" + (f"; {project.config_file.name} includes it" if written.config_changed else ""))
+        for backup in written.backups:
+            print(f"  backup: {backup}")
+        for problem in problems:
+            print(f"problem: {problem}", file=sys.stderr)
+        names = [s.name for s in [*found.shorts, *([found.teaser] if found.teaser else [])]]
+        print(f"next: vidgen storyboard --variant {names[0]} --per-beat 2 (look at the framing), vidgen lint --variant {names[0]}")
+    else:
+        print("next: --write to add them as variants (shorts.yaml, included by the config)")
     return 1 if problems else 0
 
 
@@ -1918,6 +1954,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0, help="seed of the random looks given once the built-in ones are used (default: 0)")
     p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
     p.set_defaults(func=cmd_story)
+
+    p = sub.add_parser("shorts", help="suggest Shorts cut from the video: scored 30-60 s windows with a hook each, written as cut: variants on request (no AI)")
+    p.add_argument("action", choices=["suggest"], help="suggest: a report of the best windows; --write adds them as variants")
+    project_arg(p)
+    p.add_argument("--count", type=int, default=3, metavar="N", help="how many Shorts (default: 3)")
+    p.add_argument("--min", type=float, default=30.0, metavar="SECONDS", help="shortest Short, end card included (default: 30)")
+    p.add_argument("--max", type=float, default=60.0, metavar="SECONDS", help="longest Short, end card included (default: 60)")
+    p.add_argument("--teaser", action="store_true", help="also a teaser: about 15 s of the best short lines across the film, ending on the title")
+    p.add_argument("--spoilers", action="store_true", help="do not mark down windows that hold the film's ending")
+    p.add_argument("--end-card", default="Full story on the channel", metavar="TEXT", help="the end card's line under the title (default: Full story on the channel)")
+    p.add_argument("--write", action="store_true", help="write the variants to shorts.yaml (backed up first) and include it from the config (backed up first)")
+    p.add_argument("--out", default="shorts.yaml", metavar="FILE", help="the file the variants go to, next to the config (default: shorts.yaml)")
+    p.set_defaults(func=cmd_shorts)
 
     p = sub.add_parser("cast", help="write a cast of characters that differ clearly (looks, colours, voices) as an include file (no AI)")
     p.add_argument("--random", type=int, required=True, metavar="N", help="how many characters (1-24)")

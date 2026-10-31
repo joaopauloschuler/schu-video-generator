@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from vidgen.random_cast import RandomCast
     from vidgen.screenplay import ScreenplayProject
     from vidgen.story_draft import StoryDraft
+    from vidgen.shorts_suggest import Suggestions, WriteResult
     from vidgen.slides import SlidesResult
     from vidgen.slides_pdf import PdfResult
     from vidgen.thumbnail import ThumbnailResult
@@ -278,6 +279,42 @@ def story_document(
         ],
         estimated_duration=round(project.estimated_duration(), 2),
         todo_count=draft.todo_count,
+        problems=[p.to_json() for p in problems],
+    )
+
+
+def shorts_document(
+    project: Project, found: Suggestions, written: WriteResult | None, problems: list[Problem], warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen shorts suggest --json`` document: the settings, each suggested Short (and the
+    teaser) with its window, score parts, hook, scenes, beats, notes and variant, what was written
+    and the problems ``vidgen validate`` finds after writing (``ok`` false when any)."""
+
+    def entry(s: Any) -> dict[str, Any]:
+        w = s.window
+        return {
+            "name": s.name, "rank": s.rank, "teaser": s.teaser, "start": round(w.start, 2), "end": round(w.end, 2),
+            "seconds": round(w.seconds, 2), "score": w.score, "parts": dict(w.parts), "spoils_ending": w.spoils,
+            "hook": w.hook, "hook_source": w.hook_source, "scenes": w.scenes, "beats": [b.id for b in w.beats],
+            "first_line": w.beats[0].text, "last_line": w.beats[-1].text, "notes": list(w.notes), "variant": s.variant,
+        }
+
+    return envelope(
+        "shorts",
+        not problems,
+        warnings,
+        project=_path(project.root),
+        config=_path(project.config_file),
+        min_seconds=found.min_seconds,
+        max_seconds=found.max_seconds,
+        film_seconds=round(found.film_seconds, 2),
+        timed_by=found.timed_by,
+        candidates=found.candidates,
+        shorts=[entry(s) for s in found.shorts],
+        teaser=entry(found.teaser) if found.teaser is not None else None,
+        written=None if written is None else {
+            "file": _path(written.file), "config_changed": written.config_changed, "backups": [_path(b) for b in written.backups],
+        },
         problems=[p.to_json() for p in problems],
     )
 

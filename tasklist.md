@@ -1635,7 +1635,7 @@ a few lines per feature in CONFIG and the guide.
 - [x] `vidgen story draft story.md [-o project/] [--style iso|flat] [--format 9:16] [--narrator V]`: scenes (headings, breaks, time cues), dialogue and speakers with a confidence, a cast with distinct Kokoro voices (first person: the narrator is the protagonist's voice), eleven ready-made iso places (or flat sets) with light, weather and named objects, placeholder staging, beats, title and end cards, a music bed, a `story_draft.md` report with TODOs; MCP tool `story_draft`; tests `test_story_draft.py` on neutral sample texts
 
 ### Step 273 — Shorts suggestions
-- [ ] `vidgen shorts suggest [project]`: scored 30–60 s windows with clean starts and ends, a hook line, `cut:` variants written to a file or the project; an MCP tool; tests
+- [x] `vidgen shorts suggest [project] [--count N] [--min 30 --max 60] [--teaser] [--spoilers] [--write]`: windows between beat boundaries timed by audio or words, scored (dialogue, questions, exclamations, emotional / action words, variety, clean start, strong last line, ending marked down), non-overlapping, a hook line each (≤ 6 words or a template), a ~15 s teaser; `--write`: `cut:` variants (9:16, shorts, captions, hook, end card, opening zooms) in `shorts.yaml` included by the config (`variants` allowed in include files; backups); MCP tool `shorts_suggest`; tests `test_shorts_suggest.py`
 
 ### Step 274 — Ambient life
 - [ ] `ambient: {birds, walkers, cat, seed}` on an iso stage: birds, a cat, background walkers, butterflies / fireflies; avoid objects and main characters, never steal focus; deterministic by seed; cheap

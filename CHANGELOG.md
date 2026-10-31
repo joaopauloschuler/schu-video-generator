@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–272)
+## Unreleased (Steps 193–273)
 
 ### Phase AD: features without AI APIs (Steps 268–275)
 
@@ -14,6 +14,7 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 - A day passing in one scene: `- {time_of_day: night, run_time: 6}` (`morning`, `day`, `sunset`, `night`, `indoor`) fades the light and a sky of the time of day (day to night through a sunset), the stars coming out once it is dark; at dusk the lamps, a house's windows, lit objects and cars' headlights switch on by themselves one after another, and off at dawn (`auto_lights: false`, or `auto_light: false` on an object, opts out); on iso places and the flat stage.
 - Iso weather: at night the puddles mirror lit windows, lanterns and neon trims (wobbling while it rains; rain's `settled` with `puddles` starts them full size); `fog` lies over an iso place in drifting bands, thicker further back; `wind` bends the trees, bushes, flowers and plants and swings scarecrows and balloon bunches in gusts. Outdoors only.
 - `vidgen story draft story.md -o DIR` (MCP tool `story_draft`): a story cartoon drafted from prose, without AI — scenes from headings, breaks and time cues, a cast with distinct Kokoro voices (told in the first person, the narrator speaks with the protagonist's voice), each quoted line given a speaker with a confidence, ready-made iso places (or flat sets with `--style flat`) with light, weather and objects from the story's words, placeholder walks and shots, title and end cards, a music bed; `story_draft.md` lists every decision and a TODO checklist.
+- `vidgen shorts suggest [PROJECT] [--count N] [--min 30 --max 60] [--teaser] [--write]` (MCP tool `shorts_suggest`): Shorts suggested without AI — windows between beat boundaries timed by the narration (or the word count), scored by dialogue, questions, exclamations, emotional and action words, variety, a clean start and a strong last line (the film's ending marked down), each with a hook line of up to six words; `--teaser` about 15 s of the best lines ending on the title; `--write` adds them as `cut:` variants (9:16, karaoke captions, hook, end card, opening zooms) in `shorts.yaml`, included by the config. An included file may now hold `variants`. A story draft no longer names two objects `lamp`.
 
 ### More iso objects (Steps 261–267)
 

@@ -20576,3 +20576,57 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   named only by a description (`said the old man`) is read by the narrator; places are
   placeholders (no map built from the story); characters stand from the scene's start unless the
   story brings them in; more than four characters in a scene are not placed.
+
+### 105.6 Shorts suggestions (Step 273)
+
+- **Command**: `vidgen shorts suggest [PROJECT] [--count 3] [--min 30] [--max 60] [--teaser]
+  [--spoilers] [--end-card TEXT] [--write] [--out shorts.yaml] [--json]`; MCP tool
+  `shorts_suggest`. A subcommand group like `story draft`. Never calls a model.
+- **Timing** (`shorts_suggest.timed_beats`): `VideoPlan` of the base config (in a
+  `project_session`, so scene types' `outro` count): each narrated beat's start in the film and its
+  window (to the next beat's start; the last to the narration's end), the MP3's length when there
+  is one, else words / `narration.words_per_second` (as the silent storyboard). Silent scenes
+  (cards) break runs. A cut's length = beats + each scene entry's `outro` + the end card (3 s;
+  teaser card 2.5 s); measured on the sample: 47.2 s planned vs 46.8 s of the variant's own plan
+  (crossfades overlap).
+- **Windows**: every run of whole beats in one run of narrated scenes, `min`..`max` long; not
+  opening on an `overlap` / `interrupt` beat; no kept beat whose action waits `until` a beat outside.
+- **Score** (`score_window`, parts kept for the report): dialogue share of time × 6, questions ×
+  1.5 and exclamations × 1 (spoken ones; narration's at half; capped 3), emotional / action words
+  (`EMOTION_WORDS` stems) and beat emotions × 0.6 (cap 8), beats with move actions × 0.75 (cap 4),
+  variety (scenes − 1, 0.75 per speaker, 0.5 per shot; cap 4), start (+1 a scene's start; −1.5 a
+  narration opening on a leaning word or a line answering one left out), end (+2 a strong last
+  line: spoken `!` / `?` or ≤ 8 words; +1 a scene's end), length −0.1 per second from 45,
+  spoiler −4 for a window holding the ending (beats in the last 15 % of the narration, and the last
+  beat) unless `--spoilers`. Greedy pick by score; at most 25 % overlap with a picked window.
+- **Hook** (`hook_line`, `shorten`): sentences of the window that are questions (3, +1 spoken),
+  exclamations (2, +1 spoken) or short emotional spoken lines (1.5); the window's first line −1.5
+  (heard at once anyway); shortened to ≤ 6 words (the sentence, else a clause split at `, ; : —`,
+  a question's last clause first; leading fillers dropped); else `HOOK_TEMPLATES` by the window's
+  words, else "Wait for the ending.".
+- **Variants** (`short_variant`): `format` 1080×1920, `preview` 360×640, `shorts: true` (or
+  `{max_seconds}` over 60), `audio {target_lufs: -14, bitrate: 256k}`, overlays: the full video's
+  `watermark` + karaoke captions (`speakers: color` with named voices), `cut`: one entry per scene
+  (whole: its id; a run: `{from, to}` / `{from}`; the teaser's scattered beats: a list),
+  `cut.beats` with `{zoom: speakers, at: 0, cut: true, hold: true}` prepended to the first kept
+  beat's own actions on every stage scene (no `hold` when a framed character moves later), hook,
+  end card. Notes: moves / light changes of left-out beats before a mid-scene start, framing
+  without hold. Names `short1..`, `teaser`, skipping the config file's own variant names.
+- **Teaser** (`teaser_beats`): beats ≤ 6 s, not in the ending, ranked by `beat_score`, ≤ 2 per
+  scene, ≤ 15 s in all, in film order; end card `type: card` (the title big, the line under it).
+- **Writing** (`write_suggestions`): decision — a separate file included by the config rather
+  than `variants:` inside it: the generated file can be replaced on every run while the config's
+  text and comments stay as written. `includes.INCLUDABLE_KEYS` gains `variants` (merged by name
+  under the config's own; the config's win). The config gets `shorts.yaml` added to `include:`
+  by a one-line text edit (flow, scalar or block list; checked by loading it back; a flow-style
+  YAML or JSON config is written again whole); `<config>.bak` and `shorts.yaml.bak` backups. The
+  CLI validates the project with its variants after writing (problems: exit 1).
+- **Public**: `vidgen.api` adds `TimedBeat`, `ShortsWindow` (`Window`), `Suggestions`,
+  `timed_beats`, `suggest_shorts`, `write_suggestions`, `shorts_yaml`; JSON document `shorts`
+  (`jsonout.shorts_document`). Additive; `INCLUDABLE_KEYS` accepts one key more (its error message
+  lists it). Fix found on the way: a story draft's added object of a kind the place already names
+  (`lamp` by the harbour's street lamp) gets a numbered name (`story_places.StoryPlace.iso`).
+- **Left for later**: no restaging beyond the opening zoom (shots per beat, characters' starting
+  spots after left-out moves, a left-out `time_of_day`'s light are notes for the author / an
+  agent); a window never jumps over beats (only the teaser does); hooks are taken from the text,
+  so a narrator's question can win when the dialogue has none; scores use word lists in English.

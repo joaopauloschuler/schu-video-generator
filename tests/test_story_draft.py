@@ -168,6 +168,9 @@ def test_places_light_weather_music_objects() -> None:
     assert [(w, k) for w, k, _ in found] == [("dish", "satellite_dish"), ("telescope", "telescope"), ("lamp", "lamp")]
     assert [c for _, _, c in found] == list(PLACES["city"].free)
     assert objects_named("a telescope", PLACES["city"], found) == []          # the place has it now
+    harbour = PLACES["harbour"].iso(False, objects_named("the lamp", PLACES["harbour"]))   # its street lamp is named 'lamp'
+    names = [o["name"] for o in harbour["objects"] if "name" in o]   # unnamed ones are numbered by the stage
+    assert len(names) == len(set(names)) and "lamp_2" in names
     for place in PLACES.values():   # spots of the stands and goals exist on the map
         assert set(place.stands) | set(place.goals) <= set(place.spots.values()), place.name
         assert len(place.free) == 3 and len(place.stands) == 4

@@ -64,7 +64,8 @@ schu-video-generator (the `vidgen` command) makes narrated, animated videos from
 relative to the server's root folder; nothing outside it can be read or written.
 Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
 an outline), `screenplay` (a cartoon from a screenplay; `cast` writes a well-contrasted cast for it), `story_draft` (a story \
-cartoon drafted from prose, with a report of what to refine) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
+cartoon drafted from prose, with a report of what to refine) or `init` -> edit video.yaml (`shorts_suggest` proposes \
+Shorts cut from a finished video as variants) -> `validate` -> `storyboard` (look at the sheets it \
 returns) -> `lint` -> fix -> repeat; then `tts` with dry_run=true (free), and only after the user \
 agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provider kokoro is local and \
 free: no confirm_cost); then `render`. `schema` with \
@@ -414,6 +415,29 @@ def build_server(root: Path) -> Any:
             source = Path(folder) / "story.md"
             source.write_text(story_text or "", encoding="utf-8")
             return answer(await call(ctx, args_of(["story", "draft"], [str(source)], options)))
+
+    @tool("Suggest vertical Shorts cut from a project's video (no AI: timing and rules): windows of min..max seconds "
+          "between beat boundaries, scored by dialogue, questions, exclamations, emotional and action words, variety, a "
+          "clean start and a strong last line (the film's ending marked down), each with a hook line; optionally a ~15 s "
+          "teaser. write=true adds them as cut: variants (9:16, shorts, karaoke captions, hook, end card, opening zooms) "
+          "in shorts.yaml, included by video.yaml (both backed up first). Refine the variants, then storyboard / lint "
+          "with variant=NAME.", writes)
+    async def shorts_suggest(
+        ctx: Context,
+        project: Project = ".",
+        count: Annotated[int, Field(ge=1, le=20, description="how many Shorts")] = 3,
+        min_seconds: Annotated[float, Field(ge=5, description="shortest Short, end card included")] = 30.0,
+        max_seconds: Annotated[float, Field(ge=5, le=180, description="longest Short, end card included")] = 60.0,
+        teaser: Annotated[bool, Field(description="also a teaser of the best short lines, ending on the title")] = False,
+        spoilers: Annotated[bool, Field(description="do not mark down windows holding the film's ending")] = False,
+        end_card: Annotated[str, Field(min_length=1, description="the end card's line under the title")] = "Full story on the channel",
+        write: Annotated[bool, Field(description="write the variants (shorts.yaml, included by the config)")] = False,
+    ) -> Any:
+        options = {
+            "count": count, "min": min_seconds, "max": max_seconds, "teaser": teaser, "spoilers": spoilers,
+            "end-card": end_card, "write": write,
+        }
+        return answer(await call(ctx, args_of(["shorts", "suggest"], [str(where(project))], options)))
 
     @tool("Write a cast of original characters that differ clearly (silhouette, colours, accessories, voice kind and "
           "voice) as an include file: use it with include: in video.yaml or as screenplay's cast. The same seed gives "

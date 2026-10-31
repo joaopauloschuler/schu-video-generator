@@ -33,7 +33,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `draft` | 240 px on the shorter side, 8 fps | `vidgen render --draft`: `{width, height, fps}`, each optional; see [drafts](#drafts-vidgen-render---draft) |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
-| `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices` and `sets` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
+| `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices`, `sets` and `variants` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `sets` | `{}` | named `stage` sets (`name: {background, layers, props, marks, light, wind...}`) a stage scene uses with `set: NAME`; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
@@ -661,6 +661,43 @@ of two lines covers less of a face near the top than one of three or four). Busy
 many lights) make larger files: re-encode one over a size budget (`ffmpeg -c:v libx264 -crf 23
 -c:a copy`).
 
+### Suggested Shorts (`vidgen shorts suggest`)
+
+`vidgen shorts suggest [PROJECT] [--count 3] [--min 30] [--max 60] [--teaser] [--spoilers]
+[--end-card TEXT] [--write] [--out shorts.yaml] [--json]` (MCP tool `shorts_suggest`) finds the
+windows of the video that would make good Shorts, without AI. Beats are timed by the video's plan
+(their narration MP3s, else the word count at `narration.words_per_second`). A window is a run of
+whole beats of consecutive narrated scenes lasting `--min`..`--max` seconds with the end card. It
+is scored by dialogue (share of time), questions, exclamations, emotional and action words,
+action beats, variety (scenes, speakers, shots), a clean start (a scene's start; not a reply or a
+sentence opening on *he*, *then*...), a strong last line and a length near 45 s; one holding the
+film's ending (its last 15 %) is marked down unless `--spoilers`. Overlapping windows are
+skipped. Each gets a hook: a question or exclamation of the window (spoken lines first) shortened
+to six words, else a line from its situation. The report lists rank, window, beats, length,
+score parts and hook, then notes (what left-out beats did before a mid-scene start). `--teaser`
+adds about 15 s of the best short lines across the film, ending on a title card.
+
+`--write` writes the variants `short1`, `short2`... (`teaser`; names the config already uses are
+skipped) to `shorts.yaml` next to the config and adds it to the config's `include:` (the only edit
+to the config; both files are backed up as `.bak` first). Each is 9:16 with `shorts: true`, `-14`
+LUFS, karaoke captions, the `cut` (scenes and beats), the hook, the end card "Full story on the
+channel" under the title, and a `zoom` with `cut: true, hold: true` opening each stage scene on its
+speakers (no `hold` when one of them walks later). The written variants validate; look at
+`vidgen storyboard --variant short1 --per-beat 2` and restage in `cut.beats` as above.
+
+```yaml
+# shorts.yaml (written)
+variants:
+  short1:
+    format: {width: 1080, height: 1920}
+    shorts: true
+    cut:
+      scenes: [{scene: the_harbour, beats: {from: the_harbour_b6}}, the_storm]
+      beats: {the_harbour_b6: {actions: [{zoom: [nell, tomas], at: 0, cut: true, hold: true}]}}
+      hook: "The lamp is out!"
+      end_card: "Full story on the channel"
+```
+
 ## Shared casts and sets (`include:` and `sets:`)
 
 A cartoon series keeps its characters, voices and places in shared files, and each episode
@@ -704,7 +741,8 @@ sets:
 ```
 
 - **`include:`** a file name or a list. An included file holds only `characters`, `voices`,
-  `sets` and its own `include` (relative to it; a file reached twice is merged once). The files
+  `sets`, `variants` (e.g. the `shorts.yaml` of [`vidgen shorts suggest`](#suggested-shorts-vidgen-shorts-suggest);
+  paths in its variants are read from the project folder) and its own `include` (relative to it; a file reached twice is merged once). The files
   merge in order, a file's includes before the file, the project's own config last:
   mappings (`voices`, `sets`, a character's `look`) merge key by key; a `characters` entry with a
   name already declared changes that character (its keys win), a new name is added; anything
@@ -14808,7 +14846,8 @@ default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` gi
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
 (`vidgen story draft`: `input_path` or `story_text`, `out`, `style`, `format`, `narrator`, `seed`,
-`force`), `cast` (`count`
+`force`), `shorts_suggest` (`vidgen shorts suggest`: `project`, `count`, `min_seconds`,
+`max_seconds`, `teaser`, `spoilers`, `end_card`, `write`), `cast` (`count`
 for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`), and the studio's
 hand-offs (Step 198, "Music studio" above): `studio_sessions`, `studio_read` (`session`,
 `version`), `studio_check` (`session`, `score`, `compare`, `images`: `vidgen music check` of the
@@ -14862,7 +14901,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft`, `vidgen shorts suggest` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -15441,6 +15480,24 @@ anyway).
 | `notes` | list | TODOs about the whole video (e.g. voices to set by hand) |
 | `scenes` | list | `{id, beats, characters, actions, todos}` per scene: the characters on its stage, the actions written from stage directions and manners, its `# TODO:` comments |
 | `problems` | list | `vidgen validate` problems of the project, `{location, message, variant, file}` (normally empty) |
+
+### `vidgen story --json`
+
+The project drafted by [`vidgen story draft`](#a-story-in-prose-vidgen-story-draft); `ok` false
+when `vidgen validate` finds problems in it. Keys: `project`, `config`, `report` (paths),
+`report_text`, `created`, `title`, `style`, `format`, `first_person`, `narrator`, `music`,
+`characters`, `scenes` (`{id, place, light, changes, weather, objects, characters, off_stage,
+source_line, reason}`), `dialogue` (`{scene, beat, speaker, confidence, method, text}`),
+`estimated_duration`, `todo_count`, `problems`.
+
+### `vidgen shorts --json`
+
+The Shorts of [`vidgen shorts suggest`](#suggested-shorts-vidgen-shorts-suggest); `ok` false when
+`vidgen validate` finds problems after `--write`. Keys: `project`, `config`, `min_seconds`,
+`max_seconds`, `film_seconds`, `timed_by` (`audio`, `words` or a mix), `candidates` (windows
+scored), `shorts` (best first) and `teaser` (or `null`): `{name, rank, teaser, start, end, seconds,
+score, parts, spoils_ending, hook, hook_source, scenes, beats, first_line, last_line, notes,
+variant}`; `written` (`null` without `--write`, else `{file, config_changed, backups}`), `problems`.
 
 ### `vidgen cast --json`
 

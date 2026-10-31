@@ -344,6 +344,13 @@ variants:
 - `vidgen storyboard --variant short1 --per-beat 2` and `vidgen lint --variant short1`, then
   `vidgen render --variant short1` (`--max-scenes` keeps each run short; a change in `cut.beats`
   re-renders only that scene, a new hook every scene).
+- **Which windows?** `vidgen shorts suggest [--count 3] [--min 30 --max 60] [--teaser]` (MCP
+  `shorts_suggest`) times the beats (audio, else words), scores every 30–60 s window between beat
+  boundaries (dialogue, questions, exclamations, emotional and action words, variety, a clean start,
+  a strong last line; the ending marked down) and prints a table with a hook each. `--write` adds
+  them as variants in `shorts.yaml` (included by the config, both backed up): 9:16, captions, hook,
+  end card, a held `zoom ... cut` opening each stage scene. It is a draft: read its notes (a
+  mid-scene start loses earlier moves and light changes), then storyboard and restage as above.
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
