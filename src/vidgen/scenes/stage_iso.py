@@ -375,6 +375,7 @@ class IsoStaging:
         self.story_things += list(getattr(self, "iso_vehicles", {}).values())   # a switch, a flame, a bob (§105)
         everything += self._iso_make_swayers(swaying, density)   # the trees in the wind... (§105.4)
         self._iso_glow_watch()   # the lights mirrored in puddles at night (§105.4)
+        self._iso_make_ambient(place)   # walkers, birds, a cat... (§105.7): they come on with the set
         return everything
 
     def _iso_story_overlays(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
@@ -632,6 +633,8 @@ class IsoStaging:
             vehicle.show_view(frame)
         for swayer, _ in getattr(self, "iso_swayers", {}).values():   # §105.4
             swayer.show_view(frame)
+        for critter in getattr(self, "iso_critters", {}).values():   # §105.7
+            critter.show_view(frame)
 
     def _iso_front(self, name: str, picture: Any) -> Mobject | None:
         """``name``'s front picture of ``picture`` (made once; ``None`` for no picture), graded by the light."""
@@ -639,6 +642,9 @@ class IsoStaging:
             return None
         if (name, picture) not in self._iso_front_pictures:
             self._iso_front_pictures[(name, picture)] = self._iso_tiles(picture, f"iso_front_{name}")
+            critter = getattr(self, "iso_critters", {}).get(name)
+            if critter is not None:   # a small creature's: drawn only where it is (§105.7)
+                self._iso_front_pictures[(name, picture)].clip(critter.rect)
         return self._iso_front_pictures[(name, picture)]
 
     # ----- the draw order of the bodies (DESIGN.md §89.9) ---------------------------------------------
@@ -668,8 +674,8 @@ class IsoStaging:
         return item_box(place, feet, height)
 
     def _iso_body(self, mob: Mobject) -> Box3:
-        """The box a character, small thing or driven vehicle (§105) stands in on the place now (tile units)."""
-        if getattr(mob, "iso_vehicle", False):
+        """The box a character, small thing, driven vehicle (§105) or creature (§105.7) stands in on the place now (tile units)."""
+        if getattr(mob, "iso_vehicle", False) or getattr(mob, "iso_ambient", False):
             return mob.box()
         return self._iso_box(mob.name, mob.iso_feet)
 
@@ -687,10 +693,10 @@ class IsoStaging:
         return False
 
     def _iso_bodies(self) -> dict[str, Mobject]:
-        """The characters, the small things standing on the place (not held) and the driven
-        vehicles (§105), by name."""
+        """The characters, the small things standing on the place (not held), the driven
+        vehicles (§105) and the creatures of its ambient life (§105.7), by name."""
         props = {name: prop for name, prop in getattr(self, "props", {}).items() if getattr(prop, "held_by", None) is None}
-        return {**self.cast, **props, **getattr(self, "iso_vehicles", {})}
+        return {**self.cast, **props, **getattr(self, "iso_vehicles", {}), **getattr(self, "iso_critters", {})}
 
     def _iso_keep_order(self) -> bool:
         """On an iso place, each frame while things move or the place changes (DESIGN.md §89.9):
@@ -704,6 +710,8 @@ class IsoStaging:
         for name in list(self._iso_fronts):
             swapped = self._iso_swap_front(name, bodies)
             if swapped is not None:
+                if getattr(bodies.get(name), "iso_ambient", False) and self._iso_splice_front(bodies[name], *swapped):
+                    continue   # a creature's new front picture, drawn right after it (§105.7)
                 added += [swapped[1]] if swapped[1] is not None else []
                 changed = True
         names = list(bodies)
@@ -736,6 +744,8 @@ class IsoStaging:
         figure = bodies.get(name)
         if figure is not None and getattr(figure, "iso_vehicle", False):
             new_picture = self._iso_vehicle_front(figure)   # not its own piece (§105)
+        elif figure is not None and getattr(figure, "iso_ambient", False):
+            new_picture = self._iso_critter_front(figure)   # found once per cell (§105.7)
         elif figure is not None and getattr(figure, "iso_seat", None) is not None:
             new_picture = self._iso_seat_front(figure)   # the arm of its armchair, not the armchair (§105.2)
         else:

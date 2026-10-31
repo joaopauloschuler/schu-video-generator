@@ -20630,3 +20630,71 @@ agent driving vidgen can use. Plan: 268 moving vehicles in iso, 269 sitting and 
   spots after left-out moves, a left-out `time_of_day`'s light are notes for the author / an
   agent); a window never jumps over beats (only the teaser does); hooks are taken from the text,
   so a narrator's question can win when the dialogue has none; scores use word lists in English.
+
+### 105.7 Ambient life (Step 274)
+
+- **Config**: the stage's `ambient` (iso only): `{walkers, birds, cat, ducks, butterflies,
+  fireflies, flies, muted, seed, auto}`; counts or `true` (`AMBIENT_DEFAULTS`: 3, 4, 1, 2, 3, 10,
+  1; at most `AMBIENT_MAX`); `ambient: true` is `{auto: true}`: every kind that suits the place
+  besides those given. Checks (`_check_ambient`): not on a flat stage (its `birds` is a flock),
+  indoors only `cat` / `flies` (`INDOOR_KINDS`), `ducks` need water; did-you-mean on keys (the
+  config's unknown-key message). A stage key, not under `iso:` (as `fog`, `wind`), so a story
+  draft or a variant can set it per scene. Keys chosen over the brief's sketch: `ducks`, `flies`
+  added; `muted` defaults to true (background extras should not draw the eye).
+- **Rules** (`world/iso_ambient.py`, no manim): `ambient_cells` — `walk` (floor, path, blocks;
+  not `avoid`, not `roads`), `rest` (walk cells outside `clear`: where one may stop), `paths`,
+  `water`, `air` (nothing over `LOW_OBJECT` 1.2 tiles), `blooms` (flowers, bush, plant), `green`
+  (and trees), the free spots. The stage avoids `around()` (8 neighbours and the three cells two
+  in front on the picture) the main characters' spots, the spots and cells of the scene's moves,
+  small things' spots, the objects the actions name, seats and beds and driven vehicles; it keeps
+  `clear` (radius 2) round the characters' cells (passing allowed: one stopping right behind a
+  character showed over its shoulders on the sheet); `roads` are the path cells when a car
+  drives, a train's track. An `AmbientPlan` per creature (seed `ambient_seed(seed, name)`) makes
+  its `AmbientMove`s lazily as far as asked (`at(t)` asks in any order: the same poses): walkers
+  stroll between paths and spots (`cell_route`, Dijkstra, paths cheaper, steps of one) at
+  0.95 tiles/s and stand 1–4 s looking round; the cat walks within 5 cells and sits / grooms;
+  ducks glide on water and dip; birds peck, hop (0.45 tiles, an arc) and every 6–14 s fly to a
+  cell 4+ away (an arc over what stands between; no flight past a tower over 7.5 tiles) or out of
+  the place beyond a picture edge (faded), away 3–7 s, then back from an edge; butterflies flutter
+  (a wavering line) between bloom cells and rest on them; flies dart about a room; fireflies
+  hover about a point near green (sum of sines) and blink (`glow`). Several of a kind start
+  spread across the picture.
+- **Drawn** (`cartoon/iso_ambient.py`): `IsoCritter`, a body of the place like a driven vehicle:
+  three fixed image slots (picture, `PoolTile`, `GlowTile`) whose pixels are a sprite of simple
+  iso shapes drawn upright in the picture's plane (`_b`), made once per (pose, frame, facing,
+  level of detail) and faded in `ALPHA_STEPS`; an empty slot gets no area (the tile drawing skips
+  it). Walkers (`critter_look`: shirt, trousers, skin, hair by seed; `muted`: x0.86, colours 45 %
+  to grey), birds (wings in flight), a cat (walk frames, sit with a swishing tail, groom), ducks
+  (a ripple ring), butterflies (front view, wings beating), a fly, fireflies (a glowing speck in
+  a halo drawn as a pool of light). `box()` is clipped to its cell (as a character's); `region`
+  samples the plan (`PLAN_STEP`) for what Manim redraws.
+- **Stage** (`scenes/stage_ambient.py`, `IsoAmbience`): made at the end of `_iso_scenery` (none
+  in a draft), added with the set (`iso_ambient_shown`), in `_iso_bodies` (draw order, fog bands,
+  swaying trees layer them), in `story_things` (living: updated each frame), never targets.
+  `seen(kind, now)`: hidden past a camera zoom of 1.45–1.9 over the scene's wide view (close
+  shots, two-shots, a follow), butterflies `1 - rise(darkness, 0.2, 0.5)`, fireflies
+  `rise(darkness, 0.3, 0.7)` (they follow `time_of_day`); butterflies are left out of a scene
+  that stays dark, fireflies out of one that stays light. A creature's front picture is found per
+  (cell, height band) (`_iso_body_over`, `IsoScenery.front(over=)`), drawn only over the
+  creature's sprite (`IsoTiles.clip`, `iso_clip` in `draw_tile`), and swapped into what Manim
+  draws without sorting it all again (`_iso_splice_front`): creatures change cells often.
+- **Cost** (854x480 preview, 15 fps, sample `s274/proj`; without → with): a village with 3
+  walkers, 4 birds, a cat, 2 ducks, 3 butterflies 7.5 → 11.6 s (13.9 s of video); a park at dusk
+  with 12 fireflies, a cat 10.4 → 14.5 s; a street with 6 walkers, 3 birds 8.2 → 11.7 s. Before
+  the clipping and the splicing the same scenes took 13.6 / 14.2 / 15.9 s.
+- **Checked by eye** (`/home/claude/work/scratch/s274/sheet.png`): village by day (walkers along
+  the path, birds, a duck on the pond, a cat by a house, a butterfly on the flowers), motion
+  frames, the close-up without them, a park from sunset to night (fireflies coming out, a cat),
+  a city street with six walkers passing the towers and lamps (hidden behind them), the two-shot
+  without them, 9:16 of all three. Lint: no new issues (only the sample cast's look-alike).
+- **Public**: `vidgen.api` adds `AMBIENT_DEFAULTS`, `AMBIENT_KEYS`, `AMBIENT_KINDS`,
+  `AMBIENT_MAX`, `INDOOR_KINDS`, `AmbientCells`, `AmbientMove`, `AmbientPlan`, `AmbientPose`,
+  `ambient_cells`, `ambient_counts`, `ambient_seed`, `around`, `cell_route`, `plan_ambient`,
+  `CritterLook`, `IsoCritter`, `critter_look`, `critter_shapes`; `IsoScenery.front(over=)`,
+  `IsoTiles.clip`. Additive: Phase Q baseline 31/31 and iso-story `night` / `rowans_room` (25
+  stills) identical.
+- **Left for later**: creatures do not react to the characters (birds do not flee a walker) nor
+  avoid each other or moving vehicles; walkers have no faces and no lamplight; they wait in a
+  cell only away from where characters stood at the start or walk to (not along their walks);
+  no fish ripples; no sounds of their own (the birdsong bed plays); a creature is a fixed sprite
+  per pose (no snow on it, not mirrored in puddles).

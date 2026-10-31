@@ -10292,6 +10292,7 @@ never leaves the stage.
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds`, `fog` or outdoor particles |
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; on an iso place in bands across it; not in a `room` or an indoor iso place |
+| `ambient` | `true` \| mapping | none | an iso place's [ambient life](#isometric-places-iso): `true` (every kind that suits the place) or `{walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}`; away from the characters, hidden in close shots; indoors only `cat` and `flies` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
 | `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props`, `size` or `character_size` |
 
@@ -10950,6 +10951,23 @@ they hide what is behind them.
   wind: windy
   fog: {density: 0.5}
   particles: [{kind: rain, puddles: true, settled: 12}]
+  ```
+- **Ambient life** (`ambient`, a stage key): background creatures going about the place on their
+  own — `walkers` (people strolling between the spots and along the paths, stopping and looking
+  round; `true`: 3, at most 8), `birds` (pecking and hopping, flying off over the place or out of
+  it and back; `true`: 4), `cat` (strolling, sitting, grooming), `ducks` (gliding on `~` water),
+  `butterflies` (from flower to flower by day, gone at dusk), `fireflies` (blinking near grass,
+  bushes and trees at night, out at dusk), `flies`. `ambient: true` sets every kind that suits
+  the place (`auto`). They never speak, are no action targets, keep off where the characters
+  stand and go (they may pass near them, never stop there), the objects the scene uses, the
+  roads a `drive_to` car takes and a train's track, and hide in close shots (a zoom over about
+  1.5x the wide view: `shot: closeup`, `two_shot`, `follow`). `muted` (default `true`) draws the
+  walkers smaller and greyer; `seed` varies them (the same seed, the same life). Indoors only `cat`
+  and `flies`; `ducks` need water; none in a `--draft`. They cost render time (a scene with a
+  dozen: about +40–55 % in a preview).
+
+  ```yaml
+  ambient: {walkers: 3, birds: 4, cat: true, butterflies: true, seed: 1}
   ```
 - **A city at night.** `tower` objects are tall buildings: walls in `color` (default a night
   blue-grey, `#2A3050`), rows of windows on both faces of which a seeded share is lit (warm and

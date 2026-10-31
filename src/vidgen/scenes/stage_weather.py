@@ -114,7 +114,7 @@ class IsoWeather:
         taken = {id(m) for _, group in groups for m in group}
         self.mobjects[:] = [m for m in self.mobjects if id(m) not in taken]
         bodies = [(name, body) for name, body in self._iso_bodies().items() if body in self.mobjects]
-        overs = {name: scenery.over(self._iso_body(body)) for name, body in bodies}
+        overs = {name: self._iso_body_over(body) for name, body in bodies}
         holders = [(scenery.index[name], holder) for name, holder in self.iso_objects.items()]
         floor = 0
         for k, group in groups:

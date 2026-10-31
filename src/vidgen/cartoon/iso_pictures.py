@@ -79,6 +79,17 @@ class IsoTiles(Group):
         #: each picture tile's own pixels and its snow's, while snow settles; the snow shown on it
         self._snow_sources: dict[int, tuple[np.ndarray, np.ndarray | None]] = {}
         self._snow_shown: dict[int, float] = {}
+        #: where on screen its tiles are drawn now (``None``: all of them; a callable giving
+        #: left, bottom, right, top in Manim units, or ``None`` for nothing): a creature's front
+        #: picture only where the creature is (DESIGN.md §105.7)
+        self.clip_to: Callable[[], tuple[float, float, float, float] | None] | None = None
+
+    def clip(self, rect: Callable[[], tuple[float, float, float, float] | None]) -> None:
+        """Draw its tiles (also those made later) only inside ``rect()`` (see :attr:`clip_to`)."""
+        self.clip_to = rect
+        for made in self._tiles.values():
+            if made is not None:
+                made.iso_clip = rect
 
     def show_view(self, frame: Mobject) -> bool:
         """Keep as members the tiles that the camera ``frame`` shows (with a margin of half a
@@ -130,6 +141,8 @@ class IsoTiles(Group):
         made.scenery = True
         made.iso_tile = True   # drawn by :func:`draw_tile`
         made.iso_canvas = (level, tile, canvas)
+        if self.clip_to is not None:
+            made.iso_clip = self.clip_to
         if self.tile_opacity < 1.0:
             made.set_opacity(self.tile_opacity)
         if getattr(self, LIT, False) and not glow:
@@ -347,6 +360,13 @@ def draw_tile(camera: Any, mob: ImageMobject, pixel_array: np.ndarray) -> None:
     low, high = (round, round) if pool else (math.floor, math.ceil)
     x0, y0 = max(low(left), 0), max(low(top), 0)
     x1, y1 = min(high(right), width), min(high(bottom), height)
+    clip = getattr(mob, "iso_clip", None)   # only where a small thing is (a creature's front picture, §105.7)
+    if clip is not None:
+        box = clip()
+        if box is None:
+            return
+        (a, b), (c, d) = camera.points_to_subpixel_coords(mob, np.array([[box[0], box[3], 0.0], [box[2], box[1], 0.0]]))
+        x0, y0, x1, y1 = max(x0, math.floor(a)), max(y0, math.floor(b)), min(x1, math.ceil(c)), min(y1, math.ceil(d))
     if x1 <= x0 or y1 <= y0:
         return
     source = mob.pixel_array

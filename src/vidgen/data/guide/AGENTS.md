@@ -2709,6 +2709,12 @@ and give each scene `set: village`.
   lies over the place in drifting bands, thicker further back; `wind: windy` (or `- wind:
   gale`) bends trees, bushes, flowers and plants, swings scarecrows and balloon bunches and
   slants the rain. All fade with `time_of_day`.
+- Life in the background: `ambient: {walkers: 3, birds: 4, cat: true, butterflies: true,
+  fireflies: true, seed: 1}` on the stage (or `ambient: true`; also `ducks` on `~`, `flies`):
+  passers-by stroll the paths, birds peck and fly off, a cat sits and grooms, butterflies by day,
+  fireflies at night. They keep away from the characters, never speak, are no targets and hide
+  in close shots; walkers are `muted` (smaller, greyer) unless `muted: false`. Indoors a cat and
+  flies only. They add render time: a handful is enough.
 - Other selves: a character with `echo: true` (or `{color, opacity}`) is a translucent other
   self that keeps its own costume, its outlines glowing (a timeline, a memory, a dream); stand
   it beside the one it echoes and bring it with `- materialise: ana_captain`. Accessories

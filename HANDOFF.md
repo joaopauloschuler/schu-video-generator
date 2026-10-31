@@ -24140,3 +24140,46 @@ is in `tasklist.md`.
   baseline not needed). Own sample `/home/claude/work/scratch/s273/stories/lighthouse.md` drafted to
   `s273/lighthouse` (validates with its 4 variants); storyboard of `short1` (silent, timed from
   text, 360x640) at `/home/claude/work/scratch/s273/sheet.png`.
+
+## Step 274 — Ambient life on iso places (Phase AD)
+
+- Built: the stage's `ambient` (iso only): `{walkers, birds, cat, ducks, butterflies, fireflies,
+  flies, muted, seed, auto}`, `ambient: true` = `auto` (every kind that suits the place). Walkers
+  stroll between spots and along paths and stop to look round; birds peck, hop and fly off
+  (over the place or out of it and back); a cat walks, sits, grooms; ducks glide on `~`;
+  butterflies flutter between flowers by day; fireflies hover and blink at night (both follow
+  `darkness`, so `time_of_day` fades them); flies buzz about a room. Deterministic by seed (plans
+  made lazily, the same poses whatever order they are asked in). They keep off the characters'
+  spots and move destinations, small things' spots, objects the actions name, seats, beds,
+  driven vehicles (radius 1 + the cells two in front), stop nowhere within 2 cells of the
+  characters, keep off a car's paths and a train's track; hidden past a 1.45–1.9 zoom over the
+  wide view (close-ups, two-shots, follow); never targets, never speak; `muted` (default) walkers
+  x0.86 and greyer. Indoors only `cat` / `flies`; ducks need water; flat stage refused; did you
+  mean on keys. None in a draft.
+- Files: new `world/iso_ambient.py` (rules), `cartoon/iso_ambient.py` (`IsoCritter`, shapes),
+  `scenes/stage_ambient.py` (`IsoAmbience`, part of `Stage`), `tests/test_iso_ambient.py`;
+  `scenes/stage.py` (`StageAmbient`, `ambient` param and checks, mixin, entrance, order watch),
+  `scenes/stage_iso.py` (bodies, body box, front swap and splice, camera view, clipped creature
+  fronts), `scenes/stage_weather.py` (swayers use `_iso_body_over`), `cartoon/iso_stage.py`
+  (`IsoScenery.front(over=)`), `cartoon/iso_pictures.py` (`IsoTiles.clip`, `iso_clip` in
+  `draw_tile`), `api.py`; docs CONFIG (iso **Ambient life**, stage table row), the guide (+
+  `AGENTS.md`), DESIGN §105.7, CHANGELOG, tasklist.
+- Public: see DESIGN §105.7 (`plan_ambient`, `AmbientPlan`, `IsoCritter`, `critter_look`...).
+- Decisions: creatures are sprites as bodies of the place (fog and swaying trees layer them,
+  lint sees them as scenery pieces: no character rules); a stage key, not under `iso:`; added
+  `ducks`, `flies`, `auto`; no fish ripples. Cost work: empty sprite slots get no area, a
+  creature's front picture is found per cell and drawn only over its sprite, and swapped into
+  Manim's drawn list in place (a re-sort per cell change cost ~40 ms).
+- Cost (854x480 preview): village 7.5 → 11.6 s, park at dusk 10.4 → 14.5 s, street 8.2 → 11.7 s
+  (13–16 s of video each; a dozen creatures).
+- Known gaps / later: no reactions (birds do not flee walkers), creatures do not avoid each other
+  or moving vehicles; walkers pass near characters' walks; no faces / lamplight on walkers; no
+  sounds of their own; not mirrored in puddles. Step 275: maybe `ambient` in story drafts' places.
+- Tests: new `test_iso_ambient.py` (9: rules, determinism, drawing, setting checks with did you
+  mean, one render) passed; `test_iso_atmosphere`, `test_iso_vehicles`, `test_iso_seats`,
+  `test_iso_staging`, `test_iso_story`, `test_iso_place`, `test_iso_mood`, `test_time_of_day`,
+  `test_iso_moves`, `test_iso_objects_more`, `test_iso_weather`, `test_api`, `test_schema`,
+  `test_introspect`, `test_actions_coverage`, `test_docs`, `test_guide`, `test_mcp -k "list or
+  schema or scene_types"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
+  `rowans_room` (25 stills) identical. Private sheet `/home/claude/work/scratch/s274/sheet.png`;
+  sample `s274/proj` (validate ok; lint: only the sample cast's look-alike).

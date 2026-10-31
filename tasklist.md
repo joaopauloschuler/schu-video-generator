@@ -1638,7 +1638,7 @@ a few lines per feature in CONFIG and the guide.
 - [x] `vidgen shorts suggest [project] [--count N] [--min 30 --max 60] [--teaser] [--spoilers] [--write]`: windows between beat boundaries timed by audio or words, scored (dialogue, questions, exclamations, emotional / action words, variety, clean start, strong last line, ending marked down), non-overlapping, a hook line each (≤ 6 words or a template), a ~15 s teaser; `--write`: `cut:` variants (9:16, shorts, captions, hook, end card, opening zooms) in `shorts.yaml` included by the config (`variants` allowed in include files; backups); MCP tool `shorts_suggest`; tests `test_shorts_suggest.py`
 
 ### Step 274 — Ambient life
-- [ ] `ambient: {birds, walkers, cat, seed}` on an iso stage: birds, a cat, background walkers, butterflies / fireflies; avoid objects and main characters, never steal focus; deterministic by seed; cheap
+- [x] `ambient: {walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}` (or `true`) on an iso stage: walkers between spots and along paths (muted: smaller, greyer), birds pecking, hopping, flying off and back, a cat sitting and grooming, ducks on water, butterflies by day and fireflies at night (following `time_of_day`); away from the characters, their moves, the objects used, roads and tracks; hidden in close shots; no targets, never speaking; indoors a cat and flies; deterministic by seed; front pictures drawn only over each creature (cost +40–55 % on a dozen); tests `test_iso_ambient.py`
 
 ### Step 275 — Review of Phase AD
 - [ ] Compatibility (Phase Q baseline 31/31), each feature's tests and related suites, `test_mcp.py`, docs consistency, performance

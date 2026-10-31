@@ -26,6 +26,7 @@ from .stage_seats import IsoSeating
 from .stage_vehicles import IsoDriving
 from .stage_daylight import DayPassing
 from .stage_weather import IsoWeather
+from .stage_ambient import IsoAmbience
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -367,6 +368,56 @@ class StageFogSetting(SceneParams):
     def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
         """``true`` or a density is also fog (JSON Schema ``anyOf`` true | density | object)."""
         return {"anyOf": [{"const": True}, {"type": "number", "exclusiveMinimum": 0, "maximum": 1}, handler(core_schema)]}
+
+
+class StageAmbient(SceneParams):
+    """Ambient life on an iso place (DESIGN.md §105.7): background walkers, birds, a cat, ducks,
+    butterflies, fireflies and flies going about their business, away from the main characters,
+    hidden in close shots. ``true`` is every kind that suits the place (``auto``)."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (bool,)
+
+    walkers: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["walkers"])] = 0
+    """Background people strolling between the spots and along the paths, stopping and looking round (true: 3); they never speak and keep off where the characters stand and go, the seats, the roads cars drive on and a train's track."""
+    birds: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["birds"])] = 0
+    """Small birds pecking and hopping on the ground and flying off now and then, over the place or out of it and back (true: 4)."""
+    cat: bool = False
+    """A cat strolling about, sitting down and grooming (indoors too)."""
+    ducks: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["ducks"])] = 0
+    """Ducks gliding on the place's water (~) and dipping (true: 2)."""
+    butterflies: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["butterflies"])] = 0
+    """Butterflies fluttering from flower to flower (bushes, plants) by day, fading out at dusk (true: 3)."""
+    fireflies: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["fireflies"])] = 0
+    """Fireflies hovering and blinking near the grass, bushes and trees at night, coming out at dusk (true: 10)."""
+    flies: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["flies"])] = 0
+    """A fly buzzing about (indoors too; true: 1)."""
+    muted: bool = True
+    """The walkers a little smaller and greyer than the characters, so they stay in the background; false: as colourful as the cast."""
+    seed: int | None = None
+    """Varies who goes where and the walkers' and animals' colours; default: one from the scene."""
+    auto: bool = False
+    """Every kind that suits the place besides those given (what ambient: true means): outdoors walkers, birds, a cat, ducks on water, butterflies and fireflies (each when the light suits it); indoors a cat and a fly."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain(cls, data: Any) -> Any:
+        if data is False:
+            raise ValueError("ambient: false is the default; leave ambient out")
+        return {"auto": True} if data is True else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """``true`` is also ambient life (JSON Schema ``anyOf`` true | object)."""
+        return {"anyOf": [{"const": True}, handler(core_schema)]}
+
+    def counts(self, *, indoor: bool) -> dict[str, int | bool]:
+        """The kinds asked for (:data:`AMBIENT_KEYS`): those given, and with ``auto`` the others
+        that suit the place (indoors or out)."""
+        found: dict[str, int | bool] = {key: getattr(self, key) for key in AMBIENT_KEYS if key in self.model_fields_set}
+        if self.auto:
+            kinds = INDOOR_KINDS if indoor else {"walker", "bird", "cat", "duck", "butterfly", "firefly"}
+            found = {**{key: True for key, kind in AMBIENT_KEYS.items() if kind in kinds}, **found}
+        return found
 
 
 class LayerShape(SceneParams):
@@ -857,7 +908,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
+class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -1021,6 +1072,8 @@ class Stage(IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StorySta
         """A flock of birds crossing the sky, flapping: true, a number of birds, or {count, direction, height, start, seconds, seed}; outdoors only (the birds action sends one later)."""
         fog: StageFogSetting | None = None
         """Fog in translucent bands lying between the characters and props by depth, thicker further back (the sky most), drifting slowly and with the wind: true, a density from 0 to 1 (true: 0.5), or {density, color, drift, seed}; on an iso place in bands across the place; outdoors only."""
+        ambient: StageAmbient | None = None
+        """An iso place's ambient life: true (every kind that suits the place), or {walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}: background walkers, birds, a cat, ducks, butterflies by day and fireflies at night going about the place, away from the characters, never speaking, hidden in close shots; indoors a cat and flies."""
         drawing: DrawingConfig | None = None
         """How this scene is drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: the keys given win over the video's drawing."""
         level: StageLevel | None = None
@@ -1095,6 +1148,8 @@ class Stage(IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StorySta
                 if prop.against == "wall" and self.room is None:
                     raise ValueError(f"props[{k}]: against: wall needs a room (room: true) to stand against")
             self._check_water_and_air(marks)
+            if self.ambient is not None and self.iso is None:
+                raise ValueError("ambient life goes about an iso place (give the stage an iso); on this stage birds sends a flock across the sky")
             if self.room is not None:
                 self._check_room()
             if self.iso is not None:
@@ -1119,6 +1174,8 @@ class Stage(IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StorySta
                     raise ValueError("there is no fog inside an indoor place: remove fog (or use place: outdoor)")
                 if wind_level(self.wind) != 0.0:
                     raise ValueError("there is no wind inside an indoor place: remove wind (or use place: outdoor)")
+            if self.ambient is not None:
+                self._check_ambient()
             spots = self.iso.parsed().spot_names()
             taken = set(self.iso.changeable_names()) | set(spots)
             for k, item in enumerate(self.particles):
@@ -1149,6 +1206,20 @@ class Stage(IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StorySta
                                      f"'{member.at}' (spots: {', '.join(spots) or 'none: put a letter on the map'})")
             if "light" not in self.model_fields_set and any(item.kind == "rain" for item in self.particles):
                 self.light = CustomLight(tint=ISO_RAIN_LIGHT[0], strength=ISO_RAIN_LIGHT[1])   # a rainy day, not a sunny one
+
+        def _check_ambient(self) -> None:
+            """Ambient life suits its place (DESIGN.md §105.7): indoors only a cat and flies,
+            ducks on water."""
+            assert self.ambient is not None and self.iso is not None
+            given = {key: value for key, value in self.ambient.counts(indoor=False).items() if key in self.ambient.model_fields_set and value}
+            if self.iso.place == "indoor":
+                outdoors = [key for key in given if AMBIENT_KEYS[key] not in INDOOR_KINDS]
+                if outdoors:
+                    raise ValueError(f"ambient: {outdoors[0]} live outdoors; inside an indoor place the ambient life is a cat and flies "
+                                     f"(remove {outdoors[0]}, or use place: outdoor)")
+            place = self.iso.parsed()
+            if "ducks" in given and not any(place.ground(c, r) == "water" for r in range(place.rows) for c in range(place.columns)):
+                raise ValueError("ambient: ducks swim on water and the map has none: put ~ on the map (or remove ducks)")
 
         def _check_level(self, marks: dict[str, float]) -> None:
             """A level is the ground: no room, water or width of its own; everything stands on its
@@ -1665,8 +1736,9 @@ class Stage(IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StorySta
         #: the scene updater keeping the draw order, kept: Manim removes an updater by identity
         self._order_updater = self._draw_order_step
         fronts = any(c.facing == "front" for c in self.params.characters) or any(u.options.to == "front" for u in self.action_uses("turn"))
-        if fronts or getattr(self, "_iso_gadget_places", None) or getattr(self, "iso_vehicles", None) or getattr(self, "iso_swayers", None):
-            # a working object's parts (§103), a vehicle (§105), a tree in the wind (§105.4)
+        if (fronts or getattr(self, "_iso_gadget_places", None) or getattr(self, "iso_vehicles", None) or getattr(self, "iso_swayers", None)
+                or getattr(self, "iso_critters", None)):
+            # a working object's parts (§103), a vehicle (§105), a tree in the wind (§105.4), ambient life (§105.7)
             self._watch_draw_order()
 
     def _watch_draw_order(self) -> None:
@@ -2224,7 +2296,7 @@ class Stage(IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StorySta
             """The set comes in as one picture: everything is added at once, back to front, under
             a cover of the background colour that fades out (a fade-in per thing would show the
             things behind through each one while they fade, §69.51)."""
-            shown: list[Mobject] = [*backdrop]
+            shown: list[Mobject] = [*backdrop, *self.iso_ambient_shown()]   # an iso place's creatures (§105.7)
             items: list = []
             for k, t in enumerate(targets):  # moving things' shadows: drawn just before the first of them
                 shown += [moving] if k == first_moving else []

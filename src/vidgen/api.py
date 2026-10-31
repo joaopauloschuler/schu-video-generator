@@ -649,6 +649,8 @@ from vidgen.cartoon.iso_weather import ISO_SWAYS, glow_outlines, iso_sway_degree
 from vidgen.world.iso import VOID  # noqa: E402
 from vidgen.cartoon.fog import iso_fog_depths  # noqa: E402
 from vidgen.cartoon.iso_atmosphere import IsoFog, IsoReflections, IsoSwayer  # noqa: E402
+from vidgen.world.iso_ambient import AMBIENT_DEFAULTS, AMBIENT_KEYS, AMBIENT_KINDS, AMBIENT_MAX, INDOOR_KINDS, AmbientCells, AmbientMove, AmbientPlan, AmbientPose, ambient_cells, ambient_counts, ambient_seed, around, cell_route, plan_ambient  # noqa: E402
+from vidgen.cartoon.iso_ambient import CritterLook, IsoCritter, critter_look, critter_shapes  # noqa: E402
 from vidgen.story_text import Story, read_story  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
@@ -1679,6 +1681,25 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "IsoFog",
     "IsoReflections",
     "IsoSwayer",
+    "AMBIENT_DEFAULTS",
+    "AMBIENT_KEYS",
+    "AMBIENT_KINDS",
+    "AMBIENT_MAX",
+    "INDOOR_KINDS",
+    "AmbientCells",
+    "AmbientMove",
+    "AmbientPlan",
+    "AmbientPose",
+    "ambient_cells",
+    "ambient_counts",
+    "ambient_seed",
+    "around",
+    "cell_route",
+    "plan_ambient",
+    "CritterLook",
+    "IsoCritter",
+    "critter_look",
+    "critter_shapes",
     "Story",
     "read_story",
     "STORY_PLACES",

@@ -412,11 +412,12 @@ class IsoScenery:
         """The base picture: the ground and every piece there now but the layered ones."""
         return (True, self._entries([k for k in self._own() if k not in self.layered and k not in self.apart]))
 
-    def front(self, box: Box3, exclude: Collection[str] = (), first: int | None = None) -> Picture | None:
+    def front(self, box: Box3, exclude: Collection[str] = (), first: int | None = None, over: Sequence[int] | None = None) -> Picture | None:
         """The front picture of a character standing in ``box`` (``None``: nothing hides it);
         ``exclude``: pieces left out (a driven vehicle's own piece, DESIGN.md §105); ``first``:
-        a part (:meth:`part`) drawn first (the arm of the armchair it sits in, §105.2)."""
-        over = tuple(k for k in self.over(box) if k not in self.apart)
+        a part (:meth:`part`) drawn first (the arm of the armchair it sits in, §105.2); ``over``:
+        :meth:`over` of the box, found already (a creature's, by its cell, §105.7)."""
+        over = tuple(k for k in (self.over(box) if over is None else over) if k not in self.apart)
         if exclude:
             over = tuple(k for k in over if self.pieces[k].name not in exclude)
         found = self._entries(over)
