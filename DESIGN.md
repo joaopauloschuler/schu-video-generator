@@ -20748,3 +20748,54 @@ Fixes from a look at each step's sheet; all additive, Phase Q baseline 31/31 and
 - **Public**: `vidgen.api` adds `turning_shapes`, `ISO_SWINGS`, `swing_pixels`, `PERSON_NOUNS`,
   `quote_pattern`, `CARD_LOOKS`, `DRAFT_AMBIENT`, `card_mood`; `VehicleRoute.turning`,
   `IsoSeat.tucked`, `SkyBody(sink=)`.
+
+## 106. A fixed-scale wide view for iso places (Step 277)
+
+The whole-place wide view (§89.13, §100.6) fits the place's bounding box, so outdoors about half
+of the frame is background and a bigger map only pulls the camera back; a number is relative to
+the whole map and stops at 2.5 (9:16 needs ~5). The owner's goal: ground to the frame's edges by
+using bigger maps, not by zooming in on the action.
+
+- **Setting**: `StageIso.wide` adds `fixed` and `IsoFixedWide` (`{tiles: N}`, 2–80).
+  `StageIso.fixed`, `wide_fit()` (`"fixed"` for both) and `view_tiles(fw, fh, character_size)`.
+  `character_size` is accepted on a stage with an iso place only with `wide: fixed`
+  (`_iso_wide_given`; with `{tiles}` or another wide view it is refused, the message naming
+  `wide: fixed`); `expand_character_size` passes the video's to iso scenes with `wide: fixed`.
+- **Scale** (`iso_stage`): `ISO_FIXED_SHARES` small 0.14, medium 0.20, large 0.28 — a character
+  (`ISO_CHARACTER_HEIGHT` × `ISO_RISE` tile widths) as a share of the frame's *height* in both
+  formats; `fixed_tiles(fw, fh, size)` the tile widths across the frame (16:9 medium 10.89, 9:16
+  3.44). The view is `tiles × unit` wide, never wider than the whole place's fit (a smaller place
+  shows whole, the diorama).
+- **On the ground**: a view of half size `hu` x `hv` (tile widths) centred on picture point
+  (u, v) lies on the ground (`z` 0) iff the ground point under its centre, `x = 2v + u`,
+  `y = 2v − u`, is `fixed_reach = hu + 2hv` cells from every map edge. `on_ground` clamps x and y
+  independently (an axis too short: its middle), so `fixed_fill_size = ceil(2 · reach)`:
+  16:9 34 / 24 / 17, 9:16 23 / 16 / 12 (small / medium / large); measured with magenta stills
+  (s277): background 0 % from those sizes, one size smaller leaves thin corners (0.1–2.5 %).
+  Non-square maps: the shorter side counts.
+- **Centring** (`fixed_view`): the middle of the bodies' padded picture bounds (the place's middle
+  without any), `on_ground`, then moved as little as keeps the bodies in view (`ISO_MARGIN`,
+  `ISO_WIDE_BODY_ROOM`: a character by an edge wins over the ground), then inside the frame.
+  `wide_view(..., fit="fixed", tiles=)` dispatches to it; `ground_view_center` is the same move
+  for any view in Manim units. The other `fit`s are unchanged.
+- **Moves over it**: `Stage.zoom_base()` = the fixed view's magnification over the whole place
+  (1 otherwise); `Zoom` multiplies `scale`, its automatic cap (`max_scale`) and its "already
+  fills" test by it. Shots: `frame_shot` / `shot_view` take `max_scale` (`MAX_SHOT_SCALE` ×
+  base on an iso place); `follow_width(most=)` likewise — on big maps the base passes 8 (9:16
+  32x32 large ~14) and a close-up would otherwise be wider than the wide view. `MAX_DETAIL` 3 → 5
+  so those zooms stay sharp (levels 4–5 are only reached past zoom ~11; older renders unchanged).
+  `SmoothFollow(settle=)` moves the target centre (`Stage._follow_settle` → `_iso_on_ground`;
+  feet kept in view too), and `_MoveThenFollow` applies it within `FOLLOW_MAX_OFFSET` of the
+  character; `pan_point` moves onto the ground keeping the target in the middle half of the view.
+- **Lint `iso_ground`** (still rule, default warning): `IsoStaging.layout_keys` adds `iso_ground`
+  on a scene's first beat (`view` fixed | tiles | auto | fill | number, `place`, `map`, `size`,
+  `tiles`, `need`); a fixed view on a map below `need` → "this 12x12 place shows the background
+  around it in 9:16 at character_size medium; a map of at least 16x16 fills the frame (or give
+  the stage a sky background)"; outdoor `auto` / `fill` → an info hint naming `wide: fixed` and
+  the size (`IsoGroundRule.hint`).
+- **Compatibility**: without `wide: fixed` the framing, shots and moves are as before (Phase Q
+  baseline 31/31, iso-story `night` / `rowans_room` 25 stills identical).
+- **Public**: `vidgen.api` adds `ISO_FIXED_SHARES`, `fixed_tiles`, `fixed_reach`,
+  `fixed_fill_size`, `fixed_view`, `on_ground`, `ground_view_center`, `MAX_SHOT_SCALE`,
+  `FOLLOW_MAX_OFFSET`; `wide_view(tiles=)`, `frame_shot` / `shot_view(max_scale=)`,
+  `follow_width(most=)`, `SmoothFollow(settle=)`.

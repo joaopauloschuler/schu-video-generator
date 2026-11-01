@@ -115,22 +115,23 @@ def _sign(facing: str) -> float:
     return facing_sign(facing, front=0.0)
 
 
-def _one(subject: ShotFigure, kind: str, frame_width: float, frame_height: float) -> tuple[float, float, float]:
+def _one(subject: ShotFigure, kind: str, frame_width: float, frame_height: float, max_scale: float = MAX_SHOT_SCALE) -> tuple[float, float, float]:
     """``(scale, centre y, view width)`` framing ``subject`` by its span (:data:`SHOT_SPANS`), no
     narrower than :data:`SHOT_MIN_WIDTHS`."""
     below, above = SHOT_SPANS[kind]
     tightest = min(frame_height / ((below + above) * subject.height), frame_width / (SHOT_MIN_WIDTHS[kind] * subject.height))
-    scale = _clamp(tightest, 1.0, MAX_SHOT_SCALE)
+    scale = _clamp(tightest, 1.0, max_scale)
     view_height = frame_height / scale
     return scale, subject.head_top + above * subject.height - view_height / 2, frame_width / scale
 
 
 def frame_shot(
     kind: str, subjects: Sequence[ShotFigure], *, frame_width: float, frame_height: float, bounds: Bounds,
-    near: ShotFigure | None = None,
+    near: ShotFigure | None = None, max_scale: float = MAX_SHOT_SCALE,
 ) -> ShotView:
     """The camera view of a ``kind`` shot (:data:`SHOT_KINDS`) of ``subjects`` (and the ``near``
-    character of an over-the-shoulder shot), kept inside ``bounds`` (``view_center_within``):
+    character of an over-the-shoulder shot), kept inside ``bounds`` (``view_center_within``), at
+    most ``max_scale`` (an iso place's fixed wide view raises it, DESIGN.md §106):
 
     - ``wide``: no zoom, centred on the middle of the subjects (the stage's middle without any);
     - ``two_shot``: the subjects' figures, whole, with :data:`TWO_SHOT_PADDING` around them;
@@ -155,13 +156,13 @@ def frame_shot(
         x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
         room = 1 - 2 * TWO_SHOT_PADDING
         scale = min(room * frame_width / max(x1 - x0, 1e-6), room * frame_height / max(y1 - y0, 1e-6))
-        return _within(bounds, (x0 + x1) / 2, (y0 + y1) / 2, _clamp(scale, 1.0, MAX_SHOT_SCALE), frame_width, frame_height)
+        return _within(bounds, (x0 + x1) / 2, (y0 + y1) / 2, _clamp(scale, 1.0, max_scale), frame_width, frame_height)
     if kind in ("closeup", "medium") and len(subjects) > 1:
-        return _within(bounds, *_group(subjects, kind, frame_width, frame_height), frame_width, frame_height)
+        return _within(bounds, *_group(subjects, kind, frame_width, frame_height, max_scale), frame_width, frame_height)
     subject = subjects[0]
     if kind == "over_shoulder" and near is not None:
-        scale, _, _ = _one(subject, "over_shoulder", frame_width, frame_height)
-        closest = _one(subject, "closeup", frame_width, frame_height)[0]
+        scale, _, _ = _one(subject, "over_shoulder", frame_width, frame_height, max_scale)
+        closest = _one(subject, "closeup", frame_width, frame_height, max_scale)[0]
         apart = abs(subject.x - near.x)
         if apart > 1e-6:
             scale = _clamp(SUBJECT_AT * frame_width / apart, 1.0, closest)
@@ -171,11 +172,12 @@ def frame_shot(
         top = subject.head_top + SHOT_SPANS["over_shoulder"][1] * subject.height
         return _within(bounds, x, top - view_height / 2, scale, frame_width, frame_height)
     framing = "medium" if kind == "over_shoulder" else kind
-    scale, y, view_width = _one(subject, framing, frame_width, frame_height)
+    scale, y, view_width = _one(subject, framing, frame_width, frame_height, max_scale)
     return _within(bounds, subject.x + _sign(subject.facing) * LOOK_ROOM * view_width, y, scale, frame_width, frame_height)
 
 
-def _group(subjects: Sequence[ShotFigure], kind: str, frame_width: float, frame_height: float) -> tuple[float, float, float]:
+def _group(subjects: Sequence[ShotFigure], kind: str, frame_width: float, frame_height: float,
+           max_scale: float = MAX_SHOT_SCALE) -> tuple[float, float, float]:
     """``(centre x, centre y, scale)`` of a ``closeup`` or ``medium`` of several characters
     (DESIGN.md §100.6): each one's :data:`SHOT_SPANS` (its head and shoulders, or hips up) and
     its figure's width, all in the view with :data:`GROUP_PADDING` at the sides, no tighter
@@ -189,7 +191,7 @@ def _group(subjects: Sequence[ShotFigure], kind: str, frame_width: float, frame_
     tallest = max(s.height for s in subjects)
     width = max((x1 - x0) / (1 - 2 * GROUP_PADDING), SHOT_MIN_WIDTHS[kind] * tallest)
     height = max(tops) - min(bottoms)
-    scale = _clamp(min(frame_height / max(height, 1e-6), frame_width / max(width, 1e-6)), 1.0, MAX_SHOT_SCALE)
+    scale = _clamp(min(frame_height / max(height, 1e-6), frame_width / max(width, 1e-6)), 1.0, max_scale)
     return (x0 + x1) / 2, max(tops) - frame_height / scale / 2, scale
 
 
@@ -235,11 +237,12 @@ def shot_figures(
     return Shot(kind, (subject.name,))
 
 
-def shot_view(shot: Shot, present: Mapping[str, ShotFigure], *, frame_width: float, frame_height: float, bounds: Bounds) -> ShotView:
+def shot_view(shot: Shot, present: Mapping[str, ShotFigure], *, frame_width: float, frame_height: float, bounds: Bounds,
+              max_scale: float = MAX_SHOT_SCALE) -> ShotView:
     """:func:`frame_shot` of ``shot`` (from :func:`shot_figures`) with the ``present`` figures."""
     subjects = [present[n] for n in shot.subjects if n in present]
     near = present.get(shot.near) if shot.near else None
-    return frame_shot(shot.kind, subjects, frame_width=frame_width, frame_height=frame_height, bounds=bounds, near=near)
+    return frame_shot(shot.kind, subjects, frame_width=frame_width, frame_height=frame_height, bounds=bounds, near=near, max_scale=max_scale)
 
 
 def portrait_shot(view: ShotView, shot: Shot, present: Mapping[str, ShotFigure], *, frame_width: float, frame_height: float,

@@ -765,6 +765,25 @@ class IsoHazeParam(SceneParams):
     """Seconds into the scene when it fades in (0: there from the start)."""
 
 
+class IsoFixedWide(SceneParams):
+    """``iso.wide: {tiles: N}`` (DESIGN.md §106): the fixed wide view with ``N`` tile widths
+    across the frame."""
+
+    tiles: float = Field(ge=2.0, le=80.0)
+    """How many tile widths (one cell's diamond) fit across the frame's width (16:9 at character_size medium: about 11; 9:16: about 3.4)."""
+
+
+def _iso_wide_given(iso: Any) -> str | None:
+    """``fixed`` when an ``iso`` param (a mapping or a :class:`StageIso`) asks for ``wide:
+    fixed``, ``tiles`` for ``wide: {tiles: N}``, else ``None`` (DESIGN.md §106)."""
+    wide = iso.get("wide") if isinstance(iso, dict) else getattr(iso, "wide", None)
+    if wide == "fixed":
+        return "fixed"
+    if isinstance(wide, (dict, IsoFixedWide)):
+        return "tiles"
+    return None
+
+
 class StageIso(SceneParams):
     """An isometric place (DESIGN.md §89): written as a small map, seen from above at an angle."""
 
@@ -782,8 +801,8 @@ class StageIso(SceneParams):
     """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
     name_tags: bool = True
     """While a character speaks and is small on screen (a wide view), a tag with its name over its head shows who speaks (not with a speech bubble); false: none."""
-    wide: Literal["auto", "fill"] | Annotated[float, Field(ge=1.0, le=2.5)] = "auto"
-    """How the wide (establishing) view frames the place: auto (the whole room in a landscape frame; outdoors the place fills the frame, its tips cut); fill (a room fills the frame too: its spots, objects and characters kept, the walls' far corners may be cut); or a number from 1 to 2.5: that many times closer than the whole place (kept on the characters)."""
+    wide: Literal["auto", "fill", "fixed"] | Annotated[float, Field(ge=1.0, le=2.5)] | IsoFixedWide = "auto"
+    """How the wide (establishing) view frames the place: auto (the whole place, moved in until its bounding box fills the frame: its tips cut, outdoors about half the frame is ground; a room whole in a landscape frame); fill (a room fills the frame too: its spots, objects and characters kept, the walls' far corners may be cut); a number from 1 to 2.5: that many times closer than the whole place (kept on the characters); fixed: the same scale whatever the map's size (a character about 0.2 of the frame's height at character_size medium), centred on the characters as far as the ground reaches: a big enough map fills the frame with ground (vidgen lint iso_ground names the size), a smaller one shows centred; {tiles: N}: fixed with N tile widths across the frame."""
     shutters: bool = False
     """An indoor place: true starts with steel shutters down over its windows (the shutters action opens and closes them)."""
     traffic: list[IsoTrafficLane] = []
@@ -794,6 +813,25 @@ class StageIso(SceneParams):
     """Shimmering air over spots of the place, {at, width, height, color, strength, from} each: a heat-haze ripple with faint sparkles (strange air round a door, over a vent)."""
     wall_lights: ThemeColor | Annotated[list[ThemeColor], Field(min_length=1, max_length=2)] | None = None
     """An indoor place: neon strip lights along the top of its standing walls, glowing whatever the light (a corridor or a club at night): a colour, or two (the left back wall's, the right one's)."""
+
+    @property
+    def fixed(self) -> bool:
+        """Whether the wide view is the fixed one (``wide: fixed`` or ``{tiles: N}``, §106)."""
+        return self.wide == "fixed" or isinstance(self.wide, IsoFixedWide)
+
+    def view_tiles(self, frame_width: float, frame_height: float, character_size: str | None = None) -> float | None:
+        """The tile widths across the frame of the fixed wide view (its ``tiles``, else from
+        ``character_size``: :func:`~vidgen.cartoon.iso_stage.fixed_tiles`); ``None`` for the
+        other wide views (DESIGN.md §106)."""
+        if isinstance(self.wide, IsoFixedWide):
+            return self.wide.tiles
+        if self.wide == "fixed":
+            return fixed_tiles(frame_width, frame_height, character_size)
+        return None
+
+    def wide_fit(self) -> str | float:
+        """``wide`` as :func:`~vidgen.cartoon.iso_stage.wide_view`'s ``fit``."""
+        return "fixed" if self.fixed else self.wide   # type: ignore[return-value]
 
     def wall_light_colors(self) -> tuple[str, str] | None:
         """The strip lights' colours (DESIGN.md §102.18): the left back wall's (a wall along a
@@ -1091,10 +1129,12 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
             if not isinstance(data, dict):
                 return data
             if data.get("iso") is not None:
-                given = [key for key in ("size", "character_size") if data.get(key) is not None]
+                wide = _iso_wide_given(data["iso"])
+                given = [key for key in ("size", "character_size") if data.get(key) is not None and not (key == "character_size" and wide == "fixed")]
                 if given:
                     raise ValueError(f"on an iso place the characters' size follows the place (a character is two tiles tall): remove {' and '.join(given)} "
-                                     "(a beat's shot makes them large: shot: closeup <name>, two_shot, follow)")
+                                     "(a beat's shot makes them large: shot: closeup <name>, two_shot, follow; "
+                                     + ("iso.wide's tiles set the view's scale" if wide == "tiles" else "or iso: {wide: fixed}, whose scale character_size sets") + ")")
                 return data
             named = data.get("character_size")
             if "size" in data:
@@ -2092,7 +2132,8 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         shot = shot_figures(kind, names, present, speakers=getattr(self, "beat_speakers", []), looked_at=looked)
         if kind == "wide" and self.on_iso:   # the place's wide view, keeping who is there (§89.13)
             return self.iso_wide_shot(list(present)), shot
-        view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
+        most = MAX_SHOT_SCALE * (self.zoom_base() if self.on_iso else 1.0)   # closer than an iso place's fixed wide view (§106)
+        view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds(), max_scale=most)
         if self.on_iso and self.frame_height > self.frame_width:   # 9:16 on an iso place: nobody cut at the edge (§90.14)
             view = portrait_shot(view, shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
         return view, shot
@@ -2139,8 +2180,13 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
                 tops = [mob.parts[part].get_top()[1] for part in ("head", "accessory") if mob.has_part(part)]
                 return float(mob.feet()[1]), float(max(tops) if tops else mob.get_top()[1])
 
-            return SmoothFollow(x_of, span_of, followed=mob)
-        return SmoothFollow(lambda: float(mob.get_center()[0]), followed=mob)
+            return SmoothFollow(x_of, span_of, followed=mob, settle=self._follow_settle())
+        return SmoothFollow(lambda: float(mob.get_center()[0]), followed=mob, settle=self._follow_settle())
+
+    def _follow_settle(self) -> Any:
+        """A follow's ``settle``: an iso place's fixed wide view keeps the view on the ground
+        (DESIGN.md §106); ``None`` elsewhere."""
+        return self._iso_on_ground if self.on_iso and self.iso_tiles() is not None else None
 
     @property
     def stage_width(self) -> float:

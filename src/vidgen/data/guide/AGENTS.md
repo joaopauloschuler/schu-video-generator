@@ -2694,6 +2694,14 @@ and give each scene `set: village`.
   `two_shot` with a human). Two characters `- {hold_hands: ana, with: ben}` step in close
   enough for the joined hands to show; walk both in one beat with the same `run_time` and they
   go side by side (`let_go_hands`). At night give the stage `fill_light: 0.4` so faces read.
+- Ground to the frame's edges: the default wide view fits the whole place (its bounding box), so
+  outdoors about half of the frame is background, and a bigger map only pulls the camera back.
+  `iso: {wide: fixed}` keeps one scale instead (a character 0.14 / 0.20 / 0.28 of the frame's
+  height at `character_size` small / medium / large, which an iso place takes with `wide:
+  fixed`; or `wide: {tiles: N}` across), centred on the characters as far as the ground goes:
+  a big enough map fills the frame. Square maps of at least 24x24 (16:9) or 16x16 (9:16) at
+  medium; 34 / 23 small, 17 / 12 large. Lint `iso_ground` names the size; `zoom: {scale: 2}` is
+  then twice as close as that view.
 - Framing: `iso: {wide: fill}` (or a number 1–2.5) brings a room's wide view closer;
   `shot: closeup ana ben` frames two faces together, `{kind: closeup, of: guide, clear: true}`
   hides everyone else for the beat. A memory: `flashback: true` on a stage (faded warm colours,
@@ -3816,6 +3824,7 @@ install; `vidgen validate` warns when it is missing.
 | `hidden_speaker` | something in front hides the speaker's face (on an iso place: what really covers its eyes and mouth, a lamp post across the face) | move one of them, or a smaller `depth` for the speaker; on an iso place `walk_to` a spot with nothing in front, or a `shot` |
 | `small_speaker` | a speaking face too small on screen to read it and its lip sync (on an iso place a speaker with a name tag may say up to 12 words) | `shot: closeup <name>` (or `medium`) for that beat, or `character_size: large` |
 | `offscreen_action` | on an iso place: a walk, a thing handed about or a change of the place (a door, a lamp) the camera mostly does not show while it happens | `shot: wide`, a `pan` or `follow` to it, or do it in a beat whose shot shows it |
+| `iso_ground` | an iso place with `wide: fixed` on a map too small for the frame (background round it); info: an outdoor place in the whole-place wide view | the map size it names, or a sky `background` if the floating place is meant |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `said_before_shown` | the narration names a label on screen (a node, a callout, a stage) seconds before it appears, and not again when it does | show it on the word: `{reveal: node:database, at: "@database"}` (or the callout's `at`); or name it in the beat that shows it |
 | `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |

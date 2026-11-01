@@ -5,7 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–275)
+## Unreleased (Steps 193–277)
+
+### Iso framing (Step 277)
+
+- `iso: {wide: fixed}`: a wide view of one scale whatever the map's size (a character 0.14 / 0.20 / 0.28 of the frame's height at `character_size` small / medium / large, now allowed on an iso place with it; or `wide: {tiles: N}`), centred on the characters as far as the ground reaches, so a bigger map fills the frame with ground: square maps of 34 / 24 / 17 cells in 16:9, 23 / 16 / 12 in 9:16. A `zoom`'s scale is relative to it; close-ups and `follow` zoom in from it on big maps; `follow` and `pan` stay on the ground as far as their target allows. Lint `iso_ground` names the map size that fills the frame (an info hint for outdoor places in the whole-place view). The docs no longer say `fill` fills the frame outdoors (it fits the place's bounding box).
 
 ### Phase AD: features without AI APIs (Steps 268–275)
 

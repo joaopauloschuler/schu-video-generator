@@ -24246,3 +24246,52 @@ is in `tasklist.md`.
   space, and correcting the guide wording that `fill` fills the frame outdoors (it fills the
   bounding box, about half of which is ground).
 - Tests: `tests/test_docs.py` passes.
+
+## Step 277 — A fixed-scale wide view for iso places
+
+- Built: `iso: {wide: fixed}` (and `wide: {tiles: N}`), a wide view of one scale whatever the
+  map's size, so bigger maps fill the frame with ground. Scale from `character_size` (a character
+  0.14 / 0.20 / 0.28 of the frame's height; now accepted on an iso stage with `wide: fixed`, and
+  the video's reaches those scenes). Centred on the characters, moved onto the ground as far as
+  the map allows (`on_ground`: exact maths, the view's ground corners), then as little as keeps
+  the characters in view; a small place is centred (whole, when smaller than the view). Moves:
+  `zoom`'s `scale` is over the fixed view (`Stage.zoom_base`), shot and follow zoom caps scale
+  with it, `follow` (`SmoothFollow(settle=)`, `_MoveThenFollow`) and `pan` stay on the ground as
+  far as their target allows, `MAX_DETAIL` 5 for the large zooms. Lint `iso_ground` (warning with
+  the map size that fills the frame; info hint for outdoor `auto` / `fill`). DESIGN §106.
+- Measured (s277, magenta background, preview stills): map that fills — 16:9 small 34, medium
+  24, large 17; 9:16 small 23, medium 16, large 12 (the formula's `fixed_fill_size`); character
+  height 0.145–0.155 / 0.205–0.22 / 0.29–0.31 of the frame height at any map size. Rooms the same
+  (24x24 fills 16:9 medium, 16x16 fills 9:16). Moves checked on 32x32 (16:9) and 20x20 (9:16):
+  follow ends on ground, close-ups at zoom 23–33, `zoom: {scale: 2}` doubles the base, a pan to a
+  corner spot shows the spot (background beyond it).
+- Docs: CONFIG (the iso **Size** paragraph corrected: the wide view fills the bounding box, about
+  half background outdoors; the fixed view with a table and a snippet; the `iso` row; the lint
+  row and defaults), the guide (+ `AGENTS.md`), `docs/COOKBOOK-ISO-CARTOONS.md` rewritten around
+  the fixed view's map sizes, the `StageIso.wide` docstring (schema), CHANGELOG, tasklist.
+- Files: `cartoon/iso_stage.py`, `cartoon/shots.py`, `camera.py`, `scenes/stage.py`,
+  `scenes/stage_iso.py`, `scenes/actions.py`, `includes.py`, `config.py`,
+  `lint/cartoon_rules.py`, `api.py`; `tests/test_iso_fixed_view.py`.
+- Public: `vidgen.api` adds `ISO_FIXED_SHARES`, `fixed_tiles`, `fixed_reach`, `fixed_fill_size`,
+  `fixed_view`, `on_ground`, `ground_view_center`, `MAX_SHOT_SCALE`, `FOLLOW_MAX_OFFSET`;
+  `wide_view(tiles=)`, `frame_shot` / `shot_view(max_scale=)`, `follow_width(most=)`,
+  `SmoothFollow(settle=)`; lint rule `iso_ground` (`IsoGroundRule.hint`).
+- Decisions: the share is of the frame's *height* in both formats (owner's 0.20 target; in 9:16
+  that is 0.36 of the width). The ground is the map's top at `z` 0 (raised blocks and the slab
+  are ignored: conservative at the front). Characters win over the ground (a character by the
+  map's edge shows background beyond it rather than being cut). The fixed view is never wider
+  than the whole place's fit.
+- Known gaps: a 9:16 start keeps the scene's walk destinations in view too (as before), so when
+  they are far apart the view centres between them and may show a character near the frame's
+  edge; non-square maps show background on the short axis; the lint hint is per scene (info);
+  a `zoom` without `scale` on a fixed view is capped at 3x the base; pans and follows near an
+  edge show background beyond the target by design.
+- Tests: `test_iso_fixed_view.py` (14, one render), `test_guide`, `test_docs`, `test_api`,
+  `test_schema` (71), `test_mcp.py` in full (22), `test_iso_staging`, `_moves`, `_place`,
+  `_story`, `_mood`, `_vehicles`, `_weather`, `_seats`, `_ambient`, `_objects_more`,
+  `_atmosphere`, `test_cartoon_shots`, `_lint`, `_stage`, `_directing`, `test_lint`,
+  `test_includes`, `test_phase_q_review`, `test_phase_r_review`, `test_platform_camera` passed one
+  at a time. Phase Q baseline 31/31 identical (`s277/make_baseline.py`, `compare.py`); iso-story
+  `night` / `rowans_room` 25 stills identical to Step 275's (`s277/iso_check.py`). Sheet
+  `/home/claude/work/scratch/s277/sheet.png`; scripts `gen.py`, `run_all.py`, `measure.py`,
+  `gen_moves.py`, `run_moves.py`, `make_sheet.py`, `results.csv`.

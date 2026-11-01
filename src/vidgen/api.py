@@ -400,7 +400,7 @@ from vidgen.cartoon.stage import (  # noqa: E402
     walk_destination,
 )
 from vidgen.camera import view_center_within  # noqa: E402
-from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, portrait_shot, shot_figures, shot_view  # noqa: E402
+from vidgen.cartoon.shots import MAX_SHOT_SCALE, SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, portrait_shot, shot_figures, shot_view  # noqa: E402
 from vidgen.particles import MAX_PARTICLES, PARTICLE_KINDS, particle_count, particle_seeds, particle_states  # noqa: E402
 from vidgen.particle_field import (  # noqa: E402
     ParticleField,
@@ -592,7 +592,7 @@ from vidgen.cartoon.room import (  # noqa: E402
     window_sky,
 )
 from vidgen.cartoon.room_drawing import RoomColors, RoomDrawing, WindowLook, WindowViews, draw_room, room_colors  # noqa: E402
-from vidgen.camera import SmoothFollow  # noqa: E402
+from vidgen.camera import FOLLOW_MAX_OFFSET, SmoothFollow  # noqa: E402
 from vidgen.config import CharacterSize  # noqa: E402
 from vidgen.world import (  # noqa: E402
     COIN,
@@ -636,7 +636,7 @@ from vidgen.world.iso_view import Box3, draw_order, in_front, iso_point  # noqa:
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
 from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, LIT_OBJECTS, MOVING_KINDS, OBJECT_COLORS, ObjectLook, object_box, object_lights, object_motion, object_working, tower_screen  # noqa: E402
 from vidgen.cartoon.iso_scenery import IsoColors, window_faces  # noqa: E402
-from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view  # noqa: E402
+from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view, ISO_FIXED_SHARES, fixed_fill_size, fixed_reach, fixed_tiles, fixed_view, ground_view_center, on_ground  # noqa: E402
 from vidgen.cartoon.iso_pictures import POOL_STRENGTH, GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
@@ -1295,6 +1295,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "fruit_skin",
     "hit_stars",
     "view_center_within",
+    "MAX_SHOT_SCALE",
     "SHOT_KINDS",
     "SHOT_MOVE_SECONDS",
     "SHOT_NAMES",
@@ -1534,6 +1535,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "has_error_text",
     "value_trend",
     "SmoothFollow",
+    "FOLLOW_MAX_OFFSET",
     "CharacterSize",
     "COIN",
     "KEY",
@@ -1739,6 +1741,13 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "plan_move",
     "iso_view",
     "wide_view",
+    "ISO_FIXED_SHARES",
+    "fixed_fill_size",
+    "fixed_reach",
+    "fixed_tiles",
+    "fixed_view",
+    "ground_view_center",
+    "on_ground",
     "ISO_WIDE_MAX",
     "ISO_PAN_ZOOM",
     "map_fraction",

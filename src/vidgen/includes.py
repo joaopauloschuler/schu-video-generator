@@ -359,7 +359,8 @@ _CHARACTER_SIZES = ("small", "medium", "large")
 
 def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str, Origin]]:
     """``data`` with the video's ``character_size`` (DESIGN.md §86.10) given to every ``stage``
-    scene whose params (after its set) give neither ``character_size`` nor ``size`` nor an ``iso`` place, and
+    scene whose params (after its set) give neither ``character_size`` nor ``size`` nor an ``iso`` place
+    (one with ``wide: fixed`` takes it: its view's scale, DESIGN.md §106), and
     ``origins`` pointing those at the video's key; the scene's own setting wins."""
     updated = dict(origins)
     named = data.get("character_size") if isinstance(data, Mapping) else None
@@ -368,8 +369,9 @@ def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any
     scenes: list[Any] = []
     for i, scene in enumerate(data["scenes"]):
         params = scene.get("params", {}) if isinstance(scene, Mapping) else None
+        iso = params.get("iso") if isinstance(params, Mapping) else None
         if (not isinstance(params, Mapping) or scene.get("type") != "stage" or "character_size" in params or "size" in params
-                or params.get("iso") is not None):   # an iso place sets its own size (DESIGN.md §89.7)
+                or (iso is not None and not (isinstance(iso, Mapping) and iso.get("wide") == "fixed"))):   # an iso place sets its own size (§89.7), but wide: fixed (§106)
             scenes.append(scene)
             continue
         scenes.append({**scene, "params": {**params, "character_size": named}})

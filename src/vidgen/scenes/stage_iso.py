@@ -587,7 +587,29 @@ class IsoStaging:
         place = self.params.iso.parsed()
         count = len(self.params.iso.objects)
         placed = [item.name for item in place.objects[len(place.objects) - count:]] if count else []
-        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed, fit=self.params.iso.wide)
+        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed, fit=self.params.iso.wide_fit(),
+                         tiles=self.iso_tiles())
+
+    def iso_tiles(self) -> float | None:
+        """The tile widths across the frame of the fixed wide view (``wide: fixed``, DESIGN.md
+        §106); ``None`` for the other wide views."""
+        return self.params.iso.view_tiles(self.frame_width, self.frame_height, self.params.character_size)
+
+    def zoom_base(self) -> float:
+        """What a ``zoom``'s ``scale`` multiplies: on an iso place with the fixed wide view that
+        view's magnification over the whole place (a ``zoom: {scale: 2}`` is twice as close as the
+        wide view, DESIGN.md §106); else 1."""
+        tiles = self.iso_tiles() if self.on_iso else None
+        if tiles is None:
+            return 1.0
+        return max(self.frame_width / (tiles * self.iso_view.unit), 1.0)
+
+    def _iso_on_ground(self, width: float, center: tuple[float, float]) -> tuple[float, float]:
+        """With the fixed wide view, ``center`` of a view ``width`` wide moved so the view lies
+        on the ground as far as the map allows (DESIGN.md §106); else as it is."""
+        if self.iso_tiles() is None:
+            return center
+        return ground_view_center(self.params.iso.parsed(), self.iso_view, self.frame_width, self.frame_height, width, center)
 
     def iso_wide_shot(self, names: list[str]) -> ShotView:
         """``shot: wide`` on the place: the wide view keeping the characters ``names`` (those on
@@ -1184,7 +1206,25 @@ class IsoStaging:
             return {}
         beat = self.beat(beat_id)
         acts = [{"action": w.action, "who": w.who, "seen": round(w.seen, 4)} for w in self.__dict__.get("_iso_watched", []) if w.beat == beat_id and w.frames]
-        return {"line_words": len(beat.text.split()), **({"iso_actions": acts} if acts else {})}
+        ground = {"iso_ground": self._iso_ground_key()} if beat.id == self.beat(0).id else {}   # once a scene (§106)
+        return {"line_words": len(beat.text.split()), **({"iso_actions": acts} if acts else {}), **ground}
+
+    def _iso_ground_key(self) -> dict[str, Any]:
+        """For lint ``iso_ground`` (DESIGN.md §106): the place's wide view (``fixed``, ``tiles``
+        given, or ``auto`` / ``fill`` / ``number``), indoor or outdoor, the map's size, the
+        character size, the fixed view's tiles across (medium for the other views) and the map
+        side that fills the frame with them."""
+        iso = self.params.iso
+        place = iso.parsed()
+        tiles = self.iso_tiles()
+        if iso.fixed:
+            view = "fixed" if iso.wide == "fixed" else "tiles"
+        else:
+            view = iso.wide if isinstance(iso.wide, str) else "number"
+        if tiles is None:
+            tiles = fixed_tiles(self.frame_width, self.frame_height)
+        return {"view": view, "place": iso.place, "map": [place.columns, place.rows], "size": self.params.character_size or "medium",
+                "tiles": round(tiles, 3), "need": fixed_fill_size(tiles, self.frame_width, self.frame_height)}
 
     # ----- who speaks (DESIGN.md §89.11) -----------------------------------------------------------
 
@@ -1309,9 +1349,9 @@ class IsoStaging:
             return None
         frame = self.camera.frame
         x, feet, head = self._iso_span(mob)
-        width = follow_width(head - feet, self.frame_width, self.frame_height, float(frame.width))
+        width = follow_width(head - feet, self.frame_width, self.frame_height, float(frame.width), MAX_SHOT_SCALE * self.zoom_base())
         height = width * self.frame_height / self.frame_width
-        center = view_center_within(self.camera_bounds(), (x, (feet + head) / 2), width, height)
+        center = self._iso_on_ground(width, view_center_within(self.camera_bounds(), (x, (feet + head) / 2), width, height))
 
         def y_of() -> float:   # the body's middle as it stands (not bobbing with each step)
             if isinstance(mob, Character):
@@ -1333,6 +1373,16 @@ class IsoStaging:
         standing there); ``None`` elsewhere (a pan moves sideways only)."""
         if not self.on_iso:
             return None
+        found = self._iso_pan_target(targets, to)
+        if found is None:
+            return None
+        width = self.pan_width()   # the fixed wide view's: on the ground, the target in the middle half (§106)
+        height = width * self.frame_height / self.frame_width
+        x, y = self._iso_on_ground(width, found)
+        return min(max(x, found[0] - width / 4), found[0] + width / 4), min(max(y, found[1] - height / 4), found[1] + height / 4)
+
+    def _iso_pan_target(self, targets: list[Mobject], to: Any) -> tuple[float, float] | None:
+        """:meth:`pan_point`'s target before the fixed wide view keeps it on the ground."""
         if targets:
             spans = [self._iso_span(mob) for mob in targets]
             return float(np.mean([x for x, _, _ in spans])), float(np.mean([(f + h) / 2 for _, f, h in spans]))

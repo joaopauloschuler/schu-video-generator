@@ -10295,7 +10295,7 @@ never leaves the stage.
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; on an iso place in bands across it; not in a `room` or an indoor iso place |
 | `ambient` | `true` \| mapping | none | an iso place's [ambient life](#isometric-places-iso): `true` (every kind that suits the place) or `{walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}`; away from the characters, hidden in close shots; indoors only `cat` and `flies` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props` or `size` (`character_size` only with `wide: fixed`) |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10729,7 +10729,8 @@ they hide what is behind them.
   everything smaller; a character is two tiles tall wherever it stands (no `depth`; `size` and
   `character_size` are refused: the camera's shots make characters large, see **The camera**
   below). The scene starts on the **wide view** (the establishing view), which moves in from that
-  fit as far as fills the frame: a place's picture is a diamond, so its tips are cut off, but in
+  fit until the place's *bounding box* fills the frame: a place's picture is a diamond, so its
+  tips are cut off and outdoors about half of the frame is still background around it, but in
   16:9 never the characters, the spots or the `objects` you placed (a house's roof stays whole;
   the map's trees, bushes, flowers and fences may be cut at the edges; a room shows all of
   itself). In 9:16 it keeps just the characters (at their spots, those that `enter` later too)
@@ -10745,6 +10746,29 @@ they hide what is behind them.
   landscape frame too: its spots, placed objects and characters are kept, the far corners of its
   walls may be cut) or a number from 1 to 2.5 (that many times closer than the whole place,
   moved to keep the characters in view): `iso: {place: indoor, wide: fill, map: ...}`.
+  **`wide: fixed`** keeps one scale whatever the map's size, so a *bigger map* fills the frame
+  with ground instead of pulling the camera back: a character is 0.14 / 0.20 / 0.28 of the
+  frame's height at `character_size` `small` / `medium` / `large` (allowed on an iso place with
+  `wide: fixed`; the video's applies too), or `wide: {tiles: N}` shows N tile widths across the
+  frame. The view centres on the characters, moved onto the ground as far as the map allows (a
+  character by the edge stays in view); a map too small for the frame shows centred (the whole
+  place when it is smaller than the view). Ground fills the frame from these square map sizes
+  (lint `iso_ground` names the size; see `docs/COOKBOOK-ISO-CARTOONS.md`):
+
+  | format | `small` | `medium` | `large` |
+  |---|---|---|---|
+  | 16:9 | 34 x 34 | 24 x 24 | 17 x 17 |
+  | 9:16 | 23 x 23 | 16 x 16 | 12 x 12 |
+
+  ```yaml
+  character_size: medium
+  scenes:
+    - {id: green, type: stage, params: {iso: {wide: fixed, map: ...}}}   # a 24 x 24 map in 16:9
+  ```
+
+  Over it a `zoom`'s `scale` is relative to the fixed view (`scale: 2` is twice as close), and
+  shots, `follow` and `pan` move as elsewhere (a follow and a pan stay on the ground as far as
+  their target allows).
 - **`colors`**: `grass`, `earth` (the slab and the sides of raised grass), `path`, `water`,
   `stone` (raised blocks and garden walls outdoors), `floor`, `tiles`, `wall`, `cut` (the top of
   the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the
@@ -14260,6 +14284,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol, nor a `hud`, which `overlay_face` checks). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. On an [iso place](#isometric-places-iso) it measures what really covers the speaker's eyes and mouth (the opaque pixels of the place in front of it: a lamp post across the face, not the empty corners of a tree's picture) and reports at `min_hidden_features` (`0.25`) of their box, naming the pieces of the place (`lamp`, `tree_2`). Fix: move one of them, or a smaller `depth` for the speaker; on an iso place walk it to a spot where nothing stands in front of it, or a shot that frames it from where it shows |
 | `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. On an [iso place](#isometric-places-iso) a speaker whose name tag shows (or that has a speech bubble) is not reported for a line of at most `max_tagged_words` (`12`) words: the tag shows who says a short line. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
 | `offscreen_action` | warning | on an [iso place](#isometric-places-iso): something a beat does — a walk (`walk_to`, `run_to`, `meet`, `wander`, `enter`, `exit`), a small thing picked up, given or put down, a door, lamp or flowers changing, an object appearing or going — that the camera mostly does not show while it happens: on fewer than `min_seen` (`0.5`) of its frames is at least half of it in view (or enough of it to fill a quarter of the view: a house in a close-up). Fix: a wider shot (`shot: wide`), a `pan` or `follow` to it, or do it in a beat whose shot shows it |
+| `iso_ground` | warning (info for the hint) | an [iso place](#isometric-places-iso) with `wide: fixed` on a map too small to fill the frame for its format and character size, so the background shows round it: "this 12x12 place shows the background around it in 9:16 at character_size medium; a map of at least 16x16 fills the frame". An outdoor place in the whole-place wide view (`auto` / `fill`) gets an info-level hint naming `wide: fixed` and the map size (`hint: false` turns it off). Once a scene. Fix: a bigger map, or a sky `background` if the floating place is meant |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's, area's, point's, vector's or mark's `color` or a `number_line` point's, interval's or jump's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
 | `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared, nor an [echo](#echo-characters-echo) (another self, alike on purpose). Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
@@ -14349,6 +14374,7 @@ lint:
     hidden_speaker: {min_hidden: 0.5, min_hidden_features: 0.25}   # fraction of the speaker's face box; on an iso place of its eyes and mouth
     small_speaker: {min_face: 0.075, max_tagged_words: 12}   # a speaker's face height, fraction of the shorter side; words a name tag carries
     offscreen_action: {min_seen: 0.5}       # on an iso place: share of an action's frames that show it
+    iso_ground: {hint: true}                # the info hint for outdoor places in the whole-place wide view
     mouth_without_voice: {}
     look_alike: {min_contrast: 0.35}        # contrast score of two characters, 0 to 1
     narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range

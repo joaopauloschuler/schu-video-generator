@@ -63,12 +63,16 @@ class SmoothFollow:
     (:func:`smooth_damp`), never lets it get further than :data:`FOLLOW_MAX_OFFSET` from the
     centre, and with ``span_of`` (the character's feet and head-top y) moves up and down to keep
     room above its head and below its feet. Called, it gives the character's x (as the plain
-    follow's function does); ``followed`` is the character (an ``exit`` stops following it)."""
+    follow's function does); ``followed`` is the character (an ``exit`` stops following it);
+    ``settle(width, centre)`` moves the centre the camera eases to (an iso place's fixed wide
+    view keeps it on the ground, DESIGN.md §106)."""
 
-    def __init__(self, x_of: Callable[[], float], span_of: Callable[[], tuple[float, float]] | None = None, followed: Any = None) -> None:
+    def __init__(self, x_of: Callable[[], float], span_of: Callable[[], tuple[float, float]] | None = None, followed: Any = None,
+                 settle: Callable[[float, tuple[float, float]], tuple[float, float]] | None = None) -> None:
         self.x_of = x_of
         self.span_of = span_of
         self.followed = followed
+        self.settle = settle
         self.velocity = (0.0, 0.0)
 
     def __call__(self) -> float:
@@ -91,12 +95,16 @@ class SmoothFollow:
             high = feet + height / 2 - FOLLOW_FEET_ROOM * height
             target_y = low if low > high else min(max(cy, low), high)
         target_x, target_y = view_center_within(bounds, (target_x, target_y), width, height)
+        if self.settle is not None:
+            target_x, target_y = self.settle(width, (target_x, target_y))
         new_x, vx = smooth_damp(cx, target_x, self.velocity[0], FOLLOW_SECONDS, dt)
         new_y, vy = smooth_damp(cy, target_y, self.velocity[1], FOLLOW_SECONDS, dt)
         self.velocity = (vx, vy)
         far = FOLLOW_MAX_OFFSET * width
         new_x = min(max(new_x, x - far), x + far)
         if head is not None:
+            if self.settle is not None:   # moved on to the ground: its feet stay in the view too
+                new_y = min(new_y, feet + height / 2 - FOLLOW_MIN_HEAD_ROOM * height)
             new_y = max(new_y, head - height / 2 + FOLLOW_MIN_HEAD_ROOM * height)
         return view_center_within(bounds, (new_x, new_y), width, height)
 

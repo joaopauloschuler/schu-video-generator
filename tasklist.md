@@ -1646,6 +1646,9 @@ a few lines per feature in CONFIG and the guide.
 ### Step 276 — Cookbook: iso map sizes that fill the frame
 - [x] Measured outdoor and indoor iso places (map sizes, `wide`, 16:9 and 9:16) and wrote `docs/COOKBOOK-ISO-CARTOONS.md` (linked from `docs/COOKBOOK.md`); docs only
 
+### Step 277 — A fixed-scale wide view for iso places
+- [x] `iso: {wide: fixed}` (scale from `character_size`, allowed on iso places with it; or `wide: {tiles: N}`): the same scale on any map, centred on the characters and moved onto the ground (characters by an edge kept in view), a small place centred; `zoom` scale, shots, `follow` and `pan` relative to it (shot / follow caps scaled, follow and pan settle on the ground, `MAX_DETAIL` 5); lint `iso_ground` (map size that fills the frame; info hint for outdoor `auto` / `fill`); measured map sizes (16:9 34 / 24 / 17, 9:16 23 / 16 / 12) in CONFIG, the guide and the iso cookbook; `fill` wording corrected; tests `test_iso_fixed_view.py`
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
