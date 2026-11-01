@@ -24231,3 +24231,18 @@ is in `tasklist.md`.
   `night` / `rowans_room` (25 stills) identical. Private sheet
   `/home/claude/work/scratch/s275/sheet.png`; samples `s275/veh`, `seat`, `sky`, `wx`, `lamps`,
   stories `s275/stories/` (drafts `lampdraft`, `clock` with `shorts.yaml`).
+
+## Step 276 — Cookbook: iso map sizes that fill the frame
+
+- Docs only: new `docs/COOKBOOK-ISO-CARTOONS.md` (linked from the intro of `docs/COOKBOOK.md`)
+  with measured guidance for iso places that fill the frame: 16:9 needs a square map of about
+  24x24 with `iso: {wide: 2.5}` (32x32 hides the last corners); in 9:16 no `wide` fills the frame
+  today (zoom capped at 2.5, portrait needs ~5), so use `shot: medium` / `closeup` or zooms; keep
+  maps square, the action central, a sky `background` for leftover corners, and the
+  magenta-background check.
+- Measurements: private experiment in `/home/claude/work/scratch/s276/` (results.csv, sheet.png).
+- Proposed, not built: `iso: {wide: full}` (zoom past 2.5 until no edge shows, centred on the
+  ground), centring the numeric `wide` on the ground, a lint warning for a place floating in
+  space, and correcting the guide wording that `fill` fills the frame outdoors (it fills the
+  bounding box, about half of which is ground).
+- Tests: `tests/test_docs.py` passes.

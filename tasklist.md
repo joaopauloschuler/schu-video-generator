@@ -1643,6 +1643,9 @@ a few lines per feature in CONFIG and the guide.
 ### Step 275 — Review of Phase AD
 - [x] Compatibility (Phase Q baseline 31/31, iso-story stills identical), each feature's tests and related suites, `test_mcp.py` in full, docs consistency, performance (DESIGN §105.8). Fixes: headlights ahead when driving away, a turned in-between frame at corners, a pupil's legs under the school desk, the sun sinking behind the ground, lamps on from a rainy day to night, visible wind and swinging balloons, British quotes / described speakers / calls by name / a title card by mood / ambient in story drafts, the light restated in mid-scene Shorts, walkers with faces and lamplight, ducks off a boat's way, the schema's YAML `on` key
 
+### Step 276 — Cookbook: iso map sizes that fill the frame
+- [x] Measured outdoor and indoor iso places (map sizes, `wide`, 16:9 and 9:16) and wrote `docs/COOKBOOK-ISO-CARTOONS.md` (linked from `docs/COOKBOOK.md`); docs only
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
