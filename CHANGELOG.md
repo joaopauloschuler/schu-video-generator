@@ -5,7 +5,46 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–256)
+## Unreleased (Steps 193–277)
+
+### Iso framing (Step 277)
+
+- `iso: {wide: fixed}`: a wide view of one scale whatever the map's size (a character 0.14 / 0.20 / 0.28 of the frame's height at `character_size` small / medium / large, now allowed on an iso place with it; or `wide: {tiles: N}`), centred on the characters as far as the ground reaches, so a bigger map fills the frame with ground: square maps of 34 / 24 / 17 cells in 16:9, 23 / 16 / 12 in 9:16. A `zoom`'s scale is relative to it; close-ups and `follow` zoom in from it on big maps; `follow` and `pan` stay on the ground as far as their target allows. Lint `iso_ground` names the map size that fills the frame (an info hint for outdoor places in the whole-place view). The docs no longer say `fill` fills the frame outdoors (it fits the place's bounding box).
+
+### Phase AD: features without AI APIs (Steps 268–275)
+
+- Moving vehicles on iso places: `drive_to` drives a `car` along the paths (turning at corners, its tail and tail lights showing as it drives away, headlights with `switch_on`) or rolls a `train_car` along its track, `sail_to` sails a `boat` across the water (bobbing, a wake), `lift_off` sends a `rocket` up out of the view in smoke and flame; `to` / `via` spots or cells, `speed`; `follow` keeps the camera on one; engine, brakes and launch sounds; `vidgen validate` names what is in the way.
+- Sitting, lying and using furniture on iso places: `sit_on` an object with seats (chair, bench, sofa, armchair, throne, lab stool, log, stump, hay bale, rock, bus stop, café table, school desk, bed), facing the way its seat does, its near arm, chair back or a desk in front drawn over the sitter; `lie_on` a bed (the blanket over it); `use` a laptop, PC, console, piano (typing), a campfire or fireplace (warming the hands), shelves or a machine; `stand_up`; `vidgen validate` names a seat taken, nothing to sit on, a character too far or walking before it stands up.
+- A day passing in one scene: `- {time_of_day: night, run_time: 6}` (`morning`, `day`, `sunset`, `night`, `indoor`) fades the light and a sky of the time of day (day to night through a sunset), the stars coming out once it is dark; at dusk the lamps, a house's windows, lit objects and cars' headlights switch on by themselves one after another, and off at dawn (`auto_lights: false`, or `auto_light: false` on an object, opts out); on iso places and the flat stage.
+- Iso weather: at night the puddles mirror lit windows, lanterns and neon trims (wobbling while it rains; rain's `settled` with `puddles` starts them full size); `fog` lies over an iso place in drifting bands, thicker further back; `wind` bends the trees, bushes, flowers and plants and swings scarecrows and balloon bunches in gusts. Outdoors only.
+- `vidgen story draft story.md -o DIR` (MCP tool `story_draft`): a story cartoon drafted from prose, without AI — scenes from headings, breaks and time cues, a cast with distinct Kokoro voices (told in the first person, the narrator speaks with the protagonist's voice), each quoted line given a speaker with a confidence, ready-made iso places (or flat sets with `--style flat`) with light, weather and objects from the story's words, placeholder walks and shots, title and end cards, a music bed; `story_draft.md` lists every decision and a TODO checklist.
+- `vidgen shorts suggest [PROJECT] [--count N] [--min 30 --max 60] [--teaser] [--write]` (MCP tool `shorts_suggest`): Shorts suggested without AI — windows between beat boundaries timed by the narration (or the word count), scored by dialogue, questions, exclamations, emotional and action words, variety, a clean start and a strong last line (the film's ending marked down), each with a hook line of up to six words; `--teaser` about 15 s of the best lines ending on the title; `--write` adds them as `cut:` variants (9:16, karaoke captions, hook, end card, opening zooms) in `shorts.yaml`, included by the config. An included file may now hold `variants`. A story draft no longer names two objects `lamp`.
+- Ambient life on iso places: `ambient: {walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}` (or `ambient: true`) sets background walkers strolling the paths, birds pecking and flying off, a cat sitting and grooming, ducks on the water, butterflies by day and fireflies at night about the place, the same on every render; they keep away from the characters, never speak, hide in close shots and are drawn smaller and greyer (`muted`); indoors a cat and flies.
+- Review (Step 275): a car's headlights light the road ahead when it drives away up the picture too, and a car or a boat shows a turned in-between frame at corners; a pupil's legs go under the school desk; a setting sun or moon sinks behind the ground instead of fading beside the characters' feet; a rainy day turning to night switches the lamps on; trees bend visibly on a windy day and balloon bunches swing on their strings (a gale no longer stretches them); story drafts read British `‘…’` dialogue, make characters of described speakers (`said the old man`), give a line calling someone by name to the other speaker, choose the title card's look from the story's mood (dark and neon at night) and add a little ambient life outdoors; a Short starting mid-scene keeps the light the scene had reached; walkers have faces and take lamplight, ducks keep off a sailing boat's way; the JSON schema accepts a YAML 1.1 `on` key on iso objects again.
+
+### More iso objects (Steps 261–267)
+
+- Seasons, harbour and travel objects `christmas_tree` (twinkles when on), `snowman`, `pumpkin` (glows when on), `gift_pile`, `balloon_bunch` (sways when on), `birthday_cake` (candles when on), `boat` (floats on water, bobs when on), `dock` (walked on over water), `lighthouse` (its beam sweeps when on), `train_car` and `rocket` (fires when on); review: a fire's or torch's moving glow and a beam are faint by day, softer stove steam, a brighter vending machine at night, a plainer crib, a bigger bicycle, a crystal that glows from within.
+
+- Fantasy objects `treasure_chest` (opens with a golden glow), `cauldron` (bubbles over its fire when on), `giant_crystal` (glows and pulses when on), `throne`, `torch_sconce` (on a back wall; a flickering torch that lights who stands near), `signpost`, `archway` and `statue`; a switched lamp's pool of light is no longer cut off at the edge of its box.
+
+- Farm, school and office objects `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (with its chair), `desk_with_pc` (screen and typing when on), `water_cooler` (bubbles when on), `printer` (prints when on), `globe` (spins when on) and `trophy_shelf`.
+
+- Nature objects `campfire` (flames and sparks, lights who sits near), `tent`, `log`, `stump`, `mushroom_ring` (glows faintly at night), `pond` (ripples when on), `scarecrow` and `beehive` (bees when on); a lamp's pool of light is now faint by day and strong only at night.
+
+- Town objects `street_lamp` (lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (runs when on), `phone_booth` (lights), `car` (headlights), `bicycle` and `newsstand`; a lit street lamp or phone booth lights the characters near it, and every lamp's pool of light is now warm at night (it read olive or grey).
+
+- Home, café and shop objects `bathtub`, `wardrobe` (`open`), `crib`, `cafe_table` (with two chairs), `counter`, `cash_register`, `display_case` (`kind: cakes | jewels`), `market_stall` and `vending_machine` (glows when on).
+
+- Home objects `fireplace` (flickering fire, warm light), `kitchen_counter`, `stove` (the pot steams), `sink`, `bookshelf_tall`, `armchair`, `floor_lamp` (lights), `tv` (plays a picture) and `piano`; a lit fireplace or floor lamp lights the characters near it.
+
+### More lab objects (Steps 258–260)
+
+- Iso objects `telescope`, `satellite_dish` (turns), `charging_station` (bars fill), `crate_stack`, `airlock` (`open`, a flashing beacon), `printer_3d` (prints layer by layer), `hazard_sign` (`kind:`) and `fire_extinguisher`; the coffee machine now reads as one (light body, big mug), and a laptop's or kiosk's text no longer reads mirrored facing right.
+
+- Iso objects `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge` (`open`) and `fume_hood`, with glowing liquids, bubbles, drips, mist and vapour when on; a working object's motion now also shows behind another object and over a character standing behind it.
+
+- Iso objects `laptop`, `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`, `centrifuge`, `coffee_machine`, `lab_stool` and `wall_clock` (`time:`); the working ones switch on and move (a pulsing core, a swinging arm, a spinning rotor, steam).
 
 ### The project name in messages (Steps 255–256)
 

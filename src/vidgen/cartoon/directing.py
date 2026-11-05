@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 FRAMING_ACTIONS = frozenset({"say", "zoom", "pan", "follow", "shot", "highlight", "dim", "callout"})
 #: Written actions after which a character's look is not known (it turned, moved or took a pose).
 LOOK_CHANGING = frozenset({
-    "turn", "walk_to", "run_to", "enter", "exit", "move_along", "keyframes", "pose", "emote", "sit_on", "lean_on", "get_in", "ride_to", "get_out",
+    "turn", "walk_to", "run_to", "enter", "exit", "move_along", "keyframes", "pose", "emote", "sit_on", "lean_on", "get_in", "ride_to", "get_out", "lie_on", "use",
 })
 #: When an automatic reaction starts, as a fraction of the line: it plays in the pause after it.
 REACTION_AT = 0.95
@@ -97,7 +97,7 @@ CLOSEUP_SECONDS = 0.5
 #: the camera's own moves.
 MOVING_ACTIONS = frozenset({
     "walk_to", "run_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw",
-    "sit_on", "lean_on", "stand_up", "shot", "blow_away", "get_in", "ride_to", "get_out",
+    "sit_on", "lean_on", "stand_up", "shot", "blow_away", "get_in", "ride_to", "get_out", "lie_on",
 })
 #: A generated figure's proportions, in its heights (measured on the generator's looks; an SVG
 #: look is taken to be alike): half its width (``FIGURE_HALF_WIDTH``, shared with the shots'
@@ -741,7 +741,12 @@ def _pose(state: _SceneState, action: str, targets: set[str], options: Mapping[s
                 state.postures.stand(name)
                 continue
             if action == "sit_on":
-                state.postures.sit(name, prop, state.frame.seat_places.get(prop, 1) if state.frame is not None else 1)
+                # an iso place's object (not a prop of the frame): its seats are its own (vidgen validate counts them)
+                places = 1 if state.frame is None else state.frame.seat_places.get(prop, 1) if prop in state.frame.props else 8
+                state.postures.sit(name, prop, places)
+            elif action == "lie_on":   # a bed of an iso place (DESIGN.md §105.2): it keeps its facing
+                state.postures.lie(name, prop)
+                continue
             else:
                 state.postures.lean(name, prop)
         except PostureError:
@@ -837,7 +842,7 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
                 state.holdings.drop(prop)
                 to = options.get("to")
                 state.prop_x[prop] = state.frame.place_x(to) if state.frame is not None and to is not None else None
-        elif act.action in ("sit_on", "lean_on", "stand_up"):
+        elif act.action in ("sit_on", "lean_on", "stand_up", "lie_on"):
             _pose(state, act.action, targets, options)
         elif act.action in ("get_in", "ride_to", "get_out"):
             _riding(state, act, names)

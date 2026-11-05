@@ -188,10 +188,11 @@ class SettledSnow:
 class FogBand(VGroup):
     """One band of fog: :data:`~vidgen.cartoon.fog.FOG_LAYERS` shapes in ``color``, ``opacity``
     where all overlap; ``stage_depth`` is where it lies (the stage draws it in front of everything
-    deeper)."""
+    deeper); ``shares``: the share of its fog each layer holds (an iso place's banks hold more,
+    §105.4)."""
 
-    def __init__(self, depth: float, color: str, opacity: float) -> None:
-        super().__init__(*[_filled(VMobject(), color, layer_opacity(opacity, share)) for share in FOG_LAYER_SHARES])
+    def __init__(self, depth: float, color: str, opacity: float, shares: Sequence[float] = FOG_LAYER_SHARES) -> None:
+        super().__init__(*[_filled(VMobject(), color, layer_opacity(opacity, share)) for share in shares])
         self.stage_depth = depth
         self.name = f"fog_{depth:g}"
 
@@ -347,13 +348,16 @@ class StageRainbow:
 class SkyBody:
     """A ``sun`` or ``moon`` prop moving along the sky's path (DESIGN.md §69.61): from path share
     ``base`` at the start, then each :class:`~vidgen.cartoon.sun_path.PathMove`; ``place(x share,
-    height)`` gives where its middle is (Manim units). It fades out under the horizon."""
+    height)`` gives where its middle is (Manim units). It fades out under the horizon; with a
+    ``sink`` (path heights: its own height, DESIGN.md §105.8) the ground in front of the sky hides
+    it, so it shows whole down to the horizon and sinks behind the ground, gone ``sink`` under it."""
 
-    def __init__(self, prop: Mobject, kind: str, base: float, place: Callable[[float, float], tuple[float, float]]) -> None:
+    def __init__(self, prop: Mobject, kind: str, base: float, place: Callable[[float, float], tuple[float, float]], sink: float = 0.0) -> None:
         self.prop = prop
         self.kind = kind
         self.base = base
         self.place = place
+        self.sink = sink
         self.moves: list[PathMove] = []
         self._alphas = [(m, m.fill_rgbas[:, 3].copy(), m.stroke_rgbas[:, 3].copy()) for m in prop.family_members_with_points()]
         #: where it is now (path share; ``None``: not placed yet) and how much of it shows
@@ -374,6 +378,8 @@ class SkyBody:
         x, y = self.place(x_share, height)
         self.prop.shift(np.array([x, y, 0.0]) - self.prop.get_center())
         self.shown = shown
+        if self.sink > 0:   # the ground hides what is under the horizon: it sinks, whole until gone
+            shown = 1.0 if height > -self.sink else 0.0
         for member, fill, stroke in self._alphas:
             member.fill_rgbas[:, 3] = fill * shown
             member.stroke_rgbas[:, 3] = stroke * shown

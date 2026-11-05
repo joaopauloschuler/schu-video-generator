@@ -336,6 +336,33 @@ def ride_cues(played: PlayedAction) -> list[FoleyCue]:
     return cues
 
 
+#: A vehicle moving on an iso place (DESIGN.md §105): its engine's pitch (semitones) and gain (dB)
+#: as for a ride (a train's low and long, a rocket's a deep roar under its launch); brakes as a car
+#: or a train stops (pitch, gain).
+DRIVE_SOUNDS: dict[str, tuple[float, float]] = {"car": (0.0, -5.0), "boat": (6.0, -8.0), "train_car": (-7.0, -6.0), "rocket": (-12.0, -3.0)}
+DRIVE_BRAKES: dict[str, tuple[float, float]] = {"car": (0.0, -8.0), "train_car": (-5.0, -9.0)}
+LAUNCH_ROAR = (-6.0, -4.0)
+
+
+def drive_cues(played: PlayedAction) -> list[FoleyCue]:
+    """The sounds of a ``drive_to``, ``sail_to`` or ``lift_off`` (DESIGN.md §105): an engine for
+    most of the move (a boat's with a splash as it sets off, a rocket's under a launch roar), then
+    a car's or a train's brakes as it stops."""
+    start, seconds = played.start, played.seconds
+    kind = played.vehicle or ""
+    pitch, gain = DRIVE_SOUNDS[kind]
+    length = min(max(ENGINE_SHARE * seconds, ENGINE_MIN_SECONDS), ENGINE_MAX_SECONDS)
+    cues = [FoleyCue(start, "engine", gain, {"duration": round(length, 3), "pitch": pitch})]
+    if kind == "rocket":
+        cues.append(FoleyCue(start, "launch", LAUNCH_ROAR[1], {"pitch": LAUNCH_ROAR[0]}))
+    if kind == "boat":
+        cues.append(FoleyCue(start, "splash", BOAT_SPLASH[0], BOAT_SPLASH[1]))
+    if kind in DRIVE_BRAKES:
+        brakes_pitch, brakes_gain = DRIVE_BRAKES[kind]
+        cues.append(FoleyCue(start + seconds, "brakes", brakes_gain, {"pitch": brakes_pitch}, align="end"))
+    return cues
+
+
 def door_cues(played: PlayedAction) -> list[FoleyCue]:
     """A door's ``open`` (its creak from the start; after the key's ``unlock`` when it
     ``unlocks``) or ``close`` (a shorter, higher creak, then a thud when it shuts, at
@@ -425,6 +452,8 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
         cues += landing_cues(played)
     elif played.action == "ride_to" and played.vehicle in RIDE_SOUNDS:
         cues += ride_cues(played)
+    elif played.action in ("drive_to", "sail_to", "lift_off") and played.vehicle in DRIVE_SOUNDS:
+        cues += drive_cues(played)
     elif played.lands is not None:
         cues.append(FoleyCue(start + played.lands * seconds, "thud", LANDING_GAIN))
     elif played.action == "effect" and played.effect in EFFECT_SOUNDS:

@@ -476,7 +476,7 @@ class _Reshape(Action):
                 if name in objects:
                     if objects[name] not in OPENING_KINDS:
                         problems.append(("target", f"'{name}' (a {objects[name]}) cannot {action}; on an iso place a house (its door), "
-                                         "a door of a room's wall (door_1...) and flowers (they bloom, or close to buds) can"))
+                                         "a door of a room's wall (door_1...), flowers (they bloom, or close to buds), a laptop, a lab_fridge, an airlock, a wardrobe and a treasure_chest can"))
                 elif name not in kinds:
                     problems.append(("target", f"'{name}' is not a prop; {action} acts on props (- {action}: <prop>)"))
                 elif self.shape not in PROP_SHAPES.get(kinds[name] or "", ()):
@@ -610,7 +610,7 @@ class BlowAway(Action):
         if "<prop>" not in scene_cls.target_patterns:
             return [("target", "blow_away is for the props of a stage")]
         if getattr(params, "iso", None) is not None:
-            return [("action", "blow_away is not for an iso place (no wind there yet); hide an object, or put_down a prop")]
+            return [("action", "blow_away is not for an iso place (its wind sways the plants and balloons, it blows no prop away); hide an object, or put_down a prop")]
         kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         light = ", ".join(sorted(LIGHT_PROPS))
         problems: list[tuple[str, str]] = []

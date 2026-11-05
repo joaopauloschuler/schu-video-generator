@@ -34,8 +34,8 @@ class _Switch(Action):
             for name in [n for n in scene_cls.target_names(params) if fnmatchcase(n, pattern) and not is_part_target(n)]:
                 if name in objects:
                     if objects[name] not in SWITCHED_KINDS:
-                        problems.append(("target", f"'{name}' (a {objects[name]}) cannot be switched on or off; on an iso place a lamp "
-                                         "and a house (its windows) can"))
+                        problems.append(("target", f"'{name}' (a {objects[name]}) cannot be switched on or off; on an iso place these "
+                                         f"can: {', '.join(sorted(SWITCHED_KINDS))}"))
                 elif name not in kinds:
                     problems.append(("target", f"'{name}' is not a prop; {action} acts on props (- {action}: <prop>)"))
                 elif kinds[name] not in SWITCHED_PROPS:

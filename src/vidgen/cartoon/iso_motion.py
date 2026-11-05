@@ -14,12 +14,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from manim import Mobject
+from manim import Mobject, smooth
 
 from vidgen.cartoon.acting import WALK_SPEED, WALKING, Gait
 from vidgen.cartoon.character import Character
 from vidgen.cartoon.iso_stage import IsoView
-from vidgen.cartoon.transition import Walk
+from vidgen.cartoon.transition import BodyMove, Walk
 from vidgen.world.iso_moves import IsoRoute
 from vidgen.world.iso_view import iso_point
 
@@ -107,4 +107,41 @@ class IsoWalk(Walk):
         return self.route.end
 
 
-__all__ = ["STRAIGHT_ON", "IsoWalk", "leg_facing"]
+class IsoSeatMove(BodyMove):
+    """``character`` sits down on an object of an iso place, lies down on it or stands up from it
+    (DESIGN.md §105.2): a :class:`BodyMove` through ``keys`` whose feet go in the world from
+    where they are to ``end`` (tile units, placed by ``view``; ``iso_feet`` and the shadow's
+    ``ground_y`` follow, for the draw order), the figure scaled to ``scale`` about its feet (a
+    character lying in bed is drawn smaller) and ``seat`` on the figure (``iso_seat``: (object,
+    part key) whose part is drawn over it) from the start; ``None`` (standing up): the seat it
+    had until it is out."""
+
+    def __init__(self, character: Character, keys: Sequence[tuple[float, Any]], view: IsoView, end: tuple[float, float, float], *,
+                 seat: tuple[str, str] | None, scale: float = 1.0, **kwargs: Any) -> None:
+        self.view, self.end, self.seat, self.scale = view, end, seat, float(scale)
+        x, y = view.point(*end)
+        super().__init__(character, keys, x=x, y=y, **kwargs)
+
+    def begin(self) -> None:
+        figure = self.mobject
+        self._from_feet = tuple(getattr(figure, "iso_feet", self.end))
+        self._from_seat = getattr(figure, "iso_seat", None)
+        self._from_scale = float(getattr(figure, "iso_scale", 1.0))
+        super().begin()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        figure = self.mobject
+        t = smooth(self.rate_func(alpha))
+        scale = self._from_scale + (self.scale - self._from_scale) * t
+        figure.iso_scale = scale
+        figure.set_squash(scale, scale)
+        super().interpolate_mobject(alpha)
+        feet = tuple(a + (b - a) * t for a, b in zip(self._from_feet, self.end))
+        figure.iso_feet = feet
+        figure.ground_y = self.view.point(*feet)[1]
+        # sitting down it is in the seat's front picture at once, standing up until it is out: half in
+        # the object's box, the whole object would be drawn over it (a bus shelter's glass)
+        figure.iso_seat = self.seat if self.seat is not None else (self._from_seat if t < 1.0 else None)
+
+
+__all__ = ["STRAIGHT_ON", "IsoSeatMove", "IsoWalk", "leg_facing"]

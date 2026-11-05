@@ -36,7 +36,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -200,6 +200,91 @@ def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
     for problem in problems:
         print(f"problem: {problem}", file=sys.stderr)
     print("next: `vidgen character-sheet --all`, `vidgen direct`, `vidgen storyboard`, `vidgen lint`; then `vidgen tts`")
+    return 1 if problems else 0
+
+
+def cmd_story(args: argparse.Namespace) -> CommandResult:
+    """Draft a story cartoon project from a story in prose (DESIGN.md §105.5)."""
+    from vidgen import kokoro_voices
+    from vidgen.fileio import write_text_atomic
+    from vidgen.plan_yaml import write_project
+    from vidgen.story_draft import DraftOptions, draft_story, report_markdown, story_yaml
+    from vidgen.story_text import read_story
+
+    source = Path(args.input)
+    if not source.is_file():
+        raise VidgenError(f"{source}: no such file (give a story, e.g. story.md or story.txt)")
+    try:
+        text = source.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise VidgenError(f"{source}: cannot read it as UTF-8 text: {exc}") from None
+    if args.narrator and args.narrator not in kokoro_voices.catalog()["voices"]:
+        close = difflib.get_close_matches(args.narrator, list(kokoro_voices.catalog()["voices"]), n=1)
+        hint = f"; did you mean '{close[0]}'?" if close else ""
+        raise VidgenError(f"--narrator: '{args.narrator}' is not a Kokoro voice{hint} (e.g. {', '.join(kokoro_voices.voices_of('b')[:4])})")
+    story = read_story(text)
+    if not any(scene.lines for scene in story.scenes):
+        raise VidgenError(f"{source}: no story text to draft from")
+    title = source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled"
+    options = DraftOptions(style=args.style, fmt=args.format, narrator=args.narrator, default_title=title, seed=args.seed)
+    draft = draft_story(story, options)
+    output = Path(args.out) if args.out else Path(source.stem)
+    result = write_project(story_yaml(draft, source.name), output, force=args.force)
+    report = result.root / "story_draft.md"
+    write_text_atomic(report, report_markdown(draft, source.name, result.config.name))
+    project = Project.load(result.config)
+    problems, _ = validate_all(project, keep_going=True)
+    if args.json:
+        return jsonout.story_document(project, draft, result, report, problems)
+    doubtful = sum(1 for a in draft.attributions if a.speaker is None or a.confidence < 0.6)
+    beats = sum(len(s.get("beats", [])) for s in draft.config["scenes"])
+    print(
+        f"drafted {len(draft.scenes)} scenes ({beats} beats), {len(draft.cast)} characters, "
+        f"{'first' if story.first_person else 'third'}-person, about {_format_seconds(project.estimated_duration())}; "
+        f"{len(draft.attributions)} lines of dialogue ({doubtful} to check)"
+    )
+    for scene in draft.scenes:
+        print(f"  {scene.id:<16} {scene.place:<8} {scene.light:<8} {', '.join(scene.cast) or '-'}")
+    print(f"{'created project in' if result.created else 'wrote'} {result.root if result.created else result.config}; report: {report}")
+    for problem in problems:
+        print(f"problem: {problem}", file=sys.stderr)
+    print("next: read story_draft.md, then `vidgen validate`, `vidgen storyboard`, `vidgen lint`; `vidgen tts` when it reads well")
+    return 1 if problems else 0
+
+
+def cmd_shorts(args: argparse.Namespace) -> CommandResult:
+    """Suggest Shorts cut from the video, and write them as variants (DESIGN.md §105.6)."""
+    from vidgen.shorts_suggest import report_text, suggest_shorts, write_suggestions
+
+    project = Project.load(args.project)
+    found = suggest_shorts(
+        project, args.count, args.min, args.max, teaser=args.teaser, spoilers=args.spoilers, end_text=args.end_card,
+    )
+    written, problems = None, []
+    if args.write and (found.shorts or found.teaser):
+        written = write_suggestions(project, found, args.out)
+        project = Project.load(project.config_file)
+        problems, _ = validate_all(project, keep_going=True)
+    if args.json:
+        return jsonout.shorts_document(project, found, written, problems)
+    print(
+        f"{len(found.shorts)} Short(s) from {found.candidates} windows of {found.min_seconds:g}-{found.max_seconds:g} s "
+        f"(film {_format_seconds(found.film_seconds)}, timed by {found.timed_by})"
+    )
+    if not found.shorts and found.teaser is None:
+        print("no window fits: try other --min / --max")
+        return 0
+    print(report_text(found))
+    if written is not None:
+        print(f"wrote {written.file}" + (f"; {project.config_file.name} includes it" if written.config_changed else ""))
+        for backup in written.backups:
+            print(f"  backup: {backup}")
+        for problem in problems:
+            print(f"problem: {problem}", file=sys.stderr)
+        names = [s.name for s in [*found.shorts, *([found.teaser] if found.teaser else [])]]
+        print(f"next: vidgen storyboard --variant {names[0]} --per-beat 2 (look at the framing), vidgen lint --variant {names[0]}")
+    else:
+        print("next: --write to add them as variants (shorts.yaml, included by the config)")
     return 1 if problems else 0
 
 
@@ -1858,6 +1943,30 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0, help="seed of the random looks undeclared characters get once the built-in ones are used (default: 0)")
     p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
     p.set_defaults(func=cmd_screenplay)
+
+    p = sub.add_parser("story", help="draft a story cartoon project from a story in prose: scenes, places, light, cast, voices, dialogue (no AI)")
+    p.add_argument("action", choices=["draft"], help="draft: write a project folder (video.yaml + story_draft.md, a report of every decision and a TODO list)")
+    p.add_argument("input", help="the story (.md or .txt)")
+    p.add_argument("--out", "-o", metavar="DIR|FILE", help="project folder to create, or a .yaml file to write (default: a folder named after INPUT)")
+    p.add_argument("--style", choices=["iso", "flat"], default="iso", help="iso places (default) or the flat stage's ready-made sets")
+    p.add_argument("--format", choices=["16:9", "9:16"], default="16:9", help="frame: 16:9 (default) or 9:16 (vertical)")
+    p.add_argument("--narrator", metavar="VOICE", help="the narrator's Kokoro voice (default: bf_emma; told in the first person: the protagonist's voice)")
+    p.add_argument("--seed", type=int, default=0, help="seed of the random looks given once the built-in ones are used (default: 0)")
+    p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
+    p.set_defaults(func=cmd_story)
+
+    p = sub.add_parser("shorts", help="suggest Shorts cut from the video: scored 30-60 s windows with a hook each, written as cut: variants on request (no AI)")
+    p.add_argument("action", choices=["suggest"], help="suggest: a report of the best windows; --write adds them as variants")
+    project_arg(p)
+    p.add_argument("--count", type=int, default=3, metavar="N", help="how many Shorts (default: 3)")
+    p.add_argument("--min", type=float, default=30.0, metavar="SECONDS", help="shortest Short, end card included (default: 30)")
+    p.add_argument("--max", type=float, default=60.0, metavar="SECONDS", help="longest Short, end card included (default: 60)")
+    p.add_argument("--teaser", action="store_true", help="also a teaser: about 15 s of the best short lines across the film, ending on the title")
+    p.add_argument("--spoilers", action="store_true", help="do not mark down windows that hold the film's ending")
+    p.add_argument("--end-card", default="Full story on the channel", metavar="TEXT", help="the end card's line under the title (default: Full story on the channel)")
+    p.add_argument("--write", action="store_true", help="write the variants to shorts.yaml (backed up first) and include it from the config (backed up first)")
+    p.add_argument("--out", default="shorts.yaml", metavar="FILE", help="the file the variants go to, next to the config (default: shorts.yaml)")
+    p.set_defaults(func=cmd_shorts)
 
     p = sub.add_parser("cast", help="write a cast of characters that differ clearly (looks, colours, voices) as an include file (no AI)")
     p.add_argument("--random", type=int, required=True, metavar="N", help="how many characters (1-24)")

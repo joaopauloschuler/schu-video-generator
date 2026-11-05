@@ -34,6 +34,7 @@ from vidgen.cartoon.lighting import (
     light_changing,
     lifted,
     light_grade,
+    pool_strength,
     shadow_ellipse,
     tint_grade,
 )
@@ -47,6 +48,9 @@ from vidgen.theme import Theme
 
 #: The attribute :func:`mark_lit` sets on what the light grades.
 LIT = "light_graded"
+#: The camera's attribute saying how strongly an iso place's pools of light show (DESIGN.md §104;
+#: :data:`~vidgen.cartoon.iso_pictures.POOL_STRENGTH`, the same name).
+POOL_STRENGTH = "pool_strength"
 #: Colour of the stars (no theme token is light in every preset).
 STAR_COLOR = "#FFF6DA"
 #: A shadow's rings, from the outside in: size as a share of the shadow, share of its opacity.
@@ -147,8 +151,10 @@ class StageLight:
         self._listeners: list[Callable[[LightGrade], None]] = []
         #: grades lifted by a fill light, by (grade, share): made once (§100.15)
         self._lifted: dict[tuple[LightGrade, float], LightGrade] = {}
+        self.camera = camera
         if flat:
             return
+        setattr(camera, POOL_STRENGTH, pool_strength(base))
         fill, stroke, image = camera.get_fill_rgbas, camera.get_stroke_rgbas, camera.display_image_mobject
         camera.get_fill_rgbas = lambda vmobject: self._graded(vmobject, fill(vmobject))
         camera.get_stroke_rgbas = lambda vmobject, *args, **kwargs: self._graded(vmobject, stroke(vmobject, *args, **kwargs))
@@ -209,6 +215,8 @@ class StageLight:
             grade = alarm_grade(grade, self.alarms, now)
         if grade != self.grade:
             self.grade = grade
+            if not self.flat:   # an iso place's pools of light (§104)
+                setattr(self.camera, POOL_STRENGTH, pool_strength(grade))
             for listener in self._listeners:
                 listener(grade)
 

@@ -161,7 +161,7 @@ def test_includes_merge_in_order_relative_to_their_file(tmp_path: Path) -> None:
         ({"video.yaml": {"include": "a.yaml"}, "a.yaml": {"include": "sub/b.yaml"}, "sub/b.yaml": {"include": "../a.yaml"}},
          "video.yaml -> a.yaml -> sub/b.yaml: include '../a.yaml' makes a cycle: a.yaml -> sub/b.yaml -> a.yaml", "include", "sub/b.yaml"),
         ({"video.yaml": {"include": ["a.yaml"]}, "a.yaml": {"include": ["gone.yaml"]}}, "video.yaml -> a.yaml: include 'gone.yaml' not found", "include[0]", "a.yaml"),
-        ({"video.yaml": {"include": ["a.yaml"]}, "a.yaml": {"theme": {"preset": "x"}}}, "a.yaml: an included file holds include, characters, voices, sets; not theme", "theme", "a.yaml"),
+        ({"video.yaml": {"include": ["a.yaml"]}, "a.yaml": {"theme": {"preset": "x"}}}, "a.yaml: an included file holds include, characters, voices, sets, variants; not theme", "theme", "a.yaml"),
         ({"video.yaml": {"include": [3]}}, "include: give a file name or a list", "include", None),
         ({"video.yaml": {"include": ["notes.txt"]}}, "include 'notes.txt' is not a .yaml, .yml or .json file", "include[0]", None),
     ],

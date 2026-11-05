@@ -72,7 +72,7 @@ LEAN_SECONDS = 0.8
 #: The actions that sit, lean or stand up, and the whole-character moves a character that sits or
 #: leans cannot make before it stands up.
 POSTURE_ACTIONS: frozenset[str] = frozenset({"sit_on", "lean_on", "stand_up"})
-PINNED_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit", "jump", "turn", "move_along", "keyframes"})
+PINNED_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit", "jump", "turn", "move_along", "keyframes", "wander", "meet"})
 
 
 class PostureError(ValueError):
@@ -101,7 +101,7 @@ class Postures:
         if now is not None and now[0] == "riding":
             raise PostureError(f"{character} rides '{now[1]}' then; get_out first (- get_out: {character})")
         if now is not None:
-            verb = "sits on" if now[0] == "sitting" else "leans on"
+            verb = {"sitting": "sits on", "lying": "lies on"}.get(now[0], "leans on")
             raise PostureError(f"{character} {verb} '{now[1]}' then; stand_up first (- stand_up: {character})")
 
     def riders(self, vehicle: str) -> list[str]:
@@ -135,6 +135,9 @@ class Postures:
         """``character`` sits down on ``prop``, whose seat has ``places`` places (one character
         each), in the first free one of ``prefer`` (default: in order); the place it took."""
         self._free(character)
+        lying = [who for who in self.on(prop) if self.held[who][0] == "lying"]
+        if lying:
+            raise PostureError(f"'{prop}' is taken: {lying[0]} lies on it then")
         sitting = [who for who in self.on(prop) if self.held[who][0] == "sitting"]
         taken = {self.places.get(who, 0) for who in sitting}
         free = [k for k in [*prefer, *range(places)] if 0 <= k < places and k not in taken]
@@ -145,6 +148,17 @@ class Postures:
         self.held[character] = ("sitting", prop)
         self.places[character] = free[0]
         return free[0]
+
+    def lie(self, character: str, prop: str) -> None:
+        """``character`` lies down on ``prop`` (a bed of an iso place, DESIGN.md §105.2): nobody
+        else may sit or lie on it then."""
+        self._free(character)
+        others = [who for who in self.on(prop) if self.held[who][0] in ("sitting", "lying")]
+        if others:
+            verb = "lies" if self.held[others[0]][0] == "lying" else "sits"
+            raise PostureError(f"'{prop}' is taken: {others[0]} {verb} on it then")
+        self.held[character] = ("lying", prop)
+        self.places[character] = 0
 
     def lean(self, character: str, prop: str) -> None:
         """``character`` leans its back on ``prop`` (several may lean on one prop)."""

@@ -1,8 +1,8 @@
 """Shared casts and sets: ``include:`` files and named ``sets:`` (DESIGN.md §69.35). No manim.
 
 A project's config may start from other files: ``include: [cast.yaml, ../shared/sets.yaml]``
-(paths relative to the file that names them) holding ``characters``, ``voices``, ``sets`` and
-their own ``include``. :func:`read_project_config` reads them and merges them with
+(paths relative to the file that names them) holding ``characters``, ``voices``, ``sets``,
+``variants`` (e.g. the Shorts ``vidgen shorts suggest`` writes) and their own ``include``. :func:`read_project_config` reads them and merges them with
 :func:`merge_config`: a file's includes first, then the file; the project's own keys last, so they
 win. Mappings merge key by key, ``characters`` entries by name (an entry of a later file changes
 the earlier entry of that name), other values replace.
@@ -33,7 +33,7 @@ from vidgen.cartoon.stage import numbered_names, prop_default_name
 from vidgen.errors import Problem, VidgenError
 
 #: Top-level keys an included file may hold.
-INCLUDABLE_KEYS: tuple[str, ...] = ("include", "characters", "voices", "sets")
+INCLUDABLE_KEYS: tuple[str, ...] = ("include", "characters", "voices", "sets", "variants")
 #: Set params that are one choice: a stage that gives any of them drops all of the set's.
 BACKGROUND_KEYS = frozenset({"image", "generate", "background"})
 #: A stage's indoor set (DESIGN.md §69.42): another choice of backdrop, see :func:`apply_set`.
@@ -359,7 +359,8 @@ _CHARACTER_SIZES = ("small", "medium", "large")
 
 def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any, dict[str, Origin]]:
     """``data`` with the video's ``character_size`` (DESIGN.md §86.10) given to every ``stage``
-    scene whose params (after its set) give neither ``character_size`` nor ``size`` nor an ``iso`` place, and
+    scene whose params (after its set) give neither ``character_size`` nor ``size`` nor an ``iso`` place
+    (one with ``wide: fixed`` takes it: its view's scale, DESIGN.md §106), and
     ``origins`` pointing those at the video's key; the scene's own setting wins."""
     updated = dict(origins)
     named = data.get("character_size") if isinstance(data, Mapping) else None
@@ -368,8 +369,9 @@ def expand_character_size(data: Any, origins: Mapping[str, Origin]) -> tuple[Any
     scenes: list[Any] = []
     for i, scene in enumerate(data["scenes"]):
         params = scene.get("params", {}) if isinstance(scene, Mapping) else None
+        iso = params.get("iso") if isinstance(params, Mapping) else None
         if (not isinstance(params, Mapping) or scene.get("type") != "stage" or "character_size" in params or "size" in params
-                or params.get("iso") is not None):   # an iso place sets its own size (DESIGN.md §89.7)
+                or (iso is not None and not (isinstance(iso, Mapping) and iso.get("wide") == "fixed"))):   # an iso place sets its own size (§89.7), but wide: fixed (§106)
             scenes.append(scene)
             continue
         scenes.append({**scene, "params": {**params, "character_size": named}})

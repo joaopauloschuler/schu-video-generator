@@ -5,6 +5,7 @@ layers that move by their factor when the camera moves (§69.7), props (§69.8),
 props that move by themselves (§69.54), snow that settles and fog (§69.60), lightning, rainbows
 and the sun and moon moving across the sky (§69.61)."""
 
+import difflib
 import math
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -21,6 +22,11 @@ from .effect_action import show_symbol
 from .image import check_image, is_vector, load_image
 from .stage_iso import IsoStaging, _moving_block, iso_particle_problem
 from .stage_story import FlashbackSetting, StoryStaging
+from .stage_seats import IsoSeating
+from .stage_vehicles import IsoDriving
+from .stage_daylight import DayPassing
+from .stage_weather import IsoWeather
+from .stage_ambient import IsoAmbience
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
@@ -169,6 +175,8 @@ class StageProp(SceneParams):
     """wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it."""
     on: bool = False
     """A tv, a lamp, a fireplace, a kettle, a phone, a portal or a hologram_display: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams, a phone rings and shakes, a portal is open, a display shows its panel; the switch_on / switch_off actions change it)."""
+    auto_light: bool = True
+    """A lamp: false keeps it as it is when a time_of_day action passes dusk or dawn (by default it switches on at dusk and off at dawn by itself)."""
     time: str | None = None
     """A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning."""
     speed: float | None = Field(None, gt=0.0, le=MAX_CLOCK_SPEED)
@@ -210,6 +218,8 @@ class StageProp(SceneParams):
             raise ValueError(f"open is for props that open ({able}), not {self.prop or 'an svg prop'}")
         if self.on and self.prop not in SWITCHED_PROPS:
             raise ValueError(f"on is for props that switch on ({', '.join(SWITCHED_PROPS)}), not {self.prop or 'an svg prop'}")
+        if not self.auto_light and self.prop != "lamp":
+            raise ValueError(f"auto_light is for a lamp (a time_of_day switches it by itself), not {self.prop or 'an svg prop'}")
         if (self.time is not None or self.speed is not None) and self.prop != "clock":
             raise ValueError(f"time and speed are for a clock, not {self.prop or 'an svg prop'}")
         if self.time is not None:
@@ -358,6 +368,56 @@ class StageFogSetting(SceneParams):
     def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
         """``true`` or a density is also fog (JSON Schema ``anyOf`` true | density | object)."""
         return {"anyOf": [{"const": True}, {"type": "number", "exclusiveMinimum": 0, "maximum": 1}, handler(core_schema)]}
+
+
+class StageAmbient(SceneParams):
+    """Ambient life on an iso place (DESIGN.md §105.7): background walkers, birds, a cat, ducks,
+    butterflies, fireflies and flies going about their business, away from the main characters,
+    hidden in close shots. ``true`` is every kind that suits the place (``auto``)."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (bool,)
+
+    walkers: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["walkers"])] = 0
+    """Background people strolling between the spots and along the paths, stopping and looking round (true: 3); they never speak and keep off where the characters stand and go, the seats, the roads cars drive on and a train's track."""
+    birds: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["birds"])] = 0
+    """Small birds pecking and hopping on the ground and flying off now and then, over the place or out of it and back (true: 4)."""
+    cat: bool = False
+    """A cat strolling about, sitting down and grooming (indoors too)."""
+    ducks: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["ducks"])] = 0
+    """Ducks gliding on the place's water (~) and dipping (true: 2)."""
+    butterflies: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["butterflies"])] = 0
+    """Butterflies fluttering from flower to flower (bushes, plants) by day, fading out at dusk (true: 3)."""
+    fireflies: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["fireflies"])] = 0
+    """Fireflies hovering and blinking near the grass, bushes and trees at night, coming out at dusk (true: 10)."""
+    flies: bool | Annotated[int, Field(ge=0, le=AMBIENT_MAX["flies"])] = 0
+    """A fly buzzing about (indoors too; true: 1)."""
+    muted: bool = True
+    """The walkers a little smaller and greyer than the characters, so they stay in the background; false: as colourful as the cast."""
+    seed: int | None = None
+    """Varies who goes where and the walkers' and animals' colours; default: one from the scene."""
+    auto: bool = False
+    """Every kind that suits the place besides those given (what ambient: true means): outdoors walkers, birds, a cat, ducks on water, butterflies and fireflies (each when the light suits it); indoors a cat and a fly."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain(cls, data: Any) -> Any:
+        if data is False:
+            raise ValueError("ambient: false is the default; leave ambient out")
+        return {"auto": True} if data is True else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """``true`` is also ambient life (JSON Schema ``anyOf`` true | object)."""
+        return {"anyOf": [{"const": True}, handler(core_schema)]}
+
+    def counts(self, *, indoor: bool) -> dict[str, int | bool]:
+        """The kinds asked for (:data:`AMBIENT_KEYS`): those given, and with ``auto`` the others
+        that suit the place (indoors or out)."""
+        found: dict[str, int | bool] = {key: getattr(self, key) for key in AMBIENT_KEYS if key in self.model_fields_set}
+        if self.auto:
+            kinds = INDOOR_KINDS if indoor else {"walker", "bird", "cat", "duck", "butterfly", "firefly"}
+            found = {**{key: True for key, kind in AMBIENT_KEYS.items() if kind in kinds}, **found}
+        return found
 
 
 class LayerShape(SceneParams):
@@ -586,7 +646,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims)."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood, telescope, satellite_dish, charging_station, crate_stack, airlock (2 x 1), printer_3d, hazard_sign, fire_extinguisher; at home: fireplace (2 x 1), kitchen_counter (2 x 1), stove, sink, bookshelf_tall, armchair, floor_lamp, tv, piano (2 x 1), bathtub (2 x 1), wardrobe (2 x 1), crib; in a café or shop: cafe_table (2 x 1, with two chairs), counter (2 x 1), cash_register, display_case (2 x 1), market_stall (2 x 1), vending_machine; in town: street_lamp, traffic_light, bus_stop (2 x 1), mailbox, fountain (2 x 2), phone_booth, car (2 x 1), bicycle, newsstand (2 x 1); in nature: campfire, tent (2 x 2), log (2 x 1), stump, mushroom_ring (2 x 2), pond (2 x 2), scarecrow, beehive; on a farm, at school or in an office: vegetable_patch (2 x 1), wheelbarrow, hay_bale (2 x 1), school_desk, desk_with_pc (2 x 1), water_cooler, printer, globe, trophy_shelf (2 x 1); in a fantasy tale: treasure_chest, cauldron, giant_crystal, throne, torch_sconce (at a cell of a back wall), signpost, archway (2 x 1), statue; for seasons, a harbour and travel: christmas_tree, snowman, pumpkin, gift_pile, balloon_bunch, birthday_cake, boat (2 x 1, floats on water ~), dock (1 x 2, over water, walked on), lighthouse, train_car (3 x 1), rocket (2 x 2)."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -600,34 +660,58 @@ class IsoObjectParam(SceneParams):
     detail: ThemeColor | None = None
     """Its second colour (a house's roof, a lamp's light, flower heads...)."""
     open: bool | None = None
-    """A house: true starts its door open; flowers: false starts them in bud (the open / close actions change it later)."""
+    """A house: true starts its door open; flowers: false starts them in bud; a laptop: false starts it closed; a lab_fridge, an airlock or a wardrobe: true starts its door open; a treasure_chest: true starts its lid open (its gold glows; the open / close actions change it later)."""
     on: bool | None = None
-    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default) (switch_on / switch_off change it)."""
+    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge, coffee_machine, grow_rack, specimen_tank, chemistry_bench, distillation_rig, lab_fridge, fume_hood, satellite_dish, charging_station, airlock, printer_3d, fireplace (lit), stove, floor_lamp (lit), tv, vending_machine (lit), street_lamp (lit), traffic_light (cycles), fountain (runs), phone_booth (lit), car (headlights), campfire (lit), pond (ripples), beehive (bees out), desk_with_pc (its screen), water_cooler (bubbles), printer (prints), globe (spins), cauldron (bubbles over its fire), giant_crystal (glows), torch_sconce (lit), christmas_tree (lights twinkle), pumpkin (glows), balloon_bunch (sways), birthday_cake (candles burn), boat (bobs, its lantern lit), lighthouse (its beam sweeps) or rocket (fires): true starts it working (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
+    auto_light: bool = True
+    """A lamp, floor_lamp, street_lamp, house (its windows), phone_booth, vending_machine, lighthouse, christmas_tree, pumpkin or car (headlights): false keeps it as it is when a time_of_day action passes dusk or dawn (by default it switches on at dusk and off at dawn by itself)."""
     height: float | None = Field(None, ge=2.0, le=30.0)
     """A tower: how tall it is, in tiles (2-30; a character is 2 tiles tall); default 9."""
     screen: bool = False
     """A tower: a big info screen on its front whose lines of text crawl up."""
     garden: bool = False
     """A tower: glowing bands of algae farms up its sides, pulsing softly."""
+    time: str | None = Field(None, pattern=r"^([01]?\d|2[0-3]):[0-5]\d$")
+    """A wall_clock: the time its hands show, "HH:MM" (default 10:10)."""
+    kind: str | None = None
+    """A hazard_sign: biohazard (default), radiation or authorised (a staff-only board); a display_case: cakes (default) or jewels."""
 
     @model_validator(mode="before")
     @classmethod
     def _on_key(cls, data: Any) -> Any:
         if isinstance(data, dict) and True in data and "on" not in data:   # YAML 1.1 reads the bare key `on` as true
             data = {("on" if key is True else key): value for key, value in data.items()}
+        if isinstance(data, dict) and isinstance(data.get("object"), str) and data["object"] not in OBJECT_KINDS:
+            close = difflib.get_close_matches(data["object"], list(OBJECT_KINDS), n=1, cutoff=0.6)
+            hint = f"; did you mean {close[0]}?" if close else ""
+            raise ValueError(f"unknown object '{data['object']}'{hint} (objects: {', '.join(OBJECT_KINDS)})")
+        styles = OBJECT_STYLES.get(data.get("object")) if isinstance(data, dict) and isinstance(data.get("object"), str) else None
+        if styles and isinstance(data.get("kind"), str) and data["kind"] not in styles:
+            close = difflib.get_close_matches(data["kind"], list(styles), n=1, cutoff=0.6)
+            hint = f"; did you mean {close[0]}?" if close else ""
+            raise ValueError(f"unknown {data['object']} kind '{data['kind']}'{hint} (kinds: {', '.join(styles)})")
         return data
 
     @model_validator(mode="after")
     def _states(self) -> "IsoObjectParam":
         if self.open is not None and self.object not in OPENING_KINDS:
-            raise ValueError(f"open is for a house (its door) or flowers (in bloom or in bud), not {_a(self.object)}")
+            raise ValueError(f"open is for a house (its door), flowers (in bloom or in bud), a laptop, a lab_fridge, an airlock, a wardrobe or a treasure_chest, "
+                             f"not {_a(self.object)}")
+        if not self.auto_light and self.object not in AUTO_LIGHT_KINDS:
+            raise ValueError(f"auto_light is for the lights a time_of_day switches by itself ({', '.join(sorted(AUTO_LIGHT_KINDS))}), "
+                             f"not {_a(self.object)}")
         if self.on and self.object not in SWITCHED_KINDS:
-            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), not {_a(self.object)}")
+            raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), or one of {', '.join(sorted(SWITCHED_KINDS - {'house', 'lamp', 'tower'}))}, "
+                             f"not {_a(self.object)}")
         for option in ("height", "screen", "garden"):
             if getattr(self, option) and self.object != "tower":
                 raise ValueError(f"{option} is for a tower, not {_a(self.object)}")
+        if self.time is not None and self.object != "wall_clock":
+            raise ValueError(f"time is for a wall_clock, not {_a(self.object)}")
+        if self.kind is not None and self.object not in OBJECT_STYLES:
+            raise ValueError(f"kind is for a hazard_sign or a display_case, not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
@@ -637,9 +721,9 @@ class IsoObjectParam(SceneParams):
 
     def placing(self) -> ObjectPlacing:
         at = self.at if isinstance(self.at, str) else (self.at.column, self.at.row)
-        features = tuple(name for name in ("screen", "garden") if getattr(self, name))
+        features = tuple(name for name in ("screen", "garden") if getattr(self, name)) + ((self.kind,) if self.kind else ())
         return ObjectPlacing(self.object, at, self.name, self.facing, (self.size[0], self.size[1]) if self.size else None, self.color, self.detail,
-                             self.height, features)
+                             self.height, features, self.time)
 
 
 class IsoTrafficLane(SceneParams):
@@ -681,6 +765,25 @@ class IsoHazeParam(SceneParams):
     """Seconds into the scene when it fades in (0: there from the start)."""
 
 
+class IsoFixedWide(SceneParams):
+    """``iso.wide: {tiles: N}`` (DESIGN.md §106): the fixed wide view with ``N`` tile widths
+    across the frame."""
+
+    tiles: float = Field(ge=2.0, le=80.0)
+    """How many tile widths (one cell's diamond) fit across the frame's width (16:9 at character_size medium: about 11; 9:16: about 3.4)."""
+
+
+def _iso_wide_given(iso: Any) -> str | None:
+    """``fixed`` when an ``iso`` param (a mapping or a :class:`StageIso`) asks for ``wide:
+    fixed``, ``tiles`` for ``wide: {tiles: N}``, else ``None`` (DESIGN.md §106)."""
+    wide = iso.get("wide") if isinstance(iso, dict) else getattr(iso, "wide", None)
+    if wide == "fixed":
+        return "fixed"
+    if isinstance(wide, (dict, IsoFixedWide)):
+        return "tiles"
+    return None
+
+
 class StageIso(SceneParams):
     """An isometric place (DESIGN.md §89): written as a small map, seen from above at an angle."""
 
@@ -698,8 +801,8 @@ class StageIso(SceneParams):
     """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
     name_tags: bool = True
     """While a character speaks and is small on screen (a wide view), a tag with its name over its head shows who speaks (not with a speech bubble); false: none."""
-    wide: Literal["auto", "fill"] | Annotated[float, Field(ge=1.0, le=2.5)] = "auto"
-    """How the wide (establishing) view frames the place: auto (the whole room in a landscape frame; outdoors the place fills the frame, its tips cut); fill (a room fills the frame too: its spots, objects and characters kept, the walls' far corners may be cut); or a number from 1 to 2.5: that many times closer than the whole place (kept on the characters)."""
+    wide: Literal["auto", "fill", "fixed"] | Annotated[float, Field(ge=1.0, le=2.5)] | IsoFixedWide = "auto"
+    """How the wide (establishing) view frames the place: auto (the whole place, moved in until its bounding box fills the frame: its tips cut, outdoors about half the frame is ground; a room whole in a landscape frame); fill (a room fills the frame too: its spots, objects and characters kept, the walls' far corners may be cut); a number from 1 to 2.5: that many times closer than the whole place (kept on the characters); fixed: the same scale whatever the map's size (a character about 0.2 of the frame's height at character_size medium), centred on the characters as far as the ground reaches: a big enough map fills the frame with ground (vidgen lint iso_ground names the size), a smaller one shows centred; {tiles: N}: fixed with N tile widths across the frame."""
     shutters: bool = False
     """An indoor place: true starts with steel shutters down over its windows (the shutters action opens and closes them)."""
     traffic: list[IsoTrafficLane] = []
@@ -710,6 +813,25 @@ class StageIso(SceneParams):
     """Shimmering air over spots of the place, {at, width, height, color, strength, from} each: a heat-haze ripple with faint sparkles (strange air round a door, over a vent)."""
     wall_lights: ThemeColor | Annotated[list[ThemeColor], Field(min_length=1, max_length=2)] | None = None
     """An indoor place: neon strip lights along the top of its standing walls, glowing whatever the light (a corridor or a club at night): a colour, or two (the left back wall's, the right one's)."""
+
+    @property
+    def fixed(self) -> bool:
+        """Whether the wide view is the fixed one (``wide: fixed`` or ``{tiles: N}``, §106)."""
+        return self.wide == "fixed" or isinstance(self.wide, IsoFixedWide)
+
+    def view_tiles(self, frame_width: float, frame_height: float, character_size: str | None = None) -> float | None:
+        """The tile widths across the frame of the fixed wide view (its ``tiles``, else from
+        ``character_size``: :func:`~vidgen.cartoon.iso_stage.fixed_tiles`); ``None`` for the
+        other wide views (DESIGN.md §106)."""
+        if isinstance(self.wide, IsoFixedWide):
+            return self.wide.tiles
+        if self.wide == "fixed":
+            return fixed_tiles(frame_width, frame_height, character_size)
+        return None
+
+    def wide_fit(self) -> str | float:
+        """``wide`` as :func:`~vidgen.cartoon.iso_stage.wide_view`'s ``fit``."""
+        return "fixed" if self.fixed else self.wide   # type: ignore[return-value]
 
     def wall_light_colors(self) -> tuple[str, str] | None:
         """The strip lights' colours (DESIGN.md §102.18): the left back wall's (a wall along a
@@ -787,6 +909,14 @@ class StageIso(SceneParams):
         placed = self.parsed().objects[-len(self.objects):] if self.objects else ()
         return {item.name: param.state() for param, item in zip(self.objects, placed) if param.state() != default_state(param.object)}
 
+    def auto_lit(self) -> dict[str, str]:
+        """The lights a ``time_of_day`` action switches by itself (DESIGN.md §105.3) by name:
+        their kinds (:data:`AUTO_LIGHT_KINDS`, not those placed with ``auto_light: false``)."""
+        place = self.parsed()
+        placed = place.objects[-len(self.objects):] if self.objects else ()
+        kept = {item.name for param, item in zip(self.objects, placed) if not param.auto_light}
+        return {item.name: item.kind for item in place.objects if item.kind in AUTO_LIGHT_KINDS and item.name not in kept}
+
     def changeable_names(self) -> list[str]:
         """The names an action may change or name: the objects and the doors that open."""
         return list(self.object_kinds())
@@ -816,7 +946,7 @@ class _Parallax:
 
 
 @scene("stage")
-class Stage(IsoStaging, StoryStaging, NarratedScene):
+class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStaging, StoryStaging, NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
     gradient), a ground line and the video's characters standing on named marks.
 
@@ -888,7 +1018,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
     one). They sit on a chair, a rock, a box, a sofa, an armchair, a bed, a bench, a log or at a
     desk or a school desk with ``sit_on``, lean on a tree, a pine, a door, a sign, a bus stop, a
     counter, shelves or a wardrobe with ``lean_on``, and get up with
-    ``stand_up``. They ``get_in`` a car or a bus (or on a bicycle), ``ride_to`` a place in it with
+    ``stand_up``; on an iso place they sit on its chairs, benches, sofas, armchairs, stools, logs
+    and café tables, ``lie_on`` a bed and ``use`` a laptop, a fire, a shelf or a machine. They ``get_in`` a car or a bus (or on a bicycle), ``ride_to`` a place in it with
     its wheels turning (pedalling on a bicycle) and ``get_out``. ``water`` puts a strip of water
     with waves at the front, where a boat bobs and rides; a hot-air balloon rises, drifts with the
     wind and lands; a toy rocket launches with smoke and floats down under its parachute (or flies
@@ -906,7 +1037,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
     mid_still_actions = frozenset({
         "walk_to", "run_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
-        "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out", "let_go", "pour",
+        "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out", "let_go", "pour", "drive_to", "sail_to", "lift_off",
+        "lie_on", "use",
     })
 
     @classmethod
@@ -969,7 +1101,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         shadows: bool = True
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
         wind: WindSetting = 0.0
-        """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); the wind action changes it during the scene, blow_away blows a light prop away."""
+        """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); on an iso place its trees, bushes, flowers, plants, scarecrows and balloon bunches sway (outdoors); the wind action changes it during the scene, blow_away blows a light prop away."""
         room: StageRoom | None = None
         """An indoor set instead of the sky and the ground: true, or {wall, wallpaper (plain, stripes, dots), floor, flooring (boards, tiles, plain), skirting, ceiling, depth, windows, doors}; windows show the sky of the stage's light, doors are door props whose names are marks (enter / exit through them); no wind, rain, snow, leaves or streaks inside."""
         water: WaterStrip | None = None
@@ -977,7 +1109,9 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         birds: StageBirds | None = None
         """A flock of birds crossing the sky, flapping: true, a number of birds, or {count, direction, height, start, seconds, seed}; outdoors only (the birds action sends one later)."""
         fog: StageFogSetting | None = None
-        """Fog in translucent bands lying between the characters and props by depth, thicker further back (the sky most), drifting slowly and with the wind: true, a density from 0 to 1 (true: 0.5), or {density, color, drift, seed}; outdoors only."""
+        """Fog in translucent bands lying between the characters and props by depth, thicker further back (the sky most), drifting slowly and with the wind: true, a density from 0 to 1 (true: 0.5), or {density, color, drift, seed}; on an iso place in bands across the place; outdoors only."""
+        ambient: StageAmbient | None = None
+        """An iso place's ambient life: true (every kind that suits the place), or {walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}: background walkers, birds, a cat, ducks, butterflies by day and fireflies at night going about the place, away from the characters, never speaking, hidden in close shots; indoors a cat and flies."""
         drawing: DrawingConfig | None = None
         """How this scene is drawn {outline: thin | normal | bold, shading: flat | soft, texture: none | paper | storybook, seed}: the keys given win over the video's drawing."""
         level: StageLevel | None = None
@@ -995,10 +1129,12 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
             if not isinstance(data, dict):
                 return data
             if data.get("iso") is not None:
-                given = [key for key in ("size", "character_size") if data.get(key) is not None]
+                wide = _iso_wide_given(data["iso"])
+                given = [key for key in ("size", "character_size") if data.get(key) is not None and not (key == "character_size" and wide == "fixed")]
                 if given:
                     raise ValueError(f"on an iso place the characters' size follows the place (a character is two tiles tall): remove {' and '.join(given)} "
-                                     "(a beat's shot makes them large: shot: closeup <name>, two_shot, follow)")
+                                     "(a beat's shot makes them large: shot: closeup <name>, two_shot, follow; "
+                                     + ("iso.wide's tiles set the view's scale" if wide == "tiles" else "or iso: {wide: fixed}, whose scale character_size sets") + ")")
                 return data
             named = data.get("character_size")
             if "size" in data:
@@ -1052,6 +1188,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
                 if prop.against == "wall" and self.room is None:
                     raise ValueError(f"props[{k}]: against: wall needs a room (room: true) to stand against")
             self._check_water_and_air(marks)
+            if self.ambient is not None and self.iso is None:
+                raise ValueError("ambient life goes about an iso place (give the stage an iso); on this stage birds sends a flock across the sky")
             if self.room is not None:
                 self._check_room()
             if self.iso is not None:
@@ -1064,13 +1202,20 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
             """An iso place is the whole set: no level, room, water, width, layers or flat props;
             characters stand at its spots, with no depth (DESIGN.md §89.7)."""
             assert self.iso is not None
-            given = [key for key in ("level", "room", "water", "fog") if getattr(self, key) is not None]
+            given = [key for key in ("level", "room", "water") if getattr(self, key) is not None]
             given += [key for key in ("width", "layers") if key in self.model_fields_set and getattr(self, key) not in ([], 1.0)]
             if given:
                 hints = {"level": "a side-view platform level is its own kind of stage", "room": "an indoor place is iso: {place: indoor}",
-                         "water": "water is ~ on the map", "fog": "fog lies in bands by depth on a flat stage",
+                         "water": "water is ~ on the map",
                          "width": "the whole place fits the frame", "layers": "the background colour or picture shows around the place"}
                 raise ValueError(f"an iso place cannot have {given[0]} ({hints[given[0]]}); remove it, or the iso")
+            if self.iso.place == "indoor":   # weather stays outdoors (DESIGN.md §105.4)
+                if self.fog is not None:
+                    raise ValueError("there is no fog inside an indoor place: remove fog (or use place: outdoor)")
+                if wind_level(self.wind) != 0.0:
+                    raise ValueError("there is no wind inside an indoor place: remove wind (or use place: outdoor)")
+            if self.ambient is not None:
+                self._check_ambient()
             spots = self.iso.parsed().spot_names()
             taken = set(self.iso.changeable_names()) | set(spots)
             for k, item in enumerate(self.particles):
@@ -1101,6 +1246,20 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
                                      f"'{member.at}' (spots: {', '.join(spots) or 'none: put a letter on the map'})")
             if "light" not in self.model_fields_set and any(item.kind == "rain" for item in self.particles):
                 self.light = CustomLight(tint=ISO_RAIN_LIGHT[0], strength=ISO_RAIN_LIGHT[1])   # a rainy day, not a sunny one
+
+        def _check_ambient(self) -> None:
+            """Ambient life suits its place (DESIGN.md §105.7): indoors only a cat and flies,
+            ducks on water."""
+            assert self.ambient is not None and self.iso is not None
+            given = {key: value for key, value in self.ambient.counts(indoor=False).items() if key in self.ambient.model_fields_set and value}
+            if self.iso.place == "indoor":
+                outdoors = [key for key in given if AMBIENT_KEYS[key] not in INDOOR_KINDS]
+                if outdoors:
+                    raise ValueError(f"ambient: {outdoors[0]} live outdoors; inside an indoor place the ambient life is a cat and flies "
+                                     f"(remove {outdoors[0]}, or use place: outdoor)")
+            place = self.iso.parsed()
+            if "ducks" in given and not any(place.ground(c, r) == "water" for r in range(place.rows) for c in range(place.columns)):
+                raise ValueError("ambient: ducks swim on water and the map has none: put ~ on the map (or remove ducks)")
 
         def _check_level(self, marks: dict[str, float]) -> None:
             """A level is the ground: no room, water or width of its own; everything stands on its
@@ -1371,7 +1530,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
             return tuple(n for n in names if any(fnmatchcase(n, p) for p in use.config.targets()))
 
         ordered = [u for _, u in sorted(enumerate(uses), key=lambda iu: (beats.index(iu[1].beat), iu[1].config.at, iu[0]))]
-        steps = [HandlingStep(u.location, u.config.action, matched(u), u.config.options) for u in ordered]
+        steps = [HandlingStep(u.location, u.config.action, matched(u), u.config.options) for u in ordered
+                 if not (iso and u.config.action in ISO_SEAT_ACTIONS)]   # on an iso place: its own replay (§105.2)
         left = -frame.stage_width / 2
         problems = holding_problems(
             steps,
@@ -1432,9 +1592,12 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         steps = []
         for use in ordered:
             action = use.config.action
-            if action not in ISO_MOVES | ISO_ITEM_ACTIONS | ISO_PLACE_CHANGES:
+            if action not in ISO_MOVES | ISO_ITEM_ACTIONS | ISO_PLACE_CHANGES | ISO_VEHICLE_ACTIONS | ISO_SEAT_ACTIONS:
                 continue
             names = objects if action in ISO_PLACE_CHANGES else characters
+            if action in ISO_VEHICLE_ACTIONS:   # the vehicles it moves (§105)
+                kinds = params.iso.object_kinds()
+                names = [n for n in objects if VEHICLE_ACTIONS.get(kinds.get(n, "")) == action]
             moved = tuple(n for n in names if any(fnmatchcase(n, pattern) for pattern in use.config.targets()))
             plan = use.action._iso_plan() if action in ISO_MOVES else dict(use.config.options)
             steps.append(IsoStep(use.location, use.beat, "walk_to" if action == "run_to" else action, moved,
@@ -1613,7 +1776,9 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         #: the scene updater keeping the draw order, kept: Manim removes an updater by identity
         self._order_updater = self._draw_order_step
         fronts = any(c.facing == "front" for c in self.params.characters) or any(u.options.to == "front" for u in self.action_uses("turn"))
-        if fronts:
+        if (fronts or getattr(self, "_iso_gadget_places", None) or getattr(self, "iso_vehicles", None) or getattr(self, "iso_swayers", None)
+                or getattr(self, "iso_critters", None)):
+            # a working object's parts (§103), a vehicle (§105), a tree in the wind (§105.4), ambient life (§105.7)
             self._watch_draw_order()
 
     def _watch_draw_order(self) -> None:
@@ -1759,7 +1924,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
             puddle_count(self.stage_width / self.frame_width), settings.seed, left, right, self.rain_ground(),
             min(self.frame_width, self.frame_height),
         )
-        puddles = Puddles(spots, start=field.start, ended=lambda: field.ended, clock=lambda: float(self.renderer.time))
+        puddles = Puddles(spots, start=field.start - settings.settled, ended=lambda: field.ended, clock=lambda: float(self.renderer.time))
         mark_lit(puddles)
         self.puddles.append(puddles)
         self._lay_on_ground(puddles)
@@ -1848,6 +2013,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         setting = self.params.fog
         if setting is None or self.is_draft:
             return None
+        if self.on_iso:   # in bands by depth over the place (§105.4)
+            return self._iso_fog(setting)
         left, right = self.camera_bounds()[:2]
         color = resolve_color(setting.color, self.theme) if setting.color is not None else FOG_COLOR
         wind = getattr(self, "particle_wind", None)
@@ -1868,6 +2035,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         fog = getattr(self, "fog", None)
         if fog is None:
             return False
+        if self.on_iso:
+            return self._iso_sort_fog()
         before = [id(m) for m in self.mobjects]
         bands = {id(b) for b in fog.bands}
         self.mobjects[:] = [m for m in self.mobjects if id(m) not in bands]
@@ -1963,7 +2132,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         shot = shot_figures(kind, names, present, speakers=getattr(self, "beat_speakers", []), looked_at=looked)
         if kind == "wide" and self.on_iso:   # the place's wide view, keeping who is there (§89.13)
             return self.iso_wide_shot(list(present)), shot
-        view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
+        most = MAX_SHOT_SCALE * (self.zoom_base() if self.on_iso else 1.0)   # closer than an iso place's fixed wide view (§106)
+        view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds(), max_scale=most)
         if self.on_iso and self.frame_height > self.frame_width:   # 9:16 on an iso place: nobody cut at the edge (§90.14)
             view = portrait_shot(view, shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
         return view, shot
@@ -2010,8 +2180,13 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
                 tops = [mob.parts[part].get_top()[1] for part in ("head", "accessory") if mob.has_part(part)]
                 return float(mob.feet()[1]), float(max(tops) if tops else mob.get_top()[1])
 
-            return SmoothFollow(x_of, span_of, followed=mob)
-        return SmoothFollow(lambda: float(mob.get_center()[0]), followed=mob)
+            return SmoothFollow(x_of, span_of, followed=mob, settle=self._follow_settle())
+        return SmoothFollow(lambda: float(mob.get_center()[0]), followed=mob, settle=self._follow_settle())
+
+    def _follow_settle(self) -> Any:
+        """A follow's ``settle``: an iso place's fixed wide view keeps the view on the ground
+        (DESIGN.md §106); ``None`` elsewhere."""
+        return self._iso_on_ground if self.on_iso and self.iso_tiles() is not None else None
 
     @property
     def stage_width(self) -> float:
@@ -2134,7 +2309,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
                 if prop.is_vehicle and VEHICLES[prop.kind].medium == "water":
                     self.water.float_boat(prop)
         # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
-        mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews))], *in_front, *(mob for _, mob in on_stage))
+        mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews)) and m is not self.day_sky], *in_front, *(mob for _, mob in on_stage))
         if p.iso is not None:   # a lamp's light falls on who stands near it (§89.13)
             self.iso_lamplight()
         if self.drawing.shading == "soft":   # the characters' and props' fills (DESIGN.md §79)
@@ -2148,7 +2323,10 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
         backdrop += self._level_story()   # coins and stars float in front of the tiles, not graded by the light
-        self._start_sky_path()
+        self._start_sky_path(any(getattr(m, "name", None) == "ground" for m in backdrop))
+        vehicles =list(getattr(self, "iso_vehicles", {}).items())   # the vehicles the scene moves: bodies of the place (§105)
+        mark_lit(*(vehicle for _, vehicle in vehicles))
+        on_stage = vehicles + on_stage
         # register back to front, so the fade-ins add them (and draw them) in that order
         targets = [self.target(name, mob) for name, mob in on_stage]
         for whole in targets:  # parts come on screen with their character (§69.14)
@@ -2164,7 +2342,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
             """The set comes in as one picture: everything is added at once, back to front, under
             a cover of the background colour that fades out (a fade-in per thing would show the
             things behind through each one while they fade, §69.51)."""
-            shown: list[Mobject] = [*backdrop]
+            shown: list[Mobject] = [*backdrop, *self.iso_ambient_shown()]   # an iso place's creatures (§105.7)
             items: list = []
             for k, t in enumerate(targets):  # moving things' shadows: drawn just before the first of them
                 shown += [moving] if k == first_moving else []
@@ -2259,7 +2437,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         #: (scene time, light preset or ``None`` for a tint) from the start: where the light
         #: counts as changed for the ambience (half-way through each change, DESIGN.md §69.62)
         self.light_marks: list[tuple[float, str | None]] = [(0.0, self.params.light if isinstance(self.params.light, str) else None)]
-        changes = [resolve_light(use.setting(), self.theme) for use in self.action_uses("light")]
+        changes = [resolve_light(use.setting(), self.theme) for use in self._light_uses()]
         self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
         flashes = self._lightning_used() or bool(self.action_uses("alarm"))
         #: the stage's light (``None``: the set as drawn, nothing changes it)
@@ -2278,6 +2456,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         self._bolt_paths: dict[int, list[np.ndarray]] = {}
         self.stars: StarField | None = None
         self.window_views: WindowViews | None = None
+        #: a day passing's sky (DESIGN.md §105.3; ``None``: the set's own background)
+        self.day_sky: Rectangle | None = None
         self.shadows: list[StageShadows] = []
         #: the scene updater while the light changes, kept: Manim removes an updater by identity,
         #: and each ``self._light_step`` is a new bound method
@@ -2289,7 +2469,7 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         ``move_sun``: the suns and moons move along the sky's path to their places for the preset
         meanwhile (DESIGN.md §69.61)."""
         self.light_marks.append((float(start) + max(float(seconds), 0.0) / 2, setting if isinstance(setting, str) else None))
-        if self.window_views is not None:   # the sky outside fades with it (§69.42)
+        if self.window_views is not None or self.day_sky is not None:   # the sky outside fades with it (§69.42, §105.3)
             self._sky_changes.append(SkyChange(float(start), max(float(seconds), 0.0), window_sky(self._light_key(setting))))
         if move_sun and isinstance(setting, str):
             for body in self.sky_bodies:
@@ -2322,12 +2502,17 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
 
     def _show_light(self, grade: LightGrade) -> None:
         """The stars' brightness and the shadows' darkness for ``grade``, and the sky outside a
-        room's windows for the light now (lit by lightning, §69.61)."""
-        if self.stars is not None:
-            self.stars.set_level(grade.stars)
-        if self.window_views is not None:
+        room's windows or of a day passing for the light now (lit by lightning, §69.61, §105.3)."""
+        if self.stars is not None:   # in a day passing's sky they come out late, once it is dark (§105.3)
+            self.stars.set_level(grade.stars ** 2 if self.day_sky is not None else grade.stars)
+        if self.window_views is not None or self.day_sky is not None:
             sky = sky_at(self._sky_base, self._sky_changes, float(self.renderer.time))
-            self.window_views.show(flash_sky(sky, self.light.flash) if self.light is not None else sky)
+            sky = flash_sky(sky, self.light.flash) if self.light is not None else sky
+            if self.window_views is not None:
+                self.window_views.show(sky)
+            if self.day_sky is not None:
+                self.day_sky.set_fill([sky.top, sky.bottom], opacity=1.0)
+                self.day_sky.set_sheen_direction(DOWN)
         for group in self.shadows:
             group.set_strength(grade.shadow)
 
@@ -2416,16 +2601,19 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         if self.rainbows:
             self._watch_living()
 
-    def _start_sky_path(self) -> None:
+    def _start_sky_path(self, ground: bool = False) -> None:
         """With a ``light`` action that has ``move_sun`` (outdoors), every ``sun`` and ``moon``
         prop is a :class:`SkyBody`: placed on the sky's path where the light at the start puts it
-        (a tint: as by day), moved by the light changes, and the shadows cast away from it."""
-        if self.params.room is not None or not any(use.options.move_sun for use in self.action_uses("light")):
+        (a tint: as by day), moved by the light changes, and the shadows cast away from it.
+        ``ground``: a ground band hides the sky under the horizon (a body sinks behind it, §105.8)."""
+        if self.params.room is not None or not any(use.moves_sun(self.params) for use in self._light_uses()):
             return
         start = self.params.light if isinstance(self.params.light, str) else "day"
+        room = self.frame_height / 2 - self._horizon_y() - SKY_TOP_ROOM * self.frame_height
         for prop in self.props.values():
             if prop.kind in SKY_BODIES and prop.held_by is None:
-                body = SkyBody(prop, prop.kind, place_for(prop.kind, start), self._sky_place)
+                sink = float(prop.height) / room if ground and room > 0 else 0.0
+                body = SkyBody(prop, prop.kind, place_for(prop.kind, start), self._sky_place, sink)
                 prop.stage_depth = 1.0   # it moves into the sky, behind everything (entrance)
                 self.sky_bodies.append(body)
         self._sky_step(float(self.renderer.time))
@@ -2532,6 +2720,8 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         self.blowing.wind.change(level, start, seconds)
         if not self.is_draft and not any(f is self._wind_updater for f in self.updaters):
             self.add_updater(self._wind_updater)
+        if getattr(self, "iso_swayers", None):   # the place's trees sway with it (§105.4)
+            self._watch_living()
 
     def _wind_step(self, dt: float) -> None:
         """Scene updater while the wind may move something: props and trailing pieces for now;
@@ -2589,12 +2779,15 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
 
     def _living_names(self) -> set[str]:
         """The props that move by themselves in this scene: running clocks, and the tvs and lamps
-        that are on at the start or that a ``switch_on`` names. Every other prop is drawn as before."""
+        that are on at the start or that a ``switch_on`` names (or, for lamps, a ``time_of_day`` may
+        switch, §105.3). Every other prop is drawn as before."""
         p = self.params
         patterns = [pattern for use in self.action_uses("switch_on") for pattern in use.config.targets()]
+        dusk = any(use.options.auto_lights for use in self.action_uses("time_of_day"))
         return {
             name for name, prop in zip(p.prop_names(), p.stage_props())
             if prop.runs() or (prop.prop in SWITCHED_PROPS and (prop.on or any(fnmatchcase(name, pat) for pat in patterns)))
+            or (dusk and prop.prop == "lamp" and prop.auto_light)
         }
 
     def _start_living(self, names: set[str]) -> None:
@@ -2944,6 +3137,11 @@ class Stage(IsoStaging, StoryStaging, NarratedScene):
         elif p.background is not None or self.light is not None:   # a lit stage grades the theme's background too
             colors = p.background if isinstance(p.background, list) else [p.background or self.theme.background]
             sky = Rectangle(width=fw, height=fh, stroke_width=0)
+            if p.background is None and self.action_uses("time_of_day"):   # a day passing: the sky of the time of day (§105.3)
+                self._sky_base = window_sky(self._light_key(p.light))
+                self._sky_changes = []
+                self.day_sky = sky
+                colors = [self._sky_base.top, self._sky_base.bottom]
             sky.set_fill([resolve_color(c, self.theme) for c in colors], opacity=1.0)
             sky.set_sheen_direction(DOWN)  # a gradient runs from the first colour at the top
             sky.name = "background"
@@ -3449,6 +3647,8 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     if isinstance(anim, Ride):
         lands = 1.0 if anim.flies and anim.course.land else None   # a balloon or a toy rocket touching down (§69.53)
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind, lands=lands)
+    if isinstance(anim, IsoDrive):   # a vehicle on an iso place (§105)
+        return PlayedAction(action, start, seconds, vehicle=anim.kind)
     if isinstance(anim, ArcJump):   # on a level: it lands as its settle starts (DESIGN.md §86.9)
         return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift, lands=1.0 - anim.phases.after, pickups=_picked_kinds(anim))
     if isinstance(anim, Jump):

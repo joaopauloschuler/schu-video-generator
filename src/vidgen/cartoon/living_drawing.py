@@ -266,10 +266,12 @@ class _Shown:
         self.members = members
         self._drawn = [(float(m.get_fill_opacity()), float(m.get_stroke_opacity())) for m in members]
 
-    def show(self, shown: bool) -> None:
+    def show(self, shown: bool | float) -> None:
+        """Show them (``True`` or 1), hide them (``False`` or 0) or show them part way (0..1)."""
+        level = float(shown)
         for member, (fill, stroke) in zip(self.members, self._drawn):
-            member.set_fill(opacity=fill if shown else 0.0)
-            member.set_stroke(opacity=stroke if shown else 0.0)
+            member.set_fill(opacity=fill * level)
+            member.set_stroke(opacity=stroke * level)
 
 
 class PropGlow(VGroup):
@@ -353,7 +355,9 @@ class LivingProp:
         self.wind = wind
         #: Each switch: (scene time, on).
         self.switches: list[tuple[float, bool]] = []
-        self.hands = {name: living_parts(prop, name) for name in HAND_LENGTHS} if self.kind == "clock" else {}
+        #: The switches it fades over, (scene time, seconds): a lamp lit by itself at dusk (§105.3).
+        self.fades: list[tuple[float, float]] = []
+        self.hands ={name: living_parts(prop, name) for name in HAND_LENGTHS} if self.kind == "clock" else {}
         if self.hands:
             _Shown(self.hands["second"]).show(shows_second_hand(self.speed))
         self.flames = living_parts(prop, "flame")
@@ -388,9 +392,22 @@ class LivingProp:
             mark_lit(self.steam)   # steam is graded like the set
         self.update(0.0)
 
-    def switch(self, on: bool, time: float) -> None:
-        """Switch it on (or off) at scene ``time``."""
+    def switch(self, on: bool, time: float, fade: float = 0.0) -> None:
+        """Switch it on (or off) at scene ``time``; its light fades in (or out) over ``fade``
+        seconds (0: at once)."""
         self.switches.append((float(time), bool(on)))
+        if fade > 0:
+            self.fades.append((float(time), float(fade)))
+
+    def _level(self, now: float, on: bool) -> float:
+        """How much of its light shows at scene time ``now`` (0..1): all or nothing, but part way
+        through a fade."""
+        for start, seconds in self.fades:
+            if start <= now < start + seconds:
+                share = (now - start) / seconds
+                share = share * share * (3.0 - 2.0 * share)
+                return share if on else 1.0 - share
+        return 1.0 if on else 0.0
 
     def is_on(self, now: float) -> bool:
         """Whether it is on at scene time ``now`` (a clock always runs)."""
@@ -403,7 +420,7 @@ class LivingProp:
             return True
         if self.kind == "portal":   # while open, opening or sealing (§100.4)
             return portal_changing(self.on, self.switches, start, end)
-        if switch_between(self.switches, start, end):
+        if switch_between(self.switches, start, end) or any(s < end and s + d > start for s, d in self.fades):
             return True
         on = on_between(self.on, self.switches, start, end)
         return on and (self.kind in ("tv", "fireplace", "kettle", "phone", "hologram_display", "scanner", "crystal") or self.movable)
@@ -463,8 +480,8 @@ class LivingProp:
             self._project(now)
             return
         on = self.is_on(now)
-        self._shown.show(on)
-        strength = 1.0 if on else 0.0
+        strength = self._level(now, on)
+        self._shown.show(strength)
         if on and self.kind == "tv":
             picture = tv_picture(now, self.seed)
             for member, color in zip(self.overlays, picture.colors):

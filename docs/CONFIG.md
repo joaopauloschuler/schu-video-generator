@@ -33,7 +33,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `draft` | 240 px on the shorter side, 8 fps | `vidgen render --draft`: `{width, height, fps}`, each optional; see [drafts](#drafts-vidgen-render---draft) |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
-| `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices` and `sets` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
+| `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices`, `sets` and `variants` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `sets` | `{}` | named `stage` sets (`name: {background, layers, props, marks, light, wind...}`) a stage scene uses with `set: NAME`; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
@@ -661,6 +661,44 @@ of two lines covers less of a face near the top than one of three or four). Busy
 many lights) make larger files: re-encode one over a size budget (`ffmpeg -c:v libx264 -crf 23
 -c:a copy`).
 
+### Suggested Shorts (`vidgen shorts suggest`)
+
+`vidgen shorts suggest [PROJECT] [--count 3] [--min 30] [--max 60] [--teaser] [--spoilers]
+[--end-card TEXT] [--write] [--out shorts.yaml] [--json]` (MCP tool `shorts_suggest`) finds the
+windows of the video that would make good Shorts, without AI. Beats are timed by the video's plan
+(their narration MP3s, else the word count at `narration.words_per_second`). A window is a run of
+whole beats of consecutive narrated scenes lasting `--min`..`--max` seconds with the end card. It
+is scored by dialogue (share of time), questions, exclamations, emotional and action words,
+action beats, variety (scenes, speakers, shots), a clean start (a scene's start; not a reply or a
+sentence opening on *he*, *then*...), a strong last line and a length near 45 s; one holding the
+film's ending (its last 15 %) is marked down unless `--spoilers`. Overlapping windows are
+skipped. Each gets a hook: a question or exclamation of the window (spoken lines first) shortened
+to six words, else a line from its situation. The report lists rank, window, beats, length,
+score parts and hook, then notes (what left-out beats did before a mid-scene start). `--teaser`
+adds about 15 s of the best short lines across the film, ending on a title card.
+
+`--write` writes the variants `short1`, `short2`... (`teaser`; names the config already uses are
+skipped) to `shorts.yaml` next to the config and adds it to the config's `include:` (the only edit
+to the config; both files are backed up as `.bak` first). Each is 9:16 with `shorts: true`, `-14`
+LUFS, karaoke captions, the `cut` (scenes and beats), the hook, the end card "Full story on the
+channel" under the title, and a `zoom` with `cut: true, hold: true` opening each stage scene on its
+speakers (no `hold` when one of them walks later); a mid-scene start opens in the light the
+left-out beats' `time_of_day` / `light` left. The written variants validate; look at
+`vidgen storyboard --variant short1 --per-beat 2` and restage in `cut.beats` as above.
+
+```yaml
+# shorts.yaml (written)
+variants:
+  short1:
+    format: {width: 1080, height: 1920}
+    shorts: true
+    cut:
+      scenes: [{scene: the_harbour, beats: {from: the_harbour_b6}}, the_storm]
+      beats: {the_harbour_b6: {actions: [{zoom: [nell, tomas], at: 0, cut: true, hold: true}]}}
+      hook: "The lamp is out!"
+      end_card: "Full story on the channel"
+```
+
 ## Shared casts and sets (`include:` and `sets:`)
 
 A cartoon series keeps its characters, voices and places in shared files, and each episode
@@ -704,7 +742,8 @@ sets:
 ```
 
 - **`include:`** a file name or a list. An included file holds only `characters`, `voices`,
-  `sets` and its own `include` (relative to it; a file reached twice is merged once). The files
+  `sets`, `variants` (e.g. the `shorts.yaml` of [`vidgen shorts suggest`](#suggested-shorts-vidgen-shorts-suggest);
+  paths in its variants are read from the project folder) and its own `include` (relative to it; a file reached twice is merged once). The files
   merge in order, a file's includes before the file, the project's own config last:
   mappings (`voices`, `sets`, a character's `look`) merge key by key; a `characters` entry with a
   name already declared changes that character (its keys win), a new name is added; anything
@@ -10253,9 +10292,10 @@ never leaves the stage.
 | `water` | `true` \| mapping | none | a strip of [water](#water-and-air-vehicles-water-land) with waves at the front of the stage, for a `boat`: `true` (the whole width) or `{left, right, color}` (`left` / `right`: marks or x from 0 to 1; `color`: a theme token or #hex, default a clear blue); not in a `room` |
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds`, `fog` or outdoor particles |
 | `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
-| `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; not in a `room` |
+| `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; on an iso place in bands across it; not in a `room` or an indoor iso place |
+| `ambient` | `true` \| mapping | none | an iso place's [ambient life](#isometric-places-iso): `true` (every kind that suits the place) or `{walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}`; away from the characters, hidden in close shots; indoors only `cat` and `flies` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `fog`, `width`, `layers`, big `props`, `size` or `character_size` |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props` or `size` (`character_size` only with `wide: fixed`) |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10638,6 +10678,36 @@ they hide what is behind them.
   flowers) and a `chess_table` (a small table with a board and pieces); for a city a `tower`
   (2 x 2, 9 tiles tall: see **A city at night** below). The screens, the
   pad's ring and the rack's lights glow: no `light` darkens them.
+  Other objects: `laptop` (`open: false` closed), `terminal_kiosk`, `quantum_core`, `robot_arm`,
+  `microscope`, `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (`at` a cell of a back
+  wall, `time: "03:27"`), `grow_rack`, `terrarium`, `specimen_tank` (`color` its liquid; a
+  `detail` colour adds a floating shape), `chemistry_bench` (2 x 1), `distillation_rig`,
+  `lab_fridge` (`open`), `fume_hood`, `telescope`, `satellite_dish`, `charging_station`,
+  `crate_stack`, `airlock` (2 x 1, `open`), `printer_3d`, `hazard_sign` (`kind: biohazard |
+  radiation | authorised`), `fire_extinguisher`, `fireplace` (2 x 1), `kitchen_counter`
+  (2 x 1), `stove`, `sink`, `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1),
+  `bathtub` (2 x 1), `wardrobe` (2 x 1, `open`), `crib`, `cafe_table` (2 x 1, two chairs),
+  `counter` (2 x 1), `cash_register`, `display_case` (2 x 1, `kind: cakes | jewels`),
+  `market_stall` (2 x 1), `vending_machine`, `street_lamp`, `traffic_light`, `bus_stop` (2 x 1),
+  `mailbox`, `fountain` (2 x 2), `phone_booth`, `car` (2 x 1, `color` its body), `bicycle`,
+  `newsstand` (2 x 1), `campfire`, `tent` (2 x 2), `log` (2 x 1), `stump`, `mushroom_ring`
+  (2 x 2), `pond` (2 x 2), `scarecrow`, `beehive`, `vegetable_patch` (2 x 1), `wheelbarrow`,
+  `hay_bale` (2 x 1), `school_desk` (with its chair), `desk_with_pc` (2 x 1), `water_cooler`,
+  `printer`, `globe`, `trophy_shelf` (2 x 1), `treasure_chest` (`open`: gold glows),
+  `cauldron` (`color` its potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a
+  back wall), `signpost`, `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`,
+  `gift_pile`, `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock`
+  (1 x 2, over water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2);
+  `on: true` / `switch_on` makes the
+  laptop, kiosk, core, arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood,
+  dish, charging station, airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV,
+  vending machine, street lamp, traffic light (cycles), fountain, phone booth, car
+  (headlights), campfire, pond (ripples), beehive (bees), desk_with_pc (its screen), water
+  cooler (bubbles), printer (prints), globe (spins), cauldron (bubbles), giant crystal (glows),
+  torch sconce, Christmas tree (twinkles), pumpkin, balloons (sway), cake (candles), boat
+  (bobs), lighthouse (its beam sweeps) and rocket (fires) work (a lit fireplace, floor lamp,
+  street lamp, phone booth, campfire, cauldron or torch lights who stands near; pools of light
+  and beams show mostly at night).
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
   front looks to the viewer's lower left) or `right` (lower right; its footprint turns: a bench
@@ -10659,7 +10729,8 @@ they hide what is behind them.
   everything smaller; a character is two tiles tall wherever it stands (no `depth`; `size` and
   `character_size` are refused: the camera's shots make characters large, see **The camera**
   below). The scene starts on the **wide view** (the establishing view), which moves in from that
-  fit as far as fills the frame: a place's picture is a diamond, so its tips are cut off, but in
+  fit until the place's *bounding box* fills the frame: a place's picture is a diamond, so its
+  tips are cut off and outdoors about half of the frame is still background around it, but in
   16:9 never the characters, the spots or the `objects` you placed (a house's roof stays whole;
   the map's trees, bushes, flowers and fences may be cut at the edges; a room shows all of
   itself). In 9:16 it keeps just the characters (at their spots, those that `enter` later too)
@@ -10675,6 +10746,29 @@ they hide what is behind them.
   landscape frame too: its spots, placed objects and characters are kept, the far corners of its
   walls may be cut) or a number from 1 to 2.5 (that many times closer than the whole place,
   moved to keep the characters in view): `iso: {place: indoor, wide: fill, map: ...}`.
+  **`wide: fixed`** keeps one scale whatever the map's size, so a *bigger map* fills the frame
+  with ground instead of pulling the camera back: a character is 0.14 / 0.20 / 0.28 of the
+  frame's height at `character_size` `small` / `medium` / `large` (allowed on an iso place with
+  `wide: fixed`; the video's applies too), or `wide: {tiles: N}` shows N tile widths across the
+  frame. The view centres on the characters, moved onto the ground as far as the map allows (a
+  character by the edge stays in view); a map too small for the frame shows centred (the whole
+  place when it is smaller than the view). Ground fills the frame from these square map sizes
+  (lint `iso_ground` names the size; see `docs/COOKBOOK-ISO-CARTOONS.md`):
+
+  | format | `small` | `medium` | `large` |
+  |---|---|---|---|
+  | 16:9 | 34 x 34 | 24 x 24 | 17 x 17 |
+  | 9:16 | 23 x 23 | 16 x 16 | 12 x 12 |
+
+  ```yaml
+  character_size: medium
+  scenes:
+    - {id: green, type: stage, params: {iso: {wide: fixed, map: ...}}}   # a 24 x 24 map in 16:9
+  ```
+
+  Over it a `zoom`'s `scale` is relative to the fixed view (`scale: 2` is twice as close), and
+  shots, `follow` and `pan` move as elsewhere (a follow and a pan stay on the ground as far as
+  their target allows).
 - **`colors`**: `grass`, `earth` (the slab and the sides of raised grass), `path`, `water`,
   `stone` (raised blocks and garden walls outdoors), `floor`, `tiles`, `wall`, `cut` (the top of
   the cut-away walls); theme tokens or #hex. The drawing style's outline width applies; the
@@ -10782,6 +10876,55 @@ they hide what is behind them.
   walking at the same time do not avoid each other** (a route goes round where others stand, not
   round others walking; they pass in front of or behind each other, drawn in the right order).
   Time two walks that cross so they do not meet in one cell, or `meet` them.
+- **Vehicles that move** (actions on `iso.objects`; the stage then draws them itself):
+
+  ```yaml
+  actions:
+    - {drive_to: car, to: shop, via: [{column: 9, row: 2}], speed: 3}   # along path cells (:)
+    - {sail_to: boat, to: pier}                 # across water (~)
+    - {drive_to: train_car, to: {column: 12, row: 1}}   # along its own row or column
+    - lift_off: rocket                          # up and out of the view (run_time, default 4)
+  ```
+
+  A `car` keeps to path cells and a `boat` to water, cell by cell along the map's rows and columns
+  (no diagonals), turning at corners (drawn turned half-way round) and round where its way ends;
+  each stops with its front in the
+  `to` cell (a spot off its way: the nearest cell it can reach, at most two away). A `train_car`
+  rolls along the line of its cells as far as level free grass or path goes (its track is drawn
+  there) and stops with its middle at `to`. A rocket's engine fires (smoke over the pad), it rises
+  faster and faster and is gone; its pad and tower stay. `speed` is in tiles per second (a car 2.6,
+  a train car 2.2, a boat 1.1; a character walks about 1.4). Driving away up the picture a car
+  shows its tail; `switch_on` lights its headlights (a boat's lantern, a rocket's engine);
+  `follow: car` keeps the camera on it. Characters, objects and other vehicles stop it:
+  `vidgen validate` replays the moves with the walks (a walk later goes round where the car
+  stopped) and names what is in the way (`'car' cannot drive to row 4, column 7: row 4, column 7
+  is grass (a car drives along path cells, :)`). An engine sounds (brakes as a car or a train
+  stops, a splash as a boat sets off, a launch's roar).
+- **Sitting, lying and using objects** (a character next to an object of `iso.objects`):
+
+  ```yaml
+  actions:
+    - {sit_on: pip, to: armchair}       # chair, bench, sofa, armchair, throne, lab_stool, log, stump,
+                                        # hay_bale, rock, bus_stop, cafe_table, school_desk, bed
+    - {use: pip, to: laptop, run_time: 4}   # type / warm hands / take a book / press, then hands back
+    - {lie_on: kit, to: bed}            # on its back, the blanket over it
+    - stand_up: pip                     # back to the cell it sat down from
+  ```
+
+  `sit_on` takes the free seat nearest the character (a bench, a sofa, a log, a hay bale, a bus
+  stop and a café table seat two) and faces the way the seat does: out of the object's front (its
+  `facing`), at a `cafe_table` its two chairs face each other, at a `school_desk` the desk (the
+  legs go under it). The
+  parts of the object in front of the sitter are drawn over it (an armchair's or a throne's near
+  arm, a chair's back, a bus shelter's near pane, a bed's blanket), and what stands in front of
+  the object too (a desk in front of a chair). `use` works on a laptop, a desk's PC, a console, a
+  kiosk, a till, a piano (typing), a campfire or a fireplace (warming the hands), shelves (a
+  book), and a stove, a sink, a coffee or vending machine, a water cooler, a microscope, a globe,
+  a printer, a mailbox, a telescope or a counter (a press); seated, the character keeps its seat
+  and facing (a laptop next to its stool). Lip sync, expressions and `look_at` (its head) work
+  while seated or lying. `vidgen validate` names what is wrong: nothing to sit on (`'lamp' is a
+  lamp: nothing to sit on`), too far (with the `walk_to` that fixes it), a seat taken, a walk
+  before `stand_up`. On a plain stage `sit_on` takes a prop with a seat, as before.
 - **Time of day and weather** are the stage's own keys:
   - `light` grades the whole place: `morning` (a soft peach haze), `day`, `sunset` (the evening:
     warm and a little darker), `night` (dark blue, with stars in the sky around the place) or
@@ -10815,6 +10958,45 @@ they hide what is behind them.
     `density: 1` (`settled: 30` starts it white) and stays when the snow stops. Its colour is
     snow white (`color` colours the flakes only).
   - A **run** (or a fast walk) leaves its **speed lines** along the walk's diagonal on screen.
+  - **Reflections**: at night the puddles mirror the place's lights — lit windows, lamps'
+    lanterns, a phone booth, a tower's neon trims — where the mirror image falls (a light `h`
+    tiles up shows `h` under its foot, so a low light or a trim down to the ground shows in a
+    puddle in front of it), as strong as the light is dark (none by day; they fade with
+    `time_of_day` and with a light switched on or off) and wobbling while it rains. `settled: 12`
+    on the rain field starts the puddles full size (seconds of rain already fallen).
+  - **Fog** (`fog: true`, a density, or `{density, color, drift, seed}` as on a flat stage) lies
+    over the place in five bands across it, from its back edge to near its front: each drawn
+    in front of the characters standing further back, so the further back, the more fog; the
+    banks drift (and with the wind) and the light grades them. Outdoors only.
+  - **Wind** (`wind: windy`, a level −1..1, negative to the left; the `wind` action fades it):
+    trees, pines, bushes, flowers, plants and scarecrows bend and sway in gusts (balloon bunches
+    swing on their strings), rain slants, leaves and streaks drift, scarves and hats trail. The objects an action changes
+    stay still. Outdoors only; nothing sways in a `--draft`.
+
+  ```yaml
+  light: night
+  wind: windy
+  fog: {density: 0.5}
+  particles: [{kind: rain, puddles: true, settled: 12}]
+  ```
+- **Ambient life** (`ambient`, a stage key): background creatures going about the place on their
+  own — `walkers` (people strolling between the spots and along the paths, stopping and looking
+  round; `true`: 3, at most 8), `birds` (pecking and hopping, flying off over the place or out of
+  it and back; `true`: 4), `cat` (strolling, sitting, grooming), `ducks` (gliding on `~` water),
+  `butterflies` (from flower to flower by day, gone at dusk), `fireflies` (blinking near grass,
+  bushes and trees at night, out at dusk), `flies`. `ambient: true` sets every kind that suits
+  the place (`auto`). They never speak, are no action targets, keep off where the characters
+  stand and go (they may pass near them, never stop there), the objects the scene uses, the
+  roads a `drive_to` car takes, a train's track and a sailing boat's way, and hide in close shots
+  (a zoom over about 1.5x the wide view: `shot: closeup`, `two_shot`, `follow`). `muted` (default
+  `true`) draws the walkers smaller and greyer; walkers and the cat take lamplight at night as the
+  characters do; `seed` varies them (the same seed, the same life). Indoors only `cat`
+  and `flies`; `ducks` need water; none in a `--draft`. They cost render time (a scene with a
+  dozen: about +40–55 % in a preview).
+
+  ```yaml
+  ambient: {walkers: 3, birds: 4, cat: true, butterflies: true, seed: 1}
+  ```
 - **A city at night.** `tower` objects are tall buildings: walls in `color` (default a night
   blue-grey, `#2A3050`), rows of windows on both faces of which a seeded share is lit (warm and
   cool lights; `on: false` starts them dark, `switch_on` / `switch_off` change them), neon trims
@@ -10902,7 +11084,7 @@ they hide what is behind them.
   mouth (a lamp post across the face is reported, the empty corner of a tree's picture is not),
   `small_speaker` as above, and `offscreen_action` names an action the camera mostly does not
   show while it happens (a walk outside a close-up, a door opening out of view).
-- **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `fog`, `width`,
+- **Not with**: `level`, `room` (use `place: indoor`), `water` (use `~`), `width`,
   `layers` (the background colour or picture shows around the place), big `props` (a tree, a
   sofa: use `objects`), a prop's `depth`, `lift` or `against`. A set (`set: park`) gives an iso place its sky, light, ambience and weather, not its
   props, layers or fog.
@@ -12310,6 +12492,31 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
 
 A sample is `examples/screenplay/humming_box.md`.
 
+#### A story in prose (`vidgen story draft`)
+
+`vidgen story draft STORY.md|.txt [-o DIR|FILE.yaml] [--style iso|flat] [--format 16:9|9:16] [--narrator VOICE] [--seed S] [--force] [--json]`
+(MCP tool `story_draft`) drafts a story cartoon from plain prose, deterministically (no AI): scenes
+at headings, scene breaks (`***`, `* * *`, `---`, a lone `#`) and paragraphs opening on a time cue
+(`The next morning`, `Later`, `That night`); characters (names used as speakers or subjects,
+titles such as `Doctor Vale`), their voice kind (title, a small list of names, the pronouns after
+them) and distinct Kokoro voices; dialogue in double quotes (straight, curly, `«»`; single curly
+`‘…’` in a story without double ones) attributed by speech tag (`said Mara`, `she whispered`, `I
+said`; `said the old man` makes a character `old_man`), action beat, alternation or last mention,
+each with a confidence (a line calling a character by name, `Grandpa! ...`, is the other one's);
+told in the first person, the narrator speaks with the protagonist's voice. Each
+scene stands on a ready-made iso place chosen from its words (`village`, `city`, `lab`, `office`,
+`home`, `cafe`, `forest`, `harbour`, `castle`, `school`, `winter`; `--style flat`: the nearest
+ready-made set), with objects the story names on free cells, light from time cues (`3 AM`, `dawn`,
+`sunset`; a later cue fades with `time_of_day`, night adds `fill_light`), rain / fog / wind / snow,
+characters at the place's spots (`enter` where the story brings one in), beats of up to 25 words
+of narration or one line each (voice, emotion, a close-up on an emotional line, a two-shot on a long
+one, `walk_to` / `run_to` placeholder spots on movement verbs), a modest `ambient` outdoors, a title
+card in the story's mood (dark and neon at night, warm when cosy), an end card, a music bed from
+mood words, captions in the speakers' colours and `auto_direct`. Besides `video.yaml` it
+writes `story_draft.md`: every decision, each line's speaker with its confidence and method, and a
+TODO checklist (beats with a doubtful speaker carry a `# TODO:`). `--json` returns the paths, the
+report's text, the cast, the scenes and every line of dialogue (`speaker`, `confidence`, `method`).
+
 #### A random cast (`vidgen cast`)
 
 `vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE.yaml] [--provider kokoro|openrouter|elevenlabs]
@@ -12506,7 +12713,7 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 | `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground); on an iso place on its grass and paths, with ripples: [Isometric places](#isometric-places-iso)) |
 | `lightning` | `false` | rain on a `stage` only: `true` flashes [lightning](#lightning-and-thunder-lightning) while it rains, at seeded times about every 8 s, with thunder; a number (2–120) is the seconds between strikes on average |
 | `settle` | `false` | snow on a `stage` only: `true` lands it on the ground and on the props, where a white layer grows while it snows ([Snow that settles](#snow-that-settles-settle); on an iso place on its ground, roofs and tops: [Isometric places](#isometric-places-iso)) |
-| `settled` | `0` | with `settle`: seconds of snowfall already lying when it starts, 0–600 (`24` or more: the full layer at density 1) |
+| `settled` | `0` | with `settle`: seconds of snowfall already lying when it starts, 0–600 (`24` or more: the full layer at density 1); rain with `puddles`: seconds of rain already fallen (`10` or more: the puddles full size from the start) |
 
 ```yaml
 - id: storm
@@ -12621,7 +12828,7 @@ the sky low down more than half); a number is the density (above 0, up to 1: a t
 mapping sets `density`, `color` (a theme token or #hex; default a pale grey blue `#DCE2EA`),
 `drift` (0–5, default 1; `0`: the waves stay still unless the wind blows, so the fog is drawn
 once per animation, not on every frame) and `seed` (the waves; default one from the scene). The fog is graded by the
-light (a blue-grey fog at night). A `room` refuses it. While its waves move, everything from the
+light (a blue-grey fog at night). A `room` (and an indoor iso place) refuses it; on an iso place it lies in bands across the place ([Isometric places](#isometric-places-iso)). While its waves move, everything from the
 backmost band on is redrawn on every frame (a scratch forest at preview: about 12 % more
 render time).
 
@@ -12764,6 +12971,43 @@ straight overhead they are as usual. It needs a `sun` or a `moon` prop and the s
     - text: "Then night came and the moon rose."
       actions:
         - {light: night, move_sun: true, run_time: 4}
+```
+
+**A day passing (`time_of_day`)**: `- {time_of_day: sunset, run_time: 6}` (`morning`, `day`,
+`sunset`, `night`, `indoor`; `run_time` default `6`) is the same fade to a preset, made for a whole
+evening or dawn in one shot. A stage without a `background` or picture gets a sky of the time of
+day that fades along (blue by day, gold and pink at sunset, dark blue with stars at night); from
+daylight straight to `night` the fade goes through a sunset (from night to `day` through a
+morning); the stars come out late, once the sky is dark; a `sun` or `moon` prop moves along the
+sky (`move_sun`, default on when the stage has one outdoors), behind the set, setting behind the
+ground. As the light passes **dusk** (darker than an evening, so a `sunset` is past it; from a
+light already that dark, such as a rainy day's, early in the fade) the lights switch on by themselves, each a
+little early or late and fading in over 1.2 s: on an iso place `lamp`, `floor_lamp`,
+`street_lamp`, a `house`'s windows, `phone_booth`, `vending_machine`, `lighthouse`,
+`christmas_tree`, `pumpkin` and a `car`'s headlights (a driving one too), on the flat stage a
+`lamp` prop; at **dawn** they go out again (not on the way to `indoor`). Their pools of light grow
+with the dark (as with `light`), and characters near a lit lamp are lit by it. `auto_lights:
+false` on the action switches nothing; `auto_light: false` on an iso object or a lamp prop keeps
+that one as it is. `fill_light` and towers' windows work as with `light`.
+
+```yaml
+- id: dusk
+  type: stage
+  params:
+    iso:
+      map: |
+        ..........
+        ::::::::::
+        ....s.....
+      spots: {s: square}
+      objects:
+        - {object: street_lamp, at: {column: 3, row: 1}}
+        - {object: lamp, at: {column: 9, row: 3}, auto_light: false}
+    characters: [{name: dot, at: square}]
+  beats:
+    - text: "Evening came, and one by one the street lights came on."
+      actions:
+        - {time_of_day: night, run_time: 6}
 ```
 
 `shadows` (default `true`) puts a soft shadow on the ground under each character and each prop
@@ -13142,11 +13386,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `step_aside`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `knock`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `lie_on`, `use`, `step_aside`, `get_in`, `ride_to`, `get_out`, `drive_to`, `sail_to`, `lift_off`, `light`, `time_of_day`, `wind`, `blow_away`, `effect`, `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit`, `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel`, `form_gametes`, `fill`, `count`, `ratio`, `chi_square`, `deduce`, `analyse`, `risk`, `cross_over`, `measure`, `rearrange`, `mutate`, `scan`, `cleave`, `repair`, `run`, `simulate`, `resample`, `regional`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when: a fraction of the beat's narration (`0` ≤ at < `1`), or a word the beat says, `"@gradient"` ([below](#actions-on-a-spoken-word)) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6 (with `to` on a level: its run-up, crouch, flight and landing), `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6), `let_go` by how far the balloons rise (1–6), `pour` 2.0; a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6 (with `to` on a level: its run-up, crouch, flight and landing), `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `lie_on` 1.2, `use` 3.0, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `drive_to` / `sail_to` as long as the way needs at their `speed`, `lift_off` 4.0, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `time_of_day` 6.0 (the fade), `blow_away` by the distance and the wind (0.6–6), `let_go` by how far the balloons rise (1–6), `pour` 2.0; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -13216,7 +13460,7 @@ a title card, a `transform` of a bar).
 | `gwas` | `title`, `manhattan`, `points`, `chromosome:<n>`, `thresholds`, `significance`, `suggestive`, `peaks`, `peak:<label>`, `qq`, `lambda`, `regional`, `simulated` | regional, reveal, highlight, dim, callout | `points` every variant (`chromosome:16` one chromosome's), `thresholds` both lines, `peak:FTO` a peak's ring and label (its gene, else its lead variant), `qq` the QQ plot, `lambda` λ_GC, `regional` the regional plot (with the `regional` param), `simulated` the "simulated data" tag; see [`gwas`](#gwas) |
 | `pathway` | `title`, `<id>`, `edge:<from>-><to>`, `band:<name>`, `pathway` | signal, inhibit, knockout, drug, amplify, focus, highlight, dim, reveal, callout | a node's id brings its glyph, name and state badges; `band:nucleus` a compartment; `pathway` everything; see [`pathway`](#pathway) |
 | `molecule` | `title`, `membrane`, `scale_bar`, `potential`, `<id>`, `<solute>` | set_state, transport, diffuse, osmosis, action_potential, transcribe, cap, splice, polyadenylate, export, translate, target_er, glycosylate, fold, reveal, dim, highlight, callout, zoom | `membrane` is the bilayer with the names of its two compartments (and its charges); a molecule's id brings its name and part labels; a solute's id its particles and concentration bars; `potential` the voltage readout; see [processes as actions](#processes-as-actions) |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, step_aside, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, knock, drop_fruit, blow_away, sit_on, lean_on, stand_up, lie_on, use, get_in, ride_to, get_out, drive_to, sail_to, lift_off, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`knock`](#ambience-and-door-sounds-ambience-knock) a door, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -13238,9 +13482,10 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
 | `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
 | `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`); `move_sun` (`false`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action; `move_sun: true` moves the sun and moon across the sky meanwhile, the shadows turning. Its "target" is the light, not a target of the scene; no `until`. |
+| `time_of_day` | as the target: `- time_of_day: night` (`day`, `morning`, `sunset`, `night`, `indoor`); `auto_lights` (`true`), `move_sun` (on with a `sun` / `moon` prop outdoors) | on a `stage`: [a day passing](#light-and-shadows-light-shadows): the light fades from `at` over `run_time` seconds (`6`), with a sky of the time of day, day to night through a sunset; at dusk the lamps, windows, lit objects and headlights switch on by themselves (off at dawn). No `until`. |
 | `lightning` | as the target: where (`- lightning: right`, a mark or an x; optional); `distance` (`1` km), `bolt` (`true`), `seed` | on a `stage`: the set flashes and a bolt strikes from `at`, its thunder `distance` × ~3 s later (foley); in a room the windows flash; see [Lightning](#lightning-and-thunder-lightning). `run_time` is the flash (0.7 s); no `until`. |
 | `rainbow` | as the target: where its middle is (`- rainbow: centre`; optional); `width` (`0.75`), `opacity` (`0.55`), `hide` (`false`) | on a `stage` outdoors: a rainbow fades into the sky over `run_time` (`3`) from `at` and stays; `hide: true` fades the rainbows out; see [Rainbows](#rainbows-rainbow). No `until`. |
-| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`) and `lightning` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
+| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`) and `lightning` (`false`, rain on a stage), `settle` (`false`) and `settled` (`0`, snow on a stage; with rain and `puddles`, seconds of rain already fallen) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)), snow with `settle` lands and a white layer grows ([Snow that settles](#snow-that-settles-settle)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `step_aside` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump, a level's blocker moving out of the way |
@@ -13262,6 +13507,8 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `birds` | as the target: how many (`- birds: 5`); `count`, `direction`, `height`, `seconds`, `seed` | on a `stage` outdoors: a flock of birds crosses the sky from `at`; see [Birds](#birds-birds). No `until`. |
 | `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock, a box or furniture (a sofa, an armchair, a bed, a desk), leans on a tree, a door, a sign or furniture (a counter...), and stands up again |
 | `get_in`, `ride_to`, `get_out` | see [Vehicles](#vehicles-get_in-ride_to-get_out) | a `stage`'s character gets in a car, a bus, a boat or a balloon or on a bicycle, the vehicle rides (or flies) to a place with its riders, and they get out |
+| `lie_on`, `use` (and `sit_on` on an object) | see [Isometric places](#isometric-places-iso) (**Sitting, lying and using objects**) | on an iso place a character sits on its chairs, benches, sofas..., lies in a bed, types at a laptop, warms its hands at a fire |
+| `drive_to`, `sail_to`, `lift_off` | see [Isometric places](#isometric-places-iso) (**Vehicles that move**) | on an iso place a car drives along the paths, a train car rolls along its track, a boat sails, a rocket lifts off |
 | `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |
 | `host_point`, `host_look`, `host_react`, `host_move`, `host_enter`, `host_exit` | see [Pointing, reacting and moving](#pointing-reacting-and-moving-host-actions) | the scene's [host](#a-host-beside-any-scene-host) points at or looks at a target of the scene, shows an expression (and a symbol), walks to the other side (the content slides over), walks in or out; any scene type with a host |
 | `build`, `raise`, `lower`, `explode`, `collapse`, `flow`, `focus`, `relabel` | see [Iso diagram actions](#iso-diagram-actions) | the [`iso_diagram`](#iso_diagram) actions: blocks come in (growing up from the floor, dropping in, fading), are raised and set down, a stack's layers are pulled apart and put back, dots or packets run along connectors, the camera moves onto a part (no rotation), a label or value changes in place |
@@ -14037,6 +14284,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol, nor a `hud`, which `overlay_face` checks). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. On an [iso place](#isometric-places-iso) it measures what really covers the speaker's eyes and mouth (the opaque pixels of the place in front of it: a lamp post across the face, not the empty corners of a tree's picture) and reports at `min_hidden_features` (`0.25`) of their box, naming the pieces of the place (`lamp`, `tree_2`). Fix: move one of them, or a smaller `depth` for the speaker; on an iso place walk it to a spot where nothing stands in front of it, or a shot that frames it from where it shows |
 | `small_speaker` | warning | a speaking character whose face (its head's box, as seen: a shot that frames it closer counts) is less than `min_face` (`0.075`) of the frame's shorter side tall: too small to read its face and lip sync. A character on a platform level is about `0.07` at `character_size: small` and `0.095` at `medium`. On an [iso place](#isometric-places-iso) a speaker whose name tag shows (or that has a speech bubble) is not reported for a line of at most `max_tagged_words` (`12`) words: the tag shows who says a short line. Fix: a `shot: closeup <name>` (or `medium`) for the beat, or larger characters ([`character_size`](#character-size-character_size)) |
 | `offscreen_action` | warning | on an [iso place](#isometric-places-iso): something a beat does — a walk (`walk_to`, `run_to`, `meet`, `wander`, `enter`, `exit`), a small thing picked up, given or put down, a door, lamp or flowers changing, an object appearing or going — that the camera mostly does not show while it happens: on fewer than `min_seen` (`0.5`) of its frames is at least half of it in view (or enough of it to fill a quarter of the view: a house in a close-up). Fix: a wider shot (`shot: wide`), a `pan` or `follow` to it, or do it in a beat whose shot shows it |
+| `iso_ground` | warning (info for the hint) | an [iso place](#isometric-places-iso) with `wide: fixed` on a map too small to fill the frame for its format and character size, so the background shows round it: "this 12x12 place shows the background around it in 9:16 at character_size medium; a map of at least 16x16 fills the frame". An outdoor place in the whole-place wide view (`auto` / `fill`) gets an info-level hint naming `wide: fixed` and the map size (`hint: false` turns it off). Once a scene. Fix: a bigger map, or a sky `background` if the floating place is meant |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `concept_colors` | warning | the video's [`terms:`](#one-colour-per-concept-terms) colours: more than `max_colors` different colours (reported once, on the first scene that draws them), a colour whose WCAG contrast on the theme background is below `min_contrast`, and a scene setting that colours a term otherwise: a `title`'s `highlight_color` on a highlight that says a term, a `line_chart` series' `color` on a series named after a term, an `equation_derivation`'s `colors` entry for a term's `tex`, a `function_plot` function's, area's, point's, vector's or mark's `color` or a `number_line` point's, interval's or jump's `color` when its name or label says a term, a `callout`'s `color` when its label says a term (on that beat). Scenes with `terms: false` are not checked. Fix: the term's colour, or leave the setting out |
 | `look_alike` | warning | two generated characters on the video's stages whose [contrast](#a-random-cast-vidgen-cast) (silhouette, colours in the theme, accessories; 0 the same look, 1 fully different) is below `min_contrast`: viewers may not tell them apart. Reported once per pair, at the first beat of the scene where the later of the two first appears; the message names what they share, most weighty first, and what to change on the second. Characters drawn from an SVG file are not compared, nor an [echo](#echo-characters-echo) (another self, alike on purpose). Fix: another body, hair, species or clothes colour (the message says which), or `vidgen cast --random N` for a cast chosen to differ |
@@ -14126,6 +14374,7 @@ lint:
     hidden_speaker: {min_hidden: 0.5, min_hidden_features: 0.25}   # fraction of the speaker's face box; on an iso place of its eyes and mouth
     small_speaker: {min_face: 0.075, max_tagged_words: 12}   # a speaker's face height, fraction of the shorter side; words a name tag carries
     offscreen_action: {min_seen: 0.5}       # on an iso place: share of an action's frames that show it
+    iso_ground: {hint: true}                # the info hint for outdoor places in the whole-place wide view
     mouth_without_voice: {}
     look_alike: {min_contrast: 0.35}        # contrast score of two characters, 0 to 1
     narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range
@@ -14647,7 +14896,10 @@ list), `music_patches`, `music_render` (`score`: a path or a project piece's or 
 default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` given the same way,
 `narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
-(`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `cast` (`count`
+(`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
+(`vidgen story draft`: `input_path` or `story_text`, `out`, `style`, `format`, `narrator`, `seed`,
+`force`), `shorts_suggest` (`vidgen shorts suggest`: `project`, `count`, `min_seconds`,
+`max_seconds`, `teaser`, `spoilers`, `end_card`, `write`), `cast` (`count`
 for `--random`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`), and the studio's
 hand-offs (Step 198, "Music studio" above): `studio_sessions`, `studio_read` (`session`,
 `version`), `studio_check` (`session`, `score`, `compare`, `images`: `vidgen music check` of the
@@ -14701,7 +14953,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft`, `vidgen shorts suggest` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -15280,6 +15532,24 @@ anyway).
 | `notes` | list | TODOs about the whole video (e.g. voices to set by hand) |
 | `scenes` | list | `{id, beats, characters, actions, todos}` per scene: the characters on its stage, the actions written from stage directions and manners, its `# TODO:` comments |
 | `problems` | list | `vidgen validate` problems of the project, `{location, message, variant, file}` (normally empty) |
+
+### `vidgen story --json`
+
+The project drafted by [`vidgen story draft`](#a-story-in-prose-vidgen-story-draft); `ok` false
+when `vidgen validate` finds problems in it. Keys: `project`, `config`, `report` (paths),
+`report_text`, `created`, `title`, `style`, `format`, `first_person`, `narrator`, `music`,
+`characters`, `scenes` (`{id, place, light, changes, weather, objects, characters, off_stage,
+source_line, reason}`), `dialogue` (`{scene, beat, speaker, confidence, method, text}`),
+`estimated_duration`, `todo_count`, `problems`.
+
+### `vidgen shorts --json`
+
+The Shorts of [`vidgen shorts suggest`](#suggested-shorts-vidgen-shorts-suggest); `ok` false when
+`vidgen validate` finds problems after `--write`. Keys: `project`, `config`, `min_seconds`,
+`max_seconds`, `film_seconds`, `timed_by` (`audio`, `words` or a mix), `candidates` (windows
+scored), `shorts` (best first) and `teaser` (or `null`): `{name, rank, teaser, start, end, seconds,
+score, parts, spoils_ending, hook, hook_source, scenes, beats, first_line, last_line, notes,
+variant}`; `written` (`null` without `--write`, else `{file, config_changed, backups}`), `problems`.
 
 ### `vidgen cast --json`
 

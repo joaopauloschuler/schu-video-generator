@@ -16,7 +16,8 @@ ISCN, HGVS notation, exact numbers, a counselling tone), see
 [COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md); for orbital mechanics (scale honesty,
 units and Δv, approximations to state, pacing an orbit), see [COOKBOOK-ORBITS.md](COOKBOOK-ORBITS.md);
 for particle physics (natural units, simulated data, sources, local significance and p-values),
-see [COOKBOOK-PARTICLES.md](COOKBOOK-PARTICLES.md).
+see [COOKBOOK-PARTICLES.md](COOKBOOK-PARTICLES.md); for isometric cartoons (map sizes that fill the
+frame in 16:9 and 9:16), see [COOKBOOK-ISO-CARTOONS.md](COOKBOOK-ISO-CARTOONS.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 

@@ -34,6 +34,9 @@ ISO_LAMP_REACH = (1.0, 2.2)
 #: object's own) and a light's radius (tile widths).
 LAB_AMBER = "#FFB547"
 LAB_LIGHT_SIZE = 0.035
+#: The scene times at which a working object's moving parts are sampled for the region they stay
+#: in (its box, and wherever they reach: a lighthouse's sweeping beam, §104).
+GADGET_SAMPLES = tuple(k * 0.37 for k in range(40))
 
 
 @dataclass
@@ -216,7 +219,8 @@ class IsoStaging:
         (they appear later or have gone, §89.10)."""
         place = self.params.iso.parsed()
         planned = getattr(self, "_iso_planned_states", {})
-        return place.without([name for name, state in planned.items() if not state.shown])
+        place = place.without([name for name, state in planned.items() if not state.shown])
+        return moved_place(place, self.iso_vehicle_items()) if getattr(self, "iso_vehicles", None) else place   # where the vehicles will be (§105)
 
     def iso_walks(self, action: str, character: Character, options: dict[str, Any], *, pace: Any, gait: Gait = WALKING) -> list[IsoWalk]:
         """The walks of a move ``action`` of ``character`` on the iso place (DESIGN.md §89.9):
@@ -279,9 +283,13 @@ class IsoStaging:
     # ----- the pictures (DESIGN.md §89.7, §89.10) ---------------------------------------------------
 
     def _iso_action_targets(self) -> list[str]:
-        """The target patterns of every action of the scene."""
+        """The target patterns of every action of the scene, and the lights a ``time_of_day``
+        may switch by itself (§105.3)."""
         uses = self._actions.uses if getattr(self, "_actions", None) is not None else []
-        return [pattern for use in uses for pattern in use.action.config.targets()]
+        found = [pattern for use in uses for pattern in use.action.config.targets()]
+        if any(use.options.auto_lights for use in self.action_uses("time_of_day")):
+            found += list(self.params.iso.auto_lit())
+        return found
 
     def _iso_scenery(self, placements: list[StagePlacement]) -> list[Mobject]:
         """An iso place drawn into pictures (DESIGN.md §89.7, §89.9, §89.10): returns the place's
@@ -299,7 +307,7 @@ class IsoStaging:
         # in a tall frame also where the scene's walks go (it shows only the part where they are, §90.14)
         bodies = [self._iso_start_box(pl.name) for pl in placements]
         if self.frame_height > self.frame_width:
-            bodies += self._iso_arrivals(place)
+            bodies += self._iso_arrivals(place) + self._iso_vehicle_views(place)   # and where the vehicles go (§105)
         width, center = self.iso_wide(bodies)
         if "camera_at" in p.model_fields_set:   # across the picture to the mark (a spot), as on any stage
             x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
@@ -308,17 +316,26 @@ class IsoStaging:
         lights = p.iso.wall_light_colors()
         strips = None if lights is None else (resolve_color(lights[0], self.theme), resolve_color(lights[1], self.theme))
         colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors, strips=strips)
+        #: the vehicles the scene moves (DESIGN.md §105): the stage draws them, not the place's pictures
+        driven = self._iso_driven(place)
+        #: the working objects whose moving parts are drawn over the place (DESIGN.md §103)
+        self._iso_moving = self._iso_moving_names(place) - set(driven)
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
-                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])))
+                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])),
+                                       moving=item.name in self._iso_moving, driven=item.name in driven)
                  for item in place.objects}
         density = 1.0 if self.is_draft else ISO_OVERSAMPLE
         states = p.iso.states()
         patterns = self._iso_action_targets()
-        names = p.iso.changeable_names()
+        names = [name for name in p.iso.changeable_names() if name not in driven]
         layered = [name for name in names if name in states or any(fnmatchcase(name, pattern) for pattern in patterns)]
+        changed = {name for name in names if any(fnmatchcase(name, pattern) for pattern in patterns)}
+        swaying = self._iso_swaying(place, changed | set(driven))   # in the wind, drawn on their own (§105.4)
+        layered = [name for name in layered if name not in swaying]
+        self._iso_still_looks(looks, swaying)
         pixels = config.pixel_height / self.frame_height
         self.iso_scenery = IsoScenery(place, colors, looks, self.iso_view, pixels * density, outline=self.drawing.outline_factor,
-                                      states=states, layered=layered)
+                                      states=states, layered=layered, apart=swaying)
         self._iso_density = density * pixels / (config.pixel_width / self.frame_width)
         #: each object's state once the changes planned so far are over, its picture group, and the changes
         self._iso_planned_states: dict[str, ObjectState] = {name: self.iso_scenery.states[self.iso_scenery.index[name]] for name in layered}
@@ -337,6 +354,8 @@ class IsoStaging:
             self._iso_fronts[pl.name] = (picture, front)
             if front is not None:
                 self._iso_after[pl.name] = [front]
+        if driven:   # the vehicles the scene moves, and a train's track (§105)
+            self._iso_make_vehicles(place, looks, density)
         base = self._iso_tiles(self.iso_scenery.base(), "iso_place")
         shown: list[Mobject] = [base]
         for name in [self.iso_scenery.pieces[k].name for k in self.iso_scenery.layered]:
@@ -349,7 +368,15 @@ class IsoStaging:
             if picture is not None:
                 shown.append(holder)
         self.add_camera_listener(self._iso_show_view)
-        return shown + self._iso_story_overlays(place, looks)
+        everything = shown + self._iso_story_overlays(place, looks)
+        gadgets = [everything.index(gadget) for gadget, _, _ in self._iso_gadget_places]
+        #: what a working object's moving parts follow when no character stands behind it (§103)
+        self._iso_gadget_home = everything[min(gadgets) - 1] if gadgets else None
+        self.story_things += list(getattr(self, "iso_vehicles", {}).values())   # a switch, a flame, a bob (§105)
+        everything += self._iso_make_swayers(swaying, density)   # the trees in the wind... (§105.4)
+        self._iso_glow_watch()   # the lights mirrored in puddles at night (§105.4)
+        self._iso_make_ambient(place)   # walkers, birds, a cat... (§105.7): they come on with the set
+        return everything
 
     def _iso_story_overlays(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
         """The steel shutters over a room's windows when the place starts with them down or a
@@ -382,6 +409,26 @@ class IsoStaging:
                                                  hidden=lambda k: self._iso_light_hidden(lights[k], boxes[k])))
         if not self.is_draft:
             self.story_things += self._iso_city(place, looks)
+        #: each working object's moving parts, the piece it is and the picture of what stands in
+        #: front of it (``None``: nothing), kept after the front pictures showing it (§103)
+        self._iso_gadget_places: list[tuple[IsoGadgets, int, Mobject | None]] = []
+        self._iso_state_log: dict[str, list[tuple[float, ObjectState]]] = {}
+        self._iso_gadget_fades: dict[str, list[tuple[float, float]]] = {}
+        covers: dict[int, Mobject] = {}
+        smoke = dict((item.name, gadget) for gadget, item in ([] if self.is_draft else self._iso_rocket_smoke(place, looks)))   # §105
+        for item in place.objects:
+            if item.name in self._iso_moving or item.name in smoke:
+                gadget = smoke.get(item.name) or self._iso_gadgets(place, looks, item)
+                self.story_things.append(gadget)
+                box = object_box(item, place.floor_z(item.column, item.row))
+                picture = self.iso_scenery.front(box)
+                cover = None
+                if picture is not None:   # it follows the changes of what it shows (_iso_follow_change)
+                    cover = IsoObject()
+                    cover.name, cover.iso_box = f"iso_cover_{item.name}", box
+                    cover.add(self._iso_tiles(picture, cover.name))
+                    covers[id(gadget)] = cover
+                self._iso_gadget_places.append((gadget, self.iso_scenery.index[item.name], cover))
         if p.iso.haze and not self.is_draft:   # shimmering air over spots (§102.12)
             spots = []
             for haze in p.iso.haze:
@@ -389,7 +436,90 @@ class IsoStaging:
                 spots.append(HazeSpot(self.iso_view.point(x, y, z), self.iso_view.point(x, y, z + haze.height), haze.width * self.iso_view.unit,
                                       resolve_color(haze.color, self.theme), haze.strength, haze.start))
             self.story_things.append(IsoHaze(spots, seed=motion_seed(self.spec.id, "haze")))
-        return list(self.story_things)
+        return [m for thing in self.story_things for m in (thing, *([covers[id(thing)]] if id(thing) in covers else []))]
+
+    def _iso_moving_names(self, place: Any) -> set[str]:
+        """The objects of the place with moving parts (:data:`MOVING_KINDS`) that the stage
+        animates while they work (DESIGN.md §103); none in a draft."""
+        if self.is_draft:
+            return set()
+        return {item.name for item in place.objects if item.kind in MOVING_KINDS}
+
+    def _iso_gadgets(self, place: Any, looks: dict[str, Any], item: Any) -> IsoGadgets:
+        """The moving parts of the working object ``item`` over the place (DESIGN.md §103), drawn
+        while it works: the state it starts in, then each change the scene makes
+        (:attr:`_iso_state_log`, kept by :meth:`iso_change`)."""
+        scenery = self.iso_scenery
+        base = place.floor_z(item.column, item.row)
+        #: each working object's states from scene times on: (time, state), in time order
+        log = self._iso_state_log[item.name] = [(0.0, scenery.states[scenery.index[item.name]])]
+        #: the changes it fades over (a light switching by itself at dusk or dawn, §105.3): (start, seconds)
+        fades = self._iso_gadget_fades[item.name] = []
+
+        def state_at(now: float) -> ObjectState:
+            return [s for t, s in log if t <= now][-1] if log[0][0] <= now else log[0][1]
+
+        def fading(now: float) -> tuple[float, float] | None:
+            return next(((s, d) for s, d in fades if s <= now < s + d), None)
+
+        def shown_state(now: float) -> ObjectState:
+            fade = fading(now)
+            if fade is not None and not object_working(item.kind, state_at(now)):
+                return state_at(fade[0] - 1e-6)   # going out: as it was, fading
+            return state_at(now)
+
+        def working(now: float) -> bool:
+            return object_working(item.kind, shown_state(now))
+
+        def level(now: float) -> float:
+            fade = fading(now)
+            if fade is None:
+                return 1.0
+            share = smooth((now - fade[0]) / fade[1])
+            return share if object_working(item.kind, state_at(now)) else 1.0 - share
+
+        def busy(start: float, end: float) -> bool:
+            return (working(start) or any(start <= t <= end and object_working(item.kind, s) for t, s in log)
+                    or any(s < end and s + d > start for s, d in fades))
+
+        def parts(now: float, look: ObjectLook = looks[item.name]) -> list[Any]:
+            return object_motion(item, look, base, now, shown_state(now))
+
+        box = object_box(item, base)
+        corners = [self.iso_view.point(x, y, z) for x in (box.x0, box.x1 + 0.6) for y in (box.y0, box.y1 + 0.6) for z in (box.z0, box.z1 + 1.0)]
+        # and where its parts reach over a while (a lighthouse's beam sweeps far out of its box, §104)
+        corners += [self.iso_view.point(*p) for now in GADGET_SAMPLES for part in parts(now) for p in part.points]
+        pad = 0.2 * self.iso_view.unit
+        region = (min(x for x, _ in corners) - pad, min(y for _, y in corners) - pad, max(x for x, _ in corners) + pad, max(y for _, y in corners) + pad)
+        return IsoGadgets([Gadget(parts, working, busy, level)], lambda point: self.iso_view.point(*point), unit=self.iso_view.unit, region=region,
+                          outline=self.drawing.outline_factor, pool_strength=lambda: getattr(self.camera, POOL_STRENGTH, POOL_DAY))
+
+    def _iso_place_gadgets(self) -> bool:
+        """Keep each working object's moving parts (and the picture of what stands in front of
+        it) right after the last front picture on the scene that shows the object, so a character
+        standing behind it does not hide them (DESIGN.md §103); else right after the place's
+        pictures. Whether anything moved."""
+        places = getattr(self, "_iso_gadget_places", [])
+        home = getattr(self, "_iso_gadget_home", None)
+        if not places or home is None:
+            return False
+        before = [id(m) for m in self.mobjects]
+        for gadget, k, cover in reversed(places):
+            if gadget not in self.mobjects:
+                continue
+            group = [gadget, *([cover] if cover is not None and cover in self.mobjects else [])]
+            for m in group:
+                self.mobjects.remove(m)
+            hosts = [self.mobjects.index(front) for picture, front in self._iso_fronts.values()
+                     if front is not None and front in self.mobjects and any(j == k for j, _ in picture[1])]
+            if hosts:
+                at = max(hosts) + 1
+            elif home in self.mobjects:
+                at = self.mobjects.index(home) + 1
+            else:
+                at = len(self.mobjects)
+            self.mobjects[at:at] = group
+        return [id(m) for m in self.mobjects] != before
 
     def _iso_city(self, place: Any, looks: dict[str, Any]) -> list[Mobject]:
         """A city's moving parts over the place (DESIGN.md §102.2, §102.3): the crawling lines of
@@ -457,14 +587,36 @@ class IsoStaging:
         place = self.params.iso.parsed()
         count = len(self.params.iso.objects)
         placed = [item.name for item in place.objects[len(place.objects) - count:]] if count else []
-        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed, fit=self.params.iso.wide)
+        return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed, fit=self.params.iso.wide_fit(),
+                         tiles=self.iso_tiles())
+
+    def iso_tiles(self) -> float | None:
+        """The tile widths across the frame of the fixed wide view (``wide: fixed``, DESIGN.md
+        §106); ``None`` for the other wide views."""
+        return self.params.iso.view_tiles(self.frame_width, self.frame_height, self.params.character_size)
+
+    def zoom_base(self) -> float:
+        """What a ``zoom``'s ``scale`` multiplies: on an iso place with the fixed wide view that
+        view's magnification over the whole place (a ``zoom: {scale: 2}`` is twice as close as the
+        wide view, DESIGN.md §106); else 1."""
+        tiles = self.iso_tiles() if self.on_iso else None
+        if tiles is None:
+            return 1.0
+        return max(self.frame_width / (tiles * self.iso_view.unit), 1.0)
+
+    def _iso_on_ground(self, width: float, center: tuple[float, float]) -> tuple[float, float]:
+        """With the fixed wide view, ``center`` of a view ``width`` wide moved so the view lies
+        on the ground as far as the map allows (DESIGN.md §106); else as it is."""
+        if self.iso_tiles() is None:
+            return center
+        return ground_view_center(self.params.iso.parsed(), self.iso_view, self.frame_width, self.frame_height, width, center)
 
     def iso_wide_shot(self, names: list[str]) -> ShotView:
         """``shot: wide`` on the place: the wide view keeping the characters ``names`` (those on
         the place now) in view; in a tall frame also the spots the scene's walks go to."""
         bodies = [self._iso_body(self.cast[name]) for name in names if hasattr(self.cast[name], "iso_feet")]
         if self.frame_height > self.frame_width:   # a tall frame: also where the scene's walks go, as the start's view (§90.14)
-            bodies += self._iso_arrivals(self.params.iso.parsed())
+            bodies += self._iso_arrivals(self.params.iso.parsed()) + self._iso_vehicle_views(self.params.iso.parsed())
         width, (x, y) = self.iso_wide(bodies)
         return ShotView(x, y, self.frame_width / width)
 
@@ -499,6 +651,12 @@ class IsoStaging:
             elif isinstance(mob, IsoObject):
                 for tiles in mob.submobjects:
                     tiles.show_view(frame)
+        for vehicle in getattr(self, "iso_vehicles", {}).values():   # sharp in a close view (§105)
+            vehicle.show_view(frame)
+        for swayer, _ in getattr(self, "iso_swayers", {}).values():   # §105.4
+            swayer.show_view(frame)
+        for critter in getattr(self, "iso_critters", {}).values():   # §105.7
+            critter.show_view(frame)
 
     def _iso_front(self, name: str, picture: Any) -> Mobject | None:
         """``name``'s front picture of ``picture`` (made once; ``None`` for no picture), graded by the light."""
@@ -506,6 +664,9 @@ class IsoStaging:
             return None
         if (name, picture) not in self._iso_front_pictures:
             self._iso_front_pictures[(name, picture)] = self._iso_tiles(picture, f"iso_front_{name}")
+            critter = getattr(self, "iso_critters", {}).get(name)
+            if critter is not None:   # a small creature's: drawn only where it is (§105.7)
+                self._iso_front_pictures[(name, picture)].clip(critter.rect)
         return self._iso_front_pictures[(name, picture)]
 
     # ----- the draw order of the bodies (DESIGN.md §89.9) ---------------------------------------------
@@ -535,7 +696,9 @@ class IsoStaging:
         return item_box(place, feet, height)
 
     def _iso_body(self, mob: Mobject) -> Box3:
-        """The box a character or small thing stands in on the place now (tile units)."""
+        """The box a character, small thing, driven vehicle (§105) or creature (§105.7) stands in on the place now (tile units)."""
+        if getattr(mob, "iso_vehicle", False) or getattr(mob, "iso_ambient", False):
+            return mob.box()
         return self._iso_box(mob.name, mob.iso_feet)
 
     def _iso_light_hidden(self, point: tuple[float, float], box: Box3) -> bool:
@@ -552,9 +715,10 @@ class IsoStaging:
         return False
 
     def _iso_bodies(self) -> dict[str, Mobject]:
-        """The characters and the small things standing on the place (not held), by name."""
+        """The characters, the small things standing on the place (not held), the driven
+        vehicles (§105) and the creatures of its ambient life (§105.7), by name."""
         props = {name: prop for name, prop in getattr(self, "props", {}).items() if getattr(prop, "held_by", None) is None}
-        return {**self.cast, **props}
+        return {**self.cast, **props, **getattr(self, "iso_vehicles", {}), **getattr(self, "iso_critters", {})}
 
     def _iso_keep_order(self) -> bool:
         """On an iso place, each frame while things move or the place changes (DESIGN.md §89.9):
@@ -568,6 +732,8 @@ class IsoStaging:
         for name in list(self._iso_fronts):
             swapped = self._iso_swap_front(name, bodies)
             if swapped is not None:
+                if getattr(bodies.get(name), "iso_ambient", False) and self._iso_splice_front(bodies[name], *swapped):
+                    continue   # a creature's new front picture, drawn right after it (§105.7)
                 added += [swapped[1]] if swapped[1] is not None else []
                 changed = True
         names = list(bodies)
@@ -584,6 +750,9 @@ class IsoStaging:
             self.mobjects[:] = rest[:before] + [m for n in wanted for m in blocks[n]] + rest[before:]
             self._shadows_first()
             changed = True
+        changed |= self._iso_place_gadgets()
+        changed |= self._iso_place_swayers()   # the trees in the wind (§105.4)
+        changed |= self._iso_sort_fog()   # a walker may pass a fog band's depth (§105.4)
         if added and getattr(self, "animations", None):
             self.moving_mobjects = [*self.moving_mobjects, *(m for front in added for m in front.get_family())]
         return changed
@@ -595,7 +764,14 @@ class IsoStaging:
         other, §90.15)."""
         picture, front = self._iso_fronts[name]
         figure = bodies.get(name)
-        new_picture = None if figure is None else self.iso_scenery.front(self._iso_body(figure))
+        if figure is not None and getattr(figure, "iso_vehicle", False):
+            new_picture = self._iso_vehicle_front(figure)   # not its own piece (§105)
+        elif figure is not None and getattr(figure, "iso_ambient", False):
+            new_picture = self._iso_critter_front(figure)   # found once per cell (§105.7)
+        elif figure is not None and getattr(figure, "iso_seat", None) is not None:
+            new_picture = self._iso_seat_front(figure)   # the arm of its armchair, not the armchair (§105.2)
+        else:
+            new_picture = None if figure is None else self.iso_scenery.front(self._iso_body(figure))
         if new_picture == picture:
             return None
         new = self._iso_front(name, new_picture)
@@ -627,6 +803,18 @@ class IsoStaging:
             if swapped is not None:
                 follows.append(_IsoFollow(change, *swapped))
                 added += [swapped[1]] if swapped[1] is not None else []
+        for cover in self.iso_covers():   # what stands in front of a working object (§103) or a swaying one (§105.4)
+            following = [f for f in self._iso_follows if f.parent is cover]
+            current = following[-1].new if following else (cover.submobjects[-1] if cover.submobjects else None)
+            picture = self.iso_scenery.front(cover.iso_box)
+            if (current.picture if current is not None else None) == picture:
+                continue
+            new = None if picture is None else self._iso_tiles(picture, cover.name)
+            if new is not None:
+                at = cover.submobjects.index(current) if current in cover.submobjects else len(cover.submobjects)
+                cover.submobjects.insert(at, new)
+                added.append(new)
+            follows.append(_IsoFollow(change, current, new, cover))
         for follow in follows:
             if not self._iso_follow_on(follow):
                 self._iso_follow_step(follow, 0.0)
@@ -696,7 +884,7 @@ class IsoStaging:
         if self.params.iso is None:
             return set()
         found: set[int] = set()
-        if any(isinstance(anim, IsoWalk) for anim in animations):
+        if any(isinstance(anim, (IsoWalk, IsoDrive, IsoSeatMove)) for anim in animations):   # a vehicle driving, sitting down (§105)
             things: list[Mobject] = [*self._iso_bodies().values(), *(front for _, front in self._iso_fronts.values() if front is not None)]
             if getattr(self, "_moving_shadows", None) is not None:
                 things.append(self._moving_shadows)
@@ -736,10 +924,12 @@ class IsoStaging:
 
     # ----- changes of the place (DESIGN.md §89.10) ---------------------------------------------------
 
-    def iso_change(self, name: str, start: float, seconds: float, **fields: bool) -> bool:
+    def iso_change(self, name: str, start: float, seconds: float, *, auto: bool = False, **fields: bool) -> bool:
         """Change the object (or map door) ``name`` from scene time ``start`` over ``seconds``:
         ``shown``, ``open``, ``on`` (:class:`~vidgen.world.iso.ObjectState`), after the changes
-        planned so far; its new picture fades in over the old one. Whether anything changes."""
+        planned so far; its new picture fades in over the old one. ``auto``: a light switching by
+        itself at dusk or dawn (§105.3): its moving parts fade too, and lint does not watch it.
+        Whether anything changes."""
         planned = self._iso_planned_states[name]
         state = replace(planned, **fields)
         if state == planned:
@@ -759,13 +949,23 @@ class IsoStaging:
             if holder not in self.mobjects:
                 self._iso_insert(holder)
         self._iso_changes.append(_IsoChange(name, state, float(start), max(float(seconds), 1e-3), old, new))
+        log = getattr(self, "_iso_state_log", {}).get(name)
+        if log is not None:   # a working object's moving parts follow it (§103)
+            log.append((float(start), state))
+            log.sort(key=lambda entry: entry[0])
+            if auto:
+                self._iso_gadget_fades[name].append((float(start), max(float(seconds), 1e-3)))
+            if auto or object_working(self.iso_scenery.pieces[self.iso_scenery.index[name]].kind or "", state):
+                self._watch_living()
         if "shown" in fields:
             change = "reveal" if fields["shown"] else "hide"
         elif "open" in fields:
             change = "open" if fields["open"] else "close"
         else:
             change = "switch_on" if fields.get("on") else "switch_off"
-        self.iso_watch(change, name, float(start), float(seconds), self._iso_object_box(name))
+        if not auto:   # not a light a time_of_day switches by itself (§105.3)
+            self.iso_watch(change, name, float(start), float(seconds), self._iso_object_box(name))
+        self.iso_glow_changed(name, start, seconds, state)   # its light mirrored in puddles (§105.4)
         if name in getattr(self, "_iso_lamps", {}):   # its light on the characters near it fades with it (§89.13)
             self._iso_lamps[name][1].append((float(start), max(float(seconds), 1e-3), 1.0 if state.on and state.shown else 0.0))
         if self._foley_on():   # a door's creak, a bloom, an appearance (§89.11)
@@ -836,15 +1036,19 @@ class IsoStaging:
         #: each lamp's middle (tile units) and its light from the start: (scene time, seconds, level)
         self._iso_lamps: dict[str, tuple[tuple[float, float], list[tuple[float, float, float]]]] = {}
         for item in place.objects:
-            if item.kind == "lamp":
+            if item.kind in LAMPLIGHT_KINDS:   # a lamp, a floor lamp, a fireplace, a street lamp, a phone booth, a campfire (§104)
                 state = scenery.states[scenery.index[item.name]]
-                self._iso_lamps[item.name] = ((item.column + 0.5, item.row + 0.5), [(0.0, 0.0, 1.0 if state.on and state.shown else 0.0)])
+                middle = (item.column + 0.5, item.row + 0.5) if item.kind == "lamp" else (item.column + item.width / 2, item.row + item.depth / 2)
+                self._iso_lamps[item.name] = (middle, [(0.0, 0.0, 1.0 if state.on and state.shown else 0.0)])
         if not self._iso_lamps:
             return
         self._iso_lamp_shares: dict[str, float] = {}
         self._iso_lamp_time = -1.0
         for name, mob in [*self.cast.items(), *getattr(self, "props", {}).items()]:
             mark_lamp_lit(mob, LampLit(lambda name=name: self._iso_lamp_share(name)))
+        for name, critter in getattr(self, "iso_critters", {}).items():   # background walkers and a cat too (§105.8)
+            if critter.kind in ("walker", "cat"):
+                mark_lamp_lit(critter, LampLit(lambda critter=critter: self._iso_lamp_at(critter.name, critter.iso_feet)))
 
     def _iso_lamp_level(self, name: str, now: float) -> float:
         """How lit the lamp ``name`` is at scene time ``now`` (0..1), fading with its switches."""
@@ -860,16 +1064,20 @@ class IsoStaging:
         """How much lamplight falls on the character or small thing ``name`` now (a held thing:
         as on its holder), 0..1: the most of any lamp's, by the distance of its feet from the
         lamp (:data:`ISO_LAMP_REACH`) times how lit the lamp is."""
+        mob = self.cast[name] if name in self.cast else self.props.get(name)
+        holder = getattr(mob, "held_by", None)
+        if holder is not None and holder in self.cast:
+            mob = self.cast[holder]
+        return self._iso_lamp_at(name, getattr(mob, "iso_feet", None))
+
+    def _iso_lamp_at(self, name: str, feet: Any) -> float:
+        """How much lamplight falls on ``name`` standing with its feet at ``feet`` (tile units;
+        ``None``: none) now: the most of any lamp's (:meth:`_iso_lamp_share`), once per scene time."""
         now = float(self.renderer.time)
         if now != self._iso_lamp_time:
             self._iso_lamp_time, self._iso_lamp_shares = now, {}
         if name in self._iso_lamp_shares:
             return self._iso_lamp_shares[name]
-        mob = self.cast[name] if name in self.cast else self.props.get(name)
-        holder = getattr(mob, "held_by", None)
-        if holder is not None and holder in self.cast:
-            mob = self.cast[holder]
-        feet = getattr(mob, "iso_feet", None)
         share = 0.0
         if feet is not None:
             near, far = ISO_LAMP_REACH
@@ -928,7 +1136,7 @@ class IsoStaging:
         ``switch_on`` / ``switch_off`` actions): the lamp lights, the house's windows glow. The
         names switched."""
         names = [name for name in self.iso_objects if any(fnmatchcase(name, pat) for pat in patterns)]
-        return [name for name in names if self.iso_change(name, time, ISO_SWITCH_SECONDS, on=on)]
+        return [name for name in names if self.iso_change(name, time, ISO_SWITCH_SECONDS, on=on)] + self.iso_switch_vehicles(patterns, on, time)
 
     # ----- what the camera shows of the beat's actions (DESIGN.md §89.11) -------------------------------
 
@@ -982,7 +1190,7 @@ class IsoStaging:
         :meth:`action_foley`): each character walking, and the character picking up, giving or
         putting down a small thing."""
         for anim in animations:
-            if isinstance(anim, IsoWalk):
+            if isinstance(anim, (IsoWalk, IsoDrive)):   # a vehicle's move too (§105)
                 self.iso_watch(action, anim.mobject.name, start, seconds, self._iso_body_box(anim.mobject))
         if action in ISO_ITEM_ACTIONS:
             movers = {m.name: m for m in (getattr(anim, "mobject", None) for anim in animations) if isinstance(m, Character)}
@@ -998,7 +1206,25 @@ class IsoStaging:
             return {}
         beat = self.beat(beat_id)
         acts = [{"action": w.action, "who": w.who, "seen": round(w.seen, 4)} for w in self.__dict__.get("_iso_watched", []) if w.beat == beat_id and w.frames]
-        return {"line_words": len(beat.text.split()), **({"iso_actions": acts} if acts else {})}
+        ground = {"iso_ground": self._iso_ground_key()} if beat.id == self.beat(0).id else {}   # once a scene (§106)
+        return {"line_words": len(beat.text.split()), **({"iso_actions": acts} if acts else {}), **ground}
+
+    def _iso_ground_key(self) -> dict[str, Any]:
+        """For lint ``iso_ground`` (DESIGN.md §106): the place's wide view (``fixed``, ``tiles``
+        given, or ``auto`` / ``fill`` / ``number``), indoor or outdoor, the map's size, the
+        character size, the fixed view's tiles across (medium for the other views) and the map
+        side that fills the frame with them."""
+        iso = self.params.iso
+        place = iso.parsed()
+        tiles = self.iso_tiles()
+        if iso.fixed:
+            view = "fixed" if iso.wide == "fixed" else "tiles"
+        else:
+            view = iso.wide if isinstance(iso.wide, str) else "number"
+        if tiles is None:
+            tiles = fixed_tiles(self.frame_width, self.frame_height)
+        return {"view": view, "place": iso.place, "map": [place.columns, place.rows], "size": self.params.character_size or "medium",
+                "tiles": round(tiles, 3), "need": fixed_fill_size(tiles, self.frame_width, self.frame_height)}
 
     # ----- who speaks (DESIGN.md §89.11) -----------------------------------------------------------
 
@@ -1073,17 +1299,20 @@ class IsoStaging:
 
     def iso_lay_puddles(self, field: Any, settings: Any) -> None:
         """Puddles growing on the place's ground cells while the rain ``field`` falls (``settings``:
-        its seed), with ripples while it rains (:class:`IsoPuddles`, DESIGN.md §90.2), laid over
-        the place's pictures under the shadows and the characters."""
+        its seed; ``settled``: seconds of rain already fallen), with ripples while it rains
+        (:class:`IsoPuddles`, DESIGN.md §90.2), laid over the place's pictures under the shadows
+        and the characters; the place's lights mirrored in them at night (§105.4)."""
         scenery = self.iso_scenery
         boxes = [piece.box for k, piece in enumerate(scenery.pieces) if scenery.shown(k)]
         spots = iso_puddles(self.iso_place_now(), scenery.top_surface(), boxes, settings.seed)
         if not spots:
             return
-        puddles = IsoPuddles(spots, self.iso_view, start=field.start, ended=lambda: field.ended, clock=lambda: float(self.renderer.time))
+        puddles = IsoPuddles(spots, self.iso_view, start=field.start - settings.settled, ended=lambda: field.ended,
+                             clock=lambda: float(self.renderer.time))
         mark_lit(puddles)
         self.puddles.append(puddles)
         self._lay_on_ground(puddles)
+        self.iso_reflect(puddles)   # the lights mirrored in them at night (§105.4)
 
     def iso_settle_snow(self, field: Any, settings: Any) -> None:
         """Snow from the settling ``field`` lies on the place (``settings``: its density and
@@ -1120,9 +1349,9 @@ class IsoStaging:
             return None
         frame = self.camera.frame
         x, feet, head = self._iso_span(mob)
-        width = follow_width(head - feet, self.frame_width, self.frame_height, float(frame.width))
+        width = follow_width(head - feet, self.frame_width, self.frame_height, float(frame.width), MAX_SHOT_SCALE * self.zoom_base())
         height = width * self.frame_height / self.frame_width
-        center = view_center_within(self.camera_bounds(), (x, (feet + head) / 2), width, height)
+        center = self._iso_on_ground(width, view_center_within(self.camera_bounds(), (x, (feet + head) / 2), width, height))
 
         def y_of() -> float:   # the body's middle as it stands (not bobbing with each step)
             if isinstance(mob, Character):
@@ -1144,6 +1373,16 @@ class IsoStaging:
         standing there); ``None`` elsewhere (a pan moves sideways only)."""
         if not self.on_iso:
             return None
+        found = self._iso_pan_target(targets, to)
+        if found is None:
+            return None
+        width = self.pan_width()   # the fixed wide view's: on the ground, the target in the middle half (§106)
+        height = width * self.frame_height / self.frame_width
+        x, y = self._iso_on_ground(width, found)
+        return min(max(x, found[0] - width / 4), found[0] + width / 4), min(max(y, found[1] - height / 4), found[1] + height / 4)
+
+    def _iso_pan_target(self, targets: list[Mobject], to: Any) -> tuple[float, float] | None:
+        """:meth:`pan_point`'s target before the fixed wide view keeps it on the ground."""
         if targets:
             spans = [self._iso_span(mob) for mob in targets]
             return float(np.mean([x for x, _, _ in spans])), float(np.mean([(f + h) / 2 for _, f, h in spans]))

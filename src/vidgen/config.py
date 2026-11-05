@@ -898,6 +898,7 @@ LINT_RULES: tuple[str, ...] = (
     "hidden_speaker",
     "small_speaker",
     "offscreen_action",
+    "iso_ground",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -981,6 +982,7 @@ RuleName = Literal[
     "hidden_speaker",
     "small_speaker",
     "offscreen_action",
+    "iso_ground",
     "mouth_without_voice",
     "look_alike",
     "narration_speed",
@@ -1204,6 +1206,13 @@ class OffscreenActionRule(RuleConfig):
 
     min_seen: Fraction = 0.5
     """Least share of the action's frames on which at least half of what acts (the character's box, the object's picture) is in view."""
+
+
+class IsoGroundRule(RuleConfig):
+    """``iso_ground``: an iso place with the fixed wide view (``wide: fixed``) on a map too small to fill the frame for its format and character size, so the background shows around it; the hint names the map size that fills it (DESIGN.md §106). For an outdoor place in the whole-place wide view (``auto`` / ``fill``) an info-level hint names the fixed view and that size."""
+
+    hint: bool = True
+    """The info-level hint for outdoor places in the whole-place wide view; false: only the fixed view's warning."""
 
 
 class MouthWithoutVoiceRule(RuleConfig):
@@ -1648,6 +1657,8 @@ class LintRules(_Strict):
     """A speaking character too small on screen to read its face and lip sync (default: warning)."""
     offscreen_action: OffscreenActionRule = Field(default_factory=OffscreenActionRule)
     """On an iso place, an action the camera mostly does not show while it happens (default: warning)."""
+    iso_ground: IsoGroundRule = Field(default_factory=IsoGroundRule)
+    """An iso place whose fixed wide view shows background around a map too small for the frame, with the map size that fills it (default: warning; for an outdoor place in the whole-place wide view: info)."""
     mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
     """A mouth moving with lip sync while no narration is heard (default: warning)."""
     look_alike: LookAlikeRule = Field(default_factory=LookAlikeRule)

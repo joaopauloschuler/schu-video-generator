@@ -22,8 +22,9 @@ from PIL import Image, ImageDraw
 
 from vidgen.cartoon.iso_drawing import Blobs, Disc, Poly, Shape, Upright, upward
 from vidgen.cartoon.iso_scenery import WATER_DEPTH
+from vidgen.cartoon.wind import SWAY_WOBBLE, SWAYS, Sway, felt_force
 from vidgen.world.iso import FLOOR, PATH, VOID, WATER, IsoPlace
-from vidgen.world.iso_view import ISO_RISE, Box3, in_front
+from vidgen.world.iso_view import ISO_RISE, Box3, Point3, in_front, iso_point
 
 #: Samples of the top surface per tile, each way.
 SURFACE_SAMPLES = 8
@@ -276,9 +277,241 @@ def ripples(puddle: IsoPuddle, seconds: float, size: float = 1.0) -> list[Ripple
     return found
 
 
+# ----- lights mirrored in puddles (DESIGN.md §105.4) ------------------------------------------------
+
+#: A light mirrored in a puddle at night: its opacity at full darkness (how much shows by day and
+#: at dusk: :func:`~vidgen.cartoon.lighting.darkness`), how much whiter than the light it is.
+REFLECTION_OPACITY = 0.85
+REFLECTION_WHITEN = 0.25
+#: Its soft glow: as much wider each side (tile widths), at this share of its opacity.
+REFLECTION_HALO = 0.06
+REFLECTION_HALO_SHARE = 0.35
+#: While it rains a reflection wobbles sideways: by this much (tile widths on the picture), in
+#: waves this long down the picture (tile widths), running this fast (waves a second).
+REFLECTION_SHIMMER = 0.03
+REFLECTION_WAVE = 0.22
+REFLECTION_HZ = 1.4
+#: Tile widths (on the picture) between the points of a reflection's edges (so it can wobble).
+REFLECTION_STEP = 0.05
+#: Corners of a disc's ring and of a puddle's outline when a reflection is cut to it.
+_RING = 16
+
+#: A light of the place on the picture: its outline in the world and its colour.
+Light = tuple[tuple[Point3, ...], str]
+
+
+def glow_outlines(shapes: Sequence[Shape]) -> list[Light]:
+    """The lights among ``shapes`` (DESIGN.md §89.11): each glowing polygon (a lit window, a
+    lantern's face, a tower's neon trim) and each glowing disc (a lamp's bulb) as a ring of world
+    points, with its colour; not the pools of light on the ground (§104)."""
+    found: list[Light] = []
+    for shape in shapes:
+        if isinstance(shape, Poly) and shape.glow:
+            found.append((shape.points, shape.fill))
+        elif isinstance(shape, Disc) and shape.glow and not shape.pool:
+            cx, cy, cz = shape.centre
+            ring = tuple((cx + shape.radius * math.cos(a), cy + shape.radius * math.sin(a), cz)
+                         for a in np.linspace(0.0, 2 * math.pi, _RING, endpoint=False))
+            found.append((ring, shape.fill))
+    return found
+
+
+def mirrored(points: Sequence[Point3], z: float) -> np.ndarray:
+    """``points`` mirrored in still water at height ``z``, on the picture (tile widths, ``v``
+    down): seen from above, a light ``h`` over the water shows ``h`` under it."""
+    return np.array([iso_point(x, y, 2.0 * z - pz) for x, y, pz in points], dtype=float)
+
+
+def puddle_outline(puddle: IsoPuddle, size: float = 1.0) -> np.ndarray:
+    """The outline of ``puddle`` on the picture at ``size`` (0..1) of its radius: the ellipse a
+    circle on the ground makes, :data:`_RING` × 2 corners, counter-clockwise on the picture."""
+    u, v = iso_point(puddle.x, puddle.y, puddle.z)
+    a = puddle.radius * size * math.sqrt(2) / 2
+    angles = np.linspace(0.0, 2 * math.pi, 2 * _RING, endpoint=False)
+    return np.stack([u + a * np.cos(angles), v - a / 2 * np.sin(angles)], axis=1)
+
+
+def clip_convex(polygon: np.ndarray, window: np.ndarray) -> np.ndarray:
+    """The part of ``polygon`` (corners, rows ``u, v``) inside the convex ``window`` (corners in
+    either turning sense): Sutherland–Hodgman; empty (0 rows) when they do not meet."""
+    out = np.asarray(polygon, dtype=float)
+    w = np.asarray(window, dtype=float)
+    turn = np.sign(np.sum(w[:, 0] * np.roll(w[:, 1], -1) - np.roll(w[:, 0], -1) * w[:, 1])) or 1.0
+    for k in range(len(w)):
+        if not len(out):
+            break
+        a, b = w[k], w[(k + 1) % len(w)]
+        edge = b - a
+        side = turn * (edge[0] * (out[:, 1] - a[1]) - edge[1] * (out[:, 0] - a[0]))
+        kept: list[np.ndarray] = []
+        for j in range(len(out)):
+            p, q, sp, sq = out[j], out[(j + 1) % len(out)], side[j], side[(j + 1) % len(out)]
+            if sp >= 0:
+                kept.append(p)
+            if (sp >= 0) != (sq >= 0):
+                kept.append(p + (q - p) * (sp / (sp - sq)))
+        out = np.array(kept, dtype=float).reshape(-1, 2)
+    return out
+
+
+def densified(polygon: np.ndarray, step: float = REFLECTION_STEP) -> np.ndarray:
+    """``polygon`` with points added along its edges at most ``step`` apart."""
+    points: list[np.ndarray] = []
+    for k in range(len(polygon)):
+        p, q = polygon[k], polygon[(k + 1) % len(polygon)]
+        count = max(1, math.ceil(float(np.hypot(*(q - p))) / step))
+        points += [p + (q - p) * (j / count) for j in range(count)]
+    return np.array(points, dtype=float).reshape(-1, 2)
+
+
+def shimmered(polygon: np.ndarray, seconds: float, amount: float, phase: float = 0.0) -> np.ndarray:
+    """``polygon`` wobbling sideways ``amount`` of :data:`REFLECTION_SHIMMER` at ``seconds``: each
+    point by a wave running down the picture (rain on the water)."""
+    if amount <= 0.0 or not len(polygon):
+        return polygon
+    out = polygon.copy()
+    out[:, 0] += REFLECTION_SHIMMER * amount * np.sin(2 * math.pi * (polygon[:, 1] / REFLECTION_WAVE - REFLECTION_HZ * seconds) + phase)
+    return out
+
+
+def puddle_lights(puddle: IsoPuddle, lights: Sequence[Light]) -> list[int]:
+    """The indices of ``lights`` whose mirror image may show in ``puddle`` (at its full size,
+    with room for the shimmer)."""
+    outline = puddle_outline(puddle)
+    pad = REFLECTION_SHIMMER * 2
+    left, top = outline.min(axis=0) - pad
+    right, bottom = outline.max(axis=0) + pad
+    found = []
+    for k, (points, _) in enumerate(lights):
+        image = mirrored(points, puddle.z)
+        if image[:, 0].max() >= left and image[:, 0].min() <= right and image[:, 1].max() >= top and image[:, 1].min() <= bottom:
+            found.append(k)
+    return found
+
+
+def still_reflection(puddle: IsoPuddle, light: Light, *, size: float, widen: float = 0.0) -> np.ndarray:
+    """The mirror image of ``light`` in ``puddle`` at ``size`` (0..1, as it grows), cut to the
+    puddle (kept clear of its edge by :data:`REFLECTION_SHIMMER`, so it stays inside when it
+    wobbles), with points along its edges (:func:`densified`), on the picture (tile widths; 0
+    rows: it does not show there); ``widen``: that much wider each side (its glow,
+    :data:`REFLECTION_HALO`)."""
+    inside = size - REFLECTION_SHIMMER * math.sqrt(2) / max(puddle.radius, 1e-9)
+    if inside <= 0.0:
+        return np.zeros((0, 2))
+    image = mirrored(light[0], puddle.z)
+    if widen:
+        middle = image[:, 0].mean()
+        image[:, 0] += widen * np.sign(image[:, 0] - middle)
+    cut = clip_convex(image, puddle_outline(puddle, inside))
+    return densified(cut) if len(cut) >= 3 else np.zeros((0, 2))
+
+
+def reflection(puddle: IsoPuddle, light: Light, *, size: float, seconds: float, rain: float, widen: float = 0.0) -> np.ndarray:
+    """:func:`still_reflection` wobbling at ``seconds`` while it rains (``rain``: 0..1)."""
+    return shimmered(still_reflection(puddle, light, size=size, widen=widen), seconds, rain, phase=puddle.seed % 628 / 100.0)
+
+
+# ----- wind on the place's plants and balloons (DESIGN.md §105.4) -----------------------------------
+
+#: The objects of an iso place that sway in the wind (outdoors), and how (a flat stage's prop's
+#: :class:`~vidgen.cartoon.wind.Sway` where there is one): trees, pines, bushes, flowers and
+#: plants bend, a scarecrow's coat and a bunch of balloons swing.
+ISO_SWAYS: dict[str, Sway] = {
+    "tree": SWAYS["tree"],
+    "pine": SWAYS["pine"],
+    "bush": SWAYS["bush"],
+    "flowers": SWAYS["flowers"],
+    "plant": SWAYS["plant"],
+    "scarecrow": Sway(3.0, 1.3, 0.3),
+    "balloon_bunch": Sway(14.0, 0.6, 0.05),
+}
+#: The swaying things that swing as a whole about their foot (a bunch of balloons on its string
+#: turns; bent, a gale stretched it), DESIGN.md §105.8.
+ISO_SWINGS = frozenset({"balloon_bunch"})
+#: How a swaying thing on an iso place leans for a felt force (a flat stage's prop leans with
+#: it): ``ISO_SWAY_SHARE`` × its degrees × the felt force to the power ``ISO_SWAY_POWER``, so
+#: a breeze or a windy day bends trees as far as reads at a preview's size (Step 271's lean,
+#: 0.55 × the felt force, hardly showed) while a gale, seen from above at a slant, does not
+#: look like a fall (DESIGN.md §105.8).
+ISO_SWAY_SHARE = 1.0
+ISO_SWAY_POWER = 0.65
+
+
+def iso_sway_degrees(kind: str, force: float, seconds: float, phase: float = 0.0) -> float:
+    """How far (degrees, to the right on screen; negative: left) the ``kind`` object
+    (:data:`ISO_SWAYS`) leans under the signed wind ``force`` at ``seconds``: its degrees times
+    the felt force (:func:`~vidgen.cartoon.wind.felt_force`) to the power
+    :data:`ISO_SWAY_POWER`, with its own to-and-fro."""
+    sway = ISO_SWAYS[kind]
+    felt = felt_force(force)
+    lean = math.copysign(abs(felt) ** ISO_SWAY_POWER, felt) if felt else 0.0
+    return ISO_SWAY_SHARE * sway.degrees * lean * (1.0 + SWAY_WOBBLE * math.sin(2.0 * math.pi * sway.hz * seconds + phase))
+
+
+def swing_pixels(pixels: np.ndarray, foot: float, centre: float, degrees: float) -> np.ndarray:
+    """``pixels`` (rows × columns × RGBA, uint8) turned ``degrees`` (its top to the right for a
+    positive angle) about the point (``centre`` column, ``foot`` row): a balloon bunch swinging
+    on its string. Premultiplied while turned (no dark fringe); equal to ``pixels`` at 0."""
+    if degrees == 0.0:
+        return pixels.copy()
+    image = Image.fromarray(pixels, "RGBA").convert("RGBa")
+    turned = image.rotate(-degrees, resample=Image.Resampling.BICUBIC, center=(centre, foot))
+    return np.array(turned.convert("RGBA"))
+
+
+def sway_rows(pixels: np.ndarray, foot: float, height: float, degrees: float, bend_from: float = 0.0) -> np.ndarray:
+    """``pixels`` (rows × columns × RGBA, uint8) of a thing standing with its foot on row
+    ``foot`` and ``height`` pixels tall, bent so its top leans ``degrees`` to the right: each row
+    shifts sideways by the square of its height over ``bend_from`` of the way up (the foot
+    stays), smoothly between pixels (premultiplied, so no dark fringe). A new array; equal to
+    ``pixels`` at 0 degrees."""
+    if degrees == 0.0 or height <= 0.0:
+        return pixels.copy()
+    rows, columns = pixels.shape[:2]
+    straight = min(max(bend_from, 0.0), 0.95)
+    u = np.clip((foot - np.arange(rows) - 0.5) / height - straight, 0.0, None) / (1.0 - straight)
+    shift = math.tan(math.radians(degrees)) * (1.0 - straight) * height * u * u
+    whole = np.floor(shift).astype(int)
+    part = (shift - whole)[:, None, None]
+    alpha = pixels[..., 3:4].astype(np.float32) / 255.0
+    pre = np.concatenate([pixels[..., :3].astype(np.float32) * alpha, alpha * 255.0], axis=2)
+    pad = np.concatenate([np.zeros((rows, 1, 4), np.float32), pre, np.zeros((rows, 1, 4), np.float32)], axis=1)
+    x = np.arange(columns)[None, :] - whole[:, None] + 1   # source column (padded) of each pixel
+    at = lambda cols: pad[np.arange(rows)[:, None], np.clip(cols, 0, columns + 1)]   # noqa: E731
+    mixed = at(x) * (1.0 - part) + at(x - 1) * part
+    out = np.zeros_like(pixels)
+    a = mixed[..., 3]
+    out[..., 3] = np.clip(np.rint(a), 0, 255).astype(np.uint8)
+    safe = np.where(a > 0, a / 255.0, 1.0)[..., None]
+    out[..., :3] = np.clip(np.rint(mixed[..., :3] / safe), 0, 255).astype(np.uint8)
+    return out
+
+
 __all__ = [
     "BALL_RADIUS",
     "CELLS_PER_PUDDLE",
+    "ISO_SWAYS",
+    "ISO_SWAY_SHARE",
+    "Light",
+    "iso_sway_degrees",
+    "REFLECTION_HALO",
+    "REFLECTION_HALO_SHARE",
+    "REFLECTION_OPACITY",
+    "REFLECTION_SHIMMER",
+    "REFLECTION_WHITEN",
+    "clip_convex",
+    "densified",
+    "glow_outlines",
+    "mirrored",
+    "puddle_lights",
+    "puddle_outline",
+    "reflection",
+    "shimmered",
+    "still_reflection",
+    "sway_rows",
+    "swing_pixels",
+    "ISO_SWINGS",
+    "ISO_SWAY_POWER",
     "IsoPuddle",
     "PUDDLE_GROUNDS",
     "PUDDLE_RADIUS",

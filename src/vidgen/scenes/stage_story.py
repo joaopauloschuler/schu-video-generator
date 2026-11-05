@@ -106,6 +106,9 @@ class StoryStaging:
         for thing in getattr(self, "story_things", []):
             if isinstance(thing, (IsoBlinkers, IsoScreens, IsoTraffic, IsoHaze)):
                 unmark_lit(thing)   # a lab's lights, a city's screens and pods shine at night too
+            elif isinstance(thing, IsoGadgets):
+                for piece in thing.glowing:   # a quantum core's glow (§103)
+                    unmark_lit(piece)
         if getattr(self, "story_things", []):
             self._watch_living()
         #: the scene updater, kept: Manim removes an updater by identity

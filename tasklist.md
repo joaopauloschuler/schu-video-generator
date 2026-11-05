@@ -1569,6 +1569,86 @@ Phase AA done.
 ### Step 257 — The studio screenshot with the new name
 - [x] `docs/images/studio.png` taken again with Step 200's recipe (1440 × 900, 160 colours, 73 KB; same state), the top bar reads "schu-video-generator studio"; the README's alt text says so
 
+## Phase AB — More iso lab and sci-fi objects (DESIGN §103)
+
+26 new iso objects in the flat cartoon style, `on` states with gentle motion; docs: one short
+"Other objects" list in CONFIG and the guide.
+
+### Step 258 — Lab objects I
+- [x] `laptop` (`open`), `terminal_kiosk`, `quantum_core` (pulses), `robot_arm` (swings), `microscope`, `centrifuge` (spins), `coffee_machine` (steam), `lab_stool`, `wall_clock` (on a back wall, `time`); moving parts drawn over the place while on (`IsoGadgets`); tests `test_lab_objects.py`; Phase AB plan here and DESIGN §103
+
+### Step 259 — Lab objects II
+- [x] `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench`, `distillation_rig`, `lab_fridge` (`open`), `fume_hood`; liquids glow when on, bubbles / steam / drips / mist / fan; a working object behind another object or in front of a character keeps its motion (cover pictures, gadgets after front pictures); tests in `test_lab_objects.py`
+
+### Step 260 — Lab objects III and review
+- [x] `telescope`, `satellite_dish` (turns), `charging_station` (bars fill), `crate_stack`, `airlock` (2 x 1, `open`, beacon), `printer_3d` (prints layer by layer), `hazard_sign` (`kind`), `fire_extinguisher`; a critical review of all of them (24: the batches list 24, not 26): coffee machine redrawn light with a big mug, laptop / kiosk text no longer mirrored facing right, style / sizes / on-off / night checked, a room with all working previews at ~3–4 s per video second; tests in `test_lab_objects.py`
+
+Phase AB done.
+
+## Phase AC — 63 more iso objects (DESIGN §104)
+
+Home, café, town, nature, school / office, fantasy, seasons and harbour objects in the same flat
+cartoon style, `on` states with gentle motion where listed; docs: the one "Other objects" list.
+
+### Step 261 — Home I
+- [x] `fireplace` (2 x 1; flames flicker, warm light), `kitchen_counter` (2 x 1), `stove` (pot steams), `sink`, `bookshelf_tall`, `armchair`, `floor_lamp` (lights), `tv` (picture, flicker), `piano` (2 x 1); a lit fireplace or floor lamp lights nearby characters; drawings in `cartoon/iso_home.py` (`MORE_MODULES`); tests `test_iso_objects_more.py`; Phase AC plan here and DESIGN §104
+
+### Step 262 — Home II and café
+- [x] `bathtub`, `wardrobe` (`open`), `crib`, `cafe_table` (with two chairs), `counter`, `cash_register`, `display_case` (`kind: cakes | jewels`), `market_stall` (awning, fruit crates), `vending_machine` (glows when on); drawings in `cartoon/iso_shop.py`; `kind` per object via `OBJECT_STYLES`
+
+### Step 263 — Town
+- [x] `street_lamp` (tall, lights), `traffic_light` (cycles when on), `bus_stop`, `mailbox`, `fountain` (water when on), `phone_booth` (light), `car` (parked; headlights; `color`), `bicycle`, `newsstand`; drawings in `cartoon/iso_town.py`; warm night light pools for every lamp (`light_pool`)
+
+### Step 264 — Nature I
+- [x] `campfire` (flames, sparks, glow), `tent`, `log`, `stump`, `mushroom_ring` (faint glow at night), `pond` (lily pads, ripples), `scarecrow`, `beehive` (bees when on); drawings in `cartoon/iso_nature.py`; pools of light faint by day (their own picture, `pool_strength`)
+
+### Step 265 — Nature II, school and office
+- [x] `vegetable_patch`, `wheelbarrow`, `hay_bale`, `school_desk` (iso), `desk_with_pc` (screen), `water_cooler` (bubble), `printer` (paper slides out), `globe` (spins), `trophy_shelf`; drawings in `cartoon/iso_school.py`
+
+### Step 266 — Fantasy and seasons I
+- [x] `treasure_chest` (opens with a golden glow), `cauldron` (bubbling potion in `color`), `giant_crystal` (pulses), `throne`, `torch_sconce` (wall-mounted flame), `signpost`, `archway`, `statue`; drawings in `cartoon/iso_fantasy.py`; a layer's clip covers its own pool of light
+
+### Step 267 — Seasons II, harbour and review
+- [x] `christmas_tree` (lights twinkle), `snowman`, `pumpkin` (glows), `gift_pile`, `balloon_bunch` (sways), `birthday_cake` (candles), `boat` (bobs on water), `dock`, `lighthouse` (beam at night), `train_car`, `rocket` (smoke / flame); a critical review of all 63 (style, sizes, on / off and night, performance, did-you-mean, the doc list), fixes, `test_mcp.py`; drawings in `cartoon/iso_seasons.py`; moving light on things (fire glow, torch light, beam) faint by day; stove steam, vending machine, crib, bicycle, crystal glow redone
+
+Phase AC done.
+
+## Phase AD — Seven features without AI APIs (DESIGN §105)
+
+Deterministic only: no AI API calls in code, tests or the work (rules, heuristics, local data);
+where judgement helps, building blocks (CLI + MCP tools) for an agent driving vidgen. Docs lean:
+a few lines per feature in CONFIG and the guide.
+
+### Step 268 — Moving vehicles in iso
+- [x] `drive_to` (a `car` along path cells, turning at corners, round where its way ends; a `train_car` along its track, drawn along its line), `sail_to` (a `boat` across water), `lift_off` (a `rocket`: smoke, faster and faster, out of the view); `to` / `via` spots or cells, `speed`; drawn by the stage as moving sprites (a car driving away shows its tail, wheels turn, headlights with `switch_on`, a boat bobs); bodies of the place (front pictures, draw order by boxes); `follow` works; validate replays them with the walks; engine / brakes / launch sounds; tests `test_iso_vehicles.py`
+
+### Step 269 — Sitting and using furniture
+- [x] `sit_on` an iso object (chair, bench, bus stop, armchair, sofa, throne, lab stool, log / stump, hay bale, rock, café table's two chairs, school desk, bed's edge), `lie_on` (bed), `stand_up`, a generic `use` with per-object poses (typing, warming the hands at a campfire / fireplace, a book from shelves, pressing at machines); facing-aware seat points, the object's near parts drawn over the sitter; `vidgen validate` checks sitting on nothing, two on one seat, too far, walking while seated; tests `test_iso_seats.py`
+
+### Step 270 — A day passing in one scene
+- [x] `- {time_of_day: sunset, run_time: 6}` blending the light smoothly (day to night through a sunset, a sky of the time of day on stages without a background, stars coming out late, pools growing); lamps, windows, lit objects and cars' headlights (driven ones too) switch on one after another at dusk and off at dawn, fading (`auto_lights: false`, `auto_light: false` per object / lamp prop); iso places and the flat stage; works with `fill_light`; tests `test_time_of_day.py`
+
+### Step 271 — Iso weather
+- [~] Puddles mirror lit windows, lanterns and neon trims at night (as strong as it is dark, fading with `time_of_day` and switches, wobbling in rain; `settled` starts them grown); the stage's `fog` on iso places in drifting bands by depth; the stage's `wind` (a signed level, not `{strength, direction}`: one wind on both stages) bends trees, pines, bushes, flowers, plants, swings scarecrows and balloon bunches (rain already slants, leaves drift); outdoors only; tests `test_iso_atmosphere.py`. Partial: no flag object to sway; characters are not mirrored
+
+### Step 272 — Story to video draft
+- [x] `vidgen story draft story.md [-o project/] [--style iso|flat] [--format 9:16] [--narrator V]`: scenes (headings, breaks, time cues), dialogue and speakers with a confidence, a cast with distinct Kokoro voices (first person: the narrator is the protagonist's voice), eleven ready-made iso places (or flat sets) with light, weather and named objects, placeholder staging, beats, title and end cards, a music bed, a `story_draft.md` report with TODOs; MCP tool `story_draft`; tests `test_story_draft.py` on neutral sample texts
+
+### Step 273 — Shorts suggestions
+- [x] `vidgen shorts suggest [project] [--count N] [--min 30 --max 60] [--teaser] [--spoilers] [--write]`: windows between beat boundaries timed by audio or words, scored (dialogue, questions, exclamations, emotional / action words, variety, clean start, strong last line, ending marked down), non-overlapping, a hook line each (≤ 6 words or a template), a ~15 s teaser; `--write`: `cut:` variants (9:16, shorts, captions, hook, end card, opening zooms) in `shorts.yaml` included by the config (`variants` allowed in include files; backups); MCP tool `shorts_suggest`; tests `test_shorts_suggest.py`
+
+### Step 274 — Ambient life
+- [x] `ambient: {walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}` (or `true`) on an iso stage: walkers between spots and along paths (muted: smaller, greyer), birds pecking, hopping, flying off and back, a cat sitting and grooming, ducks on water, butterflies by day and fireflies at night (following `time_of_day`); away from the characters, their moves, the objects used, roads and tracks; hidden in close shots; no targets, never speaking; indoors a cat and flies; deterministic by seed; front pictures drawn only over each creature (cost +40–55 % on a dozen); tests `test_iso_ambient.py`
+
+### Step 275 — Review of Phase AD
+- [x] Compatibility (Phase Q baseline 31/31, iso-story stills identical), each feature's tests and related suites, `test_mcp.py` in full, docs consistency, performance (DESIGN §105.8). Fixes: headlights ahead when driving away, a turned in-between frame at corners, a pupil's legs under the school desk, the sun sinking behind the ground, lamps on from a rainy day to night, visible wind and swinging balloons, British quotes / described speakers / calls by name / a title card by mood / ambient in story drafts, the light restated in mid-scene Shorts, walkers with faces and lamplight, ducks off a boat's way, the schema's YAML `on` key
+
+### Step 276 — Cookbook: iso map sizes that fill the frame
+- [x] Measured outdoor and indoor iso places (map sizes, `wide`, 16:9 and 9:16) and wrote `docs/COOKBOOK-ISO-CARTOONS.md` (linked from `docs/COOKBOOK.md`); docs only
+
+### Step 277 — A fixed-scale wide view for iso places
+- [x] `iso: {wide: fixed}` (scale from `character_size`, allowed on iso places with it; or `wide: {tiles: N}`): the same scale on any map, centred on the characters and moved onto the ground (characters by an edge kept in view), a small place centred; `zoom` scale, shots, `follow` and `pan` relative to it (shot / follow caps scaled, follow and pan settle on the ground, `MAX_DETAIL` 5); lint `iso_ground` (map size that fills the frame; info hint for outdoor `auto` / `fill`); measured map sizes (16:9 34 / 24 / 17, 9:16 23 / 16 / 12) in CONFIG, the guide and the iso cookbook; `fill` wording corrected; tests `test_iso_fixed_view.py`
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

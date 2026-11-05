@@ -23581,3 +23581,717 @@ studio: …") names no project and is unchanged. No other file references the pi
 Files: `docs/images/studio.png`, `README.md`, `tasklist.md`.
 
 How to test: `tests/test_docs.py` (73 passed).
+
+## Step 258 — Lab objects I (Phase AB)
+
+- Built: iso objects `laptop`, `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`,
+  `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (DESIGN §103); the working ones switch
+  on, and the core, arm, centrifuge and coffee machine move while on (`IsoGadgets` overlay,
+  `object_motion`). The Phase AB plan in `tasklist.md`.
+- Files: `world/iso.py` (kinds, `WALL_KINDS`, `time`, wall placement), `cartoon/iso_objects.py`
+  (drawings, `Motion`, `object_motion`, `ObjectLook.moving`, wall box), `cartoon/iso_overlays.py`
+  (`IsoGadgets`), `scenes/stage.py` (`time` key, did-you-mean for an unknown object, messages),
+  `scenes/stage_iso.py` (`_iso_moving_names`, `_iso_gadgets`, state log), `scenes/stage_story.py`,
+  `scenes/switch_action.py`, `scenes/handling.py`, `api.py`; docs: one "Other objects" list in
+  `docs/CONFIG.md` and the guide (`AGENTS.md`).
+- Decisions: objects do not stack, so the laptop and microscope stand on their own small table
+  and the centrifuge and coffee machine on a bench cabinet; a wall clock is placed at a wall cell
+  (it takes no floor cell). A working object another object covers on screen keeps a still
+  picture (as a tower's screen).
+- Known gaps: a character standing right behind a working object hides part of its motion under
+  the object's front picture; a laptop's code lines are mirrored when it faces right.
+- Tests: `tests/test_lab_objects.py` (5 logic + 1 small render); `test_iso_place.py`
+  (every object draws: a wall clock on a wall). Contact sheet (private):
+  scratchpad `s258/objects.png`. Shared iso drawing code untouched for existing objects.
+
+## Step 259 — Lab objects II (Phase AB)
+
+- Built: iso objects `grow_rack`, `terrarium`, `specimen_tank`, `chemistry_bench` (2 x 1),
+  `distillation_rig`, `lab_fridge` (`open`; works while on or open), `fume_hood` (DESIGN §103).
+  Liquids in `color` / `detail` / `LIQUIDS`, glowing while on; tank, bench, rig, fridge and hood
+  move (bubbles, steam, flame and drips, cold mist, fan and vapour). Both of 258's gaps fixed:
+  a working object another object covers now moves under a cover picture that follows the
+  place's changes, and its moving parts stay drawn after the front picture of a character
+  standing right behind it (`_iso_place_gadgets`, one `IsoGadgets` per working object).
+- Files: `cartoon/iso_objects.py` (drawings, `_lab_motion`, `object_working`, `object_motion`'s
+  `state`), `world/iso.py`, `scenes/stage_iso.py` (gadgets per object, covers, placing),
+  `scenes/stage.py` (draw-order updater on while there are gadgets; messages), `handling.py`,
+  `api.py`; one "Other objects" list in CONFIG and the guide.
+- Known gaps: glassware is flat cut-outs facing the viewer (fine at preview size); a gadget sits
+  after the last front picture showing its object, so with several characters around one object
+  its parts may be drawn over a character between it and that one (rare).
+- Tests: `tests/test_lab_objects.py` (8 logic + 2 small renders); 258's render test now expects
+  the covered quantum core to move. Phase Q baseline 31/31 identical. Contact sheet (private):
+  scratchpad `s259/objects.png` (plus `closeup.png`).
+
+## Step 260 — Lab objects III and the Phase AB review
+
+- Built: iso objects `telescope`, `satellite_dish` (dish turns slowly while on), `charging_station`
+  (four bars fill while on), `crate_stack` (hazard stripes; `top`), `airlock` (2 x 1; `open`: the
+  door slides into the wall, a dark tunnel; on: its beacon flashes), `printer_3d` (a vase grows
+  layer by layer under a moving head while on), `hazard_sign` (`kind: biohazard | radiation |
+  authorised`, stored as the placing's `features`, `HAZARD_SIGNS`), `fire_extinguisher` (DESIGN §103).
+- Review of all 24 objects (the plan said 26, its three batches list 24): the coffee machine is now
+  a light drip machine with a big white mug under its spout, a coffee window and a stream while on
+  (steam drifts out from under the head); a laptop's and a kiosk's screen text facing right reads
+  from the left (`_reading`). Shading, outline widths and palette are the shared ones; heights
+  0.85–2.5 tiles. A preview (854 x 480, 15 fps) of one room with all 24 working renders 5.1 s of
+  video in 16.5 s (day) / 22.1 s (night). `vidgen validate` / `lint` say "did you mean telescope?"
+  and "did you mean radiation?" on typos.
+- Files: `cartoon/iso_objects.py`, `world/iso.py` (kinds, `HAZARD_SIGNS`, airlock opens and
+  switches), `scenes/stage.py` (`kind` key, messages), `scenes/handling.py`, `api.py`; the one
+  "Other objects" list in CONFIG and the guide; tests `tests/test_lab_objects.py` (+4 logic, +1 render).
+- Known gaps: the airlock is decoration (characters do not walk through it); hazard signs do not
+  glow at night; the dish's struts can read as a fan when seen face-on in its sweep.
+- Tests: `test_lab_objects.py` 15 passed; iso files, `test_guide`, `test_api`, `test_mcp`,
+  `test_schema`, `test_docs`, `test_city_hud_echo` passed. Phase Q baseline 31/31 identical.
+  Contact sheets (private): scratchpad `s260/objects.png`, `s260/all26.png`.
+
+## Step 261 — Home objects I (Phase AC)
+
+- Built: iso objects `fireplace` (2 x 1), `kitchen_counter` (2 x 1), `stove`, `sink`,
+  `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1) (DESIGN §104). Switched: the
+  fireplace (flames, embers, sparks, warm floor light), stove (glowing oven and ring, steam),
+  floor lamp (glowing shade, pool of light) and TV (a picture, a cloud, a flicker); the fire,
+  steam and TV picture move (`IsoGadgets`). A lit fireplace or floor lamp lights nearby characters
+  like a lamp (`LAMPLIGHT_KINDS`). The Phase AC plan in `tasklist.md`.
+- Files: new `cartoon/iso_home.py` (drawings, `motion`); `cartoon/iso_objects.py` (colours,
+  `MORE_MODULES` dispatch, `LAMPLIGHT_KINDS`, `MOVING_KINDS`, shadow); `world/iso.py` (kinds,
+  `SWITCHED_KINDS`); `scenes/stage_iso.py` (lamplight kinds); `scenes/stage.py` (docstrings);
+  `api.py`; the one "Other objects" list in CONFIG and the guide; tests
+  `tests/test_iso_objects_more.py` (3 logic + 1 small render).
+- Decisions: the new drawings go in their own module per batch (iso_objects.py is ~2000 lines),
+  found through `MORE_MODULES`; later batches add their module there. Names do not clash: iso
+  objects are their own namespace (`objects:` of an iso place), apart from the 2D props `tv`,
+  `fireplace`, `armchair` (as `lamp` already was). A lamp keeps its lamplight point (first cell).
+- Known gaps: the TV's picture is fixed (no `kind`); nobody sits in the armchair (`top` holds
+  small things, like the sofa's); the fireplace's floor light is a flat tint (also over a rug).
+- Tests: `test_iso_objects_more.py` 4 passed; `test_lab_objects`, `test_iso_place`,
+  `test_guide`, `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo`, the lamplight tests
+  of `test_phase_q_review` passed. Phase Q baseline 31/31 identical. Contact sheet (private):
+  scratchpad `s261/objects.png` (plus `closeup.png`, `zoom.png`).
+
+## Step 262 — Home II, café and shop objects (Phase AC)
+
+- Built: iso objects `bathtub` (2 x 1), `wardrobe` (2 x 1; `open`: both doors swing out, a mirror
+  inside one, clothes on hangers, a shelf, shoes), `crib` (with a mobile), `cafe_table` (2 x 1: a
+  round table between two bistro chairs, cups, a flower), `counter` (2 x 1, `top`),
+  `cash_register` (on a piece of counter), `display_case` (2 x 1, `kind: cakes | jewels`),
+  `market_stall` (2 x 1, striped awning, fruit crates, chalk board), `vending_machine` (on: its
+  window, sign and buttons glow, a pool of light in front) (DESIGN §104). Nothing moves.
+- Files: new `cartoon/iso_shop.py` (drawings; `motion` returns nothing); `cartoon/iso_objects.py`
+  (colours, `MORE_MODULES`); `world/iso.py` (kinds, `DISPLAY_CASES`, `OBJECT_STYLES`, wardrobe
+  opens, vending machine switches); `scenes/stage.py` (`kind` checked per object through
+  `OBJECT_STYLES`, messages, docstrings); `scenes/handling.py` (open message); `api.py`; the one
+  "Other objects" list in CONFIG and the guide; tests in `tests/test_iso_objects_more.py`.
+- Decisions: `kind` is now general: `OBJECT_STYLES` (object -> its kinds) feeds both validation
+  (did-you-mean per object: "unknown display_case kind 'jewls'; did you mean jewels?") and
+  `OBJECT_FEATURES`; a `kind` on another object says "kind is for a hazard_sign or a
+  display_case". The café table's chairs are part of the object (nobody sits on them). The cash
+  register stands on its own counter piece (objects do not stack), coloured like `counter`'s
+  default so the two line up.
+- Known gaps: the vending machine does not light characters (not in `LAMPLIGHT_KINDS`); the
+  wardrobe's open doors reach out of its footprint (like the lab fridge's); the display case is
+  not lit at night; the crib reads small and busy at preview size.
+- For later batches: add the module to `MORE_MODULES`; a new `kind:` object only needs an entry in
+  `OBJECT_STYLES`; scratchpad `s262/closeup.py` (states incl. `open` and kinds) and `crop.py`.
+- Tests: `test_iso_objects_more.py` 8 passed; `test_lab_objects`, `test_iso_place`, `test_guide`,
+  `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo` passed. No shared drawing code
+  changed (Phase Q baseline not affected). Contact sheets (private): scratchpad
+  `s262/objects.png`, `s262/closeup.png`.
+
+## Step 263 — Town objects (Phase AC)
+
+- Built: iso objects `street_lamp` (lantern on a crook; lights), `traffic_light` (cycles red,
+  green, amber while on), `bus_stop` (2 x 1), `mailbox`, `fountain` (2 x 2; jet, falls, rings
+  while on), `phone_booth` (panes and sign glow), `car` (2 x 1; headlights, tail light, light on
+  the ground ahead), `bicycle`, `newsstand` (2 x 1) (DESIGN §104). A lit street lamp or phone booth
+  lights nearby characters (`LAMPLIGHT_KINDS`). Night light pools are now warm: a shared
+  `light_pool` (amber rings) for `lamp`, `floor_lamp`, `vending_machine` and the new lights — the
+  old pale tints over the night-graded ground read olive / grey (glow layer alpha-composited over
+  the blue-multiplied picture).
+- Files: new `cartoon/iso_town.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `LAMPLIGHT_KINDS`, shadows, `light_pool`, `LIGHT_POOL` now the warm amber,
+  `LIGHT_POOL_OPACITY` gone); `cartoon/iso_home.py`, `cartoon/iso_shop.py` (their pools);
+  `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`, `scenes/stage_iso.py` (docstrings);
+  the one "Other objects" list in CONFIG and the guide; tests `test_iso_objects_more.py` (+5),
+  `test_iso_staging.py` (the lamp's pool is now rings).
+- Decisions: the car stands side-on, its nose on the visible right side face (so facing left or
+  right both show the headlights); its light pool lies just outside its footprint. The fountain's
+  falls are only on its viewer side (moving parts are drawn over the picture, so falls behind the
+  column would show through it). The fountain's water is not self-lit at night.
+- Known gaps: in daylight a lit lamp's pool reads as a clear orange patch (the glow layer is
+  drawn over the day picture too, as before); the bicycle's wheels overlap in the iso view and it
+  reads small at preview size; nobody sits on the bus stop's bench; the car does not move.
+- For later batches: `iso_town` shows a moving object whose still picture (`look.moving` false)
+  stands in for its motion (traffic light red, fountain water at t=0.4). Use `light_pool` for any
+  new lit object (campfire, pumpkin, lighthouse...). Scratchpad `s263/closeup.py` draws close-ups
+  under the real night grade (`grade_rgbas`) with motion frames; `s263/pool.py` checks a pool's
+  night colour over several grounds.
+- Tests: `test_iso_objects_more.py` 13 passed; `test_iso_staging`, `test_lab_objects`,
+  `test_iso_place`, `test_iso_mood`, `test_guide`, `test_api`, `test_schema`, `test_docs`,
+  `test_city_hud_echo`, the lamplight tests of `test_phase_q_review` passed. Phase Q baseline 31/31
+  identical. Contact sheets (private): scratchpad `s263/objects.png`, `s263/closeup.png`.
+
+## Step 264 — Nature objects; pools of light by day (Phase AC)
+
+- Built: iso objects `campfire` (flames and rising sparks while on, embers, a warm pool; lights
+  nearby characters via `LAMPLIGHT_KINDS`), `tent` (2 x 2), `log` (2 x 1, `top`), `stump` (`top`),
+  `mushroom_ring` (2 x 2; spots and a faint green glow on the grass at night), `pond` (2 x 2; lily
+  pads, reeds; `on` spreads ripples), `scarecrow`, `beehive` (bees circle it while on) (DESIGN
+  §104). Reviewer's fix first: a lit lamp's pool of light was a strong orange patch by day (it was
+  in the day picture and drawn again, ungraded, in the glow layer). Pools are now their own
+  picture (`Disc.pool`, `draw_shapes(pool=True)`, `PoolTile`) shown at `pool_strength(light)`:
+  1 at night, ~0.6 at sunset, ~0.45 indoors, 0.1 by day; never in a character's front picture,
+  no seams between tiles.
+- Files: new `cartoon/iso_nature.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `LAMPLIGHT_KINDS`, shadows, `light_pool` marks `pool`, `POOL_RINGS`);
+  `cartoon/iso_drawing.py` (`Disc.pool`, `draw_shapes(pool=)`); `cartoon/iso_stage.py`
+  (`pools`, `pool_shapes`, layer owners, `tile_image`/`picture` `pool=`); `cartoon/iso_pictures.py`
+  (`PoolTile`, `POOL_STRENGTH`, pool tiles in `show_view`, `draw_tile` fades them);
+  `cartoon/lighting.py` (`pool_strength`, `POOL_DAY`, `POOL_CURVE`); `cartoon/shading.py`
+  (`StageLight` sets the camera's pool strength); `cartoon/iso_home.py` (the fireplace's floor light
+  is a pool); `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`, `scenes/stage_iso.py`
+  (docstrings); the one "Other objects" list in CONFIG and the guide; tests
+  `test_iso_objects_more.py` (+5), `test_iso_staging.py` (pool discs are `pool`).
+- Decisions: the pond is switched (`on`: ripples) rather than always moving, so a still pond costs
+  nothing per frame. The mushroom ring's night glow is a mint pool (no switch needed: pools fade by
+  day). Without a stage light (plain `day`) or in a draft, pools show at the day strength. Night
+  pools are a little softer than in 263 (drawn once, not twice; rings raised to 0.34–0.38).
+- Known gaps: the fireplace's flickering floor glow (a moving part) is still drawn ungraded by
+  day; nobody sits on the log or stump (`top` holds small things); bees are small at preview size;
+  the tent cannot be entered; a layer picture equal to a front picture would draw a pool twice
+  (not seen).
+- For later batches: lit objects use `light_pool` (it now fades by day by itself); a glow on the
+  ground that should show only at night can be any `Disc(..., pool=True)`. Scratchpad
+  `s264/closeup.py` composes day (pools at day strength) and night like the stage; `s264/proj`
+  is a meadow test project; `s261/sheet.py` makes the sheet.
+- Tests: `test_iso_objects_more.py` 18 passed; `test_iso_staging`, `test_iso_mood`,
+  `test_lab_objects`, `test_iso_place`, `test_city_hud_echo`, `test_story_light_hands`,
+  `test_draft`, `test_guide`, `test_api`, `test_schema`, `test_docs`, the lamplight tests of
+  `test_phase_q_review` passed. Phase Q baseline 31/31 identical. Contact sheets (private):
+  scratchpad `s264/objects.png`, `s264/closeup.png`.
+
+## Step 265 — Farm, school and office objects (Phase AC)
+
+- Built: iso objects `vegetable_patch` (2 x 1), `wheelbarrow`, `hay_bale` (2 x 1, `top`),
+  `school_desk` (iso version with its chair), `desk_with_pc` (2 x 1; screen, typing), `water_cooler`
+  (bubbles), `printer` (a sheet slides out), `globe` (spins), `trophy_shelf` (2 x 1, `top`)
+  (DESIGN §104). Switched and moving: desk_with_pc, water_cooler, printer, globe.
+- Files: new `cartoon/iso_school.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, shadows, docstring); `world/iso.py` (kinds, `SWITCHED_KINDS`); `scenes/stage.py`
+  (docstrings); the one "Other objects" list in CONFIG and the guide (the 3D printer is now
+  called "3D printer" there); tests `test_iso_objects_more.py` (+4).
+- Decisions: iso objects are their own namespace, so `school_desk` (iso) lives beside the 2D
+  `school_desk` prop and `printer` beside `printer_3d`. The school desk's chair stands in front of
+  it (the pupil faces the room's back wall, where a whiteboard goes); it has no `top` (its desk is
+  not at the cell's middle, and `TOP_SPOTS` does not turn with `facing`). The globe's land is in
+  its picture unless it spins (`state.on and look.moving`: the stage marks every moving kind
+  `moving`, also while off — check that for any still picture of a later moving object).
+- Known gaps: nobody sits at the school desk; the globe shows a wide empty Pacific for part of a
+  turn and its land is dark at night; the printer's sheet is small at preview size and slides past
+  the footprint's front edge; nothing here lights characters.
+- For later batches: scratchpad `s265/closeup.py` (farm things on grass, the rest on a floor,
+  four motion frames), `s265/sheet.py` (times fit short scenes, a crop), `s265/stack.py` (sheets
+  one under another), `s265/crop.py`.
+- Tests: `test_iso_objects_more.py` 22 passed; `test_lab_objects`, `test_iso_place`,
+  `test_iso_staging`, `test_guide`, `test_docs`, `test_api`, `test_schema`, `test_city_hud_echo`
+  passed. No shared drawing code changed (Phase Q baseline not affected). Contact sheets
+  (private): scratchpad `s265/objects.png` (garden corner, then classroom office),
+  `s265/closeup.png`.
+
+## Step 266 — Fantasy objects (Phase AC)
+
+- Built: iso objects `treasure_chest` (`open`: lid back, gold and gems glow, a pool; sparkles
+  while open), `cauldron` (`color` its potion; on: fire, glow, bubbles, vapour), `giant_crystal`
+  (on: glows in its tint, pulses, tips twinkle), `throne` (`top`), `torch_sconce` (hangs on a
+  back wall like `wall_clock`; on: flickering flame, light on the wall, a pool on the floor),
+  `signpost`, `archway` (2 x 1), `statue` (DESIGN §104). A lit cauldron or torch lights nearby
+  characters (`LAMPLIGHT_KINDS`). Fix: a layer's clip now covers its piece's own pool of light
+  (a lit torch's pool was cut to a streak while it was in its switch layer; a car's too).
+- Files: new `cartoon/iso_fantasy.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, `OPEN_WORKING`, `LAMPLIGHT_KINDS`, shadows, `_wall_box` per kind);
+  `cartoon/iso_stage.py` (`clip`); `world/iso.py` (kinds, `OPENING_KINDS`, `SWITCHED_KINDS`,
+  `WALL_KINDS`); `scenes/stage.py`, `scenes/handling.py` (docstrings, open messages); the one
+  "Other objects" list in CONFIG and the guide; tests `test_iso_objects_more.py` (+5),
+  `test_iso_place.py` (wall objects by `WALL_KINDS`).
+- Decisions: `giant_crystal` is its own name beside the small 2D `crystal` prop (separate
+  namespaces; "crystal" as an iso object says "did you mean giant_crystal?"). The chest works
+  while open (no `on`), like the lab fridge's mist. The crystal does not light characters
+  (lamplight is warm). `color` is the cauldron's potion (its iron is `detail`).
+- Known gaps: one cannot walk through the archway (not walkable, like `flower_arch`); nobody
+  sits on the throne (`top` holds small things); a torch sconce hangs only on a room's standing
+  wall (not outdoors, not on a garden wall); a layered lamp's pool still tints base objects
+  standing in it (as before); the crystal's halo reads as a soft bubble.
+- For the last batch: wall objects need an entry in `_wall_box` if their span differs from the
+  clock's; scratchpad `s266/closeup.py` (states incl. `open`, a wall behind wall objects),
+  `s266/pooltest.py` (a room's picture beside its pools' picture), `s266/proj_hall`,
+  `s266/proj_path` and `s266/baseline.sh`.
+- Tests: `test_iso_objects_more.py` 27 passed; `test_lab_objects`, `test_iso_staging`,
+  `test_iso_place`, `test_iso_mood`, `test_guide`, `test_docs`, `test_api`, `test_schema`,
+  `test_city_hud_echo`, the lamplight tests of `test_phase_q_review` passed. Phase Q baseline
+  31/31 identical. Contact sheets (private): scratchpad `s266/objects.png` (castle hall, then
+  forest path), `s266/closeup.png`.
+
+## Step 267 — Seasons, harbour and travel objects; Phase AC review (Phase AC)
+
+- Built: iso objects `christmas_tree` (lights twinkle when on), `snowman`, `pumpkin` (its face
+  glows and flickers when on), `gift_pile`, `balloon_bunch` (sways when on), `birthday_cake`
+  (candles burn when on), `boat` (2 x 1, floats: only on water; bobs and its lantern is lit when
+  on), `dock` (1 x 2, over water, walked on like a bridge), `lighthouse` (5.6 tall; lit lantern,
+  its beam sweeps when on), `train_car` (3 x 1), `rocket` (2 x 2; flame and smoke when on)
+  (DESIGN §104). Review fixes: moving light thrown on things (`Motion.pool`: fireplace floor
+  glow, torch wall light, crystal ground glow, beam, star glow) now fades by day like pools; the
+  stove's steam is soft see-through wisps; the vending machine reads clearly lit at night; the
+  crib is plainer; the bicycle bigger; the giant crystal's pulse brightens its shards (no round
+  halo); a gadget's redraw region covers where its parts reach.
+- Files: new `cartoon/iso_seasons.py`; `cartoon/iso_objects.py` (colours, `MORE_MODULES`,
+  `MOVING_KINDS`, shadows, `Motion.pool`); `cartoon/iso_overlays.py` (`IsoGadgets(pool_strength=)`);
+  `cartoon/iso_home.py` (fire glow, steam), `iso_fantasy.py` (torch light, crystal pulse),
+  `iso_shop.py` (vending machine, crib), `iso_town.py` (bicycle); `world/iso.py` (kinds,
+  `ObjectKind.floats`, the floats check, `SWITCHED_KINDS`); `scenes/stage_iso.py`
+  (`GADGET_SAMPLES`, pool strength to the gadgets); `scenes/stage.py` (docstrings); `api.py`
+  (`POOL_DAY`, `POOL_STRENGTH`); the one "Other objects" list in CONFIG and the guide; tests
+  `test_iso_objects_more.py` (+6), `test_iso_place.py` (a boat is placed on water).
+- Decisions: the boat and the balloons move only while `on` (like the pond: a still one costs
+  nothing per frame); while they work the whole boat / bunch is drawn by the stage (left out of
+  the picture), else it is in the picture. A spot's letter is ground, so a boat takes
+  `at: {column, row}` on the `~` (the error says so). The dock's front-half posts reach into the
+  water (a dock on land there would show a short post below the ground). The lighthouse and
+  rocket do not light characters (no `LAMPLIGHT_KINDS`).
+- Performance: a preview of 19 working objects in one outdoor place renders 8.9 s of video in
+  21 s (one working object: 8.8 s, none: 5.3 s): about 5 ms per working object per frame, mostly
+  grading and resizing each working object's cover picture every frame (not cached; a grade cache
+  keyed on the picture could cut it, left for later since images' pixels can change in place).
+- Known gaps: by day the beam is faint but not gone (as pools); the boat does not sail and nobody
+  boards it; the train car does not move and has no lit windows; the snowman does not melt; the
+  dock, a walkable object, makes the bridge's footstep sound.
+- Tests: `test_iso_objects_more.py` 33 passed; `test_lab_objects`, all `test_iso_*`
+  (`place`, `staging`, `moves`, `mood`, `story`, `weather`, `diagram`, `diagram_actions`,
+  `web_page`), `test_guide`, `test_api`, `test_schema`, `test_docs`, `test_city_hud_echo`, the
+  lamplight tests of `test_phase_q_review`, `test_mcp.py` (20) passed. Phase Q baseline 31/31
+  identical. Contact sheets (private): scratchpad `s267/objects.png` (winter party, then
+  harbour), `s267/all63.png` (all ten Phase AC places, day on and night on), `s267/closeup.png`.
+
+Phase AC done.
+
+## Step 268 — Moving vehicles in iso (Phase AD)
+
+Phase AD (Steps 268–275, DESIGN §105): seven features with no AI API calls of any kind; the plan
+is in `tasklist.md`.
+
+- Built: actions `drive_to` (a `car` along path cells; a `train_car` along its track), `sail_to`
+  (a `boat` across water) and `lift_off` (a `rocket` up and out of the view) on an iso place's
+  objects: `{drive_to: car, to: shop, via: [corner], speed: 3}`, `{sail_to: boat, to: {column: 9,
+  row: 8}}`, `{drive_to: train_car, to: {column: 12, row: 1}}`, `- lift_off: rocket`. A car or a
+  boat turns at corners (four neighbours, a cost per turn, a U-turn where its way ends), stops with
+  its front at the goal (a spot off its way: the nearest cell within 2); a train car's track is the
+  line of its cells over level free ground (drawn there), its middle stops at `to`; a rocket's
+  engine fires (smoke over the pad), it rises faster and faster and is gone. Drawn by the stage as
+  a sprite moved across the place (heading, lit or not, wheel step, flame frame, boat wake): a car
+  driving away shows its tail and tail lights, `switch_on` lights headlights, a boat bobs and
+  leaves a wake. Vehicles are bodies of the place (front pictures, draw order with characters),
+  `follow: car` works, foley (engine, brakes, splash, launch roar), lint `offscreen_action` watches
+  them; `vidgen validate` replays them with the walks (walks later go round a parked car).
+- Files: new `world/iso_vehicles.py` (rules), `cartoon/iso_driving.py` (`IsoVehicle`, `IsoDrive`,
+  sprites, wake, track), `scenes/stage_vehicles.py` (`IsoDriving`, part of `Stage`),
+  `scenes/driving.py` (the actions); `cartoon/iso_town.py` (`car_shapes`: `reverse`, `spin`),
+  `cartoon/iso_seasons.py` (boat `reverse`, `train_track` / `train_body`, rocket pad / body /
+  `rocket_fire` / `launch_smoke`), `cartoon/iso_objects.py` (`ObjectLook.driven`),
+  `cartoon/iso_stage.py` (`IsoScenery.front(exclude=)`), `cartoon/foley.py` (`drive_cues`),
+  `world/iso_moves.py` (the replay), `scenes/stage_iso.py` (bodies, fronts, redraw, switch, view,
+  wide view in 9:16), `scenes/stage.py` (Stage bases, vehicles as targets, mid stills, the
+  replay's names, `_played`), `scenes/__init__.py`, `api.py`; docs CONFIG (iso **Vehicles that
+  move**, action lists), the guide (+ `AGENTS.md`: a bullet, the actions table), DESIGN §105,
+  CHANGELOG, tasklist (Phase AD plan).
+- Public: `vidgen.api` adds `ISO_VEHICLE_ACTIONS`, `LIFT_OFF_SECONDS`, `VEHICLE_ACTIONS`,
+  `VEHICLE_SPEEDS`, `VehicleRoute`, `drive_seconds`, `middle_of`, `moved_item`, `moved_place`,
+  `plan_vehicle`, `start_heading`, `track_cells`, `IsoDrive`, `IsoVehicle`, `rocket_smoke`,
+  `track_shapes`, `vehicle_shapes`; `ObjectLook.driven`, `IsoScenery.front(exclude=)`.
+- Decisions: sprites, not per-frame vector shapes (cheap, the place's exact look; a move in an iso
+  view is a shift of the picture); three fixed image slots whose pixels change (a swapped member
+  stayed drawn by Manim: a ghost car); a turn switches the drawing half-way across the corner cell
+  (no in-between angles); a parked car's footprint is always two grid cells; names `drive_to` /
+  `sail_to` / `lift_off` (`launch` is the orbit scene's). A vehicle is driven only when the scene
+  moves it: other scenes and parked cars are drawn as before.
+- Known gaps / later: no in-between angles at corners, a U-turn flips the vehicle; moving
+  vehicles and walkers do not avoid each other (as two walkers); one train car (no coupled cars);
+  no riders on iso vehicles; the rocket's smoke is drawn behind the rocket body; Step 270 (a day
+  passing) may switch headlights on at dusk via `iso_switch_vehicles`.
+- Tests: new `test_iso_vehicles.py` (20: rules, drawings, foley, checks, one render) passed;
+  `test_iso_objects_more`, `test_iso_moves`, `test_iso_staging`, `test_iso_story`, `test_iso_mood`,
+  `test_iso_place`, `test_iso_weather`, `test_cartoon_foley`, `test_api`, `test_guide`,
+  `test_docs`, `test_introspect`, `test_actions_coverage` passed. Phase Q baseline 31/31
+  identical; iso-story `night` and `rowans_room` (25 stills) identical to the code before. Private sheet: `/home/claude/work/scratch/s268/sheet.png` (day / night, motion,
+  crops, 9:16); sample project `s268/proj` (`vidgen validate` and `vidgen lint` clean but a
+  look-alike warning of the sample cast).
+
+## Step 269 — Sitting, lying and using furniture in iso (Phase AD)
+
+- Built: on an iso place `sit_on` takes an object with seats (`{sit_on: pip, to: armchair}`:
+  chair, bench, sofa, armchair, throne, lab_stool, log, stump, hay_bale, rock, bus_stop,
+  cafe_table's two chairs, school_desk, a bed's edge), `lie_on` a bed, `use` an object
+  (`{use: kit, to: laptop, run_time: 4}`: typing at a laptop / desk_with_pc / console / kiosk /
+  till / piano, warming the hands at a campfire / fireplace, a book from shelves, pressing at a
+  stove, sink, machine...), `stand_up` back to where it sat down from. Seats are facing-aware
+  (the object's frame, mirrored with its `facing`); the free seat nearest the feet is taken; the
+  sitter faces the seat's way (café chairs face each other, a school desk's chair its desk). Its
+  front picture leaves out the object and starts with the object's near *part* (an armchair's or
+  throne's arm, a chair's back, a bus shelter's pane and posts, a bed's blanket); a desk in
+  front is drawn over it as any piece. Lying: turned along the bed on the picture, face up, drawn
+  0.72 smaller, legs folded under the blanket. Lip sync, expressions, `look_at` work seated.
+  `vidgen validate` (the iso replay): nothing to sit on / lie on / use (did you mean), too far
+  (with the `walk_to` cell), a seat taken, a walk before `stand_up`, `use` while lying. The flat
+  stage's `sit_on` (props with seats, §69.28) is unchanged.
+- Files: new `world/iso_seats.py` (rules), `scenes/stage_seats.py` (`IsoSeating`, part of
+  `Stage`); `cartoon/iso_motion.py` (`IsoSeatMove`), `cartoon/iso_stage.py` (`IsoScenery.part`,
+  `front(first=)`, base / over / top surface without parts), `cartoon/iso_drawing.py`
+  (`shape_points`), `cartoon/seating.py` (`Postures.lie`, `PINNED_ACTIONS` + wander / meet),
+  `cartoon/directing.py` (lie_on, use), `scenes/sitting.py` (`LieOn`, `Use`, iso `sit_on` /
+  `stand_up`), `scenes/stage_iso.py` (seat fronts, redraw), `scenes/stage.py` (mixin, the iso
+  replay of the new actions, mid stills), `world/iso_moves.py` (replay), `api.py`; docs CONFIG
+  (iso **Sitting, lying and using objects**, action lists), the guide (+ `AGENTS.md`), DESIGN
+  §105.2, CHANGELOG, tasklist.
+- Public: see DESIGN §105.2 (`ISO_SEATS`, `ISO_BEDS`, `ISO_USES`, `IsoSeatMove`, `use_point`...).
+- Decisions: reused `sit_on` / `stand_up` (one verb on both stages); a generic `use` whose pose
+  the object picks instead of `warm_hands` & co.; `use` is timed (hands back after `run_time`),
+  composable with sitting; the seat goes on the figure from the start of sitting down (half in
+  the object's box the whole object hid it: a bus shelter's glass); a part region may stop at a
+  height (the shelter's posts, not its roof).
+- Known gaps / later: seated characters show their side view (no front-facing sit); no `lie_on`
+  for a sofa or the flat stage; a sitter's legs over a school desk's front are not hidden; a
+  bean's head pokes over a bus shelter's roof; Step 270 (a day passing) needs nothing from here.
+- Tests: new `test_iso_seats.py` (17: rules, parts, postures, checks, one render) passed;
+  `test_iso_moves`, `test_iso_vehicles`, `test_iso_staging`, `test_cartoon_seating`,
+  `test_cartoon_directing`, `test_iso_objects_more`, `test_iso_story`, `test_iso_mood`,
+  `test_iso_place`, `test_iso_weather`, `test_api`, `test_introspect`, `test_actions_coverage`,
+  `test_guide`, `test_docs`, `test_mcp -k "action or list or scene_types"` passed. Phase Q
+  baseline 31/31 identical; iso-story `night` / `rowans_room` (25 stills) identical to the code
+  before. Private sheet `/home/claude/work/scratch/s269/sheet.png`; sample `s269/proj` (validate
+  clean; lint: the sample cast's look-alike and its short beats' rushed walks).
+
+## Step 270 — A day passing in one scene (Phase AD)
+
+- Built: the `time_of_day` action on a `stage` (`- {time_of_day: night, run_time: 6}`: `morning`,
+  `day`, `sunset`, `night`, `indoor`; default fade 6 s; `auto_lights`, `move_sun`). It fades the
+  light as `light` does (grade, shadows, stars, pools of light growing, lamplight on characters,
+  `fill_light`), from daylight to night through a sunset (night to day through a morning), with a
+  sky of the time of day on a stage without `background` / picture (the rooms' window gradients;
+  stars come out late). Where the fade passes dusk (darker than `DUSK_DARK` 0.35; a sunset is past
+  it) the lights switch on by themselves one after another, fading in over 1.2 s, and off at dawn:
+  on iso places lamps, floor and street lamps, houses' windows, phone booths, vending machines,
+  lighthouses, christmas trees, pumpkins and cars' headlights (a driving car too); on the flat
+  stage `lamp` props. Opt out with `auto_lights: false` on the action or `auto_light: false` on an
+  iso object / a lamp prop. Did-you-mean on the preset, `auto_light` refused on other kinds.
+- Files: new `scenes/stage_daylight.py` (`DayPassing`, part of `Stage`), `tests/test_time_of_day.py`;
+  `cartoon/lighting.py` (`darkness`, `dusk_crossing`, `auto_switch_time`, `day_stages`, constants),
+  `scenes/light_action.py` (`TimeOfDay`, `Light.moves_sun`), `scenes/stage.py` (`auto_light` on
+  `IsoObjectParam` / `StageProp`, `StageIso.auto_lit`, `day_sky`, `_light_uses`, living lamps),
+  `scenes/stage_iso.py` (`iso_change(auto=)`, gadget fades, auto-lit objects layered),
+  `cartoon/iso_overlays.py` (`Gadget.level`), `cartoon/living_drawing.py` (`switch(fade=)`,
+  `_Shown.show(0..1)`), `world/iso.py` (`AUTO_LIGHT_KINDS`), `scenes/__init__.py`, `api.py`; docs
+  CONFIG (light section: **A day passing**, action tables), guide (+ `AGENTS.md`), DESIGN §105.3,
+  CHANGELOG, tasklist.
+- Public: `vidgen.api` adds `AUTO_LIGHT_KINDS`, `AUTO_SWITCH_SECONDS`, `DUSK_DARK`,
+  `TIME_OF_DAY_SECONDS`, `TWILIGHT_SHARE`, `auto_switch_time`, `darkness`, `day_stages`,
+  `dusk_crossing`.
+- Decisions: a new action rather than options on `light` (its defaults differ; `light` unchanged);
+  the switch is at the darkness the pools already use (one measure); automatic changes are not
+  watched by lint (`offscreen_action`) and make no click; towers keep their windows as set (lit by
+  day by default); the flat stage's light system allowed it (lamp props, sun/moon via `move_sun`).
+- Known gaps / later: a driven car's headlights switch at once (sprite, no in-between); no sun or
+  moon on iso places; the `light` action switches nothing; dawn switches off what the author
+  switched on too (unless `auto_light: false`). Step 271 (iso weather) can reuse `darkness` for
+  puddle reflections at night.
+- Tests: new `test_time_of_day.py` (15, one render) passed; `test_cartoon_lighting`,
+  `test_cartoon_living`, `test_iso_objects_more`, `test_iso_mood`, `test_iso_vehicles`,
+  `test_iso_staging`, `test_iso_place`, `test_iso_story`, `test_iso_moves`, `test_iso_weather`,
+  `test_iso_seats`, `test_cartoon_storm`, `test_portal_hologram`, `test_lab_objects`,
+  `test_cartoon_fire_nature`, `test_cartoon_small_props`, `test_story_fx`, `test_phase_l_review`,
+  the lamplight tests of `test_phase_q_review`, `test_api`, `test_schema`, `test_introspect`,
+  `test_actions_coverage`, `test_docs`, `test_guide`, `test_mcp -k "action or list or
+  scene_types or schema"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
+  `rowans_room` (25 stills) identical. Private sheet `/home/claude/work/scratch/s270/sheet.png`;
+  sample `s270/proj` (validate ok; lint: the sample cast's look-alike, a house cut at the edge).
+
+## Step 271 — Iso weather: reflections, fog, wind (Phase AD)
+
+- Built: on an iso place (outdoors) **reflections**: at night the puddles of rain with
+  `puddles: true` mirror the place's lights (lit windows, lanterns, a phone booth, towers' neon
+  trims: every glowing shape but pools) where the mirror image falls (a light `h` up shows `h`
+  under its foot), cut to the puddle with a soft glow, as strong as the light is dark
+  (`darkness`, none by day), fading with a light switched on or off (by an action or a
+  `time_of_day`), wobbling while it rains; rain's `settled` now also counts with `puddles`
+  (seconds of rain already fallen: puddles full size from the start; flat stage too).
+  **Fog**: the stage's `fog` (refused on iso before) lies over the place in five drifting bands
+  from its back edge to near its front, each drawn before the first body at its depth or nearer.
+  **Wind**: the stage's `wind` / the `wind` action bends trees, pines, bushes, flowers and plants
+  and swings scarecrows and balloon bunches in gusts (rain already slanted, leaves and streaks
+  drift, scarves trail). Indoors `fog`, `wind` and the `wind` action are refused (validate).
+- Files: new `cartoon/iso_atmosphere.py` (`IsoReflections`, `IsoFog`, `IsoSwayer`),
+  `scenes/stage_weather.py` (`IsoWeather`, part of `Stage`), `tests/test_iso_atmosphere.py`;
+  `cartoon/iso_weather.py` (reflection and sway rules), `cartoon/fog.py` (iso bands),
+  `cartoon/iso_stage.py` (`IsoScenery(apart=)`), `cartoon/iso_pictures.py`
+  (`IsoPuddles.size_at` / `raining`), `cartoon/weather_drawing.py` (`FogBand(shares=)`),
+  `particle_field.py` (`settle_problem`: `settled` with rain + puddles), `scenes/stage.py` (fog and
+  wind on iso, the fog's dispatch, `settled` puddles, order watch), `scenes/stage_iso.py`
+  (swaying objects apart and drawn, covers following changes, keep order, glow log, reflections),
+  `scenes/wind_action.py`, `scenes/handling.py` (blow_away message), `api.py`; docs CONFIG (iso
+  weather bullets, fog / iso / particles rows), the guide (+ `AGENTS.md`), DESIGN §105.4,
+  CHANGELOG, tasklist.
+- Public: `vidgen.api` adds `ISO_SWAYS`, `VOID`, `glow_outlines`, `iso_sway_degrees`,
+  `iso_fog_depths`, `IsoFog`, `IsoReflections`, `IsoSwayer`, `wind_phase`.
+- Decisions: the existing `fog` setting and the signed `wind` level (not a fog particle kind or
+  `wind: {strength, direction}`): one fog and one wind on both stages, ± on screen as particles
+  and trailing pieces read it. Swaying objects are left out of the pictures (still on the top
+  surface: they keep the rain off) and drawn as sprites bent per frame (a shear growing with
+  height), with a cover picture of what stands in front, after the bodies they hide; objects an
+  action changes stay still. Reflections follow mirror geometry (lamps' lanterns show in puddles
+  well in front of them; trims to the ground and low lights show near).
+- Cost (854x480 preview, 15 fps): reflections +25 % on the rainy street, fog +4 %, wind +34 % on
+  a meadow with seven swaying objects (nothing is redrawn while nothing moves).
+- Known gaps / later: characters and moving vehicles are not mirrored, nor gadgets' lights or
+  screens; fog over the place's pieces follows screen height (one base picture: a front roof
+  under several bands); swaying is a shear (a gale stretches balloons); no flag object;
+  a swaying tree gets no snow cap. Step 274 (ambient life): birds or walkers are bodies, so the
+  fog bands layer them and swaying trees hide them correctly.
+- Tests: new `test_iso_atmosphere.py` (14: rules, scenery, validation with did-you-mean, one
+  render) passed; `test_cartoon_snow_fog`, `test_cartoon_wind`, `test_cartoon_rain`,
+  `test_cartoon_storm`, `test_phase_r_review`, `test_iso_staging`, `test_iso_weather`,
+  `test_iso_mood`, `test_iso_place`, `test_iso_vehicles`, `test_iso_seats`, `test_time_of_day`,
+  `test_iso_moves`, `test_iso_story`, `test_iso_objects_more`, `test_api`, `test_docs`,
+  `test_guide`, `test_introspect`, `test_schema`, `test_actions_coverage`, `test_mcp -k "action or
+  list or scene_types or schema"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
+  `rowans_room` (25 stills) identical to Step 270's. Private sheet
+  `/home/claude/work/scratch/s271/sheet.png`; sample `s271/proj` (validate ok).
+
+## Step 272 — A story in prose to a draft project (Phase AD)
+
+- Built: `vidgen story draft STORY.md|.txt [-o DIR] [--style iso|flat] [--format 16:9|9:16]
+  [--narrator VOICE] [--seed S] [--force] [--json]` and MCP tool `story_draft` (`input_path` or
+  `story_text`). Deterministic, no model: scenes (headings, `***` breaks, time cues), characters
+  (tags, titles, name lists, subjects; surnames merged; `Mum` / `Grandpa`), voice kinds (title, name
+  list, pronouns), first person (`My name is X`; the narrator gets the protagonist's voice),
+  dialogue attribution with a confidence and method (tag by name / pronoun / `I`, action beat,
+  alternation, last mention, narrator), emotions from tag verbs and adverbs, moves (walk / run /
+  enter / exit). Eleven ready-made iso places chosen by keywords (village, city, lab, office, home,
+  cafe, forest, harbour, castle, school, winter; `_night` sets with lights on; objects the story
+  names on free cells), light from time cues (later cues: `time_of_day`), weather (negated words
+  ignored), `fill_light` at night, staging at four spots, close-ups / two-shots, title and end
+  cards, a music bed from mood words, captions, `auto_direct`. Report `story_draft.md`: narration,
+  cast, scenes, attribution table (doubtful ones marked **check**), TODO checklist; YAML beats
+  with a doubtful speaker carry `# TODO:`.
+- Files: new `story_text.py`, `story_places.py`, `story_draft.py`, `tests/test_story_draft.py`;
+  `cli.py` (`cmd_story`, parser, JSON_COMMANDS), `jsonout.py` (`story_document`), `mcp_server.py`
+  (tool, instructions), `api.py`, `tests/test_mcp.py` (tool list, one test); docs CONFIG ("A story
+  in prose", MCP and `--json` lists), guide (+ `AGENTS.md`: "From a story in prose"), DESIGN §105.5,
+  CHANGELOG, tasklist.
+- Public: see DESIGN §105.5 (`read_story`, `draft_story`, `STORY_PLACES`...).
+- Decisions: reused `screenplay.assign_voices` / `_generated_looks` and `plan_yaml` writing; objects
+  the story names go on the place's set (later scenes there keep them; an iso mapping in params
+  would replace the whole object list); indoor places use `wide: fill` and keep the second spot row
+  off the bottom row (captions covered characters there); no cue keeps the scene before's night.
+- Known gaps / later: single curly quotes (British dialogue) not read; descriptive speakers (`said
+  the old man`) go to the narrator; places are placeholders, at most four characters per scene;
+  characters stand from the start unless an entering verb brings them in; `left` heuristics are
+  simple. Step 273 (shorts suggest) can use the drafted projects' dialogue beats (`voice:`) and
+  emotions for scoring.
+- Tests: `test_story_draft.py` (12) passed; `test_mcp -k "story or tools or list or instructions"`,
+  `test_api`, `test_cli`, `test_guide`, `test_docs`, `test_screenplay` passed. No shared rendering code
+  changed (Phase Q baseline not needed). Own samples `/home/claude/work/scratch/s272/stories/`
+  (third person with dialogue, first person, scene breaks with night / rain); all three drafts
+  validate; storyboard of the `signal` sample (silent, timed from text) at
+  `/home/claude/work/scratch/s272/sheet.png`.
+
+## Step 273 — Shorts suggestions (Phase AD)
+
+- Built: `vidgen shorts suggest [PROJECT] [--count N] [--min 30 --max 60] [--teaser] [--spoilers]
+  [--end-card TEXT] [--write] [--out shorts.yaml] [--json]` and MCP tool `shorts_suggest`.
+  Deterministic: beats timed by the video's plan (MP3s, else words at `narration.words_per_second`),
+  windows of whole beats between `--min` and `--max` (end card included) inside runs of narrated
+  scenes, scored (dialogue share, questions, exclamations, emotional / action words, move actions,
+  variety, clean start, strong last line, length near 45 s, the ending marked down), picked with at
+  most 25 % overlap, a hook each (a question / exclamation shortened to ≤ 6 words, else a template);
+  `--teaser`: ~15 s of the best short beats across the film ending on a title card. Report: a table
+  (rank, variant, window, beats, secs, score, parts, hook) and notes. `--write`: variants
+  `short1..` / `teaser` (9:16, `shorts: true`, −14 LUFS, karaoke captions, `cut` with scenes /
+  beats, hook, end card "Full story on the channel" under the title, a `zoom ... cut: true, hold:
+  true` on the speakers opening each stage scene) in `shorts.yaml`, added to the config's
+  `include:` (backups `video.yaml.bak`, `shorts.yaml.bak`), then validated.
+- Files: new `shorts_suggest.py`, `tests/test_shorts_suggest.py`; `includes.py` (`variants` in
+  `INCLUDABLE_KEYS`), `cli.py` (`cmd_shorts`, parser, JSON_COMMANDS), `jsonout.py`
+  (`shorts_document`), `mcp_server.py` (tool, instructions), `api.py`, `story_places.py` (two
+  `lamp`s fix), tests `test_includes.py` (message), `test_story_draft.py` (+ the fix),
+  `test_mcp.py` (tool list, one test); docs CONFIG ("Suggested Shorts", include, MCP and `--json`
+  lists; `vidgen story --json` and `vidgen shorts --json` sections — the first was missing since
+  Step 272 and failed `test_json_output`), guide (+ `AGENTS.md`, Shorts bullet), DESIGN §105.6, CHANGELOG, tasklist.
+- Public: see DESIGN §105.6 (`suggest_shorts`, `write_suggestions`, `timed_beats`...).
+- Decisions: a separate generated file included by the config (the config's text and comments
+  kept; re-running replaces only `shorts.yaml`) — needed include files to accept `variants`; every
+  stage scene of a cut opens framed (the 16:9 iso place was tiny in 9:16 on the sample's sheet),
+  not only mid-scene starts; no `hold` when a framed character moves later.
+- Known gaps / later: restaging is limited to the opening zoom; a mid-scene start loses earlier
+  moves and `time_of_day` changes (listed as notes / `# TODO:` in shorts.yaml, not fixed); windows
+  are contiguous (only the teaser jumps); English word lists; story-draft dialogue tagged to the
+  narrator counts as narration (fewer dialogue points). Step 275: review with a longer sample.
+- Tests: `test_shorts_suggest.py` (22) passed; `test_story_draft`, `test_includes`, `test_mcp -k
+  "shorts or story or tools or list or instructions"`, `test_api`, `test_cli`, `test_docs`,
+  `test_guide`, `test_cuts_shorts`, `test_json_output` passed. No rendering code changed (Phase Q
+  baseline not needed). Own sample `/home/claude/work/scratch/s273/stories/lighthouse.md` drafted to
+  `s273/lighthouse` (validates with its 4 variants); storyboard of `short1` (silent, timed from
+  text, 360x640) at `/home/claude/work/scratch/s273/sheet.png`.
+
+## Step 274 — Ambient life on iso places (Phase AD)
+
+- Built: the stage's `ambient` (iso only): `{walkers, birds, cat, ducks, butterflies, fireflies,
+  flies, muted, seed, auto}`, `ambient: true` = `auto` (every kind that suits the place). Walkers
+  stroll between spots and along paths and stop to look round; birds peck, hop and fly off
+  (over the place or out of it and back); a cat walks, sits, grooms; ducks glide on `~`;
+  butterflies flutter between flowers by day; fireflies hover and blink at night (both follow
+  `darkness`, so `time_of_day` fades them); flies buzz about a room. Deterministic by seed (plans
+  made lazily, the same poses whatever order they are asked in). They keep off the characters'
+  spots and move destinations, small things' spots, objects the actions name, seats, beds,
+  driven vehicles (radius 1 + the cells two in front), stop nowhere within 2 cells of the
+  characters, keep off a car's paths and a train's track; hidden past a 1.45–1.9 zoom over the
+  wide view (close-ups, two-shots, follow); never targets, never speak; `muted` (default) walkers
+  x0.86 and greyer. Indoors only `cat` / `flies`; ducks need water; flat stage refused; did you
+  mean on keys. None in a draft.
+- Files: new `world/iso_ambient.py` (rules), `cartoon/iso_ambient.py` (`IsoCritter`, shapes),
+  `scenes/stage_ambient.py` (`IsoAmbience`, part of `Stage`), `tests/test_iso_ambient.py`;
+  `scenes/stage.py` (`StageAmbient`, `ambient` param and checks, mixin, entrance, order watch),
+  `scenes/stage_iso.py` (bodies, body box, front swap and splice, camera view, clipped creature
+  fronts), `scenes/stage_weather.py` (swayers use `_iso_body_over`), `cartoon/iso_stage.py`
+  (`IsoScenery.front(over=)`), `cartoon/iso_pictures.py` (`IsoTiles.clip`, `iso_clip` in
+  `draw_tile`), `api.py`; docs CONFIG (iso **Ambient life**, stage table row), the guide (+
+  `AGENTS.md`), DESIGN §105.7, CHANGELOG, tasklist.
+- Public: see DESIGN §105.7 (`plan_ambient`, `AmbientPlan`, `IsoCritter`, `critter_look`...).
+- Decisions: creatures are sprites as bodies of the place (fog and swaying trees layer them,
+  lint sees them as scenery pieces: no character rules); a stage key, not under `iso:`; added
+  `ducks`, `flies`, `auto`; no fish ripples. Cost work: empty sprite slots get no area, a
+  creature's front picture is found per cell and drawn only over its sprite, and swapped into
+  Manim's drawn list in place (a re-sort per cell change cost ~40 ms).
+- Cost (854x480 preview): village 7.5 → 11.6 s, park at dusk 10.4 → 14.5 s, street 8.2 → 11.7 s
+  (13–16 s of video each; a dozen creatures).
+- Known gaps / later: no reactions (birds do not flee walkers), creatures do not avoid each other
+  or moving vehicles; walkers pass near characters' walks; no faces / lamplight on walkers; no
+  sounds of their own; not mirrored in puddles. Step 275: maybe `ambient` in story drafts' places.
+- Tests: new `test_iso_ambient.py` (9: rules, determinism, drawing, setting checks with did you
+  mean, one render) passed; `test_iso_atmosphere`, `test_iso_vehicles`, `test_iso_seats`,
+  `test_iso_staging`, `test_iso_story`, `test_iso_place`, `test_iso_mood`, `test_time_of_day`,
+  `test_iso_moves`, `test_iso_objects_more`, `test_iso_weather`, `test_api`, `test_schema`,
+  `test_introspect`, `test_actions_coverage`, `test_docs`, `test_guide`, `test_mcp -k "list or
+  schema or scene_types"` passed. Phase Q baseline 31/31 identical; iso-story `night` /
+  `rowans_room` (25 stills) identical. Private sheet `/home/claude/work/scratch/s274/sheet.png`;
+  sample `s274/proj` (validate ok; lint: only the sample cast's look-alike).
+
+## Step 275 — Review of Phase AD (Phase AD)
+
+- Findings and fixes (DESIGN §105.8): vehicles — the headlights' pool was ahead in the world for
+  all four headings, but driving away up the picture the car hid it: it lies further on and wider
+  there; a car or a boat is drawn turned 45° in the middle of a corner (`VehicleRoute.turning`,
+  `turning_shapes`); the train "behind the tower" was correct (its track lies behind the pad).
+  Seats — a school desk's sitter tucks its legs away (`IsoSeat.tucked`). Sky — the sun was behind
+  the set already but set fading beside a character's feet: with a ground band it now shows whole
+  and sinks behind the ground (`SkyBody(sink=)`); found: a rainy iso day (overcast, past dusk)
+  never switched its lamps on in a `time_of_day` to night — now early in the fade. Wind — iso
+  lean ~2.5x on a windy day (felt force ^ 0.65), balloons swing whole (`swing_pixels`). Story
+  draft — British `‘…’` quotes (only without double quotes), described speakers become
+  characters (`old_man`; `a girl called X` excluded), a line calling a character by name goes to
+  the other one (0.55), title card look by mood (`card_mood`), `DRAFT_AMBIENT` outdoors. Shorts —
+  a mid-scene start restates the last left-out `time_of_day` / `light` (tried on a 3:54 story,
+  ranking sensible). Ambient — walkers' dot faces, lamplight on walkers and the cat, ducks off a
+  sailing boat's lanes. Schema — an optional boolean `on` takes the YAML 1.1 `"true"` key (failing
+  `test_phase_q_review` since Step 251).
+- Files: `world/iso_vehicles.py`, `cartoon/iso_driving.py`, `cartoon/iso_town.py`,
+  `world/iso_seats.py`, `scenes/stage_seats.py`, `scenes/sitting.py`, `cartoon/weather_drawing.py`,
+  `scenes/stage.py`, `scenes/stage_daylight.py`, `cartoon/iso_weather.py`,
+  `cartoon/iso_atmosphere.py`, `story_text.py`, `story_draft.py`, `shorts_suggest.py`,
+  `cartoon/iso_ambient.py`, `scenes/stage_ambient.py`, `scenes/stage_iso.py`, `schema.py`,
+  `api.py`; tests (vehicles, seats, time_of_day, atmosphere, ambient, story_draft, shorts); docs
+  CONFIG, guide (+ `AGENTS.md`), DESIGN §105.8 (and the "left for later" lines it settles),
+  CHANGELOG, tasklist (Phase AD done).
+- Public: `vidgen.api` adds `turning_shapes`, `ISO_SWINGS`, `swing_pixels`, `PERSON_NOUNS`,
+  `quote_pattern`, `CARD_LOOKS`, `DRAFT_AMBIENT`, `card_mood`.
+- Performance (854x480 preview, 15 fps): a harbour at night with a car and a boat moving and a
+  `time_of_day` 19.2 s for 15 s of video; plus rain with puddles, a breeze and ten creatures
+  31.1 s (+62 %, mostly the light fade grading every picture, and the rain).
+- Known gaps: one in-between angle per corner, U-turns flip; a described speaker's pronouns
+  (`The mayor ... she announced`) go to a named character; walkers' faces are a pixel at preview
+  size; creatures still do not avoid each other or react; a Short still loses left-out walks.
+- Tests: `test_mcp.py` in full (22) passed; every Phase AD file (`test_iso_vehicles` 21,
+  `test_iso_seats` 18, `test_time_of_day` 17, `test_iso_atmosphere` 15, `test_story_draft` 14,
+  `test_shorts_suggest` 23, `test_iso_ambient` 11) and, one at a time, the iso / cartoon / story /
+  cuts suites (`test_iso_moves`, `_staging`, `_story`, `_mood`, `_place`, `_weather`,
+  `_objects_more`, `test_cartoon_lighting`, `_living`, `_storm`, `_wind`, `_rain`, `_snow_fog`,
+  `_seating`, `_directing`, `_foley`, `_stage`, `test_screenplay`, `test_cuts_shorts`,
+  `test_includes`, `test_json_output`, `test_cli`, `test_api`, `test_docs`, `test_guide`,
+  `test_introspect`, `test_schema`, `test_actions_coverage`, `test_phase_q_review`,
+  `test_phase_r_review`, `test_phase_l_review`, `test_lint`, `test_portal_hologram`,
+  `test_story_fx`, `test_lab_objects`) passed. Phase Q baseline 31/31 identical; iso-story
+  `night` / `rowans_room` (25 stills) identical. Private sheet
+  `/home/claude/work/scratch/s275/sheet.png`; samples `s275/veh`, `seat`, `sky`, `wx`, `lamps`,
+  stories `s275/stories/` (drafts `lampdraft`, `clock` with `shorts.yaml`).
+
+## Step 276 — Cookbook: iso map sizes that fill the frame
+
+- Docs only: new `docs/COOKBOOK-ISO-CARTOONS.md` (linked from the intro of `docs/COOKBOOK.md`)
+  with measured guidance for iso places that fill the frame: 16:9 needs a square map of about
+  24x24 with `iso: {wide: 2.5}` (32x32 hides the last corners); in 9:16 no `wide` fills the frame
+  today (zoom capped at 2.5, portrait needs ~5), so use `shot: medium` / `closeup` or zooms; keep
+  maps square, the action central, a sky `background` for leftover corners, and the
+  magenta-background check.
+- Measurements: private experiment in `/home/claude/work/scratch/s276/` (results.csv, sheet.png).
+- Proposed, not built: `iso: {wide: full}` (zoom past 2.5 until no edge shows, centred on the
+  ground), centring the numeric `wide` on the ground, a lint warning for a place floating in
+  space, and correcting the guide wording that `fill` fills the frame outdoors (it fills the
+  bounding box, about half of which is ground).
+- Tests: `tests/test_docs.py` passes.
+
+## Step 277 — A fixed-scale wide view for iso places
+
+- Built: `iso: {wide: fixed}` (and `wide: {tiles: N}`), a wide view of one scale whatever the
+  map's size, so bigger maps fill the frame with ground. Scale from `character_size` (a character
+  0.14 / 0.20 / 0.28 of the frame's height; now accepted on an iso stage with `wide: fixed`, and
+  the video's reaches those scenes). Centred on the characters, moved onto the ground as far as
+  the map allows (`on_ground`: exact maths, the view's ground corners), then as little as keeps
+  the characters in view; a small place is centred (whole, when smaller than the view). Moves:
+  `zoom`'s `scale` is over the fixed view (`Stage.zoom_base`), shot and follow zoom caps scale
+  with it, `follow` (`SmoothFollow(settle=)`, `_MoveThenFollow`) and `pan` stay on the ground as
+  far as their target allows, `MAX_DETAIL` 5 for the large zooms. Lint `iso_ground` (warning with
+  the map size that fills the frame; info hint for outdoor `auto` / `fill`). DESIGN §106.
+- Measured (s277, magenta background, preview stills): map that fills — 16:9 small 34, medium
+  24, large 17; 9:16 small 23, medium 16, large 12 (the formula's `fixed_fill_size`); character
+  height 0.145–0.155 / 0.205–0.22 / 0.29–0.31 of the frame height at any map size. Rooms the same
+  (24x24 fills 16:9 medium, 16x16 fills 9:16). Moves checked on 32x32 (16:9) and 20x20 (9:16):
+  follow ends on ground, close-ups at zoom 23–33, `zoom: {scale: 2}` doubles the base, a pan to a
+  corner spot shows the spot (background beyond it).
+- Docs: CONFIG (the iso **Size** paragraph corrected: the wide view fills the bounding box, about
+  half background outdoors; the fixed view with a table and a snippet; the `iso` row; the lint
+  row and defaults), the guide (+ `AGENTS.md`), `docs/COOKBOOK-ISO-CARTOONS.md` rewritten around
+  the fixed view's map sizes, the `StageIso.wide` docstring (schema), CHANGELOG, tasklist.
+- Files: `cartoon/iso_stage.py`, `cartoon/shots.py`, `camera.py`, `scenes/stage.py`,
+  `scenes/stage_iso.py`, `scenes/actions.py`, `includes.py`, `config.py`,
+  `lint/cartoon_rules.py`, `api.py`; `tests/test_iso_fixed_view.py`.
+- Public: `vidgen.api` adds `ISO_FIXED_SHARES`, `fixed_tiles`, `fixed_reach`, `fixed_fill_size`,
+  `fixed_view`, `on_ground`, `ground_view_center`, `MAX_SHOT_SCALE`, `FOLLOW_MAX_OFFSET`;
+  `wide_view(tiles=)`, `frame_shot` / `shot_view(max_scale=)`, `follow_width(most=)`,
+  `SmoothFollow(settle=)`; lint rule `iso_ground` (`IsoGroundRule.hint`).
+- Decisions: the share is of the frame's *height* in both formats (owner's 0.20 target; in 9:16
+  that is 0.36 of the width). The ground is the map's top at `z` 0 (raised blocks and the slab
+  are ignored: conservative at the front). Characters win over the ground (a character by the
+  map's edge shows background beyond it rather than being cut). The fixed view is never wider
+  than the whole place's fit.
+- Known gaps: a 9:16 start keeps the scene's walk destinations in view too (as before), so when
+  they are far apart the view centres between them and may show a character near the frame's
+  edge; non-square maps show background on the short axis; the lint hint is per scene (info);
+  a `zoom` without `scale` on a fixed view is capped at 3x the base; pans and follows near an
+  edge show background beyond the target by design.
+- Tests: `test_iso_fixed_view.py` (14, one render), `test_guide`, `test_docs`, `test_api`,
+  `test_schema` (71), `test_mcp.py` in full (22), `test_iso_staging`, `_moves`, `_place`,
+  `_story`, `_mood`, `_vehicles`, `_weather`, `_seats`, `_ambient`, `_objects_more`,
+  `_atmosphere`, `test_cartoon_shots`, `_lint`, `_stage`, `_directing`, `test_lint`,
+  `test_includes`, `test_phase_q_review`, `test_phase_r_review`, `test_platform_camera` passed one
+  at a time. Phase Q baseline 31/31 identical (`s277/make_baseline.py`, `compare.py`); iso-story
+  `night` / `rowans_room` 25 stills identical to Step 275's (`s277/iso_check.py`). Sheet
+  `/home/claude/work/scratch/s277/sheet.png`; scripts `gen.py`, `run_all.py`, `measure.py`,
+  `gen_moves.py`, `run_moves.py`, `make_sheet.py`, `results.csv`.

@@ -21,6 +21,7 @@ from vidgen.config import (
     CharacterOverlapRule,
     FacingAwayRule,
     HiddenSpeakerRule,
+    IsoGroundRule,
     LookAlikeRule,
     MouthWithoutVoiceRule,
     OffscreenActionRule,
@@ -432,6 +433,44 @@ def offscreen_action(ctx: StillContext, settings: OffscreenActionRule) -> Iterat
             limit=settings.min_seen,
             group=("offscreen_action", who, action),
         )
+
+
+def _format_name(width: int, height: int) -> str:
+    """``16:9``, ``9:16`` or ``1:1``-like names of a frame (px)."""
+    if width > height:
+        return "16:9" if abs(width / height - 16 / 9) < 0.05 else f"{width}x{height}"
+    if height > width:
+        return "9:16" if abs(height / width - 16 / 9) < 0.05 else f"{width}x{height}"
+    return "1:1"
+
+
+@rule("iso_ground")
+def iso_ground(ctx: StillContext, settings: IsoGroundRule) -> Iterator[Issue]:
+    """An iso place's fixed wide view on a map too small to fill the frame (the background shows
+    round it; DESIGN.md §106), with the map size that fills it; for an outdoor place in the
+    whole-place wide view an info-level hint (once a scene, the layout dump's ``iso_ground``)."""
+    data = ctx.frame.get("iso_ground")
+    if not data:
+        return
+    columns, rows = (int(v) for v in data["map"])
+    need = int(data["need"])
+    fmt = _format_name(ctx.width, ctx.height)
+    place = {"id": "iso:place", "kind": "iso_object", "class": "IsoPlace", "name": "place", "path": "place", "bbox": [0.0, 0.0, 0.0, 0.0]}
+    scale = f"tiles {data['tiles']:g}" if data["view"] == "tiles" else f"character_size {data['size']}"
+    if data["view"] in ("fixed", "tiles"):
+        if min(columns, rows) >= need:
+            return
+        yield Issue(
+            f"this {columns}x{rows} place shows the background around it in {fmt} at {scale}; a map of at least "
+            f"{need}x{need} fills the frame (or give the stage a sky background)",
+            None, (place,), value=min(columns, rows), limit=need, group=("iso_ground",))
+    elif settings.hint and data["place"] == "outdoor" and data["view"] in ("auto", "fill"):
+        size = (f"this map is big enough in {fmt}" if min(columns, rows) >= need
+                else f"on a map of at least {need}x{need} in {fmt} at character_size medium")
+        yield Issue(
+            f"the wide view fits the whole {columns}x{rows} place in the frame (about half of the frame is background); "
+            f"for ground to the frame's edges use iso: {{wide: fixed}} ({size})",
+            None, (place,), severity="info", value=min(columns, rows), limit=need, group=("iso_ground",))
 
 
 @rule("mouth_without_voice")

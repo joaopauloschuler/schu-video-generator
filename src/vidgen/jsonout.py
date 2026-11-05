@@ -36,6 +36,8 @@ if TYPE_CHECKING:
     from vidgen.plan_yaml import PlanResult
     from vidgen.random_cast import RandomCast
     from vidgen.screenplay import ScreenplayProject
+    from vidgen.story_draft import StoryDraft
+    from vidgen.shorts_suggest import Suggestions, WriteResult
     from vidgen.slides import SlidesResult
     from vidgen.slides_pdf import PdfResult
     from vidgen.thumbnail import ThumbnailResult
@@ -238,6 +240,81 @@ def screenplay_document(
         todo_count=draft.todo_count,
         notes=list(draft.notes),
         scenes=scenes,
+        problems=[p.to_json() for p in problems],
+    )
+
+
+def story_document(
+    project: Project, draft: StoryDraft, result: PlanResult, report: Path, problems: list[Problem], warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen story draft --json`` document: where the project and its report went, the
+    narration (person, narrator voice, music), the cast, each scene's place, light and characters,
+    every line of dialogue with its speaker and confidence, and the problems ``vidgen validate``
+    finds (``ok`` false when any). The report's text is included (``report_text``)."""
+    story = draft.story
+    return envelope(
+        "story",
+        not problems,
+        warnings,
+        project=_path(result.root),
+        config=_path(result.config),
+        report=_path(report),
+        report_text=report.read_text(encoding="utf-8"),
+        created=result.created,
+        title=draft.config["title"],
+        style=draft.options.style,
+        format=draft.options.fmt,
+        first_person=story.first_person,
+        narrator=draft.config["voice"]["voice"],
+        music=draft.music[0],
+        characters=[dict(row) for row in draft.cast],
+        scenes=[
+            {"id": s.id, "place": s.place, "light": s.light, "changes": s.changes, "weather": s.weather, "objects": s.objects, "characters": s.cast,
+             "off_stage": s.off_stage, "source_line": s.source_line, "reason": s.reason}
+            for s in draft.scenes
+        ],
+        dialogue=[
+            {"scene": a.scene, "beat": a.beat, "speaker": a.speaker, "confidence": round(a.confidence, 2), "method": a.method, "text": a.text}
+            for a in draft.attributions
+        ],
+        estimated_duration=round(project.estimated_duration(), 2),
+        todo_count=draft.todo_count,
+        problems=[p.to_json() for p in problems],
+    )
+
+
+def shorts_document(
+    project: Project, found: Suggestions, written: WriteResult | None, problems: list[Problem], warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen shorts suggest --json`` document: the settings, each suggested Short (and the
+    teaser) with its window, score parts, hook, scenes, beats, notes and variant, what was written
+    and the problems ``vidgen validate`` finds after writing (``ok`` false when any)."""
+
+    def entry(s: Any) -> dict[str, Any]:
+        w = s.window
+        return {
+            "name": s.name, "rank": s.rank, "teaser": s.teaser, "start": round(w.start, 2), "end": round(w.end, 2),
+            "seconds": round(w.seconds, 2), "score": w.score, "parts": dict(w.parts), "spoils_ending": w.spoils,
+            "hook": w.hook, "hook_source": w.hook_source, "scenes": w.scenes, "beats": [b.id for b in w.beats],
+            "first_line": w.beats[0].text, "last_line": w.beats[-1].text, "notes": list(w.notes), "variant": s.variant,
+        }
+
+    return envelope(
+        "shorts",
+        not problems,
+        warnings,
+        project=_path(project.root),
+        config=_path(project.config_file),
+        min_seconds=found.min_seconds,
+        max_seconds=found.max_seconds,
+        film_seconds=round(found.film_seconds, 2),
+        timed_by=found.timed_by,
+        candidates=found.candidates,
+        shorts=[entry(s) for s in found.shorts],
+        teaser=entry(found.teaser) if found.teaser is not None else None,
+        written=None if written is None else {
+            "file": _path(written.file), "config_changed": written.config_changed, "backups": [_path(b) for b in written.backups],
+        },
         problems=[p.to_json() for p in problems],
     )
 

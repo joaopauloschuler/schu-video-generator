@@ -103,7 +103,7 @@ class ParticleSettings(BaseModel):
     settle: bool = False
     """Snow on a stage: true lands it on the ground and on the props, where a white layer grows while it snows (only thinly under a tree or an open umbrella)."""
     settled: float = Field(0.0, ge=0.0, le=600.0)
-    """With settle: seconds of snowfall already lying when it starts (24 or more: the full layer at density 1)."""
+    """With settle: seconds of snowfall already lying when it starts (24 or more: the full layer at density 1); rain with puddles: seconds of rain already fallen (10 or more: the puddles full size from the start)."""
     lightning: bool | Annotated[float, Field(ge=2.0, le=120.0)] = False
     """Rain on a stage: true flashes lightning while it rains, about every 8 s at seeded times and places, mostly with a bolt, thunder following by the distance (with foley); a number is the seconds between strikes on average."""
     glow: bool = False
@@ -387,10 +387,13 @@ class Puddles(VGroup):
 
 
 def settle_problem(kind: str, settings: ParticleSettings) -> tuple[str, str] | None:
-    """``(option, message)`` when ``settle`` / ``settled`` do not fit ``kind`` (DESIGN.md §69.60)."""
+    """``(option, message)`` when ``settle`` / ``settled`` do not fit ``kind`` (DESIGN.md §69.60;
+    ``settled`` also for rain with ``puddles``, §105.4)."""
     if settings.settle and kind != "snow":
         return "settle", f"only snow settles, not {kind}"
-    if settings.settled and not settings.settle:
+    if settings.settled and kind == "rain" and not settings.puddles:
+        return "settled", "settled is for rain with puddles (seconds of rain already fallen): add puddles: true"
+    if settings.settled and not settings.settle and kind != "rain":
         return "settled", "settled is for snow that settles: add settle: true"
     return None
 

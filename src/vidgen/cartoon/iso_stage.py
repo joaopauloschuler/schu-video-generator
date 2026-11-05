@@ -17,14 +17,14 @@ from __future__ import annotations
 
 import math
 from collections import OrderedDict
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 from PIL import Image
 
-from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes
+from vidgen.cartoon.iso_drawing import ISO_SUPERSAMPLE, IsoCanvas, Shape, canvas_for, draw_shapes, shape_bounds
 from vidgen.cartoon.iso_objects import ObjectLook, object_box
 from vidgen.cartoon.iso_scenery import SLAB_DEPTH, IsoColors, IsoPiece, ground_shapes, place_pieces
 from vidgen.cartoon.iso_weather import TopSurface, top_surface
@@ -89,8 +89,94 @@ ISO_PAN_ZOOM = 2.0
 ISO_WIDE_BODY_ROOM = 0.25
 
 
+#: ``wide: fixed`` (DESIGN.md §106): a character's height (:data:`~vidgen.world.iso.ISO_CHARACTER_HEIGHT`
+#: tiles) as a share of the frame's height, by ``character_size``.
+ISO_FIXED_SHARES: dict[str, float] = {"small": 0.14, "medium": 0.20, "large": 0.28}
+
+
+def fixed_tiles(frame_width: float, frame_height: float, character_size: str | None = None) -> float:
+    """How many tile widths across the frame's width the fixed wide view (``wide: fixed``) shows
+    by default: as many as make a character :data:`ISO_FIXED_SHARES` of the frame's height
+    (``character_size``; ``None``: medium). 16:9 medium: about 10.9; 9:16 medium: about 3.4."""
+    share = ISO_FIXED_SHARES[character_size or "medium"]
+    return ISO_CHARACTER_HEIGHT * ISO_RISE / share * frame_width / frame_height
+
+
+def fixed_reach(tiles: float, frame_width: float, frame_height: float) -> float:
+    """How far (cells, along each of the map's axes) the ground point under the view's centre
+    must be from the map's edges for a view ``tiles`` tile widths across to lie wholly on the
+    ground: the view's corners on the ground (``z`` 0) are its half width plus twice its half
+    height (tile widths) from that point along each axis."""
+    return tiles / 2 * (1 + 2 * frame_height / frame_width)
+
+
+def fixed_fill_size(tiles: float, frame_width: float, frame_height: float) -> int:
+    """The least number of cells a map needs along each axis for the fixed wide view of ``tiles``
+    across to show only ground (no background): 16:9 medium 24, 9:16 medium 16."""
+    return math.ceil(2 * fixed_reach(tiles, frame_width, frame_height) - 1e-6)
+
+
+def on_ground(place: IsoPlace, u: float, v: float, half_u: float, half_v: float) -> tuple[float, float]:
+    """The picture point (tile widths) nearest to (``u``, ``v``), along the map's two axes, at
+    which a view of half size ``half_u`` x ``half_v`` (tile widths) lies on the ground (the map's
+    top at ``z`` 0); along an axis too short for it, the map's middle (the place centred)."""
+    reach = half_u + 2 * half_v
+    x, y = 2 * v + u, 2 * v - u   # the ground point under (u, v)
+    x = _between(x, reach, place.columns - reach)
+    y = _between(y, reach, place.rows - reach)
+    return iso_point(x, y)
+
+
+def ground_view_center(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float,
+                       width: float, center: tuple[float, float]) -> tuple[float, float]:
+    """``center`` (Manim units) of a view ``width`` wide moved by :func:`on_ground` so the view
+    lies on the ground, then inside the frame (the camera's bounds)."""
+    unit = view.unit
+    height = width * frame_height / frame_width
+    u, v = center[0] / unit + view.u0, -center[1] / unit + view.v0
+    u, v = on_ground(place, u, v, width / unit / 2, height / unit / 2)
+    return _in_frame(view, frame_width, frame_height, width, u, v)
+
+
+def _in_frame(view: IsoView, frame_width: float, frame_height: float, width: float, u: float, v: float) -> tuple[float, float]:
+    """The centre (Manim units) of a view ``width`` wide on the picture point (``u``, ``v``),
+    moved inside the frame (the camera's bounds)."""
+    height = width * frame_height / frame_width
+    x, y = (u - view.u0) * view.unit, -(v - view.v0) * view.unit
+    half_w, half_h = frame_width / 2, frame_height / 2
+    return _between(x, -half_w + width / 2, half_w - width / 2), _between(y, -half_h + height / 2, half_h - height / 2)
+
+
+def fixed_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float, tiles: float,
+               bodies: Sequence[Box3] = ()) -> tuple[float, tuple[float, float]]:
+    """The fixed wide view (``wide: fixed``, DESIGN.md §106): ``tiles`` tile widths across
+    whatever the map's size (never wider than the whole place's fit: a smaller place shows whole,
+    centred, as a diorama), centred on the middle of the ``bodies`` (the place's middle without
+    any), moved onto the ground (:func:`on_ground`): on a map big enough (:func:`fixed_fill_size`)
+    only ground shows, along an axis too short the place is centred; then moved as little as
+    keeps the bodies in view (with :data:`ISO_WIDE_BODY_ROOM` and :data:`ISO_MARGIN`: a
+    character by the map's edge is shown, with the background beyond it)."""
+    unit = view.unit
+    width = min(tiles * unit, frame_width)
+    half_u, half_v = width / unit / 2, width * frame_height / frame_width / unit / 2
+    keep = [_padded(box.picture_bounds(), ISO_WIDE_BODY_ROOM) for box in bodies]
+    if keep:
+        k_left, k_top = min(b[0] for b in keep), min(b[1] for b in keep)
+        k_right, k_bottom = max(b[2] for b in keep), max(b[3] for b in keep)
+        u, v = (k_left + k_right) / 2, (k_top + k_bottom) / 2
+    else:
+        u, v = iso_point(place.columns / 2, place.rows / 2)
+    u, v = on_ground(place, u, v, half_u, half_v)
+    if keep:
+        pad_u, pad_v = ISO_MARGIN * 2 * half_u, ISO_MARGIN * 2 * half_v
+        u = _between(u, k_right + pad_u - half_u, k_left - pad_u + half_u)
+        v = _between(v, k_bottom + pad_v - half_v, k_top - pad_v + half_v)
+    return width, _in_frame(view, frame_width, frame_height, width, u, v)
+
+
 def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float,
-              bodies: Sequence[Box3] = (), placed: Collection[str] = (), fit: str | float = "auto") -> tuple[float, tuple[float, float]]:
+              bodies: Sequence[Box3] = (), placed: Collection[str] = (), fit: str | float = "auto",
+              tiles: float | None = None) -> tuple[float, tuple[float, float]]:
     """The wide (establishing) camera view of the place (DESIGN.md §89.13): ``(view width,
     centre)`` in Manim units. The place's picture is diamond-shaped, so fitted whole
     (:func:`iso_view`, the frame) it leaves wide empty corners; the wide view magnifies that fit
@@ -108,7 +194,11 @@ def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: 
     ``fit`` (the place's ``wide``, DESIGN.md §100.6): ``auto`` as above; ``fill`` lets a room's
     walls be cut too (the floor, its spots, objects and characters fill the frame); a number is
     the magnification over the whole place's fit itself (at least 1), moved as little as keeps
-    the ``bodies`` in view."""
+    the ``bodies`` in view; ``fixed`` is :func:`fixed_view` of ``tiles`` across (DESIGN.md §106)."""
+    if fit == "fixed":
+        if tiles is None:
+            raise ValueError("wide_view: fit 'fixed' needs tiles")
+        return fixed_view(place, view, frame_width, frame_height, tiles, bodies)
     left, top, right, bottom = place_bounds(place)
     room = 1 - 2 * ISO_MARGIN
     unit = view.unit
@@ -242,13 +332,13 @@ def item_box(place: IsoPlace, feet: tuple[float, float, float], height: float) -
 ISO_FOLLOW_SIZE = 0.45
 
 
-def follow_width(character_height: float, frame_width: float, frame_height: float, view_width: float) -> float:
+def follow_width(character_height: float, frame_width: float, frame_height: float, view_width: float, most: float = MAX_ZOOM) -> float:
     """The view's width (Manim units) a ``follow`` of a character ``character_height`` tall on
     screen (at the establishing view) moves to: zoomed in to :data:`ISO_FOLLOW_SIZE`, at most
-    to :data:`~vidgen.cartoon.stage.MAX_ZOOM`, never wider than ``view_width`` (the camera's
-    now)."""
+    to ``most`` (:data:`~vidgen.cartoon.stage.MAX_ZOOM`; more over a fixed wide view, §106),
+    never wider than ``view_width`` (the camera's now)."""
     zoom = ISO_FOLLOW_SIZE * min(frame_width, frame_height) / max(character_height, 1e-9)
-    return min(view_width, frame_width / min(max(zoom, 1.0), MAX_ZOOM))
+    return min(view_width, frame_width / min(max(zoom, 1.0), most))
 
 
 def iso_layout(place: IsoPlace, items: Sequence[StageItem], *, frame_width: float, frame_height: float) -> list[StagePlacement]:
@@ -297,10 +387,12 @@ FRONT_MARGIN = 0.5
 #: :data:`TILE_OVERLAP` pixels: a resampled picture's edge is half transparent and showed a seam),
 #: at levels of detail: level ``k`` has 2**k times the pixels of level 0, up to
 #: :data:`MAX_DETAIL` (DESIGN.md §89.10). A camera zoomed in shows the tiles of the level as sharp
-#: as its view needs, and only those in view are drawn (once, kept in :data:`TILE_CACHE`).
+#: as its view needs, and only those in view are drawn (once, kept in :data:`TILE_CACHE`). Up to
+#: level 3 for the zooms of the whole-place views; 4 and 5 for a fixed wide view on a big map
+#: and its shots (zoomed 10x and more over the whole place, DESIGN.md §106).
 TILE_PIXELS = 512
 TILE_OVERLAP = 2
-MAX_DETAIL = 3
+MAX_DETAIL = 5
 #: A level of detail is used up to a zoom this much over its own (a little blur is not seen).
 DETAIL_SLACK = 1.1
 #: How many tiles a scenery keeps drawn (about 1 MB each).
@@ -335,7 +427,8 @@ class IsoScenery:
     layer is in the base too (but a layered one), so where its edge meets the base no seam shows."""
 
     def __init__(self, place: IsoPlace, colors: IsoColors, looks: Mapping[str, ObjectLook], view: IsoView, pixels_per_unit: float,
-                 *, outline: float = 1.0, states: Mapping[str, ObjectState] | None = None, layered: Collection[str] = ()) -> None:
+                 *, outline: float = 1.0, states: Mapping[str, ObjectState] | None = None, layered: Collection[str] = (),
+                 apart: Collection[str] = ()) -> None:
         pieces = place_pieces(place, colors, looks)
         self.view = view
         self.bounds = place_bounds(place)
@@ -349,10 +442,40 @@ class IsoScenery:
         #: each piece's state now (a block or a wall: as drawn)
         self.states: dict[int, ObjectState] = {k: (states or {}).get(piece.name, default_state(piece.kind or "")) for k, piece in enumerate(self.pieces)}
         self.layered = tuple(k for k, piece in enumerate(self.pieces) if piece.name in layered)
+        #: the pieces the stage draws on their own (swaying in the wind, DESIGN.md §105.4): in no
+        #: picture, but on the top surface (they keep the rain off)
+        self.apart = frozenset(k for k, piece in enumerate(self.pieces) if piece.name in apart)
         self._images: OrderedDict[tuple[Any, ...], Image.Image | None] = OrderedDict()
         self._glows: dict[Picture, bool] = {}
+        self._pools: dict[Picture, bool] = {}
+        #: each layer picture made: its layered piece (§104: the one whose pool of light it draws)
+        self._layer_of: dict[Picture, int] = {}
         self._place = place
         self._surfaces: dict[tuple[tuple[int, ObjectState], ...], TopSurface] = {}
+        #: the parts of objects drawn over who sits or lies on them (DESIGN.md §105.2): pieces made
+        #: by :meth:`part`, after the place's own (in no picture but a front one), by their key
+        self._parts: dict[tuple[str, str], int | None] = {}
+
+    def part(self, name: str, key: str, keep: Callable[[Shape], bool]) -> int | None:
+        """A piece of the shapes of the object ``name`` (as it is now) that ``keep`` keeps (an
+        armchair's near arm, a bed's blanket: what hides who sits or lies there, DESIGN.md
+        §105.2), made once per ``key``: its index into :attr:`pieces`, for :meth:`front`'s
+        ``first``. ``None``: it keeps none."""
+        if (name, key) not in self._parts:
+            owner = self.index[name]
+            piece = self.pieces[owner]
+            shapes = tuple(shape for shape in piece.shapes_in(self.states[owner]) if keep(shape))
+            found = None
+            if shapes:
+                self.pieces.append(IsoPiece(f"{name}#{key}", piece.box, shapes, piece.kind))
+                found = len(self.pieces) - 1
+                self.states[found] = default_state(piece.kind or "")
+            self._parts[(name, key)] = found
+        return self._parts[(name, key)]
+
+    def _own(self) -> range:
+        """The indices of the place's own pieces (not the parts of :meth:`part`)."""
+        return range(len(self.pieces) - sum(1 for k in self._parts.values() if k is not None))
 
     @property
     def canvas(self) -> IsoCanvas:
@@ -372,18 +495,26 @@ class IsoScenery:
 
     def over(self, box: Box3) -> tuple[int, ...]:
         """Which pieces (indices into :attr:`pieces`) are drawn over a character standing in ``box``."""
-        return tuple(_over(self.pieces, box))
+        return tuple(_over(self.pieces[:len(self._own())], box))
 
     def _entries(self, ks: Collection[int]) -> tuple[tuple[int, ObjectState], ...]:
         return tuple((k, self.states[k]) for k in sorted(ks) if self.shown(k))
 
     def base(self) -> Picture:
         """The base picture: the ground and every piece there now but the layered ones."""
-        return (True, self._entries([k for k in range(len(self.pieces)) if k not in self.layered]))
+        return (True, self._entries([k for k in self._own() if k not in self.layered and k not in self.apart]))
 
-    def front(self, box: Box3) -> Picture | None:
-        """The front picture of a character standing in ``box`` (``None``: nothing hides it)."""
-        found = self._entries(self.over(box))
+    def front(self, box: Box3, exclude: Collection[str] = (), first: int | None = None, over: Sequence[int] | None = None) -> Picture | None:
+        """The front picture of a character standing in ``box`` (``None``: nothing hides it);
+        ``exclude``: pieces left out (a driven vehicle's own piece, DESIGN.md §105); ``first``:
+        a part (:meth:`part`) drawn first (the arm of the armchair it sits in, §105.2); ``over``:
+        :meth:`over` of the box, found already (a creature's, by its cell, §105.7)."""
+        over = tuple(k for k in (self.over(box) if over is None else over) if k not in self.apart)
+        if exclude:
+            over = tuple(k for k in over if self.pieces[k].name not in exclude)
+        found = self._entries(over)
+        if first is not None and self.shown(self.index[self.pieces[first].name.split("#")[0]]):
+            found = ((first, self.states[first]), *found)
         return (False, found) if found else None
 
     def layer(self, name: str) -> Picture | None:
@@ -392,13 +523,21 @@ class IsoScenery:
         k = self.index[name]
         if not self.shown(k):
             return None
-        return (False, self._entries({k, *(j for j in _over(self.pieces, self.pieces[k].box) if j != k)}))
+        picture = (False, self._entries({k, *(j for j in self.over(self.pieces[k].box) if j != k and j not in self.apart)}))
+        self._layer_of[picture] = k
+        return picture
 
     def clip(self, picture: Picture) -> tuple[float, float, float, float] | None:
-        """The picture bounds (tile widths) a front or a layer covers (``None``: the whole canvas)."""
+        """The picture bounds (tile widths) a front or a layer covers (``None``: the whole canvas);
+        a layer's also the pool of light of its piece (one lying out from it: a torch sconce's on
+        the floor below its wall, §104)."""
         if picture[0]:
             return None
         bounds = [self.pieces[k].box.picture_bounds() for k, _ in picture[1]]
+        owner = self._layer_of.get(picture)
+        if owner is not None:
+            bounds += [shape_bounds(shape) for k, state in picture[1] if k == owner
+                       for shape in self.pieces[k].shapes_in(state) if getattr(shape, "pool", False)]
         return (min(b[0] for b in bounds) - FRONT_MARGIN, min(b[1] for b in bounds) - FRONT_MARGIN,
                 max(b[2] for b in bounds) + FRONT_MARGIN, max(b[3] for b in bounds) + FRONT_MARGIN)
 
@@ -439,26 +578,46 @@ class IsoScenery:
             self._glows[picture] = any(getattr(shape, "glow", False) for k, state in picture[1] for shape in self.pieces[k].shapes_in(state))
         return self._glows[picture]
 
+    def _pool_owner(self, picture: Picture, k: int) -> bool:
+        """Whether ``picture`` draws the pool of light of its piece ``k``: the base its pieces',
+        a layer its layered piece's; a character's front picture none (seen through, a pool
+        drawn in two pictures would show twice; and it lies on the ground, under the feet)."""
+        return picture[0] or self._layer_of.get(picture) == k
+
+    def pools(self, picture: Picture) -> bool:
+        """Whether ``picture`` shows a pool of light (under a lit lamp, DESIGN.md §104)."""
+        if picture not in self._pools:
+            self._pools[picture] = any(getattr(shape, "pool", False) for k, state in picture[1] if self._pool_owner(picture, k)
+                                       for shape in self.pieces[k].shapes_in(state))
+        return self._pools[picture]
+
+    def pool_shapes(self, picture: Picture) -> list[Shape]:
+        """What the picture of ``picture``'s pools of light draws: its shapes without the pools
+        it does not own (:meth:`_pool_owner`)."""
+        ground = list(self.ground) if picture[0] else []
+        return ground + [shape for k, state in picture[1] for shape in self.pieces[k].shapes_in(state)
+                         if self._pool_owner(picture, k) or not getattr(shape, "pool", False)]
+
     def top_surface(self) -> TopSurface:
         """The place's :class:`~vidgen.cartoon.iso_weather.TopSurface` as it is now (the objects
         there now, in their states; made once per set of states): what keeps the rain off and
         where puddles may lie (DESIGN.md §90.2)."""
-        key = self._entries(range(len(self.pieces)))
+        key = self._entries(self._own())
         if key not in self._surfaces:
             self._surfaces[key] = top_surface(self._place, self.shapes((True, key)))
         return self._surfaces[key]
 
     def tile_image(self, picture: Picture, level: int, tile: tuple[int, int], canvas: IsoCanvas, *, glow: bool = False,
-                   snow: bool = False) -> Image.Image | None:
+                   snow: bool = False, pool: bool = False) -> Image.Image | None:
         """The tile ``tile`` of ``picture`` at ``level`` (its ``canvas`` from :meth:`tiles`),
         drawn once (``None``: nothing on it); ``glow``: of its lights only (DESIGN.md §89.11);
-        ``snow``: of the snow lying on it (§90.3)."""
-        key = (picture, level, tile, glow) if not snow else (picture, level, tile, glow, snow)
+        ``snow``: of the snow lying on it (§90.3); ``pool``: of its pools of light only (§104)."""
+        key = (picture, level, tile, glow) if not (snow or pool) else (picture, level, tile, glow, snow, pool)
         if key in self._images:
             self._images.move_to_end(key)
             return self._images[key]
-        image: Image.Image | None = draw_shapes(self.shapes(picture), canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow,
-                                                snow=snow)
+        shapes = self.pool_shapes(picture) if pool else self.shapes(picture)
+        image: Image.Image | None = draw_shapes(shapes, canvas, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow, snow=snow, pool=pool)
         if image is not None and image.getbbox() is None:
             image = None
         self._images[key] = image
@@ -466,9 +625,10 @@ class IsoScenery:
             self._images.popitem(last=False)
         return image
 
-    def picture(self, picture: Picture, level: int = 0, *, glow: bool = False, snow: bool = False) -> tuple[IsoCanvas, Image.Image]:
+    def picture(self, picture: Picture, level: int = 0, *, glow: bool = False, snow: bool = False, pool: bool = False) -> tuple[IsoCanvas, Image.Image]:
         """The whole of ``picture`` at ``level`` as one image, on its part of the canvas (for tests
-        and stills; the stage draws tiles); ``glow``: of its lights only; ``snow``: of its snow."""
+        and stills; the stage draws tiles); ``glow``: of its lights only; ``snow``: of its snow;
+        ``pool``: of its pools of light."""
         c = self.level_canvas(level)
         clip = self.clip(picture)
         if clip is None:
@@ -477,7 +637,8 @@ class IsoScenery:
             x0, y0 = max(math.floor((clip[0] - c.left) * c.scale), 0), max(math.floor((clip[1] - c.top) * c.scale), 0)
             x1, y1 = min(math.ceil((clip[2] - c.left) * c.scale), c.width), min(math.ceil((clip[3] - c.top) * c.scale), c.height)
             part = IsoCanvas(c.scale, c.left + x0 / c.scale, c.top + y0 / c.scale, max(x1 - x0, 1), max(y1 - y0, 1))
-        return part, draw_shapes(self.shapes(picture), part, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow, snow=snow)
+        shapes = self.pool_shapes(picture) if pool else self.shapes(picture)
+        return part, draw_shapes(shapes, part, outline=self.outline, supersample=ISO_SUPERSAMPLE, glow=glow, snow=snow, pool=pool)
 
 
 #: How many places across the picture :func:`place_outline` measures the place's edges at.
@@ -548,6 +709,13 @@ __all__ = [
     "ISO_PAN_ZOOM",
     "ISO_WIDE_MAX",
     "wide_view",
+    "ISO_FIXED_SHARES",
+    "fixed_fill_size",
+    "fixed_reach",
+    "fixed_tiles",
+    "fixed_view",
+    "ground_view_center",
+    "on_ground",
     "map_fraction",
     "OUTLINE_SAMPLES",
     "place_bounds",

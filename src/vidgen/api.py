@@ -355,7 +355,7 @@ from vidgen.cartoon.figure_fx import (  # noqa: E402
 from vidgen.cartoon.clothes import PENDANT_GLOW  # noqa: E402
 from vidgen.cartoon.kiss import KISS_SECONDS, contact_time  # noqa: E402
 from vidgen.cartoon.holo_display import DISPLAY_PATTERNS, display_frame  # noqa: E402
-from vidgen.cartoon.iso_overlays import HazeSpot, IsoBlinkers, IsoHaze, IsoScreens, IsoShutters, IsoTraffic, PodLane  # noqa: E402
+from vidgen.cartoon.iso_overlays import Gadget, HazeSpot, IsoBlinkers, IsoGadgets, IsoHaze, IsoScreens, IsoShutters, IsoTraffic, PodLane  # noqa: E402
 from vidgen.cartoon.iso_city import POD_LENGTH, TOWER_ANTENNA_LIGHT, box_outline, garden_bands, lane_pods, pod_hidden, screen_color, screen_lines, screen_seed  # noqa: E402
 from vidgen.cartoon.portal import PORTAL_VIEWS, portal_view  # noqa: E402
 from vidgen.cartoon.vignette import FLASHBACK_SATURATION, FLASHBACK_STRENGTH, FLASHBACK_TINT, VIGNETTE_COLOR, VIGNETTE_OPACITY, CameraVignette, flashback_grade  # noqa: E402
@@ -400,7 +400,7 @@ from vidgen.cartoon.stage import (  # noqa: E402
     walk_destination,
 )
 from vidgen.camera import view_center_within  # noqa: E402
-from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, portrait_shot, shot_figures, shot_view  # noqa: E402
+from vidgen.cartoon.shots import MAX_SHOT_SCALE, SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, portrait_shot, shot_figures, shot_view  # noqa: E402
 from vidgen.particles import MAX_PARTICLES, PARTICLE_KINDS, particle_count, particle_seeds, particle_states  # noqa: E402
 from vidgen.particle_field import (  # noqa: E402
     ParticleField,
@@ -479,18 +479,27 @@ from vidgen.cartoon.rain import (  # noqa: E402
     splash_shapes,
 )
 from vidgen.cartoon.lighting import (  # noqa: E402
+    AUTO_SWITCH_SECONDS,
     DEFAULT_STRENGTH,
+    DUSK_DARK,
     LIGHT_FADE_SECONDS,
     LIGHT_PRESETS,
+    POOL_DAY,
     PROP_SHADOW_WIDTH,
     SHADOW_WIDTH,
     STAR_HEAD_ROOM,
     STAR_SKY,
+    TIME_OF_DAY_SECONDS,
+    TWILIGHT_SHARE,
     LightChange,
     LightGrade,
     ShadowEllipse,
     Stars,
+    auto_switch_time,
     blend_grades,
+    darkness,
+    day_stages,
+    dusk_crossing,
     grade_pixels,
     grade_rgbas,
     lifted,
@@ -521,6 +530,7 @@ from vidgen.cartoon.wind import (  # noqa: E402
     sway_degrees,
     trail_degrees,
     wind_level,
+    wind_phase,
     wind_seed,
 )
 from vidgen.cartoon.windblown import StageWind, SwayingProp  # noqa: E402
@@ -582,7 +592,7 @@ from vidgen.cartoon.room import (  # noqa: E402
     window_sky,
 )
 from vidgen.cartoon.room_drawing import RoomColors, RoomDrawing, WindowLook, WindowViews, draw_room, room_colors  # noqa: E402
-from vidgen.camera import SmoothFollow  # noqa: E402
+from vidgen.camera import FOLLOW_MAX_OFFSET, SmoothFollow  # noqa: E402
 from vidgen.config import CharacterSize  # noqa: E402
 from vidgen.world import (  # noqa: E402
     COIN,
@@ -621,16 +631,35 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_move_problems,
     level_world,
 )
-from vidgen.world.iso import ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
+from vidgen.world.iso import AUTO_LIGHT_KINDS, DISPLAY_CASES, HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
 from vidgen.world.iso_view import Box3, draw_order, in_front, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
-from vidgen.cartoon.iso_objects import LIT_OBJECTS, OBJECT_COLORS, ObjectLook, object_box, object_lights, tower_screen  # noqa: E402
+from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, LIT_OBJECTS, MOVING_KINDS, OBJECT_COLORS, ObjectLook, object_box, object_lights, object_motion, object_working, tower_screen  # noqa: E402
 from vidgen.cartoon.iso_scenery import IsoColors, window_faces  # noqa: E402
-from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view  # noqa: E402
-from vidgen.cartoon.iso_pictures import GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
+from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view, ISO_FIXED_SHARES, fixed_fill_size, fixed_reach, fixed_tiles, fixed_view, ground_view_center, on_ground  # noqa: E402
+from vidgen.cartoon.iso_pictures import POOL_STRENGTH, GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
-from vidgen.cartoon.iso_motion import IsoWalk  # noqa: E402
+from vidgen.cartoon.iso_motion import IsoSeatMove, IsoWalk  # noqa: E402
+from vidgen.world.iso_seats import ISO_BEDS, ISO_SEAT_ACTIONS, ISO_SEATS, ISO_USES, LIE_DEGREES, LIE_SCALE, LIE_SECONDS, SEAT_REACH, USE_SECONDS, IsoBed, IsoSeat, IsoUse, bed_facing, footprint_apart, in_regions, kinds_words, next_to, object_frame_point, object_uses_hint, seat_facing, seat_hips, seat_order, use_point  # noqa: E402
+from vidgen.cartoon.iso_drawing import shape_points  # noqa: E402
+from vidgen.world.iso_vehicles import ISO_VEHICLE_ACTIONS, LIFT_OFF_SECONDS, VEHICLE_ACTIONS, VEHICLE_SPEEDS, VehicleRoute, drive_seconds, middle_of, moved_item, moved_place, plan_vehicle, start_heading, track_cells  # noqa: E402
+from vidgen.cartoon.iso_driving import IsoDrive, IsoVehicle, rocket_smoke, track_shapes, vehicle_shapes  # noqa: E402
+from vidgen.cartoon.iso_weather import ISO_SWAYS, glow_outlines, iso_sway_degrees  # noqa: E402
+from vidgen.world.iso import VOID  # noqa: E402
+from vidgen.cartoon.fog import iso_fog_depths  # noqa: E402
+from vidgen.cartoon.iso_atmosphere import IsoFog, IsoReflections, IsoSwayer  # noqa: E402
+from vidgen.world.iso_ambient import AMBIENT_DEFAULTS, AMBIENT_KEYS, AMBIENT_KINDS, AMBIENT_MAX, INDOOR_KINDS, AmbientCells, AmbientMove, AmbientPlan, AmbientPose, ambient_cells, ambient_counts, ambient_seed, around, cell_route, plan_ambient  # noqa: E402
+from vidgen.cartoon.iso_ambient import CritterLook, IsoCritter, critter_look, critter_shapes  # noqa: E402
+from vidgen.story_text import Story, read_story  # noqa: E402
+from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
+from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
+from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
+# Phase AD review (Step 275, DESIGN.md §105.8)
+from vidgen.cartoon.iso_driving import turning_shapes  # noqa: E402
+from vidgen.cartoon.iso_weather import ISO_SWINGS, swing_pixels  # noqa: E402
+from vidgen.story_text import PERSON_NOUNS, quote_pattern  # noqa: E402
+from vidgen.story_draft import CARD_LOOKS, DRAFT_AMBIENT, card_mood  # noqa: E402
 from vidgen.iso_blocks import BlockSpec, DiagramShapes, EdgeSpec, GroupSpec, IsoDiagramLayout, ItemSpec, diagram_shapes, layout_iso_diagram, outline_ink, readable_ink, side_point, top_point, top_room  # noqa: E402
 from vidgen.iso_blocks import PIPE_HEIGHT, PlacedBlock, arrow_shapes, block_outline, block_shapes, box_faces, box_outline, FloorCells, picture_size, plate_shapes, ramped, slant  # noqa: E402
 from vidgen.iso_labels import AROUND, FAR_COST, LINE_COST, SIDEWAYS, Obstacles, clip_area, convex_hull, hull_box, hull_gap, hull_of_point, polyline_gap, ray_exit, rect_exit, rect_of, rect_union, slide_out  # noqa: E402
@@ -1177,6 +1206,12 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "DISPLAY_PATTERNS",
     "display_frame",
     "IsoBlinkers",
+    "IsoGadgets",
+    "Gadget",
+    "MOVING_KINDS",
+    "LAMPLIGHT_KINDS",
+    "object_motion",
+    "object_working",
     "IsoShutters",
     "IsoScreens",
     "IsoTraffic",
@@ -1260,6 +1295,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "fruit_skin",
     "hit_stars",
     "view_center_within",
+    "MAX_SHOT_SCALE",
     "SHOT_KINDS",
     "SHOT_MOVE_SECONDS",
     "SHOT_NAMES",
@@ -1282,18 +1318,27 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "reframe_path",
     "stage_base_width",
     "stage_reframes",
+    "AUTO_SWITCH_SECONDS",
     "DEFAULT_STRENGTH",
+    "DUSK_DARK",
     "LIGHT_FADE_SECONDS",
     "LIGHT_PRESETS",
+    "POOL_DAY",
     "PROP_SHADOW_WIDTH",
     "SHADOW_WIDTH",
     "STAR_HEAD_ROOM",
     "STAR_SKY",
+    "TIME_OF_DAY_SECONDS",
+    "TWILIGHT_SHARE",
     "LightChange",
     "LightGrade",
     "ShadowEllipse",
     "Stars",
+    "auto_switch_time",
     "blend_grades",
+    "darkness",
+    "day_stages",
+    "dusk_crossing",
     "grade_pixels",
     "grade_rgbas",
     "light_at",
@@ -1333,6 +1378,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "sway_degrees",
     "trail_degrees",
     "wind_level",
+    "wind_phase",
     "wind_seed",
     "StageWind",
     "SwayingProp",
@@ -1489,6 +1535,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "has_error_text",
     "value_trend",
     "SmoothFollow",
+    "FOLLOW_MAX_OFFSET",
     "CharacterSize",
     "COIN",
     "KEY",
@@ -1535,6 +1582,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "level_world",
     "ISO_CHARACTER_HEIGHT",
     "OBJECT_KINDS",
+    "HAZARD_SIGNS",
+    "DISPLAY_CASES",
+    "OBJECT_STYLES",
     "IsoPlace",
     "ObjectPlacing",
     "parse_iso_map",
@@ -1550,6 +1600,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "IsoScenery",
     "IsoTiles",
     "GlowTile",
+    "POOL_STRENGTH",
     "IsoPuddles",
     "IsoSnow",
     "IsoPuddle",
@@ -1564,6 +1615,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "ISO_FOLLOW_SIZE",
     "OPENING_KINDS",
     "SWITCHED_KINDS",
+    "AUTO_LIGHT_KINDS",
     "ObjectState",
     "default_state",
     "follow_width",
@@ -1586,11 +1638,116 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "WANDER_RADIUS",
     "WANDER_STOPS",
     "IsoWalk",
+    "IsoSeatMove",
+    "ISO_BEDS",
+    "ISO_SEAT_ACTIONS",
+    "ISO_SEATS",
+    "ISO_USES",
+    "LIE_DEGREES",
+    "LIE_SCALE",
+    "LIE_SECONDS",
+    "SEAT_REACH",
+    "USE_SECONDS",
+    "IsoBed",
+    "IsoSeat",
+    "IsoUse",
+    "bed_facing",
+    "footprint_apart",
+    "in_regions",
+    "kinds_words",
+    "next_to",
+    "object_frame_point",
+    "object_uses_hint",
+    "seat_facing",
+    "seat_hips",
+    "seat_order",
+    "use_point",
+    "shape_points",
+    "ISO_VEHICLE_ACTIONS",
+    "LIFT_OFF_SECONDS",
+    "VEHICLE_ACTIONS",
+    "VEHICLE_SPEEDS",
+    "VehicleRoute",
+    "drive_seconds",
+    "middle_of",
+    "moved_item",
+    "moved_place",
+    "plan_vehicle",
+    "start_heading",
+    "track_cells",
+    "IsoDrive",
+    "IsoVehicle",
+    "rocket_smoke",
+    "track_shapes",
+    "vehicle_shapes",
+    "ISO_SWAYS",
+    "VOID",
+    "glow_outlines",
+    "iso_sway_degrees",
+    "iso_fog_depths",
+    "IsoFog",
+    "IsoReflections",
+    "IsoSwayer",
+    "AMBIENT_DEFAULTS",
+    "AMBIENT_KEYS",
+    "AMBIENT_KINDS",
+    "AMBIENT_MAX",
+    "INDOOR_KINDS",
+    "AmbientCells",
+    "AmbientMove",
+    "AmbientPlan",
+    "AmbientPose",
+    "ambient_cells",
+    "ambient_counts",
+    "ambient_seed",
+    "around",
+    "cell_route",
+    "plan_ambient",
+    "CritterLook",
+    "IsoCritter",
+    "critter_look",
+    "critter_shapes",
+    "Story",
+    "read_story",
+    "STORY_PLACES",
+    "StoryPlace",
+    "choose_place",
+    "light_cues",
+    "music_of",
+    "objects_named",
+    "weather_of",
+    "DraftOptions",
+    "StoryDraft",
+    "draft_story",
+    "report_markdown",
+    "story_yaml",
+    "TimedBeat",
+    "ShortsWindow",
+    "Suggestions",
+    "timed_beats",
+    "suggest_shorts",
+    "write_suggestions",
+    "shorts_yaml",
+    "turning_shapes",
+    "ISO_SWINGS",
+    "swing_pixels",
+    "PERSON_NOUNS",
+    "quote_pattern",
+    "CARD_LOOKS",
+    "DRAFT_AMBIENT",
+    "card_mood",
     "cell_of",
     "find_route",
     "plan_move",
     "iso_view",
     "wide_view",
+    "ISO_FIXED_SHARES",
+    "fixed_fill_size",
+    "fixed_reach",
+    "fixed_tiles",
+    "fixed_view",
+    "ground_view_center",
+    "on_ground",
     "ISO_WIDE_MAX",
     "ISO_PAN_ZOOM",
     "map_fraction",

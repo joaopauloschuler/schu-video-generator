@@ -344,6 +344,14 @@ variants:
 - `vidgen storyboard --variant short1 --per-beat 2` and `vidgen lint --variant short1`, then
   `vidgen render --variant short1` (`--max-scenes` keeps each run short; a change in `cut.beats`
   re-renders only that scene, a new hook every scene).
+- **Which windows?** `vidgen shorts suggest [--count 3] [--min 30 --max 60] [--teaser]` (MCP
+  `shorts_suggest`) times the beats (audio, else words), scores every 30–60 s window between beat
+  boundaries (dialogue, questions, exclamations, emotional and action words, variety, a clean start,
+  a strong last line; the ending marked down) and prints a table with a hook each. `--write` adds
+  them as variants in `shorts.yaml` (included by the config, both backed up): 9:16, captions, hook,
+  end card, a held `zoom ... cut` opening each stage scene. It is a draft: read its notes (a
+  mid-scene start keeps the light earlier beats set, not their moves), then storyboard and
+  restage as above.
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
@@ -1895,6 +1903,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |
 | `blow_away` | on a `stage`: the wind blows a light prop away, tumbling, out of a hand too (`- blow_away: napkin`; `to:` a mark to land there, else off the stage) | a gust in the story; napkin, umbrella, ball, cup, basket, box, letter, balloons only |
 | `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s; `move_sun: true` moves a `sun` / `moon` prop across the sky, shadows turning) | when time passes in the story |
+| `time_of_day` | on a `stage`: a day passing (`- {time_of_day: night, run_time: 6}`, 6 s): the light and a sky of the time of day fade (day to night through a sunset), stars come out, and at dusk lamps, windows, lit objects and cars' headlights switch on by themselves one after another (off at dawn); `auto_lights: false`, or `auto_light: false` on an object, opts out; a `sun` / `moon` prop moves | evening falls or morning comes during a scene |
 | `lightning` | on a `stage`: the set flashes and a bolt strikes (`- lightning: right`; `distance: 2`: its thunder ~6 s later; in a room the windows flash) | a storm, a scare; rain with `lightning: true` strikes on its own |
 | `rainbow` | on a `stage` outdoors: a rainbow fades into the sky and stays (`- rainbow: centre`; `hide: true` fades it out) | after the rain |
 | `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley); on an iso place a `lamp` lights, a `house`'s windows glow (they stay bright at `light: sunset` / `night`) | when someone in the story switches it on or lights the fire; when a call comes |
@@ -1936,12 +1945,17 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
 | `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head; `by: pip` reaches for it (a locked door on a `level` opens only by whoever holds its key); on an iso place a `house`'s door, a room's `door_1`, `flowers` (they bloom) | `open: true` in `props` starts it open |
 | `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand; on an iso place a house's or a room's door, flowers back to buds | |
-| `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
+| `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend; on an iso place on an object with seats (`armchair`, `bench`, `cafe_table`...) | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
-| `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
+| `stand_up` | on a `stage`: a character gets up from where it sits, leans or lies | |
+| `lie_on` | on an iso place: a character lies in a `bed` (`to: bed`), the blanket over it | next to the bed; `stand_up` before it walks |
+| `use` | on an iso place: a character types at a `laptop` / `desk_with_pc` / `console`, warms its hands at a `campfire` / `fireplace`, takes a book, presses at a machine (`to: laptop`, `run_time`) | next to the object, or seated next to it |
 | `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
 | `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
+| `drive_to` | on an iso place: a `car` drives along the path cells to `to` (a spot or `{column, row}`, `via` on the way); a `train_car` rolls along its track | a car arriving, leaving, passing by |
+| `sail_to` | on an iso place: a `boat` sails across the water to `to` (`via` on the way) | a boat setting off or coming in |
+| `lift_off` | on an iso place: a `rocket` fires and rises out of the view | a launch |
 | `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`; `closeup ana ben`: two or three faces together; `{kind: closeup, of: kit, clear: true}` hides the others for the beat); the next beat without one cuts back; on an iso place `wide` is the place's wide view and the others make its small characters large | a beat's dialogue line or reaction (on an iso place every longer spoken line: in a wide view a speaker gets a name tag, enough for a short line); not with a walk out of the framing |
 | `host_point` | with a `host:`: the host's arm reaches towards a target of the scene and it looks there (`- host_point: item2`; `line: true`: a thin pointer line) | one per beat; a line only when nothing lies between the host and the target |
 | `host_look` | with a `host:`: the host looks at a target of the scene (`- host_look: bar3`) | when attention moves |
@@ -2101,7 +2115,9 @@ asks for one, say schu-video-generator makes original characters and offer one w
   the frame (`width: 2`), the camera goes along with `follow`.
 - **Light and mood**: `light: morning | sunset | night | indoor` (or `{tint, strength}`) grades
   the whole set and the characters, never the bubbles or text; `night` adds stars on a colour
-  background. Time passing is a `- light: night` action (it fades, 2 s); `fill_light: 0.4` keeps
+  background. Time passing is a `- light: night` action (it fades, 2 s), or a whole evening in
+  one shot: `- {time_of_day: night, run_time: 6}` (the sky turns gold then dark, the lamps light
+  themselves at dusk; `time_of_day: morning` puts them out again); `fill_light: 0.4` keeps
   the characters' faces readable in a dark light (the set stays dark). Characters and props on
   the ground get soft shadows on their own (`shadows: false` for none). `wind: breeze | windy |
   gale` (or 0..1; negative blows left) sways trees and bushes, makes scarves, long hair, ears and
@@ -2284,6 +2300,15 @@ line: at that word), except a voice sound such as `[laugh]` inside a line, which
 line. Undeclared characters get looks that differ from the others (`--species cat dog` for
 animals, `--seed` for other random ones). `docs/CONFIG.md` "Cartoons from a screenplay" has the
 whole format.
+
+**From a story in prose.** `vidgen story draft story.md -o DIR [--style iso|flat] [--format 9:16]
+[--narrator VOICE]` (MCP tool `story_draft`) drafts the whole project without AI: scenes at
+headings, `***` breaks and time cues, a cast with distinct Kokoro voices (first person: the narrator
+is the protagonist's voice), each quoted line (double quotes, or British `‘…’`) given a speaker with
+a confidence (`said the old man` adds an `old_man`), iso places with a little `ambient` life, light,
+weather and objects from the story's words, placeholder walks and shots, a title card in the
+story's mood, an end card, a music bed. Read its `story_draft.md` first: fix the speakers marked **check** (`voice:` of those
+beats), the cast, then the places and walks (they are placeholders), and run the usual loop.
 
 **A series: one cast, shared sets.** Put the characters and their voices in `shared/cast.yaml`
 and the places in `shared/sets.yaml` (`sets: {meadow: {background, props, marks, light...}}`);
@@ -2619,13 +2644,64 @@ and give each scene `set: village`.
   `projector_pad` (a glowing platform a hologram stands on), `whiteboard`. A portal's `view:
   coast` (or `stars`, `meadow`) shows another place inside it. `- alarm: start` darkens the room
   under a pulsing red light with a siren (`stop` ends it), `- shutters: close` slams steel
-  shutters over the windows; `ambience: hum` gives a lab its hum.
+  shutters over the windows; `ambience: hum` gives a lab its hum. Other objects: `laptop`
+  (`open: false` closed), `terminal_kiosk`, `quantum_core`, `robot_arm`, `microscope`,
+  `centrifuge`, `coffee_machine`, `lab_stool`, `wall_clock` (`at` a cell of a back wall,
+  `time: "03:27"`), `grow_rack`, `terrarium`, `specimen_tank` (`color` its liquid; a `detail`
+  colour adds a floating shape), `chemistry_bench` (2 x 1), `distillation_rig`, `lab_fridge`
+  (`open`), `fume_hood`, `telescope`, `satellite_dish`, `charging_station`, `crate_stack`,
+  `airlock` (2 x 1, `open`), `printer_3d`, `hazard_sign` (`kind: biohazard | radiation |
+  authorised`), `fire_extinguisher`, `fireplace` (2 x 1), `kitchen_counter` (2 x 1), `stove`,
+  `sink`, `bookshelf_tall`, `armchair`, `floor_lamp`, `tv`, `piano` (2 x 1), `bathtub` (2 x 1),
+  `wardrobe` (2 x 1, `open`), `crib`, `cafe_table` (2 x 1, two chairs), `counter` (2 x 1),
+  `cash_register`, `display_case` (2 x 1, `kind: cakes | jewels`), `market_stall` (2 x 1),
+  `vending_machine`, `street_lamp`, `traffic_light`, `bus_stop` (2 x 1), `mailbox`, `fountain`
+  (2 x 2), `phone_booth`, `car` (2 x 1, `color` its body), `bicycle`, `newsstand` (2 x 1),
+  `campfire`, `tent` (2 x 2), `log` (2 x 1), `stump`, `mushroom_ring` (2 x 2), `pond` (2 x 2),
+  `scarecrow`, `beehive`, `vegetable_patch` (2 x 1), `wheelbarrow`, `hay_bale` (2 x 1),
+  `school_desk` (with its chair), `desk_with_pc` (2 x 1), `water_cooler`, `printer`, `globe`,
+  `trophy_shelf` (2 x 1), `treasure_chest` (`open`: gold glows), `cauldron` (`color` its
+  potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a back wall), `signpost`,
+  `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`, `gift_pile`,
+  `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock` (1 x 2, over
+  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); `on: true` /
+  `switch_on` makes the laptop, kiosk, core, arm,
+  centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
+  airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV, vending machine, street
+  lamp, traffic light (cycles), fountain, phone booth, car (headlights), campfire, pond
+  (ripples), beehive (bees), desk_with_pc (its screen), water cooler (bubbles), printer
+  (prints), globe (spins), cauldron (bubbles), giant crystal (glows), torch sconce, Christmas
+  tree (twinkles), pumpkin, balloons (sway), cake (candles), boat (bobs), lighthouse (its beam
+  sweeps) and rocket (fires) work (a lit fireplace, floor lamp, street lamp, phone booth,
+  campfire, cauldron or torch lights who stands near; pools of light and beams show mostly at
+  night).
+- Vehicles move: `- {drive_to: car, to: shop, via: [corner]}` drives a `car` along the path
+  cells (`:`), turning at corners (driving away its tail shows; `switch_on` its headlights);
+  `- {sail_to: boat, to: pier}` sails a `boat` across `~`; `drive_to` rolls a `train_car` along
+  its row or column (its track is drawn there) until its middle is at `to`; `- lift_off: rocket`
+  fires and rises out of the view. `speed` in tiles per second; `follow: car` keeps the camera on
+  it; give the beat time for the way; `vidgen validate` names what is in the way.
+- Furniture: walk next to an object, then `- {sit_on: pip, to: armchair}` (chair, bench, sofa,
+  armchair, throne, lab_stool, log, stump, hay_bale, rock, bus_stop, cafe_table: two face each
+  other, school_desk, bed), `- {lie_on: pip, to: bed}`, `- {use: pip, to: laptop, run_time: 4}`
+  (types; warms its hands at a campfire or fireplace, takes a book from shelves, presses at a
+  machine or stove), `- stand_up: pip`. A seat faces out of the object's front (set its
+  `facing`); its near arm, a chair's back or a blanket is drawn over the sitter. Talking, faces
+  and looks work seated; walk only after `stand_up`.
 - Visitors: `iridescent: true` (skin shifting colours like oil on water, partly self-lit:
   `{glow: 0–1}`, default 0.5) and `afterimages: true` (faint copies trailing a move) on a
   character, a `scale` of 1.5–1.8 on the stage to tower over the others (check it in a
   `two_shot` with a human). Two characters `- {hold_hands: ana, with: ben}` step in close
   enough for the joined hands to show; walk both in one beat with the same `run_time` and they
   go side by side (`let_go_hands`). At night give the stage `fill_light: 0.4` so faces read.
+- Ground to the frame's edges: the default wide view fits the whole place (its bounding box), so
+  outdoors about half of the frame is background, and a bigger map only pulls the camera back.
+  `iso: {wide: fixed}` keeps one scale instead (a character 0.14 / 0.20 / 0.28 of the frame's
+  height at `character_size` small / medium / large, which an iso place takes with `wide:
+  fixed`; or `wide: {tiles: N}` across), centred on the characters as far as the ground goes:
+  a big enough map fills the frame. Square maps of at least 24x24 (16:9) or 16x16 (9:16) at
+  medium; 34 / 23 small, 17 / 12 large. Lint `iso_ground` names the size; `zoom: {scale: 2}` is
+  then twice as close as that view.
 - Framing: `iso: {wide: fill}` (or a number 1–2.5) brings a room's wide view closer;
   `shot: closeup ana ben` frames two faces together, `{kind: closeup, of: guide, clear: true}`
   hides everyone else for the beat. A memory: `flashback: true` on a stage (faded warm colours,
@@ -2638,6 +2714,18 @@ and give each scene `set: village`.
   a `pan` to the end spot with the same `run_time` follows it). `wide: 1.6`–`2.5` lets the towers
   reach out of the top of the frame. Neon rain: `particles: [{kind: rain, glow: true, color:
   ["#5FFFE0", "#4FA8FF"]}]` (`glow` works on any particles).
+- Weather outdoors: rain with `puddles: true, settled: 12` (puddles full size from the start)
+  mirrors lit windows, lanterns and neon trims at night, wobbling while it rains; `fog: 0.6`
+  lies over the place in drifting bands, thicker further back; `wind: windy` (or `- wind:
+  gale`) bends trees, bushes, flowers and plants in gusts, swings scarecrows and balloon bunches
+  (on their strings) and slants the rain. All fade with `time_of_day`.
+- Life in the background: `ambient: {walkers: 3, birds: 4, cat: true, butterflies: true,
+  fireflies: true, seed: 1}` on the stage (or `ambient: true`; also `ducks` on `~`, `flies`):
+  passers-by stroll the paths, birds peck and fly off, a cat sits and grooms, butterflies by day,
+  fireflies at night. They keep away from the characters, never speak, are no targets and hide
+  in close shots; walkers are `muted` (smaller, greyer) unless `muted: false`, and lamps light
+  them at night. Indoors a cat and
+  flies only. They add render time: a handful is enough.
 - Other selves: a character with `echo: true` (or `{color, opacity}`) is a translucent other
   self that keeps its own costume, its outlines glowing (a timeline, a memory, a dream); stand
   it beside the one it echoes and bring it with `- materialise: ana_captain`. Accessories
@@ -3736,6 +3824,7 @@ install; `vidgen validate` warns when it is missing.
 | `hidden_speaker` | something in front hides the speaker's face (on an iso place: what really covers its eyes and mouth, a lamp post across the face) | move one of them, or a smaller `depth` for the speaker; on an iso place `walk_to` a spot with nothing in front, or a `shot` |
 | `small_speaker` | a speaking face too small on screen to read it and its lip sync (on an iso place a speaker with a name tag may say up to 12 words) | `shot: closeup <name>` (or `medium`) for that beat, or `character_size: large` |
 | `offscreen_action` | on an iso place: a walk, a thing handed about or a change of the place (a door, a lamp) the camera mostly does not show while it happens | `shot: wide`, a `pan` or `follow` to it, or do it in a beat whose shot shows it |
+| `iso_ground` | an iso place with `wide: fixed` on a map too small for the frame (background round it); info: an outdoor place in the whole-place wide view | the map size it names, or a sky `background` if the floating place is meant |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `said_before_shown` | the narration names a label on screen (a node, a callout, a stage) seconds before it appears, and not again when it does | show it on the word: `{reveal: node:database, at: "@database"}` (or the callout's `at`); or name it in the beat that shows it |
 | `unsaid_reveal` | (off unless `lint.rules.unsaid_reveal.severity` is set) a beat shows new labels the narration never names | say what the viewer should look at, or leave it off: many labels need no words |

@@ -483,12 +483,13 @@ class Zoom(Action):
         parts = [part for _, part in _parts(scene, targets)] or [t.mobject for t in targets]
         group = Group(*parts)
         fw, fh = scene.frame_width, scene.frame_height
+        base = scene.zoom_base() if hasattr(scene, "zoom_base") else 1.0   # an iso place's fixed wide view (DESIGN.md §106)
         if self.options.scale is not None:
-            factor = self.options.scale
+            factor = base * self.options.scale
         else:
             room = 1 - 2 * self.options.padding
-            factor = min(self.max_scale, room * fw / max(group.width, 1e-6), room * fh / max(group.height, 1e-6))
-        if factor <= 1.01:
+            factor = min(base * self.max_scale, room * fw / max(group.width, 1e-6), room * fh / max(group.height, 1e-6))
+        if factor <= base * 1.01:
             names = ", ".join(t.name for t in targets)
             log.warning("scene '%s': zoom on %s: the targets already fill the frame; the camera stays (use scale)", scene.spec.id, names)
             return []
@@ -678,6 +679,11 @@ class _MoveThenFollow(MoveCamera):
         end = self.target_copy
         y = self.y_of() if self.y_of is not None else self.target_y   # an iso place: up and down the picture too (§89.10)
         x, y = view_center_within(self.bounds(), (self.x_of(), y), end.width, end.height)
+        settle = getattr(self.x_of, "settle", None)
+        if settle is not None:   # an iso place's fixed wide view: on the ground, the target near the middle (§106)
+            sx, sy = settle(float(end.width), (x, y))
+            reach_x, reach_y = FOLLOW_MAX_OFFSET * end.width, FOLLOW_MAX_OFFSET * end.height
+            x, y = min(max(sx, x - reach_x), x + reach_x), min(max(sy, y - reach_y), y + reach_y)
         end.move_to([x, y, 0.0])
         super().interpolate_mobject(alpha)
 
