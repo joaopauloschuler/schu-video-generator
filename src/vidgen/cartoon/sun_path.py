@@ -33,8 +33,8 @@ PATH_TOP = 0.8
 RISE_FADE = 0.15
 #: Where each body is under each light preset (path shares; beyond 0..1: below the horizon).
 PATH_PLACES: dict[str, dict[str, float]] = {
-    "sun": {"morning": 0.1, "day": 0.5, "sunset": 0.9, "night": 1.0 + PATH_HIDDEN, "indoor": 1.0 + PATH_HIDDEN},
-    "moon": {"morning": 0.9, "day": -PATH_HIDDEN, "sunset": 0.1, "night": 0.5, "indoor": 0.3},
+    "sun": {"morning": 0.1, "day": 0.5, "sunset": 0.9, "night": 1.0 + PATH_HIDDEN, "indoor": 1.0 + PATH_HIDDEN, "blue_hour": 1.0 + PATH_HIDDEN},
+    "moon": {"morning": 0.9, "day": -PATH_HIDDEN, "sunset": 0.1, "night": 0.5, "indoor": 0.3, "blue_hour": 0.3},
 }
 #: The sun's highest elevation (degrees, at the top of the arc).
 TOP_ELEVATION = 65.0

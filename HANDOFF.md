@@ -24295,3 +24295,50 @@ is in `tasklist.md`.
   `night` / `rowans_room` 25 stills identical to Step 275's (`s277/iso_check.py`). Sheet
   `/home/claude/work/scratch/s277/sheet.png`; scripts `gen.py`, `run_all.py`, `measure.py`,
   `gen_moves.py`, `run_moves.py`, `make_sheet.py`, `results.csv`.
+
+## Step 278 — Retro-future kit (Phase AE)
+
+Phase AE (Steps 278–281, plan in `tasklist.md`): a second, brighter private story cartoon in a
+retro-futuristic iso look; the story and its project live in the scratchpad (a private story
+project), repo work is generic.
+
+- Built (DESIGN §107): `iso: {style: retro}` (ground colours, textures, object colours, saucer
+  traffic) and `textures: {grass, path, floor, tiles}`; `light: blue_hour` (a brighter, more
+  saturated night, lamps glow); twelve iso objects in a new `cartoon/iso_retro.py`
+  (`googie_building`, `retro_tower`, `starburst_sign`, `ray_lamp`, `atomic_sculpture`, `monorail`,
+  `tube_computer`, `sunburst_clock`, `tv_console`, `retro_desk`, `hedge`, `planter`); a car's
+  `kind: rocket` (parked and driven); traffic `shape: capsule | saucer | monorail`, `hull`; looks
+  `suit`, `lab_coat`, `jumpsuit`, `pompadour`, `bob`, `fedora`, `pillbox`.
+- Files: `world/iso.py` (kinds, `CAR_STYLES`, `CONSOLE_PICTURES`, `CLOCK_KINDS`, `TALL_KINDS`
+  retro tower, switched / auto-lit / wall kinds), `world/iso_seats.py` (uses),
+  `cartoon/iso_retro.py` (new), `cartoon/iso_objects.py` (colours, `STYLE_OBJECT_COLORS`,
+  `object_colors`, modules, moving, lamplight, shadows, the sunburst clock's wall box),
+  `cartoon/iso_scenery.py` (textures, style colours), `cartoon/iso_town.py` (rocket car hand-off),
+  `cartoon/iso_driving.py` (features), `cartoon/iso_overlays.py` (saucer, train),
+  `cartoon/lighting.py` (preset, saturation), `cartoon/room.py`, `cartoon/sun_path.py`,
+  `ambience.py`, `cartoon/clothes.py`, `cartoon/generator.py`, `config.py`, `scenes/stage.py`
+  (params, messages), `scenes/stage_iso.py`, `scenes/stage_vehicles.py`, `api.py`; docs CONFIG,
+  guide (+ `AGENTS.md`), DESIGN §107, CHANGELOG, tasklist.
+- Decisions: a `style` key on the iso place rather than a theme preset (themes colour text and
+  charts); textures per surface with the surfaces' own as defaults (old pictures unchanged);
+  saturation above 1 for the blue hour (the night grade's multiply alone turns pastels grey);
+  a moving monorail train is a traffic shape over a static `monorail` beam (cheap, no new vehicle
+  rules), not a driven object; the existing `bush` / `flowers` with `size` stay the soft hedge
+  and flower bed, `hedge` is the clipped one.
+- Test-helper fix: `frames_of` (`tests/test_cartoon_living.py`) accepts Manim 0.22's
+  `write_frame(..., repeat=)` (every render test using it failed since the environment rebuild);
+  `test_cartoon_room.py::test_the_set_fades_in_as_one_picture` has its own copy and still fails
+  the same way (pre-existing, not fixed here).
+- Known gaps: see DESIGN §107 "Left for later" (monorail train not hidden or stopping; 9:16 at
+  270 x 480 makes medium characters silhouettes — preview tall variants at 540 x 960; blue hour
+  ~1.4x slower than night on lit places); the monorail lane's height over the beam (3.15) was not
+  checked in a frame (the beam was out of view in the sample's shots).
+- Tests: `tests/test_retro_kit.py` (10, one render); `test_iso_objects_more` (town test allows
+  the car's kinds; a message), `test_iso_place`, `test_lab_objects`, `test_city_hud_echo`,
+  `test_cartoon_lighting`, `test_cartoon_room` (but the pre-existing failure above),
+  `test_iso_vehicles`, `test_time_of_day`, `test_cartoon_outfits`, `test_cartoon_generator`,
+  `test_iso_seats`, `test_schema`, `test_api`, `test_iso_staging`, `test_iso_atmosphere`,
+  `test_random_cast`, `test_iso_mood`, `test_guide`, `test_docs` passed. Frame baseline 33 frames,
+  max difference 0.
+- Private: sheet `/home/claude/work/scratch/s278/sheet.png`, sample project `s278/proj`
+  (`gen.py`), `objs.py` (object close-ups), `measure.py` / `measure.csv`, `sheet.py`.

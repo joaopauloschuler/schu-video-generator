@@ -1649,6 +1649,25 @@ a few lines per feature in CONFIG and the guide.
 ### Step 277 — A fixed-scale wide view for iso places
 - [x] `iso: {wide: fixed}` (scale from `character_size`, allowed on iso places with it; or `wide: {tiles: N}`): the same scale on any map, centred on the characters and moved onto the ground (characters by an edge kept in view), a small place centred; `zoom` scale, shots, `follow` and `pan` relative to it (shot / follow caps scaled, follow and pan settle on the ground, `MAX_DETAIL` 5); lint `iso_ground` (map size that fills the frame; info hint for outdoor `auto` / `fill`); measured map sizes (16:9 34 / 24 / 17, 9:16 23 / 16 / 12) in CONFIG, the guide and the iso cookbook; `fill` wording corrected; tests `test_iso_fixed_view.py`
 
+## Phase AE — A retro-futuristic, bright story cartoon (DESIGN §107)
+
+A second, more beautiful attempt at a private story cartoon: isometric and retro-futuristic (a
+1950s-60s "world of tomorrow": pastels and chrome), full-frame ground (`wide: fixed`, big maps),
+bright "blue hour" nights instead of muddy dark ones, rich places. The story and its project are
+private (scratchpad); repo work stays generic. No AI API calls; Kokoro only.
+
+### Step 278 — Retro-future kit
+- [x] `iso: {style: retro}` (pastel ground and object colours, cream saucer traffic) and `textures: {grass, path, floor, tiles}` (`plain`, `tufts`, `lawn`, `stones`, `checker`, `terrazzo`, `boards`, `tiles`); `light: blue_hour` (a bright clean night, more saturated, lamps glow); objects `googie_building`, `retro_tower`, `starburst_sign`, `ray_lamp`, `atomic_sculpture`, `monorail`, `tube_computer`, `sunburst_clock`, `tv_console` (`kind: wave | face`), `retro_desk`, `hedge`, `planter`; a `car`'s `kind: rocket` (parked and driven); traffic `shape: saucer | monorail`, `hull`; looks `outfit: suit | lab_coat | jumpsuit`, `hair: pompadour | bob`, `fedora`, `pillbox`; tests `test_retro_kit.py`; private style sheet
+
+### Step 279 — Adaptation and test cut
+- [ ] The script (shots, lines per speaker, voices, camera, staging, sets with map sizes, light, weather, ambient, music) and a private test cut of 3–4 key shots with Kokoro voices; stills checked against the visual rules and measured; generic fixes in the repo
+
+### Step 280 — The film
+- [ ] The full private film (previews looked at shot by shot), a 16:9 1080p MP4 and a delivery copy under 28 MB, captions, −16 LUFS, a contact sheet
+
+### Step 281 — Critical review
+- [ ] Story fidelity, beauty against the visual rules, audio levels, compatibility baseline, tests; fixes and final renders
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

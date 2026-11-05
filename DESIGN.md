@@ -20799,3 +20799,79 @@ using bigger maps, not by zooming in on the action.
   `fixed_fill_size`, `fixed_view`, `on_ground`, `ground_view_center`, `MAX_SHOT_SCALE`,
   `FOLLOW_MAX_OFFSET`; `wide_view(tiles=)`, `frame_shot` / `shot_view(max_scale=)`,
   `follow_width(most=)`, `SmoothFollow(settle=)`.
+
+## 107. A retro-future kit (Phase AE, Step 278)
+
+Phase AE (Steps 278–281) makes a second, brighter private story cartoon in a 1950s-60s "world of
+tomorrow" look (pastels and chrome, googie buildings, saucers, a monorail, tape-reel computers).
+Step 278 is the generic kit; docs stay lean (one list in CONFIG and the guide, a guide bullet).
+
+- **Style** (`StageIso.style: plain | retro`, default plain): the stage merges
+  `STYLE_COLORS[style]` under the place's `colors` (retro: mint `grass`, terracotta `earth`, cream
+  `path`, turquoise `water`, cream `floor` / `tiles`, turquoise `wall`, coral `cut`),
+  `STYLE_TEXTURES[style]` under its `textures`, and takes objects' default colours from
+  `object_colors(kind, style)` (`STYLE_OBJECT_COLORS`: houses, trees, lamps, benches, signs, cars,
+  towers, office furniture... in turquoise, coral, mustard, mint and cream; a placing's `color` /
+  `detail` win). Traffic in a retro place defaults to cream saucers. Chosen over a theme preset: a
+  place's look is the iso place's business (themes colour text and charts), and one key reads as
+  what the author means.
+- **Textures** (`StageIso.textures: {grass | path | floor | tiles: texture}`, `TEXTURES`:
+  `plain`, `tufts`, `lawn` (a darker stripe on every other row, a daisy now and then), `stones`,
+  `checker` (two darker quarters per cell, `CHECKER_TONE`), `terrazzo` (seeded chips, softened
+  into the floor), `boards`, `tiles`). `IsoColors.textures` / `texture(surface)`; a surface's own
+  texture (`DEFAULT_TEXTURES`) takes the old code path (pictures identical), any other one draws
+  in `_texture` and drops the cell parity shading. Raised grass and path blocks get them too.
+- **Blue hour** (`light: blue_hour`, `LIGHT_PRESETS` + `PRESET_LIGHTS`): tint `#4A66C8` at 0.58, a
+  cool glow (0.035, 0.045, 0.09) lifting the blacks to indigo, stars 0.7, shadows 0.6, and
+  `PRESET_SATURATION` 1.3 (`LightGrade.saturation` above 1 boosts; `grade_rgbas` clips then).
+  `darkness` 0.6 (past `DUSK_DARK`): pools, lamplight and glows show. Its window sky, sun / moon
+  places, crickets (`ambience.NIGHT`) and a twilight on the way to it (`day_stages`) follow.
+  Measured on the sample's stills (preview, mean Rec. 709 luma / Hasler–Süsstrunk colourfulness):
+  street 141 / 69 vs `night` 97 / 52 (day 185 / 61); office 145 / 49 vs night 93 / 34.
+- **Objects** (`cartoon/iso_retro.py`, `MORE_MODULES`): `googie_building` (3 x 3, 4.9: glass
+  shop front and door, slot windows, clerestory glass under a roof swept up to the front right on
+  a V of pylons, a mast with a boomerang sign board and a starburst; on: glass, sign and star
+  glow, a pool), `retro_tower` (2 x 2, `TALL_KINDS` 4–30, on by default: a round shaft with
+  ribbon windows (seeded lit share), fins, a saucer deck with portholes, a cupola, a spire and an
+  atom ball), `starburst_sign`, `ray_lamp` (lamplight, auto light), `atomic_sculpture` (moving:
+  electrons orbit while on), `monorail` (a beam on T pylons across its footprint; `size`
+  lengthens it), `tube_computer` (2 x 1; moving: reels turn, bulbs blink; vacuum tubes glow),
+  `sunburst_clock` (`WALL_KINDS`, `CLOCK_KINDS` with `wall_clock`: `time`), `tv_console` (moving:
+  `kind: wave` an oscilloscope wave, `face` a robot face talking in a wave: `CONSOLE_PICTURES`),
+  `retro_desk` (2 x 1, `top`; a kidney top on hairpin legs, a terminal glowing green while on, a
+  dial telephone), `hedge` and `planter` (across their footprint, `size`). `ISO_USES` gains the
+  desk (type), the tube computer and the TV console (reach).
+- **Rocket car** (`CAR_STYLES`: `car` `kind: sedan | rocket`): `car_shapes` hands a rocket to
+  `rocket_car_shapes` (pointed nose, chrome stripe, bubble canopy, tail fins, a jet ring;
+  headlight pool ahead as a sedan's). Driven too: `IsoVehicle(features=)`,
+  `vehicle_shapes(features=)`, `frame_item(features=)`.
+- **Traffic shapes** (`IsoTrafficLane.shape: capsule | saucer | monorail`, `hull`;
+  `PodLane.shape` / `hull`, `POD_SHAPES`, `POD_RETRO_HULL`): the same six parts per pod drawn as a
+  saucer (a wide flat hull, a dome with its rider, a ring of light, a glow below) or a monorail
+  train (a long round-ended hull along the lane, a band of windows, a nose and a headlight, no
+  trail). A monorail lane at about 3.15 over a `monorail` beam's row rides on it (not hidden by
+  what stands in front; pods never are, but tall objects).
+- **Looks** (`config.py`, `clothes.py`, `generator.py`): `outfit: suit` (jacket, lapels, shirt
+  V in `trim`, tie in `accessory`, buttons, pocket square), `lab_coat` (in `SKIRTED_OUTFITS`: an
+  open coat with tails over a shirt and trousers in `trim`, pockets, a pen), `jumpsuit` (wide
+  collar, zip, belt with a buckle, badge); `hair: pompadour` (the cap's radius swells over the
+  brow, a high hairline), `bob` (to the chin, flipped out); `accessories: fedora` (pinched crown,
+  band in `trim`, snap brim), `pillbox` (both in `TOP_OF_HEAD`). `random_cast` keeps its own lists
+  (casts unchanged).
+- **Checked by eye** (`/home/claude/work/scratch/s278/sheet.png`, sample `s278/proj`): a 30 x 30
+  retro street (`wide: fixed`, medium) by day, at blue hour and at plain night, a two-shot of each;
+  a 24 x 24 office and a lab by day and at blue hour (office at night too); 9:16 of the street and
+  the office; close-ups of the twelve objects and the rocket car off and lit.
+- **Cost** (854 x 480 preview, 15 fps): the street with ~60 objects, three traffic lanes and four
+  walkers: 6.2 s of video in 19.5 s by day, 64.5 s at night, 92 s at blue hour (its lights and
+  pools; the saturation adds to every grade).
+- **Public**: `vidgen.api` adds `CAR_STYLES`, `CLOCK_KINDS`, `CONSOLE_PICTURES`, `TALL_KINDS`,
+  `STYLE_OBJECT_COLORS`, `object_colors`, `STYLE_COLORS`, `STYLE_TEXTURES`, `TEXTURED_SURFACES`,
+  `TEXTURES`, `POD_HULL`, `POD_RETRO_HULL`, `POD_SHAPES`; `IsoColors.textures` / `texture()`,
+  `PodLane.shape` / `hull`, `IsoVehicle(features=)`, `vehicle_shapes(features=)`,
+  `frame_item(features=)`; `PRESET_SATURATION`. Additive: the frame baseline 33/33 identical.
+- **Left for later**: the monorail train does not stop at stations or hide behind what stands in
+  front of it; no driven monorail car object; the retro ground lacks kerbs and road markings;
+  objects without a retro colour keep their own (lab machines); 9:16 previews at 270 x 480 draw
+  characters at `medium` with outlines so thick they read as silhouettes (use 540 x 960); blue
+  hour renders about 1.4x slower than night on lit places.

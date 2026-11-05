@@ -1644,12 +1644,12 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `head_size` | `1.0` | head size relative to the default head, 0.6 to 1.6 |
 | `eyes` | `dot` | `dot`, `oval` or `round` (white with a pupil), `sleepy` (half closed) |
 | `nose` | `none` | `none`, `dot`, `round`, `triangle` |
-| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `wavy` (long locks waving past the jaw, ending in curls; the chin and chest left clear), `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
+| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `wavy` (long locks waving past the jaw, ending in curls; the chin and chest left clear), `bun`, `curly`, `ponytail`, `braids`, `afro`, `pompadour` (a 1950s quiff), `bob` (chin length, flipped out) (colour `colors.hair`) |
 | `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
 | `facial_hair` | `none` | `none`, `moustache`, `beard` (with a moustache; the mouth stays seen); colour `colors.hair` |
-| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace`, `medal` (a gold medal on a ribbon in `colors.accessory`), `pendant` (a stone in `colors.accessory` on a dark cord, glowing at night and pulsing like a slow heartbeat) (on the body), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, only one of `hat`, `cap`, `crown`, `wizard_hat`, `party_hat`, and one of `necklace`, `medal`, `pendant` |
+| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace`, `medal` (a gold medal on a ribbon in `colors.accessory`), `pendant` (a stone in `colors.accessory` on a dark cord, glowing at night and pulsing like a slow heartbeat) (on the body), `fedora` (a pinched crown, a snap brim, a band in `colors.trim`), `pillbox` (a small round 1960s hat), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, only one of `hat`, `cap`, `fedora`, `pillbox`, `crown`, `wizard_hat`, `party_hat`, and one of `necklace`, `medal`, `pendant` |
 | `proportions` | `adult` | `adult`, `kid` (a big head on a short body and legs), `tall_kid` (lankier, a smaller head than a kid's); the figure is as tall as any other, so make a kid smaller with the stage's `scale` (about 0.7 for a `kid`, 0.85 for a `tall_kid`) |
-| `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
+| `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes), `suit` (a jacket with lapels over a shirt in `trim`, a tie in `colors.accessory`), `lab_coat` (a long open coat over a shirt and trousers in `trim`, pockets, a pen), `jumpsuit` (one piece, a wide collar in `trim`, a zip, a belt in `colors.accessory`, a badge) |
 | `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
 | `shoes` | `none` | `none`, `shoes`, `boots` (colour `colors.accessory`) |
 | `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin`, `snail` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it; or `robot` ([Robots and costumes](#robots-and-costumes); no `hair` either) |
@@ -10284,7 +10284,7 @@ never leaves the stage.
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
-| `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene; on an [iso place](#isometric-places-iso) where it rains from the start, the rainy day's tint |
+| `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `blue_hour` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene; on an [iso place](#isometric-places-iso) where it rains from the start, the rainy day's tint |
 | `fill_light` | float 0–1 | `0` | a soft [fill light](#light-and-shadows-light-shadows) on the characters only, so faces stay readable in a dark light (night, an alarm, a dim tint): 0 none, 1 the characters as drawn whatever the light; 0.3–0.5 keeps the mood |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `drawing` | mapping | none (the video's `drawing`) | this scene's [drawing style](#drawing-style-drawing): `{outline, shading, texture, seed}`; the keys given win over the video's `drawing` |
@@ -10295,7 +10295,7 @@ never leaves the stage.
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; on an iso place in bands across it; not in a `room` or an indoor iso place |
 | `ambient` | `true` \| mapping | none | an iso place's [ambient life](#isometric-places-iso): `true` (every kind that suits the place) or `{walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}`; away from the characters, hidden in close shots; indoors only `cat` and `flies` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props` or `size` (`character_size` only with `wide: fixed`) |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, style, textures, name_tags, wide, shutters, traffic, doors, haze, wall_lights}` (`style: retro`: a 1950s world-of-tomorrow palette — mint lawn, cream checker paths, terrazzo floors, turquoise walls, pastel objects, cream saucer traffic; `textures: {grass, path, floor, tiles}`: `plain`, `tufts`, `lawn`, `stones`, `checker`, `terrazzo`, `boards`, `tiles`; a `traffic` lane's `shape: capsule | saucer | monorail` and `hull` colour); the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props` or `size` (`character_size` only with `wide: fixed`) |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10697,7 +10697,8 @@ they hide what is behind them.
   `cauldron` (`color` its potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a
   back wall), `signpost`, `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`,
   `gift_pile`, `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock`
-  (1 x 2, over water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2);
+  (1 x 2, over water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); the retro kit (DESIGN §107):
+  `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long); a `car` takes `kind: rocket` (tail fins, a bubble canopy);
   `on: true` / `switch_on` makes the
   laptop, kiosk, core, arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood,
   dish, charging station, airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV,
@@ -10705,8 +10706,9 @@ they hide what is behind them.
   (headlights), campfire, pond (ripples), beehive (bees), desk_with_pc (its screen), water
   cooler (bubbles), printer (prints), globe (spins), cauldron (bubbles), giant crystal (glows),
   torch sconce, Christmas tree (twinkles), pumpkin, balloons (sway), cake (candles), boat
-  (bobs), lighthouse (its beam sweeps) and rocket (fires) work (a lit fireplace, floor lamp,
-  street lamp, phone booth, campfire, cauldron or torch lights who stands near; pools of light
+  (bobs), lighthouse (its beam sweeps), rocket (fires), googie building, starburst sign, ray lamp, atomic
+  sculpture (electrons orbit), tube computer (reels turn, bulbs blink), TV console and retro desk work (a
+  lit fireplace, floor lamp, street lamp, ray lamp, phone booth, campfire, cauldron or torch lights who stands near; pools of light
   and beams show mostly at night).
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
@@ -12921,6 +12923,7 @@ particles keep their colours too.
 | `sunset` | warm and orange-pink, a little darker; blue skies turn warm |
 | `night` | dark blue; stars in the sky (on a colour background only, behind the layers, above the characters' heads) and faint shadows |
 | `indoor` | warm lamplight, a little dimmer |
+| `blue_hour` | a bright, clean night: a lighter indigo than `night` with the shadows lifted to a cool blue, colours a little more saturated, a few stars; dark enough for lamps, lit windows and neon to glow and pool |
 | `{tint, strength}` | a light of your own: every colour multiplied towards `tint` (a theme token or `#hex`) by `strength` (0 = no change, 1 = fully, default `0.5`) |
 
 **`fill_light`** (0–1, default 0) adds a soft light on the characters alone, as a film lights

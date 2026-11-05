@@ -436,13 +436,14 @@ class CharacterColors(_Strict):
 BodyShape = Literal["round", "tall", "square", "bean", "pear", "triangle"]
 EyeStyle = Literal["dot", "oval", "round", "sleepy"]
 NoseStyle = Literal["none", "dot", "round", "triangle"]
-HairStyle = Literal["none", "short", "spiky", "long", "wavy", "bun", "curly", "ponytail", "braids", "afro"]
+HairStyle = Literal["none", "short", "spiky", "long", "wavy", "bun", "curly", "ponytail", "braids", "afro", "pompadour", "bob"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
 Accessory = Literal[
-    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape", "medal", "pendant",
+    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape", "medal", "pendant", "fedora",
+    "pillbox",
 ]
 ProportionStyle = Literal["adult", "kid", "tall_kid"]
-Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
+Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron", "suit", "lab_coat", "jumpsuit"]
 ClothesPattern = Literal["none", "stripes", "dots"]
 ShoeStyle = Literal["none", "shoes", "boots"]
 FacialHair = Literal["none", "moustache", "beard"]
@@ -457,9 +458,9 @@ SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "snail", "robot"})
 SHELLED_SPECIES: frozenset[str] = frozenset({"turtle", "snail"})
 #: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1,
 #: the costume pieces §69.58).
-HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat"})
+HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat", "fedora", "pillbox"})
 #: Accessories worn on top of the head: a look wears at most one of them.
-TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat")
+TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat", "fedora", "pillbox")
 #: Accessories hanging round the neck: a look wears at most one of them (DESIGN.md §102.14).
 NECK_ACCESSORIES: tuple[str, ...] = ("necklace", "medal", "pendant")
 RobotHead = Literal["box", "round"]
@@ -480,7 +481,7 @@ class RobotLook(_Strict):
     """legs (it walks), or wheels (it rolls: no steps, no footsteps)."""
 #: Outfits with a skirt or coat tails hanging from the body: their ``body`` part has a second
 #: shape, ``seated``, the cloth over the lap (DESIGN.md §69.47).
-SKIRTED_OUTFITS: frozenset[str] = frozenset({"dress", "coat"})
+SKIRTED_OUTFITS: frozenset[str] = frozenset({"dress", "coat", "lab_coat"})
 #: The name of that shape: a seated character shows it (``Character.seated``, the ``sitting`` pose).
 SEATED_BODY_SHAPE = "seated"
 
@@ -500,15 +501,15 @@ class CharacterLook(_Strict):
     nose: NoseStyle = "none"
     """Nose: none, dot, round or triangle."""
     hair: HairStyle = "none"
-    """Hair: none, short, spiky, long, wavy (long waving locks past the shoulders), bun, curly, ponytail, braids or afro (colour: colors.hair)."""
+    """Hair: none, short, spiky, long, wavy (long waving locks past the shoulders), bun, curly, ponytail, braids, afro, pompadour (a 1950s quiff swept up over the brow) or bob (a chin-length bob flipped out at the ends) (colour: colors.hair)."""
     ears: EarStyle = "none"
     """Ears: none, round, pointy or floppy (skin colour)."""
     accessories: list[Accessory] = Field(default_factory=list)
-    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace, medal (a gold medal on a ribbon in the accessory colour), pendant (a glowing, pulsing pendant on a cord, in the accessory colour) and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat; one of necklace, medal, pendant)."""
+    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace, medal (a gold medal on a ribbon in the accessory colour), pendant (a glowing, pulsing pendant on a cord, in the accessory colour), fedora (a 1950s hat with a pinched crown and a snap brim), pillbox (a small round 1960s hat) and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat, fedora, pillbox; one of necklace, medal, pendant)."""
     proportions: ProportionStyle = "adult"
     """adult, kid (big head, short body and legs) or tall_kid (lankier); pair a kid with the stage's scale (e.g. 0.7)."""
     outfit: Outfit = "plain"
-    """plain (one colour), dress, overalls, coat, shorts or apron (second colour: colors.trim)."""
+    """plain (one colour), dress, overalls, coat, shorts, apron, suit (a jacket with lapels over a shirt in colors.trim and a tie in colors.accessory), lab_coat (a long open coat over a shirt and trousers in colors.trim, pockets and a pen) or jumpsuit (one piece with a wide collar in colors.trim, a zip, a belt in colors.accessory and a badge) (second colour: colors.trim)."""
     pattern: ClothesPattern = "none"
     """none, stripes or dots on the clothes (a lighter or darker tone of their colour)."""
     shoes: ShoeStyle = "none"

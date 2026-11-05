@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–277)
+## Unreleased (Steps 193–278)
+
+### A retro-future kit (Step 278)
+
+- `iso: {style: retro}`: a 1950s "world of tomorrow" palette for iso places (mint lawn mown in stripes, cream checker paths, terrazzo floors, turquoise walls, pastel objects, cream saucer traffic); `textures: {grass, path, floor, tiles}` (`lawn`, `checker`, `terrazzo`, `stones`, `boards`, `tiles`, `tufts`, `plain`) on any place.
+- `light: blue_hour`: a bright, clean night — lighter and more colourful than `night`, still dark enough for lamps, windows and neon to glow and pool.
+- Iso objects `googie_building`, `retro_tower`, `starburst_sign`, `ray_lamp`, `atomic_sculpture`, `monorail`, `tube_computer`, `sunburst_clock`, `tv_console` (`kind: wave | face`), `retro_desk`, `hedge`, `planter`; a `car`'s `kind: rocket` (parked or driven); traffic `shape: saucer | monorail` and `hull`.
+- Looks: `outfit: suit | lab_coat | jumpsuit`, `hair: pompadour | bob`, `accessories: [fedora]` / `[pillbox]`.
 
 ### Iso framing (Step 277)
 

@@ -24,15 +24,21 @@ from vidgen.lint.color import hex_rgb
 from vidgen.particles import particle_count, particle_seeds
 
 #: The light presets, in the order the docs list them.
-LIGHT_PRESETS = ("day", "morning", "sunset", "night", "indoor")
+LIGHT_PRESETS = ("day", "morning", "sunset", "night", "indoor", "blue_hour")
 #: Each preset: tint, strength, glow, star brightness, shadow factor. ``day`` changes nothing.
+#: ``blue_hour`` (DESIGN.md §107) is a bright, clean night: a lighter indigo than ``night`` with a
+#: cool lift in the shadows (no muddy blacks), colours a little more saturated, dark enough for
+#: lamps, windows and neon to glow and pool.
 PRESET_LIGHTS: dict[str, tuple[str, float, tuple[float, float, float], float, float]] = {
     "day": ("#FFFFFF", 0.0, (0.0, 0.0, 0.0), 0.0, 1.0),
     "morning": ("#FFE4CC", 0.3, (0.05, 0.035, 0.02), 0.0, 0.8),
     "sunset": ("#FF8A5C", 0.55, (0.13, 0.04, 0.03), 0.0, 0.9),
     "night": ("#2A3C78", 0.72, (0.0, 0.0, 0.0), 1.0, 0.45),
     "indoor": ("#E6BC7E", 0.4, (0.0, 0.0, 0.0), 0.0, 0.75),
+    "blue_hour": ("#4A66C8", 0.58, (0.035, 0.045, 0.09), 0.7, 0.6),
 }
+#: The presets that keep more (or less) than all of each colour's saturation.
+PRESET_SATURATION: dict[str, float] = {"blue_hour": 1.3}
 #: Strength of a ``{tint}`` light that gives none.
 DEFAULT_STRENGTH = 0.5
 #: Seconds a ``light`` beat action fades over by default.
@@ -106,7 +112,10 @@ def light_grade(light: str | tuple[str, float]) -> LightGrade:
     if light not in PRESET_LIGHTS:
         raise ValueError(f"unknown light {light!r}; presets: {', '.join(LIGHT_PRESETS)}")
     tint, strength, glow, stars, shadow = PRESET_LIGHTS[light]
-    return tint_grade(tint, strength, glow=glow, stars=stars, shadow=shadow)
+    grade = tint_grade(tint, strength, glow=glow, stars=stars, shadow=shadow)
+    if light in PRESET_SATURATION:
+        grade = LightGrade(grade.multiply, grade.glow, grade.stars, grade.shadow, PRESET_SATURATION[light])
+    return grade
 
 
 def blend_grades(a: LightGrade, b: LightGrade, share: float) -> LightGrade:
@@ -181,7 +190,7 @@ def day_stages(before: LightGrade, preset: str) -> list[tuple[str, float]]:
     light day to night, ``[("morning", 0.5), ("day", 1.0)]`` from night to day, else
     ``[(preset, 1.0)]``."""
     dark = darkness(before)
-    if preset == "night" and dark <= TWILIGHT_FROM_DAY:
+    if preset in ("night", "blue_hour") and dark <= TWILIGHT_FROM_DAY:
         return [("sunset", TWILIGHT_SHARE), ("night", 1.0)]
     if preset == "day" and dark >= TWILIGHT_FROM_NIGHT:
         return [("morning", TWILIGHT_SHARE), ("day", 1.0)]
@@ -251,6 +260,7 @@ def grade_rgbas(rgbas: np.ndarray, grade: LightGrade) -> np.ndarray:
     colors *= multiply
     if glow is not None:
         colors += glow
+    if glow is not None or grade.saturation > 1.0:   # more saturated colours may leave 0..1
         np.clip(colors, 0.0, 1.0, out=colors)
     return graded
 

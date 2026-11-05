@@ -315,13 +315,16 @@ class IsoStaging:
         self.camera.frame.scale(width / self.camera.frame.width).move_to([*center, 0.0])   # the wide view (§89.13)
         lights = p.iso.wall_light_colors()
         strips = None if lights is None else (resolve_color(lights[0], self.theme), resolve_color(lights[1], self.theme))
-        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors, strips=strips)
+        given = {**STYLE_COLORS.get(p.iso.style, {}), **p.iso.colors}   # a style's ground colours, the place's own over them (§107)
+        textures = {**STYLE_TEXTURES.get(p.iso.style, {}), **p.iso.textures}
+        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in given.items()}, doors=p.iso.doors, strips=strips,
+                           textures=tuple(sorted(textures.items())))
         #: the vehicles the scene moves (DESIGN.md §105): the stage draws them, not the place's pictures
         driven = self._iso_driven(place)
         #: the working objects whose moving parts are drawn over the place (DESIGN.md §103)
         self._iso_moving = self._iso_moving_names(place) - set(driven)
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
-                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])),
+                                         for own, default in zip((item.color, item.detail), object_colors(item.kind, p.iso.style))),
                                        moving=item.name in self._iso_moving, driven=item.name in driven)
                  for item in place.objects}
         density = 1.0 if self.is_draft else ISO_OVERSAMPLE
@@ -551,8 +554,12 @@ class IsoStaging:
         lanes = []
         for lane in p.iso.traffic:
             start, end = p.iso.lane_ends(lane)
+            retro = p.iso.style == "retro"   # cream saucers by default (§107)
+            shape = lane.shape or ("saucer" if retro else "capsule")
+            hull = resolve_color(lane.hull, self.theme) if lane.hull is not None else (POD_RETRO_HULL if retro or shape != "capsule" else POD_HULL)
             lanes.append(PodLane(self.iso_view.point(*start), self.iso_view.point(*end), lane.seconds, lane.count,
-                                 resolve_color(lane.color, self.theme), POD_LENGTH * lane.size * self.iso_view.unit, lane.at, (start, end)))
+                                 resolve_color(lane.color, self.theme), POD_LENGTH * lane.size * self.iso_view.unit, lane.at, (start, end),
+                                 shape=shape, hull=hull))
         if lanes:   # a pod behind a building is hidden by it
             things.append(IsoTraffic(lanes, [(box, box_outline(box)) for _, box in boxes]))
         return things

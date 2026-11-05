@@ -355,7 +355,7 @@ from vidgen.cartoon.figure_fx import (  # noqa: E402
 from vidgen.cartoon.clothes import PENDANT_GLOW  # noqa: E402
 from vidgen.cartoon.kiss import KISS_SECONDS, contact_time  # noqa: E402
 from vidgen.cartoon.holo_display import DISPLAY_PATTERNS, display_frame  # noqa: E402
-from vidgen.cartoon.iso_overlays import Gadget, HazeSpot, IsoBlinkers, IsoGadgets, IsoHaze, IsoScreens, IsoShutters, IsoTraffic, PodLane  # noqa: E402
+from vidgen.cartoon.iso_overlays import Gadget, HazeSpot, IsoBlinkers, IsoGadgets, IsoHaze, IsoScreens, IsoShutters, IsoTraffic, POD_HULL, POD_RETRO_HULL, POD_SHAPES, PodLane  # noqa: E402
 from vidgen.cartoon.iso_city import POD_LENGTH, TOWER_ANTENNA_LIGHT, box_outline, garden_bands, lane_pods, pod_hidden, screen_color, screen_lines, screen_seed  # noqa: E402
 from vidgen.cartoon.portal import PORTAL_VIEWS, portal_view  # noqa: E402
 from vidgen.cartoon.vignette import FLASHBACK_SATURATION, FLASHBACK_STRENGTH, FLASHBACK_TINT, VIGNETTE_COLOR, VIGNETTE_OPACITY, CameraVignette, flashback_grade  # noqa: E402
@@ -631,11 +631,11 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_move_problems,
     level_world,
 )
-from vidgen.world.iso import AUTO_LIGHT_KINDS, DISPLAY_CASES, HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
+from vidgen.world.iso import AUTO_LIGHT_KINDS, CAR_STYLES, CLOCK_KINDS, CONSOLE_PICTURES, DISPLAY_CASES, HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, TALL_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
 from vidgen.world.iso_view import Box3, draw_order, in_front, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
-from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, LIT_OBJECTS, MOVING_KINDS, OBJECT_COLORS, ObjectLook, object_box, object_lights, object_motion, object_working, tower_screen  # noqa: E402
-from vidgen.cartoon.iso_scenery import IsoColors, window_faces  # noqa: E402
+from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, LIT_OBJECTS, MOVING_KINDS, OBJECT_COLORS, STYLE_OBJECT_COLORS, ObjectLook, object_box, object_colors, object_lights, object_motion, object_working, tower_screen  # noqa: E402
+from vidgen.cartoon.iso_scenery import STYLE_COLORS, STYLE_TEXTURES, TEXTURED_SURFACES, TEXTURES, IsoColors, window_faces  # noqa: E402
 from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view, ISO_FIXED_SHARES, fixed_fill_size, fixed_reach, fixed_tiles, fixed_view, ground_view_center, on_ground  # noqa: E402
 from vidgen.cartoon.iso_pictures import POOL_STRENGTH, GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
@@ -1218,6 +1218,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "IsoHaze",
     "HazeSpot",
     "PodLane",
+    "POD_HULL",
+    "POD_RETRO_HULL",
+    "POD_SHAPES",
     "POD_LENGTH",
     "TOWER_ANTENNA_LIGHT",
     "box_outline",
@@ -1585,6 +1588,16 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "HAZARD_SIGNS",
     "DISPLAY_CASES",
     "OBJECT_STYLES",
+    "CAR_STYLES",
+    "STYLE_OBJECT_COLORS",
+    "object_colors",
+    "STYLE_COLORS",
+    "STYLE_TEXTURES",
+    "TEXTURED_SURFACES",
+    "TEXTURES",
+    "CLOCK_KINDS",
+    "CONSOLE_PICTURES",
+    "TALL_KINDS",
     "IsoPlace",
     "ObjectPlacing",
     "parse_iso_map",

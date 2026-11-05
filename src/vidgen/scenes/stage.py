@@ -646,7 +646,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood, telescope, satellite_dish, charging_station, crate_stack, airlock (2 x 1), printer_3d, hazard_sign, fire_extinguisher; at home: fireplace (2 x 1), kitchen_counter (2 x 1), stove, sink, bookshelf_tall, armchair, floor_lamp, tv, piano (2 x 1), bathtub (2 x 1), wardrobe (2 x 1), crib; in a café or shop: cafe_table (2 x 1, with two chairs), counter (2 x 1), cash_register, display_case (2 x 1), market_stall (2 x 1), vending_machine; in town: street_lamp, traffic_light, bus_stop (2 x 1), mailbox, fountain (2 x 2), phone_booth, car (2 x 1), bicycle, newsstand (2 x 1); in nature: campfire, tent (2 x 2), log (2 x 1), stump, mushroom_ring (2 x 2), pond (2 x 2), scarecrow, beehive; on a farm, at school or in an office: vegetable_patch (2 x 1), wheelbarrow, hay_bale (2 x 1), school_desk, desk_with_pc (2 x 1), water_cooler, printer, globe, trophy_shelf (2 x 1); in a fantasy tale: treasure_chest, cauldron, giant_crystal, throne, torch_sconce (at a cell of a back wall), signpost, archway (2 x 1), statue; for seasons, a harbour and travel: christmas_tree, snowman, pumpkin, gift_pile, balloon_bunch, birthday_cake, boat (2 x 1, floats on water ~), dock (1 x 2, over water, walked on), lighthouse, train_car (3 x 1), rocket (2 x 2)."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood, telescope, satellite_dish, charging_station, crate_stack, airlock (2 x 1), printer_3d, hazard_sign, fire_extinguisher; at home: fireplace (2 x 1), kitchen_counter (2 x 1), stove, sink, bookshelf_tall, armchair, floor_lamp, tv, piano (2 x 1), bathtub (2 x 1), wardrobe (2 x 1), crib; in a café or shop: cafe_table (2 x 1, with two chairs), counter (2 x 1), cash_register, display_case (2 x 1), market_stall (2 x 1), vending_machine; in town: street_lamp, traffic_light, bus_stop (2 x 1), mailbox, fountain (2 x 2), phone_booth, car (2 x 1), bicycle, newsstand (2 x 1); in nature: campfire, tent (2 x 2), log (2 x 1), stump, mushroom_ring (2 x 2), pond (2 x 2), scarecrow, beehive; on a farm, at school or in an office: vegetable_patch (2 x 1), wheelbarrow, hay_bale (2 x 1), school_desk, desk_with_pc (2 x 1), water_cooler, printer, globe, trophy_shelf (2 x 1); in a fantasy tale: treasure_chest, cauldron, giant_crystal, throne, torch_sconce (at a cell of a back wall), signpost, archway (2 x 1), statue; for seasons, a harbour and travel: christmas_tree, snowman, pumpkin, gift_pile, balloon_bunch, birthday_cake, boat (2 x 1, floats on water ~), dock (1 x 2, over water, walked on), lighthouse, train_car (3 x 1), rocket (2 x 2); a retro-future kit: googie_building (3 x 3, a boomerang roof and a starburst sign), retro_tower (2 x 2, round, a saucer deck), starburst_sign, ray_lamp, atomic_sculpture, monorail (4 x 1, a beam on pylons; traffic with shape: monorail glides along it), tube_computer (2 x 1, tape reels and bulbs), sunburst_clock (at a cell of a back wall), tv_console, retro_desk (2 x 1), hedge, planter."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -662,21 +662,21 @@ class IsoObjectParam(SceneParams):
     open: bool | None = None
     """A house: true starts its door open; flowers: false starts them in bud; a laptop: false starts it closed; a lab_fridge, an airlock or a wardrobe: true starts its door open; a treasure_chest: true starts its lid open (its gold glows; the open / close actions change it later)."""
     on: bool | None = None
-    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge, coffee_machine, grow_rack, specimen_tank, chemistry_bench, distillation_rig, lab_fridge, fume_hood, satellite_dish, charging_station, airlock, printer_3d, fireplace (lit), stove, floor_lamp (lit), tv, vending_machine (lit), street_lamp (lit), traffic_light (cycles), fountain (runs), phone_booth (lit), car (headlights), campfire (lit), pond (ripples), beehive (bees out), desk_with_pc (its screen), water_cooler (bubbles), printer (prints), globe (spins), cauldron (bubbles over its fire), giant_crystal (glows), torch_sconce (lit), christmas_tree (lights twinkle), pumpkin (glows), balloon_bunch (sways), birthday_cake (candles burn), boat (bobs, its lantern lit), lighthouse (its beam sweeps) or rocket (fires): true starts it working (switch_on / switch_off change it)."""
+    """A lamp: true starts it lit; a house: its windows lit; a tower: false starts its windows dark (lit by default); a laptop, terminal_kiosk, quantum_core, robot_arm, centrifuge, coffee_machine, grow_rack, specimen_tank, chemistry_bench, distillation_rig, lab_fridge, fume_hood, satellite_dish, charging_station, airlock, printer_3d, fireplace (lit), stove, floor_lamp (lit), tv, vending_machine (lit), street_lamp (lit), traffic_light (cycles), fountain (runs), phone_booth (lit), car (headlights), campfire (lit), pond (ripples), beehive (bees out), desk_with_pc (its screen), water_cooler (bubbles), printer (prints), globe (spins), cauldron (bubbles over its fire), giant_crystal (glows), torch_sconce (lit), christmas_tree (lights twinkle), pumpkin (glows), balloon_bunch (sways), birthday_cake (candles burn), boat (bobs, its lantern lit), lighthouse (its beam sweeps), rocket (fires), googie_building (windows and sign lit), retro_tower (windows lit by default), starburst_sign, ray_lamp (lit), atomic_sculpture (electrons orbit), tube_computer (reels turn, bulbs blink), tv_console (its picture) or retro_desk (its screen): true starts it working (switch_on / switch_off change it)."""
     shown: bool = True
     """false: it is not there at the start (the reveal action brings it, hide takes it away; a bridge not there cannot be walked on)."""
     auto_light: bool = True
     """A lamp, floor_lamp, street_lamp, house (its windows), phone_booth, vending_machine, lighthouse, christmas_tree, pumpkin or car (headlights): false keeps it as it is when a time_of_day action passes dusk or dawn (by default it switches on at dusk and off at dawn by itself)."""
     height: float | None = Field(None, ge=2.0, le=30.0)
-    """A tower: how tall it is, in tiles (2-30; a character is 2 tiles tall); default 9."""
+    """A tower or a retro_tower: how tall it is, in tiles (a tower 2-30, a retro_tower 4-30; a character is 2 tiles tall); default 9."""
     screen: bool = False
     """A tower: a big info screen on its front whose lines of text crawl up."""
     garden: bool = False
     """A tower: glowing bands of algae farms up its sides, pulsing softly."""
     time: str | None = Field(None, pattern=r"^([01]?\d|2[0-3]):[0-5]\d$")
-    """A wall_clock: the time its hands show, "HH:MM" (default 10:10)."""
+    """A wall_clock or a sunburst_clock: the time its hands show, "HH:MM" (default 10:10)."""
     kind: str | None = None
-    """A hazard_sign: biohazard (default), radiation or authorised (a staff-only board); a display_case: cakes (default) or jewels."""
+    """A hazard_sign: biohazard (default), radiation or authorised (a staff-only board); a display_case: cakes (default) or jewels; a car: sedan (default) or rocket (tail fins, a bubble canopy); a tv_console: wave (default, an oscilloscope wave) or face (a robot face whose mouth is a wave)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -705,13 +705,18 @@ class IsoObjectParam(SceneParams):
         if self.on and self.object not in SWITCHED_KINDS:
             raise ValueError(f"on is for a lamp, a house or a tower (its windows lit), or one of {', '.join(sorted(SWITCHED_KINDS - {'house', 'lamp', 'tower'}))}, "
                              f"not {_a(self.object)}")
-        for option in ("height", "screen", "garden"):
+        if self.height is not None and self.object not in TALL_KINDS:
+            raise ValueError(f"height is for a tower or a retro_tower, not {_a(self.object)}")
+        if self.height is not None and not TALL_KINDS[self.object][0] <= self.height <= TALL_KINDS[self.object][1]:
+            low, high = TALL_KINDS[self.object]
+            raise ValueError(f"a {self.object}'s height is {low:g} to {high:g} tiles, not {self.height:g}")
+        for option in ("screen", "garden"):
             if getattr(self, option) and self.object != "tower":
                 raise ValueError(f"{option} is for a tower, not {_a(self.object)}")
-        if self.time is not None and self.object != "wall_clock":
-            raise ValueError(f"time is for a wall_clock, not {_a(self.object)}")
+        if self.time is not None and self.object not in CLOCK_KINDS:
+            raise ValueError(f"time is for a wall_clock or a sunburst_clock, not {_a(self.object)}")
         if self.kind is not None and self.object not in OBJECT_STYLES:
-            raise ValueError(f"kind is for a hazard_sign or a display_case, not {_a(self.object)}")
+            raise ValueError(f"kind is for a hazard_sign, a display_case, a car or a tv_console, not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
@@ -746,6 +751,10 @@ class IsoTrafficLane(SceneParams):
     """The pods' size (1: a little shorter than a tile is wide)."""
     at: float | None = Field(None, ge=0.0)
     """Seconds into the scene when the first pod sets off to cross the lane once (the others follow, seconds / count apart), easing in and out; none: the pods loop along it all the time."""
+    shape: Literal["capsule", "saucer", "monorail"] | None = None
+    """What glides along it: capsule (a hover pod), saucer (a flying saucer with a dome and a ring of lights) or monorail (a streamlined train of two cars: set the lane's height to a monorail's beam, 2.75, along it); default capsule (saucer in a retro place)."""
+    hull: ThemeColor | None = None
+    """The hull's colour (a theme token or #hex); default a dark blue-grey capsule, a cream saucer or train."""
 
 
 class IsoHazeParam(SceneParams):
@@ -799,6 +808,10 @@ class StageIso(SceneParams):
     """Ready-made objects: {object, at, name, facing, size, color, detail, open, on, shown; a tower's height, screen, garden}, e.g. {object: house, at: home}."""
     colors: dict[Literal["grass", "earth", "path", "water", "stone", "floor", "tiles", "wall", "cut"], ThemeColor] = {}
     """Colours (theme tokens or #hex): grass, earth (the slab and the sides of raised grass), path, water, stone (raised blocks and garden walls outdoors), floor, tiles (: indoors), wall (a room's walls), cut (the top of cut-away walls)."""
+    style: Literal["plain", "retro"] = "plain"
+    """The place's look: plain (its own colours), or retro (a 1950s world of tomorrow: a mint lawn mown in stripes, cream checker paths, turquoise water, terrazzo floors, turquoise walls, objects in turquoise, coral, mustard and cream; traffic pods as cream saucers); colors, textures and an object's color win."""
+    textures: dict[Literal["grass", "path", "floor", "tiles"], Literal["plain", "tufts", "lawn", "stones", "checker", "terrazzo", "boards", "tiles"]] = {}
+    """What lies on the ground's surfaces: grass (. outdoors; default tufts), path (: outdoors; default stones), floor (. indoors; default boards), tiles (: indoors; default tiles): plain, tufts, lawn (mown stripes), stones, checker (a checkerboard plaza), terrazzo (coloured chips), boards or tiles (two shades)."""
     name_tags: bool = True
     """While a character speaks and is small on screen (a wide view), a tag with its name over its head shows who speaks (not with a speech bubble); false: none."""
     wide: Literal["auto", "fill", "fixed"] | Annotated[float, Field(ge=1.0, le=2.5)] | IsoFixedWide = "auto"

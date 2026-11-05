@@ -33,6 +33,7 @@ from vidgen.cartoon.primitives import (
     TRAIL_WEIGHTS,
     Point,
     arc_points,
+    clip_to_box,
     filled,
     outer_hair,
     outlined,
@@ -236,10 +237,15 @@ def _hair_cap(look: CharacterLook, f: Frame) -> VMobject:
     """The hair over the top of the head: an arc (zigzag for ``spiky``) and a fringe above the eyes."""
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     radii = [1.35 * r if k % 2 else 1.0 * r for k in range(19)] if look.hair == "spiky" else [1.06 * r] * 25
+    if look.hair == "pompadour":   # a quiff swept up over the brow (§107): highest over the front (from the front: the middle)
+        peak = 90.0 if f.front else 62.0
+        radii = [r * (1.06 + 0.36 * math.exp(-(((-10 + 200 * k / 24) - peak) / 32) ** 2)) for k in range(25)]
     outer = arc_points(cx, cy, radii, -10, 190)
     fringe = [(-0.92, -0.15), (-0.7, 0.45), (-0.3, 0.62), (0.05, 0.55), (0.45, 0.7), (0.85, 0.4), (0.98, -0.05)]
     if f.front:   # symmetric: parted in the middle
         fringe = [(-0.97, -0.1), (-0.75, 0.42), (-0.35, 0.62), (0.0, 0.5), (0.35, 0.62), (0.75, 0.42), (0.97, -0.1)]
+    if look.hair == "pompadour":   # swept back: the hairline high, the temples short
+        fringe = [(-0.97, 0.05), (-0.75, 0.55), (-0.3, 0.78), (0.3, 0.82), (0.75, 0.62), (0.98, 0.15)]
     return polygon([*outer, *((cx + a * r, cy + b * r) for a, b in fringe)])
 
 
@@ -304,6 +310,11 @@ def _hair_back(look: CharacterLook, f: Frame) -> list[VMobject]:
         return [trailing(hair, (cx, cy + 0.4 * r), "long")]
     if look.hair == "wavy":
         return [trailing(polygon(_wavy_outline(f)), (cx, cy + 0.4 * r), "long")]
+    if look.hair == "bob":   # chin length, its ends flipped out (§107)
+        top = arc_points(cx, cy, [1.12 * r] * 25, 0, 180)
+        ends = ([(-1.14, -0.5), (-1.32, -0.8), (-0.9, -0.78), (0.9, -0.78), (1.32, -0.8), (1.14, -0.5)] if f.front
+                else [(-1.14, -0.5), (-1.32, -0.82), (-0.85, -0.8), (0.55, -0.6), (1.06, -0.15)])
+        return [trailing(polygon([*top, *((cx + a * r, cy + b * r) for a, b in ends)]), (cx, cy + 0.4 * r), "long")]
     if look.hair == "bun":
         bun_x = cx if f.front else cx - 0.15 * r
         return [trailing(Circle(radius=0.38 * r).move_to([bun_x, cy + 1.18 * r, 0]), (bun_x, cy + 0.85 * r), "bun")]
@@ -509,6 +520,40 @@ def _cap(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
     return [trailing(outlined(piece, c["accessory"], c["outline"], w), (cx, cy + 0.6 * r), "cap") for piece in pieces]
 
 
+def _fedora(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A fedora (DESIGN.md §107): a crown pinched in the middle, a band in the trim colour and a
+    brim snapped down at the front (from the front: level, the dent in the middle)."""
+    r, cx, cy = f.p.head_radius, f.head_x, f.head_y
+    y = cy + 0.6 * r
+    if f.front:
+        brim = [(cx - 1.35 * r, y - 0.02 * r), (cx + 1.35 * r, y - 0.02 * r), (cx + 1.2 * r, y + 0.12 * r), (cx - 1.2 * r, y + 0.12 * r)]
+        crown = [(cx - 0.72 * r, y + 0.08 * r), (cx + 0.72 * r, y + 0.08 * r), (cx + 0.62 * r, y + 0.82 * r), (cx + 0.25 * r, y + 0.95 * r),
+                 (cx, y + 0.8 * r), (cx - 0.25 * r, y + 0.95 * r), (cx - 0.62 * r, y + 0.82 * r)]
+    else:
+        brim = [(cx - 1.25 * r, y + 0.1 * r), (cx - 0.6 * r, y + 0.02 * r), (cx + 0.7 * r, y - 0.02 * r), (cx + 1.42 * r, y - 0.14 * r),
+                (cx + 1.38 * r, y - 0.03 * r), (cx + 0.7 * r, y + 0.1 * r), (cx - 0.6 * r, y + 0.14 * r), (cx - 1.2 * r, y + 0.2 * r)]
+        crown = [(cx - 0.75 * r, y + 0.1 * r), (cx + 0.7 * r, y + 0.06 * r), (cx + 0.6 * r, y + 0.8 * r), (cx + 0.25 * r, y + 0.9 * r),
+                 (cx - 0.05 * r, y + 0.82 * r), (cx - 0.35 * r, y + 0.95 * r), (cx - 0.7 * r, y + 0.82 * r)]
+    band = clip_to_box(crown, bottom=y + 0.12 * r, top=y + 0.32 * r)
+    pieces = [outlined(polygon(crown), c["accessory"], c["outline"], w), outlined(polygon(band), c.get("trim", c["clothes"]), c["outline"], w * 0.75),
+              outlined(polygon(brim), c["accessory"], c["outline"], w)]
+    return [trailing(piece, (cx, y), "hat") for piece in pieces]
+
+
+def _pillbox(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A pillbox hat (DESIGN.md §107): a small round box worn towards the back of the head, its
+    top rim lighter, a band in the trim colour."""
+    r, cx, cy = f.p.head_radius, f.head_x, f.head_y
+    x = cx if f.front else cx - 0.18 * r
+    y = cy + 0.92 * r
+    box = RoundedRectangle(width=1.0 * r, height=0.42 * r, corner_radius=0.1 * r).move_to([x, y, 0])
+    top = Ellipse(width=1.0 * r, height=0.22 * r).move_to([x, y + 0.21 * r, 0])
+    band = RoundedRectangle(width=1.0 * r, height=0.1 * r, corner_radius=0.03 * r).move_to([x, y - 0.1 * r, 0])
+    pieces = [outlined(box, c["accessory"], c["outline"], w), outlined(band, c.get("trim", c["clothes"]), c["outline"], w * 0.6),
+              outlined(top, c["accessory"], c["outline"], w * 0.75)]
+    return [trailing(piece, (x, y - 0.2 * r), "hat") for piece in pieces]
+
+
 def _bow(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
     """A bow on top of the head (towards the back; from the front: on one side)."""
     r = f.p.head_radius
@@ -541,6 +586,10 @@ def _worn_on_head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float)
         group.add(*(trailing(piece, (cx, brim_y), "hat") for piece in hat))
     if "cap" in look.accessories:
         group.add(*_cap(f, c, w))
+    if "fedora" in look.accessories:
+        group.add(*_fedora(f, c, w))
+    if "pillbox" in look.accessories:
+        group.add(*_pillbox(f, c, w))
     if "bow" in look.accessories:
         group.add(*_bow(f, c, w))
     for piece, drawing in costumes.HEADWEAR_DRAWINGS.items():   # a crown, a wizard hat, a party hat (§69.58)

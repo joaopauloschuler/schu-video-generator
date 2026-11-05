@@ -377,7 +377,7 @@ def hum_loop() -> np.ndarray:
 #: The lights (presets) by day, when birds sing outdoors.
 DAYLIGHT: frozenset[str] = frozenset({"day", "morning"})
 #: The lights (presets) when crickets chirp outdoors on an iso place: the evening and the night.
-NIGHT: frozenset[str] = frozenset({"sunset", "night"})
+NIGHT: frozenset[str] = frozenset({"sunset", "night", "blue_hour"})
 #: Seconds after the rain stops before the birds sing again.
 BIRDS_AFTER_RAIN = 2.0
 #: Birdsong for less than this (s) is left out.

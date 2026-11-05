@@ -2664,7 +2664,7 @@ and give each scene `set: village`.
   potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a back wall), `signpost`,
   `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`, `gift_pile`,
   `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock` (1 x 2, over
-  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); `on: true` /
+  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); retro: `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long); a `car` takes `kind: rocket` (tail fins, a bubble canopy); `on: true` /
   `switch_on` makes the laptop, kiosk, core, arm,
   centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
   airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV, vending machine, street
@@ -2672,7 +2672,7 @@ and give each scene `set: village`.
   (ripples), beehive (bees), desk_with_pc (its screen), water cooler (bubbles), printer
   (prints), globe (spins), cauldron (bubbles), giant crystal (glows), torch sconce, Christmas
   tree (twinkles), pumpkin, balloons (sway), cake (candles), boat (bobs), lighthouse (its beam
-  sweeps) and rocket (fires) work (a lit fireplace, floor lamp, street lamp, phone booth,
+  sweeps), rocket (fires) and the retro lights and machines work (a lit fireplace, floor lamp, street lamp, phone booth,
   campfire, cauldron or torch lights who stands near; pools of light and beams show mostly at
   night).
 - Vehicles move: `- {drive_to: car, to: shop, via: [corner]}` drives a `car` along the path
@@ -2737,6 +2737,14 @@ and give each scene `set: village`.
   the picture: cells on a diagonal of the map (`{column: 5, row: 6}` and `{column: 6, row: 5}`)
   are at the same height on screen. Actions of a beat at different `at` play one after another,
   so two couples kissing at once share one `at`. Long hair that reads in a close-up: `hair: wavy`.
+- A retro-future world (1950s "world of tomorrow"): `iso: {style: retro}` gives the place pastel
+  ground and objects (mint lawn, cream checker paths, terrazzo floors, turquoise walls; your
+  `colors` / `textures` / an object's `color` win); `textures: {path: checker, floor: terrazzo,
+  grass: lawn}` work on any place. A night that stays bright and clear: `light: blue_hour` with the
+  lights `on: true` and `fill_light: 0.35` (a deep sky `background`, e.g. `["#3A4FA8", "#9BB9F0"]`).
+  Traffic as saucers or a train on a `monorail` beam: `traffic: [{..., shape: saucer | monorail}]`
+  (a monorail lane at `height: 3.15` over the beam's row). Retro looks: `outfit: suit | lab_coat |
+  jumpsuit`, `hair: pompadour | bob`, `accessories: [fedora]` or `[pillbox]`.
 - A strange door: `iso: {doors: slide}` (steel doors sliding open with a hiss on `- open:
   door_1`) and `haze: [{at: door_in}]` (shimmering air with sparkles over a spot). A room at
   night: dark `colors: {wall, floor}`, `light: night`, `fill_light: 0.45` and `wall_lights:

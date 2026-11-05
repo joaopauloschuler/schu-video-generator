@@ -48,7 +48,7 @@ DOT_RADIUS, DOT_SPACING, DOT_MARGIN = 0.017, 0.06, 0.008
 #: white on a dark one (relative luminance above / below :data:`LIGHT_CLOTH`).
 PATTERN_SHADE, PATTERN_LIGHT, LIGHT_CLOTH = 0.28, 0.4, 0.35
 #: How far a skirt (and less, coat tails) flares out at the hem beyond the body's width.
-SKIRT_FLARE = {"dress": 0.07, "coat": 0.02}
+SKIRT_FLARE = {"dress": 0.07, "coat": 0.02, "lab_coat": 0.035}
 #: The cloth over a seated character's lap: from the hips, between these directions (degrees from
 #: forward, + up), out to the knee plus :data:`LAP_OVERHANG`.
 LAP_UP_DEGREES, LAP_DOWN_DEGREES, LAP_OVERHANG = 15.0, -50.0, 0.045
@@ -102,6 +102,9 @@ def limb_colors(look: CharacterLook, c: Mapping[str, str]) -> tuple[str, str, st
         "overalls": (trim, trim, clothes, clothes),
         "coat": (clothes, clothes, trim, trim),
         "shorts": (clothes, skin, trim, skin),
+        "suit": (clothes, clothes, clothes, clothes),
+        "lab_coat": (clothes, clothes, trim, trim),
+        "jumpsuit": (clothes, clothes, clothes, clothes),
     }[look.outfit]
 
 
@@ -203,6 +206,8 @@ def _outfit_details(look: CharacterLook, f: Frame, body: Sequence[Point], c: Map
             pocket = RoundedRectangle(width=0.12, height=0.07, corner_radius=0.015).move_to([0, f.body_bottom + 0.06, 0])
             pieces.append(outlined(pocket, trim, outline, w * 0.75))
         return pieces
+    if look.outfit in RETRO_OUTFITS:
+        return _retro_details(look, f, body, c, w)
     if look.outfit == "coat":
         x = 0.0 if f.front else 0.3 * p.body_width
         pieces: list[VMobject] = [Line([x, f.body_top - 0.04, 0], [x, f.body_bottom + 0.03, 0]).set_stroke(outline, width=w * 0.75)]
@@ -214,6 +219,71 @@ def _outfit_details(look: CharacterLook, f: Frame, body: Sequence[Point], c: Map
             pieces.append(outlined(polygon(lapel), clothes, outline, w * 0.75))
         return pieces
     return []
+
+
+#: The outfits of a retro look (DESIGN.md §107): a suit, a lab coat, a jumpsuit.
+RETRO_OUTFITS = ("suit", "lab_coat", "jumpsuit")
+
+
+def _retro_details(look: CharacterLook, f: Frame, body: Sequence[Point], c: Mapping[str, str], w: float) -> list[VMobject]:
+    """What a suit, a lab coat or a jumpsuit adds over the top: a suit's shirt (``trim``), tie
+    (``accessory``), lapels, buttons and pocket square; a lab coat's open front over the shirt,
+    lapels, pockets and a pen; a jumpsuit's wide collar (``trim``), zip, belt (``accessory``) and
+    badge. Side view: the front is to the right."""
+    p = f.p
+    trim, clothes, outline, accessory = c.get("trim", c["clothes"]), c["clothes"], c["outline"], c["accessory"]
+    top, bottom = f.body_top, f.body_bottom
+    x = 0.0 if f.front else 0.3 * p.body_width
+    sides = (-1.0, 1.0) if f.front else (1.0,)
+    pieces: list[VMobject] = []
+
+    def lapels(depth: float, color: str) -> None:
+        for side in sides:
+            base = x if f.front else x - 0.02
+            pieces.append(outlined(polygon([(base, top - depth), (base + side * 0.1, top - 0.005), (base + side * 0.025, top + 0.005)]), color, outline, w * 0.75))
+
+    if look.outfit == "suit":
+        v = [(x - 0.065, top), (x + 0.065, top), (x, top - 0.18)] if f.front else [(x - 0.035, top), (x + 0.06, top), (x + 0.01, top - 0.16)]
+        pieces.append(outlined(polygon(v), trim, outline, w * 0.75))
+        tx = x if f.front else x + 0.012
+        pieces.append(outlined(polygon([(tx - 0.018, top - 0.01), (tx + 0.018, top - 0.01), (tx + 0.026, top - 0.2), (tx, top - 0.235), (tx - 0.026, top - 0.2)]),
+                               accessory, outline, w * 0.6))
+        lapels(0.2, shade_cloth(clothes))
+        for k in range(2):
+            pieces.append(outlined(Circle(radius=0.011).move_to([x + (0.03 if f.front else 0.022), top - 0.25 - k * 0.08, 0]), shade_cloth(clothes), outline, w * 0.6))
+        if f.front:
+            pieces.append(outlined(polygon([(-0.16, top - 0.11), (-0.09, top - 0.11), (-0.12, top - 0.075)]), trim, outline, w * 0.5))
+        return pieces
+    if look.outfit == "lab_coat":
+        strip = [(x - 0.04, top), (x + 0.04, top), (x + 0.03, bottom + 0.04), (x - 0.03, bottom + 0.04)] if f.front else \
+            [(x - 0.015, top), (x + 0.04, top), (x + 0.03, bottom + 0.04), (x - 0.01, bottom + 0.04)]
+        pieces.append(outlined(polygon(strip), trim, outline, w * 0.6))
+        lapels(0.16, clothes)
+        pockets = (-0.11, 0.11) if f.front else (x - 0.1,)
+        for px in pockets:
+            pieces.append(outlined(RoundedRectangle(width=0.07, height=0.06, corner_radius=0.01).move_to([px, bottom + 0.1, 0]), clothes, outline, w * 0.6))
+        pen_x = -0.11 if f.front else x - 0.08
+        pieces.append(outlined(RoundedRectangle(width=0.06, height=0.045, corner_radius=0.008).move_to([pen_x, top - 0.12, 0]), clothes, outline, w * 0.5))
+        pieces.append(Line([pen_x + 0.012, top - 0.12, 0], [pen_x + 0.012, top - 0.07, 0]).set_stroke(accessory, width=w * 1.4))
+        return pieces
+    # a jumpsuit
+    waist = bottom + 0.3 * p.body_height
+    belt = clip_to_box(body, bottom=waist - 0.022, top=waist + 0.022)
+    if belt:
+        pieces.append(outlined(polygon(belt), accessory, outline, w * 0.7))
+        pieces.append(outlined(RoundedRectangle(width=0.05, height=0.045, corner_radius=0.008).move_to([x, waist, 0]), MEDAL_GOLD, outline, w * 0.5))
+    pieces.append(Line([x, top - 0.03, 0], [x, waist + 0.025, 0]).set_stroke(outline, width=w * 0.7))
+    for side in sides:
+        base = x if f.front else x - 0.01
+        pieces.append(outlined(polygon([(base, top - 0.03), (base + side * 0.13, top + 0.005), (base + side * 0.1, top - 0.07)]), trim, outline, w * 0.7))
+    badge_x = -0.1 if f.front else x - 0.09
+    pieces.append(outlined(Circle(radius=0.022).move_to([badge_x, top - 0.13, 0]), trim, outline, w * 0.6))
+    return pieces
+
+
+def shade_cloth(color: str) -> str:
+    """``color`` a little darker: a suit's lapels and buttons."""
+    return interpolate_color(ManimColor(ManimColor(color).to_hex()), BLACK, 0.18).to_hex()
 
 
 def _necklace(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
