@@ -99,20 +99,26 @@ def designs_ambience(scenes: Sequence[SceneConfig]) -> bool:
     return any(s.ambience not in (None, False) or any(b.ambience is not None for b in s.beats) for s in scenes)
 
 
-def change_time(project: Project, slot: BeatSlot, at: float | str) -> float:
-    """The audio time of an ambience change at ``at`` of a beat: a fraction of its ``body``, a
-    word it says (its time in the beat's audio, else estimated: :func:`vidgen.word_anchors.beat_words`)
-    moved by the anchor's seconds, or ``end`` (where its line ends)."""
+def word_offset(project: Project, beat: BeatConfig, at: str) -> float:
+    """Seconds from a beat's start to the word anchor ``at`` (``"@door"``, ``"@door#2+0.3s"``):
+    the word's time in the beat's audio, else estimated (:func:`vidgen.word_anchors.beat_words`),
+    moved by the anchor's seconds, within the line."""
     from vidgen.word_anchors import beat_words, find_words, parse_word_anchor
 
+    anchor = parse_word_anchor(at)
+    seconds, times = beat_words(project, beat)
+    index = find_words(anchor, beat.text.split(), beat.id)
+    word = times[index].start if index < len(times) else 0.0
+    return min(max(word + anchor.offset, 0.0), seconds)
+
+
+def change_time(project: Project, slot: BeatSlot, at: float | str) -> float:
+    """The audio time of an ambience change at ``at`` of a beat: a fraction of its ``body``, a
+    word it says (:func:`word_offset`), or ``end`` (where its line ends)."""
     if isinstance(at, str):
         if at.strip() == "end":
             return slot.end
-        anchor = parse_word_anchor(at)
-        seconds, times = beat_words(project, slot.beat)
-        index = find_words(anchor, slot.beat.text.split(), slot.beat.id)
-        word = times[index].start if index < len(times) else 0.0
-        return slot.start + min(max(word + anchor.offset, 0.0), seconds)
+        return slot.start + word_offset(project, slot.beat, at)
     return slot.start + float(at) * slot.body
 
 
@@ -432,4 +438,5 @@ __all__ = [
     "designs_ambience",
     "scene_beds",
     "stage_sounds",
+    "word_offset",
 ]

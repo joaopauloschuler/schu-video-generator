@@ -1780,7 +1780,9 @@ def config_problems(config: VideoConfig, root: Path | None) -> list[tuple[str, s
             guess = f"; did you mean '{close[0]}'?" if close else ""
             hint = f"; built-in beds: {', '.join(BUILTIN_BEDS)}, or compose: {{mood: ...}} (vidgen list-music)"
             found.append((f"{where}.source", f"neither a built-in bed nor a file: {cue.source} (looked for {path}){guess}{hint}"))
-    return found
+    from vidgen.scoring import theme_problems
+
+    return found + theme_problems(config, root)
 
 
 def music_warnings(config: VideoConfig) -> list[str]:

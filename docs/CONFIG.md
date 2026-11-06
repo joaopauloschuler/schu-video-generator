@@ -145,7 +145,8 @@ spoken or shown. `[laugh]`, `[gasp]`, `[sigh]`, `[hmm]`, `[giggle]`, `[groan]` a
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
 that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices). A beat's
 `sting` (default none) plays a short music sting on it: `reveal`, `comic` or `sad`, or `{kind, at,
-gain}`, see [music stings](#foley-and-music-stings). A beat's `music_pause` (default none) stops
+gain}`, see [music stings](#foley-and-music-stings). A beat's `motif` (default none) plays a
+named theme briefly on it ([music for dramas](#music-for-dramas-score-themes-motifs)). A beat's `music_pause` (default none) stops
 [composed music that follows the video](#music-that-follows-the-video) just before it (a
 punchline) until the next bar line after it: `true`, or `false` to stop the automatic pause before
 a `card` scene's first beat or a short last line. A beat's `auto_direct` (default: its scene's,
@@ -3104,7 +3105,7 @@ beats:
 | key | default | |
 |---|---|---|
 | `kind` | required | `reveal` (`sting_reveal`: a "ta-da" chord), `comic` (`sting_comic`: ba-dum-tss) or `sad` (`sting_sad`: a sad trombone); a plain string is the kind |
-| `at` | `start` for `reveal`, `end` for `comic` and `sad` | `start`: as the beat starts; `end`: when its narration ends, in the pause after the line (the beat's `narration.pad`) |
+| `at` | `start` for `reveal`, `end` for `comic` and `sad` | `start`: as the beat starts; `end`: when its narration ends, in the pause after the line (the beat's `narration.pad`); a word the line says (`"@ticket"`, `"@ticket+0.2s"`): on it (a reveal on the word that reveals) |
 | `gain` | `0` | dB, -60 to 12, like a sound effect's |
 
 Stings go on the sound-effect track (any scene type) and duck under the narration like the
@@ -3328,7 +3329,7 @@ sits between (54 %, 1.6 dB emptier in the voice's range than `pulse`).
 | `crossfade` | `2.0` | seconds over which a file's end cross-fades (equal power) into its start at every repeat; beds loop seamlessly |
 | `fade_in` | `1.5` | seconds of fade-in at the cue's start |
 | `fade_out` | `3.0` | seconds of fade-out ending at the cue's end (the video's end) |
-| `duck` | see below | ducking under the narration; `false` for none |
+| `duck` | see below | ducking under the narration: a preset (`light`, `standard`, `drama`, `deep`) or the keys below; `false` for none |
 | `from` | the first scene | (in a list of cues) the scene the cue starts with |
 | `to` | the last scene | (in a list of cues) the scene the cue ends with; cues may not overlap |
 
@@ -3343,6 +3344,8 @@ whole beat when it has no audio yet). Sound effects never duck it.
 | `release` | `1.0` | seconds it takes to come back after the speech |
 | `hold` | `1.5` | pauses shorter than this stay ducked (no pumping between beats); longer pauses, silent scenes and the gaps between narrated scenes bring the music up |
 | `clips` | `true` | a `video_clip` scene whose clip plays sound (not `mute`, `volume` above 0) also ducks the music, for the whole scene |
+| `swell` | `0` | dB the music rises above its level where it is not ducked (pauses of at least `hold`, the lead-in, the tail), following the release and the attack: it swells into the pauses |
+| `preset` | none | the values the other keys start from: `light` (depth 8), `standard` (the defaults), `drama` (depth 18, attack 0.5, release 2.5, hold 1.2, swell 3: dialogue in the clear, music that takes the pauses), `deep` (depth 24, attack 0.6, release 2, hold 2: dense audiobooks); `duck: drama` alone is the preset |
 
 A scene's `music:` — `false` (none: it fades out over the 0.75 s before the scene, back in over
 the 0.75 s after) or `{volume: dB}` (added to the cue's volume during the scene, ramped the same
@@ -4247,6 +4250,77 @@ sections:
   events as the video's scene code makes, within about 50 ms. Still left out, and named in the
   warning: moves on a platform `level` or an iso place, vehicles, thrown props, pours,
   lightning, alarms, fires and ringing phones (cue those with `sfx`).
+
+### Music for dramas (`score`: themes, motifs)
+
+Opt-in, for audio dramas (and videos): named themes that scenes and sections play, cross-fading
+at the changes, motifs on beats, stings on words, ducking that swells into the pauses, and a
+check that the music does not fight dense dialogue. Nothing changes until a scene names a theme
+or a beat a motif.
+
+```yaml
+score:
+  themes:
+    main: love                                     # a project piece: assets/music/love.yaml (a studio score file)
+    tension: {source: enigma, volume: -1}          # a built-in bed
+    warm: calm
+    love: {source: love, section: b, tracks: [melody], volume: -2}   # the piano alone, its second phrase
+  crossfade: 4                                     # seconds, centred on each scene change
+  duck: drama                                      # 18 dB under the voices, 2.5 s release, 3 dB swell into pauses
+sections:
+  - {title: The Last Train, music: main, beats: ["The Last Train. A story in two scenes."]}
+  - pause: 2.5                                     # main plays on and swells
+  - title: The Platform
+    music: tension                                 # main cross-fades into tension
+    beats:
+      - {text: "Do you remember the summer we met?", voice: mara, motif: {theme: love, at: "@remember", length: 7}}
+      - text: She held up a ticket, yellow with age.
+        sting: {kind: reveal, at: "@ticket"}
+  - title: Morning
+    music: warm
+    beats:
+      - text: She smiled, and somewhere a radio played their song.
+        motif: {theme: love, at: end, length: 8, variation: {transpose: 2}}
+  - {title: Credits, music: main, beats: ["The Last Train."]}
+```
+
+- **`score.themes`**: name → a built-in bed, a project piece (a [score file](#score-files-vidgen-music-render)
+  under `assets/music`) or an audio file, or `{source, volume, section, start, transpose,
+  tempo, tracks}`. A scene's or section's `music:` may name one directly (a bed or project piece
+  needs no entry).
+- **A scene's `music: NAME`** (or `{theme, variation, volume}`) plays that theme from the scene
+  on: the scenes after it keep it (a pause swells under it) until one names another or says
+  `music: false` (it stops). At a change the theme playing fades out and the next fades in over
+  **`score.crossfade`** (`3` s) centred on the change, in **`score.curve`**: `equal_power` (the
+  default: two different pieces at an even loudness), `linear` or `smooth`. The same theme with the
+  same variation plays on. The first theme fades in over `score.fade_in` (`2`), the last out over
+  `score.fade_out` (`4`). A new theme starts from its beginning (or `section`), so a theme that
+  returns is recognised. `{volume: dB}` still changes the level in one scene.
+- **Variations** (`variation:` on a scene or a motif, or on the theme): `section` / `start` (where
+  it starts), `transpose` (semitones, its pitched tracks), `tempo`, `tracks` (only these play: a
+  sparse version). All but `section` / `start` render the theme's score again (a project piece,
+  a score bed, or a built-in bed's [score template](#score-files-vidgen-music-render), a close
+  re-creation; kept in `build/music`), at the music level; an audio file cannot vary. Unknown
+  tracks or sections are problems with a did-you-mean.
+- **A beat's `motif:`** (`love`, or `{theme, at, length, fade_in, fade_out, gain, dip,
+  variation}`): the theme heard over the scene's theme from `at` (`start`, `end`: into the pause
+  after the line, a word `"@remember"`, or a fraction of the line) for `length` seconds (`6`,
+  fades `1` in / `2.5` out), from its beginning or `section`; the scene's theme dips `dip` dB
+  (`score.motif_dip`, `6`) meanwhile.
+- **Stings**: a beat's `sting:` may be on a word (`at: "@ticket"`, [stings](#foley-and-music-stings));
+  the scene's theme dips `score.sting_dip` dB (`4`) while it sounds.
+- **`score.duck`** (default `drama`): how the themes and motifs [duck](#background-music-music)
+  under the voices and swell in the pauses: a preset or `{preset, depth, attack, release, hold,
+  clips, swell}`. The presets work on `music:` cues too (`duck: deep`).
+- **Check** (`score.check`: on when scenes play themes; `true` also for `music:` cues; `false`
+  off): after the mix the music (not the ambience) is measured against the voices — where the
+  speech fills at least 80% of 5 s it must stay `score.dense_lu` (`15`) LU under them, else a
+  warning names the times (`music: in dense dialogue the music is less than 15 LU under the voices
+  at 6.9-11.0 s (8.1 LU): duck it deeper (score.duck: deep) or lower it there`). `timings.json`
+  `mix.music_check`: `{under_dialogue_lu, in_pauses_lu, dense: [{start, end, lu}], worst_dense_lu,
+  dense_lu, ok}`; each theme in `mix.music` has `theme` (and `motif: true`, `swell`).
+- Themes are mixed like `music:` cues (`audio.music_width`, normalisation, the limiter), in
+  audio-only renders and when a video is joined (no re-render).
 
 ## Transitions (`transition`)
 

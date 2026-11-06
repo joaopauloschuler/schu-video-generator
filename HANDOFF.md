@@ -24703,3 +24703,51 @@ project), repo work is generic.
 - **Next (289)**: music cues per scene / section can reuse `ambience_entries`' crossfade walk
   (scene changes, centred fades) for music beds; `designed_entries` shows how timings entries
   carry their own fades.
+
+## Step 289 — Music cues for drama
+
+- **Built** (DESIGN §112.2, new module `scoring.py`): `score: {themes, crossfade, curve, duck,
+  fade_in, fade_out, motif_dip, sting_dip, check, dense_lu}`; a scene's / section's `music: NAME`
+  (or `{theme, variation, volume}`) plays a named theme (a bed, a project piece, a file) from there
+  on, cross-fading over `score.crossfade` centred on the change (`equal_power` / `linear` /
+  `smooth`); variations `{section, start, transpose, tempo, tracks}` re-render the theme's score
+  (a piece, a score bed or a bed's template); a beat's `motif:` plays a theme briefly (at start,
+  end, a word, a fraction) while the scene's theme dips; stings `at: "@word"` (video and audio)
+  and the scene's theme dipping under them; `duck` presets (`light`, `standard`, `drama`, `deep`)
+  and `swell` (dB up in the pauses) for themes and `music:` cues; a dense-dialogue check after the
+  mix (`mix.music_check`, a warning). The placements are planned from the timings
+  (`mix.plan_score`), so the video join plays them too.
+- **Decisions**: themes are sticky (a scene without `music:` keeps the theme; that is how a pause
+  swells under it), unlike ambience beds (per scene); a returning theme restarts from its top
+  (recognisable); a variation renders at the music level (a sparse `tracks:` version is not
+  quieter: give it a `volume`); the check's "dense" is a 5 s window ≥ 80% speech (Kokoro dialogue
+  with 0.35 s gaps reaches 0.82). The music `ThemeConfig` name was taken (visual theme): the class
+  is `MusicTheme`.
+- **Files**: `scoring.py` (new), `config.py` (`ScoreConfig`, `MusicTheme`, `ThemeVariation`,
+  `MotifCue`, `DUCK_PRESETS`, `DuckConfig.swell` / `preset`, `DuckSetting`, `SceneMusic.theme` /
+  `variation`, `StingCue.at` word, `BeatConfig.motif`), `mix.py` (`plan_score`, `duck_gain_db`,
+  `_scene_curve`, `Placement.theme` / `motif`, `MixReport.music_check`), `music.py`
+  (`config_problems` + theme problems), `sound_design.py` (`word_offset`), `audio_only.py`
+  (`_sting_time`), `scene.py` (sting on a word), `render/fingerprint.py`. Docs: CONFIG ("Music for
+  dramas", duck presets / swell, sting `at` word, beat `motif`), guide + `AGENTS.md`, DESIGN
+  §112.2, CHANGELOG, tasklist.
+- **Tests**: new `test_scoring.py` (15: settings and errors, schema, theme problems, fade curves,
+  the walk, swell, variations, a render with themes / motif / sting on a word, the check, a video
+  scene's sting on a word, unset options byte-equal, fingerprint). Run and passed: `test_scoring`,
+  `test_sound_design`, `test_audio_only`, `test_staging`, `test_music` (81, 4.5 min),
+  `test_musicfit`, `test_music_pieces`, `test_config`, `test_schema`, `test_sfx`, `test_scene`,
+  `test_api`, `test_overlap_pinned`, `test_docs`, `test_guide`. Frame baseline: 33 stills, max
+  difference 0.
+- **Demo** (`/home/claude/work/scratch/s289/drama/`, Kokoro, 1:07, −18.3 LUFS, mono PASS; a short
+  neutral two-scene drama "The Last Train"): `s289/measure.py PROJECT PNG` — music 24.7 LU under
+  the voices on their lines, 18–22 LU up in the pauses; crossfades 0.71 / 0.71 at the change,
+  power 1.00; `music_check` ok (dense runs 24.8 / 26.0 LU); `--variant loud` (light duck, +6 dB)
+  warns at 6.9–11.0 s (8.1 LU). Picture `s289/drama_plot.png` (spectrogram, levels, fades, gains).
+- **Known gaps**: themes are not fitted to bar lines at changes (a cross-fade, not a musical
+  transition); a motif plays its theme's opening (or a section) rather than a written motif line;
+  no `vidgen lint` rule for the check (measured at render only); `vidgen direct` does not edit
+  `motif` / `music` themes; the limiter in the demo (5.4 dB) comes from Kokoro voice peaks —
+  `audio.level_voice` (or 290's `drama` preset) should handle it.
+- **Next (290)**: a `drama` loudness preset can turn `level_voice` on and reuse
+  `music_check`'s `under_dialogue_lu` as its music-to-voice ratio; spoken credits can play
+  `music: main` under the closing section.

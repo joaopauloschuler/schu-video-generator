@@ -3744,6 +3744,16 @@ Good: the result first, then the context.
   (or `start:`) changes them on a word. Cues on words: `actions: [{sfx: step_wood, at:
   "@crossed", repeat: 7, every: 0.48, pan: {from: far_left, to: far_right}}]`; `room: phone` (or
   `true`, or `audio.sfx_room: true` for all) puts a cue in a room like a voice.
+- **Music for dramas** (opt-in, videos too): `score: {themes: {main: love, tension: {source:
+  enigma, volume: -1}}, crossfade: 4, duck: drama}` names themes (a bed, a project piece
+  `assets/music/love.yaml`, a file); a scene's or section's `music: tension` plays one from there
+  on, cross-fading at the change (the same theme plays on; `music: false` stops it); a pause
+  swells under it (`duck: drama`: 18 dB under lines, 3 dB up in pauses; presets `light`,
+  `standard`, `drama`, `deep`, on `music:` cues too). Variations: `{theme: love, variation:
+  {section: b, transpose: 2, tempo: 60, tracks: [melody]}}`. A beat's `motif: {theme: love, at:
+  "@remember", length: 7}` plays a theme briefly over the scene's (which dips); `sting: {kind:
+  reveal, at: "@ticket"}` on a word. The render warns when music is under 15 LU below dense
+  dialogue (`mix.music_check`).
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}

@@ -9,6 +9,7 @@ errors into a readable :class:`~vidgen.errors.VidgenError`.
 
 from __future__ import annotations
 
+import difflib
 import re
 from collections.abc import Collection, Iterable
 from typing import Annotated, Any, Literal, Union
@@ -2179,14 +2180,22 @@ class StingCue(_Strict):
 
     kind: StingKind
     """reveal (a "ta-da" chord), comic (ba-dum-tss) or sad (wah wah wah waaah)."""
-    at: Literal["start", "end"] | None = None
-    """start: as the beat starts; end: when its narration ends, in the pause after the line; default start for reveal, end for comic and sad."""
+    at: Literal["start", "end"] | Annotated[str, Field(pattern=r"^\s*@")] | None = None
+    """start: as the beat starts; end: when its narration ends, in the pause after the line; a word the line says ("@door", "@door+0.2s"): on it; default start for reveal, end for comic and sad."""
     gain: float = Field(default=0.0, ge=-60, le=12)
     """Level change in dB (0: about 7 dB under the narration before ducking)."""
 
+    @field_validator("at", mode="before")
+    @classmethod
+    def _anchor(cls, value: Any) -> Any:
+        if isinstance(value, str) and is_word_anchor(value):
+            parse_word_anchor(value)
+            return value.strip()
+        return value
+
     @property
-    def placed_at(self) -> Literal["start", "end"]:
-        """``at``, or the kind's default (reveal: start; comic, sad: end)."""
+    def placed_at(self) -> str:
+        """``at``, or the kind's default (reveal: start; comic, sad: end); a word anchor (``@door``) as written."""
         return self.at or ("start" if self.kind == "reveal" else "end")
 
 
@@ -2328,9 +2337,37 @@ class SfxConfig(_Strict):
     """Level change in dB of every sound effect of the video."""
 
 
-class DuckConfig(_Strict):
-    """How music ducks under the narration (DESIGN.md §48)."""
+#: Ducking presets (``duck: drama``; DESIGN.md §112.2): what each sets of :class:`DuckConfig`.
+DUCK_PRESETS: dict[str, dict[str, float]] = {
+    "light": {"depth": 8.0},
+    "standard": {},
+    "drama": {"depth": 18.0, "attack": 0.5, "release": 2.5, "hold": 1.2, "swell": 3.0},
+    "deep": {"depth": 24.0, "attack": 0.6, "release": 2.0, "hold": 2.0},
+}
+#: The names of :data:`DUCK_PRESETS`.
+DuckPreset = Literal["light", "standard", "drama", "deep"]
 
+
+class DuckConfig(_Strict):
+    """How music ducks under the narration (DESIGN.md §48), and swells into the pauses (§112.2)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _preset(cls, data: Any) -> Any:
+        """``drama`` or ``{preset: drama, depth: 20}``: the preset's values, the keys given winning."""
+        if isinstance(data, str):
+            data = {"preset": data}
+        if isinstance(data, dict) and "preset" in data:
+            name = data["preset"]
+            if name not in DUCK_PRESETS:
+                close = difflib.get_close_matches(str(name), list(DUCK_PRESETS), n=1)
+                hint = f"; did you mean '{close[0]}'?" if close else ""
+                raise ValueError(f"unknown duck preset {name!r}{hint} (presets: {', '.join(DUCK_PRESETS)})")
+            data = {**DUCK_PRESETS[name], **data}
+        return data
+
+    preset: DuckPreset | None = None
+    """A preset the other keys start from: light (8 dB), standard (the defaults), drama (18 dB, slow 2.5 s release, a 3 dB swell into pauses) or deep (24 dB, for dense audiobooks); `duck: drama` alone is the preset."""
     depth: float = Field(default=12.0, ge=0, le=40)
     """dB the music drops while the narrator speaks (0: no ducking)."""
     attack: float = Field(default=0.4, ge=0, le=5)
@@ -2341,12 +2378,20 @@ class DuckConfig(_Strict):
     """Pauses in the speech shorter than this keep the music down (no pumping between beats and sentences)."""
     clips: bool = True
     """A video_clip scene's own sound counts as foreground too (the music ducks under it)."""
+    swell: float = Field(default=0.0, ge=0, le=12)
+    """dB the music rises above its level where it is not ducked (the pauses between lines of at least hold, the lead-in and the tail), following the release and the attack: a swell into a pause; 0: none."""
 
 
-def _duck(value: bool | DuckConfig) -> DuckConfig:
+def _duck(value: bool | DuckConfig | str) -> DuckConfig:
     if isinstance(value, DuckConfig):
         return value
+    if isinstance(value, str):
+        return DuckConfig.model_validate(value)
     return DuckConfig() if value else DuckConfig(depth=0)
+
+
+#: ``duck:``: a preset's name, ``{preset, depth, attack, release, hold, clips, swell}``, or true / false.
+DuckSetting = Annotated[Union[DuckPreset, DuckConfig, bool], AfterValidator(_duck)]
 
 
 class ComposeInstrument(_Strict):
@@ -2427,8 +2472,8 @@ class MusicCue(_Strict):
     """Seconds of fade-in at the cue's start."""
     fade_out: float = Field(default=3.0, ge=0)
     """Seconds of fade-out ending at the cue's end."""
-    duck: Annotated[DuckConfig | bool, AfterValidator(_duck)] = Field(default_factory=DuckConfig)
-    """Ducking under the narration: {depth, attack, release, hold, clips}; false: none."""
+    duck: DuckSetting = Field(default_factory=DuckConfig)
+    """Ducking under the narration: a preset (light, standard, drama, deep) or {preset, depth, attack, release, hold, clips, swell}; false: none."""
     from_: Identifier | None = Field(default=None, alias="from")
     """First scene of the cue (from its start); default the video's first scene."""
     to: Identifier | None = None
@@ -2460,11 +2505,61 @@ MusicEntry = Annotated[Union[Annotated[str, Field(min_length=1)], MusicCue], Aft
 MusicSetting = Annotated[Union[MusicEntry, list[MusicEntry], Literal[False], None], AfterValidator(_no_music)]
 
 
+class ThemeVariation(_Strict):
+    """How a theme plays this time (DESIGN.md §112.2): another section, start, key or tempo, or
+    only some of its tracks. All but ``section`` / ``start`` re-render the theme's score (a
+    project piece, a score bed, or a built-in bed's score template)."""
+
+    section: Identifier | None = None
+    """Start at this section of the theme's score (e.g. lift)."""
+    start: float | None = Field(default=None, ge=0)
+    """Seconds into the theme (after section) where it starts."""
+    transpose: int | None = Field(default=None, ge=-12, le=12)
+    """Semitones up (or down) for its pitched tracks: the theme in another key."""
+    tempo: float | None = Field(default=None, ge=40, le=240)
+    """Another tempo (quarter notes per minute): slower and sadder, faster and urgent."""
+    tracks: list[Identifier] | None = Field(default=None, min_length=1)
+    """Only these tracks of its score play (e.g. [pad, melody]: a sparse version); the rest are silent."""
+
+    @property
+    def changes_score(self) -> bool:
+        """Whether this re-renders the score (transpose, tempo or tracks given)."""
+        return self.transpose is not None or self.tempo is not None or self.tracks is not None
+
+
+class MusicTheme(ThemeVariation):
+    """A named theme of ``score.themes`` in its long form: what plays and how (DESIGN.md §112.2)."""
+
+    source: str = Field(min_length=1)
+    """A built-in bed (calm, enigma, lullaby...), a project piece (a score file: love for assets/music/love.yaml) or an audio file under the project."""
+    volume: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB (0: -28 LUFS, the music beds' level)."""
+
+
+def _music_theme(value: str | MusicTheme) -> MusicTheme:
+    return MusicTheme(source=value) if isinstance(value, str) else value
+
+
+#: A ``score.themes`` entry: a source (bed, project piece, file) or ``{source, volume, section, start, transpose, tempo, tracks}``.
+MusicThemeSetting = Annotated[Union[Annotated[str, Field(min_length=1)], MusicTheme], AfterValidator(_music_theme)]
+
+
 class SceneMusic(_Strict):
     """A scene's ``music:`` override in its long form: its level and, under composed music that
     follows the video (a ``compose:`` cue without ``bars``, DESIGN.md §84), other compose
-    settings from this scene's first bar to its end."""
+    settings from this scene's first bar to its end; or the theme it plays (``score:``,
+    DESIGN.md §112.2)."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def _theme_name(cls, data: Any) -> Any:
+        """``music: tension`` is ``{theme: tension}``."""
+        return {"theme": data} if isinstance(data, str) else data
+
+    theme: Identifier | None = None
+    """A theme of score.themes (or a built-in bed or project piece by name) this scene plays from its start: it cross-fades from the theme before (score.crossfade) and plays on through the next scenes until one names another (or music: false); the same theme and variation plays on without a break."""
+    variation: ThemeVariation | None = None
+    """How the theme plays here: {section, start, transpose, tempo, tracks}; another variation cross-fades like another theme."""
     volume: float = Field(default=0.0, ge=-60, le=12)
     """dB added to the music's volume during this scene."""
     mood: str | None = None
@@ -2486,6 +2581,71 @@ class SceneMusic(_Strict):
     def instrument_settings(self) -> dict[str, Any]:
         """``instruments`` as plain data for :func:`vidgen.composer.compose`."""
         return {role: v.model_dump() if isinstance(v, ComposeInstrument) else v for role, v in self.instruments.items()}
+
+
+class MotifCue(_Strict):
+    """A theme heard briefly on a beat (``motif:``; DESIGN.md §112.2): it fades in at ``at``,
+    plays ``length`` seconds from its start (or section) over the scene's theme, which dips under
+    it, and fades out."""
+
+    theme: Identifier
+    """A theme of score.themes (or a built-in bed or project piece by name)."""
+    at: Annotated[float, Field(ge=0, lt=1)] | Literal["start", "end"] | Annotated[str, Field(pattern=r"^\s*@")] = "start"
+    """When it starts: start (as the line starts), end (as it ends, into the pause after it), a word the line says ("@love") or a fraction of the line."""
+    length: float = Field(default=6.0, ge=1, le=60)
+    """Seconds it plays, its fade-out included."""
+    fade_in: float = Field(default=1.0, ge=0, le=10)
+    """Seconds of its fade-in."""
+    fade_out: float = Field(default=2.5, ge=0, le=20)
+    """Seconds of its fade-out (ending length seconds after it starts)."""
+    gain: float = Field(default=0.0, ge=-30, le=12)
+    """Level change in dB of the theme's own level."""
+    dip: float | None = Field(default=None, ge=0, le=40)
+    """dB the scene's theme goes down while the motif plays; default score.motif_dip."""
+    variation: ThemeVariation | None = None
+    """How the theme plays here: {section, start, transpose, tempo, tracks}."""
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _anchor(cls, value: Any) -> Any:
+        if isinstance(value, str) and is_word_anchor(value):
+            parse_word_anchor(value)
+            return value.strip()
+        return value
+
+
+def _motif(value: str | MotifCue) -> MotifCue:
+    return MotifCue(theme=value) if isinstance(value, str) else value
+
+
+#: A beat's ``motif:``: a theme's name, or ``{theme, at, length, fade_in, fade_out, gain, dip, variation}``.
+MotifSetting = Annotated[Union[Identifier, MotifCue], AfterValidator(_motif)]
+
+
+class ScoreConfig(_Strict):
+    """``score:`` (DESIGN.md §112.2): the named themes scenes, sections and beats play, and how
+    they change, duck, swell and dip."""
+
+    themes: dict[Identifier, MusicThemeSetting] = Field(default_factory=dict)
+    """Named themes: name -> a built-in bed, a project piece (a score file under assets/music) or an audio file, or {source, volume, section, start, transpose, tempo, tracks}; a scene plays one with music: NAME, a beat briefly with motif: NAME."""
+    crossfade: float = Field(default=3.0, ge=0, le=20)
+    """Seconds over which a scene's theme cross-fades into the next one's, centred on the scene change."""
+    curve: Literal["equal_power", "linear", "smooth"] = "equal_power"
+    """The shape of the cross-fades and of the themes' fades: equal_power (the loudness stays even between two different pieces), linear, or smooth (an S curve)."""
+    duck: DuckSetting = Field(default_factory=lambda: DuckConfig.model_validate("drama"))
+    """How the themes duck under the voices and swell in the pauses: a preset (light, standard, drama, deep) or {preset, depth, attack, release, hold, clips, swell}."""
+    fade_in: float = Field(default=2.0, ge=0, le=20)
+    """Seconds of the fade-in of a theme that starts the audio."""
+    fade_out: float = Field(default=4.0, ge=0, le=30)
+    """Seconds of the fade-out of the theme playing at the end."""
+    motif_dip: float = Field(default=6.0, ge=0, le=40)
+    """dB a scene's theme goes down while a beat's motif plays over it."""
+    sting_dip: float = Field(default=4.0, ge=0, le=40)
+    """dB a scene's theme goes down while a beat's sting sounds (a reveal reads clearly)."""
+    check: bool | None = None
+    """Measure the music under dense dialogue after the mix and warn when it is less than dense_lu under the voices; default on when scenes play themes, true: also for music: cues, false: off."""
+    dense_lu: float = Field(default=15.0, ge=0, le=40)
+    """LU (dB of loudness) the music must stay under the voices where they speak almost without pauses."""
 
 
 class RoomConfig(_Strict):
@@ -2983,6 +3143,8 @@ class BeatConfig(_Strict):
     """References of the scene this beat cites (their ids, or 1-based places in the scene's references): while it plays, the on-screen citation shows their numbers; default: the scene's citation shows all its references."""
     ambience: AmbienceChange | list[AmbienceChange] | None = None
     """Ambience beds that start or stop during this beat: {start: rain, at: "@rain"}, {stop: hum, at: end, fade: 3} or a list; at is a fraction of the line, a word it says or end; the scene's ambience: is what plays before."""
+    motif: MotifSetting | None = None
+    """A theme heard briefly on this beat (score.themes): its name, or {theme, at: start | end | "@word" | fraction, length, fade_in, fade_out, gain, dip, variation}; the scene's theme dips under it."""
 
     @property
     def ambience_changes(self) -> list[AmbienceChange]:
@@ -2991,15 +3153,20 @@ class BeatConfig(_Strict):
 
     @model_validator(mode="after")
     def _check_ambience_words(self) -> BeatConfig:
-        """An ambience change at a word: the beat must say it."""
+        """An ambience change, a sting or a motif at a word: the beat must say it."""
         from vidgen.word_anchors import find_words
 
-        for change in self.ambience_changes:
-            if isinstance(change.at, str) and is_word_anchor(change.at):
+        timed = [("ambience", change.at) for change in self.ambience_changes]
+        if self.sting is not None and self.sting.at is not None:
+            timed.append(("sting", self.sting.at))
+        if self.motif is not None:
+            timed.append(("motif", self.motif.at))
+        for key, at in timed:
+            if isinstance(at, str) and is_word_anchor(at):
                 try:
-                    find_words(parse_word_anchor(change.at), self.text.split(), self.id)
+                    find_words(parse_word_anchor(at), self.text.split(), self.id)
                 except ValueError as exc:
-                    raise ValueError(f"ambience at {change.at!r}: {exc}") from None
+                    raise ValueError(f"{key} at {at!r}: {exc}") from None
         return self
 
     @model_validator(mode="after")
@@ -3112,8 +3279,8 @@ class SceneConfig(_Strict):
     """The room this scene's voices sound in: small_office, corridor, hall, outdoors, car, phone, none, or {use, amount, narrator}; default audio.room."""
     ambience: AmbienceSetting | None = None
     """Sound beds under this scene: rain, fire, birdsong, city, room_tone, crickets, hum, alarm, a list, or {beds, gain, width}; they cross-fade into the next scene's (audio.ambience_crossfade); false or none: no bed (a stage's own foley beds still play)."""
-    music: bool | SceneMusic = True
-    """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here; under composed music also {mood, key, tempo, instruments, seed} from this scene's first bar."""
+    music: bool | SceneMusic = Field(default=True, json_schema_extra=_mood_name_schema)
+    """Background music during this scene: false for none (it fades out before the scene and back in after it; a theme stops), or {volume: dB} to change its level here; under composed music also {mood, key, tempo, instruments, seed} from this scene's first bar; a theme's name (music: tension) or {theme, variation, volume}: that theme plays from here on (score:)."""
     transition: TransitionSetting | None = None
     """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}; default the video's transition."""
     carry: CarrySetting = Field(default_factory=list)
@@ -3326,6 +3493,8 @@ class VideoConfig(_Strict):
     """Sound effects of the whole video: automatic sounds for built-in animations, overall level."""
     music: MusicSetting = None
     """Background music: a bed name or file, {source | compose, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids; compose: {mood, ...} composes music."""
+    score: ScoreConfig = Field(default_factory=ScoreConfig)
+    """Music for dramas (DESIGN.md §112.2): named themes {themes, crossfade, curve, duck, fade_in, fade_out, motif_dip, sting_dip, check, dense_lu} that scenes and sections play with music: NAME (cross-fading at the changes) and beats briefly with motif: NAME."""
     soundfont: str | None = Field(default=None, min_length=1)
     """SoundFont (an .sf2 or .sf3 file, relative to the project) that composed music is played with; default: GeneralUser GS 2.0.3, downloaded once into vidgen's cache (`vidgen soundfont fetch`)."""
     audio: AudioConfig = Field(default_factory=AudioConfig)

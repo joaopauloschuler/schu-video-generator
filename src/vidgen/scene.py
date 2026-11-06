@@ -823,7 +823,13 @@ class NarratedScene(MovingCameraScene):
         self._beat_start = start
         host_track = self._host_speak(b)
         if b.sting is not None:
-            self.sting(b.sting, start + (window.heard if b.sting.placed_at == "end" else 0.0))
+            at = b.sting.placed_at
+            if at in ("start", "end"):
+                self.sting(b.sting, start + (window.heard if at == "end" else 0.0))
+            else:   # on a word the line says (DESIGN.md §112.2)
+                from vidgen.sound_design import word_offset
+
+                self.sting(b.sting, start + word_offset(self.project, b, at))
         for span in beat_sound_spans(self.project, b, d):
             cut = window.shape.cut
             if span.generated and (cut is None or span.start < cut):   # a breath the TTS cannot say, in the silence before / after the line (§69.33)

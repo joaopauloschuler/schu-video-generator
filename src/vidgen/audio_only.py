@@ -51,7 +51,7 @@ from vidgen.fileio import remove_file, replace_file
 from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.project import Project
 from vidgen.sfx import RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo
-from vidgen.sound_design import BeatSlot, SceneSlot, ambience_entries, clip_sound, cue_events, designs_ambience, stage_sounds
+from vidgen.sound_design import BeatSlot, SceneSlot, ambience_entries, clip_sound, cue_events, designs_ambience, stage_sounds, word_offset
 from vidgen.staging import VoiceStaging, beat_staging, params_stage_pan, stage_voice, uses_staging
 from vidgen.transcripts import write_transcripts
 from vidgen.videoplan import VideoPlan, beat_seconds
@@ -229,8 +229,7 @@ def _video_timeline(project: Project, fps: int) -> tuple[list[AudioScene], float
             for beat, timed, window, d in zip(spec.beats, slot.beats, windows, seconds):
                 start = slot.start + timed.start
                 scene.beats.append(PlacedBeat(beat.id, start, slot.start + timed.end, beat.text, window.shape, _staging(project, spec, beat), window.body))
-                ends = beat.sting is not None and beat.sting.placed_at == "end"
-                scene.events += _beat_events(project, spec, beat, start, window, d, start + (window.heard if ends else 0.0), fps)
+                scene.events += _beat_events(project, spec, beat, start, window, d, _sting_time(project, beat, start, window.heard, 0.0), fps)
         scenes.append(scene)
     return scenes, plan.duration
 
@@ -241,6 +240,17 @@ def _starts_with_sting(beat: BeatConfig) -> bool:
 
 def _ends_with_sting(beat: BeatConfig) -> bool:
     return beat.sting is not None and beat.sting.placed_at == "end"
+
+
+def _sting_time(project: Project, beat: BeatConfig, start: float, heard: float, before: float) -> float:
+    """When a beat's sting sounds: ``before`` seconds ahead of its line starting at ``start``, as
+    it ends (``heard`` seconds later) or on a word it says (DESIGN.md §112.2)."""
+    at = beat.sting.placed_at if beat.sting is not None else "start"
+    if at == "end":
+        return start + heard
+    if at == "start":
+        return start - before
+    return start + word_offset(project, beat, at)
 
 
 class _SpeechTimer:
@@ -312,7 +322,7 @@ class _SpeechTimer:
         clock = start + lead
         for beat, window, d in zip(spec.beats, windows, seconds):
             scene.beats.append(PlacedBeat(beat.id, clock, clock + window.heard, beat.text, window.shape, _staging(project, spec, beat), window.body))
-            sting_at = clock + window.heard if _ends_with_sting(beat) else clock - self.pacing.sting_before
+            sting_at = _sting_time(project, beat, clock, window.heard, self.pacing.sting_before)
             scene.events += _beat_events(project, spec, beat, clock, window, d, sting_at, None)
             clock += window.window
         scene.duration = clock - start

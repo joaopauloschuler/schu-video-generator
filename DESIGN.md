@@ -21293,3 +21293,80 @@ after either timeline) and the video join (`pipeline._add_designed_ambience`, sc
 - **Public**: config scene / section / pause `ambience`, beat `ambience`, `sfx` `repeat` / `every`
   / `room` / pan positions and moves, `audio.ambience_crossfade`, `sfx_room`, `scene_sounds`;
   `NarratedScene.sfx(repeat=, every=, room=)`; `SfxEvent.room`; `vidgen.api.PanMove`.
+
+### 112.2 Music cues for drama (Step 289)
+
+New module `vidgen.scoring` (no manim import); `mix.plan_score` places what it plans beside the
+`music:` cues (`Placement` with `theme` / `motif`), from the timings alone, so audio-only renders
+and the video join share it (no re-render; `score` and beat `motif` are left out of the scene
+fingerprint; the scene's `music` already was).
+
+- **Config**: `score: ScoreConfig {themes: {name: MusicTheme | source}, crossfade (3 s), curve
+  (equal_power | linear | smooth), duck (DuckSetting, default the drama preset), fade_in (2),
+  fade_out (4), motif_dip (6 dB), sting_dip (4 dB), check (None: on when themes play), dense_lu
+  (15)}`. `MusicTheme(ThemeVariation) {source, volume}`; `ThemeVariation {section, start,
+  transpose (±12), tempo, tracks}`. A scene's `music` takes a name (`SceneMusic` before-validator:
+  `{theme}`) or `{theme, variation, volume}`. `BeatConfig.motif: MotifCue {theme, at (start | end
+  | "@word" | fraction), length (6), fade_in (1), fade_out (2.5), gain, dip, variation}`.
+  `StingCue.at` also takes a word anchor (`placed_at` returns it); words of stings and motifs are
+  checked at load like the beat ambience's. (The visual `ThemeConfig` keeps its name; the music
+  one is `MusicTheme`.)
+- **Ducking presets** `DUCK_PRESETS` / `DuckPreset`: `light` (8 dB), `standard` (the defaults),
+  `drama` (18 dB, attack 0.5, release 2.5, hold 1.2, swell 3), `deep` (24 dB, 0.6, 2, 2). A
+  `DuckConfig` before-validator expands a string or `{preset, ...}` (given keys win); `preset` is
+  kept as a field. `DuckSetting` on `music:` cues and `score.duck`. New `DuckConfig.swell` (dB,
+  default 0): `mix.duck_gain_db` = `duck_curve` + `swell × (1 + duck_curve at depth 1)`, i.e. up
+  to `swell` where the music is released, following the raised-cosine release / attack (with
+  `swell` 0 exactly `duck_curve`, so cues mix as before).
+- **Scene themes** (`theme_pieces`): sticky — a scene without a theme keeps the one playing, a
+  silent pause section too (so it swells under the pause), `music: false` ends it. At a change the
+  old piece ends at `change + crossfade/2` with a fade-out of `crossfade`, the new starts at
+  `change − crossfade/2` with a fade-in of `crossfade` (min 0.05 s); the same `ThemePlay` (name,
+  source, level, variation) plays on. First piece from 0 over `fade_in`, last to the end over
+  `fade_out`. `fade_shape`: equal_power sin(πu/2) (power sum 1 across a change: measured 1.00 at
+  −2…+2 s on the demo), linear, smooth (raised cosine). A piece starts its source from the
+  beginning (or section / start), so a returning theme is heard from its top. Gain per frame:
+  `10^(volume/20) × envelope × scene curve (SceneMusic.volume, false) × ducking (score.duck over
+  speech + clip spans) × dips`.
+- **Motifs** (`motif_pieces`): at the timings' beat start + `start` / speech end (`end`, the
+  beat's seconds from `word_anchors.beat_words`) / a word (`sound_design.word_offset`, shared with
+  ambience changes and stings) / a fraction of the speech; `length` long; ducked like the themes.
+  `dip_curve`: the scene themes go down by the deepest of each motif's `dip × envelope` and each
+  sting's `sting_dip` (the timings' ducked sfx events, their sound's length, 0.05 s in, 0.6 s
+  out).
+- **Sources** (`theme_source`): without a note change, `music.Source` of a looping cue (beds,
+  pieces, files; a score bed's or a piece's `section`). With `transpose` / `tempo` / `tracks` (or
+  a `section` of a bed made in Python) the score is rendered again: a project piece, a score bed's
+  file, or the bed's score template (`studio/beds/<bed>.yaml`, a close re-creation);
+  `variant_score` sets `tempo` in the YAML before parsing, keeps the listed tracks (a kept part
+  that ducked under a dropped track loses its duck), adds `transpose` to every pitched (not
+  drum) track's parts; rendered at the music level (so a sparse version is as loud as the full
+  one: set its `volume`) and cached as `build/music/theme-<key>.npy` (key: `piece_key`,
+  variation, `VARIATION_VERSION`). `theme_problems` (in `music.config_problems`: validate and
+  render): an unknown theme (did-you-mean across themes, beds, pieces), a missing source, a
+  variation of an audio file, an unknown track or section.
+- **Check** (`dense_dialogue_check`, `MixReport.music_check`, `timings.mix.music_check` only
+  when measured): 100 ms frames of K-weighted power of the voice track and of the music
+  placements (no ambience, before the gain: a ratio); speech from `speech_spans`; dense = within a
+  5 s window filled ≥ 80% by speech (the window's whole width; the speech frames in it measured);
+  runs of ≥ 2 s reported `{start, end, lu}`; `under_dialogue_lu` over all speech, `in_pauses_lu`
+  (the music in gaps ≥ 1 s against the voices' level); `ok` when every dense run is ≥ `dense_lu`.
+  A warning names the worst runs. The check runs when scenes play themes (or `check: true` with
+  any music).
+- **Demo** (scratch `s289/drama`, Kokoro, 1:07, −18.3 LUFS, mono PASS): a theme (`love`, a 8-bar
+  project piece) at the opener and credits, a tense platform (`enigma`) into a warm morning
+  (`calm`), the piano motif of `love` on "remember" and again (transposed +2) after the last
+  line, a reveal sting on "ticket". `s289/measure.py`: the music 24.7 LU under the voices on
+  their lines and 18–22 LU higher in the pauses (1–6 LU under the voices' level); crossfades
+  0.71/0.71 at the change, power sum 1.00; `music_check` under dialogue 25.8 LU, in pauses
+  9.8 LU, dense runs 24.8 / 26.0 LU (ok); the variant `loud` (`duck: light`, tension +6 dB) is
+  caught: 8.1 LU at 6.9–11.0 s. Picture `s289/drama_plot.png`. The limiter's 5.4 dB there is the
+  Kokoro voices' own peaks (the music is −35 dBFS at those moments).
+- **Compatibility**: with no scene theme and no motif `plan_score` returns at once and no
+  `music_check` is written; `duck_gain_db` equals `duck_curve` without a swell; `_scene_curve`
+  is the old code moved. Pinned audio-only and video mixes byte-equal (test_staging,
+  test_audio_only, test_sound_design, and test_scoring with unused themes and `duck: {swell: 0}`);
+  frame baseline 33 stills, max difference 0 (`scene.py`'s sting branch is new only for a word).
+- **Public**: config `score`, scene `music: NAME | {theme, variation}`, beat `motif`, sting `at:
+  "@word"`, `duck` presets and `swell`; `timings.mix.music_check`, `mix.music[].theme / motif /
+  swell`.

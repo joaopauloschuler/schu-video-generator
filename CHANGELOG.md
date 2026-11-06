@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–288)
+## Unreleased (Steps 193–289)
+
+### Music cues for drama (Step 289)
+
+- `score: {themes: {main: love, tension: enigma}, crossfade: 4, duck: drama}`: a scene's or section's `music: tension` plays a named theme from there on, cross-fading at the change (`curve: equal_power | linear | smooth`); variations `{section, start, transpose, tempo, tracks}` re-render the theme's score.
+- A beat's `motif: {theme: love, at: "@remember"}` plays a theme briefly over the scene's; `sting: {kind: reveal, at: "@ticket"}` on a word.
+- Ducking presets (`duck: light | standard | drama | deep`, on `music:` cues too) and `swell`: the music rises into the pauses.
+- The render measures the music under dense dialogue and warns when it is less than 15 LU under the voices (`mix.music_check`).
+- All opt-in: projects without these keys sound exactly as before.
 
 ### Sound design for audio dramas (Step 288)
 
