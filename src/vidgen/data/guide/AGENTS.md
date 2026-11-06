@@ -182,7 +182,7 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 
 **Through MCP.** When your client has the vidgen MCP server (`vidgen mcp --root DIR`), the same
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
-`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`,
+`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`,
 `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
 `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic`, and `studio_sessions`, `studio_read`,
 `studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio` (options in snake_case: `per_beat`,
@@ -2084,6 +2084,9 @@ asks for one, say schu-video-generator makes original characters and offer one w
   (`docs/CONFIG.md` "Robots and costumes"). `vidgen character-sheet` shows every pose and the front view. `vidgen cast --random 4
   [--seed S] [--species cat dog]` writes a cast chosen to differ (looks, colours, voice kinds
   and voices, original names) for `include:`; lint `look_alike` warns when two look too alike.
+- Arms: by default (`front`) both arms hang clear at the sides, the far arm drawn over the body;
+  `cartoon_arms: classic` (or a look's `arms: classic`) keeps the older look, most of the side
+  view's far arm hidden behind the body.
 - Give each a want and a temper (the eager one, the doubter); their starting `pose` and
   `expression` say it before they speak. Short names, easy to say (the voice says them).
 - One voice each (`voices:` + `characters[].voice`), clearly different; keep the narrator's
@@ -2664,7 +2667,7 @@ and give each scene `set: village`.
   potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a back wall), `signpost`,
   `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`, `gift_pile`,
   `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock` (1 x 2, over
-  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); `on: true` /
+  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); retro: `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long), on a back wall's cell `poster` (`kind: rocket | atom | planet`) and `wall_shelf` (books, a plant); a `car` takes `kind: rocket` (tail fins, a bubble canopy); `on: true` /
   `switch_on` makes the laptop, kiosk, core, arm,
   centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
   airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV, vending machine, street
@@ -2672,7 +2675,7 @@ and give each scene `set: village`.
   (ripples), beehive (bees), desk_with_pc (its screen), water cooler (bubbles), printer
   (prints), globe (spins), cauldron (bubbles), giant crystal (glows), torch sconce, Christmas
   tree (twinkles), pumpkin, balloons (sway), cake (candles), boat (bobs), lighthouse (its beam
-  sweeps) and rocket (fires) work (a lit fireplace, floor lamp, street lamp, phone booth,
+  sweeps), rocket (fires) and the retro lights and machines work (a lit fireplace, floor lamp, street lamp, phone booth,
   campfire, cauldron or torch lights who stands near; pools of light and beams show mostly at
   night).
 - Vehicles move: `- {drive_to: car, to: shop, via: [corner]}` drives a `car` along the path
@@ -2737,6 +2740,20 @@ and give each scene `set: village`.
   the picture: cells on a diagonal of the map (`{column: 5, row: 6}` and `{column: 6, row: 5}`)
   are at the same height on screen. Actions of a beat at different `at` play one after another,
   so two couples kissing at once share one `at`. Long hair that reads in a close-up: `hair: wavy`.
+- A retro-future world (1950s "world of tomorrow"): `iso: {style: retro}` gives the place pastel
+  ground and objects (mint lawn, cream checker paths, terrazzo floors, turquoise walls; your
+  `colors` / `textures` / an object's `color` win); `textures: {path: checker, floor: terrazzo,
+  grass: lawn}` work on any place. A night that stays bright and crisp: `light: blue_hour` (colours
+  keep their hues, clean contrast) with the lights `on: true`, `fill_light: 0.6` and `fill_color:
+  "#FFE2BC"` (a warm key on faces) and a deep sky `background`, e.g. `["#1B2A6B", "#2E8FA8"]`.
+  Traffic as saucers or a train on a `monorail` beam: `traffic: [{..., shape: saucer | monorail}]`
+  (a monorail lane at `height: 3.15` over the beam's row). Retro looks: `outfit: suit | lab_coat |
+  jumpsuit`, `hair: pompadour | bob`, `accessories: [fedora]` or `[pillbox]`; `eyes: bright` (clear
+  whites, a fine rim, catchlights) keeps faces friendly in close-ups and at night.
+- Rooms that feel like rooms: `iso: {wide: fixed, show_walls: true}` frames a room from its back
+  corner so its standing walls fill the top of the frame; stage the action within a few rows of
+  the back walls (`character_size: large`), hang `poster`, `wall_shelf`, `sunburst_clock` on wall
+  cells next to windows `%`, and crowd the floor round the characters: rugs, plants, lamps, desks.
 - A strange door: `iso: {doors: slide}` (steel doors sliding open with a hiss on `- open:
   door_1`) and `haze: [{at: door_in}]` (shimmering air with sparkles over a spot). A room at
   night: dark `colors: {wall, floor}`, `light: night`, `fill_light: 0.45` and `wall_lights:
@@ -3696,6 +3713,29 @@ Good: the result first, then the context.
   writes it with the video, `vidgen thumbnail` alone; open the small copy it names
   (`build/.../thumbnail/<name>_small.png`, YouTube's 320 px) and fix the checks it prints. A
   frame of a scene works too: `vidgen thumbnail --scene results --beat 2`.
+- **Audio only** (audiobooks, podcasts, the sound of a video): `vidgen render --audio-only`
+  writes `output/<output>.wav` without rendering a scene (voices, music ducked under them,
+  effects, stings, loudness). `audio_only: true` makes it the project's render; such a project
+  may list `sections:` (`{id, title, voice, room, music, sfx, beats}`, `- pause: 2` between them)
+  instead of scenes, and `vidgen story draft --audio` drafts one from a story. Lines are timed
+  by their speech plus `pacing:` gaps (`speaker`, `scene`, `chapter`, `lead_in`, `tail`); a
+  beat's `pause: 1.5` (or a `- pause: 1.5` item) is the silence after it, in videos too.
+  `pacing: {timing: video}` keeps the video's timeline instead. Stage foley and ambience are
+  left out (a warning says so); write the sounds that matter as `sfx`. The file:
+  `audio_output: {format: mp3 | m4a | ogg | wav, bitrate, channels: mono, sample_rate,
+  loudness: podcast | audiobook | broadcast | custom}`; the render measures it against the
+  preset and says PASS / FAIL (fix what it names: an `audiobook` wants 0.5-1 s of silence before
+  the first sound, so no effect in the first half second). It also writes the transcript
+  (`_transcript.txt` with speakers and chapters), `.srt`, `.vtt` and `_chapters.txt`.
+  `vidgen audio check FILE` (MCP `audio_check`; `render` takes `audio_only`) measures any audio
+  file. Settings: `docs/COOKBOOK-AUDIO.md`.
+- **Stereo and rooms** (opt-in, videos too): `pan: left` (-1..1, `far_left`...`far_right`) on a
+  voice of `voices:` or on a beat (`pan: {from: right, to: left}` moves it across the line);
+  `audio: {follow_stage: true}` pans stage voices to where their characters stand; `room:
+  small_office | corridor | hall | outdoors | car | phone | none` on a scene or section (or
+  `audio.room` for all), the narrator dry unless `{use: hall, narrator: true}`;
+  `audio.music_width: 0.7` narrows the music. The render prints a `mono:` check; keep
+  `music_width` at 1 or less if it fails.
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}

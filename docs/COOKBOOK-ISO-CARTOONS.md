@@ -1,7 +1,8 @@
-# Isometric cartoons: framing the place
+# Isometric cartoons: craft notes
 
 Craft notes for `stage` scenes with an `iso:` place. The author guide (`AGENTS.md`) says what the
-iso features are; this page is about making the picture *work*.
+iso features are; this page is about making the picture *and the sound* work: framing the place,
+and voices that sound like they are in it.
 
 ## Ground that fills the frame (no floating tile)
 
@@ -44,3 +45,42 @@ height:
   hint for outdoor places in the whole-place view).
 - **To check a frame**, render a still with `background: "#FF00FF"`: any magenta left is ground
   that does not reach the edge.
+
+## Voices that live in the place (stereo and rooms)
+
+A cartoon sounds much bigger when each character's voice comes from where they stand and the
+room around them sounds like the set: an office is close and soft, a corridor rings, outdoors is
+open. It is opt-in, applied in the mix (no line is voiced again), and works the same in videos
+and audio-only renders (details: CONFIG "Stereo staging and rooms", [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md)).
+
+```yaml
+voices:
+  ada: {voice: bf_isabella, label: Ada, pan: left}    # a default side per character
+  tom: {voice: bm_lewis, label: Tom, pan: right}
+audio: {follow_stage: true, music_width: 0.7}       # voices sound where their character stands
+scenes:
+  - id: office
+    type: stage
+    room: small_office                              # match the set
+    params: {iso: {wide: fixed, place: indoor, map: ...}}
+  - id: hallway
+    type: stage
+    room: corridor
+    beats:
+      - {text: "This way?", voice: tom, pan: {from: right, to: left}}   # he crosses as he speaks
+```
+
+- **Narrator centred and dry** (the default): the storyteller stays "in your ear", the
+  characters are in the place. Only the characters' voices get the room.
+- **Give each character a side** with `pan: left` / `right`; turn on `follow_stage` so a line
+  comes from where the speaker is on screen (a two-shot: one left, one right). Keep pans moderate
+  (`left` / `right`, `far_` only for a moment) so phone speakers still carry both.
+- **Match the room to the set**: `small_office` for rooms and labs, `corridor` for halls and
+  stairwells, `hall` for big interiors, `outdoors` for streets and meadows, `car` inside a
+  vehicle or pod, `phone` for a call, a radio or a voice in someone's head (an AI, an implant).
+- **A move across a line** (`pan: {from, to}`) sells a walk past the camera or a character
+  crossing the room; time it with the walk.
+- **Music narrower than the voices** (`music_width: 0.7`): the built-in beds are already wide,
+  and a narrower bed leaves the sides to the characters.
+- **Check on one speaker**: `vidgen audio check output/<video>.mp4 --mono` (or the audio file)
+  reports whether the mix still works folded to mono.

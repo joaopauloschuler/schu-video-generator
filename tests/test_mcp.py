@@ -205,7 +205,7 @@ TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview", "story_draft", "shorts_suggest",
-    "music_template", "music_patches", "music_render", "music_check",
+    "music_template", "music_patches", "music_render", "music_check", "audio_check",
     "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
 }
 
@@ -388,6 +388,12 @@ def test_server_music_tools(tmp_path: Path) -> None:
         assert [c.type for c in result.content] == ["text", "image"]
         doc = doc_of(await client.call_tool("music_check", {"source": "assets/music/tiny.yaml", "compare": str(tmp_path / "build" / "mcp" / "music" / "tiny.mp3"), "images": 0}))
         assert doc["compare"]["table"] and Path(doc["files"]["spectrogram"]).name == "tiny-vs-tiny.png"
+
+        # Step 286: audio_check measures any audio file (here the rendered piece)
+        doc = json.loads(texts(await client.call_tool("audio_check", {"target": "build/mcp/music/tiny.mp3", "preset": "broadcast"}))[0])
+        assert doc["command"] == "audio" and doc["measured"]["integrated_lufs"] == pytest.approx(-28, abs=0.7)
+        assert doc["checks"][0]["preset"] == "broadcast" and doc["ok"] is False   # -28 LUFS misses -23
+        assert "outside the folder" in error_text(await client.call_tool("audio_check", {"target": "../x.mp3"}))
 
     run_session(tmp_path, body)
 

@@ -96,6 +96,9 @@ ISO_USES: dict[str, IsoUse] = {
     **{kind: IsoUse("type", 0.5, b, z) for kind, b, z in (("laptop", 0.75, 0.8), ("console", 0.9, 0.87), ("terminal_kiosk", 0.5, 1.1),
                                                       ("cash_register", 0.84, 1.25), ("piano", 0.75, 0.9))},
     "desk_with_pc": IsoUse("type", 0.42, 0.66, 0.82),
+    "retro_desk": IsoUse("type", 0.29, 0.75, 0.86),
+    "tube_computer": IsoUse("reach", 0.4, 0.95, 0.75),
+    "tv_console": IsoUse("reach", 0.8, 0.9, 0.85),
     **{kind: IsoUse("warm", 0.5, b, z) for kind, b, z in (("campfire", 0.5, 0.55), ("fireplace", 1.0, 0.6))},
     **{kind: IsoUse("read", 0.5, b, 1.3) for kind, b in (("bookshelf_tall", 0.6), ("shelf", 0.6), ("trophy_shelf", 0.6), ("newsstand", 0.8))},
     **{kind: IsoUse("reach", 0.5, b, z) for kind, b, z in (

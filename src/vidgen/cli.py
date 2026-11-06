@@ -36,7 +36,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts", "audio",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -226,7 +226,7 @@ def cmd_story(args: argparse.Namespace) -> CommandResult:
     if not any(scene.lines for scene in story.scenes):
         raise VidgenError(f"{source}: no story text to draft from")
     title = source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled"
-    options = DraftOptions(style=args.style, fmt=args.format, narrator=args.narrator, default_title=title, seed=args.seed)
+    options = DraftOptions(style=args.style, fmt=args.format, narrator=args.narrator, default_title=title, seed=args.seed, audio=args.audio)
     draft = draft_story(story, options)
     output = Path(args.out) if args.out else Path(source.stem)
     result = write_project(story_yaml(draft, source.name), output, force=args.force)
@@ -237,18 +237,22 @@ def cmd_story(args: argparse.Namespace) -> CommandResult:
     if args.json:
         return jsonout.story_document(project, draft, result, report, problems)
     doubtful = sum(1 for a in draft.attributions if a.speaker is None or a.confidence < 0.6)
-    beats = sum(len(s.get("beats", [])) for s in draft.config["scenes"])
+    beats = sum(len(s.beats) for s in project.config.scenes)
     print(
-        f"drafted {len(draft.scenes)} scenes ({beats} beats), {len(draft.cast)} characters, "
+        f"drafted {len(draft.scenes)} {'sections (audio only)' if args.audio else 'scenes'} ({beats} beats), {len(draft.cast)} characters, "
         f"{'first' if story.first_person else 'third'}-person, about {_format_seconds(project.estimated_duration())}; "
         f"{len(draft.attributions)} lines of dialogue ({doubtful} to check)"
     )
     for scene in draft.scenes:
-        print(f"  {scene.id:<16} {scene.place:<8} {scene.light:<8} {', '.join(scene.cast) or '-'}")
+        place = "" if args.audio else f" {scene.place:<8} {scene.light:<8}"
+        print(f"  {scene.id:<16}{place} {', '.join(scene.cast) or '-'}")
     print(f"{'created project in' if result.created else 'wrote'} {result.root if result.created else result.config}; report: {report}")
     for problem in problems:
         print(f"problem: {problem}", file=sys.stderr)
-    print("next: read story_draft.md, then `vidgen validate`, `vidgen storyboard`, `vidgen lint`; `vidgen tts` when it reads well")
+    if args.audio:
+        print("next: read story_draft.md, then `vidgen validate`; `vidgen tts` when it reads well, then `vidgen render` (the .wav)")
+    else:
+        print("next: read story_draft.md, then `vidgen validate`, `vidgen storyboard`, `vidgen lint`; `vidgen tts` when it reads well")
     return 1 if problems else 0
 
 
@@ -827,6 +831,8 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
     frames = args.frames_per_beat or (1 if args.frames else 0)
     started = time.monotonic()
     project = Project.load(args.project, variant=variant, output_dir=args.output_dir, draft=args.draft)
+    if args.audio_only or project.config.audio_only:
+        return _render_audio(args, project, started)
     result = render_project(
         project,
         preview=args.preview or args.draft,
@@ -857,13 +863,101 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
     return 0
 
 
-def _loudness_line(mix: dict[str, Any]) -> str:
-    """``-16.0 LUFS integrated, true peak -1.6 dBTP (normalised to -16, +4.2 dB; music: calm)``."""
-    level = "silent" if mix["integrated_lufs"] is None else f"{mix['integrated_lufs']:.1f} LUFS integrated"
+def _render_audio(args: argparse.Namespace, project: Project, started: float) -> CommandResult:
+    """``vidgen render --audio-only`` (or ``audio_only: true``): the sound alone (DESIGN.md §111)."""
+    from vidgen.audio_only import render_audio
+
+    video_only = [name for name, given in (
+        ("--scene", args.scene), ("--no-audio", args.no_audio), ("--frames", args.frames or args.frames_per_beat),
+        ("--max-scenes", args.max_scenes), ("--keep-going", args.keep_going),
+    ) if given]
+    if video_only:
+        raise VidgenError(f"{', '.join(video_only)}: not with an audio-only render (no scene is rendered)")
+    preview = args.preview or args.draft
+    result = render_audio(project, preview=preview)
+    if args.json:
+        return jsonout.audio_render_document(project, result, preview, time.monotonic() - started)
+    print(f"audio:     {result.output}")
+    print(f"timing:    {result.timing} ({len(result.timings['scenes'])} scenes, {sum(len(s['beats']) for s in result.timings['scenes'])} beats)")
+    print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
+    print(f"loudness:  {_loudness_line(result.timings['mix'], limiter=True)}")
+    if result.check is not None:
+        print(f"check:     {result.check.line()}")
+    if "stereo" in result.timings:
+        stereo = result.timings["stereo"]
+        verdict = "PASS" if stereo["ok"] else "FAIL"
+        print(f"mono:      {verdict}  " + "; ".join(f"{i['name']} {i['value']} ({i['target']})" for i in stereo["items"]))
+    for kind, path in result.transcripts.items():
+        print(f"{kind + ':':<10} {path}")
+    print(f"timings:   {result.timings_file}")
+    return 0
+
+
+def cmd_audio(args: argparse.Namespace) -> CommandResult:
+    """``vidgen audio check FILE|PROJECT``: measure an audio file and check it against the
+    loudness presets (DESIGN.md §111.2); exit code 1 when the preset asked for (``--preset``, or
+    the project's ``audio_output.loudness``) fails, or with ``--mono`` when a stereo file does not
+    fold to mono well (§111.4)."""
+    from vidgen import audio_check
+    from vidgen.config import AudioConfig
+
+    target = Path(args.target)
+    audio = AudioConfig()
+    wanted = args.preset
+    if target.is_dir() or target.name in CONFIG_NAMES:
+        project = Project.load(target, variant=args.variant, output_dir=args.output_dir, draft=args.draft)
+        audio = project.config.audio
+        path = project.audio_path(args.preview or args.draft)
+        if not path.is_file():
+            raise VidgenError(f"{path}: not rendered yet (vidgen render --audio-only)")
+        if wanted is None and project.config.audio_output.loudness != "none":
+            wanted = project.config.audio_output.loudness
+    else:
+        path = target
+    custom = args.lufs is not None or args.true_peak is not None
+    if custom:
+        audio = audio.model_copy(update={k: v for k, v in (("target_lufs", args.lufs), ("true_peak", args.true_peak)) if v is not None})
+    names = [wanted] if wanted is not None else [*audio_check.PRESETS, *(["custom"] if custom else [])]
+    measured = audio_check.measure_file(path)
+    results = audio_check.check_all(measured, [audio_check.preset_named(n, audio) for n in names])
+    failed = wanted is not None and not results[0].ok
+    if measured.channels == 2:
+        mono = audio_check.mono_check(measured)
+        results.append(mono)
+        failed = failed or (args.mono and not mono.ok)
+    if args.json:
+        return jsonout.envelope("audio", not failed, file=str(path), measured=measured.to_json(), checks=[r.to_json() for r in results])
+    print(f"{path}: {audio_check.summary_line(measured)}")
+    for result in results:
+        print(f"  {result.line()}")
+    return 1 if failed else 0
+
+
+def _loudness_line(mix: dict[str, Any], limiter: bool = False) -> str:
+    """``-16.0 LUFS integrated, true peak -1.6 dBTP (normalised to -16, +4.2 dB; music: calm)``;
+    with ``limiter`` also the limiter's largest gain reduction."""
+    if mix["integrated_lufs"] is None:
+        level = "silent"
+    elif mix.get("mono"):  # both channels the same: what the one-channel file measures
+        from vidgen.mix import DUAL_MONO_LU
+
+        level = f"{mix['integrated_lufs'] - DUAL_MONO_LU:.1f} LUFS integrated (mono)"
+    else:
+        level = f"{mix['integrated_lufs']:.1f} LUFS integrated"
     peak = "" if mix["true_peak_dbtp"] is None else f", true peak {mix['true_peak_dbtp']:.1f} dBTP"
     notes = []
-    if mix["normalized"]:
+    if mix["normalized"] and mix.get("target_rms") is not None:
+        notes.append(f"normalised to RMS {mix['target_rms']:g} dB, {mix['gain_db']:+.1f} dB")
+    elif mix["normalized"] and mix.get("mono"):
+        from vidgen.mix import DUAL_MONO_LU
+
+        notes.append(f"normalised to {mix['target_lufs'] - DUAL_MONO_LU:.3g} as mono, {mix['gain_db']:+.1f} dB")
+    elif mix["normalized"]:
         notes.append(f"normalised to {mix['target_lufs']:g}, {mix['gain_db']:+.1f} dB")
+    if mix.get("levelled_db") is not None:
+        notes.append(f"voice levelled up to {mix['levelled_db']:.1f} dB")
+    if limiter and mix.get("limited_db"):
+        notes.append(f"limiter up to {mix['limited_db']:.1f} dB")
     if mix["music"]:
         notes.append("music: " + ", ".join(m["source"] for m in mix["music"]))
     return level + peak + (f" ({'; '.join(notes)})" if notes else "")
@@ -1952,6 +2046,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--format", choices=["16:9", "9:16"], default="16:9", help="frame: 16:9 (default) or 9:16 (vertical)")
     p.add_argument("--narrator", metavar="VOICE", help="the narrator's Kokoro voice (default: bf_emma; told in the first person: the protagonist's voice)")
     p.add_argument("--seed", type=int, default=0, help="seed of the random looks given once the built-in ones are used (default: 0)")
+    p.add_argument("--audio", action="store_true", help="an audio-only project (an audiobook): sections of lines with the voices and emotions, no pictures")
     p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
     p.set_defaults(func=cmd_story)
 
@@ -2121,6 +2216,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene (repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
+    p.add_argument(
+        "--audio-only", action="store_true",
+        help="write only the sound, <output>.wav (narration, voices, music, effects; timed by pacing:), rendering no scene; also audio_only: true",
+    )
     p.add_argument("--keep-going", action="store_true", help="continue after a scene fails")
     jobs_arg(p)
     p.add_argument("--frames", action="store_true", help="also save a PNG still at the end of each beat (build/.../frames/)")
@@ -2136,6 +2235,30 @@ def build_parser() -> argparse.ArgumentParser:
     output_dir_arg(p)
     all_languages_arg(p)
     p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser(
+        "audio",
+        help="audio file tools: check measures an audio file (or a project's audio-only render) and checks it against the loudness presets "
+        "(podcast, audiobook / ACX, broadcast / EBU R128, custom)",
+    )
+    p.add_argument("action", choices=["check"], help="check: loudness, true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per preset; mono compatibility of a stereo file")
+    p.add_argument("target", nargs="?", default=".", help="an audio file (wav, mp3, m4a, ogg...), or a project dir or config file: its rendered audio (default: .)")
+    p.add_argument(
+        "--preset", choices=["podcast", "audiobook", "broadcast", "custom"],
+        help="check against this preset only (exit code 1 if it fails); default: the project's audio_output.loudness, else every preset",
+    )
+    p.add_argument("--lufs", type=float, metavar="LUFS", help="the custom preset's loudness (default: audio.target_lufs, -16)")
+    p.add_argument("--true-peak", type=float, metavar="DBTP", help="the custom preset's highest true peak (default: audio.true_peak, -1.5)")
+    p.add_argument(
+        "--mono", action="store_true",
+        help="exit code 1 also when a stereo file does not fold to mono well (its mono compatibility line: channel correlation, mono fold loss)",
+    )
+    p.add_argument("--variant", metavar="NAME", help="a project's variant (its rendered file)")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--preview", action="store_true", help="a project's preview render")
+    quality.add_argument("--draft", action="store_true", help="a project's draft render")
+    output_dir_arg(p)
+    p.set_defaults(func=cmd_audio)
 
     p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")
     project_arg(p)

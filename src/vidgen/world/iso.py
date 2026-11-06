@@ -207,17 +207,43 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "lighthouse": ObjectKind(1, 1, 5.6),
     "train_car": ObjectKind(3, 1, 2.05),
     "rocket": ObjectKind(2, 2, 4.7),
+    # a retro-future kit (DESIGN.md §107): a sunburst_clock hangs on a room's back wall like a wall_clock
+    "googie_building": ObjectKind(3, 3, 4.9),
+    "retro_tower": ObjectKind(2, 2, 9.0),
+    "starburst_sign": ObjectKind(1, 1, 3.4),
+    "ray_lamp": ObjectKind(1, 1, 3.3),
+    "atomic_sculpture": ObjectKind(1, 1, 2.6),
+    "monorail": ObjectKind(4, 1, 2.75),
+    "tube_computer": ObjectKind(2, 1, 2.35),
+    "sunburst_clock": ObjectKind(1, 1, 2.75),
+    "tv_console": ObjectKind(1, 1, 1.45),
+    "retro_desk": ObjectKind(2, 1, 1.35, top=0.8),
+    "hedge": ObjectKind(1, 1, 0.95),
+    "planter": ObjectKind(1, 1, 1.15),
+    # a room's walls dressed (DESIGN.md §108): they hang on a standing back wall like a clock
+    "poster": ObjectKind(1, 1, 2.75),
+    "wall_shelf": ObjectKind(1, 1, 2.75),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
-TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0)}
+TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0), "retro_tower": (4.0, 30.0)}
 #: Extras an object of a kind may have (``features`` of a placing), DESIGN.md §102.2: a tower's
 #: big info ``screen`` on its front and its glowing algae-farm bands (``garden``); a hazard sign's
 #: kind (one of them, §103; default ``biohazard``).
 HAZARD_SIGNS: tuple[str, ...] = ("biohazard", "radiation", "authorised")
 #: A display case's kinds (§104; default ``cakes``).
 DISPLAY_CASES: tuple[str, ...] = ("cakes", "jewels")
-#: The objects with a ``kind`` (one of these, the first the default): a hazard sign, a display case.
-OBJECT_STYLES: dict[str, tuple[str, ...]] = {"hazard_sign": HAZARD_SIGNS, "display_case": DISPLAY_CASES}
+#: A car's kinds (§107; default ``sedan``): a ``rocket`` car has tail fins and a bubble canopy.
+CAR_STYLES: tuple[str, ...] = ("sedan", "rocket")
+#: What a TV console's screen shows when on (§107; default ``wave``): an oscilloscope's wave, or
+#: a retro robot's ``face`` (two round eyes over a wave of a mouth).
+CONSOLE_PICTURES: tuple[str, ...] = ("wave", "face")
+#: What a wall poster shows (§108; default ``rocket``): a rocket over a planet, an atom, a ringed
+#: planet with a saucer.
+POSTER_PICTURES: tuple[str, ...] = ("rocket", "atom", "planet")
+#: The objects with a ``kind`` (one of these, the first the default): a hazard sign, a display
+#: case, a car, a TV console, a poster.
+OBJECT_STYLES: dict[str, tuple[str, ...]] = {"hazard_sign": HAZARD_SIGNS, "display_case": DISPLAY_CASES, "car": CAR_STYLES,
+                                             "tv_console": CONSOLE_PICTURES, "poster": POSTER_PICTURES}
 OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), **OBJECT_STYLES}
 
 
@@ -230,15 +256,19 @@ SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", 
                                             "fireplace", "stove", "floor_lamp", "tv", "vending_machine", "street_lamp", "traffic_light",
                                             "fountain", "phone_booth", "car", "campfire", "pond", "beehive",
                                             "desk_with_pc", "water_cooler", "printer", "globe", "cauldron", "giant_crystal", "torch_sconce",
-                                            "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket"})
+                                            "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket",
+                                            "googie_building", "retro_tower", "starburst_sign", "ray_lamp", "atomic_sculpture",
+                                            "tube_computer", "tv_console", "retro_desk"})
 #: The lights that a day passing (``time_of_day``, DESIGN.md §105.3) switches on at dusk and off at
 #: dawn by themselves: lamps, a house's windows, a phone booth, a vending machine, a lighthouse, a
 #: christmas tree's lights, a pumpkin's face and a car's headlights (not fires, machines or towers,
 #: whose windows are lit from the start).
 AUTO_LIGHT_KINDS: frozenset[str] = frozenset({"house", "lamp", "floor_lamp", "street_lamp", "phone_booth", "vending_machine", "lighthouse",
-                                              "christmas_tree", "pumpkin", "car"})
+                                              "christmas_tree", "pumpkin", "car", "googie_building", "starburst_sign", "ray_lamp"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
-WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce"})
+WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce", "sunburst_clock", "poster", "wall_shelf"})
+#: The clocks, whose placing may give a ``time`` (DESIGN.md §103, §107).
+CLOCK_KINDS: frozenset[str] = frozenset({"wall_clock", "sunburst_clock"})
 
 
 @dataclass(frozen=True)
@@ -254,8 +284,8 @@ class ObjectState:
 
 def default_state(kind: str) -> ObjectState:
     """The state of an object of ``kind`` unless the scene says otherwise: there, closed and off;
-    flowers in bloom; a laptop open; a tower's windows lit (§102.2)."""
-    return ObjectState(open=kind in ("flowers", "laptop"), on=kind == "tower")
+    flowers in bloom; a laptop open; a tower's windows lit (§102.2, a retro tower's too, §107)."""
+    return ObjectState(open=kind in ("flowers", "laptop"), on=kind in ("tower", "retro_tower"))
 
 
 @dataclass(frozen=True)
@@ -660,8 +690,8 @@ def place_objects(place: IsoPlace, placings: Sequence[ObjectPlacing]) -> IsoPlac
         facing = _wall_facing(place, placing.kind, column, row, placing.facing) if placing.kind in WALL_KINDS else placing.facing
         if placing.size is None and facing == "right":
             width, depth = depth, width
-        if placing.time is not None and placing.kind != "wall_clock":
-            raise VidgenError(f"objects[{k}]: time is for a wall_clock, not {placing.kind}")
+        if placing.time is not None and placing.kind not in CLOCK_KINDS:
+            raise VidgenError(f"objects[{k}]: time is for a wall_clock or a sunburst_clock, not {placing.kind}")
         if placing.height is not None:
             low, high = TALL_KINDS.get(placing.kind, (None, None))
             if low is None or high is None:
@@ -698,6 +728,10 @@ def _wall_facing(place: IsoPlace, kind: str, column: int, row: int, facing: str)
 __all__ = [
     "AUTO_LIGHT_KINDS",
     "BLOCK",
+    "CAR_STYLES",
+    "CLOCK_KINDS",
+    "CONSOLE_PICTURES",
+    "POSTER_PICTURES",
     "CUT_WALL_HEIGHT",
     "DOOR",
     "DOOR_HEIGHT",

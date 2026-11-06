@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from vidgen.thumbnail import ThumbnailResult
     from vidgen.translation import TemplateResult
     from vidgen.render.pipeline import RenderResult
+    from vidgen.audio_only import AudioRenderResult
     from vidgen.lint import LintResult
     from vidgen.readback import ReadbackResult
     from vidgen.storyboard import StoryboardResult
@@ -264,6 +265,7 @@ def story_document(
         title=draft.config["title"],
         style=draft.options.style,
         format=draft.options.fmt,
+        audio_only=draft.options.audio,
         first_person=story.first_person,
         narrator=draft.config["voice"]["voice"],
         music=draft.music[0],
@@ -895,6 +897,48 @@ def render_document(
         duration=result.duration,
         elapsed=round(elapsed, 3),
         mix=timings.get("mix"),
+        chapters=timings.get("chapters", []),
+        scenes=scenes,
+    )
+
+
+def audio_render_document(project: Project, result: AudioRenderResult, preview: bool, elapsed: float) -> dict[str, Any]:
+    """The ``vidgen render --audio-only --json`` document (DESIGN.md §111): ``audio_only: true``,
+    the ``timing`` used, what was ``left_out``, ``outputs.audio``, ``outputs.timings`` and the
+    transcripts (``outputs.transcript_<kind>``), the mix report, the loudness ``check``
+    (§111.2; ``null`` without a preset), the ``stereo`` mono-compatibility check (§111.4;
+    ``null`` without staging), chapters and the scenes with their beats."""
+    timings = result.timings
+    scenes = [
+        {
+            "id": scene["id"],
+            "type": scene["type"],
+            "start": scene["start"],
+            "duration": scene["duration"],
+            "beats": [{"id": b["id"], "start": b["start"], "end": b["end"]} for b in scene["beats"]],
+        }
+        for scene in timings["scenes"]
+    ]
+    return envelope(
+        "render",
+        True,
+        project=_path(project.root),
+        variant=project.variant,
+        preview=preview,
+        draft=project.draft,
+        audio_only=True,
+        timing=result.timing,
+        left_out=result.left_out,
+        outputs={
+            "audio": _path(result.output),
+            "timings": _path(result.timings_file),
+            **{f"transcript_{kind}": _path(path) for kind, path in result.transcripts.items()},
+        },
+        duration=result.duration,
+        elapsed=round(elapsed, 3),
+        mix=timings.get("mix"),
+        check=None if result.check is None else result.check.to_json(),
+        stereo=timings.get("stereo"),
         chapters=timings.get("chapters", []),
         scenes=scenes,
     )

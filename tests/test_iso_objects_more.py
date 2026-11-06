@@ -144,7 +144,7 @@ def test_shop_keys_validate() -> None:
     for bad, message in (({"object": "display_case", "at": "here", "kind": "jewls"}, "unknown display_case kind 'jewls'; did you mean jewels"),
                          ({"object": "display_case", "at": "here", "kind": "radiation"}, "kinds: cakes, jewels"),
                          ({"object": "hazard_sign", "at": "here", "kind": "cakes"}, "unknown hazard_sign kind"),
-                         ({"object": "counter", "at": "here", "kind": "cakes"}, "kind is for a hazard_sign or a display_case"),
+                         ({"object": "counter", "at": "here", "kind": "cakes"}, "kind is for a hazard_sign, a display_case"),
                          ({"object": "crib", "at": "here", "on": True}, "on is for"), ({"object": "bathtub", "at": "here", "open": True}, "open is for"),
                          ({"object": "vending_machin", "at": "here"}, "did you mean vending_machine")):
         with pytest.raises(ValidationError, match=message):
@@ -180,7 +180,7 @@ def test_town_objects_have_footprints_colours_and_states() -> None:
     for kind in TOWN:
         assert kind in OBJECT_KINDS and kind in OBJECT_COLORS and MORE_MODULES[kind] == "iso_town" and OBJECT_KINDS[kind].height <= 4.0
         assert (OBJECT_KINDS[kind].width, OBJECT_KINDS[kind].depth) == TOWN_SIZES.get(kind, (1, 1))
-        assert default_state(kind) == ObjectState() and kind not in OPENING_KINDS and kind not in OBJECT_STYLES
+        assert default_state(kind) == ObjectState() and kind not in OPENING_KINDS and (kind not in OBJECT_STYLES or kind == "car")   # a car has kinds since §107
     assert set(TOWN) & SWITCHED_KINDS == set(TOWN_WORKING) and set(TOWN) & set(MOVING_KINDS) == set(TOWN_MOVING)
     assert set(TOWN) & LAMPLIGHT_KINDS == {"street_lamp", "phone_booth"}
 

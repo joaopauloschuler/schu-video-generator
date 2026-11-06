@@ -1649,6 +1649,49 @@ a few lines per feature in CONFIG and the guide.
 ### Step 277 — A fixed-scale wide view for iso places
 - [x] `iso: {wide: fixed}` (scale from `character_size`, allowed on iso places with it; or `wide: {tiles: N}`): the same scale on any map, centred on the characters and moved onto the ground (characters by an edge kept in view), a small place centred; `zoom` scale, shots, `follow` and `pan` relative to it (shot / follow caps scaled, follow and pan settle on the ground, `MAX_DETAIL` 5); lint `iso_ground` (map size that fills the frame; info hint for outdoor `auto` / `fill`); measured map sizes (16:9 34 / 24 / 17, 9:16 23 / 16 / 12) in CONFIG, the guide and the iso cookbook; `fill` wording corrected; tests `test_iso_fixed_view.py`
 
+## Phase AE — A retro-futuristic, bright story cartoon (DESIGN §107)
+
+A second, more beautiful attempt at a private story cartoon: isometric and retro-futuristic (a
+1950s-60s "world of tomorrow": pastels and chrome), full-frame ground (`wide: fixed`, big maps),
+bright "blue hour" nights instead of muddy dark ones, rich places. The story and its project are
+private (scratchpad); repo work stays generic. No AI API calls; Kokoro only.
+
+### Step 278 — Retro-future kit
+- [x] `iso: {style: retro}` (pastel ground and object colours, cream saucer traffic) and `textures: {grass, path, floor, tiles}` (`plain`, `tufts`, `lawn`, `stones`, `checker`, `terrazzo`, `boards`, `tiles`); `light: blue_hour` (a bright clean night, more saturated, lamps glow); objects `googie_building`, `retro_tower`, `starburst_sign`, `ray_lamp`, `atomic_sculpture`, `monorail`, `tube_computer`, `sunburst_clock`, `tv_console` (`kind: wave | face`), `retro_desk`, `hedge`, `planter`; a `car`'s `kind: rocket` (parked and driven); traffic `shape: saucer | monorail`, `hull`; looks `outfit: suit | lab_coat | jumpsuit`, `hair: pompadour | bob`, `fedora`, `pillbox`; tests `test_retro_kit.py`; private style sheet
+
+### Step 279 — Adaptation and test cut
+- [x] The script (shots, lines per speaker, voices, camera, staging, sets with map sizes, light, weather, ambient, music) and a private test cut of 3–4 key shots with Kokoro voices; stills checked against the visual rules and measured; generic fixes in the repo: a crisp `blue_hour` (hues kept, a tone curve), `fill_color`, `eyes: bright`, thin strokes one pixel of the fixed wide view, `show_walls`, wall objects `poster` / `wall_shelf`; tests `test_crisp_night_faces_rooms.py`
+
+### Step 280 — The film
+- [x] The full private film (previews looked at shot by shot), a 16:9 1080p MP4 and a delivery copy under 28 MB, captions, −16 LUFS, a contact sheet (48 scenes, 7:40, −16.2 LUFS; generic fixes: graded and resized iso tiles kept while unchanged (several times faster lit places), less memory for zoomed and panned big maps, `zoom` onto an iso object frames it, working objects' moving parts drawn back to front; tests `test_picture_caches.py`)
+
+### Step 281 — Critical review
+- [x] Review fixes and final renders (7:14, −16.2 LUFS; delivery copy 26.8 MB): the owner's note "one of the arms is always in the background" — `cartoon_arms` / `look.arms: front | classic` (front: both arms clear at the sides, the far arm over the body; the default on iso places with `wide: fixed`, global default unchanged); crossfades into a stage no longer dip to the background; many crossfaded scenes joined a batch at a time (memory); the ride re-staged (pod no longer hidden), crossfades between shots; tests `test_arms_front.py`, `test_join_batches.py`; `test_actions` / `test_cartoon_sheet` lists of the Phase AD actions
+
+### Step 282 — Arms at the sides by default
+- [x] (tested in Step 286: suites, `test_mcp.py` and the frame baseline as expected) The owner's decision: `arms: front` is the default everywhere (`generator.DEFAULT_ARMS`; `stage_arms` removed); `cartoon_arms: classic` / `look.arms: classic` opt out; the scene host follows `cartoon_arms`; gallery character entries (`stage`, nine showcases) re-rendered; docs (DESIGN §110.1, CONFIG, guide, CHANGELOG). **Committed untested at the owner's request (no time):** the test suites, `tests/test_mcp.py` and the frame baseline (expect 25 of 33 stills to change, arms only; then remake the references) still have to be run in a later step
+
+## Phase AF — Audio-only output (DESIGN §111)
+
+Audio files only (audiobooks of stories, podcast-style episodes, the sound of an existing video):
+fast, no Manim, reusing the narration, voices, music, sfx, ducking and loudness pipeline. No paid
+or AI API calls; Kokoro (local) only.
+
+### Step 283 — Audio-only renders and projects (owner's items 1–3)
+- [x] `vidgen render --audio-only` / `audio_only: true` writes `output/<output>.wav` (48 kHz stereo 24-bit: voices, music ducked, sfx, stings, normalisation, limiter) without rendering a scene, for any project; audio-only projects with `sections:` (`{id, title, voice, music, sfx, beats}`, `{pause: S}`; did-you-mean on unknown keys) that become `text_card` scenes; timing without pictures `pacing: {timing: speech | video, line, speaker, scene, chapter, sting_before, sting_after, silent, lead_in, tail}`, deterministic; a beat's `pause:` (and `- pause: S` items) in videos too; `vidgen story draft --audio`; a pinned video mix; tests `test_audio_only.py`; one Kokoro end-to-end sample
+
+### Step 284 — Output formats, loudness presets, transcripts (items 4, 7, 8)
+- [x] `audio_output: {format: mp3 | m4a | wav | ogg, bitrate, channels: mono | stereo, sample_rate}` (ffmpeg only); loudness presets `podcast` (−16 LUFS stereo / −19 mono, −1 dBTP), `audiobook` (ACX-style: RMS −23…−18 dB, peaks ≤ −3 dB, room tone head 0.5–1 s and tail 1–5 s, noise floor), `broadcast` (EBU R128 −23 LUFS), `custom`, measured and reported pass / fail (`vidgen audio check` or lint); transcripts from the word timings: plain text with speakers, WebVTT, SRT, a chapters / timestamps list — done with `vidgen audio check` (no lint rule), `room_tone`, `bit_depth`, `audio.level_voice` (a voice leveller before the limiter), `docs/COOKBOOK-AUDIO.md`
+
+### Step 285 — Stereo staging and room acoustics (items 10, 11)
+- [x] Per-voice / character `pan` (or left / centre / right; following a stage position or a beat's `pan:`; a moving voice if cheap); music / ambience stereo width; `room: small_office | corridor | hall | outdoors | car | phone | none` per scene / section via ffmpeg filters (no downloads), narrator optionally dry, smooth changes between rooms; a mono-compatibility check; opt-in for videos too — done with generated impulse responses in numpy (not ffmpeg filters), `pan: {from, to}` moves, `audio.follow_stage`, `audio.music_width` / `ambience_width`, `vidgen audio check --mono`; tests `test_staging.py`
+
+### Step 286 — Critical review of Phase AF, and Step 282's pending checks
+- [x] Review fixes for Steps 283–285; Step 282's checks: the character / cartoon / iso suites, `test_arms_front`, `tests/test_mcp.py` in full, the frame baseline (exactly the 25 stills with characters change, arms only: keep the old references as `frames_classic/`, remake them, update the baseline README) — done: all passed after fixing three tests' frame recorders (manim 0.22 `repeat=`) and `test_push_wipe_carry`'s fake layer; baseline as expected and remade; fixes: WebVTT escaping, problems name `sections[i]`, `vidgen schema` knows `sections`, no YouTube chapter warnings for audio, MCP `render(audio_only)` and `audio_check`; final demo kphi3 podcast + audiobook MP3s PASS (DESIGN §111.5)
+
+### Step 287 — Cookbook: voices in iso cartoons
+- [x] `docs/COOKBOOK-ISO-CARTOONS.md`: a section on stereo staging and rooms for cartoon videos (docs only)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

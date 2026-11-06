@@ -28,6 +28,7 @@ from vidgen.includes import (
 )
 from vidgen.kokoro_voices import voice_parts
 from vidgen.pronunciation import Pronunciation, PronunciationValue, Spoken, build_pronunciation, builtin_entries, builtin_list_name, project_entries
+from vidgen.sections import expand_sections, section_error, section_problems
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.word_anchors import pin_translated_anchors, retime_project_anchors
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
@@ -229,6 +230,8 @@ class Project:
         self.draft = False
         #: The ``--output-dir`` folder (absolute); it wins over ``output_dir:`` (see :attr:`output_dir`).
         self.output_dir_override: Path | None = None
+        #: True for a project written with ``sections:`` (§111): its problems name the sections.
+        self.from_sections = False
         retime_project_anchors(self)   # actions at a spoken word, timed by the beats' audio (§87.2)
 
     @classmethod
@@ -251,11 +254,22 @@ class Project:
     @classmethod
     def _load(cls, path: str | Path, variant: str | None) -> Project:
         config_file = find_config_file(path).resolve()
+        included = read_project_config(config_file, Path(os.environ[CONFINE_ENV]) if os.environ.get(CONFINE_ENV) else None)
+        if not (isinstance(included.data, dict) and "sections" in included.data):
+            return cls._load_config(config_file, included, variant)
+        try:   # an audio-only project's sections (§111): problems located in its sections
+            project = cls._load_config(config_file, included, variant)
+        except VidgenError as exc:
+            raise section_error(exc) from None
+        project.from_sections = True
+        return project
+
+    @classmethod
+    def _load_config(cls, config_file: Path, included: ConfigSource, variant: str | None) -> Project:
+        """:meth:`_load` of the config ``included`` read from ``config_file``."""
         root = config_file.parent
         source = config_file.name
-        confine = os.environ.get(CONFINE_ENV)
-        included = read_project_config(config_file, Path(confine) if confine else None)
-        data = included.data
+        data = expand_sections(included.data, source)   # an audio-only project's sections (§111)
         _confine(data, root, source)
         base_data, base_origins = expand_character_size(*expand_sets(*apply_cut(data, included.origins)))
         base, base_source, base_report = _translated(base_data, root, source, base_origins)
@@ -285,6 +299,7 @@ class Project:
         bare.bare = True
         bare.draft = self.draft
         bare.output_dir_override = self.output_dir_override
+        bare.from_sections = self.from_sections
         return bare
 
     @property
@@ -294,8 +309,10 @@ class Project:
 
     def attributed(self, problems: Iterable[Problem]) -> list[Problem]:
         """``problems`` placed where their values are written: an ``include:`` file (``file``),
-        a set's entry (``sets.NAME...``), the scene's own entry (:func:`vidgen.includes.attributed`)."""
-        return attributed(problems, self.origins)
+        a set's entry (``sets.NAME...``), the scene's own entry (:func:`vidgen.includes.attributed`);
+        a project written with ``sections:``, the section's entry."""
+        placed = attributed(problems, self.origins)
+        return section_problems(placed) if self.from_sections else placed
 
     # ----- names and paths -------------------------------------------------------------------
 
@@ -476,6 +493,16 @@ class Project:
         """Subtitle path matching :meth:`output_path`."""
         return self.output_dir / f"{self._output_stem(preview)}.srt"
 
+    def audio_path(self, preview: bool = False, suffix: str | None = None) -> Path:
+        """The sound of an audio-only render (DESIGN.md §111) matching :meth:`output_path`:
+        ``<output>[_<variant>][_preview|_draft].<format>`` (``suffix``, default that of
+        ``audio_output.format``)."""
+        if suffix is None:
+            from vidgen.audio_encode import suffix as format_suffix
+
+            suffix = format_suffix(self.config.audio_output)
+        return self.output_dir / f"{self._output_stem(preview)}{suffix}"
+
     def chapters_path(self, preview: bool = False) -> Path:
         """YouTube chapter list matching :meth:`output_path`: ``<output>[_<variant>][_preview|_draft]_chapters.txt``."""
         return self.output_dir / f"{self._output_stem(preview)}_chapters.txt"
@@ -541,7 +568,7 @@ class Project:
             if scene.silent:
                 total += scene.duration or 0.0
             for beat in scene.beats:
-                total += beat.estimated_duration(narration.words_per_second) + narration.pad
+                total += beat.estimated_duration(narration.words_per_second) + (narration.pad if beat.pause is None else beat.pause)
             transition = effective(self.config, i)
             if transition.overlaps:
                 total -= transition.seconds

@@ -11,6 +11,8 @@ colours and its contrast.
 
 from __future__ import annotations
 
+import weakref
+import zlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -113,11 +115,24 @@ def mark_lamp_lit(mobject: Mobject, lamp: LampLit) -> None:
 LIGHT_LIFT = "light_lift"
 
 
-def mark_light_lift(mobject: Mobject, share: float) -> None:
+#: The attribute holding the multiply a coloured fill light lifts to (DESIGN.md §108).
+LIGHT_LIFT_TOWARD = "light_lift_toward"
+#: The most bytes of pictures (their pixels as drawn and graded) a :class:`StageLight` keeps to
+#: draw an unchanged picture again without grading it again (DESIGN.md §109).
+GRADED_CACHE_BYTES = 192 * 1024 * 1024
+#: The attribute an iso tile carries while the stage's light draws it: (its
+#: :class:`GradedPictures`, the grade), so the tile grades only what it draws anew (§109).
+TILE_GRADING = "iso_tile_grading"
+
+
+def mark_light_lift(mobject: Mobject, share: float, toward: tuple[float, float, float] = (1.0, 1.0, 1.0)) -> None:
     """Let a fill light lift ``mobject`` and everything in it ``share`` (0..1) of the way from
-    the stage's light back to its colours as drawn (:func:`~vidgen.cartoon.lighting.lifted`)."""
+    the stage's light back to its colours as drawn, or to the multiply ``toward`` (a coloured
+    fill light; :func:`~vidgen.cartoon.lighting.lifted`)."""
+    toward = tuple(float(c) for c in toward)
     for member in mobject.get_family():
         setattr(member, LIGHT_LIFT, float(share))
+        setattr(member, LIGHT_LIFT_TOWARD, toward)
 
 
 def mark_lit(*mobjects: Mobject) -> None:
@@ -125,6 +140,93 @@ def mark_lit(*mobjects: Mobject) -> None:
     for mob in mobjects:
         for member in mob.get_family():
             setattr(member, LIT, True)
+
+
+def _in_frame(camera: Any, image: Any, pixel_array: np.ndarray) -> bool:
+    """Whether any of ``image`` (a Manim image mobject) lies on the camera's ``pixel_array``."""
+    points = getattr(image, "points", None)
+    if points is None or len(points) == 0 or not hasattr(camera, "points_to_subpixel_coords"):
+        return True
+    corners = camera.points_to_subpixel_coords(image, points)
+    height, width = pixel_array.shape[:2]
+    xs, ys = corners[:, 0], corners[:, 1]
+    return not (xs.max() < 0 or ys.max() < 0 or xs.min() > width or ys.min() > height)
+
+
+def pixels_digest(pixels: np.ndarray) -> tuple[Any, ...]:
+    """A picture's fingerprint: its shape, type and the CRC-32 and Adler-32 of its bytes (both
+    together: a changed picture keeps the same one about once in 10^19 changes; ~0.03 ms a
+    megabyte, a twentieth of comparing it with a copy, and no copy kept; DESIGN.md §109)."""
+    data = np.ascontiguousarray(pixels)
+    return pixels.shape, pixels.dtype.str, zlib.crc32(data), zlib.adler32(data)
+
+
+class OwnedCache:
+    """Values kept for live objects (their *owners*), at most ``budget`` bytes in all: a value
+    goes when its owner is gone (a picture made again at another level of detail), so what is
+    kept is only ever for what can still be drawn (DESIGN.md §109)."""
+
+    def __init__(self, budget: int) -> None:
+        self.budget = budget
+        self.used = 0
+        self._kept: dict[int, tuple[Any, int]] = {}
+        self._watched: set[int] = set()
+
+    def get(self, owner: Any) -> Any | None:
+        """The value kept for ``owner``, else ``None``."""
+        found = self._kept.get(id(owner))
+        return None if found is None else found[0]
+
+    def put(self, owner: Any, value: Any, size: int) -> None:
+        """Keep ``value`` (``size`` bytes) for ``owner`` instead of what was kept for it, when it
+        fits the budget (else keep nothing for it)."""
+        key = id(owner)
+        old = self._kept.pop(key, None)
+        if old is not None:
+            self.used -= old[1]
+        if self.used + size > self.budget:
+            return
+        self._kept[key] = (value, size)
+        self.used += size
+        if key not in self._watched:
+            self._watched.add(key)
+            weakref.finalize(owner, self._forget, key)
+
+    def _forget(self, key: int) -> None:
+        old = self._kept.pop(key, None)
+        if old is not None:
+            self.used -= old[1]
+        self._watched.discard(key)
+
+
+class GradedPictures:
+    """The graded pixels of pictures drawn before, so a picture whose pixels and grade are what
+    they were at its last drawing is not graded again (DESIGN.md §109): most of an iso place's
+    pictures stay the same from frame to frame, and grading them was most of a lit frame's cost.
+    A picture counts as the same when its fingerprint (:func:`pixels_digest`) is (pictures change
+    in place: pools, sprites). Keeps at most ``budget`` bytes of graded pixels of live pictures
+    (:class:`OwnedCache`); past it, new pictures are graded every time (default
+    :data:`GRADED_CACHE_BYTES`; 0 keeps none)."""
+
+    def __init__(self, budget: int | None = None) -> None:
+        self._kept = OwnedCache(GRADED_CACHE_BYTES if budget is None else budget)
+
+    @property
+    def used(self) -> int:
+        """The bytes kept now."""
+        return self._kept.used
+
+    def graded(self, owner: Any, pixels: np.ndarray, grade: LightGrade, digest: tuple[Any, ...] | None = None) -> np.ndarray:
+        """``pixels`` (the picture ``owner``'s, of fingerprint ``digest`` if known) with ``grade``
+        applied (:func:`grade_pixels`)."""
+        kept = self._kept.get(owner)
+        digest = pixels_digest(pixels) if digest is None else digest
+        if kept is not None and kept[1] == digest and kept[0] == grade:
+            return kept[2]
+        graded = grade_pixels(pixels, grade)
+        graded.flags.writeable = False   # shared while kept: read only
+        self._kept.put(owner, (grade, digest, graded), graded.nbytes)
+        return graded
 
 
 class StageLight:
@@ -150,7 +252,9 @@ class StageLight:
         self.flash = 0.0
         self._listeners: list[Callable[[LightGrade], None]] = []
         #: grades lifted by a fill light, by (grade, share): made once (§100.15)
-        self._lifted: dict[tuple[LightGrade, float], LightGrade] = {}
+        self._lifted: dict[tuple[LightGrade, float, tuple[float, ...]], LightGrade] = {}
+        #: pictures graded before, drawn again without grading while unchanged (§109)
+        self.pictures = GradedPictures()
         self.camera = camera
         if flat:
             return
@@ -168,12 +272,13 @@ class StageLight:
         lift = getattr(mob, LIGHT_LIFT, 0.0)
         if lift <= 0.0:
             return grade
-        key = (grade, lift)
+        toward = getattr(mob, LIGHT_LIFT_TOWARD, (1.0, 1.0, 1.0))
+        key = (grade, lift, toward)
         found = self._lifted.get(key)
         if found is None:
             if len(self._lifted) > 256:
                 self._lifted.clear()
-            found = self._lifted[key] = lifted(grade, lift)
+            found = self._lifted[key] = lifted(grade, lift, toward)
         return found
 
     def _graded(self, mob: Any, rgbas: np.ndarray) -> np.ndarray:
@@ -182,11 +287,18 @@ class StageLight:
         return grade_rgbas(rgbas, self._grade_of(mob))
 
     def _draw_image(self, draw: Callable[[Any, Any], Any], image: Any, pixel_array: Any) -> Any:
-        """Draw a picture, graded while it is drawn when it is lit."""
-        if not self.grade.changes_colors or not getattr(image, LIT, False):
+        """Draw a picture, graded while it is drawn when it is lit (not one wholly outside the
+        frame: nothing of it is drawn, §109)."""
+        if not self.grade.changes_colors or not getattr(image, LIT, False) or not _in_frame(self.camera, image, pixel_array):
             return draw(image, pixel_array)
+        if getattr(image, "iso_tile", False):   # an iso tile grades as it draws, only when its part on screen changed (§109)
+            setattr(image, TILE_GRADING, (self.pictures, self._grade_of(image)))
+            try:
+                return draw(image, pixel_array)
+            finally:
+                setattr(image, TILE_GRADING, None)
         original = image.pixel_array
-        image.pixel_array = grade_pixels(original, self._grade_of(image))
+        image.pixel_array = self.pictures.graded(image, original, self._grade_of(image))
         try:
             return draw(image, pixel_array)
         finally:

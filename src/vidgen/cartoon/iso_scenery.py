@@ -63,6 +63,35 @@ class IsoColors:
     cut: str = "#8A664A"
     doors: str = "swing"
     strips: tuple[str, str] | None = None   # neon strips: the left back wall's, the right one's (§102.18)
+    #: the surfaces' textures that are not their own (DESIGN.md §107): (surface, texture) pairs of
+    #: :data:`TEXTURED_SURFACES` and :data:`TEXTURES`
+    textures: tuple[tuple[str, str], ...] = ()
+
+    def texture(self, surface: str) -> str:
+        """The texture of ``surface`` (``grass``, ``path``, ``floor`` or ``tiles``): given, else
+        its own (:data:`DEFAULT_TEXTURES`)."""
+        return dict(self.textures).get(surface, DEFAULT_TEXTURES[surface])
+
+
+#: The ground's surfaces that take a texture: outdoors grass (``.``) and paths (``:``), indoors
+#: the floor (``.``) and the tiled floor (``:``), DESIGN.md §107.
+TEXTURED_SURFACES: tuple[str, ...] = ("grass", "path", "floor", "tiles")
+#: The textures: none, tufts of grass, a striped mown lawn, stones, a checkerboard, terrazzo
+#: chips, floorboards, tiles in two shades.
+TEXTURES: tuple[str, ...] = ("plain", "tufts", "lawn", "stones", "checker", "terrazzo", "boards", "tiles")
+#: Each surface's own texture.
+DEFAULT_TEXTURES: dict[str, str] = {"grass": "tufts", "path": "stones", "floor": "boards", "tiles": "tiles"}
+#: The colours a ``style`` gives the ground (DESIGN.md §107; the place's ``colors`` win) and its
+#: textures (the place's ``textures`` win): ``retro``, the world of tomorrow's pastels — a mint
+#: lawn, cream checker paths, turquoise water, terrazzo floors and turquoise walls.
+STYLE_COLORS: dict[str, dict[str, str]] = {
+    "retro": {"grass": "#9ED9A8", "earth": "#E2A77C", "path": "#F6EBD3", "water": "#5ED0D6", "stone": "#F0E2C8", "floor": "#F3E7D0",
+              "tiles": "#F7F0E3", "wall": "#9ED8CF", "cut": "#E8806B"},
+}
+STYLE_TEXTURES: dict[str, dict[str, str]] = {"retro": {"grass": "lawn", "path": "checker", "floor": "terrazzo", "tiles": "checker"}}
+#: The second colour of a checkerboard (mixed into the surface's), and terrazzo's chips.
+CHECKER_TONE = ("#C98A6A", 0.22)
+TERRAZZO_CHIPS = ("#FF7F6B", "#3FC1B5", "#F2B33D", "#8A93A3")
 
 
 #: Neon strip lights along a room's standing walls (``wall_lights``, DESIGN.md §102.18): the
@@ -137,6 +166,10 @@ def _details(place: IsoPlace, colors: IsoColors, column: int, row: int, z: float
     ground = place.ground(column, row)
     seed = _seed(column, row)
     found: list[Shape] = []
+    surface = _surface_name(place, ground)
+    texture = colors.texture(surface) if surface is not None else None
+    if texture is not None and texture != DEFAULT_TEXTURES[surface]:   # type: ignore[index]
+        return _texture(texture, _surface(place, colors, column, row), column, row, z, seed)
     if place.indoor:
         if ground == PATH:
             return []
@@ -156,6 +189,57 @@ def _details(place: IsoPlace, colors: IsoColors, column: int, row: int, z: float
         tuft = shade(colors.grass, 0.22)
         found += [Line(((x - 0.05, y + 0.05, z + 0.12), (x, y, z), (x + 0.05, y - 0.05, z + 0.12)), tuft, 0.6),
                   Line(((x, y, z), (x, y, z + 0.16)), tuft, 0.6)]
+    return found
+
+
+def _surface_name(place: IsoPlace, ground: str) -> str | None:
+    """Which of :data:`TEXTURED_SURFACES` a cell's ground is (``None``: none, a stone block, water)."""
+    if ground == FLOOR:
+        return "floor" if place.indoor else "grass"
+    if ground == PATH:
+        return "tiles" if place.indoor else "path"
+    return None
+
+
+def _texture(texture: str, color: str, column: int, row: int, z: float, seed: int) -> list[Shape]:
+    """What ``texture`` lays on a cell's top of ``color`` at height ``z`` (DESIGN.md §107), placed
+    by the cell (the same in every render): two darker quarters of a checkerboard, terrazzo's
+    chips, a mown lawn's darker stripe on every other row, tufts, stones, floorboards' seams or a
+    tile's darker shade."""
+    found: list[Shape] = []
+    if texture == "checker":
+        dark = mix(color, *CHECKER_TONE)
+        for dc, dr in ((0.0, 0.0), (0.5, 0.5)):
+            x, y = column + dc, row + dr
+            found.append(Poly(((x, y, z), (x + 0.5, y, z), (x + 0.5, y + 0.5, z), (x, y + 0.5, z)), dark, False))
+    elif texture == "terrazzo":
+        for k in range(4):
+            s = _seed(column, row, f"chip{k}")
+            x, y = column + 0.08 + (s % 84) / 100, row + 0.08 + ((s >> 7) % 84) / 100
+            found.append(Disc((x, y, z), 0.028 + (s >> 14) % 3 * 0.008, mix(color, TERRAZZO_CHIPS[(s >> 17) % len(TERRAZZO_CHIPS)], 0.6), False))
+    elif texture == "lawn":
+        if row % 2:
+            found.append(Poly(_top(column, row, z), shade(color, 0.06), False))
+        if seed % 5 == 0:
+            x, y = column + 0.2 + (seed % 60) / 100, row + 0.2 + ((seed >> 6) % 60) / 100
+            found.append(Disc((x, y, z), 0.05, mix(color, "#FFFFFF", 0.5), False))   # a daisy
+    elif texture == "tufts" and seed % 3 != 0:
+        x, y = column + 0.2 + (seed % 60) / 100, row + 0.2 + ((seed >> 6) % 60) / 100
+        tuft = shade(color, 0.22)
+        found += [Line(((x - 0.05, y + 0.05, z + 0.12), (x, y, z), (x + 0.05, y - 0.05, z + 0.12)), tuft, 0.6),
+                  Line(((x, y, z), (x, y, z + 0.16)), tuft, 0.6)]
+    elif texture == "stones":
+        for k in range(2):
+            s = seed >> (8 * k)
+            x, y = column + 0.2 + (s % 60) / 100, row + 0.2 + ((s >> 6) % 60) / 100
+            found.append(Disc((x, y, z), 0.09 + (s >> 12) % 4 * 0.015, mix(color, "#FFFFFF", 0.35), False))
+    elif texture == "boards":
+        for k in (1, 2):
+            found.append(Line(((column + 0.02, row + k / 3, z), (column + 0.98, row + k / 3, z)), shade(color, 0.14), 0.55))
+        cut = column + 0.25 + (seed % 50) / 100
+        found.append(Line(((cut, row + 0.36, z), (cut, row + 0.64, z)), shade(color, 0.14), 0.55))
+    elif texture == "tiles" and (column + row) % 2:
+        found.append(Poly(_top(column, row, z), shade(color, 0.12), False))
     return found
 
 
@@ -187,9 +271,11 @@ def ground_shapes(place: IsoPlace, colors: IsoColors) -> list[Shape]:
                 shapes.append(Line(((x, y, -WATER_DEPTH), (x + 0.22, y - 0.22, -WATER_DEPTH)), mix(colors.water, "#FFFFFF", 0.55), 0.9))
         else:
             color = _surface(place, colors, c, r)
-            if not place.indoor and (c + r) % 2:
+            surface = _surface_name(place, cell.ground)
+            own = surface is None or colors.texture(surface) == DEFAULT_TEXTURES[surface]   # a texture given draws its own
+            if own and not place.indoor and (c + r) % 2:
                 color = shade(color, 0.035)
-            elif place.indoor and cell.ground == PATH and (c + r) % 2:
+            elif own and place.indoor and cell.ground == PATH and (c + r) % 2:
                 color = shade(color, 0.12)
             shapes.append(Poly(_top(c, r, 0.0), color, (open_n, open_e, open_s, open_w)))
             if place.ground(c, r) not in WALLS:
@@ -460,4 +546,5 @@ def place_pieces(place: IsoPlace, colors: IsoColors, looks: Mapping[str, ObjectL
     return pieces
 
 
-__all__ = ["SLAB_DEPTH", "WATER_DEPTH", "IsoColors", "IsoPiece", "ground_shapes", "place_pieces", "window_faces"]
+__all__ = ["DEFAULT_TEXTURES", "SLAB_DEPTH", "STYLE_COLORS", "STYLE_TEXTURES", "TEXTURED_SURFACES", "TEXTURES", "WATER_DEPTH", "IsoColors", "IsoPiece",
+           "ground_shapes", "place_pieces", "window_faces"]

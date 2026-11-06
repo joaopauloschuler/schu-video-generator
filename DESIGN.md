@@ -20799,3 +20799,426 @@ using bigger maps, not by zooming in on the action.
   `fixed_fill_size`, `fixed_view`, `on_ground`, `ground_view_center`, `MAX_SHOT_SCALE`,
   `FOLLOW_MAX_OFFSET`; `wide_view(tiles=)`, `frame_shot` / `shot_view(max_scale=)`,
   `follow_width(most=)`, `SmoothFollow(settle=)`.
+
+## 107. A retro-future kit (Phase AE, Step 278)
+
+Phase AE (Steps 278–281) makes a second, brighter private story cartoon in a 1950s-60s "world of
+tomorrow" look (pastels and chrome, googie buildings, saucers, a monorail, tape-reel computers).
+Step 278 is the generic kit; docs stay lean (one list in CONFIG and the guide, a guide bullet).
+
+- **Style** (`StageIso.style: plain | retro`, default plain): the stage merges
+  `STYLE_COLORS[style]` under the place's `colors` (retro: mint `grass`, terracotta `earth`, cream
+  `path`, turquoise `water`, cream `floor` / `tiles`, turquoise `wall`, coral `cut`),
+  `STYLE_TEXTURES[style]` under its `textures`, and takes objects' default colours from
+  `object_colors(kind, style)` (`STYLE_OBJECT_COLORS`: houses, trees, lamps, benches, signs, cars,
+  towers, office furniture... in turquoise, coral, mustard, mint and cream; a placing's `color` /
+  `detail` win). Traffic in a retro place defaults to cream saucers. Chosen over a theme preset: a
+  place's look is the iso place's business (themes colour text and charts), and one key reads as
+  what the author means.
+- **Textures** (`StageIso.textures: {grass | path | floor | tiles: texture}`, `TEXTURES`:
+  `plain`, `tufts`, `lawn` (a darker stripe on every other row, a daisy now and then), `stones`,
+  `checker` (two darker quarters per cell, `CHECKER_TONE`), `terrazzo` (seeded chips, softened
+  into the floor), `boards`, `tiles`). `IsoColors.textures` / `texture(surface)`; a surface's own
+  texture (`DEFAULT_TEXTURES`) takes the old code path (pictures identical), any other one draws
+  in `_texture` and drops the cell parity shading. Raised grass and path blocks get them too.
+- **Blue hour** (`light: blue_hour`, `LIGHT_PRESETS` + `PRESET_LIGHTS`): tint `#4A66C8` at 0.58, a
+  cool glow (0.035, 0.045, 0.09) lifting the blacks to indigo, stars 0.7, shadows 0.6, and
+  `PRESET_SATURATION` 1.3 (`LightGrade.saturation` above 1 boosts; `grade_rgbas` clips then).
+  `darkness` 0.6 (past `DUSK_DARK`): pools, lamplight and glows show. Its window sky, sun / moon
+  places, crickets (`ambience.NIGHT`) and a twilight on the way to it (`day_stages`) follow.
+  Measured on the sample's stills (preview, mean Rec. 709 luma / Hasler–Süsstrunk colourfulness):
+  street 141 / 69 vs `night` 97 / 52 (day 185 / 61); office 145 / 49 vs night 93 / 34.
+- **Objects** (`cartoon/iso_retro.py`, `MORE_MODULES`): `googie_building` (3 x 3, 4.9: glass
+  shop front and door, slot windows, clerestory glass under a roof swept up to the front right on
+  a V of pylons, a mast with a boomerang sign board and a starburst; on: glass, sign and star
+  glow, a pool), `retro_tower` (2 x 2, `TALL_KINDS` 4–30, on by default: a round shaft with
+  ribbon windows (seeded lit share), fins, a saucer deck with portholes, a cupola, a spire and an
+  atom ball), `starburst_sign`, `ray_lamp` (lamplight, auto light), `atomic_sculpture` (moving:
+  electrons orbit while on), `monorail` (a beam on T pylons across its footprint; `size`
+  lengthens it), `tube_computer` (2 x 1; moving: reels turn, bulbs blink; vacuum tubes glow),
+  `sunburst_clock` (`WALL_KINDS`, `CLOCK_KINDS` with `wall_clock`: `time`), `tv_console` (moving:
+  `kind: wave` an oscilloscope wave, `face` a robot face talking in a wave: `CONSOLE_PICTURES`),
+  `retro_desk` (2 x 1, `top`; a kidney top on hairpin legs, a terminal glowing green while on, a
+  dial telephone), `hedge` and `planter` (across their footprint, `size`). `ISO_USES` gains the
+  desk (type), the tube computer and the TV console (reach).
+- **Rocket car** (`CAR_STYLES`: `car` `kind: sedan | rocket`): `car_shapes` hands a rocket to
+  `rocket_car_shapes` (pointed nose, chrome stripe, bubble canopy, tail fins, a jet ring;
+  headlight pool ahead as a sedan's). Driven too: `IsoVehicle(features=)`,
+  `vehicle_shapes(features=)`, `frame_item(features=)`.
+- **Traffic shapes** (`IsoTrafficLane.shape: capsule | saucer | monorail`, `hull`;
+  `PodLane.shape` / `hull`, `POD_SHAPES`, `POD_RETRO_HULL`): the same six parts per pod drawn as a
+  saucer (a wide flat hull, a dome with its rider, a ring of light, a glow below) or a monorail
+  train (a long round-ended hull along the lane, a band of windows, a nose and a headlight, no
+  trail). A monorail lane at about 3.15 over a `monorail` beam's row rides on it (not hidden by
+  what stands in front; pods never are, but tall objects).
+- **Looks** (`config.py`, `clothes.py`, `generator.py`): `outfit: suit` (jacket, lapels, shirt
+  V in `trim`, tie in `accessory`, buttons, pocket square), `lab_coat` (in `SKIRTED_OUTFITS`: an
+  open coat with tails over a shirt and trousers in `trim`, pockets, a pen), `jumpsuit` (wide
+  collar, zip, belt with a buckle, badge); `hair: pompadour` (the cap's radius swells over the
+  brow, a high hairline), `bob` (to the chin, flipped out); `accessories: fedora` (pinched crown,
+  band in `trim`, snap brim), `pillbox` (both in `TOP_OF_HEAD`). `random_cast` keeps its own lists
+  (casts unchanged).
+- **Checked by eye** (`/home/claude/work/scratch/s278/sheet.png`, sample `s278/proj`): a 30 x 30
+  retro street (`wide: fixed`, medium) by day, at blue hour and at plain night, a two-shot of each;
+  a 24 x 24 office and a lab by day and at blue hour (office at night too); 9:16 of the street and
+  the office; close-ups of the twelve objects and the rocket car off and lit.
+- **Cost** (854 x 480 preview, 15 fps): the street with ~60 objects, three traffic lanes and four
+  walkers: 6.2 s of video in 19.5 s by day, 64.5 s at night, 92 s at blue hour (its lights and
+  pools; the saturation adds to every grade).
+- **Public**: `vidgen.api` adds `CAR_STYLES`, `CLOCK_KINDS`, `CONSOLE_PICTURES`, `TALL_KINDS`,
+  `STYLE_OBJECT_COLORS`, `object_colors`, `STYLE_COLORS`, `STYLE_TEXTURES`, `TEXTURED_SURFACES`,
+  `TEXTURES`, `POD_HULL`, `POD_RETRO_HULL`, `POD_SHAPES`; `IsoColors.textures` / `texture()`,
+  `PodLane.shape` / `hull`, `IsoVehicle(features=)`, `vehicle_shapes(features=)`,
+  `frame_item(features=)`; `PRESET_SATURATION`. Additive: the frame baseline 33/33 identical.
+- **Left for later**: the monorail train does not stop at stations or hide behind what stands in
+  front of it; no driven monorail car object; the retro ground lacks kerbs and road markings;
+  objects without a retro colour keep their own (lab machines); 9:16 previews at 270 x 480 draw
+  characters at `medium` with outlines so thick they read as silhouettes (use 540 x 960); blue
+  hour renders about 1.4x slower than night on lit places.
+
+## 108. Crisp blue hour, friendly faces, rooms with walls (Step 279)
+
+Fixes from the review of the Step 278 sheet (`s278/sheet.png`), before the private test cut;
+additive (frame baseline 33/33 identical).
+
+- **Blue hour** (`PRESET_LIGHTS["blue_hour"]` `#3555B8` at 0.56, no glow; `PRESET_SATURATION` 1.6;
+  `PRESET_TONES` (gamma 1.2, contrast 1.3, vivid 1.15)): `LightGrade` gains `gamma` (a power on each
+  channel before the multiply: mid tones darker, whites kept), `contrast` (a stretch about
+  `CONTRAST_PIVOT` 0.35 after the multiply and glow) and `vivid` (saturation after it), `curved`;
+  `grade_rgbas` / `grade_pixels` share `_graded_colors` for them (a grade without them keeps the
+  old code path: every other light unchanged). The 278 grade lifted the blacks (glow) and tinted
+  0.58 towards lavender, so every colour converged on one luminance and hue (a filter). Chosen by
+  trying candidates on day stills (`s279/grade_try2.py`) and looking: more tint reads as a filter,
+  a contrast pivot at 0.5 reads as day, warm-heavy grades read as sunset. Measured (preview,
+  luma / colourfulness / luma std-dev): street 141 / 69 / 39 (278) → 130 / 88 / 46 (night 97 / 52 /
+  41); office 145 / 49 / 35 → 135 / 60 / 43 (night 94 / 34 / 26). `lifted` relaxes the curve and the
+  boosts with the fill light's share; `blend_grades`, `flash_grade`, `flashback_grade` carry them
+  (`dataclasses.replace`).
+- **Fill colour** (`Stage.fill_color`): `lifted(grade, share, toward)` lifts towards a multiply
+  (the colour's `tint_grade(..., 1).multiply`) instead of white; `mark_light_lift(..., toward)`,
+  `LIGHT_LIFT_TOWARD`, cached by (grade, share, toward).
+- **Faces** — the "goggles" were outlines, not the eyes: on a fixed wide view the characters are
+  built at the whole place's scale (zoom base ~3 on a 30 x 30 map) where their natural stroke is
+  below one pixel, so `one_pixel_stroke()` floored every outline to one pixel *of the whole place*,
+  which the wide view and a close-up then magnify (~18x: 25 px rims). `pixel_zoom(zoom)` (a context
+  in `cartoon/character.py`; `Stage.construct` wraps the scene in it with `zoom_base()` on an iso
+  place, 1 elsewhere) makes the floor one pixel of the fixed view. And `eyes: bright`
+  (`BRIGHT_EYE`: 0.36 x 0.46 of the eye radius, rim 0.3 of the outline, pupil 0.42 of the eye's width,
+  a catchlight 0.2 of the pupil's) for friendly close-ups.
+- **Rooms** (`StageIso.show_walls`, indoor with `wide: fixed`; `wall_room()`): the standing back
+  walls cover the picture `2 h ISO_RISE` cells behind their foot (`wall_reach`, less
+  `WALL_VIEW_MARGIN` 0.3; 0 when a back edge is not standing wall all along), so `on_ground(...,
+  back=)` / `ground_view_center(..., back=)` / `fixed_view(..., back=)` / `wide_view(..., back=)`
+  let the view reach that far behind the back edges; `fixed_view` then sits across from the bodies'
+  middle as far back as that allows (`v = (reach − back + |u|) / 2`, the back corner at u 0), and the
+  bodies still win. Chosen over a bigger room (which only adds bare floor) and over a forced corner
+  view (it lost the characters): staging near the back walls plus this framing shows the walls as a
+  band along the frame's top; with a 3-tile wall a medium 16:9 view (10.9 tiles) cannot show the
+  corner itself without background, so the private film stages the action within ~6 rows of the
+  back walls at `character_size: large` and gives the stage a wall-coloured `background`.
+  Wall dressing: `poster` (`POSTER_PICTURES` rocket | atom | planet, `kind:`) and `wall_shelf`
+  (two planks of books and a plant) join `WALL_KINDS` (`cartoon/iso_retro.py`, `WALL_SPANS`).
+- **Test cut** (private, `story-qc2/testcut/`, 1:38 at 854 x 480 with Kokoro voices): stills
+  luma 107–140, colourfulness 42–97, contrast 43–59 (`s279/measure.csv`); cost at blue hour 12–30 s
+  per second of video (the rainy city 20 s/s with a pan; a `follow` of a car zooms to character
+  size and hid the city, a pan with the drive's run time keeps the wide view).
+- **Left for later**: a shot that frames an object (the AI's TV face) rather than characters; the
+  walls show only as a band (a taller-wall option would show more); blue hour still costs about
+  1.4x night.
+- **Public**: `vidgen.api` adds `PRESET_SATURATION` (missing since §107), `PRESET_TONES`,
+  `CONTRAST_PIVOT`, `pixel_zoom`, `wall_reach`, `WALL_VIEW_MARGIN`, `POSTER_PICTURES`;
+  `LightGrade(vivid, gamma, contrast)`, `.curved`; `lifted(toward=)`, `on_ground(back=)`,
+  `ground_view_center(back=)`, `fixed_view(back=)`, `wide_view(back=)`; `Stage.fill_color`,
+  `StageIso.show_walls`, `CharacterLook.eyes: bright`.
+
+## 109. Fast lit iso places, object zooms (Step 280)
+
+Building the private film (48 scenes, 7:40 at 1920x1080, one scene per command under a 10-minute
+limit and a 3 GB memory cap) showed that a lit iso place cost 23–45 s per video second: profiles
+(cProfile of the worker) put ~75 % in `grade_pixels` (each tile graded on every frame, ~150
+calls a frame) and most of the rest in `draw_tile`'s resize; ~98 % of those tiles were unchanged
+from the frame before.
+
+- **Graded pictures kept** (`cartoon/shading.py`): `GradedPictures` keeps, per picture, the grade,
+  the pixels' fingerprint (`pixels_digest`: shape, dtype, CRC-32 and Adler-32 of the bytes,
+  ~0.03 ms a megabyte; a copy compared with `array_equal` was 5x slower and doubled the memory)
+  and the graded pixels (read-only); same fingerprint and grade: the kept array. Pictures change
+  in place (pools, sprites, snow), hence the fingerprint rather than identity. `OwnedCache` holds
+  the values per live owner (a `weakref.finalize` drops a picture's entry with it) within
+  `GRADED_CACHE_BYTES` (192 MB). `StageLight._draw_image` skips pictures wholly outside the frame
+  (`_in_frame`: nothing of them is drawn) — before, every off-screen tile of a level was graded.
+- **Tile parts kept** (`cartoon/iso_pictures.py`): an iso tile no longer has its whole picture
+  graded before drawing; the light hands it `(GradedPictures, grade)` (`TILE_GRADING`) and
+  `draw_tile` asks `TileParts` for its part on screen keyed by (fingerprint, grade, size, box):
+  a hit draws the kept part (no grading, no resize); a miss grades (through `GradedPictures`, so a
+  moving camera still skips grading) and resizes. Parts are a frame's worth: `TILE_PARTS_BYTES`
+  128 MB is far more than needed.
+- **Memory** for big maps at 1080p: `TILE_CACHE` 320 → 64 (the scenery's LRU of drawn tiles
+  duplicated what each `IsoTiles` keeps); `IsoTiles` lets the other levels' tiles go when its
+  level of detail changes (`_forget_levels`: a zoom on a 26 x 26 lit room held both levels,
+  +0.9 GB, and was killed by the cap) and the oldest tiles not shown once it keeps more than
+  `TILES_KEPT` (3) x those shown + `TILES_SPARE` (16) (`_forget_old`: a long pan made and kept every
+  tile it passed). Made again if the camera comes back (rare; a few seconds).
+- **Measured**: 854 x 480 office (7.3 s, a pan) 233 s → 56 s; 1920 x 1080 office still 13.5 s in
+  147 s, rainy city 4–8 s scenes 150–400 s (a pan misses the part cache on every frame), rooms at
+  `indoor` light 3–6 s per second. Frame baseline 33/33 identical; a render test draws a lit room
+  with and without the caches identically (`test_picture_caches.py`).
+- **Object zoom** (`scenes/actions.py`, `scenes/stage_iso.py`): `zoom` on an iso object framed the
+  middle of the place (an object's layered picture spans the whole place canvas) — now the targets'
+  box comes from the scene's `target_box(target)` when it has one (`Stage.target_box`: the
+  object's picture bounds, `_iso_object_box`), else from the on-screen parts as before (same union
+  of bounds, so other zooms are unchanged). Camera moves (`moves_camera`: zoom, pan, follow, shot)
+  no longer count among the targets that make an object a layered picture.
+- **Moving parts back to front**: `_iso_gadget_places` sorted by the pieces' draw order. Each
+  working object's gadget is placed right after the place's pictures with its cover (the picture
+  of what stands in front of it); in config order, a water cooler's cover (which includes the TV
+  in front of it) was drawn over the TV's own moving face.
+- **Private film decisions** (not code): rooms at 3:27 AM use `light: indoor` (warm lamplight,
+  night windows) with peach terrazzo floors — at `blue_hour` any warm floor turns tan or grey (the
+  multiply caps red at ~0.65); the city keeps `blue_hour`; zooms at ~1.5–2.6 of the fixed view.
+- **Left for later**: a shot (`closeup`) framed at a beat's start on a character who sits down in
+  that beat is framed where it stood (use a `zoom` after the sit); every stage scene fades in from
+  and out to its background colour (`_cover`), a visible dip between consecutive shots of one
+  place (the rainy ride); a zoom deep into a big lit map still needs ~2.5 GB at 1080p; `test_actions`'
+  `BUILTIN_ACTIONS` list lacks the Phase AD actions (pre-existing failures).
+- **Public**: no new `vidgen.api` names (internal caches); `Stage.target_box` is a scene method
+  (like `pan_point`).
+
+## 110. Arms at the sides, crossfaded stages, batched joins (Step 281)
+
+The owner's note on the private film: "one of the arms is always looking in the background". A
+generated character's side view (facing right or left: it reads as a three-quarter view, both
+eyes on the face) hung both arms on the body's edges and drew the far arm (`arm_right` facing
+right) behind the body (`DEFAULT_DRAW_ORDER` 10): on a tall or pear body and under a suit's coat
+only a sliver of it showed, so the figure read as one-armed. The front view already drew both
+arms in front, on the body's edges.
+
+- **`arms: front | classic`** (`ArmStyle`; `CharacterLook.arms`, video `cartoon_arms`;
+  `generator.ARM_STYLES`). `front` (`generator._arms` / `_arm_hang`): each arm that should hang
+  beside the body (the side view's far arm, both arms of the front view) gets its shoulder out to
+  just past the body's edge at the top of the sleeve (`ARM_SHOULDER_OUT` × the limb's width) and
+  the least lean out (0.5° steps, at most `ARM_MAX_LEAN` 14°) that keeps the forearm and hand
+  `ARM_GAP` clear of the body's outline (a pear's or a round body's hips may still touch the hand
+  at the cap); the side view's near arm leans only so far that its hand's middle is on the body's
+  edge (a pear: ~8°, a tall body: 0). The lean is drawn into the rest shapes (the elbow pivot and
+  the hand's end turn with them), so poses, walk swings and `reach` (which works from the rest
+  geometry) keep working; a pose's angles are relative to the leaning rest. The side view's far
+  arm is drawn over the body and under the near arm (`FAR_ARM_ORDER` 34 / 35): an arm swinging
+  forward or reaching across now shows over the torso (a three-quarter body's far side faces the
+  viewer) and crossed arms read as crossed. `classic` is the drawing of before (the same parts,
+  pivots, ends and orders; a test checks it).
+- **Defaults** (as changed by Step 282, §110.1): a character's `look.arms`, else the video's
+  `cartoon_arms`, else `front` (`generator.DEFAULT_ARMS`). The look cache key (`look_key`) has
+  the style. The character sheet follows `cartoon_arms`. (Step 281 made `front` the default only
+  on iso places with the fixed wide view, `stage.stage_arms`, else `classic`.)
+- **Global default at Step 281 kept `classic`**: with `front` everywhere, 25 of the 33 baseline
+  stills change (every still with a character: `yard` 9, `meadow` 16; the 8 `gradient-descent`
+  stills have none), max difference 225; the change is the arms only (sheet
+  `s281/baseline_front.png`, private). The owner decided for `front` (§110.1).
+- **Crossfades into a stage** (`Stage` entrance): the set faded in from its background colour
+  under a cover even when a crossfade / push / wipe brought the scene in, so consecutive shots
+  of one place dipped (mean luma 80–100 down to ~37 between the ride's shots). With an
+  overlapping `transition_in` the set is simply there (the transition blends it in); the scene
+  before already holds its last picture instead of fading out. A render test measures it.
+- **Joining many crossfaded scenes** (`render/ffmpeg.py`): one `xfade` graph over 48 runs at
+  1080p was killed by the 3 GB cap (every input open at once, frames held for each). Over
+  `BLEND_BATCH` (8) runs, `_blend_batches` blends 8 runs at a time into lossless H.264
+  intermediates (`LOSSLESS_CODEC`, removed after the join), then blends those with the
+  transitions between batches: the same frames (a test compares batched and one-graph joins).
+- **Private film** (not code): `cartoon_arms: front`, `transition: {type: crossfade, duration:
+  0.5}` (the scene's fade-out and fade-in were ~0.85 s of each boundary: 7:40 → 7:14, narration
+  7:02), title and end cards 4 s; the first ride shot re-staged (phone booth and bus stop moved
+  off the road's front), a tall tower in front of the road left out of the two later ride sets (it hid the pod for
+  seconds), one set without the far side of the city (memory), one zoom raised to 2.0.
+- **Left for later**: a lit 36 x 36 city zoomed to ~1.5 at 1080p still grows to ~3 GB over an
+  11 s scene (a shot zoomed 1.45–1.6 was killed; at 2.0 it renders in 146 s); the side view is the
+  only non-front view (no true profile); a far arm swinging forward crosses the torso in front.
+- **Public**: config `cartoon_arms`, `look.arms`; `vidgen.api.character(..., arms=)` takes the
+  caller's default (the video's and the look's win). No other new `vidgen.api` names.
+
+### 110.1 `front` is the default everywhere (Step 282)
+
+The owner's decision: every generated character hangs both arms at its sides unless told
+otherwise. `generator.DEFAULT_ARMS = "front"` is the default of `generate_parts`, `look_parts` /
+`look_key` and `build_character`; `stage.stage_arms` is gone (no stage-specific rule is left).
+`classic` stays as the opt-out (`cartoon_arms: classic` or `look: {arms: classic}`) and draws
+exactly as before: the Step 113 drawing pins (`test_cartoon_outfits`) and a Step 281 digest
+(`test_arms_front`) are checked with `arms="classic"`. Every place that draws a generated
+character passes the video's `cartoon_arms`: `api.character` (stages and custom scenes), the
+stills and the character sheet, and now the scene host (`build_host(..., arms=)`, which before
+drew `classic` whatever the video said); the look gallery still (`write_looks_png`, §69.47)
+takes the default unless a look says. A visible change for every existing video with characters: the
+frame baseline was remade (25 of 33 stills differ, arms only), and the gallery's character
+entries (`stage` and the nine cartoon / iso showcases) were rendered again. Pre-made SVG
+characters are untouched.
+
+## 111. Audio-only output (Phase AF, Step 283)
+
+Audiobooks, podcast-style episodes and the sound of an existing video, without Manim.
+
+- **Switch**: `vidgen render --audio-only` for one run, `audio_only: true` for the project (`output:`
+  and `format:` already mean other things, so neither carries it). `vidgen.audio_only.render_audio`
+  checks the scenes as a render does (`_check_scenes`, `warn_audio`), plans the timeline
+  (`plan_audio`), writes `build/<render>/audio/voice.wav` (each beat's MP3 at its start, shaped by
+  its `BeatWindow` like `add_narration`; 10 s blocks, a beat decoded when first needed), `sfx.wav`
+  (`sfx.write_track`, stings ducked, composed stings as in a render) and the mix
+  (`mix.mix_audio(..., always_write=True)`: the only change to `mix.py`, default off, so a video's mix
+  is unchanged — `test_video_mix_is_pinned` holds Step 282's numbers), copies it to
+  `Project.audio_path` (`<output>[_<variant>][_preview|_draft].wav`, 48 kHz stereo 24-bit) and writes
+  `timings.json` (the combined timings' shape, without `format`, plus `audio_only: {timing,
+  left_out}`). No `pre_render` / `post_render` hooks, no SRT (transcripts are Step 284).
+- **Timing** (`pacing:`): `speech` (default) times each line by its MP3 (else the word estimate)
+  and gaps — `line` (default `narration.pad`), `speaker`, `scene`, `chapter`, the beat's own `pause`;
+  a start sting `sting_before` ahead of the speech, an end sting its length + `sting_after` before the
+  next line; overlaps and interrupts through `beat_windows` as in a video; no gap next to a silent
+  scene (it lasts `pacing.silent` or its `duration`); the first scene starts at 0 with `lead_in`
+  before its first line (so no "Intro" chapter), `tail` after the last. `video` takes every start
+  from `VideoPlan` at the format's fps (frame-rounded `sfx` actions as the runner cues them): the
+  MP4's soundtrack. Both deterministic.
+- **Sounds**: only what the config fixes — a scene's `sfx:`, `sfx` actions (word anchors resolved
+  by the audio, §87.2), stings, generated voice sounds (§69.33), the type's `entrance_sfx` with
+  `sfx.auto`. Stage foley / ambience, automatic animation sounds and a clip's sound come from
+  scene code at render time; they are left out and named (`AudioPlan.left_out`, a warning,
+  `--json` `left_out`).
+- **Projects without pictures**: `sections:` (`vidgen.sections.expand_sections`, applied to the raw
+  config in `Project._load` and `parse_config`, before cuts, sets and translations): a section
+  `{id, title, voice, music, sfx, beats}` is a `text_card` scene showing its title (a video render
+  is a plain slideshow; no new scene type, so the gallery and the scene lists are unchanged), the
+  title also its `chapter`; a plain string is a beat; `{pause: S}` is a silent scene. Unknown keys
+  get a did-you-mean. Tools that edit the YAML's `scenes:` in place (`vidgen direct`, the MCP
+  editors) do not handle `sections:`.
+- **Pauses**: `BeatConfig.pause` (0–60 s) and `- pause: S` items (`config.merge_pause_items`, added to
+  the beat before, before default ids are given) replace the gap after a beat: `SpokenLine.pause`
+  in `beat_windows`, so videos (`VideoPlan` and the scene's clock alike) honour it too; unset, every
+  window is as before (frame baseline: the 8 character-free stills identical; the 25 with
+  characters differ by Step 282's arms only).
+- **Story draft**: `vidgen story draft --audio` (`DraftOptions.audio`) keeps the draft's voices,
+  lines, speakers and emotions as sections titled by the story's headings, the music bed,
+  `audio: {normalize: true}`; no cards, cast looks, sets, shots or actions; its own report sections
+  and TODOs (`commented_yaml(list_key="sections")`).
+- **Public**: config `audio_only`, `pacing`, `sections`, beat `pause`; CLI `render --audio-only`,
+  `story draft --audio`; `render --json` with `audio_only: true`. No new `vidgen.api` names.
+
+### 111.1 Audio files (Step 284)
+
+`audio_output: {format: wav | mp3 | m4a | ogg, bitrate, channels: mono | stereo, sample_rate,
+bit_depth, loudness, room_tone, transcripts}` (`AudioOutputConfig`). The deliverable is
+`Project.audio_path(preview)` with the format's suffix. `AudioOutputConfig.plain` (48 kHz stereo
+24-bit WAV, no preset, no room tone: the default) copies `mix.wav` as Step 283 did, byte for byte;
+anything else is one FFmpeg encode (`vidgen.audio_encode`): `pan=mono|c0=0.5*c0+0.5*c1` for mono,
+`aresample` for another rate, `pcm_s16le` / `pcm_s24le` (`-rf64 auto`), `libmp3lame` (`-b:a`:
+constant bitrate, ID3v2.3), `aac` in `ipod` (M4A, faststart), `libopus` in Ogg (16 / 24 / 48 kHz,
+a config error otherwise); tags from `metadata` (`chapter_export.video_tags`); written to `.part`
+then replaced. No chapters embedded (out of scope). Missing encoders surface as the FFmpeg error
+with "needs an ffmpeg with libmp3lame / libopus".
+
+### 111.2 Loudness presets, the check, the voice leveller
+
+- **Presets** (`vidgen.audio_check.PRESETS`, `LoudnessPreset`): `podcast` −16 LUFS stereo / −19 mono
+  ±1 LU, TP ≤ −1 (mix limiter −1.5); `audiobook` ACX: RMS −23…−18 (mix aims −20, unweighted RMS
+  over all samples and channels, `mix.rms_db`), sample peak ≤ −3 (limiter −3.5 dBTP), noise floor ≤
+  −60 dB (the quietest 0.5 s; digital silence passes), head 0.5–1 s and tail 1–5 s of silence
+  (10 ms frames above −50 dBFS are sound), notes (never failures) for ACX's format (MP3 ≥ 192 kb/s,
+  44.1 kHz) and 120 min; `broadcast` EBU R128 −23 ±0.5 LU, TP ≤ −1; `custom` `audio.target_lufs` ±1,
+  TP ≤ `audio.true_peak`. The audiobook preset fills `pacing` `lead_in: 0.6`, `tail: 2.5` where the
+  config does not set them (`audio_only.effective_pacing`, `model_fields_set`).
+- **Mix targets**: `audio_check.mix_targets` → `mix.MixTargets(lufs | rms, true_peak, mono, level_voice,
+  room_tone)` passed to `mix_audio(..., targets=)`: a preset always normalises; with `mono` the sum
+  is the channels' average in both channels and the LUFS target is raised by `DUAL_MONO_LU`
+  (10·log10 2), so the encoded one-channel file measures the target; `room_tone` (dBFS RMS) adds a
+  fixed 10 s loop of pink noise (80 Hz–6 kHz, seed 111) after the gain, before the limiter. The
+  report gains `levelled_db`, `target_rms`, `mono` only when set.
+- **Leveller** (`audio.level_voice`, default `None`: on with the podcast / audiobook presets, off
+  otherwise, so a video's mix is unchanged unless set; `test_video_mix_is_pinned` still holds): the
+  voice track's 10 ms frame peaks (`mix.frame_peaks`, one pass) → gain per frame (`leveller_gain`):
+  threshold = median peak of the frames within 45 dB of the loudest + 8 dB, ratio 3, 6 dB soft knee,
+  `smooth_steps` over 5 frames (look-ahead ramps on the louder side) → `LevelledTrack.read`
+  interpolates it per sample. Chosen by measuring Step 283's samples at −16 LUFS (peak vs RMS
+  detectors, thresholds +2…+9 dB, ratios 2–4): the limiter's deepest cut fell 5.0 → 0.6 dB on the
+  ElevenLabs narration (0.4 → 0 on Kokoro) with the voices lowered 0.4 dB on average where lowered.
+  Music and effects are not levelled.
+- **Check** (`measure_file`): one FFmpeg run, `ebur128=peak=true+sample` (integrated, LRA, true and
+  sample peak; its summary parsed) and the decoded samples at 48 kHz in the file's channels streamed
+  to stdout (stderr to a temp file) → per-10 ms power, nothing else kept. `check(measured, preset)` →
+  `PresetResult` of `CheckItem(name, value, target, status: pass | fail | note)`. A render with a
+  preset measures its file, logs a warning naming what misses, and records `audio_output: {file,
+  check}` in `timings.json` (`render --json` `check`). CLI `vidgen audio check FILE|PROJECT
+  [--preset] [--lufs --true-peak] [--variant --preview --draft --output-dir] [--json]`: every preset,
+  or the one asked for / the project's (exit 1 when it fails).
+
+### 111.3 Transcripts
+
+`audio_output.transcripts` (default all) next to the file (`vidgen.transcripts`): `_transcript.txt`
+(`plain_text`: title, `[M:SS] Title` per published chapter but the intro, a paragraph per voice's
+turn within a scene, `Name:` when more than one voice is used, the unlabelled base voice
+`Narrator`); `.srt` and `.vtt` from `render.pipeline.video_cues` (the video's cues, word-timed;
+speaker names follow `subtitles.speakers`; WebVTT cue text escaped by `vtt_text`, Step 286);
+`_chapters.txt` by `write_chapter_list(..., warn=False)` (as a video, without YouTube's warnings
+since Step 286). **Public**: config `audio_output`, `audio.level_voice`; CLI `audio
+check`; `render --json` `check` / transcript outputs. No new `vidgen.api` names.
+
+### 111.4 Stereo staging and rooms (Step 285)
+
+Opt-in, in videos and audio-only renders (`vidgen.staging`). Applied in the mix to each beat's
+voice after its overlap shape (`audio_only._voice_samples`, `scene.add_narration`), never to the
+MP3s: `pan` is a display field of a voice (`voices.DISPLAY_FIELDS`: not in `audio_fields`, not
+inherited by named voices), so nothing is re-voiced.
+
+- **Pan**: `PanSetting` = −1…1 or `POSITIONS` (`far_left` −0.8, `left` −0.5, `centre`/`center`,
+  `right`, `far_right`: the stage's marks); on `voice:`, `voices.<n>`, a beat (`PanMove {from, to}`:
+  eased, raised cosine, from the first to the last sample within 40 dB of the line's peak). Law:
+  `sfx.stereo`'s equal power (centre = both channels at full level, so a centred dry voice is
+  bit-identical). `beat_staging(config, scene, beat, stage)`: the beat's pan, else `stage`, else its
+  voice's. `audio.follow_stage`: a video asks `NarratedScene.speaker_pan(beat)` (default `None`;
+  `StageScene`: the mean x of `beat_speakers` in the camera frame as the line starts, 0…1 →
+  −1…1); an audio-only render reads the stage's `characters:` `at` (`params_stage_pan`, marks via
+  `mark_x`). No moves follow a character walking during a line (a beat `{from, to}` does).
+- **Rooms**: `RoomName` / `RoomConfig {use, amount 0–2, narrator}` on a scene (sections pass `room`)
+  or `audio.room`; the base voice stays dry unless `narrator`; a scene's `none` cancels the default.
+  `ROOM_PRESETS`: early reflections (ms, gain taps added to the dry voice and panned with it;
+  corridor: an 11 ms flutter) plus a reverberation IR per channel (`reverb_ir`, cached): seeded
+  noise (seed 1110 + 7·index + channel), band-limited (2nd-order magnitudes), split at 2 kHz into
+  bands decaying with `rt60` / `rt60_high`, pre-delay, 8 ms onset, unit energy × `wet_db`; FFT
+  convolution, not panned (diffuse; the two IRs correlate < 0.1). `phone`: 300–3400 Hz (4th-order
+  magnitude, zero-phase), tanh saturation, band again, RMS-matched. Measured (scratch s285):
+  T30 at 500 Hz small_office 0.52 (the band filter's own ring), corridor 1.11, hall 2.24 s;
+  4 kHz 0.30 / 0.77 / 1.63 s. The output is longer by the tail, so a room rings under the next
+  line (room changes are as smooth as the tails overlap; no crossfade of a room bus). A tail past
+  the scene's end (video: the last beat's window; audio-only: the file's end) fades over 0.25 s.
+- **Width**: `audio.music_width` / `ambience_width` (0–2) scale the side signal of each music cue /
+  ambience bed in `MusicTrack.read` (`staging.widen`; 1 returns the block itself).
+- **Mono compatibility**: `measure_file` keeps per 10 ms the sums L², R², L·R of a stereo file:
+  `correlation`, `worst_correlation` (1 s windows with sound), `mono_fold_db` (mean channel power
+  over the fold's). `mono_check` → `PresetResult("mono")`: correlation ≥ 0, worst second ≥ −0.3,
+  fold ≤ 3.5 dB (hard pan / decorrelated = 3.01). `vidgen audio check` appends it for stereo files
+  (`--mono`: it sets the exit code); an audio-only render with staging (`uses_staging`) and stereo
+  output prints `mono:` and records `timings["stereo"]` (`render --json` `stereo`). The built-in
+  beds are wide already (calm: correlation 0.22 at width 1; at 1.4 its worst second is −0.37).
+- **Compatibility**: unset, every path is the old one (`staging.plain` skips the processing; the
+  scene fingerprint adds `staging` only when a beat is staged or `follow_stage` is on a stage):
+  Step 284's audio-only render pinned (`test_audio_only_render_is_pinned_without_staging`, RMS per
+  half second and bytes with neutral settings), the video mix pinned as before, frame baseline 0.
+- **Public**: config `voice.pan`, `voices.<n>.pan`, beat `pan`, scene / section `room`, `audio.room`,
+  `follow_stage`, `music_width`, `ambience_width`; CLI `audio check --mono`; `render --json`
+  `stereo`; `NarratedScene.speaker_pan` (a scene type may override it). No new `vidgen.api` names.
+
+### 111.5 Review (Step 286)
+
+- **WebVTT**: `&`, `<`, `>` escaped and blank lines dropped in cue text (a blank line ends a cue);
+  `-->` can no longer occur. SRT unchanged (the video's). Sample files pass a format checker
+  (scratch `s286/check_subs.py`: numbering, `HH:MM:SS,mmm` / `.mmm`, start < end, order).
+- **Sections in problems**: `sections.section_location` renames `scenes[i]` → `sections[i]`
+  (`.chapter` / `.params.text` → `.title`, `.duration` → `.pause`; one scene per section, so the
+  index holds). Applied to load errors (`Project._load` / `parse_config` when the raw config has
+  `sections`, `section_error`) and to later problems (`Project.attributed` when
+  `Project.from_sections`).
+- **Schema**: `vidgen schema` has `sections` (section / pause items, `additionalProperties: false`;
+  beats as strings or `BeatConfig`); the top level requires `title` and `oneOf` `scenes` /
+  `sections`. Variants still cannot set `sections`.
+- **YouTube**: `chapter_warnings` is empty for `audio_only: true`; an audio-only render writes
+  `_chapters.txt` without the warnings (`write_chapter_list(warn=False)`).
+- **MCP**: `render` takes `audio_only`; new tool `audio_check` (`vidgen audio check`: `target`,
+  `preset`, `variant`, `preview`; read-only).
+- Checked, unchanged: speech timing (gaps, pauses, stings, silent scenes, lead-in / tail), preset
+  numbers (ACX, R128, podcast mono −19), the equal-power pan law (`left` 7.65 dB L−R) and room IR
+  maths. `pacing.silent`, when set, overrides a pause section's own seconds too (documented).

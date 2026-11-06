@@ -68,7 +68,7 @@ class IsoDriving:
             look = looks[name]
             vehicle = IsoVehicle(name, kind, ObjectLook(look.main, look.detail), self.iso_view, point=middle_of(place, item), heading=heading,
                                  scale=self.iso_view.unit * pixels * density, density=self._iso_density, frame_width=self.frame_width,
-                                 outline=self.drawing.outline_factor, on=states.get(name, default_state(kind)).on)
+                                 outline=self.drawing.outline_factor, on=states.get(name, default_state(kind)).on, features=item.features)
             self.iso_vehicles[name] = vehicle
             self._iso_vehicle_plans[name] = (item, heading)
             if kind == "train_car":

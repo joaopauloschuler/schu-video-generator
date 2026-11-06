@@ -120,12 +120,14 @@ class StoryStaging:
         """Each character's fill light (DESIGN.md §100.15): the stage's ``fill_light``, or an
         iridescent character's own ``glow`` when that is more; holograms are not graded at all."""
         entries = {entry.name: entry for entry in self.project.config.characters}
+        color = self.params.fill_color
+        toward = (1.0, 1.0, 1.0) if color is None else tint_grade(resolve_color(color, self.theme), 1.0).multiply
         for name, figure in self.cast.items():
             entry = entries.get(name)
             iridescent = entry.iridescent_look() if entry is not None else None
             share = max(float(self.params.fill_light), iridescent.glow if iridescent is not None else 0.0)
             if share > 0.0 and not (is_hologram(figure) or is_echo(figure)):
-                mark_light_lift(figure, share)
+                mark_light_lift(figure, share, toward)
 
     def _story_step(self, dt: float) -> None:
         """Scene updater: every character effect for the scene time now (after the animations,

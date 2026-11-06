@@ -399,7 +399,11 @@ def _car(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool = Fal
 
 
 def car_shapes(f: _Frame, look: ObjectLook, state: ObjectState, *, reverse: bool = False, spin: float | None = None) -> list[Shape]:
-    """The shapes of :func:`_car` (also for a car the stage drives)."""
+    """The shapes of :func:`_car` (also for a car the stage drives); a ``rocket`` car's are
+    :func:`~vidgen.cartoon.iso_retro.rocket_car_shapes` (DESIGN.md §107)."""
+    if "rocket" in f.item.features:
+        from vidgen.cartoon.iso_retro import rocket_car_shapes   # it builds on this module
+        return rocket_car_shapes(f, look, state, reverse=reverse, spin=spin)
     w, d = f.width, f.depth
     body = look.main
     on = state.on

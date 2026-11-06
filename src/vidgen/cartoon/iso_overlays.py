@@ -242,6 +242,9 @@ class PodLane:
     at: float | None = None
     #: the lane's ends in the world (tile units), for what hides its pods (``None``: nothing does)
     world: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None
+    #: what glides along it (:data:`POD_SHAPES`, DESIGN.md §107) and its hull's colour
+    shape: str = "capsule"
+    hull: str = "#262C44"
 
 
 #: A pod's parts (DESIGN.md §102.3): its height as a share of its length, its trail's length (a
@@ -251,6 +254,13 @@ POD_TRAIL = 2.4
 POD_GLOW_OPACITY = 0.28
 POD_CANOPY = "#CFF6FF"
 POD_HULL = "#262C44"
+#: What a lane's pods look like (DESIGN.md §107): a hover capsule, a flying saucer, a monorail
+#: train; the cream hull of a saucer or a train (and of every pod in a ``retro`` place).
+POD_SHAPES = ("capsule", "saucer", "monorail")
+POD_RETRO_HULL = "#FFF1D6"
+#: A monorail train's length (pod lengths) and a saucer's width.
+TRAIN_LENGTH = 3.4
+SAUCER_WIDTH = 1.35
 
 
 def _ellipse(cx: float, cy: float, rx: float, ry: float, steps: int = 20) -> list[np.ndarray]:
@@ -278,7 +288,7 @@ class IsoTraffic(VGroup):
             for _ in range(lane.count):
                 trail = VMobject().set_fill(lane.color, opacity=0.0).set_stroke(width=0.0, opacity=0.0)
                 glow = VMobject().set_fill(lane.color, opacity=0.0).set_stroke(width=0.0, opacity=0.0)
-                hull = VMobject().set_fill(POD_HULL, opacity=0.0).set_stroke(lane.color, width=2.0, opacity=0.0)
+                hull = VMobject().set_fill(lane.hull, opacity=0.0).set_stroke(lane.color, width=2.0, opacity=0.0)
                 canopy = VMobject().set_fill(POD_CANOPY, opacity=0.0).set_stroke(width=0.0, opacity=0.0)
                 head = VMobject().set_fill("#141826", opacity=0.0).set_stroke(width=0.0, opacity=0.0)
                 light = VMobject().set_fill("#FFFFFF", opacity=0.0).set_stroke(width=0.0, opacity=0.0)
@@ -308,7 +318,8 @@ class IsoTraffic(VGroup):
                     for part in parts:
                         part.points = np.zeros((0, 3))
                     continue
-                self._draw(parts, x0 + dx * spot.share, y0 + dy * spot.share, ux, uy, facing, lane.length, spot.shown)
+                draw = {"saucer": self._draw_saucer, "monorail": self._draw_train}.get(lane.shape, self._draw)
+                draw(parts, x0 + dx * spot.share, y0 + dy * spot.share, ux, uy, facing, lane.length, spot.shown)
 
     @staticmethod
     def _draw(parts: tuple[VMobject, ...], x: float, y: float, ux: float, uy: float, facing: float, length: float, shown: float) -> None:
@@ -330,6 +341,61 @@ class IsoTraffic(VGroup):
         head.set_points_as_corners(_ellipse(x + facing * half * 0.05, y + tall * 0.75, tall * 0.42, tall * 0.48, 12))
         head.set_fill(opacity=0.9 * shown)
         light.set_points_as_corners(_ellipse(x + facing * half * 0.9, y - tall * 0.1, tall * 0.22, tall * 0.18, 10))
+        light.set_fill(opacity=shown)
+
+    @staticmethod
+    def _draw_saucer(parts: tuple[VMobject, ...], x: float, y: float, ux: float, uy: float, facing: float, length: float, shown: float) -> None:
+        """A flying saucer (DESIGN.md §107): a wide flat hull with a glowing rim in the lane's
+        colour, a glass dome with its rider, a ring of light under it and a soft beam of glow
+        below; a short faint trail."""
+        trail, glow, hull, canopy, head, light = parts
+        half, tall = length * SAUCER_WIDTH / 2, length * 0.13
+        back = np.array([x - ux * half * 0.6, y - uy * half * 0.6, 0.0])
+        tail = np.array([x - ux * length * 1.4, y - uy * length * 1.4, 0.0])
+        side = np.array([-uy, ux, 0.0]) * tall
+        trail.set_points_as_corners([back + side, tail, back - side, back + side])
+        trail.set_fill(opacity=0.2 * shown)
+        glow.set_points_as_corners(_ellipse(x, y - tall * 3.2, half * 0.9, tall * 1.1))
+        glow.set_fill(opacity=POD_GLOW_OPACITY * shown)
+        hull.set_points_as_corners(_ellipse(x, y, half, tall))
+        hull.set_fill(opacity=shown).set_stroke(opacity=shown)
+        dome = [np.array([x + half * 0.42 * math.cos(a), y + tall * 0.5 + tall * 2.4 * math.sin(a), 0.0]) for a in np.linspace(0.0, math.pi, 15)]
+        canopy.set_points_as_corners([*dome, dome[0]])
+        canopy.set_fill(opacity=0.85 * shown)
+        head.set_points_as_corners(_ellipse(x + facing * half * 0.06, y + tall * 1.5, tall * 0.62, tall * 0.7, 12))
+        head.set_fill(opacity=0.9 * shown)
+        light.set_points_as_corners(_ellipse(x, y - tall * 0.55, half * 0.62, tall * 0.32, 16))
+        light.set_fill(opacity=shown)
+
+    @staticmethod
+    def _draw_train(parts: tuple[VMobject, ...], x: float, y: float, ux: float, uy: float, facing: float, length: float, shown: float) -> None:
+        """A monorail train (DESIGN.md §107) along the lane: a long round-ended hull with a stripe
+        of the lane's colour, a band of lit windows, a dark nose and a headlight, a faint glow
+        under it; no trail."""
+        trail, glow, hull, canopy, head, light = parts
+        half, tall = length * TRAIN_LENGTH / 2, length * 0.22
+        along, up = np.array([ux, uy, 0.0]), np.array([0.0, 1.0, 0.0])
+        centre = np.array([x, y, 0.0])
+
+        def capsule(cx: np.ndarray, h: float, r: float, lift: float) -> list[np.ndarray]:
+            points = []
+            for end, sign in ((h, 1.0), (-h, -1.0)):
+                for a in np.linspace(-math.pi / 2, math.pi / 2, 7):
+                    points.append(cx + along * (end + sign * r * 0.9 * math.cos(a)) + up * (lift + r * math.sin(a) * sign))
+            return [*points, points[0]]
+
+        trail.points = np.zeros((0, 3))
+        glow.set_points_as_corners(_ellipse(x, y - tall * 2.2, half * 0.9, tall * 0.6))
+        glow.set_fill(opacity=POD_GLOW_OPACITY * 0.7 * shown)
+        hull.set_points_as_corners(capsule(centre, half - tall, tall, 0.0))
+        hull.set_fill(opacity=shown).set_stroke(opacity=shown)
+        canopy.set_points_as_corners(capsule(centre, half - tall * 1.4, tall * 0.32, tall * 0.25))
+        canopy.set_fill(opacity=0.9 * shown)
+        nose = centre + along * (half - tall * 0.55)
+        head.set_points_as_corners(_ellipse(nose[0], nose[1] + tall * 0.25, tall * 0.4, tall * 0.42, 12))
+        head.set_fill(opacity=0.9 * shown)
+        lamp = centre + along * (half - tall * 0.15)
+        light.set_points_as_corners(_ellipse(lamp[0], lamp[1] - tall * 0.25, tall * 0.25, tall * 0.2, 10))
         light.set_fill(opacity=shown)
 
     def changing(self, start: float, end: float) -> bool:
@@ -520,5 +586,5 @@ class IsoHaze(VGroup):
         return min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
 
 
-__all__ = ["BLINK_DUTY", "BLINK_SECONDS", "POD_HEIGHT", "SCREEN_LINE_THICKNESS", "SHUTTER_SLATS", "Gadget", "HazeSpot", "IsoBlinkers", "IsoGadgets", "IsoHaze",
+__all__ = ["BLINK_DUTY", "BLINK_SECONDS", "POD_HEIGHT", "POD_HULL", "POD_RETRO_HULL", "POD_SHAPES", "SCREEN_LINE_THICKNESS", "SHUTTER_SLATS", "Gadget", "HazeSpot", "IsoBlinkers", "IsoGadgets", "IsoHaze",
            "IsoScreens", "IsoShutters", "IsoTraffic", "PodLane", "blink_on"]

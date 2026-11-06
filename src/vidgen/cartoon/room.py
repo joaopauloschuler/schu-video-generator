@@ -328,6 +328,7 @@ WINDOW_SKIES: dict[str, WindowSky] = {
     "sunset": WindowSky("#5B6FB0", "#F59A6B"),
     "night": WindowSky("#0E1838", "#24366A", 1.0),
     "indoor": WindowSky("#1B2550", "#4A4F86", 0.6),
+    "blue_hour": WindowSky("#26357F", "#7FB2E0", 0.5),
 }
 
 

@@ -82,7 +82,36 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "gift_pile": ("#E2574C", "#F6C945"), "balloon_bunch": ("#E2574C", "#B9BFC9"), "birthday_cake": ("#F2A7C3", "#F4F6FA"),
     "boat": ("#3B6FB6", "#F4F6FA"), "dock": ("#C69466", "#7A5236"), "lighthouse": ("#E2574C", "#2B2F3A"),
     "train_car": ("#3E8E6A", "#F2C14E"), "rocket": ("#F4F6FA", "#E2574C"),
+    "googie_building": ("#FFF4DE", "#FF7F6B"), "retro_tower": ("#F4EBDD", "#3FC1B5"), "starburst_sign": ("#FFF4DE", "#FF7F6B"),
+    "ray_lamp": ("#3FC1B5", "#FFE9A8"), "atomic_sculpture": ("#EDE3D1", "#FF7F6B"), "monorail": ("#EDE7DC", "#3FC1B5"),
+    "tube_computer": ("#E9DFC8", "#FF7F6B"), "sunburst_clock": ("#8A5A3C", "#E8B23A"), "tv_console": ("#A0673F", "#7CFFC4"),
+    "retro_desk": ("#F2E6CF", "#3FC1B5"), "hedge": ("#4E9F5A", "#4E9F5A"), "planter": ("#F1E6D2", "#FF7F6B"),
+    "poster": ("#3A3F4B", "#FF7F6B"), "wall_shelf": ("#C9925E", "#3FC1B5"),
 }
+#: The default colours a place's ``style`` gives objects instead (DESIGN.md §107; a placing's
+#: ``color`` / ``detail`` win): ``retro``, pastels and chrome — turquoise, coral, mustard, mint, cream.
+STYLE_OBJECT_COLORS: dict[str, dict[str, tuple[str, str]]] = {
+    "retro": {
+        "house": ("#FFE3C9", "#3FC1B5"), "tree": ("#6CC48A", "#9C6B47"), "pine": ("#4FAE7F", "#9C6B47"), "bush": ("#5DBB7C", "#FF7F6B"),
+        "flowers": ("#FF7F6B", "#F2B33D"), "fence": ("#FFF4DE", "#3FC1B5"), "bench": ("#FF7F6B", "#D5DEE6"), "lamp": ("#3FC1B5", "#FFE9A8"),
+        "sign": ("#F2B33D", "#FF7F6B"), "table": ("#F2E6CF", "#F2E6CF"), "chair": ("#FF7F6B", "#FF7F6B"), "sofa": ("#3FC1B5", "#F2B33D"),
+        "plant": ("#4FA36B", "#FF7F6B"), "rug": ("#F2B33D", "#FF7F6B"), "bed": ("#3FC1B5", "#FFF4DE"), "shelf": ("#E9C99A", "#FF7F6B"),
+        "tower": ("#F4EBDD", "#3FC1B5"), "street_lamp": ("#3FC1B5", "#FFE9A8"), "car": ("#3FC1B5", "#CFF2EE"), "bus_stop": ("#3FC1B5", "#FF7F6B"),
+        "phone_booth": ("#FF7F6B", "#F2B33D"), "vending_machine": ("#FF7F6B", "#7CE0F0"), "fountain": ("#F0E2C8", "#5ED0D6"),
+        "mailbox": ("#3FC1B5", "#F2B33D"), "newsstand": ("#FF7F6B", "#F2B33D"), "cafe_table": ("#D5DEE6", "#FFF4DE"),
+        "armchair": ("#FF7F6B", "#F2B33D"), "floor_lamp": ("#F2B33D", "#3A3F4B"), "console": ("#E9DFC8", "#7CFFC4"),
+        "server_rack": ("#E9DFC8", "#FF7F6B"), "desk_with_pc": ("#F2E6CF", "#7CFFC4"), "bookshelf_tall": ("#C9925E", "#FF7F6B"),
+        "coffee_machine": ("#D5DEE6", "#FF7F6B"), "water_cooler": ("#FFF4DE", "#7EC8F0"), "kitchen_counter": ("#A8E6CF", "#FFF4DE"),
+    },
+}
+
+
+def object_colors(kind: str, style: str | None = None) -> tuple[str, str]:
+    """The default (main, detail) colours of an object of ``kind`` in a place of ``style``
+    (:data:`STYLE_OBJECT_COLORS`, else :data:`OBJECT_COLORS`)."""
+    return STYLE_OBJECT_COLORS.get(style or "", {}).get(kind, OBJECT_COLORS[kind])
+
+
 GLASS = "#D6EEF8"
 FRAME = "#F4F6FA"
 WOOD = "#9C6B47"
@@ -1065,6 +1094,11 @@ def _wall_box(item: IsoObject, base: float) -> Box3:
     f = _Frame(item, base)
     if item.kind == "torch_sconce":
         low, high, reach = _more(item.kind).SCONCE_SPAN
+    elif item.kind == "sunburst_clock":
+        retro = _more(item.kind)
+        low, high, reach = retro.SUNBURST_HEIGHT - retro.SUNBURST_RADIUS - 0.08, retro.SUNBURST_HEIGHT + retro.SUNBURST_RADIUS + 0.08, 0.06
+    elif item.kind in ("poster", "wall_shelf"):
+        low, high, reach = _more(item.kind).WALL_SPANS[item.kind]
     else:
         radius = CLOCK_RADIUS * min(f.width, 1.6)
         low, high, reach = CLOCK_HEIGHT - radius - 0.05, CLOCK_HEIGHT + radius + 0.05, 0.06
@@ -1794,7 +1828,8 @@ def _fire_extinguisher(f: _Frame, look: ObjectLook) -> list[Shape]:
 MOVING_KINDS = ("quantum_core", "robot_arm", "centrifuge", "coffee_machine", "specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge",
                 "fume_hood", "satellite_dish", "charging_station", "airlock", "printer_3d", "fireplace", "stove", "tv", "traffic_light", "fountain",
                 "campfire", "pond", "beehive", "desk_with_pc", "water_cooler", "printer", "globe", "treasure_chest", "cauldron", "giant_crystal",
-                "torch_sconce", "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket")
+                "torch_sconce", "christmas_tree", "pumpkin", "balloon_bunch", "birthday_cake", "boat", "lighthouse", "rocket",
+                "atomic_sculpture", "tube_computer", "tv_console")
 _LAB_MOVING = frozenset({"specimen_tank", "chemistry_bench", "distillation_rig", "lab_fridge", "fume_hood"})
 _WORKSHOP_MOVING = frozenset({"satellite_dish", "charging_station", "airlock", "printer_3d"})
 #: The objects that work while open too (a lab fridge's cold mist, a treasure chest's sparkles).
@@ -2016,7 +2051,7 @@ SHADOW_RADII: dict[str, float] = {"tree": 0.45, "pine": 0.42, "bush": 0.48, "roc
                                   "floor_lamp": 0.26, "street_lamp": 0.26, "traffic_light": 0.22, "mailbox": 0.3, "bicycle": 0.36,
                                   "stump": 0.4, "scarecrow": 0.3, "beehive": 0.4, "wheelbarrow": 0.4, "water_cooler": 0.32, "globe": 0.36,
                                   "cauldron": 0.42, "giant_crystal": 0.48, "signpost": 0.24, "christmas_tree": 0.5, "pumpkin": 0.36,
-                                  "balloon_bunch": 0.18, "birthday_cake": 0.44}
+                                  "balloon_bunch": 0.18, "birthday_cake": 0.44, "starburst_sign": 0.22, "ray_lamp": 0.3}
 #: The shadows' colour and opacity (a tint of what lies under them).
 SHADOW_COLOR = "#1F2430"
 SHADOW_OPACITY = 0.16
@@ -2047,9 +2082,12 @@ MORE_MODULES: dict[str, str] = {
     **{kind: "iso_fantasy" for kind in ("treasure_chest", "cauldron", "giant_crystal", "throne", "torch_sconce", "signpost", "archway", "statue")},
     **{kind: "iso_seasons" for kind in ("christmas_tree", "snowman", "pumpkin", "gift_pile", "balloon_bunch", "birthday_cake", "boat", "dock",
                                         "lighthouse", "train_car", "rocket")},
+    **{kind: "iso_retro" for kind in ("googie_building", "retro_tower", "starburst_sign", "ray_lamp", "atomic_sculpture", "monorail",
+                                      "tube_computer", "sunburst_clock", "tv_console", "retro_desk", "hedge", "planter", "poster",
+                                      "wall_shelf")},
 }
 #: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
-LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire", "cauldron", "torch_sconce"})
+LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire", "cauldron", "torch_sconce", "ray_lamp"})
 
 
 def _more(kind: str) -> ModuleType:
@@ -2096,5 +2134,5 @@ def object_box(item: IsoObject, base: float) -> Box3:
 
 
 __all__ = ["BED_KINDS", "DOORWAY", "LAMPLIGHT_KINDS", "LIGHT_POOL", "LIT_GLASS", "LIT_OBJECTS", "MORE_MODULES", "MOVING_KINDS", "OBJECT_COLORS",
-           "OPEN_WORKING", "Motion", "ObjectLook",
-           "clock_hands", "light_pool", "object_box", "object_lights", "object_motion", "object_shapes", "object_working", "tower_screen"]
+           "OPEN_WORKING", "STYLE_OBJECT_COLORS", "Motion", "ObjectLook",
+           "clock_hands", "light_pool", "object_box", "object_colors", "object_lights", "object_motion", "object_shapes", "object_working", "tower_screen"]

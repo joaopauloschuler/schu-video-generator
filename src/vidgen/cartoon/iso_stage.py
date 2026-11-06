@@ -116,25 +116,45 @@ def fixed_fill_size(tiles: float, frame_width: float, frame_height: float) -> in
     return math.ceil(2 * fixed_reach(tiles, frame_width, frame_height) - 1e-6)
 
 
-def on_ground(place: IsoPlace, u: float, v: float, half_u: float, half_v: float) -> tuple[float, float]:
+def on_ground(place: IsoPlace, u: float, v: float, half_u: float, half_v: float, back: float = 0.0) -> tuple[float, float]:
     """The picture point (tile widths) nearest to (``u``, ``v``), along the map's two axes, at
     which a view of half size ``half_u`` x ``half_v`` (tile widths) lies on the ground (the map's
-    top at ``z`` 0); along an axis too short for it, the map's middle (the place centred)."""
+    top at ``z`` 0); along an axis too short for it, the map's middle (the place centred).
+    ``back`` (cells) lets the view reach that far behind the map's back edges (a room's standing
+    back walls cover the frame there: :func:`wall_reach`, DESIGN.md §108)."""
     reach = half_u + 2 * half_v
     x, y = 2 * v + u, 2 * v - u   # the ground point under (u, v)
-    x = _between(x, reach, place.columns - reach)
-    y = _between(y, reach, place.rows - reach)
+    x = _between(x, reach - back, place.columns - reach)
+    y = _between(y, reach - back, place.rows - reach)
     return iso_point(x, y)
 
 
+#: Cells kept off the line where a standing back wall's top meets the picture behind it
+#: (:func:`wall_reach`): the outline and anti-aliasing.
+WALL_VIEW_MARGIN = 0.3
+
+
+def wall_reach(place: IsoPlace) -> float:
+    """How far (cells) behind the map's back edges a view may reach and still show no background,
+    covered by the room's standing back walls (DESIGN.md §108): a wall ``h`` high covers the
+    picture ``2 h ISO_RISE`` cells behind its foot (less :data:`WALL_VIEW_MARGIN`); 0 outdoors
+    or when a back edge (the map's first row or column) is not standing wall all along."""
+    if not place.indoor:
+        return 0.0
+    edge = [(c, 0) for c in range(place.columns)] + [(0, r) for r in range(place.rows)]
+    height = min(0.0 if place.is_cut(c, r) else place.wall_height(c, r) for c, r in edge)
+    return max(2 * height * ISO_RISE - WALL_VIEW_MARGIN, 0.0)
+
+
 def ground_view_center(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float,
-                       width: float, center: tuple[float, float]) -> tuple[float, float]:
+                       width: float, center: tuple[float, float], back: float = 0.0) -> tuple[float, float]:
     """``center`` (Manim units) of a view ``width`` wide moved by :func:`on_ground` so the view
-    lies on the ground, then inside the frame (the camera's bounds)."""
+    lies on the ground (``back``: as far behind the back walls as they cover), then inside the
+    frame (the camera's bounds)."""
     unit = view.unit
     height = width * frame_height / frame_width
     u, v = center[0] / unit + view.u0, -center[1] / unit + view.v0
-    u, v = on_ground(place, u, v, width / unit / 2, height / unit / 2)
+    u, v = on_ground(place, u, v, width / unit / 2, height / unit / 2, back)
     return _in_frame(view, frame_width, frame_height, width, u, v)
 
 
@@ -148,14 +168,17 @@ def _in_frame(view: IsoView, frame_width: float, frame_height: float, width: flo
 
 
 def fixed_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float, tiles: float,
-               bodies: Sequence[Box3] = ()) -> tuple[float, tuple[float, float]]:
+               bodies: Sequence[Box3] = (), back: float = 0.0) -> tuple[float, tuple[float, float]]:
     """The fixed wide view (``wide: fixed``, DESIGN.md §106): ``tiles`` tile widths across
     whatever the map's size (never wider than the whole place's fit: a smaller place shows whole,
     centred, as a diorama), centred on the middle of the ``bodies`` (the place's middle without
     any), moved onto the ground (:func:`on_ground`): on a map big enough (:func:`fixed_fill_size`)
     only ground shows, along an axis too short the place is centred; then moved as little as
     keeps the bodies in view (with :data:`ISO_WIDE_BODY_ROOM` and :data:`ISO_MARGIN`: a
-    character by the map's edge is shown, with the background beyond it)."""
+    character by the map's edge is shown, with the background beyond it). ``back`` > 0 (a
+    room's ``show_walls``, :func:`wall_reach`, DESIGN.md §108): across from the bodies' middle, as
+    far back as that much room behind the back edges allows, so the standing walls fill the
+    frame's top (then moved as little as keeps the bodies in view)."""
     unit = view.unit
     width = min(tiles * unit, frame_width)
     half_u, half_v = width / unit / 2, width * frame_height / frame_width / unit / 2
@@ -166,7 +189,9 @@ def fixed_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height:
         u, v = (k_left + k_right) / 2, (k_top + k_bottom) / 2
     else:
         u, v = iso_point(place.columns / 2, place.rows / 2)
-    u, v = on_ground(place, u, v, half_u, half_v)
+    if back > 0.0:   # as far back as the walls cover, across from the bodies (the map's back corner is u 0)
+        v = (half_u + 2 * half_v - back + abs(u)) / 2
+    u, v = on_ground(place, u, v, half_u, half_v, back)
     if keep:
         pad_u, pad_v = ISO_MARGIN * 2 * half_u, ISO_MARGIN * 2 * half_v
         u = _between(u, k_right + pad_u - half_u, k_left - pad_u + half_u)
@@ -176,7 +201,7 @@ def fixed_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height:
 
 def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: float,
               bodies: Sequence[Box3] = (), placed: Collection[str] = (), fit: str | float = "auto",
-              tiles: float | None = None) -> tuple[float, tuple[float, float]]:
+              tiles: float | None = None, back: float = 0.0) -> tuple[float, tuple[float, float]]:
     """The wide (establishing) camera view of the place (DESIGN.md §89.13): ``(view width,
     centre)`` in Manim units. The place's picture is diamond-shaped, so fitted whole
     (:func:`iso_view`, the frame) it leaves wide empty corners; the wide view magnifies that fit
@@ -194,11 +219,12 @@ def wide_view(place: IsoPlace, view: IsoView, frame_width: float, frame_height: 
     ``fit`` (the place's ``wide``, DESIGN.md §100.6): ``auto`` as above; ``fill`` lets a room's
     walls be cut too (the floor, its spots, objects and characters fill the frame); a number is
     the magnification over the whole place's fit itself (at least 1), moved as little as keeps
-    the ``bodies`` in view; ``fixed`` is :func:`fixed_view` of ``tiles`` across (DESIGN.md §106)."""
+    the ``bodies`` in view; ``fixed`` is :func:`fixed_view` of ``tiles`` across (DESIGN.md §106;
+    ``back``: its reach behind a room's back walls, §108)."""
     if fit == "fixed":
         if tiles is None:
             raise ValueError("wide_view: fit 'fixed' needs tiles")
-        return fixed_view(place, view, frame_width, frame_height, tiles, bodies)
+        return fixed_view(place, view, frame_width, frame_height, tiles, bodies, back)
     left, top, right, bottom = place_bounds(place)
     room = 1 - 2 * ISO_MARGIN
     unit = view.unit
@@ -395,8 +421,11 @@ TILE_OVERLAP = 2
 MAX_DETAIL = 5
 #: A level of detail is used up to a zoom this much over its own (a little blur is not seen).
 DETAIL_SLACK = 1.1
-#: How many tiles a scenery keeps drawn (about 1 MB each).
-TILE_CACHE = 320
+#: How many tiles a scenery keeps drawn (about 1 MB each). The stage's pictures keep the tiles
+#: they made themselves (:class:`~vidgen.cartoon.iso_pictures.IsoTiles`), so this only spares
+#: drawing one again for another picture: 64, not 320, so a big map's zoomed scene keeps its
+#: memory for what it shows (DESIGN.md §109).
+TILE_CACHE = 64
 
 #: A picture of the scenery: whether it has the ground, and the pieces in it (indices into
 #: :attr:`IsoScenery.pieces`, in draw order) with the state each is drawn in.
@@ -716,6 +745,8 @@ __all__ = [
     "fixed_view",
     "ground_view_center",
     "on_ground",
+    "WALL_VIEW_MARGIN",
+    "wall_reach",
     "map_fraction",
     "OUTLINE_SAMPLES",
     "place_bounds",

@@ -5,7 +5,70 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–277)
+## Unreleased (Steps 193–286)
+
+### Phase AF review (Step 286)
+
+- Problems in a project written with `sections:` name the section (`sections[1].beats[0].voice`, `sections[2].pause`), not the scene it became; `vidgen schema` knows `sections`.
+- No more YouTube chapter warnings for audio-only projects and renders.
+- WebVTT transcripts escape `&` and `<` in the text, as the format requires.
+- MCP: `render` takes `audio_only`; new tool `audio_check`.
+- Step 282's arms default is now tested (character, cartoon and iso suites, MCP, frame baseline: the 25 stills with characters change, arms only).
+
+### Stereo staging and rooms (Step 285)
+
+- `pan:` places a voice in stereo (−1…1, or `far_left`, `left`, `centre`, `right`, `far_right`) on a voice of `voices:` or on a line; `pan: {from: right, to: left}` moves it across the line; `audio.follow_stage` pans stage voices to where their characters stand.
+- `room: small_office | corridor | hall | outdoors | car | phone | none` per scene or section (or `audio.room`): generated reflections and reverberation, the narrator dry unless asked; nothing downloaded, nothing re-voiced.
+- `audio.music_width` / `ambience_width` narrow or widen the music and ambience beds.
+- A mono-compatibility check (channel correlation, mono fold loss) in `vidgen audio check` (`--mono` sets the exit code) and in audio-only renders with staging. All opt-in: videos and mixes without these keys are unchanged.
+
+### Audio files, loudness presets, transcripts (Step 284)
+
+- `audio_output: {format: mp3 | m4a | ogg | wav, bitrate, channels: mono, sample_rate}` for audio-only renders (FFmpeg only).
+- Loudness presets `podcast` (−16 LUFS stereo / −19 mono), `audiobook` (ACX: RMS, peaks, noise floor, room tone head and tail), `broadcast` (EBU R128 −23), `custom`: the render measures the file and says PASS / FAIL; `vidgen audio check FILE|PROJECT` measures any audio file.
+- `audio.level_voice`: a gentle leveller on the voices before the limiter (on with the podcast and audiobook presets; opt-in for videos): the limiter's deepest cut on ElevenLabs narration at −16 LUFS fell from 5.2 to 0.7 dB.
+- Transcripts next to the file: plain text with speakers and chapter times, SRT, WebVTT, the chapter list. Cookbook: `docs/COOKBOOK-AUDIO.md`.
+
+### Audio only (Step 283)
+
+- `vidgen render --audio-only` (or `audio_only: true`) writes the project's sound alone, `output/<output>.wav`: narration and dialogue voices, music ducked under them, sound effects, stings, loudness normalisation; no scene is rendered, so it takes seconds.
+- Audio-only projects (audiobooks, podcasts) may list `sections:` (title, voice, music, sfx, lines; `- pause: 2` between them) instead of scenes; `vidgen story draft --audio` drafts one from a story.
+- Lines are timed by their speech plus `pacing:` gaps (between lines, speakers, sections, chapters, around stings); `pacing: {timing: video}` keeps a video's own timeline.
+- A beat's `pause: 1.5` (or a `- pause: 1.5` item after it) sets the silence after its line, in videos too.
+
+### Arms at the sides by default (Step 282)
+
+- **Visible change:** characters now hang both arms at their sides by default; set `cartoon_arms: classic` for the old look (or `look: {arms: classic}` for one character). Every existing video with generated characters looks slightly different (the arms only); `classic` draws exactly as before.
+- A scene host (`host:`) follows `cartoon_arms` too (it was always drawn the old way).
+- The gallery's character entries (`stage` and the cartoon and iso showcases) are rendered again with the new arms.
+
+### Arms at the sides, smooth crossfades between stage scenes (Step 281)
+
+- `cartoon_arms: front` (video) or `look: {arms: front}` (a character): both arms read as arms at the sides, hanging just clear of the body; the far arm of the side view is drawn over the body (under the near arm) instead of behind it, where only a sliver showed. The default on iso places with `wide: fixed`; elsewhere `classic` (as before) unless set (since Step 282: `front` everywhere).
+- A crossfade, push or wipe into a `stage` scene no longer passes through the background colour: the set comes in with the transition.
+- Videos with many crossfaded scenes join in less memory (a batch of runs at a time, the same pictures).
+
+### Faster lit places, zooms onto objects (Step 280)
+
+- Lit iso places (`blue_hour`, `night`, …) render several times faster: a tile is graded and resized again only when its pixels, the light or its place on screen change (854x480: 233 s → 56 s for 7.3 s of a busy room; 1920x1080: ~13 s per second of a still camera). Pictures are the same as before.
+- Big maps at full size use less memory: a zoomed view keeps one level of detail's tiles, a long pan lets the tiles it passed go, fewer spare tiles are kept.
+- `zoom` onto an iso place's object (`zoom: tv_1`, `zoom: [lamp, pip]`) frames that object, not the middle of the place; a camera move no longer takes an object out of the place's picture.
+- Working objects with moving parts (a TV's picture, a cooler's bubbles) are drawn back to front: one standing in front of another shows its moving parts.
+
+### Crisp nights, friendly faces, rooms with walls (Step 279)
+
+- `light: blue_hour` is crisp: colours keep their own hues (saturated before the cool tint), mid tones darker and the tones stretched, clean blacks — no lavender haze (mean luma ~130 against `night`'s ~95).
+- `fill_color` on a stage: the fill light lifts the characters towards a colour (a warm key at night).
+- `eyes: bright`: a clear white, a fine rim, a small pupil with a catchlight.
+- On an iso place with `wide: fixed`, thin outlines are one pixel of that view, not of the whole place (close-ups no longer get thick, dark outlines and eyes).
+- `iso: {show_walls: true}` (a room with `wide: fixed`): the view goes as far back as the standing back walls cover, so they fill the top of the frame; iso objects `poster` (`kind: rocket | atom | planet`) and `wall_shelf` hang on a back wall.
+
+### A retro-future kit (Step 278)
+
+- `iso: {style: retro}`: a 1950s "world of tomorrow" palette for iso places (mint lawn mown in stripes, cream checker paths, terrazzo floors, turquoise walls, pastel objects, cream saucer traffic); `textures: {grass, path, floor, tiles}` (`lawn`, `checker`, `terrazzo`, `stones`, `boards`, `tiles`, `tufts`, `plain`) on any place.
+- `light: blue_hour`: a bright, clean night — lighter and more colourful than `night`, still dark enough for lamps, windows and neon to glow and pool.
+- Iso objects `googie_building`, `retro_tower`, `starburst_sign`, `ray_lamp`, `atomic_sculpture`, `monorail`, `tube_computer`, `sunburst_clock`, `tv_console` (`kind: wave | face`), `retro_desk`, `hedge`, `planter`; a `car`'s `kind: rocket` (parked or driven); traffic `shape: saucer | monorail` and `hull`.
+- Looks: `outfit: suit | lab_coat | jumpsuit`, `hair: pompadour | bob`, `accessories: [fedora]` / `[pillbox]`.
 
 ### Iso framing (Step 277)
 

@@ -64,6 +64,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
 | `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
+| `cartoon_arms` | `front` | how generated characters' arms hang: `front` (both read as arms at the sides, just clear of the body; the side view's far arm drawn over the body, under the near arm) or `classic` (the older look: on the body's edges, the far arm behind the body); a character's `look.arms` wins |
 | `motion_effects` | `true` | dust, speed lines, impact stars and whoosh arcs the moves on `stage` scenes add while `cartoon_motion` is not `none`; `false`: none; a stage's `motion_effects` param wins; see [motion effects](#motion-effects-motion_effects) |
 | `drawing` | none (`normal`, `flat`, `none`: as drawn) | how the cartoons are drawn: `{outline: thin \| normal \| bold, shading: flat \| soft, texture: none \| paper \| storybook, seed}` on `stage` scenes (the host: outline and shading); a stage's `drawing` param wins key by key; a variant may change it; see [drawing style](#drawing-style-drawing) |
 | `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
@@ -1155,11 +1156,13 @@ voice:
   dub: null                         # this voice in other languages, {pt: pf_dora}: see "Dubbing"
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
+  pan: null                         # where the voice sounds in stereo (-1..1, left, right...): see "Stereo staging and rooms"
 ```
 
 All keys are optional; the values shown are the defaults. Unknown keys are an error. Changing
 `voice_id`, `model_id`, `output_format` or `settings` re-voices every beat of this voice on the
-next `vidgen tts`; `label` and `color` only name the speaker (they change no audio). `context`
+next `vidgen tts`; `label` and `color` only name the speaker and `pan` places it in the mix (they
+change no audio file). `context`
 sends the neighbouring beats only when they have the same voice (see
 [multiple voices](#multiple-voices-voices)).
 
@@ -1644,17 +1647,18 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `head_size` | `1.0` | head size relative to the default head, 0.6 to 1.6 |
 | `eyes` | `dot` | `dot`, `oval` or `round` (white with a pupil), `sleepy` (half closed) |
 | `nose` | `none` | `none`, `dot`, `round`, `triangle` |
-| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `wavy` (long locks waving past the jaw, ending in curls; the chin and chest left clear), `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
+| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `wavy` (long locks waving past the jaw, ending in curls; the chin and chest left clear), `bun`, `curly`, `ponytail`, `braids`, `afro`, `pompadour` (a 1950s quiff), `bob` (chin length, flipped out) (colour `colors.hair`) |
 | `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
 | `facial_hair` | `none` | `none`, `moustache`, `beard` (with a moustache; the mouth stays seen); colour `colors.hair` |
-| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace`, `medal` (a gold medal on a ribbon in `colors.accessory`), `pendant` (a stone in `colors.accessory` on a dark cord, glowing at night and pulsing like a slow heartbeat) (on the body), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, only one of `hat`, `cap`, `crown`, `wizard_hat`, `party_hat`, and one of `necklace`, `medal`, `pendant` |
+| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace`, `medal` (a gold medal on a ribbon in `colors.accessory`), `pendant` (a stone in `colors.accessory` on a dark cord, glowing at night and pulsing like a slow heartbeat) (on the body), `fedora` (a pinched crown, a snap brim, a band in `colors.trim`), `pillbox` (a small round 1960s hat), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, only one of `hat`, `cap`, `fedora`, `pillbox`, `crown`, `wizard_hat`, `party_hat`, and one of `necklace`, `medal`, `pendant` |
 | `proportions` | `adult` | `adult`, `kid` (a big head on a short body and legs), `tall_kid` (lankier, a smaller head than a kid's); the figure is as tall as any other, so make a kid smaller with the stage's `scale` (about 0.7 for a `kid`, 0.85 for a `tall_kid`) |
-| `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
+| `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes), `suit` (a jacket with lapels over a shirt in `trim`, a tie in `colors.accessory`), `lab_coat` (a long open coat over a shirt and trousers in `trim`, pockets, a pen), `jumpsuit` (one piece, a wide collar in `trim`, a zip, a belt in `colors.accessory`, a badge) |
 | `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
 | `shoes` | `none` | `none`, `shoes`, `boots` (colour `colors.accessory`) |
 | `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin`, `snail` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it; or `robot` ([Robots and costumes](#robots-and-costumes); no `hair` either) |
 | `robot` | none | `species: robot` only: `{head: box \| round, face: eyes \| screen, antenna: true \| false, moves_on: legs \| wheels}`; default a box head, eyes, an antenna, legs |
 | `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
+| `arms` | none (the video's `cartoon_arms`, else `front`) | `front`: both arms read as arms at the sides, hanging just clear of the body (a pear's or a round body's lean out a little), the side view's far arm drawn over the body; `classic`: on the body's edges, the side view's far arm behind the body (a sliver shows) |
 | `svg` | none | an SVG file (relative to the project folder) drawn instead of the generator, split into parts by element ids ([below](#characters-from-svg-files)); the other `look` keys and `colors` do not apply |
 
 | key (`colors`) | default | |
@@ -3952,6 +3956,7 @@ audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
 | `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
 | `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
 | `bitrate` | `192k` | AAC bitrate of the video's audio: `128k`, `160k`, `192k`, `256k`, `320k`. A loud, dense mix (a Short at −14 LUFS) can come out of FFmpeg's AAC encoder at 192k several dB over `true_peak` (measured: −1.9 dBTP in the mix, +1.9 in the MP4); at 256k it stayed at −1.6. Check the MP4 (`ffmpeg -i out.mp4 -af ebur128=peak=true -f null -`) |
+| `level_voice` | — | a gentle leveller on the voices before the limiter: 3:1 (6 dB soft knee) above the voices' usual peak + 8 dB, 50 ms ramps. Only the loudest syllables come down (by ~0.4 dB on average where it acts), so the limiter barely works: raising the kphi3 narration to −16 LUFS, the limiter's deepest cut fell from 5.2 to 0.7 dB. `true` / `false`; unset: on in audio-only renders with the `podcast` or `audiobook` [preset](#audio-files-audio_output-loudness-presets-transcripts), off otherwise (a video's mix is unchanged unless you set it) |
 
 When the mix is written (music, or `normalize: true`) schu-video-generator measures the sum, applies one gain to
 reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
@@ -4017,6 +4022,172 @@ your own music, private or commercial; no attribution is required. A credit is w
 example in the video's description:
 
 > Music rendered with the GeneralUser GS SoundFont by S. Christian Collins (https://www.schristiancollins.com/generaluser).
+
+## Audio only (`audio_only`, `sections`, `pacing`)
+
+`vidgen render --audio-only` writes only the sound of any project, `output/<output>.wav` (48 kHz
+stereo, 24-bit; MP3, M4A, Ogg Opus, mono, a loudness preset and transcripts with
+[`audio_output`](#audio-files-audio_output-loudness-presets-transcripts)), and renders no scene: the narration and dialogue voices (with their effects and
+emotions, as `vidgen tts` made them), music beds ducked under the voices, sound effects, stings,
+loudness normalisation and the limiter (`audio:`). `audio_only: true` makes every `vidgen render`
+of the project do that. The timings go to `build/final/audio/timings.json`; `--json` prints them
+with the `mix` report. What only a scene's code makes while it renders is left out and named in
+a warning: stage foley and ambience, automatic animation sounds (`sfx: {auto: true}`), a
+`video_clip`'s sound.
+
+An audio-only project may list `sections` instead of `scenes` (an audiobook, a podcast):
+
+```yaml
+title: The Night Ferry
+audio_only: true
+voice: {provider: kokoro, voice: bf_emma}
+voices: {ferryman: {voice: bm_george, label: Ferryman}}
+music: {source: calm, volume: -2}
+sections:
+  - id: shore
+    title: The Shore               # starts a chapter
+    sfx: [{sound: bell, at: 0.2}]  # seconds from the section's start
+    beats:
+      - The last bell rang across the water.          # a plain line
+      - {text: "Evening. Only one passenger?", voice: ferryman, emotion: calm}
+      - pause: 1.0                                    # silence after the line before
+      - {text: "The engine hummed.", actions: [{sfx: engine, at: "@hummed"}]}
+      - {text: "There. *Home*.", voice: ferryman, sting: reveal}
+  - pause: 2.0                     # a silent section
+```
+
+A section (`id`, `title`, `voice`, `room`, `music`, `sfx`, `beats`) becomes a `text_card` scene showing its
+title (a video render is a plain slideshow); its beats are ordinary beats. A beat's `pause: S` (or a
+`- pause: S` item after it, in any scene) is the silence after its line, instead of
+`narration.pad` in a video or the gap below in audio. `vidgen schema` knows `sections`, and
+problems name them (`sections[1].beats[0].voice`, `sections[2].pause`).
+
+`pacing` times an audio-only render (seconds; the defaults):
+
+| key | default | |
+|---|---|---|
+| `timing` | `speech` | `speech`: each line as long as its audio, then the gaps below; `video`: the video's own timeline (pads, silent scenes, crossfades), the MP4's soundtrack without pictures |
+| `line` | `narration.pad` | gap between two lines of the same voice |
+| `speaker` | `0.6` | gap where the voice changes |
+| `scene` | `1.2` | gap between scenes / sections |
+| `chapter` | `2.5` | gap before a scene that starts a chapter |
+| `sting_before` | `0.6` | a sting at a line's start sounds this long before the speech |
+| `sting_after` | `0.4` | after a sting at a line's end (its own length first), before the next line |
+| `silent` | its `duration` | how long every silent scene lasts (a video's title cards) |
+| `lead_in` | `0.5` | silence before the first line |
+| `tail` | `1.5` | silence after the last line |
+
+No gap is added next to a silent scene (it is the gap). `vidgen story draft --audio` drafts such a
+project from a story in prose (sections of lines with the speakers' voices and emotions).
+
+### Audio files (`audio_output`), loudness presets, transcripts
+
+`audio_output` says what file an audio-only render writes; the mix is encoded once by FFmpeg (no
+other tools). Settings and cookbook: [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md).
+
+```yaml
+audio_output: {format: mp3, bitrate: 192k, channels: mono, sample_rate: 44100, loudness: audiobook}
+```
+
+| key | default | |
+|---|---|---|
+| `format` | `wav` | `wav` (PCM), `mp3` (LAME, constant bitrate), `m4a` (AAC), `ogg` (Opus); the file is `output/<output>.<format>` |
+| `bitrate` | `192k` mp3 / m4a, `96k` ogg | e.g. `128k` (not for wav) |
+| `channels` | `stereo` | `mono`: left and right averaged into one channel |
+| `sample_rate` | `48000` | `16000`, `22050`, `24000`, `32000`, `44100`, `48000`; Opus takes `16000`, `24000`, `48000` |
+| `bit_depth` | `24` | wav only: `16` or `24` |
+| `loudness` | `none` | a preset (below); `none`: the `audio:` settings as they are |
+| `room_tone` | — | dBFS RMS (−90 to −55, e.g. `-72`) of a faint, steady pink noise under the whole file, so pauses are not digital silence |
+| `transcripts` | `true` | `txt`, `srt`, `vtt`, `chapters` (a list), `true` all, `false` none |
+
+| preset | the file must measure | the mix aims for |
+|---|---|---|
+| `podcast` | −16 LUFS stereo / −19 mono (±1 LU), true peak ≤ −1 dBTP | that loudness, limiter −1.5 dBTP, `level_voice` on |
+| `audiobook` | ACX: RMS −23 to −18 dB, peaks ≤ −3 dB, noise floor ≤ −60 dB, 0.5–1 s of room tone before the first sound and 1–5 s after the last; notes (not failures) on ACX's format (MP3 ≥ 192 kb/s CBR, 44.1 kHz) and length (≤ 120 min a file) | RMS −20 dB, limiter −3.5 dBTP, `level_voice` on; `pacing` `lead_in: 0.6`, `tail: 2.5` where unset |
+| `broadcast` | EBU R128: −23 LUFS (±0.5 LU), true peak ≤ −1 dBTP | that, limiter −1.5 dBTP |
+| `custom` | `audio.target_lufs` (±1 LU), true peak ≤ `audio.true_peak` | that |
+
+A preset always normalises (`audio.normalize` aside). A mono file's loudness is its one channel's:
+the mix is then the channels' average in both channels, normalised 3 dB higher, so the file
+measures the target. Without `loudness` (or a `custom` / `broadcast` target) a mono file measures
+3 LU under the stereo mix. After the encode the render measures the file and prints
+`check: podcast PASS loudness -16.3 LUFS (-16 ±1 stereo) ok; true peak -2.2 dBTP (≤ -1) ok`; a
+failing preset is a warning (`timings.json` and `--json` carry `audio_output.check` / `check`).
+Lossy encoders move the level a little (LAME at 192k: about −0.3 dB).
+
+`vidgen audio check FILE|PROJECT [--preset P] [--lufs L --true-peak T] [--variant V] [--json]`
+measures any audio file (or a project's rendered one): integrated loudness, loudness range, true
+and sample peak (FFmpeg's `ebur128`), RMS over the whole file, noise floor (the quietest 0.5 s),
+the silence before the first and after the last sound (10 ms frames above −50 dBFS), and checks
+it against every preset, or only `--preset` / the project's `audio_output.loudness` (exit code 1
+when that one fails). `--lufs` / `--true-peak` add a `custom` check. A stereo file also gets a
+`mono` line ([mono compatibility](#stereo-staging-and-rooms-pan-room)); `--mono` makes its
+failure exit 1 too.
+
+Transcripts (from the word timings, next to the file): `<output>_transcript.txt` — the title, each
+chapter as `[M:SS] Title`, a paragraph per voice's turn in a section, `Name: text` when there is
+more than one voice (the base voice without a `label` is `Narrator`); `<output>.srt` and
+`<output>.vtt` — the cues a video's SRT holds (speaker names with `subtitles.speakers: name`;
+WebVTT text escaped); `<output>_chapters.txt` — `M:SS Title` per chapter, for show notes (YouTube's
+chapter rules are not checked for audio). No chapters are embedded in the audio file.
+
+### Stereo staging and rooms (`pan`, `room`)
+
+Opt-in; nothing changes until one of these is set, in videos and audio-only renders alike. They
+are applied in the mix, to each line's voice, so no beat is voiced again.
+
+```yaml
+voices:
+  ada: {voice: bf_isabella, pan: left}       # -1 (left) .. 1 (right), or far_left, left, centre, right, far_right
+  tom: {voice: bm_lewis, pan: right}
+audio: {room: small_office, music_width: 0.7}   # the default room of every scene; a narrower music bed
+sections:                                    # or scenes:
+  - title: The Corridor
+    room: corridor                           # this scene's room; none: dry here
+    beats:
+      - {text: "This way?", voice: tom, pan: {from: right, to: left}}   # a move across the line
+      - {text: "Trust me.", voice: ada, pan: far_left}                  # this line only
+```
+
+- **`pan`** on `voice:` (the narrator), a named voice of `voices:` (not inherited from the base
+  voice) or a beat: a number from −1 (left) to 1 (right) or a position: `far_left` −0.8, `left`
+  −0.5, `centre` / `center` 0, `right` 0.5, `far_right` 0.8 (the stage's marks). Equal-power law:
+  `left` is 7.7 dB louder on the left, as loud overall as a centred voice. A beat's `{from, to}`
+  moves the voice from one place to the other over its speech (eased). A beat's own `pan` wins,
+  then (with `follow_stage`) its character's place, then its voice's.
+- **`follow_stage`** of `audio:` (`false`): on a stage scene each voice sounds where its speaking
+  character stands as its line starts (left to right of the camera's view); an audio-only render
+  takes the character's `at:` place in the scene's `characters:`.
+- **`room`** on a scene or section (default `audio.room`, none): a preset name or `{use, amount,
+  narrator}`. `amount` (1; 0–2) scales the room's reflections and reverberation; the narrator (the
+  base voice) stays dry unless `narrator: true`; a scene's `room: none` cancels `audio.room`.
+
+| room | what it sounds like |
+|---|---|
+| `small_office` | a small furnished room: close reflections (4–17 ms), short soft reverberation (RT60 0.4 s), 12 dB under the voice |
+| `corridor` | a long hard corridor: an 11 ms flutter echo, RT60 1.1 s, 11 dB under |
+| `hall` | a large hall: 25 ms pre-delay, smooth RT60 2.2 s (highs 1.2 s), 9 dB under |
+| `outdoors` | open air: almost dry, a faint slap from a building far off (88 and 161 ms) |
+| `car` | a car's cabin: very short, boxy (RT60 0.12 s, 90 Hz–3.5 kHz) |
+| `phone` | a telephone line: 300–3400 Hz, a little saturated, the same loudness, no room |
+| `none` | dry |
+
+The rooms are generated (seeded noise impulse responses, one per channel so the tail is wide;
+nothing downloaded); each line's room rings out under the next line, so a cut to another room
+is as smooth as the tails overlap. A video scene fades a tail that would outlast it.
+
+- **`music_width`**, **`ambience_width`** of `audio:` (`1`; 0–2): the stereo width of the music
+  and of the ambience beds (a stage's rain, a fire): 1 as they are, 0 mono, above 1 wider. The
+  built-in beds are already wide: at 1.4 the calm bed's channels are opposed in some seconds
+  (correlation −0.37) and its mono fold loses 3.5 dB; 0.5–0.8 leaves room for panned voices.
+
+**Mono compatibility.** A stereo file with staging set (audio-only renders), and every stereo
+file `vidgen audio check` reads, is measured for how it sounds folded to mono: the channels'
+correlation over the file (≥ 0), the lowest over any second with sound (≥ −0.3: a moment that
+cancels) and how much quieter the fold `(L + R) / 2` is (≤ 3.5 dB; a voice panned hard to one side
+loses 3 dB, `left` 0.7 dB). The render prints `mono: PASS correlation 0.71 (≥ 0); worst second
+0.16 (≥ -0.3); mono fold 0.8 dB (≤ 3.5)` and warns when it fails; `timings.json` / `--json` carry
+it as `stereo`. `audio_output.channels: mono` simply averages the channels.
 
 ## Transitions (`transition`)
 
@@ -10284,8 +10455,9 @@ never leaves the stage.
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
-| `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene; on an [iso place](#isometric-places-iso) where it rains from the start, the rainy day's tint |
+| `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `blue_hour` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene; on an [iso place](#isometric-places-iso) where it rains from the start, the rainy day's tint |
 | `fill_light` | float 0–1 | `0` | a soft [fill light](#light-and-shadows-light-shadows) on the characters only, so faces stay readable in a dark light (night, an alarm, a dim tint): 0 none, 1 the characters as drawn whatever the light; 0.3–0.5 keeps the mood |
+| `fill_color` | colour | white | the fill light's colour: the characters are lifted towards it (a warm key at night, e.g. `"#FFE2BC"`) |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `drawing` | mapping | none (the video's `drawing`) | this scene's [drawing style](#drawing-style-drawing): `{outline, shading, texture, seed}`; the keys given win over the video's `drawing` |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
@@ -10295,7 +10467,7 @@ never leaves the stage.
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; on an iso place in bands across it; not in a `room` or an indoor iso place |
 | `ambient` | `true` \| mapping | none | an iso place's [ambient life](#isometric-places-iso): `true` (every kind that suits the place) or `{walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}`; away from the characters, hidden in close shots; indoors only `cat` and `flies` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, name_tags, wide, shutters, traffic, doors, haze, wall_lights}`; the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props` or `size` (`character_size` only with `wide: fixed`) |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, style, textures, name_tags, wide, show_walls, shutters, traffic, doors, haze, wall_lights}` (`style: retro`: a 1950s world-of-tomorrow palette — mint lawn, cream checker paths, terrazzo floors, turquoise walls, pastel objects, cream saucer traffic; `textures: {grass, path, floor, tiles}`: `plain`, `tufts`, `lawn`, `stones`, `checker`, `terrazzo`, `boards`, `tiles`; a `traffic` lane's `shape: capsule | saucer | monorail` and `hull` colour; `show_walls: true` on a room with `wide: fixed` frames it from its back corner, as far back as keeps the characters in view: the standing walls fill the frame's top); the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props` or `size` (`character_size` only with `wide: fixed`) |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10697,7 +10869,8 @@ they hide what is behind them.
   `cauldron` (`color` its potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a
   back wall), `signpost`, `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`,
   `gift_pile`, `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock`
-  (1 x 2, over water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2);
+  (1 x 2, over water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); the retro kit (DESIGN §107):
+  `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long), on a back wall's cell `poster` (`kind: rocket | atom | planet`) and `wall_shelf` (books, a plant); a `car` takes `kind: rocket` (tail fins, a bubble canopy);
   `on: true` / `switch_on` makes the
   laptop, kiosk, core, arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood,
   dish, charging station, airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV,
@@ -10705,8 +10878,9 @@ they hide what is behind them.
   (headlights), campfire, pond (ripples), beehive (bees), desk_with_pc (its screen), water
   cooler (bubbles), printer (prints), globe (spins), cauldron (bubbles), giant crystal (glows),
   torch sconce, Christmas tree (twinkles), pumpkin, balloons (sway), cake (candles), boat
-  (bobs), lighthouse (its beam sweeps) and rocket (fires) work (a lit fireplace, floor lamp,
-  street lamp, phone booth, campfire, cauldron or torch lights who stands near; pools of light
+  (bobs), lighthouse (its beam sweeps), rocket (fires), googie building, starburst sign, ray lamp, atomic
+  sculpture (electrons orbit), tube computer (reels turn, bulbs blink), TV console and retro desk work (a
+  lit fireplace, floor lamp, street lamp, ray lamp, phone booth, campfire, cauldron or torch lights who stands near; pools of light
   and beams show mostly at night).
   `at` is a spot or `{column, row}` (from the map's top left, from 1): the object's top-left
   cell on the map; it covers its footprint to the right and down. `facing: left` (default: its
@@ -12921,6 +13095,7 @@ particles keep their colours too.
 | `sunset` | warm and orange-pink, a little darker; blue skies turn warm |
 | `night` | dark blue; stars in the sky (on a colour background only, behind the layers, above the characters' heads) and faint shadows |
 | `indoor` | warm lamplight, a little dimmer |
+| `blue_hour` | a bright, crisp night: a cool indigo lighter than `night`, colours keeping their own hues (saturated before the tint), mid tones darkened and the tones stretched for contrast, clean blacks, a few stars; dark enough for lamps, lit windows and neon to glow and pool |
 | `{tint, strength}` | a light of your own: every colour multiplied towards `tint` (a theme token or `#hex`) by `strength` (0 = no change, 1 = fully, default `0.5`) |
 
 **`fill_light`** (0–1, default 0) adds a soft light on the characters alone, as a film lights
@@ -12928,7 +13103,8 @@ its actors apart from the set: each character is graded that share of the way ba
 colours, so faces and expressions read at `night`, under an [alarm](#alarms-and-shutters-alarm-shutters) or in
 a dim tint while the room stays dark (a lamp's light on an iso place adds to it; holograms are
 never graded). `fill_light: 0.45` with `light: night` keeps a dark-skinned face readable; 1 shows
-the characters as drawn.
+the characters as drawn. `fill_color` lifts them towards a colour instead (`"#FFE2BC"`: a warm key that keeps skin warm
+against a cool `blue_hour`).
 
 ```yaml
 - id: late_lab
@@ -14894,7 +15070,9 @@ back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`,
 `out`), `music_template` (`bed`, `out` default `assets/music/<bed>.yaml`, `force`; no `bed`: the
 list), `music_patches`, `music_render` (`score`: a path or a project piece's or bed's name, `out`
 default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` given the same way,
-`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `audio_check`
+(`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
+sound alone), `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
 (`vidgen story draft`: `input_path` or `story_text`, `out`, `style`, `format`, `narrator`, `seed`,
@@ -15236,6 +15414,27 @@ for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids 
 to render is not joined: it fails with `error.details` `{rendered, remaining, render_seconds}`
 (the next run goes on with `remaining`; finished scenes' renders are kept, as after an
 interrupted run).
+
+An audio-only render (`--audio-only`, `audio_only: true`) answers with `audio_only: true`,
+`timing`, `left_out`, `outputs` `{audio, timings, transcript_txt, transcript_srt,
+transcript_vtt, transcript_chapters}` (the transcripts written), `mix` (with `levelled_db`,
+`target_rms`, `mono` when they apply), `check` (the file against its loudness preset, as in
+[`vidgen audio --json`](#vidgen-audio---json), or `null`), `stereo` (the mono-compatibility
+check with [staging](#stereo-staging-and-rooms-pan-room) set, else `null`), `chapters` and
+`scenes` (`{id, type, start, duration, beats}`).
+
+### `vidgen audio --json`
+
+`vidgen audio check FILE|PROJECT --json`:
+
+| key | type | |
+|---|---|---|
+| `file` | str | the file measured |
+| `measured` | object | `{path, codec, sample_rate, channels, bitrate, duration, integrated_lufs, loudness_range, true_peak, sample_peak, rms, noise_floor, head, tail, correlation, worst_correlation, mono_fold_db, digital_silence}` (dB values `null` for silence; the last three `null` for a mono file) |
+| `checks` | list | per preset: `{preset, description, ok, items}`, each item `{name, value, target, status}` (`pass`, `fail`, or a `note` that does not count); a stereo file ends with the `mono` check |
+
+`ok` is false when the preset asked for (`--preset`, or the project's `audio_output.loudness`)
+fails, or with `--mono` the mono check.
 
 ### `vidgen storyboard --json`
 

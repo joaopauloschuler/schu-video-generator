@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 import random
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -181,7 +181,7 @@ def flash_grade(grade: LightGrade, level: float, *, share: float = FLASH_SHARE, 
     white = hex_rgb(color)
     multiply = tuple(m * (1.0 - f) for m in grade.multiply)
     glow = tuple(g * (1.0 - f) + f * w for g, w in zip(grade.glow, white))
-    return LightGrade(multiply, glow, grade.stars * (1.0 - f), grade.shadow * (1.0 - f), grade.saturation)  # type: ignore[arg-type]
+    return replace(grade, multiply=multiply, glow=glow, stars=grade.stars * (1.0 - f), shadow=grade.shadow * (1.0 - f))
 
 
 def storm_strikes(start: float, until: float, *, every: float = STORM_EVERY, seed: int = 1, stop: float | None = None) -> list[Strike]:

@@ -243,6 +243,22 @@ class VoiceEffectConfig(_Strict):
 #: ``effect:``: a preset's name, a list of presets, or ``{use, pitch, amount}``.
 VoiceEffectSetting = Union[VoiceEffectName, list[VoiceEffectName], VoiceEffectConfig]
 
+#: Named stereo positions of ``pan:`` (:data:`vidgen.staging.POSITIONS`; a test keeps the two equal).
+PanPosition = Literal["far_left", "left", "centre", "center", "right", "far_right"]
+#: ``pan:``: -1 (left) to 1 (right), or a named position (DESIGN.md §111.4).
+PanSetting = Union[Annotated[float, Field(ge=-1, le=1)], PanPosition]
+
+
+class PanMove(_Strict):
+    """A beat's ``pan:`` as a move across its line (a speaker walking, DESIGN.md §111.4)."""
+
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
+
+    from_: PanSetting = Field(alias="from")
+    """Where the voice is as the line starts: -1 (left) to 1 (right), or far_left, left, centre, right, far_right."""
+    to: PanSetting
+    """Where it is as the line ends (an eased move between the two)."""
+
 #: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
 TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
 #: Keys of ``voice:`` used only by some providers (the others ignore them).
@@ -340,6 +356,8 @@ class VoiceConfig(_Strict):
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
     """Speaker colour (theme token or hex) for captions that colour speakers; default the theme's text colour."""
+    pan: PanSetting | None = None
+    """Where this voice sounds in stereo, applied in the mix: -1 (left) to 1 (right), or far_left, left, centre, right, far_right; default centre; not inherited by voices:."""
 
     @model_validator(mode="after")
     def _provider_options(self) -> VoiceConfig:
@@ -401,6 +419,8 @@ class VoiceEntry(_Strict):
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None
     """Speaker colour (theme token or hex) for captions; default the theme palette colour of the voice's position in voices."""
+    pan: PanSetting | None = None
+    """Where this speaker sounds in stereo, applied in the mix: -1 (left) to 1 (right), or far_left, left, centre, right, far_right; default centre (not inherited from the base voice)."""
 
 
 class SubtitlesConfig(_Strict):
@@ -434,15 +454,16 @@ class CharacterColors(_Strict):
 
 
 BodyShape = Literal["round", "tall", "square", "bean", "pear", "triangle"]
-EyeStyle = Literal["dot", "oval", "round", "sleepy"]
+EyeStyle = Literal["dot", "oval", "round", "sleepy", "bright"]
 NoseStyle = Literal["none", "dot", "round", "triangle"]
-HairStyle = Literal["none", "short", "spiky", "long", "wavy", "bun", "curly", "ponytail", "braids", "afro"]
+HairStyle = Literal["none", "short", "spiky", "long", "wavy", "bun", "curly", "ponytail", "braids", "afro", "pompadour", "bob"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
 Accessory = Literal[
-    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape", "medal", "pendant",
+    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape", "medal", "pendant", "fedora",
+    "pillbox",
 ]
 ProportionStyle = Literal["adult", "kid", "tall_kid"]
-Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
+Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron", "suit", "lab_coat", "jumpsuit"]
 ClothesPattern = Literal["none", "stripes", "dots"]
 ShoeStyle = Literal["none", "shoes", "boots"]
 FacialHair = Literal["none", "moustache", "beard"]
@@ -457,9 +478,9 @@ SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "snail", "robot"})
 SHELLED_SPECIES: frozenset[str] = frozenset({"turtle", "snail"})
 #: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1,
 #: the costume pieces §69.58).
-HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat"})
+HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat", "fedora", "pillbox"})
 #: Accessories worn on top of the head: a look wears at most one of them.
-TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat")
+TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat", "fedora", "pillbox")
 #: Accessories hanging round the neck: a look wears at most one of them (DESIGN.md §102.14).
 NECK_ACCESSORIES: tuple[str, ...] = ("necklace", "medal", "pendant")
 RobotHead = Literal["box", "round"]
@@ -480,9 +501,11 @@ class RobotLook(_Strict):
     """legs (it walks), or wheels (it rolls: no steps, no footsteps)."""
 #: Outfits with a skirt or coat tails hanging from the body: their ``body`` part has a second
 #: shape, ``seated``, the cloth over the lap (DESIGN.md §69.47).
-SKIRTED_OUTFITS: frozenset[str] = frozenset({"dress", "coat"})
+SKIRTED_OUTFITS: frozenset[str] = frozenset({"dress", "coat", "lab_coat"})
 #: The name of that shape: a seated character shows it (``Character.seated``, the ``sitting`` pose).
 SEATED_BODY_SHAPE = "seated"
+#: How a generated character's arms hang (DESIGN.md §110): ``look.arms`` / ``cartoon_arms:``.
+ArmStyle = Literal["classic", "front"]
 
 
 class CharacterLook(_Strict):
@@ -496,19 +519,19 @@ class CharacterLook(_Strict):
     head_size: float = Field(1.0, ge=0.6, le=1.6)
     """Head size relative to the default head (0.6 to 1.6)."""
     eyes: EyeStyle = "dot"
-    """Eye style: dot, oval, round (white with a pupil) or sleepy."""
+    """Eye style: dot, oval, round (white with a pupil), bright (a big clear white, a fine rim, a small pupil with a catchlight: friendly and readable in close-ups and at night) or sleepy."""
     nose: NoseStyle = "none"
     """Nose: none, dot, round or triangle."""
     hair: HairStyle = "none"
-    """Hair: none, short, spiky, long, wavy (long waving locks past the shoulders), bun, curly, ponytail, braids or afro (colour: colors.hair)."""
+    """Hair: none, short, spiky, long, wavy (long waving locks past the shoulders), bun, curly, ponytail, braids, afro, pompadour (a 1950s quiff swept up over the brow) or bob (a chin-length bob flipped out at the ends) (colour: colors.hair)."""
     ears: EarStyle = "none"
     """Ears: none, round, pointy or floppy (skin colour)."""
     accessories: list[Accessory] = Field(default_factory=list)
-    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace, medal (a gold medal on a ribbon in the accessory colour), pendant (a glowing, pulsing pendant on a cord, in the accessory colour) and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat; one of necklace, medal, pendant)."""
+    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace, medal (a gold medal on a ribbon in the accessory colour), pendant (a glowing, pulsing pendant on a cord, in the accessory colour), fedora (a 1950s hat with a pinched crown and a snap brim), pillbox (a small round 1960s hat) and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat, fedora, pillbox; one of necklace, medal, pendant)."""
     proportions: ProportionStyle = "adult"
     """adult, kid (big head, short body and legs) or tall_kid (lankier); pair a kid with the stage's scale (e.g. 0.7)."""
     outfit: Outfit = "plain"
-    """plain (one colour), dress, overalls, coat, shorts or apron (second colour: colors.trim)."""
+    """plain (one colour), dress, overalls, coat, shorts, apron, suit (a jacket with lapels over a shirt in colors.trim and a tie in colors.accessory), lab_coat (a long open coat over a shirt and trousers in colors.trim, pockets and a pen) or jumpsuit (one piece with a wide collar in colors.trim, a zip, a belt in colors.accessory and a badge) (second colour: colors.trim)."""
     pattern: ClothesPattern = "none"
     """none, stripes or dots on the clothes (a lighter or darker tone of their colour)."""
     shoes: ShoeStyle = "none"
@@ -521,6 +544,8 @@ class CharacterLook(_Strict):
     """species robot only: {head: box | round, face: eyes | screen, antenna: true | false, moves_on: legs | wheels}; default a box head, eyes, an antenna, legs."""
     seed: int | None = None
     """A number that varies the proportions a little (same seed, same figure); none: no variation."""
+    arms: ArmStyle | None = None
+    """How the arms hang: front (both read as arms at the sides, just clear of the body; the far arm of the side view is drawn over the body) or classic (on the body's edges, the far arm behind the body); wins over the video's cartoon_arms; default front."""
     svg: str | None = Field(default=None, min_length=1)
     """An SVG file (relative to the project folder; best under assets/) drawn instead of the generator: parts by id (head, mouth, arm_left, mouth_A, ...), data-pivot="x y"."""
 
@@ -2373,8 +2398,27 @@ class SceneMusic(_Strict):
         return {role: v.model_dump() if isinstance(v, ComposeInstrument) else v for role, v in self.instruments.items()}
 
 
+#: Room presets of ``room:`` (:data:`vidgen.staging.ROOMS`; a test keeps the two equal).
+RoomName = Literal["none", "small_office", "corridor", "hall", "outdoors", "car", "phone"]
+
+
+class RoomConfig(_Strict):
+    """``room:`` as a mapping (DESIGN.md §111.4)."""
+
+    use: RoomName
+    """The room: small_office, corridor, hall, outdoors, car, phone or none."""
+    amount: float = Field(default=1.0, ge=0, le=2)
+    """How much of the room is heard (its reflections and reverberation): 1 the preset's, 0 none, up to 2."""
+    narrator: bool = False
+    """true: the narrator (the base voice) is in the room too; false: it stays dry."""
+
+
+#: ``room:``: a preset's name or ``{use, amount, narrator}``.
+RoomSetting = Union[RoomName, RoomConfig]
+
+
 class AudioConfig(_Strict):
-    """The final mix: loudness normalisation (DESIGN.md §48)."""
+    """The final mix: loudness normalisation (DESIGN.md §48), stereo staging and rooms (§111.4)."""
 
     normalize: bool | Literal["auto"] = "auto"
     """Normalise the final mix to target_lufs: true, false, or auto (only when the video has music; narration-only videos keep their level)."""
@@ -2384,6 +2428,100 @@ class AudioConfig(_Strict):
     """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
     bitrate: Literal["128k", "160k", "192k", "256k", "320k"] = "192k"
     """AAC bitrate of the video's audio; a loud mix (a Short at -14 LUFS) keeps its true peak better at 256k or 320k (the encoder's overshoot is smaller)."""
+    level_voice: bool | None = None
+    """A gentle leveller on the voices before the limiter (3:1 above their usual peaks, 50 ms ramps): loud syllables come down a little, so the limiter barely works; default: on in audio-only renders with the podcast or audiobook loudness preset, off otherwise."""
+    room: RoomSetting | None = None
+    """The room the voices sound in, in every scene without its own room: small_office, corridor, hall, outdoors, car, phone or none, or {use, amount, narrator}; the narrator (the base voice) stays dry unless narrator: true; default none."""
+    follow_stage: bool = False
+    """Stage scenes: each voice sounds where its speaking character stands as its line starts (left to right of the frame); a beat's own pan wins, and this wins over the voice's pan; default false."""
+    music_width: float = Field(default=1.0, ge=0, le=2)
+    """Stereo width of the music: 1 as it is, 0 mono (centred), up to 2 wider."""
+    ambience_width: float = Field(default=1.0, ge=0, le=2)
+    """Stereo width of the ambience beds (a stage's rain, a fireplace): 1 as it is, 0 mono, up to 2 wider."""
+
+
+#: Audio file formats of an audio-only render and their default bitrates (DESIGN.md §111.1).
+AUDIO_FORMATS: dict[str, str | None] = {"wav": None, "mp3": "192k", "m4a": "192k", "ogg": "96k"}
+#: Loudness presets of an audio-only render (:mod:`vidgen.audio_check`).
+LOUDNESS_PRESETS = ("podcast", "audiobook", "broadcast", "custom")
+#: Transcript files an audio-only render can write.
+TRANSCRIPT_KINDS = ("txt", "srt", "vtt", "chapters")
+#: Sample rates Opus can encode.
+OPUS_RATES = (16000, 24000, 48000)
+
+
+class AudioOutputConfig(_Strict):
+    """The file an audio-only render writes (DESIGN.md §111.1): its format, loudness preset and
+    transcripts."""
+
+    format: Literal["wav", "mp3", "m4a", "ogg"] = "wav"
+    """wav (PCM), mp3, m4a (AAC) or ogg (Opus); the file is <output>.<format>."""
+    bitrate: Annotated[str, Field(pattern=r"^\d{2,3}k$")] | None = None
+    """Bitrate of a compressed format, e.g. 128k; default 192k for mp3 and m4a (constant bitrate for mp3), 96k for ogg."""
+    channels: Literal["mono", "stereo"] = "stereo"
+    """mono: one channel (the left and right mixed); stereo: two."""
+    sample_rate: Literal[16000, 22050, 24000, 32000, 44100, 48000] = 48000
+    """Samples per second of the file (Opus: 16000, 24000 or 48000); ACX audiobooks want 44100."""
+    bit_depth: Literal[16, 24] = 24
+    """wav only: bits per sample."""
+    loudness: Literal["none", "podcast", "audiobook", "broadcast", "custom"] = "none"
+    """Loudness preset: podcast (-16 LUFS stereo / -19 mono, peaks under -1 dBTP), audiobook (ACX: RMS -23 to -18 dB, peaks under -3 dB, room-tone head and tail, noise floor under -60 dB), broadcast (EBU R128: -23 LUFS, -1 dBTP), custom (audio.target_lufs and audio.true_peak); none: the audio: settings as they are. The render measures the file and reports pass or fail (vidgen audio check)."""
+    room_tone: float | None = Field(default=None, ge=-90, le=-55)
+    """A faint steady noise (dBFS RMS, e.g. -72) under the whole file, so pauses are not digital silence; default none."""
+    transcripts: list[Literal["txt", "srt", "vtt", "chapters"]] | bool = True
+    """Transcripts written next to the file from the word timings: txt (plain text with speakers and chapter titles), srt, vtt (WebVTT), chapters (<output>_chapters.txt, a timestamp per chapter); true: all, false: none."""
+
+    @model_validator(mode="after")
+    def _check_opus(self) -> AudioOutputConfig:
+        if self.format == "ogg" and self.sample_rate not in OPUS_RATES:
+            rates = ", ".join(str(r) for r in OPUS_RATES)
+            raise ValueError(f"sample_rate: Opus (format: ogg) encodes {rates} only, not {self.sample_rate}")
+        return self
+
+    @property
+    def transcript_kinds(self) -> tuple[str, ...]:
+        """The transcripts to write, in :data:`TRANSCRIPT_KINDS` order."""
+        if self.transcripts is True:
+            return TRANSCRIPT_KINDS
+        if self.transcripts is False:
+            return ()
+        return tuple(k for k in TRANSCRIPT_KINDS if k in self.transcripts)
+
+    @property
+    def effective_bitrate(self) -> str | None:
+        """The bitrate the encoder gets (``None`` for wav)."""
+        return None if self.format == "wav" else self.bitrate or AUDIO_FORMATS[self.format]
+
+    @property
+    def plain(self) -> bool:
+        """Whether the file is the mix as written (48 kHz stereo 24-bit WAV, no preset): copied, not encoded."""
+        return (self.format, self.channels, self.sample_rate, self.bit_depth, self.loudness, self.room_tone) == ("wav", "stereo", 48000, 24, "none", None)
+
+
+class PacingConfig(_Strict):
+    """How an audio-only render times the beats (DESIGN.md §111): from the speech and these gaps
+    (seconds), or as the video's timeline."""
+
+    timing: Literal["speech", "video"] = "speech"
+    """speech: each line as long as its audio, then the gaps below; video: the video's own timeline (its pads, silent scenes and crossfades), the soundtrack of the MP4 without its pictures."""
+    line: float | None = Field(default=None, ge=0, le=10)
+    """Gap between two lines of the same voice; default narration.pad."""
+    speaker: float = Field(default=0.6, ge=0, le=10)
+    """Gap where the voice changes."""
+    scene: float = Field(default=1.2, ge=0, le=30)
+    """Gap between two scenes (sections)."""
+    chapter: float = Field(default=2.5, ge=0, le=30)
+    """Gap before a scene that starts a chapter (a section with a title)."""
+    sting_before: float = Field(default=0.6, ge=0, le=10)
+    """Seconds from a sting played at a line's start to that line's speech."""
+    sting_after: float = Field(default=0.4, ge=0, le=10)
+    """Seconds after a sting played at a line's end before the next line (the sting's own length comes first)."""
+    silent: float | None = Field(default=None, ge=0, le=60)
+    """Seconds every silent scene lasts (a video's title cards, pause sections); default: its own duration."""
+    lead_in: float = Field(default=0.5, ge=0, le=30)
+    """Silence before the first line."""
+    tail: float = Field(default=1.5, ge=0, le=30)
+    """Silence after the last line (music and effects play on into it)."""
 
 
 class ChaptersConfig(_Strict):
@@ -2743,6 +2881,10 @@ class BeatConfig(_Strict):
     """Seconds this beat starts before the previous beat's speech ends: both lines are heard (the earlier a little lower) and both mouths move; not on a scene's first beat."""
     interrupt: bool = False
     """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
+    pause: float | None = Field(default=None, ge=0, le=60)
+    """Seconds of silence after this beat's line, instead of narration.pad (or, in an audio-only render, the pacing gap); an item `- pause: 1.5` of a beats list adds it to the beat before."""
+    pan: PanSetting | PanMove | None = None
+    """Where this line sounds in stereo: -1 (left) to 1 (right), far_left, left, centre, right, far_right, or {from, to}: a move across the line (a speaker walking); default the voice's pan."""
     emotion: EmotionSetting | None = None
     """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; Kokoro changes speed, pitch, loudness and pauses; ElevenLabs uses an audio tag (eleven_v3) or voice settings, OpenRouter an instruction or the audio's speed, pitch and loudness; default the voice's emotion."""
     cite: list[PositiveInt | Identifier] = Field(default_factory=list)
@@ -2800,6 +2942,32 @@ class TermConfig(_Strict):
 TermSetting = ColorRef | TermConfig
 
 
+def _is_pause_item(item: Any) -> bool:
+    return isinstance(item, dict) and set(item) == {"pause"}
+
+
+def merge_pause_items(beats: list[Any]) -> list[Any]:
+    """A raw beats list with every ``{pause: S}`` item added to the ``pause`` of the beat before
+    it (DESIGN.md §111). ``ValueError`` for a pause before the first beat."""
+    if not any(_is_pause_item(b) for b in beats):
+        return beats
+    merged: list[Any] = []
+    for n, item in enumerate(beats):
+        if not _is_pause_item(item):
+            merged.append(item)
+            continue
+        seconds = item["pause"]
+        if not merged or not isinstance(merged[-1], dict):
+            raise ValueError(
+                f"beats[{n}]: a pause item adds silence after the beat before it, and there is none; "
+                "start with silence in a silent scene (beats: [], duration: S) or a `- pause: S` section"
+            )
+        before = merged[-1].get("pause")
+        numbers = all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (seconds, before or 0))
+        merged[-1] = {**merged[-1], "pause": (before or 0) + seconds if numbers else seconds}
+    return merged
+
+
 class SceneConfig(_Strict):
     """A scene: a registered scene ``type`` plus its params and narrated beats.
 
@@ -2828,6 +2996,8 @@ class SceneConfig(_Strict):
     """Voice of this scene's beats: a name from voices (or default: the base voice); a beat's own voice wins."""
     sfx: list[SfxEntry] = Field(default_factory=list)
     """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
+    room: RoomSetting | None = None
+    """The room this scene's voices sound in: small_office, corridor, hall, outdoors, car, phone, none, or {use, amount, narrator}; default audio.room."""
     music: bool | SceneMusic = True
     """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here; under composed music also {mood, key, tempo, instruments, seed} from this scene's first bar."""
     transition: TransitionSetting | None = None
@@ -2861,13 +3031,15 @@ class SceneConfig(_Strict):
     @model_validator(mode="before")
     @classmethod
     def _default_beat_ids(cls, data: Any) -> Any:
-        """Give beats without an ``id`` the id ``f"{scene_id}_b{n}"`` (1-based)."""
+        """Give beats without an ``id`` the id ``f"{scene_id}_b{n}"`` (1-based), after adding each
+        ``{pause: S}`` item to the beat before it (:func:`merge_pause_items`)."""
         if not isinstance(data, dict):
             return data
         scene_id = data.get("id")
         beats = data.get("beats")
         if not isinstance(scene_id, str) or not isinstance(beats, list):
             return data
+        beats = merge_pause_items(beats)
         filled = []
         for n, beat in enumerate(beats, start=1):
             if isinstance(beat, dict) and beat.get("id") is None:
@@ -3044,6 +3216,12 @@ class VideoConfig(_Strict):
     """SoundFont (an .sf2 or .sf3 file, relative to the project) that composed music is played with; default: GeneralUser GS 2.0.3, downloaded once into vidgen's cache (`vidgen soundfont fetch`)."""
     audio: AudioConfig = Field(default_factory=AudioConfig)
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
+    audio_only: bool = False
+    """true: vidgen render writes only the sound, <output>.wav (narration, voices, music, sound effects), and renders no scene; vidgen render --audio-only does that for one run."""
+    audio_output: AudioOutputConfig = Field(default_factory=AudioOutputConfig)
+    """The file of an audio-only render: {format: wav | mp3 | m4a | ogg, bitrate, channels: mono | stereo, sample_rate, bit_depth, loudness: none | podcast | audiobook | broadcast | custom, room_tone, transcripts}."""
+    pacing: PacingConfig = Field(default_factory=PacingConfig)
+    """Timing of an audio-only render: {timing: speech | video, line, speaker, scene, chapter, sting_before, sting_after, silent, lead_in, tail} (seconds)."""
     transition: TransitionSetting | None = None
     """Default transition between scenes (cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}); a scene's transition wins."""
     chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)
@@ -3072,6 +3250,8 @@ class VideoConfig(_Strict):
     """On stage scenes wider than the frame (a 9:16 variant crops the landscape stage): speaker moves the camera to whoever speaks, easing between speakers and holding during short replies; none: only the beats' own pan / follow / zoom / shot move it; default: speaker when the characters do not fit in one view (a stage's reframe param wins)."""
     cartoon_motion: MotionSetting | None = None
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
+    cartoon_arms: ArmStyle | None = None
+    """How every generated character's arms hang: front (both read as arms at the sides, just clear of the body) or classic (on the body's edges, the far arm of the side view behind the body); a character's look.arms wins; default front."""
     motion_effects: bool = True
     """Motion effects on stage scenes, added on their own while cartoon_motion is lively or calm (smaller): dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture; false: none (a stage's motion_effects param wins)."""
     drawing: DrawingConfig | None = None
@@ -3321,6 +3501,13 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
     """
     if not isinstance(data, dict):
         raise VidgenError(f"{source}: the top level must be a mapping (key: value pairs)")
+    from vidgen.sections import expand_sections, section_error
+
+    if "sections" in data:   # problems named by the sections they come from (§111)
+        try:
+            return parse_config(expand_sections(data, source), source)
+        except VidgenError as exc:
+            raise section_error(exc) from None
     try:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:

@@ -22,7 +22,8 @@ from __future__ import annotations
 import json
 import math
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -246,12 +247,31 @@ def _check_parts(specs: Mapping[str, CharacterPart], who: str, required: Iterabl
     return parents
 
 
+#: How many times closer than the whole frame the scene being built is seen at its widest (a
+#: fixed wide view's magnification, DESIGN.md §108); :func:`pixel_zoom` sets it.
+_PIXEL_ZOOM: list[float] = [1.0]
+
+
+@contextmanager
+def pixel_zoom(zoom: float) -> Iterator[None]:
+    """Within it, :func:`one_pixel_stroke` is one pixel of a view ``zoom`` times closer than the
+    frame (a stage on an iso place with the fixed wide view, which is never seen wider): thin
+    outlines are kept one pixel wide there, not one pixel of the whole place, which the zoom
+    would thicken many times (DESIGN.md §108)."""
+    before = _PIXEL_ZOOM[0]
+    _PIXEL_ZOOM[0] = max(float(zoom), 1.0)
+    try:
+        yield
+    finally:
+        _PIXEL_ZOOM[0] = before
+
+
 def one_pixel_stroke() -> float:
     """The Manim stroke width of one pixel in the current Manim config (Cairo draws a stroke
-    width ``w`` as ``w * 0.01`` frame units)."""
+    width ``w`` as ``w * 0.01`` frame units), of the view :func:`pixel_zoom` sets."""
     from manim import config
 
-    return 100.0 * float(config.frame_height) / float(config.pixel_height)
+    return 100.0 * float(config.frame_height) / float(config.pixel_height) / _PIXEL_ZOOM[0]
 
 
 def scale_strokes(shape: VMobject, factor: float, floor: float) -> None:
@@ -1235,25 +1255,30 @@ LOOK_CACHE_SIZE = 32
 _look_cache: OrderedDict[str, list[CharacterPart]] = OrderedDict()
 
 
-def look_key(look: CharacterLook, colors: Mapping[str, Any], front: bool = False) -> str:
+def look_key(look: CharacterLook, colors: Mapping[str, Any], front: bool = False, arms: str | None = None) -> str:
     """The key of a generated look's part drawings in :func:`look_parts`: the ``look``
-    parameters, the resolved ``colors`` and the view (``front``). A character's poses,
-    expressions, name, voice and state are not in it: they never change a part's drawing, only
-    how it is transformed."""
+    parameters, the resolved ``colors``, the view (``front``) and how the arms hang (``arms``,
+    default :data:`~vidgen.cartoon.generator.DEFAULT_ARMS`). A character's poses, expressions,
+    name, voice and state are not in it: they never change a part's drawing, only how it is
+    transformed."""
+    from vidgen.cartoon.generator import DEFAULT_ARMS
+
     resolved = {part: str(color) for part, color in sorted(colors.items())}
-    return json.dumps([look.model_dump(mode="json"), resolved, front], sort_keys=True)
+    return json.dumps([look.model_dump(mode="json"), resolved, front, arms or DEFAULT_ARMS], sort_keys=True)
 
 
-def look_parts(look: CharacterLook, colors: Mapping[str, Any], front: bool = False) -> list[CharacterPart]:
+def look_parts(look: CharacterLook, colors: Mapping[str, Any], front: bool = False, arms: str | None = None) -> list[CharacterPart]:
     """The generator's parts for ``look`` in ``colors`` (:func:`~vidgen.cartoon.generator.generate_parts`;
-    ``front``: its front view), drawn once per :func:`look_key` and shared: a :class:`Character`
-    copies the shapes it is given, so callers must not change them."""
-    from vidgen.cartoon.generator import generate_parts
+    ``front``: its front view; ``arms``: how its arms hang, default
+    :data:`~vidgen.cartoon.generator.DEFAULT_ARMS`), drawn once per :func:`look_key` and
+    shared: a :class:`Character` copies the shapes it is given, so callers must not change them."""
+    from vidgen.cartoon.generator import DEFAULT_ARMS, generate_parts
 
-    key = look_key(look, colors, front)
+    arms = arms or DEFAULT_ARMS
+    key = look_key(look, colors, front, arms)
     parts = _look_cache.get(key)
     if parts is None:
-        parts = generate_parts(look, colors, front=front)
+        parts = generate_parts(look, colors, front=front, arms=arms)
         _look_cache[key] = parts
         while len(_look_cache) > LOOK_CACHE_SIZE:
             _look_cache.popitem(last=False)
@@ -1270,13 +1295,16 @@ def build_character(
     facing: str = "right",
     root: Path | None = None,
     motion: str | None = None,
+    arms: str | None = None,
 ) -> Character:
     """The :class:`Character` of a ``characters:`` entry, feet at the origin: its ``look`` drawn
     by the generator with its colours resolved in ``theme`` (default: the current theme), or
     ``look.svg`` (relative to ``root``, default: the active project's folder) split into parts.
     Its idle motion runs unless the entry says ``idle: false``. Its ``cartoon_motion`` is the
-    entry's, else ``motion`` (the scene's or the video's), else ``lively``. An animal or a robot
-    walks, runs and jumps its species' way, a robot on wheels rolls (:attr:`Character.species_motion`)."""
+    entry's, else ``motion`` (the scene's or the video's), else ``lively``. Its arms hang the
+    look's ``arms`` way, else ``arms`` (the video's ``cartoon_arms``), else ``front`` (§110). An
+    animal or a robot walks, runs and jumps its species' way, a robot on wheels rolls
+    (:attr:`Character.species_motion`)."""
     motion = resolve_motion(entry.cartoon_motion, motion)
     if entry.look.svg is not None:
         from vidgen.cartoon.svg_look import SVG_REQUIRED_PARTS, svg_character_parts
@@ -1292,9 +1320,10 @@ def build_character(
         )
     else:
         colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
+        hang = entry.look.arms or arms   # look_parts falls back to DEFAULT_ARMS
         built = Character(
-            look_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
-            poses=entry.poses, expressions=entry.expressions, motion=motion, front=look_parts(entry.look, colors, front=True),
+            look_parts(entry.look, colors, arms=hang), name=entry.name, height=height, facing=facing, voice=entry.voice,
+            poses=entry.poses, expressions=entry.expressions, motion=motion, front=look_parts(entry.look, colors, front=True, arms=hang),
         )
         wheels = entry.look.species == "robot" and entry.look.robot_look().moves_on == "wheels"
         built.species_motion = species_motion(entry.look.species, wheels=wheels)
@@ -1311,10 +1340,14 @@ def build_character(
     return built.start_idle() if entry.idle else built
 
 
-def character(name: str, *, height: float = 3.0, facing: str = "right", motion: str | None = None) -> Character:
+def character(
+    name: str, *, height: float = 3.0, facing: str = "right", motion: str | None = None, arms: str | None = None,
+) -> Character:
     """The character ``name`` of the active project's ``characters:``, ``height`` Manim units
     tall, feet at the origin. Unknown names raise :class:`VidgenError` with suggestions. Its
-    ``cartoon_motion`` is its own, else ``motion`` (a scene's), else the video's, else ``lively``."""
+    ``cartoon_motion`` is its own, else ``motion`` (a scene's), else the video's, else ``lively``.
+    Its arms hang its look's way, else the video's ``cartoon_arms``, else ``arms`` (a caller's
+    default), else ``front`` (§110)."""
     from vidgen.cartoon.cast import find_character
     from vidgen.runtime import current_project, current_theme
 
@@ -1322,7 +1355,7 @@ def character(name: str, *, height: float = 3.0, facing: str = "right", motion: 
     entry = find_character(project.config, name)
     return build_character(
         entry, theme=current_theme(), height=height, facing=facing, root=project.root,
-        motion=resolve_motion(motion, project.config.cartoon_motion),
+        motion=resolve_motion(motion, project.config.cartoon_motion), arms=project.config.cartoon_arms or arms,
     )
 
 

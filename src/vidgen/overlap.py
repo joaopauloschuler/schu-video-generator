@@ -51,14 +51,16 @@ MIN_WINDOW = 0.2
 class SpokenLine:
     """A beat as the timeline sees it: its narration's length ``seconds`` (``d``), where its
     speech ends (``speech_end``, seconds from its start, at most ``d``), its own ``overlap``
-    and ``interrupt`` keys (how it joins the beat before it) and its ``last_word`` (start, end;
-    seconds from its start) when stored word times give it."""
+    and ``interrupt`` keys (how it joins the beat before it), its ``last_word`` (start, end;
+    seconds from its start) when stored word times give it, and ``pause``: the silence after it
+    instead of the pad (its ``pause:``, DESIGN.md §111; ``None``: the pad)."""
 
     seconds: float
     speech_end: float
     overlap: float | None = None
     interrupt: bool = False
     last_word: tuple[float, float] | None = None
+    pause: float | None = None
 
     @property
     def joins(self) -> bool:
@@ -152,15 +154,15 @@ class BeatWindow:
 
 def beat_windows(lines: Sequence[SpokenLine], pad: float, fps: float | None = None) -> list[BeatWindow]:
     """Each beat's :class:`BeatWindow` from the scene's ``lines`` in order and
-    ``narration.pad``. A beat the next one does not join: ``body = d``, ``rest = pad``, heard
-    whole. One it joins: the window ends :meth:`SpokenLine.lead_after` before its speech ends
+    ``narration.pad``. A beat the next one does not join: ``body = d``, ``rest = pad`` (its
+    :attr:`SpokenLine.pause` when given), heard whole. One it joins: the window ends :meth:`SpokenLine.lead_after` before its speech ends
     (at least :data:`MIN_WINDOW`; with ``fps``, in whole frames, where the next beat really
     starts), no pad; an interrupt cuts its voice there, an overlap dips it."""
     out = []
     for k, line in enumerate(lines):
         follower = lines[k + 1] if k + 1 < len(lines) else None
         if follower is None or not follower.joins:
-            out.append(BeatWindow(line.seconds, pad, line.seconds))
+            out.append(BeatWindow(line.seconds, pad if line.pause is None else line.pause, line.seconds))
             continue
         window = max(line.speech_end - follower.lead_after(line), MIN_WINDOW)
         if fps:
@@ -205,7 +207,8 @@ def beat_lines(project: Project, beats: Sequence[BeatConfig], seconds: Callable[
         joined = follower is not None and (follower.overlap is not None or follower.interrupt)
         end = beat_speech_end(project, beat.id, d) if joined else d
         cut_inside = follower is not None and follower.interrupt and follower.overlap is None
-        lines.append(SpokenLine(d, end, beat.overlap, beat.interrupt, beat_last_word(project, beat) if cut_inside else None))
+        last_word = beat_last_word(project, beat) if cut_inside else None
+        lines.append(SpokenLine(d, end, beat.overlap, beat.interrupt, last_word, beat.pause))
     return lines
 
 

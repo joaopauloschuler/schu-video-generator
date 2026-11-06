@@ -21,7 +21,7 @@ from vidgen.cartoon.iso_stage import TILE_PIXELS, IsoScenery, IsoView, Picture, 
 from vidgen.cartoon.lighting import POOL_DAY
 from vidgen.cartoon.iso_weather import RIPPLE_OPACITY, RIPPLE_WIDTH, RIPPLES, IsoPuddle, ripples
 from vidgen.cartoon.rain import puddle_growth
-from vidgen.cartoon.shading import LIT, mark_lit
+from vidgen.cartoon.shading import LIT, TILE_GRADING, OwnedCache, mark_lit, pixels_digest
 from vidgen.cartoon.snow import BLANKET_OPACITY, blanket_cover, settle_amount, settled_seconds
 
 
@@ -49,6 +49,12 @@ class PoolTile(GlowTile):
     either, but drawn (:func:`draw_tile`) as strong as the stage's light is dark (the camera's
     :data:`POOL_STRENGTH`): full at night, faint by day. Its overlap with the next tiles is left
     out and tiles meet on whole pixels (seen through, a pixel drawn twice shows as a stripe)."""
+
+
+#: A picture keeps at most this many times the tiles it shows (and :data:`TILES_SPARE` more):
+#: the oldest of the others go (made again when the camera comes back, DESIGN.md §109).
+TILES_KEPT = 3
+TILES_SPARE = 16
 
 
 class IsoTiles(Group):
@@ -105,6 +111,8 @@ class IsoTiles(Group):
         key = (level, tuple(tile for tile, _ in tiles))
         if key == self.shown_key:
             return False
+        if self.shown_key is not None and self.shown_key[0] != level:   # another level: let the old one's tiles go (§109)
+            self._forget_levels(level)
         self.shown_key = key
         members = []
         modes = ["picture"] + (["pool"] if self.scenery.pools(self.picture) else []) + (["glow"] if self.scenery.glows(self.picture) else [])
@@ -118,7 +126,32 @@ class IsoTiles(Group):
                         self._show_snow(made)
                     members.append(made)
         self.submobjects = members
+        self._forget_old(set(id(m) for m in members))
         return True
+
+    def _forget_old(self, shown: set[int]) -> None:
+        """Let go of the oldest tiles not shown now once it keeps more than :data:`TILES_KEPT`
+        times those shown (a long pan over a big map made and kept every tile it passed, §109)."""
+        limit = TILES_KEPT * max(len(shown), 1) + TILES_SPARE
+        if len(self._tiles) <= limit:
+            return
+        for key in [k for k, made in self._tiles.items() if made is None or id(made) not in shown]:
+            if len(self._tiles) <= limit:
+                break
+            made = self._tiles.pop(key)
+            if made is not None:
+                self._snow_sources.pop(id(made), None)
+                self._snow_shown.pop(id(made), None)
+
+    def _forget_levels(self, level: int) -> None:
+        """Let go of the tiles of every level but ``level`` (made again if the camera goes back
+        to theirs): a zoomed view of a big map at full size otherwise holds two levels' tiles,
+        which outgrew the memory of a small machine (DESIGN.md §109)."""
+        for key in [k for k in self._tiles if k[0] != level]:
+            made = self._tiles.pop(key)
+            if made is not None:
+                self._snow_sources.pop(id(made), None)
+                self._snow_shown.pop(id(made), None)
 
     def _make(self, level: int, tile: tuple[int, int], canvas: Any, mode: str = "picture") -> ImageMobject | None:
         """A tile of the picture (``mode`` ``picture``), of its pools of light (``pool``) or of its lights (``glow``)."""
@@ -346,6 +379,46 @@ class IsoSnow:
         return self._region
 
 
+#: The camera's attribute holding its :class:`TileParts`.
+TILE_PARTS = "iso_tile_parts"
+#: The most bytes of tiles (their pixels and their resized parts) a camera keeps (DESIGN.md §109).
+TILE_PARTS_BYTES = 128 * 1024 * 1024
+
+
+class TileParts:
+    """The parts on screen of tiles drawn before (:func:`draw_tile`): a tile drawn again at the
+    same place and size from the same pixels in the same light is neither graded nor resized again
+    (DESIGN.md §109): while the camera holds still, most tiles are. The same pixels: of the same
+    fingerprint (:func:`~vidgen.cartoon.shading.pixels_digest`; tiles change in place: pools,
+    snow). Keeps at most ``budget`` bytes of parts of live tiles
+    (:class:`~vidgen.cartoon.shading.OwnedCache`; default :data:`TILE_PARTS_BYTES`; 0 keeps none):
+    a frame's worth or two, so little memory."""
+
+    def __init__(self, budget: int | None = None) -> None:
+        #: by tile: (its pixels' fingerprint, the grade, size, box, part)
+        self._kept = OwnedCache(TILE_PARTS_BYTES if budget is None else budget)
+
+    @property
+    def used(self) -> int:
+        """The bytes kept now."""
+        return self._kept.used
+
+    def part(self, owner: Any, source: np.ndarray, size: tuple[int, int], box: tuple[float, ...],
+             grading: tuple[Any, Any] | None = None) -> Image.Image:
+        """``source`` (the tile ``owner``'s RGBA pixels) graded (``grading``: the stage light's
+        :class:`~vidgen.cartoon.shading.GradedPictures` and grade; none: as it is), cut to ``box``
+        and resized to ``size``."""
+        kept = self._kept.get(owner)
+        digest = pixels_digest(source)
+        grade = None if grading is None else grading[1]
+        if kept is not None and kept[0] == digest and kept[2] == size and kept[3] == box and kept[1] == grade:
+            return kept[4]
+        pixels = source if grading is None else grading[0].graded(owner, source, grade, digest)
+        part = Image.fromarray(pixels, "RGBA").resize(size, Image.Resampling.BILINEAR, box=box)
+        self._kept.put(owner, (digest, grade, size, box, part), size[0] * size[1] * 4)
+        return part
+
+
 def draw_tile(camera: Any, mob: ImageMobject, pixel_array: np.ndarray) -> None:
     """Draw the tile ``mob`` (upright, not turned) onto the camera's ``pixel_array``: only the
     part in the frame, resized (smoothly, also when it shrinks) onto just that part. Manim's own
@@ -374,7 +447,11 @@ def draw_tile(camera: Any, mob: ImageMobject, pixel_array: np.ndarray) -> None:
     high_x, high_y = source.shape[1], source.shape[0]
     box = (min(max((x0 - left) * sx, 0.0), high_x), min(max((y0 - top) * sy, 0.0), high_y),
            min(max((x1 - left) * sx, 0.0), high_x), min(max((y1 - top) * sy, 0.0), high_y))
-    part = Image.fromarray(source, "RGBA").resize((x1 - x0, y1 - y0), Image.Resampling.BILINEAR, box=box)
+    parts = getattr(camera, TILE_PARTS, None)
+    if parts is None:
+        parts = TileParts()
+        setattr(camera, TILE_PARTS, parts)
+    part = parts.part(mob, source, (x1 - x0, y1 - y0), box, getattr(mob, TILE_GRADING, None))
     if pool:   # as strong as the stage's light is dark (its light sets it; none: by day)
         strength = getattr(camera, POOL_STRENGTH, POOL_DAY)
         if strength < 1.0:

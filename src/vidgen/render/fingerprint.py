@@ -110,6 +110,19 @@ def _joins(spec: SceneConfig) -> dict[str, list[Any]]:
     return {b.id: [b.overlap, b.interrupt] for b in spec.beats if b.overlap is not None or b.interrupt}
 
 
+def _staging(project: Project, spec: Any) -> Any:
+    """The scene's voice staging (DESIGN.md §111.4): each beat's pan and room, and whether its
+    speakers' places pan them; ``None`` when every voice plays centred and dry."""
+    from vidgen.staging import beat_staging
+
+    cfg = project.config
+    beats = {b.id: beat_staging(cfg, spec, b).to_json() for b in spec.beats}
+    follow = cfg.audio.follow_stage and spec.type == "stage"
+    if not follow and all(beat_staging(cfg, spec, b).plain for b in spec.beats):
+        return None
+    return {"beats": beats, "follow_stage": follow}
+
+
 def _overlay_inputs(project: Project) -> Any:
     """What overlays read from the other scenes (their planned timeline: types, durations, beat
     texts and MP3s, chapters; DESIGN.md §41-42), the beats' stored alignments (captions, §43),
@@ -245,6 +258,11 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     if joins:
         # overlapping and interrupting lines change the beats' times and their voices (§69.34)
         data["joins"] = joins
+    staged = _staging(project, spec)
+    if staged:
+        # pans and rooms are in the scene's sound (§111.4); the voices' and audio's settings are
+        # left out of "config" above
+        data["staging"] = staged
     sounds = {beat.id: [list(s) for s in beat.voice_sounds] for beat in spec.beats if beat.voice_sounds}
     if sounds:
         # [laugh] marks are taken out of the text but make sounds, faces and mouths (§69.33)

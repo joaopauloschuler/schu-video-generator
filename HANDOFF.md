@@ -24295,3 +24295,370 @@ is in `tasklist.md`.
   `night` / `rowans_room` 25 stills identical to Step 275's (`s277/iso_check.py`). Sheet
   `/home/claude/work/scratch/s277/sheet.png`; scripts `gen.py`, `run_all.py`, `measure.py`,
   `gen_moves.py`, `run_moves.py`, `make_sheet.py`, `results.csv`.
+
+## Step 278 — Retro-future kit (Phase AE)
+
+Phase AE (Steps 278–281, plan in `tasklist.md`): a second, brighter private story cartoon in a
+retro-futuristic iso look; the story and its project live in the scratchpad (a private story
+project), repo work is generic.
+
+- Built (DESIGN §107): `iso: {style: retro}` (ground colours, textures, object colours, saucer
+  traffic) and `textures: {grass, path, floor, tiles}`; `light: blue_hour` (a brighter, more
+  saturated night, lamps glow); twelve iso objects in a new `cartoon/iso_retro.py`
+  (`googie_building`, `retro_tower`, `starburst_sign`, `ray_lamp`, `atomic_sculpture`, `monorail`,
+  `tube_computer`, `sunburst_clock`, `tv_console`, `retro_desk`, `hedge`, `planter`); a car's
+  `kind: rocket` (parked and driven); traffic `shape: capsule | saucer | monorail`, `hull`; looks
+  `suit`, `lab_coat`, `jumpsuit`, `pompadour`, `bob`, `fedora`, `pillbox`.
+- Files: `world/iso.py` (kinds, `CAR_STYLES`, `CONSOLE_PICTURES`, `CLOCK_KINDS`, `TALL_KINDS`
+  retro tower, switched / auto-lit / wall kinds), `world/iso_seats.py` (uses),
+  `cartoon/iso_retro.py` (new), `cartoon/iso_objects.py` (colours, `STYLE_OBJECT_COLORS`,
+  `object_colors`, modules, moving, lamplight, shadows, the sunburst clock's wall box),
+  `cartoon/iso_scenery.py` (textures, style colours), `cartoon/iso_town.py` (rocket car hand-off),
+  `cartoon/iso_driving.py` (features), `cartoon/iso_overlays.py` (saucer, train),
+  `cartoon/lighting.py` (preset, saturation), `cartoon/room.py`, `cartoon/sun_path.py`,
+  `ambience.py`, `cartoon/clothes.py`, `cartoon/generator.py`, `config.py`, `scenes/stage.py`
+  (params, messages), `scenes/stage_iso.py`, `scenes/stage_vehicles.py`, `api.py`; docs CONFIG,
+  guide (+ `AGENTS.md`), DESIGN §107, CHANGELOG, tasklist.
+- Decisions: a `style` key on the iso place rather than a theme preset (themes colour text and
+  charts); textures per surface with the surfaces' own as defaults (old pictures unchanged);
+  saturation above 1 for the blue hour (the night grade's multiply alone turns pastels grey);
+  a moving monorail train is a traffic shape over a static `monorail` beam (cheap, no new vehicle
+  rules), not a driven object; the existing `bush` / `flowers` with `size` stay the soft hedge
+  and flower bed, `hedge` is the clipped one.
+- Test-helper fix: `frames_of` (`tests/test_cartoon_living.py`) accepts Manim 0.22's
+  `write_frame(..., repeat=)` (every render test using it failed since the environment rebuild);
+  `test_cartoon_room.py::test_the_set_fades_in_as_one_picture` has its own copy and still fails
+  the same way (pre-existing, not fixed here).
+- Known gaps: see DESIGN §107 "Left for later" (monorail train not hidden or stopping; 9:16 at
+  270 x 480 makes medium characters silhouettes — preview tall variants at 540 x 960; blue hour
+  ~1.4x slower than night on lit places); the monorail lane's height over the beam (3.15) was not
+  checked in a frame (the beam was out of view in the sample's shots).
+- Tests: `tests/test_retro_kit.py` (10, one render); `test_iso_objects_more` (town test allows
+  the car's kinds; a message), `test_iso_place`, `test_lab_objects`, `test_city_hud_echo`,
+  `test_cartoon_lighting`, `test_cartoon_room` (but the pre-existing failure above),
+  `test_iso_vehicles`, `test_time_of_day`, `test_cartoon_outfits`, `test_cartoon_generator`,
+  `test_iso_seats`, `test_schema`, `test_api`, `test_iso_staging`, `test_iso_atmosphere`,
+  `test_random_cast`, `test_iso_mood`, `test_guide`, `test_docs` passed. Frame baseline 33 frames,
+  max difference 0.
+- Private: sheet `/home/claude/work/scratch/s278/sheet.png`, sample project `s278/proj`
+  (`gen.py`), `objs.py` (object close-ups), `measure.py` / `measure.csv`, `sheet.py`.
+
+## Step 279 — Adaptation and test cut (Phase AE)
+
+- Built (DESIGN §108): a crisp `light: blue_hour` (`LightGrade.gamma` / `contrast` / `vivid`,
+  `PRESET_TONES`, `CONTRAST_PIVOT`); a stage's `fill_color` (a warm key); `eyes: bright`;
+  `pixel_zoom` (outlines one pixel of the fixed wide view: the real cause of the dark "goggle" eyes
+  in close-ups); `iso: {show_walls: true}` (`wall_reach`, `back=` on `on_ground`,
+  `ground_view_center`, `fixed_view`, `wide_view`); wall objects `poster` (`kind: rocket | atom |
+  planet`) and `wall_shelf`.
+- Files: `cartoon/lighting.py`, `cartoon/shading.py`, `cartoon/storm.py`, `cartoon/vignette.py`,
+  `cartoon/character.py`, `cartoon/generator.py`, `cartoon/iso_stage.py`, `cartoon/iso_objects.py`,
+  `cartoon/iso_retro.py`, `world/iso.py`, `config.py`, `scenes/stage.py` (`fill_color`,
+  `show_walls`, `wall_room`, `construct` in `pixel_zoom`), `scenes/stage_iso.py`,
+  `scenes/stage_story.py`, `api.py`; docs CONFIG, guide (+ `AGENTS.md`), DESIGN §108, CHANGELOG,
+  tasklist.
+- Decisions: the reviewer's goggles were outline thickness from the one-pixel floor at the whole
+  place's scale, so the floor follows the view (scoped, 1 outside fixed iso views) besides a new
+  eye style; `show_walls` keeps the bodies-win rule and sits across from the bodies, because a
+  forced back-corner view lost the characters; the 278 blue-hour test (blacks lifted) became
+  "coral stays warm" in `test_retro_kit`.
+- A private story project: script `story-qc2/script.md` (950 spoken words, ~6.5 min), test cut
+  `story-qc2/testcut/` (generator `s279/testcut_gen.py`, 5 scenes, 1:38, -16.2 LUFS), sheet
+  `/home/claude/work/scratch/s279/sheet.png`, numbers `s279/measure.csv`; fixes project
+  `s279/fixes/` (`fixes_gen.py`).
+- Known gaps / for 280: no shot frames an object (the AI's TV face: zoom / pan to its spot); the kiss
+  wants a medium with the echoes in it; render at blue hour 12–30 s per video second (keep scenes
+  ≤ 15 s, one per command: the tool limit is 10 min); `follow` on a car zooms to character size
+  (use a `pan` with the drive's run time); outdoor `pan` to a spot by the map's edge still shows
+  background (keep spots ≥ reach from the edges).
+- Tests: `tests/test_crisp_night_faces_rooms.py` (8, one render); `test_retro_kit`,
+  `test_iso_fixed_view`, `test_story_fx`, `test_story_light_hands`, `test_cartoon_lighting`,
+  `test_api`, `test_schema`, `test_cartoon_generator`, `test_random_cast`, `test_iso_objects_more`,
+  `test_lab_objects`, `test_iso_place`, `test_guide`, `test_docs` passed. Frame baseline 33 frames,
+  max difference 0.
+
+## Step 280 — The film (Phase AE)
+
+- A private story project: the full film (48 scenes, 7:40, 1920x1080 at 24 fps, −16.2 LUFS, true
+  peak −1.5 dBTP) and a 720p delivery copy under 28 MB; generator, measurements and sheets in the
+  scratchpad (`s280/`). Rooms at night use `light: indoor` with warm floors (blue hour turns any
+  warm floor grey or tan), the city stays at `blue_hour`; the pod ride is four short scenes with
+  the camera zoomed on the pod and panning with its drive.
+- Built (DESIGN §109): lit iso places render several times faster — `GradedPictures` (graded
+  pixels kept per picture by a CRC-32 + Adler-32 fingerprint, `OwnedCache` per live owner,
+  off-frame pictures not graded) and `TileParts` (an iso tile's part on screen kept by fingerprint,
+  grade, size and box; the light hands tiles their grading, `TILE_GRADING`); memory for big maps at
+  1080p (`TILE_CACHE` 64, `IsoTiles._forget_levels` / `_forget_old`); `zoom` onto an iso object
+  frames it (`Stage.target_box`, actions' `_targets_box`; camera moves no longer layer objects);
+  working objects' moving parts placed back to front (a TV's face was hidden by the cooler behind
+  it).
+- Files: `cartoon/shading.py`, `cartoon/iso_pictures.py`, `cartoon/iso_stage.py` (`TILE_CACHE`),
+  `world/iso_view.py` (`Box3.picture_bounds` worked out once), `scenes/actions.py`,
+  `scenes/stage_iso.py`; tests `tests/test_picture_caches.py` (8, two renders); DESIGN §109,
+  CHANGELOG, tasklist.
+- Decisions: fingerprints instead of copies (a copy doubled the memory and a comparison cost 5x a
+  checksum); caches bounded and tied to the pictures' lives because the 3 GB cap killed zoomed
+  scenes; no new public names (internal).
+- Known gaps / for 281: the set's fade in / out between scenes (`_cover`) dips between the ride's
+  shots; a `closeup` at the start of a beat in which the character sits frames where it stood (the
+  film uses `zoom` instead); zooms deeper than ~1.6x on the lit city or ~2.6x in the office at
+  1080p come near the 3 GB cap (kept at those); the pod hides behind the phone booth for a moment
+  in the first ride shot; 7:40 is above the 6–7 min aim (narration alone 7:02); lint 5 warnings
+  (narration speed of three short lines, two quick steps); `test_actions.py` fails 3 tests
+  (`BUILTIN_ACTIONS` lacks the Phase AD actions, pre-existing).
+- Tests: `test_picture_caches`, `test_retro_kit`, `test_crisp_night_faces_rooms`,
+  `test_iso_staging`, `test_iso_fixed_view`, `test_iso_place`, `test_iso_objects_more`,
+  `test_lab_objects`, `test_cartoon_lighting`, `test_iso_vehicles`, `test_city_hud_echo`,
+  `test_iso_story`, `test_iso_atmosphere`, `test_story_fx`, `test_cartoon_shots`, `test_iso_seats`
+  passed. Frame baseline 33 frames, max difference 0.
+
+## Step 281 — Critical review, arms at the sides, final renders (Phase AE)
+
+- The owner's note: "In the characters, one of the arms is always looking in the background." The
+  generated side view (it reads as three-quarter) drew the far arm behind the body on the body's
+  edge, so a sliver showed past a coat. Built (DESIGN §110): `cartoon_arms: front | classic`
+  (video) and `look.arms` (a character; wins); `front` hangs the arms just clear of the body
+  (shoulder out to the edge, a lean out of at most 14°, computed from the body's outline) and draws
+  the side view's far arm over the body, under the near arm; default `front` on iso places with
+  `wide: fixed` (`stage_arms`), else `classic` (global default unchanged: switching it changes 25
+  of the 33 baseline stills, every one with a character; the owner decides). Crossfades / pushes /
+  wipes into a stage no longer dip to the background (the set comes in with the transition).
+  Many crossfaded scenes join in batches of 8 via lossless intermediates (one graph over 48
+  scenes at 1080p hit 3 GB).
+- Files: `cartoon/generator.py` (`ARM_STYLES`, `_arms`, `_arm_hang`, `_arm`), `cartoon/character.py`
+  (`look_key` / `look_parts` / `build_character` / `character` `arms`), `cartoon/still.py`,
+  `config.py` (`ArmStyle`, `CharacterLook.arms`, `cartoon_arms`), `scenes/stage.py`
+  (`stage_arms`, the entrance without the cover after an overlapping transition),
+  `render/ffmpeg.py` (`BLEND_BATCH`, `LOSSLESS_CODEC`, `_blend_batches`); docs CONFIG, guide
+  (+ `AGENTS.md`), DESIGN §110, CHANGELOG, tasklist (Phase AE done).
+- Public: config `cartoon_arms`, `look.arms`; `vidgen.api.character(..., arms=)`.
+- A private story project: the film re-rendered (48 scenes, 7:14, 1920x1080, −16.2 LUFS / −1.7 dBTP;
+  delivery copy 720p two-pass 26.8 MB, −16.3 LUFS / −1.2 dBTP after a peak limiter), crossfades
+  between all shots (the ride's dips gone: luma dips 80–100 → ≤ 4), the first ride shot
+  re-staged, the tower that hid the pod left out of the later ride sets, title / end 4 s; arms
+  sheet `/home/claude/work/scratch/s281/arms.png` (classic vs front: three-quarter idle, shrug,
+  point, two walk phases, front idle and walk, holding the scanner, holding hands; four film
+  characters and four old-style defaults), baseline before/after `s281/baseline_front.png`,
+  generator `s281/gen.py`, contact sheet `story-qc2/contact.png`, measurements
+  `s281/measure_final.csv`, scripts `s281/dips.py`, `small.py`, `loud.py`, `memprobe.py`.
+- Known gaps: a lit 36 x 36 city zoomed ~1.5x at 1080p grows to ~3 GB over 11 s (one shot
+  zoomed to 2.0 to fit); the side view is three-quarter (no profile), so a far arm swinging forward
+  crosses the torso; the arm lean is capped at 14°, a pear's hand may touch its hip;
+  `test_push_wipe_carry::test_overlay_rgba_composites_like_the_layer` fails (a fake layer lacks
+  `overlays`; pre-existing, untouched code); lint warnings of 280 unchanged.
+- Tests: `tests/test_arms_front.py` (18), `tests/test_join_batches.py` (2, one render); fixed the
+  Phase AD action lists in `test_actions.py` and `test_cartoon_sheet.py`; `test_cartoon_character`,
+  `test_cartoon_generator`, `test_cartoon_holding`, `test_cartoon_limbs`, `test_cartoon_outfits`,
+  `test_cartoon_poses`, `test_story_light_hands`, `test_kiss_display_props`,
+  `test_wall_lights_kiss`, `test_iso_staging`, `test_iso_story`, `test_iso_fixed_view`,
+  `test_retro_kit`, `test_transitions`, `test_schema`, `test_api`, `test_guide`, `test_docs` passed.
+  Frame baseline 33 frames, max difference 0.
+
+## Step 282 — Arms at the sides by default (committed untested)
+
+- The owner decided that front arms are the default everywhere: generator.DEFAULT_ARMS = front; stage.stage_arms removed; cartoon_arms: classic or look.arms: classic opt out; the scene host follows cartoon_arms. Gallery character entries re-rendered; DESIGN 110.1, CONFIG, guide, CHANGELOG updated.
+- NOT TESTED: the owner asked for the code change without tests (no time). Next step must run the character, cartoon and iso suites, test_arms_front, test_mcp.py in full, and the frame baseline in /home/claude/work/scratch/baseline (expect 25 of 33 stills to change, arms only; then keep the old frames as frames_classic and remake the references).
+
+## Step 283 — Audio-only renders and projects (Phase AF)
+
+- Built (DESIGN §111): `vidgen render --audio-only` / `audio_only: true` writes
+  `output/<output>.wav` (48 kHz stereo 24-bit) with no scene rendered: voices, music ducked,
+  sfx, stings, normalisation, limiter. `sections:` for projects without pictures (each a
+  `text_card` scene; `{pause: S}` a silent one; did-you-mean on keys). `pacing:` times it
+  (`speech` default: speech + gaps; `video`: `VideoPlan`). Beat `pause:` and `- pause: S` items
+  (videos too). `vidgen story draft --audio`. Phase AF plan added to tasklist (Steps 283–286).
+- Files: new `audio_only.py`, `sections.py`, `tests/test_audio_only.py` (17); `config.py`
+  (`PacingConfig`, `audio_only`, `pacing`, `BeatConfig.pause`, `merge_pause_items`, sections in
+  `parse_config`), `overlap.py` (`SpokenLine.pause`), `project.py` (`audio_path`, sections in
+  `_load`, pauses in `estimated_duration`), `mix.py` (`always_write`), `cli.py` (`--audio-only`,
+  `story draft --audio`), `jsonout.py` (`audio_render_document`, story `audio_only`),
+  `story_draft.py` (`DraftOptions.audio`, `_to_audio`, report), `plan_yaml.py`
+  (`commented_yaml(list_key=)`); docs CONFIG ("Audio only"), guide (+ `AGENTS.md`), DESIGN §111,
+  CHANGELOG, tasklist.
+- Decisions: the switch is `audio_only` (not `output:` / `format:`, both taken); default timing
+  `speech` for every audio-only render; sections become `text_card` scenes (no new scene type:
+  the gallery, scene lists and examples tests stay as they are); no SRT or hooks in audio-only
+  renders (transcripts are Step 284); deliverable WAV only (formats are Step 284).
+- Samples (`/home/claude/work/scratch/s283/`, not committed): `ferry/` (my two-voice story,
+  Kokoro bf_emma + bm_george, sections, pause items, a pause section, bell cue, engine `sfx`
+  action at "@hummed", reveal sting, calm bed): `output/night_ferry.wav` 38.34 s, ffmpeg −18.0
+  LUFS / −2.8 dBTP (target −18). `kphi3/` (the example's committed ElevenLabs MP3s, no API call):
+  variant `podcast` (speech timing, calm bed) `output/kphi3_video_podcast.wav` 232.11 s, −16.1
+  LUFS / −1.9 dBTP (limiter up to 5.2 dB on speech peaks, as in a video at −16); variant
+  `soundtrack` (`timing: video`) 224.47 s, −21.4 LUFS / −2.2 dBTP. Waveforms with beats and
+  sfx marked: `measurements/*_waveform.png`; `lantern/` a `story draft --audio` of my
+  `lantern.md`. Scripts `measure.py`, `pin_mix.py` (the pinned numbers, run on b2fbedd).
+- Known gaps: stage foley / ambience, automatic animation sounds and clip sound are left out
+  (warned); `vidgen direct` / MCP editors do not edit `sections:`; `vidgen schema` still requires
+  `scenes`; validate's "YouTube needs 3 chapters" warning also shows for audio projects; a
+  variant cannot override `sections:` (they are expanded before the merge); sections' problem
+  locations read `scenes[i]`.
+- Tests: `test_audio_only` 17 passed (5 s); `test_config` 21, `test_overlap` + `_pinned` 18,
+  `test_story_draft` 14, `test_docs` + `test_guide` 164, `test_schema` (in a run with docs/guide:
+  234 passed before the CONFIG entry), `test_json_output` 21, `test_plan` 68, `test_music` not
+  slow 23, `test_cli` 10, `test_chapters_progress` + `test_transitions` + `test_word_anchors` 59:
+  all passed. Not run: `test_music` slow bed tests (54, untouched code). Frame baseline: 33
+  stills, the 8 gradient-descent ones identical, the 25 with characters differ (Step 282's arms;
+  frame names, i.e. timings, all the same).
+- Next (284): formats via ffmpeg from `build/<render>/audio/mix.wav`; transcripts from
+  `timings.json` with `subtitles.cues_from_timings` / `video_cues` (works on it as is).
+
+## Step 284 — Audio formats, loudness presets and check, voice leveller, transcripts (Phase AF)
+
+- Built (DESIGN §111.1–111.3): `audio_output: {format: wav | mp3 | m4a | ogg, bitrate, channels,
+  sample_rate, bit_depth, loudness: none | podcast | audiobook | broadcast | custom, room_tone,
+  transcripts}`; one FFmpeg encode from `mix.wav` (default config still copies it byte for byte).
+  Presets set the mix's targets (LUFS per channel count, or ACX RMS −20; limiter; leveller; audiobook
+  pacing head/tail) and the render measures the file and reports PASS / FAIL.
+  `vidgen audio check FILE|PROJECT [--preset] [--lufs --true-peak] [--json]`. `audio.level_voice`
+  (voice leveller, opt-in for videos, on with podcast/audiobook). Transcripts: `_transcript.txt`
+  (speakers, `[M:SS]` chapters), `.srt`, `.vtt`, `_chapters.txt`.
+- Files: new `audio_check.py`, `audio_encode.py`, `transcripts.py`, `tests/test_audio_output.py`
+  (25), `docs/COOKBOOK-AUDIO.md`; `config.py` (`AudioOutputConfig`, `AudioConfig.level_voice`),
+  `mix.py` (`frame_peaks`, `leveller_gain`, `LevelledTrack`, `room_tone`, `rms_db`, `MixTargets`,
+  `mix_audio(targets=)`, `write_mix(floor=)`, report fields), `audio_only.py` (`effective_pacing`,
+  `write_output`, check, transcripts), `project.py` (`audio_path(suffix=)`), `cli.py` (`audio`
+  command, loudness line), `jsonout.py`; docs CONFIG (audio files, `level_voice`, JSON), COOKBOOK,
+  README, guide (+ `AGENTS.md`), DESIGN, CHANGELOG, tasklist.
+- Decisions: presets live in `audio_output.loudness` (audio-only renders only); a mono file is
+  normalised as the channels' average in both channels +3.01 LU, so the file measures its target
+  (podcast −19 mono); ACX format / length are notes, not failures (a WAV master is fine); digital
+  silence passes the noise floor (room tone is opt-in `room_tone: -72`); the measuring check uses
+  FFmpeg's `ebur128` (independent of the mixer's own meter; they agree on WAVs to 0.05 LU);
+  leveller: peak detector, median peak + 8 dB, 3:1, 6 dB knee, 50 ms ramps — chosen by measuring
+  (scratch `compress_exp.py`); SRT/VTT speaker names follow `subtitles.speakers` (the txt always
+  names speakers when there are several).
+- Samples (`/home/claude/work/scratch/s284/`, not committed): `ferry/` 8 variants (podcast mp3,
+  podcast_mono m4a 96k, podcast_nolevel, audiobook mp3 44.1k mono, audiobook_tone room tone −72,
+  broadcast wav 16-bit, opus ogg, custom −14), `kphi3/` (episode / episode_nolevel mp3,
+  audiobook / audiobook_nolevel, broadcast m4a), `lantern/` (Kokoro TTS, audiobook mp3 + podcast
+  m4a). All podcast / broadcast / custom files PASS (podcast −16.3 stereo, −19.0/−19.1 mono; broadcast
+  −23.0); kphi3 and lantern audiobooks PASS (RMS −20.3/−20.5, peak −4.1, head 0.61/0.88 s, tail
+  2.8/3.3 s); the ferry audiobooks FAIL on head 0.20 s (its bell sfx at 0.2 s — the check works).
+  Leveller: kphi3 limiter 5.2 → 0.7 dB (podcast), 6.5 → 2.0 dB (audiobook); ferry 1.1 → 0. Table:
+  `summary.py` output; PNGs `measurements/kphi3_levelled_vs_not.png` (only the highest tips
+  differ) and `*_spectrogram.png` (room tone visible in pauses, no artefacts). Default renders
+  `cmp`-identical to Step 283's WAVs; encodes deterministic (MP3 rendered twice: same bytes).
+- Known gaps: MP3 at 192k measures ~0.3 dB quieter than the mix (in tolerance; not compensated);
+  the audio-only render prints YouTube's chapter warnings for `_chapters.txt`; no embedded
+  chapters; the ACX "CBR" note trusts the bitrate (VBR is not detected); `vidgen audio check`
+  streams the file (one value per 10 ms kept) but was only tried on files up to 4 minutes.
+- Tests: `test_audio_output` 25 passed (14 s), `test_audio_only` 17, `test_config` + `test_json_output`
+  + `test_cli` 54, `test_docs` + `test_guide` + `test_schema` 235, `test_music` not slow 23,
+  `test_music_pieces` + `test_score` 41, `test_cartoon_rain -k mix` 1: all passed. Frame baseline
+  not run: no frame-rendering code changed (the video mix is pinned by `test_video_mix_is_pinned`,
+  which passes).
+- Next (285): pan / rooms go into `mix.py` / `audio_only.write_voice_track`; keep `MixTargets`
+  `mono` in mind (the mono-compatibility check can reuse `audio_check.measure_file`).
+
+## Step 285 — Stereo staging and room acoustics (Phase AF)
+
+- Built (DESIGN §111.4, new `vidgen.staging`): `pan:` on `voice:`, `voices.<n>` and beats (−1…1 or
+  `far_left`/`left`/`centre`/`center`/`right`/`far_right`; a beat's `{from, to}` eases across the
+  speech); `audio.follow_stage` (video: the speakers' x in the camera frame as the line starts via
+  `NarratedScene.speaker_pan`, overridden by `StageScene`; audio-only: the stage's `characters:` `at`);
+  `room:` per scene / section or `audio.room` (`small_office`, `corridor`, `hall`, `outdoors`, `car`,
+  `phone`, `none`; `{use, amount, narrator}`; narrator = base voice, dry by default);
+  `audio.music_width` / `ambience_width`; mono check (`audio_check.mono_check`, appended to
+  `vidgen audio check` for stereo files, `--mono` for the exit code; audio-only renders with staging
+  print `mono:` and record `timings.stereo` / `--json` `stereo`).
+- Files: new `staging.py`, `tests/test_staging.py` (21); `config.py` (`PanSetting`, `PanMove`,
+  `RoomName`, `RoomConfig`, fields), `voices.py` (`pan` in `DISPLAY_FIELDS`), `audio_only.py`
+  (`PlacedBeat.staging`, `_voice_samples` limit, mono report), `scene.py` (`add_narration(staging,
+  limit)`, `speaker_pan`), `scenes/stage.py`, `mix.py` (`MusicTrack(widths)`), `audio_check.py`
+  (stereo sums, `mono_check`), `render/fingerprint.py` (`staging` key only when staged),
+  `sections.py` (`room`), `cli.py`, `jsonout.py`, `tests/test_audio_output.py` (the extra `mono`
+  check); docs CONFIG ("Stereo staging and rooms"), guide (+ `AGENTS.md`), COOKBOOK-AUDIO, DESIGN,
+  CHANGELOG, tasklist.
+- Decisions: rooms are generated impulse responses convolved in numpy (seeded noise, two bands with
+  their own RT60, early-reflection taps), not ffmpeg `aecho`/`afir`: deterministic, measurable, no
+  temp files, one code path for videos (Manim scene sounds) and audio-only; early reflections are
+  panned with the voice, the reverberation is diffuse (decorrelated L/R, not panned); room changes
+  are smooth because each line's tail rings under the next (no room bus crossfade); `pan` is a
+  display field (no re-voicing; not inherited by named voices); `follow_stage` takes the place as
+  the line starts (no tracking of a walk during the line); thresholds of the mono check
+  (correlation ≥ 0, worst second ≥ −0.3, fold ≤ 3.5 dB) set from measurements: hard pan = 3.01 dB.
+- Samples (`/home/claude/work/scratch/s285/`, not committed): `errand/` (Kokoro: narrator bf_emma
+  centre/dry, Ada bf_isabella `left`, Tom bm_lewis `right`; small_office → corridor (Tom walks
+  right→left) → outdoors (Ada `far_left`); `music_width: 0.7`): `output/errand.wav` 42.5 s, −18.0
+  LUFS, mono PASS (corr 0.71, worst second 0.16, fold 0.8 dB); per line voice-track L−R: Ada +6.6 /
+  +5.8 dB in the office (room fills the far side a little), Tom −6.0, far_left +15.7, narrator 0.0;
+  variant `wide` (`music_width: 1.4`) mono FAIL (worst second −0.49; the check works);
+  `podcast_mono` mp3 PASS −19.3 LUFS; `errand_dry/` the same lines dry (same MP3s, no re-voice).
+  `rooms/<room>.wav` one line through every room. PNGs `measurements/rooms_decay.png` (Schroeder
+  curves), `rooms_spectrograms.png` (tails after the line), `errand_balance.png`,
+  `errand_correlation.png`, `errand_spectrogram.png`. Scripts `rooms_measure.py`,
+  `rooms_spectro.py`, `analyse.py`, `bed_width.py`, `pin_before.py`.
+- Measured: T30 500 Hz / 4 kHz: small_office 0.52/0.30, corridor 1.11/0.77, hall 2.24/1.63, car
+  (short; band-filter ring); hall IRs L/R correlation < 0.1; positions: `left` 7.7 dB L−R, mono fold
+  −0.7 dB; `far_left` 16.0 / −1.8 dB; built-in beds at width 1 already wide (calm corr 0.22).
+- Compatibility: Step 284's audio-only render pinned (`test_audio_only_render_is_pinned_without_staging`:
+  RMS per half second recorded on 15d2562, and neutral settings give the same bytes); the video mix
+  pin holds; frame baseline 33 stills identical to s283's (max difference 0).
+- Known gaps: no movement of a voice while a character walks during a line (only `{from, to}`);
+  `follow_stage` in an audio-only render uses the starting `at` (a video uses the live place); the
+  narrator is "the base voice" (a stage character speaking with the base voice stays dry unless
+  `narrator: true`); a variant cannot change a section's `room` (sections are expanded first);
+  host scenes do not pan; rooms on pure tones can make the mono check's worst second negative (tone
+  and its own reverb), not seen on speech; music width applies to beds and files alike.
+- Tests: `test_staging` 21 passed (8 s; 2 tiny renders), `test_audio_only` 17, `test_audio_output`
+  25, `test_api`, `test_config` + `test_voices` + `test_cli` + `test_json_output` 72, `test_docs` +
+  `test_guide` + `test_schema` 235, `test_music` not slow 23, `test_overlap` + `_pinned` 21,
+  `test_tts` + `test_dubbing` + `test_voice_effects` 59: all passed.
+- Next (286): review; consider `follow_stage` tracking walks (sample the speaker's x over the line)
+  and a room per beat if authors ask.
+
+## Step 286 — Phase AF review; Step 282 now tested
+
+- **Step 282 now tested** (arms `front` by default): `test_arms_front` 20; `test_cartoon_character`
+  + `generator` + `holding` + `limbs` 143; `outfits` + `poses` + `story_light_hands` + both kiss
+  tests + `test_cartoon_sheet` 110; `cartoon_stage` + `shots` + `directing` + `lint` 83;
+  `test_cartoon_room` 28; iso `staging` + `story` + `fixed_view` + `retro_kit` + `seats` + `moves`
+  114; `objects_more` + `ambient` + `atmosphere` + `vehicles` + `time_of_day` 97; `test_actions` +
+  `test_push_wipe_carry` 59; `test_gallery -m "not render"` 19; `test_mcp.py` in full 22: all
+  passed after two test fixes (no code fault): `test_cartoon_room::test_the_set_fades_in_as_one_picture`
+  and the same frame recorder in `test_cartoon_wind` / `test_cartoon_motion_effects` take manim
+  0.22's `write_frame(frame, repeat=)` (the pattern of `test_cartoon_living`);
+  `test_push_wipe_carry::test_overlay_rgba_composites_like_the_layer`: its `_FakeLayer` lacked
+  `overlays` / `following` and `_patch(piece=)` (the layer grew pieces in Phase AD).
+- **Frame baseline**: exactly the 25 stills with characters differ from the old references
+  (platform-story 16, cartoon 9; diff boxes only around the arms), the 8 gradient-descent stills
+  identical; renders at b2fbedd (s283) and HEAD identical. Old references moved to
+  `baseline/frames_classic/`, `frames/` remade from HEAD, README updated; sheet
+  `/home/claude/work/scratch/s286/baseline.png` (old | new | diff ×4 | zooms, 4 stills; script
+  `s286/sheet.py`). After this step's changes: 33 frames, max difference 0.
+- **Review fixes** (DESIGN §111.5): WebVTT cue text escaped (`transcripts.vtt_text`: `&`, `<`,
+  `>`, no blank lines); problems of a `sections:` project name the section
+  (`sections.section_location` / `section_problems` / `section_error`; `Project.from_sections`,
+  `Project.attributed`, `parse_config`); `vidgen schema` knows `sections` (`schema._add_sections`;
+  top level `oneOf` scenes / sections); no YouTube chapter warnings for `audio_only: true`
+  (`chapter_warnings`) or in an audio-only render (`write_chapter_list(warn=)`); MCP `render`
+  `audio_only` and a new read-only tool `audio_check`. Docs: CONFIG (transcripts paragraph moved
+  from the stereo section to "Audio files", sections in schema/problems, MCP list), guide (+
+  `AGENTS.md`), README, COOKBOOK-AUDIO, DESIGN, CHANGELOG, tasklist (Phase AF ticked).
+- Reviewed without change: speech timing, preset numbers, pan law (`left` = 7.65 dB L−R) and room
+  maths, SRT output (shared with videos). Sample SRT/VTT of Steps 284 and 286 pass
+  `s286/check_subs.py` (a format checker).
+- **Demo** (`/home/claude/work/scratch/s286/kphi3/`, the kphi3 example with its committed MP3s, no
+  TTS; variants added by `s286/make_demo.py`): `output/kphi3_video_podcast.mp3` (stereo 192k, calm
+  bed) 3:52, −16.3 LUFS, TP −2.2 dBTP, `vidgen audio check --preset podcast --mono` PASS (mono:
+  correlation 0.99, worst second −0.22, fold 0.0 dB); `output/kphi3_video_audiobook.mp3` (mono 44.1
+  kHz 192k) 3:55, RMS −20.3 dB, peak −4.1 dB, head 0.61 s, tail 2.83 s, `--preset audiobook` PASS.
+  Each with `_transcript.txt`, `.srt`, `.vtt` (53 cues, valid); no `_chapters.txt` (no chapters).
+- Files: `transcripts.py`, `sections.py`, `project.py`, `config.py`, `schema.py`, `chapter_export.py`,
+  `render/pipeline.py`, `mcp_server.py`; tests `test_audio_only` (+2), `test_audio_output`,
+  `test_schema` (sections valid / invalid cases, top-level `oneOf`), `test_mcp` (`audio_check`),
+  `test_cartoon_room`, `test_cartoon_wind`, `test_cartoon_motion_effects`, `test_push_wipe_carry`.
+- Tests after the fixes: `test_audio_only` + `test_audio_output` 44, `test_schema` 76 (with slow),
+  `test_staging` + `test_config` + `test_project` + `test_includes` + `test_chapter_export` +
+  `test_chapters_progress` 118, `test_docs` + `test_guide` + `test_cli` + `test_json_output` +
+  `test_api` + `test_story_draft` 221, `test_translation` + `test_cuts_shorts` + `test_robustness` +
+  `test_overlap_pinned` 155, `test_mcp` 22: all passed.
+- Known gaps: `vidgen direct` / MCP editors do not edit `sections:`; a variant cannot set
+  `sections:` (or a section's `room`); `pacing.silent` overrides a pause section's own seconds;
+  `follow_stage` does not track a walk during a line; no chapters embedded in audio files; MP3
+  ~0.3 dB under the mix.
+
+## Step 287 — Cookbook: voices in iso cartoons
+
+- Docs only: docs/COOKBOOK-ISO-CARTOONS.md is now "craft notes" and gains a section on stereo staging and rooms for cartoon videos (per-character pan, follow_stage, room per scene matched to the set, narrator dry and centred, moves across a line, narrower music, the mono check). The YAML snippet was validated with vidgen validate; vidgen audio check --mono was tried on an MP4. tests/test_docs.py passes.

@@ -656,9 +656,10 @@ def video_cues(project: Project, timings: dict[str, Any]) -> list[Cue]:
     return cues_from_timings(timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language, spoken)
 
 
-def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any]) -> Path | None:
+def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any], warn: bool = True) -> Path | None:
     """Write the description file ``<output>_chapters.txt``: the YouTube chapter list from the
-    combined timings' ``chapters`` (DESIGN.md §52; why YouTube would ignore it is logged) and,
+    combined timings' ``chapters`` (DESIGN.md §52; why YouTube would ignore it is logged unless
+    not ``warn``: an audio-only render's list is for a podcast's show notes) and,
     after it, the numbered references and figure credits of the scenes (§95.14); returns its
     path, or ``None`` (and removes an old file) when there is neither (no chapters or
     ``chapters.youtube`` false, and no references or ``citations.description`` false)."""
@@ -670,7 +671,8 @@ def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any])
     if not chapters and not cited:
         remove_file(path)
         return None
-    for problem in chapter_export.write_youtube_list(path, chapters, cited):
+    problems = chapter_export.write_youtube_list(path, chapters, cited)
+    for problem in problems if warn else []:
         log.warning("%s", problem)
     return path
 

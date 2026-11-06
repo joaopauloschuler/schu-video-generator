@@ -59,7 +59,7 @@ def write_character_png(
         "background_color": theme.background,
     }
     with tempconfig(settings):
-        figure = build_character(entry, theme=theme, height=FRAME_SHORT_SIDE * STILL_CHARACTER_HEIGHT, facing=facing, root=project.root)
+        figure = build_character(entry, theme=theme, height=FRAME_SHORT_SIDE * STILL_CHARACTER_HEIGHT, facing=facing, root=project.root, arms=project.config.cartoon_arms)
         figure.move_to([0, 0, 0])
         camera = Camera()
         camera.capture_mobjects([figure])
@@ -341,7 +341,7 @@ def _section_pictures(
     }
     pictures = []
     with tempconfig(settings):
-        probe = build_character(entry, theme=theme, height=1.0, root=project.root)
+        probe = build_character(entry, theme=theme, height=1.0, root=project.root, arms=project.config.cartoon_arms)
         whole = section.kind in WHOLE_FIGURE_KINDS
         if whole:
             sizes = [(_show_whole(probe, section.kind, name).width, probe.height) for name in section.names]
@@ -349,7 +349,7 @@ def _section_pictures(
         else:
             box_width, box_height = _box_size(_head_box(probe))
             figure_height = HEAD_FILL * min(frame_width / box_width, frame_height / box_height)
-        figure = build_character(entry, theme=theme, height=figure_height, root=project.root)
+        figure = build_character(entry, theme=theme, height=figure_height, root=project.root, arms=project.config.cartoon_arms)
         if not whole:
             low, high = _head_box(figure)
             figure.shift([-(low[0] + high[0]) / 2, -(low[1] + high[1]) / 2, 0.0])

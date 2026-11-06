@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import zlib
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cached_property
 from typing import Any, Protocol, TypeVar
 
@@ -24,15 +24,26 @@ from vidgen.lint.color import hex_rgb
 from vidgen.particles import particle_count, particle_seeds
 
 #: The light presets, in the order the docs list them.
-LIGHT_PRESETS = ("day", "morning", "sunset", "night", "indoor")
+LIGHT_PRESETS = ("day", "morning", "sunset", "night", "indoor", "blue_hour")
 #: Each preset: tint, strength, glow, star brightness, shadow factor. ``day`` changes nothing.
+#: ``blue_hour`` (DESIGN.md §107, §108) is a crisp, clean night: a cool indigo multiply with no
+#: lift in the blacks, colours made more saturated before the tint (they keep their own hues, not a
+#: lavender haze), mid tones darkened and the tones stretched (contrast), dark enough for lamps,
+#: windows and neon to glow and pool.
 PRESET_LIGHTS: dict[str, tuple[str, float, tuple[float, float, float], float, float]] = {
     "day": ("#FFFFFF", 0.0, (0.0, 0.0, 0.0), 0.0, 1.0),
     "morning": ("#FFE4CC", 0.3, (0.05, 0.035, 0.02), 0.0, 0.8),
     "sunset": ("#FF8A5C", 0.55, (0.13, 0.04, 0.03), 0.0, 0.9),
     "night": ("#2A3C78", 0.72, (0.0, 0.0, 0.0), 1.0, 0.45),
     "indoor": ("#E6BC7E", 0.4, (0.0, 0.0, 0.0), 0.0, 0.75),
+    "blue_hour": ("#3555B8", 0.56, (0.0, 0.0, 0.0), 0.7, 0.6),
 }
+#: The presets that keep more (or less) than all of each colour's saturation (before the tint).
+PRESET_SATURATION: dict[str, float] = {"blue_hour": 1.6}
+#: The presets that bend the tones: (gamma, contrast, vivid) (:class:`LightGrade`, DESIGN.md §108).
+PRESET_TONES: dict[str, tuple[float, float, float]] = {"blue_hour": (1.2, 1.3, 1.15)}
+#: The tone a ``contrast`` stretches about (0..1): below it darker, above it brighter.
+CONTRAST_PIVOT = 0.35
 #: Strength of a ``{tint}`` light that gives none.
 DEFAULT_STRENGTH = 0.5
 #: Seconds a ``light`` beat action fades over by default.
@@ -73,12 +84,25 @@ class LightGrade:
     #: How much of each colour's saturation is kept before the multiply (1: all; a flashback's
     #: faded colours less, DESIGN.md §100.12).
     saturation: float = 1.0
+    #: The saturation scaled after the multiply and glow (1: unchanged; above 1 the tinted colours
+    #: get their hues back, DESIGN.md §108).
+    vivid: float = 1.0
+    #: A power on each channel before the multiply (1: none; above 1 the mid tones darken while
+    #: whites stay, a crisper night, DESIGN.md §108).
+    gamma: float = 1.0
+    #: A contrast stretch about :data:`CONTRAST_PIVOT` after the multiply and glow (1: none).
+    contrast: float = 1.0
+
+    @property
+    def curved(self) -> bool:
+        """Whether it bends the tones (``gamma`` or ``contrast`` not 1)."""
+        return abs(self.gamma - 1.0) > 1e-9 or abs(self.contrast - 1.0) > 1e-9
 
     @property
     def changes_colors(self) -> bool:
         """Whether it changes any colour (``day`` does not)."""
         return (any(abs(m - 1.0) > 1e-9 for m in self.multiply) or any(abs(g) > 1e-9 for g in self.glow)
-                or abs(self.saturation - 1.0) > 1e-9)
+                or abs(self.saturation - 1.0) > 1e-9 or abs(self.vivid - 1.0) > 1e-9 or self.curved)
 
     @cached_property
     def arrays(self) -> tuple[np.ndarray, np.ndarray | None]:
@@ -106,7 +130,11 @@ def light_grade(light: str | tuple[str, float]) -> LightGrade:
     if light not in PRESET_LIGHTS:
         raise ValueError(f"unknown light {light!r}; presets: {', '.join(LIGHT_PRESETS)}")
     tint, strength, glow, stars, shadow = PRESET_LIGHTS[light]
-    return tint_grade(tint, strength, glow=glow, stars=stars, shadow=shadow)
+    grade = tint_grade(tint, strength, glow=glow, stars=stars, shadow=shadow)
+    if light in PRESET_SATURATION or light in PRESET_TONES:
+        gamma, contrast, vivid = PRESET_TONES.get(light, (1.0, 1.0, 1.0))
+        grade = replace(grade, saturation=PRESET_SATURATION.get(light, 1.0), gamma=gamma, contrast=contrast, vivid=vivid)
+    return grade
 
 
 def blend_grades(a: LightGrade, b: LightGrade, share: float) -> LightGrade:
@@ -117,8 +145,11 @@ def blend_grades(a: LightGrade, b: LightGrade, share: float) -> LightGrade:
 
     multiply = tuple(mix(x, y) for x, y in zip(a.multiply, b.multiply))
     glow = tuple(mix(x, y) for x, y in zip(a.glow, b.glow))
-    saturation = a.saturation if a.saturation == b.saturation else mix(a.saturation, b.saturation)
-    return LightGrade(multiply, glow, mix(a.stars, b.stars), mix(a.shadow, b.shadow), saturation)  # type: ignore[arg-type]
+    def keep(x: float, y: float) -> float:
+        return x if x == y else mix(x, y)
+
+    return LightGrade(multiply, glow, mix(a.stars, b.stars), mix(a.shadow, b.shadow), keep(a.saturation, b.saturation),  # type: ignore[arg-type]
+                      keep(a.vivid, b.vivid), keep(a.gamma, b.gamma), keep(a.contrast, b.contrast))
 
 
 #: A lamp's light on what stands near it (an iso place's lamp at night, DESIGN.md §89.13): its
@@ -181,7 +212,7 @@ def day_stages(before: LightGrade, preset: str) -> list[tuple[str, float]]:
     light day to night, ``[("morning", 0.5), ("day", 1.0)]`` from night to day, else
     ``[(preset, 1.0)]``."""
     dark = darkness(before)
-    if preset == "night" and dark <= TWILIGHT_FROM_DAY:
+    if preset in ("night", "blue_hour") and dark <= TWILIGHT_FROM_DAY:
         return [("sunset", TWILIGHT_SHARE), ("night", 1.0)]
     if preset == "day" and dark >= TWILIGHT_FROM_NIGHT:
         return [("morning", TWILIGHT_SHARE), ("day", 1.0)]
@@ -229,38 +260,79 @@ def auto_switch_time(name: str, crossing: float, start: float, seconds: float) -
     return min(max(crossing + offset, float(start)), float(start) + max(float(seconds), 0.0))
 
 
-def lifted(grade: LightGrade, share: float) -> LightGrade:
+def lifted(grade: LightGrade, share: float, toward: RGB = (1.0, 1.0, 1.0)) -> LightGrade:
     """``grade`` lifted ``share`` 0..1 of the way back to the colours as drawn: a fill light on
     what it grades (a stage's ``fill_light`` on its characters, a visitor's own ``glow``,
-    DESIGN.md §100.15). Its stars, shadows and saturation are kept; 0 returns ``grade`` itself."""
+    DESIGN.md §100.15). ``toward`` is the multiply it lifts to (a coloured fill light, e.g. a
+    warm key, ``fill_color``, DESIGN.md §108; white: the colours as drawn). Its stars, shadows and
+    saturation are kept, but a boost above 1 (``saturation``, ``vivid``) and the tone curve
+    (``gamma``, ``contrast``) relax as far towards 1; 0 returns ``grade`` itself."""
     s = min(max(float(share), 0.0), 1.0)
     if s <= 1e-9:
         return grade
-    multiply = tuple(m + (1.0 - m) * s for m in grade.multiply)
+
+    def relax(value: float) -> float:
+        return value + (1.0 - value) * s
+
+    multiply = tuple(m + (t - m) * s for m, t in zip(grade.multiply, toward))
     glow = tuple(g * (1.0 - s) for g in grade.glow)
-    return LightGrade(multiply, glow, grade.stars, grade.shadow, grade.saturation)  # type: ignore[arg-type]
+    saturation = grade.saturation if grade.saturation <= 1.0 else relax(grade.saturation)
+    return replace(grade, multiply=multiply, glow=glow, saturation=saturation, vivid=relax(grade.vivid), gamma=relax(grade.gamma),
+                   contrast=relax(grade.contrast))
+
+
+def _graded_colors(colors: np.ndarray, grade: LightGrade, scale: float) -> None:
+    """Grade ``colors`` (rows of RGB in 0..``scale``) in place, except the final clip: saturation,
+    gamma, multiply, glow, contrast, vivid."""
+    if grade.saturation != 1.0:
+        _desaturate(colors, grade.saturation)
+    if grade.gamma != 1.0:
+        np.clip(colors, 0.0, scale, out=colors)
+        colors /= scale
+        np.power(colors, grade.gamma, out=colors)
+        colors *= scale
+    colors *= np.asarray(grade.multiply, dtype=colors.dtype)
+    if any(grade.glow):
+        colors += scale * np.asarray(grade.glow, dtype=colors.dtype)
+    if grade.contrast != 1.0:
+        pivot = scale * CONTRAST_PIVOT
+        colors -= pivot
+        colors *= grade.contrast
+        colors += pivot
+    if grade.vivid != 1.0:
+        _desaturate(colors, grade.vivid)
 
 
 def grade_rgbas(rgbas: np.ndarray, grade: LightGrade) -> np.ndarray:
     """RGBA rows (components 0..1) with the grade applied; alpha unchanged; a new array."""
     graded = np.array(rgbas, dtype=float, copy=True)
-    multiply, glow = grade.arrays
     colors = graded[..., :3]
-    if grade.saturation != 1.0:
-        _desaturate(colors, grade.saturation)
-    colors *= multiply
-    if glow is not None:
-        colors += glow
-        np.clip(colors, 0.0, 1.0, out=colors)
+    if not grade.curved and grade.vivid == 1.0:   # the plain path, as before §108
+        multiply, glow = grade.arrays
+        if grade.saturation != 1.0:
+            _desaturate(colors, grade.saturation)
+        colors *= multiply
+        if glow is not None:
+            colors += glow
+        if glow is not None or grade.saturation > 1.0:   # more saturated colours may leave 0..1
+            np.clip(colors, 0.0, 1.0, out=colors)
+        return graded
+    _graded_colors(colors, grade, 1.0)
+    np.clip(colors, 0.0, 1.0, out=colors)
     return graded
 
 
 def grade_pixels(pixels: np.ndarray, grade: LightGrade) -> np.ndarray:
     """An 8-bit RGB or RGBA picture with the grade applied; alpha unchanged; a new array."""
     graded = pixels.astype(np.float32)
-    if grade.saturation != 1.0:
-        _desaturate(graded[..., :3], grade.saturation)
-    graded[..., :3] = graded[..., :3] * np.asarray(grade.multiply, dtype=np.float32) + 255 * np.asarray(grade.glow, dtype=np.float32)
+    if not grade.curved and grade.vivid == 1.0:   # the plain path, as before §108
+        if grade.saturation != 1.0:
+            _desaturate(graded[..., :3], grade.saturation)
+        graded[..., :3] = graded[..., :3] * np.asarray(grade.multiply, dtype=np.float32) + 255 * np.asarray(grade.glow, dtype=np.float32)
+        return np.clip(np.rint(graded), 0, 255).astype(pixels.dtype)
+    colors = graded[..., :3].copy()
+    _graded_colors(colors, grade, 255.0)
+    graded[..., :3] = colors
     return np.clip(np.rint(graded), 0, 255).astype(pixels.dtype)
 
 

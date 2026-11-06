@@ -283,10 +283,11 @@ class IsoStaging:
     # ----- the pictures (DESIGN.md §89.7, §89.10) ---------------------------------------------------
 
     def _iso_action_targets(self) -> list[str]:
-        """The target patterns of every action of the scene, and the lights a ``time_of_day``
-        may switch by itself (§105.3)."""
+        """The target patterns of every action of the scene that may change what it targets (not
+        a camera move's: a ``zoom`` onto an object leaves it drawn in the place, its moving parts
+        showing, §109), and the lights a ``time_of_day`` may switch by itself (§105.3)."""
         uses = self._actions.uses if getattr(self, "_actions", None) is not None else []
-        found = [pattern for use in uses for pattern in use.action.config.targets()]
+        found = [pattern for use in uses if not getattr(use.action, "moves_camera", False) for pattern in use.action.config.targets()]
         if any(use.options.auto_lights for use in self.action_uses("time_of_day")):
             found += list(self.params.iso.auto_lit())
         return found
@@ -315,13 +316,16 @@ class IsoStaging:
         self.camera.frame.scale(width / self.camera.frame.width).move_to([*center, 0.0])   # the wide view (§89.13)
         lights = p.iso.wall_light_colors()
         strips = None if lights is None else (resolve_color(lights[0], self.theme), resolve_color(lights[1], self.theme))
-        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in p.iso.colors.items()}, doors=p.iso.doors, strips=strips)
+        given = {**STYLE_COLORS.get(p.iso.style, {}), **p.iso.colors}   # a style's ground colours, the place's own over them (§107)
+        textures = {**STYLE_TEXTURES.get(p.iso.style, {}), **p.iso.textures}
+        colors = IsoColors(**{key: resolve_color(value, self.theme) for key, value in given.items()}, doors=p.iso.doors, strips=strips,
+                           textures=tuple(sorted(textures.items())))
         #: the vehicles the scene moves (DESIGN.md §105): the stage draws them, not the place's pictures
         driven = self._iso_driven(place)
         #: the working objects whose moving parts are drawn over the place (DESIGN.md §103)
         self._iso_moving = self._iso_moving_names(place) - set(driven)
         looks = {item.name: ObjectLook(*(resolve_color(own or default, self.theme)
-                                         for own, default in zip((item.color, item.detail), OBJECT_COLORS[item.kind])),
+                                         for own, default in zip((item.color, item.detail), object_colors(item.kind, p.iso.style))),
                                        moving=item.name in self._iso_moving, driven=item.name in driven)
                  for item in place.objects}
         density = 1.0 if self.is_draft else ISO_OVERSAMPLE
@@ -429,6 +433,9 @@ class IsoStaging:
                     cover.add(self._iso_tiles(picture, cover.name))
                     covers[id(gadget)] = cover
                 self._iso_gadget_places.append((gadget, self.iso_scenery.index[item.name], cover))
+        # back to front (the pieces' draw order): what stands in front of one working object (its
+        # cover) never hides the moving parts of another that stands nearer (§109)
+        self._iso_gadget_places.sort(key=lambda place_of: place_of[1])
         if p.iso.haze and not self.is_draft:   # shimmering air over spots (§102.12)
             spots = []
             for haze in p.iso.haze:
@@ -551,8 +558,12 @@ class IsoStaging:
         lanes = []
         for lane in p.iso.traffic:
             start, end = p.iso.lane_ends(lane)
+            retro = p.iso.style == "retro"   # cream saucers by default (§107)
+            shape = lane.shape or ("saucer" if retro else "capsule")
+            hull = resolve_color(lane.hull, self.theme) if lane.hull is not None else (POD_RETRO_HULL if retro or shape != "capsule" else POD_HULL)
             lanes.append(PodLane(self.iso_view.point(*start), self.iso_view.point(*end), lane.seconds, lane.count,
-                                 resolve_color(lane.color, self.theme), POD_LENGTH * lane.size * self.iso_view.unit, lane.at, (start, end)))
+                                 resolve_color(lane.color, self.theme), POD_LENGTH * lane.size * self.iso_view.unit, lane.at, (start, end),
+                                 shape=shape, hull=hull))
         if lanes:   # a pod behind a building is hidden by it
             things.append(IsoTraffic(lanes, [(box, box_outline(box)) for _, box in boxes]))
         return things
@@ -588,7 +599,7 @@ class IsoStaging:
         count = len(self.params.iso.objects)
         placed = [item.name for item in place.objects[len(place.objects) - count:]] if count else []
         return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed, fit=self.params.iso.wide_fit(),
-                         tiles=self.iso_tiles())
+                         tiles=self.iso_tiles(), back=self.params.iso.wall_room())
 
     def iso_tiles(self) -> float | None:
         """The tile widths across the frame of the fixed wide view (``wide: fixed``, DESIGN.md
@@ -609,7 +620,8 @@ class IsoStaging:
         on the ground as far as the map allows (DESIGN.md §106); else as it is."""
         if self.iso_tiles() is None:
             return center
-        return ground_view_center(self.params.iso.parsed(), self.iso_view, self.frame_width, self.frame_height, width, center)
+        return ground_view_center(self.params.iso.parsed(), self.iso_view, self.frame_width, self.frame_height, width, center,
+                                  self.params.iso.wall_room())
 
     def iso_wide_shot(self, names: list[str]) -> ShotView:
         """``shot: wide`` on the place: the wide view keeping the characters ``names`` (those on
@@ -1177,6 +1189,16 @@ class IsoStaging:
                 return None
             return float(mob.get_left()[0]), float(mob.get_bottom()[1]), float(mob.get_right()[0]), float(mob.get_top()[1])
         return box
+
+    def target_box(self, target: Any) -> tuple[float, float, float, float] | None:
+        """``(left, bottom, right, top)`` of an iso place's object named by ``target`` (Manim
+        units): the box it stands in on the picture, for a ``zoom`` onto it (its own picture spans
+        the whole place, DESIGN.md §109); ``None`` for anything else."""
+        scenery = getattr(self, "iso_scenery", None)
+        name = getattr(target, "name", None)
+        if not self.on_iso or scenery is None or name not in scenery.index:
+            return None
+        return self._iso_object_box(name)()
 
     def _iso_object_box(self, name: str) -> Callable[[], tuple[float, float, float, float] | None]:
         piece = self.iso_scenery.pieces[self.iso_scenery.index[name]]

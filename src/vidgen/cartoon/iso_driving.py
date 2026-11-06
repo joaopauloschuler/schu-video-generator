@@ -48,16 +48,17 @@ LIFT_FLAME = 2.2
 Span = tuple[float, float]
 
 
-def frame_item(kind: str, heading: Cell) -> IsoObject:
+def frame_item(kind: str, heading: Cell, features: tuple[str, ...] = ()) -> IsoObject:
     """The vehicle ``kind`` standing with its middle at the world's origin, heading ``heading``
-    (along the map's rows: facing left; along its columns: facing right)."""
+    (along the map's rows: facing left; along its columns: facing right); ``features``: its
+    placing's (a car's ``rocket`` kind, DESIGN.md §107)."""
     spec = OBJECT_KINDS[kind]
     length, width = max(spec.width, spec.depth), min(spec.width, spec.depth)
     if kind == "rocket":
-        return IsoObject(kind, kind, -spec.width / 2, -spec.depth / 2, spec.width, spec.depth, spec.height)   # type: ignore[arg-type]
+        return IsoObject(kind, kind, -spec.width / 2, -spec.depth / 2, spec.width, spec.depth, spec.height, features=features)   # type: ignore[arg-type]
     if heading[1] == 0:
-        return IsoObject(kind, kind, -length / 2, -width / 2, length, width, spec.height, "left")   # type: ignore[arg-type]
-    return IsoObject(kind, kind, -width / 2, -length / 2, width, length, spec.height, "right")   # type: ignore[arg-type]
+        return IsoObject(kind, kind, -length / 2, -width / 2, length, width, spec.height, "left", features=features)   # type: ignore[arg-type]
+    return IsoObject(kind, kind, -width / 2, -length / 2, width, length, spec.height, "right", features=features)   # type: ignore[arg-type]
 
 
 #: A sailing boat's wake: how far behind its stern it spreads (tile units) and how wide.
@@ -112,15 +113,16 @@ def turning_shapes(kind: str, look: ObjectLook, turn: tuple[Cell, Cell], **setti
 
 
 def vehicle_shapes(kind: str, look: ObjectLook, *, heading: Cell, on: bool, spin: float | None = None, now: float = 0.0,
-                   boost: float = 1.0, wake: bool = False, turn: tuple[Cell, Cell] | None = None) -> list[Shape]:
+                   boost: float = 1.0, wake: bool = False, turn: tuple[Cell, Cell] | None = None, features: tuple[str, ...] = ()) -> list[Shape]:
     """The shapes of a moving vehicle with its middle at the world's origin (on its base, ``z``
     0), heading ``heading``: a car side-on (driving away up the picture its tail shows, ``spin``
     its spokes), a boat (its bow the way it sails; ``wake``: its wake behind it), a train car's
     carriage (no track), a rocket without its pad (its flame at ``now``, ``boost`` times as long,
-    while ``on``); ``turn``: a car or a boat half-way round a corner (:func:`turning_shapes`)."""
+    while ``on``); ``turn``: a car or a boat half-way round a corner (:func:`turning_shapes`);
+    ``features``: its placing's (a ``rocket`` car, DESIGN.md §107)."""
     if turn is not None:
-        return turning_shapes(kind, look, turn, on=on, spin=spin, now=now, boost=boost, wake=wake)
-    f = _Frame(frame_item(kind, heading), 0.0)
+        return turning_shapes(kind, look, turn, on=on, spin=spin, now=now, boost=boost, wake=wake, features=features)
+    f = _Frame(frame_item(kind, heading, features), 0.0)
     plain = ObjectLook(look.main, look.detail)
     away = heading in ((-1, 0), (0, -1))
     if kind == "car":
@@ -192,9 +194,11 @@ class IsoVehicle(Group):
     iso_vehicle = True
 
     def __init__(self, name: str, kind: str, look: ObjectLook, view: IsoView, *, point: Point3, heading: Cell, scale: float, density: float,
-                 frame_width: float, outline: float = 1.0, on: bool = False) -> None:
+                 frame_width: float, outline: float = 1.0, on: bool = False, features: tuple[str, ...] = ()) -> None:
         super().__init__()
         self.name, self.kind, self.look, self.view = name, kind, look, view
+        #: its placing's extras (a car's ``rocket`` kind, DESIGN.md §107)
+        self.features = tuple(features)
         self.point, self.heading = point, heading
         #: half-way round a corner: the ways it heads before and after (drawn turned)
         self.turn: tuple[Cell, Cell] | None = None
@@ -302,7 +306,7 @@ class IsoVehicle(Group):
         key, settings = self._variant(now)
         key = (*key, self.level)
         if key not in self._sprites:
-            shapes = vehicle_shapes(self.kind, self.look, **settings)
+            shapes = vehicle_shapes(self.kind, self.look, features=self.features, **settings)
             self._sprites[key] = draw_sprite(shapes, self.scale * 2**self.level, outline=self.outline)
         sprite = self._sprites[key]
         x, y, z = self.point
