@@ -142,7 +142,7 @@ from vidgen.translation import TextRef, TranslatableStr  # noqa: E402
 from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
-from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
+from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character, pixel_zoom  # noqa: E402
 from vidgen.cartoon.transition import ArmMove, BodyMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, PropReshape, Walk, feet_of  # noqa: E402
 from vidgen.cartoon.holding import (  # noqa: E402
     GIVE_SECONDS,
@@ -485,6 +485,9 @@ from vidgen.cartoon.lighting import (  # noqa: E402
     LIGHT_FADE_SECONDS,
     LIGHT_PRESETS,
     POOL_DAY,
+    PRESET_SATURATION,
+    PRESET_TONES,
+    CONTRAST_PIVOT,
     PROP_SHADOW_WIDTH,
     SHADOW_WIDTH,
     STAR_HEAD_ROOM,
@@ -631,12 +634,12 @@ from vidgen.cartoon.level_stage import (  # noqa: E402
     level_move_problems,
     level_world,
 )
-from vidgen.world.iso import AUTO_LIGHT_KINDS, CAR_STYLES, CLOCK_KINDS, CONSOLE_PICTURES, DISPLAY_CASES, HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, TALL_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
+from vidgen.world.iso import AUTO_LIGHT_KINDS, CAR_STYLES, CLOCK_KINDS, CONSOLE_PICTURES, POSTER_PICTURES, DISPLAY_CASES, HAZARD_SIGNS, ISO_CHARACTER_HEIGHT, OBJECT_KINDS, OBJECT_STYLES, OPENING_KINDS, SWITCHED_KINDS, TALL_KINDS, IsoPlace, ObjectPlacing, ObjectState, default_state, parse_iso_map, place_objects  # noqa: E402
 from vidgen.world.iso_view import Box3, draw_order, in_front, iso_point  # noqa: E402
 from vidgen.cartoon.iso_drawing import draw_shapes  # noqa: E402
 from vidgen.cartoon.iso_objects import LAMPLIGHT_KINDS, LIT_OBJECTS, MOVING_KINDS, OBJECT_COLORS, STYLE_OBJECT_COLORS, ObjectLook, object_box, object_colors, object_lights, object_motion, object_working, tower_screen  # noqa: E402
 from vidgen.cartoon.iso_scenery import STYLE_COLORS, STYLE_TEXTURES, TEXTURED_SURFACES, TEXTURES, IsoColors, window_faces  # noqa: E402
-from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view, ISO_FIXED_SHARES, fixed_fill_size, fixed_reach, fixed_tiles, fixed_view, ground_view_center, on_ground  # noqa: E402
+from vidgen.cartoon.iso_stage import ISO_FOLLOW_SIZE, ISO_PAN_ZOOM, ISO_WIDE_MAX, IsoScenery, IsoView, body_box, canvas_center, follow_width, iso_item_point, iso_layout, iso_stand, iso_view, item_box, map_fraction, place_outline, standing_box, wide_view, ISO_FIXED_SHARES, fixed_fill_size, fixed_reach, fixed_tiles, fixed_view, ground_view_center, on_ground, WALL_VIEW_MARGIN, wall_reach  # noqa: E402
 from vidgen.cartoon.iso_pictures import POOL_STRENGTH, GlowTile, IsoPuddles, IsoSnow, IsoTiles, install_tile_drawing  # noqa: E402
 from vidgen.cartoon.iso_weather import IsoPuddle, TopSurface, iso_puddles, lift_floors, ripples, top_surface  # noqa: E402
 from vidgen.world.iso_moves import ISO_ITEM_ACTIONS, ISO_MOVES, ISO_PLACE_CHANGES, ISO_REACH, SURFACES, WANDER_RADIUS, WANDER_STOPS, IsoRoute, IsoStep, cell_of, find_route, iso_move_problems, plan_move, route_surfaces, surface_at  # noqa: E402
@@ -991,6 +994,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "VisemeCue",
     "VisemeTrack",
     "character",
+    "pixel_zoom",
     "pose_name_problem",
     "beat_voice",
     "say_problem",
@@ -1349,6 +1353,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "night_stars",
     "shadow_ellipse",
     "tint_grade",
+    "PRESET_SATURATION",
+    "PRESET_TONES",
+    "CONTRAST_PIVOT",
     "CustomLight",
     "LightSetting",
     "ShadowCaster",
@@ -1597,6 +1604,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "TEXTURES",
     "CLOCK_KINDS",
     "CONSOLE_PICTURES",
+    "POSTER_PICTURES",
     "TALL_KINDS",
     "IsoPlace",
     "ObjectPlacing",
@@ -1760,6 +1768,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "fixed_tiles",
     "fixed_view",
     "ground_view_center",
+    "WALL_VIEW_MARGIN",
+    "wall_reach",
     "on_ground",
     "ISO_WIDE_MAX",
     "ISO_PAN_ZOOM",

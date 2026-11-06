@@ -2664,7 +2664,7 @@ and give each scene `set: village`.
   potion), `giant_crystal`, `throne`, `torch_sconce` (`at` a cell of a back wall), `signpost`,
   `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`, `gift_pile`,
   `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock` (1 x 2, over
-  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); retro: `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long); a `car` takes `kind: rocket` (tail fins, a bubble canopy); `on: true` /
+  water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); retro: `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long), on a back wall's cell `poster` (`kind: rocket | atom | planet`) and `wall_shelf` (books, a plant); a `car` takes `kind: rocket` (tail fins, a bubble canopy); `on: true` /
   `switch_on` makes the laptop, kiosk, core, arm,
   centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood, dish, charging station,
   airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV, vending machine, street
@@ -2740,11 +2740,17 @@ and give each scene `set: village`.
 - A retro-future world (1950s "world of tomorrow"): `iso: {style: retro}` gives the place pastel
   ground and objects (mint lawn, cream checker paths, terrazzo floors, turquoise walls; your
   `colors` / `textures` / an object's `color` win); `textures: {path: checker, floor: terrazzo,
-  grass: lawn}` work on any place. A night that stays bright and clear: `light: blue_hour` with the
-  lights `on: true` and `fill_light: 0.35` (a deep sky `background`, e.g. `["#3A4FA8", "#9BB9F0"]`).
+  grass: lawn}` work on any place. A night that stays bright and crisp: `light: blue_hour` (colours
+  keep their hues, clean contrast) with the lights `on: true`, `fill_light: 0.6` and `fill_color:
+  "#FFE2BC"` (a warm key on faces) and a deep sky `background`, e.g. `["#1B2A6B", "#2E8FA8"]`.
   Traffic as saucers or a train on a `monorail` beam: `traffic: [{..., shape: saucer | monorail}]`
   (a monorail lane at `height: 3.15` over the beam's row). Retro looks: `outfit: suit | lab_coat |
-  jumpsuit`, `hair: pompadour | bob`, `accessories: [fedora]` or `[pillbox]`.
+  jumpsuit`, `hair: pompadour | bob`, `accessories: [fedora]` or `[pillbox]`; `eyes: bright` (clear
+  whites, a fine rim, catchlights) keeps faces friendly in close-ups and at night.
+- Rooms that feel like rooms: `iso: {wide: fixed, show_walls: true}` frames a room from its back
+  corner so its standing walls fill the top of the frame; stage the action within a few rows of
+  the back walls (`character_size: large`), hang `poster`, `wall_shelf`, `sunburst_clock` on wall
+  cells next to windows `%`, and crowd the floor round the characters: rugs, plants, lamps, desks.
 - A strange door: `iso: {doors: slide}` (steel doors sliding open with a hiss on `- open:
   door_1`) and `haze: [{at: door_in}]` (shimmering air with sparkles over a spot). A room at
   night: dark `colors: {wall, floor}`, `light: night`, `fill_light: 0.45` and `wall_lights:

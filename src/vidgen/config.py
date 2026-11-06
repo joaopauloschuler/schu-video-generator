@@ -434,7 +434,7 @@ class CharacterColors(_Strict):
 
 
 BodyShape = Literal["round", "tall", "square", "bean", "pear", "triangle"]
-EyeStyle = Literal["dot", "oval", "round", "sleepy"]
+EyeStyle = Literal["dot", "oval", "round", "sleepy", "bright"]
 NoseStyle = Literal["none", "dot", "round", "triangle"]
 HairStyle = Literal["none", "short", "spiky", "long", "wavy", "bun", "curly", "ponytail", "braids", "afro", "pompadour", "bob"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
@@ -497,7 +497,7 @@ class CharacterLook(_Strict):
     head_size: float = Field(1.0, ge=0.6, le=1.6)
     """Head size relative to the default head (0.6 to 1.6)."""
     eyes: EyeStyle = "dot"
-    """Eye style: dot, oval, round (white with a pupil) or sleepy."""
+    """Eye style: dot, oval, round (white with a pupil), bright (a big clear white, a fine rim, a small pupil with a catchlight: friendly and readable in close-ups and at night) or sleepy."""
     nose: NoseStyle = "none"
     """Nose: none, dot, round or triangle."""
     hair: HairStyle = "none"

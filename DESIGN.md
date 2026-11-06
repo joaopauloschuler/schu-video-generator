@@ -20875,3 +20875,58 @@ Step 278 is the generic kit; docs stay lean (one list in CONFIG and the guide, a
   objects without a retro colour keep their own (lab machines); 9:16 previews at 270 x 480 draw
   characters at `medium` with outlines so thick they read as silhouettes (use 540 x 960); blue
   hour renders about 1.4x slower than night on lit places.
+
+## 108. Crisp blue hour, friendly faces, rooms with walls (Step 279)
+
+Fixes from the review of the Step 278 sheet (`s278/sheet.png`), before the private test cut;
+additive (frame baseline 33/33 identical).
+
+- **Blue hour** (`PRESET_LIGHTS["blue_hour"]` `#3555B8` at 0.56, no glow; `PRESET_SATURATION` 1.6;
+  `PRESET_TONES` (gamma 1.2, contrast 1.3, vivid 1.15)): `LightGrade` gains `gamma` (a power on each
+  channel before the multiply: mid tones darker, whites kept), `contrast` (a stretch about
+  `CONTRAST_PIVOT` 0.35 after the multiply and glow) and `vivid` (saturation after it), `curved`;
+  `grade_rgbas` / `grade_pixels` share `_graded_colors` for them (a grade without them keeps the
+  old code path: every other light unchanged). The 278 grade lifted the blacks (glow) and tinted
+  0.58 towards lavender, so every colour converged on one luminance and hue (a filter). Chosen by
+  trying candidates on day stills (`s279/grade_try2.py`) and looking: more tint reads as a filter,
+  a contrast pivot at 0.5 reads as day, warm-heavy grades read as sunset. Measured (preview,
+  luma / colourfulness / luma std-dev): street 141 / 69 / 39 (278) → 130 / 88 / 46 (night 97 / 52 /
+  41); office 145 / 49 / 35 → 135 / 60 / 43 (night 94 / 34 / 26). `lifted` relaxes the curve and the
+  boosts with the fill light's share; `blend_grades`, `flash_grade`, `flashback_grade` carry them
+  (`dataclasses.replace`).
+- **Fill colour** (`Stage.fill_color`): `lifted(grade, share, toward)` lifts towards a multiply
+  (the colour's `tint_grade(..., 1).multiply`) instead of white; `mark_light_lift(..., toward)`,
+  `LIGHT_LIFT_TOWARD`, cached by (grade, share, toward).
+- **Faces** — the "goggles" were outlines, not the eyes: on a fixed wide view the characters are
+  built at the whole place's scale (zoom base ~3 on a 30 x 30 map) where their natural stroke is
+  below one pixel, so `one_pixel_stroke()` floored every outline to one pixel *of the whole place*,
+  which the wide view and a close-up then magnify (~18x: 25 px rims). `pixel_zoom(zoom)` (a context
+  in `cartoon/character.py`; `Stage.construct` wraps the scene in it with `zoom_base()` on an iso
+  place, 1 elsewhere) makes the floor one pixel of the fixed view. And `eyes: bright`
+  (`BRIGHT_EYE`: 0.36 x 0.46 of the eye radius, rim 0.3 of the outline, pupil 0.42 of the eye's width,
+  a catchlight 0.2 of the pupil's) for friendly close-ups.
+- **Rooms** (`StageIso.show_walls`, indoor with `wide: fixed`; `wall_room()`): the standing back
+  walls cover the picture `2 h ISO_RISE` cells behind their foot (`wall_reach`, less
+  `WALL_VIEW_MARGIN` 0.3; 0 when a back edge is not standing wall all along), so `on_ground(...,
+  back=)` / `ground_view_center(..., back=)` / `fixed_view(..., back=)` / `wide_view(..., back=)`
+  let the view reach that far behind the back edges; `fixed_view` then sits across from the bodies'
+  middle as far back as that allows (`v = (reach − back + |u|) / 2`, the back corner at u 0), and the
+  bodies still win. Chosen over a bigger room (which only adds bare floor) and over a forced corner
+  view (it lost the characters): staging near the back walls plus this framing shows the walls as a
+  band along the frame's top; with a 3-tile wall a medium 16:9 view (10.9 tiles) cannot show the
+  corner itself without background, so the private film stages the action within ~6 rows of the
+  back walls at `character_size: large` and gives the stage a wall-coloured `background`.
+  Wall dressing: `poster` (`POSTER_PICTURES` rocket | atom | planet, `kind:`) and `wall_shelf`
+  (two planks of books and a plant) join `WALL_KINDS` (`cartoon/iso_retro.py`, `WALL_SPANS`).
+- **Test cut** (private, `story-qc2/testcut/`, 1:38 at 854 x 480 with Kokoro voices): stills
+  luma 107–140, colourfulness 42–97, contrast 43–59 (`s279/measure.csv`); cost at blue hour 12–30 s
+  per second of video (the rainy city 20 s/s with a pan; a `follow` of a car zooms to character
+  size and hid the city, a pan with the drive's run time keeps the wide view).
+- **Left for later**: a shot that frames an object (the AI's TV face) rather than characters; the
+  walls show only as a band (a taller-wall option would show more); blue hour still costs about
+  1.4x night.
+- **Public**: `vidgen.api` adds `PRESET_SATURATION` (missing since §107), `PRESET_TONES`,
+  `CONTRAST_PIVOT`, `pixel_zoom`, `wall_reach`, `WALL_VIEW_MARGIN`, `POSTER_PICTURES`;
+  `LightGrade(vivid, gamma, contrast)`, `.curved`; `lifted(toward=)`, `on_ground(back=)`,
+  `ground_view_center(back=)`, `fixed_view(back=)`, `wide_view(back=)`; `Stage.fill_color`,
+  `StageIso.show_walls`, `CharacterLook.eyes: bright`.

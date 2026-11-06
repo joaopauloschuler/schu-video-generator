@@ -113,11 +113,18 @@ def mark_lamp_lit(mobject: Mobject, lamp: LampLit) -> None:
 LIGHT_LIFT = "light_lift"
 
 
-def mark_light_lift(mobject: Mobject, share: float) -> None:
+#: The attribute holding the multiply a coloured fill light lifts to (DESIGN.md §108).
+LIGHT_LIFT_TOWARD = "light_lift_toward"
+
+
+def mark_light_lift(mobject: Mobject, share: float, toward: tuple[float, float, float] = (1.0, 1.0, 1.0)) -> None:
     """Let a fill light lift ``mobject`` and everything in it ``share`` (0..1) of the way from
-    the stage's light back to its colours as drawn (:func:`~vidgen.cartoon.lighting.lifted`)."""
+    the stage's light back to its colours as drawn, or to the multiply ``toward`` (a coloured
+    fill light; :func:`~vidgen.cartoon.lighting.lifted`)."""
+    toward = tuple(float(c) for c in toward)
     for member in mobject.get_family():
         setattr(member, LIGHT_LIFT, float(share))
+        setattr(member, LIGHT_LIFT_TOWARD, toward)
 
 
 def mark_lit(*mobjects: Mobject) -> None:
@@ -150,7 +157,7 @@ class StageLight:
         self.flash = 0.0
         self._listeners: list[Callable[[LightGrade], None]] = []
         #: grades lifted by a fill light, by (grade, share): made once (§100.15)
-        self._lifted: dict[tuple[LightGrade, float], LightGrade] = {}
+        self._lifted: dict[tuple[LightGrade, float, tuple[float, ...]], LightGrade] = {}
         self.camera = camera
         if flat:
             return
@@ -168,12 +175,13 @@ class StageLight:
         lift = getattr(mob, LIGHT_LIFT, 0.0)
         if lift <= 0.0:
             return grade
-        key = (grade, lift)
+        toward = getattr(mob, LIGHT_LIFT_TOWARD, (1.0, 1.0, 1.0))
+        key = (grade, lift, toward)
         found = self._lifted.get(key)
         if found is None:
             if len(self._lifted) > 256:
                 self._lifted.clear()
-            found = self._lifted[key] = lifted(grade, lift)
+            found = self._lifted[key] = lifted(grade, lift, toward)
         return found
 
     def _graded(self, mob: Any, rgbas: np.ndarray) -> np.ndarray:

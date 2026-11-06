@@ -694,10 +694,92 @@ def rocket_car_shapes(f: _Frame, look: ObjectLook, state: ObjectState, *, revers
     return shapes
 
 
+#: Objects dressing a room's walls (DESIGN.md §108): (lowest, highest, reach into the room), tile
+#: units over the wall's base, of a poster and a wall shelf.
+WALL_SPANS: dict[str, tuple[float, float, float]] = {"poster": (1.2, 2.45, 0.05), "wall_shelf": (1.35, 2.45, 0.34)}
+#: A poster's picture's sky colour by kind, and a shelf's book colours.
+POSTER_SKIES: dict[str, str] = {"rocket": "#24365E", "atom": CREAM, "planet": "#2F8F9D"}
+BOOKS = (CORAL, MUSTARD, TURQUOISE, CREAM, "#7C6FD6", MINT)
+PLANT_GREEN = "#4FA36B"
+
+
+def _poster(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """A framed travel poster of tomorrow on the wall it hangs on (``color`` the frame, ``detail``
+    the picture's accent): a rocket over a planet, an atom, or a ringed planet with a saucer."""
+    kind = f.item.features[0] if f.item.features else "rocket"
+    face_b = f.depth + 0.02
+    cx, across = f.width / 2, (-1.0 if f.swap else 1.0)
+    low, high, _ = WALL_SPANS["poster"]
+
+    def at(u: float, z: float, lift: float = 0.0) -> Point3:
+        return f.p(cx + across * u, face_b + lift, z)
+
+    def rect(u0: float, u1: float, z0: float, z1: float, fill: str, lift: float, ink: bool = True) -> Poly:
+        return Poly((at(u0, z0, lift), at(u1, z0, lift), at(u1, z1, lift), at(u0, z1, lift)), fill, ink)
+
+    def disc(u: float, z: float, r: float, fill: str, lift: float, ink: bool = False, squash: float = 1.0) -> Poly:
+        return Poly(tuple(at(u + r * math.cos(2 * math.pi * k / 16), z + squash * r * math.sin(2 * math.pi * k / 16), lift) for k in range(16)), fill, ink)
+
+    half = 0.34
+    shapes: list[Shape] = [rect(-half, half, low, high, look.main, 0.0), rect(-half + 0.05, half - 0.05, low + 0.05, high - 0.05, POSTER_SKIES[kind], 0.002, False)]
+    mid = (low + high) / 2
+    if kind == "rocket":
+        shapes.append(disc(0.12, low + 0.28, 0.2, look.detail, 0.003))
+        body = [(-0.05, mid - 0.2), (0.05, mid - 0.2), (0.06, mid + 0.18), (0.0, mid + 0.36), (-0.06, mid + 0.18)]
+        shapes.append(Poly(tuple(at(u - 0.08, z, 0.004) for u, z in body), CREAM, False))
+        for side in (-1.0, 1.0):
+            shapes.append(Poly((at(-0.08 + side * 0.05, mid - 0.2, 0.005), at(-0.08 + side * 0.13, mid - 0.3, 0.005),
+                                at(-0.08 + side * 0.05, mid - 0.06, 0.005)), CORAL, False))
+        shapes.append(disc(-0.08, mid + 0.08, 0.03, TURQUOISE, 0.006))
+        shapes += [disc(u, z, 0.012, CREAM, 0.003) for u, z in ((-0.2, high - 0.15), (0.18, high - 0.22), (0.22, mid + 0.05), (-0.22, mid - 0.15))]
+    elif kind == "atom":
+        for k in range(3):
+            t = math.pi * k / 3
+            ring = [(0.2 * math.cos(s) * math.cos(t) - 0.08 * math.sin(s) * math.sin(t), 0.2 * math.cos(s) * math.sin(t) + 0.08 * math.sin(s) * math.cos(t))
+                    for s in [2 * math.pi * j / 20 for j in range(21)]]
+            shapes.append(Line(tuple(at(u, mid + 0.08 + z, 0.003) for u, z in ring), look.detail, 1.6))
+        shapes.append(disc(0.0, mid + 0.08, 0.04, CORAL, 0.004))
+        shapes.append(rect(-0.2, 0.2, low + 0.12, low + 0.17, TURQUOISE, 0.003, False))
+    else:
+        shapes.append(disc(-0.04, mid, 0.16, MUSTARD, 0.003))
+        ring = [(-0.04 + 0.27 * math.cos(s), mid + 0.06 * math.sin(s) - 0.03 * math.cos(s)) for s in [2 * math.pi * j / 20 for j in range(21)]]
+        shapes.append(Line(tuple(at(u, z, 0.004) for u, z in ring), CREAM, 1.8))
+        shapes.append(disc(0.16, high - 0.22, 0.07, look.detail, 0.004, squash=0.35))
+        shapes.append(disc(0.16, high - 0.2, 0.035, "#BFEFFF", 0.005))
+    return shapes
+
+
+def _wall_shelf(f: _Frame, look: ObjectLook, state: ObjectState) -> list[Shape]:
+    """Two planks on brackets on the wall it hangs on (``color`` wood, ``detail`` an accent) with
+    rows of books, a small potted plant and a vase."""
+    face_b = f.depth
+    a0, a1 = 0.1, f.width - 0.1
+    reach = WALL_SPANS["wall_shelf"][2] - 0.04
+    shapes: list[Shape] = []
+    for tier, z in enumerate((1.4, 2.0)):
+        shapes += f.box(a0, face_b, z, a1, face_b + reach, z + 0.05, look.main)
+        a = a0 + 0.04
+        k = tier * 3 + f.item.column + f.item.row
+        while a < a1 - 0.12:
+            width = 0.06 + 0.03 * _unit(f.item.name, tier, a)
+            height = 0.22 + 0.12 * _unit(f.item.name, a, tier)
+            if tier == 1 and a > a0 + 0.45:   # a plant on the upper plank
+                cx = a + 0.1
+                shapes += f.box(cx - 0.07, face_b + 0.08, z + 0.05, cx + 0.07, face_b + 0.22, z + 0.17, CORAL)
+                leaves = [(cx + 0.11 * math.cos(2 * math.pi * j / 10), face_b + 0.15, z + 0.27 + 0.1 * math.sin(2 * math.pi * j / 10)) for j in range(10)]
+                shapes.append(f.poly(leaves, PLANT_GREEN))
+                break
+            color = look.detail if k % 4 == 0 else BOOKS[k % len(BOOKS)]
+            shapes += f.box(a, face_b + 0.05, z + 0.05, a + width, face_b + reach - 0.03, z + 0.05 + height, color)
+            a += width + 0.01
+            k += 1
+    return shapes
+
+
 DRAWINGS: dict[str, Callable[[_Frame, ObjectLook, ObjectState], list[Shape]]] = {
     "googie_building": _googie_building, "retro_tower": _retro_tower, "starburst_sign": _starburst_sign, "ray_lamp": _ray_lamp,
     "atomic_sculpture": _atomic_sculpture, "monorail": _monorail, "tube_computer": _tube_computer, "sunburst_clock": _sunburst_clock,
-    "tv_console": _tv_console, "retro_desk": _retro_desk, "hedge": _hedge, "planter": _planter,
+    "tv_console": _tv_console, "retro_desk": _retro_desk, "hedge": _hedge, "planter": _planter, "poster": _poster, "wall_shelf": _wall_shelf,
 }
 
 
@@ -714,5 +796,5 @@ def motion(f: _Frame, look: ObjectLook, now: float) -> list[Motion]:
     return []
 
 
-__all__ = ["CHROME", "CORAL", "CREAM", "MINT", "MUSTARD", "SUNBURST_HEIGHT", "SUNBURST_RADIUS", "TURQUOISE", "DRAWINGS", "motion",
+__all__ = ["CHROME", "CORAL", "CREAM", "MINT", "MUSTARD", "SUNBURST_HEIGHT", "SUNBURST_RADIUS", "TURQUOISE", "WALL_SPANS", "DRAWINGS", "motion",
            "rocket_car_shapes"]

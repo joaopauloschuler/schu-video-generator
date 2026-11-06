@@ -220,6 +220,9 @@ OBJECT_KINDS: dict[str, ObjectKind] = {
     "retro_desk": ObjectKind(2, 1, 1.35, top=0.8),
     "hedge": ObjectKind(1, 1, 0.95),
     "planter": ObjectKind(1, 1, 1.15),
+    # a room's walls dressed (DESIGN.md §108): they hang on a standing back wall like a clock
+    "poster": ObjectKind(1, 1, 2.75),
+    "wall_shelf": ObjectKind(1, 1, 2.75),
 }
 #: The objects whose ``height`` a placing may give (tile units, from .. to), DESIGN.md §102.2.
 TALL_KINDS: dict[str, tuple[float, float]] = {"tower": (2.0, 30.0), "retro_tower": (4.0, 30.0)}
@@ -234,10 +237,13 @@ CAR_STYLES: tuple[str, ...] = ("sedan", "rocket")
 #: What a TV console's screen shows when on (§107; default ``wave``): an oscilloscope's wave, or
 #: a retro robot's ``face`` (two round eyes over a wave of a mouth).
 CONSOLE_PICTURES: tuple[str, ...] = ("wave", "face")
+#: What a wall poster shows (§108; default ``rocket``): a rocket over a planet, an atom, a ringed
+#: planet with a saucer.
+POSTER_PICTURES: tuple[str, ...] = ("rocket", "atom", "planet")
 #: The objects with a ``kind`` (one of these, the first the default): a hazard sign, a display
-#: case, a car, a TV console.
+#: case, a car, a TV console, a poster.
 OBJECT_STYLES: dict[str, tuple[str, ...]] = {"hazard_sign": HAZARD_SIGNS, "display_case": DISPLAY_CASES, "car": CAR_STYLES,
-                                             "tv_console": CONSOLE_PICTURES}
+                                             "tv_console": CONSOLE_PICTURES, "poster": POSTER_PICTURES}
 OBJECT_FEATURES: dict[str, tuple[str, ...]] = {"tower": ("screen", "garden"), **OBJECT_STYLES}
 
 
@@ -260,7 +266,7 @@ SWITCHED_KINDS: frozenset[str] = frozenset({"house", "lamp", "tower", "laptop", 
 AUTO_LIGHT_KINDS: frozenset[str] = frozenset({"house", "lamp", "floor_lamp", "street_lamp", "phone_booth", "vending_machine", "lighthouse",
                                               "christmas_tree", "pumpkin", "car", "googie_building", "starburst_sign", "ray_lamp"})
 #: The objects that hang on a room's standing wall: placed at the wall's cell (DESIGN.md §103).
-WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce", "sunburst_clock"})
+WALL_KINDS: frozenset[str] = frozenset({"wall_clock", "torch_sconce", "sunburst_clock", "poster", "wall_shelf"})
 #: The clocks, whose placing may give a ``time`` (DESIGN.md §103, §107).
 CLOCK_KINDS: frozenset[str] = frozenset({"wall_clock", "sunburst_clock"})
 
@@ -725,6 +731,7 @@ __all__ = [
     "CAR_STYLES",
     "CLOCK_KINDS",
     "CONSOLE_PICTURES",
+    "POSTER_PICTURES",
     "CUT_WALL_HEIGHT",
     "DOOR",
     "DOOR_HEIGHT",

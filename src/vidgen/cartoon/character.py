@@ -22,7 +22,8 @@ from __future__ import annotations
 import json
 import math
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -246,12 +247,31 @@ def _check_parts(specs: Mapping[str, CharacterPart], who: str, required: Iterabl
     return parents
 
 
+#: How many times closer than the whole frame the scene being built is seen at its widest (a
+#: fixed wide view's magnification, DESIGN.md §108); :func:`pixel_zoom` sets it.
+_PIXEL_ZOOM: list[float] = [1.0]
+
+
+@contextmanager
+def pixel_zoom(zoom: float) -> Iterator[None]:
+    """Within it, :func:`one_pixel_stroke` is one pixel of a view ``zoom`` times closer than the
+    frame (a stage on an iso place with the fixed wide view, which is never seen wider): thin
+    outlines are kept one pixel wide there, not one pixel of the whole place, which the zoom
+    would thicken many times (DESIGN.md §108)."""
+    before = _PIXEL_ZOOM[0]
+    _PIXEL_ZOOM[0] = max(float(zoom), 1.0)
+    try:
+        yield
+    finally:
+        _PIXEL_ZOOM[0] = before
+
+
 def one_pixel_stroke() -> float:
     """The Manim stroke width of one pixel in the current Manim config (Cairo draws a stroke
-    width ``w`` as ``w * 0.01`` frame units)."""
+    width ``w`` as ``w * 0.01`` frame units), of the view :func:`pixel_zoom` sets."""
     from manim import config
 
-    return 100.0 * float(config.frame_height) / float(config.pixel_height)
+    return 100.0 * float(config.frame_height) / float(config.pixel_height) / _PIXEL_ZOOM[0]
 
 
 def scale_strokes(shape: VMobject, factor: float, floor: float) -> None:

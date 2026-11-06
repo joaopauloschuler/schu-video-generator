@@ -86,6 +86,7 @@ OBJECT_COLORS: dict[str, tuple[str, str]] = {
     "ray_lamp": ("#3FC1B5", "#FFE9A8"), "atomic_sculpture": ("#EDE3D1", "#FF7F6B"), "monorail": ("#EDE7DC", "#3FC1B5"),
     "tube_computer": ("#E9DFC8", "#FF7F6B"), "sunburst_clock": ("#8A5A3C", "#E8B23A"), "tv_console": ("#A0673F", "#7CFFC4"),
     "retro_desk": ("#F2E6CF", "#3FC1B5"), "hedge": ("#4E9F5A", "#4E9F5A"), "planter": ("#F1E6D2", "#FF7F6B"),
+    "poster": ("#3A3F4B", "#FF7F6B"), "wall_shelf": ("#C9925E", "#3FC1B5"),
 }
 #: The default colours a place's ``style`` gives objects instead (DESIGN.md §107; a placing's
 #: ``color`` / ``detail`` win): ``retro``, pastels and chrome — turquoise, coral, mustard, mint, cream.
@@ -1096,6 +1097,8 @@ def _wall_box(item: IsoObject, base: float) -> Box3:
     elif item.kind == "sunburst_clock":
         retro = _more(item.kind)
         low, high, reach = retro.SUNBURST_HEIGHT - retro.SUNBURST_RADIUS - 0.08, retro.SUNBURST_HEIGHT + retro.SUNBURST_RADIUS + 0.08, 0.06
+    elif item.kind in ("poster", "wall_shelf"):
+        low, high, reach = _more(item.kind).WALL_SPANS[item.kind]
     else:
         radius = CLOCK_RADIUS * min(f.width, 1.6)
         low, high, reach = CLOCK_HEIGHT - radius - 0.05, CLOCK_HEIGHT + radius + 0.05, 0.06
@@ -2080,7 +2083,8 @@ MORE_MODULES: dict[str, str] = {
     **{kind: "iso_seasons" for kind in ("christmas_tree", "snowman", "pumpkin", "gift_pile", "balloon_bunch", "birthday_cake", "boat", "dock",
                                         "lighthouse", "train_car", "rocket")},
     **{kind: "iso_retro" for kind in ("googie_building", "retro_tower", "starburst_sign", "ray_lamp", "atomic_sculpture", "monorail",
-                                      "tube_computer", "sunburst_clock", "tv_console", "retro_desk", "hedge", "planter")},
+                                      "tube_computer", "sunburst_clock", "tv_console", "retro_desk", "hedge", "planter", "poster",
+                                      "wall_shelf")},
 }
 #: The objects whose light falls on the characters near them while on, like a lamp's (§89.13).
 LAMPLIGHT_KINDS = frozenset({"lamp", "floor_lamp", "fireplace", "street_lamp", "phone_booth", "campfire", "cauldron", "torch_sconce", "ray_lamp"})

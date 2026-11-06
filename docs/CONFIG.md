@@ -10286,6 +10286,7 @@ never leaves the stage.
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles, lightning, settle, settled}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) and with `lightning: true` flashes [lightning](#lightning-and-thunder-lightning), snow with `settle: true` lands and lies there ([Snow that settles](#snow-that-settles-settle)) |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `blue_hour` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene; on an [iso place](#isometric-places-iso) where it rains from the start, the rainy day's tint |
 | `fill_light` | float 0–1 | `0` | a soft [fill light](#light-and-shadows-light-shadows) on the characters only, so faces stay readable in a dark light (night, an alarm, a dim tint): 0 none, 1 the characters as drawn whatever the light; 0.3–0.5 keeps the mood |
+| `fill_color` | colour | white | the fill light's colour: the characters are lifted towards it (a warm key at night, e.g. `"#FFE2BC"`) |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `drawing` | mapping | none (the video's `drawing`) | this scene's [drawing style](#drawing-style-drawing): `{outline, shading, texture, seed}`; the keys given win over the video's `drawing` |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
@@ -10295,7 +10296,7 @@ never leaves the stage.
 | `fog` | `true` \| number \| mapping | none | [fog](#fog-fog) in translucent bands lying between the characters and props by depth, thicker further back, drifting: `true` (density 0.5), a density from 0 to 1, or `{density, color, drift, seed}`; on an iso place in bands across it; not in a `room` or an indoor iso place |
 | `ambient` | `true` \| mapping | none | an iso place's [ambient life](#isometric-places-iso): `true` (every kind that suits the place) or `{walkers, birds, cat, ducks, butterflies, fireflies, flies, muted, seed}`; away from the characters, hidden in close shots; indoors only `cat` and `flies` |
 | `level` | mapping | none | a [platform level](#platform-levels-level) instead of the ground line: `{map, spots, colors, locks, blockers, follow}`; its tiles are the ground, the stage is as wide as its map, the background and layers move behind it by parallax; not with `room`, `water` or `width` |
-| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, style, textures, name_tags, wide, shutters, traffic, doors, haze, wall_lights}` (`style: retro`: a 1950s world-of-tomorrow palette — mint lawn, cream checker paths, terrazzo floors, turquoise walls, pastel objects, cream saucer traffic; `textures: {grass, path, floor, tiles}`: `plain`, `tufts`, `lawn`, `stones`, `checker`, `terrazzo`, `boards`, `tiles`; a `traffic` lane's `shape: capsule | saucer | monorail` and `hull` colour); the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props` or `size` (`character_size` only with `wide: fixed`) |
+| `iso` | mapping | none | an [isometric place](#isometric-places-iso) instead of the ground line: `{place, map, heights, spots, objects, colors, style, textures, name_tags, wide, show_walls, shutters, traffic, doors, haze, wall_lights}` (`style: retro`: a 1950s world-of-tomorrow palette — mint lawn, cream checker paths, terrazzo floors, turquoise walls, pastel objects, cream saucer traffic; `textures: {grass, path, floor, tiles}`: `plain`, `tufts`, `lawn`, `stones`, `checker`, `terrazzo`, `boards`, `tiles`; a `traffic` lane's `shape: capsule | saucer | monorail` and `hull` colour; `show_walls: true` on a room with `wide: fixed` frames it from its back corner, as far back as keeps the characters in view: the standing walls fill the frame's top); the whole place in the frame, seen from above at an angle, characters standing upright at its spots; small `props` and a `portal` stand at spots; not with `level`, `room`, `water`, `width`, `layers`, big `props` or `size` (`character_size` only with `wide: fixed`) |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -10698,7 +10699,7 @@ they hide what is behind them.
   back wall), `signpost`, `archway` (2 x 1), `statue`, `christmas_tree`, `snowman`, `pumpkin`,
   `gift_pile`, `balloon_bunch`, `birthday_cake`, `boat` (2 x 1, on water `~` only), `dock`
   (1 x 2, over water, walked on), `lighthouse`, `train_car` (3 x 1), `rocket` (2 x 2); the retro kit (DESIGN §107):
-  `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long); a `car` takes `kind: rocket` (tail fins, a bubble canopy);
+  `googie_building` (3 x 3: a boomerang roof, a starburst sign), `retro_tower` (2 x 2, round, a saucer deck; `height` 4-30), `starburst_sign`, `ray_lamp` (a ray-gun street lamp), `atomic_sculpture`, `monorail` (4 x 1, a beam on pylons; `size` makes it longer), `tube_computer` (2 x 1, tape reels, bulbs), `sunburst_clock` (`at` a cell of a back wall, `time`), `tv_console` (`kind: wave | face`), `retro_desk` (2 x 1, a terminal), `hedge` and `planter` (`size` makes them long), on a back wall's cell `poster` (`kind: rocket | atom | planet`) and `wall_shelf` (books, a plant); a `car` takes `kind: rocket` (tail fins, a bubble canopy);
   `on: true` / `switch_on` makes the
   laptop, kiosk, core, arm, centrifuge, coffee machine, rack, tank, bench, rig, fridge, hood,
   dish, charging station, airlock (its beacon), 3D printer, fireplace, stove, floor lamp, TV,
@@ -12923,7 +12924,7 @@ particles keep their colours too.
 | `sunset` | warm and orange-pink, a little darker; blue skies turn warm |
 | `night` | dark blue; stars in the sky (on a colour background only, behind the layers, above the characters' heads) and faint shadows |
 | `indoor` | warm lamplight, a little dimmer |
-| `blue_hour` | a bright, clean night: a lighter indigo than `night` with the shadows lifted to a cool blue, colours a little more saturated, a few stars; dark enough for lamps, lit windows and neon to glow and pool |
+| `blue_hour` | a bright, crisp night: a cool indigo lighter than `night`, colours keeping their own hues (saturated before the tint), mid tones darkened and the tones stretched for contrast, clean blacks, a few stars; dark enough for lamps, lit windows and neon to glow and pool |
 | `{tint, strength}` | a light of your own: every colour multiplied towards `tint` (a theme token or `#hex`) by `strength` (0 = no change, 1 = fully, default `0.5`) |
 
 **`fill_light`** (0–1, default 0) adds a soft light on the characters alone, as a film lights
@@ -12931,7 +12932,8 @@ its actors apart from the set: each character is graded that share of the way ba
 colours, so faces and expressions read at `night`, under an [alarm](#alarms-and-shutters-alarm-shutters) or in
 a dim tint while the room stays dark (a lamp's light on an iso place adds to it; holograms are
 never graded). `fill_light: 0.45` with `light: night` keeps a dark-skinned face readable; 1 shows
-the characters as drawn.
+the characters as drawn. `fill_color` lifts them towards a colour instead (`"#FFE2BC"`: a warm key that keeps skin warm
+against a cool `blue_hour`).
 
 ```yaml
 - id: late_lab

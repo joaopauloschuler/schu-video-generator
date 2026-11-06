@@ -47,6 +47,9 @@ from vidgen.config import SHELLED_SPECIES, SPECIES_WITHOUT_TAIL, CharacterLook
 COLOR_KEYS: tuple[str, ...] = ("skin", "clothes", "outline", "features", "hair", "accessory", "trim")
 #: The whites of the ``oval`` and ``round`` eyes.
 EYE_WHITE = "#FFFFFF"
+#: The ``bright`` eye (DESIGN.md §108): width and height (× the eye radius), the rim (× the outline
+#: width), the pupil's width (× the eye's) and its catchlight's radius (× the pupil's width).
+BRIGHT_EYE: tuple[float, float, float, float, float] = (0.36, 0.46, 0.3, 0.42, 0.2)
 #: (width, height) of each body shape, in character units before the figure is scaled to height 1.
 BODY_SIZES: dict[str, tuple[float, float]] = {
     "round": (0.40, 0.44), "tall": (0.30, 0.52), "square": (0.42, 0.40), "bean": (0.36, 0.48),
@@ -422,7 +425,8 @@ def _head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> VGro
 def _eye_size(look: CharacterLook, f: Frame) -> tuple[float, float]:
     """(width, height) of one open eye."""
     r = f.p.head_radius * f.p.eye_size
-    return {"dot": (0.25 * r, 0.375 * r), "oval": (0.3 * r, 0.45 * r), "round": (0.4 * r, 0.4 * r), "sleepy": (0.3 * r, 0.2 * r)}[look.eyes]
+    return {"dot": (0.25 * r, 0.375 * r), "oval": (0.3 * r, 0.45 * r), "round": (0.4 * r, 0.4 * r), "sleepy": (0.3 * r, 0.2 * r),
+            "bright": (BRIGHT_EYE[0] * r, BRIGHT_EYE[1] * r)}[look.eyes]
 
 
 def _eye_xs(f: Frame) -> tuple[float, float]:
@@ -439,6 +443,13 @@ def _open_eye(look: CharacterLook, x: float, f: Frame, c: Mapping[str, str], w: 
         half = polygon([(px, y + (py - y) * 2 * height / width) for px, py in lower])
         lid = Line([x - width * 0.65, y + 0.01, 0], [x + width * 0.65, y + 0.01, 0]).set_stroke(c["features"], width=w)
         return VGroup(filled(half, c["features"]), lid)
+    if look.eyes == "bright":   # a clear white, a fine rim, a small pupil with a catchlight (DESIGN.md §108)
+        _, _, rim, pupil_share, spark = BRIGHT_EYE
+        size = pupil_share * width
+        pupil = Circle(radius=size / 2).move_to([x + look_x * 0.6, y - 0.06 * height, 0])
+        glint = Circle(radius=spark * size).move_to([x + look_x * 0.6 + 0.22 * size, y - 0.06 * height + 0.22 * size, 0])
+        white = outlined(Ellipse(width=width, height=height).move_to([x, y, 0]), EYE_WHITE, c["outline"], w * rim)
+        return VGroup(white, filled(pupil, c["features"]), filled(glint, EYE_WHITE))
     white = Ellipse(width=width, height=height) if look.eyes == "oval" else Circle(radius=width / 2)
     pupil = Ellipse(width=width * 0.45, height=height * 0.45).move_to([x + look_x, y - 0.05 * height, 0])
     return VGroup(outlined(white.move_to([x, y, 0]), EYE_WHITE, c["outline"], w * 0.75), filled(pupil, c["features"]))

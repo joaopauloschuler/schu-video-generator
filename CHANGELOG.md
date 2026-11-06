@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–278)
+## Unreleased (Steps 193–279)
+
+### Crisp nights, friendly faces, rooms with walls (Step 279)
+
+- `light: blue_hour` is crisp: colours keep their own hues (saturated before the cool tint), mid tones darker and the tones stretched, clean blacks — no lavender haze (mean luma ~130 against `night`'s ~95).
+- `fill_color` on a stage: the fill light lifts the characters towards a colour (a warm key at night).
+- `eyes: bright`: a clear white, a fine rim, a small pupil with a catchlight.
+- On an iso place with `wide: fixed`, thin outlines are one pixel of that view, not of the whole place (close-ups no longer get thick, dark outlines and eyes).
+- `iso: {show_walls: true}` (a room with `wide: fixed`): the view goes as far back as the standing back walls cover, so they fill the top of the frame; iso objects `poster` (`kind: rocket | atom | planet`) and `wall_shelf` hang on a back wall.
 
 ### A retro-future kit (Step 278)
 

@@ -646,7 +646,7 @@ class IsoObjectParam(SceneParams):
     """A ready-made object standing in an iso place (DESIGN.md §89.5)."""
 
     object: Literal[tuple(OBJECT_KINDS)]  # type: ignore[valid-type]
-    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood, telescope, satellite_dish, charging_station, crate_stack, airlock (2 x 1), printer_3d, hazard_sign, fire_extinguisher; at home: fireplace (2 x 1), kitchen_counter (2 x 1), stove, sink, bookshelf_tall, armchair, floor_lamp, tv, piano (2 x 1), bathtub (2 x 1), wardrobe (2 x 1), crib; in a café or shop: cafe_table (2 x 1, with two chairs), counter (2 x 1), cash_register, display_case (2 x 1), market_stall (2 x 1), vending_machine; in town: street_lamp, traffic_light, bus_stop (2 x 1), mailbox, fountain (2 x 2), phone_booth, car (2 x 1), bicycle, newsstand (2 x 1); in nature: campfire, tent (2 x 2), log (2 x 1), stump, mushroom_ring (2 x 2), pond (2 x 2), scarecrow, beehive; on a farm, at school or in an office: vegetable_patch (2 x 1), wheelbarrow, hay_bale (2 x 1), school_desk, desk_with_pc (2 x 1), water_cooler, printer, globe, trophy_shelf (2 x 1); in a fantasy tale: treasure_chest, cauldron, giant_crystal, throne, torch_sconce (at a cell of a back wall), signpost, archway (2 x 1), statue; for seasons, a harbour and travel: christmas_tree, snowman, pumpkin, gift_pile, balloon_bunch, birthday_cake, boat (2 x 1, floats on water ~), dock (1 x 2, over water, walked on), lighthouse, train_car (3 x 1), rocket (2 x 2); a retro-future kit: googie_building (3 x 3, a boomerang roof and a starburst sign), retro_tower (2 x 2, round, a saucer deck), starburst_sign, ray_lamp, atomic_sculpture, monorail (4 x 1, a beam on pylons; traffic with shape: monorail glides along it), tube_computer (2 x 1, tape reels and bulbs), sunburst_clock (at a cell of a back wall), tv_console, retro_desk (2 x 1), hedge, planter."""
+    """What it is: house, tree, pine, bush, rock, flowers, fence, bench, lamp, well, sign, bridge (over water), table, chair, bed, shelf, sofa, plant or rug; a lab's console (desk with glowing screens), server_rack (blinking lights), projector_pad (a glowing platform to stand on) or whiteboard; a flower_arch or a chess_table; a city's tower (a tall building with lit windows and neon trims); more lab objects: laptop, terminal_kiosk, quantum_core, robot_arm, microscope, centrifuge, coffee_machine, lab_stool, wall_clock (at a cell of a back wall), grow_rack, terrarium, specimen_tank, chemistry_bench (2 x 1), distillation_rig, lab_fridge, fume_hood, telescope, satellite_dish, charging_station, crate_stack, airlock (2 x 1), printer_3d, hazard_sign, fire_extinguisher; at home: fireplace (2 x 1), kitchen_counter (2 x 1), stove, sink, bookshelf_tall, armchair, floor_lamp, tv, piano (2 x 1), bathtub (2 x 1), wardrobe (2 x 1), crib; in a café or shop: cafe_table (2 x 1, with two chairs), counter (2 x 1), cash_register, display_case (2 x 1), market_stall (2 x 1), vending_machine; in town: street_lamp, traffic_light, bus_stop (2 x 1), mailbox, fountain (2 x 2), phone_booth, car (2 x 1), bicycle, newsstand (2 x 1); in nature: campfire, tent (2 x 2), log (2 x 1), stump, mushroom_ring (2 x 2), pond (2 x 2), scarecrow, beehive; on a farm, at school or in an office: vegetable_patch (2 x 1), wheelbarrow, hay_bale (2 x 1), school_desk, desk_with_pc (2 x 1), water_cooler, printer, globe, trophy_shelf (2 x 1); in a fantasy tale: treasure_chest, cauldron, giant_crystal, throne, torch_sconce (at a cell of a back wall), signpost, archway (2 x 1), statue; for seasons, a harbour and travel: christmas_tree, snowman, pumpkin, gift_pile, balloon_bunch, birthday_cake, boat (2 x 1, floats on water ~), dock (1 x 2, over water, walked on), lighthouse, train_car (3 x 1), rocket (2 x 2); a retro-future kit: googie_building (3 x 3, a boomerang roof and a starburst sign), retro_tower (2 x 2, round, a saucer deck), starburst_sign, ray_lamp, atomic_sculpture, monorail (4 x 1, a beam on pylons; traffic with shape: monorail glides along it), tube_computer (2 x 1, tape reels and bulbs), sunburst_clock (at a cell of a back wall), tv_console, retro_desk (2 x 1), hedge, planter; on a room's back wall (at a cell of it): poster (a framed picture of tomorrow), wall_shelf (books and a plant)."""
     at: Identifier | IsoCellRef
     """Where it stands: a spot of the map (its letter's cell), or {column, row}; a larger object (a house: 3 x 3 cells) covers the cells from there to the right and down the map."""
     name: Identifier | None = None
@@ -676,7 +676,7 @@ class IsoObjectParam(SceneParams):
     time: str | None = Field(None, pattern=r"^([01]?\d|2[0-3]):[0-5]\d$")
     """A wall_clock or a sunburst_clock: the time its hands show, "HH:MM" (default 10:10)."""
     kind: str | None = None
-    """A hazard_sign: biohazard (default), radiation or authorised (a staff-only board); a display_case: cakes (default) or jewels; a car: sedan (default) or rocket (tail fins, a bubble canopy); a tv_console: wave (default, an oscilloscope wave) or face (a robot face whose mouth is a wave)."""
+    """A hazard_sign: biohazard (default), radiation or authorised (a staff-only board); a display_case: cakes (default) or jewels; a car: sedan (default) or rocket (tail fins, a bubble canopy); a tv_console: wave (default, an oscilloscope wave) or face (a robot face whose mouth is a wave); a poster: rocket (default), atom or planet."""
 
     @model_validator(mode="before")
     @classmethod
@@ -716,7 +716,7 @@ class IsoObjectParam(SceneParams):
         if self.time is not None and self.object not in CLOCK_KINDS:
             raise ValueError(f"time is for a wall_clock or a sunburst_clock, not {_a(self.object)}")
         if self.kind is not None and self.object not in OBJECT_STYLES:
-            raise ValueError(f"kind is for a hazard_sign, a display_case, a car or a tv_console, not {_a(self.object)}")
+            raise ValueError(f"kind is for a hazard_sign, a display_case, a car, a tv_console or a poster, not {_a(self.object)}")
         return self
 
     def state(self) -> ObjectState:
@@ -816,6 +816,8 @@ class StageIso(SceneParams):
     """While a character speaks and is small on screen (a wide view), a tag with its name over its head shows who speaks (not with a speech bubble); false: none."""
     wide: Literal["auto", "fill", "fixed"] | Annotated[float, Field(ge=1.0, le=2.5)] | IsoFixedWide = "auto"
     """How the wide (establishing) view frames the place: auto (the whole place, moved in until its bounding box fills the frame: its tips cut, outdoors about half the frame is ground; a room whole in a landscape frame); fill (a room fills the frame too: its spots, objects and characters kept, the walls' far corners may be cut); a number from 1 to 2.5: that many times closer than the whole place (kept on the characters); fixed: the same scale whatever the map's size (a character about 0.2 of the frame's height at character_size medium), centred on the characters as far as the ground reaches: a big enough map fills the frame with ground (vidgen lint iso_ground names the size), a smaller one shows centred; {tiles: N}: fixed with N tile widths across the frame."""
+    show_walls: bool = False
+    """An indoor place with the fixed wide view: true frames the room from its back corner, as far back as keeps the characters in view, so the standing back walls (windows, shelves, clocks) fill the top of the frame and the floor the rest (the walls cover the frame there, no background shows); follows and close shots may reach the walls too."""
     shutters: bool = False
     """An indoor place: true starts with steel shutters down over its windows (the shutters action opens and closes them)."""
     traffic: list[IsoTrafficLane] = []
@@ -846,6 +848,12 @@ class StageIso(SceneParams):
         """``wide`` as :func:`~vidgen.cartoon.iso_stage.wide_view`'s ``fit``."""
         return "fixed" if self.fixed else self.wide   # type: ignore[return-value]
 
+    def wall_room(self) -> float:
+        """How far (cells) the fixed wide view may reach behind the floor's back edges: the
+        standing back walls' :func:`~vidgen.cartoon.iso_stage.wall_reach` with ``show_walls``,
+        else 0 (DESIGN.md §108)."""
+        return wall_reach(self.parsed()) if self.show_walls else 0.0
+
     def wall_light_colors(self) -> tuple[str, str] | None:
         """The strip lights' colours (DESIGN.md §102.18): the left back wall's (a wall along a
         column of the map) and the right one's (along a row); ``None`` without strips."""
@@ -864,6 +872,8 @@ class StageIso(SceneParams):
             raise ValueError("traffic flies over an outdoor place, not indoors")
         if self.wall_lights is not None and self.place != "indoor":
             raise ValueError("wall_lights run along a room's walls: give them to an indoor place")
+        if self.show_walls and (self.place != "indoor" or not self.fixed):
+            raise ValueError("show_walls frames a room's back walls in the fixed wide view: give it to an indoor place with wide: fixed")
         spots = {spot.name for spot in place.spots}
         for k, lane in enumerate(self.traffic):
             for key, end in (("from", lane.start), ("to", lane.to)):
@@ -1111,6 +1121,8 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene; default day (on an iso place where it rains from the start: an overcast tint)."""
         fill_light: float = Field(0.0, ge=0.0, le=1.0)
         """A soft light on the characters only, so faces stay readable in a dark light (night, an alarm, a dim tint): 0 none (graded like the set), 1 the characters as drawn whatever the light; 0.3-0.5 keeps the mood. A lamp's light adds to it."""
+        fill_color: ThemeColor | None = None
+        """The fill light's colour: the characters are lifted towards this tint instead of to their colours as drawn (a warm key at night, e.g. '#FFE6C4', keeps skin warm and faces bright); default white."""
         shadows: bool = True
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
         wind: WindSetting = 0.0
@@ -2214,6 +2226,16 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         return self.params.width * stage_base_width(self.frame_width, self.frame_height, self._reframes)
 
     def construct(self) -> None:
+        # on an iso place with the fixed wide view, thin strokes are one pixel of that view, not of
+        # the whole place the zoom magnifies (DESIGN.md §108); 1 otherwise (unchanged)
+        zoom = 1.0
+        if self.params.iso is not None:
+            self.iso_view = iso_view(self.params.iso.parsed(), self.frame_width, self.frame_height)
+            zoom = self.zoom_base()
+        with pixel_zoom(zoom):
+            self._construct_stage()
+
+    def _construct_stage(self) -> None:
         p = self.params
         frame = self.camera.frame
         start_x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width

@@ -24342,3 +24342,37 @@ project), repo work is generic.
   max difference 0.
 - Private: sheet `/home/claude/work/scratch/s278/sheet.png`, sample project `s278/proj`
   (`gen.py`), `objs.py` (object close-ups), `measure.py` / `measure.csv`, `sheet.py`.
+
+## Step 279 — Adaptation and test cut (Phase AE)
+
+- Built (DESIGN §108): a crisp `light: blue_hour` (`LightGrade.gamma` / `contrast` / `vivid`,
+  `PRESET_TONES`, `CONTRAST_PIVOT`); a stage's `fill_color` (a warm key); `eyes: bright`;
+  `pixel_zoom` (outlines one pixel of the fixed wide view: the real cause of the dark "goggle" eyes
+  in close-ups); `iso: {show_walls: true}` (`wall_reach`, `back=` on `on_ground`,
+  `ground_view_center`, `fixed_view`, `wide_view`); wall objects `poster` (`kind: rocket | atom |
+  planet`) and `wall_shelf`.
+- Files: `cartoon/lighting.py`, `cartoon/shading.py`, `cartoon/storm.py`, `cartoon/vignette.py`,
+  `cartoon/character.py`, `cartoon/generator.py`, `cartoon/iso_stage.py`, `cartoon/iso_objects.py`,
+  `cartoon/iso_retro.py`, `world/iso.py`, `config.py`, `scenes/stage.py` (`fill_color`,
+  `show_walls`, `wall_room`, `construct` in `pixel_zoom`), `scenes/stage_iso.py`,
+  `scenes/stage_story.py`, `api.py`; docs CONFIG, guide (+ `AGENTS.md`), DESIGN §108, CHANGELOG,
+  tasklist.
+- Decisions: the reviewer's goggles were outline thickness from the one-pixel floor at the whole
+  place's scale, so the floor follows the view (scoped, 1 outside fixed iso views) besides a new
+  eye style; `show_walls` keeps the bodies-win rule and sits across from the bodies, because a
+  forced back-corner view lost the characters; the 278 blue-hour test (blacks lifted) became
+  "coral stays warm" in `test_retro_kit`.
+- A private story project: script `story-qc2/script.md` (950 spoken words, ~6.5 min), test cut
+  `story-qc2/testcut/` (generator `s279/testcut_gen.py`, 5 scenes, 1:38, -16.2 LUFS), sheet
+  `/home/claude/work/scratch/s279/sheet.png`, numbers `s279/measure.csv`; fixes project
+  `s279/fixes/` (`fixes_gen.py`).
+- Known gaps / for 280: no shot frames an object (the AI's TV face: zoom / pan to its spot); the kiss
+  wants a medium with the echoes in it; render at blue hour 12–30 s per video second (keep scenes
+  ≤ 15 s, one per command: the tool limit is 10 min); `follow` on a car zooms to character size
+  (use a `pan` with the drive's run time); outdoor `pan` to a spot by the map's edge still shows
+  background (keep spots ≥ reach from the edges).
+- Tests: `tests/test_crisp_night_faces_rooms.py` (8, one render); `test_retro_kit`,
+  `test_iso_fixed_view`, `test_story_fx`, `test_story_light_hands`, `test_cartoon_lighting`,
+  `test_api`, `test_schema`, `test_cartoon_generator`, `test_random_cast`, `test_iso_objects_more`,
+  `test_lab_objects`, `test_iso_place`, `test_guide`, `test_docs` passed. Frame baseline 33 frames,
+  max difference 0.

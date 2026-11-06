@@ -10,6 +10,7 @@ are drawn over it, ungraded.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -40,7 +41,7 @@ def flashback_grade(base: LightGrade, *, tint: str = FLASHBACK_TINT, strength: f
     lift = tuple(FLASHBACK_LIFT * c for c in hex_rgb(tint))
     multiply = tuple(a * b for a, b in zip(base.multiply, sepia.multiply))
     glow = tuple(min(a + b, 1.0) for a, b in zip(base.glow, lift))
-    return LightGrade(multiply, glow, base.stars, base.shadow, base.saturation * saturation)  # type: ignore[arg-type]
+    return replace(base, multiply=multiply, glow=glow, saturation=base.saturation * saturation, vivid=min(base.vivid, 1.0))
 
 
 def vignette_pixels(width: int, height: int, *, color: str = VIGNETTE_COLOR, opacity: float = VIGNETTE_OPACITY,

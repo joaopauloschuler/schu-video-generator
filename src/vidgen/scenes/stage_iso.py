@@ -595,7 +595,7 @@ class IsoStaging:
         count = len(self.params.iso.objects)
         placed = [item.name for item in place.objects[len(place.objects) - count:]] if count else []
         return wide_view(place, self.iso_view, self.frame_width, self.frame_height, bodies, placed, fit=self.params.iso.wide_fit(),
-                         tiles=self.iso_tiles())
+                         tiles=self.iso_tiles(), back=self.params.iso.wall_room())
 
     def iso_tiles(self) -> float | None:
         """The tile widths across the frame of the fixed wide view (``wide: fixed``, DESIGN.md
@@ -616,7 +616,8 @@ class IsoStaging:
         on the ground as far as the map allows (DESIGN.md §106); else as it is."""
         if self.iso_tiles() is None:
             return center
-        return ground_view_center(self.params.iso.parsed(), self.iso_view, self.frame_width, self.frame_height, width, center)
+        return ground_view_center(self.params.iso.parsed(), self.iso_view, self.frame_width, self.frame_height, width, center,
+                                  self.params.iso.wall_room())
 
     def iso_wide_shot(self, names: list[str]) -> ShotView:
         """``shot: wide`` on the place: the wide view keeping the characters ``names`` (those on

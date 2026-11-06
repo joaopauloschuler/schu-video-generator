@@ -1660,7 +1660,7 @@ private (scratchpad); repo work stays generic. No AI API calls; Kokoro only.
 - [x] `iso: {style: retro}` (pastel ground and object colours, cream saucer traffic) and `textures: {grass, path, floor, tiles}` (`plain`, `tufts`, `lawn`, `stones`, `checker`, `terrazzo`, `boards`, `tiles`); `light: blue_hour` (a bright clean night, more saturated, lamps glow); objects `googie_building`, `retro_tower`, `starburst_sign`, `ray_lamp`, `atomic_sculpture`, `monorail`, `tube_computer`, `sunburst_clock`, `tv_console` (`kind: wave | face`), `retro_desk`, `hedge`, `planter`; a `car`'s `kind: rocket` (parked and driven); traffic `shape: saucer | monorail`, `hull`; looks `outfit: suit | lab_coat | jumpsuit`, `hair: pompadour | bob`, `fedora`, `pillbox`; tests `test_retro_kit.py`; private style sheet
 
 ### Step 279 — Adaptation and test cut
-- [ ] The script (shots, lines per speaker, voices, camera, staging, sets with map sizes, light, weather, ambient, music) and a private test cut of 3–4 key shots with Kokoro voices; stills checked against the visual rules and measured; generic fixes in the repo
+- [x] The script (shots, lines per speaker, voices, camera, staging, sets with map sizes, light, weather, ambient, music) and a private test cut of 3–4 key shots with Kokoro voices; stills checked against the visual rules and measured; generic fixes in the repo: a crisp `blue_hour` (hues kept, a tone curve), `fill_color`, `eyes: bright`, thin strokes one pixel of the fixed wide view, `show_walls`, wall objects `poster` / `wall_shelf`; tests `test_crisp_night_faces_rooms.py`
 
 ### Step 280 — The film
 - [ ] The full private film (previews looked at shot by shot), a 16:9 1080p MP4 and a delivery copy under 28 MB, captions, −16 LUFS, a contact sheet
