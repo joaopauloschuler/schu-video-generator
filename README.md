@@ -924,7 +924,9 @@ my_video/
   [docs/COOKBOOK-PARTICLES.md](docs/COOKBOOK-PARTICLES.md) — particle-physics videos: planning a
   discovery story, choosing the scene, natural units (GeV vs GeV/c²), simulated data and schematic
   detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
-  mistakes and the lint rules that catch them.
+  mistakes and the lint rules that catch them;
+  [docs/COOKBOOK-AUDIO.md](docs/COOKBOOK-AUDIO.md) — audiobooks and podcasts without pictures:
+  loudness presets and targets, formats, pacing, voices, checking a file.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

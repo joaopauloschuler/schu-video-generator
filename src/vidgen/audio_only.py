@@ -23,6 +23,12 @@ later line joins it; 10 s blocks, so a long audiobook never sits in memory whole
 track (:func:`vidgen.sfx.write_track`) and the mix (:func:`vidgen.mix.mix_audio`: music beds
 ducked under the voices, loudness normalisation, the true-peak limiter), then copies the mix to
 the deliverable and writes ``build/<render>/audio/timings.json``.
+
+``audio_output`` (§111.1-111.3) chooses the deliverable: the mix is encoded
+(:mod:`vidgen.audio_encode`) unless it is wanted as it is; a loudness preset sets the mix's
+targets (:func:`vidgen.audio_check.mix_targets`) and the file is measured against it after the
+encode (:func:`vidgen.audio_check.check`); the transcripts are written from the timings
+(:mod:`vidgen.transcripts`).
 """
 
 from __future__ import annotations
@@ -37,13 +43,15 @@ from typing import Any
 
 import numpy as np
 
-from vidgen import __version__, chapter_export, mix, musicfit, sfx
+from vidgen import __version__, audio_encode, chapter_export, mix, musicfit, sfx
+from vidgen.audio_check import PresetResult, check, measure_file, mix_targets, project_preset
 from vidgen.chapters import chapter_marks
 from vidgen.config import BeatConfig, PacingConfig, SceneConfig
 from vidgen.fileio import remove_file, replace_file
 from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.project import Project
 from vidgen.sfx import RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo
+from vidgen.transcripts import write_transcripts
 from vidgen.videoplan import VideoPlan, beat_seconds
 from vidgen.voicesounds import SOUND_GAIN_DB, VOICE_SOUNDS, beat_sound_spans
 
@@ -102,9 +110,10 @@ class AudioPlan:
 
 @dataclass
 class AudioRenderResult:
-    """What :func:`render_audio` wrote: the sound ``output`` (WAV), the ``timings_file`` and its
-    content ``timings`` (with the ``mix`` report), the length in seconds, the ``timing`` used and
-    what was ``left_out``."""
+    """What :func:`render_audio` wrote: the sound ``output`` (``audio_output.format``), the
+    ``timings_file`` and its content ``timings`` (with the ``mix`` report), the length in
+    seconds, the ``timing`` used, what was ``left_out``, the ``transcripts`` (kind -> file) and,
+    with a loudness preset, the file's ``check``."""
 
     output: Path
     timings_file: Path
@@ -112,6 +121,8 @@ class AudioRenderResult:
     timings: dict[str, Any]
     timing: str
     left_out: list[str] = field(default_factory=list)
+    transcripts: dict[str, Path] = field(default_factory=dict)
+    check: PresetResult | None = None
 
 
 # ----- sound effects --------------------------------------------------------------------------------
@@ -302,11 +313,23 @@ class _SpeechTimer:
         return scenes, clock
 
 
+def effective_pacing(project: Project) -> PacingConfig:
+    """``pacing:`` with, under the ``audiobook`` loudness preset, its room-tone head and tail
+    (:data:`~vidgen.audio_check.AUDIOBOOK_PACING`) where ``pacing:`` does not set them."""
+    from vidgen.audio_check import AUDIOBOOK_PACING
+
+    pacing = project.config.pacing
+    if project.config.audio_output.loudness != "audiobook":
+        return pacing
+    unset = {k: v for k, v in AUDIOBOOK_PACING.items() if k not in pacing.model_fields_set}
+    return pacing.model_copy(update=unset) if unset else pacing
+
+
 def plan_audio(project: Project, preview: bool = False) -> AudioPlan:
     """The timeline of ``project``'s audio-only render (``pacing.timing``; ``video`` at the fps of
     the final format, or the preview's with ``preview``). Needs the project's scene types
     registered (an extension session) for the video timing and the entrance sounds."""
-    pacing = project.config.pacing
+    pacing = effective_pacing(project)
     if pacing.timing == "video":
         scenes, duration = _video_timeline(project, project.render_format(preview).fps)
     else:
@@ -413,13 +436,37 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
             stings = musicfit.composed_stings(project, timings, events, library)
             sfx.write_track(track, events, total, library, project.config.sfx.gain, ducking, stings)
         mixed = folder / "mix.wav"
-        report = mix.mix_audio(project, timings, [voice], track if track.is_file() else None, mixed, always_write=True)
+        targets = mix_targets(project)
+        report = mix.mix_audio(project, timings, [voice], track if track.is_file() else None, mixed, always_write=True, targets=targets)
         timings["mix"] = report.to_json()
-        output = project.audio_path(preview)
-        output.parent.mkdir(parents=True, exist_ok=True)
+        output = write_output(project, mixed, preview)
+        transcripts = write_transcripts(project, timings, preview, project.config.audio_output.transcript_kinds)
+        checked = None
+        preset = project_preset(project)
+        if preset is not None:
+            checked = check(measure_file(output), preset)
+            timings["audio_output"] = {"file": output.name, "check": checked.to_json()}
+            if checked.ok:
+                log.info("%s meets the %s preset", output.name, preset.name)
+            else:
+                misses = "; ".join(f"{i.name} {i.value} (wanted {i.target})" for i in checked.failures)
+                log.warning("%s misses the %s preset: %s (vidgen audio check)", output.name, preset.name, misses)
+        timings_file = folder / "timings.json"
+        write_json(timings_file, timings)
+    return AudioRenderResult(output, timings_file, plan.duration, timings, plan.timing, plan.left_out, transcripts, checked)
+
+
+def write_output(project: Project, mixed: Path, preview: bool) -> Path:
+    """The deliverable :meth:`Project.audio_path` from the mix: copied when ``audio_output`` asks
+    for the mix as it is (48 kHz stereo 24-bit WAV, no preset), else encoded
+    (:func:`vidgen.audio_encode.encode`, tagged with the ``metadata``)."""
+    out = project.config.audio_output
+    output = project.audio_path(preview)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if out.plain:
         partial = output.with_name(output.name + ".part")
         shutil.copyfile(mixed, partial)
         replace_file(partial, output)
-        timings_file = folder / "timings.json"
-        write_json(timings_file, timings)
-    return AudioRenderResult(output, timings_file, plan.duration, timings, plan.timing, plan.left_out)
+    else:
+        audio_encode.encode(mixed, output, out, chapter_export.video_tags(project.config))
+    return output

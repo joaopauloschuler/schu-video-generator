@@ -21,6 +21,11 @@ normalisation the sum is measured first (BS.1770-4 integrated loudness, :mod:`vi
 and scaled to ``audio.target_lufs``; a look-ahead true-peak limiter (10 ms, gain never above
 what keeps the 4x-oversampled peak under ``audio.true_peak``) then catches the peaks. Every step
 is deterministic numpy.
+
+Opt-in (DESIGN.md §111.2): ``audio.level_voice`` puts a gentle leveller on the voice track before
+the sum (:class:`LevelledTrack`); an audio-only render's loudness preset passes
+:class:`MixTargets` (a file loudness or RMS, a mono mix, a limiter setting, a room tone added
+after the gain). Without them a video's mix is what it was.
 """
 
 from __future__ import annotations
@@ -61,6 +66,20 @@ STING_DUCK = DuckConfig(depth=6.0, attack=0.15, release=0.3, hold=0.0, clips=Fal
 #: The limiter aims this far (dB) under ``audio.true_peak``: room for the interpolation and for
 #: the AAC encode, which moved the gallery's true peak up by 0.2 dB (Step 48).
 LIMITER_MARGIN_DB = 0.4
+#: The voice leveller (``audio.level_voice``, DESIGN.md §111.2): 3:1 with a 6 dB soft knee
+#: above the voices' usual peak (the median 10 ms peak of the frames within 45 dB of the
+#: loudest, plus 8 dB), its gain ramped over 50 ms on the louder side (look-ahead: the mix is
+#: offline). Chosen on Step 283's samples: the limiter's gain reduction at -16 LUFS fell from
+#: 5.0 to 0.6 dB (ElevenLabs) and 0.4 to 0 dB (Kokoro), the voices lowered 0.4 dB on average
+#: where they are lowered at all.
+LEVEL_ABOVE_DB = 8.0
+LEVEL_RATIO = 3.0
+LEVEL_KNEE_DB = 6.0
+LEVEL_RAMP_FRAMES = 5
+LEVEL_RANGE_DB = 45.0
+#: Length of the room tone's loop (``audio_output.room_tone``; samples) and its band (Hz).
+ROOM_TONE_LOOP = RATE * 10
+ROOM_TONE_BAND = (80.0, 6000.0)
 
 
 # ----- tracks ----------------------------------------------------------------------------------------
@@ -93,6 +112,73 @@ class WavTrack:
                 data = np.frombuffer(src.readframes(hi - lo), dtype="<i2").reshape(-1, 2)
             out[lo - a : lo - a + len(data)] = data / 32768
         return out
+
+
+def frame_peaks(track: WavTrack) -> np.ndarray:
+    """The sample peak (dBFS, over both channels) of every 10 ms frame of ``track``, read 10 s
+    at a time."""
+    frames = -(-track.length // FRAME)
+    out = np.zeros(frames)
+    step = FRAME * 1000
+    for lo in range(0, track.length, step):
+        x = np.max(np.abs(track.read(lo, min(track.length, lo + step))), axis=1)
+        n = -(-len(x) // FRAME)
+        out[lo // FRAME : lo // FRAME + n] = np.pad(x, (0, n * FRAME - len(x))).reshape(n, FRAME).max(axis=1)
+    return 20 * np.log10(np.maximum(out, 1e-9))
+
+
+def leveller_gain(peaks_db: np.ndarray) -> np.ndarray:
+    """The voice leveller's gain (dB per 10 ms frame, 0 or negative) for frame peaks
+    ``peaks_db`` (see :data:`LEVEL_ABOVE_DB`)."""
+    if not len(peaks_db) or peaks_db.max() <= -150:
+        return np.zeros(len(peaks_db))
+    active = peaks_db > peaks_db.max() - LEVEL_RANGE_DB
+    over = peaks_db - (float(np.median(peaks_db[active])) + LEVEL_ABOVE_DB)
+    slope, knee = 1 - 1 / LEVEL_RATIO, LEVEL_KNEE_DB
+    soft = slope * (over + knee / 2) ** 2 / (2 * knee)
+    reduction = np.where(over <= -knee / 2, 0.0, np.where(over >= knee / 2, slope * over, soft))
+    return smooth_steps(-reduction, LEVEL_RAMP_FRAMES)
+
+
+class LevelledTrack:
+    """A voice track through the leveller (:func:`leveller_gain`, its curve computed once over
+    the whole track); ``reduction_db`` is its largest gain reduction."""
+
+    def __init__(self, track: WavTrack) -> None:
+        self.track = track
+        self.length = track.length
+        self.gain = leveller_gain(frame_peaks(track))
+        self.reduction_db = float(-self.gain.min()) if len(self.gain) else 0.0
+
+    def read(self, a: int, b: int) -> np.ndarray:
+        x = self.track.read(a, b)
+        if not len(self.gain):
+            return x
+        at = np.arange(a, b) / FRAME - 0.5
+        return x * (10 ** (np.interp(at, np.arange(len(self.gain)), self.gain) / 20))[:, None]
+
+
+def room_tone(level_db: float) -> np.ndarray:
+    """A seamless loop (:data:`ROOM_TONE_LOOP` samples, mono) of faint pink noise in
+    :data:`ROOM_TONE_BAND` at ``level_db`` dBFS RMS; always the same samples."""
+    rng = np.random.default_rng(111)
+    spectrum = np.fft.rfft(rng.standard_normal(ROOM_TONE_LOOP))
+    freqs = np.fft.rfftfreq(ROOM_TONE_LOOP, 1 / RATE)
+    band = (freqs >= ROOM_TONE_BAND[0]) & (freqs <= ROOM_TONE_BAND[1])
+    spectrum = np.where(band, spectrum / np.sqrt(np.maximum(freqs, 1.0)), 0.0)
+    loop = np.fft.irfft(spectrum, ROOM_TONE_LOOP)
+    return loop * (10 ** (level_db / 20) / float(np.sqrt(np.mean(loop**2))))
+
+
+def rms_db(total: int, read: Callable[[int, int], np.ndarray]) -> float:
+    """The RMS (dBFS) of a whole signal over all its samples and channels (the ACX measure),
+    read 10 s at a time."""
+    power, count = 0.0, 0
+    for lo in range(0, total, loudness.BLOCK):
+        x = read(lo, min(total, lo + loudness.BLOCK))
+        power += float(np.sum(x**2))
+        count += x.size
+    return 10 * math.log10(power / count) if power > 0 else -math.inf
 
 
 def _ramp(u: np.ndarray) -> np.ndarray:
@@ -387,9 +473,13 @@ class MixReport:
     limited_db: float  # the limiter's largest gain reduction (0: never engaged)
     music: list[dict[str, Any]] = field(default_factory=list)
     ambience: list[dict[str, Any]] = field(default_factory=list)
+    levelled_db: float | None = None  # the voice leveller's largest gain reduction (None: off)
+    target_rms: float | None = None  # normalised to this RMS (dBFS) instead of target_lufs
+    mono: bool = False  # the left and right mixed to one before the limiter
 
     def to_json(self) -> dict[str, Any]:
-        """The report; ``ambience`` only when a bed played (DESIGN.md §69.39)."""
+        """The report; ``ambience`` only when a bed played (DESIGN.md §69.39); ``levelled_db``,
+        ``target_rms`` and ``mono`` only when set (DESIGN.md §111.2)."""
 
         def num(value: float | None) -> float | None:
             return None if value is None or not math.isfinite(value) else round(value, 2)
@@ -407,7 +497,33 @@ class MixReport:
         }
         if self.ambience:
             data["ambience"] = self.ambience
+        if self.levelled_db is not None:
+            data["levelled_db"] = num(self.levelled_db)
+        if self.target_rms is not None:
+            data["target_rms"] = self.target_rms
+        if self.mono:
+            data["mono"] = True
         return data
+
+
+#: How much louder (LU) a mix whose two channels are the same measures than one of them alone.
+DUAL_MONO_LU = 10 * math.log10(2)
+
+
+@dataclass(frozen=True)
+class MixTargets:
+    """What an audio-only render's loudness preset asks of the mix (DESIGN.md §111.2), in place
+    of ``audio:``: the file's integrated loudness ``lufs`` (a mono file's, when ``mono``: the mix
+    is the channels' average in both, so it measures :data:`DUAL_MONO_LU` more) or its RMS
+    ``rms`` (dBFS), the limiter's ``true_peak``, the voice leveller, a ``room_tone`` (dBFS RMS)
+    under everything."""
+
+    lufs: float | None = None
+    rms: float | None = None
+    true_peak: float = -1.5
+    mono: bool = False
+    level_voice: bool = False
+    room_tone: float | None = None
 
 
 def limit(x: np.ndarray, ceiling: float) -> tuple[np.ndarray, float]:
@@ -427,11 +543,11 @@ def _write_block(out: wave.Wave_write, x: np.ndarray) -> None:
 
 
 def write_mix(
-    path: Path, read: Callable[[int, int], np.ndarray], total: int, gain_db: float, true_peak: float
+    path: Path, read: Callable[[int, int], np.ndarray], total: int, gain_db: float, true_peak: float, floor: np.ndarray | None = None
 ) -> tuple[loudness.LoudnessMeter, float]:
-    """Write ``read(a, b)`` × ``gain_db`` through the limiter (``true_peak`` dBTP) to ``path``
-    (48 kHz stereo 24-bit), block by block; returns the output's meter and the lowest limiter
-    gain."""
+    """Write ``read(a, b)`` × ``gain_db`` (plus the loop ``floor``, a :func:`room_tone`, after
+    the gain) through the limiter (``true_peak`` dBTP) to ``path`` (48 kHz stereo 24-bit), block
+    by block; returns the output's meter and the lowest limiter gain."""
     gain = 10 ** (gain_db / 20)
     ceiling = 10 ** ((true_peak - LIMITER_MARGIN_DB) / 20)
     meter = loudness.LoudnessMeter()
@@ -443,7 +559,10 @@ def write_mix(
         out.setsampwidth(3)
         out.setframerate(RATE)
         for lo, hi, ext in loudness.blocks(total, read):
-            limited, low = limit(ext * gain, ceiling)
+            ext = ext * gain
+            if floor is not None:
+                ext += floor[np.arange(lo - m, lo - m + len(ext)) % len(floor)][:, None]
+            limited, low = limit(ext, ceiling)
             lowest = min(lowest, low)
             part = slice(m, m + hi - lo)
             meter.add(loudness.kweighted_power(limited)[part], loudness.peak_envelope(limited)[part])
@@ -458,7 +577,13 @@ def _has_narration_audio(project: Project) -> bool:
 
 
 def mix_audio(
-    project: Project, timings: dict[str, Any], voices: Sequence[Path], sfx_track: Path | None, out: Path, always_write: bool = False
+    project: Project,
+    timings: dict[str, Any],
+    voices: Sequence[Path],
+    sfx_track: Path | None,
+    out: Path,
+    always_write: bool = False,
+    targets: MixTargets | None = None,
 ) -> MixReport:
     """Mix the video's audio (``timings``: combined timings; ``voices``: the padded scene WAVs in
     order; ``sfx_track``: the SFX track or ``None``).
@@ -467,11 +592,17 @@ def mix_audio(
     written to ``out`` and the report says ``mixed``; otherwise nothing is written (the final
     mux sums narration and effects as before) and the report only measures that sum, unless
     ``always_write`` (an audio-only render, DESIGN.md §111: the sum goes through the limiter into
-    ``out``). A video whose narrated beats have no MP3 yet is not normalised.
+    ``out``). A video whose narrated beats have no MP3 yet is not normalised. The voices go
+    through the leveller with ``audio.level_voice: true``. ``targets`` (an audio-only render's
+    loudness preset) replace ``audio:``'s normalisation, limit and leveller setting and always
+    normalise.
     """
     audio = project.config.audio
-    voice = WavTrack(voices)
-    total = voice.length
+    plain_voice = WavTrack(voices)
+    total = plain_voice.length
+    level = targets.level_voice if targets is not None else audio.level_voice is True
+    voice: WavTrack | LevelledTrack = LevelledTrack(plain_voice) if level else plain_voice
+    mono = targets is not None and targets.mono
     sfx = WavTrack([sfx_track]) if sfx_track is not None else None
     placements = plan_music(project, timings, total)
     beds = plan_ambience(project, timings, total)
@@ -483,9 +614,11 @@ def mix_audio(
             x += sfx.read(a, b)
         if music is not None:
             x += music.read(a, b)
+        if mono:
+            x[:] = x.mean(axis=1, keepdims=True)
         return x
 
-    normalize = audio.normalize is True or (audio.normalize == "auto" and bool(placements))
+    normalize = targets is not None or audio.normalize is True or (audio.normalize == "auto" and bool(placements))
     if normalize and not _has_narration_audio(project):
         # Normalising a video whose narration is not voiced yet would lift the music and the
         # effects to the target on their own (a preview timed from word counts).
@@ -493,27 +626,38 @@ def mix_audio(
         normalize = False
     summaries = [p.summary() for p in placements]
     ambience = [b.summary() for b in beds]
+    levelled = voice.reduction_db if isinstance(voice, LevelledTrack) else None
     out.unlink(missing_ok=True)
     if not normalize and music is None and not always_write:
         meter = loudness.measure(total, read)
-        return MixReport(False, False, None, None, 0.0, meter.integrated, meter.true_peak, 0.0, summaries, ambience)
+        return MixReport(False, False, None, None, 0.0, meter.integrated, meter.true_peak, 0.0, summaries, ambience, levelled)
+    true_peak = audio.true_peak if targets is None else targets.true_peak
+    target_lufs: float | None = audio.target_lufs
+    target_rms = None
+    if targets is not None:
+        target_rms = targets.rms
+        target_lufs = None if targets.lufs is None else targets.lufs + (DUAL_MONO_LU if mono else 0.0)
     gain_db = 0.0
     if normalize:
-        before = loudness.measure(total, read, peaks=False).integrated
+        before = rms_db(total, read) if target_rms is not None else loudness.measure(total, read, peaks=False).integrated
         if math.isfinite(before):
-            gain_db = audio.target_lufs - before
+            gain_db = (target_rms if target_rms is not None else target_lufs or 0.0) - before
         else:
             log.warning("the audio is silent; it is not normalised")
-    meter, lowest = write_mix(out, read, total, gain_db, audio.true_peak)
+    floor = room_tone(targets.room_tone) if targets is not None and targets.room_tone is not None else None
+    meter, lowest = write_mix(out, read, total, gain_db, true_peak, floor)
     return MixReport(
         True,
         normalize,
-        audio.target_lufs if normalize else None,
-        audio.true_peak,
+        target_lufs if normalize and target_rms is None else None,
+        true_peak,
         gain_db,
         meter.integrated,
         meter.true_peak,
         -20 * math.log10(lowest) if lowest > 0 else math.inf,
         summaries,
         ambience,
+        levelled,
+        target_rms if normalize else None,
+        mono,
     )

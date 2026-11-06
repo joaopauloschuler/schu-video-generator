@@ -36,7 +36,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts", "audio",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -880,18 +880,75 @@ def _render_audio(args: argparse.Namespace, project: Project, started: float) ->
     print(f"audio:     {result.output}")
     print(f"timing:    {result.timing} ({len(result.timings['scenes'])} scenes, {sum(len(s['beats']) for s in result.timings['scenes'])} beats)")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
-    print(f"loudness:  {_loudness_line(result.timings['mix'])}")
+    print(f"loudness:  {_loudness_line(result.timings['mix'], limiter=True)}")
+    if result.check is not None:
+        print(f"check:     {result.check.line()}")
+    for kind, path in result.transcripts.items():
+        print(f"{kind + ':':<10} {path}")
     print(f"timings:   {result.timings_file}")
     return 0
 
 
-def _loudness_line(mix: dict[str, Any]) -> str:
-    """``-16.0 LUFS integrated, true peak -1.6 dBTP (normalised to -16, +4.2 dB; music: calm)``."""
-    level = "silent" if mix["integrated_lufs"] is None else f"{mix['integrated_lufs']:.1f} LUFS integrated"
+def cmd_audio(args: argparse.Namespace) -> CommandResult:
+    """``vidgen audio check FILE|PROJECT``: measure an audio file and check it against the
+    loudness presets (DESIGN.md §111.2); exit code 1 when the preset asked for (``--preset``, or
+    the project's ``audio_output.loudness``) fails."""
+    from vidgen import audio_check
+    from vidgen.config import AudioConfig
+
+    target = Path(args.target)
+    audio = AudioConfig()
+    wanted = args.preset
+    if target.is_dir() or target.name in CONFIG_NAMES:
+        project = Project.load(target, variant=args.variant, output_dir=args.output_dir, draft=args.draft)
+        audio = project.config.audio
+        path = project.audio_path(args.preview or args.draft)
+        if not path.is_file():
+            raise VidgenError(f"{path}: not rendered yet (vidgen render --audio-only)")
+        if wanted is None and project.config.audio_output.loudness != "none":
+            wanted = project.config.audio_output.loudness
+    else:
+        path = target
+    custom = args.lufs is not None or args.true_peak is not None
+    if custom:
+        audio = audio.model_copy(update={k: v for k, v in (("target_lufs", args.lufs), ("true_peak", args.true_peak)) if v is not None})
+    names = [wanted] if wanted is not None else [*audio_check.PRESETS, *(["custom"] if custom else [])]
+    measured = audio_check.measure_file(path)
+    results = audio_check.check_all(measured, [audio_check.preset_named(n, audio) for n in names])
+    failed = wanted is not None and not results[0].ok
+    if args.json:
+        return jsonout.envelope("audio", not failed, file=str(path), measured=measured.to_json(), checks=[r.to_json() for r in results])
+    print(f"{path}: {audio_check.summary_line(measured)}")
+    for result in results:
+        print(f"  {result.line()}")
+    return 1 if failed else 0
+
+
+def _loudness_line(mix: dict[str, Any], limiter: bool = False) -> str:
+    """``-16.0 LUFS integrated, true peak -1.6 dBTP (normalised to -16, +4.2 dB; music: calm)``;
+    with ``limiter`` also the limiter's largest gain reduction."""
+    if mix["integrated_lufs"] is None:
+        level = "silent"
+    elif mix.get("mono"):  # both channels the same: what the one-channel file measures
+        from vidgen.mix import DUAL_MONO_LU
+
+        level = f"{mix['integrated_lufs'] - DUAL_MONO_LU:.1f} LUFS integrated (mono)"
+    else:
+        level = f"{mix['integrated_lufs']:.1f} LUFS integrated"
     peak = "" if mix["true_peak_dbtp"] is None else f", true peak {mix['true_peak_dbtp']:.1f} dBTP"
     notes = []
-    if mix["normalized"]:
+    if mix["normalized"] and mix.get("target_rms") is not None:
+        notes.append(f"normalised to RMS {mix['target_rms']:g} dB, {mix['gain_db']:+.1f} dB")
+    elif mix["normalized"] and mix.get("mono"):
+        from vidgen.mix import DUAL_MONO_LU
+
+        notes.append(f"normalised to {mix['target_lufs'] - DUAL_MONO_LU:.3g} as mono, {mix['gain_db']:+.1f} dB")
+    elif mix["normalized"]:
         notes.append(f"normalised to {mix['target_lufs']:g}, {mix['gain_db']:+.1f} dB")
+    if mix.get("levelled_db") is not None:
+        notes.append(f"voice levelled up to {mix['levelled_db']:.1f} dB")
+    if limiter and mix.get("limited_db"):
+        notes.append(f"limiter up to {mix['limited_db']:.1f} dB")
     if mix["music"]:
         notes.append("music: " + ", ".join(m["source"] for m in mix["music"]))
     return level + peak + (f" ({'; '.join(notes)})" if notes else "")
@@ -2169,6 +2226,26 @@ def build_parser() -> argparse.ArgumentParser:
     output_dir_arg(p)
     all_languages_arg(p)
     p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser(
+        "audio",
+        help="audio file tools: check measures an audio file (or a project's audio-only render) and checks it against the loudness presets "
+        "(podcast, audiobook / ACX, broadcast / EBU R128, custom)",
+    )
+    p.add_argument("action", choices=["check"], help="check: loudness, true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per preset")
+    p.add_argument("target", nargs="?", default=".", help="an audio file (wav, mp3, m4a, ogg...), or a project dir or config file: its rendered audio (default: .)")
+    p.add_argument(
+        "--preset", choices=["podcast", "audiobook", "broadcast", "custom"],
+        help="check against this preset only (exit code 1 if it fails); default: the project's audio_output.loudness, else every preset",
+    )
+    p.add_argument("--lufs", type=float, metavar="LUFS", help="the custom preset's loudness (default: audio.target_lufs, -16)")
+    p.add_argument("--true-peak", type=float, metavar="DBTP", help="the custom preset's highest true peak (default: audio.true_peak, -1.5)")
+    p.add_argument("--variant", metavar="NAME", help="a project's variant (its rendered file)")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--preview", action="store_true", help="a project's preview render")
+    quality.add_argument("--draft", action="store_true", help="a project's draft render")
+    output_dir_arg(p)
+    p.set_defaults(func=cmd_audio)
 
     p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")
     project_arg(p)

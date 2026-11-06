@@ -21098,3 +21098,60 @@ Audiobooks, podcast-style episodes and the sound of an existing video, without M
   and TODOs (`commented_yaml(list_key="sections")`).
 - **Public**: config `audio_only`, `pacing`, `sections`, beat `pause`; CLI `render --audio-only`,
   `story draft --audio`; `render --json` with `audio_only: true`. No new `vidgen.api` names.
+
+### 111.1 Audio files (Step 284)
+
+`audio_output: {format: wav | mp3 | m4a | ogg, bitrate, channels: mono | stereo, sample_rate,
+bit_depth, loudness, room_tone, transcripts}` (`AudioOutputConfig`). The deliverable is
+`Project.audio_path(preview)` with the format's suffix. `AudioOutputConfig.plain` (48 kHz stereo
+24-bit WAV, no preset, no room tone: the default) copies `mix.wav` as Step 283 did, byte for byte;
+anything else is one FFmpeg encode (`vidgen.audio_encode`): `pan=mono|c0=0.5*c0+0.5*c1` for mono,
+`aresample` for another rate, `pcm_s16le` / `pcm_s24le` (`-rf64 auto`), `libmp3lame` (`-b:a`:
+constant bitrate, ID3v2.3), `aac` in `ipod` (M4A, faststart), `libopus` in Ogg (16 / 24 / 48 kHz,
+a config error otherwise); tags from `metadata` (`chapter_export.video_tags`); written to `.part`
+then replaced. No chapters embedded (out of scope). Missing encoders surface as the FFmpeg error
+with "needs an ffmpeg with libmp3lame / libopus".
+
+### 111.2 Loudness presets, the check, the voice leveller
+
+- **Presets** (`vidgen.audio_check.PRESETS`, `LoudnessPreset`): `podcast` −16 LUFS stereo / −19 mono
+  ±1 LU, TP ≤ −1 (mix limiter −1.5); `audiobook` ACX: RMS −23…−18 (mix aims −20, unweighted RMS
+  over all samples and channels, `mix.rms_db`), sample peak ≤ −3 (limiter −3.5 dBTP), noise floor ≤
+  −60 dB (the quietest 0.5 s; digital silence passes), head 0.5–1 s and tail 1–5 s of silence
+  (10 ms frames above −50 dBFS are sound), notes (never failures) for ACX's format (MP3 ≥ 192 kb/s,
+  44.1 kHz) and 120 min; `broadcast` EBU R128 −23 ±0.5 LU, TP ≤ −1; `custom` `audio.target_lufs` ±1,
+  TP ≤ `audio.true_peak`. The audiobook preset fills `pacing` `lead_in: 0.6`, `tail: 2.5` where the
+  config does not set them (`audio_only.effective_pacing`, `model_fields_set`).
+- **Mix targets**: `audio_check.mix_targets` → `mix.MixTargets(lufs | rms, true_peak, mono, level_voice,
+  room_tone)` passed to `mix_audio(..., targets=)`: a preset always normalises; with `mono` the sum
+  is the channels' average in both channels and the LUFS target is raised by `DUAL_MONO_LU`
+  (10·log10 2), so the encoded one-channel file measures the target; `room_tone` (dBFS RMS) adds a
+  fixed 10 s loop of pink noise (80 Hz–6 kHz, seed 111) after the gain, before the limiter. The
+  report gains `levelled_db`, `target_rms`, `mono` only when set.
+- **Leveller** (`audio.level_voice`, default `None`: on with the podcast / audiobook presets, off
+  otherwise, so a video's mix is unchanged unless set; `test_video_mix_is_pinned` still holds): the
+  voice track's 10 ms frame peaks (`mix.frame_peaks`, one pass) → gain per frame (`leveller_gain`):
+  threshold = median peak of the frames within 45 dB of the loudest + 8 dB, ratio 3, 6 dB soft knee,
+  `smooth_steps` over 5 frames (look-ahead ramps on the louder side) → `LevelledTrack.read`
+  interpolates it per sample. Chosen by measuring Step 283's samples at −16 LUFS (peak vs RMS
+  detectors, thresholds +2…+9 dB, ratios 2–4): the limiter's deepest cut fell 5.0 → 0.6 dB on the
+  ElevenLabs narration (0.4 → 0 on Kokoro) with the voices lowered 0.4 dB on average where lowered.
+  Music and effects are not levelled.
+- **Check** (`measure_file`): one FFmpeg run, `ebur128=peak=true+sample` (integrated, LRA, true and
+  sample peak; its summary parsed) and the decoded samples at 48 kHz in the file's channels streamed
+  to stdout (stderr to a temp file) → per-10 ms power, nothing else kept. `check(measured, preset)` →
+  `PresetResult` of `CheckItem(name, value, target, status: pass | fail | note)`. A render with a
+  preset measures its file, logs a warning naming what misses, and records `audio_output: {file,
+  check}` in `timings.json` (`render --json` `check`). CLI `vidgen audio check FILE|PROJECT
+  [--preset] [--lufs --true-peak] [--variant --preview --draft --output-dir] [--json]`: every preset,
+  or the one asked for / the project's (exit 1 when it fails).
+
+### 111.3 Transcripts
+
+`audio_output.transcripts` (default all) next to the file (`vidgen.transcripts`): `_transcript.txt`
+(`plain_text`: title, `[M:SS] Title` per published chapter but the intro, a paragraph per voice's
+turn within a scene, `Name:` when more than one voice is used, the unlabelled base voice
+`Narrator`); `.srt` and `.vtt` from `render.pipeline.video_cues` (the video's cues, word-timed;
+speaker names follow `subtitles.speakers`); `_chapters.txt` by `write_chapter_list` (as a video,
+with the YouTube warnings). **Public**: config `audio_output`, `audio.level_voice`; CLI `audio
+check`; `render --json` `check` / transcript outputs. No new `vidgen.api` names.

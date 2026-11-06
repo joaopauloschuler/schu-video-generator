@@ -24502,3 +24502,51 @@ project), repo work is generic.
   frame names, i.e. timings, all the same).
 - Next (284): formats via ffmpeg from `build/<render>/audio/mix.wav`; transcripts from
   `timings.json` with `subtitles.cues_from_timings` / `video_cues` (works on it as is).
+
+## Step 284 — Audio formats, loudness presets and check, voice leveller, transcripts (Phase AF)
+
+- Built (DESIGN §111.1–111.3): `audio_output: {format: wav | mp3 | m4a | ogg, bitrate, channels,
+  sample_rate, bit_depth, loudness: none | podcast | audiobook | broadcast | custom, room_tone,
+  transcripts}`; one FFmpeg encode from `mix.wav` (default config still copies it byte for byte).
+  Presets set the mix's targets (LUFS per channel count, or ACX RMS −20; limiter; leveller; audiobook
+  pacing head/tail) and the render measures the file and reports PASS / FAIL.
+  `vidgen audio check FILE|PROJECT [--preset] [--lufs --true-peak] [--json]`. `audio.level_voice`
+  (voice leveller, opt-in for videos, on with podcast/audiobook). Transcripts: `_transcript.txt`
+  (speakers, `[M:SS]` chapters), `.srt`, `.vtt`, `_chapters.txt`.
+- Files: new `audio_check.py`, `audio_encode.py`, `transcripts.py`, `tests/test_audio_output.py`
+  (25), `docs/COOKBOOK-AUDIO.md`; `config.py` (`AudioOutputConfig`, `AudioConfig.level_voice`),
+  `mix.py` (`frame_peaks`, `leveller_gain`, `LevelledTrack`, `room_tone`, `rms_db`, `MixTargets`,
+  `mix_audio(targets=)`, `write_mix(floor=)`, report fields), `audio_only.py` (`effective_pacing`,
+  `write_output`, check, transcripts), `project.py` (`audio_path(suffix=)`), `cli.py` (`audio`
+  command, loudness line), `jsonout.py`; docs CONFIG (audio files, `level_voice`, JSON), COOKBOOK,
+  README, guide (+ `AGENTS.md`), DESIGN, CHANGELOG, tasklist.
+- Decisions: presets live in `audio_output.loudness` (audio-only renders only); a mono file is
+  normalised as the channels' average in both channels +3.01 LU, so the file measures its target
+  (podcast −19 mono); ACX format / length are notes, not failures (a WAV master is fine); digital
+  silence passes the noise floor (room tone is opt-in `room_tone: -72`); the measuring check uses
+  FFmpeg's `ebur128` (independent of the mixer's own meter; they agree on WAVs to 0.05 LU);
+  leveller: peak detector, median peak + 8 dB, 3:1, 6 dB knee, 50 ms ramps — chosen by measuring
+  (scratch `compress_exp.py`); SRT/VTT speaker names follow `subtitles.speakers` (the txt always
+  names speakers when there are several).
+- Samples (`/home/claude/work/scratch/s284/`, not committed): `ferry/` 8 variants (podcast mp3,
+  podcast_mono m4a 96k, podcast_nolevel, audiobook mp3 44.1k mono, audiobook_tone room tone −72,
+  broadcast wav 16-bit, opus ogg, custom −14), `kphi3/` (episode / episode_nolevel mp3,
+  audiobook / audiobook_nolevel, broadcast m4a), `lantern/` (Kokoro TTS, audiobook mp3 + podcast
+  m4a). All podcast / broadcast / custom files PASS (podcast −16.3 stereo, −19.0/−19.1 mono; broadcast
+  −23.0); kphi3 and lantern audiobooks PASS (RMS −20.3/−20.5, peak −4.1, head 0.61/0.88 s, tail
+  2.8/3.3 s); the ferry audiobooks FAIL on head 0.20 s (its bell sfx at 0.2 s — the check works).
+  Leveller: kphi3 limiter 5.2 → 0.7 dB (podcast), 6.5 → 2.0 dB (audiobook); ferry 1.1 → 0. Table:
+  `summary.py` output; PNGs `measurements/kphi3_levelled_vs_not.png` (only the highest tips
+  differ) and `*_spectrogram.png` (room tone visible in pauses, no artefacts). Default renders
+  `cmp`-identical to Step 283's WAVs; encodes deterministic (MP3 rendered twice: same bytes).
+- Known gaps: MP3 at 192k measures ~0.3 dB quieter than the mix (in tolerance; not compensated);
+  the audio-only render prints YouTube's chapter warnings for `_chapters.txt`; no embedded
+  chapters; the ACX "CBR" note trusts the bitrate (VBR is not detected); `vidgen audio check`
+  streams the file (one value per 10 ms kept) but was only tried on files up to 4 minutes.
+- Tests: `test_audio_output` 25 passed (14 s), `test_audio_only` 17, `test_config` + `test_json_output`
+  + `test_cli` 54, `test_docs` + `test_guide` + `test_schema` 235, `test_music` not slow 23,
+  `test_music_pieces` + `test_score` 41, `test_cartoon_rain -k mix` 1: all passed. Frame baseline
+  not run: no frame-rendering code changed (the video mix is pinned by `test_video_mix_is_pinned`,
+  which passes).
+- Next (285): pan / rooms go into `mix.py` / `audio_only.write_voice_track`; keep `MixTargets`
+  `mono` in mind (the mono-compatibility check can reuse `audio_check.measure_file`).

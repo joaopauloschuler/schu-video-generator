@@ -904,8 +904,9 @@ def render_document(
 
 def audio_render_document(project: Project, result: AudioRenderResult, preview: bool, elapsed: float) -> dict[str, Any]:
     """The ``vidgen render --audio-only --json`` document (DESIGN.md §111): ``audio_only: true``,
-    the ``timing`` used, what was ``left_out``, ``outputs.audio`` and ``outputs.timings``, the
-    mix report, chapters and the scenes with their beats."""
+    the ``timing`` used, what was ``left_out``, ``outputs.audio``, ``outputs.timings`` and the
+    transcripts (``outputs.transcript_<kind>``), the mix report, the loudness ``check``
+    (§111.2; ``null`` without a preset), chapters and the scenes with their beats."""
     timings = result.timings
     scenes = [
         {
@@ -927,10 +928,15 @@ def audio_render_document(project: Project, result: AudioRenderResult, preview: 
         audio_only=True,
         timing=result.timing,
         left_out=result.left_out,
-        outputs={"audio": _path(result.output), "timings": _path(result.timings_file)},
+        outputs={
+            "audio": _path(result.output),
+            "timings": _path(result.timings_file),
+            **{f"transcript_{kind}": _path(path) for kind, path in result.transcripts.items()},
+        },
         duration=result.duration,
         elapsed=round(elapsed, 3),
         mix=timings.get("mix"),
+        check=None if result.check is None else result.check.to_json(),
         chapters=timings.get("chapters", []),
         scenes=scenes,
     )

@@ -477,10 +477,15 @@ class Project:
         """Subtitle path matching :meth:`output_path`."""
         return self.output_dir / f"{self._output_stem(preview)}.srt"
 
-    def audio_path(self, preview: bool = False) -> Path:
+    def audio_path(self, preview: bool = False, suffix: str | None = None) -> Path:
         """The sound of an audio-only render (DESIGN.md §111) matching :meth:`output_path`:
-        ``<output>[_<variant>][_preview|_draft].wav``."""
-        return self.output_dir / f"{self._output_stem(preview)}.wav"
+        ``<output>[_<variant>][_preview|_draft].<format>`` (``suffix``, default that of
+        ``audio_output.format``)."""
+        if suffix is None:
+            from vidgen.audio_encode import suffix as format_suffix
+
+            suffix = format_suffix(self.config.audio_output)
+        return self.output_dir / f"{self._output_stem(preview)}{suffix}"
 
     def chapters_path(self, preview: bool = False) -> Path:
         """YouTube chapter list matching :meth:`output_path`: ``<output>[_<variant>][_preview|_draft]_chapters.txt``."""

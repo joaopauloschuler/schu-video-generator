@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–283)
+## Unreleased (Steps 193–284)
+
+### Audio files, loudness presets, transcripts (Step 284)
+
+- `audio_output: {format: mp3 | m4a | ogg | wav, bitrate, channels: mono, sample_rate}` for audio-only renders (FFmpeg only).
+- Loudness presets `podcast` (−16 LUFS stereo / −19 mono), `audiobook` (ACX: RMS, peaks, noise floor, room tone head and tail), `broadcast` (EBU R128 −23), `custom`: the render measures the file and says PASS / FAIL; `vidgen audio check FILE|PROJECT` measures any audio file.
+- `audio.level_voice`: a gentle leveller on the voices before the limiter (on with the podcast and audiobook presets; opt-in for videos): the limiter's deepest cut on ElevenLabs narration at −16 LUFS fell from 5.2 to 0.7 dB.
+- Transcripts next to the file: plain text with speakers and chapter times, SRT, WebVTT, the chapter list. Cookbook: `docs/COOKBOOK-AUDIO.md`.
 
 ### Audio only (Step 283)
 

@@ -3721,7 +3721,13 @@ Good: the result first, then the context.
   by their speech plus `pacing:` gaps (`speaker`, `scene`, `chapter`, `lead_in`, `tail`); a
   beat's `pause: 1.5` (or a `- pause: 1.5` item) is the silence after it, in videos too.
   `pacing: {timing: video}` keeps the video's timeline instead. Stage foley and ambience are
-  left out (a warning says so); write the sounds that matter as `sfx`.
+  left out (a warning says so); write the sounds that matter as `sfx`. The file:
+  `audio_output: {format: mp3 | m4a | ogg | wav, bitrate, channels: mono, sample_rate,
+  loudness: podcast | audiobook | broadcast | custom}`; the render measures it against the
+  preset and says PASS / FAIL (fix what it names: an `audiobook` wants 0.5-1 s of silence before
+  the first sound, so no effect in the first half second). It also writes the transcript
+  (`_transcript.txt` with speakers and chapters), `.srt`, `.vtt` and `_chapters.txt`.
+  `vidgen audio check FILE` measures any audio file. Settings: `docs/COOKBOOK-AUDIO.md`.
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}

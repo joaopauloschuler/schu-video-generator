@@ -3954,6 +3954,7 @@ audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
 | `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
 | `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
 | `bitrate` | `192k` | AAC bitrate of the video's audio: `128k`, `160k`, `192k`, `256k`, `320k`. A loud, dense mix (a Short at −14 LUFS) can come out of FFmpeg's AAC encoder at 192k several dB over `true_peak` (measured: −1.9 dBTP in the mix, +1.9 in the MP4); at 256k it stayed at −1.6. Check the MP4 (`ffmpeg -i out.mp4 -af ebur128=peak=true -f null -`) |
+| `level_voice` | — | a gentle leveller on the voices before the limiter: 3:1 (6 dB soft knee) above the voices' usual peak + 8 dB, 50 ms ramps. Only the loudest syllables come down (by ~0.4 dB on average where it acts), so the limiter barely works: raising the kphi3 narration to −16 LUFS, the limiter's deepest cut fell from 5.2 to 0.7 dB. `true` / `false`; unset: on in audio-only renders with the `podcast` or `audiobook` [preset](#audio-files-audio_output-loudness-presets-transcripts), off otherwise (a video's mix is unchanged unless you set it) |
 
 When the mix is written (music, or `normalize: true`) schu-video-generator measures the sum, applies one gain to
 reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
@@ -4023,7 +4024,8 @@ example in the video's description:
 ## Audio only (`audio_only`, `sections`, `pacing`)
 
 `vidgen render --audio-only` writes only the sound of any project, `output/<output>.wav` (48 kHz
-stereo, 24-bit), and renders no scene: the narration and dialogue voices (with their effects and
+stereo, 24-bit; MP3, M4A, Ogg Opus, mono, a loudness preset and transcripts with
+[`audio_output`](#audio-files-audio_output-loudness-presets-transcripts)), and renders no scene: the narration and dialogue voices (with their effects and
 emotions, as `vidgen tts` made them), music beds ducked under the voices, sound effects, stings,
 loudness normalisation and the limiter (`audio:`). `audio_only: true` makes every `vidgen render`
 of the project do that. The timings go to `build/final/audio/timings.json`; `--json` prints them
@@ -4074,6 +4076,55 @@ title (a video render is a plain slideshow); its beats are ordinary beats. A bea
 
 No gap is added next to a silent scene (it is the gap). `vidgen story draft --audio` drafts such a
 project from a story in prose (sections of lines with the speakers' voices and emotions).
+
+### Audio files (`audio_output`), loudness presets, transcripts
+
+`audio_output` says what file an audio-only render writes; the mix is encoded once by FFmpeg (no
+other tools). Settings and cookbook: [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md).
+
+```yaml
+audio_output: {format: mp3, bitrate: 192k, channels: mono, sample_rate: 44100, loudness: audiobook}
+```
+
+| key | default | |
+|---|---|---|
+| `format` | `wav` | `wav` (PCM), `mp3` (LAME, constant bitrate), `m4a` (AAC), `ogg` (Opus); the file is `output/<output>.<format>` |
+| `bitrate` | `192k` mp3 / m4a, `96k` ogg | e.g. `128k` (not for wav) |
+| `channels` | `stereo` | `mono`: left and right averaged into one channel |
+| `sample_rate` | `48000` | `16000`, `22050`, `24000`, `32000`, `44100`, `48000`; Opus takes `16000`, `24000`, `48000` |
+| `bit_depth` | `24` | wav only: `16` or `24` |
+| `loudness` | `none` | a preset (below); `none`: the `audio:` settings as they are |
+| `room_tone` | — | dBFS RMS (−90 to −55, e.g. `-72`) of a faint, steady pink noise under the whole file, so pauses are not digital silence |
+| `transcripts` | `true` | `txt`, `srt`, `vtt`, `chapters` (a list), `true` all, `false` none |
+
+| preset | the file must measure | the mix aims for |
+|---|---|---|
+| `podcast` | −16 LUFS stereo / −19 mono (±1 LU), true peak ≤ −1 dBTP | that loudness, limiter −1.5 dBTP, `level_voice` on |
+| `audiobook` | ACX: RMS −23 to −18 dB, peaks ≤ −3 dB, noise floor ≤ −60 dB, 0.5–1 s of room tone before the first sound and 1–5 s after the last; notes (not failures) on ACX's format (MP3 ≥ 192 kb/s CBR, 44.1 kHz) and length (≤ 120 min a file) | RMS −20 dB, limiter −3.5 dBTP, `level_voice` on; `pacing` `lead_in: 0.6`, `tail: 2.5` where unset |
+| `broadcast` | EBU R128: −23 LUFS (±0.5 LU), true peak ≤ −1 dBTP | that, limiter −1.5 dBTP |
+| `custom` | `audio.target_lufs` (±1 LU), true peak ≤ `audio.true_peak` | that |
+
+A preset always normalises (`audio.normalize` aside). A mono file's loudness is its one channel's:
+the mix is then the channels' average in both channels, normalised 3 dB higher, so the file
+measures the target. Without `loudness` (or a `custom` / `broadcast` target) a mono file measures
+3 LU under the stereo mix. After the encode the render measures the file and prints
+`check: podcast PASS loudness -16.3 LUFS (-16 ±1 stereo) ok; true peak -2.2 dBTP (≤ -1) ok`; a
+failing preset is a warning (`timings.json` and `--json` carry `audio_output.check` / `check`).
+Lossy encoders move the level a little (LAME at 192k: about −0.3 dB).
+
+`vidgen audio check FILE|PROJECT [--preset P] [--lufs L --true-peak T] [--variant V] [--json]`
+measures any audio file (or a project's rendered one): integrated loudness, loudness range, true
+and sample peak (FFmpeg's `ebur128`), RMS over the whole file, noise floor (the quietest 0.5 s),
+the silence before the first and after the last sound (10 ms frames above −50 dBFS), and checks
+it against every preset, or only `--preset` / the project's `audio_output.loudness` (exit code 1
+when that one fails). `--lufs` / `--true-peak` add a `custom` check.
+
+Transcripts (from the word timings, next to the file): `<output>_transcript.txt` — the title, each
+chapter as `[M:SS] Title`, a paragraph per voice's turn in a section, `Name: text` when there is
+more than one voice (the base voice without a `label` is `Narrator`); `<output>.srt` and
+`<output>.vtt` — the cues a video's SRT holds (speaker names with `subtitles.speakers: name`);
+`<output>_chapters.txt` — `M:SS Title` per chapter, as for a video (with the YouTube warnings).
+No chapters are embedded in the audio file.
 
 ## Transitions (`transition`)
 
@@ -15298,6 +15349,26 @@ for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids 
 to render is not joined: it fails with `error.details` `{rendered, remaining, render_seconds}`
 (the next run goes on with `remaining`; finished scenes' renders are kept, as after an
 interrupted run).
+
+An audio-only render (`--audio-only`, `audio_only: true`) answers with `audio_only: true`,
+`timing`, `left_out`, `outputs` `{audio, timings, transcript_txt, transcript_srt,
+transcript_vtt, transcript_chapters}` (the transcripts written), `mix` (with `levelled_db`,
+`target_rms`, `mono` when they apply), `check` (the file against its loudness preset, as in
+[`vidgen audio --json`](#vidgen-audio---json), or `null`), `chapters` and `scenes` (`{id, type,
+start, duration, beats}`).
+
+### `vidgen audio --json`
+
+`vidgen audio check FILE|PROJECT --json`:
+
+| key | type | |
+|---|---|---|
+| `file` | str | the file measured |
+| `measured` | object | `{path, codec, sample_rate, channels, bitrate, duration, integrated_lufs, loudness_range, true_peak, sample_peak, rms, noise_floor, head, tail, digital_silence}` (dB values `null` for silence) |
+| `checks` | list | per preset: `{preset, description, ok, items}`, each item `{name, value, target, status}` (`pass`, `fail`, or a `note` that does not count) |
+
+`ok` is false when the preset asked for (`--preset`, or the project's `audio_output.loudness`)
+fails.
 
 ### `vidgen storyboard --json`
 

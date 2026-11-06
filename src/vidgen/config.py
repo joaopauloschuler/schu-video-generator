@@ -2389,6 +2389,66 @@ class AudioConfig(_Strict):
     """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
     bitrate: Literal["128k", "160k", "192k", "256k", "320k"] = "192k"
     """AAC bitrate of the video's audio; a loud mix (a Short at -14 LUFS) keeps its true peak better at 256k or 320k (the encoder's overshoot is smaller)."""
+    level_voice: bool | None = None
+    """A gentle leveller on the voices before the limiter (3:1 above their usual peaks, 50 ms ramps): loud syllables come down a little, so the limiter barely works; default: on in audio-only renders with the podcast or audiobook loudness preset, off otherwise."""
+
+
+#: Audio file formats of an audio-only render and their default bitrates (DESIGN.md §111.1).
+AUDIO_FORMATS: dict[str, str | None] = {"wav": None, "mp3": "192k", "m4a": "192k", "ogg": "96k"}
+#: Loudness presets of an audio-only render (:mod:`vidgen.audio_check`).
+LOUDNESS_PRESETS = ("podcast", "audiobook", "broadcast", "custom")
+#: Transcript files an audio-only render can write.
+TRANSCRIPT_KINDS = ("txt", "srt", "vtt", "chapters")
+#: Sample rates Opus can encode.
+OPUS_RATES = (16000, 24000, 48000)
+
+
+class AudioOutputConfig(_Strict):
+    """The file an audio-only render writes (DESIGN.md §111.1): its format, loudness preset and
+    transcripts."""
+
+    format: Literal["wav", "mp3", "m4a", "ogg"] = "wav"
+    """wav (PCM), mp3, m4a (AAC) or ogg (Opus); the file is <output>.<format>."""
+    bitrate: Annotated[str, Field(pattern=r"^\d{2,3}k$")] | None = None
+    """Bitrate of a compressed format, e.g. 128k; default 192k for mp3 and m4a (constant bitrate for mp3), 96k for ogg."""
+    channels: Literal["mono", "stereo"] = "stereo"
+    """mono: one channel (the left and right mixed); stereo: two."""
+    sample_rate: Literal[16000, 22050, 24000, 32000, 44100, 48000] = 48000
+    """Samples per second of the file (Opus: 16000, 24000 or 48000); ACX audiobooks want 44100."""
+    bit_depth: Literal[16, 24] = 24
+    """wav only: bits per sample."""
+    loudness: Literal["none", "podcast", "audiobook", "broadcast", "custom"] = "none"
+    """Loudness preset: podcast (-16 LUFS stereo / -19 mono, peaks under -1 dBTP), audiobook (ACX: RMS -23 to -18 dB, peaks under -3 dB, room-tone head and tail, noise floor under -60 dB), broadcast (EBU R128: -23 LUFS, -1 dBTP), custom (audio.target_lufs and audio.true_peak); none: the audio: settings as they are. The render measures the file and reports pass or fail (vidgen audio check)."""
+    room_tone: float | None = Field(default=None, ge=-90, le=-55)
+    """A faint steady noise (dBFS RMS, e.g. -72) under the whole file, so pauses are not digital silence; default none."""
+    transcripts: list[Literal["txt", "srt", "vtt", "chapters"]] | bool = True
+    """Transcripts written next to the file from the word timings: txt (plain text with speakers and chapter titles), srt, vtt (WebVTT), chapters (<output>_chapters.txt, a timestamp per chapter); true: all, false: none."""
+
+    @model_validator(mode="after")
+    def _check_opus(self) -> AudioOutputConfig:
+        if self.format == "ogg" and self.sample_rate not in OPUS_RATES:
+            rates = ", ".join(str(r) for r in OPUS_RATES)
+            raise ValueError(f"sample_rate: Opus (format: ogg) encodes {rates} only, not {self.sample_rate}")
+        return self
+
+    @property
+    def transcript_kinds(self) -> tuple[str, ...]:
+        """The transcripts to write, in :data:`TRANSCRIPT_KINDS` order."""
+        if self.transcripts is True:
+            return TRANSCRIPT_KINDS
+        if self.transcripts is False:
+            return ()
+        return tuple(k for k in TRANSCRIPT_KINDS if k in self.transcripts)
+
+    @property
+    def effective_bitrate(self) -> str | None:
+        """The bitrate the encoder gets (``None`` for wav)."""
+        return None if self.format == "wav" else self.bitrate or AUDIO_FORMATS[self.format]
+
+    @property
+    def plain(self) -> bool:
+        """Whether the file is the mix as written (48 kHz stereo 24-bit WAV, no preset): copied, not encoded."""
+        return (self.format, self.channels, self.sample_rate, self.bit_depth, self.loudness, self.room_tone) == ("wav", "stereo", 48000, 24, "none", None)
 
 
 class PacingConfig(_Strict):
@@ -3107,6 +3167,8 @@ class VideoConfig(_Strict):
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
     audio_only: bool = False
     """true: vidgen render writes only the sound, <output>.wav (narration, voices, music, sound effects), and renders no scene; vidgen render --audio-only does that for one run."""
+    audio_output: AudioOutputConfig = Field(default_factory=AudioOutputConfig)
+    """The file of an audio-only render: {format: wav | mp3 | m4a | ogg, bitrate, channels: mono | stereo, sample_rate, bit_depth, loudness: none | podcast | audiobook | broadcast | custom, room_tone, transcripts}."""
     pacing: PacingConfig = Field(default_factory=PacingConfig)
     """Timing of an audio-only render: {timing: speech | video, line, speaker, scene, chapter, sting_before, sting_after, silent, lead_in, tail} (seconds)."""
     transition: TransitionSetting | None = None
