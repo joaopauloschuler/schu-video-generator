@@ -1666,7 +1666,7 @@ private (scratchpad); repo work stays generic. No AI API calls; Kokoro only.
 - [x] The full private film (previews looked at shot by shot), a 16:9 1080p MP4 and a delivery copy under 28 MB, captions, −16 LUFS, a contact sheet (48 scenes, 7:40, −16.2 LUFS; generic fixes: graded and resized iso tiles kept while unchanged (several times faster lit places), less memory for zoomed and panned big maps, `zoom` onto an iso object frames it, working objects' moving parts drawn back to front; tests `test_picture_caches.py`)
 
 ### Step 281 — Critical review
-- [ ] Story fidelity, beauty against the visual rules, audio levels, compatibility baseline, tests; fixes and final renders
+- [x] Review fixes and final renders (7:14, −16.2 LUFS; delivery copy 26.8 MB): the owner's note "one of the arms is always in the background" — `cartoon_arms` / `look.arms: front | classic` (front: both arms clear at the sides, the far arm over the body; the default on iso places with `wide: fixed`, global default unchanged); crossfades into a stage no longer dip to the background; many crossfaded scenes joined a batch at a time (memory); the ride re-staged (pod no longer hidden), crossfades between shots; tests `test_arms_front.py`, `test_join_batches.py`; `test_actions` / `test_cartoon_sheet` lists of the Phase AD actions
 
 ---
 

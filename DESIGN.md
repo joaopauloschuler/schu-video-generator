@@ -20983,3 +20983,54 @@ from the frame before.
   `BUILTIN_ACTIONS` list lacks the Phase AD actions (pre-existing failures).
 - **Public**: no new `vidgen.api` names (internal caches); `Stage.target_box` is a scene method
   (like `pan_point`).
+
+## 110. Arms at the sides, crossfaded stages, batched joins (Step 281)
+
+The owner's note on the private film: "one of the arms is always looking in the background". A
+generated character's side view (facing right or left: it reads as a three-quarter view, both
+eyes on the face) hung both arms on the body's edges and drew the far arm (`arm_right` facing
+right) behind the body (`DEFAULT_DRAW_ORDER` 10): on a tall or pear body and under a suit's coat
+only a sliver of it showed, so the figure read as one-armed. The front view already drew both
+arms in front, on the body's edges.
+
+- **`arms: front | classic`** (`ArmStyle`; `CharacterLook.arms`, video `cartoon_arms`;
+  `generator.ARM_STYLES`). `front` (`generator._arms` / `_arm_hang`): each arm that should hang
+  beside the body (the side view's far arm, both arms of the front view) gets its shoulder out to
+  just past the body's edge at the top of the sleeve (`ARM_SHOULDER_OUT` × the limb's width) and
+  the least lean out (0.5° steps, at most `ARM_MAX_LEAN` 14°) that keeps the forearm and hand
+  `ARM_GAP` clear of the body's outline (a pear's or a round body's hips may still touch the hand
+  at the cap); the side view's near arm leans only so far that its hand's middle is on the body's
+  edge (a pear: ~8°, a tall body: 0). The lean is drawn into the rest shapes (the elbow pivot and
+  the hand's end turn with them), so poses, walk swings and `reach` (which works from the rest
+  geometry) keep working; a pose's angles are relative to the leaning rest. The side view's far
+  arm is drawn over the body and under the near arm (`FAR_ARM_ORDER` 34 / 35): an arm swinging
+  forward or reaching across now shows over the torso (a three-quarter body's far side faces the
+  viewer) and crossed arms read as crossed. `classic` is the drawing of before (the same parts,
+  pivots, ends and orders; a test checks it).
+- **Defaults**: a character's `look.arms`, else the video's `cartoon_arms`, else the stage's
+  (`stage.stage_arms`: `front` on an iso place with the fixed wide view), else `classic`. The
+  look cache key (`look_key`) has the style. The character sheet follows `cartoon_arms`.
+- **Global default kept `classic`**: with `front` everywhere, 25 of the 33 baseline stills change
+  (every still with a character: `yard` 9, `meadow` 16; the 8 `gradient-descent` stills have
+  none), max difference 225; the change is the arms only (sheet `s281/baseline_front.png`,
+  private). The owner decides.
+- **Crossfades into a stage** (`Stage` entrance): the set faded in from its background colour
+  under a cover even when a crossfade / push / wipe brought the scene in, so consecutive shots
+  of one place dipped (mean luma 80–100 down to ~37 between the ride's shots). With an
+  overlapping `transition_in` the set is simply there (the transition blends it in); the scene
+  before already holds its last picture instead of fading out. A render test measures it.
+- **Joining many crossfaded scenes** (`render/ffmpeg.py`): one `xfade` graph over 48 runs at
+  1080p was killed by the 3 GB cap (every input open at once, frames held for each). Over
+  `BLEND_BATCH` (8) runs, `_blend_batches` blends 8 runs at a time into lossless H.264
+  intermediates (`LOSSLESS_CODEC`, removed after the join), then blends those with the
+  transitions between batches: the same frames (a test compares batched and one-graph joins).
+- **Private film** (not code): `cartoon_arms: front`, `transition: {type: crossfade, duration:
+  0.5}` (the scene's fade-out and fade-in were ~0.85 s of each boundary: 7:40 → 7:14, narration
+  7:02), title and end cards 4 s; the first ride shot re-staged (phone booth and bus stop moved
+  off the road's front), a tall tower in front of the road left out of the two later ride sets (it hid the pod for
+  seconds), one set without the far side of the city (memory), one zoom raised to 2.0.
+- **Left for later**: a lit 36 x 36 city zoomed to ~1.5 at 1080p still grows to ~3 GB over an
+  11 s scene (a shot zoomed 1.45–1.6 was killed; at 2.0 it renders in 146 s); the side view is the
+  only non-front view (no true profile); a far arm swinging forward crosses the torso in front.
+- **Public**: config `cartoon_arms`, `look.arms`; `vidgen.api.character(..., arms=)` takes the
+  stage's default (the video's and the look's win). No other new `vidgen.api` names.

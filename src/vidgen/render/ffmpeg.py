@@ -311,19 +311,20 @@ def join(
             run_list = work_dir / f"video_concat_{k}.txt"
             write_concat_list([videos[i] for i in group], run_list)
             inputs += ["-f", "concat", "-safe", "0", "-i", str(run_list)]
-        blends, label = crossfade_graph(
-            [sum(frames[i] for i in group) for group in groups],
-            [crossfades[g[0] - 1] for g in groups[1:]],
-            fps,
-            [kinds[g[0] - 1] for g in groups[1:]] if kinds else None,
-        )
+        runs = [sum(frames[i] for i in group) for group in groups]
+        blends_at = [crossfades[g[0] - 1] for g in groups[1:]]
+        kinds_at = [kinds[g[0] - 1] for g in groups[1:]] if kinds else None
+        if len(groups) > BLEND_BATCH:   # many runs: blended a batch at a time (memory, §110)
+            inputs, runs, blends_at, kinds_at = _blend_batches(ffmpeg, inputs, runs, blends_at, kinds_at, fps, work_dir)
+        blends, label = crossfade_graph(runs, blends_at, fps, kinds_at)
+        video_inputs = inputs.count("-i")
         graph += blends
         for clip, _ in overlays or []:
             inputs += ["-i", str(clip)]
-        drawn, label = overlay_graph(label, [(len(groups) + k, start) for k, (_, start) in enumerate(overlays or [])], fps)
+        drawn, label = overlay_graph(label, [(video_inputs + k, start) for k, (_, start) in enumerate(overlays or [])], fps)
         graph += drawn
         video_map, video_codec = f"[{label}]", ["-c:v", "libx264", "-crf", VIDEO_CRF, "-pix_fmt", "yuv420p"]
-        first_audio = len(groups) + len(overlays or [])
+        first_audio = video_inputs + len(overlays or [])
     else:
         video_list = work_dir / "video_concat.txt"
         write_concat_list(videos, video_list)
@@ -340,19 +341,60 @@ def join(
     if language is not None:
         tagging += ["-metadata:s:a:0", f"language={language}"]
     filters = ["-filter_complex", ";".join(graph)] if graph else []
-    _write_video(
-        ffmpeg,
-        [
-            *inputs,
-            *filters,
-            "-map", video_map, "-map", audio_map,
-            *video_codec, "-c:a", "aac", "-b:a", audio_bitrate, "-ar", str(AUDIO_RATE),
-            *tagging,
-            "-movflags", "+faststart",
-        ],
-        dst,
-        f"joining the scenes into {dst.name}",
-    )
+    try:
+        _write_video(
+            ffmpeg,
+            [
+                *inputs,
+                *filters,
+                "-map", video_map, "-map", audio_map,
+                *video_codec, "-c:a", "aac", "-b:a", audio_bitrate, "-ar", str(AUDIO_RATE),
+                *tagging,
+                "-movflags", "+faststart",
+            ],
+            dst,
+            f"joining the scenes into {dst.name}",
+        )
+    finally:
+        for part in work_dir.glob("blend_*.mp4"):   # the batches' lossless videos (:func:`_blend_batches`)
+            part.unlink(missing_ok=True)
+
+
+#: Most runs (scenes joined by cuts) one ``xfade`` graph blends: every input is open at once and
+#: the graph holds frames of each, so 48 crossfaded 1080p scenes took over 3 GB (DESIGN.md §110).
+#: More are blended a batch at a time into lossless intermediate videos, then those.
+BLEND_BATCH = 8
+#: The intermediate videos' encoding: lossless H.264 (the same pictures as one graph gives).
+LOSSLESS_CODEC: tuple[str, ...] = ("-c:v", "libx264", "-qp", "0", "-preset", "ultrafast", "-pix_fmt", "yuv420p")
+
+
+def _blend_batches(
+    ffmpeg: str, inputs: list[str], runs: list[int], blends: list[int], kinds: list[str] | None, fps: int, work_dir: Path,
+) -> tuple[list[str], list[int], list[int], list[str] | None]:
+    """Blend the runs (``inputs``: the same number of arguments for each, ``runs`` frames, the
+    ``blends`` and ``kinds`` between them) :data:`BLEND_BATCH` at a time into lossless videos in
+    ``work_dir``: the inputs, runs, blends and kinds of those videos (the blends between batches
+    are left for the final graph, so the output has the same frames)."""
+    per_input = len(inputs) // len(runs)
+    out_inputs: list[str] = []
+    out_runs: list[int] = []
+    out_blends: list[int] = []
+    out_kinds: list[str] = []
+    for start in range(0, len(runs), BLEND_BATCH):
+        end = min(start + BLEND_BATCH, len(runs))
+        part = work_dir / f"blend_{start // BLEND_BATCH}.mp4"
+        graph, label = crossfade_graph(runs[start:end], blends[start:end - 1], fps, kinds[start:end - 1] if kinds else None)
+        run_ffmpeg(
+            ffmpeg,
+            [*inputs[start * per_input:end * per_input], "-filter_complex", ";".join(graph), "-map", f"[{label}]", *LOSSLESS_CODEC, str(part)],
+            f"blending scenes {start + 1}-{end} of the video",
+        )
+        if start:
+            out_blends.append(blends[start - 1])
+            out_kinds.append(kinds[start - 1] if kinds else "fade")
+        out_inputs += ["-i", str(part)]
+        out_runs.append(sum(runs[start:end]) - sum(blends[start:end - 1]))
+    return out_inputs, out_runs, out_blends, out_kinds if kinds else None
 
 
 def _audio_inputs(audio_list: Path, first: int, sfx: Path | None, mix: Path | None) -> tuple[list[str], list[str], str]:

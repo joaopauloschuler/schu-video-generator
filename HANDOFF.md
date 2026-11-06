@@ -24411,3 +24411,45 @@ project), repo work is generic.
   `test_lab_objects`, `test_cartoon_lighting`, `test_iso_vehicles`, `test_city_hud_echo`,
   `test_iso_story`, `test_iso_atmosphere`, `test_story_fx`, `test_cartoon_shots`, `test_iso_seats`
   passed. Frame baseline 33 frames, max difference 0.
+
+## Step 281 — Critical review, arms at the sides, final renders (Phase AE)
+
+- The owner's note: "In the characters, one of the arms is always looking in the background." The
+  generated side view (it reads as three-quarter) drew the far arm behind the body on the body's
+  edge, so a sliver showed past a coat. Built (DESIGN §110): `cartoon_arms: front | classic`
+  (video) and `look.arms` (a character; wins); `front` hangs the arms just clear of the body
+  (shoulder out to the edge, a lean out of at most 14°, computed from the body's outline) and draws
+  the side view's far arm over the body, under the near arm; default `front` on iso places with
+  `wide: fixed` (`stage_arms`), else `classic` (global default unchanged: switching it changes 25
+  of the 33 baseline stills, every one with a character; the owner decides). Crossfades / pushes /
+  wipes into a stage no longer dip to the background (the set comes in with the transition).
+  Many crossfaded scenes join in batches of 8 via lossless intermediates (one graph over 48
+  scenes at 1080p hit 3 GB).
+- Files: `cartoon/generator.py` (`ARM_STYLES`, `_arms`, `_arm_hang`, `_arm`), `cartoon/character.py`
+  (`look_key` / `look_parts` / `build_character` / `character` `arms`), `cartoon/still.py`,
+  `config.py` (`ArmStyle`, `CharacterLook.arms`, `cartoon_arms`), `scenes/stage.py`
+  (`stage_arms`, the entrance without the cover after an overlapping transition),
+  `render/ffmpeg.py` (`BLEND_BATCH`, `LOSSLESS_CODEC`, `_blend_batches`); docs CONFIG, guide
+  (+ `AGENTS.md`), DESIGN §110, CHANGELOG, tasklist (Phase AE done).
+- Public: config `cartoon_arms`, `look.arms`; `vidgen.api.character(..., arms=)`.
+- A private story project: the film re-rendered (48 scenes, 7:14, 1920x1080, −16.2 LUFS / −1.7 dBTP;
+  delivery copy 720p two-pass 26.8 MB, −16.3 LUFS / −1.2 dBTP after a peak limiter), crossfades
+  between all shots (the ride's dips gone: luma dips 80–100 → ≤ 4), the first ride shot
+  re-staged, the tower that hid the pod left out of the later ride sets, title / end 4 s; arms
+  sheet `/home/claude/work/scratch/s281/arms.png` (classic vs front: three-quarter idle, shrug,
+  point, two walk phases, front idle and walk, holding the scanner, holding hands; four film
+  characters and four old-style defaults), baseline before/after `s281/baseline_front.png`,
+  generator `s281/gen.py`, contact sheet `story-qc2/contact.png`, measurements
+  `s281/measure_final.csv`, scripts `s281/dips.py`, `small.py`, `loud.py`, `memprobe.py`.
+- Known gaps: a lit 36 x 36 city zoomed ~1.5x at 1080p grows to ~3 GB over 11 s (one shot
+  zoomed to 2.0 to fit); the side view is three-quarter (no profile), so a far arm swinging forward
+  crosses the torso; the arm lean is capped at 14°, a pear's hand may touch its hip;
+  `test_push_wipe_carry::test_overlay_rgba_composites_like_the_layer` fails (a fake layer lacks
+  `overlays`; pre-existing, untouched code); lint warnings of 280 unchanged.
+- Tests: `tests/test_arms_front.py` (18), `tests/test_join_batches.py` (2, one render); fixed the
+  Phase AD action lists in `test_actions.py` and `test_cartoon_sheet.py`; `test_cartoon_character`,
+  `test_cartoon_generator`, `test_cartoon_holding`, `test_cartoon_limbs`, `test_cartoon_outfits`,
+  `test_cartoon_poses`, `test_story_light_hands`, `test_kiss_display_props`,
+  `test_wall_lights_kiss`, `test_iso_staging`, `test_iso_story`, `test_iso_fixed_view`,
+  `test_retro_kit`, `test_transitions`, `test_schema`, `test_api`, `test_guide`, `test_docs` passed.
+  Frame baseline 33 frames, max difference 0.

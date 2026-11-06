@@ -36,12 +36,15 @@ from vidgen.cartoon.primitives import (
     clip_to_box,
     filled,
     outer_hair,
+    outline_polygon,
     outlined,
     point_at,
     polygon,
+    span_at,
     trailing,
 )
 from vidgen.config import SHELLED_SPECIES, SPECIES_WITHOUT_TAIL, CharacterLook
+from vidgen.errors import VidgenError
 
 #: Colour keys :func:`generate_parts` needs (the fields of ``characters[].colors``).
 COLOR_KEYS: tuple[str, ...] = ("skin", "clothes", "outline", "features", "hair", "accessory", "trim")
@@ -210,11 +213,64 @@ def _legs(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
     return parts
 
 
-def _arm(name: str, side: float, look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
+#: How a generated figure's arms hang (DESIGN.md §110): ``classic`` (on the body's edges; the far
+#: arm of the side view behind the body, a sliver of it showing) or ``front`` (both read as arms
+#: at the sides: hanging just clear of the body, the side view's far arm drawn over the body).
+ARM_STYLES: tuple[str, ...] = ("classic", "front")
+#: ``front`` arms: the gap between a hanging forearm and hand and the body (character units),
+#: how far the shoulder may sit out past the body's edge (× the limb's width), the most an arm
+#: leans out (degrees) and the far arm's draw order in the side view (over the body, under the
+#: near arm; upper, lower).
+ARM_GAP = 0.012
+ARM_SHOULDER_OUT = 0.35
+ARM_MAX_LEAN = 14.0
+FAR_ARM_ORDER: tuple[int, int] = (34, 35)
+
+
+def _arm_hang(body: list[Point], side: float, x: float, shoulder_y: float, length: float, beside: bool) -> tuple[float, float]:
+    """Where a ``front`` arm hangs: its shoulder's x (out to just past the body's edge when
+    ``beside``) and its lean out in degrees, the least that keeps the forearm and hand
+    :data:`ARM_GAP` clear of the ``body`` outline (``beside``), or the hand's middle at least on
+    the body's edge (the side view's near arm)."""
+    def edge(y: float) -> float | None:
+        span = span_at(body, y)
+        return None if span is None else (span[1] if side > 0 else -span[0])
+
+    out = abs(x)
+    if beside:
+        top_edge = edge(shoulder_y + 0.02 - LIMB_WIDTH / 2)
+        if top_edge is not None:
+            out = max(out, top_edge + ARM_SHOULDER_OUT * LIMB_WIDTH)
+    reaches = (0.75, 0.875, 1.0) if beside else (1.0,)
+    lean = 0.0
+    while lean < ARM_MAX_LEAN:
+        a = math.radians(lean)
+        clear = True
+        for share in reaches:
+            d = share * length
+            body_x = edge(shoulder_y - d * math.cos(a))
+            half = (0.045 if share == 1.0 else LIMB_WIDTH / 2) if beside else 0.0
+            if body_x is not None and out + d * math.sin(a) - half < body_x + (ARM_GAP if beside else 0.0):
+                clear = False
+                break
+        if clear:
+            break
+        lean += 0.5
+    return side * out, side * min(lean, ARM_MAX_LEAN)
+
+
+def _arm(
+    name: str, side: float, look: CharacterLook, f: Frame, c: Mapping[str, str], w: float,
+    hang: tuple[float, float] | None = None, order: tuple[int, int] | None = None,
+) -> list[CharacterPart]:
     """An arm in two segments: the upper sleeve turns about the shoulder, the forearm (sleeve or
-    bare arm, and hand) about the elbow half-way down; its end is the hand's middle."""
+    bare arm, and hand) about the elbow half-way down; its end is the hand's middle. ``hang``:
+    the shoulder's x and the lean out (degrees counterclockwise) of a ``front`` arm
+    (:func:`_arm_hang`); ``order``: the upper and lower segment's draw order."""
     p = f.p
     x, shoulder_y = side * p.body_width / 2 * SHOULDER_SHARES.get(look.body, 1.0), f.body_top - 0.08
+    if hang is not None:
+        x = hang[0]
     top, wrist = shoulder_y + 0.02 - LIMB_WIDTH / 2, shoulder_y + 0.02 - p.arm_length
     elbow = (top + wrist) / 2
     upper_color, lower_color, _, _ = limb_colors(look, c)
@@ -230,10 +286,42 @@ def _arm(name: str, side: float, look: CharacterLook, f: Frame, c: Mapping[str, 
         upper = VGroup(_segment(x, top, elbow, upper_color, c, w))
         hand = animals.paw(x, wrist, c, w) if animals.is_animal(look) else outlined(Circle(radius=0.045).move_to([x, wrist, 0]), c["skin"], c["outline"], w)
         lower = VGroup(_segment(x, elbow, wrist, lower_color, c, w), hand)
+    elbow_at, end_at = (x, elbow), (x, wrist)
+    if hang is not None and hang[1]:
+        about = np.array([x, shoulder_y, 0.0])
+        for drawn in (upper, lower):
+            drawn.rotate(math.radians(hang[1]), about_point=about)
+        a = math.radians(hang[1])
+
+        def turned(y: float) -> tuple[float, float]:
+            d = shoulder_y - y
+            return (x + d * math.sin(a), shoulder_y - d * math.cos(a))
+
+        elbow_at, end_at = turned(elbow), turned(wrist)
+    upper_order, lower_order = order if order is not None else (None, None)
     return [
-        CharacterPart(name, {"default": upper}, (x, shoulder_y)),
-        CharacterPart(f"{name}_lower", {"default": lower}, (x, elbow), end=(x, wrist)),
+        CharacterPart(name, {"default": upper}, (x, shoulder_y), order=upper_order),
+        CharacterPart(f"{name}_lower", {"default": lower}, elbow_at, end=end_at, order=lower_order),
     ]
+
+
+def _arms(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float, arms: str) -> list[CharacterPart]:
+    """Both arms in the ``arms`` style (:data:`ARM_STYLES`): ``arm_left`` (the near arm facing
+    right) and ``arm_right``."""
+    if arms == "classic":
+        return [*_arm("arm_left", 1.0, look, f, c, w), *_arm("arm_right", -1.0, look, f, c, w)]
+    if arms not in ARM_STYLES:
+        raise VidgenError(f"arms must be one of {', '.join(ARM_STYLES)}, not {arms!r}")
+    p = f.p
+    body = outline_polygon(_body_shape(look, f))
+    shoulder_y = f.body_top - 0.08
+    made = []
+    for name, side in (("arm_left", 1.0), ("arm_right", -1.0)):
+        x = side * p.body_width / 2 * SHOULDER_SHARES.get(look.body, 1.0)
+        far = side < 0 and not f.front
+        hang = _arm_hang(body, side, x, shoulder_y, p.arm_length - 0.02, beside=f.front or far)
+        made += _arm(name, side, look, f, c, w, hang, FAR_ARM_ORDER if far else None)
+    return made
 
 
 def _hair_cap(look: CharacterLook, f: Frame) -> VMobject:
@@ -611,13 +699,14 @@ def _worn_on_head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float)
 
 def generate_parts(
     look: CharacterLook, colors: Mapping[str, str], *, outline_width: float = OUTLINE_WIDTH, front: bool = False,
+    arms: str = "classic",
 ) -> list[CharacterPart]:
     """The parts of the figure ``look`` describes, in character units with its top at 1.
     ``colors`` maps every key of :data:`COLOR_KEYS` to a Manim colour (``trim`` may be left out
     for an outfit that does not use it); ``outline_width`` is the stroke width of outlines and
     feature lines (the :class:`Character` scales it with its height); ``front``: its front view,
-    the same parts and shapes seen from the front (DESIGN.md §69.44). The same look always gives
-    the same shapes."""
+    the same parts and shapes seen from the front (DESIGN.md §69.44); ``arms``: how the arms
+    hang (:data:`ARM_STYLES`, DESIGN.md §110). The same look always gives the same shapes."""
     f = animals.species_frame(look, Frame.of(resolve_proportions(look), front))
     w = outline_width
     body = body_shapes(look, f, _body_shape(look, f), colors, w)
@@ -634,8 +723,7 @@ def generate_parts(
     parts = [
         *_legs(look, f, colors, w),
         CharacterPart("body", body, (0.0, f.body_bottom + 0.02)),
-        *_arm("arm_left", 1.0, look, f, colors, w),
-        *_arm("arm_right", -1.0, look, f, colors, w),
+        *_arms(look, f, colors, w, arms),
         CharacterPart("head", {"default": head}, (0.0, f.body_top - 0.02)),
         *_face(look, f, robots.face_colors(look, colors), w),
         expression_shapes.bristles_part(look, f, float(head.get_top()[1]) - f.head_y, colors, w),
@@ -680,6 +768,7 @@ def _scaled_to_unit_height(parts: list[CharacterPart]) -> list[CharacterPart]:
 
 
 __all__ = [
+    "ARM_STYLES",
     "BODY_SIZES",
     "COLOR_KEYS",
     "EXPRESSION_ONLY",
