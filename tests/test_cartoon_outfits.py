@@ -62,13 +62,14 @@ def _number_bytes(values: Any) -> bytes:
     return array.tobytes()
 
 
-def drawing_digest(look: CharacterLook, *, front: bool = False) -> str:
+def drawing_digest(look: CharacterLook, *, front: bool = False, arms: str = "classic") -> str:
     """A digest of everything the generator draws for ``look``: every part's name, pivot, end,
     parent, order and shapes, each drawn member's points, fill, stroke and trailing mark; the
     Step 125 parts and shapes (``EXPRESSION_ONLY``, added after every earlier shape) left out,
-    so the pins taken before it still hold for everything drawn before it."""
+    so the pins taken before it still hold for everything drawn before it. ``arms``: ``classic``
+    (the arms of the pins; the default is ``front`` since Step 282, DESIGN.md §110)."""
     digest = hashlib.sha256()
-    for part in generate_parts(look, PIN_COLORS, front=front):
+    for part in generate_parts(look, PIN_COLORS, front=front, arms=arms):
         new_shapes = EXPRESSION_ONLY.get(part.name, frozenset())
         if set(part.shapes) <= new_shapes:
             continue
@@ -92,6 +93,7 @@ def drawing_digest(look: CharacterLook, *, front: bool = False) -> str:
 def test_looks_made_before_keep_their_drawings(name: str) -> None:
     look = CharacterLook(**PINNED_LOOKS[name])
     assert (drawing_digest(look), drawing_digest(look, front=True)) == PINNED_DIGESTS[name]
+    assert drawing_digest(look, arms="front") != PINNED_DIGESTS[name][0]   # the default since Step 282
 
 
 # ----- sampled combinations ---------------------------------------------------------------------

@@ -454,6 +454,7 @@ class NarratedScene(MovingCameraScene):
         self.host = build_host(
             setting, find_character(cfg, setting.character), theme=self.theme, area=(area.x0, area.y0, area.x1, area.y1),
             frame_width=self.frame_width, frame_height=self.frame_height, root=self.project.root, motion=cfg.cartoon_motion,
+            arms=cfg.cartoon_arms,
         )
         if self.is_draft:   # no breathing, swaying or blinking (DESIGN.md §74)
             self.host.character.stop_idle()

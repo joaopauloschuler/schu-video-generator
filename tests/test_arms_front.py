@@ -1,17 +1,19 @@
-"""Step 281: arms that read as arms at the sides (``look.arms`` / ``cartoon_arms``, DESIGN.md §110)."""
+"""Steps 281-282: arms that read as arms at the sides (``look.arms`` / ``cartoon_arms``, DESIGN.md
+§110), the default since Step 282; ``classic`` is the opt-out."""
 
 from __future__ import annotations
+
+import hashlib
 
 import numpy as np
 import pytest
 
 from conftest import minimal_config
 from vidgen.cartoon.character import build_character
-from vidgen.cartoon.generator import ARM_GAP, ARM_STYLES, FAR_ARM_ORDER, generate_parts
+from vidgen.cartoon.generator import ARM_GAP, ARM_STYLES, DEFAULT_ARMS, FAR_ARM_ORDER, generate_parts
 from vidgen.cartoon.primitives import outline_polygon, span_at
 from vidgen.config import CharacterEntry, CharacterLook, parse_config
 from vidgen.errors import VidgenError
-from vidgen.scenes.stage import StageIso, stage_arms
 from vidgen.theme import Theme
 
 COLORS = {"skin": "#E8B98F", "clothes": "#4F6A9E", "outline": "#222222", "features": "#222222", "hair": "#2B2018",
@@ -91,7 +93,7 @@ def test_the_far_arm_is_drawn_over_the_body_and_under_the_near_arm() -> None:
     order = c.submobjects
     index = {name: order.index(part) for name, part in c.parts.items()}
     assert index["body"] < index["arm_right"] < index["arm_right_lower"] < index["arm_left"]
-    classic = build_character(CharacterEntry(name="m", look=LOOKS["suit"]), theme=Theme())
+    classic = build_character(CharacterEntry(name="m", look=LOOKS["suit"]), theme=Theme(), arms="classic")
     index = {name: classic.submobjects.index(part) for name, part in classic.parts.items()}
     assert index["arm_right"] < index["body"] < index["arm_left"]
     c.face("front")
@@ -100,11 +102,31 @@ def test_the_far_arm_is_drawn_over_the_body_and_under_the_near_arm() -> None:
     assert FAR_ARM_ORDER[0] > 30
 
 
+def _rounded(point: tuple[float, float] | None) -> tuple[float, ...] | None:
+    return None if point is None else tuple(round(v, 4) + 0.0 for v in point)
+
+
+def parts_digest(arms: str) -> str:
+    """A digest of every part (name, pivot, end, order, all shape points to 1e-4) of the looks of
+    :data:`LOOKS`, side and front views, drawn with ``arms``."""
+    digest = hashlib.sha256()
+    for name in sorted(LOOKS):
+        for front in (False, True):
+            for part in generate_parts(LOOKS[name], COLORS, front=front, arms=arms):
+                digest.update(repr((part.name, _rounded(part.pivot), _rounded(part.end), part.order)).encode())
+                for key in sorted(part.shapes):
+                    for member in part.shapes[key].get_family():
+                        digest.update((np.round(member.points, 4) + 0.0).tobytes())
+    return digest.hexdigest()
+
+
+#: :func:`parts_digest` of ``classic`` at Step 281 (db69328), when ``classic`` was the default.
+CLASSIC_DIGEST = "74186fcf00744e83fedce63fdbb936ec5e10c911050ff3622844f72c4f482653"
+
+
 def test_classic_is_the_drawing_of_before() -> None:
-    for look in LOOKS.values():
-        old, new = generate_parts(look, COLORS), generate_parts(look, COLORS, arms="classic")
-        for a, b in zip(old, new):
-            assert a.name == b.name and a.pivot == b.pivot and a.end == b.end and a.order == b.order
+    assert parts_digest("classic") == CLASSIC_DIGEST
+    assert parts_digest("front") != CLASSIC_DIGEST
 
 
 def test_a_leaning_arm_still_reaches_its_point() -> None:
@@ -115,22 +137,39 @@ def test_a_leaning_arm_still_reaches_its_point() -> None:
     assert np.allclose(c.hand_point("right")[:2], target[:2], atol=1e-6)
 
 
-def test_the_look_wins_over_the_video_and_the_stage() -> None:
+def test_the_look_wins_over_the_video() -> None:
     entry = CharacterEntry(name="m", look=CharacterLook(body="tall", arms="classic"))
     a = build_character(entry, theme=Theme(), arms="front")
     b = build_character(CharacterEntry(name="m", look=CharacterLook(body="tall")), theme=Theme(), arms="front")
     assert a.limb_rest("arm_right")[0] != b.limb_rest("arm_right")[0]
     assert build_character(entry, theme=Theme()).limb_rest("arm_right")[0] == a.limb_rest("arm_right")[0]
+    front = CharacterEntry(name="m", look=CharacterLook(body="tall", arms="front"))
+    assert build_character(front, theme=Theme(), arms="classic").limb_rest("arm_right")[0] == b.limb_rest("arm_right")[0]
 
 
-def test_the_settings_parse_and_the_fixed_iso_view_defaults_to_front() -> None:
-    assert ARM_STYLES == ("classic", "front")
-    config = parse_config(minimal_config(cartoon_arms="front"))
-    assert config.cartoon_arms == "front"
+def test_front_is_the_default_and_classic_opts_out() -> None:
+    assert ARM_STYLES == ("classic", "front") and DEFAULT_ARMS == "front"
+    assert parts_digest(DEFAULT_ARMS) == parts_digest("front")
+    plain = CharacterEntry(name="m", look=CharacterLook(body="tall"))
+    default, front = build_character(plain, theme=Theme()), build_character(plain, theme=Theme(), arms="front")
+    classic = build_character(plain, theme=Theme(), arms="classic")
+    assert default.limb_rest("arm_right")[0] == front.limb_rest("arm_right")[0] != classic.limb_rest("arm_right")[0]
+    assert parse_config(minimal_config()).cartoon_arms is None   # unset: front
+    assert parse_config(minimal_config(cartoon_arms="classic")).cartoon_arms == "classic"
     with pytest.raises(Exception):
         CharacterLook(arms="behind")
     with pytest.raises(VidgenError, match="arms must be one of"):
         generate_parts(CharacterLook(), COLORS, arms="behind")
-    assert stage_arms(None) is None
-    assert stage_arms(StageIso(map="...\n...\n...", wide="fixed")) == "front"
-    assert stage_arms(StageIso(map="...\n...\n...")) is None
+
+
+@pytest.mark.parametrize("arms", [None, "classic"])
+def test_cartoon_arms_reaches_the_host_and_api_character(make_project, arms: str | None) -> None:
+    from test_host import built_scene, config
+    from vidgen.api import character
+
+    root = make_project(config(host="dot", **({} if arms is None else {"cartoon_arms": arms})))
+    expected = {name: build_character(CharacterEntry(name=name), theme=Theme(), arms=arms or "front").limb_rest("arm_right")[0]
+                for name in ("dot", "kit")}
+    host = built_scene(root, (160, 90))[0].host.character   # the project stays active
+    assert host.limb_rest("arm_right")[0] == expected["dot"]
+    assert character("kit").limb_rest("arm_right")[0] == expected["kit"]   # a stage's cast is drawn by it

@@ -525,7 +525,7 @@ class CharacterLook(_Strict):
     seed: int | None = None
     """A number that varies the proportions a little (same seed, same figure); none: no variation."""
     arms: ArmStyle | None = None
-    """How the arms hang: front (both read as arms at the sides, just clear of the body; the far arm of the side view is drawn over the body) or classic (on the body's edges, the far arm behind the body); wins over the video's cartoon_arms; default: front on an iso place with wide: fixed, else classic."""
+    """How the arms hang: front (both read as arms at the sides, just clear of the body; the far arm of the side view is drawn over the body) or classic (on the body's edges, the far arm behind the body); wins over the video's cartoon_arms; default front."""
     svg: str | None = Field(default=None, min_length=1)
     """An SVG file (relative to the project folder; best under assets/) drawn instead of the generator: parts by id (head, mouth, arm_left, mouth_A, ...), data-pivot="x y"."""
 
@@ -3078,7 +3078,7 @@ class VideoConfig(_Strict):
     cartoon_motion: MotionSetting | None = None
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
     cartoon_arms: ArmStyle | None = None
-    """How every generated character's arms hang: front (both read as arms at the sides, just clear of the body) or classic (on the body's edges, the far arm of the side view behind the body); a character's look.arms wins; default: front on iso places with wide: fixed, else classic."""
+    """How every generated character's arms hang: front (both read as arms at the sides, just clear of the body) or classic (on the body's edges, the far arm of the side view behind the body); a character's look.arms wins; default front."""
     motion_effects: bool = True
     """Motion effects on stage scenes, added on their own while cartoon_motion is lively or calm (smaller): dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture; false: none (a stage's motion_effects param wins)."""
     drawing: DrawingConfig | None = None

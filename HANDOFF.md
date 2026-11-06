@@ -24453,3 +24453,8 @@ project), repo work is generic.
   `test_wall_lights_kiss`, `test_iso_staging`, `test_iso_story`, `test_iso_fixed_view`,
   `test_retro_kit`, `test_transitions`, `test_schema`, `test_api`, `test_guide`, `test_docs` passed.
   Frame baseline 33 frames, max difference 0.
+
+## Step 282 — Arms at the sides by default (committed untested)
+
+- The owner decided that front arms are the default everywhere: generator.DEFAULT_ARMS = front; stage.stage_arms removed; cartoon_arms: classic or look.arms: classic opt out; the scene host follows cartoon_arms. Gallery character entries re-rendered; DESIGN 110.1, CONFIG, guide, CHANGELOG updated.
+- NOT TESTED: the owner asked for the code change without tests (no time). Next step must run the character, cartoon and iso suites, test_arms_front, test_mcp.py in full, and the frame baseline in /home/claude/work/scratch/baseline (expect 25 of 33 stills to change, arms only; then keep the old frames as frames_classic and remake the references).

@@ -782,12 +782,6 @@ class IsoFixedWide(SceneParams):
     """How many tile widths (one cell's diamond) fit across the frame's width (16:9 at character_size medium: about 11; 9:16: about 3.4)."""
 
 
-def stage_arms(iso: "StageIso | None") -> str | None:
-    """How a stage's characters' arms hang unless their look or the video says (DESIGN.md
-    §110): ``front`` on an iso place with the fixed wide view, else ``None`` (``classic``)."""
-    return "front" if iso is not None and iso.fixed else None
-
-
 def _iso_wide_given(iso: Any) -> str | None:
     """``fixed`` when an ``iso`` param (a mapping or a :class:`StageIso`) asks for ``wide:
     fixed``, ``tiles`` for ``wide: {tiles: N}``, else ``None`` (DESIGN.md §106)."""
@@ -2310,7 +2304,7 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
                 continue
             member = members[place_at.name]
             facing = facing_towards_centre(place_at.x_fraction) if member.facing in ("auto", "front") else member.facing
-            figure = character(member.name, height=place_at.height, facing=facing, motion=p.cartoon_motion, arms=stage_arms(p.iso))
+            figure = character(member.name, height=place_at.height, facing=facing, motion=p.cartoon_motion)
             if member.facing == "front":
                 figure.face("front")   # an SVG character keeps its side, towards the middle (§69.44)
             figure.stage_depth, figure.ground_y = place_at.depth, self.grounds[place_at.name]

@@ -21007,13 +21007,14 @@ arms in front, on the body's edges.
   forward or reaching across now shows over the torso (a three-quarter body's far side faces the
   viewer) and crossed arms read as crossed. `classic` is the drawing of before (the same parts,
   pivots, ends and orders; a test checks it).
-- **Defaults**: a character's `look.arms`, else the video's `cartoon_arms`, else the stage's
-  (`stage.stage_arms`: `front` on an iso place with the fixed wide view), else `classic`. The
-  look cache key (`look_key`) has the style. The character sheet follows `cartoon_arms`.
-- **Global default kept `classic`**: with `front` everywhere, 25 of the 33 baseline stills change
-  (every still with a character: `yard` 9, `meadow` 16; the 8 `gradient-descent` stills have
-  none), max difference 225; the change is the arms only (sheet `s281/baseline_front.png`,
-  private). The owner decides.
+- **Defaults** (as changed by Step 282, §110.1): a character's `look.arms`, else the video's
+  `cartoon_arms`, else `front` (`generator.DEFAULT_ARMS`). The look cache key (`look_key`) has
+  the style. The character sheet follows `cartoon_arms`. (Step 281 made `front` the default only
+  on iso places with the fixed wide view, `stage.stage_arms`, else `classic`.)
+- **Global default at Step 281 kept `classic`**: with `front` everywhere, 25 of the 33 baseline
+  stills change (every still with a character: `yard` 9, `meadow` 16; the 8 `gradient-descent`
+  stills have none), max difference 225; the change is the arms only (sheet
+  `s281/baseline_front.png`, private). The owner decided for `front` (§110.1).
 - **Crossfades into a stage** (`Stage` entrance): the set faded in from its background colour
   under a cover even when a crossfade / push / wipe brought the scene in, so consecutive shots
   of one place dipped (mean luma 80–100 down to ~37 between the ride's shots). With an
@@ -21033,4 +21034,20 @@ arms in front, on the body's edges.
   11 s scene (a shot zoomed 1.45–1.6 was killed; at 2.0 it renders in 146 s); the side view is the
   only non-front view (no true profile); a far arm swinging forward crosses the torso in front.
 - **Public**: config `cartoon_arms`, `look.arms`; `vidgen.api.character(..., arms=)` takes the
-  stage's default (the video's and the look's win). No other new `vidgen.api` names.
+  caller's default (the video's and the look's win). No other new `vidgen.api` names.
+
+### 110.1 `front` is the default everywhere (Step 282)
+
+The owner's decision: every generated character hangs both arms at its sides unless told
+otherwise. `generator.DEFAULT_ARMS = "front"` is the default of `generate_parts`, `look_parts` /
+`look_key` and `build_character`; `stage.stage_arms` is gone (no stage-specific rule is left).
+`classic` stays as the opt-out (`cartoon_arms: classic` or `look: {arms: classic}`) and draws
+exactly as before: the Step 113 drawing pins (`test_cartoon_outfits`) and a Step 281 digest
+(`test_arms_front`) are checked with `arms="classic"`. Every place that draws a generated
+character passes the video's `cartoon_arms`: `api.character` (stages and custom scenes), the
+stills and the character sheet, and now the scene host (`build_host(..., arms=)`, which before
+drew `classic` whatever the video said); the look gallery still (`write_looks_png`, §69.47)
+takes the default unless a look says. A visible change for every existing video with characters: the
+frame baseline was remade (25 of 33 stills differ, arms only), and the gallery's character
+entries (`stage` and the nine cartoon / iso showcases) were rendered again. Pre-made SVG
+characters are untouched.

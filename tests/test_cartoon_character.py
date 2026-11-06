@@ -55,7 +55,12 @@ def test_part_tree_and_draw_order() -> None:
     limbs = {"arm_left_lower", "arm_right_lower", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower"}
     faces = {"cheeks", "bristles"}   # Step 125
     assert set(c.parts) == {*REQUIRED_PARTS, *limbs, *faces} and not c.has_part("accessory") and not c.has_part("legs")
-    assert c.draw_order == [
+    assert c.draw_order == [   # arms: front (the default since Step 282): the far arm over the body, under the near arm
+        "leg_right", "leg_right_lower", "leg_left", "leg_left_lower", "body", "arm_right", "arm_right_lower",
+        "arm_left", "arm_left_lower", "bristles", "head", "cheeks", "eyes", "mouth", "brows",
+    ]
+    classic = Character(generate_parts(CharacterLook(), COLORS, arms="classic"), name="tester")
+    assert classic.draw_order == [
         "arm_right", "arm_right_lower", "leg_right", "leg_right_lower", "leg_left", "leg_left_lower", "body",
         "arm_left", "arm_left_lower", "bristles", "head", "cheeks", "eyes", "mouth", "brows",
     ]

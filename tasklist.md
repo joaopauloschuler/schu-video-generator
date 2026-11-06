@@ -1668,6 +1668,9 @@ private (scratchpad); repo work stays generic. No AI API calls; Kokoro only.
 ### Step 281 — Critical review
 - [x] Review fixes and final renders (7:14, −16.2 LUFS; delivery copy 26.8 MB): the owner's note "one of the arms is always in the background" — `cartoon_arms` / `look.arms: front | classic` (front: both arms clear at the sides, the far arm over the body; the default on iso places with `wide: fixed`, global default unchanged); crossfades into a stage no longer dip to the background; many crossfaded scenes joined a batch at a time (memory); the ride re-staged (pod no longer hidden), crossfades between shots; tests `test_arms_front.py`, `test_join_batches.py`; `test_actions` / `test_cartoon_sheet` lists of the Phase AD actions
 
+### Step 282 — Arms at the sides by default
+- [~] The owner's decision: `arms: front` is the default everywhere (`generator.DEFAULT_ARMS`; `stage_arms` removed); `cartoon_arms: classic` / `look.arms: classic` opt out; the scene host follows `cartoon_arms`; gallery character entries (`stage`, nine showcases) re-rendered; docs (DESIGN §110.1, CONFIG, guide, CHANGELOG). **Committed untested at the owner's request (no time):** the test suites, `tests/test_mcp.py` and the frame baseline (expect 25 of 33 stills to change, arms only; then remake the references) still have to be run in a later step
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

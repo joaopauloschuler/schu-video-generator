@@ -65,8 +65,13 @@ class HostFigure(VGroup):
         return self.character.name
 
 
-def _posed(entry: CharacterEntry, host: HostConfig, theme: Theme, root: Path | None, motion: str | None, height: float, facing: str) -> Character:
-    figure = build_character(entry, theme=theme, height=height, facing="right" if facing == "front" else facing, root=root, motion=motion)
+def _posed(
+    entry: CharacterEntry, host: HostConfig, theme: Theme, root: Path | None, motion: str | None, height: float, facing: str,
+    arms: str | None,
+) -> Character:
+    figure = build_character(
+        entry, theme=theme, height=height, facing="right" if facing == "front" else facing, root=root, motion=motion, arms=arms,
+    )
     if facing == "front":
         figure.face("front")   # an SVG character has no front view and keeps its side
     if host.pose is not None:
@@ -86,13 +91,15 @@ def build_host(
     frame_height: float,
     root: Path | None = None,
     motion: str | None = None,
+    arms: str | None = None,
 ) -> HostFigure:
     """The host ``host`` (its character ``entry``, coloured with ``theme``) standing in ``area``
-    (the scene's safe area without the overlays' reserved room) of the frame."""
+    (the scene's safe area without the overlays' reserved room) of the frame; ``arms``: the
+    video's ``cartoon_arms`` (DESIGN.md §110)."""
     facing = facing_for(host.side, host.facing)
-    probe = _posed(entry, host, theme, root, motion, REFERENCE_HEIGHT, facing)
+    probe = _posed(entry, host, theme, root, motion, REFERENCE_HEIGHT, facing, arms)
     layout = host_layout(area, frame_width, frame_height, host, probe.width / REFERENCE_HEIGHT)
-    figure = _posed(entry, host, theme, root, motion, layout.height, layout.facing)
+    figure = _posed(entry, host, theme, root, motion, layout.height, layout.facing, arms)
     # the drawing's middle (not the feet: an arm held out moves it) on the column's middle
     figure.shift([layout.feet[0] - figure.get_center()[0], layout.feet[1] - figure.feet()[1], 0.0])
     floor = None

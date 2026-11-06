@@ -2084,9 +2084,9 @@ asks for one, say schu-video-generator makes original characters and offer one w
   (`docs/CONFIG.md` "Robots and costumes"). `vidgen character-sheet` shows every pose and the front view. `vidgen cast --random 4
   [--seed S] [--species cat dog]` writes a cast chosen to differ (looks, colours, voice kinds
   and voices, original names) for `include:`; lint `look_alike` warns when two look too alike.
-- Arms: `cartoon_arms: front` (or a look's `arms: front`) hangs both arms clear at the sides, the
-  far arm drawn over the body (the default on iso places with `wide: fixed`); `classic` hides
-  most of the side view's far arm behind the body.
+- Arms: by default (`front`) both arms hang clear at the sides, the far arm drawn over the body;
+  `cartoon_arms: classic` (or a look's `arms: classic`) keeps the older look, most of the side
+  view's far arm hidden behind the body.
 - Give each a want and a temper (the eager one, the doubter); their starting `pose` and
   `expression` say it before they speak. Short names, easy to say (the voice says them).
 - One voice each (`voices:` + `characters[].voice`), clearly different; keep the narrator's

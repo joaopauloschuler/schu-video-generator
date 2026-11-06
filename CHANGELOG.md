@@ -5,11 +5,17 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–281)
+## Unreleased (Steps 193–282)
+
+### Arms at the sides by default (Step 282)
+
+- **Visible change:** characters now hang both arms at their sides by default; set `cartoon_arms: classic` for the old look (or `look: {arms: classic}` for one character). Every existing video with generated characters looks slightly different (the arms only); `classic` draws exactly as before.
+- A scene host (`host:`) follows `cartoon_arms` too (it was always drawn the old way).
+- The gallery's character entries (`stage` and the cartoon and iso showcases) are rendered again with the new arms.
 
 ### Arms at the sides, smooth crossfades between stage scenes (Step 281)
 
-- `cartoon_arms: front` (video) or `look: {arms: front}` (a character): both arms read as arms at the sides, hanging just clear of the body; the far arm of the side view is drawn over the body (under the near arm) instead of behind it, where only a sliver showed. The default on iso places with `wide: fixed`; elsewhere `classic` (as before) unless set.
+- `cartoon_arms: front` (video) or `look: {arms: front}` (a character): both arms read as arms at the sides, hanging just clear of the body; the far arm of the side view is drawn over the body (under the near arm) instead of behind it, where only a sliver showed. The default on iso places with `wide: fixed`; elsewhere `classic` (as before) unless set (since Step 282: `front` everywhere).
 - A crossfade, push or wipe into a `stage` scene no longer passes through the background colour: the set comes in with the transition.
 - Videos with many crossfaded scenes join in less memory (a batch of runs at a time, the same pictures).
 

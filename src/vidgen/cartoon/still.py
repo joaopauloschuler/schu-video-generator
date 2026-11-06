@@ -341,7 +341,7 @@ def _section_pictures(
     }
     pictures = []
     with tempconfig(settings):
-        probe = build_character(entry, theme=theme, height=1.0, root=project.root)
+        probe = build_character(entry, theme=theme, height=1.0, root=project.root, arms=project.config.cartoon_arms)
         whole = section.kind in WHOLE_FIGURE_KINDS
         if whole:
             sizes = [(_show_whole(probe, section.kind, name).width, probe.height) for name in section.names]

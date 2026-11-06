@@ -217,6 +217,9 @@ def _legs(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
 #: arm of the side view behind the body, a sliver of it showing) or ``front`` (both read as arms
 #: at the sides: hanging just clear of the body, the side view's far arm drawn over the body).
 ARM_STYLES: tuple[str, ...] = ("classic", "front")
+#: How the arms hang unless a look or the video says (DESIGN.md §110.1, Step 282: ``front``
+#: everywhere; ``classic`` is the opt-out).
+DEFAULT_ARMS = "front"
 #: ``front`` arms: the gap between a hanging forearm and hand and the body (character units),
 #: how far the shoulder may sit out past the body's edge (× the limb's width), the most an arm
 #: leans out (degrees) and the far arm's draw order in the side view (over the body, under the
@@ -699,7 +702,7 @@ def _worn_on_head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float)
 
 def generate_parts(
     look: CharacterLook, colors: Mapping[str, str], *, outline_width: float = OUTLINE_WIDTH, front: bool = False,
-    arms: str = "classic",
+    arms: str = DEFAULT_ARMS,
 ) -> list[CharacterPart]:
     """The parts of the figure ``look`` describes, in character units with its top at 1.
     ``colors`` maps every key of :data:`COLOR_KEYS` to a Manim colour (``trim`` may be left out
@@ -771,6 +774,7 @@ __all__ = [
     "ARM_STYLES",
     "BODY_SIZES",
     "COLOR_KEYS",
+    "DEFAULT_ARMS",
     "EXPRESSION_ONLY",
     "EYE_WHITE",
     "LIMB_WIDTH",
