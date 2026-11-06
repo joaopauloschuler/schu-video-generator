@@ -3961,7 +3961,7 @@ audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
 | `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
 | `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
 | `bitrate` | `192k` | AAC bitrate of the video's audio: `128k`, `160k`, `192k`, `256k`, `320k`. A loud, dense mix (a Short at −14 LUFS) can come out of FFmpeg's AAC encoder at 192k several dB over `true_peak` (measured: −1.9 dBTP in the mix, +1.9 in the MP4); at 256k it stayed at −1.6. Check the MP4 (`ffmpeg -i out.mp4 -af ebur128=peak=true -f null -`) |
-| `level_voice` | — | a gentle leveller on the voices before the limiter: 3:1 (6 dB soft knee) above the voices' usual peak + 8 dB, 50 ms ramps. Only the loudest syllables come down (by ~0.4 dB on average where it acts), so the limiter barely works: raising the kphi3 narration to −16 LUFS, the limiter's deepest cut fell from 5.2 to 0.7 dB. `true` / `false`; unset: on in audio-only renders with the `podcast` or `audiobook` [preset](#audio-files-audio_output-loudness-presets-transcripts), off otherwise (a video's mix is unchanged unless you set it) |
+| `level_voice` | — | a gentle leveller on the voices before the limiter: 3:1 (6 dB soft knee) above the voices' usual peak + 8 dB, 50 ms ramps. Only the loudest syllables come down (by ~0.4 dB on average where it acts), so the limiter barely works: raising the kphi3 narration to −16 LUFS, the limiter's deepest cut fell from 5.2 to 0.7 dB. `true` / `false`; unset: on in audio-only renders with the `podcast`, `audiobook` or `drama` [preset](#audio-files-audio_output-loudness-presets-transcripts), off otherwise (a video's mix is unchanged unless you set it) |
 
 When the mix is written (music, or `normalize: true`) schu-video-generator measures the sum, applies one gain to
 reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
@@ -4106,12 +4106,14 @@ audio_output: {format: mp3, bitrate: 192k, channels: mono, sample_rate: 44100, l
 | `loudness` | `none` | a preset (below); `none`: the `audio:` settings as they are |
 | `room_tone` | — | dBFS RMS (−90 to −55, e.g. `-72`) of a faint, steady pink noise under the whole file, so pauses are not digital silence |
 | `transcripts` | `true` | `txt`, `srt`, `vtt`, `chapters` (a list), `true` all, `false` none |
+| `split` | `none` | `chapters`: one file per chapter ([delivery](#delivering-an-audio-drama-split-credits-cold_open)) |
 
 | preset | the file must measure | the mix aims for |
 |---|---|---|
 | `podcast` | −16 LUFS stereo / −19 mono (±1 LU), true peak ≤ −1 dBTP | that loudness, limiter −1.5 dBTP, `level_voice` on |
 | `audiobook` | ACX: RMS −23 to −18 dB, peaks ≤ −3 dB, noise floor ≤ −60 dB, 0.5–1 s of room tone before the first sound and 1–5 s after the last; notes (not failures) on ACX's format (MP3 ≥ 192 kb/s CBR, 44.1 kHz) and length (≤ 120 min a file) | RMS −20 dB, limiter −3.5 dBTP, `level_voice` on; `pacing` `lead_in: 0.6`, `tail: 2.5` where unset |
 | `broadcast` | EBU R128: −23 LUFS (±0.5 LU), true peak ≤ −1 dBTP | that, limiter −1.5 dBTP |
+| `drama` | podcast loudness (−16 / −19 mono ±1 LU, ≤ −1 dBTP), loudness range ≤ 10 LU, even dialogue, music under the voices ([checks](#delivering-an-audio-drama-split-credits-cold_open)); no noise-floor or room-tone gate | as `podcast`; the music check runs for any music |
 | `custom` | `audio.target_lufs` (±1 LU), true peak ≤ `audio.true_peak` | that |
 
 A preset always normalises (`audio.normalize` aside). A mono file's loudness is its one channel's:
@@ -4321,6 +4323,51 @@ sections:
   dense_lu, ok}`; each theme in `mix.music` has `theme` (and `motif: true`, `swell`).
 - Themes are mixed like `music:` cues (`audio.music_width`, normalisation, the limiter), in
   audio-only renders and when a video is joined (no re-render).
+
+### Delivering an audio drama (`split`, `credits`, `cold_open`)
+
+Opt-in; nothing changes until one is set.
+
+```yaml
+audio_output: {format: mp3, loudness: drama, split: chapters}
+cold_open: [platform_b7, platform_b8]       # these lines first, then the title and the theme
+credits: {speak: true, lines: ["Music by the studio."]}
+```
+
+- **`loudness: drama`**: the `podcast` loudness (−16 LUFS stereo / −19 mono ±1 LU, true peak ≤ −1
+  dBTP; `level_voice` on) plus checks suited to listening on earbuds and phones (recommendations,
+  not a platform's rules): **loudness range** ≤ 10 LU; **dialogue lines** — each line's loudness
+  (BS.1770-gated, from FFmpeg's 100 ms momentary loudness over its speech; lines ≥ 0.8 s) within
+  6 LU from the 10th to the 90th percentile; **voices** — each speaker's level (Narrator, Mara...)
+  within 4 LU of the others; **music under dialogue** — the [music check](#music-for-dramas-score-themes-motifs)'s
+  `under_dialogue_lu` and its worst dense run at least `score.dense_lu` (15) LU (it runs for any
+  music under this preset). No noise-floor or room-tone gate. `vidgen audio check FILE` can only
+  note the dialogue checks; `vidgen audio check PROJECT` reads the render's `timings.json`.
+- **`audio_output.split: chapters`**: one file per chapter (a section with a `title`, a scene with
+  a `chapter`): `<output>_01_<title>.<format>`, `_02_...`, each normalised to the preset on its
+  own, an `<output>.m3u` playlist (`#EXTINF` seconds and titles; files it listed before and no
+  longer does are removed), and each file's `_transcript.txt`, `.srt`, `.vtt` at its own times
+  (no `_chapters.txt`). What comes before the first chapter (a cold open) is in the first file.
+  A file starts `pacing.lead_in` before its chapter's first line (at most half-way back into the
+  silence before it) with a 0.3 s fade, and ends with a fade of up to 2 s after its last line.
+  The check measures every file and then the files against each other: loudness within 1 LU,
+  dialogue (the median line) within 2 LU. `timings.json` `audio_output: {split, playlist, files:
+  [{file, title, start, end, check, stereo}], files_check, check}`; `mix.parts` has each file's
+  gain and level. Tags: `title` "Title: Chapter", `track` "1/2".
+- **`credits: {speak: true}`**: a closing scene (section) `credits` read by the narrator (`voice`:
+  another): the title (`title`), "Starring Bella as Mara and Adam as Jonas." (every named voice
+  that speaks, in order, by its `label`; `voiced_by: {mara: Ana Lima, narrator: Jo}` names the
+  actors; a Kokoro voice's own name otherwise, `af_bella` → Bella; with neither, the character
+  alone), "Narrated by George." and `lines`. `cast: false` leaves the cast out; `music` (a score
+  theme, default `main` when the score has one; `false`: none) plays under; `chapter` gives it a
+  chapter (and a file) of its own; `id` (default `credits`). The text is English; write other
+  languages as `lines` with `cast: false`.
+- **`cold_open`**: a scene or section id — moved to the very start, its chapter title dropped (it
+  belongs to the first chapter's file); or a list of beat ids — copied in that order into a scene
+  `cold_open` at the start (`cold_open_<beat id>`, voiced by `vidgen tts` like any beat; the lines
+  are heard again in their place), with the first beat's room, ambience and music; a copied beat
+  keeps its sound actions only. In a video both are ordinary card scenes. Problems in a project
+  with a cold open are located after the move.
 
 ## Transitions (`transition`)
 
@@ -15554,7 +15601,10 @@ transcript_vtt, transcript_chapters}` (the transcripts written), `mix` (with `le
 `target_rms`, `mono` when they apply), `check` (the file against its loudness preset, as in
 [`vidgen audio --json`](#vidgen-audio---json), or `null`), `stereo` (the mono-compatibility
 check with [staging](#stereo-staging-and-rooms-pan-room) set, else `null`), `chapters` and
-`scenes` (`{id, type, start, duration, beats}`).
+`scenes` (`{id, type, start, duration, beats}`). Split into chapter files
+([`split`](#delivering-an-audio-drama-split-credits-cold_open)): `outputs.audio` is the `.m3u`,
+the transcripts are `transcript_txt_01`, ..., `check` holds every file's items (`01 loudness`)
+and the files', and `files` lists `{file, title, start, end, check, stereo}`.
 
 ### `vidgen audio --json`
 
@@ -15567,7 +15617,9 @@ check with [staging](#stereo-staging-and-rooms-pan-room) set, else `null`), `cha
 | `checks` | list | per preset: `{preset, description, ok, items}`, each item `{name, value, target, status}` (`pass`, `fail`, or a `note` that does not count); a stereo file ends with the `mono` check |
 
 `ok` is false when the preset asked for (`--preset`, or the project's `audio_output.loudness`)
-fails, or with `--mono` the mono check.
+fails, or with `--mono` the mono check. A project split into chapter files adds `files` (`{file,
+measured, checks}` each; `file` / `measured` / `checks` are the first's) and `files_check` (the
+files against each other); `ok` is false when any file or that check fails.
 
 ### `vidgen storyboard --json`
 

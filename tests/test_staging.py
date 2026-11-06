@@ -242,6 +242,11 @@ def test_audio_only_render_is_pinned_without_staging(tmp_path: Path) -> None:
     still = Project.load(_write(tmp_path / "r", designed))
     _voice_all(still)
     assert render_audio(still).output.read_bytes() == render_audio(project).output.read_bytes()
+    # Step 290's options unset or neutral (no split, no spoken credits, no cold open)
+    delivered = {**PIN, "audio_output": {"split": "none", "loudness": "none"}, "credits": {"speak": False, "voiced_by": {"b": "Bo"}}, "cold_open": None}
+    plain = Project.load(_write(tmp_path / "s", delivered))
+    _voice_all(plain)
+    assert render_audio(plain).output.read_bytes() == render_audio(project).output.read_bytes()
 
 
 def test_staged_render_places_the_voices(tmp_path: Path) -> None:

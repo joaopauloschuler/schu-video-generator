@@ -21370,3 +21370,67 @@ fingerprint; the scene's `music` already was).
 - **Public**: config `score`, scene `music: NAME | {theme, variation}`, beat `motif`, sting `at:
   "@word"`, `duck` presets and `swell`; `timings.mix.music_check`, `mix.music[].theme / motif /
   swell`.
+
+### 112.3 Delivery (Step 290)
+
+New module `vidgen.delivery` (no manim import); `audio_check` gains the `drama` preset; `mix`
+writes split parts.
+
+- **`drama` preset** (`PRESETS["drama"]`): podcast loudness (−16 LUFS stereo / −19 mono ±1 LU, TP ≤
+  −1 dBTP, limiter −1.5, `level_voice` default on) — the common podcast-app recommendation, not
+  a platform rule — plus `max_lra` 10 LU (`LoudnessPreset.max_lra`, ebur128's LRA) and
+  `dialogue` checks; no noise-floor / head / tail gate. `MixTargets.music_check` makes the mix run
+  `_check_music` for any music (`score.check: false` still turns it off). Dialogue: `measure_file(path,
+  momentary=True)` switches ebur128 to `framelog=info` and parses each 100 ms momentary value
+  (`parse_momentary`; off by default, so other measurements run as before); `line_loudness` =
+  the 400 ms blocks wholly inside a line's speech (else overlapping), gated at −70 LUFS and then
+  10 LU under their power mean (BS.1770's programme gating over the line). Lines (`DialogueLine
+  {beat, speaker, start, end}`, `delivery.dialogue`: each beat's speech via `speech_bounds`,
+  speakers named as in the transcripts) of ≥ `MIN_LINE` 0.8 s: the 10–90th percentile spread ≤
+  `LINE_SPREAD_LU` 6; speakers' power-mean levels within `VOICE_SPREAD_LU` 4; the music check's
+  `under_dialogue_lu` and its worst dense run (only runs in the file, for a split file) ≥
+  `score.dense_lu`. Without a project (`vidgen audio check FILE`) the dialogue item is a note.
+  Thresholds are recommendations chosen for earbuds; measured on the demo (Kokoro, levelled):
+  lines 1.6–2.0 LU, voices 1.8–2.5 LU, LRA 4.4–6.2 LU.
+- **Split** (`audio_output.split: chapters`; `plain` is false with it): `plan_parts` — one part
+  per chapter mark (`chapter_marks`; the first part from 0, so a cold open joins it; no marks:
+  one part titled by the video). Cut before chapter k = `max(min(scene start, first speech −
+  pacing.lead_in), (previous speech end + first speech)/2)`; fades (raised cosine, `MixPart.reader`)
+  in over ≤ `PART_FADE_IN` 0.3 s ending by the first speech, out over ≤ `PART_FADE_OUT` 2 s after
+  the last speech; none at the audio's own start and end. `mix_audio(parts=)` writes the whole as
+  before, then each part through the same `read` (pre-limiter sum), normalised on its own to the
+  whole's target (LUFS or RMS; else the whole's gain), the same limiter and room tone
+  (`MixReport.parts`: file, start, end, gain, LUFS, TP, limited). `write_parts`: copy (48 kHz
+  stereo 24-bit WAV) or encode each (`title` "Title: Chapter", `album`, `track` "k/n") to
+  `<output>_<NN>_<slug>.<ext>`; per file `_transcript.txt`, `.srt`, `.vtt` from `part_timings`
+  (its scenes and beats at its times, non-intro chapters); `<output>.m3u` (extended M3U, UTF-8,
+  `#EXTINF` whole seconds; entries the old playlist listed and the new does not are removed —
+  only files it named). The single file and `_chapters.txt` are not written. The check measures
+  each file (`audio_output.files[].check`, `stereo`) and `files_check` compares them (loudness
+  within `FILE_SPREAD_LU` 1, median line within `FILE_DIALOGUE_SPREAD_LU` 2); the result's
+  `check` lists every file's items as `NN name` plus those. `vidgen audio check PROJECT` reads
+  `timings.json` (`delivery.rendered_files`) for the files and lines; `--json` adds `files` and
+  `files_check`. `AudioRenderResult.files`; `output` is the playlist.
+- **Spoken credits** (`credits: CreditsConfig {speak, id, title, voice, music, cast, voiced_by,
+  lines, chapter}`) and **cold open** (`cold_open: ID | [IDs]`): `apply_delivery(data, origins)`
+  on the raw config after `apply_cut` (both in `Project._load_config`, variants too; not in
+  `parse_config`, like a cut). Cold open first: a scene id moves that scene to index 0 (drops
+  `chapter`, `transition`; `cuts._moved_origins`); beat ids (filled as `cuts._with_beat_ids`)
+  are deep-copied into a `text_card` scene `cold_open` (beat ids `cold_open_<id>`, the source
+  scene's `voice` written onto the beat, only `sfx` actions kept, the first beat's scene's
+  `room` / `ambience` / `music`). Credits then append a `text_card` scene: `credit_lines` =
+  the title sentence, "Starring A as X, B as Y and Z." (named voices in order of first line,
+  the cold open skipped; actor = `voiced_by[name]`, else a Kokoro id `xx_name` → Name, else
+  none), "Narrated by N." (base voice speaks and has an actor), `lines`; `music` default `main`
+  when `score.themes` has it. English text only. Errors: unknown id (did-you-mean over scenes
+  and beats), an existing `cold_open` / credits id.
+- **Compatibility**: nothing set → `apply_delivery` returns the data object itself, no parts, no
+  momentary parse, `music_check` as before, `MixReport.to_json` without `parts`; the scene
+  fingerprint now excludes `credits`, `cold_open`, `audio_output` (audio-only / already scenes).
+  Pinned: `test_staging`'s audio-only render with the Step 290 options neutral (bytes equal),
+  `test_video_mix_is_pinned`; frame baseline 33 stills, max difference 0. `vidgen audio check
+  FILE` now lists `drama` among every preset.
+- **Public**: config `audio_output.loudness: drama`, `audio_output.split`, `credits`, `cold_open`;
+  CLI `audio check --preset drama`; `render --json` `files`, `audio --json` `files` /
+  `files_check`; `timings.json` `audio_output.{split, playlist, files, files_check}`,
+  `mix.parts`. No new `vidgen.api` names.

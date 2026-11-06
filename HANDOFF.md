@@ -24751,3 +24751,49 @@ project), repo work is generic.
 - **Next (290)**: a `drama` loudness preset can turn `level_voice` on and reuse
   `music_check`'s `under_dialogue_lu` as its music-to-voice ratio; spoken credits can play
   `music: main` under the closing section.
+
+## Step 290 — Delivery (drama preset, chapter files, spoken credits, cold open)
+
+- **Built** (DESIGN §112.3, new module `delivery.py`): `audio_output.loudness: drama` (podcast
+  loudness, `level_voice` on, LRA ≤ 10 LU, dialogue checks: lines' 10–90% spread ≤ 6 LU,
+  speakers within 4 LU, music ≥ `score.dense_lu` under the voices; no ACX gate; all described as
+  recommendations); per-line loudness from ebur128's momentary log (`measure_file(momentary=True)`,
+  `line_loudness`). `audio_output.split: chapters`: one part per chapter (cold open in the
+  first), cut `lead_in` before the chapter's first line (at most half-way into the gap), short
+  fades, each part normalised on its own in `mix_audio(parts=)`, files `<output>_NN_<slug>.<ext>`
+  + `<output>.m3u` + per-file txt / srt / vtt, a files-alike check. `credits: {speak: true, ...}`
+  (closing scene from the cast, Kokoro names as actors, `voiced_by`, `lines`, `music` default
+  `main`). `cold_open: section id | [beat ids]` (move, or copy into a `cold_open` scene).
+  `vidgen audio check PROJECT` reads `timings.json` (files, lines, music check).
+- **Files**: `delivery.py` (new), `audio_check.py` (drama preset, `DialogueLine`, `Dialogue`,
+  `line_loudness`, `dialogue_items`, `files_check`, `parse_momentary`), `mix.py` (`MixPart`,
+  `MixTargets.music_check`, `MixReport.parts`), `audio_only.py` (`_check_parts`,
+  `AudioRenderResult.files`), `config.py` (`CreditsConfig`, `cold_open`, `split`, `drama`),
+  `project.py` (`apply_delivery` after `apply_cut`), `render/fingerprint.py` (excludes credits,
+  cold_open, audio_output), `cli.py`, `jsonout.py`, `mcp_server.py`. Docs: CONFIG ("Delivering an
+  audio drama", presets table, JSON), guide + `AGENTS.md`, DESIGN §112.3, CHANGELOG, tasklist.
+- **Tests**: new `test_delivery.py` (9: credit lines, credits scene and errors, cold open move /
+  copy / did-you-mean, line loudness, drama items, a drama render, a split render with cold open
+  and CLI check, playlist clean-up, split without chapters); `test_staging` pin extended (Step 290
+  options neutral → bytes equal); `test_audio_output` (drama in the all-presets list). Run and
+  passed: `test_delivery`, `test_audio_output`, `test_audio_only`, `test_staging`,
+  `test_scoring`, `test_sound_design`, `test_music` (81), `test_schema` (76), `test_config`,
+  `test_cuts_shorts`, `test_project`, `test_mcp`, `test_api`, `test_overlap_pinned`, `test_docs`,
+  `test_guide`. Frame baseline: 33 stills, max difference 0.
+- **Demo** (`/home/claude/work/scratch/s290/drama/`, Kokoro, the 289 drama as two parts + cold
+  open of two lines + spoken credits; mp3, `drama`, `split: chapters`): `last_train_01_part_one_
+  the_platform.mp3` 0:50, −16.4 LUFS, TP −1.9, LRA 6.2, lines 2.0 LU (11), voices 1.8 LU;
+  `last_train_02_part_two_morning.mp3` 0:35, −16.3 LUFS, TP −2.1, LRA 4.4, lines 1.6 LU (8),
+  voices 2.5 LU; music 25.0 LU under dialogue (dense 24.8); files spread 0.1 LU, dialogue 0.1 LU;
+  the leveller (up to 5.7 dB) took the limiter from 289's 5.4 dB to 2.5 dB at −16 LUFS. Cut at
+  49.57 s: 4.83 s after part one's last line, 0.50 s before part two's first. Variant `loud`
+  (one file) fails on music (10.9 LU, dense 8.1). `s290/measure.py PROJECT PNG` → picture
+  `s290/drama_delivery.png` (whole mix + cut, each file's momentary loudness with line bars).
+- **Known gaps**: the credits' wording is English only (other languages: `lines` + `cast:
+  false`); copied cold-open lines are re-voiced (new ids), not reused MP3s; with a cold open,
+  section-located problems are off by the moved / inserted scene (include origins are moved);
+  `under_dialogue_lu` in a split file is the whole mix's (dense runs are per file); a part's cut
+  through a swelling pause fades the music out (no musical ending); no chapter files for videos;
+  no embedded chapter markers; the drama thresholds are chosen, not a platform's spec.
+- **Next (291)**: the cookbook can quote the drama check's items and the split layout; the
+  showcase can use `cold_open`, `credits: {speak: true, voiced_by: ...}` and `split: chapters`.

@@ -13,6 +13,7 @@ import yaml
 
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, draft_format, parse_config
 from vidgen.cuts import apply_cut
+from vidgen.delivery import apply_delivery
 from vidgen.emotions import Prosody, named_cues, prosody
 from vidgen.errors import Problem, VidgenError
 from vidgen.includes import (
@@ -271,7 +272,7 @@ class Project:
         source = config_file.name
         data = expand_sections(included.data, source)   # an audio-only project's sections (§111)
         _confine(data, root, source)
-        base_data, base_origins = expand_character_size(*expand_sets(*apply_cut(data, included.origins)))
+        base_data, base_origins = expand_character_size(*expand_sets(*apply_delivery(*apply_cut(data, included.origins))))
         base, base_source, base_report = _translated(base_data, root, source, base_origins)
         if variant is None:
             return cls(root, config_file, base, None, base, base_source, base_report, included, base_origins)
@@ -281,7 +282,7 @@ class Project:
         override = base.variants[variant]
         where = f"{source} (variant '{variant}')"
         try:
-            cut = apply_cut(deep_merge(data, override), after_variant(included.origins, data, override))
+            cut = apply_delivery(*apply_cut(deep_merge(data, override), after_variant(included.origins, data, override)))
             data, origins = expand_character_size(*expand_sets(*cut))
             config, merged, report = _translated(data, root, where, origins)
         except VidgenError as exc:

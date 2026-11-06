@@ -675,11 +675,12 @@ def build_server(root: Path) -> Any:
 
     @tool("Measure an audio file, or a project's audio-only render (render with audio_only=true), for agents that cannot "
           "listen: loudness (LUFS), true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per "
-          "loudness preset (podcast, audiobook / ACX, broadcast / EBU R128, custom) and a stereo file's mono compatibility.", read_only)
+          "loudness preset (podcast, audiobook / ACX, broadcast / EBU R128, drama: loudness range, even dialogue, music under the "
+          "voices; custom) and a stereo file's mono compatibility; a project split into chapter files: each file and the files alike.", read_only)
     async def audio_check(
         ctx: Context,
         target: Annotated[str, Field(description="an audio file (wav, mp3, m4a, ogg) or a project folder, relative to the root")] = ".",
-        preset: Annotated[Literal["podcast", "audiobook", "broadcast", "custom"] | None, Field(
+        preset: Annotated[Literal["podcast", "audiobook", "broadcast", "drama", "custom"] | None, Field(
             description="check this preset only (default: the project's audio_output.loudness, else every preset)")] = None,
         variant: Variant = None,
         preview: Annotated[bool, Field(description="a project's preview render")] = False,

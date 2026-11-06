@@ -28,7 +28,8 @@ the deliverable and writes ``build/<render>/audio/timings.json``.
 (:mod:`vidgen.audio_encode`) unless it is wanted as it is; a loudness preset sets the mix's
 targets (:func:`vidgen.audio_check.mix_targets`) and the file is measured against it after the
 encode (:func:`vidgen.audio_check.check`); the transcripts are written from the timings
-(:mod:`vidgen.transcripts`).
+(:mod:`vidgen.transcripts`). With ``split: chapters`` (§112.3) the mix also writes one part per
+chapter and :mod:`vidgen.delivery` makes the files, the playlist and their transcripts.
 """
 
 from __future__ import annotations
@@ -43,8 +44,8 @@ from typing import Any
 
 import numpy as np
 
-from vidgen import __version__, audio_encode, chapter_export, mix, musicfit, sfx
-from vidgen.audio_check import PresetResult, check, measure_file, mix_targets, mono_check, project_preset
+from vidgen import __version__, audio_encode, chapter_export, delivery, mix, musicfit, sfx
+from vidgen.audio_check import CheckItem, LoudnessPreset, PresetResult, check, files_check, measure_file, mix_targets, mono_check, project_preset
 from vidgen.chapters import chapter_marks
 from vidgen.config import BeatConfig, PacingConfig, SceneConfig
 from vidgen.fileio import remove_file, replace_file
@@ -129,6 +130,7 @@ class AudioRenderResult:
     left_out: list[str] = field(default_factory=list)
     transcripts: dict[str, Path] = field(default_factory=dict)
     check: PresetResult | None = None
+    files: list[Path] = field(default_factory=list)  # audio_output.split: each chapter's file (output is the playlist)
 
 
 # ----- sound effects --------------------------------------------------------------------------------
@@ -509,14 +511,24 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
             sfx.write_track(track, events, total, library, project.config.sfx.gain, ducking, stings)
         mixed = folder / "mix.wav"
         targets = mix_targets(project)
-        report = mix.mix_audio(project, timings, [voice], track if track.is_file() else None, mixed, always_write=True, targets=targets)
+        parts = delivery.plan_parts(project, timings, effective_pacing(project).lead_in) if project.config.audio_output.split == "chapters" else []
+        part_mixes = delivery.mix_parts(parts, folder / "parts")
+        report = mix.mix_audio(project, timings, [voice], track if track.is_file() else None, mixed, always_write=True, targets=targets, parts=part_mixes)
         timings["mix"] = report.to_json()
+        preset = project_preset(project)
+        staged = uses_staging(project.config) and project.config.audio_output.channels == "stereo"
+        if parts:   # one file per chapter (DESIGN.md §112.3)
+            written = delivery.write_parts(project, preview, timings, parts, part_mixes)
+            checked = _check_parts(project, timings, written, preset, staged)
+            timings_file = folder / "timings.json"
+            write_json(timings_file, timings)
+            return AudioRenderResult(written.playlist, timings_file, plan.duration, timings, plan.timing, plan.left_out, written.transcripts, checked,
+                                     [path for _, path in written.files])
         output = write_output(project, mixed, preview)
         transcripts = write_transcripts(project, timings, preview, project.config.audio_output.transcript_kinds)
         checked = None
-        preset = project_preset(project)
-        staged = uses_staging(project.config) and project.config.audio_output.channels == "stereo"
-        measured = measure_file(output) if preset is not None or staged else None
+        lines = preset is not None and preset.dialogue
+        measured = measure_file(output, momentary=lines) if preset is not None or staged else None
         if staged:
             assert measured is not None
             mono = mono_check(measured)
@@ -528,7 +540,7 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
                 log.warning("%s may not fold to mono well: %s (vidgen audio check; a music_width over 1 often does it)", output.name, values)
         if preset is not None:
             assert measured is not None
-            checked = check(measured, preset)
+            checked = check(measured, preset, delivery.dialogue(project, timings) if lines else None)
             timings["audio_output"] = {"file": output.name, "check": checked.to_json()}
             if checked.ok:
                 log.info("%s meets the %s preset", output.name, preset.name)
@@ -538,6 +550,55 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
         timings_file = folder / "timings.json"
         write_json(timings_file, timings)
     return AudioRenderResult(output, timings_file, plan.duration, timings, plan.timing, plan.left_out, transcripts, checked)
+
+
+def _check_parts(project: Project, timings: dict[str, Any], written: delivery.WrittenParts, preset: LoudnessPreset | None,
+                 staged: bool) -> PresetResult | None:
+    """Measure each file of a split render (DESIGN.md §112.3) against ``preset`` and for mono
+    compatibility (``staged``), and the files against each other; records ``audio_output``
+    ``{split, playlist, files: [{file, title, start, end, check, stereo}], files_check, check}``
+    (and ``stereo``: the first file that folds badly, else the first) in ``timings``; returns
+    every file's items (``NN name``) and the files' in one result."""
+    lines = preset is not None and preset.dialogue
+    entries = []
+    measured: list[tuple[Any, Any]] = []
+    total = PresetResult(preset.name, preset.description) if preset is not None else None
+    stereo: list[PresetResult] = []
+    for part, path in written.files:
+        entry: dict[str, Any] = {"file": path.name, "title": part.title, "start": part.start, "end": part.end}
+        m = measure_file(path, momentary=lines) if preset is not None or staged else None
+        if staged:
+            assert m is not None
+            mono = mono_check(m)
+            stereo.append(mono)
+            entry["stereo"] = mono.to_json()
+            if not mono.ok:
+                log.warning("%s may not fold to mono well (vidgen audio check; a music_width over 1 often does it)", path.name)
+        if preset is not None and total is not None:
+            assert m is not None
+            dialogue = delivery.dialogue(project, timings, part.start, part.end) if lines else None
+            checked = check(m, preset, dialogue)
+            entry["check"] = checked.to_json()
+            measured.append((m, dialogue))
+            total.items += [CheckItem(f"{part.index:02d} {i.name}", i.value, i.target, i.status) for i in checked.items]
+            if not checked.ok:
+                misses = "; ".join(f"{i.name} {i.value} (wanted {i.target})" for i in checked.failures)
+                log.warning("%s misses the %s preset: %s (vidgen audio check)", path.name, preset.name, misses)
+        entries.append(entry)
+    timings["audio_output"] = {"split": "chapters", "playlist": written.playlist.name, "files": entries}
+    if stereo:
+        timings["stereo"] = next((s for s in stereo if not s.ok), stereo[0]).to_json()
+    if total is None:
+        return None
+    across = files_check(measured)
+    timings["audio_output"]["files_check"] = across.to_json()
+    total.items += across.items
+    timings["audio_output"]["check"] = total.to_json()
+    if total.ok:
+        log.info("%d files meet the %s preset", len(written.files), total.preset)
+    elif not across.ok:
+        log.warning("the files differ: %s (vidgen audio check)", "; ".join(f"{i.name} {i.value} (wanted {i.target})" for i in across.failures))
+    return total
 
 
 def write_output(project: Project, mixed: Path, preview: bool) -> Path:

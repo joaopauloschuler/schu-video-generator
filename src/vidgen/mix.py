@@ -579,6 +579,7 @@ class MixReport:
     target_rms: float | None = None  # normalised to this RMS (dBFS) instead of target_lufs
     mono: bool = False  # the left and right mixed to one before the limiter
     music_check: dict[str, Any] | None = None  # the music under dense dialogue (score.check, DESIGN.md §112.2)
+    parts: list[dict[str, Any]] = field(default_factory=list)  # the files of a split mix (audio_output.split, §112.3)
 
     def to_json(self) -> dict[str, Any]:
         """The report; ``ambience`` only when a bed played (DESIGN.md §69.39); ``levelled_db``,
@@ -609,6 +610,8 @@ class MixReport:
             data["mono"] = True
         if self.music_check is not None:
             data["music_check"] = self.music_check
+        if self.parts:
+            data["parts"] = self.parts
         return data
 
 
@@ -622,7 +625,8 @@ class MixTargets:
     of ``audio:``: the file's integrated loudness ``lufs`` (a mono file's, when ``mono``: the mix
     is the channels' average in both, so it measures :data:`DUAL_MONO_LU` more) or its RMS
     ``rms`` (dBFS), the limiter's ``true_peak``, the voice leveller, a ``room_tone`` (dBFS RMS)
-    under everything."""
+    under everything, and whether the music is measured under the voices (``music_check``: the
+    drama preset, §112.3, unless ``score.check: false``)."""
 
     lufs: float | None = None
     rms: float | None = None
@@ -630,6 +634,7 @@ class MixTargets:
     mono: bool = False
     level_voice: bool = False
     room_tone: float | None = None
+    music_check: bool = False
 
 
 def limit(x: np.ndarray, ceiling: float) -> tuple[np.ndarray, float]:
@@ -676,6 +681,61 @@ def write_mix(
     return meter, lowest
 
 
+@dataclass(frozen=True)
+class MixPart:
+    """One file of a split mix (``audio_output.split``, DESIGN.md §112.3): samples ``start`` to
+    ``end`` of the whole, faded in and out over ``fade_in`` / ``fade_out`` seconds at its edges
+    (raised cosine), written to ``path`` normalised on its own."""
+
+    path: Path
+    start: int
+    end: int
+    fade_in: float = 0.0
+    fade_out: float = 0.0
+
+    def reader(self, read: Callable[[int, int], np.ndarray]) -> Callable[[int, int], np.ndarray]:
+        """``read`` of the whole as this part's samples, its fades applied."""
+        n = self.end - self.start
+        fade_in, fade_out = round(self.fade_in * RATE), round(self.fade_out * RATE)
+
+        def part(a: int, b: int) -> np.ndarray:
+            x = read(self.start + a, self.start + b)
+            if fade_in or fade_out:
+                at = np.arange(a, b, dtype=np.float64)
+                gain = np.ones(b - a)
+                if fade_in:
+                    gain *= 1.0 - _ramp(at / fade_in)
+                if fade_out:
+                    gain *= _ramp((at - (n - fade_out)) / fade_out)
+                x = x * gain[:, None]
+            return x
+
+        return part
+
+
+def _write_part(part: MixPart, read: Callable[[int, int], np.ndarray], gain_db: float, target: tuple[float | None, float | None] | None,
+                true_peak: float, floor: np.ndarray | None) -> dict[str, Any]:
+    """Write ``part`` of the mix ``read``: normalised to ``target`` (``(lufs, rms)``) on its own,
+    else with the whole's ``gain_db``; returns its entry of :attr:`MixReport.parts`."""
+    n = part.end - part.start
+    sub = part.reader(read)
+    gain = gain_db
+    if target is not None:
+        lufs, rms = target
+        before = rms_db(n, sub) if rms is not None else loudness.measure(n, sub, peaks=False).integrated
+        if math.isfinite(before):
+            gain = (rms if rms is not None else lufs or 0.0) - before
+    meter, lowest = write_mix(part.path, sub, n, gain, true_peak, floor)
+
+    def num(value: float) -> float | None:
+        return round(value, 2) if math.isfinite(value) else None
+
+    return {
+        "file": part.path.name, "start": round(part.start / RATE, 3), "end": round(part.end / RATE, 3), "gain_db": num(gain),
+        "integrated_lufs": num(meter.integrated), "true_peak_dbtp": num(meter.true_peak), "limited_db": num(-20 * math.log10(lowest) if lowest > 0 else math.inf),
+    }
+
+
 def _has_narration_audio(project: Project) -> bool:
     """Whether some beat has its MP3, or the video has no narrated beats at all."""
     beats = [beat.id for _, beat in project.beats()]
@@ -690,6 +750,7 @@ def mix_audio(
     out: Path,
     always_write: bool = False,
     targets: MixTargets | None = None,
+    parts: Sequence[MixPart] = (),
 ) -> MixReport:
     """Mix the video's audio (``timings``: combined timings; ``voices``: the padded scene WAVs in
     order; ``sfx_track``: the SFX track or ``None``).
@@ -701,7 +762,8 @@ def mix_audio(
     ``out``). A video whose narrated beats have no MP3 yet is not normalised. The voices go
     through the leveller with ``audio.level_voice: true``. ``targets`` (an audio-only render's
     loudness preset) replace ``audio:``'s normalisation, limit and leveller setting and always
-    normalise.
+    normalise. ``parts`` (``audio_output.split``, DESIGN.md §112.3): after the whole, each part
+    is written to its own file, normalised on its own when the whole is (:attr:`MixReport.parts`).
     """
     audio = project.config.audio
     plain_voice = WavTrack(voices)
@@ -752,7 +814,10 @@ def mix_audio(
             log.warning("the audio is silent; it is not normalised")
     floor = room_tone(targets.room_tone) if targets is not None and targets.room_tone is not None else None
     meter, lowest = write_mix(out, read, total, gain_db, true_peak, floor)
-    checked = _check_music(project, timings, voice, placements, total) if placements else None
+    target = (target_lufs, target_rms) if normalize else None
+    written = [_write_part(part, read, gain_db, target, true_peak, floor) for part in parts]
+    forced = targets is not None and targets.music_check
+    checked = _check_music(project, timings, voice, placements, total, forced) if placements else None
     return MixReport(
         True,
         normalize,
@@ -768,17 +833,19 @@ def mix_audio(
         target_rms if normalize else None,
         mono,
         checked,
+        written,
     )
 
 
 def _check_music(project: Project, timings: dict[str, Any], voice: WavTrack | LevelledTrack, placements: Sequence[Placement],
-                 total: int) -> dict[str, Any] | None:
+                 total: int, forced: bool = False) -> dict[str, Any] | None:
     """``score.check`` (DESIGN.md §112.2): the music (no ambience) measured under the voices
-    (:func:`vidgen.scoring.dense_dialogue_check`), a warning where it fights dense dialogue."""
+    (:func:`vidgen.scoring.dense_dialogue_check`), a warning where it fights dense dialogue;
+    ``forced`` (the drama preset, §112.3) measures any music unless ``score.check: false``."""
     from vidgen import scoring
 
     cfg = project.config
-    if not scoring.check_wanted(cfg):
+    if not (scoring.check_wanted(cfg) or (forced and cfg.score.check is not False)):
         return None
     music = MusicTrack(placements, (cfg.audio.music_width, cfg.audio.ambience_width))
     report = scoring.dense_dialogue_check(total, voice.read, music.read, speech_spans(project, timings), cfg.score.dense_lu)

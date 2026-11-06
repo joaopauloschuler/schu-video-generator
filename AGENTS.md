@@ -3724,7 +3724,7 @@ Good: the result first, then the context.
   left out (a warning says so) unless `audio: {scene_sounds: true}` (stage walks, doors, knocks,
   switches, set beds, a video_clip's sound; not levels, iso moves, vehicles, phones). The file:
   `audio_output: {format: mp3 | m4a | ogg | wav, bitrate, channels: mono, sample_rate,
-  loudness: podcast | audiobook | broadcast | custom}`; the render measures it against the
+  loudness: podcast | audiobook | broadcast | drama | custom}`; the render measures it against the
   preset and says PASS / FAIL (fix what it names: an `audiobook` wants 0.5-1 s of silence before
   the first sound, so no effect in the first half second). It also writes the transcript
   (`_transcript.txt` with speakers and chapters), `.srt`, `.vtt` and `_chapters.txt`.
@@ -3754,6 +3754,14 @@ Good: the result first, then the context.
   "@remember", length: 7}` plays a theme briefly over the scene's (which dips); `sting: {kind:
   reveal, at: "@ticket"}` on a word. The render warns when music is under 15 LU below dense
   dialogue (`mix.music_check`).
+- **Delivering a drama** (opt-in): `audio_output: {loudness: drama}` is podcast loudness plus
+  checks: loudness range ≤ 10 LU, lines and voices even (6 / 4 LU), music ≥ 15 LU under them
+  (`vidgen audio check PROJECT`; a quiet line or voice it names: raise its `emotion` gain or
+  re-voice it). `split: chapters` writes one file per chapter (`_01_<title>`, each at the
+  loudness, an `.m3u`, per-file transcripts). `credits: {speak: true}` adds closing credits from
+  the cast ("Starring Bella as Mara ..."; `voiced_by: {mara: Ana}`, `lines`); `cold_open:
+  [beat ids]` (or a section id) plays those lines first, before the title. Run `vidgen tts` after
+  adding them (new beats).
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}

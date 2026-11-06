@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–289)
+## Unreleased (Steps 193–290)
+
+### Delivering an audio drama (Step 290)
+
+- `audio_output: {loudness: drama}`: podcast loudness (−16 LUFS stereo / −19 mono, −1 dBTP) with checks for earbuds — loudness range ≤ 10 LU, every line and every voice at an even level, the music at least 15 LU under the voices; `vidgen audio check PROJECT --preset drama`.
+- `audio_output: {split: chapters}`: one file per chapter, each at the preset's loudness, with an `.m3u` playlist and each file's transcripts.
+- `credits: {speak: true}`: closing credits read from the cast ("Starring Bella as Mara and Adam as Jonas. Narrated by George."), the main theme under them.
+- `cold_open: [beat ids]` (or a section id): those lines first, then the title and the theme.
+- All opt-in: projects without these keys sound exactly as before.
 
 ### Music cues for drama (Step 289)
 

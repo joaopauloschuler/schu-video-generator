@@ -2716,8 +2716,10 @@ class AudioOutputConfig(_Strict):
     """Samples per second of the file (Opus: 16000, 24000 or 48000); ACX audiobooks want 44100."""
     bit_depth: Literal[16, 24] = 24
     """wav only: bits per sample."""
-    loudness: Literal["none", "podcast", "audiobook", "broadcast", "custom"] = "none"
-    """Loudness preset: podcast (-16 LUFS stereo / -19 mono, peaks under -1 dBTP), audiobook (ACX: RMS -23 to -18 dB, peaks under -3 dB, room-tone head and tail, noise floor under -60 dB), broadcast (EBU R128: -23 LUFS, -1 dBTP), custom (audio.target_lufs and audio.true_peak); none: the audio: settings as they are. The render measures the file and reports pass or fail (vidgen audio check)."""
+    loudness: Literal["none", "podcast", "audiobook", "broadcast", "drama", "custom"] = "none"
+    """Loudness preset: podcast (-16 LUFS stereo / -19 mono, peaks under -1 dBTP), audiobook (ACX: RMS -23 to -18 dB, peaks under -3 dB, room-tone head and tail, noise floor under -60 dB), broadcast (EBU R128: -23 LUFS, -1 dBTP), drama (an audio drama: podcast loudness plus a loudness-range check for earbuds, even dialogue across lines and voices, the music well under the voices), custom (audio.target_lufs and audio.true_peak); none: the audio: settings as they are. The render measures the file and reports pass or fail (vidgen audio check)."""
+    split: Literal["none", "chapters"] = "none"
+    """chapters: one file per chapter (episode), <output>_01_<title>.<format>..., each at the preset's loudness, with an <output>.m3u playlist and each file's own transcripts; what comes before the first chapter (a cold open) is in the first file; none: one file."""
     room_tone: float | None = Field(default=None, ge=-90, le=-55)
     """A faint steady noise (dBFS RMS, e.g. -72) under the whole file, so pauses are not digital silence; default none."""
     transcripts: list[Literal["txt", "srt", "vtt", "chapters"]] | bool = True
@@ -2747,7 +2749,8 @@ class AudioOutputConfig(_Strict):
     @property
     def plain(self) -> bool:
         """Whether the file is the mix as written (48 kHz stereo 24-bit WAV, no preset): copied, not encoded."""
-        return (self.format, self.channels, self.sample_rate, self.bit_depth, self.loudness, self.room_tone) == ("wav", "stereo", 48000, 24, "none", None)
+        return (self.format, self.channels, self.sample_rate, self.bit_depth, self.loudness, self.room_tone, self.split) == (
+            "wav", "stereo", 48000, 24, "none", None, "none")
 
 
 class PacingConfig(_Strict):
@@ -2774,6 +2777,30 @@ class PacingConfig(_Strict):
     """Silence before the first line."""
     tail: float = Field(default=1.5, ge=0, le=30)
     """Silence after the last line (music and effects play on into it)."""
+
+
+class CreditsConfig(_Strict):
+    """Spoken credits made from the cast (DESIGN.md §112.3): a closing scene (section) with the
+    title, "Starring <actor> as <character>, ...", "Narrated by <actor>." and more lines."""
+
+    speak: bool = False
+    """true: add the closing scene with the spoken credits."""
+    id: Identifier = "credits"
+    """The closing scene's id (its beats are <id>_b1, ...)."""
+    title: str | None = Field(default=None, min_length=1)
+    """The first line; default the video's title."""
+    voice: Identifier | None = None
+    """Who reads the credits (a voices: name); default the base voice (the narrator)."""
+    music: Identifier | Literal[False] | None = None
+    """The score theme under the credits (score.themes name); default main when the score has a theme main; false: none."""
+    cast: bool = True
+    """Name the characters: every named voice that speaks, in the order they first speak, by its label."""
+    voiced_by: dict[Identifier, Annotated[str, Field(min_length=1)]] = Field(default_factory=dict)
+    """Who plays each voice (voices name, or narrator for the base voice): {mara: Ana Lima}; default for a Kokoro voice its name (af_bella: Bella); a voice without one is named without an actor."""
+    lines: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    """More lines read after the cast (music, thanks, a copyright)."""
+    chapter: str | None = Field(default=None, min_length=1)
+    """A chapter title of its own (with audio_output.split: chapters a file of its own); default: part of the last chapter."""
 
 
 class ChaptersConfig(_Strict):
@@ -3502,9 +3529,13 @@ class VideoConfig(_Strict):
     audio_only: bool = False
     """true: vidgen render writes only the sound, <output>.wav (narration, voices, music, sound effects), and renders no scene; vidgen render --audio-only does that for one run."""
     audio_output: AudioOutputConfig = Field(default_factory=AudioOutputConfig)
-    """The file of an audio-only render: {format: wav | mp3 | m4a | ogg, bitrate, channels: mono | stereo, sample_rate, bit_depth, loudness: none | podcast | audiobook | broadcast | custom, room_tone, transcripts}."""
+    """The file of an audio-only render: {format: wav | mp3 | m4a | ogg, bitrate, channels: mono | stereo, sample_rate, bit_depth, loudness: none | podcast | audiobook | broadcast | drama | custom, room_tone, transcripts, split: none | chapters}."""
     pacing: PacingConfig = Field(default_factory=PacingConfig)
     """Timing of an audio-only render: {timing: speech | video, line, speaker, scene, chapter, sting_before, sting_after, silent, lead_in, tail} (seconds)."""
+    credits: CreditsConfig = Field(default_factory=CreditsConfig)
+    """Spoken credits from the cast {speak: true, title, voice, music, cast, voiced_by, lines, chapter}: a closing scene with the title, "Starring ... as ...", "Narrated by ...", music under (DESIGN.md §112.3)."""
+    cold_open: Identifier | list[Identifier] | None = None
+    """A cold open: a scene (section) id, moved to the very start (before the title and theme; its chapter title dropped), or beat ids, copied in that order into a scene cold_open at the start (re-voiced as cold_open_<beat id>; the lines are heard again in their place)."""
     transition: TransitionSetting | None = None
     """Default transition between scenes (cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}); a scene's transition wins."""
     chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)

@@ -208,6 +208,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "citations",
         # a draft's size and frame rate: only drafts use them, checked like any format (§74)
         "draft",
+        # spoken credits and a cold open are already scenes; audio_output is the audio-only file (§112.3)
+        "credits", "cold_open", "audio_output",
     }
     if project.config.cut is not None:
         # a cut (§101) is already applied to the scenes (and its hook to the overlays, its end
