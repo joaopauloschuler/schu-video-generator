@@ -24658,3 +24658,7 @@ project), repo work is generic.
   `sections:` (or a section's `room`); `pacing.silent` overrides a pause section's own seconds;
   `follow_stage` does not track a walk during a line; no chapters embedded in audio files; MP3
   ~0.3 dB under the mix.
+
+## Step 287 — Cookbook: voices in iso cartoons
+
+- Docs only: docs/COOKBOOK-ISO-CARTOONS.md is now "craft notes" and gains a section on stereo staging and rooms for cartoon videos (per-character pan, follow_stage, room per scene matched to the set, narrator dry and centred, moves across a line, narrower music, the mono check). The YAML snippet was validated with vidgen validate; vidgen audio check --mono was tried on an MP4. tests/test_docs.py passes.

@@ -1689,6 +1689,9 @@ or AI API calls; Kokoro (local) only.
 ### Step 286 — Critical review of Phase AF, and Step 282's pending checks
 - [x] Review fixes for Steps 283–285; Step 282's checks: the character / cartoon / iso suites, `test_arms_front`, `tests/test_mcp.py` in full, the frame baseline (exactly the 25 stills with characters change, arms only: keep the old references as `frames_classic/`, remake them, update the baseline README) — done: all passed after fixing three tests' frame recorders (manim 0.22 `repeat=`) and `test_push_wipe_carry`'s fake layer; baseline as expected and remade; fixes: WebVTT escaping, problems name `sections[i]`, `vidgen schema` knows `sections`, no YouTube chapter warnings for audio, MCP `render(audio_only)` and `audio_check`; final demo kphi3 podcast + audiobook MP3s PASS (DESIGN §111.5)
 
+### Step 287 — Cookbook: voices in iso cartoons
+- [x] `docs/COOKBOOK-ISO-CARTOONS.md`: a section on stereo staging and rooms for cartoon videos (docs only)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
