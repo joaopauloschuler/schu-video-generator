@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–286)
+## Unreleased (Steps 193–288)
+
+### Sound design for audio dramas (Step 288)
+
+- `ambience:` on a scene or section (`rain`, `city`, `hum`, `room_tone`, `fire`, ... or `{beds, gain, width}`) plays beds that cross-fade at scene changes (`audio.ambience_crossfade`); a beat's `ambience: {start | stop, at: "@word"}` changes them on a word.
+- Sound cues repeat (`repeat`, `every`; footsteps alternate feet), take named pans and `pan: {from, to}` steps across, and sound in a room (`room:`, or `audio.sfx_room: true` for all).
+- `audio.scene_sounds: true`: audio-only renders play the stage sounds they can work out without pictures (set beds, walks, doors, knocks, switches, jumps) and a `video_clip`'s sound.
+- All opt-in: projects without these keys sound exactly as before.
 
 ### Phase AF review (Step 286)
 

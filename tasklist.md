@@ -1692,6 +1692,24 @@ or AI API calls; Kokoro (local) only.
 ### Step 287 — Cookbook: voices in iso cartoons
 - [x] `docs/COOKBOOK-ISO-CARTOONS.md`: a section on stereo staging and rooms for cartoon videos (docs only)
 
+## Phase AG — Dramatized audiobooks / audio drama (DESIGN §112)
+
+Radio-play style productions made audio-only and fast (narrator centred and dry, characters
+panned in rooms) with music and sound design. Opt-in; existing mixes byte-identical. No paid or
+AI API calls; Kokoro (local) only.
+
+### Step 288 — Sound design in audio-only renders
+- [x] Ambience beds per scene / section (`ambience: rain | city | hum | room_tone | ...`, `{beds, gain, width}`) cross-fading at scene changes (`audio.ambience_crossfade`), with their own stereo width; beds that start / stop on a beat's word (`ambience: {start | stop, at: "@word", fade}`); cues timed to words with `repeat` / `every` (footsteps alternate feet; `pan: {from, to}` steps across), named pans and `room` (`audio.sfx_room`); `audio.scene_sounds`: a stage's set beds, walks, doors, knocks, switches, jumps, surprise pops and effects, and a `video_clip`'s sound worked out without Manim (a level's / iso place's moves, vehicles, props thrown, pours, lightning, alarms, fires, phones left out, named in the warning); pinned tests extended; tests `test_sound_design.py`; Kokoro demo (scratch `s288/caller`)
+
+### Step 289 — Music cues for drama
+- [ ] Per-scene / section music beds that change with the scene (crossfade length / curve), swells into pauses (the duck releasing smoothly, a `swell:` amount), stings on beats (`sting:`), named themes / motifs from the score studio or built-in beds reused with variations (`theme: main`, `motif: love`), deeper ducking presets (`duck: drama`), a check that music never fights dense dialogue; the studio score format, no downloads
+
+### Step 290 — Delivery
+- [ ] A `drama` loudness preset (podcast-like, −16 LUFS stereo / −19 mono, −1 dBTP; no ACX noise gate; an LRA check for earbuds; dialogue consistency across lines / characters; music-to-voice ratio under dialogue); `audio_output: {split: chapters}` (numbered files, an `.m3u`, per-chapter transcripts); spoken credits from the cast (`credits: {speak: true}`); a cold open option; platform targets as recommendations unless certain
+
+### Step 291 — Cookbook, showcase, review
+- [ ] `docs/COOKBOOK-AUDIODRAMA.md` (structure, casting, narrator balance, rooms and stereo, score strategy, sound design, pacing, loudness, delivery), linked from `COOKBOOK.md` and `COOKBOOK-AUDIO.md`; a private showcase (never committed); a critical review of Phase AG (tests, docs, pinned mixes, baseline if shared rendering code changed)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

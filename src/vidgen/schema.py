@@ -447,7 +447,7 @@ def _add_sections(schema: dict[str, Any], scene: dict[str, Any]) -> None:
     the config schema: a project gives ``scenes`` or ``sections``. A section's ``voice``, ``room``,
     ``music`` and ``sfx`` are a scene's; its beats are beats or plain strings."""
     scene_props = scene["properties"]
-    shared = {key: copy.deepcopy(scene_props[key]) for key in ("voice", "room", "music", "sfx")}
+    shared = {key: copy.deepcopy(scene_props[key]) for key in ("voice", "room", "music", "sfx", "ambience")}
     named = {"id": {"type": "string", "description": "Section id (default s<n>)."}}
     section = {
         "type": "object",
@@ -463,15 +463,16 @@ def _add_sections(schema: dict[str, Any], scene: dict[str, Any]) -> None:
     }
     pause = {
         "type": "object",
-        "description": "Silence between sections (seconds), with its own sfx and music.",
-        "properties": {**named, "pause": {"type": "number", "exclusiveMinimum": 0}, "music": shared["music"], "sfx": shared["sfx"]},
+        "description": "Silence between sections (seconds), with its own sfx, music, ambience and room.",
+        "properties": {**named, "pause": {"type": "number", "exclusiveMinimum": 0},
+                       **{key: shared[key] for key in ("music", "sfx", "ambience", "room")}},
         "required": ["pause"],
         "additionalProperties": False,
     }
     schema["properties"]["sections"] = {
         "type": "array",
         "minItems": 1,
-        "description": "An audio-only project's scenes, without pictures (instead of scenes): sections {title, voice, room, music, sfx, beats} and pauses {pause: S}.",
+        "description": "An audio-only project's scenes, without pictures (instead of scenes): sections {title, voice, room, music, sfx, ambience, beats} and pauses {pause: S}.",
         "items": {"anyOf": [section, pause]},
     }
     required = schema.get("required", [])

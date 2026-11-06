@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from vidgen import loudness, musicfit
-from vidgen.ambience import AMBIENCE_BEDS, BEDS, LoopSource, ambience_spans
+from vidgen.ambience import AMBIENCE_BEDS, BEDS, LoopSource, ambience_spans, designed_entries
 from vidgen.config import DuckConfig, MusicCue, SceneMusic
 from vidgen.errors import VidgenError
 from vidgen.music import Source, cue_scene_range, fallback_bed
@@ -295,10 +295,14 @@ class AmbiencePlacement:
     source: LoopSource
     gain: np.ndarray
     duck: float
+    width: float | None = None  # its own stereo width (a scene's ambience, DESIGN.md §112); None: audio.ambience_width
 
     def summary(self) -> dict[str, Any]:
-        """``{bed, start, end, duck}`` (times in seconds)."""
-        return {"bed": self.bed, "start": round(self.start / RATE, 6), "end": round(self.end / RATE, 6), "duck": self.duck}
+        """``{bed, start, end, duck}`` (times in seconds), and ``width`` when it has its own."""
+        data = {"bed": self.bed, "start": round(self.start / RATE, 6), "end": round(self.end / RATE, 6), "duck": self.duck}
+        if self.width is not None:
+            data["width"] = self.width
+        return data
 
 
 class MusicTrack:
@@ -318,7 +322,11 @@ class MusicTrack:
                 continue
             gain = np.interp(np.arange(lo, hi) / FRAME, np.arange(len(p.gain)), p.gain)
             part = p.source.read(lo - p.start, hi - p.start) * gain[:, None]
-            out[lo - a : hi - a] += widen(part, self.widths[1 if isinstance(p, AmbiencePlacement) else 0])
+            if isinstance(p, AmbiencePlacement):
+                width = self.widths[1] if p.width is None else p.width
+            else:
+                width = self.widths[0]
+            out[lo - a : hi - a] += widen(part, width)
         return out
 
 
@@ -458,6 +466,22 @@ def plan_ambience(project: Project, timings: dict[str, Any], total: int) -> list
             if end > start:
                 gain = _fade_curve(times, a, b, bed.fade_in, bed.fade_out) * ducking
                 placements.append(AmbiencePlacement(name, start, end, source, gain, bed.duck.depth))
+    designed = designed_entries(timings)
+    if designed:  # a scene's / beat's ambience (DESIGN.md §112): each piece with its own fades, level and width
+        speech = speech_spans(project, timings) if speech is None else speech
+        ducks: dict[str, np.ndarray] = {}
+        for entry in designed:
+            name = str(entry["bed"])
+            bed = BEDS[name]
+            if name not in ducks:
+                ducks[name] = 10 ** (duck_curve(speech, frames, bed.duck) / 20)
+            a, b = float(entry["start"]), float(entry["end"])
+            start, end = round(a * RATE), min(round(b * RATE), total)
+            if end > start:
+                fades = _fade_curve(times, a, b, float(entry["fade_in"]), float(entry["fade_out"]))
+                gain = 10 ** (float(entry.get("gain", 0.0)) / 20) * fades * ducks[name]
+                width = entry.get("width")
+                placements.append(AmbiencePlacement(name, start, end, LoopSource(bed.loop()), gain, bed.duck.depth, None if width is None else float(width)))
     return placements
 
 

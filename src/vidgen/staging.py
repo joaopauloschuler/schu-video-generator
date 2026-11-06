@@ -24,6 +24,7 @@ step is deterministic numpy.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
@@ -135,6 +136,19 @@ def pan_value(setting: Any) -> float:
     return float(min(1.0, max(-1.0, setting)))
 
 
+def repeat_pans(setting: Any, repeat: int) -> list[float]:
+    """The pan of each of a cue's ``repeat`` plays (DESIGN.md §112): a ``pan:`` number or
+    position for all, or a move ``{from, to}`` (a :class:`~vidgen.config.PanMove` or a mapping)
+    in even steps from the first play to the last (footsteps crossing the stage)."""
+    if isinstance(setting, Mapping) or hasattr(setting, "from_"):
+        a = pan_value(setting["from"] if isinstance(setting, Mapping) else setting.from_)
+        b = pan_value(setting["to"] if isinstance(setting, Mapping) else setting.to)
+        if repeat <= 1:
+            return [a]
+        return [round(a + (b - a) * k / (repeat - 1), 6) for k in range(repeat)]
+    return [pan_value(setting)] * repeat
+
+
 def room_of(setting: Any) -> tuple[str, float, bool]:
     """``(name, amount, narrator)`` of a ``room:`` setting (a name or ``RoomConfig``; ``None``: dry)."""
     if setting is None:
@@ -200,11 +214,26 @@ def beat_staging(config: VideoConfig, scene: SceneConfig, beat: BeatConfig, stag
     return VoiceStaging(pan, pan_to, room, amount if room != "none" else 1.0)
 
 
+def cue_room(config: VideoConfig, scene: SceneConfig, setting: bool | str | None) -> str | None:
+    """The room a sound effect of ``scene`` sounds in (DESIGN.md §112), ``None`` dry:
+    ``setting`` ``True`` the scene's room (else ``audio.room``; with any ``narrator`` and
+    ``amount``), a room name that room, ``False`` / ``"none"`` dry, ``None`` the scene's room
+    with ``audio.sfx_room``, else dry."""
+    if setting is None:
+        setting = config.audio.sfx_room
+    if setting is False or setting == "none":
+        return None
+    if setting is True:
+        name = room_of(scene.room if scene.room is not None else config.audio.room)[0]
+        return None if name == "none" else name
+    return str(setting)
+
+
 def uses_staging(config: VideoConfig) -> bool:
     """Whether anything in ``config`` places voices or widens the music (the render then reports
     the file's mono compatibility)."""
     audio = config.audio
-    if audio.room is not None or audio.follow_stage or audio.music_width != 1.0 or audio.ambience_width != 1.0:
+    if audio.room is not None or audio.follow_stage or audio.music_width != 1.0 or audio.ambience_width != 1.0 or audio.sfx_room:
         return True
     if config.voice.pan is not None or any(v.pan is not None for v in config.voices.values()):
         return True
@@ -325,8 +354,10 @@ __all__ = [
     "RoomPreset",
     "VoiceStaging",
     "beat_staging",
+    "cue_room",
     "pan_gains",
     "pan_value",
+    "repeat_pans",
     "params_stage_pan",
     "reverb_ir",
     "room_of",

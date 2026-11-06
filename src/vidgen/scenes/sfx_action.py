@@ -3,7 +3,7 @@
 cues it when its beat starts, at the frame it is due, so the sound lands exactly there whatever
 the scene animates then; the render pipeline mixes it."""
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from vidgen.api import *
 
@@ -13,7 +13,8 @@ class SoundEffect(Action):
     """Play a sound effect at `at` of the beat: `- sfx: whoosh` (a built-in sound, or the
     project's assets/sfx/<name>.wav; `vidgen list-sfx` describes them). It plays exactly then,
     whatever the scene animates; `gain` in dB, `pan`, `align: end` to end the sound there,
-    `params` (duration, pitch, intensity) for a built-in sound. Mixed about 7 dB under the
+    `params` (duration, pitch, intensity) for a built-in sound; `repeat` times `every` seconds
+    (footsteps, knocks); `room` to sound in the scene's room. Mixed about 7 dB under the
     narration at gain 0; not heard with --no-audio."""
 
     class Options(ActionOptions):
@@ -21,12 +22,18 @@ class SoundEffect(Action):
         """The sound, when it is not written as `- sfx: NAME`."""
         gain: float = Field(default=0.0, ge=-60, le=12)
         """Level change in dB (0: the sound's own level, about 7 dB under narration)."""
-        pan: float = Field(default=0.0, ge=-1, le=1)
-        """-1 left, 0 centre, 1 right."""
+        pan: Annotated[float, Field(ge=-1, le=1)] | Literal["far_left", "left", "centre", "center", "right", "far_right"] | PanMove = 0.0
+        """-1 left, 0 centre, 1 right, or far_left, left, centre, right, far_right; with repeat also {from, to}: the plays step across."""
         align: Literal["start", "end"] = "start"
         """start: the sound starts at `at`; end: it ends there (a riser landing on a reveal)."""
         params: SfxParams = Field(default_factory=SfxParams)
         """duration, pitch, intensity of a built-in sound (vidgen list-sfx)."""
+        repeat: int = Field(default=1, ge=1, le=100)
+        """How many times it plays (footsteps, knocks, rings), every `every` seconds; steps alternate feet."""
+        every: float = Field(default=0.5, gt=0, le=30)
+        """Seconds from one repeat to the next."""
+        room: bool | Literal["none", "small_office", "corridor", "hall", "outdoors", "car", "phone"] | None = None
+        """The room it sounds in: true the scene's room (like its voices), a room name, or false / none dry; default audio.sfx_room."""
 
     run_time = 0.1
     needs_target = False
@@ -60,6 +67,6 @@ class SoundEffect(Action):
         return self.options.params.model_dump(exclude_none=True)
 
     def cue(self, scene: NarratedScene, time: float) -> None:
-        """Record the sound at ``time``."""
+        """Record the sound at ``time`` (and its repeats)."""
         o = self.options
-        scene.sfx(self.sound() or "", time, gain=o.gain, pan=o.pan, align=o.align, **self._params())
+        scene.sfx(self.sound() or "", time, gain=o.gain, pan=o.pan, align=o.align, repeat=o.repeat, every=o.every, room=o.room, **self._params())

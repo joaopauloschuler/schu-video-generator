@@ -62,13 +62,21 @@ def merge_spans(spans: Iterable[tuple[float, float]], gap: float = JOIN_GAP) -> 
 
 def ambience_spans(timings: Mapping[str, Any], bed: str) -> list[tuple[float, float]]:
     """The video seconds where ``bed`` plays: every scene's ``ambience`` entries of that bed in
-    the combined ``timings`` (already at video times), merged (:func:`merge_spans`)."""
+    the combined ``timings`` (already at video times), merged (:func:`merge_spans`); designed
+    entries (:func:`designed_entries`) are not among them."""
     return merge_spans(
         (float(entry["start"]), float(entry["end"]))
         for scene in timings["scenes"]
         for entry in scene.get("ambience", [])
-        if entry["bed"] == bed
+        if entry["bed"] == bed and "fade_in" not in entry
     )
+
+
+def designed_entries(timings: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The ``ambience`` entries of a scene's or a beat's ``ambience:`` (DESIGN.md §112,
+    :func:`vidgen.sound_design.ambience_entries`): each with its own ``fade_in``, ``fade_out``,
+    ``gain`` (dB) and maybe ``width``, placed as it is (not merged)."""
+    return [entry for scene in timings["scenes"] for entry in scene.get("ambience", []) if "fade_in" in entry]
 
 
 def _circular(x: np.ndarray, gain: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:

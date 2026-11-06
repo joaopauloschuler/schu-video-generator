@@ -3022,9 +3022,11 @@ writes them as WAV files to listen to):
 | `sound` | required | a built-in sound or the project's own (below); in an action written as `- sfx: NAME` (or `sound: NAME`) |
 | `at` | `0` | scene `sfx:` list: seconds from the scene's start; beat action: fraction of the beat's narration or a word it says (`at: "@crash"`), as for every action (rounded to a frame) |
 | `gain` | `0` | dB, -60 to 12; at 0 a sound's loudest 400 ms is −27 LUFS (K-weighted, one channel), about 7 dB under ElevenLabs narration, with peaks at most −9 dBFS |
-| `pan` | `0` | -1 left, 0 centre (full level on both channels), 1 right (equal-power) |
+| `pan` | `0` | -1 left, 0 centre (full level on both channels), 1 right (equal-power); or `far_left`, `left`, `centre`, `right`, `far_right`; a repeated cue also `{from, to}`: its plays step evenly from one to the other (footsteps crossing) |
 | `align` | `start` | `start`: the sound starts at `at`; `end`: it ends there |
 | `params` | `{}` | `duration` (seconds, within the sound's range), `pitch` (semitones, -24 to 24, default 0), `intensity` (0 to 1, default 0.5: brighter and up to 3 dB louder towards 1) — built-in sounds only |
+| `repeat` | `1` | plays it this many times (1–100), `every` seconds apart (default `0.5`): footsteps (every second one a little lower and softer, as a walk's), knocks, rings |
+| `room` | `audio.sfx_room` | the room it sounds in, like a voice: `true` its scene's [room](#stereo-staging-and-rooms-pan-room), a room name (`phone`: a ring heard down the line), `false` / `none` dry |
 
 Video-wide `sfx:`:
 
@@ -4033,7 +4035,8 @@ loudness normalisation and the limiter (`audio:`). `audio_only: true` makes ever
 of the project do that. The timings go to `build/final/audio/timings.json`; `--json` prints them
 with the `mix` report. What only a scene's code makes while it renders is left out and named in
 a warning: stage foley and ambience, automatic animation sounds (`sfx: {auto: true}`), a
-`video_clip`'s sound.
+`video_clip`'s sound; `audio.scene_sounds: true` works most of them out without pictures
+([sound design](#sound-design-ambience-cues-scene_sounds)).
 
 An audio-only project may list `sections` instead of `scenes` (an audiobook, a podcast):
 
@@ -4056,8 +4059,9 @@ sections:
   - pause: 2.0                     # a silent section
 ```
 
-A section (`id`, `title`, `voice`, `room`, `music`, `sfx`, `beats`) becomes a `text_card` scene showing its
-title (a video render is a plain slideshow); its beats are ordinary beats. A beat's `pause: S` (or a
+A section (`id`, `title`, `voice`, `room`, `music`, `sfx`, `ambience`, `beats`) becomes a `text_card` scene showing its
+title (a video render is a plain slideshow); its beats are ordinary beats. A pause section takes
+`sfx`, `music`, `ambience` and `room`. A beat's `pause: S` (or a
 `- pause: S` item after it, in any scene) is the silence after its line, instead of
 `narration.pad` in a video or the gap below in audio. `vidgen schema` knows `sections`, and
 problems name them (`sections[1].beats[0].voice`, `sections[2].pause`).
@@ -4188,6 +4192,61 @@ cancels) and how much quieter the fold `(L + R) / 2` is (≤ 3.5 dB; a voice pan
 loses 3 dB, `left` 0.7 dB). The render prints `mono: PASS correlation 0.71 (≥ 0); worst second
 0.16 (≥ -0.3); mono fold 0.8 dB (≤ 3.5)` and warns when it fails; `timings.json` / `--json` carry
 it as `stereo`. `audio_output.channels: mono` simply averages the channels.
+
+### Sound design (`ambience`, cues, `scene_sounds`)
+
+Opt-in, for audio dramas and audiobooks (and videos: a scene's `ambience` and the cue options
+work there too). Nothing changes until one of these is set.
+
+```yaml
+audio: {ambience_crossfade: 3, sfx_room: true}     # beds cross-fade over 3 s; cues sound in their scene's room
+sections:
+  - title: The Porch
+    room: outdoors
+    ambience: {beds: [rain, city], gain: 1}        # or a bed (ambience: rain) or a list
+    beats:
+      - text: The rain had not stopped when Sam reached the house.
+        actions: [{sfx: step_stone, at: "@reached", repeat: 5, every: 0.45, pan: right}]
+      - text: He knocked, and the door creaked open.
+        actions: [{sfx: knock, at: "@knocked"}, {sfx: creak, at: "@creaked", gain: -3}]
+  - title: The Hall
+    room: small_office
+    ambience: {beds: {room_tone: 4, rain: -14}}     # bed -> dB: the rain through the walls
+    beats:
+      - text: Sam crossed the hall to the fire.
+        actions: [{sfx: step_wood, at: "@crossed", repeat: 7, every: 0.48, pan: {from: far_left, to: far_right}}]
+      - text: Then the phone began to ring.
+        actions: [{sfx: phone, at: "@ring", repeat: 3, every: 1.5, pan: far_left, room: phone}]
+      - text: Outside, the rain stopped.
+        ambience: {stop: rain, at: "@stopped", fade: 2.5}
+```
+
+- **`ambience`** of a scene, section or pause section: beds under it — `rain`, `fire`,
+  `birdsong`, `city`, `room_tone`, `crickets`, `hum` (a lab, a ship), `alarm` (the
+  [stage beds](#ambience-and-door-sounds-ambience-knock), at their own quiet levels and ducking
+  under the voices); a list; or `{beds, gain, width}` (`beds` a list or `{bed: dB}`; `gain` dB for
+  all; `width` 0–2, default `audio.ambience_width`); `false`: none. At a scene change the beds
+  that change fade out and the next scene's fade in over **`audio.ambience_crossfade`** (`2` s;
+  0–20) centred on the change; a bed at the same level and width plays on without a dip. The
+  first beds fade in from the start, the last fade out at the end. A stage's own set beds still
+  play beside them (in a video, or with `scene_sounds`).
+- **A beat's `ambience`** starts or stops beds during its line: `{start: rain}` / `{stop: hum}`
+  (a bed, a list, or `stop: all`), `at` a fraction of the line (`0`), a word it says
+  (`"@stopped"`, `"@rain#2"`, `"@rain+0.5s"`) or `end`; `fade` seconds (the bed's own: rain
+  1.5 in, 1.5 out); `gain` dB of the beds that start. A list makes several changes.
+- **Cues** (a scene's `sfx:` and the `sfx` action): `repeat` / `every`, named `pan` positions and
+  `{from, to}` steps, and `room` ([table](#sound-effects-sfx)). **`audio.sfx_room`** (`false`):
+  every cue without its own `room` sounds in its scene's room, panned with its reflections, the
+  tail wide (a knock in a hall rings on); cues stay dry in a scene without a room.
+- **`audio.scene_sounds`** (`false`; audio-only renders): also play what the scenes would sound
+  like, worked out from the config without rendering: a `stage`'s set ambience and rain, the
+  footsteps of `walk_to` / `run_to` / `enter` / `exit` on a plain stage (panned where the walk
+  goes; each character's `cartoon_motion`), doors opening and closing, `knock`, light switches,
+  `jump`, a surprised `emote` / `react` and `effect` sounds, in the scene's room with
+  `sfx_room`; and a `video_clip`'s own sound (its trim, speed, loop and `volume`). The same
+  events as the video's scene code makes, within about 50 ms. Still left out, and named in the
+  warning: moves on a platform `level` or an iso place, vehicles, thrown props, pours,
+  lightning, alarms, fires and ringing phones (cue those with `sfx`).
 
 ## Transitions (`transition`)
 
@@ -13654,7 +13713,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`; a label that says one of the video's [terms](#one-colour-per-concept-terms): its colour), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
-| `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
+| `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`, a position, or `{from, to}` with `repeat`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`), `repeat` (`1`), `every` (`0.5` s), `room` (`audio.sfx_room`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
 | `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
 | `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`); `move_sun` (`false`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action; `move_sun: true` moves the sun and moon across the sky meanwhile, the shadows turning. Its "target" is the light, not a target of the scene; no `until`. |

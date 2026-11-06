@@ -3716,12 +3716,13 @@ Good: the result first, then the context.
 - **Audio only** (audiobooks, podcasts, the sound of a video): `vidgen render --audio-only`
   writes `output/<output>.wav` without rendering a scene (voices, music ducked under them,
   effects, stings, loudness). `audio_only: true` makes it the project's render; such a project
-  may list `sections:` (`{id, title, voice, room, music, sfx, beats}`, `- pause: 2` between them)
-  instead of scenes, and `vidgen story draft --audio` drafts one from a story. Lines are timed
+  may list `sections:` (`{id, title, voice, room, music, sfx, ambience, beats}`, `- pause: 2`
+  between them) instead of scenes, and `vidgen story draft --audio` drafts one from a story. Lines are timed
   by their speech plus `pacing:` gaps (`speaker`, `scene`, `chapter`, `lead_in`, `tail`); a
   beat's `pause: 1.5` (or a `- pause: 1.5` item) is the silence after it, in videos too.
   `pacing: {timing: video}` keeps the video's timeline instead. Stage foley and ambience are
-  left out (a warning says so); write the sounds that matter as `sfx`. The file:
+  left out (a warning says so) unless `audio: {scene_sounds: true}` (stage walks, doors, knocks,
+  switches, set beds, a video_clip's sound; not levels, iso moves, vehicles, phones). The file:
   `audio_output: {format: mp3 | m4a | ogg | wav, bitrate, channels: mono, sample_rate,
   loudness: podcast | audiobook | broadcast | custom}`; the render measures it against the
   preset and says PASS / FAIL (fix what it names: an `audiobook` wants 0.5-1 s of silence before
@@ -3736,6 +3737,13 @@ Good: the result first, then the context.
   `audio.room` for all), the narrator dry unless `{use: hall, narrator: true}`;
   `audio.music_width: 0.7` narrows the music. The render prints a `mono:` check; keep
   `music_width` at 1 or less if it fails.
+- **Sound design** (audio dramas; opt-in, videos too): `ambience: rain` (or a list, or `{beds:
+  {room_tone: 4, rain: -14}, gain, width}`) on a scene or section plays beds under it that
+  cross-fade at the change (`audio.ambience_crossfade: 3`); beds: rain, fire, birdsong, city,
+  room_tone, crickets, hum, alarm. A beat's `ambience: {stop: rain, at: "@stopped", fade: 2.5}`
+  (or `start:`) changes them on a word. Cues on words: `actions: [{sfx: step_wood, at:
+  "@crossed", repeat: 7, every: 0.48, pan: {from: far_left, to: far_right}}]`; `room: phone` (or
+  `true`, or `audio.sfx_room: true` for all) puts a cue in a room like a voice.
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}

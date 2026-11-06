@@ -43,9 +43,9 @@ from vidgen.errors import VidgenError
 from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
 from vidgen.references import has_citations
-from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
+from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, repeated, stereo, write_wav
 from vidgen.speech import audio_duration
-from vidgen.staging import VoiceStaging, beat_staging, stage_voice
+from vidgen.staging import VoiceStaging, beat_staging, cue_room, repeat_pans, stage_voice
 from vidgen.terms import scene_terms, set_active_terms
 from vidgen.theme import Theme
 from vidgen.transitions import IRIS_HEAD_SCALE, ColorFade, IrisPoint, effective, has_transitions, resolve_color
@@ -390,7 +390,9 @@ class NarratedScene(MovingCameraScene):
             self.sfx(sound, 0.0, gain=gain)
         for k, cue in enumerate(spec.sfx):
             params = cue.params.model_dump(exclude_none=True)
-            self._add_sfx(cue.sound, cue.at, cue.gain, cue.pan, cue.align, params, f"sfx[{k}]")
+            room = cue_room(self.project.config, spec, cue.room)
+            for (at, given), pan in zip(repeated(cue.sound, cue.at, cue.repeat, cue.every, params), cue.pans):
+                self._add_sfx(cue.sound, at, cue.gain, pan, cue.align, given, f"sfx[{k}]", room=room)
 
     def _build_overlays(self) -> tuple[list[Overlay], list[Overlay]]:
         """The overlays of the project drawn on this scene (none without an ``overlays:``) and,
@@ -1090,20 +1092,28 @@ class NarratedScene(MovingCameraScene):
         return self._sounds
 
     def sfx(
-        self, sound: str, at: float | None = None, *, gain: float = 0.0, pan: float = 0.0, align: str = "start", **params: float
+        self, sound: str, at: float | None = None, *, gain: float = 0.0, pan: Any = 0.0, align: str = "start",
+        repeat: int = 1, every: float = 0.5, room: bool | str | None = None, **params: float,
     ) -> SfxEvent:
         """Play the sound effect ``sound`` at scene time ``at`` (seconds; default: now, i.e. with
-        the next ``play``). ``gain`` in dB, ``pan`` -1 (left) to 1 (right), ``align="end"`` ends
-        the sound at ``at`` instead of starting it there; ``params`` (``duration``, ``pitch``,
-        ``intensity``) shape a built-in sound. Unknown sounds and bad values raise
-        :class:`VidgenError`.
+        the next ``play``). ``gain`` in dB, ``pan`` -1 (left) to 1 (right) or a named position
+        (``left``...), ``align="end"`` ends the sound at ``at`` instead of starting it there;
+        ``params`` (``duration``, ``pitch``, ``intensity``) shape a built-in sound; ``repeat``
+        times ``every`` seconds (footsteps alternate feet; a ``pan`` move ``{from, to}`` steps
+        across the plays); ``room``: ``True`` the scene's room,
+        a room name, ``False`` dry, ``None`` as ``audio.sfx_room`` says (DESIGN.md §112).
+        Unknown sounds and bad values raise :class:`VidgenError`. Returns the (first) event.
 
         Nothing is drawn and no time passes: the sound is recorded (:attr:`sfx_log`) and mixed
         into the video's sound by the render pipeline, sample-exact, unless rendering with
         ``--no-audio``.
         """
         time = float(self.renderer.time) if at is None else at
-        return self._add_sfx(sound, time, gain, pan, align, params, "sfx")
+        placed = cue_room(self.project.config, self.spec, room)
+        moves = isinstance(pan, Mapping) or hasattr(pan, "from_")
+        plays = zip(repeated(sound, time, repeat, every, params), repeat_pans(pan, repeat) if moves else [pan] * repeat)
+        events = [self._add_sfx(sound, t, gain, p, align, given, "sfx", room=placed) for (t, given), p in plays]
+        return events[0]
 
     def sting(self, sting: StingCue | str, time: float) -> SfxEvent:
         """Play a music sting (a beat's ``sting:``, DESIGN.md §69.19; a ``card``'s) at scene time
@@ -1113,7 +1123,8 @@ class NarratedScene(MovingCameraScene):
         return self._add_sfx(STING_SOUNDS[cue.kind], time, cue.gain, 0.0, "start", {}, "sting", duck=True)
 
     def _add_sfx(
-        self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str, duck: bool = False
+        self, sound: str, time: float, gain: float, pan: float | str, align: str, params: Mapping[str, Any], where: str, duck: bool = False,
+        room: str | None = None,
     ) -> SfxEvent:
         try:
             cue = SfxCue.model_validate({"sound": sound, "at": time, "gain": gain, "pan": pan, "align": align, "params": dict(params)})
@@ -1124,7 +1135,7 @@ class NarratedScene(MovingCameraScene):
         problems = self.sounds.problems(cue.sound, given)
         if problems:
             raise VidgenError(f"scene '{self.spec.id}' {where}: " + "; ".join(f"{key}: {message}" for key, message in problems))
-        event = SfxEvent(round(cue.at, 6), cue.sound, cue.gain, cue.pan, cue.align, given, self._current_beat, duck)
+        event = SfxEvent(round(cue.at, 6), cue.sound, cue.gain, cue.pan_value, cue.align, given, self._current_beat, duck, room)
         self.sfx_log.append(event)
         return event
 

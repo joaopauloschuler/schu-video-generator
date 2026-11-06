@@ -51,6 +51,7 @@ from vidgen.fileio import remove_file, replace_file
 from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.project import Project
 from vidgen.sfx import RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo
+from vidgen.sound_design import BeatSlot, SceneSlot, ambience_entries, clip_sound, cue_events, designs_ambience, stage_sounds
 from vidgen.staging import VoiceStaging, beat_staging, params_stage_pan, stage_voice, uses_staging
 from vidgen.transcripts import write_transcripts
 from vidgen.videoplan import VideoPlan, beat_seconds
@@ -74,6 +75,7 @@ class PlacedBeat:
     text: str
     shape: VoiceShape = VoiceShape()
     staging: VoiceStaging = VoiceStaging()
+    body: float = 0.0  # the seconds a fraction of the beat counts over (its actions' at)
 
 
 @dataclass
@@ -88,6 +90,7 @@ class AudioScene:
     beats: list[PlacedBeat] = field(default_factory=list)
     events: list[SfxEvent] = field(default_factory=list)
     overlap: float = 0.0
+    ambience: list[dict[str, Any]] = field(default_factory=list)  # its beds (timings entries, audio times; DESIGN.md §112)
 
 
 @dataclass
@@ -143,13 +146,15 @@ def _scene_events(project: Project, spec: SceneConfig, start: float) -> list[Sfx
         events.append(SfxEvent(round(start, 6), entrance[0], entrance[1]))
     for cue in spec.sfx:
         params = cue.params.model_dump(exclude_none=True)
-        events.append(SfxEvent(round(start + cue.at, 6), cue.sound, cue.gain, cue.pan, cue.align, params))
+        events += cue_events(project, spec, cue.sound, round(start + cue.at, 6), gain=cue.gain, pan=cue.pan, align=cue.align,
+                             params=params, repeat=cue.repeat, every=cue.every, room=cue.room)
     return events
 
 
-def _action_events(beat: BeatConfig, start: float, body: float, fps: int | None) -> list[SfxEvent]:
+def _action_events(project: Project, spec: SceneConfig, beat: BeatConfig, start: float, body: float, fps: int | None) -> list[SfxEvent]:
     """The beat's ``sfx`` actions at audio times: ``at`` of its narration (``body`` seconds), in
-    whole frames at ``fps`` as the action runner cues them (``None``: exact)."""
+    whole frames at ``fps`` as the action runner cues them (``None``: exact), repeated and in a
+    room as they ask (DESIGN.md §112)."""
     events = []
     for act in beat.actions:
         if act.action != "sfx":
@@ -162,12 +167,15 @@ def _action_events(beat: BeatConfig, start: float, body: float, fps: int | None)
         if fps:
             offset = round(offset * fps) / fps
         params = {k: v for k, v in dict(options.get("params") or {}).items() if v is not None}
-        gain, pan = float(options.get("gain", 0.0)), float(options.get("pan", 0.0))
-        events.append(SfxEvent(round(start + offset, 6), str(sound), gain, pan, str(options.get("align", "start")), params, beat.id))
+        gain, pan = float(options.get("gain", 0.0)), options.get("pan", 0.0)
+        events += cue_events(project, spec, str(sound), round(start + offset, 6), gain=gain, pan=pan, align=str(options.get("align", "start")),
+                             params=params, repeat=int(options.get("repeat", 1)), every=float(options.get("every", 0.5)),
+                             room=options.get("room"), beat=beat.id)
     return events
 
 
-def _beat_events(project: Project, beat: BeatConfig, start: float, window: BeatWindow, seconds: float, sting_at: float, fps: int | None) -> list[SfxEvent]:
+def _beat_events(project: Project, spec: SceneConfig, beat: BeatConfig, start: float, window: BeatWindow, seconds: float, sting_at: float,
+                 fps: int | None) -> list[SfxEvent]:
     """A beat's sounds at audio times: its sting (at ``sting_at``, ducked), the voice sounds the
     TTS cannot say (in the silence around the line, as a scene plays them) and its ``sfx``
     actions."""
@@ -179,17 +187,20 @@ def _beat_events(project: Project, beat: BeatConfig, start: float, window: BeatW
         if span.generated and (cut is None or span.start < cut):
             sound = VOICE_SOUNDS[span.kind].sfx or ""
             events.append(SfxEvent(round(max(start + span.start, 0.0), 6), sound, SOUND_GAIN_DB, 0.0, "start", {}, beat.id))
-    return events + _action_events(beat, start, window.body, fps)
+    return events + _action_events(project, spec, beat, start, window.body, fps)
 
 
 def _left_out(project: Project) -> list[str]:
-    """What an audio-only render of ``project`` cannot play (made by scene code while it renders)."""
+    """What an audio-only render of ``project`` cannot play (made by scene code while it renders;
+    with ``audio.scene_sounds`` what that cannot work out, DESIGN.md §112)."""
     types = {s.type for s in project.config.scenes}
     out = []
+    worked_out = project.config.audio.scene_sounds
     if "stage" in types and (project.config.foley or project.config.ambience):
-        out.append("the foley and ambience of stage scenes")
-    if "video_clip" in types:
-        out.append("the sound of video_clip scenes")
+        out.append("the stage sounds audio.scene_sounds cannot work out (moves on a level or an iso place, vehicles, thrown props, pours, "
+                   "lightning, alarms, fires, phones ringing)" if worked_out else "the foley and ambience of stage scenes (audio.scene_sounds: true plays most of them)")
+    if "video_clip" in types and not worked_out:
+        out.append("the sound of video_clip scenes (audio.scene_sounds: true plays it)")
     if project.config.sfx.auto:
         out.append("the automatic sounds of animations (sfx: {auto: true}; a chapter card's whoosh is kept)")
     return out
@@ -217,9 +228,9 @@ def _video_timeline(project: Project, fps: int) -> tuple[list[AudioScene], float
             windows = beat_windows(beat_lines(project, spec.beats, lambda b: beat_seconds(project, b.id, b.text)), pad, fps)
             for beat, timed, window, d in zip(spec.beats, slot.beats, windows, seconds):
                 start = slot.start + timed.start
-                scene.beats.append(PlacedBeat(beat.id, start, slot.start + timed.end, beat.text, window.shape, _staging(project, spec, beat)))
+                scene.beats.append(PlacedBeat(beat.id, start, slot.start + timed.end, beat.text, window.shape, _staging(project, spec, beat), window.body))
                 ends = beat.sting is not None and beat.sting.placed_at == "end"
-                scene.events += _beat_events(project, beat, start, window, d, start + (window.heard if ends else 0.0), fps)
+                scene.events += _beat_events(project, spec, beat, start, window, d, start + (window.heard if ends else 0.0), fps)
         scenes.append(scene)
     return scenes, plan.duration
 
@@ -300,9 +311,9 @@ class _SpeechTimer:
         windows = beat_windows([replace(line, pause=gap) for line, gap in zip(lines, self.gaps(i))], self.line_gap)
         clock = start + lead
         for beat, window, d in zip(spec.beats, windows, seconds):
-            scene.beats.append(PlacedBeat(beat.id, clock, clock + window.heard, beat.text, window.shape, _staging(project, spec, beat)))
+            scene.beats.append(PlacedBeat(beat.id, clock, clock + window.heard, beat.text, window.shape, _staging(project, spec, beat), window.body))
             sting_at = clock + window.heard if _ends_with_sting(beat) else clock - self.pacing.sting_before
-            scene.events += _beat_events(project, beat, clock, window, d, sting_at, None)
+            scene.events += _beat_events(project, spec, beat, clock, window, d, sting_at, None)
             clock += window.window
         scene.duration = clock - start
         return scene
@@ -343,7 +354,32 @@ def plan_audio(project: Project, preview: bool = False) -> AudioPlan:
         scenes, duration = _video_timeline(project, project.render_format(preview).fps)
     else:
         scenes, duration = _SpeechTimer(project, pacing).timeline()
+    _design_sound(project, scenes, duration)
     return AudioPlan(pacing.timing, scenes, duration, _left_out(project))
+
+
+def scene_slots(project: Project, scenes: Sequence[AudioScene]) -> list[SceneSlot]:
+    """The scenes as :mod:`vidgen.sound_design` takes them."""
+    beats = {b.id: b for _, b in project.beats()}
+    return [SceneSlot(s.spec, s.start, s.duration, [BeatSlot(beats[b.id], b.start, b.end, b.body) for b in s.beats]) for s in scenes]
+
+
+def _design_sound(project: Project, scenes: Sequence[AudioScene], duration: float) -> None:
+    """Add the scenes' and beats' ambience beds and, with ``audio.scene_sounds``, the sounds the
+    stage scenes would make (DESIGN.md §112) to ``scenes``."""
+    sounds = project.config.audio.scene_sounds
+    designed = designs_ambience(project.config.scenes)
+    if not sounds and not designed:
+        return
+    slots = scene_slots(project, scenes)
+    if designed:
+        for scene, entries in zip(scenes, ambience_entries(project, slots, duration)):
+            scene.ambience += entries
+    if sounds:
+        for scene, slot in zip(scenes, slots):
+            events, beds = stage_sounds(project, slot)
+            scene.events += events
+            scene.ambience += beds
 
 
 # ----- writing --------------------------------------------------------------------------------------
@@ -358,11 +394,16 @@ def _voice_samples(project: Project, beat: PlacedBeat, limit: int) -> np.ndarray
     return samples if beat.staging.plain else stage_voice(samples, beat.staging, limit)
 
 
-def write_voice_track(path: Path, project: Project, beats: Sequence[PlacedBeat], samples: int) -> None:
+def write_voice_track(path: Path, project: Project, beats: Sequence[PlacedBeat], samples: int, clips: Sequence[tuple[float, Path]] = ()) -> None:
     """Write ``path``: a 48 kHz stereo 16-bit WAV of ``samples`` samples with each beat's MP3 (a
-    beat without one is silent) from its start, summed; written in :data:`BLOCK` blocks, each
-    beat decoded when the first block it sounds in is written."""
-    pending = sorted(((round(b.start * RATE), k, b) for k, b in enumerate(beats) if (project.audio_dir / f"{b.id}.mp3").is_file()))
+    beat without one is silent) from its start, summed, and each of ``clips`` (a scene's own
+    sound: ``(start seconds, WAV)``, DESIGN.md §112); written in :data:`BLOCK` blocks, each beat
+    decoded when the first block it sounds in is written."""
+    pending: list[tuple[int, int, PlacedBeat | Path]] = sorted(
+        [(round(b.start * RATE), k, b) for k, b in enumerate(beats) if (project.audio_dir / f"{b.id}.mp3").is_file()]
+        + [(round(t * RATE), len(beats) + k, wav) for k, (t, wav) in enumerate(clips)],
+        key=lambda item: (item[0], item[1]),
+    )
     active: list[tuple[int, np.ndarray]] = []
     next_beat = 0
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -373,8 +414,9 @@ def write_voice_track(path: Path, project: Project, beats: Sequence[PlacedBeat],
         for lo in range(0, samples, BLOCK):
             hi = min(lo + BLOCK, samples)
             while next_beat < len(pending) and pending[next_beat][0] < hi:
-                start, _, beat = pending[next_beat]
-                active.append((start, _voice_samples(project, beat, samples - start)))
+                start, _, item = pending[next_beat]
+                data = stereo(decode_audio(item)) if isinstance(item, Path) else _voice_samples(project, item, samples - start)
+                active.append((start, data))
                 next_beat += 1
             buf = np.zeros((hi - lo, 2), dtype=np.float32)
             for start, data in active:
@@ -400,6 +442,8 @@ def audio_timings(project: Project, plan: AudioPlan, preview: bool) -> dict[str,
         }
         if scene.events:
             entry["sfx"] = [e.to_json() for e in sorted(scene.events, key=lambda e: e.time)]
+        if scene.ambience:
+            entry["ambience"] = scene.ambience
         if scene.overlap:
             entry["transition"] = {"overlap": round(scene.overlap, 6)}
         scenes.append(entry)
@@ -437,7 +481,13 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
         folder = project.render_dir(preview) / "audio"
         total = round(plan.duration * RATE)
         voice = folder / "voice.wav"
-        write_voice_track(voice, project, plan.beats, total)
+        clips: list[tuple[float, Path]] = []
+        if project.config.audio.scene_sounds:  # a video_clip's own sound (DESIGN.md §112)
+            for slot in scene_slots(project, plan.scenes):
+                wav = clip_sound(project, slot, folder / "clips")
+                if wav is not None:
+                    clips.append((slot.start, wav))
+        write_voice_track(voice, project, plan.beats, total, clips)
         timings = audio_timings(project, plan, preview)
         track = folder / "sfx.wav"
         remove_file(track)

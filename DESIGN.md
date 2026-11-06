@@ -21222,3 +21222,74 @@ inherited by named voices), so nothing is re-voiced.
 - Checked, unchanged: speech timing (gaps, pauses, stings, silent scenes, lead-in / tail), preset
   numbers (ACX, R128, podcast mono −19), the equal-power pan law (`left` 7.65 dB L−R) and room IR
   maths. `pacing.silent`, when set, overrides a pause section's own seconds too (documented).
+
+## 112. Dramatized audiobooks: sound design, music cues, delivery (Phase AG, Steps 288–291)
+
+Radio-play / audio-movie productions made audio-only and fast: narrator centred and dry,
+characters panned in rooms (§111.4), with ambience, timed sound cues and music that follows the
+scenes. No paid or AI API calls; Kokoro local only. Plan: **288** sound design in audio-only
+renders; **289** music cues for drama (per-scene beds and crossfades, swells into pauses, stings
+on beats, named themes / motifs, deeper ducking presets, a dense-dialogue music check); **290**
+delivery (a `drama` loudness preset with LRA and dialogue-consistency checks, one file per
+chapter with an `.m3u` and per-chapter transcripts, spoken credits from the cast, a cold open);
+**291** `docs/COOKBOOK-AUDIODRAMA.md`, a private showcase, review. Everything is opt-in: unset,
+video mixes and audio-only renders are byte-identical.
+
+### 112.1 Sound design (Step 288)
+
+`vidgen.sound_design` (no manim import) times everything in audio seconds from a `SceneSlot`
+(`spec`, `start`, `duration`, `beats: [BeatSlot(beat, start, end, body)]`; `body` = the seconds a
+fraction `at` counts over, the narration). The audio-only planner (`audio_only._design_sound`
+after either timeline) and the video join (`pipeline._add_designed_ambience`, scene and beat
+`ambience` only) build the slots and share it.
+
+- **Beds** (`AmbienceSetting` on a scene / section / pause: a bed, a list, `AmbienceConfig {beds:
+  list | {bed: dB}, gain, width}`, or `false`; names `AmbienceBedName` = `ambience.AMBIENCE_BEDS`:
+  rain, fire, birdsong, city, room_tone, crickets, hum, alarm, a test keeps them equal).
+  `ambience_entries` walks the scenes: at a change every bed whose `(gain, width)` differs or that
+  is not wanted fades out and the new ones fade in over `audio.ambience_crossfade` (default 2 s,
+  min `MIN_FADE` 0.05) centred on the change; a bed with the same level and width plays on. The
+  first beds fade in from 0 over their own `BEDS[...].fade_in`, the last fade out at the end.
+  Beat changes `AmbienceChange {start, stop (bed | list | all), at (fraction | "@word" | end),
+  fade, gain}` (`BeatConfig.ambience`, one or a list; the word is checked at load) start or stop
+  beds at that time (word times: `word_anchors.beat_words`, the TTS alignment or the estimate).
+  Each piece is a timings `ambience` entry with `fade_in`, `fade_out`, `gain`, maybe `width`;
+  `ambience.designed_entries` picks those (the key `fade_in`), `ambience_spans` leaves them out,
+  and `mix.plan_ambience` places each as is (`AmbiencePlacement.width`; ducked under speech by its
+  bed's duck). The scene fingerprint excludes scene / beat `ambience` (mixed at the join).
+- **Cues**: `SfxCue` / the `sfx` action gain `repeat` (1–100), `every` (s), `room` (`True` the
+  scene's room, a `RoomName`, `False` / `none` dry; `None` → `audio.sfx_room`, default false) and
+  named `pan` positions; a repeated cue's `pan` may be a `PanMove {from, to}`: the plays step
+  evenly from one to the other (`staging.repeat_pans`). `sfx.repeated` gives each play's time and
+  params (footsteps alternate feet, `cartoon.foley.FEET`). `SfxEvent.room` (timings `room`, only
+  when set) makes `sfx.placed` run the dry sound through `staging.stage_voice` (panned early
+  reflections, wide tail; `align: end` aligns the dry sound's end). `staging.cue_room` resolves
+  the room; the scene's `room` default `audio.room`. `NarratedScene.sfx(..., repeat, every, room)`
+  does the same in videos. Measured on the demo (scratch `s288/caller`, Kokoro): every cue's onset
+  within 2 ms of its word; seven `step_wood` plays `{from: far_left, to: far_right}` in the
+  `small_office` measure R−L −8.9 → +11.0 dB monotonically.
+- **Scene sounds without pictures** (`audio.scene_sounds`, audio-only renders; default false and
+  the old warning). `stage_sounds`: the stage's set beds as `ambience.set_ambience` chooses them
+  (its `ambience` / the video's, rain particles, `light` changes half-way through their fade,
+  rooms and iso indoor `room_tone`, iso crickets); on a plain stage (no `level`, no `iso`) a
+  `_Walker` follows each character's x (marks via `mark_x`, a 16:9 frame 14.2 units wide;
+  entering characters start off stage) and `walk_to` / `run_to` / `enter` / `exit` play
+  `cartoon.foley.foley_cues` of a `PlayedAction` (walk seconds from `walk_seconds` and the
+  character's `cartoon_motion`, limited to the next beat; panned at the walk's middle); `open` /
+  `close` of a `door` prop or room door → `door_cues`; `knock`, `switch_on/off` (click, not the
+  quiet props), `jump` (boing after the crouch), `emote` / `react` to surprised (pop), `effect`
+  (`EFFECT_SOUNDS`). The first beat's actions wait for the set's fade-in (`STAGE_ENTRANCE`).
+  Against the video's own scene code (scratch `s288/stagedemo`): the same events, within 25–50 ms
+  (frame rounding at draft fps). Left out (named in the warning): a level's or iso place's moves,
+  vehicles, thrown props, pours, lightning, alarms, fires, ringing phones. `clip_sound`: a
+  `video_clip`'s trim, speed (`fit_duration`), loop and volume (0.25 under narration) via
+  `clips.clip_audio`, faded over 0.5 s, mixed into `voice.wav` (`write_voice_track(clips=)`).
+- **Sections**: `ambience` on sections; a pause section takes `ambience` and `room` (a pause's
+  cues sound in its room). `vidgen schema` has both.
+- **Compatibility**: with nothing set, `_design_sound` returns at once, no event has a room and no
+  timings key changes. Pinned: Step 284's audio-only render (bytes equal with the Step 288 options
+  neutral), the video mix (`test_video_mix_is_pinned`, bytes equal with them); frame baseline
+  33 stills, max difference 0.
+- **Public**: config scene / section / pause `ambience`, beat `ambience`, `sfx` `repeat` / `every`
+  / `room` / pan positions and moves, `audio.ambience_crossfade`, `sfx_room`, `scene_sounds`;
+  `NarratedScene.sfx(repeat=, every=, room=)`; `SfxEvent.room`; `vidgen.api.PanMove`.

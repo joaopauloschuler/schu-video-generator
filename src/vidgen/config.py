@@ -10,7 +10,7 @@ errors into a readable :class:`~vidgen.errors.VidgenError`.
 from __future__ import annotations
 
 import re
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from typing import Annotated, Any, Literal, Union
 
 from pydantic import (
@@ -258,6 +258,78 @@ class PanMove(_Strict):
     """Where the voice is as the line starts: -1 (left) to 1 (right), or far_left, left, centre, right, far_right."""
     to: PanSetting
     """Where it is as the line ends (an eased move between the two)."""
+
+
+#: Room presets of ``room:`` (:data:`vidgen.staging.ROOMS`; a test keeps the two equal).
+RoomName = Literal["none", "small_office", "corridor", "hall", "outdoors", "car", "phone"]
+#: The ambience beds a scene, a section or a beat may name (:data:`vidgen.ambience.AMBIENCE_BEDS`;
+#: a test keeps the two equal; DESIGN.md §112).
+AmbienceBedName = Literal["rain", "fire", "birdsong", "city", "room_tone", "crickets", "hum", "alarm"]
+
+
+class AmbienceConfig(_Strict):
+    """A scene's ``ambience:`` as a mapping (DESIGN.md §112)."""
+
+    beds: list[AmbienceBedName] | dict[AmbienceBedName, Annotated[float, Field(ge=-30, le=12)]] = Field(min_length=1)
+    """The beds: rain, fire, birdsong, city, room_tone, crickets, hum (a lab, a ship), alarm; or bed -> level change in dB ({hum: 0, rain: -10}: rain heard through the walls)."""
+    gain: float = Field(default=0.0, ge=-30, le=12)
+    """Level change of all the beds in dB (0: their own level, well under the voices)."""
+    width: float | None = Field(default=None, ge=0, le=2)
+    """Stereo width of the beds here: 1 as they are, 0 mono, up to 2 wider; default audio.ambience_width."""
+
+    def levels(self) -> dict[str, float]:
+        """Each bed's level change (dB): ``gain`` plus its own."""
+        own = self.beds if isinstance(self.beds, dict) else dict.fromkeys(self.beds, 0.0)
+        return {name: self.gain + float(level) for name, level in own.items()}
+
+
+#: ``ambience:`` of a scene or a section: a bed, a list of beds, ``{beds, gain, width}`` or false.
+AmbienceSetting = Union[Literal[False], AmbienceBedName, list[AmbienceBedName], AmbienceConfig]
+
+
+class AmbienceChange(_Strict):
+    """A beat's ``ambience:``: beds starting or stopping during the beat (rain that starts on a
+    word, a hum that stops; DESIGN.md §112)."""
+
+    start: AmbienceBedName | list[AmbienceBedName] | None = None
+    """Beds that start here (they fade in and play to the end of the scene unless a later beat stops them)."""
+    stop: AmbienceBedName | list[AmbienceBedName] | Literal["all"] | None = None
+    """Beds that stop here (they fade out), or all."""
+    at: Annotated[float, Field(ge=0, lt=1)] | Annotated[str, Field(pattern=r"^\s*(@|end\s*$)")] = 0.0
+    """When: a fraction of the beat's line (0 = its start), a word it says ("@rain", "@rain#2", "@rain+0.5s"), or end (when the line ends)."""
+    fade: float | None = Field(default=None, gt=0, le=20)
+    """Seconds of the fade in or out; default the bed's own (rain 1.5)."""
+    gain: float = Field(default=0.0, ge=-30, le=12)
+    """Level change of the beds that start, in dB."""
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _anchor(cls, value: Any) -> Any:
+        if isinstance(value, str) and is_word_anchor(value):
+            parse_word_anchor(value)
+            return value.strip()
+        return value
+
+    @model_validator(mode="after")
+    def _something(self) -> AmbienceChange:
+        if self.start is None and self.stop is None:
+            raise ValueError("an ambience change starts or stops beds: give start (a bed or a list) and / or stop (a bed, a list or all)")
+        return self
+
+    def started(self) -> list[str]:
+        """The beds that start here."""
+        return [] if self.start is None else [self.start] if isinstance(self.start, str) else list(self.start)
+
+    def stopped(self, playing: Iterable[str]) -> list[str]:
+        """The beds of ``playing`` that stop here."""
+        names = list(playing)
+        if self.stop is None:
+            return []
+        if self.stop == "all":
+            return names
+        wanted = [self.stop] if isinstance(self.stop, str) else list(self.stop)
+        return [n for n in names if n in wanted]
+
 
 #: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
 TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
@@ -2056,12 +2128,30 @@ class SfxCue(_Strict):
     """Seconds from the scene's start."""
     gain: float = Field(default=0.0, ge=-60, le=12)
     """Level change in dB (0: the sound's own level, about 7 dB under narration)."""
-    pan: float = Field(default=0.0, ge=-1, le=1)
-    """-1 left, 0 centre, 1 right."""
+    pan: PanSetting | PanMove = 0.0
+    """-1 left, 0 centre, 1 right, or far_left, left, centre, right, far_right; a repeated cue also {from, to}: its plays step across (footsteps crossing)."""
     align: Literal["start", "end"] = "start"
     """start: the sound starts at `at`; end: it ends there (a riser landing on a reveal)."""
     params: SfxParams = Field(default_factory=SfxParams)
     """duration, pitch, intensity of a built-in sound."""
+    repeat: int = Field(default=1, ge=1, le=100)
+    """How many times the sound plays (footsteps, knocks, rings), every `every` seconds; steps alternate feet."""
+    every: float = Field(default=0.5, gt=0, le=30)
+    """Seconds from one repeat to the next."""
+    room: bool | RoomName | None = None
+    """The room it sounds in: true its scene's room (like the voices), a room name, or false / none dry; default audio.sfx_room."""
+
+    @property
+    def pan_value(self) -> float:
+        """``pan`` as a number from -1 to 1 (a move: where it starts)."""
+        return self.pans[0]
+
+    @property
+    def pans(self) -> list[float]:
+        """The pan of each play (:func:`vidgen.staging.repeat_pans`)."""
+        from vidgen.staging import repeat_pans
+
+        return repeat_pans(self.pan, self.repeat)
 
     @field_validator("at", mode="before")
     @classmethod
@@ -2398,10 +2488,6 @@ class SceneMusic(_Strict):
         return {role: v.model_dump() if isinstance(v, ComposeInstrument) else v for role, v in self.instruments.items()}
 
 
-#: Room presets of ``room:`` (:data:`vidgen.staging.ROOMS`; a test keeps the two equal).
-RoomName = Literal["none", "small_office", "corridor", "hall", "outdoors", "car", "phone"]
-
-
 class RoomConfig(_Strict):
     """``room:`` as a mapping (DESIGN.md §111.4)."""
 
@@ -2438,6 +2524,12 @@ class AudioConfig(_Strict):
     """Stereo width of the music: 1 as it is, 0 mono (centred), up to 2 wider."""
     ambience_width: float = Field(default=1.0, ge=0, le=2)
     """Stereo width of the ambience beds (a stage's rain, a fireplace): 1 as it is, 0 mono, up to 2 wider."""
+    ambience_crossfade: float = Field(default=2.0, ge=0, le=20)
+    """Seconds over which a scene's (or section's) ambience: beds cross-fade into the next scene's, centred on the change."""
+    sfx_room: bool = False
+    """true: sound effects (a scene's sfx, sfx actions, the sounds of an audio-only render's scenes) sound in their scene's room like its voices; a cue's own room wins; default false (dry)."""
+    scene_sounds: bool = False
+    """Audio-only renders: also play what scenes would sound like, worked out without pictures: a stage's set ambience and rain, footsteps of walks, doors, knocks, switches, jumps and surprised faces, a video_clip's own sound (DESIGN.md §112); default false (left out with a warning)."""
 
 
 #: Audio file formats of an audio-only render and their default bitrates (DESIGN.md §111.1).
@@ -2889,6 +2981,26 @@ class BeatConfig(_Strict):
     """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; Kokoro changes speed, pitch, loudness and pauses; ElevenLabs uses an audio tag (eleven_v3) or voice settings, OpenRouter an instruction or the audio's speed, pitch and loudness; default the voice's emotion."""
     cite: list[PositiveInt | Identifier] = Field(default_factory=list)
     """References of the scene this beat cites (their ids, or 1-based places in the scene's references): while it plays, the on-screen citation shows their numbers; default: the scene's citation shows all its references."""
+    ambience: AmbienceChange | list[AmbienceChange] | None = None
+    """Ambience beds that start or stop during this beat: {start: rain, at: "@rain"}, {stop: hum, at: end, fade: 3} or a list; at is a fraction of the line, a word it says or end; the scene's ambience: is what plays before."""
+
+    @property
+    def ambience_changes(self) -> list[AmbienceChange]:
+        """``ambience`` as a list."""
+        return [] if self.ambience is None else [self.ambience] if isinstance(self.ambience, AmbienceChange) else list(self.ambience)
+
+    @model_validator(mode="after")
+    def _check_ambience_words(self) -> BeatConfig:
+        """An ambience change at a word: the beat must say it."""
+        from vidgen.word_anchors import find_words
+
+        for change in self.ambience_changes:
+            if isinstance(change.at, str) and is_word_anchor(change.at):
+                try:
+                    find_words(parse_word_anchor(change.at), self.text.split(), self.id)
+                except ValueError as exc:
+                    raise ValueError(f"ambience at {change.at!r}: {exc}") from None
+        return self
 
     @model_validator(mode="after")
     def _check_interrupt(self) -> BeatConfig:
@@ -2998,6 +3110,8 @@ class SceneConfig(_Strict):
     """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
     room: RoomSetting | None = None
     """The room this scene's voices sound in: small_office, corridor, hall, outdoors, car, phone, none, or {use, amount, narrator}; default audio.room."""
+    ambience: AmbienceSetting | None = None
+    """Sound beds under this scene: rain, fire, birdsong, city, room_tone, crickets, hum, alarm, a list, or {beds, gain, width}; they cross-fade into the next scene's (audio.ambience_crossfade); false or none: no bed (a stage's own foley beds still play)."""
     music: bool | SceneMusic = True
     """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here; under composed music also {mood, key, tempo, instruments, seed} from this scene's first bar."""
     transition: TransitionSetting | None = None

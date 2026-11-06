@@ -235,6 +235,13 @@ def test_audio_only_render_is_pinned_without_staging(tmp_path: Path) -> None:
     same = Project.load(_write(tmp_path / "q", neutral))
     _voice_all(same)
     assert render_audio(same).output.read_bytes() == render_audio(project).output.read_bytes()
+    # Step 288's options unset or neutral (no bed, cues dry, scene sounds on a project without stage or clip scenes)
+    designed = {**PIN, "audio": {"sfx_room": False, "ambience_crossfade": 4.0, "scene_sounds": True}}
+    designed["sections"] = [{**PIN["sections"][0], "ambience": False, "sfx": [{"sound": "chime", "at": 0.1, "repeat": 1, "room": False, "pan": "centre"}]},
+                            PIN["sections"][1]]
+    still = Project.load(_write(tmp_path / "r", designed))
+    _voice_all(still)
+    assert render_audio(still).output.read_bytes() == render_audio(project).output.read_bytes()
 
 
 def test_staged_render_places_the_voices(tmp_path: Path) -> None:

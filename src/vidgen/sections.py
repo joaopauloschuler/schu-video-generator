@@ -3,11 +3,12 @@
 An audiobook or a podcast episode has no pictures to choose, so its config may list
 ``sections`` instead of ``scenes``. :func:`expand_sections` turns them into scenes before the
 config is validated (so every tool sees an ordinary project): a section ``{id, title, voice,
-room, music, sfx, beats}`` becomes a ``text_card`` scene showing its title (a video render of the
-project is a plain slideshow), the title also starting a chapter; its beats are the usual beats
-(``text``, ``voice``, ``emotion``, ``sting``, ``pause``, ``overlap``, ``actions: [{sfx: ...}]``),
-a plain string being a beat of that text; a ``{pause: S}`` section becomes a silent scene of S
-seconds (with its own ``sfx`` and ``music``).
+room, music, sfx, ambience, beats}`` becomes a ``text_card`` scene showing its title (a video
+render of the project is a plain slideshow), the title also starting a chapter; its beats are
+the usual beats (``text``, ``voice``, ``emotion``, ``sting``, ``pause``, ``overlap``,
+``ambience``, ``actions: [{sfx: ...}]``), a plain string being a beat of that text; a ``{pause:
+S}`` section becomes a silent scene of S seconds (with its own ``sfx``, ``music``, ``ambience``
+and ``room``, DESIGN.md §112).
 """
 
 from __future__ import annotations
@@ -21,8 +22,8 @@ from typing import Any
 from vidgen.errors import Problem, VidgenError
 
 #: Keys of a section, and of a pause between sections.
-SECTION_KEYS: tuple[str, ...] = ("id", "title", "voice", "room", "music", "sfx", "beats")
-PAUSE_KEYS: tuple[str, ...] = ("id", "pause", "sfx", "music")
+SECTION_KEYS: tuple[str, ...] = ("id", "title", "voice", "room", "music", "sfx", "ambience", "beats")
+PAUSE_KEYS: tuple[str, ...] = ("id", "pause", "sfx", "music", "ambience", "room")
 #: The scene type a section becomes.
 SECTION_TYPE = "text_card"
 #: The card text of a pause (a silent scene must show something in a video render).
@@ -64,11 +65,10 @@ def _scene(n: int, section: Any, title: str, source: str) -> dict[str, Any]:
         scene["params"] = {"text": heading if isinstance(heading, str) and heading.strip() else title}
         if heading is not None:
             scene["chapter"] = heading
-        for key in ("voice", "room"):
-            if key in section:
-                scene[key] = section[key]
+        if "voice" in section:
+            scene["voice"] = section["voice"]
         scene["beats"] = _beats(section["beats"])
-    for key in ("music", "sfx"):
+    for key in ("room", "music", "sfx", "ambience"):
         if key in section:
             scene[key] = section[key]
     return scene

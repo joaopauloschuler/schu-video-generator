@@ -223,9 +223,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
+        # a scene's and a beat's ambience (§112) are mixed when the video is joined: no pixels, no timing
         "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True,
-                                                       "references": True, "figure_credit": True,
-                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite"}}}),
+                                                       "references": True, "figure_credit": True, "ambience": True,
+                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite", "ambience"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},

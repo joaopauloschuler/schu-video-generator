@@ -1289,8 +1289,9 @@ def sound_entries(library: SoundLibrary, preview_dir: Path | None = None) -> lis
 class SfxEvent:
     """One sound effect of a scene: when (``time``, seconds), which ``sound``, ``gain`` (dB),
     ``pan`` (-1 left to 1 right), ``align`` (``start``: it starts at ``time``; ``end``: it ends
-    there), the sound's ``params``, the ``beat`` it belongs to (``None``: none) and ``duck``:
-    whether it ducks under the narration (a beat's music sting, DESIGN.md §69.19)."""
+    there), the sound's ``params``, the ``beat`` it belongs to (``None``: none), ``duck``:
+    whether it ducks under the narration (a beat's music sting, DESIGN.md §69.19) and the
+    ``room`` it sounds in (a :data:`vidgen.staging.ROOM_PRESETS` name; ``None``: dry, §112)."""
 
     time: float
     sound: str
@@ -1300,9 +1301,11 @@ class SfxEvent:
     params: Mapping[str, Any] = field(default_factory=dict)
     beat: str | None = None
     duck: bool = False
+    room: str | None = None
 
     def to_json(self) -> dict[str, Any]:
-        """``{time, sound, gain, pan, align, params, beat}``, plus ``duck: true`` when it ducks."""
+        """``{time, sound, gain, pan, align, params, beat}``, plus ``duck: true`` when it ducks
+        and ``room`` when it sounds in one."""
         data = {
             "time": round(self.time, 6),
             "sound": self.sound,
@@ -1314,6 +1317,8 @@ class SfxEvent:
         }
         if self.duck:
             data["duck"] = True
+        if self.room is not None:
+            data["room"] = self.room
         return data
 
     @classmethod
@@ -1322,11 +1327,30 @@ class SfxEvent:
         return cls(
             float(data["time"]), str(data["sound"]), float(data.get("gain", 0.0)), float(data.get("pan", 0.0)),
             str(data.get("align", "start")), dict(data.get("params") or {}), data.get("beat"), bool(data.get("duck", False)),
+            data.get("room"),
         )
 
     def shifted(self, offset: float) -> SfxEvent:
         """The same event ``offset`` seconds later (scene time → video time)."""
         return replace(self, time=self.time + offset)
+
+
+def repeated(sound: str, at: float, repeat: int, every: float, params: Mapping[str, Any]) -> list[tuple[float, dict[str, Any]]]:
+    """``(time, params)`` of a cue played ``repeat`` times ``every`` seconds from ``at``
+    (DESIGN.md §112): footsteps alternate feet as a walk's do
+    (:data:`vidgen.cartoon.foley.FEET`: every second one lower and softer, unless ``params``
+    give the pitch or intensity)."""
+    from vidgen.cartoon.foley import FEET, STEP_SOUNDS
+
+    out = []
+    for k in range(repeat):
+        given = dict(params)
+        if sound in STEP_SOUNDS and repeat > 1:
+            pitch, intensity = FEET[k % 2]
+            given.setdefault("pitch", pitch)
+            given.setdefault("intensity", intensity)
+        out.append((round(at + k * every, 6), given))
+    return out
 
 
 def stereo(samples: np.ndarray, gain_db: float = 0.0, pan: float = 0.0) -> np.ndarray:
@@ -1345,11 +1369,18 @@ def stereo(samples: np.ndarray, gain_db: float = 0.0, pan: float = 0.0) -> np.nd
 def placed(event: SfxEvent, library: SoundLibrary, master_db: float = 0.0, audio: np.ndarray | None = None) -> tuple[int, np.ndarray]:
     """``(first sample, (n, 2) samples)`` of an event on a track that starts at time 0 (the first
     sample may be negative: the part before 0 is cut); ``audio``: samples to play instead of the
-    event's sound."""
-    data = stereo(library.audio(event.sound, event.params) if audio is None else audio, event.gain + master_db, event.pan)
+    event's sound. An event in a ``room`` is placed there as a voice is (panned with its early
+    reflections, the reverberation wide; :func:`vidgen.staging.stage_voice`), longer by its tail."""
+    samples = library.audio(event.sound, event.params) if audio is None else audio
+    if event.room is not None:
+        from vidgen.staging import VoiceStaging, stage_voice
+
+        data = stereo(stage_voice(samples, VoiceStaging(pan=event.pan, room=event.room)), event.gain + master_db)
+    else:
+        data = stereo(samples, event.gain + master_db, event.pan)
     start = round(event.time * RATE)
     if event.align == "end":
-        start -= len(data)
+        start -= len(samples)   # the sound itself ends there (a room's tail rings on)
     return start, data
 
 

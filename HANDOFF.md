@@ -24662,3 +24662,44 @@ project), repo work is generic.
 ## Step 287 — Cookbook: voices in iso cartoons
 
 - Docs only: docs/COOKBOOK-ISO-CARTOONS.md is now "craft notes" and gains a section on stereo staging and rooms for cartoon videos (per-character pan, follow_stage, room per scene matched to the set, narrator dry and centred, moves across a line, narrower music, the mono check). The YAML snippet was validated with vidgen validate; vidgen audio check --mono was tried on an MP4. tests/test_docs.py passes.
+
+## Step 288 — Sound design in audio-only renders (Phase AG starts)
+
+- **Built** (DESIGN §112.1, new module `sound_design.py`): `ambience:` beds on scenes / sections /
+  pause sections (a bed, a list, `{beds: list | {bed: dB}, gain, width}`, `false`) that cross-fade
+  at scene changes over `audio.ambience_crossfade` (2 s) and play on unchanged when the same; a
+  beat's `ambience: {start | stop, at: fraction | "@word" | end, fade, gain}`; cue options
+  `repeat`, `every`, `room` (and `audio.sfx_room`), named pans and `pan: {from, to}` steps for
+  repeated cues (`staging.repeat_pans`), in videos too; `audio.scene_sounds`: audio-only renders
+  work out stage set beds, plain-stage walks / enter / exit, doors, knocks, switches, jumps,
+  surprise pops, effect sounds and a `video_clip`'s sound. The video join adds scene / beat beds
+  too (`pipeline._add_designed_ambience`); they are excluded from the scene fingerprint.
+- **Files**: `sound_design.py` (new), `audio_only.py`, `config.py` (`AmbienceConfig`,
+  `AmbienceChange`, `AmbienceBedName`; `RoomName` moved up), `ambience.py` (`designed_entries`),
+  `mix.py` (`AmbiencePlacement.width`), `sfx.py` (`SfxEvent.room`, `repeated`, `placed` in a room),
+  `staging.py` (`cue_room`, `repeat_pans`), `scene.py` (`sfx(repeat, every, room)`),
+  `scenes/sfx_action.py`, `sections.py`, `schema.py`, `render/pipeline.py`,
+  `render/fingerprint.py`, `api.py` (`PanMove`). Docs: CONFIG (sfx table, "Sound design"
+  subsection), guide + `AGENTS.md`, DESIGN §112 (Phase AG plan), tasklist (Phase AG), CHANGELOG.
+- **Tests**: new `test_sound_design.py` (23); pinned tests extended: `test_staging`'s audio-only
+  render and `test_audio_only`'s video mix byte-equal with the new options neutral. Run and
+  passed: `test_sound_design`, `test_audio_only`, `test_staging`, `test_sfx`, `test_schema` (76,
+  ~3 min), `test_config`, `test_docs`, `test_guide`, `test_api`, `test_actions`, `test_scene`,
+  `test_video_clip`, `test_cartoon_foley`, `test_cartoon_sounds`, `test_cartoon_room`,
+  `test_overlap_pinned`, `test_audio_output`, `test_project`. Frame baseline: 33 stills, max
+  difference 0.
+- **Demo** (`/home/claude/work/scratch/s288/caller/`, Kokoro, 0:51, −18.2 LUFS, mono PASS): rain
+  and city on a porch, footsteps, a knock and a creak; a hall with the rain −14 dB through the
+  walls, seven wooden steps `{from: far_left, to: far_right}`, a phone ringing through the `phone`
+  room, a caller on a `phone` section; a fire bed added; the rain stops on "stopped".
+  `s288/measure.py PROJECT PNG`: cue onsets within 2 ms of their words (the creak's slow swell
+  reads +72–87 ms), the steps' R−L −8.9 → +11.0 dB monotonically, beds 16–23 LU under the
+  voices; spectrogram `s288/caller_spectro.png`. `s288/stagedemo` + `compare_stage.py`: the
+  stage events worked out without pictures match the video render's within 25–50 ms.
+- **Known gaps**: not worked out (named in the warning): platform `level` and iso moves,
+  vehicles, thrown props, pours, lightning, alarms, fires, phones; a walk's foley is panned at its
+  middle (not moving); the warning lists those kinds even when a stage has none; a clip's sound
+  goes into `voice.wav` (the voice leveller sees it); `vidgen direct` does not edit `ambience`.
+- **Next (289)**: music cues per scene / section can reuse `ambience_entries`' crossfade walk
+  (scene changes, centred fades) for music beds; `designed_entries` shows how timings entries
+  carry their own fades.
