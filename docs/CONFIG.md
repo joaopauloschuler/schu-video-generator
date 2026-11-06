@@ -4020,6 +4020,61 @@ example in the video's description:
 
 > Music rendered with the GeneralUser GS SoundFont by S. Christian Collins (https://www.schristiancollins.com/generaluser).
 
+## Audio only (`audio_only`, `sections`, `pacing`)
+
+`vidgen render --audio-only` writes only the sound of any project, `output/<output>.wav` (48 kHz
+stereo, 24-bit), and renders no scene: the narration and dialogue voices (with their effects and
+emotions, as `vidgen tts` made them), music beds ducked under the voices, sound effects, stings,
+loudness normalisation and the limiter (`audio:`). `audio_only: true` makes every `vidgen render`
+of the project do that. The timings go to `build/final/audio/timings.json`; `--json` prints them
+with the `mix` report. What only a scene's code makes while it renders is left out and named in
+a warning: stage foley and ambience, automatic animation sounds (`sfx: {auto: true}`), a
+`video_clip`'s sound.
+
+An audio-only project may list `sections` instead of `scenes` (an audiobook, a podcast):
+
+```yaml
+title: The Night Ferry
+audio_only: true
+voice: {provider: kokoro, voice: bf_emma}
+voices: {ferryman: {voice: bm_george, label: Ferryman}}
+music: {source: calm, volume: -2}
+sections:
+  - id: shore
+    title: The Shore               # starts a chapter
+    sfx: [{sound: bell, at: 0.2}]  # seconds from the section's start
+    beats:
+      - The last bell rang across the water.          # a plain line
+      - {text: "Evening. Only one passenger?", voice: ferryman, emotion: calm}
+      - pause: 1.0                                    # silence after the line before
+      - {text: "The engine hummed.", actions: [{sfx: engine, at: "@hummed"}]}
+      - {text: "There. *Home*.", voice: ferryman, sting: reveal}
+  - pause: 2.0                     # a silent section
+```
+
+A section (`id`, `title`, `voice`, `music`, `sfx`, `beats`) becomes a `text_card` scene showing its
+title (a video render is a plain slideshow); its beats are ordinary beats. A beat's `pause: S` (or a
+`- pause: S` item after it, in any scene) is the silence after its line, instead of
+`narration.pad` in a video or the gap below in audio.
+
+`pacing` times an audio-only render (seconds; the defaults):
+
+| key | default | |
+|---|---|---|
+| `timing` | `speech` | `speech`: each line as long as its audio, then the gaps below; `video`: the video's own timeline (pads, silent scenes, crossfades), the MP4's soundtrack without pictures |
+| `line` | `narration.pad` | gap between two lines of the same voice |
+| `speaker` | `0.6` | gap where the voice changes |
+| `scene` | `1.2` | gap between scenes / sections |
+| `chapter` | `2.5` | gap before a scene that starts a chapter |
+| `sting_before` | `0.6` | a sting at a line's start sounds this long before the speech |
+| `sting_after` | `0.4` | after a sting at a line's end (its own length first), before the next line |
+| `silent` | its `duration` | how long every silent scene lasts (a video's title cards) |
+| `lead_in` | `0.5` | silence before the first line |
+| `tail` | `1.5` | silence after the last line |
+
+No gap is added next to a silent scene (it is the gap). `vidgen story draft --audio` drafts such a
+project from a story in prose (sections of lines with the speakers' voices and emotions).
+
 ## Transitions (`transition`)
 
 How the video passes from one scene to the next. Without any, scenes are joined by cuts (every

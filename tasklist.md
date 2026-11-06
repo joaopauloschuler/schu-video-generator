@@ -1671,6 +1671,24 @@ private (scratchpad); repo work stays generic. No AI API calls; Kokoro only.
 ### Step 282 — Arms at the sides by default
 - [~] The owner's decision: `arms: front` is the default everywhere (`generator.DEFAULT_ARMS`; `stage_arms` removed); `cartoon_arms: classic` / `look.arms: classic` opt out; the scene host follows `cartoon_arms`; gallery character entries (`stage`, nine showcases) re-rendered; docs (DESIGN §110.1, CONFIG, guide, CHANGELOG). **Committed untested at the owner's request (no time):** the test suites, `tests/test_mcp.py` and the frame baseline (expect 25 of 33 stills to change, arms only; then remake the references) still have to be run in a later step
 
+## Phase AF — Audio-only output (DESIGN §111)
+
+Audio files only (audiobooks of stories, podcast-style episodes, the sound of an existing video):
+fast, no Manim, reusing the narration, voices, music, sfx, ducking and loudness pipeline. No paid
+or AI API calls; Kokoro (local) only.
+
+### Step 283 — Audio-only renders and projects (owner's items 1–3)
+- [x] `vidgen render --audio-only` / `audio_only: true` writes `output/<output>.wav` (48 kHz stereo 24-bit: voices, music ducked, sfx, stings, normalisation, limiter) without rendering a scene, for any project; audio-only projects with `sections:` (`{id, title, voice, music, sfx, beats}`, `{pause: S}`; did-you-mean on unknown keys) that become `text_card` scenes; timing without pictures `pacing: {timing: speech | video, line, speaker, scene, chapter, sting_before, sting_after, silent, lead_in, tail}`, deterministic; a beat's `pause:` (and `- pause: S` items) in videos too; `vidgen story draft --audio`; a pinned video mix; tests `test_audio_only.py`; one Kokoro end-to-end sample
+
+### Step 284 — Output formats, loudness presets, transcripts (items 4, 7, 8)
+- [ ] `audio_output: {format: mp3 | m4a | wav | ogg, bitrate, channels: mono | stereo, sample_rate}` (ffmpeg only); loudness presets `podcast` (−16 LUFS stereo / −19 mono, −1 dBTP), `audiobook` (ACX-style: RMS −23…−18 dB, peaks ≤ −3 dB, room tone head 0.5–1 s and tail 1–5 s, noise floor), `broadcast` (EBU R128 −23 LUFS), `custom`, measured and reported pass / fail (`vidgen audio check` or lint); transcripts from the word timings: plain text with speakers, WebVTT, SRT, a chapters / timestamps list
+
+### Step 285 — Stereo staging and room acoustics (items 10, 11)
+- [ ] Per-voice / character `pan` (or left / centre / right; following a stage position or a beat's `pan:`; a moving voice if cheap); music / ambience stereo width; `room: small_office | corridor | hall | outdoors | car | phone | none` per scene / section via ffmpeg filters (no downloads), narrator optionally dry, smooth changes between rooms; a mono-compatibility check; opt-in for videos too
+
+### Step 286 — Critical review of Phase AF, and Step 282's pending checks
+- [ ] Review fixes for Steps 283–285; Step 282's checks: the character / cartoon / iso suites, `test_arms_front`, `tests/test_mcp.py` in full, the frame baseline (exactly the 25 stills with characters change, arms only: keep the old references as `frames_classic/`, remake them, update the baseline README)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

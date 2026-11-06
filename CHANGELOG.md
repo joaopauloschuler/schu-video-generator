@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–282)
+## Unreleased (Steps 193–283)
+
+### Audio only (Step 283)
+
+- `vidgen render --audio-only` (or `audio_only: true`) writes the project's sound alone, `output/<output>.wav`: narration and dialogue voices, music ducked under them, sound effects, stings, loudness normalisation; no scene is rendered, so it takes seconds.
+- Audio-only projects (audiobooks, podcasts) may list `sections:` (title, voice, music, sfx, lines; `- pause: 2` between them) instead of scenes; `vidgen story draft --audio` drafts one from a story.
+- Lines are timed by their speech plus `pacing:` gaps (between lines, speakers, sections, chapters, around stings); `pacing: {timing: video}` keeps a video's own timeline.
+- A beat's `pause: 1.5` (or a `- pause: 1.5` item after it) sets the silence after its line, in videos too.
 
 ### Arms at the sides by default (Step 282)
 

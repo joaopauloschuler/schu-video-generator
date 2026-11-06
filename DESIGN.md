@@ -21051,3 +21051,50 @@ takes the default unless a look says. A visible change for every existing video 
 frame baseline was remade (25 of 33 stills differ, arms only), and the gallery's character
 entries (`stage` and the nine cartoon / iso showcases) were rendered again. Pre-made SVG
 characters are untouched.
+
+## 111. Audio-only output (Phase AF, Step 283)
+
+Audiobooks, podcast-style episodes and the sound of an existing video, without Manim.
+
+- **Switch**: `vidgen render --audio-only` for one run, `audio_only: true` for the project (`output:`
+  and `format:` already mean other things, so neither carries it). `vidgen.audio_only.render_audio`
+  checks the scenes as a render does (`_check_scenes`, `warn_audio`), plans the timeline
+  (`plan_audio`), writes `build/<render>/audio/voice.wav` (each beat's MP3 at its start, shaped by
+  its `BeatWindow` like `add_narration`; 10 s blocks, a beat decoded when first needed), `sfx.wav`
+  (`sfx.write_track`, stings ducked, composed stings as in a render) and the mix
+  (`mix.mix_audio(..., always_write=True)`: the only change to `mix.py`, default off, so a video's mix
+  is unchanged — `test_video_mix_is_pinned` holds Step 282's numbers), copies it to
+  `Project.audio_path` (`<output>[_<variant>][_preview|_draft].wav`, 48 kHz stereo 24-bit) and writes
+  `timings.json` (the combined timings' shape, without `format`, plus `audio_only: {timing,
+  left_out}`). No `pre_render` / `post_render` hooks, no SRT (transcripts are Step 284).
+- **Timing** (`pacing:`): `speech` (default) times each line by its MP3 (else the word estimate)
+  and gaps — `line` (default `narration.pad`), `speaker`, `scene`, `chapter`, the beat's own `pause`;
+  a start sting `sting_before` ahead of the speech, an end sting its length + `sting_after` before the
+  next line; overlaps and interrupts through `beat_windows` as in a video; no gap next to a silent
+  scene (it lasts `pacing.silent` or its `duration`); the first scene starts at 0 with `lead_in`
+  before its first line (so no "Intro" chapter), `tail` after the last. `video` takes every start
+  from `VideoPlan` at the format's fps (frame-rounded `sfx` actions as the runner cues them): the
+  MP4's soundtrack. Both deterministic.
+- **Sounds**: only what the config fixes — a scene's `sfx:`, `sfx` actions (word anchors resolved
+  by the audio, §87.2), stings, generated voice sounds (§69.33), the type's `entrance_sfx` with
+  `sfx.auto`. Stage foley / ambience, automatic animation sounds and a clip's sound come from
+  scene code at render time; they are left out and named (`AudioPlan.left_out`, a warning,
+  `--json` `left_out`).
+- **Projects without pictures**: `sections:` (`vidgen.sections.expand_sections`, applied to the raw
+  config in `Project._load` and `parse_config`, before cuts, sets and translations): a section
+  `{id, title, voice, music, sfx, beats}` is a `text_card` scene showing its title (a video render
+  is a plain slideshow; no new scene type, so the gallery and the scene lists are unchanged), the
+  title also its `chapter`; a plain string is a beat; `{pause: S}` is a silent scene. Unknown keys
+  get a did-you-mean. Tools that edit the YAML's `scenes:` in place (`vidgen direct`, the MCP
+  editors) do not handle `sections:`.
+- **Pauses**: `BeatConfig.pause` (0–60 s) and `- pause: S` items (`config.merge_pause_items`, added to
+  the beat before, before default ids are given) replace the gap after a beat: `SpokenLine.pause`
+  in `beat_windows`, so videos (`VideoPlan` and the scene's clock alike) honour it too; unset, every
+  window is as before (frame baseline: the 8 character-free stills identical; the 25 with
+  characters differ by Step 282's arms only).
+- **Story draft**: `vidgen story draft --audio` (`DraftOptions.audio`) keeps the draft's voices,
+  lines, speakers and emotions as sections titled by the story's headings, the music bed,
+  `audio: {normalize: true}`; no cards, cast looks, sets, shots or actions; its own report sections
+  and TODOs (`commented_yaml(list_key="sections")`).
+- **Public**: config `audio_only`, `pacing`, `sections`, beat `pause`; CLI `render --audio-only`,
+  `story draft --audio`; `render --json` with `audio_only: true`. No new `vidgen.api` names.

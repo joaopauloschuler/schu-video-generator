@@ -226,7 +226,7 @@ def cmd_story(args: argparse.Namespace) -> CommandResult:
     if not any(scene.lines for scene in story.scenes):
         raise VidgenError(f"{source}: no story text to draft from")
     title = source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled"
-    options = DraftOptions(style=args.style, fmt=args.format, narrator=args.narrator, default_title=title, seed=args.seed)
+    options = DraftOptions(style=args.style, fmt=args.format, narrator=args.narrator, default_title=title, seed=args.seed, audio=args.audio)
     draft = draft_story(story, options)
     output = Path(args.out) if args.out else Path(source.stem)
     result = write_project(story_yaml(draft, source.name), output, force=args.force)
@@ -237,18 +237,22 @@ def cmd_story(args: argparse.Namespace) -> CommandResult:
     if args.json:
         return jsonout.story_document(project, draft, result, report, problems)
     doubtful = sum(1 for a in draft.attributions if a.speaker is None or a.confidence < 0.6)
-    beats = sum(len(s.get("beats", [])) for s in draft.config["scenes"])
+    beats = sum(len(s.beats) for s in project.config.scenes)
     print(
-        f"drafted {len(draft.scenes)} scenes ({beats} beats), {len(draft.cast)} characters, "
+        f"drafted {len(draft.scenes)} {'sections (audio only)' if args.audio else 'scenes'} ({beats} beats), {len(draft.cast)} characters, "
         f"{'first' if story.first_person else 'third'}-person, about {_format_seconds(project.estimated_duration())}; "
         f"{len(draft.attributions)} lines of dialogue ({doubtful} to check)"
     )
     for scene in draft.scenes:
-        print(f"  {scene.id:<16} {scene.place:<8} {scene.light:<8} {', '.join(scene.cast) or '-'}")
+        place = "" if args.audio else f" {scene.place:<8} {scene.light:<8}"
+        print(f"  {scene.id:<16}{place} {', '.join(scene.cast) or '-'}")
     print(f"{'created project in' if result.created else 'wrote'} {result.root if result.created else result.config}; report: {report}")
     for problem in problems:
         print(f"problem: {problem}", file=sys.stderr)
-    print("next: read story_draft.md, then `vidgen validate`, `vidgen storyboard`, `vidgen lint`; `vidgen tts` when it reads well")
+    if args.audio:
+        print("next: read story_draft.md, then `vidgen validate`; `vidgen tts` when it reads well, then `vidgen render` (the .wav)")
+    else:
+        print("next: read story_draft.md, then `vidgen validate`, `vidgen storyboard`, `vidgen lint`; `vidgen tts` when it reads well")
     return 1 if problems else 0
 
 
@@ -827,6 +831,8 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
     frames = args.frames_per_beat or (1 if args.frames else 0)
     started = time.monotonic()
     project = Project.load(args.project, variant=variant, output_dir=args.output_dir, draft=args.draft)
+    if args.audio_only or project.config.audio_only:
+        return _render_audio(args, project, started)
     result = render_project(
         project,
         preview=args.preview or args.draft,
@@ -854,6 +860,28 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
     mix = result.timings.get("mix")
     if mix is not None:
         print(f"loudness:  {_loudness_line(mix)}")
+    return 0
+
+
+def _render_audio(args: argparse.Namespace, project: Project, started: float) -> CommandResult:
+    """``vidgen render --audio-only`` (or ``audio_only: true``): the sound alone (DESIGN.md §111)."""
+    from vidgen.audio_only import render_audio
+
+    video_only = [name for name, given in (
+        ("--scene", args.scene), ("--no-audio", args.no_audio), ("--frames", args.frames or args.frames_per_beat),
+        ("--max-scenes", args.max_scenes), ("--keep-going", args.keep_going),
+    ) if given]
+    if video_only:
+        raise VidgenError(f"{', '.join(video_only)}: not with an audio-only render (no scene is rendered)")
+    preview = args.preview or args.draft
+    result = render_audio(project, preview=preview)
+    if args.json:
+        return jsonout.audio_render_document(project, result, preview, time.monotonic() - started)
+    print(f"audio:     {result.output}")
+    print(f"timing:    {result.timing} ({len(result.timings['scenes'])} scenes, {sum(len(s['beats']) for s in result.timings['scenes'])} beats)")
+    print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
+    print(f"loudness:  {_loudness_line(result.timings['mix'])}")
+    print(f"timings:   {result.timings_file}")
     return 0
 
 
@@ -1952,6 +1980,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--format", choices=["16:9", "9:16"], default="16:9", help="frame: 16:9 (default) or 9:16 (vertical)")
     p.add_argument("--narrator", metavar="VOICE", help="the narrator's Kokoro voice (default: bf_emma; told in the first person: the protagonist's voice)")
     p.add_argument("--seed", type=int, default=0, help="seed of the random looks given once the built-in ones are used (default: 0)")
+    p.add_argument("--audio", action="store_true", help="an audio-only project (an audiobook): sections of lines with the voices and emotions, no pictures")
     p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
     p.set_defaults(func=cmd_story)
 
@@ -2121,6 +2150,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene (repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
+    p.add_argument(
+        "--audio-only", action="store_true",
+        help="write only the sound, <output>.wav (narration, voices, music, effects; timed by pacing:), rendering no scene; also audio_only: true",
+    )
     p.add_argument("--keep-going", action="store_true", help="continue after a scene fails")
     jobs_arg(p)
     p.add_argument("--frames", action="store_true", help="also save a PNG still at the end of each beat (build/.../frames/)")

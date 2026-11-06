@@ -98,13 +98,15 @@ def card_mood(lights: Sequence[str], music: str, text: str) -> str | None:
 class DraftOptions:
     """How to draft: ``style`` (``iso`` / ``flat``), ``fmt`` (``16:9`` / ``9:16``), the
     narrator's Kokoro voice (``None``: :data:`NARRATOR_VOICE`, or the protagonist's in the first
-    person), the title when the story has none, the seed of the random looks."""
+    person), the title when the story has none, the seed of the random looks, and ``audio``: an
+    audio-only project (sections of lines, no pictures; DESIGN.md §111)."""
 
     style: str = "iso"
     fmt: str = "16:9"
     narrator: str | None = None
     default_title: str = "Untitled"
     seed: int = 0
+    audio: bool = False
 
 
 @dataclass
@@ -512,13 +514,57 @@ def draft_story(story: Story, options: DraftOptions | None = None) -> StoryDraft
     if sets:
         config["sets"] = sets
     config["scenes"] = scenes
+    if options.audio:
+        _to_audio(draft, [s for s in story.scenes if s.lines])
     return draft
+
+
+#: Keys of a drafted beat an audio-only project keeps (the rest stage the picture).
+AUDIO_BEAT_KEYS: tuple[str, ...] = ("text", "voice", "emotion")
+
+
+def _to_audio(draft: StoryDraft, story_scenes: Sequence[StoryScene]) -> None:
+    """Turn the drafted cartoon into an audio-only project (DESIGN.md §111): the same voices,
+    lines, speakers and emotions as ``sections`` (one per story scene, titled by its heading),
+    the music bed, and no pictures (no title / end card, cast looks, sets, shots or actions)."""
+    config = draft.config
+    stages = config["scenes"][1:-1]   # between the title card and the end card
+    sections = []
+    for scene, story_scene in zip(stages, story_scenes):
+        section: dict[str, Any] = {"id": scene["id"]}
+        if story_scene.heading:
+            section["title"] = story_scene.heading
+        section["beats"] = [{k: beat[k] for k in AUDIO_BEAT_KEYS if k in beat} for beat in scene["beats"]]
+        sections.append(section)
+    draft.config = {
+        "title": config["title"],
+        "audio_only": True,
+        "voice": config["voice"],
+        **({"voices": config["voices"]} if "voices" in config else {}),
+        "narration": config["narration"],
+        "pacing": {"speaker": 0.6, "scene": 1.5, "chapter": 2.5},
+        "music": config["music"],
+        "audio": {"normalize": True},
+        "sections": sections,
+    }
+    draft.scene_comments = [[f"story: line {notes.source_line} ({notes.reason})"] for notes in draft.scenes]
+    draft.beat_comments = [
+        [[c for c in notes if c.startswith(("TODO: who", "TODO: speaker"))] for notes in scene] for scene in draft.beat_comments[1:-1]
+    ]
 
 
 def story_yaml(draft: StoryDraft, source: str) -> str:
     """The draft's ``video.yaml`` text with its comments (why each scene, TODOs on beats)."""
     from vidgen.plan_yaml import commented_yaml
 
+    if draft.options.audio:
+        header = [
+            f"# Audio-only draft written by `vidgen story draft --audio` from {source} (no AI: rules and keyword",
+            "# tables). One section per story scene: the lines with their speakers' voices and emotions; story_draft.md",
+            "# lists how sure each speaker is. Then: vidgen validate, vidgen tts, vidgen render (writes the .wav).",
+        ]
+        keys = {"voices": [f"TODO: {n}" for n in draft.notes]} if draft.notes else {}
+        return commented_yaml(draft.config, header, keys, draft.scene_comments, draft.beat_comments, list_key="sections")
     header = [
         f"# Draft written by `vidgen story draft` from {source} (no AI: rules and keyword tables). A starting",
         "# point: places, spots and walks are placeholders; story_draft.md lists every decision, how sure each",
@@ -551,7 +597,7 @@ def report_markdown(draft: StoryDraft, source: str, config_path: str) -> str:
         + (" (the protagonist's: the narrator is the one telling the story)" if story.first_person else "") + ".",
         f"- Music: `{draft.music[0]}`"
         + (f" (mood words: {', '.join(f'{b} {n}' for b, n in draft.music[1].items())})" if draft.music[1] else " (no mood words: the default)")
-        + "; captions in the speakers' colours; `auto_direct: true`.",
+        + ("; audio only (`audio_only: true`, sections of lines)." if options.audio else "; captions in the speakers' colours; `auto_direct: true`."),
         "",
         "## Cast",
         "",
@@ -565,9 +611,14 @@ def report_markdown(draft: StoryDraft, source: str, config_path: str) -> str:
         lines.append(f"| {row['id']} | {row['name']} | {row['kind']} ({row['kind_source']}) | {row['voice']} | {row['lines']} | {row['mentions']} | {note} |")
     if not draft.cast:
         lines.append("| - | no characters found | | | | | |")
-    lines += ["", "## Scenes", "", "| scene | starts at | place (why) | light (why) | changes | weather | objects added | on stage |",
-              "|---|---|---|---|---|---|---|---|"]
-    for s in draft.scenes:
+    if options.audio:
+        lines += ["", "## Sections (audio only)", "", "| section | starts at | title | lines |", "|---|---|---|---|"]
+        for s, section in zip(draft.scenes, draft.config["sections"]):
+            lines.append(f"| {s.id} | line {s.source_line} ({s.reason}) | {section.get('title', '-')} | {len(section['beats'])} |")
+    else:
+        lines += ["", "## Scenes", "", "| scene | starts at | place (why) | light (why) | changes | weather | objects added | on stage |",
+                  "|---|---|---|---|---|---|---|---|"]
+    for s in [] if options.audio else draft.scenes:
         lines.append(
             f"| {s.id} | line {s.source_line} ({s.reason}) | {s.place} ({s.place_reason}) | {s.light} ({s.light_reason}) | "
             f"{'; '.join(s.changes) or '-'} | {'; '.join(s.weather) or '-'} | {', '.join(s.objects) or '-'} | {', '.join(s.cast) or '-'}"
@@ -584,9 +635,25 @@ def report_markdown(draft: StoryDraft, source: str, config_path: str) -> str:
         lines.append("No dialogue found (double quotes: \"...\", “...” or «...»).")
     doubtful = [a for a in draft.attributions if a.speaker is None or a.confidence < DOUBTFUL]
     lines += ["", "## TODO (for the author or an agent)", ""]
-    todo = [
+    check = (
         f"Check the {len(doubtful)} doubtful attributions above (beats with `# TODO: speaker guessed`): set each beat's `voice:`."
-        if doubtful else "Read the attributions above once (all were tagged or clear).",
+        if doubtful else "Read the attributions above once (all were tagged or clear)."
+    )
+    if options.audio:
+        todo = [
+            check,
+            "Check the cast: a capitalised place or thing taken for a character, or a character missed (`voices:`).",
+            "Listen for pacing: `pause: S` after a line (or a `- pause: S` item), `pacing:` gaps between speakers and sections.",
+            "Add `sfx` where a sound tells the story (a section's `sfx:` list, a beat's `actions: [{sfx: NAME, at: \"@word\"}]`), "
+            "`sting:` on a reveal or a joke; a title read aloud as the first line if wanted.",
+            "Music: `vidgen list-music`; a section's level with `music: {volume: -6}`, none with `music: false`.",
+            "Then: `vidgen validate`, `vidgen tts`, `vidgen render` (the .wav in output/).",
+            *draft.notes,
+        ]
+        lines += [f"- [ ] {t}" for t in todo]
+        return "\n".join(lines) + "\n"
+    todo = [
+        check,
         "Check the cast: a capitalised place or thing taken for a character, or a character missed (`characters:` and `voices:`).",
         "Look at the generated looks (`vidgen character-sheet --all`): species, clothes and colours that suit the story.",
         "Places are ready-made placeholders: rename spots, add or move objects (`vidgen guide iso`), give each scene its own place.",

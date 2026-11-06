@@ -2391,6 +2391,32 @@ class AudioConfig(_Strict):
     """AAC bitrate of the video's audio; a loud mix (a Short at -14 LUFS) keeps its true peak better at 256k or 320k (the encoder's overshoot is smaller)."""
 
 
+class PacingConfig(_Strict):
+    """How an audio-only render times the beats (DESIGN.md §111): from the speech and these gaps
+    (seconds), or as the video's timeline."""
+
+    timing: Literal["speech", "video"] = "speech"
+    """speech: each line as long as its audio, then the gaps below; video: the video's own timeline (its pads, silent scenes and crossfades), the soundtrack of the MP4 without its pictures."""
+    line: float | None = Field(default=None, ge=0, le=10)
+    """Gap between two lines of the same voice; default narration.pad."""
+    speaker: float = Field(default=0.6, ge=0, le=10)
+    """Gap where the voice changes."""
+    scene: float = Field(default=1.2, ge=0, le=30)
+    """Gap between two scenes (sections)."""
+    chapter: float = Field(default=2.5, ge=0, le=30)
+    """Gap before a scene that starts a chapter (a section with a title)."""
+    sting_before: float = Field(default=0.6, ge=0, le=10)
+    """Seconds from a sting played at a line's start to that line's speech."""
+    sting_after: float = Field(default=0.4, ge=0, le=10)
+    """Seconds after a sting played at a line's end before the next line (the sting's own length comes first)."""
+    silent: float | None = Field(default=None, ge=0, le=60)
+    """Seconds every silent scene lasts (a video's title cards, pause sections); default: its own duration."""
+    lead_in: float = Field(default=0.5, ge=0, le=30)
+    """Silence before the first line."""
+    tail: float = Field(default=1.5, ge=0, le=30)
+    """Silence after the last line (music and effects play on into it)."""
+
+
 class ChaptersConfig(_Strict):
     """What the render writes about the video's chapters (DESIGN.md §52)."""
 
@@ -2748,6 +2774,8 @@ class BeatConfig(_Strict):
     """Seconds this beat starts before the previous beat's speech ends: both lines are heard (the earlier a little lower) and both mouths move; not on a scene's first beat."""
     interrupt: bool = False
     """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
+    pause: float | None = Field(default=None, ge=0, le=60)
+    """Seconds of silence after this beat's line, instead of narration.pad (or, in an audio-only render, the pacing gap); an item `- pause: 1.5` of a beats list adds it to the beat before."""
     emotion: EmotionSetting | None = None
     """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; Kokoro changes speed, pitch, loudness and pauses; ElevenLabs uses an audio tag (eleven_v3) or voice settings, OpenRouter an instruction or the audio's speed, pitch and loudness; default the voice's emotion."""
     cite: list[PositiveInt | Identifier] = Field(default_factory=list)
@@ -2803,6 +2831,32 @@ class TermConfig(_Strict):
 
 #: A ``terms:`` value: a colour (theme token or hex), or {color, tex}.
 TermSetting = ColorRef | TermConfig
+
+
+def _is_pause_item(item: Any) -> bool:
+    return isinstance(item, dict) and set(item) == {"pause"}
+
+
+def merge_pause_items(beats: list[Any]) -> list[Any]:
+    """A raw beats list with every ``{pause: S}`` item added to the ``pause`` of the beat before
+    it (DESIGN.md §111). ``ValueError`` for a pause before the first beat."""
+    if not any(_is_pause_item(b) for b in beats):
+        return beats
+    merged: list[Any] = []
+    for n, item in enumerate(beats):
+        if not _is_pause_item(item):
+            merged.append(item)
+            continue
+        seconds = item["pause"]
+        if not merged or not isinstance(merged[-1], dict):
+            raise ValueError(
+                f"beats[{n}]: a pause item adds silence after the beat before it, and there is none; "
+                "start with silence in a silent scene (beats: [], duration: S) or a `- pause: S` section"
+            )
+        before = merged[-1].get("pause")
+        numbers = all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (seconds, before or 0))
+        merged[-1] = {**merged[-1], "pause": (before or 0) + seconds if numbers else seconds}
+    return merged
 
 
 class SceneConfig(_Strict):
@@ -2866,13 +2920,15 @@ class SceneConfig(_Strict):
     @model_validator(mode="before")
     @classmethod
     def _default_beat_ids(cls, data: Any) -> Any:
-        """Give beats without an ``id`` the id ``f"{scene_id}_b{n}"`` (1-based)."""
+        """Give beats without an ``id`` the id ``f"{scene_id}_b{n}"`` (1-based), after adding each
+        ``{pause: S}`` item to the beat before it (:func:`merge_pause_items`)."""
         if not isinstance(data, dict):
             return data
         scene_id = data.get("id")
         beats = data.get("beats")
         if not isinstance(scene_id, str) or not isinstance(beats, list):
             return data
+        beats = merge_pause_items(beats)
         filled = []
         for n, beat in enumerate(beats, start=1):
             if isinstance(beat, dict) and beat.get("id") is None:
@@ -3049,6 +3105,10 @@ class VideoConfig(_Strict):
     """SoundFont (an .sf2 or .sf3 file, relative to the project) that composed music is played with; default: GeneralUser GS 2.0.3, downloaded once into vidgen's cache (`vidgen soundfont fetch`)."""
     audio: AudioConfig = Field(default_factory=AudioConfig)
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
+    audio_only: bool = False
+    """true: vidgen render writes only the sound, <output>.wav (narration, voices, music, sound effects), and renders no scene; vidgen render --audio-only does that for one run."""
+    pacing: PacingConfig = Field(default_factory=PacingConfig)
+    """Timing of an audio-only render: {timing: speech | video, line, speaker, scene, chapter, sting_before, sting_after, silent, lead_in, tail} (seconds)."""
     transition: TransitionSetting | None = None
     """Default transition between scenes (cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}); a scene's transition wins."""
     chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)
@@ -3328,6 +3388,9 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
     """
     if not isinstance(data, dict):
         raise VidgenError(f"{source}: the top level must be a mapping (key: value pairs)")
+    from vidgen.sections import expand_sections
+
+    data = expand_sections(data, source)
     try:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:

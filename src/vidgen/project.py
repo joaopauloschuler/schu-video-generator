@@ -28,6 +28,7 @@ from vidgen.includes import (
 )
 from vidgen.kokoro_voices import voice_parts
 from vidgen.pronunciation import Pronunciation, PronunciationValue, Spoken, build_pronunciation, builtin_entries, builtin_list_name, project_entries
+from vidgen.sections import expand_sections
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.word_anchors import pin_translated_anchors, retime_project_anchors
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
@@ -255,7 +256,7 @@ class Project:
         source = config_file.name
         confine = os.environ.get(CONFINE_ENV)
         included = read_project_config(config_file, Path(confine) if confine else None)
-        data = included.data
+        data = expand_sections(included.data, source)   # an audio-only project's sections (§111)
         _confine(data, root, source)
         base_data, base_origins = expand_character_size(*expand_sets(*apply_cut(data, included.origins)))
         base, base_source, base_report = _translated(base_data, root, source, base_origins)
@@ -476,6 +477,11 @@ class Project:
         """Subtitle path matching :meth:`output_path`."""
         return self.output_dir / f"{self._output_stem(preview)}.srt"
 
+    def audio_path(self, preview: bool = False) -> Path:
+        """The sound of an audio-only render (DESIGN.md §111) matching :meth:`output_path`:
+        ``<output>[_<variant>][_preview|_draft].wav``."""
+        return self.output_dir / f"{self._output_stem(preview)}.wav"
+
     def chapters_path(self, preview: bool = False) -> Path:
         """YouTube chapter list matching :meth:`output_path`: ``<output>[_<variant>][_preview|_draft]_chapters.txt``."""
         return self.output_dir / f"{self._output_stem(preview)}_chapters.txt"
@@ -541,7 +547,7 @@ class Project:
             if scene.silent:
                 total += scene.duration or 0.0
             for beat in scene.beats:
-                total += beat.estimated_duration(narration.words_per_second) + narration.pad
+                total += beat.estimated_duration(narration.words_per_second) + (narration.pad if beat.pause is None else beat.pause)
             transition = effective(self.config, i)
             if transition.overlaps:
                 total -= transition.seconds

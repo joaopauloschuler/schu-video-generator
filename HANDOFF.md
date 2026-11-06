@@ -24458,3 +24458,47 @@ project), repo work is generic.
 
 - The owner decided that front arms are the default everywhere: generator.DEFAULT_ARMS = front; stage.stage_arms removed; cartoon_arms: classic or look.arms: classic opt out; the scene host follows cartoon_arms. Gallery character entries re-rendered; DESIGN 110.1, CONFIG, guide, CHANGELOG updated.
 - NOT TESTED: the owner asked for the code change without tests (no time). Next step must run the character, cartoon and iso suites, test_arms_front, test_mcp.py in full, and the frame baseline in /home/claude/work/scratch/baseline (expect 25 of 33 stills to change, arms only; then keep the old frames as frames_classic and remake the references).
+
+## Step 283 — Audio-only renders and projects (Phase AF)
+
+- Built (DESIGN §111): `vidgen render --audio-only` / `audio_only: true` writes
+  `output/<output>.wav` (48 kHz stereo 24-bit) with no scene rendered: voices, music ducked,
+  sfx, stings, normalisation, limiter. `sections:` for projects without pictures (each a
+  `text_card` scene; `{pause: S}` a silent one; did-you-mean on keys). `pacing:` times it
+  (`speech` default: speech + gaps; `video`: `VideoPlan`). Beat `pause:` and `- pause: S` items
+  (videos too). `vidgen story draft --audio`. Phase AF plan added to tasklist (Steps 283–286).
+- Files: new `audio_only.py`, `sections.py`, `tests/test_audio_only.py` (17); `config.py`
+  (`PacingConfig`, `audio_only`, `pacing`, `BeatConfig.pause`, `merge_pause_items`, sections in
+  `parse_config`), `overlap.py` (`SpokenLine.pause`), `project.py` (`audio_path`, sections in
+  `_load`, pauses in `estimated_duration`), `mix.py` (`always_write`), `cli.py` (`--audio-only`,
+  `story draft --audio`), `jsonout.py` (`audio_render_document`, story `audio_only`),
+  `story_draft.py` (`DraftOptions.audio`, `_to_audio`, report), `plan_yaml.py`
+  (`commented_yaml(list_key=)`); docs CONFIG ("Audio only"), guide (+ `AGENTS.md`), DESIGN §111,
+  CHANGELOG, tasklist.
+- Decisions: the switch is `audio_only` (not `output:` / `format:`, both taken); default timing
+  `speech` for every audio-only render; sections become `text_card` scenes (no new scene type:
+  the gallery, scene lists and examples tests stay as they are); no SRT or hooks in audio-only
+  renders (transcripts are Step 284); deliverable WAV only (formats are Step 284).
+- Samples (`/home/claude/work/scratch/s283/`, not committed): `ferry/` (my two-voice story,
+  Kokoro bf_emma + bm_george, sections, pause items, a pause section, bell cue, engine `sfx`
+  action at "@hummed", reveal sting, calm bed): `output/night_ferry.wav` 38.34 s, ffmpeg −18.0
+  LUFS / −2.8 dBTP (target −18). `kphi3/` (the example's committed ElevenLabs MP3s, no API call):
+  variant `podcast` (speech timing, calm bed) `output/kphi3_video_podcast.wav` 232.11 s, −16.1
+  LUFS / −1.9 dBTP (limiter up to 5.2 dB on speech peaks, as in a video at −16); variant
+  `soundtrack` (`timing: video`) 224.47 s, −21.4 LUFS / −2.2 dBTP. Waveforms with beats and
+  sfx marked: `measurements/*_waveform.png`; `lantern/` a `story draft --audio` of my
+  `lantern.md`. Scripts `measure.py`, `pin_mix.py` (the pinned numbers, run on b2fbedd).
+- Known gaps: stage foley / ambience, automatic animation sounds and clip sound are left out
+  (warned); `vidgen direct` / MCP editors do not edit `sections:`; `vidgen schema` still requires
+  `scenes`; validate's "YouTube needs 3 chapters" warning also shows for audio projects; a
+  variant cannot override `sections:` (they are expanded before the merge); sections' problem
+  locations read `scenes[i]`.
+- Tests: `test_audio_only` 17 passed (5 s); `test_config` 21, `test_overlap` + `_pinned` 18,
+  `test_story_draft` 14, `test_docs` + `test_guide` 164, `test_schema` (in a run with docs/guide:
+  234 passed before the CONFIG entry), `test_json_output` 21, `test_plan` 68, `test_music` not
+  slow 23, `test_cli` 10, `test_chapters_progress` + `test_transitions` + `test_word_anchors` 59:
+  all passed. Not run: `test_music` slow bed tests (54, untouched code). Frame baseline: 33
+  stills, the 8 gradient-descent ones identical, the 25 with characters differ (Step 282's arms;
+  frame names, i.e. timings, all the same).
+- Next (284): formats via ffmpeg from `build/<render>/audio/mix.wav`; transcripts from
+  `timings.json` with `subtitles.cues_from_timings` / `video_cues` (works on it as is).

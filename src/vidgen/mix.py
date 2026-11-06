@@ -457,14 +457,17 @@ def _has_narration_audio(project: Project) -> bool:
     return not beats or any((project.audio_dir / f"{b}.mp3").is_file() for b in beats)
 
 
-def mix_audio(project: Project, timings: dict[str, Any], voices: Sequence[Path], sfx_track: Path | None, out: Path) -> MixReport:
+def mix_audio(
+    project: Project, timings: dict[str, Any], voices: Sequence[Path], sfx_track: Path | None, out: Path, always_write: bool = False
+) -> MixReport:
     """Mix the video's audio (``timings``: combined timings; ``voices``: the padded scene WAVs in
     order; ``sfx_track``: the SFX track or ``None``).
 
     With music or normalisation (``audio.normalize``: true, or ``auto`` with music) the mix is
     written to ``out`` and the report says ``mixed``; otherwise nothing is written (the final
-    mux sums narration and effects as before) and the report only measures that sum. A video
-    whose narrated beats have no MP3 yet is not normalised.
+    mux sums narration and effects as before) and the report only measures that sum, unless
+    ``always_write`` (an audio-only render, DESIGN.md §111: the sum goes through the limiter into
+    ``out``). A video whose narrated beats have no MP3 yet is not normalised.
     """
     audio = project.config.audio
     voice = WavTrack(voices)
@@ -491,7 +494,7 @@ def mix_audio(project: Project, timings: dict[str, Any], voices: Sequence[Path],
     summaries = [p.summary() for p in placements]
     ambience = [b.summary() for b in beds]
     out.unlink(missing_ok=True)
-    if not normalize and music is None:
+    if not normalize and music is None and not always_write:
         meter = loudness.measure(total, read)
         return MixReport(False, False, None, None, 0.0, meter.integrated, meter.true_peak, 0.0, summaries, ambience)
     gain_db = 0.0

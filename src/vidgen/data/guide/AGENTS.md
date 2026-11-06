@@ -3713,6 +3713,15 @@ Good: the result first, then the context.
   writes it with the video, `vidgen thumbnail` alone; open the small copy it names
   (`build/.../thumbnail/<name>_small.png`, YouTube's 320 px) and fix the checks it prints. A
   frame of a scene works too: `vidgen thumbnail --scene results --beat 2`.
+- **Audio only** (audiobooks, podcasts, the sound of a video): `vidgen render --audio-only`
+  writes `output/<output>.wav` without rendering a scene (voices, music ducked under them,
+  effects, stings, loudness). `audio_only: true` makes it the project's render; such a project
+  may list `sections:` (`{id, title, voice, music, sfx, beats}`, `- pause: 2` between them)
+  instead of scenes, and `vidgen story draft --audio` drafts one from a story. Lines are timed
+  by their speech plus `pacing:` gaps (`speaker`, `scene`, `chapter`, `lead_in`, `tail`); a
+  beat's `pause: 1.5` (or a `- pause: 1.5` item) is the silence after it, in videos too.
+  `pacing: {timing: video}` keeps the video's timeline instead. Stage foley and ambience are
+  left out (a warning says so); write the sounds that matter as `sfx`.
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}
