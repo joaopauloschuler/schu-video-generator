@@ -442,6 +442,44 @@ def scene_schema(entries: list[SceneType], themes: Iterable[Theme], actions: lis
     return _document("schu-video-generator scene", description, scene, defs)
 
 
+def _add_sections(schema: dict[str, Any], scene: dict[str, Any]) -> None:
+    """``sections:`` (an audio-only project's scenes, DESIGN.md §111; :mod:`vidgen.sections`) in
+    the config schema: a project gives ``scenes`` or ``sections``. A section's ``voice``, ``room``,
+    ``music`` and ``sfx`` are a scene's; its beats are beats or plain strings."""
+    scene_props = scene["properties"]
+    shared = {key: copy.deepcopy(scene_props[key]) for key in ("voice", "room", "music", "sfx")}
+    named = {"id": {"type": "string", "description": "Section id (default s<n>)."}}
+    section = {
+        "type": "object",
+        "description": "A section: its lines (beats or plain strings), read in order; a title starts a chapter.",
+        "properties": {
+            **named,
+            "title": {"type": "string", "description": "Heading: the chapter's title."},
+            **shared,
+            "beats": {"type": "array", "minItems": 1, "items": {"anyOf": [{"type": "string"}, {"$ref": _REF_PREFIX + "BeatConfig"}]}},
+        },
+        "required": ["beats"],
+        "additionalProperties": False,
+    }
+    pause = {
+        "type": "object",
+        "description": "Silence between sections (seconds), with its own sfx and music.",
+        "properties": {**named, "pause": {"type": "number", "exclusiveMinimum": 0}, "music": shared["music"], "sfx": shared["sfx"]},
+        "required": ["pause"],
+        "additionalProperties": False,
+    }
+    schema["properties"]["sections"] = {
+        "type": "array",
+        "minItems": 1,
+        "description": "An audio-only project's scenes, without pictures (instead of scenes): sections {title, voice, room, music, sfx, beats} and pauses {pause: S}.",
+        "items": {"anyOf": [section, pause]},
+    }
+    required = schema.get("required", [])
+    if "scenes" in required:
+        schema["required"] = [r for r in required if r != "scenes"]
+        schema["oneOf"] = [{"required": ["scenes"]}, {"required": ["sections"]}]
+
+
 def config_schema(
     entries: list[SceneType],
     themes: Iterable[Theme],
@@ -472,6 +510,7 @@ def config_schema(
         "properties": variant_props,
         "additionalProperties": False,
     }
+    _add_sections(schema, scene)
     description = (
         "Config of a schu-video-generator video project (docs/CONFIG.md). Scene types: "
         + ", ".join(e.name for e in entries)

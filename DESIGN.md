@@ -21152,8 +21152,9 @@ with "needs an ffmpeg with libmp3lame / libopus".
 (`plain_text`: title, `[M:SS] Title` per published chapter but the intro, a paragraph per voice's
 turn within a scene, `Name:` when more than one voice is used, the unlabelled base voice
 `Narrator`); `.srt` and `.vtt` from `render.pipeline.video_cues` (the video's cues, word-timed;
-speaker names follow `subtitles.speakers`); `_chapters.txt` by `write_chapter_list` (as a video,
-with the YouTube warnings). **Public**: config `audio_output`, `audio.level_voice`; CLI `audio
+speaker names follow `subtitles.speakers`; WebVTT cue text escaped by `vtt_text`, Step 286);
+`_chapters.txt` by `write_chapter_list(..., warn=False)` (as a video, without YouTube's warnings
+since Step 286). **Public**: config `audio_output`, `audio.level_voice`; CLI `audio
 check`; `render --json` `check` / transcript outputs. No new `vidgen.api` names.
 
 ### 111.4 Stereo staging and rooms (Step 285)
@@ -21200,3 +21201,24 @@ inherited by named voices), so nothing is re-voiced.
 - **Public**: config `voice.pan`, `voices.<n>.pan`, beat `pan`, scene / section `room`, `audio.room`,
   `follow_stage`, `music_width`, `ambience_width`; CLI `audio check --mono`; `render --json`
   `stereo`; `NarratedScene.speaker_pan` (a scene type may override it). No new `vidgen.api` names.
+
+### 111.5 Review (Step 286)
+
+- **WebVTT**: `&`, `<`, `>` escaped and blank lines dropped in cue text (a blank line ends a cue);
+  `-->` can no longer occur. SRT unchanged (the video's). Sample files pass a format checker
+  (scratch `s286/check_subs.py`: numbering, `HH:MM:SS,mmm` / `.mmm`, start < end, order).
+- **Sections in problems**: `sections.section_location` renames `scenes[i]` → `sections[i]`
+  (`.chapter` / `.params.text` → `.title`, `.duration` → `.pause`; one scene per section, so the
+  index holds). Applied to load errors (`Project._load` / `parse_config` when the raw config has
+  `sections`, `section_error`) and to later problems (`Project.attributed` when
+  `Project.from_sections`).
+- **Schema**: `vidgen schema` has `sections` (section / pause items, `additionalProperties: false`;
+  beats as strings or `BeatConfig`); the top level requires `title` and `oneOf` `scenes` /
+  `sections`. Variants still cannot set `sections`.
+- **YouTube**: `chapter_warnings` is empty for `audio_only: true`; an audio-only render writes
+  `_chapters.txt` without the warnings (`write_chapter_list(warn=False)`).
+- **MCP**: `render` takes `audio_only`; new tool `audio_check` (`vidgen audio check`: `target`,
+  `preset`, `variant`, `preview`; read-only).
+- Checked, unchanged: speech timing (gaps, pauses, stings, silent scenes, lead-in / tail), preset
+  numbers (ACX, R128, podcast mono −19), the equal-power pan law (`left` 7.65 dB L−R) and room IR
+  maths. `pacing.silent`, when set, overrides a pause section's own seconds too (documented).

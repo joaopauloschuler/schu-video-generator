@@ -328,4 +328,6 @@ def test_cookbook_examples_load_and_are_linked(tmp_path: Path) -> None:
 
 
 def test_format_vtt() -> None:
-    assert format_vtt([Cue(3661.5, 3662.25, "a --> b")]) == "WEBVTT\n\n01:01:01.500 --> 01:01:02.250\na -> b\n"
+    assert format_vtt([Cue(3661.5, 3662.25, "a --> b")]) == "WEBVTT\n\n01:01:01.500 --> 01:01:02.250\na --&gt; b\n"
+    # WebVTT cue text: & and < escaped, no blank line inside a cue (it would end the cue)
+    assert format_vtt([Cue(0, 1, "Q&A <b>\n\nnext")]) == "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nQ&amp;A &lt;b&gt;\nnext\n"

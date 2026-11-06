@@ -378,9 +378,13 @@ def frame_hashes(project: Project, media: Path, monkeypatch) -> tuple[Any, list[
     hashes: list[str] = []
     write = SceneFileWriter.write_frame
 
-    def recording(self: Any, frame: Any, num_frames: int = 1) -> None:
-        hashes.extend([hashlib.sha1(np.asarray(frame).tobytes()).hexdigest()] * num_frames)
-        write(self, frame, num_frames)
+    def recording(self: Any, frame: Any, num_frames: int = 1, repeat: int | None = None) -> None:
+        count = num_frames if repeat is None else repeat   # Manim 0.22 passes repeat=
+        hashes.extend([hashlib.sha1(np.asarray(frame).tobytes()).hexdigest()] * count)
+        if repeat is None:
+            write(self, frame, num_frames)
+        else:
+            write(self, frame, repeat=repeat)
 
     monkeypatch.setattr(SceneFileWriter, "write_frame", recording)
     scene, _ = render_with_layout(project, "hill", media)

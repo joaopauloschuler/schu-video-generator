@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–285)
+## Unreleased (Steps 193–286)
+
+### Phase AF review (Step 286)
+
+- Problems in a project written with `sections:` name the section (`sections[1].beats[0].voice`, `sections[2].pause`), not the scene it became; `vidgen schema` knows `sections`.
+- No more YouTube chapter warnings for audio-only projects and renders.
+- WebVTT transcripts escape `&` and `<` in the text, as the format requires.
+- MCP: `render` takes `audio_only`; new tool `audio_check`.
+- Step 282's arms default is now tested (character, cartoon and iso suites, MCP, frame baseline: the 25 stills with characters change, arms only).
 
 ### Stereo staging and rooms (Step 285)
 

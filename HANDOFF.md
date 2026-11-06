@@ -24607,3 +24607,54 @@ project), repo work is generic.
   `test_tts` + `test_dubbing` + `test_voice_effects` 59: all passed.
 - Next (286): review; consider `follow_stage` tracking walks (sample the speaker's x over the line)
   and a room per beat if authors ask.
+
+## Step 286 — Phase AF review; Step 282 now tested
+
+- **Step 282 now tested** (arms `front` by default): `test_arms_front` 20; `test_cartoon_character`
+  + `generator` + `holding` + `limbs` 143; `outfits` + `poses` + `story_light_hands` + both kiss
+  tests + `test_cartoon_sheet` 110; `cartoon_stage` + `shots` + `directing` + `lint` 83;
+  `test_cartoon_room` 28; iso `staging` + `story` + `fixed_view` + `retro_kit` + `seats` + `moves`
+  114; `objects_more` + `ambient` + `atmosphere` + `vehicles` + `time_of_day` 97; `test_actions` +
+  `test_push_wipe_carry` 59; `test_gallery -m "not render"` 19; `test_mcp.py` in full 22: all
+  passed after two test fixes (no code fault): `test_cartoon_room::test_the_set_fades_in_as_one_picture`
+  and the same frame recorder in `test_cartoon_wind` / `test_cartoon_motion_effects` take manim
+  0.22's `write_frame(frame, repeat=)` (the pattern of `test_cartoon_living`);
+  `test_push_wipe_carry::test_overlay_rgba_composites_like_the_layer`: its `_FakeLayer` lacked
+  `overlays` / `following` and `_patch(piece=)` (the layer grew pieces in Phase AD).
+- **Frame baseline**: exactly the 25 stills with characters differ from the old references
+  (platform-story 16, cartoon 9; diff boxes only around the arms), the 8 gradient-descent stills
+  identical; renders at b2fbedd (s283) and HEAD identical. Old references moved to
+  `baseline/frames_classic/`, `frames/` remade from HEAD, README updated; sheet
+  `/home/claude/work/scratch/s286/baseline.png` (old | new | diff ×4 | zooms, 4 stills; script
+  `s286/sheet.py`). After this step's changes: 33 frames, max difference 0.
+- **Review fixes** (DESIGN §111.5): WebVTT cue text escaped (`transcripts.vtt_text`: `&`, `<`,
+  `>`, no blank lines); problems of a `sections:` project name the section
+  (`sections.section_location` / `section_problems` / `section_error`; `Project.from_sections`,
+  `Project.attributed`, `parse_config`); `vidgen schema` knows `sections` (`schema._add_sections`;
+  top level `oneOf` scenes / sections); no YouTube chapter warnings for `audio_only: true`
+  (`chapter_warnings`) or in an audio-only render (`write_chapter_list(warn=)`); MCP `render`
+  `audio_only` and a new read-only tool `audio_check`. Docs: CONFIG (transcripts paragraph moved
+  from the stereo section to "Audio files", sections in schema/problems, MCP list), guide (+
+  `AGENTS.md`), README, COOKBOOK-AUDIO, DESIGN, CHANGELOG, tasklist (Phase AF ticked).
+- Reviewed without change: speech timing, preset numbers, pan law (`left` = 7.65 dB L−R) and room
+  maths, SRT output (shared with videos). Sample SRT/VTT of Steps 284 and 286 pass
+  `s286/check_subs.py` (a format checker).
+- **Demo** (`/home/claude/work/scratch/s286/kphi3/`, the kphi3 example with its committed MP3s, no
+  TTS; variants added by `s286/make_demo.py`): `output/kphi3_video_podcast.mp3` (stereo 192k, calm
+  bed) 3:52, −16.3 LUFS, TP −2.2 dBTP, `vidgen audio check --preset podcast --mono` PASS (mono:
+  correlation 0.99, worst second −0.22, fold 0.0 dB); `output/kphi3_video_audiobook.mp3` (mono 44.1
+  kHz 192k) 3:55, RMS −20.3 dB, peak −4.1 dB, head 0.61 s, tail 2.83 s, `--preset audiobook` PASS.
+  Each with `_transcript.txt`, `.srt`, `.vtt` (53 cues, valid); no `_chapters.txt` (no chapters).
+- Files: `transcripts.py`, `sections.py`, `project.py`, `config.py`, `schema.py`, `chapter_export.py`,
+  `render/pipeline.py`, `mcp_server.py`; tests `test_audio_only` (+2), `test_audio_output`,
+  `test_schema` (sections valid / invalid cases, top-level `oneOf`), `test_mcp` (`audio_check`),
+  `test_cartoon_room`, `test_cartoon_wind`, `test_cartoon_motion_effects`, `test_push_wipe_carry`.
+- Tests after the fixes: `test_audio_only` + `test_audio_output` 44, `test_schema` 76 (with slow),
+  `test_staging` + `test_config` + `test_project` + `test_includes` + `test_chapter_export` +
+  `test_chapters_progress` 118, `test_docs` + `test_guide` + `test_cli` + `test_json_output` +
+  `test_api` + `test_story_draft` 221, `test_translation` + `test_cuts_shorts` + `test_robustness` +
+  `test_overlap_pinned` 155, `test_mcp` 22: all passed.
+- Known gaps: `vidgen direct` / MCP editors do not edit `sections:`; a variant cannot set
+  `sections:` (or a section's `room`); `pacing.silent` overrides a pause section's own seconds;
+  `follow_stage` does not track a walk during a line; no chapters embedded in audio files; MP3
+  ~0.3 dB under the mix.

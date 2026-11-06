@@ -673,6 +673,20 @@ def build_server(root: Path) -> Any:
         picture = (doc.get("files") or {}).get("spectrogram")
         return answer(doc, [Path(picture)] if picture and images else [])
 
+    @tool("Measure an audio file, or a project's audio-only render (render with audio_only=true), for agents that cannot "
+          "listen: loudness (LUFS), true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per "
+          "loudness preset (podcast, audiobook / ACX, broadcast / EBU R128, custom) and a stereo file's mono compatibility.", read_only)
+    async def audio_check(
+        ctx: Context,
+        target: Annotated[str, Field(description="an audio file (wav, mp3, m4a, ogg) or a project folder, relative to the root")] = ".",
+        preset: Annotated[Literal["podcast", "audiobook", "broadcast", "custom"] | None, Field(
+            description="check this preset only (default: the project's audio_output.loudness, else every preset)")] = None,
+        variant: Variant = None,
+        preview: Annotated[bool, Field(description="a project's preview render")] = False,
+    ) -> Any:
+        options = {"preset": preset, "variant": variant, "preview": preview}
+        return answer(await call(ctx, args_of(["audio"], ["check", str(where(target, "target"))], options)))
+
     # ----- outputs ---------------------------------------------------------------------------------
 
     @tool("Render the video (MP4 + SRT + timings) and its thumbnail. preview=true (default) is fast and small; "
@@ -687,6 +701,8 @@ def build_server(root: Path) -> Any:
         variant: Variant = None,
         scene: Annotated[list[str] | None, Field(description="only re-render these scenes, then join")] = None,
         no_audio: Annotated[bool, Field(description="render without narration")] = False,
+        audio_only: Annotated[bool, Field(description="only the sound (no scene rendered; audio_output chooses format, "
+                                                      "loudness preset, transcripts): an audiobook / podcast of the project")] = False,
         keep_going: Annotated[bool, Field(description="continue after a scene fails")] = False,
         jobs: Jobs = 1,
         frames: Annotated[bool, Field(description="also save a still per beat end")] = False,
@@ -697,7 +713,7 @@ def build_server(root: Path) -> Any:
     ) -> Any:
         options = {
             "preview": preview and not draft, "draft": draft, "scene": scene, "variant": variant, "no-audio": no_audio,
-            "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force, "max-scenes": max_scenes,
+            "audio-only": audio_only, "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force, "max-scenes": max_scenes,
             "all-languages": all_languages,
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))

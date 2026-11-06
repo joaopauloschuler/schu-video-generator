@@ -183,8 +183,9 @@ def write_youtube_list(path: Path, chapters: Sequence[Chapter], references: str 
 
 def chapter_warnings(project: Project) -> list[str]:
     """``vidgen validate``'s warnings about the YouTube chapter list of ``project`` (planned
-    times), when it writes one."""
-    if not project.config.chapters.youtube or not chapter_marks(project.config.scenes):
+    times), when it writes one; none for an audio-only project (``audio_only: true``, §111:
+    no video for YouTube)."""
+    if project.config.audio_only or not project.config.chapters.youtube or not chapter_marks(project.config.scenes):
         return []
     try:
         return youtube_problems(video_chapters(project, intro=True))

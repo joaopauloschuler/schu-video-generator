@@ -13,9 +13,12 @@ seconds (with its own ``sfx`` and ``music``).
 from __future__ import annotations
 
 import difflib
+import re
+from collections.abc import Iterable
+from dataclasses import replace
 from typing import Any
 
-from vidgen.errors import VidgenError
+from vidgen.errors import Problem, VidgenError
 
 #: Keys of a section, and of a pause between sections.
 SECTION_KEYS: tuple[str, ...] = ("id", "title", "voice", "room", "music", "sfx", "beats")
@@ -69,6 +72,32 @@ def _scene(n: int, section: Any, title: str, source: str) -> dict[str, Any]:
         if key in section:
             scene[key] = section[key]
     return scene
+
+
+#: A scene location in a message, and what a section calls the keys it was made from.
+_LOCATION = re.compile(r"\bscenes\[(\d+)\](\.params\.text|\.chapter|\.duration)?(?![\w.\[])")
+_LOCATION_ANY = re.compile(r"\bscenes\[(\d+)\]")
+_SECTION_KEY = {".params.text": ".title", ".chapter": ".title", ".duration": ".pause"}
+
+
+def section_location(text: str) -> str:
+    """``text`` (a config location or a message) with its scene locations named as the sections
+    they were made from: ``scenes[2].beats[0]`` -> ``sections[2].beats[0]``,
+    ``scenes[2].chapter`` -> ``sections[2].title``, ``scenes[2].duration`` -> ``sections[2].pause``
+    (one scene per section, so the index is the section's)."""
+    text = _LOCATION.sub(lambda m: f"sections[{m[1]}]{_SECTION_KEY.get(m[2] or '', m[2] or '')}", text)
+    return _LOCATION_ANY.sub(lambda m: f"sections[{m[1]}]", text)
+
+
+def section_problems(problems: Iterable[Problem]) -> list[Problem]:
+    """``problems`` located in the ``sections:`` they come from (:func:`section_location`)."""
+    return [replace(p, location=section_location(p.location), message=section_location(p.message)) for p in problems]
+
+
+def section_error(exc: VidgenError) -> VidgenError:
+    """``exc`` (raised validating a project written with ``sections:``) with its locations named
+    as sections."""
+    return VidgenError(section_location(str(exc)), problems=section_problems(exc.problems), details=exc.details)
 
 
 def expand_sections(data: Any, source: str = "video.yaml") -> Any:

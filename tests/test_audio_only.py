@@ -15,7 +15,8 @@ import yaml
 
 from vidgen import cli, extensions, loudness, mix, sfx
 from vidgen.audio_only import plan_audio, render_audio
-from vidgen.errors import VidgenError
+from vidgen.config import parse_config
+from vidgen.errors import Problem, VidgenError
 from vidgen.project import Project
 from vidgen.sections import expand_sections
 from vidgen.sfx import RATE, STING_SOUNDS, SoundLibrary, write_wav
@@ -93,6 +94,30 @@ def test_section_problems(tmp_path: Path, sections: list[Any], message: str) -> 
 def test_scenes_and_sections_not_both() -> None:
     with pytest.raises(VidgenError, match="not both"):
         expand_sections({"title": "t", "scenes": [], "sections": []})
+
+
+def test_section_problems_name_the_sections(tmp_path: Path) -> None:
+    """Problems of a project written with sections point at the sections, not the scenes they
+    become (Step 286)."""
+    data = {"title": "t", "sections": [{"title": "A", "beats": [{"text": "x", "voise": "b"}]}, {"pause": -1}]}
+    with pytest.raises(VidgenError) as caught:
+        Project.load(_write(tmp_path / "p", data))
+    locations = [p.location for p in caught.value.problems]
+    assert "sections[0].beats[0].voise" in locations and "sections[1].pause" in locations
+    assert "scenes[" not in str(caught.value) and "sections[0].beats[0].voise" in str(caught.value)
+    with pytest.raises(VidgenError, match=r"sections\[1\]\.pause"):
+        parse_config(data)
+    project = Project.load(_write(tmp_path / "q", STORY))   # later checks (vidgen validate) too
+    problems = project.attributed([Problem("scenes[2].beats[0].text", "bad in scenes[2]"), Problem("scenes[0].chapter", "x")])
+    assert project.from_sections and [str(p) for p in problems] == ["sections[2].beats[0].text: bad in sections[2]", "sections[0].title: x"]
+
+
+def test_no_youtube_chapter_warnings_for_audio_only_projects(tmp_path: Path) -> None:
+    """Two chapters: too few for YouTube, which matters for a video, not for an audio-only project."""
+    from vidgen.chapter_export import chapter_warnings
+
+    assert any("YouTube shows chapters only" in w for w in chapter_warnings(Project.load(_write(tmp_path / "v", STORY))))
+    assert chapter_warnings(Project.load(_write(tmp_path / "a", {**STORY, "audio_only": True}))) == []
 
 
 def test_a_beats_pause_times_the_video_too(tmp_path: Path) -> None:

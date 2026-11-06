@@ -114,4 +114,5 @@ correlation, the worst second, how much the mono fold loses); `--mono` makes it 
 The transcripts come with every render: `<output>_transcript.txt` (title, `[M:SS]` chapter
 headings, a paragraph per speaker's turn: show notes and accessibility), `.srt` and `.vtt`
 (captions for a podcast player or a video upload), `<output>_chapters.txt` (timestamps for the
-show notes).
+show notes; YouTube's chapter rules are not checked for audio). From an agent: the MCP tools
+`render` (`audio_only: true`) and `audio_check`.

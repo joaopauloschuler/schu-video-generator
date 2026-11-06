@@ -4059,7 +4059,8 @@ sections:
 A section (`id`, `title`, `voice`, `room`, `music`, `sfx`, `beats`) becomes a `text_card` scene showing its
 title (a video render is a plain slideshow); its beats are ordinary beats. A beat's `pause: S` (or a
 `- pause: S` item after it, in any scene) is the silence after its line, instead of
-`narration.pad` in a video or the gap below in audio.
+`narration.pad` in a video or the gap below in audio. `vidgen schema` knows `sections`, and
+problems name them (`sections[1].beats[0].voice`, `sections[2].pause`).
 
 `pacing` times an audio-only render (seconds; the defaults):
 
@@ -4123,6 +4124,13 @@ when that one fails). `--lufs` / `--true-peak` add a `custom` check. A stereo fi
 `mono` line ([mono compatibility](#stereo-staging-and-rooms-pan-room)); `--mono` makes its
 failure exit 1 too.
 
+Transcripts (from the word timings, next to the file): `<output>_transcript.txt` — the title, each
+chapter as `[M:SS] Title`, a paragraph per voice's turn in a section, `Name: text` when there is
+more than one voice (the base voice without a `label` is `Narrator`); `<output>.srt` and
+`<output>.vtt` — the cues a video's SRT holds (speaker names with `subtitles.speakers: name`;
+WebVTT text escaped); `<output>_chapters.txt` — `M:SS Title` per chapter, for show notes (YouTube's
+chapter rules are not checked for audio). No chapters are embedded in the audio file.
+
 ### Stereo staging and rooms (`pan`, `room`)
 
 Opt-in; nothing changes until one of these is set, in videos and audio-only renders alike. They
@@ -4180,13 +4188,6 @@ cancels) and how much quieter the fold `(L + R) / 2` is (≤ 3.5 dB; a voice pan
 loses 3 dB, `left` 0.7 dB). The render prints `mono: PASS correlation 0.71 (≥ 0); worst second
 0.16 (≥ -0.3); mono fold 0.8 dB (≤ 3.5)` and warns when it fails; `timings.json` / `--json` carry
 it as `stereo`. `audio_output.channels: mono` simply averages the channels.
-
-Transcripts (from the word timings, next to the file): `<output>_transcript.txt` — the title, each
-chapter as `[M:SS] Title`, a paragraph per voice's turn in a section, `Name: text` when there is
-more than one voice (the base voice without a `label` is `Narrator`); `<output>.srt` and
-`<output>.vtt` — the cues a video's SRT holds (speaker names with `subtitles.speakers: name`);
-`<output>_chapters.txt` — `M:SS Title` per chapter, as for a video (with the YouTube warnings).
-No chapters are embedded in the audio file.
 
 ## Transitions (`transition`)
 
@@ -15069,7 +15070,9 @@ back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`,
 `out`), `music_template` (`bed`, `out` default `assets/music/<bed>.yaml`, `force`; no `bed`: the
 list), `music_patches`, `music_render` (`score`: a path or a project piece's or bed's name, `out`
 default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` given the same way,
-`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `audio_check`
+(`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
+sound alone), `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
 (`vidgen story draft`: `input_path` or `story_text`, `out`, `style`, `format`, `narrator`, `seed`,

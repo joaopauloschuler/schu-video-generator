@@ -306,9 +306,13 @@ def test_the_set_fades_in_as_one_picture(make_project, tmp_path: Path, monkeypat
     frames: list[np.ndarray] = []
     write = SceneFileWriter.write_frame
 
-    def recording(self: Any, frame: Any, num_frames: int = 1) -> None:
-        frames.extend([np.asarray(frame)[:, :, :3].astype(float)] * num_frames)
-        write(self, frame, num_frames)
+    def recording(self: Any, frame: Any, num_frames: int = 1, repeat: int | None = None) -> None:
+        count = num_frames if repeat is None else repeat   # Manim 0.22 passes repeat=
+        frames.extend([np.asarray(frame)[:, :, :3].astype(float)] * count)
+        if repeat is None:
+            write(self, frame, num_frames)
+        else:
+            write(self, frame, repeat=repeat)
 
     monkeypatch.setattr(SceneFileWriter, "write_frame", recording)
     render_with_layout(project, "home", tmp_path / "media")

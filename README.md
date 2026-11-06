@@ -459,7 +459,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 `vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).

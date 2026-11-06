@@ -3501,9 +3501,13 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
     """
     if not isinstance(data, dict):
         raise VidgenError(f"{source}: the top level must be a mapping (key: value pairs)")
-    from vidgen.sections import expand_sections
+    from vidgen.sections import expand_sections, section_error
 
-    data = expand_sections(data, source)
+    if "sections" in data:   # problems named by the sections they come from (§111)
+        try:
+            return parse_config(expand_sections(data, source), source)
+        except VidgenError as exc:
+            raise section_error(exc) from None
     try:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:

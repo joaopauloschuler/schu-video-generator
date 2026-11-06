@@ -182,7 +182,7 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 
 **Through MCP.** When your client has the vidgen MCP server (`vidgen mcp --root DIR`), the same
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
-`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`,
+`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`,
 `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
 `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic`, and `studio_sessions`, `studio_read`,
 `studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio` (options in snake_case: `per_beat`,
@@ -3727,7 +3727,8 @@ Good: the result first, then the context.
   preset and says PASS / FAIL (fix what it names: an `audiobook` wants 0.5-1 s of silence before
   the first sound, so no effect in the first half second). It also writes the transcript
   (`_transcript.txt` with speakers and chapters), `.srt`, `.vtt` and `_chapters.txt`.
-  `vidgen audio check FILE` measures any audio file. Settings: `docs/COOKBOOK-AUDIO.md`.
+  `vidgen audio check FILE` (MCP `audio_check`; `render` takes `audio_only`) measures any audio
+  file. Settings: `docs/COOKBOOK-AUDIO.md`.
 - **Stereo and rooms** (opt-in, videos too): `pan: left` (-1..1, `far_left`...`far_right`) on a
   voice of `voices:` or on a beat (`pan: {from: right, to: left}` moves it across the line);
   `audio: {follow_stage: true}` pans stage voices to where their characters stand; `room:

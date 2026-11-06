@@ -11,6 +11,7 @@ import shutil
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import av
@@ -271,8 +272,10 @@ class _FakeLayer(OverlayLayer):
         self.patches = patches
         self.mobjects = [object()] * len(patches)  # type: ignore[list-item]
         self.following_mobjects = []
+        self.overlays = [SimpleNamespace(pieces=None)] * len(patches)  # type: ignore[list-item]  # drawn whole
+        self.following = []
 
-    def _patch(self, k: int, state: Any) -> _Patch:
+    def _patch(self, k: int, state: Any, piece: int | None = None) -> _Patch:
         return self.patches[k]
 
 

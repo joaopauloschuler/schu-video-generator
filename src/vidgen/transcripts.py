@@ -35,9 +35,16 @@ def vtt_time(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{ms:03d}"
 
 
+def vtt_text(text: str) -> str:
+    """Cue text as WebVTT requires: ``&``, ``<``, ``>`` escaped (so ``-->`` cannot occur) and no
+    blank line inside the cue (a blank line ends it)."""
+    escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return "\n".join(line for line in escaped.splitlines() if line.strip())
+
+
 def format_vtt(cues: Iterable[Cue]) -> str:
     """A WebVTT document of ``cues``."""
-    blocks = [f"{vtt_time(c.start)} --> {vtt_time(c.end)}\n{c.text.replace('-->', '->')}\n" for c in cues]
+    blocks = [f"{vtt_time(c.start)} --> {vtt_time(c.end)}\n{vtt_text(c.text)}\n" for c in cues]
     return "WEBVTT\n\n" + "\n".join(blocks)
 
 
@@ -107,7 +114,7 @@ def write_transcripts(project: Project, timings: dict[str, Any], preview: bool, 
         elif kind == "vtt":
             write_text_atomic(paths["vtt"], format_vtt(cues))
         elif kind == "chapters":
-            if write_chapter_list(project, preview, timings) is None:
+            if write_chapter_list(project, preview, timings, warn=False) is None:   # YouTube's rules do not apply
                 continue
         written[kind] = paths[kind]
     return written
