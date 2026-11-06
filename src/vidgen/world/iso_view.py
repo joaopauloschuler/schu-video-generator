@@ -53,10 +53,15 @@ class Box3:
         return [(x, y, z) for x in (self.x0, self.x1) for y in (self.y0, self.y1) for z in (self.z0, self.z1)]
 
     def picture_bounds(self) -> tuple[float, float, float, float]:
-        """``(left, top, right, bottom)`` of the box on the picture (tile widths, ``v`` down)."""
-        points = [iso_point(*corner) for corner in self.corners()]
-        us, vs = [p[0] for p in points], [p[1] for p in points]
-        return min(us), min(vs), max(us), max(vs)
+        """``(left, top, right, bottom)`` of the box on the picture (tile widths, ``v`` down);
+        worked out once per box (the draw order asks for it millions of times, DESIGN.md §109)."""
+        found = self.__dict__.get("_picture_bounds")
+        if found is None:
+            points = [iso_point(*corner) for corner in self.corners()]
+            us, vs = [p[0] for p in points], [p[1] for p in points]
+            found = (min(us), min(vs), max(us), max(vs))
+            object.__setattr__(self, "_picture_bounds", found)
+        return found
 
 
 def in_front(a: Box3, b: Box3) -> bool | None:

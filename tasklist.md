@@ -1663,7 +1663,7 @@ private (scratchpad); repo work stays generic. No AI API calls; Kokoro only.
 - [x] The script (shots, lines per speaker, voices, camera, staging, sets with map sizes, light, weather, ambient, music) and a private test cut of 3–4 key shots with Kokoro voices; stills checked against the visual rules and measured; generic fixes in the repo: a crisp `blue_hour` (hues kept, a tone curve), `fill_color`, `eyes: bright`, thin strokes one pixel of the fixed wide view, `show_walls`, wall objects `poster` / `wall_shelf`; tests `test_crisp_night_faces_rooms.py`
 
 ### Step 280 — The film
-- [ ] The full private film (previews looked at shot by shot), a 16:9 1080p MP4 and a delivery copy under 28 MB, captions, −16 LUFS, a contact sheet
+- [x] The full private film (previews looked at shot by shot), a 16:9 1080p MP4 and a delivery copy under 28 MB, captions, −16 LUFS, a contact sheet (48 scenes, 7:40, −16.2 LUFS; generic fixes: graded and resized iso tiles kept while unchanged (several times faster lit places), less memory for zoomed and panned big maps, `zoom` onto an iso object frames it, working objects' moving parts drawn back to front; tests `test_picture_caches.py`)
 
 ### Step 281 — Critical review
 - [ ] Story fidelity, beauty against the visual rules, audio levels, compatibility baseline, tests; fixes and final renders

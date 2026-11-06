@@ -129,6 +129,22 @@ def _parts(scene: NarratedScene, targets: list[Target]) -> list[tuple[Target, Mo
     return [(t, part) for t in targets for part in scene.on_screen_parts(t)]
 
 
+def _targets_box(scene: NarratedScene, targets: list[Target]) -> tuple[float, float, float, float]:
+    """``(left, bottom, right, top)`` round the targets: each one's own box where the scene knows
+    it (``target_box``: an iso place's object, whose picture spans more than the object, DESIGN.md
+    §109), else its on-screen parts' (else its mobject's)."""
+    own = getattr(scene, "target_box", None)
+    boxes: list[tuple[float, float, float, float]] = []
+    for target in targets:
+        box = own(target) if own is not None else None
+        if box is None:
+            parts = [part for _, part in _parts(scene, [target])] or [target.mobject]
+            group = Group(*parts)
+            box = (float(group.get_left()[0]), float(group.get_bottom()[1]), float(group.get_right()[0]), float(group.get_top()[1]))
+        boxes.append(box)
+    return min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
+
+
 @action("reveal")
 class Reveal(Action):
     """Bring a target on screen with the scene's own entrance animation, e.g. an item before its
@@ -480,21 +496,20 @@ class Zoom(Action):
         if self._region():
             self.region = True
             return scene.zoom_region(targets, self.options.x, self.options.y)  # type: ignore[attr-defined]
-        parts = [part for _, part in _parts(scene, targets)] or [t.mobject for t in targets]
-        group = Group(*parts)
+        left, bottom, right, top = _targets_box(scene, targets)
         fw, fh = scene.frame_width, scene.frame_height
         base = scene.zoom_base() if hasattr(scene, "zoom_base") else 1.0   # an iso place's fixed wide view (DESIGN.md §106)
         if self.options.scale is not None:
             factor = base * self.options.scale
         else:
             room = 1 - 2 * self.options.padding
-            factor = min(base * self.max_scale, room * fw / max(group.width, 1e-6), room * fh / max(group.height, 1e-6))
+            factor = min(base * self.max_scale, room * fw / max(right - left, 1e-6), room * fh / max(top - bottom, 1e-6))
         if factor <= base * 1.01:
             names = ", ".join(t.name for t in targets)
             log.warning("scene '%s': zoom on %s: the targets already fill the frame; the camera stays (use scale)", scene.spec.id, names)
             return []
         width, height = fw / factor, fh / factor
-        center = view_center_within(scene.camera_bounds(), group.get_center()[:2], width, height)
+        center = view_center_within(scene.camera_bounds(), ((left + right) / 2, (bottom + top) / 2), width, height)
         self.before = camera_view(scene)
         self.shot = getattr(scene, "camera_shot", None)
         if self.options.cut:   # a cut: the view is there at once (DESIGN.md §101.4)

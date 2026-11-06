@@ -283,10 +283,11 @@ class IsoStaging:
     # ----- the pictures (DESIGN.md §89.7, §89.10) ---------------------------------------------------
 
     def _iso_action_targets(self) -> list[str]:
-        """The target patterns of every action of the scene, and the lights a ``time_of_day``
-        may switch by itself (§105.3)."""
+        """The target patterns of every action of the scene that may change what it targets (not
+        a camera move's: a ``zoom`` onto an object leaves it drawn in the place, its moving parts
+        showing, §109), and the lights a ``time_of_day`` may switch by itself (§105.3)."""
         uses = self._actions.uses if getattr(self, "_actions", None) is not None else []
-        found = [pattern for use in uses for pattern in use.action.config.targets()]
+        found = [pattern for use in uses if not getattr(use.action, "moves_camera", False) for pattern in use.action.config.targets()]
         if any(use.options.auto_lights for use in self.action_uses("time_of_day")):
             found += list(self.params.iso.auto_lit())
         return found
@@ -432,6 +433,9 @@ class IsoStaging:
                     cover.add(self._iso_tiles(picture, cover.name))
                     covers[id(gadget)] = cover
                 self._iso_gadget_places.append((gadget, self.iso_scenery.index[item.name], cover))
+        # back to front (the pieces' draw order): what stands in front of one working object (its
+        # cover) never hides the moving parts of another that stands nearer (§109)
+        self._iso_gadget_places.sort(key=lambda place_of: place_of[1])
         if p.iso.haze and not self.is_draft:   # shimmering air over spots (§102.12)
             spots = []
             for haze in p.iso.haze:
@@ -1185,6 +1189,16 @@ class IsoStaging:
                 return None
             return float(mob.get_left()[0]), float(mob.get_bottom()[1]), float(mob.get_right()[0]), float(mob.get_top()[1])
         return box
+
+    def target_box(self, target: Any) -> tuple[float, float, float, float] | None:
+        """``(left, bottom, right, top)`` of an iso place's object named by ``target`` (Manim
+        units): the box it stands in on the picture, for a ``zoom`` onto it (its own picture spans
+        the whole place, DESIGN.md §109); ``None`` for anything else."""
+        scenery = getattr(self, "iso_scenery", None)
+        name = getattr(target, "name", None)
+        if not self.on_iso or scenery is None or name not in scenery.index:
+            return None
+        return self._iso_object_box(name)()
 
     def _iso_object_box(self, name: str) -> Callable[[], tuple[float, float, float, float] | None]:
         piece = self.iso_scenery.pieces[self.iso_scenery.index[name]]

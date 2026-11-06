@@ -421,8 +421,11 @@ TILE_OVERLAP = 2
 MAX_DETAIL = 5
 #: A level of detail is used up to a zoom this much over its own (a little blur is not seen).
 DETAIL_SLACK = 1.1
-#: How many tiles a scenery keeps drawn (about 1 MB each).
-TILE_CACHE = 320
+#: How many tiles a scenery keeps drawn (about 1 MB each). The stage's pictures keep the tiles
+#: they made themselves (:class:`~vidgen.cartoon.iso_pictures.IsoTiles`), so this only spares
+#: drawing one again for another picture: 64, not 320, so a big map's zoomed scene keeps its
+#: memory for what it shows (DESIGN.md §109).
+TILE_CACHE = 64
 
 #: A picture of the scenery: whether it has the ground, and the pieces in it (indices into
 #: :attr:`IsoScenery.pieces`, in draw order) with the state each is drawn in.

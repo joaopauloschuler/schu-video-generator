@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–279)
+## Unreleased (Steps 193–280)
+
+### Faster lit places, zooms onto objects (Step 280)
+
+- Lit iso places (`blue_hour`, `night`, …) render several times faster: a tile is graded and resized again only when its pixels, the light or its place on screen change (854x480: 233 s → 56 s for 7.3 s of a busy room; 1920x1080: ~13 s per second of a still camera). Pictures are the same as before.
+- Big maps at full size use less memory: a zoomed view keeps one level of detail's tiles, a long pan lets the tiles it passed go, fewer spare tiles are kept.
+- `zoom` onto an iso place's object (`zoom: tv_1`, `zoom: [lamp, pip]`) frames that object, not the middle of the place; a camera move no longer takes an object out of the place's picture.
+- Working objects with moving parts (a TV's picture, a cooler's bubbles) are drawn back to front: one standing in front of another shows its moving parts.
 
 ### Crisp nights, friendly faces, rooms with walls (Step 279)
 

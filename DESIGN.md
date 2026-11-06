@@ -20930,3 +20930,56 @@ additive (frame baseline 33/33 identical).
   `LightGrade(vivid, gamma, contrast)`, `.curved`; `lifted(toward=)`, `on_ground(back=)`,
   `ground_view_center(back=)`, `fixed_view(back=)`, `wide_view(back=)`; `Stage.fill_color`,
   `StageIso.show_walls`, `CharacterLook.eyes: bright`.
+
+## 109. Fast lit iso places, object zooms (Step 280)
+
+Building the private film (48 scenes, 7:40 at 1920x1080, one scene per command under a 10-minute
+limit and a 3 GB memory cap) showed that a lit iso place cost 23–45 s per video second: profiles
+(cProfile of the worker) put ~75 % in `grade_pixels` (each tile graded on every frame, ~150
+calls a frame) and most of the rest in `draw_tile`'s resize; ~98 % of those tiles were unchanged
+from the frame before.
+
+- **Graded pictures kept** (`cartoon/shading.py`): `GradedPictures` keeps, per picture, the grade,
+  the pixels' fingerprint (`pixels_digest`: shape, dtype, CRC-32 and Adler-32 of the bytes,
+  ~0.03 ms a megabyte; a copy compared with `array_equal` was 5x slower and doubled the memory)
+  and the graded pixels (read-only); same fingerprint and grade: the kept array. Pictures change
+  in place (pools, sprites, snow), hence the fingerprint rather than identity. `OwnedCache` holds
+  the values per live owner (a `weakref.finalize` drops a picture's entry with it) within
+  `GRADED_CACHE_BYTES` (192 MB). `StageLight._draw_image` skips pictures wholly outside the frame
+  (`_in_frame`: nothing of them is drawn) — before, every off-screen tile of a level was graded.
+- **Tile parts kept** (`cartoon/iso_pictures.py`): an iso tile no longer has its whole picture
+  graded before drawing; the light hands it `(GradedPictures, grade)` (`TILE_GRADING`) and
+  `draw_tile` asks `TileParts` for its part on screen keyed by (fingerprint, grade, size, box):
+  a hit draws the kept part (no grading, no resize); a miss grades (through `GradedPictures`, so a
+  moving camera still skips grading) and resizes. Parts are a frame's worth: `TILE_PARTS_BYTES`
+  128 MB is far more than needed.
+- **Memory** for big maps at 1080p: `TILE_CACHE` 320 → 64 (the scenery's LRU of drawn tiles
+  duplicated what each `IsoTiles` keeps); `IsoTiles` lets the other levels' tiles go when its
+  level of detail changes (`_forget_levels`: a zoom on a 26 x 26 lit room held both levels,
+  +0.9 GB, and was killed by the cap) and the oldest tiles not shown once it keeps more than
+  `TILES_KEPT` (3) x those shown + `TILES_SPARE` (16) (`_forget_old`: a long pan made and kept every
+  tile it passed). Made again if the camera comes back (rare; a few seconds).
+- **Measured**: 854 x 480 office (7.3 s, a pan) 233 s → 56 s; 1920 x 1080 office still 13.5 s in
+  147 s, rainy city 4–8 s scenes 150–400 s (a pan misses the part cache on every frame), rooms at
+  `indoor` light 3–6 s per second. Frame baseline 33/33 identical; a render test draws a lit room
+  with and without the caches identically (`test_picture_caches.py`).
+- **Object zoom** (`scenes/actions.py`, `scenes/stage_iso.py`): `zoom` on an iso object framed the
+  middle of the place (an object's layered picture spans the whole place canvas) — now the targets'
+  box comes from the scene's `target_box(target)` when it has one (`Stage.target_box`: the
+  object's picture bounds, `_iso_object_box`), else from the on-screen parts as before (same union
+  of bounds, so other zooms are unchanged). Camera moves (`moves_camera`: zoom, pan, follow, shot)
+  no longer count among the targets that make an object a layered picture.
+- **Moving parts back to front**: `_iso_gadget_places` sorted by the pieces' draw order. Each
+  working object's gadget is placed right after the place's pictures with its cover (the picture
+  of what stands in front of it); in config order, a water cooler's cover (which includes the TV
+  in front of it) was drawn over the TV's own moving face.
+- **Private film decisions** (not code): rooms at 3:27 AM use `light: indoor` (warm lamplight,
+  night windows) with peach terrazzo floors — at `blue_hour` any warm floor turns tan or grey (the
+  multiply caps red at ~0.65); the city keeps `blue_hour`; zooms at ~1.5–2.6 of the fixed view.
+- **Left for later**: a shot (`closeup`) framed at a beat's start on a character who sits down in
+  that beat is framed where it stood (use a `zoom` after the sit); every stage scene fades in from
+  and out to its background colour (`_cover`), a visible dip between consecutive shots of one
+  place (the rainy ride); a zoom deep into a big lit map still needs ~2.5 GB at 1080p; `test_actions`'
+  `BUILTIN_ACTIONS` list lacks the Phase AD actions (pre-existing failures).
+- **Public**: no new `vidgen.api` names (internal caches); `Stage.target_box` is a scene method
+  (like `pan_point`).

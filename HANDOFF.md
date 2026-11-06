@@ -24376,3 +24376,38 @@ project), repo work is generic.
   `test_api`, `test_schema`, `test_cartoon_generator`, `test_random_cast`, `test_iso_objects_more`,
   `test_lab_objects`, `test_iso_place`, `test_guide`, `test_docs` passed. Frame baseline 33 frames,
   max difference 0.
+
+## Step 280 — The film (Phase AE)
+
+- A private story project: the full film (48 scenes, 7:40, 1920x1080 at 24 fps, −16.2 LUFS, true
+  peak −1.5 dBTP) and a 720p delivery copy under 28 MB; generator, measurements and sheets in the
+  scratchpad (`s280/`). Rooms at night use `light: indoor` with warm floors (blue hour turns any
+  warm floor grey or tan), the city stays at `blue_hour`; the pod ride is four short scenes with
+  the camera zoomed on the pod and panning with its drive.
+- Built (DESIGN §109): lit iso places render several times faster — `GradedPictures` (graded
+  pixels kept per picture by a CRC-32 + Adler-32 fingerprint, `OwnedCache` per live owner,
+  off-frame pictures not graded) and `TileParts` (an iso tile's part on screen kept by fingerprint,
+  grade, size and box; the light hands tiles their grading, `TILE_GRADING`); memory for big maps at
+  1080p (`TILE_CACHE` 64, `IsoTiles._forget_levels` / `_forget_old`); `zoom` onto an iso object
+  frames it (`Stage.target_box`, actions' `_targets_box`; camera moves no longer layer objects);
+  working objects' moving parts placed back to front (a TV's face was hidden by the cooler behind
+  it).
+- Files: `cartoon/shading.py`, `cartoon/iso_pictures.py`, `cartoon/iso_stage.py` (`TILE_CACHE`),
+  `world/iso_view.py` (`Box3.picture_bounds` worked out once), `scenes/actions.py`,
+  `scenes/stage_iso.py`; tests `tests/test_picture_caches.py` (8, two renders); DESIGN §109,
+  CHANGELOG, tasklist.
+- Decisions: fingerprints instead of copies (a copy doubled the memory and a comparison cost 5x a
+  checksum); caches bounded and tied to the pictures' lives because the 3 GB cap killed zoomed
+  scenes; no new public names (internal).
+- Known gaps / for 281: the set's fade in / out between scenes (`_cover`) dips between the ride's
+  shots; a `closeup` at the start of a beat in which the character sits frames where it stood (the
+  film uses `zoom` instead); zooms deeper than ~1.6x on the lit city or ~2.6x in the office at
+  1080p come near the 3 GB cap (kept at those); the pod hides behind the phone booth for a moment
+  in the first ride shot; 7:40 is above the 6–7 min aim (narration alone 7:02); lint 5 warnings
+  (narration speed of three short lines, two quick steps); `test_actions.py` fails 3 tests
+  (`BUILTIN_ACTIONS` lacks the Phase AD actions, pre-existing).
+- Tests: `test_picture_caches`, `test_retro_kit`, `test_crisp_night_faces_rooms`,
+  `test_iso_staging`, `test_iso_fixed_view`, `test_iso_place`, `test_iso_objects_more`,
+  `test_lab_objects`, `test_cartoon_lighting`, `test_iso_vehicles`, `test_city_hud_echo`,
+  `test_iso_story`, `test_iso_atmosphere`, `test_story_fx`, `test_cartoon_shots`, `test_iso_seats`
+  passed. Frame baseline 33 frames, max difference 0.
