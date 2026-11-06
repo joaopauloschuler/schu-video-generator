@@ -24550,3 +24550,60 @@ project), repo work is generic.
   which passes).
 - Next (285): pan / rooms go into `mix.py` / `audio_only.write_voice_track`; keep `MixTargets`
   `mono` in mind (the mono-compatibility check can reuse `audio_check.measure_file`).
+
+## Step 285 — Stereo staging and room acoustics (Phase AF)
+
+- Built (DESIGN §111.4, new `vidgen.staging`): `pan:` on `voice:`, `voices.<n>` and beats (−1…1 or
+  `far_left`/`left`/`centre`/`center`/`right`/`far_right`; a beat's `{from, to}` eases across the
+  speech); `audio.follow_stage` (video: the speakers' x in the camera frame as the line starts via
+  `NarratedScene.speaker_pan`, overridden by `StageScene`; audio-only: the stage's `characters:` `at`);
+  `room:` per scene / section or `audio.room` (`small_office`, `corridor`, `hall`, `outdoors`, `car`,
+  `phone`, `none`; `{use, amount, narrator}`; narrator = base voice, dry by default);
+  `audio.music_width` / `ambience_width`; mono check (`audio_check.mono_check`, appended to
+  `vidgen audio check` for stereo files, `--mono` for the exit code; audio-only renders with staging
+  print `mono:` and record `timings.stereo` / `--json` `stereo`).
+- Files: new `staging.py`, `tests/test_staging.py` (21); `config.py` (`PanSetting`, `PanMove`,
+  `RoomName`, `RoomConfig`, fields), `voices.py` (`pan` in `DISPLAY_FIELDS`), `audio_only.py`
+  (`PlacedBeat.staging`, `_voice_samples` limit, mono report), `scene.py` (`add_narration(staging,
+  limit)`, `speaker_pan`), `scenes/stage.py`, `mix.py` (`MusicTrack(widths)`), `audio_check.py`
+  (stereo sums, `mono_check`), `render/fingerprint.py` (`staging` key only when staged),
+  `sections.py` (`room`), `cli.py`, `jsonout.py`, `tests/test_audio_output.py` (the extra `mono`
+  check); docs CONFIG ("Stereo staging and rooms"), guide (+ `AGENTS.md`), COOKBOOK-AUDIO, DESIGN,
+  CHANGELOG, tasklist.
+- Decisions: rooms are generated impulse responses convolved in numpy (seeded noise, two bands with
+  their own RT60, early-reflection taps), not ffmpeg `aecho`/`afir`: deterministic, measurable, no
+  temp files, one code path for videos (Manim scene sounds) and audio-only; early reflections are
+  panned with the voice, the reverberation is diffuse (decorrelated L/R, not panned); room changes
+  are smooth because each line's tail rings under the next (no room bus crossfade); `pan` is a
+  display field (no re-voicing; not inherited by named voices); `follow_stage` takes the place as
+  the line starts (no tracking of a walk during the line); thresholds of the mono check
+  (correlation ≥ 0, worst second ≥ −0.3, fold ≤ 3.5 dB) set from measurements: hard pan = 3.01 dB.
+- Samples (`/home/claude/work/scratch/s285/`, not committed): `errand/` (Kokoro: narrator bf_emma
+  centre/dry, Ada bf_isabella `left`, Tom bm_lewis `right`; small_office → corridor (Tom walks
+  right→left) → outdoors (Ada `far_left`); `music_width: 0.7`): `output/errand.wav` 42.5 s, −18.0
+  LUFS, mono PASS (corr 0.71, worst second 0.16, fold 0.8 dB); per line voice-track L−R: Ada +6.6 /
+  +5.8 dB in the office (room fills the far side a little), Tom −6.0, far_left +15.7, narrator 0.0;
+  variant `wide` (`music_width: 1.4`) mono FAIL (worst second −0.49; the check works);
+  `podcast_mono` mp3 PASS −19.3 LUFS; `errand_dry/` the same lines dry (same MP3s, no re-voice).
+  `rooms/<room>.wav` one line through every room. PNGs `measurements/rooms_decay.png` (Schroeder
+  curves), `rooms_spectrograms.png` (tails after the line), `errand_balance.png`,
+  `errand_correlation.png`, `errand_spectrogram.png`. Scripts `rooms_measure.py`,
+  `rooms_spectro.py`, `analyse.py`, `bed_width.py`, `pin_before.py`.
+- Measured: T30 500 Hz / 4 kHz: small_office 0.52/0.30, corridor 1.11/0.77, hall 2.24/1.63, car
+  (short; band-filter ring); hall IRs L/R correlation < 0.1; positions: `left` 7.7 dB L−R, mono fold
+  −0.7 dB; `far_left` 16.0 / −1.8 dB; built-in beds at width 1 already wide (calm corr 0.22).
+- Compatibility: Step 284's audio-only render pinned (`test_audio_only_render_is_pinned_without_staging`:
+  RMS per half second recorded on 15d2562, and neutral settings give the same bytes); the video mix
+  pin holds; frame baseline 33 stills identical to s283's (max difference 0).
+- Known gaps: no movement of a voice while a character walks during a line (only `{from, to}`);
+  `follow_stage` in an audio-only render uses the starting `at` (a video uses the live place); the
+  narrator is "the base voice" (a stage character speaking with the base voice stays dry unless
+  `narrator: true`); a variant cannot change a section's `room` (sections are expanded first);
+  host scenes do not pan; rooms on pure tones can make the mono check's worst second negative (tone
+  and its own reverb), not seen on speech; music width applies to beds and files alike.
+- Tests: `test_staging` 21 passed (8 s; 2 tiny renders), `test_audio_only` 17, `test_audio_output`
+  25, `test_api`, `test_config` + `test_voices` + `test_cli` + `test_json_output` 72, `test_docs` +
+  `test_guide` + `test_schema` 235, `test_music` not slow 23, `test_overlap` + `_pinned` 21,
+  `test_tts` + `test_dubbing` + `test_voice_effects` 59: all passed.
+- Next (286): review; consider `follow_stage` tracking walks (sample the speaker's x over the line)
+  and a room per beat if authors ask.

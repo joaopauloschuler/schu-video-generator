@@ -279,11 +279,11 @@ def test_cli_audio_check(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     path = project.root / "output" / "ferry.m4a"
     assert cli.main(["audio", "check", str(path), "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
-    assert [c["preset"] for c in doc["checks"]] == ["podcast", "audiobook", "broadcast"] and doc["measured"]["codec"] == "aac"
+    assert [c["preset"] for c in doc["checks"]] == ["podcast", "audiobook", "broadcast", "mono"] and doc["measured"]["codec"] == "aac"   # mono: Step 285
     assert cli.main(["audio", "check", str(path), "--preset", "broadcast"]) == 1
     assert "broadcast  FAIL" in capsys.readouterr().out
     assert cli.main(["audio", "check", str(path), "--lufs", "-16", "--true-peak", "-1", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["checks"][-1]["preset"] == "custom"
+    assert json.loads(capsys.readouterr().out)["checks"][-2]["preset"] == "custom"
     assert cli.main(["audio", "check", str(tmp_path / "missing.mp3")]) == 1
 
 

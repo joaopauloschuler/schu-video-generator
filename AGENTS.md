@@ -3716,7 +3716,7 @@ Good: the result first, then the context.
 - **Audio only** (audiobooks, podcasts, the sound of a video): `vidgen render --audio-only`
   writes `output/<output>.wav` without rendering a scene (voices, music ducked under them,
   effects, stings, loudness). `audio_only: true` makes it the project's render; such a project
-  may list `sections:` (`{id, title, voice, music, sfx, beats}`, `- pause: 2` between them)
+  may list `sections:` (`{id, title, voice, room, music, sfx, beats}`, `- pause: 2` between them)
   instead of scenes, and `vidgen story draft --audio` drafts one from a story. Lines are timed
   by their speech plus `pacing:` gaps (`speaker`, `scene`, `chapter`, `lead_in`, `tail`); a
   beat's `pause: 1.5` (or a `- pause: 1.5` item) is the silence after it, in videos too.
@@ -3728,6 +3728,13 @@ Good: the result first, then the context.
   the first sound, so no effect in the first half second). It also writes the transcript
   (`_transcript.txt` with speakers and chapters), `.srt`, `.vtt` and `_chapters.txt`.
   `vidgen audio check FILE` measures any audio file. Settings: `docs/COOKBOOK-AUDIO.md`.
+- **Stereo and rooms** (opt-in, videos too): `pan: left` (-1..1, `far_left`...`far_right`) on a
+  voice of `voices:` or on a beat (`pan: {from: right, to: left}` moves it across the line);
+  `audio: {follow_stage: true}` pans stage voices to where their characters stand; `room:
+  small_office | corridor | hall | outdoors | car | phone | none` on a scene or section (or
+  `audio.room` for all), the narrator dry unless `{use: hall, narrator: true}`;
+  `audio.music_width: 0.7` narrows the music. The render prints a `mono:` check; keep
+  `music_width` at 1 or less if it fails.
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}

@@ -28,8 +28,9 @@ if TYPE_CHECKING:
 
 #: The name of the base voice (the ``voice:`` section) wherever a voice name is expected.
 DEFAULT_VOICE = "default"
-#: Fields of a voice that name the speaker and do not change its audio.
-DISPLAY_FIELDS = frozenset({"label", "color"})
+#: Fields of a voice that name or place the speaker and do not change its audio (``pan`` is
+#: applied in the mix, DESIGN.md §111.4).
+DISPLAY_FIELDS = frozenset({"label", "color", "pan"})
 #: Fields of a voice that say where it runs, not what it sounds like (not compared for audio).
 RUNTIME_FIELDS = frozenset({"device"})
 #: Fields of a voice that belong to that speaker: a named voice does not inherit them.

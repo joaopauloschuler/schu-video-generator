@@ -243,6 +243,22 @@ class VoiceEffectConfig(_Strict):
 #: ``effect:``: a preset's name, a list of presets, or ``{use, pitch, amount}``.
 VoiceEffectSetting = Union[VoiceEffectName, list[VoiceEffectName], VoiceEffectConfig]
 
+#: Named stereo positions of ``pan:`` (:data:`vidgen.staging.POSITIONS`; a test keeps the two equal).
+PanPosition = Literal["far_left", "left", "centre", "center", "right", "far_right"]
+#: ``pan:``: -1 (left) to 1 (right), or a named position (DESIGN.md §111.4).
+PanSetting = Union[Annotated[float, Field(ge=-1, le=1)], PanPosition]
+
+
+class PanMove(_Strict):
+    """A beat's ``pan:`` as a move across its line (a speaker walking, DESIGN.md §111.4)."""
+
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
+
+    from_: PanSetting = Field(alias="from")
+    """Where the voice is as the line starts: -1 (left) to 1 (right), or far_left, left, centre, right, far_right."""
+    to: PanSetting
+    """Where it is as the line ends (an eased move between the two)."""
+
 #: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
 TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
 #: Keys of ``voice:`` used only by some providers (the others ignore them).
@@ -340,6 +356,8 @@ class VoiceConfig(_Strict):
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
     """Speaker colour (theme token or hex) for captions that colour speakers; default the theme's text colour."""
+    pan: PanSetting | None = None
+    """Where this voice sounds in stereo, applied in the mix: -1 (left) to 1 (right), or far_left, left, centre, right, far_right; default centre; not inherited by voices:."""
 
     @model_validator(mode="after")
     def _provider_options(self) -> VoiceConfig:
@@ -401,6 +419,8 @@ class VoiceEntry(_Strict):
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None
     """Speaker colour (theme token or hex) for captions; default the theme palette colour of the voice's position in voices."""
+    pan: PanSetting | None = None
+    """Where this speaker sounds in stereo, applied in the mix: -1 (left) to 1 (right), or far_left, left, centre, right, far_right; default centre (not inherited from the base voice)."""
 
 
 class SubtitlesConfig(_Strict):
@@ -2378,8 +2398,27 @@ class SceneMusic(_Strict):
         return {role: v.model_dump() if isinstance(v, ComposeInstrument) else v for role, v in self.instruments.items()}
 
 
+#: Room presets of ``room:`` (:data:`vidgen.staging.ROOMS`; a test keeps the two equal).
+RoomName = Literal["none", "small_office", "corridor", "hall", "outdoors", "car", "phone"]
+
+
+class RoomConfig(_Strict):
+    """``room:`` as a mapping (DESIGN.md §111.4)."""
+
+    use: RoomName
+    """The room: small_office, corridor, hall, outdoors, car, phone or none."""
+    amount: float = Field(default=1.0, ge=0, le=2)
+    """How much of the room is heard (its reflections and reverberation): 1 the preset's, 0 none, up to 2."""
+    narrator: bool = False
+    """true: the narrator (the base voice) is in the room too; false: it stays dry."""
+
+
+#: ``room:``: a preset's name or ``{use, amount, narrator}``.
+RoomSetting = Union[RoomName, RoomConfig]
+
+
 class AudioConfig(_Strict):
-    """The final mix: loudness normalisation (DESIGN.md §48)."""
+    """The final mix: loudness normalisation (DESIGN.md §48), stereo staging and rooms (§111.4)."""
 
     normalize: bool | Literal["auto"] = "auto"
     """Normalise the final mix to target_lufs: true, false, or auto (only when the video has music; narration-only videos keep their level)."""
@@ -2391,6 +2430,14 @@ class AudioConfig(_Strict):
     """AAC bitrate of the video's audio; a loud mix (a Short at -14 LUFS) keeps its true peak better at 256k or 320k (the encoder's overshoot is smaller)."""
     level_voice: bool | None = None
     """A gentle leveller on the voices before the limiter (3:1 above their usual peaks, 50 ms ramps): loud syllables come down a little, so the limiter barely works; default: on in audio-only renders with the podcast or audiobook loudness preset, off otherwise."""
+    room: RoomSetting | None = None
+    """The room the voices sound in, in every scene without its own room: small_office, corridor, hall, outdoors, car, phone or none, or {use, amount, narrator}; the narrator (the base voice) stays dry unless narrator: true; default none."""
+    follow_stage: bool = False
+    """Stage scenes: each voice sounds where its speaking character stands as its line starts (left to right of the frame); a beat's own pan wins, and this wins over the voice's pan; default false."""
+    music_width: float = Field(default=1.0, ge=0, le=2)
+    """Stereo width of the music: 1 as it is, 0 mono (centred), up to 2 wider."""
+    ambience_width: float = Field(default=1.0, ge=0, le=2)
+    """Stereo width of the ambience beds (a stage's rain, a fireplace): 1 as it is, 0 mono, up to 2 wider."""
 
 
 #: Audio file formats of an audio-only render and their default bitrates (DESIGN.md §111.1).
@@ -2836,6 +2883,8 @@ class BeatConfig(_Strict):
     """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
     pause: float | None = Field(default=None, ge=0, le=60)
     """Seconds of silence after this beat's line, instead of narration.pad (or, in an audio-only render, the pacing gap); an item `- pause: 1.5` of a beats list adds it to the beat before."""
+    pan: PanSetting | PanMove | None = None
+    """Where this line sounds in stereo: -1 (left) to 1 (right), far_left, left, centre, right, far_right, or {from, to}: a move across the line (a speaker walking); default the voice's pan."""
     emotion: EmotionSetting | None = None
     """How the line feels: excited, happy, sad, angry, worried, scared, surprised, calm, doubtful, sleepy, whisper, shout or neutral, or {like, speed, pitch, gain, pauses}; Kokoro changes speed, pitch, loudness and pauses; ElevenLabs uses an audio tag (eleven_v3) or voice settings, OpenRouter an instruction or the audio's speed, pitch and loudness; default the voice's emotion."""
     cite: list[PositiveInt | Identifier] = Field(default_factory=list)
@@ -2947,6 +2996,8 @@ class SceneConfig(_Strict):
     """Voice of this scene's beats: a name from voices (or default: the base voice); a beat's own voice wins."""
     sfx: list[SfxEntry] = Field(default_factory=list)
     """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
+    room: RoomSetting | None = None
+    """The room this scene's voices sound in: small_office, corridor, hall, outdoors, car, phone, none, or {use, amount, narrator}; default audio.room."""
     music: bool | SceneMusic = True
     """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here; under composed music also {mood, key, tempo, instruments, seed} from this scene's first bar."""
     transition: TransitionSetting | None = None

@@ -44,13 +44,14 @@ from typing import Any
 import numpy as np
 
 from vidgen import __version__, audio_encode, chapter_export, mix, musicfit, sfx
-from vidgen.audio_check import PresetResult, check, measure_file, mix_targets, project_preset
+from vidgen.audio_check import PresetResult, check, measure_file, mix_targets, mono_check, project_preset
 from vidgen.chapters import chapter_marks
 from vidgen.config import BeatConfig, PacingConfig, SceneConfig
 from vidgen.fileio import remove_file, replace_file
 from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.project import Project
 from vidgen.sfx import RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo
+from vidgen.staging import VoiceStaging, beat_staging, params_stage_pan, stage_voice, uses_staging
 from vidgen.transcripts import write_transcripts
 from vidgen.videoplan import VideoPlan, beat_seconds
 from vidgen.voicesounds import SOUND_GAIN_DB, VOICE_SOUNDS, beat_sound_spans
@@ -64,13 +65,15 @@ BLOCK = RATE * 10
 @dataclass(frozen=True)
 class PlacedBeat:
     """A beat in the audio: its voice starts at ``start`` and is heard until ``end`` (seconds
-    from the audio's start), shaped by ``shape`` where a later line joins it."""
+    from the audio's start), shaped by ``shape`` where a later line joins it, placed in stereo
+    and in a room by ``staging`` (DESIGN.md §111.4)."""
 
     id: str
     start: float
     end: float
     text: str
     shape: VoiceShape = VoiceShape()
+    staging: VoiceStaging = VoiceStaging()
 
 
 @dataclass
@@ -195,6 +198,12 @@ def _left_out(project: Project) -> list[str]:
 # ----- timing ---------------------------------------------------------------------------------------
 
 
+def _staging(project: Project, spec: SceneConfig, beat: BeatConfig) -> VoiceStaging:
+    """Where ``beat`` sounds (a stage's characters at their ``characters:`` places with
+    ``audio.follow_stage``)."""
+    return beat_staging(project.config, spec, beat, params_stage_pan(project.config, spec, beat))
+
+
 def _video_timeline(project: Project, fps: int) -> tuple[list[AudioScene], float]:
     """The scenes where the video puts them (:class:`VideoPlan` at ``fps``)."""
     plan = VideoPlan(project, fps)
@@ -208,7 +217,7 @@ def _video_timeline(project: Project, fps: int) -> tuple[list[AudioScene], float
             windows = beat_windows(beat_lines(project, spec.beats, lambda b: beat_seconds(project, b.id, b.text)), pad, fps)
             for beat, timed, window, d in zip(spec.beats, slot.beats, windows, seconds):
                 start = slot.start + timed.start
-                scene.beats.append(PlacedBeat(beat.id, start, slot.start + timed.end, beat.text, window.shape))
+                scene.beats.append(PlacedBeat(beat.id, start, slot.start + timed.end, beat.text, window.shape, _staging(project, spec, beat)))
                 ends = beat.sting is not None and beat.sting.placed_at == "end"
                 scene.events += _beat_events(project, beat, start, window, d, start + (window.heard if ends else 0.0), fps)
         scenes.append(scene)
@@ -291,7 +300,7 @@ class _SpeechTimer:
         windows = beat_windows([replace(line, pause=gap) for line, gap in zip(lines, self.gaps(i))], self.line_gap)
         clock = start + lead
         for beat, window, d in zip(spec.beats, windows, seconds):
-            scene.beats.append(PlacedBeat(beat.id, clock, clock + window.heard, beat.text, window.shape))
+            scene.beats.append(PlacedBeat(beat.id, clock, clock + window.heard, beat.text, window.shape, _staging(project, spec, beat)))
             sting_at = clock + window.heard if _ends_with_sting(beat) else clock - self.pacing.sting_before
             scene.events += _beat_events(project, beat, clock, window, d, sting_at, None)
             clock += window.window
@@ -340,10 +349,13 @@ def plan_audio(project: Project, preview: bool = False) -> AudioPlan:
 # ----- writing --------------------------------------------------------------------------------------
 
 
-def _voice_samples(project: Project, beat: PlacedBeat) -> np.ndarray:
-    """A beat's voice as ``(n, 2)`` float32 at :data:`~vidgen.sfx.RATE`, as its shape plays it."""
+def _voice_samples(project: Project, beat: PlacedBeat, limit: int) -> np.ndarray:
+    """A beat's voice as ``(n, 2)`` float32 at :data:`~vidgen.sfx.RATE`, as its shape plays it
+    and its staging places it (longer by a room's tail, faded out by ``limit`` samples: the end
+    of the audio)."""
     samples = stereo(decode_audio(project.audio_dir / f"{beat.id}.mp3"))
-    return samples if beat.shape.plain else shape_voice(samples, RATE, beat.shape)
+    samples = samples if beat.shape.plain else shape_voice(samples, RATE, beat.shape)
+    return samples if beat.staging.plain else stage_voice(samples, beat.staging, limit)
 
 
 def write_voice_track(path: Path, project: Project, beats: Sequence[PlacedBeat], samples: int) -> None:
@@ -362,7 +374,7 @@ def write_voice_track(path: Path, project: Project, beats: Sequence[PlacedBeat],
             hi = min(lo + BLOCK, samples)
             while next_beat < len(pending) and pending[next_beat][0] < hi:
                 start, _, beat = pending[next_beat]
-                active.append((start, _voice_samples(project, beat)))
+                active.append((start, _voice_samples(project, beat, samples - start)))
                 next_beat += 1
             buf = np.zeros((hi - lo, 2), dtype=np.float32)
             for start, data in active:
@@ -443,8 +455,20 @@ def render_audio(project: Project, preview: bool = False) -> AudioRenderResult:
         transcripts = write_transcripts(project, timings, preview, project.config.audio_output.transcript_kinds)
         checked = None
         preset = project_preset(project)
+        staged = uses_staging(project.config) and project.config.audio_output.channels == "stereo"
+        measured = measure_file(output) if preset is not None or staged else None
+        if staged:
+            assert measured is not None
+            mono = mono_check(measured)
+            timings["stereo"] = mono.to_json()
+            values = "; ".join(f"{i.name} {i.value} ({i.target}){'' if i.status == 'pass' else ' ' + i.status.upper()}" for i in mono.items)
+            if mono.ok:
+                log.info("%s folds to mono well: %s", output.name, values)
+            else:
+                log.warning("%s may not fold to mono well: %s (vidgen audio check; a music_width over 1 often does it)", output.name, values)
         if preset is not None:
-            checked = check(measure_file(output), preset)
+            assert measured is not None
+            checked = check(measured, preset)
             timings["audio_output"] = {"file": output.name, "check": checked.to_json()}
             if checked.ok:
                 log.info("%s meets the %s preset", output.name, preset.name)

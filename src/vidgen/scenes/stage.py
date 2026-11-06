@@ -1682,6 +1682,17 @@ class Stage(IsoAmbience, IsoWeather, DayPassing, IsoSeating, IsoDriving, IsoStag
         if self.on_iso:
             self._iso_drop_tags()   # the name tags of the lines that ended (§89.11)
 
+    def speaker_pan(self, beat: Any) -> float | None:
+        """Where the beat's speakers (:attr:`beat_speakers`) stand in the camera's view as the
+        line starts, as a pan (DESIGN.md §111.4); ``None`` when none is on the stage."""
+        from vidgen.staging import stage_pan
+
+        frame = self.camera.frame
+        xs = [float(self.cast[n].get_center()[0]) for n in getattr(self, "beat_speakers", []) if n in self.cast]
+        if not xs or frame.width <= 0:
+            return None
+        return stage_pan(0.5 + (sum(xs) / len(xs) - float(frame.get_center()[0])) / frame.width)
+
     def action_foley(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
         """The sounds of a character's action as it plays (DESIGN.md §69.19): footsteps on
         walks, a whoosh on enter / exit, a boing on jump, a thud where a thrown prop lands, a pop

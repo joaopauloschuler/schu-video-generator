@@ -21155,3 +21155,48 @@ turn within a scene, `Name:` when more than one voice is used, the unlabelled ba
 speaker names follow `subtitles.speakers`); `_chapters.txt` by `write_chapter_list` (as a video,
 with the YouTube warnings). **Public**: config `audio_output`, `audio.level_voice`; CLI `audio
 check`; `render --json` `check` / transcript outputs. No new `vidgen.api` names.
+
+### 111.4 Stereo staging and rooms (Step 285)
+
+Opt-in, in videos and audio-only renders (`vidgen.staging`). Applied in the mix to each beat's
+voice after its overlap shape (`audio_only._voice_samples`, `scene.add_narration`), never to the
+MP3s: `pan` is a display field of a voice (`voices.DISPLAY_FIELDS`: not in `audio_fields`, not
+inherited by named voices), so nothing is re-voiced.
+
+- **Pan**: `PanSetting` = −1…1 or `POSITIONS` (`far_left` −0.8, `left` −0.5, `centre`/`center`,
+  `right`, `far_right`: the stage's marks); on `voice:`, `voices.<n>`, a beat (`PanMove {from, to}`:
+  eased, raised cosine, from the first to the last sample within 40 dB of the line's peak). Law:
+  `sfx.stereo`'s equal power (centre = both channels at full level, so a centred dry voice is
+  bit-identical). `beat_staging(config, scene, beat, stage)`: the beat's pan, else `stage`, else its
+  voice's. `audio.follow_stage`: a video asks `NarratedScene.speaker_pan(beat)` (default `None`;
+  `StageScene`: the mean x of `beat_speakers` in the camera frame as the line starts, 0…1 →
+  −1…1); an audio-only render reads the stage's `characters:` `at` (`params_stage_pan`, marks via
+  `mark_x`). No moves follow a character walking during a line (a beat `{from, to}` does).
+- **Rooms**: `RoomName` / `RoomConfig {use, amount 0–2, narrator}` on a scene (sections pass `room`)
+  or `audio.room`; the base voice stays dry unless `narrator`; a scene's `none` cancels the default.
+  `ROOM_PRESETS`: early reflections (ms, gain taps added to the dry voice and panned with it;
+  corridor: an 11 ms flutter) plus a reverberation IR per channel (`reverb_ir`, cached): seeded
+  noise (seed 1110 + 7·index + channel), band-limited (2nd-order magnitudes), split at 2 kHz into
+  bands decaying with `rt60` / `rt60_high`, pre-delay, 8 ms onset, unit energy × `wet_db`; FFT
+  convolution, not panned (diffuse; the two IRs correlate < 0.1). `phone`: 300–3400 Hz (4th-order
+  magnitude, zero-phase), tanh saturation, band again, RMS-matched. Measured (scratch s285):
+  T30 at 500 Hz small_office 0.52 (the band filter's own ring), corridor 1.11, hall 2.24 s;
+  4 kHz 0.30 / 0.77 / 1.63 s. The output is longer by the tail, so a room rings under the next
+  line (room changes are as smooth as the tails overlap; no crossfade of a room bus). A tail past
+  the scene's end (video: the last beat's window; audio-only: the file's end) fades over 0.25 s.
+- **Width**: `audio.music_width` / `ambience_width` (0–2) scale the side signal of each music cue /
+  ambience bed in `MusicTrack.read` (`staging.widen`; 1 returns the block itself).
+- **Mono compatibility**: `measure_file` keeps per 10 ms the sums L², R², L·R of a stereo file:
+  `correlation`, `worst_correlation` (1 s windows with sound), `mono_fold_db` (mean channel power
+  over the fold's). `mono_check` → `PresetResult("mono")`: correlation ≥ 0, worst second ≥ −0.3,
+  fold ≤ 3.5 dB (hard pan / decorrelated = 3.01). `vidgen audio check` appends it for stereo files
+  (`--mono`: it sets the exit code); an audio-only render with staging (`uses_staging`) and stereo
+  output prints `mono:` and records `timings["stereo"]` (`render --json` `stereo`). The built-in
+  beds are wide already (calm: correlation 0.22 at width 1; at 1.4 its worst second is −0.37).
+- **Compatibility**: unset, every path is the old one (`staging.plain` skips the processing; the
+  scene fingerprint adds `staging` only when a beat is staged or `follow_stage` is on a stage):
+  Step 284's audio-only render pinned (`test_audio_only_render_is_pinned_without_staging`, RMS per
+  half second and bytes with neutral settings), the video mix pinned as before, frame baseline 0.
+- **Public**: config `voice.pan`, `voices.<n>.pan`, beat `pan`, scene / section `room`, `audio.room`,
+  `follow_stage`, `music_width`, `ambience_width`; CLI `audio check --mono`; `render --json`
+  `stereo`; `NarratedScene.speaker_pan` (a scene type may override it). No new `vidgen.api` names.

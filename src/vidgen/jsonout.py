@@ -906,7 +906,8 @@ def audio_render_document(project: Project, result: AudioRenderResult, preview: 
     """The ``vidgen render --audio-only --json`` document (DESIGN.md §111): ``audio_only: true``,
     the ``timing`` used, what was ``left_out``, ``outputs.audio``, ``outputs.timings`` and the
     transcripts (``outputs.transcript_<kind>``), the mix report, the loudness ``check``
-    (§111.2; ``null`` without a preset), chapters and the scenes with their beats."""
+    (§111.2; ``null`` without a preset), the ``stereo`` mono-compatibility check (§111.4;
+    ``null`` without staging), chapters and the scenes with their beats."""
     timings = result.timings
     scenes = [
         {
@@ -937,6 +938,7 @@ def audio_render_document(project: Project, result: AudioRenderResult, preview: 
         elapsed=round(elapsed, 3),
         mix=timings.get("mix"),
         check=None if result.check is None else result.check.to_json(),
+        stereo=timings.get("stereo"),
         chapters=timings.get("chapters", []),
         scenes=scenes,
     )

@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–284)
+## Unreleased (Steps 193–285)
+
+### Stereo staging and rooms (Step 285)
+
+- `pan:` places a voice in stereo (−1…1, or `far_left`, `left`, `centre`, `right`, `far_right`) on a voice of `voices:` or on a line; `pan: {from: right, to: left}` moves it across the line; `audio.follow_stage` pans stage voices to where their characters stand.
+- `room: small_office | corridor | hall | outdoors | car | phone | none` per scene or section (or `audio.room`): generated reflections and reverberation, the narrator dry unless asked; nothing downloaded, nothing re-voiced.
+- `audio.music_width` / `ambience_width` narrow or widen the music and ambience beds.
+- A mono-compatibility check (channel correlation, mono fold loss) in `vidgen audio check` (`--mono` sets the exit code) and in audio-only renders with staging. All opt-in: videos and mixes without these keys are unchanged.
 
 ### Audio files, loudness presets, transcripts (Step 284)
 

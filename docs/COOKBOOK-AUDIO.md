@@ -89,13 +89,20 @@ Any video project becomes an episode with `vidgen render --audio-only` and a var
 - Pick voices that differ in pitch and accent (Kokoro: `bf_emma` narrator, `af_heart` a girl,
   `bm_fable` / `bm_george` older men); `emotion:` on a line where the reading should change.
 - `vidgen story draft --audio story.md` drafts the sections, speakers and emotions from prose.
+- Drama: place the characters with `pan: left` / `right` (`voices:`), keep the narrator centred
+  and dry, and give each section a `room:` (`small_office`, `corridor`, `hall`, `outdoors`, `car`,
+  `phone`); a line can walk: `pan: {from: right, to: left}`. `audio.music_width: 0.7` leaves the
+  sides to the voices. An audiobook for ACX is better without rooms on the narration (the default)
+  and with modest pans (`left` / `right`, not `far_*`): many listen on one earbud. See
+  [CONFIG: Stereo staging and rooms](CONFIG.md#stereo-staging-and-rooms-pan-room).
 
 ## 5. Checking without listening
 
 `vidgen render` measures the file after encoding and prints `check: audiobook PASS ...` or the
 values that miss. `vidgen audio check FILE` measures any audio file against every preset (exit
 code 1 when `--preset` fails); `--json` for scripts. Look at what it names: loudness, true and
-sample peak, RMS, noise floor, head and tail.
+sample peak, RMS, noise floor, head and tail. A stereo file also gets a `mono` line (channel
+correlation, the worst second, how much the mono fold loses); `--mono` makes it count.
 
 | format | when |
 |---|---|

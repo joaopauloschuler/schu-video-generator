@@ -7,7 +7,9 @@ filter gives the integrated loudness, loudness range, true peak and sample peak 
 measure podcast hosts and broadcasters use), and the decoded samples (48 kHz, the file's
 channels) give the RMS over the whole file, the noise floor (the quietest 0.5 s), and the
 silence before the first and after the last sound (room tone head and tail; a sound is a 10 ms
-frame above :data:`SOUND_DB`). Nothing is held in memory but one value per 10 ms.
+frame above :data:`SOUND_DB`); for a stereo file also the channels' correlation and how much the
+mono fold loses (:func:`mono_check`, DESIGN.md §111.4). Nothing is held in memory but a few
+values per 10 ms.
 
 :data:`PRESETS` are the targets: ``podcast`` (-16 LUFS stereo, -19 mono, ±1 LU; true peak at
 most -1 dBTP), ``audiobook`` (ACX: RMS -23 to -18 dB, sample peaks at most -3 dB, noise floor at
@@ -161,6 +163,9 @@ class AudioMeasurement:
     noise_floor: float
     head: float  # seconds before the first sound
     tail: float  # seconds after the last sound
+    correlation: float | None = None  # stereo only (DESIGN.md §111.4): of the two channels, whole file
+    worst_correlation: float | None = None  # ... its lowest over 1 s windows with sound
+    mono_fold_db: float | None = None  # ... how much quieter the mono fold (L + R) / 2 is
 
     @property
     def digital_silence(self) -> bool:
@@ -173,8 +178,10 @@ class AudioMeasurement:
 
         data = asdict(self)
         data["path"] = str(self.path)
-        for key in ("duration", "integrated_lufs", "loudness_range", "true_peak", "sample_peak", "rms", "noise_floor", "head", "tail"):
-            data[key] = num(data[key])
+        for key in ("duration", "integrated_lufs", "loudness_range", "true_peak", "sample_peak", "rms", "noise_floor", "head", "tail", "mono_fold_db"):
+            data[key] = None if data[key] is None else num(data[key])
+        for key in ("correlation", "worst_correlation"):
+            data[key] = None if data[key] is None else round(data[key], 3)
         data["digital_silence"] = self.digital_silence
         return data
 
@@ -222,6 +229,7 @@ class _Frames:
         self.channels = channels
         self.rest = np.zeros((0, channels), dtype=np.float64)
         self.powers: list[np.ndarray] = []
+        self.products: list[np.ndarray] = []  # stereo: per frame sums of L², R², L·R
         self.total = 0.0
         self.count = 0
 
@@ -231,13 +239,52 @@ class _Frames:
         x = np.concatenate([self.rest, x])
         n = len(x) // FRAME
         if n:
-            self.powers.append(np.mean(x[: n * FRAME].reshape(n, FRAME * self.channels) ** 2, axis=1))
+            frames = x[: n * FRAME]
+            self.powers.append(np.mean(frames.reshape(n, FRAME * self.channels) ** 2, axis=1))
+            if self.channels == 2:
+                self.products.append(self._products(frames.reshape(n, FRAME, 2)))
         self.rest = x[n * FRAME :]
+
+    @staticmethod
+    def _products(frames: np.ndarray) -> np.ndarray:
+        left, right = frames[..., 0], frames[..., 1]
+        return np.stack([np.sum(left**2, axis=1), np.sum(right**2, axis=1), np.sum(left * right, axis=1)], axis=1)
 
     def finish(self) -> np.ndarray:
         if len(self.rest):
             self.powers.append(np.array([np.sum(self.rest**2) / (FRAME * self.channels)]))
+            if self.channels == 2:
+                self.products.append(self._products(self.rest.reshape(1, -1, 2)))
         return np.concatenate(self.powers) if self.powers else np.zeros(0)
+
+
+#: Seconds of the windows the worst correlation is taken over (only windows with sound count).
+CORRELATION_WINDOW = 1.0
+
+
+def _stereo_image(products: np.ndarray, power: np.ndarray) -> tuple[float, float, float]:
+    """``(correlation, worst correlation, mono fold dB)`` of a stereo file from its per-frame
+    sums of L², R², L·R (``products``) and frame powers: the correlation of the two channels over
+    the whole file (1: the same, 0: unrelated or one silent, -1: opposite), its lowest over
+    :data:`CORRELATION_WINDOW` windows with sound, and how much quieter (dB) the mono fold
+    ``(L + R) / 2`` is than the stereo channels' mean power (0 for a centred voice, 3 for a
+    hard-panned or fully decorrelated one, more where they cancel)."""
+    ll, rr, lr = (float(v) for v in products.sum(axis=0))
+    corr = lr / math.sqrt(ll * rr) if ll > 0 and rr > 0 else 0.0
+    fold = (ll + rr + 2 * lr) / 4
+    drop = 10 * math.log10(((ll + rr) / 2) / fold) if fold > 0 else (math.inf if ll + rr > 0 else 0.0)
+    width = round(CORRELATION_WINDOW * 100)
+    worst = corr
+    if len(products) >= width:
+        sums = np.concatenate([np.zeros((1, 3)), np.cumsum(products, axis=0)])
+        win = sums[width:] - sums[:-width]
+        loud = np.concatenate([[0.0], np.cumsum(power)])
+        heard = (loud[width:] - loud[:-width]) / width > 10 ** (SOUND_DB / 10)
+        denom = np.sqrt(win[:, 0] * win[:, 1])
+        ok = heard & (denom > 0)
+        if ok.any():
+            worst = float(np.min(win[ok, 2] / denom[ok]))
+    return corr, worst, drop
 
 
 def _db(power: float) -> float:
@@ -289,9 +336,13 @@ def measure_file(path: Path) -> AudioMeasurement:
         floor = _db(float(np.min(sums[width:] - sums[:-width])) / width)
     else:
         floor = _db(float(power.mean())) if len(power) else -math.inf
+    image: tuple[float | None, float | None, float | None] = (None, None, None)
+    if channels == 2 and frames.products:
+        image = _stereo_image(np.concatenate(frames.products), power)
     return AudioMeasurement(
         path, codec, rate, channels, bitrate, duration, levels["integrated_lufs"], levels["loudness_range"],
         levels["true_peak"], levels["sample_peak"], _db(frames.total / frames.count) if frames.count else -math.inf, floor, head, tail,
+        *image,
     )
 
 
@@ -379,6 +430,29 @@ def check(m: AudioMeasurement, preset: LoudnessPreset) -> PresetResult:
         items.append(CheckItem("ACX format", f"{m.codec} {kbps} {rate}", "mp3 ≥ 192 kb/s CBR, 44.1 kHz", "pass" if fits else "note"))
         minutes = m.duration / 60
         items.append(CheckItem("length", f"{minutes:.1f} min", f"≤ {ACX_MINUTES} min per file", "pass" if minutes <= ACX_MINUTES else "note"))
+    return result
+
+
+#: Mono compatibility (DESIGN.md §111.4): the channels' correlation over the file at least
+#: :data:`MIN_CORRELATION`, over every second with sound at least :data:`MIN_WORST_CORRELATION`
+#: (a moment that cancels), the mono fold at most :data:`MAX_MONO_FOLD_DB` quieter (a voice panned
+#: hard to one side, or a wholly decorrelated bed, loses 3 dB).
+MIN_CORRELATION = 0.0
+MIN_WORST_CORRELATION = -0.3
+MAX_MONO_FOLD_DB = 3.5
+
+
+def mono_check(m: AudioMeasurement) -> PresetResult:
+    """Whether stereo ``m`` folds to mono well (see :data:`MAX_MONO_FOLD_DB`); a mono file
+    passes with a note."""
+    result = PresetResult("mono", f"mono compatibility: correlation ≥ {MIN_CORRELATION:g} (each second ≥ {MIN_WORST_CORRELATION:g}), mono fold ≤ {MAX_MONO_FOLD_DB:g} dB quieter")
+    if m.correlation is None or m.worst_correlation is None or m.mono_fold_db is None:
+        result.items.append(CheckItem("channels", f"{m.channels}", "2", "note"))
+        return result
+    items = result.items
+    items.append(CheckItem("correlation", f"{m.correlation:.2f}", f"≥ {MIN_CORRELATION:g}", "pass" if m.correlation >= MIN_CORRELATION - 1e-9 else "fail"))
+    items.append(CheckItem("worst second", f"{m.worst_correlation:.2f}", f"≥ {MIN_WORST_CORRELATION:g}", "pass" if m.worst_correlation >= MIN_WORST_CORRELATION - 1e-9 else "fail"))
+    items.append(_at_most("mono fold", m.mono_fold_db, MAX_MONO_FOLD_DB, "dB"))
     return result
 
 

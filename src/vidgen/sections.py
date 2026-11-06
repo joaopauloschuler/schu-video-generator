@@ -3,7 +3,7 @@
 An audiobook or a podcast episode has no pictures to choose, so its config may list
 ``sections`` instead of ``scenes``. :func:`expand_sections` turns them into scenes before the
 config is validated (so every tool sees an ordinary project): a section ``{id, title, voice,
-music, sfx, beats}`` becomes a ``text_card`` scene showing its title (a video render of the
+room, music, sfx, beats}`` becomes a ``text_card`` scene showing its title (a video render of the
 project is a plain slideshow), the title also starting a chapter; its beats are the usual beats
 (``text``, ``voice``, ``emotion``, ``sting``, ``pause``, ``overlap``, ``actions: [{sfx: ...}]``),
 a plain string being a beat of that text; a ``{pause: S}`` section becomes a silent scene of S
@@ -18,7 +18,7 @@ from typing import Any
 from vidgen.errors import VidgenError
 
 #: Keys of a section, and of a pause between sections.
-SECTION_KEYS: tuple[str, ...] = ("id", "title", "voice", "music", "sfx", "beats")
+SECTION_KEYS: tuple[str, ...] = ("id", "title", "voice", "room", "music", "sfx", "beats")
 PAUSE_KEYS: tuple[str, ...] = ("id", "pause", "sfx", "music")
 #: The scene type a section becomes.
 SECTION_TYPE = "text_card"
@@ -61,8 +61,9 @@ def _scene(n: int, section: Any, title: str, source: str) -> dict[str, Any]:
         scene["params"] = {"text": heading if isinstance(heading, str) and heading.strip() else title}
         if heading is not None:
             scene["chapter"] = heading
-        if "voice" in section:
-            scene["voice"] = section["voice"]
+        for key in ("voice", "room"):
+            if key in section:
+                scene[key] = section[key]
         scene["beats"] = _beats(section["beats"])
     for key in ("music", "sfx"):
         if key in section:

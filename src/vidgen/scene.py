@@ -45,6 +45,7 @@ from vidgen.project import Project
 from vidgen.references import has_citations
 from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.speech import audio_duration
+from vidgen.staging import VoiceStaging, beat_staging, stage_voice
 from vidgen.terms import scene_terms, set_active_terms
 from vidgen.theme import Theme
 from vidgen.transitions import IRIS_HEAD_SCALE, ColorFade, IrisPoint, effective, has_transitions, resolve_color
@@ -219,9 +220,12 @@ def _animation_name(item: Any) -> str:
     return type(item).__name__
 
 
-def add_narration(scene: MovingCameraScene, path: Path, shape: VoiceShape | None = None) -> None:
+def add_narration(
+    scene: MovingCameraScene, path: Path, shape: VoiceShape | None = None, staging: VoiceStaging | None = None, limit: float | None = None
+) -> None:
     """Add a narration file to ``scene``'s sound at the current time, at the file's own level
-    (``shape``: dipped under an overlapping line or cut by an interruption, DESIGN.md §69.34).
+    (``shape``: dipped under an overlapping line or cut by an interruption, DESIGN.md §69.34;
+    ``staging``: panned and in a room, §111.4, its tail faded out by ``limit`` seconds).
 
     The file is decoded here and handed to Manim as a 48 kHz stereo WAV: a mono MP3 (what TTS
     providers return) plays on both channels unchanged, like the sound effects (DESIGN.md §47).
@@ -231,7 +235,10 @@ def add_narration(scene: MovingCameraScene, path: Path, shape: VoiceShape | None
     with tempfile.TemporaryDirectory(prefix="vidgen_voice_") as folder:
         wav = Path(folder) / "narration.wav"
         samples = stereo(decode_audio(path))
-        write_wav(wav, samples if shape is None else shape_voice(samples, RATE, shape))
+        samples = samples if shape is None else shape_voice(samples, RATE, shape)
+        if staging is not None and not staging.plain:
+            samples = stage_voice(samples, staging, None if limit is None else round(limit * RATE))
+        write_wav(wav, samples)
         scene.add_sound(str(wav))
 
 
@@ -739,6 +746,12 @@ class NarratedScene(MovingCameraScene):
                 character.stop_lip_sync()
         self._lingering = []
 
+    def speaker_pan(self, beat: BeatConfig) -> float | None:
+        """Where ``beat``'s speaker is as its line starts, as a pan (-1 left to 1 right of the
+        frame), for ``audio.follow_stage`` (DESIGN.md §111.4); ``None``: this scene does not know
+        (a stage scene does: its speaking characters)."""
+        return None
+
     def beat_action_names(self, beat: str | int | BeatConfig) -> list[str]:
         """The action types the beat's ``actions`` use (validated), in order."""
         b = self.beat(beat)
@@ -797,7 +810,10 @@ class NarratedScene(MovingCameraScene):
         window = self.beat_window(b)
         path = self.beat_audio(b)
         if path is not None and self.audio_enabled:
-            add_narration(self, path, None if window.shape.plain else window.shape)
+            cfg = self.project.config
+            staging = beat_staging(cfg, self.spec, b, self.speaker_pan(b) if cfg.audio.follow_stage else None)
+            last = b.id == self.beats[-1].id
+            add_narration(self, path, None if window.shape.plain else window.shape, staging, window.window if last else None)
         start = float(self.renderer.time)
         if self.capture is not None:
             self.capture.begin_segment(b.id, round(window.window * config.frame_rate), include_end=False)

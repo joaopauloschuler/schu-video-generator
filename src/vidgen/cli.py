@@ -883,6 +883,10 @@ def _render_audio(args: argparse.Namespace, project: Project, started: float) ->
     print(f"loudness:  {_loudness_line(result.timings['mix'], limiter=True)}")
     if result.check is not None:
         print(f"check:     {result.check.line()}")
+    if "stereo" in result.timings:
+        stereo = result.timings["stereo"]
+        verdict = "PASS" if stereo["ok"] else "FAIL"
+        print(f"mono:      {verdict}  " + "; ".join(f"{i['name']} {i['value']} ({i['target']})" for i in stereo["items"]))
     for kind, path in result.transcripts.items():
         print(f"{kind + ':':<10} {path}")
     print(f"timings:   {result.timings_file}")
@@ -892,7 +896,8 @@ def _render_audio(args: argparse.Namespace, project: Project, started: float) ->
 def cmd_audio(args: argparse.Namespace) -> CommandResult:
     """``vidgen audio check FILE|PROJECT``: measure an audio file and check it against the
     loudness presets (DESIGN.md §111.2); exit code 1 when the preset asked for (``--preset``, or
-    the project's ``audio_output.loudness``) fails."""
+    the project's ``audio_output.loudness``) fails, or with ``--mono`` when a stereo file does not
+    fold to mono well (§111.4)."""
     from vidgen import audio_check
     from vidgen.config import AudioConfig
 
@@ -916,6 +921,10 @@ def cmd_audio(args: argparse.Namespace) -> CommandResult:
     measured = audio_check.measure_file(path)
     results = audio_check.check_all(measured, [audio_check.preset_named(n, audio) for n in names])
     failed = wanted is not None and not results[0].ok
+    if measured.channels == 2:
+        mono = audio_check.mono_check(measured)
+        results.append(mono)
+        failed = failed or (args.mono and not mono.ok)
     if args.json:
         return jsonout.envelope("audio", not failed, file=str(path), measured=measured.to_json(), checks=[r.to_json() for r in results])
     print(f"{path}: {audio_check.summary_line(measured)}")
@@ -2232,7 +2241,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="audio file tools: check measures an audio file (or a project's audio-only render) and checks it against the loudness presets "
         "(podcast, audiobook / ACX, broadcast / EBU R128, custom)",
     )
-    p.add_argument("action", choices=["check"], help="check: loudness, true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per preset")
+    p.add_argument("action", choices=["check"], help="check: loudness, true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per preset; mono compatibility of a stereo file")
     p.add_argument("target", nargs="?", default=".", help="an audio file (wav, mp3, m4a, ogg...), or a project dir or config file: its rendered audio (default: .)")
     p.add_argument(
         "--preset", choices=["podcast", "audiobook", "broadcast", "custom"],
@@ -2240,6 +2249,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--lufs", type=float, metavar="LUFS", help="the custom preset's loudness (default: audio.target_lufs, -16)")
     p.add_argument("--true-peak", type=float, metavar="DBTP", help="the custom preset's highest true peak (default: audio.true_peak, -1.5)")
+    p.add_argument(
+        "--mono", action="store_true",
+        help="exit code 1 also when a stereo file does not fold to mono well (its mono compatibility line: channel correlation, mono fold loss)",
+    )
     p.add_argument("--variant", metavar="NAME", help="a project's variant (its rendered file)")
     quality = p.add_mutually_exclusive_group()
     quality.add_argument("--preview", action="store_true", help="a project's preview render")

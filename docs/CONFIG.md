@@ -1156,11 +1156,13 @@ voice:
   dub: null                         # this voice in other languages, {pt: pf_dora}: see "Dubbing"
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
+  pan: null                         # where the voice sounds in stereo (-1..1, left, right...): see "Stereo staging and rooms"
 ```
 
 All keys are optional; the values shown are the defaults. Unknown keys are an error. Changing
 `voice_id`, `model_id`, `output_format` or `settings` re-voices every beat of this voice on the
-next `vidgen tts`; `label` and `color` only name the speaker (they change no audio). `context`
+next `vidgen tts`; `label` and `color` only name the speaker and `pan` places it in the mix (they
+change no audio file). `context`
 sends the neighbouring beats only when they have the same voice (see
 [multiple voices](#multiple-voices-voices)).
 
@@ -4054,7 +4056,7 @@ sections:
   - pause: 2.0                     # a silent section
 ```
 
-A section (`id`, `title`, `voice`, `music`, `sfx`, `beats`) becomes a `text_card` scene showing its
+A section (`id`, `title`, `voice`, `room`, `music`, `sfx`, `beats`) becomes a `text_card` scene showing its
 title (a video render is a plain slideshow); its beats are ordinary beats. A beat's `pause: S` (or a
 `- pause: S` item after it, in any scene) is the silence after its line, instead of
 `narration.pad` in a video or the gap below in audio.
@@ -4117,7 +4119,67 @@ measures any audio file (or a project's rendered one): integrated loudness, loud
 and sample peak (FFmpeg's `ebur128`), RMS over the whole file, noise floor (the quietest 0.5 s),
 the silence before the first and after the last sound (10 ms frames above −50 dBFS), and checks
 it against every preset, or only `--preset` / the project's `audio_output.loudness` (exit code 1
-when that one fails). `--lufs` / `--true-peak` add a `custom` check.
+when that one fails). `--lufs` / `--true-peak` add a `custom` check. A stereo file also gets a
+`mono` line ([mono compatibility](#stereo-staging-and-rooms-pan-room)); `--mono` makes its
+failure exit 1 too.
+
+### Stereo staging and rooms (`pan`, `room`)
+
+Opt-in; nothing changes until one of these is set, in videos and audio-only renders alike. They
+are applied in the mix, to each line's voice, so no beat is voiced again.
+
+```yaml
+voices:
+  ada: {voice: bf_isabella, pan: left}       # -1 (left) .. 1 (right), or far_left, left, centre, right, far_right
+  tom: {voice: bm_lewis, pan: right}
+audio: {room: small_office, music_width: 0.7}   # the default room of every scene; a narrower music bed
+sections:                                    # or scenes:
+  - title: The Corridor
+    room: corridor                           # this scene's room; none: dry here
+    beats:
+      - {text: "This way?", voice: tom, pan: {from: right, to: left}}   # a move across the line
+      - {text: "Trust me.", voice: ada, pan: far_left}                  # this line only
+```
+
+- **`pan`** on `voice:` (the narrator), a named voice of `voices:` (not inherited from the base
+  voice) or a beat: a number from −1 (left) to 1 (right) or a position: `far_left` −0.8, `left`
+  −0.5, `centre` / `center` 0, `right` 0.5, `far_right` 0.8 (the stage's marks). Equal-power law:
+  `left` is 7.7 dB louder on the left, as loud overall as a centred voice. A beat's `{from, to}`
+  moves the voice from one place to the other over its speech (eased). A beat's own `pan` wins,
+  then (with `follow_stage`) its character's place, then its voice's.
+- **`follow_stage`** of `audio:` (`false`): on a stage scene each voice sounds where its speaking
+  character stands as its line starts (left to right of the camera's view); an audio-only render
+  takes the character's `at:` place in the scene's `characters:`.
+- **`room`** on a scene or section (default `audio.room`, none): a preset name or `{use, amount,
+  narrator}`. `amount` (1; 0–2) scales the room's reflections and reverberation; the narrator (the
+  base voice) stays dry unless `narrator: true`; a scene's `room: none` cancels `audio.room`.
+
+| room | what it sounds like |
+|---|---|
+| `small_office` | a small furnished room: close reflections (4–17 ms), short soft reverberation (RT60 0.4 s), 12 dB under the voice |
+| `corridor` | a long hard corridor: an 11 ms flutter echo, RT60 1.1 s, 11 dB under |
+| `hall` | a large hall: 25 ms pre-delay, smooth RT60 2.2 s (highs 1.2 s), 9 dB under |
+| `outdoors` | open air: almost dry, a faint slap from a building far off (88 and 161 ms) |
+| `car` | a car's cabin: very short, boxy (RT60 0.12 s, 90 Hz–3.5 kHz) |
+| `phone` | a telephone line: 300–3400 Hz, a little saturated, the same loudness, no room |
+| `none` | dry |
+
+The rooms are generated (seeded noise impulse responses, one per channel so the tail is wide;
+nothing downloaded); each line's room rings out under the next line, so a cut to another room
+is as smooth as the tails overlap. A video scene fades a tail that would outlast it.
+
+- **`music_width`**, **`ambience_width`** of `audio:` (`1`; 0–2): the stereo width of the music
+  and of the ambience beds (a stage's rain, a fire): 1 as they are, 0 mono, above 1 wider. The
+  built-in beds are already wide: at 1.4 the calm bed's channels are opposed in some seconds
+  (correlation −0.37) and its mono fold loses 3.5 dB; 0.5–0.8 leaves room for panned voices.
+
+**Mono compatibility.** A stereo file with staging set (audio-only renders), and every stereo
+file `vidgen audio check` reads, is measured for how it sounds folded to mono: the channels'
+correlation over the file (≥ 0), the lowest over any second with sound (≥ −0.3: a moment that
+cancels) and how much quieter the fold `(L + R) / 2` is (≤ 3.5 dB; a voice panned hard to one side
+loses 3 dB, `left` 0.7 dB). The render prints `mono: PASS correlation 0.71 (≥ 0); worst second
+0.16 (≥ -0.3); mono fold 0.8 dB (≤ 3.5)` and warns when it fails; `timings.json` / `--json` carry
+it as `stereo`. `audio_output.channels: mono` simply averages the channels.
 
 Transcripts (from the word timings, next to the file): `<output>_transcript.txt` — the title, each
 chapter as `[M:SS] Title`, a paragraph per voice's turn in a section, `Name: text` when there is
@@ -15354,8 +15416,9 @@ An audio-only render (`--audio-only`, `audio_only: true`) answers with `audio_on
 `timing`, `left_out`, `outputs` `{audio, timings, transcript_txt, transcript_srt,
 transcript_vtt, transcript_chapters}` (the transcripts written), `mix` (with `levelled_db`,
 `target_rms`, `mono` when they apply), `check` (the file against its loudness preset, as in
-[`vidgen audio --json`](#vidgen-audio---json), or `null`), `chapters` and `scenes` (`{id, type,
-start, duration, beats}`).
+[`vidgen audio --json`](#vidgen-audio---json), or `null`), `stereo` (the mono-compatibility
+check with [staging](#stereo-staging-and-rooms-pan-room) set, else `null`), `chapters` and
+`scenes` (`{id, type, start, duration, beats}`).
 
 ### `vidgen audio --json`
 
@@ -15364,11 +15427,11 @@ start, duration, beats}`).
 | key | type | |
 |---|---|---|
 | `file` | str | the file measured |
-| `measured` | object | `{path, codec, sample_rate, channels, bitrate, duration, integrated_lufs, loudness_range, true_peak, sample_peak, rms, noise_floor, head, tail, digital_silence}` (dB values `null` for silence) |
-| `checks` | list | per preset: `{preset, description, ok, items}`, each item `{name, value, target, status}` (`pass`, `fail`, or a `note` that does not count) |
+| `measured` | object | `{path, codec, sample_rate, channels, bitrate, duration, integrated_lufs, loudness_range, true_peak, sample_peak, rms, noise_floor, head, tail, correlation, worst_correlation, mono_fold_db, digital_silence}` (dB values `null` for silence; the last three `null` for a mono file) |
+| `checks` | list | per preset: `{preset, description, ok, items}`, each item `{name, value, target, status}` (`pass`, `fail`, or a `note` that does not count); a stereo file ends with the `mono` check |
 
 `ok` is false when the preset asked for (`--preset`, or the project's `audio_output.loudness`)
-fails.
+fails, or with `--mono` the mono check.
 
 ### `vidgen storyboard --json`
 

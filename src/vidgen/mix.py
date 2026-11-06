@@ -25,7 +25,8 @@ is deterministic numpy.
 Opt-in (DESIGN.md §111.2): ``audio.level_voice`` puts a gentle leveller on the voice track before
 the sum (:class:`LevelledTrack`); an audio-only render's loudness preset passes
 :class:`MixTargets` (a file loudness or RMS, a mono mix, a limiter setting, a room tone added
-after the gain). Without them a video's mix is what it was.
+after the gain). ``audio.music_width`` / ``ambience_width`` (§111.4) scale the side signal of the
+music and of the beds. Without them a video's mix is what it was.
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ from vidgen.config import DuckConfig, MusicCue, SceneMusic
 from vidgen.errors import VidgenError
 from vidgen.music import Source, cue_scene_range, fallback_bed
 from vidgen.sfx import RATE
+from vidgen.staging import widen
 
 if TYPE_CHECKING:
     from vidgen.project import Project
@@ -301,10 +303,12 @@ class AmbiencePlacement:
 
 class MusicTrack:
     """The music of the whole video: every cue's source times its gain curve (and the ambience
-    beds, mixed the same way)."""
+    beds, mixed the same way); ``widths``: the stereo width of the music and of the beds
+    (``audio.music_width`` / ``ambience_width``, DESIGN.md §111.4; 1: as they are)."""
 
-    def __init__(self, placements: Sequence[Placement | AmbiencePlacement]) -> None:
+    def __init__(self, placements: Sequence[Placement | AmbiencePlacement], widths: tuple[float, float] = (1.0, 1.0)) -> None:
         self.placements = list(placements)
+        self.widths = widths
 
     def read(self, a: int, b: int) -> np.ndarray:
         out = np.zeros((b - a, 2))
@@ -313,7 +317,8 @@ class MusicTrack:
             if lo >= hi:
                 continue
             gain = np.interp(np.arange(lo, hi) / FRAME, np.arange(len(p.gain)), p.gain)
-            out[lo - a : hi - a] += p.source.read(lo - p.start, hi - p.start) * gain[:, None]
+            part = p.source.read(lo - p.start, hi - p.start) * gain[:, None]
+            out[lo - a : hi - a] += widen(part, self.widths[1 if isinstance(p, AmbiencePlacement) else 0])
         return out
 
 
@@ -606,7 +611,7 @@ def mix_audio(
     sfx = WavTrack([sfx_track]) if sfx_track is not None else None
     placements = plan_music(project, timings, total)
     beds = plan_ambience(project, timings, total)
-    music = MusicTrack([*placements, *beds]) if placements or beds else None
+    music = MusicTrack([*placements, *beds], (audio.music_width, audio.ambience_width)) if placements or beds else None
 
     def read(a: int, b: int) -> np.ndarray:
         x = voice.read(a, b)
