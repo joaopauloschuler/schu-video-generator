@@ -5,7 +5,12 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–294)
+## Unreleased (Steps 193–295)
+
+### Cleaner reference sheet prompts, real image costs (Step 295)
+
+- Character sheet pictures are now clean model-sheet pictures: full body from head to toe on a plain seamless light grey backdrop with nothing else in the picture, strict view words (a side view is a 90-degree profile facing left), the description introduced as who the person is with "No props", and an always-on "Avoid: text, letters, signs, logos, labels, props, furniture, lamps, scenery, ...". The style sheet's palette is marked as colours only (it drew lamps from "warm lamp orange"); lens, handheld, depth-of-field and scene-lighting words stay out of character pictures. Style frames keep the full look and avoid text and signage. The new prompts make new pictures: sheets made before read "not made yet".
+- Picture costs say where they come from: sidecars and the sheets' ledger events have `cost_source: reported` (OpenRouter's `usage.cost`) or `estimate` (counted at the estimate, as before), the sidecar keeps the response's `usage` numbers, and the printed lines say "reported by openrouter" or "estimated". The budget check before paying is unchanged.
 
 ### Generated video: takes in the film, QA, run (Step 294)
 

@@ -204,12 +204,13 @@ class SceneImage:
 
 @dataclass(frozen=True)
 class GeneratedPicture:
-    """What a provider returns: PNG bytes, the prompt it actually used and what it charged in
-    US dollars, if it says."""
+    """What a provider returns: PNG bytes, the prompt it actually used, what it charged in
+    US dollars, if it says, and its usage numbers as sent (OpenRouter's ``usage``)."""
 
     data: bytes
     revised_prompt: str | None = None
     cost: float | None = None
+    usage: dict[str, float] | None = None
 
 
 @dataclass(frozen=True)

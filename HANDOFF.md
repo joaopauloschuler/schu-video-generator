@@ -25034,3 +25034,56 @@ project), repo work is generic.
   checks the flow) → `generate run --pay` → `generate takes` (contact sheets) → `pick` →
   `render --preview`. Record what the API accepts (inline audio / video, the portrait as a
   reference, the guide size) and the reported costs in DESIGN §113.
+
+## Step 295 — Cleaner reference sheet prompts, real image costs
+
+- **Why**: the owner-approved sheet run (seedream-4.5, `scratch/s293/sample`, 7 pictures) gave
+  consistent characters but poor references: orange lamps from the palette word "warm lamp
+  orange" (6 of 7), a counter / ticket booth / "SELD FICKETS" sign from Theo's "sells ferry
+  tickets", a "CKET" sign in the style frame, busy backgrounds, Theo cut at the waist, Mara's
+  "side" view three-quarter, lens words fighting a studio look.
+- **Built** (DESIGN §113.6): `videogen/sheets.py` — character pictures as model-sheet pictures
+  ("full body from head to toe, whole figure in frame, <view>, neutral expression, arms relaxed
+  at the sides, empty hands, standing on a plain seamless light grey studio backdrop, even soft
+  studio light, nothing else in the picture. Who the person is (draw only the person and their
+  clothes): <prompt>. No props."), strict `VIEW_WORDS` (side = "strict 90-degree profile, facing
+  left"), always-on exclusions as the request's `negative` (`CHARACTER_EXCLUDE`,
+  `FRAME_EXCLUDE`), `_look_words(project, reference=)` (palette "colours only, not objects",
+  "era: ...", character pictures without `lens` and without shot-only clauses of the notes /
+  `imagegen.style`; style frames keep the full look + "no writing anywhere"). Costs: `usage`
+  numbers kept (`RawPicture.usage`, `GeneratedPicture.usage`, sidecar `usage`), sidecar
+  `cost_source: reported | estimate` (`sidecar_document(..., estimate=, usage=)`), sheet ledger
+  events with `cost_source`, printed lines from `imagegen.run.cost_words` ("$x reported by
+  openrouter" / "estimated $x (not reported by openrouter)"), the sheets' `done:` line splits
+  reported and estimated.
+- **Finding on the costs**: the sample's ledger and sidecars show `cost_usd: 0.04` per picture,
+  and `run_sheets` writes that field only from `GeneratedPicture.cost` = the response's
+  `usage.cost`. So vidgen already recorded the reported cost, not the estimate: OpenRouter's
+  response said $0.04 (the list price) while the account's usage rose ~$0.023 per picture. Step
+  295 cannot close that gap without a key; the kept `usage` block and `cost_source` make the
+  next run comparable with the activity page. Possible follow-up: `GET /generation` per picture
+  for the billed `total_cost`, as the TTS path does (DESIGN §66).
+- **Negative field**: OpenRouter's `/images` body has no negative-prompt field; `negative` is
+  folded into the prompt text as "Avoid: ..." by `compose_prompt` for every provider (unchanged
+  code), so sheets just set it.
+- **Public interfaces**: `GeneratedPicture.usage` (new optional field, default `None`);
+  `sidecar_document` gains keyword-only `estimate`, `usage`; new `imagegen.run.cost_words`.
+  Not in `vidgen.api`. Video shot prompts (`shot_prompt`, `StyleSheet.words()`) unchanged: the
+  palette there still reads "palette ... warm lamp orange" (Step 296 may want the same "colours
+  only" wording for clips).
+- **Effect on the sample**: all 7 picture keys changed; the old PNGs stay in `assets/sheets/`
+  (not deleted), every sheet reads "not made yet". The budget line counts the earlier $0.280.
+- **Files**: `src/vidgen/videogen/sheets.py`, `src/vidgen/imagegen/{__init__,openrouter,run}.py`,
+  `tests/test_videogen_shots.py` (+2 tests, 1 updated), `tests/test_imagegen_openrouter.py` (+1
+  test, 2 updated), DESIGN §113 (header, §113.3 wording, §113.6), CHANGELOG,
+  `docs/COOKBOOK-GENERATED-VIDEO.md` (sheet prompt note), tasklist (295 ticked; the paid
+  experiment renumbered to 296).
+- **Tests run** (one at a time, capped, `-m "not render"` where render tests exist):
+  `test_videogen_shots` (19 passed), `test_imagegen_openrouter` (31), `test_imagegen` (34, 1
+  deselected), `test_videogen` (24), `test_videogen_compose` (17, 1 deselected),
+  `test_vector_images` (26, 1 deselected), `test_docs` (79). No rendering code changed.
+- **Spending**: nothing paid, no key read. The dry run `vidgen generate sheets` read the public
+  seedream-4.5 price record (free, unauthenticated).
+- **Next (296, gated)**: as in Step 294's "Next": `generate sheets --pay` again (~$0.28 at the
+  estimate), look at `assets/sheets/`, approve, then the clips. Compare each sidecar's
+  `usage.cost` with the account's activity page.

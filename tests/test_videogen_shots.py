@@ -137,12 +137,65 @@ def test_sheet_pictures_prompts_and_status(make_project) -> None:
     assert ana is not None and [p.label for p in ana.pictures] == ["front", "side"]
     assert ana.paths[0].parent == project.root / "assets" / "sheets" and ana.paths[0].name.startswith("ana_front_")
     text = ana.pictures[1].request.text
-    assert "side view" in text and "yellow raincoat" in text and "Style: palette teal, orange; present day" in text
+    assert "side view: strict 90-degree profile, facing left" in text and "yellow raincoat" in text
+    assert "Style: colour palette: teal, orange (colours only, not objects" in text and "era: present day" in text
     assert character_sheet(project, "ben") is None
     style = style_sheet(project)
     assert style is not None and [p.label for p in style.pictures] == ["frame1"]
     assert [s.owner for s in project_sheets(project)] == ["ana", "style"]
     assert "2 of 2 pictures not made yet" in ana.status() and ana.problem() is not None
+
+
+def test_character_prompts_are_clean_references(make_project) -> None:
+    """Step 295: the paid run drew lamps from the palette, a ticket booth and "SELD FICKETS" from
+    the role, cut figures and blurred backgrounds from the lens words."""
+    style = {"palette": ["slate blue", "warm lamp orange"], "era": "present day", "lens": "35 mm, natural handheld feel, shallow depth of field",
+             "notes": "soft overcast morning light, light film grain, realistic", "frame_prompt": "a quay with a ticket hut"}
+    sheet = {"prompt": "a man who sells ferry tickets, round glasses", "views": ["front", "three_quarter", "side", "back"], "expressions": ["happy"]}
+    project = Project.load(make_project(shot_config(TALK, style_sheet=style, characters=[{"name": "ana", "voice": "ana_voice", "reference_sheet": sheet}])))
+    pictures = character_sheet(project, "ana").pictures
+    for picture in pictures:
+        text = picture.request.text
+        assert "plain seamless light grey studio backdrop" in text and "nothing else in the picture" in text
+        assert "Who the person is (draw only the person and their clothes): a man who sells ferry tickets, round glasses. No props." in text
+        assert "colour palette: slate blue, warm lamp orange (colours only, not objects: the colours of the clothing and the lighting tint)" in text
+        assert "light film grain, realistic" in text and "era: present day" in text
+        for shot_only in ("35 mm", "handheld", "depth of field", "overcast morning light"):
+            assert shot_only not in text
+        avoid = text.split("Avoid: ")[1]
+        for word in ("text", "letters", "signs", "logos", "labels", "props", "furniture", "lamps", "scenery"):
+            assert word in avoid
+        assert picture.request.negative.startswith("text, letters")
+    by_label = {p.label: p.request.text for p in pictures}
+    assert "full body from head to toe, whole figure in frame" in by_label["front"] and "facing the camera squarely" in by_label["front"]
+    assert "turned 45 degrees to the left" in by_label["three_quarter"] and "seen straight from behind" in by_label["back"]
+    assert "head and shoulders" in by_label["happy"] and "happy expression" in by_label["happy"]
+    frame = style_sheet(project).pictures[0].request.text
+    assert "35 mm, natural handheld feel, shallow depth of field" in frame and "(colours only, not objects)" in frame and "clothing" not in frame
+    assert "no writing anywhere" in frame and "Avoid: text, letters, words, numbers, signs, signage, logos" in frame and "props" not in frame
+
+
+def test_sheet_costs_reported_or_marked_estimated(make_project) -> None:
+    """The cost OpenRouter reports (``usage.cost``) is recorded; without one the estimate is
+    counted and marked as one (ledger, sidecar, the printed line)."""
+    root = make_project(shot_config(TALK))
+
+    class Unreported(StubImages):
+        def generate(self, request: ImageRequest) -> GeneratedPicture:
+            self.made.append(request.path.name)
+            return GeneratedPicture(b"\x89PNG\r\n\x1a\n" + request.key.encode(), cost=None if len(self.made) == 1 else 0.023, usage={"cost": 0.023} if len(self.made) > 1 else None)
+
+    lines: list[str] = []
+    run_sheets(Project.load(root), ["ana"], pay=True, provider=Unreported(), out=lines.append)
+    events = [e for e in Ledger(ledger_path(root, "mock")).events() if e["event"] == "completed"]
+    assert [(e["cost_usd"], e["cost_source"]) for e in events] == [(None, "estimate"), (0.023, "reported")]
+    assert Ledger(ledger_path(root, "mock")).spent() == pytest.approx(0.063 + 0.023)   # gpt-image-1 portrait estimate + reported
+    front = json.loads(next((root / "assets" / "sheets").glob("ana_front_*.json")).read_text(encoding="utf-8"))
+    side = json.loads(next((root / "assets" / "sheets").glob("ana_side_*.json")).read_text(encoding="utf-8"))
+    assert (front["cost_usd"], front["cost_source"]) == (pytest.approx(0.063), "estimate") and "usage" not in front
+    assert (side["cost_usd"], side["cost_source"], side["usage"]) == (0.023, "reported", {"cost": 0.023})
+    assert "estimated $0.063 (not reported by mock)" in lines[-3] and "$0.023 reported by mock" in lines[-2]
+    assert lines[-1].startswith("done: 2 picture(s) made ($0.023 reported by mock + $0.063 estimated (not reported))")
 
 
 def test_run_sheets_dry_run_pays_nothing_and_pay_needs_a_budget(make_project) -> None:

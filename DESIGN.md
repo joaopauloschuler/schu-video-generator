@@ -21462,14 +21462,15 @@ writes split parts.
 - Verified: frame baseline 33 stills, max difference 0; pinned audio-only and video mixes
   unchanged (test_staging, test_audio_only, test_sound_design, test_scoring).
 
-## 113. Generated video shots through OpenRouter (Phase AH, Steps 292–295)
+## 113. Generated video shots through OpenRouter (Phase AH, Steps 292–296)
 
 Generative video models make selected shots (talking close-ups lip-synced to vidgen's own voice
 lines, acting shots guided by character / style sheets, establishing shots); vidgen keeps story,
 timing, text, captions, music, sound design and assembly. The model's own audio is never used:
 every job is sent with `generate_audio: false`. Opt-in (`videogen:` and, from Step 293, per-beat
 `generated_shot:` specs, §113.3); nothing changes for existing projects. Steps 292–294 spend nothing (paid
-endpoints mocked); Step 295 is the owner-gated paid experiment (≤ US$2.00, 9:16, 4–5 s clips).
+endpoints mocked); Step 295 cleans up the sheet prompts after the first paid sheet pictures
+(§113.6); Step 296 is the owner-gated paid experiment (≤ US$2.00, 9:16, 4–5 s clips).
 
 ### 113.1 API facts (checked 2026-11-07; no key used, nothing paid)
 
@@ -21524,7 +21525,7 @@ directly downloadable"). For **audio_url and video_url no page says data URLs wo
 "lip-synced to the reference voiceover") uses a hosted https MP3. Not confirmed: inline audio /
 video; no size limits are documented (413 exists). So vidgen sends pictures inline, and for
 audio / video needs a hosted URL from a pluggable `uploader(Path) -> url` (none is chosen: the
-owner decides on a hosting service) or the opt-in `inline_media: all` (try it in Step 295 with
+owner decides on a hosting service) or the opt-in `inline_media: all` (try it in Step 296 with
 the cheapest model: a rejected request is a 400 before generation). Without either, the request
 stops with an error naming both options.
 
@@ -21646,9 +21647,8 @@ stops with an error naming both options.
 - **Sheets** (`videogen/sheets.py`): each picture is an `ImageRequest` made by `image_request`
   (prompt, style, key rules of `generate:` pictures; the style words = `imagegen.style` +
   `style_sheet.words()`) moved to `assets/sheets/<owner>_<label>_<key>.png` (+ `.json`
-  sidecar). Characters: one picture per view ("Character reference sheet picture: a single figure
-  on a plain light grey background, even soft studio light, full body, <view>, neutral
-  expression: <prompt>", portrait), one per expression (front, head and shoulders); style:
+  sidecar). Characters: one picture per view (full body, neutral expression, portrait), one per
+  expression (front, head and shoulders); the prompt words are in §113.6 (Step 295); style:
   `frames` stills of `frame_prompt` in the video's shape (frames after the first get seed + n −
   1). `Sheet {owner, location, approved, pictures, notes}`: `ready` = approved and all made;
   `status()` / `problem()`. `run_sheets(pay=False)`: the dry run (pictures, prices via
@@ -21836,7 +21836,7 @@ every scene), and sheets without proxy mode (the image provider needed `OPENROUT
 when the proxy adds it).
 
 Open, by weight:
-1. **Unverified against the real API** (295 settles it): inline audio / video (`inline_media:
+1. **Unverified against the real API** (296, the paid experiment, settles it): inline audio / video (`inline_media:
    all`), avatar-iv taking the portrait as an input reference, Seedance accepting a 240-pixel
    guide, the real 402 / 429 / 413 / moderation bodies, and what `usage.cost` reports. A
    rejected inline request should fail before generation (a 400), costing nothing.
@@ -21855,3 +21855,63 @@ Open, by weight:
 7. **Colour matching** is grey-world: it pulls deliberately tinted footage (golden hour) towards
    neutral at half strength; `color_match: 0` turns it off.
 8. A mock job that timed out cannot be resumed (each run has its own fake API); real jobs can.
+
+### 113.6 Cleaner sheet prompts and real image costs (Step 295)
+
+The first paid sheet pictures (seedream-4.5, the s293 sample, 7 pictures, 2026-11-07) kept the
+characters consistent but made poor references: the palette word "warm lamp orange" drew orange
+lamps in 6 of 7 pictures; Theo's role ("sells ferry tickets") drew a counter, a ticket booth and
+a sign "SELD FICKETS" (the style frame had a cut-off "CKET" sign); backgrounds were not plain,
+Theo's front view was cut at the waist, Mara's side view was three-quarter; the lens words
+(35 mm, handheld, shallow depth of field) fought a studio reference. `videogen/sheets.py` now
+builds:
+
+- **Character pictures** (`CHARACTER_SETUP`, `BACKDROP`, `WHO`, `VIEW_WORDS`): "Character model
+  sheet picture of one person: full body from head to toe, whole figure in frame, <view>, neutral
+  expression, arms relaxed at the sides, empty hands, standing on a plain seamless light grey
+  studio backdrop, even soft studio light, nothing else in the picture. Who the person is (draw
+  only the person and their clothes): <prompt>. No props." (expressions: "head and shoulders,
+  <front view>, <expression> expression, <backdrop>"). Views: front "facing the camera squarely,
+  body and face straight on"; three_quarter "body and face turned 45 degrees to the left, both
+  eyes visible"; side "strict 90-degree profile, facing left, only one eye visible"; back "seen
+  straight from behind, the face not visible".
+- **Exclusions** go in the request's `negative` (`CHARACTER_EXCLUDE`, `FRAME_EXCLUDE`; merged
+  with `imagegen.negative`). Every provider sends it as "Avoid: ..." at the end of the prompt
+  text (`compose_prompt`), since OpenRouter's `/images` takes no negative-prompt field. Character
+  pictures: text, letters, words, numbers, signs, signage, logos, labels, captions, watermarks,
+  props, objects in the hands, furniture, counters, booths, lamps, scenery, buildings, other
+  people, cropped head or feet. Style frames: the text / signage part only.
+- **Look words** (`_look_words(project, reference=)`): the palette as "colour palette: <colours>
+  (colours only, not objects: the colours of the clothing and the lighting tint)" and "era:
+  <era>" for both. Character pictures then take only those words of `imagegen.style` and
+  `style_sheet.notes` (split at commas) that are not shot-only (`_SHOT_ONLY`: lens / mm / depth
+  of field / bokeh / handheld / camera / close-up / wide angle / dolly / tracking words, and
+  scene-lighting clauses ending in "light" / "lighting"), and never `style_sheet.lens`. Style
+  frames keep the whole look ("(colours only, not objects)", the lens, the notes) and say "a still
+  of the film with no writing anywhere". Video shot prompts (`shot_prompt`,
+  `StyleSheet.words()`) are unchanged.
+- The prompts changed, so the picture keys changed: the old pictures stay in `assets/sheets/`
+  but every sheet reads "not made yet" (an approved sheet would be blocked until `approved:
+  false`).
+
+**Costs.** The ledger of that run shows `cost_usd` 0.04 per picture in `completed` events, and
+`run_sheets` writes `cost_usd` only from `GeneratedPicture.cost` (`usage.cost` of the response):
+OpenRouter's response reported $0.04 (the list price, as with seedream-5-0-flash in §66) while
+the account's usage rose only ~$0.16 for all 7 (~$0.023 each). vidgen keeps recording what the
+response reports, and now says where a number comes from:
+
+- `GeneratedPicture.usage` / `RawPicture.usage` (new, default `None`): the numeric fields of
+  the response's `usage` as sent; the sidecar keeps them under `usage`, so a later run can be
+  compared with the account's activity page.
+- Sidecars (`sidecar_document(..., estimate=, usage=)`): `cost_usd` + `cost_source: reported`
+  when the response has `usage.cost`; else the estimate with `cost_source: estimate`; neither: no
+  cost. Sheet ledger events (`completed`, `failed`) carry `cost_source` too (`cost_usd` stays the
+  reported cost or `null`; `Ledger.spent` counts `null` at the estimate, unchanged).
+- Printed lines (`imagegen.run.cost_words`): `$0.023 reported by openrouter`, `estimated $0.040
+  (not reported by openrouter)`, `cost not reported by openrouter`; the sheets' `done:` line
+  splits "reported" and "estimated". `vidgen imagegen` uses the same words.
+- Budget safety is unchanged: the check before paying still uses the estimate (`refusal`).
+
+Open: whether `usage.cost` over-reports for every image model or only for seedream-4.5 routed to a
+cheaper provider; asking `GET /generation` (as the TTS path does, §66) after a picture would
+give the billed `total_cost`, at the price of a key-authenticated lookup per picture.

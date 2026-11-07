@@ -81,6 +81,13 @@ vidgen generate pick --shot closeup_b1 --take 1
 vidgen render --preview              # the takes laid into the film
 ```
 
+Sheet prompts: vidgen asks for clean model-sheet pictures (one person, full body, a plain grey
+backdrop, nothing else, no text or props) and treats the style sheet's palette as colours only.
+Describe a character by looks and clothes; a role ("sells tickets") is said as who the person is,
+but words naming objects can still turn into objects, so keep them out of `reference_sheet.prompt`.
+The printed and recorded cost of each picture is OpenRouter's reported `usage.cost`, or the
+estimate marked "estimated" when it reports none.
+
 The scene under a generated shot still matters: it is what shows when no take is picked, what
 the guide render shows the model, and what the take fades from and to. A stage scene with the
 characters in place is a good fallback.

@@ -9,14 +9,17 @@ rules as ``generate:`` pictures) stored as ``assets/sheets/<owner>_<label>_<key>
 approved): with a changed prompt it is blocked until ``approved: false``.
 
 Making pictures costs money: :func:`run_sheets` is a dry run (pictures, estimated price) unless
-``pay``; paying needs ``videogen.budget_usd`` and records each picture in the video ledger
-(``image-<key>`` jobs), so the cap covers sheets and clips together.
+``pay``; paying needs ``videogen.budget_usd`` (checked against the estimate before paying) and
+records each picture in the video ledger (``image-<key>`` jobs, with the cost OpenRouter reported
+in ``usage.cost`` or, without one, counted at the estimate: ``cost_source``), so the cap covers
+sheets and clips together.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import json
+import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -27,7 +30,7 @@ from vidgen.config import ReferenceSheet, StyleSheet
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_bytes_atomic, write_text_atomic
 from vidgen.imagegen import GenerateImage, ImageProvider, ImageRequest, get_image_provider, image_request, style_words
-from vidgen.imagegen.run import ImagegenPlan, price_plan, sidecar_document
+from vidgen.imagegen.run import ImagegenPlan, cost_words, price_plan, sidecar_document
 from vidgen.project import Project
 from vidgen.videogen import did_you_mean
 from vidgen.videogen.ledger import BudgetState, Ledger, refusal
@@ -37,15 +40,37 @@ from vidgen.videogen.models import money
 SHEETS_DIR = Path("assets") / "sheets"
 #: The owner name of the style sheet's pictures.
 STYLE = "style"
-#: Words of each view in a character picture's prompt.
+#: Words of each view in a character picture's prompt (strict: models drift to three-quarter).
 VIEW_WORDS: dict[str, str] = {
-    "front": "front view, facing the camera",
-    "three_quarter": "three-quarter view, turned 45 degrees to the side",
-    "side": "side view, in profile",
-    "back": "back view, seen from behind",
+    "front": "front view: facing the camera squarely, body and face straight on",
+    "three_quarter": "three-quarter view: body and face turned 45 degrees to the left, both eyes visible",
+    "side": "side view: strict 90-degree profile, facing left, only one eye visible",
+    "back": "back view: seen straight from behind, the face not visible",
 }
-#: How every character picture is set up (one figure, plain background: a usable reference).
-CHARACTER_SETUP = "Character reference sheet picture: a single figure on a plain light grey background, even soft studio light"
+#: How every character picture is set up: a clean model-sheet picture, one figure, nothing else.
+CHARACTER_SETUP = "Character model sheet picture of one person"
+#: The backdrop of every character picture.
+BACKDROP = "standing on a plain seamless light grey studio backdrop, even soft studio light, nothing else in the picture"
+#: How a character's description is introduced: who the person is, so a job is not drawn as props.
+WHO = "Who the person is (draw only the person and their clothes): "
+#: Always excluded from character pictures (added as "Avoid: ...").
+CHARACTER_EXCLUDE = (
+    "text, letters, words, numbers, signs, signage, logos, labels, captions, watermarks, props, objects in the hands, "
+    "furniture, counters, booths, lamps, scenery, buildings, other people, cropped head or feet"
+)
+#: Always excluded from style frames.
+FRAME_EXCLUDE = "text, letters, words, numbers, signs, signage, logos, labels, captions, watermarks"
+#: How the palette is phrased: colours, never things to draw ("warm lamp orange" drew lamps).
+PALETTE_WORDS = "colour palette: {colours} (colours only, not objects{where})"
+#: What the palette colours in a character picture.
+PALETTE_WHERE = ": the colours of the clothing and the lighting tint"
+#: Look words that suit a film shot but fight a studio reference (left out of character pictures):
+#: lens, depth of field, camera movement, and scene lighting ("soft overcast morning light").
+_SHOT_ONLY = re.compile(
+    r"\b(\d+\s*mm|lens|depth of field|bokeh|hand-?held|focal|aperture|camera|close-?up|wide[- ]angle|dolly|tracking|telephoto)\b"
+    r"|\b(light|lighting|sunlight|daylight|moonlight|glow)$",
+    re.IGNORECASE,
+)
 DEFAULT_FRAME = "a representative still of the film"
 
 
@@ -99,19 +124,42 @@ class Sheet:
         return None if self.ready else f"{self.owner} sheet: {self.status()}"
 
 
-def _request(project: Project, owner: str, label: str, prompt: str, style: str, aspect: str, seed: int | None) -> ImageRequest:
+def _request(project: Project, owner: str, label: str, prompt: str, style: str, negative: str, aspect: str, seed: int | None) -> ImageRequest:
     """The picture's request, stored under ``assets/sheets/`` instead of ``assets/generated/``."""
-    request = image_request(project, GenerateImage(prompt=prompt, style=style or "none", aspect=aspect, seed=seed))  # type: ignore[arg-type]
+    generate = GenerateImage(prompt=prompt, negative=negative, style=style or "none", aspect=aspect, seed=seed)  # type: ignore[arg-type]
+    request = image_request(project, generate)
     folder = project.root / SHEETS_DIR
     stem = f"{owner}_{label}_{request.key}"
     return dataclasses.replace(request, path=folder / f"{stem}.png", sidecar=folder / f"{stem}.json")
 
 
-def _look_words(project: Project) -> str:
-    """The style words of every sheet picture: ``imagegen.style`` and the style sheet's."""
+def _clean(text: str | None) -> str:
+    return " ".join((text or "").split()).rstrip(".")
+
+
+def _look_words(project: Project, *, reference: bool) -> str:
+    """The style words of sheet pictures: ``imagegen.style`` and the style sheet's, the palette
+    phrased as colours only. ``reference`` (character pictures): only the palette, the era and the
+    rendering words (realism, film grain); lens, camera and scene-lighting words are left out."""
     cfg = project.config
-    words = [style_words(cfg.imagegen.style), cfg.style_sheet.words() if cfg.style_sheet is not None else ""]
-    return "; ".join(dict.fromkeys(w for w in words if w))
+    sheet = cfg.style_sheet
+    parts: list[str] = []
+    if sheet is not None:
+        colours = ", ".join(sheet.palette) if isinstance(sheet.palette, list) else _clean(sheet.palette)
+        if colours:
+            parts.append(PALETTE_WORDS.format(colours=colours, where=PALETTE_WHERE if reference else ""))
+        if sheet.era:
+            parts.append(f"era: {_clean(sheet.era)}")
+    rest = [style_words(cfg.imagegen.style)]
+    if sheet is not None:
+        rest += [sheet.notes or ""] if reference else [sheet.lens or "", sheet.notes or ""]
+    for words in rest:
+        clauses = [c.strip() for c in _clean(words).split(",") if c.strip()]
+        if reference:
+            clauses = [c for c in clauses if not _SHOT_ONLY.search(c)]
+        if clauses:
+            parts.append(", ".join(clauses))
+    return "; ".join(dict.fromkeys(parts))
 
 
 def character_sheet(project: Project, name: str) -> Sheet | None:
@@ -123,17 +171,20 @@ def character_sheet(project: Project, name: str) -> Sheet | None:
 
 
 def _character_sheet(project: Project, index: int, name: str, sheet: ReferenceSheet) -> Sheet:
-    look = _look_words(project)
-    who = " ".join(sheet.prompt.split()).rstrip(".")
-    pictures = [
-        SheetPicture(view, _request(project, name, view, f"{CHARACTER_SETUP}, full body, {VIEW_WORDS[view]}, neutral expression: {who}", look, "portrait", sheet.seed))
-        for view in sheet.views
-    ]
+    look = _look_words(project, reference=True)
+    who = f"{WHO}{_clean(sheet.prompt)}. No props"
+    pictures = []
+    for view in sheet.views:
+        prompt = (
+            f"{CHARACTER_SETUP}: full body from head to toe, whole figure in frame, {VIEW_WORDS[view]}, neutral expression, "
+            f"arms relaxed at the sides, empty hands, {BACKDROP}. {who}"
+        )
+        pictures.append(SheetPicture(view, _request(project, name, view, prompt, look, CHARACTER_EXCLUDE, "portrait", sheet.seed)))
     for expression in sheet.expressions:
         label = "_".join(expression.lower().split())
-        prompt = f"{CHARACTER_SETUP}, head and shoulders, {VIEW_WORDS['front']}, {expression} expression: {who}"
-        pictures.append(SheetPicture(label, _request(project, name, label, prompt, look, "portrait", sheet.seed)))
-    notes = "; ".join(" ".join(p.split()).rstrip(".") for p in (sheet.prompt, sheet.notes or "") if p)
+        prompt = f"{CHARACTER_SETUP}: head and shoulders, {VIEW_WORDS['front']}, {expression} expression, {BACKDROP}. {who}"
+        pictures.append(SheetPicture(label, _request(project, name, label, prompt, look, CHARACTER_EXCLUDE, "portrait", sheet.seed)))
+    notes = "; ".join(_clean(p) for p in (sheet.prompt, sheet.notes or "") if p)
     return Sheet(name, f"characters[{index}].reference_sheet", sheet.approved, tuple(pictures), notes)
 
 
@@ -142,13 +193,13 @@ def style_sheet(project: Project) -> Sheet | None:
     sheet: StyleSheet | None = project.config.style_sheet
     if sheet is None:
         return None
-    look = _look_words(project)
-    shows = " ".join((sheet.frame_prompt or DEFAULT_FRAME).split()).rstrip(".")
+    look = _look_words(project, reference=False)
+    shows = _clean(sheet.frame_prompt or DEFAULT_FRAME)
     def seed(n: int) -> int | None:  # frames after the first need their own seed to differ
         return None if sheet.seed is None and n == 1 else (sheet.seed or 0) + n - 1
 
     pictures = tuple(
-        SheetPicture(f"frame{n}", _request(project, STYLE, f"frame{n}", f"Style frame: {shows}", look, "auto", seed(n)))
+        SheetPicture(f"frame{n}", _request(project, STYLE, f"frame{n}", f"Style frame, a still of the film with no writing anywhere: {shows}", look, FRAME_EXCLUDE, "auto", seed(n)))
         for n in range(1, sheet.frames + 1)
     )
     return Sheet(STYLE, "style_sheet", sheet.approved, pictures, sheet.words())
@@ -270,6 +321,7 @@ def run_sheets(
     check_requests = getattr(chosen, "check_requests", None)
     if callable(check_requests):
         check_requests(plan.todo)
+    reported = estimated = 0.0
     for n, request in enumerate(plan.todo, start=1):
         estimate = plan.quote(request).cost
         job = f"image-{request.key}"
@@ -278,16 +330,23 @@ def run_sheets(
         try:
             picture = chosen.generate(request)
         except VidgenError as exc:
-            ledger.append("failed", job_id=job, cost_usd=None)
+            ledger.append("failed", job_id=job, cost_usd=None, cost_source="estimate")
             raise VidgenError(f"sheet picture {request.path.name}: {exc}\n({n - 1} of {len(plan.todo)} made before the error; run again to continue)") from None
-        ledger.append("completed", job_id=job, cost_usd=picture.cost)
+        source = "reported" if picture.cost is not None else "estimate"
+        ledger.append("completed", job_id=job, cost_usd=picture.cost, cost_source=source)
         write_bytes_atomic(request.path, picture.data)
-        doc = sidecar_document(request, picture.revised_prompt, plan.scenes[request.key], picture.cost)
+        doc = sidecar_document(request, picture.revised_prompt, plan.scenes[request.key], picture.cost, estimate=estimate, usage=picture.usage)
         write_text_atomic(request.sidecar, json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
-        result.paid += picture.cost if picture.cost is not None else (estimate or 0.0)
-        cost = money(picture.cost) if picture.cost is not None else "cost not reported"
-        out(f"[{n}/{len(plan.todo)}] made {request.path.name} ({time.monotonic() - started:.1f} s, {cost})")
-    out(f"done: {len(plan.todo)} picture(s) made ({money(result.paid)} counted); look at them, then set approved: true")
+        if picture.cost is not None:
+            reported += picture.cost
+        else:
+            estimated += estimate or 0.0
+        out(f"[{n}/{len(plan.todo)}] made {request.path.name} ({time.monotonic() - started:.1f} s, {cost_words(picture.cost, estimate, chosen.name)})")
+    result.paid = reported + estimated
+    counted = [f"{money(reported)} reported by {chosen.name}"] if reported or not estimated else []
+    if estimated:
+        counted.append(f"{money(estimated)} estimated (not reported)")
+    out(f"done: {len(plan.todo)} picture(s) made ({" + ".join(counted)}); look at them, then set approved: true")
     return result
 
 

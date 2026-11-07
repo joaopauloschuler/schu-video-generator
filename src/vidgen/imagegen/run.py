@@ -162,10 +162,13 @@ def _describe(request: ImageRequest, quote: PriceQuote) -> str:
 
 
 def sidecar_document(
-    request: ImageRequest, revised_prompt: str | None, scenes: list[str], cost: float | None = None
+    request: ImageRequest, revised_prompt: str | None, scenes: list[str], cost: float | None = None,
+    *, estimate: float | None = None, usage: dict[str, float] | None = None,
 ) -> dict[str, object]:
     """The ``<key>.json`` next to a generated picture: how it was made (OpenRouter pictures also
-    record the aspect ratio and resolution asked for and the cost the provider reported)."""
+    record the aspect ratio and resolution asked for). ``cost_usd`` is the ``cost`` the provider
+    reported (``cost_source: reported``, with its ``usage`` numbers), else the ``estimate``
+    (``cost_source: estimate``); neither known: no cost."""
     doc: dict[str, object] = {
         "vidgen_imagegen": 1,
         "key": request.key,
@@ -189,8 +192,22 @@ def sidecar_document(
     if request.format != "png":
         doc["format"] = request.format
     if cost is not None:
-        doc["cost_usd"] = cost
+        doc["cost_usd"], doc["cost_source"] = cost, "reported"
+    elif estimate is not None:
+        doc["cost_usd"], doc["cost_source"] = estimate, "estimate"
+    if usage:
+        doc["usage"] = usage
     return doc
+
+
+def cost_words(cost: float | None, estimate: float | None, provider: str) -> str:
+    """How a picture's cost is shown: ``$0.023 reported by openrouter``, ``estimated $0.040 (not
+    reported by openrouter)`` or ``cost not reported by openrouter``."""
+    if cost is not None:
+        return f"{_money(cost)} reported by {provider}"
+    if estimate is not None:
+        return f"estimated {_money(estimate)} (not reported by {provider})"
+    return f"cost not reported by {provider}"
 
 
 def run_imagegen(
@@ -245,15 +262,16 @@ def run_imagegen(
         try:
             picture = provider.generate(request)
             write_bytes_atomic(request.path, picture.data)
-            doc = sidecar_document(request, picture.revised_prompt, scenes, picture.cost)
+            estimate = plan.quote(request).cost
+            doc = sidecar_document(request, picture.revised_prompt, scenes, picture.cost, estimate=estimate, usage=picture.usage)
             write_text_atomic(request.sidecar, json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
         except (VidgenError, OSError) as exc:
             done = f"{n - 1} of {len(plan.todo)} done before the error; run again to continue"
             raise VidgenError(f"picture for scene '{scenes[0]}': {exc}\n({done})") from None
         if picture.cost is not None:
             charged.append(picture.cost)
-        cost = f", {_money(picture.cost)}" if picture.cost is not None else ""
-        out(f"[{n}/{len(plan.todo)}] generated {request.path.name} for {', '.join(scenes)} ({time.monotonic() - started:.1f} s{cost})")
+        cost = cost_words(picture.cost, estimate, provider.name)
+        out(f"[{n}/{len(plan.todo)}] generated {request.path.name} for {', '.join(scenes)} ({time.monotonic() - started:.1f} s, {cost})")
     if charged:
         plan.charged = sum(charged)
         spent = f"{_money(plan.charged)} charged by {provider.name}" + (f" for {len(charged)} of them" if len(charged) < len(plan.todo) else "")

@@ -313,12 +313,14 @@ def request_body(request: ImageRequest, info: ModelInfo | None = None) -> dict[s
 
 @dataclass(frozen=True)
 class RawPicture:
-    """A response's picture as sent: bytes, media type (may be ``None``), cost, revised prompt."""
+    """A response's picture as sent: bytes, media type (may be ``None``), cost, revised prompt
+    and the numbers of ``usage`` (``None`` without one)."""
 
     data: bytes
     media_type: str | None
     cost: float | None
     revised_prompt: str | None
+    usage: dict[str, float] | None = None
 
 
 def decode_response(body: bytes) -> RawPicture:
@@ -333,15 +335,20 @@ def decode_response(body: bytes) -> RawPicture:
     if not data:
         raise VidgenError("OpenRouter returned an empty picture")
     usage = doc.get("usage") if isinstance(doc, dict) else None
-    cost = usage.get("cost") if isinstance(usage, dict) else None
+    numbers = {k: float(v) for k, v in usage.items() if _is_number(v)} if isinstance(usage, dict) else None
     media = item.get("media_type")
     revised = item.get("revised_prompt")
     return RawPicture(
         data,
         media if isinstance(media, str) and media else None,
-        float(cost) if isinstance(cost, (int, float)) and not isinstance(cost, bool) else None,
+        numbers.get("cost") if numbers else None,
         revised if isinstance(revised, str) and revised.strip() else None,
+        numbers or None,
     )
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _is_vector(raw: RawPicture) -> bool:
@@ -359,10 +366,10 @@ def parse_response(body: bytes, format: str = "png") -> GeneratedPicture:
         from vidgen.svgclean import sanitize_svg
 
         sanitize_svg(raw.data, where="the SVG OpenRouter returned")  # raises if it cannot be shown
-        return GeneratedPicture(raw.data, raw.revised_prompt, raw.cost)
+        return GeneratedPicture(raw.data, raw.revised_prompt, raw.cost, raw.usage)
     if _is_vector(raw):
         raise VidgenError("OpenRouter returned a vector (SVG) picture: add format: svg to the generate: to store it as one, or choose a raster model")
-    return GeneratedPicture(as_png(raw.data, SERVICE), raw.revised_prompt, raw.cost)
+    return GeneratedPicture(as_png(raw.data, SERVICE), raw.revised_prompt, raw.cost, raw.usage)
 
 
 # ----- an account's data policy ------------------------------------------------------------------

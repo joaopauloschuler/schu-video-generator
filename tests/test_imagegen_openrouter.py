@@ -378,7 +378,8 @@ def test_real_run_stores_png_sidecar_and_cost(router: FakeRouter, or_project) ->
     sidecar = json.loads(request.sidecar.read_text(encoding="utf-8"))
     assert (sidecar["provider"], sidecar["model"], sidecar["aspect_ratio"], sidecar["resolution"], sidecar["size"]) == ("openrouter", SEEDREAM, "16:9", "2K", None)
     assert sidecar["cost_usd"] == 0.04 and sidecar["key"] == request.key and KEY not in request.sidecar.read_text(encoding="utf-8")
-    assert lines[0].endswith(", $0.040)") and lines[-1].startswith("done: 2 picture(s) generated ($0.080 charged by openrouter)")
+    assert sidecar["cost_source"] == "reported" and sidecar["usage"]["completion_tokens"] == 4175
+    assert lines[0].endswith(", $0.040 reported by openrouter)") and lines[-1].startswith("done: 2 picture(s) generated ($0.080 charged by openrouter)")
     assert run_imagegen(project, provider=provider(), out=lines.append).todo == []   # cached
 
 
@@ -403,6 +404,22 @@ def test_real_run_offline_lookup_does_not_block(router: FakeRouter, or_project, 
     run_imagegen(project, provider=orr.OpenRouterImageProvider(sleep=lambda s: None, fetch=offline), out=lines.append)
     assert calls == [SEEDREAM] and router.body()["seed"] == 9   # sent as asked: nothing known about the model
     assert "cost not reported by openrouter" in lines[-1]
+    sidecar = json.loads(scene_images(project)[0].request.sidecar.read_text(encoding="utf-8"))
+    assert "cost_usd" not in sidecar and "cost_source" not in sidecar   # no price known: no cost claimed
+
+
+def test_reported_cost_is_recorded_not_the_estimate(or_project) -> None:
+    """The sheet run of 2026-11-07: OpenRouter's ``usage.cost`` is what is recorded, whatever the estimate."""
+    raw = orr.decode_response(router_body(cost=0.0228))
+    assert raw.cost == pytest.approx(0.0228) and raw.usage == {"prompt_tokens": 0.0, "completion_tokens": 4175.0, "total_tokens": 4175.0, "cost": 0.0228}
+    assert orr.decode_response(router_body(cost=None)).usage is None
+    from vidgen.imagegen.run import cost_words, sidecar_document
+
+    request = scene_images(or_project())[0].request
+    assert sidecar_document(request, None, ["s"], 0.0228, estimate=0.04)["cost_usd"] == pytest.approx(0.0228)
+    doc = sidecar_document(request, None, ["s"], None, estimate=0.04)
+    assert (doc["cost_usd"], doc["cost_source"]) == (0.04, "estimate")
+    assert cost_words(None, 0.04, "openrouter") == "estimated $0.040 (not reported by openrouter)"
 
 
 def test_get_image_provider_and_price_plan_mixing(or_project) -> None:
