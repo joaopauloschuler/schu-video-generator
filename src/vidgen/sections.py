@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import difflib
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -80,24 +80,32 @@ _LOCATION_ANY = re.compile(r"\bscenes\[(\d+)\]")
 _SECTION_KEY = {".params.text": ".title", ".chapter": ".title", ".duration": ".pause"}
 
 
-def section_location(text: str) -> str:
+def _section_name(index: str, sources: Sequence[int | str] | None) -> str:
+    """The section scene ``index`` was made from (``sections[k]``), or the key that added it."""
+    k = int(index)
+    source: int | str = sources[k] if sources is not None and k < len(sources) else k
+    return f"sections[{source}]" if isinstance(source, int) else source
+
+
+def section_location(text: str, sources: Sequence[int | str] | None = None) -> str:
     """``text`` (a config location or a message) with its scene locations named as the sections
     they were made from: ``scenes[2].beats[0]`` -> ``sections[2].beats[0]``,
     ``scenes[2].chapter`` -> ``sections[2].title``, ``scenes[2].duration`` -> ``sections[2].pause``
-    (one scene per section, so the index is the section's)."""
-    text = _LOCATION.sub(lambda m: f"sections[{m[1]}]{_SECTION_KEY.get(m[2] or '', m[2] or '')}", text)
-    return _LOCATION_ANY.sub(lambda m: f"sections[{m[1]}]", text)
+    (one scene per section). ``sources``: each scene's section index, or the key that added it
+    (``cold_open``, ``credits``; :func:`vidgen.delivery.scene_sources`); default the same index."""
+    text = _LOCATION.sub(lambda m: f"{_section_name(m[1], sources)}{_SECTION_KEY.get(m[2] or '', m[2] or '')}", text)
+    return _LOCATION_ANY.sub(lambda m: _section_name(m[1], sources), text)
 
 
-def section_problems(problems: Iterable[Problem]) -> list[Problem]:
+def section_problems(problems: Iterable[Problem], sources: Sequence[int | str] | None = None) -> list[Problem]:
     """``problems`` located in the ``sections:`` they come from (:func:`section_location`)."""
-    return [replace(p, location=section_location(p.location), message=section_location(p.message)) for p in problems]
+    return [replace(p, location=section_location(p.location, sources), message=section_location(p.message, sources)) for p in problems]
 
 
-def section_error(exc: VidgenError) -> VidgenError:
+def section_error(exc: VidgenError, sources: Sequence[int | str] | None = None) -> VidgenError:
     """``exc`` (raised validating a project written with ``sections:``) with its locations named
     as sections."""
-    return VidgenError(section_location(str(exc)), problems=section_problems(exc.problems), details=exc.details)
+    return VidgenError(section_location(str(exc), sources), problems=section_problems(exc.problems, sources), details=exc.details)
 
 
 def expand_sections(data: Any, source: str = "video.yaml") -> Any:

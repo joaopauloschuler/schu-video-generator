@@ -4364,10 +4364,12 @@ credits: {speak: true, lines: ["Music by the studio."]}
   languages as `lines` with `cast: false`.
 - **`cold_open`**: a scene or section id — moved to the very start, its chapter title dropped (it
   belongs to the first chapter's file); or a list of beat ids — copied in that order into a scene
-  `cold_open` at the start (`cold_open_<beat id>`, voiced by `vidgen tts` like any beat; the lines
-  are heard again in their place), with the first beat's room, ambience and music; a copied beat
-  keeps its sound actions only. In a video both are ordinary card scenes. Problems in a project
-  with a cold open are located after the move.
+  `cold_open` at the start (`cold_open_<beat id>`; `vidgen tts` copies each one's audio from its
+  line when both say the same in the same voice; the lines are heard again in their place), with
+  the first beat's room, ambience and music; a copied beat keeps its sound actions only. In a
+  video both are ordinary card scenes. Problems in a project written with `sections:` name the
+  section they come from (`cold_open` / `credits` for the added scenes); in a `scenes:` project
+  they are located after the move.
 
 ## Transitions (`transition`)
 

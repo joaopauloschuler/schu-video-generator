@@ -101,6 +101,68 @@ def test_cold_open(tmp_path: Path) -> None:
         Project.load(_write(tmp_path / "c", {**DRAMA, "cold_open": ["river_b33"]}))
     data = {"title": "t", "scenes": [{"id": "s", "beats": [{"text": "x"}]}]}
     assert delivery.apply_delivery(data)[0] is data   # nothing asked: nothing changed
+    assert [s.id for s in Project.load(_write(tmp_path / "d", {**DRAMA, "cold_open": []})).config.scenes] == ["shore", "s2", "river"]
+
+
+def test_problems_name_the_sections_after_a_cold_open(tmp_path: Path) -> None:
+    sections = [*DRAMA["sections"][:2], {**DRAMA["sections"][2], "beats": ["nine ten", {"text": "Home.", "voice": "ben", "pause": 99}]}]
+    data = {**DRAMA, "sections": sections, "cold_open": ["shore_b2"], "credits": {"speak": True}}
+    assert delivery.scene_sources({"scenes": sections, "cold_open": ["shore_b2"], "credits": {"speak": True}}) == ["cold_open", 0, 1, 2, "credits"]
+    assert delivery.scene_sources({"scenes": sections, "cold_open": "river"}) == [2, 0, 1]
+    assert delivery.scene_sources({"scenes": sections}) is None
+    with pytest.raises(VidgenError) as raised:
+        Project.load(_write(tmp_path / "a", data))
+    assert "sections[2].beats[1].pause" in str(raised.value) and "sections[3]" not in str(raised.value)
+    assert all("sections[2].beats[1]" in p.location for p in raised.value.problems)
+    moved = {**data, "cold_open": "river"}
+    with pytest.raises(VidgenError, match=r"sections\[2\]\.beats\[1\]\.pause"):
+        Project.load(_write(tmp_path / "b", moved))
+
+
+class _Voicer:
+    """A TTS mock: each text's own bytes; what it was asked to say is kept."""
+
+    name = "fake"
+
+    def __init__(self) -> None:
+        self.said: list[str] = []
+
+    def cache_key(self, text: str) -> str:
+        return f"fake|{text}"
+
+    def matches(self, text: str, stored: str) -> bool:
+        return stored == self.cache_key(text)
+
+    def check_credentials(self) -> None:
+        pass
+
+    def synthesize(self, text: str, previous_text: str | None = None, next_text: str | None = None) -> bytes:
+        self.said.append(text)
+        return f"audio of {text}".encode()
+
+
+def test_cold_open_lines_copy_their_audio(tmp_path: Path) -> None:
+    from vidgen.tts.run import run_tts
+
+    root = _write(tmp_path / "t", {**DRAMA, "cold_open": ["river_b3", "shore_b2"]})
+    project = Project.load(root)
+    assert delivery.cold_open_sources(project) == {"cold_open_river_b3": "river_b3", "cold_open_shore_b2": "shore_b2"}
+    voicer, lines = _Voicer(), []
+    run_tts(project, provider=voicer, out=lines.append)
+    spoken = [beat.text for _, beat in project.beats() if not beat.id.startswith("cold_open_")]
+    assert sorted(voicer.said) == sorted(spoken)   # every line voiced once
+    assert (project.audio_dir / "cold_open_river_b3.mp3").read_bytes() == b"audio of Home."
+    assert "copied cold_open_river_b3.mp3 from audio/river_b3.mp3" in " ".join(lines)
+    order = [line.split("] ")[1].split(".mp3")[0].split()[-1] for line in lines if line.startswith("[")]
+    assert order.index("cold_open_shore_b2") == order.index("shore_b2") + 1   # copied right after its source is voiced
+    (project.audio_dir / "cold_open_shore_b2.mp3").unlink()
+    again = _Voicer()
+    run_tts(Project.load(root), provider=again, out=lines.append)
+    assert again.said == [] and (project.audio_dir / "cold_open_shore_b2.mp3").read_bytes() == b"audio of five six"
+    (project.audio_dir / "shore_b2.hash").write_text("stale", encoding="utf-8")   # a source that is not current is not copied
+    third = _Voicer()
+    run_tts(Project.load(root), provider=third, out=lines.append, beat_ids=["cold_open_shore_b2"], force=True)
+    assert third.said == ["five six"]
 
 
 # ----- the drama preset's checks ---------------------------------------------------------------------

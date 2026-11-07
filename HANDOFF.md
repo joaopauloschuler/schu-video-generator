@@ -24797,3 +24797,46 @@ project), repo work is generic.
   no embedded chapter markers; the drama thresholds are chosen, not a platform's spec.
 - **Next (291)**: the cookbook can quote the drama check's items and the split layout; the
   showcase can use `cold_open`, `credits: {speak: true, voiced_by: ...}` and `split: chapters`.
+
+## Step 291 — Audio drama cookbook, showcase, Phase AG review (Phase AG done)
+
+- **Built**: `docs/COOKBOOK-AUDIODRAMA.md` (skeleton, structure, casting and voices, narrator
+  balance / rooms / stereo, score, sound design, pacing, the drama check's items, the split file
+  layout; targets as recommendations, numbers measured on the showcase), linked from
+  `COOKBOOK.md`, `COOKBOOK-AUDIO.md` (intro and the drama bullet), `COOKBOOK-ISO-CARTOONS.md`
+  (voices section), README and the guide (+ `AGENTS.md`). DESIGN §112.4.
+- **Review fixes**: (1) `vidgen tts` copies cold-open lines (`cold_open_<id>`) from their source
+  beat's MP3 when the hashes match (`delivery.cold_open_sources`, `tts.run._reuse_cold_open`,
+  `_sources_first`, `_copy_source`; alignment / visemes read under the source's id); (2) a
+  `sections:` project with a cold open or spoken credits names the right section in problems and
+  load errors (`delivery.scene_sources`, `sections.section_location(text, sources)`,
+  `Project.section_sources`); (3) `cold_open: []` crashed with an IndexError, now no cold open.
+  CONFIG's cold-open bullet and the config docstring updated.
+- **Review, no change needed**: re-read `delivery.py`, `scoring.py` (theme walk, motifs, dips),
+  the Step 288–290 docs (CONFIG sections, guide, DESIGN §112) — consistent with the code.
+- **Files**: `delivery.py`, `tts/run.py`, `sections.py`, `project.py`, `config.py` (docstring),
+  `docs/COOKBOOK-AUDIODRAMA.md` (new), `docs/COOKBOOK.md`, `docs/COOKBOOK-AUDIO.md`,
+  `docs/COOKBOOK-ISO-CARTOONS.md`, `docs/CONFIG.md`, README, guide + `AGENTS.md`, DESIGN, CHANGELOG,
+  tasklist; tests `test_delivery.py` (+2: section locations after a cold open / credits, cold-open
+  audio copied; the cold-open test checks `[]`), `test_docs.py` (+1: the cookbook's skeleton
+  validates, links).
+- **Tests run and passed** (one at a time, capped): `test_delivery`, `test_docs` (74),
+  `test_guide`, `test_api`, `test_tts`, `test_tts_kokoro`, `test_cartoon_visemes`,
+  `test_sound_design` (23), `test_scoring` (15), `test_audio_only`, `test_audio_output`,
+  `test_staging` (22, 2 min), `test_mcp`, `test_schema` (76, 3 min), `test_music` (81, 4.7 min),
+  `test_project`, `test_cuts_shorts`. Frame baseline: 33 stills, max difference 0. Pinned mixes
+  unchanged (their tests above).
+- **Showcase** (PRIVATE, in scratch, never committed; an owner's story as a dramatized audiobook,
+  Kokoro, 69 lines of which 51 reused from the owner's film project's audio, 2 cold-open lines
+  copied by the new reuse): four chapter MP3s 2:49 / 1:31 / 3:32 / 1:44 (+ a single 9:36 file from
+  a `split: none` variant), each −16.3 LUFS, TP −2.0 to −2.1 dBTP, LRA 3.6–5.4 LU, lines 1.6–2.9
+  LU, voices 1.6–2.4 LU, music 23.1 LU under dialogue (worst dense run 20.7), files spread 0.0 /
+  0.9 LU: `vidgen audio check --preset drama` PASS first time. A machine voice in a `room: phone`
+  section measured 0.06 % of its energy above 3.5 kHz (narrator 5.9 %); 22 word-anchored cues
+  within 0.1 ms of their words. Measuring script `scratch/s291/measure.py PROJECT PNG`.
+- **Known gaps**: the cold-open reuse needs equal hashes (a copied line with another voice or
+  emotion is voiced); a cold-open copy's problems are named `cold_open...` (not the source
+  section); a `cut` with sections still renumbers scenes without section mapping; the earlier
+  gaps of Steps 288–290 stand (no musical ending at a file cut, no embedded chapter markers, no
+  chapter files for videos, English-only credit wording, a walk's foley panned at its middle).
+- **Next**: Phase AG is complete.

@@ -21434,3 +21434,21 @@ writes split parts.
   CLI `audio check --preset drama`; `render --json` `files`, `audio --json` `files` /
   `files_check`; `timings.json` `audio_output.{split, playlist, files, files_check}`,
   `mix.parts`. No new `vidgen.api` names.
+
+### 112.4 Cookbook and review (Step 291)
+
+`docs/COOKBOOK-AUDIODRAMA.md` (its skeleton validated by `test_docs`). Review fixes:
+
+- **Cold-open audio**: `delivery.cold_open_sources(project)` maps each copied beat
+  `cold_open_<id>` to `<id>`; `tts.run.plan_tts` puts it in `plan.reuse` (the source's MP3 in the
+  same folder) when both hashes are equal and the source is current or voiced in this run;
+  `_sources_first` orders the copy after its source; at run time `_copy_source` voices it after
+  all when the source is not current then (a hook skipped it). Alignments and visemes are read
+  under the source's id (`source.stem`; unchanged for the variant copies, same id).
+- **Section locations**: `delivery.scene_sources(data)` (each scene's section index, or
+  `cold_open` / `credits` for added scenes; `None` when nothing moves) feeds
+  `sections.section_location(text, sources)`; `Project.section_sources`, set in `Project._load`
+  (variant merged), names problems and load errors.
+- `cold_open: []` is "no cold open" (was an IndexError).
+- Verified: frame baseline 33 stills, max difference 0; pinned audio-only and video mixes
+  unchanged (test_staging, test_audio_only, test_sound_design, test_scoring).

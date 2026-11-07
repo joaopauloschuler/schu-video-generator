@@ -1708,7 +1708,9 @@ AI API calls; Kokoro (local) only.
 - [x] A `drama` loudness preset (podcast-like, −16 LUFS stereo / −19 mono, −1 dBTP; no ACX noise gate; an LRA check for earbuds; dialogue consistency across lines / characters; music-to-voice ratio under dialogue); `audio_output: {split: chapters}` (numbered files, an `.m3u`, per-chapter transcripts); spoken credits from the cast (`credits: {speak: true}`); a cold open option; platform targets as recommendations unless certain — done as `loudness: drama` (LRA ≤ 10, lines 6 / voices 4 LU, music ≥ `score.dense_lu`), `split: chapters` (`_NN_<title>` files each normalised, `.m3u`, per-file txt/srt/vtt, files check), `credits: {speak, voiced_by, lines, ...}`, `cold_open: ID | [beat ids]`; new module `delivery.py`; tests `test_delivery.py`; Kokoro demo (scratch `s290/drama`)
 
 ### Step 291 — Cookbook, showcase, review
-- [ ] `docs/COOKBOOK-AUDIODRAMA.md` (structure, casting, narrator balance, rooms and stereo, score strategy, sound design, pacing, loudness, delivery), linked from `COOKBOOK.md` and `COOKBOOK-AUDIO.md`; a private showcase (never committed); a critical review of Phase AG (tests, docs, pinned mixes, baseline if shared rendering code changed)
+- [x] `docs/COOKBOOK-AUDIODRAMA.md` (structure, casting, narrator balance, rooms and stereo, score strategy, sound design, pacing, loudness, delivery), linked from `COOKBOOK.md` and `COOKBOOK-AUDIO.md`; a private showcase (never committed); a critical review of Phase AG (tests, docs, pinned mixes, baseline if shared rendering code changed) — done; review fixes: cold-open copies take their lines' audio (`vidgen tts`), problems of a `sections:` project with a cold open / credits name the right section, `cold_open: []` no longer crashes; the cookbook's skeleton is tested (`test_docs`)
+
+**Phase AG done** (Steps 288–291).
 
 ---
 

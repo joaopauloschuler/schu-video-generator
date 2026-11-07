@@ -3761,7 +3761,8 @@ Good: the result first, then the context.
   loudness, an `.m3u`, per-file transcripts). `credits: {speak: true}` adds closing credits from
   the cast ("Starring Bella as Mara ..."; `voiced_by: {mara: Ana}`, `lines`); `cold_open:
   [beat ids]` (or a section id) plays those lines first, before the title. Run `vidgen tts` after
-  adding them (new beats).
+  adding them (new beats; cold-open copies take the originals' audio). Craft notes:
+  `docs/COOKBOOK-AUDIODRAMA.md`.
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}

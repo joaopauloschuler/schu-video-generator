@@ -51,7 +51,8 @@ height:
 A cartoon sounds much bigger when each character's voice comes from where they stand and the
 room around them sounds like the set: an office is close and soft, a corridor rings, outdoors is
 open. It is opt-in, applied in the mix (no line is voiced again), and works the same in videos
-and audio-only renders (details: CONFIG "Stereo staging and rooms", [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md)).
+and audio-only renders (details: CONFIG "Stereo staging and rooms", [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md);
+the same story as an audio drama: [COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md)).
 
 ```yaml
 voices:

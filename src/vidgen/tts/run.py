@@ -150,7 +150,48 @@ def plan_tts(
         plan.todo.append(beat)
         if not force and base_dir != plan.audio_dir and is_up_to_date(beat_provider, base_dir, beat.id, plan.say(beat)):
             plan.reuse[beat.id] = mp3_path(base_dir, beat.id)
+    _reuse_cold_open(project, plan, providers)
     return plan
+
+
+def _reuse_cold_open(project: Project, plan: TTSPlan, providers: dict[str, TTSProvider]) -> None:
+    """A cold open's copied line (``cold_open_<id>``, DESIGN.md §112.3) is copied from its source
+    beat's MP3 in the same folder when both say the same text in the same voice (equal hashes):
+    the source's current audio, or what this run voices for it (:func:`_sources_first`)."""
+    from vidgen.delivery import cold_open_sources
+
+    todo = {beat.id for beat in plan.todo}
+    for copy_id, source_id in cold_open_sources(project).items():
+        if copy_id not in todo or copy_id in plan.reuse:
+            continue
+        if providers[copy_id].cache_key(plan.spoken[copy_id]) != providers[source_id].cache_key(plan.spoken[source_id]):
+            continue
+        if source_id in todo or is_up_to_date(providers[source_id], plan.audio_dir, source_id, plan.spoken[source_id]):
+            plan.reuse[copy_id] = mp3_path(plan.audio_dir, source_id)
+
+
+def _sources_first(plan: TTSPlan) -> None:
+    """Order ``plan.todo`` so a beat copied from another beat of this folder comes after it."""
+    position = {beat.id: i for i, beat in enumerate(plan.todo)}
+
+    def key(item: tuple[int, BeatConfig]) -> tuple[int, int]:
+        i, beat = item
+        source = plan.reuse.get(beat.id)
+        after = position.get(source.stem, -1) if source is not None and source.parent == plan.audio_dir else -1
+        return (max(i, after), 1 if after > i else 0)
+
+    plan.todo = [beat for _, beat in sorted(enumerate(plan.todo), key=key)]
+
+
+def _copy_source(plan: TTSPlan, beat: BeatConfig, providers: dict[str, TTSProvider]) -> Path | None:
+    """The MP3 to copy for ``beat``: its planned source, unless that is a beat of this folder
+    whose audio is not current now (a hook skipped it, or it failed): then ``None``, voice it."""
+    source = plan.reuse.get(beat.id)
+    if source is not None and source.parent == plan.audio_dir:
+        source_id = source.stem
+        if source_id not in providers or not is_up_to_date(providers[source_id], plan.audio_dir, source_id, plan.spoken.get(source_id, "")):
+            return None
+    return source
 
 
 def _apply_pre_tts(project: Project, plan: TTSPlan, force: bool, dry_run: bool) -> None:
@@ -363,7 +404,7 @@ def _store_visemes(project: Project, audio_dir: Path, beat_id: str, text: str, a
     from vidgen.cartoon.visemes import read_visemes, write_beat_visemes, write_visemes
 
     if source is not None:
-        stored = read_visemes(source.parent, beat_id, text)
+        stored = read_visemes(source.parent, source.stem, text)
         if stored is not None:
             write_visemes(audio_dir, beat_id, text, audio, stored)
             return
@@ -412,6 +453,7 @@ def run_tts(
     """
     plan = plan_tts(project, provider, beat_ids, force, voices)
     _apply_pre_tts(project, plan, force, dry_run)
+    _sources_first(plan)
     where = _relative(plan.audio_dir, project.root)
 
     orphans = orphaned_audio(project)
@@ -448,11 +490,11 @@ def run_tts(
     for n, beat in enumerate(plan.todo, start=1):
         text = plan.say(beat)
         try:
-            source = plan.reuse.get(beat.id)
+            source = _copy_source(plan, beat, providers)
             alignment: dict[str, Any] | None = None
             if source is not None:
                 audio = source.read_bytes()
-                stored = read_alignment(source.parent, beat.id, text)
+                stored = read_alignment(source.parent, source.stem, text)
                 if stored is not None:
                     keys = ("characters", "character_start_times_seconds", "character_end_times_seconds")
                     alignment = dict(zip(keys, (stored["characters"], stored["starts"], stored["ends"])))

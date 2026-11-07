@@ -13,7 +13,7 @@ import yaml
 
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, draft_format, parse_config
 from vidgen.cuts import apply_cut
-from vidgen.delivery import apply_delivery
+from vidgen.delivery import apply_delivery, scene_sources
 from vidgen.emotions import Prosody, named_cues, prosody
 from vidgen.errors import Problem, VidgenError
 from vidgen.includes import (
@@ -153,6 +153,17 @@ def _confine(data: Any, root: Path, source: str) -> None:
         raise VidgenError(f"{source}: files outside the allowed folder:\n" + "\n".join(f"  {p}" for p in problems))
 
 
+def _section_sources(data: Any, variant: str | None) -> list[int | str] | None:
+    """:func:`vidgen.delivery.scene_sources` of a project written with ``sections:`` (its
+    ``variant`` merged in); ``None`` when the sections cannot be read (that error is reported)."""
+    try:
+        expanded = expand_sections(data)
+    except VidgenError:
+        return None
+    override = (expanded.get("variants") or {}).get(variant) if variant is not None and isinstance(expanded.get("variants"), Mapping) else None
+    return scene_sources(deep_merge(expanded, override) if isinstance(override, Mapping) else expanded)
+
+
 def _dump(config: VideoConfig) -> dict[str, Any]:
     """A raw mapping of ``config`` (for a project built from a validated config alone)."""
     return config.model_dump(mode="json", by_alias=True, exclude_none=True)
@@ -233,6 +244,9 @@ class Project:
         self.output_dir_override: Path | None = None
         #: True for a project written with ``sections:`` (§111): its problems name the sections.
         self.from_sections = False
+        #: Each scene's section index or the key that added it (``cold_open``, ``credits``),
+        #: when a cold open or spoken credits moved or added scenes (§112.3); else ``None``.
+        self.section_sources: list[int | str] | None = None
         retime_project_anchors(self)   # actions at a spoken word, timed by the beats' audio (§87.2)
 
     @classmethod
@@ -258,11 +272,13 @@ class Project:
         included = read_project_config(config_file, Path(os.environ[CONFINE_ENV]) if os.environ.get(CONFINE_ENV) else None)
         if not (isinstance(included.data, dict) and "sections" in included.data):
             return cls._load_config(config_file, included, variant)
+        sources = _section_sources(included.data, variant)
         try:   # an audio-only project's sections (§111): problems located in its sections
             project = cls._load_config(config_file, included, variant)
         except VidgenError as exc:
-            raise section_error(exc) from None
+            raise section_error(exc, sources) from None
         project.from_sections = True
+        project.section_sources = sources
         return project
 
     @classmethod
@@ -301,6 +317,7 @@ class Project:
         bare.draft = self.draft
         bare.output_dir_override = self.output_dir_override
         bare.from_sections = self.from_sections
+        bare.section_sources = self.section_sources
         return bare
 
     @property
@@ -313,7 +330,7 @@ class Project:
         a set's entry (``sets.NAME...``), the scene's own entry (:func:`vidgen.includes.attributed`);
         a project written with ``sections:``, the section's entry."""
         placed = attributed(problems, self.origins)
-        return section_problems(placed) if self.from_sections else placed
+        return section_problems(placed, self.section_sources) if self.from_sections else placed
 
     # ----- names and paths -------------------------------------------------------------------
 

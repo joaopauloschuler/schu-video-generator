@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–290)
+## Unreleased (Steps 193–291)
+
+### Audio drama cookbook; Phase AG review (Step 291)
+
+- `docs/COOKBOOK-AUDIODRAMA.md`: structure, casting, narrator balance, rooms and stereo, score, sound design, pacing, the drama checks and a file per chapter, with measured numbers.
+- `vidgen tts` copies a cold open's lines from the lines' own audio instead of voicing them again.
+- Problems in a `sections:` project with a cold open or spoken credits name the right section (`cold_open` / `credits` for the added scenes); `cold_open: []` no longer crashes.
 
 ### Delivering an audio drama (Step 290)
 

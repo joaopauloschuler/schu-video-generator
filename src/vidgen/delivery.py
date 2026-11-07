@@ -6,7 +6,8 @@ loudness preset's dialogue checks measure.
 it is validated, like :func:`vidgen.cuts.apply_cut`): ``cold_open: ID`` moves that scene
 (section) to the very start, before the title and the theme (its chapter title dropped, so it
 belongs to the first chapter's file); ``cold_open: [beat ids]`` copies those beats, in order,
-into a scene ``cold_open`` at the start (ids ``cold_open_<beat id>``: re-voiced; the lines are
+into a scene ``cold_open`` at the start (ids ``cold_open_<beat id>``, their audio copied from the
+lines' own by ``vidgen tts``, :func:`cold_open_sources`; the lines are
 heard again in their place; the first beat's scene gives the room, ambience and music; a copied
 beat keeps its sound actions only). ``credits: {speak: true}`` appends a closing scene: the
 title, "Starring <actor> as <character>, ..." for every named voice that speaks (in the order
@@ -97,6 +98,8 @@ def _cold_open(data: dict[str, Any], origins: dict[str, Origin]) -> tuple[dict[s
         order = [i, *(k for k in range(len(scenes)) if k != i)]
         return {**data, "scenes": [moved if k == i else scenes[k] for k in order]}, _moved_origins(origins, order)
     wanted = [spec] if isinstance(spec, str) else list(spec)
+    if not wanted:
+        return data, origins
     found: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
     for scene in scenes:
         if isinstance(scene, Mapping) and isinstance(scene.get("id"), str):
@@ -215,6 +218,37 @@ def _credits(data: dict[str, Any], origins: dict[str, Origin]) -> tuple[dict[str
     if music is not None:
         scene["music"] = music
     return {**data, "scenes": [*scenes, scene]}, origins
+
+
+def scene_sources(data: Any) -> list[int | str] | None:
+    """Where each scene of the raw config ``data`` comes from after :func:`apply_delivery`: its
+    index before, or the key that added it (``cold_open``, ``credits``); ``None`` when nothing
+    moves or is added. Problems of a project written with ``sections:`` are named by it."""
+    scenes = data.get("scenes") if isinstance(data, Mapping) else None
+    if not isinstance(scenes, list):
+        return None
+    order: list[int | str] = list(range(len(scenes)))
+    spec = data.get("cold_open")
+    ids = [s.get("id") if isinstance(s, Mapping) else None for s in scenes]
+    if isinstance(spec, str) and spec in ids:
+        i = ids.index(spec)
+        order = [i, *(k for k in order if k != i)]
+    elif isinstance(spec, str) or isinstance(spec, list) and spec and all(isinstance(s, str) for s in spec):
+        order = [COLD_OPEN_ID, *order]
+    credits = data.get("credits")
+    if isinstance(credits, Mapping) and credits.get("speak") is True:
+        order.append("credits")
+    return None if order == list(range(len(scenes))) else order
+
+
+def cold_open_sources(project: Project) -> dict[str, str]:
+    """Copied cold-open beat id -> the beat it copies (``cold_open_<id>`` -> ``<id>``), for a
+    ``cold_open`` of beat ids; empty otherwise. ``vidgen tts`` copies the source's MP3 when both
+    say the same in the same voice instead of voicing the line again."""
+    spec = project.config.cold_open
+    names = [spec] if isinstance(spec, str) else list(spec or [])
+    ids = {beat.id for _, beat in project.beats()}
+    return {f"{COLD_OPEN_ID}_{name}": name for name in names if name in ids and f"{COLD_OPEN_ID}_{name}" in ids}
 
 
 def apply_delivery(data: Any, origins: Mapping[str, Origin] | None = None) -> tuple[Any, dict[str, Origin]]:

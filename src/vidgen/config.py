@@ -3535,7 +3535,7 @@ class VideoConfig(_Strict):
     credits: CreditsConfig = Field(default_factory=CreditsConfig)
     """Spoken credits from the cast {speak: true, title, voice, music, cast, voiced_by, lines, chapter}: a closing scene with the title, "Starring ... as ...", "Narrated by ...", music under (DESIGN.md §112.3)."""
     cold_open: Identifier | list[Identifier] | None = None
-    """A cold open: a scene (section) id, moved to the very start (before the title and theme; its chapter title dropped), or beat ids, copied in that order into a scene cold_open at the start (re-voiced as cold_open_<beat id>; the lines are heard again in their place)."""
+    """A cold open: a scene (section) id, moved to the very start (before the title and theme; its chapter title dropped), or beat ids, copied in that order into a scene cold_open at the start (beats cold_open_<beat id>, their audio copied from the lines' own; the lines are heard again in their place)."""
     transition: TransitionSetting | None = None
     """Default transition between scenes (cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}); a scene's transition wins."""
     chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)
