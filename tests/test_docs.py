@@ -170,6 +170,26 @@ def test_audio_drama_cookbook_skeleton_is_valid_and_linked(tmp_path: Path) -> No
         assert "COOKBOOK-AUDIODRAMA.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
+def test_generated_video_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 294: the generated-video cookbook's project is valid, its talking shot resolves, and
+    the cookbooks, README, CONFIG and the guide point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.project import Project
+    from vidgen.videogen.shots import project_shots
+
+    text = (ROOT / "docs" / "COOKBOOK-GENERATED-VIDEO.md").read_text(encoding="utf-8")
+    assert "Zero Data Retention" in text and "budget_usd" in text and "vidgen generate run --pay" in text
+    block = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)[0]
+    (tmp_path / "video.yaml").write_text(block, encoding="utf-8")
+    project = Project.load(tmp_path)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    (shot,) = project_shots(project, None)
+    assert shot.id == "closeup_b1" and shot.speaker == "theo" and shot.spec.kind == "talking"
+    for doc in ("docs/COOKBOOK.md", "README.md", "docs/CONFIG.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
+        assert "COOKBOOK-GENERATED-VIDEO.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
 GENETICS_TYPES = ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas")
 
 

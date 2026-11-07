@@ -2763,14 +2763,17 @@ Selected shots can be made by generative video models through OpenRouter's video
 AH, DESIGN.md §113). vidgen keeps the story, timing, text, captions, music and assembly; the
 model's own audio is never used (every job is sent with `generate_audio: false`). Generation
 costs money, so nothing is paid unless a run is given `--pay` **and** the project has a budget.
+The workflow, cost control and privacy: [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md).
 
 ```yaml
 videogen:
   provider: openrouter      # openrouter (paid) | mock (a fake API: no key, nothing sent)
   budget_usd: 2.0           # hard cap for this project; paying needs it (default: null)
-  key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header
+  key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header (clips and sheets)
   inline_media: images      # images | all (audio / video inline too: not confirmed by OpenRouter's docs)
   poll_timeout: 900         # seconds to wait for a job (it keeps running; a later run polls it again)
+  crossfade: 0.25           # seconds a placed take fades in from / out to vidgen's picture (0: a cut)
+  color_match: 0.5          # light colour matching of placed takes, 0 (as made) - 1
 ```
 
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
@@ -2842,6 +2845,9 @@ scenes:
           resolution: 480p                  # default: the model's lowest
           aspect_ratio: "9:16"              # default: the model's nearest to the format
           line: true                        # the beat's text in the prompt as what is said
+          place: true                       # show the shown take over the beat (false: keep vidgen's picture)
+          fit: cover                        # cover (fill, overhang cut off) | contain (all of it, black bars)
+          crossfade: null                   # seconds; default videogen.crossfade
 ```
 
 - **Sheets**: `vidgen generate sheets [PROJECT] [--sheet NAME] [--pay]` lists the pictures and
@@ -2871,6 +2877,42 @@ scenes:
   what blocks it, the prompt), the sheets' pictures still to make, the total and the budget.
   Nothing is sent or paid; `vidgen validate` reports unknown characters and pictures with a
   did-you-mean (`plan` also checks the models and their settings).
+
+### Run, takes and the film (`vidgen generate run | status | takes | pick`)
+
+- **Run**: `vidgen generate run [PROJECT] [--shot ID]... [--budget USD] [--pay] [--json]`.
+  Without `--pay` a dry run: what would be generated and the estimate; nothing is sent, paid or
+  written. With `--pay` (a budget is required: `videogen.budget_usd` or `--budget`, the lower of
+  both): a shot with problems, or ready shots estimated above what the budget has left, refuse
+  the whole run before anything is paid; then each ready shot is generated in video order
+  (blocked ones are skipped and named), each clip becomes a take, and the first failure stops
+  the run. A paid job is never retried automatically; a request already made is never paid
+  again (it comes from the cache, or an earlier job is downloaded).
+- **Takes**: `takes/<shot>/<n>.mp4` (n = 1, 2, ...) with `<n>.json` (model, provider, job, cost,
+  cache key, QA report) and `<n>.contact.png`. Commit or back up `takes/` (paid footage). A new
+  take of a shot needs a different request (e.g. another `seed`, prompt or model).
+- **QA** of every take: duration (shorter than the shot: its last frame holds), aspect ratio
+  (what `cover` cuts off) and size (scaled up more than 2x), black (error when all black,
+  warning from 0.5 s), frozen (error when nothing moves, warning from 1 s), flicker (brightness
+  jumping from frame to frame, warning over 3 levels of 255), abrupt cuts inside the clip, and
+  its own sound (noted; never used). `vidgen generate takes [PROJECT] [--shot ID]` lists them
+  with their findings and contact sheets: look at the sheets before picking.
+- **Pick**: `vidgen generate pick [PROJECT] --shot ID --take N | none | auto` (in
+  `takes/picks.json`). A shot shows its picked take; `none`: vidgen's own picture; nothing
+  picked (`auto`): the newest take without QA errors. `vidgen generate status` lists each shot's
+  takes and the one shown, the budget, the credit line and the disclosure reminder.
+- **In the film**: `vidgen render` lays the shown take over its beat (from the beat's start to
+  the next beat's; the scene's last beat keeps it to the scene's end), scaled and cropped to the
+  format (`fit`), at the video's frame rate (the snapped clip is trimmed, a short one holds its
+  last frame), lightly colour matched (`color_match`), fading in from and out to vidgen's
+  picture of the beat (`crossfade`; none at a scene's edges, where the transitions join scenes,
+  and none between two takes). The take's sound is never used; vidgen's overlays and captions
+  are drawn on top. The scene renders again when a take or pick changes; drafts (`--draft`, the
+  guide renders) show vidgen's own picture.
+- **Credits and disclosure**: when the film shows takes, the description file
+  (`<output>_chapters.txt`) ends with "Includes AI-generated footage (model, ...)." and the lint
+  rule `generated_footage` (info) reminds you to disclose AI-generated footage where the platform
+  asks (YouTube's "Altered or synthetic content", TikTok's AI-generated label).
 
 ## Languages and translations
 
@@ -14820,6 +14862,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_cover` (0.1) of a face — for captions, any caption of the line being spoken (the layout dump's `reach` of the caption), not only the one in the still; for an overlay that keeps off faces (a `hud`) only its texts and panels' plates count, not its frame's lines over the whole picture. Beat-end and mid-beat stills: in a Short, `vidgen lint` renders 3 stills per beat (stills of a storyboard with 2 or more per beat are reused), so a face under the captions while a zoom is held part-way through a beat is found too. Faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
 | `overlay_face` | warning | outside a Short, a [`hud`](#hud)'s text or panel plate covering at least `min_cover` (0.15) of a character's face (the HUD places its texts clear of faces by itself; this catches what it could not: a close-up with a face in every corner). Fix: frame the face away from the corners (a shot or zoom), `compact: true`, fewer `lines` |
 | `shorts_length` | error | a Short planned longer than `shorts.max_seconds` (60): reported on the video's last scene. Fix: fewer beats or scenes in the `cut`, a shorter end card |
+| `generated_footage` | info | a scene shows generated video takes (`vidgen generate`): a reminder to disclose AI-generated footage when publishing (YouTube "Altered or synthetic content", TikTok's AI-generated label); the description file already says so |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -14910,6 +14953,7 @@ lint:
     shorts_safe_area: {tolerance: 0.01, min_face: 0.25, min_cover: 0.1}   # in a Short only; shares of a face's box (under the app's parts / an overlay)
     overlay_face: {min_cover: 0.15}         # a hud's text or plate over a face (share of the face's box); not in a Short
     shorts_length: {}                       # default severity error; in a Short only
+    generated_footage: {}                   # default severity info; scenes showing generated takes
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -15381,7 +15425,11 @@ hand-offs (Step 198, "Music studio" above): `studio_sessions`, `studio_read` (`s
 score you mean to propose, in `build/mcp/studio/`), `studio_variations` (`session`, `version`,
 `shuffle`: four variations as whole scores with labels, Step 199) and `studio_propose` (`score`,
 `explanations` `{n1: ...}`, `summary`, `agent`, `session`, `base`) — these five work on files
-in the studio's session folders, in the server's process. Their parameters are the command's
+in the studio's session folders, in the server's process. Generated video (§113): `generate_plan`
+(`shot`, `budget`, `variant`; free), `generate_run` (`dry_run` default true, `confirm_cost`,
+`shot`, `budget`, `variant`), `generate_status`, `generate_takes` (`shot`, `images`: returns the
+takes' contact sheets as pictures) and `generate_pick` (`shot`, `take`: a number, `none` or
+`auto`). Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
@@ -15395,9 +15443,10 @@ the long side, PNG (JPEG when a PNG would exceed 800 KB). `images` (default 3, a
 `image_offset` page through more; the document's `mcp_images` says `{total, offset, returned,
 next_offset}`. Stills are reused, so asking for the next page renders nothing.
 
-**Costs.** `tts` and `imagegen` are dry runs by default (free, no key): they list what would be
-made and its size (characters, estimated dollars). A real run needs `dry_run: false` **and**
-`confirm_cost: true`; without the latter the tool refuses before anything starts. `readback` asks
+**Costs.** `tts`, `imagegen` and `generate_run` are dry runs by default (free, no key): they list
+what would be made and its size (characters, estimated dollars). A real run needs `dry_run: false`
+**and** `confirm_cost: true`; without the latter the tool refuses before anything starts
+(`generate_run` also needs a budget, like `vidgen generate run --pay`). `readback` asks
 for `confirm_cost: true` when the project's `stt.provider` is a paid service (`elevenlabs`).
 
 **Folder.** Every path a tool takes (project, outputs, `init`'s folder, `plan`'s input) is relative
@@ -15417,7 +15466,7 @@ commands it runs but never returns it; documents carry only paths and results.
 **How it runs.** Every call starts `python -m vidgen <command> ... --json` in the root folder (a
 fresh process: Manim's configuration is process-global and a crashing scene or extension cannot
 take the server down) and turns the command's stderr lines into MCP progress notifications.
-Rendering calls (`storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+Rendering calls (`storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `generate_run`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`) run one at a time; cancelling a call stops its process and the
 render workers it started (the process group on macOS / Linux, the process tree on Windows).
 
@@ -16024,6 +16073,18 @@ model that follows its audio). `vidgen generate sheets --json`: `action` (`sheet
 `todo` (pictures to make), `estimate_usd`, `unknown_prices`, `paid_usd`, `sheets` (`{owner,
 location, approved, ready, status, pictures}`). `vidgen generate inputs --json`: `action`
 (`inputs`), `written`.
+
+`vidgen generate run PROJECT [--pay] --json`: `action` (`run`), `paid` (whether `--pay`),
+`cost_usd` (what this run's jobs reported), `shots` (`{shot, status, model, estimate_usd,
+cost_usd, take, take_path, new_take, qa, contact_sheet, message}`; `status` `would_generate`,
+`cached`, `paid`, `downloaded` (an earlier job), `blocked`, `problems` or `failed`). A failure
+stops the run: `ok` false, `error.details.shots` the outcomes so far. `vidgen generate status
+--json`: `action` (`status`), `shots` (`{shot, kind, model, takes, shown, picked, blocked}`),
+`budget_usd`, `spent_usd`, `remaining_usd`, `credit` (the credit line, or `null`),
+`disclosure`. `vidgen generate takes --json`: `action` (`takes`), `shots` (`{shot, shown, takes:
+[{take, path, model, cost_usd, qa, contact_sheet}]}`; `qa`: `{width, height, fps, duration,
+audio, summary, checks: [{check, severity, message}], metrics}`). `vidgen generate pick --json`:
+`action` (`pick`), `shot`, `shown` (the take number, or `null`: vidgen's own picture).
 
 ### `vidgen character-sheet --json`
 

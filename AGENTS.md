@@ -185,11 +185,12 @@ commands are tools with the same JSON documents: `guide`, `plan`, `init`, `valid
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`,
 `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
 `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic`, and `studio_sessions`, `studio_read`,
-`studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio` (options in snake_case: `per_beat`,
+`studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio`, and
+`generate_plan`, `generate_run`, `generate_status`, `generate_takes`, `generate_pick` for generated video shots (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
-them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
-`imagegen` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry
+them; page with `image_offset`), `thumbnail`, `gallery`, `character_sheet` and `generate_takes` their pictures. `render` previews by default. `tts`,
+`imagegen` and `generate_run` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry
 run, tell the user what it will cost, and confirm only after they agree.
 
 <!-- topic: pacing (also: story, storytelling, text, narration, beats) -->
@@ -3826,6 +3827,21 @@ scenes:
   "flat illustration, simple shapes, few colours"); not for photos or soft lighting (thousands
   of shapes, capped and thinned: worse than a PNG). Text in an SVG is removed — keep words in
   schu-video-generator's captions. No SVG model has a ZDR endpoint (2026-10-08).
+- **Generated video shots** (a beat's `generated_shot: {kind: talking | action | establishing,
+  model, prompt, setting, ...}`; `docs/COOKBOOK-GENERATED-VIDEO.md`): a video model on OpenRouter
+  makes the beat's picture; schu-video-generator keeps the timing, voices, captions, overlays and
+  music (the model's sound is never used). Expensive (about $0.03-0.60 per second), so: a few
+  shots that need real footage, the lowest resolution, 4-5 s. The order: `vidgen generate plan`
+  (free) → `generate sheets --pay` → look, `approved: true` → `vidgen tts` → `generate inputs
+  --guide` → `generate plan` (nothing blocked; tell the user the total) → `generate run --pay`
+  (needs `videogen.budget_usd`; stops at the first failure, never retries, never pays twice) →
+  `generate takes` (look at every contact sheet and QA finding) → `generate pick --shot ID
+  --take N` → `vidgen render`. A take with QA errors (black, frozen) is not shown unless picked;
+  `--take none` keeps vidgen's own picture. A new take needs a changed request (another `seed`).
+  Takes are paid footage: commit `takes/`. When the film shows takes, the description file says
+  "Includes AI-generated footage (models)" and lint's `generated_footage` reminds you to mark the
+  upload as altered or synthetic content. Video generation is not eligible for Zero Data
+  Retention: send no private faces or material you may not share.
 
 ### Your content and third-party services
 
@@ -3945,6 +3961,7 @@ install; `vidgen validate` warns when it is missing.
 | `shorts_safe_area` | in a Short (`shorts:`), text or a face where the app covers the frame (bottom 20 %, right 15 %), or a caption / the hook over a face | a closer `shot` or `zoom` with the faces higher; move the scene's text inwards |
 | `overlay_face` | a `hud`'s text or plate over a character's face (outside Shorts) | frame the face away from the corners, `compact: true`, fewer `lines` |
 | `shorts_length` (error) | a Short longer than `shorts.max_seconds` (60) | leave out beats or scenes in `cut:`, a shorter `end_card` |
+| `generated_footage` (info) | the scene shows AI-generated video takes | nothing to fix: when publishing, mark the video as altered or synthetic content where the platform asks |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

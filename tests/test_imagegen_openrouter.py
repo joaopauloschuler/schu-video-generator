@@ -237,6 +237,23 @@ def test_missing_key(monkeypatch: pytest.MonkeyPatch, or_project) -> None:
     assert calls == [] and not (project.root / "assets" / "generated").exists()
 
 
+def test_proxy_mode_sends_no_key(router: FakeRouter, monkeypatch: pytest.MonkeyPatch, or_project) -> None:
+    """Step 294: with the key added by a network proxy (as for the video API) no key is needed
+    and no Authorization header is sent."""
+    monkeypatch.delenv(orr.API_KEY_ENV, raising=False)
+    monkeypatch.setenv("VIDGEN_OPENROUTER_KEY_VIA_PROXY", "1")
+    project = or_project()
+    chosen = provider()
+    chosen.check_credentials()
+    chosen.generate(image_request(project, GenerateImage(prompt=PROMPT)))
+    assert router.posts and all(r.get_header("Authorization") is None for r in router.posts)
+    monkeypatch.delenv("VIDGEN_OPENROUTER_KEY_VIA_PROXY")
+    with pytest.raises(VidgenError, match="OPENROUTER_API_KEY is not set"):
+        chosen.check_credentials()
+    chosen.key_via_proxy = True     # what `vidgen generate sheets` sets from videogen.key_via_proxy
+    chosen.check_credentials()
+
+
 # ----- model records and prices ------------------------------------------------------------------------
 
 

@@ -24958,3 +24958,79 @@ project), repo work is generic.
   `generate run --pay` = for each ready shot `generate_clip(root, settings, shot.request(),
   pay=True, duration=shot.priced_seconds)` with the plan's running budget; takes, QA, MCP,
   credits, docs/guide.
+
+## Step 294 — Generated video: takes in the film, QA and the workflow
+
+- **Built** (DESIGN §113.4): `vidgen generate run [PROJECT] [--shot ID]... [--budget USD]
+  [--pay] [--json]` (`run_shots`: a dry run that sends and writes nothing; with `--pay` a budget
+  is required, a shot with problems or ready shots estimated above what is left refuse the whole
+  run before anything is paid, then each ready shot goes through `generate_clip(...,
+  pay=True, duration=shot.priced_seconds)` in video order with the ledger as the running budget,
+  blocked shots skipped, the first failure stops the run, nothing retried); every clip becomes a
+  take `takes/<shot>/<n>.mp4` + `<n>.json` + `<n>.contact.png` with QA (duration, aspect / size,
+  black, frozen, flicker, abrupt cuts, own sound); `vidgen generate takes | status | pick --shot
+  ID --take N | none | auto` (`takes/picks.json`; unpicked: the newest take without QA errors).
+  `vidgen render` lays the shown take over its beat (`vidgen/generated_layer.py`, attached right
+  after the overlay layer: overlays, captions and stills see the take): cover / contain to the
+  format, frame-rate conform via `ClipReader`, grey-world + exposure colour matching
+  (`videogen.color_match` 0.5), fades against vidgen's picture (`crossfade` 0.25 s; none at
+  scene edges or between takes), the scene's last beat held to the scene's end, sound never
+  read. Config `videogen.{crossfade, color_match}`, `generated_shot.{place, fit, crossfade}`.
+  Credit line "Includes AI-generated footage (models)." in `<output>_chapters.txt`; lint
+  `generated_footage` (info); MCP `generate_plan | generate_run | generate_status |
+  generate_takes | generate_pick` (`generate_run` pays only with `dry_run: false` +
+  `confirm_cost: true`); `docs/COOKBOOK-GENERATED-VIDEO.md` (cost control, ZDR / privacy);
+  guide + AGENTS.md; critical review (DESIGN §113.5).
+- **Fixes to 292–293**: the mock returns a playable MP4 shaped like the request
+  (`synthetic_clip`, which also makes QA's bad test clips) and unique job ids per run (the mock
+  ledger counted repeated runs once); `assets/generated_video/` left out of the render
+  fingerprint's assets (every downloaded clip made every scene stale); the OpenRouter image
+  provider (sheets) honours proxy mode (`VIDGEN_OPENROUTER_KEY_VIA_PROXY`, or
+  `videogen.key_via_proxy` via `generate sheets`), so 295 works with a proxy-injected key
+  (test in `test_imagegen_openrouter.py`).
+- **Decisions**: picks in `takes/picks.json`, not in `video.yaml`; placement from the planned
+  timeline via `project_shots(project, None)` (no model list in a render worker; split beats found
+  by their `takes/<beat>_p<n>` folders); a take with QA errors is shown only when picked; drafts
+  (and the guide renders) never show takes; fades only against vidgen's own picture; the scene's
+  last beat keeps its take through the fade-out (no flash of the cartoon between takes); the
+  fingerprint gains `generated` only for scenes that show takes.
+- **Files**: new `src/vidgen/generated_layer.py`, `src/vidgen/videogen/{compose,qa,takes,
+  workflow}.py`, `src/vidgen/lint/generated_rule.py`, `docs/COOKBOOK-GENERATED-VIDEO.md`,
+  `tests/test_videogen_compose.py`; changed `scene.py` (attach, close, timings), `config.py`,
+  `render/fingerprint.py`, `render/pipeline.py` (credit line), `videogen/{mock,shots}.py`
+  (`Shot.scene_start / scene_end`), `cli.py`, `mcp_server.py`, `api.py` (`run_shots`,
+  `check_clip`, `scene_placements`), `lint/{__init__,rules,run}.py`, docs CONFIG / COOKBOOK /
+  README / guide + AGENTS.md, DESIGN §113.4-113.5 and module tree, CHANGELOG, tasklist; tests
+  `test_videogen.py` (mock content), `test_mcp.py` (tool list), `test_particle_lint.py` (rule
+  order), `test_docs.py` (+ the cookbook's project and links).
+- **Tests run and passed** (one at a time, capped): `test_videogen_compose` (18, incl. a render),
+  `test_videogen` (24), `test_videogen_shots` (17), `test_particle_lint` + `test_mcp` (152),
+  `test_docs` (79), `test_guide` + `test_api` (101), `test_config` + `test_json_output` (44),
+  `test_schema` (76), `test_lint` (not render, 22), `test_imagegen_openrouter` (30),
+  `test_imagegen` + `test_videogen_shots` (52), fingerprint tests of `test_storyboard`,
+  `test_includes`, `test_cuts_shorts`. Frame baseline (shared rendering code changed:
+  `scene.py`): 33 stills, max difference 0. Audio untouched (the take's sound is never read).
+- **Spending**: nothing paid; no key read or sent. The sample was voiced with Kokoro (local,
+  free); the plan read the cached public model list.
+- **Sample**: `/home/claude/work/scratch/s293/sample` is now voiced (`audio/`, Kokoro via
+  `/home/claude/kvenv312`) and its inputs are cut (`build/videogen/quay_b1/{audio.mp3, guide.mp4,
+  first_frame.png}`, `closeup_b1/audio.mp3`); its plan shows only the unmade sheets blocking
+  (clips $0.465 + sheets $0.280 = $0.745 of $2.00). Mock copy
+  `/home/claude/work/scratch/s294/sample-mock` (stand-in sheets, provider mock): `run --pay` made
+  three takes (QA ok; quay_b1 warns 480p scaled up 2.3x), `render --preview` (540x960) placed
+  them under the overlays, `lint` lists the three `generated_footage` notes, the description
+  file has the credit line.
+- **Known gaps** (DESIGN §113.5): unverified against the real API (inline audio / video, the
+  avatar-iv portrait, the 240 px guide, real error bodies); no hosting uploader; QA thresholds
+  tuned on synthetic clips; layout lint still reads vidgen's objects under a take; a take shorter
+  than its beat plus the scene's outro holds its last frame; making sheets re-renders every scene
+  once; a timed-out mock job cannot be resumed. Kokoro reads the sample's lines fast (lint
+  `narration_speed` 3.6-3.75 w/s) — harmless for 295.
+- **Next (295, gated)**: with the owner's go-ahead and key (`OPENROUTER_API_KEY`, or
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1` when the proxy injects it), in
+  `/home/claude/work/scratch/s293/sample`: `generate plan` → `generate sheets --pay` (~$0.28) →
+  look at `assets/sheets/` → `approved: true` on both sheets and the style sheet → `generate
+  plan` (nothing blocked) → `generate run --pay --shot harbour_b1` first (the cheapest, no audio:
+  checks the flow) → `generate run --pay` → `generate takes` (contact sheets) → `pick` →
+  `render --preview`. Record what the API accepts (inline audio / video, the portrait as a
+  reference, the guide size) and the reported costs in DESIGN §113.

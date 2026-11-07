@@ -264,6 +264,8 @@ def run_sheets(
     if why:
         raise VidgenError(f"not paying for the sheet pictures: {why}")
     chosen = provider if provider is not None else get_image_provider(project)
+    if project.config.videogen.key_via_proxy and hasattr(chosen, "key_via_proxy"):
+        chosen.key_via_proxy = True   # the proxy adds the OpenRouter key for the sheets too (§113.4)
     chosen.check_credentials()
     check_requests = getattr(chosen, "check_requests", None)
     if callable(check_requests):

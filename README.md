@@ -928,7 +928,9 @@ my_video/
   [docs/COOKBOOK-AUDIO.md](docs/COOKBOOK-AUDIO.md) — audiobooks and podcasts without pictures:
   loudness presets and targets, formats, pacing, voices, checking a file;
   [docs/COOKBOOK-AUDIODRAMA.md](docs/COOKBOOK-AUDIODRAMA.md) — dramatized audiobooks: structure,
-  casting, rooms and stereo, score and sound design, the drama checks, a file per chapter.
+  casting, rooms and stereo, score and sound design, the drama checks, a file per chapter;
+  [docs/COOKBOOK-GENERATED-VIDEO.md](docs/COOKBOOK-GENERATED-VIDEO.md) — shots made by video models
+  through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

@@ -241,6 +241,10 @@ def _timing_findings(
 
         ctx.video_seconds = VideoPlan(project, project.render_format(preview).fps).duration
         ctx.shorts_max = zones.max_seconds
+    if "generated_footage" in names and lint.rules.generated_footage.severity != "off":
+        from vidgen.videogen.compose import scene_placements
+
+        ctx.generated = [(p.shot, p.number, p.model) for p in scene_placements(project, scene_id)]
     narration_rules = [n for n in ("said_before_shown", "unsaid_reveal") if n in names and getattr(lint.rules, n).severity != "off"]
     if narration_rules and layout is not None and activity["beats"]:
         from vidgen.lint.narration_rule import narration_picture

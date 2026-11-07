@@ -95,6 +95,11 @@ class Shot:
     problems: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     blocked: list[str] = field(default_factory=list)
+    #: Where the shot's scene starts on the planned timeline (``start - scene_start``: the shot's
+    #: time in its scene's render).
+    scene_start: float = 0.0
+    #: Where the shot's scene ends on the planned timeline (its fade-out and hold included).
+    scene_end: float = 0.0
 
     @property
     def folder(self) -> str:
@@ -325,7 +330,10 @@ def project_shots(project: Project, catalog: Catalog | None) -> list[Shot]:
             windows = _windows(project, scene, fps)
             for j, (beat, beat_slot, window) in enumerate(zip(scene.beats, slot.beats, windows)):
                 if beat.generated_shot is not None:
-                    shots += _beat_shots(project, scene, beat, f"scenes[{i}].beats[{j}].generated_shot", slot.start + beat_slot.start, window, catalog, sheets)
+                    found = _beat_shots(project, scene, beat, f"scenes[{i}].beats[{j}].generated_shot", slot.start + beat_slot.start, window, catalog, sheets)
+                    for shot in found:
+                        shot.scene_start, shot.scene_end = slot.start, slot.start + slot.duration
+                    shots += found
     return shots
 
 

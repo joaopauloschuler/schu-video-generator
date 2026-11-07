@@ -137,7 +137,9 @@ class SceneContext:
     ``music_check`` runs), ``science`` the scene's scientific-accuracy findings
     (:class:`vidgen.lint.science_rule.ScienceIssue`; filled when a ``science_*``, ``genetics_*``,
     ``calc_*`` or ``plot_*`` rule runs), ``video_seconds`` / ``shorts_max`` the planned length of a
-    Short and its ``max_seconds`` (set on the video's last scene when ``shorts_length`` runs).
+    Short and its ``max_seconds`` (set on the video's last scene when ``shorts_length`` runs),
+    ``generated`` the ``(shot, take, model)`` of the generated takes the scene shows (filled when
+    ``generated_footage`` runs).
     """
 
     scene_id: str
@@ -154,6 +156,7 @@ class SceneContext:
     science: list[Any] = field(default_factory=list)
     video_seconds: float | None = None
     shorts_max: float | None = None
+    generated: list[tuple[str, int, str]] = field(default_factory=list)
 
     def spoken_text(self, beat: dict[str, Any]) -> str:
         """What the narrator says for an activity-file beat."""

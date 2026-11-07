@@ -452,9 +452,20 @@ class OpenRouterImageProvider:
         self._zdr = zdr
         self._info: dict[str, Lookup] = {}
 
+    #: The network proxy adds the key (``VIDGEN_OPENROUTER_KEY_VIA_PROXY=1``, or set by
+    #: ``vidgen generate sheets`` from ``videogen.key_via_proxy``): no key read, no header sent.
+    key_via_proxy = False
+
+    def _proxy(self) -> bool:
+        from vidgen.videogen.openrouter import proxy_mode
+
+        return proxy_mode(self.key_via_proxy, os.environ)
+
     def check_credentials(self) -> None:
-        """Raise :class:`VidgenError` with setup instructions if ``OPENROUTER_API_KEY`` is unset."""
-        read_api_key()
+        """Raise :class:`VidgenError` with setup instructions if ``OPENROUTER_API_KEY`` is unset
+        (nothing in proxy mode)."""
+        if not self._proxy():
+            read_api_key()
 
     def model_info(self, model: str) -> Lookup:
         """The model's public record (fetched once per provider)."""
@@ -479,11 +490,12 @@ class OpenRouterImageProvider:
 
     def generate(self, request: ImageRequest) -> GeneratedPicture:
         """The picture of ``request``. Raises :class:`VidgenError` on any failure."""
-        key = read_api_key()
+        key = "" if self._proxy() else read_api_key()
         lookup = self.model_info(request.model)
         info = lookup if isinstance(lookup, ModelInfo) else None
         data = json.dumps(request_body(request, info)).encode("utf-8")
-        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json", "Accept": "application/json", **APP_HEADERS}
+        auth = {"Authorization": f"Bearer {key}"} if key else {}
+        headers = {**auth, "Content-Type": "application/json", "Accept": "application/json", **APP_HEADERS}
         try:
             body = httpapi.post_with_retries(
                 API_URL, data, headers=headers, service=SERVICE, secret=key, timeout=self.timeout, retries=self.retries,

@@ -1020,6 +1020,10 @@ class VideogenConfig(_Strict):
     """How local input files are sent: images (pictures inline as data URLs, as OpenRouter documents; audio and video need hosted URLs) or all (also audio and video inline: not confirmed by the documentation)."""
     poll_timeout: PositiveFloat = 900.0
     """Seconds to wait for a job before stopping (the job keeps running; a later run polls it again, never paying twice)."""
+    crossfade: float = Field(default=0.25, ge=0, le=2)
+    """Seconds a placed clip fades in from and out to vidgen's own picture of the beat at its edges (0: a cut); a shot's crossfade: overrides it."""
+    color_match: float = Field(default=0.5, ge=0, le=1)
+    """Light colour matching of placed clips (0 = as made, 1 = full): evens out colour casts (grey world) and exposure, so clips of different models sit together."""
 
 
 class StyleSheet(_Strict):
@@ -1138,6 +1142,7 @@ LINT_RULES: tuple[str, ...] = (
     "shorts_safe_area",
     "overlay_face",
     "shorts_length",
+    "generated_footage",
 )
 RuleName = Literal[
     "off_frame",
@@ -1222,6 +1227,7 @@ RuleName = Literal[
     "shorts_safe_area",
     "overlay_face",
     "shorts_length",
+    "generated_footage",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1793,6 +1799,10 @@ class ShortsLengthRule(RuleConfig):
     """``shorts_length``: a Short (``shorts:``) longer than its ``max_seconds`` (DESIGN.md §101)."""
 
 
+class GeneratedFootageRule(RuleConfig):
+    """``generated_footage``: a scene shows generated video takes (DESIGN.md §113.4): disclose AI-generated footage where the platform asks."""
+
+
 class LintRules(_Strict):
     """Per-rule settings of ``vidgen lint``."""
 
@@ -1960,6 +1970,8 @@ class LintRules(_Strict):
     """A hud's text or plate over a character's face, outside Shorts (default: warning)."""
     shorts_length: ShortsLengthRule = Field(default_factory=ShortsLengthRule)
     """A Short (shorts:) longer than its max_seconds (default: error)."""
+    generated_footage: GeneratedFootageRule = Field(default_factory=GeneratedFootageRule)
+    """A scene showing AI-generated takes: a reminder to disclose it when publishing (default: info)."""
 
 
 class LintConfig(_Strict):
@@ -3222,6 +3234,12 @@ class GeneratedShot(_Strict):
     """Aspect ratio sent (e.g. 9:16); default: the model's nearest to the video's format."""
     line: bool = True
     """Add the beat's text to the prompt as what is said (or narrated); false: leave it out."""
+    place: bool = True
+    """Show the picked take in the film over the beat (vidgen's overlays and captions on top); false: make takes but keep vidgen's own picture."""
+    fit: Literal["cover", "contain"] = "cover"
+    """How a take fills the frame: cover (scaled to fill, the overhang cut off) or contain (all of it, black bars)."""
+    crossfade: float | None = Field(default=None, ge=0, le=2)
+    """Seconds the take fades in and out over vidgen's picture at the beat's edges; default videogen.crossfade (0.25)."""
 
     @model_validator(mode="after")
     def _check_shot(self) -> GeneratedShot:

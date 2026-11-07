@@ -35,6 +35,7 @@ from vidgen.cartoon.host_directing import RevealStep, host_directions, starts_pr
 from vidgen.cartoon.effect_symbols import head_box
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
+from vidgen.generated_layer import GeneratedLayer
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays, shorts_area
@@ -379,6 +380,10 @@ class NarratedScene(MovingCameraScene):
                 box = mobject_region(mob) if overlay.reserves and mob is not None else None
                 if box is not None:
                     self._reserved.append(box)
+        #: Generated video takes laid over their beats, under the overlays (DESIGN.md §113.4),
+        #: or ``None`` without any.
+        self.generated_layer: GeneratedLayer | None = None
+        self._attach_generated()
         #: The cartoon host beside the content (``host:``, DESIGN.md §71), or ``None``.
         self.host: Any = None
         self._host_stays = False  # it stands on in the next scene, so it stays in the fade-out
@@ -423,6 +428,16 @@ class NarratedScene(MovingCameraScene):
         """The ``drawing:`` settings of this scene, later ones winning key by key: the video's
         (``stage`` adds its own ``drawing`` param)."""
         return [self.project.config.drawing]
+
+    def _attach_generated(self) -> None:
+        """Lay the picked takes of the scene's generated shots into its frames (inside the
+        overlay layer: overlays and captions are drawn over them)."""
+        from vidgen.videogen.compose import scene_placements
+
+        placements = scene_placements(self.project, self.spec.id)
+        if placements:
+            self.generated_layer = GeneratedLayer(self, placements)
+            self.generated_layer.attach()
 
     def _apply_drawing_style(self) -> None:
         """Resolve the scene's :attr:`drawing` style and install it on the camera and the renderer
@@ -1051,6 +1066,8 @@ class NarratedScene(MovingCameraScene):
             log.warning("scene '%s' lasts %.2f s; sound effects after its end play in the next scene: %s", self.spec.id, self.renderer.time, ", ".join(late))
         if self.capture is not None:
             self.capture.finish()
+        if self.generated_layer is not None:
+            self.generated_layer.close()
         super().tear_down()
 
     def timings(self) -> dict[str, Any]:
@@ -1065,6 +1082,8 @@ class NarratedScene(MovingCameraScene):
         }
         if self.sfx_log:
             data["sfx"] = [event.to_json() for event in self.sfx_log]
+        if self.generated_layer is not None:
+            data["generated"] = self.generated_layer.to_json()
         return data
 
     # ----- sound effects (DESIGN.md §47) -------------------------------------------------------

@@ -1935,6 +1935,8 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         return 0
     if args.action in ("plan", "sheets", "inputs"):
         return _generate_shots(args)
+    if args.action in ("run", "status", "takes", "pick"):
+        return _generate_workflow(args)
     project = Project.load(args.project)
     settings = project.config.videogen
     ledger = Ledger(ledger_path(project.root, settings.provider))
@@ -1978,7 +1980,7 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
             )
         return 0
     if args.pay:
-        raise VidgenError(f"--pay is for `vidgen generate sheets`; `generate {args.action}` never pays (Step 294 adds `generate run --pay`)")
+        raise VidgenError(f"--pay is for `vidgen generate run` and `generate sheets`; `generate {args.action}` never pays")
     if args.action == "inputs":
         catalog = load_catalog()
         shots = [s for s in project_shots(project, catalog) if not args.shot or s.id in args.shot or s.beat.id in args.shot]
@@ -2007,6 +2009,65 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
         )
     for line in plan.lines(root):
         print(line)
+    return 0
+
+
+def _generate_workflow(args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate run | status | takes | pick`` (DESIGN.md §113.4)."""
+    from vidgen.videogen.takes import chosen_take, pick_take, takes_of
+    from vidgen.videogen.workflow import catalog_or_none, known_shots, run_shots, status_lines
+
+    project = Project.load(args.project, variant=args.variant)
+    root = project.root
+    if args.pay and args.action != "run":
+        raise VidgenError(f"--pay is for `vidgen generate run` and `generate sheets`; `generate {args.action}` never pays")
+    if args.action == "run":
+        report = run_shots(project, pay=args.pay, budget_usd=args.budget, shot_ids=args.shot or (), out=(lambda line: None) if args.json else print)
+        if args.json:
+            return jsonout.envelope("generate", True, action="run", paid=args.pay, cost_usd=report.cost_usd, shots=[s.to_json(root) for s in report.shots])
+        return 0
+    catalog = catalog_or_none()
+    if args.action == "status":
+        lines, doc = status_lines(project, catalog)
+        if args.json:
+            return jsonout.envelope("generate", True, action="status", **doc)
+        for line in lines:
+            print(line)
+        return 0
+    known = known_shots(project, catalog)
+    if args.action == "pick":
+        if not args.shot or len(args.shot) != 1 or args.take is None:
+            raise VidgenError("pick needs one --shot ID and --take N (or --take none: vidgen's own picture; --take auto: the newest take without QA errors)")
+        shown = pick_take(root, args.shot[0], args.take, known)
+        text = f"take {shown.number} ({shown.path.relative_to(root).as_posix()})" if shown else "vidgen's own picture (no take)"
+        if args.json:
+            return jsonout.envelope("generate", True, action="pick", shot=args.shot[0], shown=shown.number if shown else None)
+        print(f"shot {args.shot[0]} shows {text}; `vidgen render` lays it in (the scene renders again)")
+        return 0
+    if args.shot:
+        for wanted in args.shot:
+            if wanted not in known:
+                from vidgen.videogen import did_you_mean
+
+                raise VidgenError(f"no generated shot {wanted!r}{did_you_mean(wanted, known)}; shots: {', '.join(known) or 'none'}")
+    chosen = [s for s in known if not args.shot or s in args.shot]
+    if args.json:
+        doc = []
+        for shot in chosen:
+            shown = chosen_take(root, shot)
+            doc.append({"shot": shot, "shown": shown.number if shown else None,
+                        "takes": [{"take": t.number, "path": t.path.relative_to(root).as_posix(), "model": t.model, "cost_usd": t.info.get("cost_usd"),
+                                   "qa": t.qa, "contact_sheet": t.contact.relative_to(root).as_posix()} for t in takes_of(root, shot)]})
+        return jsonout.envelope("generate", True, action="takes", shots=doc)
+    for shot in chosen:
+        takes = takes_of(root, shot)
+        shown = chosen_take(root, shot)
+        print(f"shot {shot}: {len(takes)} take(s)")
+        for take in takes:
+            print(f"  {take.line(root, picked=shown is not None and shown.number == take.number)}")
+            for check in take.qa.get("checks", []):
+                print(f"    {check['severity']}: {check['message']}")
+            print(f"    contact sheet: {take.contact.relative_to(root).as_posix()}")
     return 0
 
 
@@ -2334,22 +2395,27 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "generate",
         help="generated video shots through OpenRouter's video API: models lists the video models; plan lists the shots with their inputs "
-        "and cost; sheets makes the reference sheets; inputs cuts the shots' inputs; ledger shows the spending and budget",
+        "and cost; sheets makes the reference sheets; inputs cuts the shots' inputs; run makes the clips (a dry run unless --pay); status, "
+        "takes and pick show and choose the takes the film shows; ledger shows the spending and budget",
     )
     p.add_argument(
-        "action", choices=["models", "plan", "sheets", "inputs", "ledger"],
+        "action", choices=["models", "plan", "sheets", "inputs", "run", "status", "takes", "pick", "ledger"],
         help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
         "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
         "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
-        "shot's voice (and with --guide its draft render) into build/videogen/; ledger: the project's paid jobs, what they cost and what the budget has left",
+        "shot's voice (and with --guide its draft render) into build/videogen/; run: generate the ready shots (a dry run; --pay pays, within "
+        "the budget, stopping at the first failure, never retrying) and keep each clip as a take with QA and a contact sheet; status: each "
+        "shot's takes and the one shown, the credit line; takes: every take with its QA findings and contact sheet; pick: choose a shot's "
+        "take (--shot ID --take N | none | auto); ledger: the project's paid jobs, what they cost and what the budget has left",
     )
     project_arg(p)
     p.add_argument("--refresh", action="store_true", help="models: fetch the list again even when the cached copy is recent")
-    p.add_argument("--variant", metavar="NAME", help="plan, sheets, inputs: apply a named variant")
-    p.add_argument("--shot", action="append", metavar="ID", help="plan, inputs: only this shot or beat (repeatable)")
+    p.add_argument("--variant", metavar="NAME", help="plan, sheets, inputs, run, status, takes, pick: apply a named variant")
+    p.add_argument("--shot", action="append", metavar="ID", help="plan, inputs, run, takes: only this shot or beat (repeatable); pick: the shot")
     p.add_argument("--sheet", action="append", metavar="NAME", help="sheets: only this character's sheet, or style (repeatable)")
-    p.add_argument("--pay", action="store_true", help="sheets: make the pictures (paid; needs videogen.budget_usd); without it a dry run")
-    p.add_argument("--budget", type=float, metavar="USD", help="plan: a lower cap than videogen.budget_usd for this plan")
+    p.add_argument("--pay", action="store_true", help="run, sheets: pay for the clips / pictures (needs a budget); without it a dry run")
+    p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
+    p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")
     p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with guide: true or first_frame: render (a draft render of their scenes)")
     p.set_defaults(func=cmd_generate)
 

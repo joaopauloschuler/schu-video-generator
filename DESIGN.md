@@ -256,7 +256,10 @@ src/vidgen/
                           # (submit / poll / download, key or proxy mode, errors), mock.py (a fake API),
                           # ledger.py (spending ledger, budget), run.py (cache, budget, pay or dry run),
                           # sheets.py (reference / style sheets), shots.py (per-beat shots, the plan),
-                          # inputs.py (the cut voice, guide render, first frame; §113.3)
+                          # inputs.py (the cut voice, guide render, first frame; §113.3), qa.py (checks,
+                          # contact sheets), takes.py (takes, picks), compose.py (placements, credit line),
+                          # workflow.py (`generate run | status`; §113.4)
+  generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14),
@@ -21718,3 +21721,137 @@ stops with an error naming both options.
   uploader (audio / video inline only with `inline_media: all`, unconfirmed); whether avatar-iv
   takes the portrait as an input reference (its record lists no frame images) and whether a
   240-pixel guide is accepted are open until Step 295.
+
+### 113.4 Takes in the film, QA and the workflow (Step 294)
+
+- **Run** (`videogen/workflow.py`, `run_shots(project, pay=, budget_usd=, shot_ids=, out=,
+  provider=, catalog=) -> RunReport`): the plan (`plan_shots`) in video order. Without `pay` a
+  dry run (nothing sent, paid or written; `would_generate` per ready shot, the total). With
+  `pay`: no cap (config or argument) → refused; any selected shot with problems → refused; the
+  ready shots' estimate above what is left → refused (all before anything is paid). Then per
+  shot: problems / blocked → skipped and named; else `generate_clip(root, settings,
+  shot.request(), pay=True, duration=shot.priced_seconds, budget_usd=, catalog=)` (the ledger is
+  re-read per job: the running budget); the clip (paid, cached, or an earlier job downloaded) →
+  `add_take`. The first `VidgenError` stops the run (`details.shots`: the outcomes so far); no
+  retry. `ShotRun.status`: `would_generate | cached | paid | downloaded | blocked | problems |
+  failed`.
+- **Takes** (`videogen/takes.py`): `takes/<shot>/<n>.mp4` + `<n>.json` `{shot, take, key,
+  model, provider, job_id, cost_usd, source, length, time, qa}` + `<n>.contact.png`; a clip whose
+  cache key is already a take is not added again. Picks in `takes/picks.json` `{shot: n |
+  "none"}`. `chosen_take`: the picked take; `none` → none (vidgen's picture); nothing picked
+  (`auto`) → the newest take without QA errors. `pick_take(root, shot, "N" | "none" | "auto",
+  known)` with did-you-mean. Decision: picks in a JSON file, not in `video.yaml` (no rewriting
+  the author's YAML; takes are files anyway). A new take needs a new request (seed, prompt,
+  model): the cache never pays twice.
+- **QA** (`videogen/qa.py`, `check_clip(path, length=, width=, height=) -> QAReport`): decoded
+  grey at 64 px wide at the clip's own rate (≤ 30 fps, so frame-to-frame flicker is not aliased
+  away). Duration < shot − 1 frame → warning (holds); aspect ratio off by > 2 % → warning (what
+  `cover` cuts); scaled up > 2× → warning; black frames (mean < 16 and 99th percentile < 40):
+  all → error, a run ≥ 0.5 s → warning; frozen (mean abs change < 0.6): all → error, ≥ 1 s →
+  warning; flicker = mean |Lₜ − (Lₜ₋₁ + Lₜ₊₁)/2| of the frame means > 3 → warning; cuts = a change
+  > max(30, 6 × median change) outside black → warning (not reported when flickering); a sound
+  stream → info. `contact_sheet(path, out, title, report, count 8, columns 4, thumb 200)`: evenly
+  spaced frames with times under the title and the report lines (PIL).
+- **Placing** (`videogen/compose.py`, `scene_placements(project, scene_id=None) -> [Placement
+  (scene, shot, take, number, model, start, length, fit, fade_in, fade_out, color_match)]`): only
+  when not a draft, `takes/` exists and some beat has a `generated_shot` with `place: true`
+  (otherwise nothing is computed: existing projects pay nothing). From `project_shots(project,
+  None)` (no model list in a render worker): start = the beat's planned start − the scene's
+  (`Shot.scene_start`, new), length = its window; a beat split by the model's longest clip has
+  folders `<beat>_p1..n` and the parts share the window equally (as planned). The scene's last
+  beat keeps its take to the scene's end (`Shot.scene_end`, new: fade-out and hold), so vidgen's
+  picture never flashes between takes. Fades (`crossfade`, default `videogen.crossfade` 0.25 s)
+  only against vidgen's picture: none at a scene's start or end (the film's transitions join
+  scenes) and none where two takes meet (a cut).
+- **In the render** (`vidgen/generated_layer.py`, `GeneratedLayer(scene, placements)`; a render
+  input): attached in `NarratedScene.__init__` right after the overlay layer, so the frame flow
+  is colour fade → drawing texture → **take** → overlays / captions → frame capture → file:
+  overlays and captions are drawn on the take, stills and the layout dump see it. For frames in a
+  window the scene's picture is replaced by `ClipReader(take, size, crop).frame(t − start)`
+  (`cover`: centred crop to the frame's aspect, `contain`: fitted on black): the frame showing
+  at each render frame's time (fps conform; a short take holds its last frame, a long one is cut);
+  colour gains `color_gains(samples, strength)` = (grey-world balance × exposure towards mean
+  118)^strength, each within 0.8-1.25, from 8 frames at 32 px (`videogen.color_match`, default
+  0.5; 0 = as made); alpha ramps for the fades. A frozen wait is split into single frames inside
+  windows only. The take's sound is never read. The scene's timings get `generated: [{shot,
+  take, model, start, length}]`.
+- **Fingerprint**: a scene's fingerprint gains `generated` (each placement: the take's path, size
+  and mtime, start, length, fit, fades, colour match) only when it shows takes, so a new take or
+  pick renders that scene alone and other projects' fingerprints are unchanged; files under
+  `assets/generated_video/` (the clip cache) are left out of the `assets` digest (they reach
+  renders only as takes; before, every downloaded clip made every scene stale).
+- **Credits and disclosure**: `credit_line(project)` = "Includes AI-generated footage (models,
+  sorted)." appended to the description file `<output>_chapters.txt` (also when there are no
+  chapters or references); lint rule `generated_footage` (scene scope, default info, last in
+  `LINT_RULES`): each scene showing takes, with a reminder to mark the upload as altered or
+  synthetic content (YouTube) / AI-generated (TikTok). `vidgen generate status` prints both.
+- **Config**: `videogen.crossfade` (0.25, 0-2 s), `videogen.color_match` (0.5, 0-1);
+  `generated_shot.place` (true), `fit` (cover | contain), `crossfade` (null). All excluded from
+  fingerprints as before; what placing uses is in `generated`.
+- **CLI**: `vidgen generate run [PROJECT] [--shot ID]... [--budget USD] [--pay] [--variant]
+  [--json]`, `status`, `takes [--shot ID]`, `pick --shot ID --take N | none | auto`; `--pay` on any
+  other action but `sheets` is an error.
+- **MCP**: `generate_plan` (read only), `generate_run` (paid annotation; `dry_run` default true;
+  `dry_run: false` needs `confirm_cost: true`, then `--pay`), `generate_status`,
+  `generate_takes` (the contact sheets as pictures, paged), `generate_pick`.
+- **Mock** (fixes to §113.2): a completed job's content is a playable H.264 MP4 made by FFmpeg
+  (`synthetic_clip`: `testsrc2` of the submitted duration, the submitted aspect ratio at the
+  resolution tier's short side, 360 without one; `video=` bytes still override), and
+  `synthetic_clip(path, w, h, s, fps, pattern=testsrc | bars | black | frozen | flicker | cut,
+  audio=)` makes QA's test clips. `MockVideoProvider()` without an `api` (the `provider: mock`
+  setting) uses job ids `mock-<8 hex>-N`: before, every run started at `mock-job-1` and the mock
+  ledger (keyed by job id) counted repeated runs once.
+- **Proxy mode for sheets** (fix): the OpenRouter image provider honours
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY` and, through `vidgen generate sheets`, `videogen.key_via_proxy`
+  (no key read, no Authorization header); before, sheets needed `OPENROUTER_API_KEY` even when
+  the proxy adds the key.
+- **Public** `vidgen.api`: `run_shots`, `check_clip`, `scene_placements`.
+- **Tests** `tests/test_videogen_compose.py` (18; synthetic clips): QA of good / black / bars
+  (still) / frozen / flicker / cut / short and wide clips, the contact sheet, the mock's MP4,
+  takes (dedupe, numbering, picks, QA errors not shown unless picked, did-you-mean), colour gains,
+  placements (windows, fades, last beat to the scene's end, `none`, `place: false`, drafts) and
+  fingerprints, a render (9:16 at 90×160: the take fills the beat under a watermark, the other
+  beats unchanged, only that scene re-rendered, the scene timings, the credit line), the
+  workflow (dry run sends nothing, pay makes takes, a second run is cached and pays nothing, no
+  budget / over budget refused before anything is sent, the first failure stops without retry),
+  the CLI and the lint rule. Frame baseline: 33 stills, max difference 0.
+- **The sample** (Step 295): `scratch/s293/sample` is voiced (Kokoro, Python 3.12 venv) and its
+  inputs are cut (`quay_b1` voice 3.57 s + guide + first frame, `closeup_b1` voice 4.27 s); only
+  the unmade sheets block its shots. A mock copy (`scratch/s294/sample-mock`, stand-in sheets)
+  ran end to end: three takes, a 9:16 preview with the takes placed, contact sheets, the credit
+  line and the lint notes.
+
+### 113.5 Review of Steps 292–294
+
+What holds: nothing can be paid without `--pay` (or the MCP's two flags) and a cap; the cap is
+checked against conservative estimates before each job and for a whole run up front; the ledger
+records a job before it is polled, so a crash or timeout never leads to a second payment; the
+cache and the ledger's open jobs stop repeat payments of the same request; the key is never
+logged or stored; the model's audio is never asked for or used; placing takes is invisible to
+projects without them (fingerprints and the 33-still baseline unchanged).
+
+Fixed in 294: the mock's repeated job ids (its ledger undercounted), its placeholder bytes (no
+playable clip), the clip cache inside the `assets` digest (every downloaded clip re-rendered
+every scene), and sheets without proxy mode (the image provider needed `OPENROUTER_API_KEY` even
+when the proxy adds it).
+
+Open, by weight:
+1. **Unverified against the real API** (295 settles it): inline audio / video (`inline_media:
+   all`), avatar-iv taking the portrait as an input reference, Seedance accepting a 240-pixel
+   guide, the real 402 / 429 / 413 / moderation bodies, and what `usage.cost` reports. A
+   rejected inline request should fail before generation (a 400), costing nothing.
+2. **No hosting uploader**: audio and video inputs work only inline (unconfirmed); without that,
+   talking and action shots with audio stay blocked. Choosing a host is the owner's decision.
+3. **QA thresholds** come from synthetic clips; real footage (handheld, fast motion, a dark
+   scene) may need tuning: black and frozen errors are conservative, the rest are warnings.
+4. **Lint under a take**: layout rules still read vidgen's own objects of a beat that a take
+   covers (e.g. `look_alike`, text overlap) and may report what is not seen.
+5. **Timing at the edges**: the scene's last beat holds its take through the fade-out; a take
+   asked for the beat's window (e.g. 4 s for 3.67 s) then holds its last frame for the rest
+   (~0.2-0.5 s). Asking for the window plus the scene's outro would cost a step more on discrete
+   lengths (4 → 6 s on veo); left as is.
+6. **Sheets in `assets/sheets/`** still count as assets: making them re-renders every scene once
+   (render time, not money). They may be used as pictures by scenes, so they stay in.
+7. **Colour matching** is grey-world: it pulls deliberately tinted footage (golden hour) towards
+   neutral at half strength; `color_match: 0` turns it off.
+8. A mock job that timed out cannot be resumed (each run has its own fake API); real jobs can.

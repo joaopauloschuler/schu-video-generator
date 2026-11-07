@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–293)
+## Unreleased (Steps 193–294)
+
+### Generated video: takes in the film, QA, run (Step 294)
+
+- `vidgen generate run [--pay] [--budget USD] [--shot ID]`: a dry run, or (with `--pay` and a budget) each ready shot generated in order, the run refused up front when a shot has problems or the estimate is over what is left, stopped at the first failure, never retried, never paid twice. Each clip becomes a take `takes/<shot>/<n>.mp4` with QA (duration, aspect / size, black, frozen, flicker, abrupt cuts, its own sound) and a contact sheet; `vidgen generate takes | status | pick --shot ID --take N | none | auto`.
+- `vidgen render` lays the shown take over its beat under the overlays and captions: scaled / cropped to the format (`fit: cover | contain`), at the video's frame rate, lightly colour matched (`videogen.color_match`), with crossfades against vidgen's picture (`crossfade`); the take's sound is never used. Drafts show vidgen's own picture; a new take or pick renders only its scene again.
+- The description file ends with "Includes AI-generated footage (models)." and lint's `generated_footage` (info) reminds you to disclose it. MCP tools `generate_plan`, `generate_run` (paid only with `dry_run: false` and `confirm_cost: true`), `generate_status`, `generate_takes`, `generate_pick`. `docs/COOKBOOK-GENERATED-VIDEO.md` (cost control, privacy: no Zero Data Retention).
+- Fixes to Steps 292–293: the mock provider returns a playable MP4 and unique job ids (its ledger counted repeated runs once); downloaded clips in `assets/generated_video/` no longer make every scene's render stale; reference sheets work with a proxy-injected key (`VIDGEN_OPENROUTER_KEY_VIA_PROXY` / `videogen.key_via_proxy`).
 
 ### Generated video: sheets, shot specs and the plan (Step 293)
 

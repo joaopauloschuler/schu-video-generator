@@ -234,7 +234,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
                                                        "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite", "ambience", "motif", "generated_shot"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
-        "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
+        # generated clips (assets/generated_video, §113) reach renders only as takes ("generated" below)
+        "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets) if not path.is_relative_to(assets / "generated_video")},
         "overlays": _overlay_inputs(project),
         # the transition out of the scene changes its end: held instead of faded, faded to a
         # colour, or held longer (DESIGN.md §49)
@@ -288,5 +289,11 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     if before is not None:
         data["carry"] = [str(e) for e in spec.carry]
         data["carry_from"] = scene_fingerprint(project, before)
+    from vidgen.videogen.compose import scene_placements
+
+    placed = scene_placements(project, scene_id)
+    if placed:
+        # generated takes laid over beats (§113.4): the take files, where and how they go
+        data["generated"] = [p.fingerprint(project.root) for p in placed]
     text = json.dumps(data, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()

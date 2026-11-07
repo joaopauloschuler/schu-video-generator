@@ -757,6 +757,70 @@ def build_server(root: Path) -> Any:
         options = {"dry-run": dry_run, "scene": scene, "variant": variant, "force": force}
         return answer(await call(ctx, args_of(["imagegen"], [str(where(project))], options), heavy=True))
 
+    @tool("Generated video shots (generated_shot: on beats, OpenRouter's video models): the plan, free and sending "
+          "nothing: every shot with its model, length, inputs (made or not), estimated cost, what the budget has left, "
+          "problems and blocked reasons, and the prompt.", read_only)
+    async def generate_plan(
+        ctx: Context,
+        project: Project = ".",
+        shot: Annotated[list[str] | None, Field(description="only these shot or beat ids")] = None,
+        budget: Annotated[float | None, Field(description="a lower cap (US dollars) than videogen.budget_usd")] = None,
+        variant: Variant = None,
+    ) -> Any:
+        options = {"shot": shot, "budget": budget, "variant": variant}
+        return answer(await call(ctx, args_of(["generate", "plan"], [str(where(project))], options)))
+
+    @tool("Generate the ready video shots and keep each clip as a take (takes/<shot>/<n>.mp4) with QA checks and a "
+          "contact sheet. dry_run=true (default, free) sends and pays nothing. A real run COSTS MONEY (OpenRouter "
+          "video, about $0.03-0.60 per second): only with dry_run=false and confirm_cost=true after the user agreed to "
+          "the plan's estimate; it needs a budget (videogen.budget_usd or budget), stops at the first failure and never "
+          "retries a paid job; a request already made is never paid again.", paid)
+    async def generate_run(
+        ctx: Context,
+        project: Project = ".",
+        dry_run: Annotated[bool, Field(description="only list what would be generated, with the cost (free)")] = True,
+        confirm_cost: Annotated[bool, Field(description="required for dry_run=false: the user accepted the cost")] = False,
+        shot: Annotated[list[str] | None, Field(description="only these shot or beat ids")] = None,
+        budget: Annotated[float | None, Field(description="a lower cap (US dollars) than videogen.budget_usd for this run")] = None,
+        variant: Variant = None,
+    ) -> Any:
+        if not dry_run and not confirm_cost:
+            raise ToolError(cost_refusal("generate_run", "submits paid video-generation jobs"))
+        options = {"pay": not dry_run, "shot": shot, "budget": budget, "variant": variant}
+        return answer(await call(ctx, args_of(["generate", "run"], [str(where(project))], options), heavy=True))
+
+    @tool("Generated shots' status: each shot's takes and the one the film shows, the budget, the credit line and the "
+          "disclosure reminder (free).", read_only)
+    async def generate_status(ctx: Context, project: Project = ".", variant: Variant = None) -> Any:
+        return answer(await call(ctx, args_of(["generate", "status"], [str(where(project))], {"variant": variant})))
+
+    @tool("Every take of the generated shots with its QA findings (duration, size, black, frozen, flicker, cuts) and "
+          "its contact sheet as images: look at them before picking.", read_only)
+    async def generate_takes(
+        ctx: Context,
+        project: Project = ".",
+        shot: Annotated[list[str] | None, Field(description="only these shot ids")] = None,
+        variant: Variant = None,
+        images: Images = DEFAULT_IMAGES,
+        image_offset: Offset = 0,
+    ) -> Any:
+        root = where(project)
+        doc = await call(ctx, args_of(["generate", "takes"], [str(root)], {"shot": shot, "variant": variant}))
+        sheets = [root / t["contact_sheet"] for s in doc.get("shots", []) for t in s.get("takes", []) if (root / t["contact_sheet"]).is_file()]
+        return paged(doc, sheets, image_offset, images)
+
+    @tool("Choose the take a generated shot shows in the film: take=N, none (vidgen's own picture) or auto (the newest "
+          "take without QA errors); the next render lays it in.", writes)
+    async def generate_pick(
+        ctx: Context,
+        shot: Annotated[str, Field(description="the shot id")],
+        take: Annotated[str, Field(description="a take number, none or auto")],
+        project: Project = ".",
+        variant: Variant = None,
+    ) -> Any:
+        options = {"shot": [shot], "take": take, "variant": variant}
+        return answer(await call(ctx, args_of(["generate", "pick"], [str(where(project))], options)))
+
     @tool("Transcribe the narration MP3s (speech to text, cached) and compare them with the beat texts: word error "
           "rate, misheard words, words heard unclearly or after an odd pause (flags with beat and video times), "
           "suggested fixes. With a paid STT provider (stt.provider: elevenlabs) it needs "

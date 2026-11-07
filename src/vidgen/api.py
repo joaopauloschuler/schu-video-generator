@@ -145,6 +145,9 @@ from vidgen.videogen import MediaInput, VideoRequest  # noqa: E402
 from vidgen.videogen.run import generate_clip, plan_clip  # noqa: E402
 from vidgen.videogen.sheets import project_sheets  # noqa: E402
 from vidgen.videogen.shots import plan_shots, project_shots  # noqa: E402
+from vidgen.videogen.compose import scene_placements  # noqa: E402
+from vidgen.videogen.qa import check_clip  # noqa: E402
+from vidgen.videogen.workflow import run_shots  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character, pixel_zoom  # noqa: E402
 from vidgen.cartoon.transition import ArmMove, BodyMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, PropReshape, Walk, feet_of  # noqa: E402
@@ -993,6 +996,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "plan_shots",
     "project_shots",
     "project_sheets",
+    "run_shots",
+    "check_clip",
+    "scene_placements",
     "VectorPicture",
     "load_vector",
     "PART_NAMES",

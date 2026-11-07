@@ -680,14 +680,20 @@ def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any],
     """Write the description file ``<output>_chapters.txt``: the YouTube chapter list from the
     combined timings' ``chapters`` (DESIGN.md §52; why YouTube would ignore it is logged unless
     not ``warn``: an audio-only render's list is for a podcast's show notes) and,
-    after it, the numbered references and figure credits of the scenes (§95.14); returns its
-    path, or ``None`` (and removes an old file) when there is neither (no chapters or
-    ``chapters.youtube`` false, and no references or ``citations.description`` false)."""
+    after it, the numbered references and figure credits of the scenes (§95.14) and, when the
+    film shows generated takes, "Includes AI-generated footage (models)." (§113.4); returns its
+    path, or ``None`` (and removes an old file) when there is none of these (no chapters or
+    ``chapters.youtube`` false, no references or ``citations.description`` false, no takes)."""
     path = project.chapters_path(preview)
     chapters = [chapter_export.chapter_from_json(c) for c in timings.get("chapters", [])]
     if not project.config.chapters.youtube:
         chapters = []
     cited = description_text(project.config.scenes) if project.config.citations.description else ""
+    from vidgen.videogen.compose import credit_line
+
+    footage = credit_line(project)   # generated takes in the film (§113.4)
+    if footage:
+        cited = f"{cited}\n\n{footage}" if cited else footage
     if not chapters and not cited:
         remove_file(path)
         return None

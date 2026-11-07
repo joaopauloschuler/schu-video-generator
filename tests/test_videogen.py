@@ -153,7 +153,7 @@ def test_paid_flow_with_the_mock(tmp_path: Path) -> None:
     api = MockOpenRouter()
     result = run(tmp_path, request(), api)
     assert result.paid and result.path == clip_path(tmp_path, request_hash(request()))
-    assert result.path.read_bytes() == api.video and result.cost == 0.25
+    assert result.path.read_bytes() == api.content("mock-job-1") and result.cost == 0.25
     statuses = [r.url.rsplit("/", 1)[-1] for r in api.requests]
     assert [r.method for r in api.requests] == ["POST", "GET", "GET", "GET"] and statuses[-1] == "content?index=0"
     body = api.submits[0].body
