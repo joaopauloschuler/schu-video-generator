@@ -750,6 +750,36 @@ class AfterimageConfig(_Strict):
     """How strong a new copy is (a share of the figure's opacity)."""
 
 
+#: Views a reference sheet can show (DESIGN.md §113.3).
+SheetView = Literal["front", "three_quarter", "side", "back"]
+
+
+class ReferenceSheet(_Strict):
+    """``characters[].reference_sheet`` (DESIGN.md §113.3): pictures of the character made by the
+    image provider (``vidgen generate sheets``) that generated video shots take as references.
+    Not the drawn ``vidgen character-sheet``."""
+
+    prompt: str = Field(min_length=1)
+    """Who the character is, as the pictures show them, e.g. "a woman in her thirties, short curly dark hair, green raincoat"; also the character's words in shot prompts."""
+    views: list[SheetView] = Field(default_factory=lambda: ["front", "three_quarter", "side"], min_length=1)
+    """One picture per view (front, three_quarter, side, back), each with a neutral face; the first view is a talking shot's portrait."""
+    expressions: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    """More pictures, front view head and shoulders, one per expression (e.g. smiling, worried)."""
+    notes: str | None = Field(default=None, min_length=1)
+    """More words about the character for shot prompts only (how they move or speak), not drawn in the sheet."""
+    seed: int | None = Field(default=None, ge=0)
+    """Another number asks for other pictures of the same prompt (part of their cache keys)."""
+    approved: bool = False
+    """true once you have looked at the pictures and want shots to use them; no video job uses a sheet before (and approved pictures are never made again: set false first)."""
+
+    @field_validator("views")
+    @classmethod
+    def _distinct_views(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value):
+            raise ValueError(f"views are listed twice: {', '.join(sorted({v for v in value if value.count(v) > 1}))}")
+        return value
+
+
 class CharacterEntry(_Strict):
     """One entry of ``characters:`` (DESIGN.md §69): a cartoon character declared once and used
     by any scene."""
@@ -778,6 +808,8 @@ class CharacterEntry(_Strict):
     """While it moves it leaves faint copies of itself that fade (a shimmering trail): true or {spacing, life, opacity}; on a stage."""
     echo: Union[bool, EchoConfig] = False
     """Draw the character as an echo, its other self from another timeline or a memory: true or {color, opacity, flicker}; translucent, keeping its own colours (a uniform, a medal), its outlines glowing in the echo's colour, never darkened by the stage's light; appear with materialise."""
+    reference_sheet: ReferenceSheet | None = None
+    """Generated pictures of the character for generated video shots {prompt, views, expressions, notes, seed, approved} (`vidgen generate sheets`); shots use them only once approved: true."""
 
     @model_validator(mode="after")
     def _one_look(self) -> "CharacterEntry":
@@ -988,6 +1020,37 @@ class VideogenConfig(_Strict):
     """How local input files are sent: images (pictures inline as data URLs, as OpenRouter documents; audio and video need hosted URLs) or all (also audio and video inline: not confirmed by the documentation)."""
     poll_timeout: PositiveFloat = 900.0
     """Seconds to wait for a job before stopping (the job keeps running; a later run polls it again, never paying twice)."""
+
+
+class StyleSheet(_Strict):
+    """``style_sheet:`` (DESIGN.md §113.3): the look of the generated video shots, in words for
+    every shot prompt and in style frames made by the image provider (``vidgen generate sheets``)
+    that shots take as references."""
+
+    palette: str | list[Annotated[str, Field(min_length=1)]] | None = None
+    """The colours, in words or a list (hex or names), e.g. [teal, warm orange, off-white]."""
+    era: str | None = Field(default=None, min_length=1)
+    """When it looks set, e.g. "present day" or "1970s"."""
+    lens: str | None = Field(default=None, min_length=1)
+    """How it is filmed, e.g. "35 mm, shallow depth of field, handheld"."""
+    notes: str | None = Field(default=None, min_length=1)
+    """Any other words about the look, e.g. "soft overcast light, gentle film grain"."""
+    references: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    """Pictures of your own (relative to the project) every shot takes as style references (approval does not apply to them)."""
+    frames: int = Field(default=1, ge=0, le=4)
+    """How many style frames to generate (stills that show the look; 0: none)."""
+    frame_prompt: str | None = Field(default=None, min_length=1)
+    """What the style frames show; default: "a representative still of the film"."""
+    seed: int | None = Field(default=None, ge=0)
+    """Another number asks for other style frames of the same words."""
+    approved: bool = False
+    """true once you have looked at the style frames and want shots to use them (without it, no video job uses them)."""
+
+    def words(self) -> str:
+        """The look in words: ``palette ...; era ...; lens ...; notes`` (``""`` when empty)."""
+        palette = ", ".join(self.palette) if isinstance(self.palette, list) else self.palette
+        parts = [f"palette {palette}" if palette else None, self.era, self.lens, self.notes]
+        return "; ".join(" ".join(p.split()).rstrip(".") for p in parts if p)
 
 
 #: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
@@ -3124,6 +3187,61 @@ def strip_emphasis(text: str) -> str:
     return EMPHASIS.sub(r"\1", text)
 
 
+#: Kinds of generated video shots (DESIGN.md §113.3).
+ShotKind = Literal["talking", "action", "establishing"]
+
+
+class GeneratedShot(_Strict):
+    """A beat's ``generated_shot:`` (DESIGN.md §113.3): the beat is shown by a clip a video model
+    makes (``vidgen generate plan`` lists it with its inputs and estimated cost). Not the
+    ``generate:`` param of scenes, which makes a still picture."""
+
+    kind: ShotKind
+    """talking: a close-up of the speaker lip-synced to the beat's voice (a portrait + the voice); action: characters acting, guided by their reference sheets (and optionally the voice and a render of the beat); establishing: a place, usually without characters."""
+    model: str = Field(min_length=3)
+    """The OpenRouter video model (`vidgen generate models`), e.g. heygen/avatar-iv (talking), bytedance/seedance-2.0-fast (action), google/veo-3.1-lite (establishing)."""
+    prompt: str = ""
+    """What happens in the shot, e.g. "she unfolds the map against the wind"; the style sheet, setting, characters and line are added."""
+    setting: str | None = Field(default=None, min_length=1)
+    """Where the shot is, e.g. "a rainy harbour at dawn"."""
+    characters: list[Identifier] | None = None
+    """Who is in the shot (names from characters:); default: the beat's speaker for talking and action shots, nobody for establishing shots."""
+    refs: list[Annotated[str, Field(min_length=1)]] | None = None
+    """Reference pictures: a character's name (its reference sheet), style (the style sheet's frames and references) or a picture file (relative to the project); default: the shot's characters and style."""
+    audio: Literal["beat", "none"] | None = None
+    """beat: the beat's own voice, cut to the beat's exact length, goes in as an audio reference (lip-sync); none: no audio; default beat for talking shots, none otherwise."""
+    guide: bool = False
+    """true: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion)."""
+    first_frame: str | None = Field(default=None, min_length=1)
+    """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), none, or a picture file; default sheet for talking shots, none otherwise."""
+    seed: int | None = Field(default=None, ge=0)
+    """Seed sent to models that take one (not guaranteed to repeat a clip)."""
+    resolution: str | None = Field(default=None, min_length=1)
+    """Resolution tier (e.g. 480p, 720p); default: the lowest the model lists."""
+    aspect_ratio: str | None = Field(default=None, pattern=r"^\d+(\.\d+)?:\d+(\.\d+)?$")
+    """Aspect ratio sent (e.g. 9:16); default: the model's nearest to the video's format."""
+    line: bool = True
+    """Add the beat's text to the prompt as what is said (or narrated); false: leave it out."""
+
+    @model_validator(mode="after")
+    def _check_shot(self) -> GeneratedShot:
+        if "/" not in self.model.strip("/"):
+            raise ValueError(f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-fast), not {self.model!r}")
+        if self.kind == "talking" and self.audio == "none":
+            raise ValueError("a talking shot is lip-synced to the beat's voice: leave audio out (or audio: beat), or make it an action shot")
+        return self
+
+    @property
+    def wants_audio(self) -> bool:
+        """Whether the beat's voice goes in (``audio``, by default for talking shots)."""
+        return (self.audio or ("beat" if self.kind == "talking" else "none")) == "beat"
+
+    @property
+    def first_frame_source(self) -> str:
+        """``sheet``, ``render``, ``none`` or a picture file (``first_frame`` or the kind's default)."""
+        return self.first_frame or ("sheet" if self.kind == "talking" else "none")
+
+
 class BeatConfig(_Strict):
     """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted.
     ``text`` is what is spoken and shown: the voice sound markers (``[laugh]``,
@@ -3188,6 +3306,8 @@ class BeatConfig(_Strict):
     """Ambience beds that start or stop during this beat: {start: rain, at: "@rain"}, {stop: hum, at: end, fade: 3} or a list; at is a fraction of the line, a word it says or end; the scene's ambience: is what plays before."""
     motif: MotifSetting | None = None
     """A theme heard briefly on this beat (score.themes): its name, or {theme, at: start | end | "@word" | fraction, length, fade_in, fade_out, gain, dip, variation}; the scene's theme dips under it."""
+    generated_shot: GeneratedShot | None = None
+    """This beat shown by a generated video clip {kind: talking | action | establishing, model, prompt, setting, characters, refs, audio, guide, first_frame, seed, resolution, aspect_ratio, line}; `vidgen generate plan` lists the shots and their cost."""
 
     @property
     def ambience_changes(self) -> list[AmbienceChange]:
@@ -3568,6 +3688,8 @@ class VideoConfig(_Strict):
     """Image generation for generate: params and `vidgen imagegen`: {provider (openai or openrouter), model, size, quality, resolution, style, negative}."""
     videogen: VideogenConfig = Field(default_factory=VideogenConfig)
     """Generated video shots (OpenRouter's video API): {provider (openrouter or mock), budget_usd, key_via_proxy, inline_media, poll_timeout}; `vidgen generate models` lists the models."""
+    style_sheet: StyleSheet | None = None
+    """The look of generated video shots {palette, era, lens, notes, references, frames, frame_prompt, seed, approved}: words in every shot prompt and generated style frames (`vidgen generate sheets`)."""
     cartoon_style: str | None = Field(default=None, min_length=1)
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
     foley: bool = True

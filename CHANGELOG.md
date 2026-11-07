@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–292)
+## Unreleased (Steps 193–293)
+
+### Generated video: sheets, shot specs and the plan (Step 293)
+
+- A beat's `generated_shot: {kind: talking | action | establishing, model, prompt, setting, characters, refs, audio, guide, first_frame, seed, resolution, aspect_ratio, line}`: the beat shown by a generated clip, its length snapped to what the model makes (trimmed later; long beats split), its prompt built from the style sheet, setting, characters and line.
+- `characters[].reference_sheet` and `style_sheet:`: pictures made by the image provider (`vidgen generate sheets`, a dry run unless `--pay`; paid against `videogen.budget_usd`), used by shots only once `approved: true`.
+- `vidgen generate inputs [--guide]` cuts each shot's voice (exact length), and a silent draft render of the beat with its first frame; `vidgen generate plan` lists every shot with its inputs, length, estimated cost and what the budget has left (a dry run). `vidgen validate` names unknown characters and pictures with a did-you-mean.
 
 ### Generated video: the provider layer (Step 292)
 

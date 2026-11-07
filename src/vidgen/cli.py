@@ -358,6 +358,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.imagegen import imagegen_problems
     from vidgen.music import config_problems as music_problems
+    from vidgen.videogen.shots import shot_problems
     from vidgen.overlays import overlay_problems
     from vidgen.sfx import config_problems as sfx_problems
     from vidgen.soundfont import soundfont_problems
@@ -416,6 +417,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(Problem(loc, message) for loc, message in soundfont_problems(project.config.soundfont, project.root))
             problems.extend(thumbnail_problems(project, theme))
             problems.extend(Problem(loc, message) for loc, message in imagegen_problems(project))
+            problems.extend(Problem(loc, message) for loc, message in shot_problems(project))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
     return project.attributed(problems)
@@ -1931,6 +1933,8 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         print("prices: vidgen's conservative estimates from the listed SKUs (~: per video token, estimated); the model's audio is never generated")
         print("references: pictures on every model; audio / video references only where the provider supports them (e.g. Seedance 2.x)")
         return 0
+    if args.action in ("plan", "sheets", "inputs"):
+        return _generate_shots(args)
     project = Project.load(args.project)
     settings = project.config.videogen
     ledger = Ledger(ledger_path(project.root, settings.provider))
@@ -1951,6 +1955,58 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         cost = money(j.cost_usd) if j.cost_usd is not None else f"no cost reported, counted at the estimate {money(j.estimate_usd or 0.0)}"
         print(f"  {j.submitted} {j.job_id} {j.model} {j.status or 'open'}: {cost}")
     print(budget.text())
+    return 0
+
+
+def _generate_shots(args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate plan | sheets | inputs`` (DESIGN.md §113.3)."""
+    from vidgen.videogen.inputs import make_inputs
+    from vidgen.videogen.models import load_catalog
+    from vidgen.videogen.sheets import run_sheets
+    from vidgen.videogen.shots import plan_shots, project_shots
+
+    project = Project.load(args.project, variant=args.variant)
+    if args.action == "sheets":
+        result = run_sheets(project, args.sheet or (), pay=args.pay, out=(lambda line: None) if args.json else print)
+        if args.json:
+            total, unknown = result.cost
+            return jsonout.envelope(
+                "generate", True, action="sheets", paid=args.pay, todo=[r.path.relative_to(project.root).as_posix() for r in result.plan.todo],
+                estimate_usd=total, unknown_prices=unknown, paid_usd=result.paid,
+                sheets=[{"owner": s.owner, "location": s.location, "approved": s.approved, "ready": s.ready, "status": s.status(),
+                         "pictures": [p.request.path.relative_to(project.root).as_posix() for p in s.pictures]} for s in result.sheets],
+            )
+        return 0
+    if args.pay:
+        raise VidgenError(f"--pay is for `vidgen generate sheets`; `generate {args.action}` never pays (Step 294 adds `generate run --pay`)")
+    if args.action == "inputs":
+        catalog = load_catalog()
+        shots = [s for s in project_shots(project, catalog) if not args.shot or s.id in args.shot or s.beat.id in args.shot]
+        written = make_inputs(project, shots, guide=args.guide, out=(lambda line: None) if args.json else print)
+        if args.json:
+            return jsonout.envelope("generate", True, action="inputs", written=[p.relative_to(project.root).as_posix() for p in written])
+        print(f"{len(written)} input file(s) written in build/videogen/")
+        return 0
+    plan = plan_shots(project, budget_usd=args.budget, shot_ids=args.shot or ())
+    root = project.root
+    if args.json:
+        return jsonout.envelope(
+            "generate", True, action="plan", clips_usd=plan.clips_cost, sheets_usd=plan.sheets_cost, total_usd=plan.total,
+            budget_usd=plan.budget.cap_usd, spent_usd=plan.budget.spent_usd, remaining_usd=plan.budget.remaining_usd,
+            shots=[
+                {"id": s.shot.id, "kind": s.shot.spec.kind, "model": s.shot.spec.model, "scene": s.shot.scene_id, "beat": s.shot.beat.id,
+                 "start": round(s.shot.start, 3), "length": round(s.shot.length, 3), "duration": s.shot.duration,
+                 "resolution": s.shot.resolution, "aspect_ratio": s.shot.aspect_ratio,
+                 "inputs": [{"role": i.role, "kind": i.kind, "path": i.path.relative_to(root).as_posix() if i.path.is_relative_to(root) else str(i.path),
+                             "frame_image": i.frame, "ready": i.ready} for i in s.shot.inputs],
+                 "estimate_usd": s.estimate.cost if s.estimate is not None else None, "cached": s.cached, "left_after_usd": s.left_after,
+                 "notes": [*s.shot.notes, *s.check.notes], "problems": [*s.shot.problems, *s.check.problems], "blocked": s.shot.blocked,
+                 "prompt": s.shot.prompt}
+                for s in plan.shots
+            ],
+        )
+    for line in plan.lines(root):
+        print(line)
     return 0
 
 
@@ -2275,14 +2331,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (its format, prompts and imagegen settings)")
     p.set_defaults(func=cmd_imagegen)
 
-    p = sub.add_parser("generate", help="generated video shots through OpenRouter's video API: models lists the video models; ledger shows the spending and budget")
+    p = sub.add_parser(
+        "generate",
+        help="generated video shots through OpenRouter's video API: models lists the video models; plan lists the shots with their inputs "
+        "and cost; sheets makes the reference sheets; inputs cuts the shots' inputs; ledger shows the spending and budget",
+    )
     p.add_argument(
-        "action", choices=["models", "ledger"],
+        "action", choices=["models", "plan", "sheets", "inputs", "ledger"],
         help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
-        "(public list, no key; cached, works offline from the cache); ledger: the project's paid jobs, what they cost and what the budget has left",
+        "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
+        "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
+        "shot's voice (and with --guide its draft render) into build/videogen/; ledger: the project's paid jobs, what they cost and what the budget has left",
     )
     project_arg(p)
     p.add_argument("--refresh", action="store_true", help="models: fetch the list again even when the cached copy is recent")
+    p.add_argument("--variant", metavar="NAME", help="plan, sheets, inputs: apply a named variant")
+    p.add_argument("--shot", action="append", metavar="ID", help="plan, inputs: only this shot or beat (repeatable)")
+    p.add_argument("--sheet", action="append", metavar="NAME", help="sheets: only this character's sheet, or style (repeatable)")
+    p.add_argument("--pay", action="store_true", help="sheets: make the pictures (paid; needs videogen.budget_usd); without it a dry run")
+    p.add_argument("--budget", type=float, metavar="USD", help="plan: a lower cap than videogen.budget_usd for this plan")
+    p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with guide: true or first_frame: render (a draft render of their scenes)")
     p.set_defaults(func=cmd_generate)
 
     p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")

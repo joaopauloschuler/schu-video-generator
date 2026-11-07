@@ -254,7 +254,9 @@ src/vidgen/
   videogen/               # generated video (§113): __init__.py (VideoRequest, MediaInput, cache key, JobState),
                           # models.py (the public video model list, cache, checks, estimates), openrouter.py
                           # (submit / poll / download, key or proxy mode, errors), mock.py (a fake API),
-                          # ledger.py (spending ledger, budget), run.py (cache, budget, pay or dry run)
+                          # ledger.py (spending ledger, budget), run.py (cache, budget, pay or dry run),
+                          # sheets.py (reference / style sheets), shots.py (per-beat shots, the plan),
+                          # inputs.py (the cut voice, guide render, first frame; §113.3)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14),
@@ -21463,7 +21465,7 @@ Generative video models make selected shots (talking close-ups lip-synced to vid
 lines, acting shots guided by character / style sheets, establishing shots); vidgen keeps story,
 timing, text, captions, music, sound design and assembly. The model's own audio is never used:
 every job is sent with `generate_audio: false`. Opt-in (`videogen:` and, from Step 293, per-beat
-`generate:` specs); nothing changes for existing projects. Steps 292–294 spend nothing (paid
+`generated_shot:` specs, §113.3); nothing changes for existing projects. Steps 292–294 spend nothing (paid
 endpoints mocked); Step 295 is the owner-gated paid experiment (≤ US$2.00, 9:16, 4–5 s clips).
 
 ### 113.1 API facts (checked 2026-11-07; no key used, nothing paid)
@@ -21604,8 +21606,8 @@ stops with an error naming both options.
   the scenes' image param and Step 293's per-beat spec).
 - **CLI** `vidgen generate models [--refresh] [--json]` (count, date, source; one line per
   model: id | durations | resolutions | aspect ratios | frame images | estimated prices) and
-  `vidgen generate ledger [PROJECT] [--json]` (jobs, budget, spent, left). Step 294 adds `plan |
-  run [--pay] [--budget] | status | takes | pick`.
+  `vidgen generate ledger [PROJECT] [--json]` (jobs, budget, spent, left). Step 293 adds `plan |
+  sheets | inputs` (§113.3), Step 294 `run [--pay] [--budget] | status | takes | pick`.
 - **Public** `vidgen.api`: `VideoRequest`, `MediaInput`, `generate_clip`, `plan_clip`.
 - **Tests** `tests/test_videogen.py` (mock only): cache keys by content, request errors,
   model list / did-you-mean, checks (durations snapped, resolutions, frame types, passthrough,
@@ -21617,7 +21619,102 @@ stops with an error naming both options.
   (policy) and expired jobs, polls retried on 429, inline pictures / hosted audio / uploader /
   `inline_media: all`, proxy mode (config and env) sends no Authorization header, env mode sends
   it and never logs or stores the key (scrubbed when echoed), config, the CLI.
-- **Not done (later steps)**: per-beat specs, sheets, guide renders, plans (293); placing clips,
+- **Not done (later steps)**: per-beat specs, sheets, guide renders, plans (293, §113.3); placing clips,
   takes, QA, `run` / `status` CLI, MCP tools (294); a hosting `uploader`; the mock writes
   placeholder bytes, not a playable MP4; estimates for upscale / edit models (`megapixel`) stay
   unknown.
+
+### 113.3 Sheets, shot specs, inputs and the plan (Step 293)
+
+- **Names** (decision, avoiding collisions): `characters[].reference_sheet` (not `sheet`: `vidgen
+  character-sheet` is the drawn cartoon sheet), top-level `style_sheet:` (not `style`: the
+  image `style` words and scenes' `style` params), the beat key `generated_shot:` (not
+  `generate:`: the scenes' image param). All three are excluded from scene fingerprints
+  (`style_sheet` like `videogen`; `characters[].reference_sheet` and beats' `generated_shot` by
+  nested excludes), so adding them re-renders nothing.
+- **Config**: `ReferenceSheet {prompt, views: [front | three_quarter | side | back] (default
+  front, three_quarter, side; distinct), expressions, notes, seed, approved: false}`;
+  `StyleSheet {palette (words or list), era, lens, notes, references (your pictures), frames: 1
+  (0–4), frame_prompt, seed, approved: false}` with `words()`; `GeneratedShot {kind: talking |
+  action | establishing, model (author/name), prompt, setting, characters, refs, audio: beat |
+  none, guide: false, first_frame (sheet | render | none | a picture), seed, resolution,
+  aspect_ratio, line: true}`: a talking shot refuses `audio: none`; defaults: audio beat and
+  first frame sheet for talking, none otherwise.
+- **Sheets** (`videogen/sheets.py`): each picture is an `ImageRequest` made by `image_request`
+  (prompt, style, key rules of `generate:` pictures; the style words = `imagegen.style` +
+  `style_sheet.words()`) moved to `assets/sheets/<owner>_<label>_<key>.png` (+ `.json`
+  sidecar). Characters: one picture per view ("Character reference sheet picture: a single figure
+  on a plain light grey background, even soft studio light, full body, <view>, neutral
+  expression: <prompt>", portrait), one per expression (front, head and shoulders); style:
+  `frames` stills of `frame_prompt` in the video's shape (frames after the first get seed + n −
+  1). `Sheet {owner, location, approved, pictures, notes}`: `ready` = approved and all made;
+  `status()` / `problem()`. `run_sheets(pay=False)`: the dry run (pictures, prices via
+  `price_plan`); with `pay`: problems refuse, the budget refuses (no cap, unknown price, total >
+  left), then per picture a ledger `submit` (`image-<key>`, estimate), the call, `completed`
+  with the reported cost (`failed`: counted at the estimate), the files. An approved sheet with
+  missing pictures (its prompt changed) is never made again: blocked until `approved: false`.
+  The ledger is the real one unless the image provider is named `mock` (tests).
+- **Shots** (`videogen/shots.py`, `project_shots(project, catalog)`): per beat with a spec, the
+  window on the planned timeline (`VideoPlan` start; `beat_windows` at the video's fps, as
+  renders time it). Lengths: `snap_duration` of the part; a beat longer than the model's longest
+  is split into `ceil(window / longest)` equal parts `<beat>_p<n>` (offset into the beat); a
+  model without durations: the request's duration is the part rounded up (dropped by
+  `check_request`), priced with `duration=` that many seconds. Resolution: the spec's or the
+  model's lowest; aspect ratio: the spec's or the listed one nearest the format (log ratio).
+  Speaker: the character whose `voice` is the beat's voice. Characters: the spec's, else the
+  speaker (talking, action) or none (establishing). Inputs (`ShotInput {role, kind, path, what,
+  frame}`): the first frame (sheet: the speaker's / first character's first picture; render:
+  `build/videogen/<shot>/first_frame.png`; a picture) as a frame image where the model lists
+  `first_frame`, else as a picture reference (avatar-iv lists no frame images); refs (default:
+  the characters' sheets and `style`; talking: none) — a name → all its sheet pictures, `style` →
+  the frames and `style_sheet.references`, else a picture file; audio → `audio.mp3`; guide →
+  `guide.mp4`. Blocked (planned and priced, not ready to pay): a sheet not ready, an input not
+  made yet, audio / video with `inline_media: images` (no uploader yet). Problems (with
+  did-you-mean): unknown model (from the catalog), characters, refs, missing pictures, a talking
+  shot without a speaker or sheet. `shot_problems` gives the catalog-free ones to `vidgen
+  validate`.
+- **Prompt** (`shot_prompt`): "<framing>: <prompt>." (talking: "Talking close-up of <Speaker>,
+  facing the camera, speaking"; "Action shot"; "Establishing shot"), "Setting: ...",
+  "Characters: Name (sheet prompt; notes); ...", `<Speaker> says: "<text>"` (or "Spoken over
+  the shot", without a speaker; `line: false` leaves it out), "Style: <style words>", "No
+  on-screen text, captions, subtitles or logos." Names display capitalised (`old_tom` → Old
+  Tom).
+- **Inputs** (`videogen/inputs.py`, `make_inputs(project, shots, guide=, render=)`): the voice
+  from the beat's narration MP3 (`vidgen tts` first): `apad`, `atrim` from the part's offset for
+  exactly its length, MP3 mono 44.1 kHz 128 kb/s; with `guide` the scene rendered as a draft
+  (`Project.load(..., draft=True)`, `render_scenes`, reused while current), cut from the beat's
+  real start in the scene's timings + the offset for the length, silent H.264, and its first
+  frame past a fade in (the first frame at least 0.7 × as bright as the brightest of the first
+  1.5 s). Without `--guide` the renders are skipped with a message.
+- **Plan** (`plan_shots(project, catalog=, budget_usd=, shot_ids=, lookup=) -> VideoGenPlan`):
+  per shot the request, `check_request`, `estimate` (with every input made: `plan_clip`, so a
+  cached clip or an earlier job counts 0), what the budget has left after it (the cap minus the
+  ledger's spent minus the sheets' estimate minus the shots before; `over_budget`); the sheets'
+  pictures still to make and their estimate; totals. `lines()`: per shot "shot <id> (<kind>,
+  scene, beat, part, video time, length): model, resolution, aspect", the length line (asks for
+  N s, trimmed to x later | follows the audio, priced as N s), each input (made or not), cached /
+  earlier job, estimate, budget left, notes, problems, blocked, prompt; the sheets; "total: ...
+  clips ..., sheets ...; together $x", the budget line ("OVER THE BUDGET" when it is), "dry run:
+  nothing was sent or paid; n shot(s) blocked, m with problems".
+- **CLI**: `vidgen generate plan [PROJECT] [--shot ID]... [--budget USD] [--variant NAME]
+  [--json]`, `vidgen generate sheets [PROJECT] [--sheet NAME]... [--pay] [--json]`, `vidgen
+  generate inputs [PROJECT] [--shot ID]... [--guide] [--json]`; `--pay` on plan / inputs is an
+  error (294 adds `run --pay`).
+- **Public** `vidgen.api`: `plan_shots`, `project_shots`, `project_sheets`.
+- **Tests** `tests/test_videogen_shots.py` (17; a stub image provider, the model fixture):
+  config and its errors, fingerprints unchanged, sheet pictures / prompts / status, dry run pays
+  nothing, pay needs a budget, pay records the ledger and never makes a picture twice, approval
+  freezes a sheet, over-budget refusal, talking (length from audio, portrait as a reference,
+  prompt), action (inputs, frame image, snapped length), split beats, nearest aspect ratio,
+  validation with did-you-mean (also through `validate_all`), the voice cut exactly, the first
+  frame past a fade, inputs with a stub render, the plan's prices / budget / blocked reasons /
+  text, ready once approved and cut, the CLI (text, JSON, sheets, `--pay` refused).
+- **Sample** (for Step 295): `scratch/s293/sample` — 9:16, two characters with sheets, a style
+  sheet, an establishing shot (veo-3.1-lite, 720p, 4 s: $0.12), an action shot
+  (seedance-2.0-fast, 480p, 4 s, six sheet pictures + style frame + voice + guide: ~$0.095) and
+  a talking close-up (avatar-iv, 720p, 5 s: $0.25); seven sheet pictures (seedream-4.5,
+  $0.04 each: $0.28); together ~$0.745 of the $2.00 budget.
+- **Not done (294 / 295)**: placing clips, trimming, takes, QA, `run` / `status`, MCP; a hosting
+  uploader (audio / video inline only with `inline_media: all`, unconfirmed); whether avatar-iv
+  takes the portrait as an input reference (its record lists no frame images) and whether a
+  240-pixel guide is accepted are open until Step 295.

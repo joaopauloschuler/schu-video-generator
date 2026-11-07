@@ -2794,6 +2794,84 @@ videogen:
   cached for a day in vidgen's cache folder and read from there offline (`--refresh` fetches it
   again). `vidgen generate ledger` shows the project's jobs, what they cost and what is left.
 
+### Shots, sheets and inputs (`generated_shot`, `reference_sheet`, `style_sheet`)
+
+A beat is shown by a generated clip when it has a `generated_shot:` (not the scenes' `generate:`
+param, which makes a still picture). Characters get generated reference pictures with
+`reference_sheet:` (not the drawn `vidgen character-sheet`), and the look of every shot is set
+by the top-level `style_sheet:`.
+
+```yaml
+style_sheet:
+  palette: [slate blue, sea green, warm orange]   # words or a list (also `palette: muted blues`)
+  era: present day
+  lens: 35 mm, shallow depth of field
+  notes: soft overcast light, light film grain
+  references: [assets/look/ref.png]   # your own pictures, sent as style references to every shot
+  frames: 1                  # style frames to generate (0-4)
+  frame_prompt: a foggy harbour with a ferry quay   # what they show (default: a representative still)
+  seed: null
+  approved: false            # true once you have looked at the frames
+characters:
+  - name: mara
+    voice: mara_voice
+    reference_sheet:
+      prompt: a woman in her forties, short dark hair, yellow oilskin jacket
+      views: [front, three_quarter, side]   # front, three_quarter, side, back; the first is the portrait
+      expressions: [smiling]                # more pictures, front view head and shoulders
+      notes: calm, moves briskly            # words for shot prompts only
+      seed: null
+      approved: false
+scenes:
+  - id: quay
+    type: stage
+    beats:
+      - text: "Hold the map, Theo."
+        voice: mara_voice
+        generated_shot:
+          kind: action                      # talking | action | establishing
+          model: bytedance/seedance-2.0-fast
+          prompt: she hands him a folded map  # what happens; style, setting, characters and line are added
+          setting: the ferry quay in the fog
+          characters: [mara, theo]          # default: the speaker (talking, action), nobody (establishing)
+          refs: [mara, theo, style]         # sheets by name, style, or picture files; default: characters + style
+          audio: beat                       # beat | none; default beat for talking shots
+          guide: true                       # a silent draft render of the beat as a video reference
+          first_frame: none                 # sheet | render | none | a picture file; default sheet for talking
+          seed: 7
+          resolution: 480p                  # default: the model's lowest
+          aspect_ratio: "9:16"              # default: the model's nearest to the format
+          line: true                        # the beat's text in the prompt as what is said
+```
+
+- **Sheets**: `vidgen generate sheets [PROJECT] [--sheet NAME] [--pay]` lists the pictures and
+  their estimated price (a dry run); with `--pay` the image provider (`imagegen:`) makes them
+  into `assets/sheets/<owner>_<view>_<key>.png` (commit them: they cost money). Paying needs
+  `videogen.budget_usd`; each picture is recorded in the video ledger, so the cap covers sheets
+  and clips together. Look at the pictures, then set `approved: true`: no video job uses a sheet
+  before. An approved sheet is never made again; when its prompt changes its pictures are missing
+  and its shots are blocked until you set `approved: false` and make them again.
+- **Inputs**: `vidgen generate inputs [PROJECT] [--shot ID] [--guide]` cuts each shot's inputs
+  into `build/videogen/<shot>/`: `audio.mp3` (the beat's own voice from its narration MP3, cut
+  to the shot's exact length and padded with silence: run `vidgen tts` first), and with
+  `--guide` (it renders the scene as a draft) `guide.mp4` (silent, the draft format: low
+  resolution in the video's shape) and `first_frame.png`.
+- **Lengths**: a shot covers its beat's window on the planned timeline (to the next beat's
+  start). The model is asked for the shortest length it allows that covers it (trimmed later);
+  a beat longer than the model's longest clip is split into equal parts (`<beat>_p1`, `_p2`...).
+  A model that takes no duration (heygen/avatar-iv) follows its audio and is priced in whole
+  seconds.
+- **Frame images**: the first frame goes in as a frame image where the model lists
+  `first_frame`, else as a picture reference (heygen/avatar-iv's portrait).
+- **Audio and video inputs** need a hosted URL (none is set up yet) or `videogen.inline_media:
+  all`; until then their shots are listed as blocked.
+- **The plan**: `vidgen generate plan [PROJECT] [--shot ID] [--budget USD] [--json]` lists every
+  shot (time in the video, model, resolution, aspect ratio, requested and trimmed length, each
+  input and whether it is made, the estimate, what the budget has left after it, notes, problems,
+  what blocks it, the prompt), the sheets' pictures still to make, the total and the budget.
+  Nothing is sent or paid; `vidgen validate` reports unknown characters and pictures with a
+  did-you-mean (`plan` also checks the models and their settings).
+
 ## Languages and translations
 
 A video in another language is usually a [variant](#variants) with a `language:` and a
@@ -15937,6 +16015,15 @@ Generated video (DESIGN.md §113). `vidgen generate models --json`:
 `budget_usd` (float \| null), `spent_usd`, `remaining_usd` (null without a budget), `jobs`
 (`{job_id, model, request_hash, status, estimate_usd, cost_usd, charged_usd, submitted}`;
 `status` `null` while open, `charged_usd` what the job counts against the budget).
+
+`vidgen generate plan PROJECT --json`: `action` (`plan`), `clips_usd`, `sheets_usd`, `total_usd`,
+`budget_usd`, `spent_usd`, `remaining_usd`, `shots` (`{id, kind, model, scene, beat, start,
+length, duration, resolution, aspect_ratio, inputs: [{role, kind, path, frame_image, ready}],
+estimate_usd, cached, left_after_usd, notes, problems, blocked, prompt}`; `duration` `null` for a
+model that follows its audio). `vidgen generate sheets --json`: `action` (`sheets`), `paid`,
+`todo` (pictures to make), `estimate_usd`, `unknown_prices`, `paid_usd`, `sheets` (`{owner,
+location, approved, ready, status, pictures}`). `vidgen generate inputs --json`: `action`
+(`inputs`), `written`.
 
 ### `vidgen character-sheet --json`
 

@@ -210,15 +210,16 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "draft",
         # spoken credits and a cold open are already scenes; audio_output is the audio-only file (§112.3)
         "credits", "cold_open", "audio_output",
-        # generated video (§113): the provider, budget and key settings; the clips are files
-        "videogen",
+        # generated video (§113): the provider, budget and key settings, the style sheet; the clips are files
+        "videogen", "style_sheet",
     }
     if project.config.cut is not None:
         # a cut (§101) is already applied to the scenes (and its hook to the overlays, its end
         # card to the scenes): a change for one scene must not re-render the others. Left in
         # (null) without a cut, so other projects' renders stay current.
         excluded.add("cut")
-    config = project.config.model_dump(mode="json", exclude=excluded)
+    # characters' reference sheets (§113.3) are inputs of generated shots, not of renders
+    config = project.config.model_dump(mode="json", exclude={**dict.fromkeys(excluded, True), "characters": {"__all__": {"reference_sheet"}}})
     assets = project.root / "assets"
     data: dict[str, Any] = {
         "fingerprint": FINGERPRINT_VERSION,
@@ -230,7 +231,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # a scene's and a beat's ambience and a beat's motif (§112) are mixed when the video is joined: no pixels, no timing
         "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True,
                                                        "references": True, "figure_credit": True, "ambience": True,
-                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite", "ambience", "motif"}}}),
+                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite", "ambience", "motif", "generated_shot"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},

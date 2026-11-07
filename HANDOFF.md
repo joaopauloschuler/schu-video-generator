@@ -24893,3 +24893,68 @@ project), repo work is generic.
   renders; voice audio as an `audio` reference — hosted or `inline_media: all`), snap durations
   with `models.snap_duration`, print plans with `plan_clip(...).lines()`; pass the beat length as
   `duration=` for models without a duration setting (avatar-iv).
+
+## Step 293 — Generated video: sheets, shot specs, inputs and the plan
+
+- **Built** (DESIGN §113.3): `characters[].reference_sheet {prompt, views, expressions, notes,
+  seed, approved}` and `style_sheet: {palette, era, lens, notes, references, frames,
+  frame_prompt, seed, approved}` — pictures made by the project's image provider into
+  `assets/sheets/<owner>_<label>_<key>.png` (`vidgen generate sheets [--sheet NAME] [--pay]`,
+  a dry run with prices unless `--pay`; paying needs `videogen.budget_usd`, each picture is an
+  `image-<key>` job in the video ledger, so one cap covers sheets and clips); shots use a sheet
+  only once `approved: true`, and an approved sheet is never made again. A beat's
+  `generated_shot: {kind: talking | action | establishing, model, prompt, setting, characters,
+  refs, audio, guide, first_frame, seed, resolution, aspect_ratio, line}` resolved into
+  requests (`project_shots`): the beat's window on the planned timeline, lengths snapped (the
+  next allowed, trimmed later), long beats split into `<beat>_p<n>`, avatar-iv priced in whole
+  seconds of its audio, lowest resolution, nearest aspect ratio, inputs (first frame as frame
+  image or, where the model lists none, a picture reference; sheet pictures; style frames;
+  your pictures; the voice; the guide), the prompt (framing + prompt, setting, characters with
+  sheet words, the line, style words, no on-screen text). `vidgen generate inputs [--shot]
+  [--guide]` cuts `build/videogen/<shot>/audio.mp3` (the beat's narration from the part's
+  offset, exactly its length, padded) and with `--guide` renders the scene as a draft and cuts
+  `guide.mp4` (silent) and `first_frame.png` (past a fade in). `vidgen generate plan [--shot]
+  [--budget] [--json]`: every shot (time, model, length, inputs made or not, estimate, budget
+  left after it, notes, problems, blocked reasons, prompt), the sheets, totals, the budget.
+  `vidgen validate` reports unknown characters / pictures and talking shots without a speaker
+  or sheet, with did-you-mean.
+- **Decisions**: names `reference_sheet` / `style_sheet` / `generated_shot` instead of the
+  brief's `sheet` / `style` / `generate` (collisions with `vidgen character-sheet`, the image
+  `style` and the scenes' `generate:` param); all three excluded from scene fingerprints (no
+  re-render). A talking shot takes only the portrait by default (no style refs). Shots that are
+  priced but not ready are "blocked" (sheet not approved / made, inputs not cut, audio or video
+  with `inline_media: images`), not refused. Sheet pictures count in the plan's total and
+  against the budget before the shots. The first frame of a render skips a fade in from black.
+  `--pay` exists only for `sheets` (294 adds `run --pay`). The cut voice is the narration MP3
+  only (no room, music or effects); the guide is the draft format (240 px short side, 8 fps).
+- **Files**: `src/vidgen/videogen/{sheets,shots,inputs}.py` (new), `config.py`
+  (`ReferenceSheet`, `StyleSheet`, `GeneratedShot`, fields on `CharacterEntry`, `BeatConfig`,
+  `VideoConfig`), `render/fingerprint.py` (excludes), `cli.py` (`generate plan | sheets |
+  inputs`, options, validate hook), `api.py` (`plan_shots`, `project_shots`,
+  `project_sheets`), docs `CONFIG.md` ("Shots, sheets and inputs", JSON), DESIGN §113.3 / module
+  tree, CHANGELOG, tasklist. Tests `tests/test_videogen_shots.py` (17), `tests/test_docs.py`
+  (+3 models).
+- **Sample** for Step 295: `/home/claude/work/scratch/s293/sample/video.yaml` (9:16, mara and
+  theo with sheets, a style sheet, `inline_media: all`, budget $2): establishing veo-3.1-lite
+  720p 4 s $0.120, action seedance-2.0-fast 480p 4 s (6 sheet pictures + style frame + voice +
+  guide) ~$0.095, talking avatar-iv 720p 5 s $0.250; 7 sheet pictures (seedream-4.5) $0.280;
+  together $0.745. Its plan output: `/home/claude/work/scratch/s293/sample-plan.txt`. A draft
+  render and guide cut of its quay scene were tried (240x426, 8 fps; first frame past the fade).
+- **Tests run and passed** (one at a time, capped): `test_videogen_shots` (17), `test_videogen`
+  (24), `test_docs` (78), `test_config`, `test_json_output`, `test_api`, `test_schema` (76),
+  fingerprint tests of `test_storyboard`, `test_includes`, `test_cuts_shorts`. No shared
+  rendering code changed (only config models and fingerprint excludes; a test checks the
+  fingerprint is unchanged by the new keys); frame baseline not needed.
+- **Spending**: nothing paid; no key read or sent. The plan fetched only the public video model
+  list (cache) and the public image model record (seedream-4.5's price).
+- **Known gaps**: Kokoro (the sample's voices) needs Python ≤ 3.12 — this workspace has 3.13, so
+  the sample has no narration yet (`vidgen tts` elsewhere, or switch voices to openrouter for
+  295); whether avatar-iv takes the portrait as an input reference (its record lists no frame
+  images) and whether Seedance accepts a 240 px guide and inline audio / video are unconfirmed
+  (295); no hosting uploader; no setting-per-scene shorthand (each shot has its own `setting`);
+  the voice cut has no room / emotion processing done at mix time; split parts of a talking shot
+  each get their own audio slice but are not stitched yet (294).
+- **Next (294)**: place clips at `Shot.start` for `Shot.length` (trim the snapped clip),
+  `generate run --pay` = for each ready shot `generate_clip(root, settings, shot.request(),
+  pay=True, duration=shot.priced_seconds)` with the plan's running budget; takes, QA, MCP,
+  credits, docs/guide.
