@@ -141,6 +141,8 @@ from vidgen.voice_effects import VOICE_EFFECTS, VoiceEffect, effect_filter, voic
 from vidgen.translation import TextRef, TranslatableStr  # noqa: E402
 from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
+from vidgen.videogen import MediaInput, VideoRequest  # noqa: E402
+from vidgen.videogen.run import generate_clip, plan_clip  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character, pixel_zoom  # noqa: E402
 from vidgen.cartoon.transition import ArmMove, BodyMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, PropReshape, Walk, feet_of  # noqa: E402
@@ -982,6 +984,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "world_countries",
     "GenerateImage",
     "generated_image",
+    "VideoRequest",
+    "MediaInput",
+    "generate_clip",
+    "plan_clip",
     "VectorPicture",
     "load_vector",
     "PART_NAMES",

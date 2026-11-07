@@ -1712,6 +1712,26 @@ AI API calls; Kokoro (local) only.
 
 **Phase AG done** (Steps 288–291).
 
+## Phase AH — Generated video shots through OpenRouter (DESIGN §113)
+
+Generative video models (OpenRouter's video API) make selected shots — talking close-ups
+lip-synced to vidgen's own voice lines, acting shots guided by character / style sheets (and
+optionally a vidgen render), establishing shots — while vidgen keeps story, timing, text,
+captions, music, sound design and assembly. The model's audio is never used. Opt-in. Steps
+292–294 spend nothing (paid endpoints mocked); 295 runs only with the owner's go-ahead.
+
+### Step 292 — Video provider layer
+- [x] `vidgen.videogen` (OpenRouter provider, mock provider): submit / poll (timeout, backoff) / download, cache by the canonical request (input files by hash), spending ledger + hard budget cap + estimates from the models list, dry run by default and `pay=True` explicit, key from `OPENROUTER_API_KEY` or proxy-injected mode, clear errors (402, 429, 413, content policy, expired, unsupported option with did-you-mean), the data-URL question settled from the docs, `vidgen generate models` (cached, offline from cache) — done as `videogen: {provider, budget_usd, key_via_proxy, inline_media, poll_timeout}`, `generate_clip` / `plan_clip`, `videogen-ledger.jsonl`, `vidgen generate models | ledger`; pictures inline as data URLs, audio / video hosted (or `inline_media: all`); tests `test_videogen.py`
+
+### Step 293 — Inputs and shot specs
+- [ ] Character sheets and a style sheet generated with the image provider (`characters[].sheet: {views, expressions, prompt}`, `style: {palette, era, lens, notes, references}`), stored and `approved: true` before use; per-beat inputs cut by vidgen (the beat's voice-only audio, an optional low-res silent guide render, a first-frame still); the per-beat `generate:` spec (`kind: talking | action | establishing`, `model`, `refs`, `audio: beat`, `guide: true`, `seed`, prompt from style + scene + beat + sheet notes), durations snapped to the model (next allowed length, trimmed later; long beats split); validation + did-you-mean; dry-run `vidgen generate plan` with every shot's inputs and estimated cost
+
+### Step 294 — Composition, QA and workflow
+- [ ] Generated clips placed in the film for their beats (scale / crop, fps conform, light colour matching, audio off, crossfades; vidgen overlays, captions, titles on top); takes (`takes/<shot>/<n>.mp4`, pick one); QA on returned clips (duration, aspect / size, black or frozen frames, flicker, abrupt cuts) and a contact sheet per take; CLI `vidgen generate plan | run [--pay] [--budget] | status | takes | pick`; MCP tools (no paying without an explicit argument); credits line "includes AI-generated footage (model names)" and a lint reminder about disclosure; docs (CONFIG, guide → AGENTS.md, `docs/COOKBOOK-GENERATED-VIDEO.md` with privacy / ZDR and cost control); a critical review of 292–294
+
+### Step 295 — The paid experiment (LATER, gated on the owner's go-ahead)
+- [ ] With the owner's key, ≤ US$2.00 total, vertical 9:16 Shorts, lowest sensible resolution, 4–5 s clips
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

@@ -38,6 +38,7 @@ JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
     "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts", "audio",
+    "generate",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -1906,6 +1907,53 @@ def cmd_soundfont(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate(args: argparse.Namespace) -> CommandResult:
+    """Generated video (DESIGN.md §113): ``models`` lists OpenRouter's video models (public list,
+    cached; works offline from the cache); ``ledger`` shows a project's spending and budget."""
+    from vidgen.videogen.ledger import BudgetState, Ledger
+    from vidgen.videogen.models import load_catalog, model_line, money
+    from vidgen.videogen.run import ledger_path
+
+    if args.action == "models":
+        catalog = load_catalog(refresh=args.refresh)
+        if catalog.note:
+            logging.getLogger("vidgen.videogen").warning(catalog.note)
+        stamp = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(catalog.fetched_at))
+        if args.json:
+            return jsonout.envelope(
+                "generate", True, action="models", source=catalog.source, fetched_at=stamp,
+                models=[m.to_json() for m in catalog.models],
+            )
+        print(f"{len(catalog.models)} video models on OpenRouter (list of {stamp}, {catalog.source}; --refresh fetches it again)")
+        print("model | durations | resolutions | aspect ratios | frame images | estimated price without audio")
+        for model in catalog.models:
+            print(f"  {model_line(model)}")
+        print("prices: vidgen's conservative estimates from the listed SKUs (~: per video token, estimated); the model's audio is never generated")
+        print("references: pictures on every model; audio / video references only where the provider supports them (e.g. Seedance 2.x)")
+        return 0
+    project = Project.load(args.project)
+    settings = project.config.videogen
+    ledger = Ledger(ledger_path(project.root, settings.provider))
+    jobs = ledger.jobs()
+    budget = BudgetState(settings.budget_usd, ledger.spent())
+    if args.json:
+        return jsonout.envelope(
+            "generate", True, action="ledger", ledger=str(ledger.path.resolve()), provider=settings.provider,
+            budget_usd=budget.cap_usd, spent_usd=budget.spent_usd, remaining_usd=budget.remaining_usd,
+            jobs=[
+                {"job_id": j.job_id, "model": j.model, "request_hash": j.request_hash, "status": j.status, "estimate_usd": j.estimate_usd,
+                 "cost_usd": j.cost_usd, "charged_usd": j.charged, "submitted": j.submitted}
+                for j in jobs
+            ],
+        )
+    print(f"ledger: {ledger.path} ({len(jobs)} job(s), provider {settings.provider})")
+    for j in jobs:
+        cost = money(j.cost_usd) if j.cost_usd is not None else f"no cost reported, counted at the estimate {money(j.estimate_usd or 0.0)}"
+        print(f"  {j.submitted} {j.job_id} {j.model} {j.status or 'open'}: {cost}")
+    print(budget.text())
+    return 0
+
+
 def cmd_schema(args: argparse.Namespace) -> CommandResult:
     """Print the JSON Schema of video.yaml (or of one scene type's params, or of a scene)."""
     from vidgen import registry, schema
@@ -2226,6 +2274,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene's pictures (repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (its format, prompts and imagegen settings)")
     p.set_defaults(func=cmd_imagegen)
+
+    p = sub.add_parser("generate", help="generated video shots through OpenRouter's video API: models lists the video models; ledger shows the spending and budget")
+    p.add_argument(
+        "action", choices=["models", "ledger"],
+        help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
+        "(public list, no key; cached, works offline from the cache); ledger: the project's paid jobs, what they cost and what the budget has left",
+    )
+    project_arg(p)
+    p.add_argument("--refresh", action="store_true", help="models: fetch the list again even when the cached copy is recent")
+    p.set_defaults(func=cmd_generate)
 
     p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")
     project_arg(p)

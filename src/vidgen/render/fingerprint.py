@@ -52,7 +52,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
         "loudness.py", "mix.py", "music.py", "music_pieces.py", "studio", "studio_app", "musicfit.py", "composer.py", "score.py", "synth.py", "soundfont.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
         "slides_pdf.py", "stt", "readback.py", "speech_flags.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/openrouter.py",
         "imagegen/run.py", "guide.py", "gallery.py", "outline.py", "prose.py", "plan.py", "plan_yaml.py",
-        "mcp_server.py", "mcp_tools.py", "animatic.py",
+        "mcp_server.py", "mcp_tools.py", "animatic.py", "videogen",
     }
 )
 
@@ -210,6 +210,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "draft",
         # spoken credits and a cold open are already scenes; audio_output is the audio-only file (§112.3)
         "credits", "cold_open", "audio_output",
+        # generated video (§113): the provider, budget and key settings; the clips are files
+        "videogen",
     }
     if project.config.cut is not None:
         # a cut (§101) is already applied to the scenes (and its hook to the overlays, its end

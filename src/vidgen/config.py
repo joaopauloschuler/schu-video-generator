@@ -974,6 +974,22 @@ class ImagegenConfig(_Strict):
 OPENROUTER_QUALITIES: tuple[str, ...] = ("auto", "low", "medium", "high", "xhigh", "max")
 
 
+class VideogenConfig(_Strict):
+    """The optional ``videogen:`` section: generated video shots through OpenRouter's video API
+    (DESIGN.md §113). Nothing is paid without ``--pay`` and a budget."""
+
+    provider: Literal["openrouter", "mock"] = "openrouter"
+    """openrouter (OpenRouter's video API, paid; OPENROUTER_API_KEY or key_via_proxy) or mock (a fake API: no key, nothing sent or charged; for trying the flow)."""
+    budget_usd: float | None = Field(default=None, ge=0)
+    """Hard cap in US dollars on what generated video may cost in this project (the ledger videogen-ledger.jsonl counts it); paying needs it."""
+    key_via_proxy: bool = False
+    """true: a network proxy adds the OpenRouter key (Authorization header) itself, so vidgen sends none and needs no OPENROUTER_API_KEY (also VIDGEN_OPENROUTER_KEY_VIA_PROXY=1)."""
+    inline_media: Literal["images", "all"] = "images"
+    """How local input files are sent: images (pictures inline as data URLs, as OpenRouter documents; audio and video need hosted URLs) or all (also audio and video inline: not confirmed by the documentation)."""
+    poll_timeout: PositiveFloat = 900.0
+    """Seconds to wait for a job before stopping (the job keeps running; a later run polls it again, never paying twice)."""
+
+
 #: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
 #: :mod:`vidgen.lint` one rule per name (a test keeps the three in sync).
 LINT_RULES: tuple[str, ...] = (
@@ -3550,6 +3566,8 @@ class VideoConfig(_Strict):
     """Speech to text for `vidgen readback` (the narration transcribed and compared with the text): {provider, model, language, device}."""
     imagegen: ImagegenConfig = Field(default_factory=ImagegenConfig)
     """Image generation for generate: params and `vidgen imagegen`: {provider (openai or openrouter), model, size, quality, resolution, style, negative}."""
+    videogen: VideogenConfig = Field(default_factory=VideogenConfig)
+    """Generated video shots (OpenRouter's video API): {provider (openrouter or mock), budget_usd, key_via_proxy, inline_media, poll_timeout}; `vidgen generate models` lists the models."""
     cartoon_style: str | None = Field(default=None, min_length=1)
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
     foley: bool = True

@@ -54,6 +54,7 @@ MODELS: list[type[BaseModel]] = [
     config.ConceptColorsRule,
     config.SttConfig,
     config.ImagegenConfig,
+    config.VideogenConfig,
     config.OverlayConfig,
     config.SfxConfig,
     config.SfxCue,

@@ -24840,3 +24840,56 @@ project), repo work is generic.
   gaps of Steps 288–290 stand (no musical ending at a file cut, no embedded chapter markers, no
   chapter files for videos, English-only credit wording, a walk's foley panned at its middle).
 - **Next**: Phase AG is complete.
+
+## Step 292 — Generated video: the provider layer (Phase AH plan)
+
+- **Built**: package `vidgen.videogen` — `VideoRequest` / `MediaInput` / `request_hash`
+  (canonical request, input files by SHA-256), `models.py` (OpenRouter's public
+  `/videos/models`, cached a day in `<vidgen cache>/openrouter/video_models.json`, offline from
+  the cache; `check_request` with did-you-mean and snapped durations; `estimate` from
+  `pricing_skus`: per second, per token (W×H×24×s/1024), per picture, floors, highest SKU that
+  could apply), `openrouter.py` (`OpenRouterVideoProvider`: submit once / poll with backoff and
+  timeout / download; key from `OPENROUTER_API_KEY` or proxy mode; 402 / 429 / 413 / 401 /
+  content-policy / failed / expired errors), `mock.py` (`MockOpenRouter` transport,
+  `MockVideoProvider`), `ledger.py` (`videogen-ledger.jsonl`, budget), `run.py`
+  (`plan_clip`, `generate_clip`: cache → earlier job resumed → checks → estimate vs cap → dry
+  run or paid job → ledger → download → sidecar). Config `videogen: {provider: openrouter |
+  mock, budget_usd, key_via_proxy, inline_media: images | all, poll_timeout}`. CLI `vidgen
+  generate models [--refresh] [--json]`, `vidgen generate ledger [PROJECT] [--json]`.
+- **Data-URL answer** (DESIGN §113.1): pictures may be inline data URLs (documented for
+  `frame_images`, and the skill page says so for image references too); for `audio_url` /
+  `video_url` no page confirms data URLs (only a hosted https MP3 example; SDK fields
+  undocumented; no size limits documented). So pictures go inline; audio / video need a hosted
+  URL (pluggable `uploader`, none chosen) or the opt-in `inline_media: all`; otherwise a clear
+  error.
+- **Decisions**: section name `videogen:` (not top-level `generate:`, which is the image param
+  and 293's per-beat spec); proxy mode via `videogen.key_via_proxy` or
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`; the ledger counts a job without a reported cost at its
+  estimate (open, timed out, failed without usage) — conservative; the mock keeps its own
+  ledger `videogen-ledger.mock.jsonl`; paying = `generate_clip(pay=True)` plus a budget (the
+  lower of config and argument); a timed-out job is polled by the next run, never resubmitted;
+  `again=True` resubmits only deliberately (expired output). The download uses
+  `/content?index=0` (works in proxy mode), not `unsigned_urls`.
+- **Files**: `src/vidgen/videogen/{__init__,models,openrouter,mock,ledger,run}.py` (new),
+  `config.py` (`VideogenConfig`, `VideoConfig.videogen`), `cli.py` (`cmd_generate`, parser,
+  `JSON_COMMANDS`), `api.py` (4 names), `render/fingerprint.py` (`videogen` excluded / not a
+  render input), docs `CONFIG.md` ("Generated video", `vidgen generate --json`), DESIGN §2 /
+  §113, CHANGELOG, tasklist (Phase AH plan 292–295). Tests `tests/test_videogen.py` (24),
+  fixture `tests/data/openrouter_video_models.json` (the public list of 2026-11-07),
+  `tests/test_docs.py` (+`VideogenConfig`).
+- **Tests run and passed** (one at a time, capped): `test_videogen` (24), `test_docs`,
+  `test_json_output`, `test_api`, `test_config`, `test_schema` (76, 3 min). No shared
+  rendering code changed (scene fingerprints unchanged by the new section, tested); frame
+  baseline not needed.
+- **Spending**: nothing paid; no key read or sent. Only free unauthenticated GETs of the public
+  model list and documentation pages.
+- **Known gaps**: no hosting `uploader`; the mock's clip bytes are a placeholder, not a playable
+  MP4 (294's composition tests will want a real tiny clip, e.g. ffmpeg `testsrc`); 402 / 429 /
+  413 bodies are modelled, not seen live; estimates are the highest applicable SKU (heygen's
+  `long_duration` lines may overestimate ~2x); token estimates assume 24 fps; upscale / edit
+  models' prices stay unknown; `vidgen generate` has no `plan` / `run` / `status` yet; no MCP
+  tool yet; nothing in the guide / AGENTS.md yet (294).
+- **Next (293)**: build per-beat `VideoRequest`s (`MediaInput` for sheets, first frames, guide
+  renders; voice audio as an `audio` reference — hosted or `inline_media: all`), snap durations
+  with `models.snap_duration`, print plans with `plan_clip(...).lines()`; pass the beat length as
+  `duration=` for models without a duration setting (avatar-iv).

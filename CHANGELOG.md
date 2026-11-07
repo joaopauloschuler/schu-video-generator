@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–291)
+## Unreleased (Steps 193–292)
+
+### Generated video: the provider layer (Step 292)
+
+- `videogen: {provider: openrouter | mock, budget_usd, key_via_proxy, inline_media, poll_timeout}`: OpenRouter's video API (submit, poll, download) behind a hard budget cap; nothing is paid without an explicit pay and a budget; a spending ledger `videogen-ledger.jsonl`; clips cached by request, never paid twice; the model's audio never generated.
+- `vidgen generate models`: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices (public list, no key; cached, works offline). `vidgen generate ledger`: jobs, costs, what the budget has left.
+- The key from `OPENROUTER_API_KEY`, or none when a network proxy adds it (`key_via_proxy: true` / `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`). `vidgen.api`: `VideoRequest`, `MediaInput`, `generate_clip`, `plan_clip`.
 
 ### Audio drama cookbook; Phase AG review (Step 291)
 

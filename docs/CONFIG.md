@@ -2757,6 +2757,43 @@ of real people or brands that could mislead, and say that pictures are generated
 matters to the viewer. The `revised_prompt` in the sidecar shows what the model made of the
 prompt.
 
+## Generated video (`videogen`, `vidgen generate`)
+
+Selected shots can be made by generative video models through OpenRouter's video API (Phase
+AH, DESIGN.md §113). vidgen keeps the story, timing, text, captions, music and assembly; the
+model's own audio is never used (every job is sent with `generate_audio: false`). Generation
+costs money, so nothing is paid unless a run is given `--pay` **and** the project has a budget.
+
+```yaml
+videogen:
+  provider: openrouter      # openrouter (paid) | mock (a fake API: no key, nothing sent)
+  budget_usd: 2.0           # hard cap for this project; paying needs it (default: null)
+  key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header
+  inline_media: images      # images | all (audio / video inline too: not confirmed by OpenRouter's docs)
+  poll_timeout: 900         # seconds to wait for a job (it keeps running; a later run polls it again)
+```
+
+- **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
+  never stored, logged or shown. Or `key_via_proxy: true` (or `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`)
+  when the network's proxy adds `Authorization: Bearer ...` for openrouter.ai itself.
+- **Spending**: `videogen-ledger.jsonl` in the project records every paid job (submit with
+  its estimate, then the reported cost). Before each job vidgen estimates its price from the
+  model list and refuses it when the estimate is above what the budget has left; a job without
+  a reported cost counts at its estimate. Jobs are never retried automatically, and the same
+  request (model, prompt, settings, input files by content) is cached in
+  `assets/generated_video/<key>.mp4`: it is never paid twice. A job still running when the
+  wait ends is polled again by the next run, not submitted again. The mock provider keeps its
+  own `videogen-ledger.mock.jsonl`.
+- **Inputs**: pictures (first / last frame, references) are sent inline as data URLs;
+  audio and video references must be hosted URLs (OpenRouter documents only those) unless
+  `inline_media: all`.
+- **Privacy**: video generation is not eligible for OpenRouter's Zero Data Retention: the
+  provider keeps the output for a short time so it can be downloaded.
+- `vidgen generate models` lists OpenRouter's video models (durations, resolutions, aspect
+  ratios, frame images, estimated price per second without audio) from the public list (no key);
+  cached for a day in vidgen's cache folder and read from there offline (`--refresh` fetches it
+  again). `vidgen generate ledger` shows the project's jobs, what they cost and what is left.
+
 ## Languages and translations
 
 A video in another language is usually a [variant](#variants) with a `language:` and a
@@ -15884,6 +15921,22 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 | `up_to_date` | list | keys whose picture exists (skipped) |
 | `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |
 | `elapsed` | float | seconds |
+
+### `vidgen generate --json`
+
+Generated video (DESIGN.md §113). `vidgen generate models --json`:
+
+| key | type | |
+|---|---|---|
+| `action` | str | `models` |
+| `source` | str | `live` (fetched now) or `cache` (vidgen's cached copy; offline, a warning says why) |
+| `fetched_at` | str | when the list was fetched (UTC) |
+| `models` | list | `{id, name, durations, resolutions, aspect_ratios, sizes, frame_images, generate_audio, seed, passthrough, pricing_skus, prices}` as OpenRouter lists them (`null`: not listed); `prices` vidgen's estimates per second without audio, one per resolution |
+
+`vidgen generate ledger PROJECT --json`: `action` (`ledger`), `ledger` (the file), `provider`,
+`budget_usd` (float \| null), `spent_usd`, `remaining_usd` (null without a budget), `jobs`
+(`{job_id, model, request_hash, status, estimate_usd, cost_usd, charged_usd, submitted}`;
+`status` `null` while open, `charged_usd` what the job counts against the budget).
 
 ### `vidgen character-sheet --json`
 

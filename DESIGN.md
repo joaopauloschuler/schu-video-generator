@@ -251,6 +251,10 @@ src/vidgen/
   imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
                           # helpers, warnings), openai.py (OpenAI Images provider), openrouter.py (OpenRouter
                           # provider, §64; SVG and data-policy errors, §65), placeholder.py, run.py (`vidgen imagegen`)
+  videogen/               # generated video (§113): __init__.py (VideoRequest, MediaInput, cache key, JobState),
+                          # models.py (the public video model list, cache, checks, estimates), openrouter.py
+                          # (submit / poll / download, key or proxy mode, errors), mock.py (a fake API),
+                          # ledger.py (spending ledger, budget), run.py (cache, budget, pay or dry run)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14),
@@ -21452,3 +21456,168 @@ writes split parts.
 - `cold_open: []` is "no cold open" (was an IndexError).
 - Verified: frame baseline 33 stills, max difference 0; pinned audio-only and video mixes
   unchanged (test_staging, test_audio_only, test_sound_design, test_scoring).
+
+## 113. Generated video shots through OpenRouter (Phase AH, Steps 292–295)
+
+Generative video models make selected shots (talking close-ups lip-synced to vidgen's own voice
+lines, acting shots guided by character / style sheets, establishing shots); vidgen keeps story,
+timing, text, captions, music, sound design and assembly. The model's own audio is never used:
+every job is sent with `generate_audio: false`. Opt-in (`videogen:` and, from Step 293, per-beat
+`generate:` specs); nothing changes for existing projects. Steps 292–294 spend nothing (paid
+endpoints mocked); Step 295 is the owner-gated paid experiment (≤ US$2.00, 9:16, 4–5 s clips).
+
+### 113.1 API facts (checked 2026-11-07; no key used, nothing paid)
+
+Sources: OpenRouter's video skill page `openrouter.ai/skills/openrouter-video`, the multimodal
+guide `docs/guides/overview/multimodal/llms-full.txt` (video generation section), the cookbook
+page `docs/cookbook/video-generation/reference-to-video.md`, the Go SDK component pages
+`VideoGenerationRequest`, `InputReference`, `ContentPartAudio`, `AudioURL`, `ContentPartVideo`,
+the per-model pages `openrouter.ai/<model>/llms.txt` (heygen-video-1, seedance-2.5), and the
+public `GET /api/v1/videos/models` (fetched without a key; copy in
+`tests/data/openrouter_video_models.json`).
+
+- `POST /api/v1/videos` `{model (required), prompt (optional only for image-only models),
+  duration (int s), resolution | size "WxH" (interchangeable with resolution + aspect_ratio),
+  aspect_ratio, frame_images [{type: image_url, image_url: {url}, frame_type: first_frame |
+  last_frame}], input_references [{type: image_url | audio_url | video_url, <type>: {url}}],
+  generate_audio (default: the endpoint's flag), seed (determinism not guaranteed),
+  previous_job_id (continue / extend; same model and endpoint), callback_url (HTTPS webhook),
+  provider {order, only, ignore, options.<slug>.parameters.<key>}, session_id, user, trace}` →
+  202 `{id, polling_url, status: pending}`. "If both arrays are present, `frame_images` wins"
+  (image-to-video). An unlisted value is a 400; a listed one can still be refused by the
+  provider serving the call.
+- `GET /api/v1/videos/{id}` → `{id, status: pending | in_progress | completed | failed |
+  cancelled | expired, error, unsigned_urls, usage: {cost, is_byok}}`; poll about every 30 s.
+  `GET /api/v1/videos/{id}/content?index=0` (with the auth header) → the MP4 (`unsigned_urls`
+  are an alternative). vidgen uses the content endpoint.
+- `GET /api/v1/videos/models` (public): 33 models on 2026-11-07, each `{id, canonical_slug,
+  name, description, created, supported_resolutions, supported_aspect_ratios, supported_sizes,
+  supported_durations (often discrete: [4, 6, 8]), supported_frame_images, generate_audio,
+  seed, upscale_factor, creativity, pricing_skus: {name: price string}, allowed_passthrough_
+  parameters}` (`null` = not listed; heygen/avatar-iv and the edit / upscale models list no
+  durations). SKU names seen: `duration_seconds[_with_audio | _without_audio][_<tier>]`,
+  `cents_per_video_output_second_<tier>`, `cents_per_second_output[_<tier>]`,
+  `text_to_video_` / `image_to_video_duration_seconds_<tier>`, `reference_duration_seconds_
+  <tier>`, `long_duration_seconds_<tier>`, `cents_per_second_video_continuation_<tier>`,
+  `video_tokens[_<tier>][_without_audio | _with_video_input]` (Seedance), `cents_per_image_
+  input`, `reference_input_images`, `reference_images`, `minimum_cents_per_generation`,
+  `cents_per_megapixel_second_*` (upscaler).
+- Image references are honoured by all providers; audio and video references only by providers
+  that support them (BytePlus Seedance 2 and newer); others ignore them.
+- **Not eligible for Zero Data Retention**: the provider keeps the output a short time so it
+  can be retrieved; with ZDR enforced, video requests are not routed.
+- Errors: 402 / 429 / 413 / content-policy refusals are not documented on these pages (the
+  brief's list); vidgen maps them anyway (§113.2), plus 401 / 403 and failed / expired jobs.
+
+**The data-URL question (settled as far as the docs go).** `frame_images[].image_url.url`
+"is an https URL or a base64 data URL" (per-model pages) and the skill page says an image `url`
+"can be a public `https://` URL or a local-file data URL" (`data:<mime>;base64,<b64>`) for both
+`frame_images` and `input_references` (same entry shape). Confirmed: **pictures may be sent
+inline**. The reference-to-video cookbook describes only public HTTPS image URLs ("stable,
+directly downloadable"). For **audio_url and video_url no page says data URLs work**: the SDK's
+`AudioURL.url` / `VideoURL` have no description, and the only audio example (Seedance 2.5
+"lip-synced to the reference voiceover") uses a hosted https MP3. Not confirmed: inline audio /
+video; no size limits are documented (413 exists). So vidgen sends pictures inline, and for
+audio / video needs a hosted URL from a pluggable `uploader(Path) -> url` (none is chosen: the
+owner decides on a hosting service) or the opt-in `inline_media: all` (try it in Step 295 with
+the cheapest model: a rejected request is a 400 before generation). Without either, the request
+stops with an error naming both options.
+
+### 113.2 The provider layer (Step 292)
+
+- **Package** `vidgen.videogen` (not a render input: listed in `NOT_RENDER_INPUTS`; the
+  `videogen` config is excluded from scene fingerprints).
+  - `VideoRequest(model, prompt, duration, resolution | size, aspect_ratio, frame_images,
+    references, seed, previous_job_id, provider_options: {slug: {param: value}})` (checked:
+    `author/name`, duration > 0, not size and resolution, frame images with a frame type,
+    references without). `MediaInput(kind: image | audio | video, path | url, frame_type)`.
+  - `canonical_request` (cache version, every field, `generate_audio: false`, files by
+    SHA-256 and size, never by name) and `request_hash` (24 hex digits of its SHA-256).
+  - `JobState(id, status, polling_url, cost, is_byok, error)`.
+- **Models** (`models.py`): `VideoModel.from_record`, `parse_models`, `load_catalog(refresh,
+  cache_path, fetch, now, max_age=1 day)` → `Catalog(models, fetched_at, source live | cache,
+  note)`: the cache (`<vidgen cache>/openrouter/video_models.json`, `{fetched_at, doc}`) when
+  young; else fetched (public, no key) and cached; offline the cache whatever its age (a note),
+  else an error. `Catalog.find` with did-you-mean. `check_request(request, model) ->
+  RequestCheck(problems, notes, drop)`: duration not listed → problem with the snapped length
+  (`snap_duration`: the shortest allowed ≥ the wanted, else the longest; "did you mean 6?"),
+  resolution / size / aspect ratio not listed → problem with did-you-mean, a frame type not
+  listed, a passthrough option not allowed; a setting the model lists nothing for (e.g.
+  avatar-iv's duration) → note and not sent (`drop`); a seed on a model without one → dropped.
+- **Estimates** (`estimate(request, model, duration=, minimum=True) -> Estimate(cost, basis)`):
+  `cents_*` SKUs / 100; per-second SKUs × seconds; token SKUs × `W × H × 24 fps × s / 1024`
+  (ByteDance's formula; it reproduces the listed "from ~$0.10/s" of seedance-2.5 at 480p);
+  `+` per-picture SKUs × input pictures; a `minimum_*` floor. Choosing among SKUs
+  (`_applicable`): continuation SKUs only with `previous_job_id`, `reference_*` only with
+  references, `with_video_input` only with a video reference, `image_to_video` with frame
+  images else `text_to_video`, then the request's tier (else the untiered SKUs, else all), then
+  `without_audio` when listed; the **highest** remaining SKU (e.g. heygen's `long_duration`):
+  a conservative budget. Without a duration: the model's longest. Without resolution / size: all
+  tiers (the highest). Unknown (no SKUs understood, no length) → `cost None`: a paid run refuses.
+  `price_lines(model)` (one second per tier, `~` for token prices, the floor apart) and
+  `model_line` for the listing.
+- **Provider** (`openrouter.py`, `OpenRouterVideoProvider(key_via_proxy, inline_media,
+  uploader, transport, sleep, clock, environ, timeout 120, poll_interval 10, max_interval 60,
+  poll_timeout 900, retries 4)`): `submit(request, drop)` (one attempt, never retried;
+  refuses a body > 20 MB before sending), `status(id)`, `wait(job)` (sleep 10 s × 1.5 per
+  poll up to 60 s; past `poll_timeout` a VidgenError saying the paid job keeps running and the
+  next run polls it), `download(id, dest)` (atomic write). Polls and the download retry 429 /
+  5xx / 524 / 529 and unreachable (Retry-After or backoff). `request_body`: model, prompt,
+  set fields minus `drop`, `generate_audio: false`, `frame_images`, `input_references`
+  (`{type: <kind>_url, <kind>_url: {url}}`), `provider.options`. `media_url`: hosted url as is;
+  a picture inline (`data:image/png;base64,...`); audio / video inline only with
+  `inline_media: all`, else the `uploader`, else an error. Transport protocol
+  `(method, url, headers, body, timeout) -> Response(status, body, headers)` (urllib by default).
+- **Key** (decision): `OPENROUTER_API_KEY` read from the environment at each request
+  (`read_key`; spaces / non-ASCII refused), sent only as `Authorization: Bearer`, scrubbed
+  from errors (`httpapi.scrub`), never logged. **Proxy mode**: `videogen.key_via_proxy: true` or
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1|true|yes|on` → no Authorization header and no key needed
+  (the sandbox's agent proxy injects it). The missing-key message names both.
+- **Errors** (`http_error`, `job_failure`): 402 credits (nothing charged), 429 rate limited
+  (paid jobs not retried), 413 too large (inline inputs: smaller or hosted), 401 / 403 key,
+  content-policy words (`content policy`, `moderation`, `safety`, `flagged`, ...) in any answer
+  or a failed job's error, 404 job gone, failed / cancelled / expired jobs (expired: "submitting
+  it again is a new paid job"); `error.message` of JSON bodies quoted.
+- **Mock** (`mock.py`): `MockOpenRouter` (a transport faking `/videos`: job ids
+  `mock-job-N`, `states` per poll, `cost`, `video` bytes, scripted `submit_error`, `poll_error`
+  ×`poll_errors`, failed / expired states with `error`; records requests) and
+  `MockVideoProvider` (proxy mode, no sleeping). `videogen.provider: mock` uses it.
+- **Ledger** (`ledger.py`): `videogen-ledger.jsonl` (mock: `videogen-ledger.mock.jsonl`),
+  append-only lines `{event: submit, job_id, provider, model, request_hash, estimate_usd, time}`
+  and `{event: completed | failed | cancelled | expired, job_id, cost_usd, is_byok, time}`; an
+  unreadable line is an error. `Ledger.jobs()`, `spent()` (reported cost, else the estimate —
+  open, timed-out and unreported jobs count), `BudgetState(cap, spent).remaining_usd`,
+  `refusal(budget, estimate, model)`: no cap, unknown estimate, estimate > remaining.
+- **Run** (`run.py`): `plan_clip(root, settings, request, catalog=, budget_usd=, duration=,
+  provider=, again=) -> ClipPlan` and `generate_clip(..., pay=False, provider=) -> ClipResult
+  (plan, path, job, paid, cost)`. Order: cache hit (`assets/generated_video/<hash>.mp4`) →
+  nothing sent; the ledger's last job of the same hash open or completed → polled / downloaded
+  (never resubmitted; `again=True` only after its output expired); model checks (problems refuse
+  before paying); estimate vs the cap (the lower of `videogen.budget_usd` and `budget_usd=`);
+  without `pay` the plan (`ClipPlan.lines()`: would generate / job reuse / estimate / budget /
+  notes / problems / refused / prompt); with `pay`: credentials, submit, `submit` line, wait,
+  terminal line, download, sidecar `<hash>.json` `{request, key, provider, job_id,
+  estimate_usd, cost_usd, bytes, time}`.
+- **Config** `videogen: {provider: openrouter | mock, budget_usd: null (≥ 0), key_via_proxy:
+  false, inline_media: images | all, poll_timeout: 900}` (`VideogenConfig`). Decision: a
+  `videogen:` section parallel to `imagegen:` rather than a top-level `generate:` (that name is
+  the scenes' image param and Step 293's per-beat spec).
+- **CLI** `vidgen generate models [--refresh] [--json]` (count, date, source; one line per
+  model: id | durations | resolutions | aspect ratios | frame images | estimated prices) and
+  `vidgen generate ledger [PROJECT] [--json]` (jobs, budget, spent, left). Step 294 adds `plan |
+  run [--pay] [--budget] | status | takes | pick`.
+- **Public** `vidgen.api`: `VideoRequest`, `MediaInput`, `generate_clip`, `plan_clip`.
+- **Tests** `tests/test_videogen.py` (mock only): cache keys by content, request errors,
+  model list / did-you-mean, checks (durations snapped, resolutions, frame types, passthrough,
+  dropped settings), estimates (per second, tiers, without audio, per token, per picture,
+  floors, unknown), catalog cache / offline / refresh, the paid flow (states, body, ledger,
+  sidecar, separate mock ledger), cache hit = no second submit, dry run sends nothing, cap /
+  estimate / unknown-price / settings refusals, ledger accounting, timeout then resume without a
+  second submit, 402 / 429 / 413 / content-policy submits (one attempt, no ledger line), failed
+  (policy) and expired jobs, polls retried on 429, inline pictures / hosted audio / uploader /
+  `inline_media: all`, proxy mode (config and env) sends no Authorization header, env mode sends
+  it and never logs or stores the key (scrubbed when echoed), config, the CLI.
+- **Not done (later steps)**: per-beat specs, sheets, guide renders, plans (293); placing clips,
+  takes, QA, `run` / `status` CLI, MCP tools (294); a hosting `uploader`; the mock writes
+  placeholder bytes, not a playable MP4; estimates for upscale / edit models (`megapixel`) stay
+  unknown.
