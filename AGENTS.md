@@ -3716,14 +3716,15 @@ Good: the result first, then the context.
 - **Audio only** (audiobooks, podcasts, the sound of a video): `vidgen render --audio-only`
   writes `output/<output>.wav` without rendering a scene (voices, music ducked under them,
   effects, stings, loudness). `audio_only: true` makes it the project's render; such a project
-  may list `sections:` (`{id, title, voice, room, music, sfx, beats}`, `- pause: 2` between them)
-  instead of scenes, and `vidgen story draft --audio` drafts one from a story. Lines are timed
+  may list `sections:` (`{id, title, voice, room, music, sfx, ambience, beats}`, `- pause: 2`
+  between them) instead of scenes, and `vidgen story draft --audio` drafts one from a story. Lines are timed
   by their speech plus `pacing:` gaps (`speaker`, `scene`, `chapter`, `lead_in`, `tail`); a
   beat's `pause: 1.5` (or a `- pause: 1.5` item) is the silence after it, in videos too.
   `pacing: {timing: video}` keeps the video's timeline instead. Stage foley and ambience are
-  left out (a warning says so); write the sounds that matter as `sfx`. The file:
+  left out (a warning says so) unless `audio: {scene_sounds: true}` (stage walks, doors, knocks,
+  switches, set beds, a video_clip's sound; not levels, iso moves, vehicles, phones). The file:
   `audio_output: {format: mp3 | m4a | ogg | wav, bitrate, channels: mono, sample_rate,
-  loudness: podcast | audiobook | broadcast | custom}`; the render measures it against the
+  loudness: podcast | audiobook | broadcast | drama | custom}`; the render measures it against the
   preset and says PASS / FAIL (fix what it names: an `audiobook` wants 0.5-1 s of silence before
   the first sound, so no effect in the first half second). It also writes the transcript
   (`_transcript.txt` with speakers and chapters), `.srt`, `.vtt` and `_chapters.txt`.
@@ -3736,6 +3737,32 @@ Good: the result first, then the context.
   `audio.room` for all), the narrator dry unless `{use: hall, narrator: true}`;
   `audio.music_width: 0.7` narrows the music. The render prints a `mono:` check; keep
   `music_width` at 1 or less if it fails.
+- **Sound design** (audio dramas; opt-in, videos too): `ambience: rain` (or a list, or `{beds:
+  {room_tone: 4, rain: -14}, gain, width}`) on a scene or section plays beds under it that
+  cross-fade at the change (`audio.ambience_crossfade: 3`); beds: rain, fire, birdsong, city,
+  room_tone, crickets, hum, alarm. A beat's `ambience: {stop: rain, at: "@stopped", fade: 2.5}`
+  (or `start:`) changes them on a word. Cues on words: `actions: [{sfx: step_wood, at:
+  "@crossed", repeat: 7, every: 0.48, pan: {from: far_left, to: far_right}}]`; `room: phone` (or
+  `true`, or `audio.sfx_room: true` for all) puts a cue in a room like a voice.
+- **Music for dramas** (opt-in, videos too): `score: {themes: {main: love, tension: {source:
+  enigma, volume: -1}}, crossfade: 4, duck: drama}` names themes (a bed, a project piece
+  `assets/music/love.yaml`, a file); a scene's or section's `music: tension` plays one from there
+  on, cross-fading at the change (the same theme plays on; `music: false` stops it); a pause
+  swells under it (`duck: drama`: 18 dB under lines, 3 dB up in pauses; presets `light`,
+  `standard`, `drama`, `deep`, on `music:` cues too). Variations: `{theme: love, variation:
+  {section: b, transpose: 2, tempo: 60, tracks: [melody]}}`. A beat's `motif: {theme: love, at:
+  "@remember", length: 7}` plays a theme briefly over the scene's (which dips); `sting: {kind:
+  reveal, at: "@ticket"}` on a word. The render warns when music is under 15 LU below dense
+  dialogue (`mix.music_check`).
+- **Delivering a drama** (opt-in): `audio_output: {loudness: drama}` is podcast loudness plus
+  checks: loudness range ≤ 10 LU, lines and voices even (6 / 4 LU), music ≥ 15 LU under them
+  (`vidgen audio check PROJECT`; a quiet line or voice it names: raise its `emotion` gain or
+  re-voice it). `split: chapters` writes one file per chapter (`_01_<title>`, each at the
+  loudness, an `.m3u`, per-file transcripts). `credits: {speak: true}` adds closing credits from
+  the cast ("Starring Bella as Mara ..."; `voiced_by: {mara: Ana}`, `lines`); `cold_open:
+  [beat ids]` (or a section id) plays those lines first, before the title. Run `vidgen tts` after
+  adding them (new beats; cold-open copies take the originals' audio). Craft notes:
+  `docs/COOKBOOK-AUDIODRAMA.md`.
 
 ```yaml
 thumbnail: {title: "77% of the model is dead weight", icon: brain-circuit, jpeg: true}

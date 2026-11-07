@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 from vidgen import __version__, carry, chapter_export, hooks, mix, musicfit, sfx, transitions
 from vidgen.errors import VidgenError
 from vidgen.project import Project
+from vidgen.sound_design import designs_ambience
 from vidgen.references import description_text
 from vidgen.render import ffmpeg as ff
 from vidgen.fileio import remove_file, write_text_atomic
@@ -575,6 +576,8 @@ def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, p
         library = sfx.SoundLibrary(project.root)
         stings = musicfit.composed_stings(project, {"scenes": scenes}, events, library)  # played by composed music's instruments
         sfx.write_track(track, events, samples, library, project.config.sfx.gain, ducking, stings)
+    if designs_ambience(project.config.scenes):   # the scenes' and beats' ambience beds (DESIGN.md §112), at video times
+        _add_designed_ambience(project, scenes, offset)
     combined: dict[str, Any] = {
         "title": project.config.title,
         "variant": project.variant,
@@ -612,6 +615,23 @@ def prepare_join(project: Project, preview: bool, no_audio: bool, ffmpeg: str, p
         clips=clips,
         metadata=metadata,
     )
+
+
+def _add_designed_ambience(project: Project, scenes: list[dict[str, Any]], duration: float) -> None:
+    """Add each scene's and beat's ``ambience`` beds (:func:`vidgen.sound_design.ambience_entries`)
+    to the joined scenes' timings (video seconds), a beat's fractions counting over its
+    narration."""
+    from vidgen.sound_design import BeatSlot, SceneSlot, ambience_entries
+    from vidgen.videoplan import beat_seconds
+
+    slots = []
+    for spec, scene in zip(project.config.scenes, scenes):
+        by_id = {b.id: b for b in spec.beats}
+        beats = [BeatSlot(by_id[b["id"]], b["start"], b["end"], beat_seconds(project, b["id"], b["text"])) for b in scene["beats"] if b["id"] in by_id]
+        slots.append(SceneSlot(spec, scene["start"], scene["duration"], beats))
+    for scene, entries in zip(scenes, ambience_entries(project, slots, duration)):
+        if entries:
+            scene["ambience"] = [*scene.get("ambience", []), *entries]
 
 
 def _scene_renders(project: Project, preview: bool) -> list[tuple[Path, dict[str, Any], float]]:

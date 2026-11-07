@@ -6,6 +6,7 @@ import argparse
 import difflib
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -877,12 +878,18 @@ def _render_audio(args: argparse.Namespace, project: Project, started: float) ->
     result = render_audio(project, preview=preview)
     if args.json:
         return jsonout.audio_render_document(project, result, preview, time.monotonic() - started)
-    print(f"audio:     {result.output}")
+    print(f"{'playlist:' if result.files else 'audio:':<10} {result.output}")
+    split = result.timings.get("audio_output", {}).get("files", []) if result.files else []
+    for entry, path in zip(split, result.files):
+        verdict = "" if "check" not in entry else "  PASS" if entry["check"]["ok"] else "  FAIL"
+        print(f"  {path.name}  {_format_seconds(entry['end'] - entry['start'])}{verdict}")
     print(f"timing:    {result.timing} ({len(result.timings['scenes'])} scenes, {sum(len(s['beats']) for s in result.timings['scenes'])} beats)")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
     print(f"loudness:  {_loudness_line(result.timings['mix'], limiter=True)}")
-    if result.check is not None:
+    if result.check is not None and not result.files:
         print(f"check:     {result.check.line()}")
+    elif result.check is not None:
+        print(f"check:     {result.check.preset} {'PASS' if result.check.ok else 'FAIL'} (vidgen audio check: each file)")
     if "stereo" in result.timings:
         stereo = result.timings["stereo"]
         verdict = "PASS" if stereo["ok"] else "FAIL"
@@ -898,38 +905,60 @@ def cmd_audio(args: argparse.Namespace) -> CommandResult:
     loudness presets (DESIGN.md §111.2); exit code 1 when the preset asked for (``--preset``, or
     the project's ``audio_output.loudness``) fails, or with ``--mono`` when a stereo file does not
     fold to mono well (§111.4)."""
-    from vidgen import audio_check
+    from vidgen import audio_check, delivery
     from vidgen.config import AudioConfig
 
     target = Path(args.target)
     audio = AudioConfig()
     wanted = args.preset
+    project: Project | None = None
+    timings: dict[str, Any] | None = None
     if target.is_dir() or target.name in CONFIG_NAMES:
         project = Project.load(target, variant=args.variant, output_dir=args.output_dir, draft=args.draft)
         audio = project.config.audio
-        path = project.audio_path(args.preview or args.draft)
-        if not path.is_file():
-            raise VidgenError(f"{path}: not rendered yet (vidgen render --audio-only)")
+        files, timings = delivery.rendered_files(project, args.preview or args.draft)
+        for file in files:
+            if not file.path.is_file():
+                raise VidgenError(f"{file.path}: not rendered yet (vidgen render --audio-only)")
         if wanted is None and project.config.audio_output.loudness != "none":
             wanted = project.config.audio_output.loudness
     else:
-        path = target
+        files = [delivery.RenderedFile(target, 0.0, math.inf, target.stem)]
     custom = args.lufs is not None or args.true_peak is not None
     if custom:
         audio = audio.model_copy(update={k: v for k, v in (("target_lufs", args.lufs), ("true_peak", args.true_peak)) if v is not None})
     names = [wanted] if wanted is not None else [*audio_check.PRESETS, *(["custom"] if custom else [])]
-    measured = audio_check.measure_file(path)
-    results = audio_check.check_all(measured, [audio_check.preset_named(n, audio) for n in names])
-    failed = wanted is not None and not results[0].ok
-    if measured.channels == 2:
-        mono = audio_check.mono_check(measured)
-        results.append(mono)
-        failed = failed or (args.mono and not mono.ok)
+    presets = [audio_check.preset_named(n, audio) for n in names]
+    lines = any(p.dialogue for p in presets) and project is not None and timings is not None
+    failed = False
+    documents = []
+    measured_all = []
+    for file in files:
+        measured = audio_check.measure_file(file.path, momentary=lines)
+        dialogue = delivery.dialogue(project, timings, file.start, file.end) if lines and project is not None and timings is not None else None
+        results = audio_check.check_all(measured, presets, dialogue)
+        measured_all.append((measured, dialogue))
+        failed = failed or (wanted is not None and not results[0].ok)
+        if measured.channels == 2:
+            mono = audio_check.mono_check(measured)
+            results.append(mono)
+            failed = failed or (args.mono and not mono.ok)
+        documents.append((file.path, measured, results))
+    across = audio_check.files_check(measured_all) if len(files) > 1 else None
+    failed = failed or (wanted is not None and across is not None and not across.ok)
     if args.json:
-        return jsonout.envelope("audio", not failed, file=str(path), measured=measured.to_json(), checks=[r.to_json() for r in results])
-    print(f"{path}: {audio_check.summary_line(measured)}")
-    for result in results:
-        print(f"  {result.line()}")
+        path, measured, results = documents[0]
+        extra: dict[str, Any] = {}
+        if across is not None:
+            extra = {"files": [{"file": str(p), "measured": m.to_json(), "checks": [r.to_json() for r in rs]} for p, m, rs in documents],
+                     "files_check": across.to_json()}
+        return jsonout.envelope("audio", not failed, file=str(path), measured=measured.to_json(), checks=[r.to_json() for r in results], **extra)
+    for path, measured, results in documents:
+        print(f"{path}: {audio_check.summary_line(measured)}")
+        for result in results:
+            print(f"  {result.line()}")
+    if across is not None:
+        print(f"{len(files)} files: {across.line()}")
     return 1 if failed else 0
 
 
@@ -2239,12 +2268,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "audio",
         help="audio file tools: check measures an audio file (or a project's audio-only render) and checks it against the loudness presets "
-        "(podcast, audiobook / ACX, broadcast / EBU R128, custom)",
+        "(podcast, audiobook / ACX, broadcast / EBU R128, drama: an audio drama's loudness range and dialogue, custom)",
     )
     p.add_argument("action", choices=["check"], help="check: loudness, true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per preset; mono compatibility of a stereo file")
     p.add_argument("target", nargs="?", default=".", help="an audio file (wav, mp3, m4a, ogg...), or a project dir or config file: its rendered audio (default: .)")
     p.add_argument(
-        "--preset", choices=["podcast", "audiobook", "broadcast", "custom"],
+        "--preset", choices=["podcast", "audiobook", "broadcast", "drama", "custom"],
         help="check against this preset only (exit code 1 if it fails); default: the project's audio_output.loudness, else every preset",
     )
     p.add_argument("--lufs", type=float, metavar="LUFS", help="the custom preset's loudness (default: audio.target_lufs, -16)")

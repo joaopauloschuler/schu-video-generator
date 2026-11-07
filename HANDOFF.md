@@ -24662,3 +24662,181 @@ project), repo work is generic.
 ## Step 287 — Cookbook: voices in iso cartoons
 
 - Docs only: docs/COOKBOOK-ISO-CARTOONS.md is now "craft notes" and gains a section on stereo staging and rooms for cartoon videos (per-character pan, follow_stage, room per scene matched to the set, narrator dry and centred, moves across a line, narrower music, the mono check). The YAML snippet was validated with vidgen validate; vidgen audio check --mono was tried on an MP4. tests/test_docs.py passes.
+
+## Step 288 — Sound design in audio-only renders (Phase AG starts)
+
+- **Built** (DESIGN §112.1, new module `sound_design.py`): `ambience:` beds on scenes / sections /
+  pause sections (a bed, a list, `{beds: list | {bed: dB}, gain, width}`, `false`) that cross-fade
+  at scene changes over `audio.ambience_crossfade` (2 s) and play on unchanged when the same; a
+  beat's `ambience: {start | stop, at: fraction | "@word" | end, fade, gain}`; cue options
+  `repeat`, `every`, `room` (and `audio.sfx_room`), named pans and `pan: {from, to}` steps for
+  repeated cues (`staging.repeat_pans`), in videos too; `audio.scene_sounds`: audio-only renders
+  work out stage set beds, plain-stage walks / enter / exit, doors, knocks, switches, jumps,
+  surprise pops, effect sounds and a `video_clip`'s sound. The video join adds scene / beat beds
+  too (`pipeline._add_designed_ambience`); they are excluded from the scene fingerprint.
+- **Files**: `sound_design.py` (new), `audio_only.py`, `config.py` (`AmbienceConfig`,
+  `AmbienceChange`, `AmbienceBedName`; `RoomName` moved up), `ambience.py` (`designed_entries`),
+  `mix.py` (`AmbiencePlacement.width`), `sfx.py` (`SfxEvent.room`, `repeated`, `placed` in a room),
+  `staging.py` (`cue_room`, `repeat_pans`), `scene.py` (`sfx(repeat, every, room)`),
+  `scenes/sfx_action.py`, `sections.py`, `schema.py`, `render/pipeline.py`,
+  `render/fingerprint.py`, `api.py` (`PanMove`). Docs: CONFIG (sfx table, "Sound design"
+  subsection), guide + `AGENTS.md`, DESIGN §112 (Phase AG plan), tasklist (Phase AG), CHANGELOG.
+- **Tests**: new `test_sound_design.py` (23); pinned tests extended: `test_staging`'s audio-only
+  render and `test_audio_only`'s video mix byte-equal with the new options neutral. Run and
+  passed: `test_sound_design`, `test_audio_only`, `test_staging`, `test_sfx`, `test_schema` (76,
+  ~3 min), `test_config`, `test_docs`, `test_guide`, `test_api`, `test_actions`, `test_scene`,
+  `test_video_clip`, `test_cartoon_foley`, `test_cartoon_sounds`, `test_cartoon_room`,
+  `test_overlap_pinned`, `test_audio_output`, `test_project`. Frame baseline: 33 stills, max
+  difference 0.
+- **Demo** (`/home/claude/work/scratch/s288/caller/`, Kokoro, 0:51, −18.2 LUFS, mono PASS): rain
+  and city on a porch, footsteps, a knock and a creak; a hall with the rain −14 dB through the
+  walls, seven wooden steps `{from: far_left, to: far_right}`, a phone ringing through the `phone`
+  room, a caller on a `phone` section; a fire bed added; the rain stops on "stopped".
+  `s288/measure.py PROJECT PNG`: cue onsets within 2 ms of their words (the creak's slow swell
+  reads +72–87 ms), the steps' R−L −8.9 → +11.0 dB monotonically, beds 16–23 LU under the
+  voices; spectrogram `s288/caller_spectro.png`. `s288/stagedemo` + `compare_stage.py`: the
+  stage events worked out without pictures match the video render's within 25–50 ms.
+- **Known gaps**: not worked out (named in the warning): platform `level` and iso moves,
+  vehicles, thrown props, pours, lightning, alarms, fires, phones; a walk's foley is panned at its
+  middle (not moving); the warning lists those kinds even when a stage has none; a clip's sound
+  goes into `voice.wav` (the voice leveller sees it); `vidgen direct` does not edit `ambience`.
+- **Next (289)**: music cues per scene / section can reuse `ambience_entries`' crossfade walk
+  (scene changes, centred fades) for music beds; `designed_entries` shows how timings entries
+  carry their own fades.
+
+## Step 289 — Music cues for drama
+
+- **Built** (DESIGN §112.2, new module `scoring.py`): `score: {themes, crossfade, curve, duck,
+  fade_in, fade_out, motif_dip, sting_dip, check, dense_lu}`; a scene's / section's `music: NAME`
+  (or `{theme, variation, volume}`) plays a named theme (a bed, a project piece, a file) from there
+  on, cross-fading over `score.crossfade` centred on the change (`equal_power` / `linear` /
+  `smooth`); variations `{section, start, transpose, tempo, tracks}` re-render the theme's score
+  (a piece, a score bed or a bed's template); a beat's `motif:` plays a theme briefly (at start,
+  end, a word, a fraction) while the scene's theme dips; stings `at: "@word"` (video and audio)
+  and the scene's theme dipping under them; `duck` presets (`light`, `standard`, `drama`, `deep`)
+  and `swell` (dB up in the pauses) for themes and `music:` cues; a dense-dialogue check after the
+  mix (`mix.music_check`, a warning). The placements are planned from the timings
+  (`mix.plan_score`), so the video join plays them too.
+- **Decisions**: themes are sticky (a scene without `music:` keeps the theme; that is how a pause
+  swells under it), unlike ambience beds (per scene); a returning theme restarts from its top
+  (recognisable); a variation renders at the music level (a sparse `tracks:` version is not
+  quieter: give it a `volume`); the check's "dense" is a 5 s window ≥ 80% speech (Kokoro dialogue
+  with 0.35 s gaps reaches 0.82). The music `ThemeConfig` name was taken (visual theme): the class
+  is `MusicTheme`.
+- **Files**: `scoring.py` (new), `config.py` (`ScoreConfig`, `MusicTheme`, `ThemeVariation`,
+  `MotifCue`, `DUCK_PRESETS`, `DuckConfig.swell` / `preset`, `DuckSetting`, `SceneMusic.theme` /
+  `variation`, `StingCue.at` word, `BeatConfig.motif`), `mix.py` (`plan_score`, `duck_gain_db`,
+  `_scene_curve`, `Placement.theme` / `motif`, `MixReport.music_check`), `music.py`
+  (`config_problems` + theme problems), `sound_design.py` (`word_offset`), `audio_only.py`
+  (`_sting_time`), `scene.py` (sting on a word), `render/fingerprint.py`. Docs: CONFIG ("Music for
+  dramas", duck presets / swell, sting `at` word, beat `motif`), guide + `AGENTS.md`, DESIGN
+  §112.2, CHANGELOG, tasklist.
+- **Tests**: new `test_scoring.py` (15: settings and errors, schema, theme problems, fade curves,
+  the walk, swell, variations, a render with themes / motif / sting on a word, the check, a video
+  scene's sting on a word, unset options byte-equal, fingerprint). Run and passed: `test_scoring`,
+  `test_sound_design`, `test_audio_only`, `test_staging`, `test_music` (81, 4.5 min),
+  `test_musicfit`, `test_music_pieces`, `test_config`, `test_schema`, `test_sfx`, `test_scene`,
+  `test_api`, `test_overlap_pinned`, `test_docs`, `test_guide`. Frame baseline: 33 stills, max
+  difference 0.
+- **Demo** (`/home/claude/work/scratch/s289/drama/`, Kokoro, 1:07, −18.3 LUFS, mono PASS; a short
+  neutral two-scene drama "The Last Train"): `s289/measure.py PROJECT PNG` — music 24.7 LU under
+  the voices on their lines, 18–22 LU up in the pauses; crossfades 0.71 / 0.71 at the change,
+  power 1.00; `music_check` ok (dense runs 24.8 / 26.0 LU); `--variant loud` (light duck, +6 dB)
+  warns at 6.9–11.0 s (8.1 LU). Picture `s289/drama_plot.png` (spectrogram, levels, fades, gains).
+- **Known gaps**: themes are not fitted to bar lines at changes (a cross-fade, not a musical
+  transition); a motif plays its theme's opening (or a section) rather than a written motif line;
+  no `vidgen lint` rule for the check (measured at render only); `vidgen direct` does not edit
+  `motif` / `music` themes; the limiter in the demo (5.4 dB) comes from Kokoro voice peaks —
+  `audio.level_voice` (or 290's `drama` preset) should handle it.
+- **Next (290)**: a `drama` loudness preset can turn `level_voice` on and reuse
+  `music_check`'s `under_dialogue_lu` as its music-to-voice ratio; spoken credits can play
+  `music: main` under the closing section.
+
+## Step 290 — Delivery (drama preset, chapter files, spoken credits, cold open)
+
+- **Built** (DESIGN §112.3, new module `delivery.py`): `audio_output.loudness: drama` (podcast
+  loudness, `level_voice` on, LRA ≤ 10 LU, dialogue checks: lines' 10–90% spread ≤ 6 LU,
+  speakers within 4 LU, music ≥ `score.dense_lu` under the voices; no ACX gate; all described as
+  recommendations); per-line loudness from ebur128's momentary log (`measure_file(momentary=True)`,
+  `line_loudness`). `audio_output.split: chapters`: one part per chapter (cold open in the
+  first), cut `lead_in` before the chapter's first line (at most half-way into the gap), short
+  fades, each part normalised on its own in `mix_audio(parts=)`, files `<output>_NN_<slug>.<ext>`
+  + `<output>.m3u` + per-file txt / srt / vtt, a files-alike check. `credits: {speak: true, ...}`
+  (closing scene from the cast, Kokoro names as actors, `voiced_by`, `lines`, `music` default
+  `main`). `cold_open: section id | [beat ids]` (move, or copy into a `cold_open` scene).
+  `vidgen audio check PROJECT` reads `timings.json` (files, lines, music check).
+- **Files**: `delivery.py` (new), `audio_check.py` (drama preset, `DialogueLine`, `Dialogue`,
+  `line_loudness`, `dialogue_items`, `files_check`, `parse_momentary`), `mix.py` (`MixPart`,
+  `MixTargets.music_check`, `MixReport.parts`), `audio_only.py` (`_check_parts`,
+  `AudioRenderResult.files`), `config.py` (`CreditsConfig`, `cold_open`, `split`, `drama`),
+  `project.py` (`apply_delivery` after `apply_cut`), `render/fingerprint.py` (excludes credits,
+  cold_open, audio_output), `cli.py`, `jsonout.py`, `mcp_server.py`. Docs: CONFIG ("Delivering an
+  audio drama", presets table, JSON), guide + `AGENTS.md`, DESIGN §112.3, CHANGELOG, tasklist.
+- **Tests**: new `test_delivery.py` (9: credit lines, credits scene and errors, cold open move /
+  copy / did-you-mean, line loudness, drama items, a drama render, a split render with cold open
+  and CLI check, playlist clean-up, split without chapters); `test_staging` pin extended (Step 290
+  options neutral → bytes equal); `test_audio_output` (drama in the all-presets list). Run and
+  passed: `test_delivery`, `test_audio_output`, `test_audio_only`, `test_staging`,
+  `test_scoring`, `test_sound_design`, `test_music` (81), `test_schema` (76), `test_config`,
+  `test_cuts_shorts`, `test_project`, `test_mcp`, `test_api`, `test_overlap_pinned`, `test_docs`,
+  `test_guide`. Frame baseline: 33 stills, max difference 0.
+- **Demo** (`/home/claude/work/scratch/s290/drama/`, Kokoro, the 289 drama as two parts + cold
+  open of two lines + spoken credits; mp3, `drama`, `split: chapters`): `last_train_01_part_one_
+  the_platform.mp3` 0:50, −16.4 LUFS, TP −1.9, LRA 6.2, lines 2.0 LU (11), voices 1.8 LU;
+  `last_train_02_part_two_morning.mp3` 0:35, −16.3 LUFS, TP −2.1, LRA 4.4, lines 1.6 LU (8),
+  voices 2.5 LU; music 25.0 LU under dialogue (dense 24.8); files spread 0.1 LU, dialogue 0.1 LU;
+  the leveller (up to 5.7 dB) took the limiter from 289's 5.4 dB to 2.5 dB at −16 LUFS. Cut at
+  49.57 s: 4.83 s after part one's last line, 0.50 s before part two's first. Variant `loud`
+  (one file) fails on music (10.9 LU, dense 8.1). `s290/measure.py PROJECT PNG` → picture
+  `s290/drama_delivery.png` (whole mix + cut, each file's momentary loudness with line bars).
+- **Known gaps**: the credits' wording is English only (other languages: `lines` + `cast:
+  false`); copied cold-open lines are re-voiced (new ids), not reused MP3s; with a cold open,
+  section-located problems are off by the moved / inserted scene (include origins are moved);
+  `under_dialogue_lu` in a split file is the whole mix's (dense runs are per file); a part's cut
+  through a swelling pause fades the music out (no musical ending); no chapter files for videos;
+  no embedded chapter markers; the drama thresholds are chosen, not a platform's spec.
+- **Next (291)**: the cookbook can quote the drama check's items and the split layout; the
+  showcase can use `cold_open`, `credits: {speak: true, voiced_by: ...}` and `split: chapters`.
+
+## Step 291 — Audio drama cookbook, showcase, Phase AG review (Phase AG done)
+
+- **Built**: `docs/COOKBOOK-AUDIODRAMA.md` (skeleton, structure, casting and voices, narrator
+  balance / rooms / stereo, score, sound design, pacing, the drama check's items, the split file
+  layout; targets as recommendations, numbers measured on the showcase), linked from
+  `COOKBOOK.md`, `COOKBOOK-AUDIO.md` (intro and the drama bullet), `COOKBOOK-ISO-CARTOONS.md`
+  (voices section), README and the guide (+ `AGENTS.md`). DESIGN §112.4.
+- **Review fixes**: (1) `vidgen tts` copies cold-open lines (`cold_open_<id>`) from their source
+  beat's MP3 when the hashes match (`delivery.cold_open_sources`, `tts.run._reuse_cold_open`,
+  `_sources_first`, `_copy_source`; alignment / visemes read under the source's id); (2) a
+  `sections:` project with a cold open or spoken credits names the right section in problems and
+  load errors (`delivery.scene_sources`, `sections.section_location(text, sources)`,
+  `Project.section_sources`); (3) `cold_open: []` crashed with an IndexError, now no cold open.
+  CONFIG's cold-open bullet and the config docstring updated.
+- **Review, no change needed**: re-read `delivery.py`, `scoring.py` (theme walk, motifs, dips),
+  the Step 288–290 docs (CONFIG sections, guide, DESIGN §112) — consistent with the code.
+- **Files**: `delivery.py`, `tts/run.py`, `sections.py`, `project.py`, `config.py` (docstring),
+  `docs/COOKBOOK-AUDIODRAMA.md` (new), `docs/COOKBOOK.md`, `docs/COOKBOOK-AUDIO.md`,
+  `docs/COOKBOOK-ISO-CARTOONS.md`, `docs/CONFIG.md`, README, guide + `AGENTS.md`, DESIGN, CHANGELOG,
+  tasklist; tests `test_delivery.py` (+2: section locations after a cold open / credits, cold-open
+  audio copied; the cold-open test checks `[]`), `test_docs.py` (+1: the cookbook's skeleton
+  validates, links).
+- **Tests run and passed** (one at a time, capped): `test_delivery`, `test_docs` (74),
+  `test_guide`, `test_api`, `test_tts`, `test_tts_kokoro`, `test_cartoon_visemes`,
+  `test_sound_design` (23), `test_scoring` (15), `test_audio_only`, `test_audio_output`,
+  `test_staging` (22, 2 min), `test_mcp`, `test_schema` (76, 3 min), `test_music` (81, 4.7 min),
+  `test_project`, `test_cuts_shorts`. Frame baseline: 33 stills, max difference 0. Pinned mixes
+  unchanged (their tests above).
+- **Showcase** (PRIVATE, in scratch, never committed; an owner's story as a dramatized audiobook,
+  Kokoro, 69 lines of which 51 reused from the owner's film project's audio, 2 cold-open lines
+  copied by the new reuse): four chapter MP3s 2:49 / 1:31 / 3:32 / 1:44 (+ a single 9:36 file from
+  a `split: none` variant), each −16.3 LUFS, TP −2.0 to −2.1 dBTP, LRA 3.6–5.4 LU, lines 1.6–2.9
+  LU, voices 1.6–2.4 LU, music 23.1 LU under dialogue (worst dense run 20.7), files spread 0.0 /
+  0.9 LU: `vidgen audio check --preset drama` PASS first time. A machine voice in a `room: phone`
+  section measured 0.06 % of its energy above 3.5 kHz (narrator 5.9 %); 22 word-anchored cues
+  within 0.1 ms of their words. Measuring script `scratch/s291/measure.py PROJECT PNG`.
+- **Known gaps**: the cold-open reuse needs equal hashes (a copied line with another voice or
+  emotion is voiced); a cold-open copy's problems are named `cold_open...` (not the source
+  section); a `cut` with sections still renumbers scenes without section mapping; the earlier
+  gaps of Steps 288–290 stand (no musical ending at a file cut, no embedded chapter markers, no
+  chapter files for videos, English-only credit wording, a walk's foley panned at its middle).
+- **Next**: Phase AG is complete.

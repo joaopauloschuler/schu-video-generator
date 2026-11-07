@@ -14,8 +14,11 @@ values per 10 ms.
 :data:`PRESETS` are the targets: ``podcast`` (-16 LUFS stereo, -19 mono, ±1 LU; true peak at
 most -1 dBTP), ``audiobook`` (ACX: RMS -23 to -18 dB, sample peaks at most -3 dB, noise floor at
 most -60 dB, 0.5-1 s of room tone at the head and 1-5 s at the tail; the file format and the
-length per file only as notes), ``broadcast`` (EBU R128: -23 LUFS ±0.5 LU, -1 dBTP) and
-``custom`` (``audio.target_lufs`` ±1 LU, ``audio.true_peak``). :func:`mix_targets` turns a
+length per file only as notes), ``broadcast`` (EBU R128: -23 LUFS ±0.5 LU, -1 dBTP), ``drama``
+(the podcast loudness, a loudness range for earbuds, and dialogue checks — each line's loudness
+from the momentary loudness ffmpeg logs (:func:`line_loudness`), the voices against each other,
+the music under them: DESIGN.md §112.3) and ``custom`` (``audio.target_lufs`` ±1 LU,
+``audio.true_peak``); :func:`files_check` compares the files of a split render. :func:`mix_targets` turns a
 project's preset into what its mix aims for, a little inside the limits (lossy encoders move
 the peaks).
 """
@@ -70,6 +73,8 @@ class LoudnessPreset:
     mix_true_peak: float = -1.5  # the limiter's setting
     level_voice: bool = False  # the voice leveller's default
     acx_notes: bool = False  # notes on ACX's file format and length
+    max_lra: float | None = None  # loudness range (LU) at most
+    dialogue: bool = False  # the dialogue checks (DESIGN.md §112.3): lines, voices, music under them
 
 
 PRESETS: dict[str, LoudnessPreset] = {
@@ -86,7 +91,24 @@ PRESETS: dict[str, LoudnessPreset] = {
         "broadcast", "EBU R128: -23 LUFS (±0.5 LU), true peak ≤ -1 dBTP",
         lufs=-23.0, mono_lufs=-23.0, tolerance=0.5, max_true_peak=-1.0, mix_true_peak=-1.5,
     ),
+    "drama": LoudnessPreset(
+        "drama", "audio drama: -16 LUFS stereo / -19 mono (±1 LU), true peak ≤ -1 dBTP, LRA ≤ 10 LU, even dialogue, music under the voices",
+        lufs=-16.0, mono_lufs=-19.0, tolerance=1.0, max_true_peak=-1.0, mix_true_peak=-1.5, level_voice=True, max_lra=10.0, dialogue=True,
+    ),
 }
+#: The drama preset's dialogue checks (recommendations for listening on earbuds and phones, not a
+#: platform's rule): the lines' loudness within :data:`LINE_SPREAD_LU` from the 10th to the 90th
+#: percentile (lines of at least :data:`MIN_LINE` seconds), the voices' (characters') levels within
+#: :data:`VOICE_SPREAD_LU` of each other, the music at least ``score.dense_lu`` (15 LU) under the
+#: voices where they speak; with several files (``audio_output.split``) their loudness within
+#: :data:`FILE_SPREAD_LU` and their dialogue level within :data:`FILE_DIALOGUE_SPREAD_LU`.
+LINE_SPREAD_LU = 6.0
+VOICE_SPREAD_LU = 4.0
+MIN_LINE = 0.8
+FILE_SPREAD_LU = 1.0
+FILE_DIALOGUE_SPREAD_LU = 2.0
+#: Momentary loudness (BS.1770, 400 ms) as ffmpeg's ebur128 logs it every 100 ms.
+MOMENTARY_WINDOW = 0.4
 #: Pacing an audiobook gets where ``pacing:`` does not say (seconds; the speech's own lead-in
 #: silence comes on top of ``lead_in``): inside ACX's room tone head and tail.
 AUDIOBOOK_PACING = {"lead_in": 0.6, "tail": 2.5}
@@ -139,6 +161,7 @@ def mix_targets(project: Project) -> MixTargets | None:
         mono=mono,
         level_voice=preset.level_voice if level is None else level,
         room_tone=out.room_tone,
+        music_check=preset.dialogue,
     )
 
 
@@ -166,6 +189,7 @@ class AudioMeasurement:
     correlation: float | None = None  # stereo only (DESIGN.md §111.4): of the two channels, whole file
     worst_correlation: float | None = None  # ... its lowest over 1 s windows with sound
     mono_fold_db: float | None = None  # ... how much quieter the mono fold (L + R) / 2 is
+    momentary: np.ndarray | None = field(default=None, repr=False)  # (n, 2): time, momentary LUFS every 100 ms (measure_file(momentary=True))
 
     @property
     def digital_silence(self) -> bool:
@@ -177,6 +201,7 @@ class AudioMeasurement:
             return round(v, 2) if math.isfinite(v) else None
 
         data = asdict(self)
+        data.pop("momentary")
         data["path"] = str(self.path)
         for key in ("duration", "integrated_lufs", "loudness_range", "true_peak", "sample_peak", "rms", "noise_floor", "head", "tail", "mono_fold_db"):
             data[key] = None if data[key] is None else num(data[key])
@@ -291,9 +316,20 @@ def _db(power: float) -> float:
     return 10 * math.log10(power) if power > 0 else -math.inf
 
 
-def measure_file(path: Path) -> AudioMeasurement:
-    """Measure the audio file ``path`` (see the module doc); :class:`VidgenError` if ffmpeg
-    cannot read it."""
+_MOMENTARY = re.compile(r"\bt:\s*(\S+)\s+TARGET:\S+\s+LUFS\s+M:\s*(\S+)")
+
+
+def parse_momentary(text: str) -> np.ndarray:
+    """``(n, 2)``: the time and momentary loudness (LUFS) of each line of ffmpeg's
+    ``ebur128=framelog=info`` log (every 100 ms; each over the 400 ms before its time)."""
+    rows = [(float(t), float(m)) for t, m in _MOMENTARY.findall(text)]
+    return np.array(rows, dtype=np.float64).reshape(-1, 2)
+
+
+def measure_file(path: Path, momentary: bool = False) -> AudioMeasurement:
+    """Measure the audio file ``path`` (see the module doc); with ``momentary`` also keep its
+    momentary loudness every 100 ms (:attr:`AudioMeasurement.momentary`, for
+    :func:`line_loudness`); :class:`VidgenError` if ffmpeg cannot read it."""
     from vidgen.render.ffmpeg import find_ffmpeg
 
     if not path.is_file():
@@ -305,7 +341,7 @@ def measure_file(path: Path) -> AudioMeasurement:
     with tempfile.TemporaryFile() as log:
         proc = subprocess.Popen(
             [ffmpeg, "-hide_banner", "-nostats", "-nostdin", "-v", "info", "-i", str(path), "-vn",
-             "-af", f"ebur128=peak=true+sample:framelog=quiet,aresample={RATE}", "-ac", str(channels), "-f", "f32le", "pipe:1"],
+             "-af", f"ebur128=peak=true+sample:framelog={'info' if momentary else 'quiet'},aresample={RATE}", "-ac", str(channels), "-f", "f32le", "pipe:1"],
             stdout=subprocess.PIPE, stderr=log,
         )
         assert proc.stdout is not None
@@ -342,7 +378,7 @@ def measure_file(path: Path) -> AudioMeasurement:
     return AudioMeasurement(
         path, codec, rate, channels, bitrate, duration, levels["integrated_lufs"], levels["loudness_range"],
         levels["true_peak"], levels["sample_peak"], _db(frames.total / frames.count) if frames.count else -math.inf, floor, head, tail,
-        *image,
+        *image, parse_momentary(text) if momentary else None,
     )
 
 
@@ -399,8 +435,93 @@ def _between(name: str, value: float, lo: float, hi: float, unit: str, fmt: str 
     return CheckItem(name, shown, f"{lo:g} to {hi:g}", "pass" if lo - 1e-9 <= value <= hi + 1e-9 else "fail")
 
 
-def check(m: AudioMeasurement, preset: LoudnessPreset) -> PresetResult:
-    """``m`` against ``preset`` (see :data:`PRESETS`)."""
+@dataclass(frozen=True)
+class DialogueLine:
+    """A spoken line of a file: its beat, who says it (the speaker's name) and its speech's
+    seconds in the file."""
+
+    beat: str
+    speaker: str
+    start: float
+    end: float
+
+
+@dataclass
+class Dialogue:
+    """What the drama preset's dialogue checks know besides the file: its ``lines``, the mix's
+    ``music`` check (``timings.mix.music_check``; ``None``: no music measured) and the music's
+    least distance under the voices (``dense_lu``, ``score.dense_lu``)."""
+
+    lines: list[DialogueLine]
+    music: dict[str, Any] | None = None
+    dense_lu: float = 15.0
+
+
+def _power_mean(levels: np.ndarray) -> float:
+    return -0.691 + 10 * math.log10(float(np.mean(10 ** ((levels + 0.691) / 10))))
+
+
+def line_loudness(momentary: np.ndarray, start: float, end: float) -> float:
+    """The loudness (LUFS) of the seconds ``start`` to ``end`` of a file from its momentary
+    loudness (:func:`parse_momentary`): the 400 ms blocks inside (else those overlapping), gated
+    as BS.1770 gates a programme (-70 LUFS, then 10 LU under their mean); ``-inf`` for silence."""
+    if not len(momentary):
+        return -math.inf
+    t, m = momentary[:, 0], momentary[:, 1]
+    inside = (t - MOMENTARY_WINDOW >= start - 0.05) & (t <= end + 0.05)
+    if not inside.any():
+        inside = (t > start) & (t - MOMENTARY_WINDOW < end)
+    levels = m[inside]
+    levels = levels[levels > -70.0]
+    if not levels.size:
+        return -math.inf
+    return _power_mean(levels[levels > _power_mean(levels) - 10.0])
+
+
+def dialogue_levels(m: AudioMeasurement, lines: list[DialogueLine]) -> list[tuple[DialogueLine, float]]:
+    """Each line of at least :data:`MIN_LINE` seconds with its loudness in ``m`` (not silent)."""
+    if m.momentary is None:
+        return []
+    levels = [(line, line_loudness(m.momentary, line.start, line.end)) for line in lines if line.end - line.start >= MIN_LINE]
+    return [(line, level) for line, level in levels if math.isfinite(level)]
+
+
+def dialogue_items(m: AudioMeasurement, dialogue: Dialogue) -> list[CheckItem]:
+    """The drama preset's dialogue checks (see :data:`LINE_SPREAD_LU`): the lines' spread, the
+    voices' spread, the music under the voices."""
+    items = []
+    levels = dialogue_levels(m, dialogue.lines)
+    if not levels:
+        items.append(CheckItem("dialogue lines", "no lines measured", f"≤ {LINE_SPREAD_LU:g} LU (10-90%)", "note"))
+    else:
+        values = np.array([v for _, v in levels])
+        lo, hi = (float(v) for v in np.percentile(values, [10, 90]))
+        spread = hi - lo
+        items.append(CheckItem("dialogue lines", f"{spread:.1f} LU over {len(levels)} lines", f"≤ {LINE_SPREAD_LU:g} LU (10-90%)",
+                               "pass" if spread <= LINE_SPREAD_LU + 1e-9 else "fail"))
+        speakers: dict[str, list[float]] = {}
+        for line, level in levels:
+            speakers.setdefault(line.speaker, []).append(level)
+        means = {name: _power_mean(np.array(v)) for name, v in speakers.items()}
+        if len(means) > 1:
+            gap = max(means.values()) - min(means.values())
+            shown = ", ".join(f"{name} {level:.1f}" for name, level in means.items())
+            items.append(CheckItem("voices", f"{gap:.1f} LU ({shown})", f"≤ {VOICE_SPREAD_LU:g} LU", "pass" if gap <= VOICE_SPREAD_LU + 1e-9 else "fail"))
+    target = f"≥ {dialogue.dense_lu:g} LU"
+    music = dialogue.music
+    if music is None or music.get("under_dialogue_lu") is None:
+        items.append(CheckItem("music under dialogue", "no music measured", target, "pass"))
+    else:
+        under, worst = music["under_dialogue_lu"], music.get("worst_dense_lu")
+        value = f"{under:.1f} LU" + (f", dense dialogue {worst:.1f} LU" if worst is not None else "")
+        ok = under >= dialogue.dense_lu - 1e-9 and (worst is None or worst >= dialogue.dense_lu - 1e-9)
+        items.append(CheckItem("music under dialogue", value, target, "pass" if ok else "fail"))
+    return items
+
+
+def check(m: AudioMeasurement, preset: LoudnessPreset, dialogue: Dialogue | None = None) -> PresetResult:
+    """``m`` against ``preset`` (see :data:`PRESETS`); a preset with dialogue checks (``drama``)
+    needs ``dialogue`` and ``m``'s momentary loudness, else they are notes."""
     result = PresetResult(preset.name, preset.description)
     items = result.items
     if preset.lufs is not None:
@@ -410,6 +531,13 @@ def check(m: AudioMeasurement, preset: LoudnessPreset) -> PresetResult:
         items.append(CheckItem("loudness", _fmt(m.integrated_lufs, "LUFS"), f"{target:g} ±{preset.tolerance:g} {layout}", "pass" if ok else "fail"))
     if preset.max_true_peak is not None:
         items.append(_at_most("true peak", m.true_peak, preset.max_true_peak, "dBTP"))
+    if preset.max_lra is not None:
+        items.append(_at_most("loudness range", m.loudness_range, preset.max_lra, "LU"))
+    if preset.dialogue:
+        if dialogue is None or m.momentary is None:
+            items.append(CheckItem("dialogue", "needs the project (vidgen audio check PROJECT)", "lines, voices, music under them", "note"))
+        else:
+            items += dialogue_items(m, dialogue)
     if preset.rms is not None:
         items.append(_between("RMS", m.rms, preset.rms[0], preset.rms[1], "dB"))
     if preset.max_sample_peak is not None:
@@ -456,9 +584,29 @@ def mono_check(m: AudioMeasurement) -> PresetResult:
     return result
 
 
-def check_all(m: AudioMeasurement, presets: list[LoudnessPreset]) -> list[PresetResult]:
+def check_all(m: AudioMeasurement, presets: list[LoudnessPreset], dialogue: Dialogue | None = None) -> list[PresetResult]:
     """``m`` against each of ``presets``."""
-    return [check(m, p) for p in presets]
+    return [check(m, p, dialogue) for p in presets]
+
+
+def files_check(files: list[tuple[AudioMeasurement, Dialogue | None]]) -> PresetResult:
+    """Several files of one production (``audio_output.split``, DESIGN.md §112.3) against each
+    other: their loudness within :data:`FILE_SPREAD_LU`, their dialogue (the median line) within
+    :data:`FILE_DIALOGUE_SPREAD_LU`."""
+    result = PresetResult("files", f"{len(files)} files alike: loudness within {FILE_SPREAD_LU:g} LU, dialogue within {FILE_DIALOGUE_SPREAD_LU:g} LU")
+    loud = [m.integrated_lufs for m, _ in files if math.isfinite(m.integrated_lufs)]
+    if len(loud) > 1:
+        result.items.append(_at_most("loudness spread", max(loud) - min(loud), FILE_SPREAD_LU, "LU"))
+    medians = []
+    for m, dialogue in files:
+        levels = dialogue_levels(m, dialogue.lines) if dialogue is not None else []
+        if levels:
+            medians.append(float(np.median([v for _, v in levels])))
+    if len(medians) > 1:
+        result.items.append(_at_most("dialogue spread", max(medians) - min(medians), FILE_DIALOGUE_SPREAD_LU, "LU"))
+    if not result.items:
+        result.items.append(CheckItem("files", str(len(files)), "2 or more", "note"))
+    return result
 
 
 def summary_line(m: AudioMeasurement) -> str:

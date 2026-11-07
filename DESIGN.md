@@ -21222,3 +21222,233 @@ inherited by named voices), so nothing is re-voiced.
 - Checked, unchanged: speech timing (gaps, pauses, stings, silent scenes, lead-in / tail), preset
   numbers (ACX, R128, podcast mono −19), the equal-power pan law (`left` 7.65 dB L−R) and room IR
   maths. `pacing.silent`, when set, overrides a pause section's own seconds too (documented).
+
+## 112. Dramatized audiobooks: sound design, music cues, delivery (Phase AG, Steps 288–291)
+
+Radio-play / audio-movie productions made audio-only and fast: narrator centred and dry,
+characters panned in rooms (§111.4), with ambience, timed sound cues and music that follows the
+scenes. No paid or AI API calls; Kokoro local only. Plan: **288** sound design in audio-only
+renders; **289** music cues for drama (per-scene beds and crossfades, swells into pauses, stings
+on beats, named themes / motifs, deeper ducking presets, a dense-dialogue music check); **290**
+delivery (a `drama` loudness preset with LRA and dialogue-consistency checks, one file per
+chapter with an `.m3u` and per-chapter transcripts, spoken credits from the cast, a cold open);
+**291** `docs/COOKBOOK-AUDIODRAMA.md`, a private showcase, review. Everything is opt-in: unset,
+video mixes and audio-only renders are byte-identical.
+
+### 112.1 Sound design (Step 288)
+
+`vidgen.sound_design` (no manim import) times everything in audio seconds from a `SceneSlot`
+(`spec`, `start`, `duration`, `beats: [BeatSlot(beat, start, end, body)]`; `body` = the seconds a
+fraction `at` counts over, the narration). The audio-only planner (`audio_only._design_sound`
+after either timeline) and the video join (`pipeline._add_designed_ambience`, scene and beat
+`ambience` only) build the slots and share it.
+
+- **Beds** (`AmbienceSetting` on a scene / section / pause: a bed, a list, `AmbienceConfig {beds:
+  list | {bed: dB}, gain, width}`, or `false`; names `AmbienceBedName` = `ambience.AMBIENCE_BEDS`:
+  rain, fire, birdsong, city, room_tone, crickets, hum, alarm, a test keeps them equal).
+  `ambience_entries` walks the scenes: at a change every bed whose `(gain, width)` differs or that
+  is not wanted fades out and the new ones fade in over `audio.ambience_crossfade` (default 2 s,
+  min `MIN_FADE` 0.05) centred on the change; a bed with the same level and width plays on. The
+  first beds fade in from 0 over their own `BEDS[...].fade_in`, the last fade out at the end.
+  Beat changes `AmbienceChange {start, stop (bed | list | all), at (fraction | "@word" | end),
+  fade, gain}` (`BeatConfig.ambience`, one or a list; the word is checked at load) start or stop
+  beds at that time (word times: `word_anchors.beat_words`, the TTS alignment or the estimate).
+  Each piece is a timings `ambience` entry with `fade_in`, `fade_out`, `gain`, maybe `width`;
+  `ambience.designed_entries` picks those (the key `fade_in`), `ambience_spans` leaves them out,
+  and `mix.plan_ambience` places each as is (`AmbiencePlacement.width`; ducked under speech by its
+  bed's duck). The scene fingerprint excludes scene / beat `ambience` (mixed at the join).
+- **Cues**: `SfxCue` / the `sfx` action gain `repeat` (1–100), `every` (s), `room` (`True` the
+  scene's room, a `RoomName`, `False` / `none` dry; `None` → `audio.sfx_room`, default false) and
+  named `pan` positions; a repeated cue's `pan` may be a `PanMove {from, to}`: the plays step
+  evenly from one to the other (`staging.repeat_pans`). `sfx.repeated` gives each play's time and
+  params (footsteps alternate feet, `cartoon.foley.FEET`). `SfxEvent.room` (timings `room`, only
+  when set) makes `sfx.placed` run the dry sound through `staging.stage_voice` (panned early
+  reflections, wide tail; `align: end` aligns the dry sound's end). `staging.cue_room` resolves
+  the room; the scene's `room` default `audio.room`. `NarratedScene.sfx(..., repeat, every, room)`
+  does the same in videos. Measured on the demo (scratch `s288/caller`, Kokoro): every cue's onset
+  within 2 ms of its word; seven `step_wood` plays `{from: far_left, to: far_right}` in the
+  `small_office` measure R−L −8.9 → +11.0 dB monotonically.
+- **Scene sounds without pictures** (`audio.scene_sounds`, audio-only renders; default false and
+  the old warning). `stage_sounds`: the stage's set beds as `ambience.set_ambience` chooses them
+  (its `ambience` / the video's, rain particles, `light` changes half-way through their fade,
+  rooms and iso indoor `room_tone`, iso crickets); on a plain stage (no `level`, no `iso`) a
+  `_Walker` follows each character's x (marks via `mark_x`, a 16:9 frame 14.2 units wide;
+  entering characters start off stage) and `walk_to` / `run_to` / `enter` / `exit` play
+  `cartoon.foley.foley_cues` of a `PlayedAction` (walk seconds from `walk_seconds` and the
+  character's `cartoon_motion`, limited to the next beat; panned at the walk's middle); `open` /
+  `close` of a `door` prop or room door → `door_cues`; `knock`, `switch_on/off` (click, not the
+  quiet props), `jump` (boing after the crouch), `emote` / `react` to surprised (pop), `effect`
+  (`EFFECT_SOUNDS`). The first beat's actions wait for the set's fade-in (`STAGE_ENTRANCE`).
+  Against the video's own scene code (scratch `s288/stagedemo`): the same events, within 25–50 ms
+  (frame rounding at draft fps). Left out (named in the warning): a level's or iso place's moves,
+  vehicles, thrown props, pours, lightning, alarms, fires, ringing phones. `clip_sound`: a
+  `video_clip`'s trim, speed (`fit_duration`), loop and volume (0.25 under narration) via
+  `clips.clip_audio`, faded over 0.5 s, mixed into `voice.wav` (`write_voice_track(clips=)`).
+- **Sections**: `ambience` on sections; a pause section takes `ambience` and `room` (a pause's
+  cues sound in its room). `vidgen schema` has both.
+- **Compatibility**: with nothing set, `_design_sound` returns at once, no event has a room and no
+  timings key changes. Pinned: Step 284's audio-only render (bytes equal with the Step 288 options
+  neutral), the video mix (`test_video_mix_is_pinned`, bytes equal with them); frame baseline
+  33 stills, max difference 0.
+- **Public**: config scene / section / pause `ambience`, beat `ambience`, `sfx` `repeat` / `every`
+  / `room` / pan positions and moves, `audio.ambience_crossfade`, `sfx_room`, `scene_sounds`;
+  `NarratedScene.sfx(repeat=, every=, room=)`; `SfxEvent.room`; `vidgen.api.PanMove`.
+
+### 112.2 Music cues for drama (Step 289)
+
+New module `vidgen.scoring` (no manim import); `mix.plan_score` places what it plans beside the
+`music:` cues (`Placement` with `theme` / `motif`), from the timings alone, so audio-only renders
+and the video join share it (no re-render; `score` and beat `motif` are left out of the scene
+fingerprint; the scene's `music` already was).
+
+- **Config**: `score: ScoreConfig {themes: {name: MusicTheme | source}, crossfade (3 s), curve
+  (equal_power | linear | smooth), duck (DuckSetting, default the drama preset), fade_in (2),
+  fade_out (4), motif_dip (6 dB), sting_dip (4 dB), check (None: on when themes play), dense_lu
+  (15)}`. `MusicTheme(ThemeVariation) {source, volume}`; `ThemeVariation {section, start,
+  transpose (±12), tempo, tracks}`. A scene's `music` takes a name (`SceneMusic` before-validator:
+  `{theme}`) or `{theme, variation, volume}`. `BeatConfig.motif: MotifCue {theme, at (start | end
+  | "@word" | fraction), length (6), fade_in (1), fade_out (2.5), gain, dip, variation}`.
+  `StingCue.at` also takes a word anchor (`placed_at` returns it); words of stings and motifs are
+  checked at load like the beat ambience's. (The visual `ThemeConfig` keeps its name; the music
+  one is `MusicTheme`.)
+- **Ducking presets** `DUCK_PRESETS` / `DuckPreset`: `light` (8 dB), `standard` (the defaults),
+  `drama` (18 dB, attack 0.5, release 2.5, hold 1.2, swell 3), `deep` (24 dB, 0.6, 2, 2). A
+  `DuckConfig` before-validator expands a string or `{preset, ...}` (given keys win); `preset` is
+  kept as a field. `DuckSetting` on `music:` cues and `score.duck`. New `DuckConfig.swell` (dB,
+  default 0): `mix.duck_gain_db` = `duck_curve` + `swell × (1 + duck_curve at depth 1)`, i.e. up
+  to `swell` where the music is released, following the raised-cosine release / attack (with
+  `swell` 0 exactly `duck_curve`, so cues mix as before).
+- **Scene themes** (`theme_pieces`): sticky — a scene without a theme keeps the one playing, a
+  silent pause section too (so it swells under the pause), `music: false` ends it. At a change the
+  old piece ends at `change + crossfade/2` with a fade-out of `crossfade`, the new starts at
+  `change − crossfade/2` with a fade-in of `crossfade` (min 0.05 s); the same `ThemePlay` (name,
+  source, level, variation) plays on. First piece from 0 over `fade_in`, last to the end over
+  `fade_out`. `fade_shape`: equal_power sin(πu/2) (power sum 1 across a change: measured 1.00 at
+  −2…+2 s on the demo), linear, smooth (raised cosine). A piece starts its source from the
+  beginning (or section / start), so a returning theme is heard from its top. Gain per frame:
+  `10^(volume/20) × envelope × scene curve (SceneMusic.volume, false) × ducking (score.duck over
+  speech + clip spans) × dips`.
+- **Motifs** (`motif_pieces`): at the timings' beat start + `start` / speech end (`end`, the
+  beat's seconds from `word_anchors.beat_words`) / a word (`sound_design.word_offset`, shared with
+  ambience changes and stings) / a fraction of the speech; `length` long; ducked like the themes.
+  `dip_curve`: the scene themes go down by the deepest of each motif's `dip × envelope` and each
+  sting's `sting_dip` (the timings' ducked sfx events, their sound's length, 0.05 s in, 0.6 s
+  out).
+- **Sources** (`theme_source`): without a note change, `music.Source` of a looping cue (beds,
+  pieces, files; a score bed's or a piece's `section`). With `transpose` / `tempo` / `tracks` (or
+  a `section` of a bed made in Python) the score is rendered again: a project piece, a score bed's
+  file, or the bed's score template (`studio/beds/<bed>.yaml`, a close re-creation);
+  `variant_score` sets `tempo` in the YAML before parsing, keeps the listed tracks (a kept part
+  that ducked under a dropped track loses its duck), adds `transpose` to every pitched (not
+  drum) track's parts; rendered at the music level (so a sparse version is as loud as the full
+  one: set its `volume`) and cached as `build/music/theme-<key>.npy` (key: `piece_key`,
+  variation, `VARIATION_VERSION`). `theme_problems` (in `music.config_problems`: validate and
+  render): an unknown theme (did-you-mean across themes, beds, pieces), a missing source, a
+  variation of an audio file, an unknown track or section.
+- **Check** (`dense_dialogue_check`, `MixReport.music_check`, `timings.mix.music_check` only
+  when measured): 100 ms frames of K-weighted power of the voice track and of the music
+  placements (no ambience, before the gain: a ratio); speech from `speech_spans`; dense = within a
+  5 s window filled ≥ 80% by speech (the window's whole width; the speech frames in it measured);
+  runs of ≥ 2 s reported `{start, end, lu}`; `under_dialogue_lu` over all speech, `in_pauses_lu`
+  (the music in gaps ≥ 1 s against the voices' level); `ok` when every dense run is ≥ `dense_lu`.
+  A warning names the worst runs. The check runs when scenes play themes (or `check: true` with
+  any music).
+- **Demo** (scratch `s289/drama`, Kokoro, 1:07, −18.3 LUFS, mono PASS): a theme (`love`, a 8-bar
+  project piece) at the opener and credits, a tense platform (`enigma`) into a warm morning
+  (`calm`), the piano motif of `love` on "remember" and again (transposed +2) after the last
+  line, a reveal sting on "ticket". `s289/measure.py`: the music 24.7 LU under the voices on
+  their lines and 18–22 LU higher in the pauses (1–6 LU under the voices' level); crossfades
+  0.71/0.71 at the change, power sum 1.00; `music_check` under dialogue 25.8 LU, in pauses
+  9.8 LU, dense runs 24.8 / 26.0 LU (ok); the variant `loud` (`duck: light`, tension +6 dB) is
+  caught: 8.1 LU at 6.9–11.0 s. Picture `s289/drama_plot.png`. The limiter's 5.4 dB there is the
+  Kokoro voices' own peaks (the music is −35 dBFS at those moments).
+- **Compatibility**: with no scene theme and no motif `plan_score` returns at once and no
+  `music_check` is written; `duck_gain_db` equals `duck_curve` without a swell; `_scene_curve`
+  is the old code moved. Pinned audio-only and video mixes byte-equal (test_staging,
+  test_audio_only, test_sound_design, and test_scoring with unused themes and `duck: {swell: 0}`);
+  frame baseline 33 stills, max difference 0 (`scene.py`'s sting branch is new only for a word).
+- **Public**: config `score`, scene `music: NAME | {theme, variation}`, beat `motif`, sting `at:
+  "@word"`, `duck` presets and `swell`; `timings.mix.music_check`, `mix.music[].theme / motif /
+  swell`.
+
+### 112.3 Delivery (Step 290)
+
+New module `vidgen.delivery` (no manim import); `audio_check` gains the `drama` preset; `mix`
+writes split parts.
+
+- **`drama` preset** (`PRESETS["drama"]`): podcast loudness (−16 LUFS stereo / −19 mono ±1 LU, TP ≤
+  −1 dBTP, limiter −1.5, `level_voice` default on) — the common podcast-app recommendation, not
+  a platform rule — plus `max_lra` 10 LU (`LoudnessPreset.max_lra`, ebur128's LRA) and
+  `dialogue` checks; no noise-floor / head / tail gate. `MixTargets.music_check` makes the mix run
+  `_check_music` for any music (`score.check: false` still turns it off). Dialogue: `measure_file(path,
+  momentary=True)` switches ebur128 to `framelog=info` and parses each 100 ms momentary value
+  (`parse_momentary`; off by default, so other measurements run as before); `line_loudness` =
+  the 400 ms blocks wholly inside a line's speech (else overlapping), gated at −70 LUFS and then
+  10 LU under their power mean (BS.1770's programme gating over the line). Lines (`DialogueLine
+  {beat, speaker, start, end}`, `delivery.dialogue`: each beat's speech via `speech_bounds`,
+  speakers named as in the transcripts) of ≥ `MIN_LINE` 0.8 s: the 10–90th percentile spread ≤
+  `LINE_SPREAD_LU` 6; speakers' power-mean levels within `VOICE_SPREAD_LU` 4; the music check's
+  `under_dialogue_lu` and its worst dense run (only runs in the file, for a split file) ≥
+  `score.dense_lu`. Without a project (`vidgen audio check FILE`) the dialogue item is a note.
+  Thresholds are recommendations chosen for earbuds; measured on the demo (Kokoro, levelled):
+  lines 1.6–2.0 LU, voices 1.8–2.5 LU, LRA 4.4–6.2 LU.
+- **Split** (`audio_output.split: chapters`; `plain` is false with it): `plan_parts` — one part
+  per chapter mark (`chapter_marks`; the first part from 0, so a cold open joins it; no marks:
+  one part titled by the video). Cut before chapter k = `max(min(scene start, first speech −
+  pacing.lead_in), (previous speech end + first speech)/2)`; fades (raised cosine, `MixPart.reader`)
+  in over ≤ `PART_FADE_IN` 0.3 s ending by the first speech, out over ≤ `PART_FADE_OUT` 2 s after
+  the last speech; none at the audio's own start and end. `mix_audio(parts=)` writes the whole as
+  before, then each part through the same `read` (pre-limiter sum), normalised on its own to the
+  whole's target (LUFS or RMS; else the whole's gain), the same limiter and room tone
+  (`MixReport.parts`: file, start, end, gain, LUFS, TP, limited). `write_parts`: copy (48 kHz
+  stereo 24-bit WAV) or encode each (`title` "Title: Chapter", `album`, `track` "k/n") to
+  `<output>_<NN>_<slug>.<ext>`; per file `_transcript.txt`, `.srt`, `.vtt` from `part_timings`
+  (its scenes and beats at its times, non-intro chapters); `<output>.m3u` (extended M3U, UTF-8,
+  `#EXTINF` whole seconds; entries the old playlist listed and the new does not are removed —
+  only files it named). The single file and `_chapters.txt` are not written. The check measures
+  each file (`audio_output.files[].check`, `stereo`) and `files_check` compares them (loudness
+  within `FILE_SPREAD_LU` 1, median line within `FILE_DIALOGUE_SPREAD_LU` 2); the result's
+  `check` lists every file's items as `NN name` plus those. `vidgen audio check PROJECT` reads
+  `timings.json` (`delivery.rendered_files`) for the files and lines; `--json` adds `files` and
+  `files_check`. `AudioRenderResult.files`; `output` is the playlist.
+- **Spoken credits** (`credits: CreditsConfig {speak, id, title, voice, music, cast, voiced_by,
+  lines, chapter}`) and **cold open** (`cold_open: ID | [IDs]`): `apply_delivery(data, origins)`
+  on the raw config after `apply_cut` (both in `Project._load_config`, variants too; not in
+  `parse_config`, like a cut). Cold open first: a scene id moves that scene to index 0 (drops
+  `chapter`, `transition`; `cuts._moved_origins`); beat ids (filled as `cuts._with_beat_ids`)
+  are deep-copied into a `text_card` scene `cold_open` (beat ids `cold_open_<id>`, the source
+  scene's `voice` written onto the beat, only `sfx` actions kept, the first beat's scene's
+  `room` / `ambience` / `music`). Credits then append a `text_card` scene: `credit_lines` =
+  the title sentence, "Starring A as X, B as Y and Z." (named voices in order of first line,
+  the cold open skipped; actor = `voiced_by[name]`, else a Kokoro id `xx_name` → Name, else
+  none), "Narrated by N." (base voice speaks and has an actor), `lines`; `music` default `main`
+  when `score.themes` has it. English text only. Errors: unknown id (did-you-mean over scenes
+  and beats), an existing `cold_open` / credits id.
+- **Compatibility**: nothing set → `apply_delivery` returns the data object itself, no parts, no
+  momentary parse, `music_check` as before, `MixReport.to_json` without `parts`; the scene
+  fingerprint now excludes `credits`, `cold_open`, `audio_output` (audio-only / already scenes).
+  Pinned: `test_staging`'s audio-only render with the Step 290 options neutral (bytes equal),
+  `test_video_mix_is_pinned`; frame baseline 33 stills, max difference 0. `vidgen audio check
+  FILE` now lists `drama` among every preset.
+- **Public**: config `audio_output.loudness: drama`, `audio_output.split`, `credits`, `cold_open`;
+  CLI `audio check --preset drama`; `render --json` `files`, `audio --json` `files` /
+  `files_check`; `timings.json` `audio_output.{split, playlist, files, files_check}`,
+  `mix.parts`. No new `vidgen.api` names.
+
+### 112.4 Cookbook and review (Step 291)
+
+`docs/COOKBOOK-AUDIODRAMA.md` (its skeleton validated by `test_docs`). Review fixes:
+
+- **Cold-open audio**: `delivery.cold_open_sources(project)` maps each copied beat
+  `cold_open_<id>` to `<id>`; `tts.run.plan_tts` puts it in `plan.reuse` (the source's MP3 in the
+  same folder) when both hashes are equal and the source is current or voiced in this run;
+  `_sources_first` orders the copy after its source; at run time `_copy_source` voices it after
+  all when the source is not current then (a hook skipped it). Alignments and visemes are read
+  under the source's id (`source.stem`; unchanged for the variant copies, same id).
+- **Section locations**: `delivery.scene_sources(data)` (each scene's section index, or
+  `cold_open` / `credits` for added scenes; `None` when nothing moves) feeds
+  `sections.section_location(text, sources)`; `Project.section_sources`, set in `Project._load`
+  (variant merged), names problems and load errors.
+- `cold_open: []` is "no cold open" (was an IndexError).
+- Verified: frame baseline 33 stills, max difference 0; pinned audio-only and video mixes
+  unchanged (test_staging, test_audio_only, test_sound_design, test_scoring).

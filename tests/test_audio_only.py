@@ -275,6 +275,12 @@ def test_video_mix_is_pinned(tmp_path: Path) -> None:
     assert (report.gain_db, report.integrated_lufs, report.true_peak_dbtp) == pytest.approx((7.55, -16.01, -1.9), abs=0.006)
     blocks = _read_24(out).reshape(-1, RATE // 2, 2)
     assert [float(np.sqrt(np.mean(b**2))) for b in blocks] == pytest.approx(PINNED_RMS, abs=2e-6)
+    # Step 288's options neutral (no scene names a bed; sound-design settings of audio:) leave the mix as it was
+    _write(root, {"title": "t", "music": {"source": "calm", "fade_in": 0.5}, "scenes": [{**scenes[0], "ambience": False}, scenes[1]],
+                  "audio": {"normalize": True, "sfx_room": False, "ambience_crossfade": 6.0, "scene_sounds": True}})
+    again = tmp_path / "mix2.wav"
+    mix.mix_audio(Project.load(root), timings, wavs, track, again)
+    assert again.read_bytes() == out.read_bytes()
 
 
 # ----- story draft --audio -----------------------------------------------------------------------------

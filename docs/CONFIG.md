@@ -145,7 +145,8 @@ spoken or shown. `[laugh]`, `[gasp]`, `[sigh]`, `[hmm]`, `[giggle]`, `[groan]` a
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
 that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices). A beat's
 `sting` (default none) plays a short music sting on it: `reveal`, `comic` or `sad`, or `{kind, at,
-gain}`, see [music stings](#foley-and-music-stings). A beat's `music_pause` (default none) stops
+gain}`, see [music stings](#foley-and-music-stings). A beat's `motif` (default none) plays a
+named theme briefly on it ([music for dramas](#music-for-dramas-score-themes-motifs)). A beat's `music_pause` (default none) stops
 [composed music that follows the video](#music-that-follows-the-video) just before it (a
 punchline) until the next bar line after it: `true`, or `false` to stop the automatic pause before
 a `card` scene's first beat or a short last line. A beat's `auto_direct` (default: its scene's,
@@ -3022,9 +3023,11 @@ writes them as WAV files to listen to):
 | `sound` | required | a built-in sound or the project's own (below); in an action written as `- sfx: NAME` (or `sound: NAME`) |
 | `at` | `0` | scene `sfx:` list: seconds from the scene's start; beat action: fraction of the beat's narration or a word it says (`at: "@crash"`), as for every action (rounded to a frame) |
 | `gain` | `0` | dB, -60 to 12; at 0 a sound's loudest 400 ms is −27 LUFS (K-weighted, one channel), about 7 dB under ElevenLabs narration, with peaks at most −9 dBFS |
-| `pan` | `0` | -1 left, 0 centre (full level on both channels), 1 right (equal-power) |
+| `pan` | `0` | -1 left, 0 centre (full level on both channels), 1 right (equal-power); or `far_left`, `left`, `centre`, `right`, `far_right`; a repeated cue also `{from, to}`: its plays step evenly from one to the other (footsteps crossing) |
 | `align` | `start` | `start`: the sound starts at `at`; `end`: it ends there |
 | `params` | `{}` | `duration` (seconds, within the sound's range), `pitch` (semitones, -24 to 24, default 0), `intensity` (0 to 1, default 0.5: brighter and up to 3 dB louder towards 1) — built-in sounds only |
+| `repeat` | `1` | plays it this many times (1–100), `every` seconds apart (default `0.5`): footsteps (every second one a little lower and softer, as a walk's), knocks, rings |
+| `room` | `audio.sfx_room` | the room it sounds in, like a voice: `true` its scene's [room](#stereo-staging-and-rooms-pan-room), a room name (`phone`: a ring heard down the line), `false` / `none` dry |
 
 Video-wide `sfx:`:
 
@@ -3102,7 +3105,7 @@ beats:
 | key | default | |
 |---|---|---|
 | `kind` | required | `reveal` (`sting_reveal`: a "ta-da" chord), `comic` (`sting_comic`: ba-dum-tss) or `sad` (`sting_sad`: a sad trombone); a plain string is the kind |
-| `at` | `start` for `reveal`, `end` for `comic` and `sad` | `start`: as the beat starts; `end`: when its narration ends, in the pause after the line (the beat's `narration.pad`) |
+| `at` | `start` for `reveal`, `end` for `comic` and `sad` | `start`: as the beat starts; `end`: when its narration ends, in the pause after the line (the beat's `narration.pad`); a word the line says (`"@ticket"`, `"@ticket+0.2s"`): on it (a reveal on the word that reveals) |
 | `gain` | `0` | dB, -60 to 12, like a sound effect's |
 
 Stings go on the sound-effect track (any scene type) and duck under the narration like the
@@ -3326,7 +3329,7 @@ sits between (54 %, 1.6 dB emptier in the voice's range than `pulse`).
 | `crossfade` | `2.0` | seconds over which a file's end cross-fades (equal power) into its start at every repeat; beds loop seamlessly |
 | `fade_in` | `1.5` | seconds of fade-in at the cue's start |
 | `fade_out` | `3.0` | seconds of fade-out ending at the cue's end (the video's end) |
-| `duck` | see below | ducking under the narration; `false` for none |
+| `duck` | see below | ducking under the narration: a preset (`light`, `standard`, `drama`, `deep`) or the keys below; `false` for none |
 | `from` | the first scene | (in a list of cues) the scene the cue starts with |
 | `to` | the last scene | (in a list of cues) the scene the cue ends with; cues may not overlap |
 
@@ -3341,6 +3344,8 @@ whole beat when it has no audio yet). Sound effects never duck it.
 | `release` | `1.0` | seconds it takes to come back after the speech |
 | `hold` | `1.5` | pauses shorter than this stay ducked (no pumping between beats); longer pauses, silent scenes and the gaps between narrated scenes bring the music up |
 | `clips` | `true` | a `video_clip` scene whose clip plays sound (not `mute`, `volume` above 0) also ducks the music, for the whole scene |
+| `swell` | `0` | dB the music rises above its level where it is not ducked (pauses of at least `hold`, the lead-in, the tail), following the release and the attack: it swells into the pauses |
+| `preset` | none | the values the other keys start from: `light` (depth 8), `standard` (the defaults), `drama` (depth 18, attack 0.5, release 2.5, hold 1.2, swell 3: dialogue in the clear, music that takes the pauses), `deep` (depth 24, attack 0.6, release 2, hold 2: dense audiobooks); `duck: drama` alone is the preset |
 
 A scene's `music:` — `false` (none: it fades out over the 0.75 s before the scene, back in over
 the 0.75 s after) or `{volume: dB}` (added to the cue's volume during the scene, ramped the same
@@ -3956,7 +3961,7 @@ audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
 | `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
 | `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
 | `bitrate` | `192k` | AAC bitrate of the video's audio: `128k`, `160k`, `192k`, `256k`, `320k`. A loud, dense mix (a Short at −14 LUFS) can come out of FFmpeg's AAC encoder at 192k several dB over `true_peak` (measured: −1.9 dBTP in the mix, +1.9 in the MP4); at 256k it stayed at −1.6. Check the MP4 (`ffmpeg -i out.mp4 -af ebur128=peak=true -f null -`) |
-| `level_voice` | — | a gentle leveller on the voices before the limiter: 3:1 (6 dB soft knee) above the voices' usual peak + 8 dB, 50 ms ramps. Only the loudest syllables come down (by ~0.4 dB on average where it acts), so the limiter barely works: raising the kphi3 narration to −16 LUFS, the limiter's deepest cut fell from 5.2 to 0.7 dB. `true` / `false`; unset: on in audio-only renders with the `podcast` or `audiobook` [preset](#audio-files-audio_output-loudness-presets-transcripts), off otherwise (a video's mix is unchanged unless you set it) |
+| `level_voice` | — | a gentle leveller on the voices before the limiter: 3:1 (6 dB soft knee) above the voices' usual peak + 8 dB, 50 ms ramps. Only the loudest syllables come down (by ~0.4 dB on average where it acts), so the limiter barely works: raising the kphi3 narration to −16 LUFS, the limiter's deepest cut fell from 5.2 to 0.7 dB. `true` / `false`; unset: on in audio-only renders with the `podcast`, `audiobook` or `drama` [preset](#audio-files-audio_output-loudness-presets-transcripts), off otherwise (a video's mix is unchanged unless you set it) |
 
 When the mix is written (music, or `normalize: true`) schu-video-generator measures the sum, applies one gain to
 reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
@@ -4033,7 +4038,8 @@ loudness normalisation and the limiter (`audio:`). `audio_only: true` makes ever
 of the project do that. The timings go to `build/final/audio/timings.json`; `--json` prints them
 with the `mix` report. What only a scene's code makes while it renders is left out and named in
 a warning: stage foley and ambience, automatic animation sounds (`sfx: {auto: true}`), a
-`video_clip`'s sound.
+`video_clip`'s sound; `audio.scene_sounds: true` works most of them out without pictures
+([sound design](#sound-design-ambience-cues-scene_sounds)).
 
 An audio-only project may list `sections` instead of `scenes` (an audiobook, a podcast):
 
@@ -4056,8 +4062,9 @@ sections:
   - pause: 2.0                     # a silent section
 ```
 
-A section (`id`, `title`, `voice`, `room`, `music`, `sfx`, `beats`) becomes a `text_card` scene showing its
-title (a video render is a plain slideshow); its beats are ordinary beats. A beat's `pause: S` (or a
+A section (`id`, `title`, `voice`, `room`, `music`, `sfx`, `ambience`, `beats`) becomes a `text_card` scene showing its
+title (a video render is a plain slideshow); its beats are ordinary beats. A pause section takes
+`sfx`, `music`, `ambience` and `room`. A beat's `pause: S` (or a
 `- pause: S` item after it, in any scene) is the silence after its line, instead of
 `narration.pad` in a video or the gap below in audio. `vidgen schema` knows `sections`, and
 problems name them (`sections[1].beats[0].voice`, `sections[2].pause`).
@@ -4099,12 +4106,14 @@ audio_output: {format: mp3, bitrate: 192k, channels: mono, sample_rate: 44100, l
 | `loudness` | `none` | a preset (below); `none`: the `audio:` settings as they are |
 | `room_tone` | — | dBFS RMS (−90 to −55, e.g. `-72`) of a faint, steady pink noise under the whole file, so pauses are not digital silence |
 | `transcripts` | `true` | `txt`, `srt`, `vtt`, `chapters` (a list), `true` all, `false` none |
+| `split` | `none` | `chapters`: one file per chapter ([delivery](#delivering-an-audio-drama-split-credits-cold_open)) |
 
 | preset | the file must measure | the mix aims for |
 |---|---|---|
 | `podcast` | −16 LUFS stereo / −19 mono (±1 LU), true peak ≤ −1 dBTP | that loudness, limiter −1.5 dBTP, `level_voice` on |
 | `audiobook` | ACX: RMS −23 to −18 dB, peaks ≤ −3 dB, noise floor ≤ −60 dB, 0.5–1 s of room tone before the first sound and 1–5 s after the last; notes (not failures) on ACX's format (MP3 ≥ 192 kb/s CBR, 44.1 kHz) and length (≤ 120 min a file) | RMS −20 dB, limiter −3.5 dBTP, `level_voice` on; `pacing` `lead_in: 0.6`, `tail: 2.5` where unset |
 | `broadcast` | EBU R128: −23 LUFS (±0.5 LU), true peak ≤ −1 dBTP | that, limiter −1.5 dBTP |
+| `drama` | podcast loudness (−16 / −19 mono ±1 LU, ≤ −1 dBTP), loudness range ≤ 10 LU, even dialogue, music under the voices ([checks](#delivering-an-audio-drama-split-credits-cold_open)); no noise-floor or room-tone gate | as `podcast`; the music check runs for any music |
 | `custom` | `audio.target_lufs` (±1 LU), true peak ≤ `audio.true_peak` | that |
 
 A preset always normalises (`audio.normalize` aside). A mono file's loudness is its one channel's:
@@ -4188,6 +4197,179 @@ cancels) and how much quieter the fold `(L + R) / 2` is (≤ 3.5 dB; a voice pan
 loses 3 dB, `left` 0.7 dB). The render prints `mono: PASS correlation 0.71 (≥ 0); worst second
 0.16 (≥ -0.3); mono fold 0.8 dB (≤ 3.5)` and warns when it fails; `timings.json` / `--json` carry
 it as `stereo`. `audio_output.channels: mono` simply averages the channels.
+
+### Sound design (`ambience`, cues, `scene_sounds`)
+
+Opt-in, for audio dramas and audiobooks (and videos: a scene's `ambience` and the cue options
+work there too). Nothing changes until one of these is set.
+
+```yaml
+audio: {ambience_crossfade: 3, sfx_room: true}     # beds cross-fade over 3 s; cues sound in their scene's room
+sections:
+  - title: The Porch
+    room: outdoors
+    ambience: {beds: [rain, city], gain: 1}        # or a bed (ambience: rain) or a list
+    beats:
+      - text: The rain had not stopped when Sam reached the house.
+        actions: [{sfx: step_stone, at: "@reached", repeat: 5, every: 0.45, pan: right}]
+      - text: He knocked, and the door creaked open.
+        actions: [{sfx: knock, at: "@knocked"}, {sfx: creak, at: "@creaked", gain: -3}]
+  - title: The Hall
+    room: small_office
+    ambience: {beds: {room_tone: 4, rain: -14}}     # bed -> dB: the rain through the walls
+    beats:
+      - text: Sam crossed the hall to the fire.
+        actions: [{sfx: step_wood, at: "@crossed", repeat: 7, every: 0.48, pan: {from: far_left, to: far_right}}]
+      - text: Then the phone began to ring.
+        actions: [{sfx: phone, at: "@ring", repeat: 3, every: 1.5, pan: far_left, room: phone}]
+      - text: Outside, the rain stopped.
+        ambience: {stop: rain, at: "@stopped", fade: 2.5}
+```
+
+- **`ambience`** of a scene, section or pause section: beds under it — `rain`, `fire`,
+  `birdsong`, `city`, `room_tone`, `crickets`, `hum` (a lab, a ship), `alarm` (the
+  [stage beds](#ambience-and-door-sounds-ambience-knock), at their own quiet levels and ducking
+  under the voices); a list; or `{beds, gain, width}` (`beds` a list or `{bed: dB}`; `gain` dB for
+  all; `width` 0–2, default `audio.ambience_width`); `false`: none. At a scene change the beds
+  that change fade out and the next scene's fade in over **`audio.ambience_crossfade`** (`2` s;
+  0–20) centred on the change; a bed at the same level and width plays on without a dip. The
+  first beds fade in from the start, the last fade out at the end. A stage's own set beds still
+  play beside them (in a video, or with `scene_sounds`).
+- **A beat's `ambience`** starts or stops beds during its line: `{start: rain}` / `{stop: hum}`
+  (a bed, a list, or `stop: all`), `at` a fraction of the line (`0`), a word it says
+  (`"@stopped"`, `"@rain#2"`, `"@rain+0.5s"`) or `end`; `fade` seconds (the bed's own: rain
+  1.5 in, 1.5 out); `gain` dB of the beds that start. A list makes several changes.
+- **Cues** (a scene's `sfx:` and the `sfx` action): `repeat` / `every`, named `pan` positions and
+  `{from, to}` steps, and `room` ([table](#sound-effects-sfx)). **`audio.sfx_room`** (`false`):
+  every cue without its own `room` sounds in its scene's room, panned with its reflections, the
+  tail wide (a knock in a hall rings on); cues stay dry in a scene without a room.
+- **`audio.scene_sounds`** (`false`; audio-only renders): also play what the scenes would sound
+  like, worked out from the config without rendering: a `stage`'s set ambience and rain, the
+  footsteps of `walk_to` / `run_to` / `enter` / `exit` on a plain stage (panned where the walk
+  goes; each character's `cartoon_motion`), doors opening and closing, `knock`, light switches,
+  `jump`, a surprised `emote` / `react` and `effect` sounds, in the scene's room with
+  `sfx_room`; and a `video_clip`'s own sound (its trim, speed, loop and `volume`). The same
+  events as the video's scene code makes, within about 50 ms. Still left out, and named in the
+  warning: moves on a platform `level` or an iso place, vehicles, thrown props, pours,
+  lightning, alarms, fires and ringing phones (cue those with `sfx`).
+
+### Music for dramas (`score`: themes, motifs)
+
+Opt-in, for audio dramas (and videos): named themes that scenes and sections play, cross-fading
+at the changes, motifs on beats, stings on words, ducking that swells into the pauses, and a
+check that the music does not fight dense dialogue. Nothing changes until a scene names a theme
+or a beat a motif.
+
+```yaml
+score:
+  themes:
+    main: love                                     # a project piece: assets/music/love.yaml (a studio score file)
+    tension: {source: enigma, volume: -1}          # a built-in bed
+    warm: calm
+    love: {source: love, section: b, tracks: [melody], volume: -2}   # the piano alone, its second phrase
+  crossfade: 4                                     # seconds, centred on each scene change
+  duck: drama                                      # 18 dB under the voices, 2.5 s release, 3 dB swell into pauses
+sections:
+  - {title: The Last Train, music: main, beats: ["The Last Train. A story in two scenes."]}
+  - pause: 2.5                                     # main plays on and swells
+  - title: The Platform
+    music: tension                                 # main cross-fades into tension
+    beats:
+      - {text: "Do you remember the summer we met?", voice: mara, motif: {theme: love, at: "@remember", length: 7}}
+      - text: She held up a ticket, yellow with age.
+        sting: {kind: reveal, at: "@ticket"}
+  - title: Morning
+    music: warm
+    beats:
+      - text: She smiled, and somewhere a radio played their song.
+        motif: {theme: love, at: end, length: 8, variation: {transpose: 2}}
+  - {title: Credits, music: main, beats: ["The Last Train."]}
+```
+
+- **`score.themes`**: name → a built-in bed, a project piece (a [score file](#score-files-vidgen-music-render)
+  under `assets/music`) or an audio file, or `{source, volume, section, start, transpose,
+  tempo, tracks}`. A scene's or section's `music:` may name one directly (a bed or project piece
+  needs no entry).
+- **A scene's `music: NAME`** (or `{theme, variation, volume}`) plays that theme from the scene
+  on: the scenes after it keep it (a pause swells under it) until one names another or says
+  `music: false` (it stops). At a change the theme playing fades out and the next fades in over
+  **`score.crossfade`** (`3` s) centred on the change, in **`score.curve`**: `equal_power` (the
+  default: two different pieces at an even loudness), `linear` or `smooth`. The same theme with the
+  same variation plays on. The first theme fades in over `score.fade_in` (`2`), the last out over
+  `score.fade_out` (`4`). A new theme starts from its beginning (or `section`), so a theme that
+  returns is recognised. `{volume: dB}` still changes the level in one scene.
+- **Variations** (`variation:` on a scene or a motif, or on the theme): `section` / `start` (where
+  it starts), `transpose` (semitones, its pitched tracks), `tempo`, `tracks` (only these play: a
+  sparse version). All but `section` / `start` render the theme's score again (a project piece,
+  a score bed, or a built-in bed's [score template](#score-files-vidgen-music-render), a close
+  re-creation; kept in `build/music`), at the music level; an audio file cannot vary. Unknown
+  tracks or sections are problems with a did-you-mean.
+- **A beat's `motif:`** (`love`, or `{theme, at, length, fade_in, fade_out, gain, dip,
+  variation}`): the theme heard over the scene's theme from `at` (`start`, `end`: into the pause
+  after the line, a word `"@remember"`, or a fraction of the line) for `length` seconds (`6`,
+  fades `1` in / `2.5` out), from its beginning or `section`; the scene's theme dips `dip` dB
+  (`score.motif_dip`, `6`) meanwhile.
+- **Stings**: a beat's `sting:` may be on a word (`at: "@ticket"`, [stings](#foley-and-music-stings));
+  the scene's theme dips `score.sting_dip` dB (`4`) while it sounds.
+- **`score.duck`** (default `drama`): how the themes and motifs [duck](#background-music-music)
+  under the voices and swell in the pauses: a preset or `{preset, depth, attack, release, hold,
+  clips, swell}`. The presets work on `music:` cues too (`duck: deep`).
+- **Check** (`score.check`: on when scenes play themes; `true` also for `music:` cues; `false`
+  off): after the mix the music (not the ambience) is measured against the voices — where the
+  speech fills at least 80% of 5 s it must stay `score.dense_lu` (`15`) LU under them, else a
+  warning names the times (`music: in dense dialogue the music is less than 15 LU under the voices
+  at 6.9-11.0 s (8.1 LU): duck it deeper (score.duck: deep) or lower it there`). `timings.json`
+  `mix.music_check`: `{under_dialogue_lu, in_pauses_lu, dense: [{start, end, lu}], worst_dense_lu,
+  dense_lu, ok}`; each theme in `mix.music` has `theme` (and `motif: true`, `swell`).
+- Themes are mixed like `music:` cues (`audio.music_width`, normalisation, the limiter), in
+  audio-only renders and when a video is joined (no re-render).
+
+### Delivering an audio drama (`split`, `credits`, `cold_open`)
+
+Opt-in; nothing changes until one is set.
+
+```yaml
+audio_output: {format: mp3, loudness: drama, split: chapters}
+cold_open: [platform_b7, platform_b8]       # these lines first, then the title and the theme
+credits: {speak: true, lines: ["Music by the studio."]}
+```
+
+- **`loudness: drama`**: the `podcast` loudness (−16 LUFS stereo / −19 mono ±1 LU, true peak ≤ −1
+  dBTP; `level_voice` on) plus checks suited to listening on earbuds and phones (recommendations,
+  not a platform's rules): **loudness range** ≤ 10 LU; **dialogue lines** — each line's loudness
+  (BS.1770-gated, from FFmpeg's 100 ms momentary loudness over its speech; lines ≥ 0.8 s) within
+  6 LU from the 10th to the 90th percentile; **voices** — each speaker's level (Narrator, Mara...)
+  within 4 LU of the others; **music under dialogue** — the [music check](#music-for-dramas-score-themes-motifs)'s
+  `under_dialogue_lu` and its worst dense run at least `score.dense_lu` (15) LU (it runs for any
+  music under this preset). No noise-floor or room-tone gate. `vidgen audio check FILE` can only
+  note the dialogue checks; `vidgen audio check PROJECT` reads the render's `timings.json`.
+- **`audio_output.split: chapters`**: one file per chapter (a section with a `title`, a scene with
+  a `chapter`): `<output>_01_<title>.<format>`, `_02_...`, each normalised to the preset on its
+  own, an `<output>.m3u` playlist (`#EXTINF` seconds and titles; files it listed before and no
+  longer does are removed), and each file's `_transcript.txt`, `.srt`, `.vtt` at its own times
+  (no `_chapters.txt`). What comes before the first chapter (a cold open) is in the first file.
+  A file starts `pacing.lead_in` before its chapter's first line (at most half-way back into the
+  silence before it) with a 0.3 s fade, and ends with a fade of up to 2 s after its last line.
+  The check measures every file and then the files against each other: loudness within 1 LU,
+  dialogue (the median line) within 2 LU. `timings.json` `audio_output: {split, playlist, files:
+  [{file, title, start, end, check, stereo}], files_check, check}`; `mix.parts` has each file's
+  gain and level. Tags: `title` "Title: Chapter", `track` "1/2".
+- **`credits: {speak: true}`**: a closing scene (section) `credits` read by the narrator (`voice`:
+  another): the title (`title`), "Starring Bella as Mara and Adam as Jonas." (every named voice
+  that speaks, in order, by its `label`; `voiced_by: {mara: Ana Lima, narrator: Jo}` names the
+  actors; a Kokoro voice's own name otherwise, `af_bella` → Bella; with neither, the character
+  alone), "Narrated by George." and `lines`. `cast: false` leaves the cast out; `music` (a score
+  theme, default `main` when the score has one; `false`: none) plays under; `chapter` gives it a
+  chapter (and a file) of its own; `id` (default `credits`). The text is English; write other
+  languages as `lines` with `cast: false`.
+- **`cold_open`**: a scene or section id — moved to the very start, its chapter title dropped (it
+  belongs to the first chapter's file); or a list of beat ids — copied in that order into a scene
+  `cold_open` at the start (`cold_open_<beat id>`; `vidgen tts` copies each one's audio from its
+  line when both say the same in the same voice; the lines are heard again in their place), with
+  the first beat's room, ambience and music; a copied beat keeps its sound actions only. In a
+  video both are ordinary card scenes. Problems in a project written with `sections:` name the
+  section they come from (`cold_open` / `credits` for the added scenes); in a `scenes:` project
+  they are located after the move.
 
 ## Transitions (`transition`)
 
@@ -13654,7 +13836,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. On a [platform level](#the-camera-on-a-level-follow) it follows gently (a dead zone, easing) and up and down too. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`; a label that says one of the video's [terms](#one-colour-per-concept-terms): its colour), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
-| `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
+| `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`, a position, or `{from, to}` with `repeat`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`), `repeat` (`1`), `every` (`0.5` s), `room` (`audio.sfx_room`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
 | `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
 | `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`); `move_sun` (`false`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action; `move_sun: true` moves the sun and moon across the sky meanwhile, the shadows turning. Its "target" is the light, not a target of the scene; no `until`. |
@@ -15421,7 +15603,10 @@ transcript_vtt, transcript_chapters}` (the transcripts written), `mix` (with `le
 `target_rms`, `mono` when they apply), `check` (the file against its loudness preset, as in
 [`vidgen audio --json`](#vidgen-audio---json), or `null`), `stereo` (the mono-compatibility
 check with [staging](#stereo-staging-and-rooms-pan-room) set, else `null`), `chapters` and
-`scenes` (`{id, type, start, duration, beats}`).
+`scenes` (`{id, type, start, duration, beats}`). Split into chapter files
+([`split`](#delivering-an-audio-drama-split-credits-cold_open)): `outputs.audio` is the `.m3u`,
+the transcripts are `transcript_txt_01`, ..., `check` holds every file's items (`01 loudness`)
+and the files', and `files` lists `{file, title, start, end, check, stereo}`.
 
 ### `vidgen audio --json`
 
@@ -15434,7 +15619,9 @@ check with [staging](#stereo-staging-and-rooms-pan-room) set, else `null`), `cha
 | `checks` | list | per preset: `{preset, description, ok, items}`, each item `{name, value, target, status}` (`pass`, `fail`, or a `note` that does not count); a stereo file ends with the `mono` check |
 
 `ok` is false when the preset asked for (`--preset`, or the project's `audio_output.loudness`)
-fails, or with `--mono` the mono check.
+fails, or with `--mono` the mono check. A project split into chapter files adds `files` (`{file,
+measured, checks}` each; `file` / `measured` / `checks` are the first's) and `files_check` (the
+files against each other); `ok` is false when any file or that check fails.
 
 ### `vidgen storyboard --json`
 

@@ -4,7 +4,9 @@ Settings that worked for audio without pictures: an audiobook of a short story, 
 episode, and the soundtrack of an existing video. The reference is in
 [CONFIG.md](CONFIG.md#audio-only-audio_only-sections-pacing) (`audio_only`, `sections`, `pacing`)
 and [CONFIG.md](CONFIG.md#audio-files-audio_output-loudness-presets-transcripts) (`audio_output`,
-presets, `vidgen audio check`). An audio-only render takes seconds: no scene is drawn.
+presets, `vidgen audio check`). An audio-only render takes seconds: no scene is drawn. A
+dramatized audiobook with a score, sound design and a file per chapter:
+[COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md).
 
 ## 1. Two starting points
 
@@ -94,7 +96,8 @@ Any video project becomes an episode with `vidgen render --audio-only` and a var
   `phone`); a line can walk: `pan: {from: right, to: left}`. `audio.music_width: 0.7` leaves the
   sides to the voices. An audiobook for ACX is better without rooms on the narration (the default)
   and with modest pans (`left` / `right`, not `far_*`): many listen on one earbud. See
-  [CONFIG: Stereo staging and rooms](CONFIG.md#stereo-staging-and-rooms-pan-room).
+  [CONFIG: Stereo staging and rooms](CONFIG.md#stereo-staging-and-rooms-pan-room) and
+  [COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md).
 
 ## 5. Checking without listening
 

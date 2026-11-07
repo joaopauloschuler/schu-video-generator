@@ -5,7 +5,36 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–286)
+## Unreleased (Steps 193–291)
+
+### Audio drama cookbook; Phase AG review (Step 291)
+
+- `docs/COOKBOOK-AUDIODRAMA.md`: structure, casting, narrator balance, rooms and stereo, score, sound design, pacing, the drama checks and a file per chapter, with measured numbers.
+- `vidgen tts` copies a cold open's lines from the lines' own audio instead of voicing them again.
+- Problems in a `sections:` project with a cold open or spoken credits name the right section (`cold_open` / `credits` for the added scenes); `cold_open: []` no longer crashes.
+
+### Delivering an audio drama (Step 290)
+
+- `audio_output: {loudness: drama}`: podcast loudness (−16 LUFS stereo / −19 mono, −1 dBTP) with checks for earbuds — loudness range ≤ 10 LU, every line and every voice at an even level, the music at least 15 LU under the voices; `vidgen audio check PROJECT --preset drama`.
+- `audio_output: {split: chapters}`: one file per chapter, each at the preset's loudness, with an `.m3u` playlist and each file's transcripts.
+- `credits: {speak: true}`: closing credits read from the cast ("Starring Bella as Mara and Adam as Jonas. Narrated by George."), the main theme under them.
+- `cold_open: [beat ids]` (or a section id): those lines first, then the title and the theme.
+- All opt-in: projects without these keys sound exactly as before.
+
+### Music cues for drama (Step 289)
+
+- `score: {themes: {main: love, tension: enigma}, crossfade: 4, duck: drama}`: a scene's or section's `music: tension` plays a named theme from there on, cross-fading at the change (`curve: equal_power | linear | smooth`); variations `{section, start, transpose, tempo, tracks}` re-render the theme's score.
+- A beat's `motif: {theme: love, at: "@remember"}` plays a theme briefly over the scene's; `sting: {kind: reveal, at: "@ticket"}` on a word.
+- Ducking presets (`duck: light | standard | drama | deep`, on `music:` cues too) and `swell`: the music rises into the pauses.
+- The render measures the music under dense dialogue and warns when it is less than 15 LU under the voices (`mix.music_check`).
+- All opt-in: projects without these keys sound exactly as before.
+
+### Sound design for audio dramas (Step 288)
+
+- `ambience:` on a scene or section (`rain`, `city`, `hum`, `room_tone`, `fire`, ... or `{beds, gain, width}`) plays beds that cross-fade at scene changes (`audio.ambience_crossfade`); a beat's `ambience: {start | stop, at: "@word"}` changes them on a word.
+- Sound cues repeat (`repeat`, `every`; footsteps alternate feet), take named pans and `pan: {from, to}` steps across, and sound in a room (`room:`, or `audio.sfx_room: true` for all).
+- `audio.scene_sounds: true`: audio-only renders play the stage sounds they can work out without pictures (set beds, walks, doors, knocks, switches, jumps) and a `video_clip`'s sound.
+- All opt-in: projects without these keys sound exactly as before.
 
 ### Phase AF review (Step 286)
 

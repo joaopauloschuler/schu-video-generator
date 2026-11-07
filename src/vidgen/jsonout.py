@@ -941,6 +941,7 @@ def audio_render_document(project: Project, result: AudioRenderResult, preview: 
         stereo=timings.get("stereo"),
         chapters=timings.get("chapters", []),
         scenes=scenes,
+        **({"files": timings["audio_output"]["files"]} if result.files else {}),   # audio_output.split (§112.3); outputs.audio: the playlist
     )
 
 

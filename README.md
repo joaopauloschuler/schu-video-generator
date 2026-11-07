@@ -926,7 +926,9 @@ my_video/
   detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
   mistakes and the lint rules that catch them;
   [docs/COOKBOOK-AUDIO.md](docs/COOKBOOK-AUDIO.md) — audiobooks and podcasts without pictures:
-  loudness presets and targets, formats, pacing, voices, checking a file.
+  loudness presets and targets, formats, pacing, voices, checking a file;
+  [docs/COOKBOOK-AUDIODRAMA.md](docs/COOKBOOK-AUDIODRAMA.md) — dramatized audiobooks: structure,
+  casting, rooms and stereo, score and sound design, the drama checks, a file per chapter.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

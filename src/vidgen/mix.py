@@ -27,6 +27,11 @@ the sum (:class:`LevelledTrack`); an audio-only render's loudness preset passes
 :class:`MixTargets` (a file loudness or RMS, a mono mix, a limiter setting, a room tone added
 after the gain). ``audio.music_width`` / ``ambience_width`` (§111.4) scale the side signal of the
 music and of the beds. Without them a video's mix is what it was.
+
+Opt-in (DESIGN.md §112.2): the scenes' themes and the beats' motifs of ``score:``
+(:func:`plan_score`, :mod:`vidgen.scoring`) are music placements beside the cues; a duck's
+``swell`` lifts the music in the pauses (:func:`duck_gain_db`); ``score.check`` measures the music
+under dense dialogue after the mix.
 """
 
 from __future__ import annotations
@@ -42,7 +47,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from vidgen import loudness, musicfit
-from vidgen.ambience import AMBIENCE_BEDS, BEDS, LoopSource, ambience_spans
+from vidgen.ambience import AMBIENCE_BEDS, BEDS, LoopSource, ambience_spans, designed_entries
 from vidgen.config import DuckConfig, MusicCue, SceneMusic
 from vidgen.errors import VidgenError
 from vidgen.music import Source, cue_scene_range, fallback_bed
@@ -265,11 +270,14 @@ class Placement:
     source: Source
     gain: np.ndarray
     fit: dict[str, Any] | None = None  # composed music fitted to the video (musicfit summary)
+    theme: str | None = None  # a scene's theme or a beat's motif (DESIGN.md §112.2): its name
+    motif: bool = False
 
     def summary(self) -> dict[str, Any]:
         """``{source, kind, from, to, start, end, volume, duck}`` (times in seconds), and
-        ``fit`` (sections, swells, pauses) for composed music fitted to the video."""
-        data = {
+        ``fit`` (sections, swells, pauses) for composed music fitted to the video; a theme's
+        ``theme`` (and ``motif: true``) and ``swell``."""
+        data: dict[str, Any] = {
             "source": self.source.label,
             "kind": self.source.kind,
             "from": self.scenes[0],
@@ -281,6 +289,12 @@ class Placement:
         }
         if self.fit is not None:
             data["fit"] = self.fit
+        if self.theme is not None:
+            data["theme"] = self.theme
+            if self.motif:
+                data["motif"] = True
+        if self.cue.duck.swell:
+            data["swell"] = self.cue.duck.swell
         return data
 
 
@@ -295,10 +309,14 @@ class AmbiencePlacement:
     source: LoopSource
     gain: np.ndarray
     duck: float
+    width: float | None = None  # its own stereo width (a scene's ambience, DESIGN.md §112); None: audio.ambience_width
 
     def summary(self) -> dict[str, Any]:
-        """``{bed, start, end, duck}`` (times in seconds)."""
-        return {"bed": self.bed, "start": round(self.start / RATE, 6), "end": round(self.end / RATE, 6), "duck": self.duck}
+        """``{bed, start, end, duck}`` (times in seconds), and ``width`` when it has its own."""
+        data = {"bed": self.bed, "start": round(self.start / RATE, 6), "end": round(self.end / RATE, 6), "duck": self.duck}
+        if self.width is not None:
+            data["width"] = self.width
+        return data
 
 
 class MusicTrack:
@@ -318,7 +336,11 @@ class MusicTrack:
                 continue
             gain = np.interp(np.arange(lo, hi) / FRAME, np.arange(len(p.gain)), p.gain)
             part = p.source.read(lo - p.start, hi - p.start) * gain[:, None]
-            out[lo - a : hi - a] += widen(part, self.widths[1 if isinstance(p, AmbiencePlacement) else 0])
+            if isinstance(p, AmbiencePlacement):
+                width = self.widths[1] if p.width is None else p.width
+            else:
+                width = self.widths[0]
+            out[lo - a : hi - a] += widen(part, width)
         return out
 
 
@@ -388,6 +410,27 @@ def _fade_curve(times: np.ndarray, start: float, end: float, fade_in: float, fad
     return out
 
 
+def _scene_curve(project: Project, scenes: Sequence[dict[str, Any]], frames: int) -> np.ndarray:
+    """The level each scene's ``music:`` asks for, per frame, its steps smoothed into ramps on
+    the louder side (:data:`SCENE_RAMP`)."""
+    levels = np.ones(frames)
+    for spec, scene in zip(project.config.scenes, scenes):
+        lo = round(scene["start"] * 100)
+        levels[lo:] = _scene_level(spec.music)
+    return smooth_steps(levels, round(SCENE_RAMP * 100))
+
+
+def duck_gain_db(spans: Sequence[tuple[float, float]], frames: int, duck: DuckConfig) -> np.ndarray:
+    """The music's gain in dB per frame under ``spans`` (:func:`duck_curve`) plus its ``swell``:
+    up to ``swell`` dB where it is not ducked, rising with the release and falling with the
+    attack (DESIGN.md §112.2)."""
+    gain = duck_curve(spans, frames, duck)
+    if duck.swell > 0:
+        released = 1.0 + duck_curve(spans, frames, duck.model_copy(update={"depth": 1.0}))
+        gain = gain + duck.swell * released
+    return gain
+
+
 def plan_music(project: Project, timings: dict[str, Any], total: int) -> list[Placement]:
     """Place the ``music:`` cues in the video of ``total`` samples (``timings``: the combined
     timings): their spans, sources and gain curves (volume, fades, scene levels, ducking)."""
@@ -399,12 +442,7 @@ def plan_music(project: Project, timings: dict[str, Any], total: int) -> list[Pl
     order = [s["id"] for s in scenes]
     frames = total // FRAME + 2
     times = np.arange(frames) * FRAME / RATE
-    # the level each scene asks for, per frame, its steps smoothed into ramps on the louder side
-    levels = np.ones(frames)
-    for spec, scene in zip(cfg.scenes, scenes):
-        lo = round(scene["start"] * 100)
-        levels[lo:] = _scene_level(spec.music)
-    scene_curve = smooth_steps(levels, round(SCENE_RAMP * 100))
+    scene_curve = _scene_curve(project, scenes, frames)
     speech = speech_spans(project, timings)
     clips = None
     placements = []
@@ -428,9 +466,52 @@ def plan_music(project: Project, timings: dict[str, Any], total: int) -> list[Pl
             10 ** (cue.volume / 20)
             * _fade_curve(times, start / RATE, stop / RATE, cue.fade_in, fade_out)
             * scene_curve
-            * 10 ** (duck_curve(spans, frames, cue.duck) / 20)
+            * 10 ** (duck_gain_db(spans, frames, cue.duck) / 20)
         )
         placements.append(Placement(k, cue, start, stop, order[first : last + 1], source, gain, fitted.summary(start / RATE) if fitted else None))
+    return placements
+
+
+def plan_score(project: Project, timings: dict[str, Any], total: int) -> list[Placement]:
+    """Place the scenes' themes and the beats' motifs (``score:``, DESIGN.md §112.2;
+    :mod:`vidgen.scoring`) in the audio of ``total`` samples: each piece's source, its fades in
+    ``score.curve``, its level, the scenes' levels, ``score.duck`` (with its swell) and, on the
+    scene themes, the dips under motifs and stings."""
+    from vidgen import scoring
+
+    cfg = project.config
+    if not scoring.uses_score(cfg):
+        return []
+    score = cfg.score
+    duck = score.duck
+    assert isinstance(duck, DuckConfig)
+    scenes = timings["scenes"]
+    order = [s["id"] for s in scenes]
+    frames = total // FRAME + 2
+    times = np.arange(frames) * FRAME / RATE
+    scene_curve = _scene_curve(project, scenes, frames)
+    spans = speech_spans(project, timings)
+    if duck.clips and duck.depth > 0:
+        spans = spans + clip_spans(project, timings)
+    ducking = 10 ** (duck_gain_db(spans, frames, duck) / 20)
+    pieces = scoring.theme_pieces(cfg, [(float(s["start"]), float(s["duration"])) for s in scenes], total / RATE)
+    pieces += scoring.motif_pieces(project, timings)
+    stings = scoring.sting_windows(project, timings) if score.sting_dip > 0 else []
+    dips = 10 ** (scoring.dip_curve(times, pieces, stings, score.sting_dip, score.curve) / 20)
+    sources: dict[scoring.ThemePlay, Any] = {}
+    placements = []
+    for piece in pieces:
+        start, end = round(piece.start * RATE), min(round(piece.end * RATE), total)
+        if end <= start:
+            continue
+        if piece.play not in sources:
+            sources[piece.play] = scoring.theme_source(piece.play, project)
+        fades = scoring.envelope(times, piece.start, end / RATE, piece.fade_in, piece.fade_out, score.curve)
+        gain = 10 ** (piece.play.volume / 20) * fades * scene_curve * ducking * (1.0 if piece.motif else dips)
+        cue = MusicCue(source=piece.play.source, volume=piece.play.volume, duck=duck, fade_in=piece.fade_in, fade_out=piece.fade_out)
+        last = next((k for k in range(len(scenes) - 1, -1, -1) if scenes[k]["start"] < end / RATE), piece.scene)
+        placements.append(Placement(-1, cue, start, end, order[piece.scene : last + 1] or [order[piece.scene]], sources[piece.play], gain,
+                                    theme=piece.play.name, motif=piece.motif))
     return placements
 
 
@@ -458,6 +539,22 @@ def plan_ambience(project: Project, timings: dict[str, Any], total: int) -> list
             if end > start:
                 gain = _fade_curve(times, a, b, bed.fade_in, bed.fade_out) * ducking
                 placements.append(AmbiencePlacement(name, start, end, source, gain, bed.duck.depth))
+    designed = designed_entries(timings)
+    if designed:  # a scene's / beat's ambience (DESIGN.md §112): each piece with its own fades, level and width
+        speech = speech_spans(project, timings) if speech is None else speech
+        ducks: dict[str, np.ndarray] = {}
+        for entry in designed:
+            name = str(entry["bed"])
+            bed = BEDS[name]
+            if name not in ducks:
+                ducks[name] = 10 ** (duck_curve(speech, frames, bed.duck) / 20)
+            a, b = float(entry["start"]), float(entry["end"])
+            start, end = round(a * RATE), min(round(b * RATE), total)
+            if end > start:
+                fades = _fade_curve(times, a, b, float(entry["fade_in"]), float(entry["fade_out"]))
+                gain = 10 ** (float(entry.get("gain", 0.0)) / 20) * fades * ducks[name]
+                width = entry.get("width")
+                placements.append(AmbiencePlacement(name, start, end, LoopSource(bed.loop()), gain, bed.duck.depth, None if width is None else float(width)))
     return placements
 
 
@@ -481,10 +578,13 @@ class MixReport:
     levelled_db: float | None = None  # the voice leveller's largest gain reduction (None: off)
     target_rms: float | None = None  # normalised to this RMS (dBFS) instead of target_lufs
     mono: bool = False  # the left and right mixed to one before the limiter
+    music_check: dict[str, Any] | None = None  # the music under dense dialogue (score.check, DESIGN.md §112.2)
+    parts: list[dict[str, Any]] = field(default_factory=list)  # the files of a split mix (audio_output.split, §112.3)
 
     def to_json(self) -> dict[str, Any]:
         """The report; ``ambience`` only when a bed played (DESIGN.md §69.39); ``levelled_db``,
-        ``target_rms`` and ``mono`` only when set (DESIGN.md §111.2)."""
+        ``target_rms`` and ``mono`` only when set (DESIGN.md §111.2); ``music_check`` when
+        measured (§112.2)."""
 
         def num(value: float | None) -> float | None:
             return None if value is None or not math.isfinite(value) else round(value, 2)
@@ -508,6 +608,10 @@ class MixReport:
             data["target_rms"] = self.target_rms
         if self.mono:
             data["mono"] = True
+        if self.music_check is not None:
+            data["music_check"] = self.music_check
+        if self.parts:
+            data["parts"] = self.parts
         return data
 
 
@@ -521,7 +625,8 @@ class MixTargets:
     of ``audio:``: the file's integrated loudness ``lufs`` (a mono file's, when ``mono``: the mix
     is the channels' average in both, so it measures :data:`DUAL_MONO_LU` more) or its RMS
     ``rms`` (dBFS), the limiter's ``true_peak``, the voice leveller, a ``room_tone`` (dBFS RMS)
-    under everything."""
+    under everything, and whether the music is measured under the voices (``music_check``: the
+    drama preset, §112.3, unless ``score.check: false``)."""
 
     lufs: float | None = None
     rms: float | None = None
@@ -529,6 +634,7 @@ class MixTargets:
     mono: bool = False
     level_voice: bool = False
     room_tone: float | None = None
+    music_check: bool = False
 
 
 def limit(x: np.ndarray, ceiling: float) -> tuple[np.ndarray, float]:
@@ -575,6 +681,61 @@ def write_mix(
     return meter, lowest
 
 
+@dataclass(frozen=True)
+class MixPart:
+    """One file of a split mix (``audio_output.split``, DESIGN.md §112.3): samples ``start`` to
+    ``end`` of the whole, faded in and out over ``fade_in`` / ``fade_out`` seconds at its edges
+    (raised cosine), written to ``path`` normalised on its own."""
+
+    path: Path
+    start: int
+    end: int
+    fade_in: float = 0.0
+    fade_out: float = 0.0
+
+    def reader(self, read: Callable[[int, int], np.ndarray]) -> Callable[[int, int], np.ndarray]:
+        """``read`` of the whole as this part's samples, its fades applied."""
+        n = self.end - self.start
+        fade_in, fade_out = round(self.fade_in * RATE), round(self.fade_out * RATE)
+
+        def part(a: int, b: int) -> np.ndarray:
+            x = read(self.start + a, self.start + b)
+            if fade_in or fade_out:
+                at = np.arange(a, b, dtype=np.float64)
+                gain = np.ones(b - a)
+                if fade_in:
+                    gain *= 1.0 - _ramp(at / fade_in)
+                if fade_out:
+                    gain *= _ramp((at - (n - fade_out)) / fade_out)
+                x = x * gain[:, None]
+            return x
+
+        return part
+
+
+def _write_part(part: MixPart, read: Callable[[int, int], np.ndarray], gain_db: float, target: tuple[float | None, float | None] | None,
+                true_peak: float, floor: np.ndarray | None) -> dict[str, Any]:
+    """Write ``part`` of the mix ``read``: normalised to ``target`` (``(lufs, rms)``) on its own,
+    else with the whole's ``gain_db``; returns its entry of :attr:`MixReport.parts`."""
+    n = part.end - part.start
+    sub = part.reader(read)
+    gain = gain_db
+    if target is not None:
+        lufs, rms = target
+        before = rms_db(n, sub) if rms is not None else loudness.measure(n, sub, peaks=False).integrated
+        if math.isfinite(before):
+            gain = (rms if rms is not None else lufs or 0.0) - before
+    meter, lowest = write_mix(part.path, sub, n, gain, true_peak, floor)
+
+    def num(value: float) -> float | None:
+        return round(value, 2) if math.isfinite(value) else None
+
+    return {
+        "file": part.path.name, "start": round(part.start / RATE, 3), "end": round(part.end / RATE, 3), "gain_db": num(gain),
+        "integrated_lufs": num(meter.integrated), "true_peak_dbtp": num(meter.true_peak), "limited_db": num(-20 * math.log10(lowest) if lowest > 0 else math.inf),
+    }
+
+
 def _has_narration_audio(project: Project) -> bool:
     """Whether some beat has its MP3, or the video has no narrated beats at all."""
     beats = [beat.id for _, beat in project.beats()]
@@ -589,6 +750,7 @@ def mix_audio(
     out: Path,
     always_write: bool = False,
     targets: MixTargets | None = None,
+    parts: Sequence[MixPart] = (),
 ) -> MixReport:
     """Mix the video's audio (``timings``: combined timings; ``voices``: the padded scene WAVs in
     order; ``sfx_track``: the SFX track or ``None``).
@@ -600,7 +762,8 @@ def mix_audio(
     ``out``). A video whose narrated beats have no MP3 yet is not normalised. The voices go
     through the leveller with ``audio.level_voice: true``. ``targets`` (an audio-only render's
     loudness preset) replace ``audio:``'s normalisation, limit and leveller setting and always
-    normalise.
+    normalise. ``parts`` (``audio_output.split``, DESIGN.md §112.3): after the whole, each part
+    is written to its own file, normalised on its own when the whole is (:attr:`MixReport.parts`).
     """
     audio = project.config.audio
     plain_voice = WavTrack(voices)
@@ -609,7 +772,7 @@ def mix_audio(
     voice: WavTrack | LevelledTrack = LevelledTrack(plain_voice) if level else plain_voice
     mono = targets is not None and targets.mono
     sfx = WavTrack([sfx_track]) if sfx_track is not None else None
-    placements = plan_music(project, timings, total)
+    placements = plan_music(project, timings, total) + plan_score(project, timings, total)
     beds = plan_ambience(project, timings, total)
     music = MusicTrack([*placements, *beds], (audio.music_width, audio.ambience_width)) if placements or beds else None
 
@@ -651,6 +814,10 @@ def mix_audio(
             log.warning("the audio is silent; it is not normalised")
     floor = room_tone(targets.room_tone) if targets is not None and targets.room_tone is not None else None
     meter, lowest = write_mix(out, read, total, gain_db, true_peak, floor)
+    target = (target_lufs, target_rms) if normalize else None
+    written = [_write_part(part, read, gain_db, target, true_peak, floor) for part in parts]
+    forced = targets is not None and targets.music_check
+    checked = _check_music(project, timings, voice, placements, total, forced) if placements else None
     return MixReport(
         True,
         normalize,
@@ -665,4 +832,26 @@ def mix_audio(
         levelled,
         target_rms if normalize else None,
         mono,
+        checked,
+        written,
     )
+
+
+def _check_music(project: Project, timings: dict[str, Any], voice: WavTrack | LevelledTrack, placements: Sequence[Placement],
+                 total: int, forced: bool = False) -> dict[str, Any] | None:
+    """``score.check`` (DESIGN.md §112.2): the music (no ambience) measured under the voices
+    (:func:`vidgen.scoring.dense_dialogue_check`), a warning where it fights dense dialogue;
+    ``forced`` (the drama preset, §112.3) measures any music unless ``score.check: false``."""
+    from vidgen import scoring
+
+    cfg = project.config
+    if not (scoring.check_wanted(cfg) or (forced and cfg.score.check is not False)):
+        return None
+    music = MusicTrack(placements, (cfg.audio.music_width, cfg.audio.ambience_width))
+    report = scoring.dense_dialogue_check(total, voice.read, music.read, speech_spans(project, timings), cfg.score.dense_lu)
+    if not report["ok"]:
+        worst = [r for r in report["dense"] if r["lu"] is not None and r["lu"] < cfg.score.dense_lu]
+        where = ", ".join(f"{r['start']:.1f}-{r['end']:.1f} s ({r['lu']:.1f} LU)" for r in worst[:3])
+        log.warning("music: in dense dialogue the music is less than %g LU under the voices at %s: duck it deeper (score.duck: deep) "
+                    "or lower it there (music: {volume: -6})", cfg.score.dense_lu, where)
+    return report

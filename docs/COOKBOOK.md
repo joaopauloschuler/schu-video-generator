@@ -19,7 +19,8 @@ for particle physics (natural units, simulated data, sources, local significance
 see [COOKBOOK-PARTICLES.md](COOKBOOK-PARTICLES.md); for isometric cartoons (map sizes that fill the
 frame in 16:9 and 9:16), see [COOKBOOK-ISO-CARTOONS.md](COOKBOOK-ISO-CARTOONS.md); for audio
 only — audiobooks and podcasts (loudness targets, formats, pacing, voices) — see
-[COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md).
+[COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md); for dramatized audiobooks (voices in rooms, score, sound
+design, files per chapter), see [COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 

@@ -149,6 +149,23 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
         assert "COOKBOOK-MUSIC.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
+def test_audio_drama_cookbook_skeleton_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 291: the audio-drama cookbook's skeleton is a valid project (its cold open, credits,
+    themes and motif included) and the cookbooks, the README and the guide point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-AUDIODRAMA.md").read_text(encoding="utf-8")
+    block = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)[0]
+    (tmp_path / "video.yaml").write_text(block, encoding="utf-8")
+    project = Project.load(tmp_path)
+    assert project.config.scenes[0].id == "cold_open" and project.config.scenes[-1].id == "credits"
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    for doc in ("docs/COOKBOOK.md", "docs/COOKBOOK-AUDIO.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
+        assert "COOKBOOK-AUDIODRAMA.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
 GENETICS_TYPES = ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas")
 
 

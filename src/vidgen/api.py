@@ -114,7 +114,7 @@ from vidgen.registry import find as find_scene_type  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
 from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize, one_or_many  # noqa: E402
 from vidgen.pronunciation import Pronunciation, Spoken  # noqa: E402
-from vidgen.config import SfxParams, StingCue, StingSetting  # noqa: E402
+from vidgen.config import PanMove, SfxParams, StingCue, StingSetting  # noqa: E402
 from vidgen.sfx import SfxEvent, SoundLibrary, sound_library, synthesize  # noqa: E402
 from vidgen.studio import (  # noqa: E402
     MusicCheck,
@@ -936,6 +936,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "voice_effect",
     "SfxEvent",
     "SfxParams",
+    "PanMove",
     "StingCue",
     "StingSetting",
     "SoundLibrary",

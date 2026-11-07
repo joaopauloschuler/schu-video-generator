@@ -202,12 +202,14 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # `include` files are already merged into the config, and each scene's set into its params
     # (§69.35): the file names and the unused sets change nothing.
     excluded = {
-        "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "pronunciation_defaults", "voices", "subtitles", "music", "audio",
+        "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "pronunciation_defaults", "voices", "subtitles", "music", "audio", "score",
         "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets", "soundfont",
         # citations change pixels only on scenes with references ("citations" below)
         "citations",
         # a draft's size and frame rate: only drafts use them, checked like any format (§74)
         "draft",
+        # spoken credits and a cold open are already scenes; audio_output is the audio-only file (§112.3)
+        "credits", "cold_open", "audio_output",
     }
     if project.config.cut is not None:
         # a cut (§101) is already applied to the scenes (and its hook to the overlays, its end
@@ -223,9 +225,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
+        # a scene's and a beat's ambience and a beat's motif (§112) are mixed when the video is joined: no pixels, no timing
         "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True,
-                                                       "references": True, "figure_credit": True,
-                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite"}}}),
+                                                       "references": True, "figure_credit": True, "ambience": True,
+                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite", "ambience", "motif"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
