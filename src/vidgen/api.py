@@ -77,6 +77,7 @@ from vidgen.layout import (  # noqa: E402
     normalize_text,
     require_latex,
     shrink_to_fit,
+    text_plate,
     wrap_lines,
 )
 from vidgen.regions import (  # noqa: E402
@@ -662,6 +663,9 @@ from vidgen.cartoon.iso_atmosphere import IsoFog, IsoReflections, IsoSwayer  # n
 from vidgen.world.iso_ambient import AMBIENT_DEFAULTS, AMBIENT_KEYS, AMBIENT_KINDS, AMBIENT_MAX, INDOOR_KINDS, AmbientCells, AmbientMove, AmbientPlan, AmbientPose, ambient_cells, ambient_counts, ambient_seed, around, cell_route, plan_ambient  # noqa: E402
 from vidgen.cartoon.iso_ambient import CritterLook, IsoCritter, critter_look, critter_shapes  # noqa: E402
 from vidgen.story_text import Story, read_story  # noqa: E402
+from vidgen.three_d.clip import make_3d_clip  # noqa: E402
+from vidgen.three_d.description import BeatSpan, scene_description  # noqa: E402
+from vidgen.three_d.spec import Camera3D, Light3D, Object3D, Scene3DParams  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
@@ -841,6 +845,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "wrap_lines",
     "normalize_text",
     "shrink_to_fit",
+    "text_plate",
     "distribute",
     "nice_ticks",
     "auto_format",
@@ -975,6 +980,13 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "CLIP_SUFFIXES",
     "ClipInfo",
     "ClipMobject",
+    "make_3d_clip",
+    "BeatSpan",
+    "scene_description",
+    "Scene3DParams",
+    "Camera3D",
+    "Light3D",
+    "Object3D",
     "ClipTiming",
     "clip_audio",
     "fit_speed",

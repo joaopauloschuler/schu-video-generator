@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–296)
+## Unreleased (Steps 193–298)
+
+### 3D scenes: the `3d` scene type (Step 298)
+
+- New scene type `3d`: objects seen by a fixed camera under one default light (ambient + sun) over a background colour, drawn by three.js in headless Chromium through Playwright; a title on a plate, overlays and captions on top; 16:9 and 9:16 (the camera's `fov` is measured across the shorter side, so a subject fills both alike). Only the `box` shape exists yet; `spin` keeps an object turning through the scene. Params `title`, `background`, `camera: {position, look_at, fov}`, `light: {ambient, sun, sun_from, color}`, `objects: [{id, shape, size, color, position, rotation, spin}]`; unknown shapes and keys get a did-you-mean.
+- Frames are deterministic: vidgen sets the time of every frame (frame n at n / fps), three.js 0.186.1 ships with schu-video-generator (MIT, `vidgen/data/three/`), nothing is fetched from the network, and WebGL runs on Chromium's software renderer. The frames go to a lossless clip `build/<quality>/three_d/<scene>.mkv` with the scene description as JSON beside it, reused while nothing that draws them changed.
+- Optional extra: `pip install "schu-video-generator[3d]"`, then `python -m playwright install chromium`; without them a `3d` scene stops with that hint (Windows wording too), and nothing else needs them.
+- `vidgen.api` gains `text_plate` (text on a rounded plate; `video_clip` uses it too), `Scene3DParams`, `Camera3D`, `Light3D`, `Object3D`, `BeatSpan`, `scene_description` and `make_3d_clip`.
 
 ### Smaller pictures for video jobs, https-only audio / video (Step 296)
 

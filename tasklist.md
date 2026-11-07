@@ -1740,6 +1740,30 @@ with the owner's go-ahead.
 ### Step 297 — The paid experiment (LATER, gated on the owner's go-ahead)
 - [ ] With the owner's key, ≤ US$2.00 total, vertical 9:16 Shorts, lowest sensible resolution, 4–5 s clips
 
+## Phase AI — 3D scenes with three.js (DESIGN §114)
+
+Video presentations with simple 3D: three.js in headless Chromium driven by Playwright (an
+optional extra), deterministic frames (time set by vidgen, never a wall clock), a clean simple
+look (plain colours, one default light), simple character stand-ins. Later the 3D scenes feed
+video-to-video generation (camera, layout and motion from vidgen, the look from a model), so the
+design keeps a stable camera, exact timing, named objects and guide passes. Out of scope:
+molecules, planets, glTF models, realistic materials and shadows, rigs, any AI or paid call.
+
+### Step 298 — Renderer and scene type (foundation)
+- [x] `type: 3d`: frames drawn by three.js in headless Chromium through Playwright (one browser per scene render, frames in order, shown like other scenes' pictures); fixed camera, one default light (ambient + sun), background colour, a box; 16:9 and 9:16, preview and final, the render cache, captions / overlays / title on top; missing Playwright or Chromium a `VidgenError` with the install hint (Windows too); the scene description as JSON (objects with ids, camera, lights, timeline) and a draw-mode hook — done as `vidgen.three_d` (`spec`, `description`, `browser`, `clip`), the page and vendored three.js 0.186.1 in `data/three/` (served on a made-up origin, every other request refused, SwiftShader WebGL), frames written to a lossless FFV1 clip `build/<q>/three_d/<scene>.mkv` + description `.json`, reused by key, shown as a full-bleed `ClipMobject`; `spin` as a timeline track; extra `[3d]`; tests `test_scene_3d.py`
+
+### Step 299 — Shapes, groups, camera
+- [ ] box, sphere, cylinder, cone, plane / floor, torus, arrow, text label; colour, size, position, rotation; named groups (children move with the group); camera: fixed, orbit, dolly / push-in, fly-to object, look-at; moves timed to beats and words; validation with did-you-mean
+
+### Step 300 — Actions and character stand-ins
+- [ ] appear / disappear, move_to, rotate / spin, scale, highlight, follow a path; timed to beats / words, easing; stand-ins (capsule + facing nose, name, colour): walk to a point, turn to face something; lint: object off-frame, object hidden behind another while its line is spoken (if cheap)
+
+### Step 301 — Guide passes
+- [ ] Optional (off by default) depth, outline and mask videos of a 3D scene with the same camera and timing, stored alongside the render; mask colour table (object id → colour) as JSON; YAML switch and CLI; no AI calls
+
+### Step 302 — Docs, example, critical review
+- [ ] `docs/COOKBOOK-3D.md`, CONFIG / guide; a small example (9:16 Short, a few seconds: shapes, two stand-ins, camera moves) under examples/ with its guide passes rendered (media not committed); a critical review of 298–301 with fixes
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

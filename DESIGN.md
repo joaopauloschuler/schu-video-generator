@@ -261,6 +261,9 @@ src/vidgen/
                           # contact sheets), takes.py (takes, picks), compose.py (placements, credit line),
                           # workflow.py (`generate run | status`; §113.4)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
+  three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, objects), description.py
+                          # (the scene description JSON, its cache key), browser.py (Playwright + Chromium: the
+                          # page, frames, the lossless clip), clip.py (`make_3d_clip`: drawn or reused)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14),
@@ -324,6 +327,7 @@ src/vidgen/
                           # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
+  data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -21969,3 +21973,143 @@ Built:
 Open: a talking shot cannot drop its audio (`audio: none` is refused for `talking`), so until a
 host exists (owner's choice) heygen/avatar-iv and the sample's quay_b1 / closeup_b1 cannot be
 paid for; whether video models accept inline pictures (harbour_b1 is the first such job to try).
+
+## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
+
+Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in
+headless Chromium driven by **Playwright** (Python), not Blender or Manim's 3D; the look is clean
+and simple (plain colours, one default light; realism is not a goal); characters are simple
+stand-ins (Step 300). Later, 3D scenes are the input of video-to-video generation (camera, layout
+and motion from vidgen, the look from a video model; not built in this phase, it needs an https
+file host), so the design keeps a stable camera, exact timing, named objects and deterministic
+frames, and Step 301 adds guide passes (depth, outline, mask). Out of scope: molecules, planets,
+glTF models, realistic materials and shadows, rigs, any AI or paid call.
+
+### 114.1 How a `3d` scene renders (Step 298)
+
+A `3d` scene is a `NarratedScene` like every other type (`scenes/scene_3d.py`, `Scene3D`), so the
+render worker, beats, audio, timings, the render fingerprint, overlays, captions, stills, the
+layout dump and lint all work unchanged. Its `construct`:
+
+1. works out the scene's length before playing: the beats on the scene's clock from
+   `beat_window` (start = the whole frames of the beats before, end = start + `heard`), the
+   frames = Σ round(window × fps) (a silent scene: its `duration` minus the outro) + the outro's
+   frames + 2 spare frames (`SPARE_FRAMES`; a longer scene holds the last frame);
+2. builds the **scene description** (§114.3) for `config.pixel_width × pixel_height` at
+   `config.frame_rate`;
+3. `make_3d_clip(render_dir/three_d, scene id, description)` (§114.5) returns a lossless clip of
+   all frames, drawn now by one Chromium or reused;
+4. shows the clip as a `ClipMobject` (§38) covering the frame (`fit_box(frame, cover)`, decoded at
+   the size shown, copied pixel for pixel), playing from scene time 0; the title (a `text_plate` in
+   the header band, z-index 3) fades in at beat 1; `finish()` fades out over the 0.5 s outro.
+
+**Why a clip shown by Manim, not frames written over Manim's.** `generated_layer` (§113.4) replaces
+the scene's frames under the overlays, but then the scene's own title and anything Manim draws
+(callouts, actions later) would be covered. As a `ClipMobject` the 3D picture is the bottom layer
+of the scene, every Manim object and the overlay layer are drawn over it, and the existing
+`ClipMobject` code (decoding, fades, `dim` / `highlight` / `zoom` on target `view`) is reused. Cost:
+one lossless decode per frame plus Manim's image copy (measured: a 7 s scene at 320x180 renders in
+3–5 s including Chromium's start).
+
+**Frame alignment.** Frame *n* of the clip holds *t = n / fps*; output frame *k* of the scene shows
+clip frame *k* (checked by comparing the rendered scene with the clip, `test_scene_3d.py`).
+
+### 114.2 Params (Step 298)
+
+`Scene3DParams` (`three_d/spec.py`; exported by `vidgen.api` with `Camera3D`, `Light3D`,
+`Object3D`): `title`, `background` (theme colour or hex; default the theme's background),
+`camera: {position = [3, 2.5, 5], look_at = [0, 0, 0], fov = 40 (10–120)}`, `light: {ambient = 0.5
+(0–5), sun = 2.5 (0–10), sun_from = [-2, 6, 4], color = #ffffff}`, `objects: [{id, shape = box,
+size = [1, 1, 1], color = accent, position = [0, 0, 0], rotation = [0, 0, 0] (degrees, XYZ order),
+spin = [0, 0, 0] (degrees per second)}]`. Scene units, y up. Checks: object ids unique, matching
+`[A-Za-z_][A-Za-z0-9_-]*`, not `camera` (reserved: a track's target); `shape` among `SHAPES`
+with a did-you-mean (`cellworld.did_you_mean`); sizes positive; the camera not on its `look_at`;
+`sun_from` not zero; unknown keys get the usual did-you-mean. Targets: `view` (the 3D picture),
+`title`. The light values were chosen from stills: the top of a box brightest, its two visible
+sides clearly different.
+
+**`fov` across the shorter side.** three.js's `fov` is vertical; vidgen's is the angle across the
+frame's shorter side (the page converts for portrait frames), so a subject framed in 16:9 fills a
+9:16 frame alike and the long side sees more — the same rule as Manim's frame (shorter side 8
+units, §5.2).
+
+### 114.3 The scene description (JSON, version 1)
+
+`three_d/description.py`, `scene_description(params, theme, width=, height=, fps=, frames=,
+beats=, draw_mode="normal")`: `{version: 1, width, height, fps, frames, duration, draw_mode,
+background, camera: {fov, position, look_at, near: 0.1, far: 500}, lights: [{id: ambient, kind:
+ambient, color, intensity}, {id: sun, kind: sun, color, intensity, position (sun_from scaled to
+20 units)}], objects: [{id, shape, size, color, position, rotation}], timeline: {beats: [{id,
+start, end}], tracks: [{target, property, easing, keys: [{t, value}]}]}}`. Colours are resolved
+to `#rrggbb`; numbers rounded to 6 decimals, so the JSON (and its hash) is stable.
+
+It is the one contract between Python and the page, built so later steps only extend it:
+objects carry ids (actions, guide masks and video-to-video prompts refer to them), the camera is
+data (moves are tracks on `camera`), times are seconds on the scene's clock with the beats
+included (Step 299–300 time moves to beats and words), and a **track** sets one property of one
+target from keys, eased between neighbours (`linear`, `smooth`) and held outside them. Step 298
+uses one kind: `spin` becomes a linear `rotation` track from 0 to the clip's end. Properties:
+`position`, `rotation` (degrees), and the camera's `look_at`.
+
+**Draw mode (hook for Step 301).** `draw_mode` (only `normal`; `DRAW_MODES`) is in the
+description and checked by the page's `applyDrawMode`; depth / outline / mask passes are new
+modes of the same description, so they share camera and timing by construction.
+
+### 114.4 The page and the browser
+
+Package data `vidgen/data/three/`: `three.module.js` and `three.core.js` from the npm package
+`three` 0.186.1 (unmodified; SHA-256 in THIRD_PARTY_NOTICES.md; the npm package ships no minified
+build, so the two files weigh 2.1 MB), its `LICENSE` (MIT), `page.html` (one canvas) and
+`vidgen3d.js` (an ES module: `vidgen3d.load(description)` builds renderer, scene, camera, lights
+and meshes — `MeshLambertMaterial`, plain colours — and `vidgen3d.frame(t)` applies the tracks at
+`t`, renders and returns the canvas as a PNG data URL). No `requestAnimationFrame`, no clock, no
+randomness: the page draws only when asked, at the time it is given (`preserveDrawingBuffer`, so
+the read is the frame just drawn).
+
+`three_d/browser.py`, `PageRenderer(description)` (a context manager; one per scene render):
+starts Playwright and Chromium (`headless`, `--use-angle=swiftshader --enable-unsafe-swiftshader
+--ignore-gpu-blocklist`: WebGL on Chromium's software renderer, the same pixels whatever the
+graphics card), a context with the frame's size as viewport and `device_scale_factor 1`, and a
+route for **every** request: `http://vidgen-3d.invalid/<file>` is answered from `PAGE_FILES` in
+the package, anything else is aborted — so nothing is fetched from the network (ES-module imports
+need an http origin; `file://` modules are blocked by Chromium). `frame(n)` evaluates
+`vidgen3d.frame(n / fps)`, decodes the PNG (PIL) and checks its size; page errors and failed
+evaluations become `VidgenError("3D page: ...")`. `write_clip(description, path)` encodes the
+frames in order with PyAV as FFV1 (`bgr0`, lossless) in Matroska, to `<path>.partial` first.
+Measured: about 60 ms per frame at 540x960 and 130 ms at 1920x1080 (SwiftShader + PNG), plus
+about 1 s to start Chromium.
+
+**Missing dependencies.** Playwright is the optional extra `schu-video-generator[3d]`
+(`playwright>=1.40`); it is imported only when a `3d` scene renders. Not installed:
+`VidgenError(INSTALL_HINT)` = `pip install "schu-video-generator[3d]"`, then `python -m playwright
+install chromium` (Windows: `py -m pip install ...`, `py -m playwright install chromium`). Chromium
+missing (Playwright's "Executable doesn't exist"): `VidgenError(BROWSER_HINT)`. Other launch
+failures: "cannot start Chromium for a 3D scene: <first line>". `vidgen validate` and every other
+scene type never need Playwright.
+
+### 114.5 The cache
+
+`three_d/clip.py`, `make_3d_clip(folder, name, description)`: `folder/<name>.mkv` + `<name>.json`
+= `{key, description}`, with `key = sha256(engine + canonical JSON of the description)` and
+`engine = page digest (PAGE_FILES) + Playwright version` (which pins the Chromium build). The clip
+is reused when it exists and the stored key matches; otherwise the record is removed, the clip
+drawn and the record written last. `folder` is `<render_dir>/three_d` (per quality and variant).
+So: the scene-level render cache (fingerprint, §63) decides whether the scene renders at all — the
+page files are part of `vidgen_source_digest` (`data/three/*.html|*.js`); `--force` renders the
+scene again but reuses an unchanged clip.
+
+### 114.6 Public interface and decisions (Step 298)
+
+- `vidgen.api` gains `text_plate(text, fill, opacity=0.88)` (`layout.py`; the plate `video_clip`
+  used privately, now shared), `Scene3DParams`, `Camera3D`, `Light3D`, `Object3D`, `BeatSpan`,
+  `scene_description`, `make_3d_clip` — built-ins import only `vidgen.api`
+  (`test_builtins_use_only_the_public_api`).
+- One browser per scene render, not one per video: renders run in separate worker processes
+  (§5.2) and Chromium starts in about a second.
+- The 3D clip is a separate cached file, not frames streamed into Manim: it makes the scene
+  description and the frames an artefact Step 301 and video-to-video can use, and a caption or
+  title change re-renders the scene without drawing the 3D frames again.
+- `examples/gallery` has a `3d` scene (`crate`) and the gallery an entry. The shared render of
+  every built-in in `test_builtin_scenes.py` leaves `3d` out, and the per-type target render in
+  `test_actions_coverage.py` skips it without Playwright; `test_scene_3d.py` renders it (and
+  skips when Chromium is missing).

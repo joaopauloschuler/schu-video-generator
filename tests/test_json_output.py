@@ -272,7 +272,8 @@ def test_list_scenes_human_output_unchanged(tmp_path: Path, monkeypatch: pytest.
     monkeypatch.chdir(tmp_path)
     assert main(["list-scenes"]) == 0
     out = capsys.readouterr().out
-    assert re.match(r"bar_chart +builtin\n    title: str = ''   \(also: heading\)\n    labels: list\[str\]\n", out)
+    assert re.match(r"3d +builtin\n    title: str = ''   \(also: heading\)\n    background: color \| None = None\n", out)
+    assert re.search(r"\nbar_chart +builtin\n    title: str = ''   \(also: heading\)\n    labels: list\[str\]\n", out)
     assert "        start_scale: float = 1.0\n" in out and "{" not in out.splitlines()[0]
 
 

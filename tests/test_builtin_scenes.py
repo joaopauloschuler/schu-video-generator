@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "branching", "branching_pie", "bullets", "calculation", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "decay_chain", "detector", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "feynman", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "kinematics", "line_chart", "linkage_map", "map", "mass_spectrum", "metabolism", "molecule", "mutation", "network", "number_line", "orbit", "pathway", "pedigree", "pie", "plot", "population", "process", "quote", "scatter", "screenshot", "stage", "standard_model", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["3d", "bar_chart", "branching", "branching_pie", "bullets", "calculation", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "decay_chain", "detector", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "feynman", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "kinematics", "line_chart", "linkage_map", "map", "mass_spectrum", "metabolism", "molecule", "mutation", "network", "number_line", "orbit", "pathway", "pedigree", "pie", "plot", "population", "process", "quote", "scatter", "screenshot", "stage", "standard_model", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -37,6 +37,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
                              {"callouts": [{"magnifier": [0.1, 0.5, 0.3, 0.3], "label": "Zoom"}, {"spotlight": [0.1, 0.5, 0.3, 0.3]}], "focus": True}]},
     "video_clip": {"path": "assets/clip.mp4", "title": "Clip", "caption": "Moving", "frame": "window", "trim": [0.5, 2.5], "loop": True,
                    "steps": [{"box": [0.1, 0.1, 0.4, 0.3], "label": "Box"}, {"callouts": [{"arrow": [0.7, 0.6], "label": "Arrow"}], "focus": True}]},
+    "3d": {"title": "Box", "objects": [{"id": "crate", "size": [1.5, 1.5, 1.5], "spin": [0, 30, 0]}]},
     "quote": {"text": "“To be or not to be.”", "author": "Someone", "source": "Somewhere"},
     "equation": {"latex": ["x^2", "x \\cdot x"], "caption": "Square"},
     "equation_derivation": {"title": "Solve", "colors": {"x": "accent"}, "terms": ["3"],
@@ -354,6 +355,11 @@ def expected_duration(scene: Any) -> float:
     return sum(scene.beat_duration(i) + scene.pad for i in range(len(scene.beats))) + scene.outro
 
 
+#: The built-ins the shared render covers: ``3d`` needs Playwright's Chromium and has its own
+#: render tests (tests/test_scene_3d.py).
+RENDERED_BUILTINS = [name for name in BUILTINS if name != "3d"]
+
+
 @pytest.fixture(scope="module")
 def render_project(tmp_path_factory: pytest.TempPathFactory) -> Project:
     root = tmp_path_factory.mktemp("builtins")
@@ -361,7 +367,7 @@ def render_project(tmp_path_factory: pytest.TempPathFactory) -> Project:
 
     scenes = [
         {"id": name, "type": name, "params": SAMPLES[name], "beats": [{"text": "one two"}, {"text": "three four five"}]}
-        for name in BUILTINS
+        for name in RENDERED_BUILTINS
     ]
     scenes += [
         {"id": "silent_bullets", "type": "bullets", "params": {"items": ["a", "b", "c"]}, "duration": 1.2},
@@ -376,7 +382,7 @@ def render_project(tmp_path_factory: pytest.TempPathFactory) -> Project:
     return Project.load(root)
 
 
-RENDER_IDS = BUILTINS + ["silent_bullets", "crowded", "hbars", "cover"]
+RENDER_IDS = RENDERED_BUILTINS + ["silent_bullets", "crowded", "hbars", "cover"]
 
 
 @pytest.mark.render

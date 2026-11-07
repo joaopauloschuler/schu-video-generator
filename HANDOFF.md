@@ -25145,3 +25145,68 @@ project), repo work is generic.
 - **Next (297, gated)**: with the owner's go-ahead and ZDR-only turned off, `generate run --pay
   --shot harbour_b1` (pictures only, $0.120) to confirm inline pictures and `usage.cost`; then
   decide on a host for audio / video (or drop `audio:` / `guide:` from action shots).
+
+## Step 298 — 3D scenes: renderer and the `3d` scene type (Phase AI foundation)
+
+- **Built** (DESIGN §114): scene type `3d` (`scenes/scene_3d.py`, `Scene3D`): objects (only `box`
+  yet) seen by a fixed camera under one default light (ambient + sun) over a background colour,
+  drawn by three.js in headless Chromium through Playwright; `title` on a plate, overlays and
+  captions on top; 16:9 and 9:16 (`fov` across the shorter side); preview, final and draft; `spin`
+  (degrees per second) keeps an object turning. Before the scene plays, `make_3d_clip` draws every
+  frame (frame n at t = n / fps, set by vidgen) with one Chromium into a lossless FFV1 clip
+  `build/<q>[_<variant>]/three_d/<scene>.mkv` + `<scene>.json` `{key, description}`, reused while
+  the description, page files and Playwright version are unchanged; the clip is a full-bleed
+  `ClipMobject`, so stills, lint, fades and `dim` / `highlight` / `zoom` on target `view` work.
+  The **scene description** (JSON v1: size, fps, frames, draw_mode, background, camera, lights,
+  objects with ids, timeline with beats and tracks) is the contract later steps extend; tracks
+  (target, property, easing, keys) already drive `spin` and can drive the camera. `draw_mode`
+  (only `normal`) is the hook for Step 301's guide passes. three.js 0.186.1 vendored
+  (`data/three/three.{module,core}.js` + MIT `LICENSE`; `page.html`, `vidgen3d.js`); the page is
+  served on `http://vidgen-3d.invalid/`, every other request aborted (no network); WebGL on
+  SwiftShader. Missing Playwright / Chromium: `VidgenError` with `pip install
+  "schu-video-generator[3d]"` + `python -m playwright install chromium` (and the `py -m` Windows
+  wording). Extra `3d = ["playwright>=1.40"]`; `data/three/*` package data and part of the render
+  fingerprint.
+- **Public interface**: `vidgen.api` + `text_plate` (moved out of `video_clip`'s `_plate`, same
+  output), `Scene3DParams`, `Camera3D`, `Light3D`, `Object3D`, `BeatSpan`, `scene_description`,
+  `make_3d_clip`. Built-ins import only `vidgen.api`, hence the exports.
+- **Decisions / deviations**: frames are drawn into a cached clip and shown by Manim, not written
+  over Manim's frames like `generated_layer` (titles and later Manim objects stay on top; the
+  description + frames become an artefact for 301 and video-to-video); one browser per scene render
+  (workers are separate processes; Chromium starts in ~1 s); `fov` across the shorter side; light
+  defaults (ambient 0.5, sun 2.5 from [-2, 6, 4]) picked from stills; did-you-mean reuses
+  `cellworld.did_you_mean` (copies exist in `delivery.py`, `cuts.py`, `audio_check.py` —
+  consolidating them is outside this step); npm's `three` 0.186.1 has no minified build, so the
+  vendored files weigh 2.1 MB. The brief's "piped/encoded like other scenes" is met by Manim's own
+  encoder (the scene's frames go through the normal worker); the intermediate clip is written with
+  PyAV (no ffmpeg subprocess).
+- **Files**: new `src/vidgen/three_d/{__init__,spec,description,browser,clip}.py`,
+  `src/vidgen/scenes/scene_3d.py`, `src/vidgen/data/three/{three.module.js,three.core.js,LICENSE,
+  page.html,vidgen3d.js}`, `tests/test_scene_3d.py`, `docs/gallery/3d.md` + `media/3d-*.{png,gif}`;
+  changed `src/vidgen/{api,layout}.py`, `scenes/{__init__,video_clip}.py`, `render/fingerprint.py`,
+  `pyproject.toml`, `THIRD_PARTY_NOTICES.md`, `README.md`, `docs/CONFIG.md` (`3d` section, targets
+  table), `docs/gallery/README.md` (`vidgen gallery --types 3d`), guide + `AGENTS.md` (chooser row,
+  snippet), `examples/gallery/video.yaml` (scene `crate`), DESIGN §2 tree + §114, CHANGELOG,
+  tasklist (Phase AI added, 298 ticked); tests updated for the new first type name (`3d` sorts
+  before `bar_chart`): `test_builtin_scenes.py` (+ sample; its shared render leaves `3d` out),
+  `test_actions_coverage.py` (+ sample, render skipped without Playwright), `test_extensions.py`,
+  `test_json_output.py`.
+- **Tests run and passed** (one file at a time, `/home/claude/bin/capped` + `timeout`):
+  `test_scene_3d` not render (19, 2.2 s) and render (3, 18.6 s: determinism, a bad description,
+  16:9 + 9:16 with captions and the clip cache), `test_actions_coverage -k "register_their_target
+  _names and 3d"` (render, 1), `test_video_clip -k bleed` (render, 2) and not render (37),
+  `test_layout` (45), `test_docs` (79), `test_guide` (91), `test_gallery` (19), `test_builtin_scenes`
+  (176), `test_api` (10), `test_packaging` (2), `test_actions_coverage` (12), `test_extensions` (25),
+  `test_json_output` (21), `test_schema` (76, 184 s), `test_mcp` (20, 121 s), `test_storyboard -k
+  fingerprint` (1). Not run: the other render suites, the frame baseline (`text_plate` builds the
+  same plate as before).
+- **Environment**: Playwright 1.63.0 installed into `/home/claude/venv` (browsers from
+  `/opt/pw-browsers`, `playwright install` not run). three.js fetched once with `npm pack`.
+- **Stills**: `/home/claude/work/scratch/s298/{still-16x9.png, still-9x16-captions.png,
+  raw-3d-frame0.png}` from `/home/claude/work/scratch/s298/demo` (a floor and three boxes, one
+  spinning; 9:16 with karaoke captions and a watermark).
+- **Known gaps / next (299)**: only `box`; no groups, camera moves, word-timed tracks or actions
+  (the description's `tracks` and `beats` are ready for them); `view` is the only 3D target (the
+  objects are not action targets); a `zoom` on `view` enlarges the decoded pixels (no sharper
+  redraw); `vidgen validate` does not check that Playwright is installed (a render stops with the
+  hint); the clip is not deleted when a scene is removed.

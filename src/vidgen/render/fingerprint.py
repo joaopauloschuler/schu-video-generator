@@ -85,10 +85,11 @@ def _render_input(path: Path) -> bool:
 def vidgen_source_digest() -> str:
     """Digest of vidgen's own Python source that renders depend on (built-in scenes, helpers,
     the scene base, the worker...; not :data:`NOT_RENDER_INPUTS`), of its bundled fonts and of
-    its vendored icons (SVGs and manifest)."""
+    its vendored icons (SVGs and manifest) and of the 3D page with its vendored three.js."""
     paths = [p for p in _files(_PACKAGE_DIR, ".py") if _render_input(p)]
     paths += [p for p in _files(_PACKAGE_DIR / "data" / "fonts") if p.suffix in (".ttf", ".otf")]
     paths += [p for p in _files(_PACKAGE_DIR / "data" / "icons") if p.suffix in (".svg", ".json")]
+    paths += [p for p in _files(_PACKAGE_DIR / "data" / "three") if p.suffix in (".html", ".js")]
     return _contents_digest(paths, _PACKAGE_DIR)
 
 

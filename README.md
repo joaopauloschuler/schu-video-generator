@@ -130,7 +130,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     step, choropleths, pins and flight-path arcs; Natural Earth data bundled);
   - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified
     insets, a spotlight; in a browser, window or phone frame; a caption), `video_clip` (B-roll, screen
-    recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration);
+    recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration),
+    `3d` (simple 3D drawn by three.js in headless Chromium: a box under one light, a fixed camera;
+    the `3d` extra);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -569,6 +571,9 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
     downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
     Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
     by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
+13. Optional, only for `3d` scenes (three.js in headless Chromium, Phase AI): `pip install ".[3d]"`
+    (Playwright), then `py -m playwright install chromium` (downloads Chromium, ~150 MB, once).
+    three.js itself ships with schu-video-generator; nothing is fetched while rendering.
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
@@ -609,13 +614,17 @@ sudo apt install espeak-ng                    # optional fallback: kokoro uses t
 # 7. Optional: composed music (symusic); the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
 pip install ".[music]"
 vidgen soundfont fetch                        # or let the first composed render download it
+
+# 8. Optional: 3d scenes (three.js in headless Chromium through Playwright)
+pip install ".[3d]"
+python -m playwright install chromium         # add --with-deps if Chromium's system libraries are missing
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
 pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
 `sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
 terminal needs `source .venv/bin/activate` again before running `vidgen`. The optional extras
-work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`, `".[music]"`
+work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`, `".[music]"`, `".[3d]"`
 (macOS keeps the SoundFont in `~/Library/Caches/vidgen`).
 
 **Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (with 3.13 the extra installs

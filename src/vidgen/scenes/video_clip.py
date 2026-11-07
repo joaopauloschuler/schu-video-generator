@@ -269,9 +269,7 @@ class VideoClip(Screenshot):
 
     def _plate(self, text: Mobject) -> Mobject:
         """``text`` on a rounded plate in the theme's surface colour (readable over any picture)."""
-        plate = RoundedRectangle(width=text.width + 0.5, height=text.height + 0.3, corner_radius=0.12)
-        plate.set_fill(self.theme.color("surface"), opacity=0.88).set_stroke(width=0).move_to(text)
-        return Group(plate, text).set_z_index(3)
+        return text_plate(text, self.theme.color("surface"))
 
     def _picture_entrance(self) -> list[Animation]:
         if self.params.region == "bleed":

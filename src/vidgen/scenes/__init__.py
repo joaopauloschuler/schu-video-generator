@@ -110,6 +110,7 @@ from vidgen.scenes import (  # noqa: F401
     riding,
     scatter,
     shot_action,
+    scene_3d,
     sitting,
     screenshot,
     sfx_action,

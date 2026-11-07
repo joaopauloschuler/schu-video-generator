@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from functools import lru_cache
 from typing import Any, NamedTuple
 
-from manim import NORMAL, Mobject, Paragraph, Text, config
+from manim import NORMAL, Group, Mobject, Paragraph, RoundedRectangle, Text, config
 
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
@@ -84,6 +84,14 @@ def shrink_to_fit(m: Mobject, max_width: float | None = None, max_height: float 
         m.scale(factor)
         scale_icon_strokes(m, factor)
     return m
+
+
+def text_plate(text: Mobject, fill: str, opacity: float = 0.88) -> Group:
+    """``text`` on a rounded plate of colour ``fill`` (readable over a picture), drawn above
+    most of a scene (z-index 3)."""
+    plate = RoundedRectangle(width=text.width + 0.5, height=text.height + 0.3, corner_radius=0.12)
+    plate.set_fill(fill, opacity=opacity).set_stroke(width=0).move_to(text)
+    return Group(plate, text).set_z_index(3)
 
 
 def fit_text(

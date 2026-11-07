@@ -405,6 +405,7 @@ project's own scene types, in its theme).
 | a photo or illustration | `image` | `path`, `generate`, `caption`, `fit`, `ken_burns` |
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute` |
+| simple 3D: objects seen by a camera, turning (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, size, color, position, rotation in degrees, spin in degrees per second), `camera` (position, look_at, fov), `light` (ambient, sun, sun_from, color), `background` |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -1639,6 +1640,13 @@ and contrasts are left alone ("photons do not leave tracks" is fine).
   type: video_clip
   params: {path: assets/demo.mp4, trim: [1, 5], fit_duration: true, mute: true, caption: "The app, live"}
   beats: [{text: "Here it is running live."}]
+- id: crate
+  type: 3d
+  params:
+    title: "A crate in 3D"
+    objects:
+      - {id: crate, shape: box, size: [1.6, 1.6, 1.6], color: accent, rotation: [0, 20, 0], spin: [0, 30, 0]}
+  beats: [{text: "A crate turns slowly in front of the camera."}]
 - id: saying
   type: quote
   params: {text: "Simplicity is prerequisite for reliability.", author: "Edsger W. Dijkstra"}

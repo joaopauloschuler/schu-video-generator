@@ -6019,6 +6019,57 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
     - text: "Full-bleed B-roll, trimmed and stretched over the sentence."
 ```
 
+### `3d`
+
+**Simple 3D** (Phase AI, DESIGN §114): objects seen by a fixed camera under one default light
+(an even ambient part plus a sun) over a background colour, drawn by **three.js** in headless
+Chromium. The picture fills the frame from the first frame; `spin` keeps an object turning
+through every beat; beat 1 fades the `title` in (on a plate at the top); the scene fades out
+at the end. Overlays and captions are drawn over the 3D picture as over any scene. Only the `box`
+shape exists yet (Step 299 adds more shapes, groups and camera moves).
+
+**Needs the `3d` extra**: `pip install "schu-video-generator[3d]"`, then
+`python -m playwright install chromium` (Windows: `py -m pip install "schu-video-generator[3d]"`,
+then `py -m playwright install chromium`). Without them, rendering a `3d` scene stops with that
+hint; `vidgen validate` and every other scene type work without them. Nothing is fetched from the
+network while rendering: three.js (0.186.1) ships with schu-video-generator, and WebGL runs on
+Chromium's software renderer (SwiftShader), so the same YAML gives the same pixels on any machine
+with the same Playwright version.
+
+**Units and angles.** Positions and sizes are in scene units, y is up; the default camera stands
+at `[3, 2.5, 5]` and looks at the origin. `rotation` is in degrees about x, y and z (applied in
+that order), `spin` in degrees per second. `fov` is the angle across the frame's **shorter side**,
+so the same subject fills a 16:9 and a 9:16 frame alike (the long side sees more).
+
+**Frames and the cache.** Before the scene plays, its frames are drawn (frame *n* at
+*t = n / fps*) into a lossless clip `build/<quality>[_<variant>]/three_d/<scene id>.mkv`, with the
+scene description beside it (`<scene id>.json`: objects with their ids, camera, lights,
+timeline). A later render reuses the clip while the description, the page, three.js and the
+Playwright version are unchanged; `--force` renders the scene again but still reuses the clip
+(delete the clip to draw it again).
+
+[Action targets](#beat-actions): `view` (the 3D picture), `title`.
+
+| param | type | default | |
+|---|---|---|---|
+| `title` | str | `""` | heading over the 3D picture, on a plate in the theme's `surface` colour |
+| `background` | color | the theme's `background` | colour behind the objects |
+| `camera` | `{position, look_at, fov}` | `{position: [3, 2.5, 5], look_at: [0, 0, 0], fov: 40}` | where the camera stands, the point in the middle of the frame, the field of view in degrees (10–120) across the shorter side |
+| `light` | `{ambient, sun, sun_from, color}` | `{ambient: 0.5, sun: 2.5, sun_from: [-2, 6, 4], color: "#ffffff"}` | strength of the even light (0–5) and of the sun (0–10), the direction the sun shines from (towards the origin), the colour of both |
+| `objects` | list | `[]` | each `{id, shape, size, color, position, rotation, spin}`: `id` names it (letters, digits, `_`, `-`; unique; not `camera`), `shape` `box`, `size` `[width, height, depth]` (default `[1, 1, 1]`), `color` (default `accent`), `position` of its centre (default `[0, 0, 0]`), `rotation` in degrees, `spin` in degrees per second |
+
+```yaml
+- id: crate
+  type: 3d
+  params:
+    title: "A box in 3D"
+    camera: {position: [3, 2.5, 5], look_at: [0, 0, 0], fov: 40}
+    objects:
+      - {id: crate, shape: box, size: [1.6, 1.6, 1.6], color: accent, rotation: [0, 20, 0], spin: [0, 30, 0]}
+  beats:
+    - text: "A 3D scene: a box under one light, seen by a fixed camera."
+```
+
 ### `quote`
 
 Steps: (1) quote mark and text, (2) attribution. Quote characters around `text` are removed;
@@ -13947,6 +13998,7 @@ a title card, a `transform` of a bar).
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `screenshot` | `title`, `image`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
+| `3d` | `view`, `title` | dim, highlight, zoom | `view` is the whole 3D picture (as a `video_clip`'s `clip`); the objects are not targets yet |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
