@@ -25087,3 +25087,61 @@ project), repo work is generic.
 - **Next (296, gated)**: as in Step 294's "Next": `generate sheets --pay` again (~$0.28 at the
   estimate), look at `assets/sheets/`, approve, then the clips. Compare each sidecar's
   `usage.cost` with the account's activity page.
+
+## Step 296 — Smaller pictures for video jobs, https-only audio / video flagged
+
+- **Why** (the owner's first paid clip attempts, 2026-11-07, nothing charged): `generate run
+  --pay --shot quay_b1` stopped inside vidgen at 48.0 MB (six 2048x3642 sheet PNGs of 5-7 MB +
+  the style frame, inline at full size; the guard is 21 MB); heygen/avatar-iv got HTTP 400
+  "Invalid reference URL: input_references[1].audio_url.url: Only HTTPS URLs are allowed"
+  (inline audio refused); with the account's "ZDR endpoints only" on, every video model got HTTP
+  404 "ZDR violation (account settings)". `GET /api/v1/models` with the key is filtered by the
+  privacy settings (text models only); `GET /api/v1/videos/models` is not.
+- **Built** (DESIGN §113.7): new `videogen/pictures.py` — `sendable_picture(path, root)` (a JPEG
+  / WebP within 1280 px is sent as is; else a copy, longest side `PICTURE_MAX_SIDE` = 1280,
+  JPEG `JPEG_QUALITY` = 90, PNG only with transparency, in
+  `build/videogen/pictures/<sha256[:24]>_<max side>.jpg|.png`, made once), `sendable_request`
+  (swaps local pictures of a request). `generate_clip` submits the sendable request; the cache
+  key still follows the sources (+ `pictures_sent: {max_side, jpeg_quality}` in
+  `canonical_request`, so every earlier key changed — no video clip or video job existed yet).
+  `openrouter.request_bytes(request, root)`; `ShotPlan.request_bytes`, the plan line "request: X
+  MB with its inline pictures (vidgen sends at most 21 MB)", JSON `request_bytes`, a problem
+  above 21 MB. A shot with audio / video inputs under `inline_media: all` now has the problem
+  `shots.INLINE_AUDIO_VIDEO_PROBLEM` (the brief's text), so `run --pay` refuses before sending;
+  under `inline_media: images` it stays blocked (message updated). The provider never sends
+  audio / video inline (`OpenRouterVideoProvider` and `MockVideoProvider` lost `inline_media`;
+  a local sound / clip needs `uploader`).
+- **Public interfaces**: `OpenRouterVideoProvider(inline_media=...)` removed (not in
+  `vidgen.api`); new `vidgen.videogen.pictures`, `openrouter.request_bytes`,
+  `ShotPlan.request_bytes`, `shots.INLINE_AUDIO_VIDEO_PROBLEM`; `videogen.inline_media` stays
+  (both values send pictures inline). Plan JSON gains `request_bytes`.
+- **Decisions**: the copy is made at send time from the source, not stored in the request, so
+  the cache key does not depend on Pillow's encoder bytes; small opaque PNGs also go as JPEG; no
+  model lists a largest reference size, so one limit for all; `generate plan` writes the copies
+  (its only writes; documented). The problem text tells talking shots to "remove `audio:`",
+  which a talking shot cannot (`audio: none` is refused): as the brief worded it; hosting is the
+  real way out.
+- **Sample** (`scratch/s293/sample`, `video.yaml` unchanged): quay_b1's pictures were 47.9 MB of
+  base64 at full size, 0.99 MB as copies; its request is 0.99 MB (audio and guide counted as
+  hosted URLs; inline they would add 0.11 MB). harbour_b1 0.3 MB, closeup_b1 0.1 MB. The plan now
+  shows quay_b1 and closeup_b1 with the inline audio / video problem (`inline_media: all`);
+  harbour_b1 (pictures only) is ready. Six copies in its `build/videogen/pictures/`.
+- **Files**: `src/vidgen/videogen/{pictures (new),__init__,openrouter,run,shots}.py`,
+  `src/vidgen/cli.py` (plan JSON), `src/vidgen/config.py` (`inline_media` doc), docs
+  `CONFIG.md`, `COOKBOOK-GENERATED-VIDEO.md` (ZDR account setting, the free count check,
+  https-only audio / video, picture sizes; the example drops `inline_media: all`), DESIGN §113
+  header / §113.1 / §113.5 / §113.7 and module tree, CHANGELOG, tasklist (296 ticked, the paid
+  experiment is now 297). Guide / AGENTS.md unchanged (no key it names changed). Tests
+  `tests/test_videogen.py` (+2, 1 updated), `tests/test_videogen_shots.py` (+1, 1 rewritten; the
+  stub image provider makes real PNGs).
+- **Tests run and passed** (one file at a time, `/home/claude/bin/capped` + `timeout`, `-m "not
+  render"`): `test_videogen` (26, 5.6 s), `test_videogen_shots` (20, 3.8 s), `test_docs` (79),
+  `test_videogen_compose` (17, 1 deselected), `test_json_output` (21, 2 deselected),
+  `test_schema` (76, 187 s), `test_config` (21), `test_api` (10). No rendering code changed.
+- **Spending**: nothing paid, no key read; no network beyond the cached public model list.
+- **Known gaps**: no hosting uploader, so talking shots and shots with `audio:` / `guide:` cannot
+  be paid for yet; inline pictures for video jobs still unconfirmed by a real accepted job; the
+  video shot prompts' palette still reads as objects ("warm amber orange"; §113.6 note).
+- **Next (297, gated)**: with the owner's go-ahead and ZDR-only turned off, `generate run --pay
+  --shot harbour_b1` (pictures only, $0.120) to confirm inline pictures and `usage.cost`; then
+  decide on a host for audio / video (or drop `audio:` / `guide:` from action shots).

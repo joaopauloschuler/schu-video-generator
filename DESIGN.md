@@ -255,6 +255,7 @@ src/vidgen/
                           # models.py (the public video model list, cache, checks, estimates), openrouter.py
                           # (submit / poll / download, key or proxy mode, errors), mock.py (a fake API),
                           # ledger.py (spending ledger, budget), run.py (cache, budget, pay or dry run),
+                          # pictures.py (smaller copies of pictures sent inline; §113.7),
                           # sheets.py (reference / style sheets), shots.py (per-beat shots, the plan),
                           # inputs.py (the cut voice, guide render, first frame; §113.3), qa.py (checks,
                           # contact sheets), takes.py (takes, picks), compose.py (placements, credit line),
@@ -21462,7 +21463,7 @@ writes split parts.
 - Verified: frame baseline 33 stills, max difference 0; pinned audio-only and video mixes
   unchanged (test_staging, test_audio_only, test_sound_design, test_scoring).
 
-## 113. Generated video shots through OpenRouter (Phase AH, Steps 292–296)
+## 113. Generated video shots through OpenRouter (Phase AH, Steps 292–297)
 
 Generative video models make selected shots (talking close-ups lip-synced to vidgen's own voice
 lines, acting shots guided by character / style sheets, establishing shots); vidgen keeps story,
@@ -21470,7 +21471,8 @@ timing, text, captions, music, sound design and assembly. The model's own audio 
 every job is sent with `generate_audio: false`. Opt-in (`videogen:` and, from Step 293, per-beat
 `generated_shot:` specs, §113.3); nothing changes for existing projects. Steps 292–294 spend nothing (paid
 endpoints mocked); Step 295 cleans up the sheet prompts after the first paid sheet pictures
-(§113.6); Step 296 is the owner-gated paid experiment (≤ US$2.00, 9:16, 4–5 s clips).
+(§113.6); Step 296 records the first answers of the real API and shrinks the pictures sent
+(§113.7); Step 297 is the owner-gated paid experiment (≤ US$2.00, 9:16, 4–5 s clips).
 
 ### 113.1 API facts (checked 2026-11-07; no key used, nothing paid)
 
@@ -21527,7 +21529,9 @@ video; no size limits are documented (413 exists). So vidgen sends pictures inli
 audio / video needs a hosted URL from a pluggable `uploader(Path) -> url` (none is chosen: the
 owner decides on a hosting service) or the opt-in `inline_media: all` (try it in Step 296 with
 the cheapest model: a rejected request is a 400 before generation). Without either, the request
-stops with an error naming both options.
+stops with an error naming both options. **Settled in Step 296 (§113.7): OpenRouter refuses
+inline audio** (HTTP 400 "Only HTTPS URLs are allowed"), so `inline_media: all` no longer sends
+audio / video inline.
 
 ### 113.2 The provider layer (Step 292)
 
@@ -21836,12 +21840,12 @@ every scene), and sheets without proxy mode (the image provider needed `OPENROUT
 when the proxy adds it).
 
 Open, by weight:
-1. **Unverified against the real API** (296, the paid experiment, settles it): inline audio / video (`inline_media:
-   all`), avatar-iv taking the portrait as an input reference, Seedance accepting a 240-pixel
+1. **Unverified against the real API** (297, the paid experiment, settles it; inline audio was
+   refused in Step 296, §113.7): avatar-iv taking the portrait as an input reference, Seedance accepting a 240-pixel
    guide, the real 402 / 429 / 413 / moderation bodies, and what `usage.cost` reports. A
    rejected inline request should fail before generation (a 400), costing nothing.
-2. **No hosting uploader**: audio and video inputs work only inline (unconfirmed); without that,
-   talking and action shots with audio stay blocked. Choosing a host is the owner's decision.
+2. **No hosting uploader**: audio and video inputs need hosted https URLs (inline is refused,
+   §113.7); without a host, talking shots and shots with `audio:` / `guide:` stay blocked. Choosing a host is the owner's decision.
 3. **QA thresholds** come from synthetic clips; real footage (handheld, fast motion, a dark
    scene) may need tuning: black and frozen errors are conservative, the rest are warnings.
 4. **Lint under a take**: layout rules still read vidgen's own objects of a beat that a take
@@ -21915,3 +21919,53 @@ response reports, and now says where a number comes from:
 Open: whether `usage.cost` over-reports for every image model or only for seedream-4.5 routed to a
 cheaper provider; asking `GET /generation` (as the TTS path does, §66) after a picture would
 give the billed `total_cost`, at the price of a key-authenticated lookup per picture.
+
+### 113.7 What the API accepted, and smaller pictures (Step 296)
+
+The owner's first paid attempt at clips (2026-11-07, the s293 sample; nothing was charged for
+any of these) gave three answers:
+
+1. **Request size.** `vidgen generate run --pay --shot quay_b1` (Seedance 2.0 Fast, 6 sheet
+   pictures + the style frame, voice, guide) stopped inside vidgen before sending: "the request
+   is 48.0 MB with its inline inputs, more than vidgen sends (21 MB)". The sheet pictures are
+   2048x3642 PNGs of 5-7 MB, sent at full size as data URLs.
+2. **Inline audio is refused.** heygen/avatar-iv: HTTP 400 "Invalid reference URL:
+   input_references[1].audio_url.url: Only HTTPS URLs are allowed". Audio (and so video)
+   references must be https URLs. Inline pictures are documented but not yet confirmed for a
+   video job (no video job has been accepted yet).
+3. **Account privacy settings.** With "ZDR endpoints only" on, every video model is refused with
+   HTTP 404 "ZDR violation (account settings)". `GET /api/v1/models` with the key is filtered by
+   the account's privacy settings (a free check: compare its count with and without the key) but
+   lists only text models; `GET /api/v1/videos/models` is not filtered by the key, so a model
+   listed there may still be refused for the account.
+
+Built:
+
+- **Smaller pictures** (`videogen/pictures.py`): `sendable_picture(path, root)` returns the file
+  to send for a local picture: the file itself when it is a JPEG / WebP whose longest side is at
+  most `PICTURE_MAX_SIDE` (1280 px), else a copy resized to that limit (LANCZOS) and saved as
+  JPEG quality `JPEG_QUALITY` (90), or PNG when the picture has transparency. Copies live in
+  `build/videogen/pictures/<sha256 of the source, 24 hex>_<max side>.jpg|.png`, made once; the
+  sources are never changed. `sendable_request(request, root)` swaps every local picture of a
+  request (frame images and picture references) for its copy; `generate_clip` submits that.
+  The cache key is still computed from the sources (`canonical_request` gains `pictures_sent:
+  {max_side, jpeg_quality}`, so a new rule makes a new key but a new Pillow version does not).
+  No model in the list names a largest reference size, so one limit serves all. The sample's
+  quay_b1: pictures 47.9 MB of base64 at full size, 0.99 MB as copies; its request (audio /
+  guide counted as hosted URLs) is 0.99 MB. The 21 MB guard (`MAX_INLINE_BYTES`) stays.
+- **Request size in the plan**: `openrouter.request_bytes(request, root)` (local audio / video
+  counted as hosted URLs) for every ready, uncached shot; `vidgen generate plan` prints
+  "request: X MB with its inline pictures (vidgen sends at most 21 MB)" and JSON
+  `request_bytes`; over the limit is a problem. The plan's only writes are those copies.
+- **Inline audio / video flagged**: a shot with an audio or video input under `inline_media:
+  all` has the problem "audio/video references must be https URLs; OpenRouter refuses inline
+  audio/video — remove `audio:`/`guide:` from the shot or host the files" (`shots.
+  INLINE_AUDIO_VIDEO_PROBLEM`), so `run --pay` refuses the run before sending; under
+  `inline_media: images` such shots stay blocked (hosted URL needed). The provider no longer
+  sends audio / video inline at all (`OpenRouterVideoProvider` lost its `inline_media`
+  argument): a local sound or clip needs the `uploader`, else an error. `inline_media` stays a
+  valid setting; both values send pictures inline.
+
+Open: a talking shot cannot drop its audio (`audio: none` is refused for `talking`), so until a
+host exists (owner's choice) heygen/avatar-iv and the sample's quay_b1 / closeup_b1 cannot be
+paid for; whether video models accept inline pictures (harbour_b1 is the first such job to try).

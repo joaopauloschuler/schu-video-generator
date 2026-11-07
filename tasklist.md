@@ -1719,7 +1719,8 @@ lip-synced to vidgen's own voice lines, acting shots guided by character / style
 optionally a vidgen render), establishing shots — while vidgen keeps story, timing, text,
 captions, music, sound design and assembly. The model's audio is never used. Opt-in. Steps
 292–294 spend nothing (paid endpoints mocked); 295 cleans up the sheet prompts after the first
-paid sheet pictures; 296 runs only with the owner's go-ahead.
+paid sheet pictures; 296 shrinks the pictures and records the first API answers; 297 runs only
+with the owner's go-ahead.
 
 ### Step 292 — Video provider layer
 - [x] `vidgen.videogen` (OpenRouter provider, mock provider): submit / poll (timeout, backoff) / download, cache by the canonical request (input files by hash), spending ledger + hard budget cap + estimates from the models list, dry run by default and `pay=True` explicit, key from `OPENROUTER_API_KEY` or proxy-injected mode, clear errors (402, 429, 413, content policy, expired, unsupported option with did-you-mean), the data-URL question settled from the docs, `vidgen generate models` (cached, offline from cache) — done as `videogen: {provider, budget_usd, key_via_proxy, inline_media, poll_timeout}`, `generate_clip` / `plan_clip`, `videogen-ledger.jsonl`, `vidgen generate models | ledger`; pictures inline as data URLs, audio / video hosted (or `inline_media: all`); tests `test_videogen.py`
@@ -1733,7 +1734,10 @@ paid sheet pictures; 296 runs only with the owner's go-ahead.
 ### Step 295 — Cleaner reference sheet prompts, real image costs
 - [x] After the first paid sheet pictures (seedream-4.5: lamps drawn from the palette, a ticket booth and garbled signs from Theo's role, figures cut, side view not in profile): character pictures as clean model-sheet pictures (full body head to toe, plain seamless light grey backdrop, nothing else, strict view words, "who the person is ... No props"), an always-on exclusion (no text, signs, logos, labels, props, furniture, lamps, scenery) sent as the request's `negative` ("Avoid: ..." in the prompt text), the palette marked colours only, lens / handheld / depth-of-field and scene-lighting words left out of character pictures; style frames keep the full look plus the no-text exclusion; costs recorded from `usage.cost` with `cost_source: reported | estimate` (sidecar, sheet ledger events) and the response's `usage` kept in the sidecar, "estimated" in the printed line; the budget check still uses the estimate — done in `videogen/sheets.py`, `imagegen/{__init__,openrouter,run}.py`; tests in `test_videogen_shots.py`, `test_imagegen_openrouter.py`
 
-### Step 296 — The paid experiment (LATER, gated on the owner's go-ahead)
+### Step 296 — Smaller pictures for video jobs, https-only audio / video
+- [x] After the first paid clip attempts (nothing charged): a 48 MB request (six 2048x3642 sheet PNGs inline), inline audio refused by OpenRouter (HTTP 400 "Only HTTPS URLs are allowed"), every video model refused with "ZDR endpoints only" on — pictures sent as smaller copies (longest side 1280 px, JPEG q90, PNG only with transparency) cached in `build/videogen/pictures/` by source hash and size, the 21 MB guard kept, the request size in `generate plan`; inline audio / video a plan problem (`run --pay` refuses it), never sent inline; findings in DESIGN §113.7 and `docs/COOKBOOK-GENERATED-VIDEO.md` (ZDR account setting, the free model-count check, https-only audio / video) — done in `videogen/pictures.py`, `videogen/{openrouter,run,shots}.py`; tests in `test_videogen.py`, `test_videogen_shots.py`
+
+### Step 297 — The paid experiment (LATER, gated on the owner's go-ahead)
 - [ ] With the owner's key, ≤ US$2.00 total, vertical 9:16 Shorts, lowest sensible resolution, 4–5 s clips
 
 ---

@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–295)
+## Unreleased (Steps 193–296)
+
+### Smaller pictures for video jobs, https-only audio / video (Step 296)
+
+- Pictures sent inline to a video model (frame images and picture references) go as smaller copies: longest side at most 1280 px, JPEG quality 90 (PNG when the picture has transparency), cached in `build/videogen/pictures/`; the sheet files are untouched. The s293 sample's action shot went from a 48 MB request (refused by vidgen's 21 MB limit) to about 1 MB. `vidgen generate plan` shows each ready shot's request size (`request_bytes` in `--json`).
+- OpenRouter refuses inline audio and video (HTTP 400 "Only HTTPS URLs are allowed"): with `videogen.inline_media: all`, a shot with `audio:` or `guide:` (and every talking shot) is now a problem in the plan and `run --pay` refuses it before sending; vidgen no longer sends sound or clips as data URLs.
+- `docs/COOKBOOK-GENERATED-VIDEO.md`: the account's "ZDR endpoints only" setting refuses every video model (HTTP 404), a free check of the privacy settings (the model count with and without the key), and the https-only rule for audio and video.
 
 ### Cleaner reference sheet prompts, real image costs (Step 295)
 

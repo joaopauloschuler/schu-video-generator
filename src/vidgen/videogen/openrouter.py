@@ -13,11 +13,12 @@ the network proxy adds the header, vidgen sends none and needs no key.
 Paid requests are never retried automatically: a submit that fails is reported (402, 429,
 413, content policy, ...). Polls and the download are free and retried on 429 / 5xx.
 
-Inputs (frame images, references): a hosted ``url`` is sent as is. A local file is sent inline
-as a ``data:`` URL when OpenRouter's documentation says that works — pictures (``frame_images``
-"an https URL or a base64 data URL") — and for audio and video only with ``inline_media: all``
-(the documentation shows only hosted URLs for them); otherwise an ``uploader`` (a callable
-``Path -> url``) must host it, else the request stops with a clear error.
+Inputs (frame images, references): a hosted ``url`` is sent as is. A local picture is sent
+inline as a ``data:`` URL (``frame_images``: "an https URL or a base64 data URL"); the caller
+sends a smaller copy of it (:func:`vidgen.videogen.pictures.sendable_request`). A local sound or
+clip needs an ``uploader`` (a callable ``Path -> url``) to host it, else the request stops with a
+clear error: OpenRouter refuses inline audio / video (HTTP 400 "Only HTTPS URLs are allowed",
+seen in Step 296).
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from vidgen import DIST_NAME, httpapi
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_bytes_atomic
 from vidgen.videogen import JobState, MediaInput, VideoRequest
+from vidgen.videogen.pictures import sendable_request
 
 log = logging.getLogger("vidgen.videogen")
 
@@ -207,7 +209,6 @@ class OpenRouterVideoProvider:
         self,
         *,
         key_via_proxy: bool = False,
-        inline_media: str = "images",
         uploader: Callable[[Path], str] | None = None,
         transport: Transport | None = None,
         sleep: Callable[[float], None] | None = None,
@@ -221,7 +222,6 @@ class OpenRouterVideoProvider:
     ) -> None:
         self.environ = environ
         self.proxy = proxy_mode(key_via_proxy, environ)
-        self.inline_media = inline_media
         self.uploader = uploader
         self._transport = transport if transport is not None else urllib_transport
         self._sleep = sleep if sleep is not None else time.sleep
@@ -274,14 +274,12 @@ class OpenRouterVideoProvider:
         if media.url is not None:
             return media.url
         assert media.path is not None
-        inline = media.kind == "image" or self.inline_media == "all"
-        if not inline:
+        if media.kind != "image":
             if self.uploader is not None:
                 return self.uploader(media.path)
             raise VidgenError(
-                f"the {media.kind} input {media.path} must be hosted: OpenRouter's documentation shows only https URLs for "
-                f"{media.kind} references (pictures may be sent inline). Give its url, or set videogen: {{inline_media: all}} "
-                "to try sending it inline (not confirmed by the documentation)"
+                f"the {media.kind} input {media.path} must be hosted: audio/video references must be https URLs; "
+                "OpenRouter refuses inline audio/video (pictures may be sent inline). Give its url"
             )
         media_type = MEDIA_TYPES.get(media.path.suffix.lower())
         if media_type is None or not media_type.startswith(media.kind):
@@ -359,6 +357,13 @@ class OpenRouterVideoProvider:
         dest.parent.mkdir(parents=True, exist_ok=True)
         write_bytes_atomic(dest, answer.body)
         return len(answer.body)
+
+
+def request_bytes(request: VideoRequest, root: Path) -> int:
+    """Size of the JSON body vidgen would send for ``request``: local pictures inline as their
+    smaller copies (made in ``root``'s build folder), local audio / video counted as hosted URLs."""
+    provider = OpenRouterVideoProvider(environ={}, uploader=lambda path: f"https://hosted.invalid/{path.name}")
+    return len(json.dumps(provider.request_body(sendable_request(request, root))).encode("utf-8"))
 
 
 class _Headers:

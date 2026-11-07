@@ -8,7 +8,8 @@ hashes), so the same request is never paid for twice.
 
 Modules: :mod:`.models` (the public video model list, checks, cost estimates),
 :mod:`.openrouter` (the provider), :mod:`.mock` (a fake OpenRouter for tests and dry demos),
-:mod:`.ledger` (the spending ledger and budget cap), :mod:`.run` (cache, budget, pay or dry run).
+:mod:`.ledger` (the spending ledger and budget cap), :mod:`.pictures` (smaller copies of the
+pictures sent inline), :mod:`.run` (cache, budget, pay or dry run).
 """
 
 from __future__ import annotations
@@ -114,7 +115,10 @@ class VideoRequest:
 
 
 def canonical_request(request: VideoRequest) -> dict[str, Any]:
-    """Everything that decides the clip, as plain JSON (input files by content hash)."""
+    """Everything that decides the clip, as plain JSON (input files by content hash; local
+    pictures by their source, with the size limit of the copies sent, :mod:`.pictures`)."""
+    from vidgen.videogen.pictures import JPEG_QUALITY, PICTURE_MAX_SIDE
+
     return {
         "cache_version": CACHE_VERSION,
         "model": request.model,
@@ -126,6 +130,7 @@ def canonical_request(request: VideoRequest) -> dict[str, Any]:
         "generate_audio": False,
         "frame_images": [f.canonical() for f in request.frame_images],
         "references": [r.canonical() for r in request.references],
+        "pictures_sent": {"max_side": PICTURE_MAX_SIDE, "jpeg_quality": JPEG_QUALITY},
         "seed": request.seed,
         "previous_job_id": request.previous_job_id,
         "provider_options": {k: dict(v) for k, v in sorted(request.provider_options.items())},

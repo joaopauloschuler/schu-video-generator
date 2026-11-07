@@ -11,7 +11,8 @@ or ``budget_usd=``; with both, the lower). In order:
    refused with a did-you-mean, before anything is paid;
 4. the estimate (:func:`vidgen.videogen.models.estimate`) against what the budget has left;
 5. without ``pay``: the plan (a dry run; nothing is sent);
-6. with ``pay``: submit (one attempt), ``submit`` line in the ledger, poll, the terminal line
+6. with ``pay``: submit (one attempt; local pictures as their smaller copies,
+   :mod:`vidgen.videogen.pictures`), ``submit`` line in the ledger, poll, the terminal line
    with ``usage.cost``, download, sidecar ``<hash>.json``.
 
 The mock provider (``videogen.provider: mock``) keeps its own ledger,
@@ -32,6 +33,7 @@ from vidgen.videogen import CLIPS_DIR, LEDGER_NAME, JobState, VideoRequest, cano
 from vidgen.videogen.ledger import BudgetState, Ledger, LedgerJob, refusal, utc_now
 from vidgen.videogen.models import Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, load_catalog, money
 from vidgen.videogen.openrouter import OpenRouterVideoProvider, job_failure
+from vidgen.videogen.pictures import sendable_request
 
 if TYPE_CHECKING:
     from vidgen.config import VideogenConfig
@@ -54,8 +56,8 @@ def get_provider(settings: VideogenConfig) -> OpenRouterVideoProvider:
     if settings.provider == "mock":
         from vidgen.videogen.mock import MockVideoProvider
 
-        return MockVideoProvider(inline_media=settings.inline_media, poll_timeout=settings.poll_timeout)
-    return OpenRouterVideoProvider(key_via_proxy=settings.key_via_proxy, inline_media=settings.inline_media, poll_timeout=settings.poll_timeout)
+        return MockVideoProvider(poll_timeout=settings.poll_timeout)
+    return OpenRouterVideoProvider(key_via_proxy=settings.key_via_proxy, poll_timeout=settings.poll_timeout)
 
 
 @dataclass
@@ -178,7 +180,7 @@ def generate_clip(
     if plan.refusal:
         raise VidgenError(f"not paying for {request.model}: {plan.refusal}")
     assert plan.estimate is not None
-    job = chosen.submit(request, plan.check.drop)
+    job = chosen.submit(sendable_request(request, root), plan.check.drop)
     ledger.append(
         "submit", job_id=job.id, provider=name, model=request.model, request_hash=plan.key,
         estimate_usd=plan.estimate.cost,

@@ -57,6 +57,18 @@ ACT = {"id": "act", "text": "Nine ten eleven twelve.", "voice": "ana_voice",
 WIDE = {"id": "wide", "text": "Thirteen fourteen fifteen.", "generated_shot": {"kind": "establishing", "model": "google/veo-3.1-lite", "setting": "a foggy harbour"}}
 
 
+def png_bytes(key: str) -> bytes:
+    """A small real PNG, coloured by ``key`` (so each sheet picture differs)."""
+    import hashlib
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (64, 96), tuple(hashlib.sha256(key.encode()).digest()[:3])).save(buffer, "PNG")
+    return buffer.getvalue()
+
+
 class StubImages:
     """An image provider that makes a tiny PNG and reports a cost (named mock: its own ledger)."""
 
@@ -70,7 +82,7 @@ class StubImages:
 
     def generate(self, request: ImageRequest) -> GeneratedPicture:
         self.made.append(request.path.name)
-        return GeneratedPicture(b"\x89PNG\r\n\x1a\n" + request.key.encode(), cost=0.04)
+        return GeneratedPicture(png_bytes(request.key), cost=0.04)
 
 
 def approve(root: Path) -> None:
@@ -183,7 +195,7 @@ def test_sheet_costs_reported_or_marked_estimated(make_project) -> None:
     class Unreported(StubImages):
         def generate(self, request: ImageRequest) -> GeneratedPicture:
             self.made.append(request.path.name)
-            return GeneratedPicture(b"\x89PNG\r\n\x1a\n" + request.key.encode(), cost=None if len(self.made) == 1 else 0.023, usage={"cost": 0.023} if len(self.made) > 1 else None)
+            return GeneratedPicture(png_bytes(request.key), cost=None if len(self.made) == 1 else 0.023, usage={"cost": 0.023} if len(self.made) > 1 else None)
 
     lines: list[str] = []
     run_sheets(Project.load(root), ["ana"], pay=True, provider=Unreported(), out=lines.append)
@@ -378,19 +390,48 @@ def test_plan_prices_every_shot_and_counts_the_budget(make_project) -> None:
 
 
 def test_plan_is_ready_once_sheets_are_approved_and_inputs_made(make_project) -> None:
-    root = make_project(shot_config(TALK, videogen={"provider": "mock", "budget_usd": 2.0, "inline_media": "all"}))
+    from vidgen.videogen.pictures import PICTURES_DIR
+
+    pictures = {"id": "pics", "text": "Nine ten eleven twelve.", "voice": "ana_voice",
+                "generated_shot": {"kind": "action", "model": "bytedance/seedance-2.0-fast", "characters": ["ana"]}}
+    root = make_project(shot_config(pictures))
     run_sheets(Project.load(root), pay=True, provider=StubImages(), out=lambda line: None)
     project = Project.load(root)
     plan = plan_shots(project, catalog=CATALOG)
     assert any("not approved yet" in b for b in plan.shots[0].shot.blocked) and plan.budget.spent_usd == pytest.approx(0.12)
     approve(root)
     project = Project.load(root)
+    plan = plan_shots(project, catalog=CATALOG)
+    (shot,) = plan.shots
+    assert shot.shot.blocked == [] and shot.shot.problems == [] and not shot.cached
+    assert shot.left_after == pytest.approx(2.0 - 0.12 - shot.cost)
+    assert {i.kind for i in shot.shot.inputs} == {"image"}
+    copies = list((root / PICTURES_DIR).iterdir())  # the small PNGs go as JPEG copies
+    assert 0 < shot.request_bytes < 100_000 and copies and all(c.suffix == ".jpg" for c in copies)
+    assert "  request: 0.0 MB with its inline pictures (vidgen sends at most 21 MB)" in plan.lines(root)
+
+
+def test_inline_audio_is_a_problem_and_run_pay_refuses_it(make_project) -> None:
+    from vidgen.videogen.mock import MockOpenRouter, MockVideoProvider
+    from vidgen.videogen.shots import INLINE_AUDIO_VIDEO_PROBLEM
+    from vidgen.videogen.workflow import run_shots
+
+    root = make_project(shot_config(TALK, videogen={"provider": "mock", "budget_usd": 2.0, "inline_media": "all"}))
+    run_sheets(Project.load(root), pay=True, provider=StubImages(), out=lambda line: None)
+    approve(root)
+    project = Project.load(root)
     tone(project.audio_dir / "talk.mp3", 3.0)
     make_inputs(project, project_shots(project, CATALOG), out=lambda line: None)
-    plan = plan_shots(project, catalog=CATALOG)
-    (talk,) = plan.shots
-    assert talk.shot.blocked == [] and not talk.cached and talk.estimate.cost == pytest.approx(0.20)
-    assert talk.left_after == pytest.approx(2.0 - 0.12 - 0.20)
+    (talk,) = plan_shots(project, catalog=CATALOG).shots
+    assert talk.shot.blocked == [] and talk.shot.problems == [f"scenes[0].beats[0].generated_shot: {INLINE_AUDIO_VIDEO_PROBLEM}"]
+    assert talk.estimate.cost == pytest.approx(0.20)
+    api = MockOpenRouter()
+    with pytest.raises(VidgenError, match="(?s)not paying: fix these shots first.*https URLs"):
+        run_shots(project, pay=True, provider=MockVideoProvider(api), catalog=CATALOG, out=lambda line: None)
+    assert api.submits == []
+    hosted = Project.load(make_project(shot_config(TALK), folder="hosted"))
+    (talk,) = plan_shots(hosted, catalog=CATALOG).shots
+    assert talk.shot.problems == [] and any("OpenRouter refuses inline audio / video" in b for b in talk.shot.blocked)
 
 
 def test_cli_plan_text_and_json(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

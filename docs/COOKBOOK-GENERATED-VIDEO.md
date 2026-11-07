@@ -14,8 +14,8 @@ footage vidgen cannot draw; keep diagrams, text, charts and explanations as scen
 
 | kind | model (examples) | inputs | good for |
 |---|---|---|---|
-| `talking` | `heygen/avatar-iv` ($0.05/s) | a portrait (the speaker's sheet) + the beat's own voice | a lip-synced close-up of a line |
-| `action` | `bytedance/seedance-2.0-fast` | the characters' sheets, the style frame, the voice, a guide render | people doing something |
+| `talking` | `heygen/avatar-iv` ($0.05/s) | a portrait (the speaker's sheet) + the beat's own voice (hosted) | a lip-synced close-up of a line |
+| `action` | `bytedance/seedance-2.0-fast` | the characters' sheets, the style frame (+ the voice and a guide render, hosted) | people doing something |
 | `establishing` | `google/veo-3.1-lite` (4/6/8 s) | words (+ an optional first frame) | a place, a mood, a transition |
 
 ## 2. Cost control
@@ -44,6 +44,29 @@ material, or anything you may not share. The key is read from `OPENROUTER_API_KE
 paid request is made and is never stored or logged (or set `videogen.key_via_proxy: true` when a
 network proxy adds it).
 
+**Account settings.** With "ZDR endpoints only" turned on in the OpenRouter account's privacy
+settings, every video model is refused with HTTP 404 "ZDR violation (account settings)" (seen on
+2026-11-07, nothing charged). Turn that setting off for the key that makes video. A free check of
+what the settings allow: `GET https://openrouter.ai/api/v1/models` returns fewer models with the
+key than without it when the privacy settings filter them out (compare the two counts). That list
+has only text models, though, and `GET /api/v1/videos/models` (what `vidgen generate models`
+reads) is **not** filtered by the key: a video model listed there may still be refused for your
+account.
+
+**Inputs must be URLs for sound and video.** OpenRouter accepts pictures inline (data URLs) but
+refuses inline audio and video: HTTP 400 "Invalid reference URL: input_references[1].audio_url.url:
+Only HTTPS URLs are allowed". The beat's voice (`audio:`, and every talking shot) and the guide
+render (`guide:`) therefore need a hosted https URL. vidgen has no host set up yet, so those shots
+are blocked (`inline_media: images`) or have a problem (`inline_media: all`), and `run --pay`
+refuses them before anything is sent. Shots made only from words and pictures (establishing
+shots, action shots without `audio:` / `guide:`) work today.
+
+**Picture sizes.** Sheet pictures are large (2048x3642, 5-7 MB each); six of them made a 48 MB
+request, more than the 21 MB vidgen sends. vidgen now sends each picture as a smaller copy
+(longest side 1280 px, JPEG quality 90; PNG only with transparency) cached in
+`build/videogen/pictures/`; the files in `assets/sheets/` stay as they are. `vidgen generate plan`
+prints each ready shot's request size.
+
 ## 4. The workflow
 
 ```yaml
@@ -51,7 +74,7 @@ title: The Early Ferry
 format: {width: 1080, height: 1920, fps: 30}
 voice: {provider: kokoro, voice: bf_emma}
 voices: {theo_voice: {voice: am_michael, label: Theo}}
-videogen: {provider: openrouter, budget_usd: 2.0, inline_media: all}
+videogen: {provider: openrouter, budget_usd: 2.0}
 style_sheet: {palette: [slate blue, sea green, warm orange], lens: "35 mm", notes: "soft overcast light", frames: 1, frame_prompt: "a foggy harbour"}
 characters:
   - name: theo
@@ -74,7 +97,7 @@ vidgen generate sheets --pay         # the reference pictures (look at them in a
 #   set approved: true on each sheet you like (no shot uses a sheet before)
 vidgen tts                           # the voices (the talking shot is lip-synced to them)
 vidgen generate inputs --guide       # cuts each shot's voice, guide render and first frame
-vidgen generate plan                 # nothing blocked? tell whoever pays the total
+vidgen generate plan                 # nothing blocked? (a talking shot stays blocked until its voice is hosted)
 vidgen generate run --pay            # the clips, each kept as a take with QA and a contact sheet
 vidgen generate takes                # look at every contact sheet and QA finding
 vidgen generate pick --shot closeup_b1 --take 1

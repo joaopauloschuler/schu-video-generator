@@ -271,11 +271,65 @@ def test_inline_pictures_hosted_audio(tmp_path: Path) -> None:
     assert body["frame_images"][0]["image_url"]["url"].startswith("data:image/png;base64,")
     assert body["input_references"] == [{"type": "video_url", "video_url": {"url": "https://x.invalid/guide.mp4"}}]
     audio = request(references=(MediaInput("audio", voice),))
-    with pytest.raises(VidgenError, match="must be hosted.*inline_media: all"):
+    with pytest.raises(VidgenError, match="must be hosted: audio/video references must be https URLs"):
         provider.request_body(audio)
-    assert MockVideoProvider(inline_media="all").request_body(audio)["input_references"][0]["audio_url"]["url"].startswith("data:audio/mpeg;base64,")
     hosted = MockVideoProvider(uploader=lambda path: f"https://host.invalid/{path.name}")
     assert hosted.request_body(audio)["input_references"][0]["audio_url"]["url"] == "https://host.invalid/line.mp3"
+
+
+def big_picture(path: Path, size: tuple[int, int] = (2048, 3642), *, alpha: bool = False, noisy: bool = False) -> Path:
+    """A picture shaped like a reference sheet picture; ``noisy``: random pixels, which PNG cannot
+    shrink (a sheet picture's 5-7 MB), else plain (fast to write)."""
+    import numpy as np
+    from PIL import Image
+
+    channels = 4 if alpha else 3
+    if noisy:
+        pixels = np.random.default_rng(1).integers(0, 256, (size[1], size[0], channels), dtype=np.uint8)
+    else:
+        pixels = np.full((size[1], size[0], channels), 90, dtype=np.uint8)
+    if alpha:
+        pixels[..., 3] = 128
+    Image.fromarray(pixels, "RGBA" if alpha else "RGB").save(path, compress_level=1)
+    return path
+
+
+def test_pictures_are_sent_as_smaller_cached_copies(tmp_path: Path) -> None:
+    from PIL import Image
+
+    from vidgen.videogen.pictures import PICTURE_MAX_SIDE, PICTURES_DIR, sendable_picture
+
+    sheet = big_picture(tmp_path / "sheet.png")
+    before = sheet.read_bytes()
+    copy = sendable_picture(sheet, tmp_path)
+    assert copy.parent == tmp_path / PICTURES_DIR and copy.suffix == ".jpg" and sheet.read_bytes() == before
+    with Image.open(copy) as image:
+        assert image.format == "JPEG" and max(image.size) == PICTURE_MAX_SIDE and image.size == (720, 1280)
+    stamp = copy.stat().st_mtime_ns
+    assert sendable_picture(sheet, tmp_path) == copy and copy.stat().st_mtime_ns == stamp  # cached, not made again
+    clear = sendable_picture(big_picture(tmp_path / "logo.png", (1600, 400), alpha=True), tmp_path)
+    with Image.open(clear) as image:
+        assert image.format == "PNG" and image.mode == "RGBA" and image.size == (1280, 320)
+    small = tmp_path / "small.jpg"
+    Image.new("RGB", (640, 480), (10, 20, 30)).save(small)
+    assert sendable_picture(small, tmp_path) == small  # a JPEG within the limit is sent as it is
+
+
+def test_inline_pictures_shrink_the_request(tmp_path: Path) -> None:
+    from vidgen.videogen.openrouter import MAX_INLINE_BYTES, request_bytes
+
+    sheet = MediaInput("image", big_picture(tmp_path / "sheet.png", noisy=True))
+    sheets = (sheet, sheet)
+    req = request(model=FAST, resolution="480p", references=sheets)
+    full = len(json.dumps(MockVideoProvider().request_body(req)).encode("utf-8"))
+    small = request_bytes(req, tmp_path)
+    assert full > MAX_INLINE_BYTES and small < full / 10
+    api = MockOpenRouter()
+    result = run(tmp_path, req, api)
+    sent = api.submits[0].body["input_references"]
+    assert result.paid and [r["image_url"]["url"][:23] for r in sent] == ["data:image/jpeg;base64,"] * 2
+    assert len(json.dumps(api.submits[0].body).encode("utf-8")) == small
+    assert result.plan.key == request_hash(req)  # the key follows the sources, not the copies
 
 
 # ----- the key -------------------------------------------------------------------------------------

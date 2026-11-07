@@ -2770,7 +2770,7 @@ videogen:
   provider: openrouter      # openrouter (paid) | mock (a fake API: no key, nothing sent)
   budget_usd: 2.0           # hard cap for this project; paying needs it (default: null)
   key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header (clips and sheets)
-  inline_media: images      # images | all (audio / video inline too: not confirmed by OpenRouter's docs)
+  inline_media: images      # images | all (all: audio / video would go inline, which OpenRouter refuses: a plan problem)
   poll_timeout: 900         # seconds to wait for a job (it keeps running; a later run polls it again)
   crossfade: 0.25           # seconds a placed take fades in from / out to vidgen's picture (0: a cut)
   color_match: 0.5          # light colour matching of placed takes, 0 (as made) - 1
@@ -2787,9 +2787,13 @@ videogen:
   `assets/generated_video/<key>.mp4`: it is never paid twice. A job still running when the
   wait ends is polled again by the next run, not submitted again. The mock provider keeps its
   own `videogen-ledger.mock.jsonl`.
-- **Inputs**: pictures (first / last frame, references) are sent inline as data URLs;
-  audio and video references must be hosted URLs (OpenRouter documents only those) unless
-  `inline_media: all`.
+- **Inputs**: pictures (first / last frame, references) are sent inline as data URLs, as smaller
+  copies (longest side at most 1280 px, JPEG quality 90, PNG only when the picture has
+  transparency) cached in `build/videogen/pictures/`; the original files are untouched. A
+  request larger than 21 MB is refused before it is sent. Audio and video references must be
+  https URLs: OpenRouter refuses them inline (HTTP 400 "Only HTTPS URLs are allowed"), so with
+  `inline_media: all` a shot with `audio:` or `guide:` has a problem in the plan and `run --pay`
+  refuses it.
 - **Privacy**: video generation is not eligible for OpenRouter's Zero Data Retention: the
   provider keeps the output for a short time so it can be downloaded.
 - `vidgen generate models` lists OpenRouter's video models (durations, resolutions, aspect
@@ -2869,11 +2873,13 @@ scenes:
   seconds.
 - **Frame images**: the first frame goes in as a frame image where the model lists
   `first_frame`, else as a picture reference (heygen/avatar-iv's portrait).
-- **Audio and video inputs** need a hosted URL (none is set up yet) or `videogen.inline_media:
-  all`; until then their shots are listed as blocked.
+- **Audio and video inputs** need a hosted https URL (none is set up yet): with
+  `videogen.inline_media: images` their shots are listed as blocked, with `inline_media: all` as
+  problems (OpenRouter refuses inline audio / video).
 - **The plan**: `vidgen generate plan [PROJECT] [--shot ID] [--budget USD] [--json]` lists every
   shot (time in the video, model, resolution, aspect ratio, requested and trimmed length, each
-  input and whether it is made, the estimate, what the budget has left after it, notes, problems,
+  input and whether it is made, the request's size with its inline pictures, the estimate, what
+  the budget has left after it, notes, problems,
   what blocks it, the prompt), the sheets' pictures still to make, the total and the budget.
   Nothing is sent or paid; `vidgen validate` reports unknown characters and pictures with a
   did-you-mean (`plan` also checks the models and their settings).
@@ -16068,8 +16074,9 @@ Generated video (DESIGN.md §113). `vidgen generate models --json`:
 `vidgen generate plan PROJECT --json`: `action` (`plan`), `clips_usd`, `sheets_usd`, `total_usd`,
 `budget_usd`, `spent_usd`, `remaining_usd`, `shots` (`{id, kind, model, scene, beat, start,
 length, duration, resolution, aspect_ratio, inputs: [{role, kind, path, frame_image, ready}],
-estimate_usd, cached, left_after_usd, notes, problems, blocked, prompt}`; `duration` `null` for a
-model that follows its audio). `vidgen generate sheets --json`: `action` (`sheets`), `paid`,
+estimate_usd, cached, left_after_usd, request_bytes, notes, problems, blocked, prompt}`;
+`duration` `null` for a model that follows its audio; `request_bytes` the request's size with its
+inline pictures, `null` until the inputs are made or when cached). `vidgen generate sheets --json`: `action` (`sheets`), `paid`,
 `todo` (pictures to make), `estimate_usd`, `unknown_prices`, `paid_usd`, `sheets` (`{owner,
 location, approved, ready, status, pictures}`). `vidgen generate inputs --json`: `action`
 (`inputs`), `written`.

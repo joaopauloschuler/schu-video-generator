@@ -1017,7 +1017,7 @@ class VideogenConfig(_Strict):
     key_via_proxy: bool = False
     """true: a network proxy adds the OpenRouter key (Authorization header) itself, so vidgen sends none and needs no OPENROUTER_API_KEY (also VIDGEN_OPENROUTER_KEY_VIA_PROXY=1)."""
     inline_media: Literal["images", "all"] = "images"
-    """How local input files are sent: images (pictures inline as data URLs, as OpenRouter documents; audio and video need hosted URLs) or all (also audio and video inline: not confirmed by the documentation)."""
+    """How local input files are sent: images (pictures inline as data URLs, as smaller copies; audio and video need hosted https URLs) or all (also audio and video inline: OpenRouter refuses that, so such shots are problems in the plan)."""
     poll_timeout: PositiveFloat = 900.0
     """Seconds to wait for a job before stopping (the job keeps running; a later run polls it again, never paying twice)."""
     crossfade: float = Field(default=0.25, ge=0, le=2)

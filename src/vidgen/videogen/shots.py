@@ -17,7 +17,11 @@ dry-run plan of ``vidgen generate plan``.
   words, the line said, the style sheet's words and "no on-screen text".
 - **Blocked**: a shot whose sheets are not approved, whose inputs are not made yet, or whose audio
   / video needs a hosted URL (``videogen.inline_media: images``) is planned and priced but not
-  ready to pay for.
+  ready to pay for. With ``inline_media: all`` the audio / video would go inline, which OpenRouter
+  refuses: that is a problem (``run --pay`` refuses it before sending).
+- **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
+  smaller copies, :mod:`vidgen.videogen.pictures`, made here into ``build/videogen/pictures/``);
+  over :data:`~vidgen.videogen.openrouter.MAX_INLINE_BYTES` is a problem.
 """
 
 from __future__ import annotations
@@ -45,6 +49,12 @@ FRAMING: dict[str, str] = {
     "establishing": "Establishing shot",
 }
 NO_TEXT = "No on-screen text, captions, subtitles or logos"
+#: The problem of a shot whose voice or guide would go inline (OpenRouter answered HTTP 400
+#: "Only HTTPS URLs are allowed" for an inline audio reference, Step 296).
+INLINE_AUDIO_VIDEO_PROBLEM = (
+    "audio/video references must be https URLs; OpenRouter refuses inline audio/video — "
+    "remove `audio:`/`guide:` from the shot or host the files"
+)
 #: Picture files a shot may name in ``refs`` / ``first_frame``.
 PICTURE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 
@@ -293,8 +303,11 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
     made_here = [i for i in shot.inputs if i.path.is_relative_to(project.root / INPUTS_DIR)]
     if any(not i.ready for i in made_here):
         shot.blocked.append(f"inputs not made yet: `vidgen generate inputs{' --guide' if spec.guide or source == 'render' else ''}`")
-    if any(i.kind != "image" for i in shot.inputs) and project.config.videogen.inline_media != "all":
-        shot.blocked.append("audio / video inputs need a hosted URL (none is set up) or videogen.inline_media: all (not confirmed by OpenRouter's docs)")
+    if any(i.kind != "image" for i in shot.inputs):
+        if project.config.videogen.inline_media == "all":
+            shot.problems.append(f"{where}: {INLINE_AUDIO_VIDEO_PROBLEM}")
+        else:
+            shot.blocked.append("audio / video inputs need a hosted URL (none is set up; OpenRouter refuses inline audio / video)")
 
 
 def _windows(project: Project, scene: SceneConfig, fps: int) -> list[float]:
@@ -405,7 +418,8 @@ def shot_problems(project: Project) -> list[tuple[str, str]]:
 @dataclass
 class ShotPlan:
     """A shot as ``vidgen generate plan`` shows it: the request, the model's checks, the estimate,
-    the cache / earlier job, and what the budget has left after it (in plan order)."""
+    the cache / earlier job, the request's size and what the budget has left after it (in plan
+    order)."""
 
     shot: Shot
     request: VideoRequest | None = None
@@ -415,6 +429,8 @@ class ShotPlan:
     previous_job: str | None = None
     left_after: float | None = None
     over_budget: bool = False
+    #: Bytes of the request body with its inline pictures (``None``: inputs not all made yet).
+    request_bytes: int | None = None
 
     @property
     def cost(self) -> float:
@@ -445,6 +461,10 @@ class ShotPlan:
             lines.append("  cached: the clip is already made (nothing to pay)")
         if self.previous_job:
             lines.append(f"  job {self.previous_job} of this request was paid already: a run downloads it (not paid again)")
+        if self.request_bytes is not None:
+            from vidgen.videogen.openrouter import MAX_INLINE_BYTES
+
+            lines.append(f"  request: {self.request_bytes / 1e6:.1f} MB with its inline pictures (vidgen sends at most {MAX_INLINE_BYTES / 1e6:.0f} MB)")
         if self.estimate is not None:
             cost = money(self.estimate.cost) if self.estimate.cost is not None else "unknown"
             lines.append(f"  estimate: {cost} ({self.estimate.basis})")
@@ -509,8 +529,10 @@ def plan_shots(
 ) -> VideoGenPlan:
     """The dry run of every generated shot (``shot_ids``: only those; an unknown one is an error
     with a did-you-mean) and of the sheet pictures still to make. Free: the public model lists
-    may be fetched (``catalog`` / ``lookup`` replace them in tests); nothing is sent or paid."""
+    may be fetched (``catalog`` / ``lookup`` replace them in tests); nothing is sent or paid. The
+    only files written are the smaller copies of ready shots' pictures in ``build/videogen/pictures/``."""
     from vidgen.videogen.models import load_catalog
+    from vidgen.videogen.openrouter import MAX_INLINE_BYTES, request_bytes
     from vidgen.videogen.run import _cap, ledger_path, plan_clip
 
     settings = project.config.videogen
@@ -539,6 +561,13 @@ def plan_shots(
                 item.previous_job = clip.previous_job.job_id if clip.previous_job is not None else None
                 item.check = clip.check
                 item.estimate = clip.estimate or estimate(item.request, shot.model, duration=shot.priced_seconds)
+                if not clip.cached:
+                    item.request_bytes = request_bytes(item.request, project.root)
+                    if item.request_bytes > MAX_INLINE_BYTES:
+                        shot.problems.append(
+                            f"{shot.location}: the request is {item.request_bytes / 1e6:.1f} MB with its inline pictures, more than vidgen "
+                            f"sends ({MAX_INLINE_BYTES / 1e6:.0f} MB): use fewer or smaller pictures (refs:)"
+                        )
             else:
                 item.check = check_request(item.request, shot.model)
                 item.estimate = estimate(item.request, shot.model, duration=shot.priced_seconds)

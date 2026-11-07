@@ -2002,6 +2002,7 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
                  "inputs": [{"role": i.role, "kind": i.kind, "path": i.path.relative_to(root).as_posix() if i.path.is_relative_to(root) else str(i.path),
                              "frame_image": i.frame, "ready": i.ready} for i in s.shot.inputs],
                  "estimate_usd": s.estimate.cost if s.estimate is not None else None, "cached": s.cached, "left_after_usd": s.left_after,
+                 "request_bytes": s.request_bytes,
                  "notes": [*s.shot.notes, *s.check.notes], "problems": [*s.shot.problems, *s.check.problems], "blocked": s.shot.blocked,
                  "prompt": s.shot.prompt}
                 for s in plan.shots
