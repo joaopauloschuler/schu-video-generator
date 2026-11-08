@@ -5,7 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–303)
+## Unreleased (Steps 193–304)
+
+### 3D scenes: `guide_passes` takes the command-line forms (Step 304)
+
+- A `3d` scene's `guide_passes` now takes every form `vidgen render --guide-passes` takes, read by the same function: one name (`guide_passes: depth`), a comma list (`depth,mask`, spaces allowed: `depth, mask`), `all`, `true`/`false` and lists as before. Step 303's "write a list" refusal of `depth,mask` is gone. An unknown name is refused with did-you-mean, in YAML and on the command line alike (`al` → did you mean `all`). The JSON schema (`vidgen schema`) accepts those strings.
 
 ### 3D scenes: `guide_passes: all` (Step 303)
 

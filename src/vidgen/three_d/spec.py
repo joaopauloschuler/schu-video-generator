@@ -5,7 +5,7 @@ with did-you-mean messages."""
 from __future__ import annotations
 
 import re
-from typing import Any, Literal
+from typing import Annotated, Any
 
 from pydantic import Field, field_validator, model_validator
 
@@ -18,11 +18,44 @@ from vidgen.translation import TranslatableStr
 SHAPES: tuple[str, ...] = ("box", "sphere", "cylinder", "cone", "torus", "plane", "arrow", "label", "group", "standin")
 #: Names a scene description keeps for itself (a track's target ``camera``).
 RESERVED_IDS: frozenset[str] = frozenset({"camera"})
+#: The guide passes (DESIGN.md §114.14), in the order they are drawn.
+GUIDE_PASSES: tuple[str, ...] = ("depth", "outline", "mask")
+#: What ``guide_passes: true`` or ``--guide-passes`` alone mean.
+ALL_PASSES = "all"
+#: A ``guide_passes`` string the JSON schema accepts: what :func:`parse_passes` reads (a name,
+#: ``all`` or a comma list, spaces allowed, empty items skipped).
+_PASS_NAME = f"(?:{'|'.join((*GUIDE_PASSES, ALL_PASSES))})"
+PASSES_PATTERN = rf"^\s*(?:{_PASS_NAME}\s*)?(?:,\s*(?:{_PASS_NAME}\s*)?)*$"
 #: Strings pydantic reads as a boolean: ``guide_passes`` leaves them to it (``"yes"`` is ``true``).
 BOOL_WORDS: frozenset[str] = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "true", "y", "yes"})
 #: The id of the scene's ``floor`` (taken when the scene has one).
 FLOOR_ID = "floor"
 _ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
+
+
+
+def parse_passes(value: Any, where: str = "guide_passes") -> tuple[str, ...]:
+    """The passes asked for by ``value``, read the same for ``vidgen render --guide-passes`` and a
+    ``3d`` scene's ``guide_passes``: ``True`` / ``"all"`` (all three), ``False`` / ``None`` /
+    empty (none), a name, a comma list (``"depth,mask"``, ``"depth, mask"``; empty items
+    skipped) or a list of names; ``all`` among the names means all three; in
+    :data:`GUIDE_PASSES` order. ``ValueError`` (with did-you-mean, after ``where: `` unless
+    ``where`` is empty) for an unknown name."""
+    if value is None or value is False:
+        return ()
+    if value is True:
+        return GUIDE_PASSES
+    names = [n.strip() for n in value.split(",")] if isinstance(value, str) else [str(n).strip() for n in value]
+    names = [n for n in names if n]
+    if ALL_PASSES in names:
+        return GUIDE_PASSES
+    for name in names:
+        if name not in GUIDE_PASSES:
+            hint = did_you_mean(name.lower(), (*GUIDE_PASSES, ALL_PASSES))
+            prefix = f"{where}: " if where else ""
+            raise ValueError(f"{prefix}no guide pass {name!r} (passes: {', '.join(GUIDE_PASSES)}, or {ALL_PASSES}){hint}")
+    return tuple(p for p in GUIDE_PASSES if p in names)
+
 
 #: A point or a size in scene units (y is up), or angles in degrees.
 Vec3 = tuple[float, float, float]
@@ -230,26 +263,19 @@ class Scene3DParams(SceneParams):
     """A square floor the objects stand on: true, or {size, color, y} (an object with id floor)."""
     objects: list[Object3D] = Field(default_factory=list)
     """The objects: [{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}]; object actions (object_move, object_walk...) move them."""
-    guide_passes: bool | Literal["all"] | list[str] = False
-    """Also draw guide passes of the 3D picture (same frames, camera and timing; labels left out), stored beside its clip: true or all (all three), or a list of depth (near white, far dark), outline (white edges on black, like a line drawing), mask (each object one flat colour, with a colour table); also `vidgen render --guide-passes`."""
+    guide_passes: bool | Annotated[str, Field(pattern=PASSES_PATTERN)] | list[str] = False
+    """Also draw guide passes of the 3D picture (same frames, camera and timing; labels left out), stored beside its clip: true or all (all three), or some of depth (near white, far dark), outline (white edges on black, like a line drawing), mask (each object one flat colour, with a colour table) as one name, a comma list such as depth,mask (read like `vidgen render --guide-passes`) or a list."""
     depth_range: tuple[float, float] | None = None
     """[near, far]: the distances from the camera the depth pass shows as white and as its darkest grey (default: fitted to the objects over the whole shot; the floor is clamped to it)."""
 
     @field_validator("guide_passes", mode="before")
     @classmethod
     def _guide_passes(cls, v: Any) -> Any:
-        from vidgen.three_d.passes import ALL_PASSES, GUIDE_PASSES, parse_passes
-
         if isinstance(v, str) and v.strip() == ALL_PASSES:
             return True
-        if isinstance(v, str) and v.strip().lower() not in BOOL_WORDS:
-            names = [n.strip() for n in v.split(",") if n.strip()]
-            if names and all(n in GUIDE_PASSES for n in names):
-                hint = f"; write a list: [{', '.join(names)}]"
-            else:
-                hint = did_you_mean(v.strip().lower(), (ALL_PASSES, *GUIDE_PASSES))
-            raise ValueError(f"guide_passes: {v!r} is not true, false, {ALL_PASSES} or a list of {', '.join(GUIDE_PASSES)}{hint}")
-        return list(parse_passes(v)) if isinstance(v, list) else v
+        if isinstance(v, list) or (isinstance(v, str) and v.strip().lower() not in BOOL_WORDS):
+            return list(parse_passes(v, ""))
+        return v
 
     @field_validator("depth_range")
     @classmethod
@@ -300,8 +326,6 @@ class Scene3DParams(SceneParams):
 
     def passes(self) -> tuple[str, ...]:
         """The guide passes ``guide_passes`` asks for (DESIGN.md §114.14), in drawing order."""
-        from vidgen.three_d.passes import parse_passes
-
         return parse_passes(self.guide_passes)
 
     def object(self, object_id: str) -> Object3D | None:
@@ -313,4 +337,7 @@ class Scene3DParams(SceneParams):
         return ([FLOOR_ID] if self.floor is not None else []) + [o.id for o in self.objects]
 
 
-__all__ = ["DEFAULT_SIZES", "FLOOR_ID", "SHAPES", "Camera3D", "Floor3D", "Light3D", "Object3D", "Scene3DParams", "Vec3", "check_id"]
+__all__ = [
+    "ALL_PASSES", "DEFAULT_SIZES", "FLOOR_ID", "GUIDE_PASSES", "PASSES_PATTERN", "SHAPES", "Camera3D", "Floor3D", "Light3D", "Object3D", "Scene3DParams", "Vec3", "check_id",
+    "parse_passes",
+]

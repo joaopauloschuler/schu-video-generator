@@ -93,6 +93,9 @@ its look (later: a video model that repaints the scene in a style of its own):
 | `outline` | white edges on black: silhouettes, the creases of boxes and cylinders, where an object hides part of itself | thin lines (about 1 px per 540 px); labels and name tags are left out |
 | `mask` | each object one flat colour on black, the floor dark grey `#404040` | the colours come from the ids (adding an object keeps the others'), listed in `<scene>.mask-colors.json`: `colors`, `objects` (with parents and stand-in names), `names` |
 
+Ask for some of them as in the command line: `guide_passes: depth`, `guide_passes: depth,mask`
+(spaces allowed) or `guide_passes: [depth, mask]`; a misspelt name is refused with did-you-mean.
+
 The passes are lossless `.mkv` clips (exact mask colours); convert them when a tool wants MP4 or
 PNG frames. They hold only the 3D shapes: no title, captions, overlays, labels or name tags.
 

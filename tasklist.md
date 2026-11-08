@@ -1767,6 +1767,9 @@ molecules, planets, glTF models, realistic materials and shadows, rigs, any AI o
 ### Step 303 — `guide_passes: all` in YAML
 - [x] The owner's request: `all` works in both places — a `3d` scene's `guide_passes: all` (a string) means all three passes, like `vidgen render --guide-passes all`; `true`, `false` and lists unchanged; other strings refused with did-you-mean (or "write a list" for `depth,mask`) — done in `Scene3DParams._guide_passes` (a before-validator; type `bool | 'all' | list[str]`, so the JSON schema accepts it); docs, guide, DESIGN §114.14; tests in `test_scene_3d_passes.py`
 
+### Step 304 — `guide_passes` takes the command-line forms in YAML
+- [x] The owner's request: every form of `--guide-passes` also works in a `3d` scene's `guide_passes` — one name (`depth`), a comma list (`depth,mask`, `depth, mask`), `all`; `true`, `false` and lists unchanged; unknown names refused with did-you-mean — done by moving `parse_passes` (with `GUIDE_PASSES`, `ALL_PASSES`) into `three_d/spec.py`, used by the CLI, the worker and `Scene3DParams._guide_passes` alike (re-exported from `three_d/passes.py`); type `bool | str (pattern) | list[str]`, so the JSON schema accepts the strings; docs, guide, DESIGN §114.14; tests in `test_scene_3d_passes.py`
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

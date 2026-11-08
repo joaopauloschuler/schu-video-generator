@@ -25512,3 +25512,43 @@ project), repo work is generic.
   (23, 94 s). Not run: render tests (no rendering behaviour changed), the rest of `test_schema`,
   the full suite.
 - **Known gaps**: none new; Step 302's other open points stand.
+
+## Step 304 — 3D scenes: `guide_passes` takes the command-line forms in YAML (Phase AI)
+
+- **Built** (owner's request; DESIGN §114.14): every form `vidgen render --guide-passes` takes
+  also works in a `3d` scene's `guide_passes`, read by the same function (`parse_passes`), so
+  the two cannot drift: one name (`guide_passes: depth`), a comma list (`depth,mask`, spaces
+  allowed: `depth, mask`), empty items skipped (`depth,,mask,`), `all` (alone or among the names:
+  all three), an empty string (no pass, like `--guide-passes ""`). `true`, `false` and lists work
+  as before. An unknown name is refused with did-you-mean over the passes and `all`, in YAML and
+  on the command line alike: `guide_passes: no guide pass 'masc' (passes: depth, outline, mask,
+  or all); did you mean 'mask'?`. Step 303's "write a list" refusal of `depth,mask` is gone.
+  Strings pydantic reads as a boolean (`"yes"`, `"off"`...) stay booleans, as before (the CLI
+  refuses `--guide-passes yes`; YAML keeps `yes` = `true`, as the owner asked to keep booleans).
+- **Checked CLI forms**: `--guide-passes` alone (argparse `const="all"`), `all`, a name, a comma
+  list with or without spaces (quoted in the shell), empty items, `all` mixed in, `""` (none).
+  All of them now read the same in YAML. Case matters in both (`ALL` is refused, "did you mean
+  'all'"); the CLI now also suggests `all` for `al` (before it suggested only pass names).
+- **Public interface**: `parse_passes`, `GUIDE_PASSES` and `ALL_PASSES` moved from
+  `three_d/passes.py` to `three_d/spec.py` (no numpy import there); `passes.py` imports and
+  re-exports them, so `from vidgen.three_d.passes import parse_passes` and `vidgen.api.GUIDE_PASSES`
+  still work. `parse_passes(value, where)` with `where=""` gives the message without a prefix
+  (the params error already names `params.guide_passes`). New `spec.PASSES_PATTERN`.
+  `Scene3DParams.guide_passes` is typed `bool | Annotated[str, Field(pattern=PASSES_PATTERN)] |
+  list[str]`: the JSON schema (`vidgen schema`) accepts those strings and refuses others; the
+  before-validator turns every non-boolean string into `True` (`all`) or the list, so the stored
+  value keeps Step 303's three shapes and `depth,mask` has the fingerprint of `[depth, mask]`.
+  CLI, worker and MCP unchanged (they already used `parse_passes`).
+- **Files**: `src/vidgen/three_d/spec.py`, `src/vidgen/three_d/passes.py`;
+  `tests/test_scene_3d_passes.py` (Step 303's refused-strings test replaced: YAML and CLI give the
+  same passes for 7 forms, unknown names refused in both ×5, bool words, schema); `docs/CONFIG.md`
+  (pass text, param row), `docs/COOKBOOK-3D.md` (§5), `docs/gallery/3d.md` (param row, by hand to
+  match `gallery._param_rows`), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`
+  (chooser row, "Guide passes" paragraph), DESIGN §114.14, CHANGELOG, tasklist.
+- **Tests run and passed** (one file per command, `capped` + `timeout`): `test_scene_3d_passes`
+  not render (36), `test_scene_3d` not render (21), `test_guide` (92), `test_docs` (80),
+  `test_gallery` not render (19), `test_schema -k "examples_validate or 3d"` (23, 97 s),
+  `test_api` (10). Not run: render tests (no rendering changed), the rest of `test_schema`, the
+  full suite. ruff is not installed in the venv.
+- **Known gaps**: `guide_passes:` with no value (YAML null) is still refused, as before; it is not
+  a command-line form.

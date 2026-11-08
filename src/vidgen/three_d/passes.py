@@ -30,13 +30,9 @@ from vidgen.cellworld.model import did_you_mean
 from vidgen.fileio import write_text_atomic
 from vidgen.three_d.clip import make_3d_clip
 from vidgen.three_d.framing import SHOWN, camera_at, view_basis
-from vidgen.three_d.spec import FLOOR_ID
+from vidgen.three_d.spec import ALL_PASSES, FLOOR_ID, GUIDE_PASSES, parse_passes
 from vidgen.three_d.world import World
 
-#: The guide passes, in the order they are drawn.
-GUIDE_PASSES: tuple[str, ...] = ("depth", "outline", "mask")
-#: What ``guide_passes: true`` or ``--guide-passes`` alone mean.
-ALL_PASSES = "all"
 #: Shapes a pass does not draw: groups draw nothing, labels are text, not shape.
 NOT_DRAWN: frozenset[str] = frozenset({"group", "label"})
 #: The mask's background (no object).
@@ -68,24 +64,6 @@ def _hex(rgb: tuple[float, float, float]) -> str:
 MASK_PALETTE: tuple[str, ...] = tuple(
     _hex(colorsys.hsv_to_rgb(h / MASK_HUES, sat, val)) for h in range(MASK_HUES) for sat, val in MASK_TONES
 )
-
-
-def parse_passes(value: Any, where: str = "guide_passes") -> tuple[str, ...]:
-    """The passes asked for by ``value``: ``True`` / ``"all"`` (all three), ``False`` / ``None`` /
-    empty (none), a name, a comma list (``"depth,mask"``) or a list of names; in
-    :data:`GUIDE_PASSES` order. ``ValueError`` (with did-you-mean) for an unknown name."""
-    if value is None or value is False:
-        return ()
-    if value is True:
-        return GUIDE_PASSES
-    names = [n.strip() for n in value.split(",")] if isinstance(value, str) else [str(n).strip() for n in value]
-    names = [n for n in names if n]
-    if ALL_PASSES in names:
-        return GUIDE_PASSES
-    for name in names:
-        if name not in GUIDE_PASSES:
-            raise ValueError(f"{where}: no guide pass {name!r} (passes: {', '.join(GUIDE_PASSES)}, or {ALL_PASSES}){did_you_mean(name, GUIDE_PASSES)}")
-    return tuple(p for p in GUIDE_PASSES if p in names)
 
 
 def _id_hash(object_id: str, salt: int = 0) -> int:

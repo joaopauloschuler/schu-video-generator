@@ -22379,9 +22379,12 @@ layers over the clip, never in it.
 
 **Asking for them** (off by default). The `3d` param `guide_passes: true | all | [depth, outline,
 mask]` (`parse_passes`, did-you-mean; `Scene3DParams.passes()`; since Step 303 the string `all`
-is read as `true`, like `--guide-passes all`, and any other string is refused with did-you-mean,
-or with "write a list" when it names passes, e.g. `depth,mask`; strings pydantic reads as a
-boolean, such as `"yes"`, stay booleans), part of the params and so of
+is read as `true`, like `--guide-passes all`; since Step 304 every other string is read by the
+same `parse_passes` as `--guide-passes`, so `depth`, `depth,mask` and `depth, mask` work (stored
+as the list `[depth, mask]`, the same fingerprint as writing the list), empty items are skipped,
+an empty string is no pass, `all` among the names is all three, and an unknown name is refused
+with did-you-mean over the passes and `all`; strings pydantic reads as a boolean, such as
+`"yes"`, stay booleans), part of the params and so of
 the render fingerprint; and `vidgen render --guide-passes [LIST]` (alone = all; MCP `render`
 `guide_passes`) for every `3d` scene of the run: `render_project(guide_passes=)` → worker
 `--guide-passes depth,mask` → `scene.guide_passes` (a `NarratedScene` attribute, like
