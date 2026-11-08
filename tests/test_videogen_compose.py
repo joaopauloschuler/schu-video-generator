@@ -270,6 +270,28 @@ def quiet(line: str) -> None:
     return None
 
 
+def test_qa_says_where_the_clips_sound_is_heard(tmp_path: Path) -> None:
+    sounding, silent = clip(tmp_path, "sounding", audio=True), clip(tmp_path, "silent")
+    mix = check_clip(sounding, length=2.0, width=W, height=H)
+    assert "never used" in next(c.message for c in mix.checks if c.name == "sound")
+    kept = check_clip(sounding, length=2.0, width=W, height=H, sound="model")
+    note = next(c for c in kept.checks if c.name == "sound")
+    assert note.severity == "info" and "video_clip" in note.message and "never used" not in note.message
+    empty = check_clip(silent, length=2.0, width=W, height=H, sound="model")
+    assert next(c.severity for c in empty.checks if c.name == "sound") == "warning"
+
+
+def test_a_sound_model_take_keeps_its_sound_and_mock_jobs_follow_the_flag(make_project) -> None:
+    data = wide_config()
+    data["videogen"]["sound"] = "model"
+    project = Project.load(make_project(data))
+    api = MockOpenRouter(cost=0.12)
+    report = run_shots(project, pay=True, catalog=CATALOG, provider=MockVideoProvider(api), out=quiet)
+    assert api.submits[0].body["generate_audio"] is True
+    take = report.shots[0].take
+    assert take.qa["audio"] is True and "video_clip" in next(c["message"] for c in take.qa["checks"] if c["check"] == "sound")
+
+
 def test_run_dry_then_pay_then_cached(make_project) -> None:
     project = Project.load(make_project(wide_config()))
     api = MockOpenRouter(cost=0.12)

@@ -11,7 +11,8 @@ dollars; ``...second...`` SKUs are per second of output (a ``_480p`` / ``_4k`` .
 resolution tier, ``with_audio`` / ``without_audio``, ``text_to_video`` / ``image_to_video``,
 ``reference_`` and ``video_continuation`` say when they apply); ``video_tokens`` SKUs are per
 token, estimated as ``width x height x 24 fps x seconds / 1024`` (ByteDance's Seedance token
-formula); ``image_input`` / ``reference_images`` SKUs are per input picture; ``minimum_...`` is
+formula), with each video reference counted for as many seconds as the clip under a
+``with_video_input`` SKU (the real charges of Step 312, DESIGN.md §113.11); ``image_input`` / ``reference_images`` SKUs are per input picture; ``minimum_...`` is
 a floor per generation. Where several SKUs could apply, the estimate takes the highest (a
 conservative budget).
 """
@@ -318,13 +319,17 @@ def _applicable(names: list[str], request: VideoRequest) -> list[str]:
     mode = "image_to_video" if request.frame_images else "text_to_video"
     if any(mode in n for n in out):
         out = [n for n in out if mode in n or ("text_to_video" not in n and "image_to_video" not in n)]
+    if request.generate_audio:
+        out = [n for n in out if "without_audio" not in n] or out
+        if any("with_audio" in n for n in out):
+            out = [n for n in out if "with_audio" in n]
     tier = _tier_of(request)
     if tier is not None:
         matching = [n for n in out if (m := _TIER.search(n)) is not None and m.group(1) == tier]
         untagged = [n for n in out if not _TIER.search(n)]
         out = matching or untagged or out
-    if any("without_audio" in n for n in out):
-        out = [n for n in out if "without_audio" in n]  # generate_audio is always false
+    if not request.generate_audio and any("without_audio" in n for n in out):
+        out = [n for n in out if "without_audio" in n]
     return out
 
 
@@ -360,9 +365,12 @@ def estimate(request: VideoRequest, model: VideoModel, *, duration: float | None
             return Estimate(None, f"price unknown: {model.id} is priced per video token and the clip's size is not known")
         names = _applicable(tokens, request)
         rate = max(skus[n] for n in names)
-        count = px[0] * px[1] * TOKEN_FPS * seconds / 1024
+        chosen = max(names, key=lambda n: skus[n])
+        video_refs = sum(1 for r in request.references if r.kind == "video") if "with_video_input" in chosen else 0
+        count = px[0] * px[1] * TOKEN_FPS * seconds * (1 + video_refs) / 1024
         cost = rate * count
-        parts.append(f"~{count:,.0f} tokens ({px[0]}x{px[1]}, {TOKEN_FPS} fps, {seconds:g} s) x ${rate:g} ({max(names, key=lambda n: skus[n])})")
+        billed = f"{seconds:g} s" + (f" + {video_refs} video reference(s) of {seconds:g} s" if video_refs else "")
+        parts.append(f"~{count:,.0f} tokens ({px[0]}x{px[1]}, {TOKEN_FPS} fps, {billed}) x ${rate:g} ({chosen})")
     if cost is None:
         return Estimate(None, f"price unknown: {model.id}'s prices ({', '.join(model.pricing)}) are not per second or per token")
     if images:

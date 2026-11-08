@@ -21477,8 +21477,8 @@ writes split parts.
 
 Generative video models make selected shots (talking close-ups lip-synced to vidgen's own voice
 lines, acting shots guided by character / style sheets, establishing shots); vidgen keeps story,
-timing, text, captions, music, sound design and assembly. The model's own audio is never used:
-every job is sent with `generate_audio: false`. Opt-in (`videogen:` and, from Step 293, per-beat
+timing, text, captions, music, sound design and assembly. By default the model's own audio is not used
+(the job is sent with `generate_audio: false`; §113.11 for `sound: model`). Opt-in (`videogen:` and, from Step 293, per-beat
 `generated_shot:` specs, §113.3); nothing changes for existing projects. Steps 292–294 spend nothing (paid
 endpoints mocked); Step 295 cleans up the sheet prompts after the first paid sheet pictures
 (§113.6); Step 296 records the first answers of the real API and shrinks the pictures sent
@@ -21551,7 +21551,7 @@ audio / video inline.
     references, seed, previous_job_id, provider_options: {slug: {param: value}})` (checked:
     `author/name`, duration > 0, not size and resolution, frame images with a frame type,
     references without). `MediaInput(kind: image | audio | video, path | url, frame_type)`.
-  - `canonical_request` (cache version, every field, `generate_audio: false`, files by
+  - `canonical_request` (cache version, every field, `generate_audio` as requested, files by
     SHA-256 and size, never by name) and `request_hash` (24 hex digits of its SHA-256).
   - `JobState(id, status, polling_url, cost, is_byok, error)`.
 - **Models** (`models.py`): `VideoModel.from_record`, `parse_models`, `load_catalog(refresh,
@@ -21571,7 +21571,7 @@ audio / video inline.
   (`_applicable`): continuation SKUs only with `previous_job_id`, `reference_*` only with
   references, `with_video_input` only with a video reference, `image_to_video` with frame
   images else `text_to_video`, then the request's tier (else the untiered SKUs, else all), then
-  `without_audio` when listed; the **highest** remaining SKU (e.g. heygen's `long_duration`):
+  `without_audio` when listed (the audio choice follows `generate_audio`, §113.11); the **highest** remaining SKU (e.g. heygen's `long_duration`):
   a conservative budget. Without a duration: the model's longest. Without resolution / size: all
   tiers (the highest). Unknown (no SKUs understood, no length) → `cost None`: a paid run refuses.
   `price_lines(model)` (one second per tier, `~` for token prices, the floor apart) and
@@ -21583,7 +21583,7 @@ audio / video inline.
   poll up to 60 s; past `poll_timeout` a VidgenError saying the paid job keeps running and the
   next run polls it), `download(id, dest)` (atomic write). Polls and the download retry 429 /
   5xx / 524 / 529 and unreachable (Retry-After or backoff). `request_body`: model, prompt,
-  set fields minus `drop`, `generate_audio: false`, `frame_images`, `input_references`
+  set fields minus `drop`, `generate_audio` (as requested), `frame_images`, `input_references`
   (`{type: <kind>_url, <kind>_url: {url}}`), `provider.options`. `media_url`: hosted url as is;
   a picture inline (`data:image/png;base64,...`); audio / video inline only with
   `inline_media: all`, else the `uploader`, else an error. Transport protocol
@@ -22122,6 +22122,47 @@ for the same request twice while the provider had accepted the first. Now:
   (a line per unresolved one; JSON `unresolved_intents`, per-shot `unresolved_intent`), `generate
   status` (a line; JSON `unresolved_intents`), `spent`. `sheets.run_sheets` is unchanged: sheet
   pictures still write `submit` before the call (no intent; see known gaps).
+
+### 113.11 The model's own sound, and video references in token estimates (Step 312)
+
+Paid experiments on `bytedance/seedance-2.0-mini` (the beat's voice as an audio reference,
+`generate_audio: true`, two lines, two seeds) made a clip sound the owner judged to be the same
+person as the voice file and matching the lips. It is a new performance, drifting up to about 0.9 s
+later than the voice file, so the file cannot be laid over the clip. Other models may behave
+differently.
+
+- **The setting** (`SoundChoice`, `mix` | `model`): `generated_shot.sound`, then
+  `videogen.models.<model id>.sound` (`VideogenModelSettings`), then `videogen.sound` (default
+  `mix`); `VideogenConfig.sound_for(model, shot_sound)`. No model is special-cased; a `videogen.models`
+  id OpenRouter does not list is a warning in the plan (`VideoGenPlan.warnings`), not an error.
+- **Request** (`VideoRequest.generate_audio`, `Shot.sound`): in `canonical_request` and the
+  body. It was already in the canonical form as `false`, so `mix` requests keep their cache keys
+  (no new payment after upgrading); a `model` request has a different key.
+- **Plan**: `sound:` per shot (text and JSON); `generate_audio` false in the list blocks the shot
+  (`shot.blocked`: skipped, not refused for the whole run); unknown (`None`) is a note, the job
+  is still sent. A placed `model` take notes that a placed take plays vidgen's mix.
+- **Prices** (`_applicable`): `mix` keeps the `without_audio` choice; `model` removes
+  `without_audio` SKUs and, before the tier step, prefers `with_audio` ones (Seedance 2.0 mini charges
+  the same for both).
+- **Estimate of a video reference** (`estimate`, token SKUs): three real seedance-2.0-mini jobs
+  (480x854, 24 fps, 5 s, picture + audio + video references) were each charged $0.1907094 = 90,814 tokens
+  x $2.1e-06 exactly, so the `with_video_input` rate was the right SKU and the old token count (48,038)
+  was the error. 90,814 is 217 frames x 496 x 864 / 1024 (rounded down), with the real output 121 frames
+  at 496x864: the charge covers 96 more frames than the clip's, which the old estimate left out. The guide
+  video was 4.9 s long (117 frames at 24 fps in the last job), so 96 frames matches its whole seconds; the data
+  cannot tell whether that is the rule (all three guides were between 4 and 5 s). The estimate now counts each
+  video reference for as many seconds as the clip, at the request's tier size: `(1 + video references) x output
+  tokens` under a `with_video_input` SKU, $0.2018 for these jobs (5.8% above the real charge, on the
+  safe side). The budget check uses this estimate, so it refuses such shots earlier. Models
+  without a `with_video_input` SKU and shots without a video reference are unchanged; no other model's charges
+  were compared.
+- **In a film**: a placed take always plays vidgen's mix (`compose` handles only the picture). To
+  hear the model's sound: `place: false` and the take in a `video_clip` scene; with no beats it plays
+  at volume 1, with narration at 0.25 (`video_clip.UNDER_NARRATION`), `volume:` overrides. Out of scope:
+  timing captions or word-anchored actions from the clip's sound.
+- **QA** (`check_clip(..., sound=)`): a sounding clip is `info` (with `mix`: "never used"; with `model`:
+  where it is heard); `sound: model` with a silent clip is a warning.
+- **Mock**: a job with `generate_audio: true` returns a clip with a sine tone (`synthetic_clip(audio=True)`).
 
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 

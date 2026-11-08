@@ -374,7 +374,7 @@ def test_plan_prices_every_shot_and_counts_the_budget(make_project) -> None:
     talk, act, wide = plan.shots
     assert talk.estimate.cost == pytest.approx(0.20)  # $0.05/s x 4 s
     assert wide.estimate.cost == pytest.approx(0.12)  # $0.03/s x 4 s at 720p
-    assert act.estimate.cost == pytest.approx(480 * 854 * 24 * 4 / 1024 * 0.000002475)
+    assert act.estimate.cost == pytest.approx(480 * 854 * 24 * (4 + 4) / 1024 * 0.000002475)  # the output and its video reference
     assert plan.sheets_todo == 3 and plan.sheets_cost == pytest.approx(0.063 * 3)
     assert plan.total == pytest.approx(plan.clips_cost + plan.sheets_cost) and plan.total < 2.0
     assert wide.left_after == pytest.approx(2.0 - plan.total)
@@ -435,6 +435,60 @@ def test_inline_audio_is_a_problem_and_run_pay_refuses_it(make_project) -> None:
     assert talk.shot.problems == [] and any("OpenRouter refuses inline audio / video" in b for b in talk.shot.blocked)
 
 
+MINI = "bytedance/seedance-2.0-mini"
+SOUND = {"id": "act", "text": "Nine ten eleven twelve.", "voice": "ana_voice", "generated_shot": {"kind": "action", "model": MINI, "place": False}}
+
+
+def _sound_shot(make_project, shot: dict[str, Any] | None = None, **videogen: Any) -> Any:
+    beat = {**SOUND, "generated_shot": {**SOUND["generated_shot"], **(shot or {})}}
+    data = shot_config(beat)
+    data["videogen"] = {"provider": "mock", "budget_usd": 2.0, **videogen}
+    return Project.load(make_project(data))
+
+
+@pytest.mark.parametrize(
+    ("shot", "videogen", "sound"),
+    [
+        ({}, {}, "mix"),
+        ({}, {"sound": "model"}, "model"),
+        ({}, {"models": {MINI: {"sound": "model"}}}, "model"),
+        ({}, {"sound": "model", "models": {MINI: {"sound": "mix"}}}, "mix"),
+        ({}, {"models": {"google/veo-3.1-lite": {"sound": "model"}}}, "mix"),
+        ({"sound": "mix"}, {"sound": "model", "models": {MINI: {"sound": "model"}}}, "mix"),
+        ({"sound": "model"}, {"sound": "mix", "models": {MINI: {"sound": "mix"}}}, "model"),
+    ],
+)
+def test_sound_precedence_and_request(make_project, shot: dict[str, Any], videogen: dict[str, Any], sound: str) -> None:
+    project = _sound_shot(make_project, shot, **videogen)
+    (found,) = project_shots(project, CATALOG)
+    request = found.request()
+    assert found.sound == sound and request is not None and request.generate_audio is (sound == "model")
+
+
+def test_plan_shows_sound_and_blocks_a_model_that_cannot_make_it(make_project) -> None:
+    project = _sound_shot(make_project)
+    lines = plan_shots(project, catalog=CATALOG).lines(project.root)
+    assert any(line.startswith("  sound: mix") for line in lines)
+    avatar = "heygen/avatar-iv"             # the list says generate_audio: false
+    project = Project.load(make_project(shot_config({**TALK, "generated_shot": {**TALK["generated_shot"], "sound": "model"}})))
+    plan = plan_shots(project, catalog=CATALOG)
+    assert plan.shots[0].shot.model.id == avatar and any("cannot make sound" in b for b in plan.shots[0].shot.blocked)
+    assert "sound: model (the model makes the clip's own sound" in "\n".join(plan.lines(project.root))
+    unknown = "x-ai/grok-imagine-video-1.5-lite"    # generate_audio not listed: a note, not blocked
+    project = _sound_shot(make_project, {"model": unknown, "sound": "model"})
+    plan = plan_shots(project, catalog=CATALOG)
+    assert not any("cannot make sound" in b for b in plan.shots[0].shot.blocked)
+    assert any("does not say whether it can make sound" in n for n in plan.shots[0].shot.notes)
+
+
+def test_plan_warns_a_placed_sound_take_and_unlisted_models(make_project) -> None:
+    project = _sound_shot(make_project, {"sound": "model", "place": True}, models={"bytedance/seedance-20-mini": {"sound": "model"}})
+    plan = plan_shots(project, catalog=CATALOG)
+    assert any("a placed take plays vidgen's mix" in n for n in plan.shots[0].shot.notes)
+    assert any("bytedance/seedance-20-mini" in w and "did you mean" in w for w in plan.warnings)
+    assert any(line.startswith("warning: videogen.models") for line in plan.lines(project.root))
+
+
 def test_cli_plan_text_and_json(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setenv("VIDGEN_CACHE_DIR", str(tmp_path / "cache"))
     cache = tmp_path / "cache" / "openrouter" / "video_models.json"
@@ -446,7 +500,7 @@ def test_cli_plan_text_and_json(make_project, tmp_path: Path, monkeypatch: pytes
     assert "shot wide (establishing" in out and "total: 2 shot(s)" in out and "budget $2.000" in out
     assert cli.main(["generate", "plan", str(root), "--json", "--shot", "wide"]) == 0
     doc = json.loads(capsys.readouterr().out)
-    assert doc["action"] == "plan" and [s["id"] for s in doc["shots"]] == ["wide"] and doc["shots"][0]["duration"] == 4
+    assert doc["action"] == "plan" and [s["id"] for s in doc["shots"]] == ["wide"] and doc["shots"][0]["duration"] == 4 and doc["shots"][0]["sound"] == "mix"
     assert cli.main(["generate", "sheets", str(root)]) == 0
     assert "sheets: 3 picture(s) to make" in capsys.readouterr().out
     assert cli.main(["generate", "plan", str(root), "--pay"]) != 0

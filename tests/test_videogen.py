@@ -102,6 +102,60 @@ def test_checks_with_did_you_mean() -> None:
     assert any("no option 'taks'" in p for p in check_request(opts, veo).problems)
 
 
+def test_generate_audio_is_part_of_the_request_identity_and_body() -> None:
+    mix, sound = request(), request(generate_audio=True)
+    assert canonical_request(mix)["generate_audio"] is False and canonical_request(sound)["generate_audio"] is True
+    assert request_hash(mix) != request_hash(sound)
+    # a request without sound keeps the key it always had (no paying again after an upgrade)
+    assert request_hash(mix) == request_hash(request(generate_audio=False))
+    body = OpenRouterVideoProvider(environ={}).request_body
+    assert body(mix)["generate_audio"] is False and body(sound)["generate_audio"] is True
+
+
+def test_mix_request_keeps_its_cache_key() -> None:
+    assert request_hash(request()) == "afd6de4ea24498a946d67724"  # computed on the commit before generate_audio became a field
+
+
+def test_a_clip_with_sound_is_not_served_from_one_without(tmp_path: Path) -> None:
+    api = MockOpenRouter()
+    silent = run(tmp_path, request(), api)
+    assert api.submits[-1].body["generate_audio"] is False and silent.paid
+    sounding = run(tmp_path, request(generate_audio=True), api)
+    assert api.submits[-1].body["generate_audio"] is True and sounding.paid and len(api.submits) == 2
+    assert sounding.path != silent.path
+
+
+def test_price_follows_the_sound_setting() -> None:
+    veo = CATALOG.find("google/veo-3.1-lite")
+    assert estimate(request(), veo).cost == pytest.approx(4 * 0.03)                          # without_audio_720p
+    assert estimate(request(generate_audio=True), veo).cost == pytest.approx(4 * 0.05)       # with_audio_720p
+    assert estimate(request(resolution="1080p", generate_audio=True), veo).cost == pytest.approx(4 * 0.08)  # untiered with_audio
+    pro = CATALOG.find("bytedance/seedance-1-5-pro")
+    mix = estimate(request(model=pro.id, duration=5, resolution="480p"), pro)
+    sound = estimate(request(model=pro.id, duration=5, resolution="480p", generate_audio=True), pro)
+    assert sound.cost == pytest.approx(2 * mix.cost) and "without_audio" in mix.basis and "without_audio" not in sound.basis
+    kling = CATALOG.find("kwaivgi/kling-v3.0-pro")     # with_audio is listed without a tier: it still applies at 480p
+    assert estimate(request(model=kling.id, duration=5, resolution="480p", generate_audio=True), kling).cost == pytest.approx(5 * 0.168)
+
+
+def test_estimate_counts_a_video_reference_for_token_prices() -> None:
+    """Three real seedance-2.0-mini jobs (480x854, 5 s, a video reference) were each charged
+    $0.1907094 = 90,814 tokens x $2.1e-06: the rate was right, the old estimate's token count
+    (48,038) left out the input video."""
+    mini = CATALOG.find("bytedance/seedance-2.0-mini")
+    video = (MediaInput("video", url="https://x.invalid/guide.mp4"),)
+    voice = (MediaInput("audio", url="https://x.invalid/voice.mp3"),)
+    shape = {"model": mini.id, "duration": 5, "resolution": "480p", "aspect_ratio": "9:16"}
+    est = estimate(request(references=voice + video, **shape), mini)
+    assert est.cost == pytest.approx(0.2018, abs=0.0005) and "video_tokens_with_video_input" in est.basis
+    assert "1 video reference(s) of 5 s" in est.basis
+    assert est.cost >= 0.1907094     # not below what the jobs were really charged
+    same_with_sound = estimate(request(references=voice + video, generate_audio=True, **shape), mini)
+    assert same_with_sound.cost == est.cost
+    without_video = estimate(request(references=voice, **shape), mini)   # no video input: one count of the output, unchanged
+    assert without_video.cost == pytest.approx(480 * 854 * 24 * 5 / 1024 * 3.5e-6) and "reference" not in without_video.basis
+
+
 def test_estimates() -> None:
     veo = CATALOG.find("google/veo-3.1-lite")
     assert estimate(request(), veo).cost == pytest.approx(0.12)            # 720p without audio $0.03/s x 4

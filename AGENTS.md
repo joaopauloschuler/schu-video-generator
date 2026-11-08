@@ -3925,7 +3925,7 @@ scenes:
 - **Generated video shots** (a beat's `generated_shot: {kind: talking | action | establishing,
   model, prompt, setting, ...}`; `docs/COOKBOOK-GENERATED-VIDEO.md`): a video model on OpenRouter
   makes the beat's picture; schu-video-generator keeps the timing, voices, captions, overlays and
-  music (the model's sound is never used). Expensive (about $0.03-0.60 per second), so: a few
+  music (by default the model's own sound is not used; see **A model's own sound** below). Expensive (about $0.03-0.60 per second), so: a few
   shots that need real footage, the lowest resolution, 4-5 s. The order: `vidgen generate plan`
   (free) → `generate sheets --pay` → look, `approved: true` → `vidgen tts` → `generate inputs
   --guide` → `generate plan` (nothing blocked; tell the user the total) → `generate run --pay`
@@ -3940,6 +3940,19 @@ scenes:
   "Includes AI-generated footage (models)" and lint's `generated_footage` reminds you to mark the
   upload as altered or synthetic content. Video generation is not eligible for Zero Data
   Retention: send no private faces or material you may not share.
+- **A model's own sound** (`generated_shot.sound: model`, or `videogen.models: {"author/name":
+  {sound: model}}`, or `videogen.sound`; default `mix`): the job is sent with `generate_audio: true`
+  and the clip keeps the model's sound. Different models can behave differently, so choose per
+  model; the setting is part of the request, so changing it is a new paid clip. A model the list
+  says cannot make sound is blocked; one it says nothing about gets a note and may come back silent.
+  Bytedance Seedance 2.0 mini, given the beat's voice as a reference, made a sound the owner
+  judged to be the same voice and matching the lips, but it is a new performance, up to about 0.9 s
+  late against the voice file, so never lay the voice file over such a clip. A placed take always
+  plays vidgen's mix. To hear the clip's sound, use `place: false` and put the take
+  (`takes/<shot>/<n>.mp4`) in a `video_clip` scene: `{type: video_clip, params: {path:
+  takes/<shot>/<n>.mp4, region: bleed}, beats: [], duration: <the clip's length>}` plays it at
+  volume 1 (a `video_clip` with narration plays it at 0.25; `volume:` sets it). The limit: vidgen
+  does not time captions or word-anchored actions from a clip's sound.
 - **Voice and guide inputs** (talking shots, `audio:`, `guide:`): OpenRouter takes sound and
   video only as https URLs, so these shots stay blocked until the user opts in with
   `videogen: {host: quick_tunnel}` (default `none`). Then each paid shot shares only its own

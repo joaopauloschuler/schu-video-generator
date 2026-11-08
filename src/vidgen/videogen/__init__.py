@@ -1,10 +1,12 @@
 """Generated video shots (DESIGN.md §113): requests, their canonical form and cache key, jobs.
 
 A :class:`VideoRequest` is one clip asked of a video model (OpenRouter's asynchronous video API:
-submit, poll, download). The model's own audio is never used: every request is sent with
-``generate_audio: false`` (vidgen's mix wins). Requests are cached by
-:func:`request_hash`, the SHA-256 of :func:`canonical_request` (input files by their contents'
-hashes), so the same request is never paid for twice.
+submit, poll, download). A request asks for the model's own sound only when its
+``generate_audio`` is true (a shot's resolved ``sound: model``, DESIGN.md §113.11); by default it
+is sent with ``generate_audio: false`` and vidgen's mix is the film's sound. Requests are cached
+by :func:`request_hash`, the SHA-256 of :func:`canonical_request` (input files by their contents'
+hashes, ``generate_audio`` as sent), so the same request is never paid for twice and a request
+with sound is never served the clip of one without.
 
 Modules: :mod:`.models` (the public video model list, checks, cost estimates),
 :mod:`.openrouter` (the provider), :mod:`.mock` (a fake OpenRouter for tests and dry demos),
@@ -95,6 +97,7 @@ class VideoRequest:
     seed: int | None = None
     previous_job_id: str | None = None
     provider_options: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    generate_audio: bool = False
 
     def __post_init__(self) -> None:
         if "/" not in self.model.strip("/"):
@@ -127,7 +130,7 @@ def canonical_request(request: VideoRequest) -> dict[str, Any]:
         "resolution": request.resolution,
         "size": request.size,
         "aspect_ratio": request.aspect_ratio,
-        "generate_audio": False,
+        "generate_audio": request.generate_audio,
         "frame_images": [f.canonical() for f in request.frame_images],
         "references": [r.canonical() for r in request.references],
         "pictures_sent": {"max_side": PICTURE_MAX_SIDE, "jpeg_quality": JPEG_QUALITY},

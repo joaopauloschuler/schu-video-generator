@@ -1789,6 +1789,9 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 312 — A model's own sound, per model; video references in token estimates
+- [x] `generated_shot.sound` > `videogen.models.<id>.sound` > `videogen.sound` > `mix`; `model` sends `generate_audio: true` (provider body, cache key: `mix` requests keep their keys); plan shows the value, blocks a model listed as unable, notes an unknown one; the price choice follows it; the mock's job with sound returns a tone; the token estimate counts a video reference (real charges of seedance-2.0-mini); a `video_clip` scene plays a `sound: model` take (volume 1 silent, 0.25 under narration; documented, no re-timing of captions); QA notes where the sound is heard
+
 ### Step 311 — Provider text without the shared address; the mock shares nothing
 - [x] `redaction.redact_shared_addresses` (no host needed, any quoted form of a quick tunnel address) applied where provider text enters (`parse_job`, `http_error`, transport errors), `QuickTunnelHost.redact` on the message and details of everything `generate_clip` raises (submit, wait, `_finish`), and every `Ledger.append`; `provider: mock` never shares: fake uploader, no cloudflared, the plan has no "would share" lines and no host / cloudflared block; tests `test_videogen_redaction.py`, stand-in provider for host tests (DESIGN §115.6)
 

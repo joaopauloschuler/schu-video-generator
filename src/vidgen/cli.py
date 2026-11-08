@@ -2045,11 +2045,11 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
         return jsonout.envelope(
             "generate", True, action="plan", clips_usd=plan.clips_cost, sheets_usd=plan.sheets_cost, total_usd=plan.total,
             budget_usd=plan.budget.cap_usd, spent_usd=plan.budget.spent_usd, remaining_usd=plan.budget.remaining_usd,
-            unresolved_intents=[i.to_json() for i in plan.unresolved_intents],
+            unresolved_intents=[i.to_json() for i in plan.unresolved_intents], warnings=plan.warnings,
             shots=[
                 {"id": s.shot.id, "kind": s.shot.spec.kind, "model": s.shot.spec.model, "scene": s.shot.scene_id, "beat": s.shot.beat.id,
                  "start": round(s.shot.start, 3), "length": round(s.shot.length, 3), "duration": s.shot.duration,
-                 "resolution": s.shot.resolution, "aspect_ratio": s.shot.aspect_ratio,
+                 "resolution": s.shot.resolution, "aspect_ratio": s.shot.aspect_ratio, "sound": s.shot.sound,
                  "inputs": [{"role": i.role, "kind": i.kind, "path": i.path.relative_to(root).as_posix() if i.path.is_relative_to(root) else str(i.path),
                              "frame_image": i.frame, "ready": i.ready} for i in s.shot.inputs],
                  "estimate_usd": s.estimate.cost if s.estimate is not None else None, "cached": s.cached, "left_after_usd": s.left_after,

@@ -11,7 +11,8 @@ and video inputs get fake addresses, so no file is shared and no quick tunnel op
 
 The content of a completed job is ``video`` when given, else a real, playable MP4 made by FFmpeg
 (:func:`synthetic_clip`: a moving test pattern of the submitted length, in the submitted aspect
-ratio at the submitted resolution's short side, no sound), so placing, QA and contact sheets work
+ratio at the submitted resolution's short side, with a sine tone when the job asked for
+``generate_audio``, else silent), so placing, QA and contact sheets work
 on mock takes. :func:`synthetic_clip` also makes the bad clips QA tests need (black, frozen,
 flickering, an abrupt cut).
 """
@@ -44,7 +45,7 @@ def synthetic_clip(
     ``testsrc`` (a moving test pattern), ``bars`` (still colour bars), ``black``, ``frozen`` (1 s of
     movement, then its last frame held), ``flicker`` (brightness jumping every frame) or ``cut``
     (the moving pattern turning solid red half-way). ``audio``: with a sine tone (a model's own
-    sound, which vidgen drops)."""
+    sound)."""
     from vidgen.render.ffmpeg import find_ffmpeg, run_ffmpeg
 
     w, h = 2 * max(1, round(width / 2)), 2 * max(1, round(height / 2))
@@ -119,7 +120,7 @@ class MockOpenRouter:
             width, height = clip_size(body.get("aspect_ratio"), body.get("resolution"), body.get("size"))
             seconds = float(body.get("duration") or 5)
             with tempfile.TemporaryDirectory(prefix="vidgen_mock_") as folder:
-                path = synthetic_clip(Path(folder) / "clip.mp4", width, height, seconds, pattern=self.pattern)
+                path = synthetic_clip(Path(folder) / "clip.mp4", width, height, seconds, pattern=self.pattern, audio=bool(body.get("generate_audio")))
                 self.made[job_id] = path.read_bytes()
         return self.made[job_id]
 

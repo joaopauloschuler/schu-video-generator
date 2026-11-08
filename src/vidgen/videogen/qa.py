@@ -13,7 +13,9 @@ and reports:
   (0-255 levels): over :data:`FLICKER_LIMIT` a warning;
 - **cuts**: a frame-to-frame change far above the clip's usual one (a cut inside the clip, which
   the beat did not ask for) is a warning;
-- **sound**: the clip's own sound is noted (it is never used: vidgen's mix wins).
+- **sound**: the clip's own sound is noted, with where it is heard (a shot with ``sound: mix`` never
+  uses it; ``sound: model`` keeps it for a ``video_clip`` scene). ``sound: model`` with a silent
+  clip is a warning.
 
 :func:`contact_sheet` writes a PNG of evenly spaced frames with their times and the checks.
 """
@@ -140,9 +142,9 @@ def _runs(mask: np.ndarray) -> int:
     return best
 
 
-def check_clip(path: Path, *, length: float, width: int, height: int) -> QAReport:
+def check_clip(path: Path, *, length: float, width: int, height: int, sound: str = "mix") -> QAReport:
     """Check the clip ``path`` meant for a shot of ``length`` seconds in a ``width`` x ``height``
-    video (see the module docstring)."""
+    video, its ``sound`` setting being ``mix`` or ``model`` (see the module docstring)."""
     from vidgen.render.ffmpeg import decode_gray_frames
 
     w, h, fps, duration, audio = probe(path)
@@ -199,7 +201,11 @@ def check_clip(path: Path, *, length: float, width: int, height: int) -> QARepor
         if cuts and flicker <= FLICKER_LIMIT:
             times = ", ".join(f"{t:.2f} s" for t in cuts[:5])
             checks.append(QACheck("cuts", "warning", f"abrupt change at {times} (a cut inside the clip?)"))
-    if audio:
+    if sound == "model" and not audio:
+        checks.append(QACheck("sound", "warning", "sound: model, but the clip has no sound of its own"))
+    elif sound == "model":
+        checks.append(QACheck("sound", "info", "the clip has its own sound (sound: model): a video_clip scene plays it; a placed take plays vidgen's mix instead"))
+    elif audio:
         checks.append(QACheck("sound", "info", "the clip has its own sound: never used (vidgen's mix is)"))
     return report
 

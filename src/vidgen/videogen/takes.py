@@ -144,11 +144,12 @@ def pick_take(root: Path, shot_id: str, take: str, known: list[str]) -> Take | N
 
 def add_take(
     root: Path, shot_id: str, clip: Path, *, key: str, model: str, provider: str, job_id: str | None, cost: float | None,
-    length: float, width: int, height: int,
+    length: float, width: int, height: int, sound: str = "mix",
 ) -> tuple[Take, bool]:
     """Keep ``clip`` (the cached clip of request ``key``) as the shot's next take, with its QA
-    report (for a ``length`` s shot in a ``width`` x ``height`` video) and contact sheet; the
-    take that already holds ``key`` when there is one. Returns it and whether it is new."""
+    report (for a ``length`` s shot in a ``width`` x ``height`` video, ``sound`` its setting) and
+    contact sheet; the take that already holds ``key`` when there is one. Returns it and whether
+    it is new."""
     from vidgen.videogen.qa import check_clip, contact_sheet
 
     takes = takes_of(root, shot_id)
@@ -159,7 +160,7 @@ def add_take(
     path = takes_dir(root, shot_id) / f"{number}.mp4"
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(clip, path)
-    report = check_clip(path, length=length, width=width, height=height)
+    report = check_clip(path, length=length, width=width, height=height, sound=sound)
     info = {
         "shot": shot_id, "take": number, "key": key, "model": model, "provider": provider, "job_id": job_id, "cost_usd": cost,
         "source": clip.relative_to(root).as_posix() if clip.is_relative_to(root) else str(clip), "length": round(length, 3),

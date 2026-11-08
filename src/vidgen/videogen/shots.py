@@ -27,6 +27,10 @@ dry-run plan of ``vidgen generate plan``.
   / video inputs (:attr:`Shot.shared`) through a Cloudflare quick tunnel while its job runs; the
   plan lists exactly those files and the tunnel's maximum lifetime; without ``cloudflared`` the
   shot is blocked with the install hints.
+- **Sound** (:attr:`Shot.sound`, DESIGN.md §113.11): ``mix`` (no sound asked of the model) or
+  ``model`` (``generate_audio: true``): ``generated_shot.sound``, else
+  ``videogen.models.<model>.sound``, else ``videogen.sound``. A model the list says cannot make
+  sound is blocked, one it says nothing about gets a note.
 - **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
   smaller copies, :mod:`vidgen.videogen.pictures`, made here into ``build/videogen/pictures/``);
   over :data:`~vidgen.videogen.openrouter.MAX_INLINE_BYTES` is a problem.
@@ -35,12 +39,12 @@ dry-run plan of ``vidgen generate plan``.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from vidgen.config import BeatConfig, GeneratedShot, SceneConfig, VideoConfig
+from vidgen.config import BeatConfig, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.videogen import MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean
@@ -84,6 +88,11 @@ NO_HOST_BLOCKED = (
     "to share only this shot's files through a Cloudflare quick tunnel while its job runs (check it first, free: "
     "`vidgen generate host-test`)"
 )
+#: What the plan says each sound setting is.
+SOUND_WHAT: dict[str, str] = {
+    "mix": "vidgen's voice and music; the model is asked for no sound",
+    "model": "the model makes the clip's own sound and vidgen keeps it",
+}
 #: Picture files a shot may name in ``refs`` / ``first_frame``.
 PICTURE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 
@@ -144,6 +153,8 @@ class Shot:
     share_minutes: float | None = None
     #: The mock provider gives this shot's audio / video inputs fake addresses (nothing is shared).
     fake_addresses: bool = False
+    #: The shot's resolved sound setting (``mix`` or ``model``).
+    sound: SoundChoice = "mix"
 
     @property
     def shared(self) -> list[ShotInput]:
@@ -164,6 +175,7 @@ class Shot:
             resolution=self.resolution, aspect_ratio=self.aspect_ratio,
             frame_images=tuple(i.media() for i in self.inputs if i.frame),
             references=tuple(i.media() for i in self.inputs if not i.frame), seed=self.spec.seed,
+            generate_audio=self.sound == "model",
         )
 
     @property
@@ -401,6 +413,22 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             shot.blocked.append(NO_HOST_BLOCKED)
 
 
+def _check_sound(shot: Shot) -> None:
+    """Fill the blocked reason or notes of a ``sound: model`` shot (:attr:`Shot.sound`) from its model's capability."""
+    if shot.sound != "model" or shot.model is None:
+        return
+    model = shot.model
+    if model.generate_audio is False:
+        shot.blocked.append(
+            f"sound: model, but {model.id} cannot make sound (the model list says generate_audio false): "
+            "set sound: mix, or pick a model that can (`vidgen generate models --json`)"
+        )
+    elif model.generate_audio is None:
+        shot.notes.append(f"{model.id} does not say whether it can make sound: generate_audio true is sent; the take may have no sound of its own")
+    if shot.spec.place:
+        shot.notes.append("sound: model: a placed take plays vidgen's mix, not the clip's sound; to hear the clip's sound use place: false and a video_clip scene")
+
+
 def _windows(project: Project, scene: SceneConfig, fps: int) -> list[float]:
     """Each beat's window (seconds from its start to the next beat's start, whole frames)."""
     from vidgen.overlap import beat_lines, beat_windows
@@ -472,7 +500,7 @@ def _beat_shots(
         shot = Shot(
             id=beat.id if parts == 1 else f"{beat.id}_p{k + 1}", scene_id=scene.id, beat=beat, spec=spec, location=where,
             start=start + k * length, offset=k * length, length=length, part=k + 1, parts=parts, speaker=speaker,
-            characters=chosen, model=model, problems=list(problems),
+            characters=chosen, model=model, problems=list(problems), sound=config.videogen.sound_for(spec.model, spec.sound),
         )
         if model is not None:
             shot.duration = snap_duration(length, model.durations) if model.durations else None
@@ -481,6 +509,7 @@ def _beat_shots(
             if parts > 1 and k == 0:
                 shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip ({max(model.durations or [0])} s): split into {parts} parts")
         _resolve_inputs(project, shot, sheets)
+        _check_sound(shot)
         shot.prompt = shot_prompt(project, shot, sheets)
         shots.append(shot)
     return shots
@@ -550,6 +579,7 @@ class ShotPlan:
             else:
                 trim = shot.duration - shot.length
                 lines.append(f"  length: asks for {shot.duration} s, trimmed to {shot.length:.2f} s later" if trim > 1e-6 else f"  length: {shot.duration} s")
+        lines.append(f"  sound: {shot.sound} ({SOUND_WHAT[shot.sound]})")
         for item in shot.inputs:
             role = item.role + (" (frame image)" if item.frame else " (reference)" if item.role in ("portrait", "first_frame") else "")
             lines.append(f"  {role}: {_shown(item.path, root)} ({item.what}{'' if item.ready else '; not made yet'})")
@@ -609,6 +639,8 @@ class VideoGenPlan:
     sheet_lines: list[str] = field(default_factory=list)
     #: Ledger intents with no known outcome (of any request); they count in the budget at their estimate.
     unresolved_intents: list[SubmitIntent] = field(default_factory=list)
+    #: Entries of the config that have no effect (a ``videogen.models`` id OpenRouter does not list).
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def clips_cost(self) -> float:
@@ -636,10 +668,17 @@ class VideoGenPlan:
         after = f", {money(max(0.0, left - self.total))} after this plan" if left is not None else ""
         out.append(f"{self.budget.text()}{after}" + (" - OVER THE BUDGET" if left is not None and self.total > left + 1e-9 else ""))
         out += [f"unresolved submit: {intent_text(i)}" for i in self.unresolved_intents]
+        out += [f"warning: {w}" for w in self.warnings]
         blocked = sum(1 for s in self.shots if s.shot.blocked)
         problems = sum(1 for s in self.shots if s.shot.problems or s.check.problems)
         out.append(f"dry run: nothing was sent or paid; {blocked} shot(s) blocked, {problems} with problems")
         return out
+
+
+def _unlisted_models(models: Iterable[str], catalog: Catalog) -> list[str]:
+    """A warning for each ``videogen.models`` id the model list does not have (a typo has no effect)."""
+    known = [m.id for m in catalog.models]
+    return [f"videogen.models: OpenRouter lists no video model {m!r}{did_you_mean(m, known)}: its entry has no effect" for m in models if m not in known]
 
 
 def plan_shots(
@@ -672,7 +711,7 @@ def plan_shots(
 
     plan = VideoGenPlan(
         [], budget, sheet_cost, len(sheets.plan.todo), sheet_unknown, sheet_lines(sheets, project.root, prompts=False)[:-1] if sheets.sheets else [],
-        ledger.unresolved_intents(),
+        ledger.unresolved_intents(), _unlisted_models(settings.models, catalog),
     )
     left = budget.remaining_usd - sheet_cost if budget.remaining_usd is not None else None
     sources = InputSources(project)

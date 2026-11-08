@@ -1006,6 +1006,18 @@ class ImagegenConfig(_Strict):
 OPENROUTER_QUALITIES: tuple[str, ...] = ("auto", "low", "medium", "high", "xhigh", "max")
 
 
+#: Where a generated shot's sound comes from: mix (vidgen's voice and music; the model is asked
+#: for no sound) or model (the model makes the clip's own sound and vidgen keeps it).
+SoundChoice = Literal["mix", "model"]
+
+
+class VideogenModelSettings(_Strict):
+    """One video model's entry under ``videogen.models``."""
+
+    sound: SoundChoice | None = None
+    """This model's sound setting (mix or model), above videogen.sound and below a shot's own sound:; default: videogen.sound."""
+
+
 class VideogenConfig(_Strict):
     """The optional ``videogen:`` section: generated video shots through OpenRouter's video API
     (DESIGN.md §113). Nothing is paid without ``--pay`` and a budget."""
@@ -1032,6 +1044,24 @@ class VideogenConfig(_Strict):
     """How cloudflared connects to Cloudflare: http2 (TCP port 443, works on most networks), quic (UDP 7844) or auto (cloudflared's choice)."""
     host_max_minutes: float = Field(default=20.0, ge=5, le=120)
     """Hard limit in minutes on how long a quick tunnel stays open, whatever happens; it must leave room for poll_timeout (a shot is blocked otherwise). A tunnel closes as soon as its job reaches a final state."""
+    sound: SoundChoice = "mix"
+    """Where shots get their sound: mix (vidgen's voice and music; the model is asked for none) or model (the model makes the clip's own sound, kept for a video_clip scene; a placed take still plays vidgen's mix). Above it: videogen.models.<model>.sound, then a shot's sound:."""
+    models: dict[str, VideogenModelSettings] = Field(default_factory=dict)
+    """Settings per video model, by its OpenRouter id, e.g. {"bytedance/seedance-2.0-mini": {sound: model}}; other models keep videogen.sound."""
+
+    @field_validator("models")
+    @classmethod
+    def _model_ids(cls, value: dict[str, VideogenModelSettings]) -> dict[str, VideogenModelSettings]:
+        for model in value:
+            if "/" not in model.strip("/"):
+                raise ValueError(f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-mini), not {model!r}")
+        return value
+
+    def sound_for(self, model: str, shot_sound: SoundChoice | None = None) -> SoundChoice:
+        """The sound setting of a shot of ``model``: its own ``shot_sound``, else this model's
+        entry under ``models``, else ``sound``."""
+        entry = self.models.get(model)
+        return shot_sound or (entry.sound if entry is not None else None) or self.sound
 
 
 class StyleSheet(_Strict):
@@ -3276,6 +3306,8 @@ class GeneratedShot(_Strict):
     """How a take fills the frame: cover (scaled to fill, the overhang cut off) or contain (all of it, black bars)."""
     crossfade: float | None = Field(default=None, ge=0, le=2)
     """Seconds the take fades in and out over vidgen's picture at the beat's edges; default videogen.crossfade (0.25)."""
+    sound: SoundChoice | None = None
+    """mix: vidgen's voice and music (the model is asked for no sound); model: the model makes the clip's own sound and vidgen keeps it (play it with a video_clip scene; a placed take still plays vidgen's mix). Default: videogen.models.<model>.sound, then videogen.sound, then mix."""
 
     @field_validator("guide", mode="before")
     @classmethod

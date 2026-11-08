@@ -3,8 +3,8 @@
 Some beats want real-looking footage: a face saying the line, two people acting, a harbour at
 dawn. schu-video-generator can have a video model on OpenRouter make those shots while it keeps
 everything else: the story and timing, the voices, captions, overlays, titles, music and the
-final assembly. The model's own sound is never used (every job is sent with
-`generate_audio: false`). Reference: [CONFIG.md, Generated video](CONFIG.md#generated-video-videogen-vidgen-generate).
+final assembly. By default the model's own sound is not used (every job is sent with
+`generate_audio: false`); section 8 says how to keep it. Reference: [CONFIG.md, Generated video](CONFIG.md#generated-video-videogen-vidgen-generate).
 
 ## 1. When it is worth it
 
@@ -386,7 +386,28 @@ scene keeps it to the scene's end), scaled and cropped to the format (`fit: cove
 with black bars), at the video's frame rate, lightly colour matched (`videogen.color_match`),
 fading from and to vidgen's picture of the beat (`crossfade`; a cut at scene edges and between
 two takes). Captions, overlays and titles are drawn on top; the voice, music and effects are
-vidgen's mix.
+vidgen's mix, even with `sound: model` below.
+
+**A model's own sound.** `generated_shot.sound: model` (or `videogen.models:
+{"author/name": {sound: model}}` per model, or `videogen.sound` for the whole project) sends
+`generate_audio: true` and keeps the clip's own sound. It is off by default (`mix`), and `vidgen
+generate plan` shows the value for each shot. It is a different request, so it is paid again, and
+a model the list says cannot make sound is blocked. On Seedance 2.0 mini the sound followed the
+beat's voice reference and the lips, but it was a new performance, up to about 0.9 s later than the
+voice file, so laying the voice file over the clip cannot sync.
+
+To play it: set `place: false` and put the take in a `video_clip` scene, with no beats so that nothing
+else is mixed over it:
+
+```yaml
+- id: clip
+  type: video_clip
+  params: {path: takes/line/2.mp4, region: bleed}
+  duration: 5
+```
+
+It plays at volume 1 (`volume:` changes it; a `video_clip` scene with narration plays the clip's
+sound at 0.25). vidgen does not time captions or word-anchored actions from the clip's sound.
 
 ## 9. Publishing
 

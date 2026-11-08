@@ -365,6 +365,25 @@ def test_clip_sound_is_mixed_under_the_narration(make_project, clip: Path, media
 
 
 @pytest.mark.render
+def test_a_take_with_its_own_sound_plays_at_full_volume_in_a_silent_clip_scene(make_project, clip: Path, media: Path) -> None:
+    """The route for ``generated_shot.sound: model`` (DESIGN.md §113.11): the take, as a file, in a
+    ``video_clip`` scene with no beats, so nothing is mixed over it."""
+    def segment(scene: dict[str, Any]) -> Any:
+        project = load(make_project, clip, [scene])
+        (project.root / "takes" / "line").mkdir(parents=True, exist_ok=True)
+        (project.root / "takes" / "line" / "1.mp4").write_bytes(clip.read_bytes())
+        writer = render(project, "v", media).renderer.file_writer
+        return writer.audio_segment if writer.includes_sound else None
+
+    params = {"path": "takes/line/1.mp4", "region": "bleed"}
+    silent = segment({"id": "v", "type": "video_clip", "params": params, "beats": [], "duration": 2.0})
+    narrated = segment(clip_scene(**params))
+    assert silent is not None and narrated is not None
+    assert silent.duration_seconds == pytest.approx(2.0, abs=0.1)
+    assert narrated.rms / silent.rms == pytest.approx(0.25, rel=0.15)         # the default under narration
+
+
+@pytest.mark.render
 def test_actions_dim_and_highlight_the_moving_clip(make_project, clip: Path, media: Path) -> None:
     acts = [[{"dim": "clip", "until": "v_b3"}], [{"highlight": "clip", "color": "#FF0000"}], None]
     scene_cfg = clip_scene(region="bleed", fit="cover", mute=True)

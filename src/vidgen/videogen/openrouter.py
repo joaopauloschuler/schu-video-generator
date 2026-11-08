@@ -298,7 +298,7 @@ class OpenRouterVideoProvider:
         return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
 
     def request_body(self, request: VideoRequest, drop: set[str] | frozenset[str] = frozenset()) -> dict[str, Any]:
-        """The JSON body of ``POST /videos`` (``generate_audio`` always false; ``drop``: fields not sent)."""
+        """The JSON body of ``POST /videos`` (``generate_audio`` as requested; ``drop``: fields not sent)."""
         body: dict[str, Any] = {"model": request.model}
         if request.prompt:
             body["prompt"] = request.prompt
@@ -306,7 +306,7 @@ class OpenRouterVideoProvider:
             value = getattr(request, name)
             if value is not None and name not in drop:
                 body[name] = value
-        body["generate_audio"] = False
+        body["generate_audio"] = request.generate_audio
         if request.frame_images:
             body["frame_images"] = [
                 {"type": "image_url", "image_url": {"url": self.media_url(f)}, "frame_type": f.frame_type} for f in request.frame_images

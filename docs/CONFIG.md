@@ -2760,9 +2760,9 @@ prompt.
 ## Generated video (`videogen`, `vidgen generate`)
 
 Selected shots can be made by generative video models through OpenRouter's video API (Phase
-AH, DESIGN.md §113). vidgen keeps the story, timing, text, captions, music and assembly; the
-model's own audio is never used (every job is sent with `generate_audio: false`). Generation
-costs money, so nothing is paid unless a run is given `--pay` **and** the project has a budget.
+AH, DESIGN.md §113). vidgen keeps the story, timing, text, captions, music and assembly; by
+default the model's own sound is not used (the job is sent with `generate_audio: false`; see
+`sound` below for the model's own sound). Generation costs money, so nothing is paid unless a run is given `--pay` **and** the project has a budget.
 The workflow, cost control and privacy: [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md).
 
 ```yaml
@@ -2778,6 +2778,9 @@ videogen:
   cloudflared: null         # the cloudflared program for the quick tunnel (default: cloudflared on PATH)
   tunnel_protocol: http2    # http2 (TCP 443) | quic (UDP 7844) | auto (cloudflared's choice)
   host_max_minutes: 20      # a quick tunnel closes after this long at the latest (5-120); see "Quick tunnel" for when vidgen is killed
+  sound: mix                # mix (vidgen's voice and music; generate_audio false) | model (the clip's own sound; generate_audio true)
+  models:                   # per video model, by its OpenRouter id
+    "bytedance/seedance-2.0-mini": {sound: model}
 ```
 
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
@@ -2904,6 +2907,7 @@ scenes:
           place: true                       # show the shown take over the beat (false: keep vidgen's picture)
           fit: cover                        # cover (fill, overhang cut off) | contain (all of it, black bars)
           crossfade: null                   # seconds; default videogen.crossfade
+          sound: null                       # mix | model; default videogen.models.<model>.sound, then videogen.sound (mix)
 ```
 
 - **Sheets**: `vidgen generate sheets [PROJECT] [--sheet NAME] [--pay]` lists the pictures and
@@ -2969,7 +2973,7 @@ scenes:
   (what `cover` cuts off) and size (scaled up more than 2x), black (error when all black,
   warning from 0.5 s), frozen (error when nothing moves, warning from 1 s), flicker (brightness
   jumping from frame to frame, warning over 3 levels of 255), abrupt cuts inside the clip, and
-  its own sound (noted; never used). `vidgen generate takes [PROJECT] [--shot ID]` lists them
+  its own sound (noted, with where it can be heard; `sound: model` with a silent clip is a warning). `vidgen generate takes [PROJECT] [--shot ID]` lists them
   with their findings and contact sheets: look at the sheets before picking.
 - **Pick**: `vidgen generate pick [PROJECT] --shot ID --take N | none | auto` (in
   `takes/picks.json`). A shot shows its picked take; `none`: vidgen's own picture; nothing
@@ -2980,9 +2984,19 @@ scenes:
   format (`fit`), at the video's frame rate (the snapped clip is trimmed, a short one holds its
   last frame), lightly colour matched (`color_match`), fading in from and out to vidgen's
   picture of the beat (`crossfade`; none at a scene's edges, where the transitions join scenes,
-  and none between two takes). The take's sound is never used; vidgen's overlays and captions
+  and none between two takes). A placed take's sound is not used (even with `sound: model`: see **Sound** below); vidgen's overlays and captions
   are drawn on top. The scene renders again when a take or pick changes; drafts (`--draft`, the
   guide renders) show vidgen's own picture.
+- **Sound** (`generated_shot.sound`, `videogen.models.<id>.sound`, `videogen.sound`, in that order;
+  default `mix`): `model` sends `generate_audio: true` and keeps the clip's own sound; the setting
+  is part of the request's cache key, so a request is never served the other setting's clip, and
+  `mix` requests keep their old keys. `vidgen generate plan` shows the resolved value per shot, blocks a
+  shot whose model the list says cannot make sound and notes one it says nothing about. A placed
+  take still plays vidgen's mix (the model's sound is a new performance, not the beat's MP3): to
+  hear it, set `place: false` and show the take in a `video_clip` scene (`path:
+  takes/<shot>/<n>.mp4`). With no beats and a `duration` it plays at volume 1; with narration at
+  0.25 (`volume:` sets it). vidgen does not time captions or word-anchored actions from the clip's
+  sound.
 - **Credits and disclosure**: when the film shows takes, the description file
   (`<output>_chapters.txt`) ends with "Includes AI-generated footage (model, ...)." and the lint
   rule `generated_footage` (info) reminds you to disclose AI-generated footage where the platform
@@ -16341,8 +16355,8 @@ every submit intent; `outcome` `null` while nothing is known, else `refused`, `n
 `vidgen generate resolve PROJECT --intent ID ... --json`: `action` (`resolve`), `intent` (as above).
 
 `vidgen generate plan PROJECT --json`: `action` (`plan`), `clips_usd`, `sheets_usd`, `total_usd`,
-`budget_usd`, `spent_usd`, `remaining_usd`, `unresolved_intents` (as `intents` above), `shots`
-(`{id, kind, model, scene, beat, start, length, duration, resolution, aspect_ratio, inputs: [{role, kind, path, frame_image, ready}],
+`budget_usd`, `spent_usd`, `remaining_usd`, `unresolved_intents` (as `intents` above), `warnings` (config entries with no effect), `shots`
+(`{id, kind, model, scene, beat, start, length, duration, resolution, aspect_ratio, sound, inputs: [{role, kind, path, frame_image, ready}],
 estimate_usd, cached, left_after_usd, request_bytes, unresolved_intent (the id, or `null`), shared: [{path, bytes}], share_max_minutes, notes, problems,
 blocked, prompt}`; `shared` the files a paid run would share through the quick tunnel (empty without
 `host: quick_tunnel`, when cached or already paid; `bytes` `null` until made), `share_max_minutes`
