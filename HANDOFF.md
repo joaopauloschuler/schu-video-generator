@@ -25399,3 +25399,82 @@ project), repo work is generic.
   depth contrast is low for objects in front of a long floor (one linear range for the shot);
   outline lines are ~1 px per 540 px and not antialiased; the floor gets a mask colour like any
   object (often a large red area); old pass files are not deleted when passes are switched off.
+
+## Step 302 — 3D scenes: docs, example and critical review (Phase AI, last step)
+
+- **Built** (DESIGN §114.14, §114.16): `docs/COOKBOOK-3D.md` (setting up the extra incl. Windows
+  wording, building a scene, the camera in 16:9 vs 9:16, stand-ins, guide passes, checks, common
+  mistakes), linked from `docs/COOKBOOK.md`, `README.md`, the guide; guide topic `three-d`
+  (aliases `3d`, `threejs`, `three.js`, `stand-ins`, `guide-passes`...; topic names must start with
+  a letter, so `vidgen guide 3d` works through the alias) and a pointer before the guide's media
+  snippets; `examples/3d-short/video.yaml` (YAML only: a 9:16 Short of ~14.6 s, one `3d` scene
+  with floor, box, cone+cylinder group, torus, sphere, arrow, two stand-ins with voices; walk, face,
+  show (grow), path, highlight; dolly, fly-to, move; karaoke captions; `guide_passes: true`;
+  validate and lint clean); the guide's `crate` sample (= the gallery sample) and
+  `examples/gallery`'s `crate` now show object actions (`object_highlight`, `object_show`,
+  `object_path`; the gallery one also a stand-in walking); gallery `3d` regenerated (16.3 MB in
+  docs/gallery, test_gallery passes; 3d.md had stale Step 299 params).
+- **Owner's decisions on Step 301 applied** (with tests): (1) depth range fitted to the objects
+  only (planes left out; a scene of planes only fits its planes), far mapped to a dark grey 0.15
+  (`DARKEST` in the page) and clamped, so the floor stays white in front / dark grey behind and
+  only the background is black; optional `depth_range: [near, far]` param (0 ≤ near < far);
+  (2) outline white lines on black (no black-on-white setting: optional, not built); (3) floor in
+  the mask `#404040`, in the table as `floor`; (4) mask colours from `sha256(id)` into a 48-colour
+  palette (16 hues × bright / dark / pale), clash → the id first in the alphabet keeps it, the other
+  probes 7 places on; past 48 objects a colour from the hash; depends only on the set of ids, not
+  their order; (5) passes stay lossless `.mkv`.
+- **Critical review of 298–301** — fixed:
+  1. `PageRenderer.__enter__`: a Playwright error while loading the page (`goto` / `wait_for_function`
+     timeout, a crashed page) escaped as a Playwright traceback; now `VidgenError("3D page did not
+     load: ...")` (the page's own error if it reported one) and Chromium/Playwright are closed; a
+     `KeyboardInterrupt` there also closes them.
+  2. `write_clip`: on Windows `os.replace` fails when the old clip is open in a player → a
+     `PermissionError` traceback; now a `VidgenError` naming the file (the partial file removed).
+  3. Dead code: `write_clip(progress=)` was never passed; removed.
+  4. Duplication: the camera basis (forward/right/up, fov tangents with the shorter-side rule) was
+     written twice (`framing_3d`, `depth_range`); now `framing.view_basis`.
+  5. Depth range: objects counted by their sphere — an arrow's or stand-in's sphere reaches far
+     past it, so `near` came out too near (example: 1.9 instead of 2.3 units); now the tighter of
+     sphere and box (8 corners through `World.matrix`, an arrow's current length) at each end.
+  6. Docs not matching behaviour: CLI `--guide-passes` help, `guide_passes` docstring, CONFIG pass
+     table and DESIGN said black edges / golden-angle mask colours; updated. `docs/gallery/3d.md`
+     lacked the Step 300–301 params (regenerated).
+  — checked, left as is: determinism (no clock or randomness in the page; ids hashed with sha256,
+  never `hash()`; JSON keys sorted for the cache key); Windows paths (pathlib, utf-8, `LOCALAPPDATA`
+  browsers dir, URL names not paths); performance (the page's and `framing.track_value`'s linear
+  key search is O(frames × keys): negligible next to 60–130 ms per drawn frame; the world is
+  planned twice per render — planning is lazy and cheap); error messages (validate names the
+  action of a bad camera move; at render the message names only the scene — known gap).
+- **Public interface**: `Scene3DParams.depth_range`; `guide_pass(..., depth=None)`,
+  `make_guide_passes(..., depth=None)`; `passes.FLOOR_MASK`, `MASK_PALETTE`, `MASK_HUES`,
+  `MASK_TONES`, `MASK_PROBE`, `BOX_CORNERS`; `framing.view_basis`; `write_clip(description, path)`
+  (no `progress`). `vidgen.api` unchanged. Description still version 1 (pass descriptions change:
+  new ranges/colours, so old pass clips are drawn again once).
+- **Files**: new `docs/COOKBOOK-3D.md`, `examples/3d-short/video.yaml`; changed
+  `src/vidgen/three_d/{passes,framing,spec,description,browser}.py`, `scenes/scene_3d.py`,
+  `data/three/vidgen3d.js` (depth `DARKEST`, edges white on black), `cli.py` (help), guide +
+  `AGENTS.md` (topic `three-d`, intro list, chooser row `depth_range`, `crate` sample, pointer),
+  `docs/CONFIG.md` (pass table, `depth_range` row), `docs/COOKBOOK.md`, `README.md` (cookbook and
+  example), `examples/gallery/video.yaml` (`crate`), `docs/gallery/{3d.md,README.md,media/3d-*}`,
+  `tests/{test_scene_3d,test_scene_3d_passes,test_docs,test_guide}.py`, DESIGN §114.14 + §114.16,
+  CHANGELOG, tasklist.
+- **Tests run and passed** (one file per command, `capped`/`capped3g` + `timeout`):
+  `test_scene_3d_passes` all (23, incl. 2 render: depth floor ≥ 35 grey, outline white edges),
+  `test_scene_3d` all (24: page-load error, clip in use), `test_scene_3d_camera` (32),
+  `test_scene_3d_actions` (25), `test_docs` (80), `test_guide` (92), `test_gallery` (20),
+  `test_api` (10), `test_extensions` (25), `test_builtin_scenes` not render (176),
+  `test_json_output` not render (21), `test_lint` not render (22), `test_actions_coverage` not
+  render + `register_their_target_names and 3d` (13), `test_schema -k "examples_validate or 3d"`
+  (23, incl. the new example). Not run: other render suites, the rest of `test_schema`, `test_mcp`.
+- **Stills / preview**: `/home/claude/work/scratch/s302/contact-sheet.png` (rows 1, 4.6, 8.5, 10,
+  13.5 s; columns: the rendered Short with title and karaoke captions, depth, outline, mask),
+  `/home/claude/work/scratch/s302/preview.mp4` (the 540x960 preview, 14.6 s),
+  `/home/claude/work/scratch/s302/passes-preview.mp4` (video + three passes side by side), from
+  `/home/claude/work/scratch/s302/example` (a copy of `examples/3d-short`).
+- **Known gaps / open questions**: one depth range per shot still loses contrast when the camera
+  flies close and pulls far back in the same scene (the example's range is 1.5–9.0 units; split
+  the shot or set `depth_range`); no black-on-white outline setting; `guide_passes: all` (a
+  string) is refused in YAML although `--guide-passes all` works (YAML takes `true` or a list);
+  a mask colour can still move when a new id clashes with an existing one and sorts before it
+  (~2 % per pair); build JSON files are written 0600 by `write_text_atomic` (project-wide);
+  old pass files stay when passes are switched off; the stand-in lint is sphere-based.

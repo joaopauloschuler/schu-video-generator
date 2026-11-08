@@ -185,6 +185,62 @@ def test_missing_chromium_names_the_install_command() -> None:
     assert "cannot start Chromium" in str(browser._browser_error(Exception("boom")))
 
 
+def test_page_that_does_not_load_is_a_message_and_closes_chromium(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Error(Exception):
+        pass
+
+    closed: list[str] = []
+
+    class Page:
+        def on(self, *_: Any) -> None: ...
+        def goto(self, *_: Any, **__: Any) -> None:
+            raise Error("Timeout 60000ms exceeded.\n=== logs ===")
+
+    class Context:
+        def route(self, *_: Any) -> None: ...
+        def new_page(self) -> Page:
+            return Page()
+
+    class Browser:
+        def new_context(self, **_: Any) -> Context:
+            return Context()
+        def close(self) -> None:
+            closed.append("browser")
+
+    class Playwright:
+        chromium = type("Chromium", (), {"launch": lambda self, **_: Browser()})()
+        def start(self) -> "Playwright":
+            return self
+        def stop(self) -> None:
+            closed.append("playwright")
+
+    fake = type("SyncApi", (), {"Error": Error, "sync_playwright": staticmethod(lambda: Playwright())})
+    monkeypatch.setattr(browser, "_sync_api", lambda: fake)
+    with pytest.raises(VidgenError, match=r"^3D page did not load: Timeout 60000ms exceeded\.$"):
+        browser.PageRenderer(describe(params())).__enter__()
+    assert closed == ["browser", "playwright"]
+
+
+def test_a_clip_open_elsewhere_is_a_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows refuses to replace a file another program has open (a video player)."""
+    class Page:
+        def __init__(self, description: dict[str, Any]) -> None: ...
+        def __enter__(self) -> "Page":
+            return self
+        def __exit__(self, *_: Any) -> None: ...
+        def frame(self, n: int) -> np.ndarray:
+            return np.zeros((16, 16, 3), dtype=np.uint8)
+
+    def refuse(*_: Any) -> None:
+        raise PermissionError("in use")
+
+    monkeypatch.setattr(browser, "PageRenderer", Page)
+    monkeypatch.setattr(browser.os, "replace", refuse)
+    with pytest.raises(VidgenError, match="cannot replace .*close the program"):
+        browser.write_clip(describe(params(), width=16, height=16, frames=2), tmp_path / "s.mkv")
+    assert list(tmp_path.iterdir()) == []   # no partial file left
+
+
 # ----- renders (Chromium) -----------------------------------------------------------------------
 
 

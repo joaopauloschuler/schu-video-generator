@@ -227,7 +227,9 @@ class Scene3DParams(SceneParams):
     objects: list[Object3D] = Field(default_factory=list)
     """The objects: [{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}]; object actions (object_move, object_walk...) move them."""
     guide_passes: bool | list[str] = False
-    """Also draw guide passes of the 3D picture (same frames, camera and timing; labels left out), stored beside its clip: true (all), or a list of depth (near white, far dark), outline (edges like a line drawing), mask (each object one flat colour, with a colour table); also `vidgen render --guide-passes`."""
+    """Also draw guide passes of the 3D picture (same frames, camera and timing; labels left out), stored beside its clip: true (all), or a list of depth (near white, far dark), outline (white edges on black, like a line drawing), mask (each object one flat colour, with a colour table); also `vidgen render --guide-passes`."""
+    depth_range: tuple[float, float] | None = None
+    """[near, far]: the distances from the camera the depth pass shows as white and as its darkest grey (default: fitted to the objects over the whole shot; the floor is clamped to it)."""
 
     @field_validator("guide_passes")
     @classmethod
@@ -235,6 +237,13 @@ class Scene3DParams(SceneParams):
         from vidgen.three_d.passes import parse_passes
 
         return list(parse_passes(v)) if isinstance(v, list) else v
+
+    @field_validator("depth_range")
+    @classmethod
+    def _depth_range(cls, v: tuple[float, float] | None) -> tuple[float, float] | None:
+        if v is not None and not 0 <= v[0] < v[1]:
+            raise ValueError(f"depth_range: [{v[0]:g}, {v[1]:g}] must be [near, far] with 0 <= near < far")
+        return v
 
     @field_validator("floor")
     @classmethod

@@ -295,14 +295,17 @@ void main() {
   gl_Position = projectionMatrix * mv;
 }`;
 
-// depth: near (depth_range[0]) white, far (depth_range[1]) black, linear in the distance along the view
+// depth: near (depth_range[0]) white, far (depth_range[1]) the darkest grey, linear in the
+// distance along the view and clamped outside the range (a floor reaching far back stays that
+// grey), so only the empty background is black
 const DEPTH_FRAGMENT = `
 uniform float near;
 uniform float far;
 varying float vDepth;
+const float DARKEST = 0.15;
 void main() {
-  float v = clamp((far - vDepth) / (far - near), 0.0, 1.0);
-  gl_FragColor = vec4(vec3(v), 1.0);
+  float u = clamp((far - vDepth) / (far - near), 0.0, 1.0);
+  gl_FragColor = vec4(vec3(DARKEST + (1.0 - DARKEST) * u), 1.0);
 }`;
 
 const MASK_FRAGMENT = `
@@ -324,7 +327,8 @@ const QUAD_VERTEX = `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
-// outline, second step: black where the object changes (its silhouette), where the surface
+// outline, second step: white lines on black (what edge inputs of video models expect) where
+// the object changes (its silhouette), where the surface
 // bends sharply (a crease: normals more than ~37 degrees apart) or where an object hides part of
 // itself (a step in depth: 1 / depth is linear across a flat face, so its second difference is 0)
 const EDGE_FRAGMENT = `
@@ -353,7 +357,7 @@ void main() {
       edge = max(sx, sy) > DEPTH_STEP * ic;
     }
   }
-  gl_FragColor = vec4(vec3(edge ? 0.0 : 1.0), 1.0);
+  gl_FragColor = vec4(vec3(edge ? 1.0 : 0.0), 1.0);
 }`;
 
 function rgb(hex) {

@@ -57,20 +57,27 @@ def camera_at(description: dict[str, Any], t: float) -> tuple[np.ndarray, np.nda
     return np.array(pose["position"], dtype=float), np.array(pose["look_at"], dtype=float)
 
 
+def view_basis(description: dict[str, Any], t: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]:
+    """The camera of ``description`` at ``t`` as the page sees it: its position, unit forward,
+    right and up vectors, and the tangents of half the horizontal and vertical fov (vidgen's
+    ``fov`` is across the shorter side)."""
+    width, height = int(description["width"]), int(description["height"])
+    aspect = width / height
+    fov = math.radians(float(description["camera"]["fov"]))
+    tan_v = math.tan(fov / 2) if aspect >= 1 else math.tan(fov / 2) / aspect
+    position, look = camera_at(description, t)
+    forward = (look - position) / np.linalg.norm(look - position)
+    right = np.cross(forward, [0.0, 1.0, 0.0])
+    right = right / np.linalg.norm(right) if np.linalg.norm(right) > 1e-9 else np.array([1.0, 0.0, 0.0])
+    return position, forward, right, np.cross(right, forward), tan_v * aspect, tan_v
+
+
 def framing_3d(description: dict[str, Any], world: World, t: float) -> list[dict[str, Any]]:
     """The objects on screen at ``t``: ``[{id, shape, box: [x0, y0, x1, y1] px, off: share of it
     outside the frame, hidden: share of it nearer objects cover, by: the nearest of those}]``
     (objects at least half visible; the floor and groups' parts included, groups too)."""
     width, height = int(description["width"]), int(description["height"])
-    aspect = width / height
-    fov = math.radians(float(description["camera"]["fov"]))
-    tan_v = math.tan(fov / 2) if aspect >= 1 else math.tan(fov / 2) / aspect
-    tan_h = tan_v * aspect
-    position, look = camera_at(description, t)
-    forward = (look - position) / np.linalg.norm(look - position)
-    right = np.cross(forward, [0.0, 1.0, 0.0])
-    right = right / np.linalg.norm(right) if np.linalg.norm(right) > 1e-9 else np.array([1.0, 0.0, 0.0])
-    up = np.cross(right, forward)
+    position, forward, right, up, tan_h, tan_v = view_basis(description, t)
     near = float(description["camera"]["near"])
     seen = []
     for obj_id, placed in world.objects.items():
@@ -120,4 +127,4 @@ def _related(world: World, a: str, b: str) -> bool:
     return world.within(a, b) or world.within(b, a)
 
 
-__all__ = ["camera_at", "framing_3d", "track_value"]
+__all__ = ["camera_at", "framing_3d", "track_value", "view_basis"]

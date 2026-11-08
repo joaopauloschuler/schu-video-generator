@@ -25,7 +25,8 @@ stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for
 pedigrees, chromosomes, variants, the lab, populations: notation, exactness, lint), `science`
 (plots and worked calculations: plot or chart, fits, live models, units, significant figures,
 lint), `orbits` (orbital mechanics: views, scale honesty, panels, manoeuvres, three bodies,
-dates, pacing, lint), `particle-physics` (particle-physics videos: planning, choosing the scene,
+dates, pacing, lint), `three-d` (simple 3D scenes: building a set, the camera in 16:9 and 9:16,
+stand-ins, guide passes, lint), `particle-physics` (particle-physics videos: planning, choosing the scene,
 natural units, simulated data, sources, significance, pacing, lint), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
@@ -405,7 +406,7 @@ project's own scene types, in its theme).
 | a photo or illustration | `image` | `path`, `generate`, `caption`, `fit`, `ken_burns` |
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute` |
-| simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; also the render option --guide-passes); the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
+| simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; also the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -1614,6 +1615,8 @@ and contrasts are left alone ("photons do not leave tracks" is fine).
     - text: "Then we opened in London."
 ```
 
+Pictures, screenshots, clips and simple 3D (the 3D craft: `vidgen guide 3d`):
+
 ```yaml
 # pictures and media
 - id: harbour
@@ -1648,12 +1651,16 @@ and contrasts are left alone ("photons do not leave tracks" is fine).
     objects:
       - {id: crate, shape: box, size: 1.6, position: [0, 0.8, 0], rotation: [0, 20, 0], spin: [0, 30, 0]}
       - {id: tag, parent: crate, shape: label, text: "Crate", position: [0, 1.2, 0]}   # turns with it
+      - {id: ball, shape: sphere, size: 0.6, position: [2, 0.3, 1], color: highlight, visible: false}
   beats:
     - text: "A crate turns slowly in front of the camera."
-    - text: "The camera circles it, then flies in close."
       actions:
-        - {camera_orbit: crate, at: "@circles", degrees: 90, run_time: 1.5}
-        - {camera_fly_to: crate, at: "@flies"}
+        - {object_highlight: crate, at: "@crate"}
+    - text: "A ball appears and rolls round it, and the camera circles in."
+      actions:
+        - {object_show: ball, at: "@appears", style: grow}
+        - {object_path: ball, at: "@rolls", points: [[1, 0.3, 2], [-1.6, 0.3, 1.4]], run_time: 1.5}
+        - {camera_orbit: crate, at: "@circles", degrees: 60, run_time: 1.5}
 - id: meeting
   type: 3d
   params:
@@ -3155,6 +3162,42 @@ Run `vidgen lint` in 16:9 and 9:16.
     - text: "A prograde burn of two point nine four kilometres per second starts the transfer."
       actions: [{burn: "burn:1", at: "@burn"}]
 ```
+
+<!-- topic: three-d (also: 3d, threejs, three.js, 3d-scenes, stand-ins, standins, guide-passes) -->
+## 3D: simple scenes with shapes and stand-ins
+
+One scene type, `3d`, draws plain shapes, labels and character stand-ins with one light, seen by
+a camera that stands still or moves on words (three.js in headless Chromium; the `3d` extra:
+`pip install "schu-video-generator[3d]"` and `python -m playwright install chromium`). It is for
+explaining where things are and what moves where, not for realism. Every param: `docs/CONFIG.md`;
+the craft in full: `docs/COOKBOOK-3D.md` in the schu-video-generator repository; a whole example:
+`examples/3d-short` (a 9:16 Short of about 15 s: two stand-ins, a ball, four camera moves, captions,
+guide passes).
+
+**Building a set.** Scene units, y up, `floor: true` at y 0; a shape is centred on its
+`position`, so a box of height 1 stands at `y: 0.5`, a stand-in of height 1.6 at `y: 0.8`. Short,
+meaningful `id`s: actions, lint and the mask's colour table use them. `parent:` (written earlier)
+makes parts move together; `visible: false` plus `object_show` on a word brings a thing in.
+
+**The camera.** `fov` is across the frame's shorter side, so a 9:16 frame sees much more above and
+below: keep the set compact across, the camera close (`fov` 50–56, 5–6 units away), the objects in
+the middle band (title on top, captions below). One move per idea, timed to the word that names
+the thing: `camera_fly_to` an object (it follows it if it moves), `camera_orbit` 45–90° to show
+depth, `camera_dolly` a small push-in, `camera_move` to pull back at the end.
+
+**Stand-ins.** `shape: standin` with a `name` and a theme colour; its nose shows where it faces
+(+z unturned, `rotation: [0, 90, 0]` faces +x). `object_walk` (to `[x, z]` or up to an object)
+turns it and walks it there; `object_face` turns it to whom it talks to. Give its beats its
+`voice`, so lint checks the speaker is on screen.
+
+**Guide passes.** `guide_passes: true` (or `vidgen render --guide-passes`) also draws `depth`
+(near white, far dark grey; one range for the shot, fitted to the objects, or `depth_range`),
+`outline` (white edges on black) and `mask` (each object one flat colour from its id, the floor
+dark grey, with `<scene>.mask-colors.json`), same frames and camera, beside the 3D clip.
+
+**Lint.** `three_d_off_frame` (an object the beat is about is mostly outside the frame) and
+`three_d_hidden` (mostly behind a nearer one); look at `vidgen storyboard --per-beat 3` for the
+moves mid-beat.
 
 <!-- topic: particle-physics (also: particle, particle_physics, hep, higgs, standard-model, collider, feynman-diagrams) -->
 ## Particle physics: particles, collisions and discoveries

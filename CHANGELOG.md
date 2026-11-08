@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–301)
+## Unreleased (Steps 193–302)
+
+### 3D scenes: docs, example and review (Step 302)
+
+- `docs/COOKBOOK-3D.md`: setting up the `3d` extra, building a scene, the camera in 16:9 and 9:16, stand-ins, guide passes, checks and common mistakes; `vidgen guide 3d` (topic `three-d`) has the short version.
+- `examples/3d-short`: a 9:16 Short of about 15 s (shapes, two stand-ins who walk and turn to each other, a ball that appears, rolls and glows, four camera moves on words, karaoke captions, guide passes). The gallery's `3d` sample now shows object actions.
+- Guide passes: the `depth` range is fitted to the objects (the floor is clamped to it, so the objects get the contrast; far is a dark grey, only the background black) or set with the new `depth_range: [near, far]`; `outline` draws white lines on black; in the `mask` the floor is a neutral dark grey (`#404040`, listed as `floor`) and every other object's colour comes from its id, so adding or reordering objects keeps the others' colours.
+- A 3D page that does not load (a timeout, a crashed page) is a clear error instead of a traceback, and Chromium is closed.
 
 ### 3D scenes: guide passes (Step 301)
 

@@ -1,0 +1,73 @@
+# A small 3D Short (9:16, about 13 s): a `3d` scene with shapes, two character stand-ins that walk
+# and turn to face each other, camera moves on spoken words and karaoke captions; its guide passes
+# (depth, outline, mask) are drawn beside the 3D clip. Needs the 3d extra:
+#   pip install "schu-video-generator[3d]" && python -m playwright install chromium
+#   (Windows: py -m pip install "schu-video-generator[3d]" && py -m playwright install chromium)
+#
+#   vidgen validate examples/3d-short
+#   vidgen lint examples/3d-short
+#   vidgen storyboard examples/3d-short --per-beat 3       # mid-beat stills: the moves
+#   vidgen render examples/3d-short --preview              # 540x960; the passes are in
+#                                                          # build/preview/three_d/square.{depth,outline,mask}.mkv
+#   vidgen render examples/3d-short                        # 1080x1920
+#
+# No audio is committed: beats are timed from their word count until `vidgen tts` voices them
+# (`voice: {provider: kokoro}` is local and free). The craft: docs/COOKBOOK-3D.md.
+title: "Two friends and a ball"
+output: 3d_short
+
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 540, height: 960, fps: 15}
+
+overlays:
+  - type: captions
+    style: karaoke
+
+voices:
+  ana: {}
+  ben: {}
+
+scenes:
+  - id: square
+    type: 3d
+    params:
+      title: "Two friends and a ball"
+      guide_passes: true                     # depth, outline and mask videos beside the clip
+      floor: {size: 14, color: "#2b3242"}
+      camera: {position: [0, 3.4, 4.6], look_at: [0, 0.7, -0.8], fov: 56}   # fov across the shorter side
+      objects:
+        - {id: ana, shape: standin, name: "Ana", color: primary, position: [-1.7, 0.8, 1], rotation: [0, 90, 0]}
+        - {id: ben, shape: standin, name: "Ben", color: secondary, position: [1.7, 0.8, -0.4], rotation: [0, -90, 0]}
+        - {id: crate, shape: box, size: 0.9, position: [0, 0.45, -1.6], rotation: [0, 25, 0], color: accent}
+        - {id: tree, shape: group, position: [-1.5, 0, -3.2]}
+        - {id: trunk, parent: tree, shape: cylinder, size: [0.3, 1, 0.3], position: [0, 0.5, 0], color: "#8a5a3c"}
+        - {id: crown, parent: tree, shape: cone, size: [1.3, 1.8, 1.3], position: [0, 1.9, 0], color: "#3fa36b"}
+        - {id: ring, shape: torus, size: [1.1, 0.18, 1.1], position: [1.6, 0.09, -2.6], color: "#e0b040"}
+        - {id: ball, shape: sphere, size: 0.5, position: [0, 1.15, -1.6], color: highlight, visible: false}
+        - {id: pointer, shape: arrow, position: [1.1, 2.4, 0.6], to: ball, color: text, visible: false}
+    beats:
+      - id: meet
+        text: "Ana and Ben meet in a little square."
+        actions:
+          - {action: camera_dolly, by: 0.8, at: "@meet"}
+      - id: walk
+        voice: ana
+        text: "I'll walk over to the crate and find the ball."
+        actions:
+          - {object_walk: ana, at: "@walk", to: crate}
+          - {object_face: ben, at: "@crate", to: ana}
+          - {object_show: ball, at: "@ball", style: grow}
+          - {object_show: pointer, at: "@ball"}
+      - id: roll
+        voice: ben
+        text: "Watch it roll across to me!"
+        actions:
+          - {object_path: ball, at: "@roll", points: [[0.5, 0.25, -0.7], [0.9, 0.25, 0.4]], run_time: 1.4}
+          - {object_highlight: ball, at: "@roll"}
+          - {camera_fly_to: ball, at: "@across", distance: 3}
+          - {object_face: ana, at: "@me", to: ben}
+      - id: back
+        text: "Then the camera pulls back to show them both."
+        actions:
+          - {action: camera_move, to: [2.2, 3.0, 3.6], look_at: [0, 0.7, -0.7], at: "@pulls"}
+          - {object_walk: ben, at: "@show", to: ball}

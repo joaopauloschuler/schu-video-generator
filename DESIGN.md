@@ -22316,11 +22316,13 @@ count as their sphere.
 layout, not its look — later the video-to-video step (camera, layout and motion from vidgen, the
 look from a video model), which is not built here. In plain words:
 
-- **depth**: grey by distance from the camera, **near white, far dark**, the empty background
+- **depth**: grey by distance from the camera, **near white, far dark grey**, the empty background
   black. It tells a model the shapes and how far away things are.
-- **outline**: **only the edges**, black lines on white, like a line drawing.
+- **outline**: **only the edges**, white lines on black (what edge inputs of video models expect),
+  like a line drawing (Step 302; Step 301 drew black on white).
 - **mask**: **each object one flat colour of its own** on black (no light, no blending at the
-  edges), with a table object id → colour, so a tool knows exactly which pixels are which object.
+  edges), the floor a neutral dark grey, with a table object id → colour, so a tool knows exactly
+  which pixels are which object.
 
 **One description, another draw mode.** `three_d/passes.py`, `guide_pass(description, world,
 mode)` = the normal description with `draw_mode: mode` and, for `depth`, `depth_range: [near,
@@ -22339,27 +22341,41 @@ blended at an edge), sprites (labels, a stand-in's name tag) are hidden, and an 
 when its opacity is ≥ 0.5 (no fading, no glow). Captions, overlays and the title are Manim's
 layers over the clip, never in it.
 
-- **depth**: `v = clamp((far − z) / (far − near))`, z the distance along the view (camera space),
-  linear. *Why one range per shot:* a range per frame would make the same object change grey as
-  others move (flicker). `depth_range(description, world)` looks at up to `DEPTH_SAMPLES` = 120
-  frames (evenly spread, first and last): the camera of the description at that time
-  (`framing.camera_at`), every shown object in view — a plane by a 17 × 17 grid of its points
-  inside the view (a floor reaching under the camera would otherwise make the range start at the
-  lens), every other shape by its sphere (`World.focus`) — and widens the result by `DEPTH_PAD`
-  = 5 % of its span at each end (the nearest point not clipped white, the farthest a dark grey
-  apart from the black background). *Why linear, not 1/distance:* tried both on stills; with a
-  floor reaching far back, 1/distance left the objects in the middle almost black.
+- **depth**: `u = clamp((far − z) / (far − near))`, z the distance along the view (camera space),
+  linear, drawn as `0.15 + 0.85 u` (the page's `DARKEST`): near white, far the darkest grey, so a
+  floor reaching past `far` stays that grey and only the empty background is black. *Why one range
+  per shot:* a range per frame would make the same object change grey as others move (flicker).
+  `depth_range(description, world)` (Step 302: fitted to the **objects**, owner's decision) looks
+  at up to `DEPTH_SAMPLES` = 120 frames (evenly spread, first and last): the camera of the
+  description at that time (`framing.view_basis`), every shown object in view except planes — its
+  extent along the view from its sphere (`World.focus`) and its box (the 8 corners of its size
+  through `World.matrix`; an arrow following an object: its current length), the tighter at each
+  end (an arrow's or a stand-in's sphere reaches far past it) — and widens the result by
+  `DEPTH_PAD` = 5 % of its span at each end. The floor and other planes are clamped to that range
+  (white in front of the objects, the darkest grey behind), so the objects get the contrast; a
+  scene of planes only fits its planes (a 17 × 17 grid of their points inside the view). The
+  scene's `depth_range: [near, far]` (0 ≤ near < far) replaces the fit. *Why linear, not
+  1/distance:* tried both on stills; with a floor reaching far back, 1/distance left the objects in
+  the middle almost black. *Why fitted to objects (Step 302):* fitted to everything in view, a
+  long floor took most of the range and the objects were nearly one grey.
 - **outline**: each frame is drawn twice into float render targets (one: view-space normal and
   depth; two: the object's number, 1-based in description order, 0 = background), then a quad
-  with an edge shader writes black where the object changes to the right or below (silhouettes,
+  with an edge shader writes white where the object changes to the right or below (silhouettes,
   one object in front of another), where normals differ by more than ~37° (`NORMAL_COS` 0.8:
   creases of boxes, cylinder caps, a stand-in's nose) or where 1/depth is not linear across three
   pixels (`DEPTH_STEP`, an object hiding part of itself: 1/depth is linear on a flat face, so its
-  second difference is 0); white elsewhere. Lines are about 1 px per 540 px of the shorter side.
-- **mask**: `mask_colors(description)`: every drawn object (not groups, not labels) in description
-  order gets HSV(golden-angle hue, 0.85, 1.0 or 0.72) → `#rrggbb`, unique, never black. The page
-  writes the colour from a `Vector3` of the hex digits / 255, so the PNG holds exactly the table's
-  colour (tested). A stand-in's nose has its colour; an arrow's shaft and head one colour.
+  second difference is 0); black elsewhere. Lines are about 1 px per 540 px of the shorter side.
+- **mask**: `mask_colors(description)` (Step 302: stable between edits, owner's decision): the
+  floor `FLOOR_MASK` = `#404040` (neutral dark grey; in the table as `floor`); every other drawn
+  object (not groups, not labels) the colour of `MASK_PALETTE` (16 hues × 3 tones — bright,
+  dark, pale — 48 colours, never black or grey) at `sha256(id) mod 48`. A clash (two ids, one
+  colour) goes to the id **first in alphabetical order**; the other probes `MASK_PROBE` = 7 places
+  on (coprime with 48: every colour is tried; it changes hue and tone) to the first free one;
+  past 48 objects, a colour from the id's hash. So the colours depend only on the set of ids, not
+  their order: adding, removing or reordering objects changes another object's colour only when
+  their ids clash (then only the later one in the alphabet moves). The page writes the colour from
+  a `Vector3` of the hex digits / 255, so the PNG holds exactly the table's colour (tested). A
+  stand-in's nose has its colour; an arrow's shaft and head one colour.
 
 **Asking for them** (off by default). The `3d` param `guide_passes: true | [depth, outline,
 mask]` (`parse_passes`, did-you-mean; `Scene3DParams.passes()`), part of the params and so of
@@ -22387,3 +22403,24 @@ the clip and any pass already drawn. `RenderResult.guide_passes` / JSON `guide_p
   names stand-ins by `name`.
 - Lint stays sphere-based (owner's decision; masks are not used for lint); stand-ins stay centred
   on `position`.
+
+### 114.16 Docs, example and review (Step 302)
+
+- **Owner's decisions on Step 301's questions**, applied: depth fitted to the objects with the
+  floor clamped, `depth_range` override (§114.14); outline white lines on black (no black-on-white
+  setting yet); the floor's mask colour a neutral dark grey in the table as `floor`; mask colours
+  from the ids (§114.14); passes stay lossless `.mkv` (conversion is the video-to-video step's).
+- **Docs and example**: `docs/COOKBOOK-3D.md` (setting up, building a scene, the camera in 16:9
+  and 9:16, stand-ins, guide passes, checks, common mistakes); the guide topic `three-d` (`vidgen
+  guide 3d`: topic names start with a letter, `3d` is an alias); `examples/3d-short` (YAML only: a
+  9:16 Short of about 15 s, shapes, two stand-ins walking and facing, four camera moves, karaoke
+  captions, `guide_passes: true`); the gallery sample (the guide's `crate`) and
+  `examples/gallery`'s `crate` show object actions.
+- **Review fixes**: a page that does not load (a Playwright timeout, a crashed page) is a
+  `VidgenError("3D page did not load: ...")` and Chromium is closed (was a traceback); the unused
+  `progress` argument of `write_clip` is gone; a clip that cannot be replaced (Windows: open in a
+  player) is a `VidgenError` naming it; the camera basis is one helper
+  (`framing.view_basis`) for lint and the depth range; the depth extent of long thin objects uses
+  their box.
+- `vidgen.api` is unchanged; `Scene3DParams` gains `depth_range`, `guide_pass` and
+  `make_guide_passes` take `depth=`; `passes.py` gains `FLOOR_MASK`, `MASK_PALETTE`.

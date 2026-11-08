@@ -2468,7 +2468,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--guide-passes", nargs="?", const="all", metavar="LIST",
         help="also draw guide passes of every 3d scene, beside its 3D clip (build/.../three_d/<scene>.<pass>.mkv): depth (near white, "
-        "far dark), outline (edges like a line drawing), mask (each object one flat colour; table <scene>.mask-colors.json); "
+        "far dark), outline (white edges on black, like a line drawing), mask (each object one flat colour; table <scene>.mask-colors.json); "
         "alone: all three, else a comma list such as depth,mask; also guide_passes: in a 3d scene",
     )
     p.add_argument(

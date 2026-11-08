@@ -912,6 +912,10 @@ my_video/
   (125 GeV), a simulated spectrum with its bump, fit and local significance, four leptons, what
   five sigma means, and the announcement of 4 July 2012; a 9:16 variant; about 3:49 with Kokoro
   narration (no audio committed).
+- [examples/3d-short](examples/3d-short/video.yaml) — "Two friends and a ball", a 9:16 Short of
+  about 15 s in one `3d` scene: shapes, two stand-ins who walk and turn to each other, a ball that
+  appears, rolls and glows, four camera moves on spoken words, karaoke captions, and its guide
+  passes (depth, outline, mask); needs the `3d` extra (no media committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -940,7 +944,9 @@ my_video/
   [docs/COOKBOOK-AUDIODRAMA.md](docs/COOKBOOK-AUDIODRAMA.md) — dramatized audiobooks: structure,
   casting, rooms and stereo, score and sound design, the drama checks, a file per chapter;
   [docs/COOKBOOK-GENERATED-VIDEO.md](docs/COOKBOOK-GENERATED-VIDEO.md) — shots made by video models
-  through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA.
+  through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
+  [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
+  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

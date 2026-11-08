@@ -189,7 +189,7 @@ def scene_description(
         return described
     from vidgen.three_d.passes import guide_pass
 
-    return guide_pass(described, world, draw_mode)
+    return guide_pass(described, world, draw_mode, params.depth_range)
 
 
 def description_key(description: dict[str, Any], engine: str) -> str:

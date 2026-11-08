@@ -153,6 +153,17 @@ def test_the_orbits_topic_covers_the_orbit_scene() -> None:
     assert "vidgen guide orbits" in topic_text("scenes")
 
 
+def test_the_three_d_topic_covers_the_3d_scene() -> None:
+    """Step 302: a topic for 3D scenes (a set, the camera in 9:16, stand-ins, guide passes, lint);
+    named three-d (topic names start with a letter), found as 3d."""
+    text = topic_text("three-d")
+    assert find_topic("3d").name == "three-d" and find_topic("stand-ins").name == "three-d" and text.startswith("## 3D")
+    for part in ("**Building a set.**", "**The camera.**", "**Stand-ins.**", "**Guide passes.**", "**Lint.**", "COOKBOOK-3D.md",
+                 "examples/3d-short", "depth_range", "`three_d_off_frame`", "`three_d_hidden`", "white edges on black"):
+        assert part in text, part
+    assert "vidgen guide 3d" in topic_text("scenes")
+
+
 def test_the_particle_physics_topic_covers_the_particle_scenes() -> None:
     """Step 243: a topic for particle-physics videos (planning, choosing, units, honesty, pacing,
     lint), not called `particles` (the cartoon effect)."""

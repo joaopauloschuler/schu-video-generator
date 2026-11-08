@@ -22,7 +22,7 @@ from vidgen.three_d import browser
 from vidgen.three_d.description import plan_world, scene_description
 from vidgen.three_d.motion import ObjectChange
 from vidgen.three_d.passes import (
-    GUIDE_PASSES, depth_range, guide_pass, make_guide_passes, mask_colors, mask_table, parse_passes, pass_files,
+    FLOOR_MASK, GUIDE_PASSES, MASK_PALETTE, depth_range, guide_pass, make_guide_passes, mask_colors, mask_table, parse_passes, pass_files,
 )
 from vidgen.three_d.spec import Scene3DParams
 
@@ -114,16 +114,44 @@ def test_a_pass_keeps_camera_timing_and_objects() -> None:
 
 
 def test_mask_colours_are_unique_and_skip_groups_and_labels() -> None:
-    many = params(objects=[{"id": f"o{k}", "position": [k, 0, 0]} for k in range(40)] + [{"id": "g", "shape": "group"}])
+    many = params(objects=[{"id": f"o{k}", "position": [k, 0, 0]} for k in range(60)] + [{"id": "g", "shape": "group"}])
     d, _ = describe(many)
     colors = mask_colors(d)
-    assert list(colors) == [f"o{k}" for k in range(40)]
-    assert len(set(colors.values())) == 40 and "#000000" not in colors.values()
+    assert list(colors) == [f"o{k}" for k in range(60)]   # more objects than the palette has colours
+    assert len(set(colors.values())) == 60 and "#000000" not in colors.values() and FLOOR_MASK not in colors.values()
     d, _ = describe(params(**SCENE))
     table = mask_table({**d, "mask_colors": mask_colors(d)}, "plaza")
     assert set(table["colors"]) == {"floor", "near", "far", "ana", "wheel"}   # no group, no label
+    assert table["colors"]["floor"] == FLOOR_MASK == "#404040"   # the floor a neutral dark grey
     assert table["background"] == "#000000" and table["names"] == {"Ana": table["colors"]["ana"]}
     assert next(o for o in table["objects"] if o["id"] == "wheel")["parent"] == "cart"
+
+
+def test_mask_colours_come_from_the_ids_and_stay_when_objects_are_added() -> None:
+    from vidgen.three_d import passes
+
+    d, _ = describe(params(**SCENE))
+    before = mask_colors(d)
+    assert set(before.values()) - {FLOOR_MASK} <= set(MASK_PALETTE)
+    home = {MASK_PALETTE[passes._id_hash(i) % len(MASK_PALETTE)] for i in before}
+    fresh = [f"new{k}" for k in range(100) if MASK_PALETTE[passes._id_hash(f"new{k}") % len(MASK_PALETTE)] not in set(before.values()) | home][:2]
+    added = {**SCENE, "objects": [{"id": fresh[0]}, *SCENE["objects"][1:], SCENE["objects"][0], {"id": fresh[1], "shape": "cone"}]}
+    after = mask_colors(describe(params(**added))[0])
+    assert {k: after[k] for k in before} == before   # an object added before, one after, the rest reordered
+    assert len(set(after.values())) == len(after)
+    a, b = (mask_colors(describe(params(objects=[{"id": i}]))[0])[i] for i in ("a", "b"))
+    assert a != b   # different ids, different colours (from the id, not the place in the list)
+
+
+def test_mask_colour_clash_goes_to_the_id_later_in_the_alphabet() -> None:
+    from vidgen.three_d import passes
+
+    size = len(MASK_PALETTE)
+    other = next(f"z{k}" for k in range(500) if passes._id_hash(f"z{k}") % size == passes._id_hash("a") % size)
+    alone = mask_colors(describe(params(objects=[{"id": "a"}]))[0])["a"]
+    for order in (["a", other], [other, "a"]):
+        colors = mask_colors(describe(params(objects=[{"id": i} for i in order]))[0])
+        assert colors["a"] == alone and colors[other] != alone and colors[other] in MASK_PALETTE
 
 
 def test_depth_range_holds_the_whole_shot() -> None:
@@ -138,11 +166,35 @@ def test_depth_range_holds_the_whole_shot() -> None:
     assert depth_range(alone, world)[0] == alone["camera"]["near"]
 
 
-def test_depth_range_of_a_floor_counts_only_what_is_in_view() -> None:
+def test_depth_range_fits_the_objects_not_the_floor() -> None:
+    p = params(floor={"size": 200}, camera={"position": [0, 2, 6], "look_at": [0, 0.5, 0]},
+               objects=[{"id": "box", "position": [0, 0.5, 0]}, {"id": "ball", "shape": "sphere", "position": [1, 0.5, -2]}])
+    d, world = describe(p, frames=1)
+    near, far = depth_range(d, world)
+    assert 4.5 < near < 6 and 7.5 < far < 9.5   # the box and the ball, not the floor 100 units back
+
+
+def test_depth_range_of_a_long_thin_object_uses_its_box() -> None:
+    p = params(camera={"position": [0, 0, 5], "look_at": [0, 0, 0]},
+               objects=[{"id": "rod", "shape": "arrow", "position": [-2, 0, 0], "to": [2, 0, 0]}])
+    near, far = depth_range(*describe(p, frames=1))
+    assert 4.8 < near < 5 < far < 5.2   # across the view: not its 4-unit sphere
+
+
+def test_depth_range_of_a_floor_alone_counts_only_what_is_in_view() -> None:
     p = params(floor={"size": 400}, camera={"position": [0, 2, 0], "look_at": [0, 2, -10], "fov": 30})
     d, world = describe(p, frames=1)
     near, far = depth_range(d, world)
     assert near > 2 and far > 150   # the floor below the frame (under the camera) is not in view
+
+
+def test_depth_range_can_be_given() -> None:
+    p = params(depth_range=[1, 20], objects=[{"id": "box"}])
+    d = scene_description(p, THEME, width=160, height=90, fps=FPS, frames=2, beats=[], draw_mode="depth")
+    assert d["depth_range"] == [1.0, 20.0]
+    for bad in ([5, 2], [-1, 3], [2, 2]):
+        with pytest.raises(ValueError, match="depth_range: .* must be \\[near, far\\]"):
+            params(depth_range=bad)
 
 
 def test_pass_files_sit_beside_the_clip(tmp_path: Path) -> None:
@@ -193,12 +245,13 @@ def test_passes_draw_depth_outline_and_mask(tmp_path: Path) -> None:
     assert np.array_equal(grey[..., 0], grey[..., 1]) and np.array_equal(grey[..., 0], grey[..., 2])
     assert grey[0, 0, 0] == 0   # the background (sky) is black
     assert grey[where("near")][:, 0].mean() > grey[where("far")][:, 0].mean() + 20   # near is lighter
+    assert grey[where("floor")][:, 0].min() >= 35   # the floor far back is clamped to a grey, not black
 
     lines = outline[1]
     assert _hex(lines) == {"#000000", "#ffffff"}
-    assert 0.005 < (lines[..., 0] == 0).mean() < 0.2   # edges only
+    assert 0.005 < (lines[..., 0] == 255).mean() < 0.2   # white edges on black
     edge_of_near = where("near") & ~np.roll(where("near"), 1, axis=1)
-    assert (lines[..., 0][np.roll(edge_of_near, -1, axis=1)] == 0).mean() > 0.5   # the box's silhouette is drawn
+    assert (lines[..., 0][np.roll(edge_of_near, -1, axis=1)] == 255).mean() > 0.5   # the box's silhouette is drawn
 
     stamp = os.stat(tmp_path / "plaza.depth.mkv").st_mtime_ns
     make_guide_passes(tmp_path, "plaza", d, world, ("depth",))

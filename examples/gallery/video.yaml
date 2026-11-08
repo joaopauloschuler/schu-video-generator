@@ -535,9 +535,17 @@ scenes:
         - {id: crate, shape: box, size: 1.4, position: [-0.6, 0.7, 0], color: accent, rotation: [0, 20, 0], spin: [0, 30, 0]}
         - {id: tag, parent: crate, shape: label, text: "Crate", position: [0, 1.1, 0]}   # turns with the crate
         - {id: ball, shape: sphere, size: 0.8, position: [1.4, 0.4, 0.6], color: highlight}
-        - {id: pointer, shape: arrow, position: [2.4, 2.2, 1], to: ball, color: text}
+        - {id: pointer, shape: arrow, position: [2.4, 2.2, 1], to: ball, color: text}   # follows the ball
+        - {id: ana, shape: standin, name: "Ana", color: secondary, position: [-2.2, 0.8, 1.6], rotation: [0, 90, 0], visible: false}
     beats:
       - text: "A 3D scene: a crate and a ball under one light."
+        actions:
+          - {object_highlight: crate, at: "@crate"}                     # objects glow, move, appear on words
+      - text: "The ball rolls away, and Ana walks in to look."
+        actions:
+          - {object_path: ball, at: "@rolls", points: [[1.6, 0.4, 2.0], [0.4, 0.4, 2.4]], run_time: 1.5}
+          - {object_show: ana, at: "@Ana", style: grow}
+          - {object_walk: ana, at: "@walks", to: ball}                 # a stand-in turns and walks up to it
       - text: "The camera circles the crate, then flies to the ball."
         actions:
           - {camera_orbit: crate, at: "@circles", degrees: 80, run_time: 1.5}

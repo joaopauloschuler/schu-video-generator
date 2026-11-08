@@ -193,6 +193,6 @@ class Scene3D(NarratedScene):
         clip = make_3d_clip(folder, self.spec.id, description)
         passes = tuple(p for p in GUIDE_PASSES if p in self.params.passes() or p in self.guide_passes)
         if passes:
-            make_guide_passes(folder, self.spec.id, description, self._world, passes)
+            make_guide_passes(folder, self.spec.id, description, self._world, passes, self.params.depth_range)
         self.guide_passes_made = passes
         return clip

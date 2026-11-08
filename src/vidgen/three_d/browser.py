@@ -16,7 +16,6 @@ import io
 import json
 import os
 import sys
-from collections.abc import Callable
 from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
@@ -183,6 +182,14 @@ class PageRenderer:
             page.on("pageerror", lambda e: self._errors.append(str(e)))
             page.goto(PAGE_ORIGIN + "page.html", timeout=LOAD_TIMEOUT_MS)
             page.wait_for_function("() => window.vidgen3d !== undefined", timeout=LOAD_TIMEOUT_MS)
+        except sync_api.Error as exc:   # a timeout, a crashed page: a message, not a traceback
+            self.close()
+            first = str(exc).splitlines()[0] if str(exc) else repr(exc)
+            raise VidgenError(f"3D page did not load: {self._errors[0] if self._errors else first}") from None
+        except BaseException:
+            self.close()
+            raise
+        try:
             self._call("d => window.vidgen3d.load(d)", self.description)
         except BaseException:
             self.close()
@@ -226,7 +233,7 @@ class PageRenderer:
         self._browser = self._playwright = self._page = None
 
 
-def write_clip(description: dict[str, Any], path: Path, progress: Callable[[int, int], None] | None = None) -> None:
+def write_clip(description: dict[str, Any], path: Path) -> None:
     """Draw every frame of ``description`` in order and write them to ``path`` (FFV1 in
     Matroska, lossless RGB); written to a ``.partial`` file first, so a failure leaves none."""
     import av
@@ -243,10 +250,11 @@ def write_clip(description: dict[str, Any], path: Path, progress: Callable[[int,
                 frame = av.VideoFrame.from_ndarray(page.frame(n), format="rgb24").reformat(format="bgr0")
                 frame.pts = n
                 container.mux(stream.encode(frame))
-                if progress is not None:
-                    progress(n + 1, frames)
             container.mux(stream.encode())
-        os.replace(partial, path)
+        try:
+            os.replace(partial, path)
+        except PermissionError:   # Windows: the old clip is open in another program (a player)
+            raise VidgenError(f"cannot replace {path}: close the program that has it open and render again") from None
     finally:
         partial.unlink(missing_ok=True)
 
