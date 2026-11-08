@@ -22638,8 +22638,8 @@ with `vidgen generate host-test`.
   the folder, and `folder_deleted: false` in the ledger). Reasons: `done` (the `with` block ended),
   `error: <type>` (an exception in it), `interrupted` (Ctrl+C in it), `failed to open` /
   `interrupted while opening` (anything going wrong in `open`, which closes before re-raising),
-  `max lifetime` (`host_max_minutes` after `open` began, whatever happens), `vidgen exited` (an
-  `atexit` hook). A watchdog thread checks the lifetime every 0.1 s. (Step 309 removed the
+  `max lifetime` (`host_max_minutes` after `open` began, as long as vidgen runs; a killed vidgen:
+  §115.5), `terminated (SIGTERM)` / `(SIGHUP)` (§115.5), `vidgen exited` (an `atexit` hook). A watchdog thread checks the lifetime every 0.1 s. (Step 309 removed the
   `all files fetched` close: §115.4.)
 - **Ledger** (the project's `videogen-ledger.jsonl` when one is given; host events are not jobs,
   `Ledger.jobs()` ignores them): `host_open {host, files: [{name, size, sha256}], max_seconds}`
@@ -22695,7 +22695,7 @@ with `vidgen generate host-test`.
   `finally`); then `submit`, the `submit` ledger line and `provider.wait(job)` run inside the
   `with` block, so the tunnel closes (`done`) as soon as the job reaches a final state
   (completed, failed, cancelled, expired), before the download and before the job's final
-  ledger line. It closes at `host_max_minutes` whatever happens (§115.4). A `VidgenError` inside the
+  ledger line. It closes at `host_max_minutes` at the latest while vidgen runs (§115.4; a killed vidgen: §115.5). A `VidgenError` inside the
   block (a refused submit, a poll timeout) closes it (`error: VidgenError`) and is raised again
   with `host.redact(...)` (the secret replaced by `<secret>`: OpenRouter's 400 quotes the
   reference URL); Ctrl+C closes it (`interrupted`). A job resumed from the ledger (it timed out
@@ -22777,3 +22777,61 @@ the real tunnel, `taskkill`, and whether OpenRouter's providers fetch with `GET`
 - **The `max lifetime` line** still fires during a job that runs past the limit; `poll_timeout`
   ends before it with the defaults. A provider that has not fetched yet when the wait ends
   has no input: accepted and documented, it is a job the owner chose to stop waiting for.
+
+### 115.5 Cleanup when vidgen is signalled, killed or interrupted during close (Step 310)
+
+A review showed a killed vidgen left cloudflared running and the temporary copies (which can
+include a voice file) on disk, and a second Ctrl+C during close abandoned the cleanup for good.
+`host_guard.py` (and the stand-alone `host_watcher.py`) are the fix. Layers, from the inside out:
+
+- **Resumable close** (`QuickTunnelHost.close`). Steps in order: `cloudflared`, `server`, `folder`,
+  `watcher`, `report` (ledger `host_close`, the progress line). A step that finishes (even by
+  failing with an `Exception`, a warning) is not run again. `KeyboardInterrupt` / `SystemExit`
+  during a step leaves that step unfinished, the remaining steps still run, and the exception is
+  raised once at the end; `_closed` is set only when every step finished. `report` waits for all
+  others. A later `close` (the `atexit` hook, the watchdog, a retry) runs the unfinished steps; the
+  first reason given stays. The watchdog resumes an abandoned close at once. A `close` from a
+  second thread waits for the first (bounded, 30 s, then a warning); a `close` re-entered from
+  the thread already closing (a signal handler) returns at once, so no deadlock. The `watcher` step
+  disarms the watcher only when cloudflared stopped and the folder is gone; otherwise it hands the
+  remainder to the watcher, which does it immediately.
+- **Termination signals** (`track_host` / `_on_termination`). While a host is open, SIGTERM, SIGHUP
+  (and Windows SIGBREAK) close every open host (reason `terminated (SIGTERM)` ...) and raise
+  `SystemExit(128 + signum)`, so the `with` block, `finally` and `atexit` run. `track_host`
+  installs a handler only from the main thread and only over the default disposition: a handler
+  someone set, or a `nohup`'s ignored SIGHUP, stays. The handlers go back to the default with the
+  last open host; a close in another thread cannot call `signal.signal`, so the handler stays
+  installed (inert, it re-raises the default) until the next main-thread close.
+- **The watcher** (`HostGuard`, `host_watcher.py`): a small `python -I -S` process per host, in its
+  own session (so `_kill`'s process-group SIGKILL in `mcp_server.py` does not reach it), started
+  right after the folder is made, holding stdin as a pipe from vidgen. It ignores
+  SIGINT/SIGTERM/SIGHUP. vidgen sends `tunnel <pid>` once cloudflared started (POSIX),
+  `tunnel-stopped` and `disarm`. End of stdin without `disarm` means vidgen is gone, however it
+  ended: the watcher stops cloudflared's process group (SIGTERM, SIGKILL after 5 s) and deletes
+  the folder. Never by process number alone: cloudflared inherits the write end of a second
+  pipe (`tunnel_fds`) whose read end the watcher holds; end-of-file on it means cloudflared is
+  gone, so a recycled number cannot be signalled. Chosen over `PR_SET_PDEATHSIG`: that is
+  Linux-only, needs `preexec_fn` (unsafe with threads), and fires on the death of the *thread*
+  that started the process. Its stdout/stderr are `DEVNULL`, so whoever reads vidgen's pipes
+  (MCP) does not wait for it. A watcher that cannot be started is a warning; the host still works.
+- **Windows** (`HostGuard.adopt`, `_job_for_process`): cloudflared is assigned to a Job Object with
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; the handle is held only by vidgen (not inheritable), so when
+  vidgen ends by any means the handle closes and Windows kills cloudflared (and any child). The watcher
+  there has no process number or pipe to check (`CREATE_NO_WINDOW`, stdin still): it deletes the
+  folder when its stdin ends. The job is closed when cloudflared has stopped. **Not run on Windows**:
+  a mocked kernel32 tests the calls and the structure layout (`ExtendedLimits`: 144 bytes on 64-bit).
+- **The stale sweep** (`sweep_stale_shares`, called by `open`). Each share folder holds a marker
+  file `.vidgen-host.lock`, locked (`flock` / `msvcrt.locking`) by the host that made it before any
+  copy is written; the operating system releases the lock when its holder ends. `open` deletes a
+  folder only when its marker lock can be taken. A folder of a running host (locked), one without
+  a marker (an older vidgen, or a stranger's folder) and anything not owned by the user are left
+  alone. A process number is never trusted here.
+
+**What still is not covered:** vidgen and the watcher both killed at once, or a power failure:
+copies stay until the next tunnel opens (the sweep), and a `cloudflared` left running stays
+until stopped by hand; it serves nothing, because the local server ended with vidgen. A SIGKILL
+in the few milliseconds between starting cloudflared and telling the watcher its process number
+(the folder is still deleted). A vidgen frozen but alive (SIGSTOP): the watchdog is frozen too
+and nothing closes the tunnel until it runs again. Windows: `taskkill /F /T` of vidgen also kills the
+watcher (the sweep then deletes the copies at the next open). **macOS**: POSIX code paths (pipes, process groups,
+`flock`) are used but not run there. **Windows**: nothing here has been run on Windows.

@@ -2777,7 +2777,7 @@ videogen:
   host: none                # none | quick_tunnel: share a shot's voice / guide through a Cloudflare quick tunnel while its job runs
   cloudflared: null         # the cloudflared program for the quick tunnel (default: cloudflared on PATH)
   tunnel_protocol: http2    # http2 (TCP 443) | quic (UDP 7844) | auto (cloudflared's choice)
-  host_max_minutes: 20      # a quick tunnel closes after this long, whatever happens (5-120)
+  host_max_minutes: 20      # a quick tunnel closes after this long at the latest (5-120); see "Quick tunnel" for when vidgen is killed
 ```
 
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
@@ -2813,6 +2813,13 @@ videogen:
   from a temporary folder outside the project. The tunnel closes as soon as the job reaches a
   final state (completed or failed, before the download), or after `host_max_minutes`, whichever
   comes first (also on an error or Ctrl+C); then cloudflared is stopped and the copies deleted.
+  A termination signal (SIGTERM, SIGHUP) closes it the same way and ends vidgen. If vidgen is
+  killed outright (SIGKILL, Task Manager, a cancelled MCP call), a small watcher process that
+  outlives vidgen stops cloudflared and deletes the copies at once (on Windows a Job Object stops
+  cloudflared). Only when the watcher is killed too (or the computer loses power) can copies
+  remain: the next tunnel opened deletes such folders, and a cloudflared still running then
+  serves nothing and must be stopped by hand (it never stays reachable with the files, since
+  the local server ended with vidgen).
   A finished download does not close it, because a provider may fetch a file again after
   queueing the job: the tunnel can stay open a little longer in exchange for not losing a paid
   job. `host_max_minutes` must leave room for `poll_timeout` plus the time to open the tunnel

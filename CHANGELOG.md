@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–309)
+## Unreleased (Steps 193–310)
+
+### Generated video: a killed vidgen cleans up after its quick tunnel (Step 310)
+
+- A termination signal (SIGTERM, SIGHUP) now closes an open quick tunnel properly (`host_close` with reason `terminated (SIGTERM)`) and ends vidgen, without replacing a handler someone else set.
+- If vidgen is killed outright (SIGKILL, a cancelled MCP call, Task Manager), a small watcher process stops `cloudflared` and deletes the temporary copies at once; on Windows a Job Object stops `cloudflared`. The next tunnel deletes folders left by a vidgen that is gone (never a running host's). Only if the watcher dies too can copies remain until then, and a `cloudflared` left running must be stopped by hand; it serves nothing.
+- A second Ctrl+C during closing no longer abandons the cleanup: closing is finished step by step and resumed, and a concurrent close waits for the first. Windows parts of this are not exercised here (mocked).
 
 ### Generated video: a paid job does not lose its inputs or get paid twice (Step 309)
 

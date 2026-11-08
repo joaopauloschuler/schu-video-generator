@@ -165,7 +165,11 @@ the internet for a moment, long enough for the video provider to download them.
    sends the job with the secret addresses, and closes everything again as soon as the job is
    finished or failed (before the clip is downloaded), or after 20 minutes at most, whichever
    comes first. Ctrl+C or an error closes it too. Closing stops `cloudflared`, stops the server
-   and deletes the copies.
+   and deletes the copies. If vidgen is killed outright (Task Manager, `kill -9`, closing the
+   terminal), a tiny watcher process stops `cloudflared` and deletes the copies at once. Only if
+   the watcher is killed too or the computer loses power can copies stay on disk; the next
+   tunnel you open deletes them, and a `cloudflared` left running then can be stopped by hand
+   (it serves nothing: the local server ended with vidgen).
 
 **It stays open for the whole job on purpose.** The tunnel no longer closes when the provider
 has downloaded every file: some providers check the file when the job is submitted and download

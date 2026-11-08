@@ -25813,3 +25813,57 @@ project), repo work is generic.
   `test_videogen_shots` not render (21), `test_videogen_compose` not render (17),
   `test_videogen_input_freshness` not render (17), `test_guide` + `test_docs` (172), `test_config`
   (21). Not run: render tests, `test_mcp` (no MCP change), `test_schema`, the full suite.
+
+## Step 310 — Cleanup when vidgen is signalled, killed or interrupted during close
+
+- **Reproduced first, on the unchanged code** (fake cloudflared, own `TMPDIR`): SIGTERM, SIGHUP and
+  SIGKILL each left cloudflared alive and the copies on disk; `KeyboardInterrupt` at the start of
+  `stop_process_tree` left the folder, the server thread and cloudflared, and every later close
+  did nothing; a concurrent close returned in 0.00 s with the folder still there.
+- **Built** (DESIGN §115.5): new `src/vidgen/videogen/host_guard.py` and the stand-alone
+  `host_watcher.py`. `QuickTunnelHost.close` runs resumable steps (cloudflared, server, folder,
+  watcher, report); Ctrl+C / `SystemExit` in a step does not stop the others and is re-raised at
+  the end; a later close (atexit, the watchdog, a retry) runs what is left; a concurrent close
+  waits (30 s, a warning), a re-entrant one returns at once. SIGTERM / SIGHUP / SIGBREAK close
+  the open hosts and raise `SystemExit(128+n)`; handlers only from the main thread and over the
+  default disposition. The watcher (own session, `python -I -S`, stdin pipe held only by vidgen)
+  stops cloudflared's group and deletes the folder when vidgen dies by any means, including MCP's
+  process-group SIGKILL, so `mcp_server.py` did not need changing. Windows: Job Object with
+  kill-on-close (ctypes, explicit signatures), watcher deletes the folder. Stale sweep at
+  `open`: folders whose locked marker `.vidgen-host.lock` can be taken; a running host's
+  folder, a folder without a marker and another user's are untouched.
+- **Decisions**: (1) A watcher rather than `PR_SET_PDEATHSIG`: Linux-only, needs `preexec_fn`, and
+  fires on the starting *thread's* death; the watcher also deletes the folder and works on macOS.
+  (2) The watcher never signals by process number alone: cloudflared inherits the write end of a
+  pipe whose read end the watcher checks (end-of-file = cloudflared gone). (3) "Belongs to a
+  running host" is a lock the OS releases, not a recorded process number (no reuse problem).
+  (4) A Python handler is only installed over the default disposition, never chained (a `nohup`
+  stays ignored). (5) A step that fails with an `Exception` is recorded, not retried; only
+  Ctrl+C / `SystemExit` leave a step unfinished. (6) The `watcher` step disarms only when
+  cloudflared stopped and the folder is gone; after an interrupted step it hands the rest to the
+  watcher, so the resumed close finds the work done.
+- **Files**: new `src/vidgen/videogen/{host_guard,host_watcher}.py`, `tests/test_videogen_host_cleanup.py`;
+  changed `src/vidgen/videogen/host.py`, `tests/conftest.py` (autouse: no test sweeps the real temp
+  folder); docs `DESIGN.md` (§115.1/2 wording, §115.5), `docs/CONFIG.md`,
+  `docs/COOKBOOK-GENERATED-VIDEO.md`, `CHANGELOG.md`, `tasklist.md`. Guide / AGENTS.md unchanged (no
+  key or command changed; they make no "whatever happens" claim).
+- **Public interfaces** (not in `vidgen.api`): `host_guard.{HostGuard, make_share_folder,
+  release_share_folder, sweep_stale_shares, track_host, untrack_host, SHARE_PREFIX, LOCK_NAME}`;
+  `QuickTunnelHost.close(reason, wait_seconds=30.0)`; `host.CLOSE_WAIT_SECONDS`;
+  `_start_process(command, keep_fds=())`. Ledger: `host_close` reason `terminated (SIGTERM|SIGHUP)`.
+- **Known gaps / not exercised**: Windows: nothing was run on Windows (Job Object: mocked kernel32,
+  structure layout 144 bytes checked; msvcrt lock, watcher start, `taskkill /F` of python: not run).
+  macOS: POSIX paths, not run. Still unprotected: both vidgen and the watcher killed (copies at
+  the next open; a cloudflared left running serves nothing, stop it by hand); a SIGKILL in the
+  milliseconds between starting cloudflared and telling the watcher; a frozen (SIGSTOP) vidgen; a
+  `fork` without exec while a host is open would keep the watcher's pipe open (vidgen does not
+  fork; everything is `subprocess`). Marker-less folders of older vidgens are never swept.
+- **Tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`,
+  `PYTHONPATH=src`, `-m "not render"`): `test_videogen_host_cleanup` + `test_videogen_host` (30, 18.5 s),
+  `test_videogen_submit_safety` (12), `test_videogen_shots` (21), `test_videogen` (26), `test_docs` +
+  `test_guide` (172). Not run: `test_mcp` (no MCP change), render tests, `test_schema`, the full suite.
+- **Spending**: nothing paid, no key read, no network, no real cloudflared.
+- **How the owner tests on Windows**: `vidgen generate host-test --keep 60` in one terminal, then in
+  Task Manager end the `python.exe`: `cloudflared.exe` must end at once and the folder
+  `%TEMP%\vidgen-share-*` go; a `taskkill /F /T` of python leaves the folder until the next
+  `host-test` (the sweep prints a line).

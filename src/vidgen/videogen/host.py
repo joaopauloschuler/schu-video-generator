@@ -19,6 +19,7 @@ shares exactly the files it is given, for as short a time as it can:
    Ctrl+C; for a paid run, when its job reaches a final state), or at the hard maximum lifetime,
    whichever comes first. A provider may fetch a file again after queueing the job, so a fetch
    never closes it early (the owner's decision, Step 309: a longer exposure, no lost paid job).
+   Closing is resumable step by step; ``host_guard`` covers signals and a killed vidgen.
 
 The ledger gets ``host_open`` (the host name only, never the secret path; each file's name,
 size and SHA-256), ``host_fetch`` (file, method, status, bytes) and ``host_close`` (reason).
@@ -52,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from vidgen.errors import VidgenError
+from vidgen.videogen import host_guard
 from vidgen.videogen.ledger import Ledger
 from vidgen.videogen.openrouter import MEDIA_TYPES, Response
 
@@ -69,6 +71,8 @@ INSTALL_HINT = (
     "or set videogen: {cloudflared: <path to cloudflared>} in video.yaml"
 )
 _CHUNK = 64 * 1024
+#: How long a second ``close`` waits for the first (longer than the first can take: the stop waits, the deletion retries).
+CLOSE_WAIT_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -362,14 +366,15 @@ def tunnel_command(executable: Sequence[str], port: int, protocol: str = "http2"
     return command
 
 
-def _start_process(command: list[str]) -> subprocess.Popen[str]:
+def _start_process(command: list[str], keep_fds: Sequence[int] = ()) -> subprocess.Popen[str]:
     """Start ``command`` in its own process group (so it can be stopped as a tree, and Ctrl+C in
-    the terminal reaches vidgen, which then stops it)."""
+    the terminal reaches vidgen, which then stops it). ``keep_fds`` (POSIX) stay open in it."""
     options: dict[str, Any] = {}
     if os.name == "nt":
         options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         options["start_new_session"] = True
+        options["pass_fds"] = tuple(keep_fds)
     return subprocess.Popen(
         command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace", **options,
@@ -513,6 +518,12 @@ def verify_public(url: str, shared: SharedFile, fetch: Fetch, *, timeout: float,
 class _State:
     opened_at: float = 0.0
     close_reason: str | None = None
+    #: The thread running the close steps, ``None`` while none does.
+    closer: int | None = None
+    finished_steps: set[str] = field(default_factory=set)
+    problems: list[str] = field(default_factory=list)
+    tunnel_stopped: bool = False
+    folder_deleted: bool = False
 
 
 class QuickTunnelHost:
@@ -554,7 +565,11 @@ class QuickTunnelHost:
         self._lock = threading.RLock()
         self._ledger_lock = threading.Lock()
         self._closed = threading.Event()
+        self._close_idle = threading.Event()   # no thread is running the close steps
+        self._close_idle.set()
         self._watchdog: threading.Thread | None = None
+        self._guard: host_guard.HostGuard | None = None
+        self._folder_lock: int | None = None
 
     # -- opening ---------------------------------------------------------------------------------
     def __enter__(self) -> QuickTunnelHost:
@@ -573,6 +588,7 @@ class QuickTunnelHost:
         """Copy the files, start the server and the tunnel, check every file through the public
         address. On any failure (Ctrl+C included) everything opened so far is closed again."""
         atexit.register(self._close_at_exit)
+        host_guard.track_host(self)
         try:
             self._open()
         except BaseException as exc:
@@ -583,7 +599,11 @@ class QuickTunnelHost:
         settings = self.settings
         self._state.opened_at = time.monotonic()
         executable = self.executable if self.executable is not None else [find_cloudflared(settings.cloudflared)]
-        self.folder = Path(tempfile.mkdtemp(prefix="vidgen-share-"))
+        swept = host_guard.sweep_stale_shares()
+        if swept:
+            self.out(f"deleted {len(swept)} temporary share folder(s) left by a vidgen that ended without closing its quick tunnel")
+        self.folder, self._folder_lock = host_guard.make_share_folder()
+        self._guard = host_guard.HostGuard(self.folder)
         if self.root is not None and self.folder.resolve().is_relative_to(self.root.resolve()):
             raise VidgenError(f"the temporary folder {self.folder} is inside the project; set TMP / TMPDIR to a folder outside it")
         self.files = copy_into_share(self.sources, self.folder, self.root)
@@ -592,7 +612,9 @@ class QuickTunnelHost:
         self.server.start()
         self.out(f"sharing {len(self.files)} file(s) ({_size_text(sum(f.size for f in self.files))}) through a Cloudflare quick tunnel "
                  f"for at most {settings.max_seconds / 60:g} min; starting cloudflared")
-        self.tunnel = TunnelProcess(tunnel_command(executable, self.server.port, settings.protocol))
+        guard = self._guard
+        self.tunnel = TunnelProcess(tunnel_command(executable, self.server.port, settings.protocol), start=lambda command: _start_process(command, guard.tunnel_fds()))
+        guard.adopt(self.tunnel.process)
         address = self.tunnel.wait_for_url(settings.url_timeout)
         self.host_name = address.removeprefix("https://")
         self.public_base = f"{address}/{secret}"
@@ -681,59 +703,128 @@ class QuickTunnelHost:
 
     def _watch(self) -> None:
         while not self._closed.wait(0.1):
-            if time.monotonic() >= self._state.opened_at + self.settings.max_seconds:
+            abandoned = self._state.close_reason is not None and self._state.closer is None   # e.g. Ctrl+C stopped it
+            if abandoned or time.monotonic() >= self._state.opened_at + self.settings.max_seconds:
                 self.close("max lifetime")
 
     # -- closing ---------------------------------------------------------------------------------
     def _close_at_exit(self) -> None:
         self.close("vidgen exited")
 
-    def close(self, reason: str) -> None:
-        """Stop cloudflared, then the server, then delete the temporary folder (each step runs
-        even when an earlier one fails); records ``host_close``. Closing twice does nothing."""
-        with self._lock:
-            if self._closed.is_set() or self._state.close_reason is not None:
-                return
-            self._state.close_reason = reason
-        problems: list[str] = []
-        if self.tunnel is not None:
-            try:
-                self.tunnel.stop()
-            except (OSError, subprocess.SubprocessError) as exc:
-                problems.append(f"cloudflared: {exc}")
+    def close(self, reason: str, wait_seconds: float = CLOSE_WAIT_SECONDS) -> None:
+        """Stop cloudflared, then the server, then delete the temporary folder, then end the
+        cleanup watcher; records ``host_close``. Each step runs even when an earlier one fails.
+        Ctrl+C or a termination signal during a step leaves that step to be done again and is
+        raised once the other steps ran: a later ``close`` (the watchdog's, ``atexit``'s) resumes
+        the unfinished ones. A close while another thread is at it waits for that one, at most
+        ``wait_seconds``; closing a closed host does nothing."""
+        if not self._begin_closing(reason, wait_seconds):
+            return
+        interrupted: BaseException | None = None
+        steps = self._close_steps()
+        try:
+            for step, action in steps:
+                if step in self._state.finished_steps:
+                    continue
+                if step == "report" and len(self._state.finished_steps) < len(steps) - 1:
+                    continue   # an interrupted step comes first
+                try:
+                    action()
+                except (KeyboardInterrupt, SystemExit) as exc:
+                    interrupted = interrupted or exc
+                    continue
+                except Exception as exc:   # a step that failed is not retried; the next steps still run
+                    self._state.problems.append(f"{step}: {exc}")
+                self._state.finished_steps.add(step)
+            if len(self._state.finished_steps) == len(steps):
+                self._closed.set()
+                atexit.unregister(self._close_at_exit)
+                host_guard.untrack_host(self)
+        finally:
+            self._state.closer = None
+            self._close_idle.set()
+        if interrupted is not None:
+            raise interrupted
+
+    def _begin_closing(self, reason: str, wait_seconds: float) -> bool:
+        """Claim the close steps for this thread; ``False`` when there is nothing to do here
+        (closed, re-entered from a signal handler in the closing thread, or another thread still
+        at it after ``wait_seconds``)."""
+        me = threading.get_ident()
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            with self._lock:
+                if self._closed.is_set():
+                    return False
+                if self._state.close_reason is None:
+                    self._state.close_reason = reason
+                if self._state.closer is None:
+                    self._state.closer = me
+                    self._close_idle.clear()
+                    return True
+                if self._state.closer == me:
+                    return False
+            left = deadline - time.monotonic()
+            if left <= 0:
+                log.warning("closing the quick tunnel: the first close is still running after %g s", wait_seconds)
+                return False
+            self._close_idle.wait(left)
+
+    def _close_steps(self) -> tuple[tuple[str, Callable[[], None]], ...]:
+        return (
+            ("cloudflared", self._stop_tunnel), ("server", self._stop_server), ("folder", self._delete_folder),
+            ("watcher", self._finish_guard), ("report", self._report_closed),
+        )
+
+    def _stop_tunnel(self) -> None:
+        if self.tunnel is None:
+            self._state.tunnel_stopped = True
+            return
+        self.tunnel.stop()
+        self._state.tunnel_stopped = True
+        if self._guard is not None:
+            self._guard.tunnel_stopped()
+
+    def _stop_server(self) -> None:
         if self.server is not None:
+            self.server.stop()
+
+    def _delete_folder(self) -> None:
+        if self.folder is None:
+            self._state.folder_deleted = True
+            return
+        lock, self._folder_lock = self._folder_lock, None
+        host_guard.release_share_folder(lock)   # first: Windows cannot delete an open file
+        for attempt in range(5):
             try:
-                self.server.stop()
-            except OSError as exc:
-                problems.append(f"server: {exc}")
-        deleted = self._delete_folder(problems)
-        self._closed.set()
-        atexit.unregister(self._close_at_exit)
+                shutil.rmtree(self.folder)
+                self._state.folder_deleted = True
+                return
+            except FileNotFoundError:
+                self._state.folder_deleted = True
+                return
+            except OSError as exc:   # Windows: a file still open for a moment
+                if attempt == 4:
+                    self._state.problems.append(f"could not delete {self.folder}: {exc}; delete it yourself")
+                    return
+                time.sleep(0.2)
+
+    def _finish_guard(self) -> None:
+        if self._guard is not None:
+            self._guard.finish(disarm=self._state.tunnel_stopped and self._state.folder_deleted)
+
+    def _report_closed(self) -> None:
+        reason = self._state.close_reason
+        deleted = self._state.folder_deleted
         if self.host_name is not None:
             requests = self.requests
             self._append(
                 "host_close", host=self.host_name, reason=reason, seconds_open=round(time.monotonic() - self._state.opened_at, 1),
                 requests=len(requests), not_found=sum(1 for r in requests if r.status == 404), folder_deleted=deleted,
             )
-        for problem in problems:
+        for problem in self._state.problems:
             log.warning("closing the quick tunnel: %s", problem)
         self.out(f"quick tunnel closed ({reason}); temporary copies {'deleted' if deleted else 'NOT deleted, see the warning'}")
-
-    def _delete_folder(self, problems: list[str]) -> bool:
-        if self.folder is None:
-            return True
-        for attempt in range(5):
-            try:
-                shutil.rmtree(self.folder)
-                return True
-            except FileNotFoundError:
-                return True
-            except OSError as exc:   # Windows: a file still open for a moment
-                if attempt == 4:
-                    problems.append(f"could not delete {self.folder}: {exc}; delete it yourself")
-                    return False
-                time.sleep(0.2)
-        return False
 
 
 @dataclass(frozen=True)
