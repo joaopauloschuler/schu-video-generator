@@ -143,6 +143,10 @@ def request_hash(request: VideoRequest) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:24]
 
 
+#: The ``videogen.provider`` that sends nothing and shares nothing (a fake API).
+MOCK_PROVIDER = "mock"
+
+
 @dataclass(frozen=True)
 class JobState:
     """A video job as OpenRouter reports it: ``status`` (pending, in_progress, completed,

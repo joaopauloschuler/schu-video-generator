@@ -369,7 +369,7 @@ def test_make_inputs_cuts_voice_and_guide(make_project) -> None:
 
 
 def test_plan_prices_every_shot_and_counts_the_budget(make_project) -> None:
-    root = make_project(shot_config(TALK, ACT, WIDE))
+    root = make_project(shot_config(TALK, ACT, WIDE, videogen={"provider": "openrouter", "budget_usd": 2.0}))
     plan = plan_shots(Project.load(root), catalog=CATALOG)
     talk, act, wide = plan.shots
     assert talk.estimate.cost == pytest.approx(0.20)  # $0.05/s x 4 s
@@ -430,7 +430,7 @@ def test_inline_audio_is_a_problem_and_run_pay_refuses_it(make_project) -> None:
     with pytest.raises(VidgenError, match="(?s)not paying: fix these shots first.*https URLs"):
         run_shots(project, pay=True, provider=MockVideoProvider(api), catalog=CATALOG, out=lambda line: None)
     assert api.submits == []
-    hosted = Project.load(make_project(shot_config(TALK), folder="hosted"))
+    hosted = Project.load(make_project(shot_config(TALK, videogen={"provider": "openrouter", "budget_usd": 2.0}), folder="hosted"))
     (talk,) = plan_shots(hosted, catalog=CATALOG).shots
     assert talk.shot.problems == [] and any("OpenRouter refuses inline audio / video" in b for b in talk.shot.blocked)
 
@@ -461,10 +461,10 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
 ) -> None:
     import tempfile
 
-    from test_videogen_host import FAKE_HOST, local_fetch
+    from test_videogen_host import FAKE_HOST, HostedStandIn, local_fetch
 
     from vidgen.videogen.host import HostSettings, ShareOptions
-    from vidgen.videogen.mock import MockOpenRouter, MockVideoProvider
+    from vidgen.videogen.mock import MockOpenRouter
     from vidgen.videogen.openrouter import Response
     from vidgen.videogen.shots import NO_HOST_BLOCKED
     from vidgen.videogen.workflow import run_shots
@@ -472,7 +472,7 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
     temp = tmp_path / "tmp"
     temp.mkdir()
     monkeypatch.setattr(tempfile, "tempdir", str(temp))   # the share folders land here
-    videogen = {"provider": "mock", "budget_usd": 2.0, "host": "quick_tunnel", "cloudflared": fake_cloudflared[1]}
+    videogen = {"provider": "openrouter", "budget_usd": 2.0, "host": "quick_tunnel", "cloudflared": fake_cloudflared[1]}
     root = make_project(shot_config(TALK, WIDE, videogen=videogen))
     run_sheets(Project.load(root), pay=True, provider=StubImages(), out=lambda line: None)
     approve(root)
@@ -493,7 +493,7 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
     (doc,) = json.loads(capsys.readouterr().out)["shots"]
     assert doc["shared"] == [{"path": "build/videogen/talk/audio.mp3", "bytes": audio.stat().st_size}] and doc["share_max_minutes"] == 20
     # without the host: blocked with the way out; without cloudflared: blocked with the install hints
-    off = Project.load(make_project(shot_config(TALK), folder="off"))
+    off = Project.load(make_project(shot_config(TALK, videogen={"provider": "openrouter", "budget_usd": 2.0}), folder="off"))
     assert NO_HOST_BLOCKED in plan_shots(off, catalog=CATALOG).shots[0].shot.blocked
     missing = Project.load(make_project(shot_config(TALK, videogen={**videogen, "cloudflared": "nowhere/cloudflared"}), folder="missing"))
     assert any("winget install Cloudflare.cloudflared" in b for b in project_shots(missing, CATALOG)[0].blocked)
@@ -502,7 +502,7 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
     settings = HostSettings(url_timeout=10, verify_timeout=1.0, verify_interval=0.05)
     lines: list[str] = []
     share = ShareOptions(settings, out=lines.append, executable=fake_cloudflared, fetch=fetch)
-    ledger = Ledger(ledger_path(root, "mock"))
+    ledger = Ledger(ledger_path(root, "openrouter"))
     start = len(ledger.events())   # the sheet pictures
 
     def audio_url(body: bytes | None) -> str:
@@ -512,12 +512,12 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
     def refusing(method: str, url: str, headers: Any, body: bytes | None, timeout: float) -> Response:
         return Response(400, json.dumps({"error": {"code": 400, "message": f"Invalid reference URL: {audio_url(body)}"}}).encode(), {})
 
-    provider = MockVideoProvider(MockOpenRouter())
+    provider = HostedStandIn(MockOpenRouter())
     provider._transport = refusing
     with pytest.raises(VidgenError) as caught:
         run_shots(project, pay=True, shot_ids=["talk"], provider=provider, catalog=CATALOG, share=share, out=lines.append)
     message = str(caught.value)
-    assert "Invalid reference URL: https://" in message and "/<secret>/" in message
+    assert "Invalid reference URL: https://" in message and "/<secret>" in message
     names = [e["event"] for e in ledger.events()[start:]]
     assert names[0] == "host_open" and names[-1] == "host_close"
     assert sorted(names[1:-1]) == ["host_fetch", "intent_resolved", "submit_intent"]   # the check's HEAD; a refused submit; no job
@@ -532,7 +532,7 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
             got.append((audio_url(body), fetch("GET", audio_url(body), 5)))
         return api(method, url, headers, body, timeout)
 
-    provider = MockVideoProvider(api)
+    provider = HostedStandIn(api)
     provider._transport = provider_side
     before = len(ledger.events())
     report = run_shots(project, pay=True, shot_ids=["talk"], provider=provider, catalog=CATALOG, share=share, out=lines.append)

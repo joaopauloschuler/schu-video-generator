@@ -1789,6 +1789,9 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 311 — Provider text without the shared address; the mock shares nothing
+- [x] `redaction.redact_shared_addresses` (no host needed, any quoted form of a quick tunnel address) applied where provider text enters (`parse_job`, `http_error`, transport errors), `QuickTunnelHost.redact` on the message and details of everything `generate_clip` raises (submit, wait, `_finish`), and every `Ledger.append`; `provider: mock` never shares: fake uploader, no cloudflared, the plan has no "would share" lines and no host / cloudflared block; tests `test_videogen_redaction.py`, stand-in provider for host tests (DESIGN §115.6)
+
 ### Step 310 — Cleanup when vidgen is signalled, killed or interrupted during close
 - [x] SIGTERM / SIGHUP close the host properly (handlers only from the main thread and only over the default disposition); a watcher process (`host_watcher.py`, own session, stdin held only by vidgen) stops cloudflared and deletes the folder when vidgen dies, never by a process number alone (cloudflared holds a pipe the watcher checks); Windows Job Object with kill-on-close; a marker file locked by the host lets `open` sweep stale `vidgen-share-*` folders without touching a running host's or a foreign one; close finished step by step, resumed after Ctrl+C, a second caller waits (bounded) (DESIGN §115.5). Windows and macOS not exercised; Windows calls tested with a mocked kernel32
 

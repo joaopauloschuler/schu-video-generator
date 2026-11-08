@@ -25,10 +25,12 @@ and before the submit, which is refused unless the tunnel is still open with roo
 reaches a final state (completed, failed, ...), before the download, or at the maximum lifetime
 (a provider may fetch again after queueing, so a finished fetch does not close it); also on an
 error or Ctrl+C. A job resumed from the ledger is only polled: no tunnel is opened again.
-Without a host such inputs stop the submit with a clear error.
+Without a host such inputs stop the submit with a clear error. Whatever the provider says with
+the shared address in it is redacted before it leaves this module (:mod:`vidgen.videogen.redaction`).
 
 The mock provider (``videogen.provider: mock``) keeps its own ledger,
-``videogen-ledger.mock.jsonl``, so trying the flow never touches the real spending record.
+``videogen-ledger.mock.jsonl``, so trying the flow never touches the real spending record, and
+never opens a tunnel: its local audio / video inputs get fake addresses.
 """
 
 from __future__ import annotations
@@ -41,22 +43,23 @@ from typing import TYPE_CHECKING, Any
 
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_text_atomic
-from vidgen.videogen import CLIPS_DIR, LEDGER_NAME, JobState, VideoRequest, canonical_request, request_hash
+from vidgen.videogen import CLIPS_DIR, LEDGER_NAME, MOCK_PROVIDER, JobState, VideoRequest, canonical_request, request_hash
 from vidgen.videogen.ledger import BudgetState, Ledger, LedgerJob, SubmitIntent, intent_refusal, refusal, utc_now
 from vidgen.videogen.models import Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, load_catalog, money
 from vidgen.videogen.openrouter import OpenRouterVideoProvider, SubmitRefused, job_failure
 from vidgen.videogen.pictures import sendable_request
+from vidgen.videogen.redaction import redact_value
 
 if TYPE_CHECKING:
     from vidgen.config import VideogenConfig
-    from vidgen.videogen.host import ShareOptions
+    from vidgen.videogen.host import QuickTunnelHost, ShareOptions
 
 log = logging.getLogger("vidgen.videogen")
 
 
 def ledger_path(root: Path, provider: str) -> Path:
     """The project's ledger (the mock provider's own for ``mock``)."""
-    return root / (LEDGER_NAME.replace(".jsonl", ".mock.jsonl") if provider == "mock" else LEDGER_NAME)
+    return root / (LEDGER_NAME.replace(".jsonl", ".mock.jsonl") if provider == MOCK_PROVIDER else LEDGER_NAME)
 
 
 def clip_path(root: Path, key: str) -> Path:
@@ -66,7 +69,7 @@ def clip_path(root: Path, key: str) -> Path:
 
 def get_provider(settings: VideogenConfig) -> OpenRouterVideoProvider:
     """The provider ``settings`` name (``openrouter`` or ``mock``)."""
-    if settings.provider == "mock":
+    if settings.provider == MOCK_PROVIDER:
         from vidgen.videogen.mock import MockVideoProvider
 
         return MockVideoProvider(poll_timeout=settings.poll_timeout)
@@ -182,7 +185,8 @@ def generate_clip(
 ) -> ClipResult:
     """Plan ``request`` and, with ``pay``, generate it (see the module docstring). ``share``: how
     local audio / video inputs are hosted (default: ``videogen.host``). Raises
-    :class:`VidgenError` when a paid run is refused or the job fails."""
+    :class:`VidgenError` when a paid run is refused or the job fails. The mock provider ignores
+    ``share`` and ``videogen.host``: it never shares anything."""
     chosen = provider if provider is not None else (get_provider(settings) if pay else None)
     name = chosen.name if chosen is not None else settings.provider
     plan = plan_clip(root, settings, request, catalog=catalog, budget_usd=budget_usd, duration=duration, provider=name, again=again)
@@ -210,7 +214,7 @@ def generate_clip(
         from vidgen.videogen.host import ShareOptions
 
         share = ShareOptions.from_config(settings)
-    if not local or share is None:
+    if not local or share is None or chosen.name == MOCK_PROVIDER:
         job = _submit(ledger, chosen, plan, sendable)
         return _finish(root, ledger, chosen, plan, job, recorded=False)
     problem = share.settings.lifetime_problem(chosen.poll_timeout)
@@ -225,10 +229,18 @@ def generate_clip(
             job = _submit(ledger, chosen, plan, sendable)
             job = chosen.wait(job)
         except VidgenError as exc:   # a provider's error may quote a URL: never pass the secret on
-            raise VidgenError(host.redact(str(exc)), details=exc.details) from None
+            raise _without_secret(exc, host) from None
         finally:
             chosen.uploader = previous
-    return _finish(root, ledger, chosen, plan, job, recorded=False)
+    try:
+        return _finish(root, ledger, chosen, plan, job, recorded=False)
+    except VidgenError as exc:   # a failed job's error, raised after the tunnel closed
+        raise _without_secret(exc, host) from None
+
+
+def _without_secret(exc: VidgenError, host: QuickTunnelHost) -> VidgenError:
+    """``exc`` with the host's shared addresses taken out of its message and details."""
+    return VidgenError(host.redact(str(exc)), details=redact_value(exc.details, host.redact))
 
 
 def _submit(ledger: Ledger, provider: OpenRouterVideoProvider, plan: ClipPlan, request: VideoRequest) -> JobState:

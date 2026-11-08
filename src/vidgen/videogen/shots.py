@@ -43,7 +43,7 @@ from pathlib import Path
 from vidgen.config import BeatConfig, GeneratedShot, SceneConfig, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
-from vidgen.videogen import MediaInput, VideoRequest, did_you_mean
+from vidgen.videogen import MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean
 from vidgen.videogen.ledger import BudgetState, Ledger, SubmitIntent, intent_refusal, intent_text
 from vidgen.videogen.models import TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, money, snap_duration
 from vidgen.videogen.sheets import STYLE, Sheet, character_sheet, plan_sheets, style_sheet
@@ -142,6 +142,8 @@ class Shot:
     #: With ``videogen.host: quick_tunnel``: the tunnel's maximum lifetime in minutes (``None``:
     #: nothing is shared, no host or no audio / video input).
     share_minutes: float | None = None
+    #: The mock provider gives this shot's audio / video inputs fake addresses (nothing is shared).
+    fake_addresses: bool = False
 
     @property
     def shared(self) -> list[ShotInput]:
@@ -380,7 +382,11 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
         shot.blocked.append(f"inputs not made yet: `{inputs_command(project, bool(guide) or source == 'render')}`")
     if shot.shared:
         settings = project.config.videogen
-        if settings.host == "quick_tunnel":
+        if settings.inline_media == "all" and settings.host != "quick_tunnel":
+            shot.problems.append(f"{where}: {INLINE_AUDIO_VIDEO_PROBLEM}")
+        elif settings.provider == MOCK_PROVIDER:
+            shot.fake_addresses = True
+        elif settings.host == "quick_tunnel":
             from vidgen.videogen.host import HostSettings, find_cloudflared
 
             shot.share_minutes = settings.host_max_minutes
@@ -391,8 +397,6 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             lifetime = HostSettings.from_config(settings).lifetime_problem(settings.poll_timeout)
             if lifetime:
                 shot.blocked.append(lifetime)
-        elif settings.inline_media == "all":
-            shot.problems.append(f"{where}: {INLINE_AUDIO_VIDEO_PROBLEM}")
         else:
             shot.blocked.append(NO_HOST_BLOCKED)
 
@@ -549,6 +553,8 @@ class ShotPlan:
         for item in shot.inputs:
             role = item.role + (" (frame image)" if item.frame else " (reference)" if item.role in ("portrait", "first_frame") else "")
             lines.append(f"  {role}: {_shown(item.path, root)} ({item.what}{'' if item.ready else '; not made yet'})")
+        if shot.fake_addresses and not self.cached and not self.previous_job:
+            lines.append("  mock provider: these inputs stay on this machine (fake addresses; nothing is shared)")
         if shot.share_minutes is not None and not self.cached and not self.previous_job:
             lines.append(
                 f"  would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most {shot.share_minutes:g} min; "

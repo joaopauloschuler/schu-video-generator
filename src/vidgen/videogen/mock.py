@@ -6,7 +6,8 @@ completed), a completed job reports ``usage.cost``, and its content is ``video``
 records every request (method, url, headers, JSON body) so tests can check what would have been
 sent. ``submit_error`` / ``poll_error`` (``(status, message)``) and a ``states`` list ending in
 ``failed`` / ``expired`` script the failures. :class:`MockVideoProvider` is the OpenRouter
-provider on it (``videogen: {provider: mock}``): no key, no network, nothing charged.
+provider on it (``videogen: {provider: mock}``): no key, no network, nothing charged; local audio
+and video inputs get fake addresses, so no file is shared and no quick tunnel opened.
 
 The content of a completed job is ``video`` when given, else a real, playable MP4 made by FFmpeg
 (:func:`synthetic_clip`: a moving test pattern of the submitted length, in the submitted aspect
@@ -25,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from vidgen.videogen import MOCK_PROVIDER
 from vidgen.videogen.openrouter import VIDEOS_URL, OpenRouterVideoProvider, Response
 
 #: Placeholder bytes for tests that only move files around (not a playable video).
@@ -170,9 +172,10 @@ class MockVideoProvider(OpenRouterVideoProvider):
     ``Authorization`` header), no waiting. Without ``api`` (``videogen.provider: mock``) its job
     ids are unique across runs (``mock-<8 hex>-1``), so the mock ledger counts every job."""
 
-    name = "mock"
+    name = MOCK_PROVIDER
 
     def __init__(self, api: MockOpenRouter | None = None, **kwargs: Any) -> None:
         self.api = api if api is not None else MockOpenRouter(prefix=f"mock-{uuid.uuid4().hex[:8]}")
         kwargs.setdefault("sleep", lambda seconds: None)
+        kwargs.setdefault("uploader", lambda path: f"https://mock.invalid/{path.name}")
         super().__init__(key_via_proxy=True, transport=self.api, **kwargs)

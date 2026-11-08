@@ -41,6 +41,7 @@ from vidgen.errors import VidgenError
 from vidgen.fileio import write_bytes_atomic
 from vidgen.videogen import JobState, MediaInput, VideoRequest
 from vidgen.videogen.pictures import sendable_request
+from vidgen.videogen.redaction import redact_shared_addresses
 
 log = logging.getLogger("vidgen.videogen")
 
@@ -142,7 +143,7 @@ def _error_text(body: bytes) -> str:
 
 def http_error(status: int, body: bytes, what: str, secret: str = "") -> VidgenError:
     """The :class:`VidgenError` of an HTTP error answer to ``what`` (``submit``, ``poll``, ``download``)."""
-    detail = httpapi.scrub(_error_text(body), secret)
+    detail = httpapi.scrub(redact_shared_addresses(_error_text(body)), secret)
     if status == 402:
         return VidgenError(f"OpenRouter refused the {what}: not enough credits (HTTP 402: {detail}). Add credits at https://openrouter.ai/settings/credits; nothing was charged.")
     if status == 429:
@@ -195,7 +196,7 @@ def parse_job(body: bytes, fallback_id: str | None = None) -> JobState:
         id=job_id, status=status, polling_url=doc.get("polling_url") if isinstance(doc.get("polling_url"), str) else None,
         cost=float(cost) if isinstance(cost, (int, float)) and not isinstance(cost, bool) else None,
         is_byok=usage.get("is_byok") if isinstance(usage.get("is_byok"), bool) else None,
-        error=str(error) if error else None,
+        error=redact_shared_addresses(str(error)) if error else None,
     )
 
 
@@ -262,7 +263,7 @@ class OpenRouterVideoProvider:
                 answer = self._transport(method, url, headers, body, self.timeout)
             except VidgenError as exc:
                 if not retry or attempt >= self.retries:
-                    raise VidgenError(httpapi.scrub(str(exc), secret)) from None
+                    raise VidgenError(redact_shared_addresses(httpapi.scrub(str(exc), secret))) from None
                 answer = None
             if answer is not None and answer.status < 400:
                 return answer

@@ -267,7 +267,7 @@ def test_inline_pictures_hosted_audio(tmp_path: Path) -> None:
     picture, voice = tmp_path / "face.png", tmp_path / "line.mp3"
     picture.write_bytes(b"\x89PNG fake")
     voice.write_bytes(b"ID3 fake")
-    provider = MockVideoProvider()
+    provider = MockVideoProvider(uploader=None)
     frame = MediaInput("image", picture, frame_type="first_frame")
     body = provider.request_body(request(frame_images=(frame,), references=(MediaInput("video", url="https://x.invalid/guide.mp4"),)))
     assert body["frame_images"][0]["image_url"]["url"].startswith("data:image/png;base64,")
@@ -277,6 +277,7 @@ def test_inline_pictures_hosted_audio(tmp_path: Path) -> None:
         provider.request_body(audio)
     hosted = MockVideoProvider(uploader=lambda path: f"https://host.invalid/{path.name}")
     assert hosted.request_body(audio)["input_references"][0]["audio_url"]["url"] == "https://host.invalid/line.mp3"
+    assert MockVideoProvider().request_body(audio)["input_references"][0]["audio_url"]["url"] == "https://mock.invalid/line.mp3"
 
 
 def big_picture(path: Path, size: tuple[int, int] = (2048, 3642), *, alpha: bool = False, noisy: bool = False) -> Path:

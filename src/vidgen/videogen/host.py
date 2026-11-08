@@ -56,6 +56,7 @@ from vidgen.errors import VidgenError
 from vidgen.videogen import host_guard
 from vidgen.videogen.ledger import Ledger
 from vidgen.videogen.openrouter import MEDIA_TYPES, Response
+from vidgen.videogen.redaction import REDACTED, redact_shared_addresses
 
 log = logging.getLogger("vidgen.videogen")
 
@@ -644,9 +645,11 @@ class QuickTunnelHost:
         raise VidgenError(f"{source} is not shared by this host")
 
     def redact(self, text: str) -> str:
-        """``text`` without this host's secret (e.g. a provider's error that quotes a URL)."""
+        """``text`` without any quick tunnel address path, nor this host's secret (quoted alone,
+        too); works after the host closed."""
+        text = redact_shared_addresses(text)
         secret = self.server.secret if self.server is not None else None
-        return text.replace(secret, "<secret>") if secret else text
+        return text.replace(secret, REDACTED) if secret else text
 
     def urls(self) -> dict[Path, str]:
         """Every shared source with its public URL."""

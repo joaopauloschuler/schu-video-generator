@@ -41,7 +41,8 @@ footage vidgen cannot draw; keep diagrams, text, charts and explanations as scen
   both by default; the clip is trimmed to the beat). A Short at 480p-720p looks fine on a phone.
 - Draft first: try one shot (`--shot ID`) with the cheapest model before the whole video.
 - `videogen: {provider: mock}` runs the whole flow (takes, QA, render) with a fake API and
-  synthetic clips: free, for trying a project's timing and layout.
+  synthetic clips: free, for trying a project's timing and layout. Nothing is shared: voice and
+  guide files get fake addresses, no `cloudflared` is started, whatever `videogen.host` says.
 
 ## 3. Privacy (Zero Data Retention)
 
@@ -261,7 +262,8 @@ kept.
    provider (usually one `GET` of the whole file), `host_close` with `reason: done`, and the
    job's `completed` line with its cost. No provider download recorded means the provider did
    not fetch the voice through the tunnel: tell the developers (DESIGN §115). If the provider refuses the job, the tunnel is closed
-   the same way and the error is shown with the secret part replaced by `<secret>`.
+   the same way and the error is shown with the secret part replaced by `<secret>`, everywhere
+   vidgen shows or stores it (also when a later run polls a job that failed).
 
 ## 6. From a 3D scene to a generated clip
 

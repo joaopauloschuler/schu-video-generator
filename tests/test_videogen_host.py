@@ -12,6 +12,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -28,6 +29,7 @@ from vidgen.videogen.host import (
     tunnel_command,
 )
 from vidgen.videogen.ledger import Ledger
+from vidgen.videogen.mock import MockOpenRouter, MockVideoProvider
 from vidgen.videogen.openrouter import Response
 
 FAKE_HOST = "fake-words.trycloudflare.com"
@@ -50,6 +52,17 @@ time.sleep(60)
 '''
 
 SETTINGS = HostSettings(url_timeout=10, verify_timeout=1.0, verify_interval=0.05)
+
+
+class HostedStandIn(MockVideoProvider):
+    """The fake API under a provider name that is not ``mock``: for the tests of a real host (the
+    mock provider itself never shares anything)."""
+
+    name = "openrouter"
+
+    def __init__(self, api: MockOpenRouter | None = None, **kwargs: Any) -> None:
+        kwargs.setdefault("uploader", None)
+        super().__init__(api, **kwargs)
 
 
 @pytest.fixture
@@ -317,7 +330,7 @@ def test_public_address_that_never_works_stops_before_anything_is_sent(tmp_path:
         return Response(200, b"", {})
 
     with QuickTunnelHost([audio], settings=SETTINGS, executable=fake_cloudflared, fetch=no_length) as host:
-        assert host.is_open and host.redact(f"see {host.url_of(audio)}") == f"see https://{FAKE_HOST}/<secret>/{host.files[0].name}"
+        assert host.is_open and host.redact(f"see {host.url_of(audio)}") == f"see https://{FAKE_HOST}/<secret>"
 
 
 def test_self_test_and_the_cli(tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

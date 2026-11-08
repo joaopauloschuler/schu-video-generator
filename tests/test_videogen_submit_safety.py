@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from test_videogen import CATALOG, FAST, request, settings
-from test_videogen_host import SETTINGS, fake_cloudflared, local_fetch, sources  # noqa: F401 - the fixture
+from test_videogen_host import SETTINGS, HostedStandIn, fake_cloudflared, local_fetch, sources  # noqa: F401 - the fixture
 from test_videogen_shots import WIDE, shot_config
 
 from vidgen import cli
@@ -75,7 +75,7 @@ def test_a_paid_run_does_not_close_the_tunnel_after_a_fetch(tmp_path: Path, fake
     fetch = local_fetch(tmp_path)
     api = MockOpenRouter(states=("pending", "pending", "completed"), cost=0.2)
     share = CapturingShare(HostSettings(url_timeout=10, verify_timeout=2.0, verify_interval=0.05), executable=fake_cloudflared, fetch=fetch)
-    provider = MockVideoProvider(api, sleep=lambda seconds: time.sleep(0.3))   # real pauses longer than the old grace
+    provider = HostedStandIn(api, sleep=lambda seconds: time.sleep(0.3))   # real pauses longer than the old grace
     fetched: list[tuple[str, bool]] = []
 
     def provider_side(method: str, url: str, headers: Any, body: bytes | None, timeout: float) -> Response:
@@ -104,13 +104,13 @@ def test_a_host_nearly_out_of_time_refuses_the_submit_without_a_post(tmp_path: P
         return local(method, url, timeout)
 
     api = MockOpenRouter()
-    provider = MockVideoProvider(api, poll_timeout=0.1)
+    provider = HostedStandIn(api, poll_timeout=0.1)
     host_settings = HostSettings(url_timeout=1.0, verify_timeout=5.0, verify_interval=0.05, max_seconds=1.4, submit_margin=0.25)
     share = CapturingShare(host_settings, executable=fake_cloudflared, fetch=slow_public)
     with pytest.raises(VidgenError, match="(?s)quick tunnel.*nothing was sent or paid"):
         generate_clip(project, settings(host="quick_tunnel"), audio_request(audio), pay=True, provider=provider, catalog=CATALOG, share=share)
     assert api.requests == []
-    ledger = Ledger(ledger_path(project, "mock"))
+    ledger = Ledger(ledger_path(project, "openrouter"))
     assert ledger.intents() == [] and [e["event"] for e in ledger.events() if e["event"] == "submit"] == []
     assert share.made.close_reason is not None and not share.made.is_open
 
@@ -143,7 +143,7 @@ def test_generate_refuses_a_lifetime_too_short_before_opening(tmp_path: Path, fa
     api = MockOpenRouter()
     share = CapturingShare(HostSettings(max_seconds=900.0), executable=fake_cloudflared, fetch=local_fetch(tmp_path))
     with pytest.raises(VidgenError, match="closed tunnel"):
-        generate_clip(project, settings(host="quick_tunnel"), audio_request(audio), pay=True, provider=MockVideoProvider(api), catalog=CATALOG, share=share)
+        generate_clip(project, settings(host="quick_tunnel"), audio_request(audio), pay=True, provider=HostedStandIn(api), catalog=CATALOG, share=share)
     assert api.requests == [] and not hasattr(share, "made")   # no tunnel was opened
 
 

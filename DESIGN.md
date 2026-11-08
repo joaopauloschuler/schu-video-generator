@@ -22697,8 +22697,8 @@ with `vidgen generate host-test`.
   (completed, failed, cancelled, expired), before the download and before the job's final
   ledger line. It closes at `host_max_minutes` at the latest while vidgen runs (§115.4; a killed vidgen: §115.5). A `VidgenError` inside the
   block (a refused submit, a poll timeout) closes it (`error: VidgenError`) and is raised again
-  with `host.redact(...)` (the secret replaced by `<secret>`: OpenRouter's 400 quotes the
-  reference URL); Ctrl+C closes it (`interrupted`). A job resumed from the ledger (it timed out
+  with `host.redact(...)` (the secret path replaced by `<secret>`: OpenRouter's 400 quotes the
+  reference URL; all provider text is covered by §115.6); Ctrl+C closes it (`interrupted`). A job resumed from the ledger (it timed out
   earlier) is only polled: no tunnel is opened again (providers fetch inputs when the job
   starts). Without a host the provider's `media_url` still stops the submit with a clear error.
 - **`run_shots`** builds `ShareOptions.from_config(settings, out=...)` once when the host is on
@@ -22835,3 +22835,34 @@ in the few milliseconds between starting cloudflared and telling the watcher its
 and nothing closes the tunnel until it runs again. Windows: `taskkill /F /T` of vidgen also kills the
 watcher (the sweep then deletes the copies at the next open). **macOS**: POSIX code paths (pipes, process groups,
 `flock`) are used but not run there. **Windows**: nothing here has been run on Windows.
+
+### 115.6 Provider text never carries the shared address; the mock never shares (Step 311)
+
+A review showed the failed job's error was raised in `_finish`, outside the `except` that
+redacted, so it reached `ShotRun.message`, `--json` and MCP with the secret; `exc.details` was not
+redacted either; and a job polled by a later run has no host at all. `vidgen.videogen.redaction`:
+
+- `redact_shared_addresses(text)` needs no host: it replaces the path of any
+  `*.trycloudflare.com` address, plain, JSON-escaped, percent-encoded or cut off by a length
+  limit, with `<secret>` (the host name stays, it is in the ledger on purpose), and a path
+  of the host's shape (32-character secret + `/` + 16 hex digits) quoted without its host.
+- Every place provider text enters: `parse_job` (a job's `error`, submit and poll), `http_error`
+  (submit, poll and download answers), the transport error in `_send`. This covers a job resumed
+  after its host is gone.
+- `QuickTunnelHost.redact` adds the host's exact secret (a provider quoting the bare token);
+  `generate_clip` applies it to the message and details of every `VidgenError` inside the host's
+  block and from `_finish` (the failed job's error), so `run_shots`' `ShotRun.message`, its
+  `details`, `--json` and MCP (which runs the CLI) see only clean text.
+- `Ledger.append` filters every string field, so no line can hold the path. Provider error text
+  is not stored at all: terminal lines record only status, cost and `is_byok`; sidecars and takes
+  hold no error text.
+- Not covered: a bare secret with no file name quoted after the host is gone (no pattern can tell
+  it from a request id; it opens nothing without its file name, and that tunnel is closed).
+
+`provider: mock` (`MOCK_PROVIDER`) never shares: `generate_clip` ignores `share` and
+`videogen.host` for it and sends the mock's `uploader` address (`https://mock.invalid/<name>`);
+`_resolve_inputs` marks the shot `fake_addresses` instead of `share_minutes`, so the plan has no
+"would share" lines, no cloudflared lookup and no block for a missing host (one note says the
+inputs stay on this machine). `inline_media: all` without a host stays a problem, since it describes
+the real API; `vidgen generate host-test` still opens a real tunnel on purpose. Tests of a real host
+use a stand-in provider whose name is not `mock` (`tests/test_videogen_host.HostedStandIn`).

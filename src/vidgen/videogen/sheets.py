@@ -32,7 +32,7 @@ from vidgen.fileio import write_bytes_atomic, write_text_atomic
 from vidgen.imagegen import GenerateImage, ImageProvider, ImageRequest, get_image_provider, image_request, style_words
 from vidgen.imagegen.run import ImagegenPlan, cost_words, price_plan, sidecar_document
 from vidgen.project import Project
-from vidgen.videogen import did_you_mean
+from vidgen.videogen import MOCK_PROVIDER, did_you_mean
 from vidgen.videogen.ledger import BudgetState, Ledger, refusal
 from vidgen.videogen.models import money
 
@@ -299,7 +299,7 @@ def run_sheets(
     from vidgen.videogen.run import ledger_path
 
     name = provider.name if provider is not None else "openrouter"
-    ledger = Ledger(ledger_path(project.root, "mock" if name == "mock" else "openrouter"))
+    ledger = Ledger(ledger_path(project.root, MOCK_PROVIDER if name == MOCK_PROVIDER else "openrouter"))
     result = plan_sheets(project, owners, lookup=lookup, ledger=ledger)
     for line in sheet_lines(result, project.root):
         out(line)

@@ -116,13 +116,15 @@ def test_the_request_hash_changes_with_the_pass(make_project) -> None:
 
 
 def test_plan_names_the_pass_and_shares_it(make_project, fake_cloudflared: list[str]) -> None:
-    root = make_project(guide_config("depth"))
+    unhosted = guide_config("depth")
+    unhosted["videogen"] = {"provider": "openrouter", "budget_usd": 2.0}
+    root = make_project(unhosted)
     (item,) = plan_shots(Project.load(root), catalog=CATALOG).shots
     text = "\n".join(item.lines(root))
     assert "  guide: build/videogen/act/guide.depth.mp4 (depth pass of the beat's 3D scene" in text and "not made yet" in text
     assert NO_HOST_BLOCKED in item.shot.blocked and "inputs not made yet: `vidgen generate inputs --guide`" in item.shot.blocked
     hosted = guide_config("depth")
-    hosted["videogen"] = {"provider": "mock", "budget_usd": 2.0, "host": "quick_tunnel", "cloudflared": fake_cloudflared[1]}
+    hosted["videogen"] = {"provider": "openrouter", "budget_usd": 2.0, "host": "quick_tunnel", "cloudflared": fake_cloudflared[1]}
     root = make_project(hosted, folder="hosted")
     (item,) = plan_shots(Project.load(root), catalog=CATALOG).shots
     text = "\n".join(item.lines(root))

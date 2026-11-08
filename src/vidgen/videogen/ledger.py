@@ -32,6 +32,7 @@ from typing import Any
 from vidgen.errors import VidgenError
 from vidgen.videogen import TERMINAL_STATUSES
 from vidgen.videogen.models import money
+from vidgen.videogen.redaction import redact_shared_addresses, redact_value
 
 
 def utc_now() -> str:
@@ -109,8 +110,8 @@ class Ledger:
         self._clock = clock if clock is not None else utc_now
 
     def append(self, event: str, **fields: Any) -> None:
-        """Append one event line (with its time)."""
-        line = json.dumps({"event": event, "time": self._clock(), **fields}, ensure_ascii=True, sort_keys=True)
+        """Append one event line (with its time; a quick tunnel address loses its secret path)."""
+        line = json.dumps({"event": event, "time": self._clock(), **redact_value(fields, redact_shared_addresses)}, ensure_ascii=True, sort_keys=True)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8", newline="\n") as f:
             f.write(line + "\n")

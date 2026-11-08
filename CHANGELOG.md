@@ -5,7 +5,12 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–310)
+## Unreleased (Steps 193–311)
+
+### Generated video: a provider's error never shows the shared address; the mock shares nothing (Step 311)
+
+- A provider's error that quotes a quick tunnel address no longer shows its secret path, wherever it appears: a failed job's error (which used to escape the redaction), submit and download errors, exception details, `ShotRun.message`, `--json`, MCP. This also works for a job polled by a later run, when the tunnel is long gone. Ledger lines never hold the path either.
+- `provider: mock` no longer opens a real quick tunnel, even with `videogen.host: quick_tunnel`: it never starts `cloudflared` or shares a file. Its audio / video inputs get fake addresses, so the free demo runs end to end with no host setting and without `cloudflared`, and `vidgen generate plan` says the inputs stay on this machine. `vidgen generate host-test` still opens a real tunnel when you ask for it.
 
 ### Generated video: a killed vidgen cleans up after its quick tunnel (Step 310)
 

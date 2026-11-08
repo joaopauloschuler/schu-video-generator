@@ -2767,7 +2767,7 @@ The workflow, cost control and privacy: [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-G
 
 ```yaml
 videogen:
-  provider: openrouter      # openrouter (paid) | mock (a fake API: no key, nothing sent)
+  provider: openrouter      # openrouter (paid) | mock (a fake API: no key, nothing sent, no quick tunnel)
   budget_usd: 2.0           # hard cap for this project; paying needs it (default: null)
   key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header (clips and sheets)
   inline_media: images      # images | all (all: audio / video would go inline, which OpenRouter refuses: a plan problem)
@@ -2830,7 +2830,10 @@ videogen:
   `host_open` (the host name, each file's name, size and SHA-256; never the secret path),
   `host_fetch` (file, method, status, bytes) and `host_close` (reason). `vidgen generate plan`
   lists per shot exactly which files a run would share and for how long; a shot is blocked when
-  `cloudflared` is not found. A job resumed by a later run (it timed out) is only polled: no
+  `cloudflared` is not found. An error from the provider that quotes a shared address is shown
+  and stored with its secret path replaced by `<secret>` (also for a job polled by a later run). With
+  `provider: mock` nothing is shared: no `cloudflared`, no tunnel, fake addresses, and no block
+  for a missing host. A job resumed by a later run (it timed out) is only polled: no
   tunnel is opened again. `vidgen generate host-test [PROJECT] [--keep SECONDS]` checks it for
   free: it shares one tiny text file, fetches it back through the public address, checks that
   other paths answer 404 and closes (`--keep`: stays open that long and prints the address to
