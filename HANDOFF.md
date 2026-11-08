@@ -25599,3 +25599,54 @@ project), repo work is generic.
 - **Next (306)**: `videogen.host: quick_tunnel`, the host as the provider's `uploader` inside
   `run --pay` (open before submit, close after the job ends; per shot), the plan's "would share"
   lines, MCP, cookbook section, guide, review.
+
+## Step 306 — Hosted inputs: wiring, docs and review (Phase AJ, last step)
+
+- **Built** (DESIGN §115.2): `videogen.host: none | quick_tunnel` (default `none`). With
+  `quick_tunnel`, `generate_clip` opens one `QuickTunnelHost` per shot with local audio / video
+  inputs (`run.hosted_inputs`), after every other check and before the submit; the provider's
+  `uploader` is `host.url_of` for that submit only; submit + ledger `submit` + `wait` run inside
+  the `with` block, so the tunnel closes (`done`) when the job reaches a final state, before the
+  download (or earlier: all files fetched + grace, max lifetime; error / Ctrl+C). Provider errors
+  raised inside are redacted (`QuickTunnelHost.redact`, `<secret>`). New `host.ShareOptions`
+  (settings, out, fake executable / fetch for tests; `from_config`, `host(...)`);
+  `run_shots(..., share=)` and `generate_clip(..., share=)`. Plan: `Shot.shared`,
+  `Shot.share_minutes`, the "would share through a public Cloudflare quick tunnel ..." lines with
+  each file and size, JSON `shared` / `share_max_minutes`; blocked with the install hints when
+  cloudflared is not found; `shots.NO_HOST_BLOCKED` (names the setting) without the host;
+  `INLINE_AUDIO_VIDEO_PROBLEM` names it too. MCP `generate_host_test` (`keep`). Cookbook §5
+  "Sharing voice and video inputs safely" with "Test on Windows" (sections 5-7 renumbered 6-8;
+  the example's `videogen` gains `host: quick_tunnel`), CONFIG, guide + AGENTS.md, CLI help.
+- **Owner's decisions applied**: one tunnel per shot; the switch added now (default none);
+  HEAD-only providers are cut off by the lifetime (accepted), and the tunnel also closes when the
+  job reaches a final state.
+- **Review fixes to 305** (DESIGN §115.3): a source reached through a linked folder inside the
+  project (or a Windows junction) is refused; the public check accepts a HEAD answer without
+  Content-Length (a wrong one is still refused); Windows without `taskkill` kills cloudflared
+  at once; the secret is redacted from provider errors.
+- **Files**: `src/vidgen/config.py` (`host`), `src/vidgen/videogen/{host,run,shots,workflow}.py`,
+  `src/vidgen/cli.py` (plan JSON, help), `src/vidgen/mcp_server.py`, docs
+  `COOKBOOK-GENERATED-VIDEO.md`, `CONFIG.md`, guide + `AGENTS.md`, DESIGN §113.7 / §115,
+  CHANGELOG, tasklist (306 ticked). Tests: `tests/test_videogen_shots.py` (+1, imports the fake
+  cloudflared fixture from `test_videogen_host.py`), `tests/test_videogen_host.py` (2 extended:
+  linked folder, HEAD without length + `redact`), `tests/test_mcp.py` (tool list).
+- **Public interfaces**: not in `vidgen.api`. New `VideogenConfig.host`; `ShareOptions`,
+  `QuickTunnelHost.redact`, `run.hosted_inputs`, `shots.NO_HOST_BLOCKED`, `shots.share_size`,
+  `Shot.shared`, `Shot.share_minutes`; keyword `share=` on `generate_clip` and `run_shots`; plan
+  JSON `shared`, `share_max_minutes`; MCP tool `generate_host_test`.
+- **Tests run and passed** (one file at a time, `/home/claude/bin/capped` + `timeout`, `-m "not
+  render"`): `test_videogen_host` (12), `test_videogen_shots` (21), `test_videogen` (26),
+  `test_videogen_compose` (17, 1 deselected), `test_docs` (80), `test_guide` (92), `test_config`
+  (21), `test_json_output` (21, 2 deselected), `test_mcp` (20, 2 deselected). Not run:
+  `test_schema` (one optional field with a default), the full suite. No rendering code changed.
+- **Spending**: nothing paid, no key read, no network; cloudflared only as the fake script.
+- **Known gaps**: not verified against the real tunnel, Windows `taskkill`, or OpenRouter's
+  providers (do they GET the voice, how soon, more than once? the ledger's `host_fetch` lines of
+  the first paid talking shot will tell); a job resumed after a poll timeout gets no tunnel (fine
+  if providers fetch at job start); the progress lines of a host print before the shot's own
+  result line.
+- **How the owner tests on Windows**: cookbook §5 "Test on Windows": `winget install
+  Cloudflare.cloudflared`, new terminal, `vidgen generate host-test`, then with `videogen: {host:
+  quick_tunnel}` `vidgen generate plan --shot closeup_b1` (lists the shared voice), then
+  `vidgen generate run --pay --shot closeup_b1` (~$0.20) and `vidgen generate ledger` / the
+  ledger's host lines.

@@ -2774,6 +2774,7 @@ videogen:
   poll_timeout: 900         # seconds to wait for a job (it keeps running; a later run polls it again)
   crossfade: 0.25           # seconds a placed take fades in from / out to vidgen's picture (0: a cut)
   color_match: 0.5          # light colour matching of placed takes, 0 (as made) - 1
+  host: none                # none | quick_tunnel: share a shot's voice / guide through a Cloudflare quick tunnel while its job runs
   cloudflared: null         # the cloudflared program for the quick tunnel (default: cloudflared on PATH)
   tunnel_protocol: http2    # http2 (TCP 443) | quic (UDP 7844) | auto (cloudflared's choice)
   host_max_minutes: 15      # a quick tunnel closes after this long, whatever happens
@@ -2797,16 +2798,26 @@ videogen:
   request larger than 21 MB is refused before it is sent. Audio and video references must be
   https URLs: OpenRouter refuses them inline (HTTP 400 "Only HTTPS URLs are allowed"), so with
   `inline_media: all` a shot with `audio:` or `guide:` has a problem in the plan and `run --pay`
-  refuses it.
-- **Quick tunnel** (DESIGN.md §115): audio and video inputs can be shared through a Cloudflare
-  quick tunnel (free, no account; needs `cloudflared`: Windows `winget install
-  Cloudflare.cloudflared`, macOS `brew install cloudflared`). Only copies of the shot's own
-  files are shared, under random names behind a secret path, from a temporary folder outside
-  the project, for at most `host_max_minutes`; then cloudflared is stopped and the copies
-  deleted. `vidgen generate host-test [PROJECT] [--keep SECONDS]` checks it for free: it shares
-  one tiny text file, fetches it back through the public address, checks that other paths
-  answer 404 and closes (`--keep`: stays open that long and prints the address to try in a
-  browser). Using it for paid runs comes with Step 306 (`videogen.host`).
+  refuses it, unless `host: quick_tunnel` shares them (below).
+- **Quick tunnel** (`host: quick_tunnel`, off by default; DESIGN.md §115): audio and video
+  inputs are shared through a Cloudflare quick tunnel (free, no account; needs `cloudflared`:
+  Windows `winget install Cloudflare.cloudflared`, macOS `brew install cloudflared`; or
+  `cloudflared: <path>`). `vidgen generate run --pay` opens one tunnel per shot that has a voice
+  or guide, just before its job is submitted, and checks the files through the public address
+  first (if that fails, nothing is sent or paid). Only copies of that shot's own audio / video
+  files are shared (pictures go inline as before), under random names behind a secret path,
+  from a temporary folder outside the project. The tunnel closes as soon as the job reaches a
+  final state (completed or failed, before the download), or `host_grace_seconds` after the
+  provider fetched every file, or after `host_max_minutes`, whichever comes first (also on an
+  error or Ctrl+C); then cloudflared is stopped and the copies deleted. The ledger records
+  `host_open` (the host name, each file's name, size and SHA-256; never the secret path),
+  `host_fetch` (file, method, status, bytes) and `host_close` (reason). `vidgen generate plan`
+  lists per shot exactly which files a run would share and for how long; a shot is blocked when
+  `cloudflared` is not found. A job resumed by a later run (it timed out) is only polled: no
+  tunnel is opened again. `vidgen generate host-test [PROJECT] [--keep SECONDS]` checks it for
+  free: it shares one tiny text file, fetches it back through the public address, checks that
+  other paths answer 404 and closes (`--keep`: stays open that long and prints the address to
+  try in a browser).
 - **Privacy**: video generation is not eligible for OpenRouter's Zero Data Retention: the
   provider keeps the output for a short time so it can be downloaded.
 - `vidgen generate models` lists OpenRouter's video models (durations, resolutions, aspect
@@ -2886,9 +2897,9 @@ scenes:
   seconds.
 - **Frame images**: the first frame goes in as a frame image where the model lists
   `first_frame`, else as a picture reference (heygen/avatar-iv's portrait).
-- **Audio and video inputs** need a hosted https URL (none is set up yet): with
-  `videogen.inline_media: images` their shots are listed as blocked, with `inline_media: all` as
-  problems (OpenRouter refuses inline audio / video).
+- **Audio and video inputs** need a hosted https URL: with `videogen.host: quick_tunnel` the plan
+  lists the files a run would share; without it their shots are blocked (`inline_media:
+  images`) or problems (`inline_media: all`; OpenRouter refuses inline audio / video).
 - **The plan**: `vidgen generate plan [PROJECT] [--shot ID] [--budget USD] [--json]` lists every
   shot (time in the video, model, resolution, aspect ratio, requested and trimmed length, each
   input and whether it is made, the request's size with its inline pictures, the estimate, what
@@ -15642,8 +15653,9 @@ score you mean to propose, in `build/mcp/studio/`), `studio_variations` (`sessio
 in the studio's session folders, in the server's process. Generated video (§113): `generate_plan`
 (`shot`, `budget`, `variant`; free), `generate_run` (`dry_run` default true, `confirm_cost`,
 `shot`, `budget`, `variant`), `generate_status`, `generate_takes` (`shot`, `images`: returns the
-takes' contact sheets as pictures) and `generate_pick` (`shot`, `take`: a number, `none` or
-`auto`). Their parameters are the command's
+takes' contact sheets as pictures), `generate_pick` (`shot`, `take`: a number, `none` or
+`auto`) and `generate_host_test` (`keep`; §115: the free quick tunnel check, never shows the
+secret address). Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
@@ -16283,7 +16295,10 @@ Generated video (DESIGN.md §113). `vidgen generate models --json`:
 `vidgen generate plan PROJECT --json`: `action` (`plan`), `clips_usd`, `sheets_usd`, `total_usd`,
 `budget_usd`, `spent_usd`, `remaining_usd`, `shots` (`{id, kind, model, scene, beat, start,
 length, duration, resolution, aspect_ratio, inputs: [{role, kind, path, frame_image, ready}],
-estimate_usd, cached, left_after_usd, request_bytes, notes, problems, blocked, prompt}`;
+estimate_usd, cached, left_after_usd, request_bytes, shared: [{path, bytes}], share_max_minutes, notes, problems,
+blocked, prompt}`; `shared` the files a paid run would share through the quick tunnel (empty without
+`host: quick_tunnel`, when cached or already paid; `bytes` `null` until made), `share_max_minutes`
+the tunnel's maximum lifetime (`null` when nothing is shared);
 `duration` `null` for a model that follows its audio; `request_bytes` the request's size with its
 inline pictures, `null` until the inputs are made or when cached). `vidgen generate sheets --json`: `action` (`sheets`), `paid`,
 `todo` (pictures to make), `estimate_usd`, `unknown_prices`, `paid_usd`, `sheets` (`{owner,

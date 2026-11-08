@@ -148,6 +148,13 @@ def test_refuses_links_folders_and_missing_files(tmp_path: Path) -> None:
         pytest.skip("cannot create symlinks here")
     with pytest.raises(VidgenError, match="symbolic link"):
         copy_into_share([link], folder)
+    # a linked folder inside the project leading elsewhere: refused too (O_NOFOLLOW checks only the file)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "audio.mp3").write_bytes(b"private")
+    (project / "build" / "videogen" / "shot2").symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(VidgenError, match=r"goes through .*shot2, which is a symbolic link"):
+        copy_into_share([project / "build" / "videogen" / "shot2" / "audio.mp3"], folder, project)
 
 
 def test_server_answers_only_the_exact_paths(tmp_path: Path) -> None:
@@ -317,6 +324,12 @@ def test_public_address_that_never_works_stops_before_anything_is_sent(tmp_path:
 
     with pytest.raises(VidgenError, match="length 3 instead of"):
         QuickTunnelHost([audio], settings=SETTINGS, executable=fake_cloudflared, fetch=wrong_length).open()
+
+    def no_length(method: str, url: str, timeout: float) -> Response:   # a proxy may drop it from a HEAD answer
+        return Response(200, b"", {})
+
+    with QuickTunnelHost([audio], settings=SETTINGS, executable=fake_cloudflared, fetch=no_length) as host:
+        assert host.is_open and host.redact(f"see {host.url_of(audio)}") == f"see https://{FAKE_HOST}/<secret>/{host.files[0].name}"
 
 
 def test_self_test_and_the_cli(tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

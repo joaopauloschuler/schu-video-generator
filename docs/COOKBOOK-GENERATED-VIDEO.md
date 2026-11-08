@@ -56,10 +56,12 @@ account.
 **Inputs must be URLs for sound and video.** OpenRouter accepts pictures inline (data URLs) but
 refuses inline audio and video: HTTP 400 "Invalid reference URL: input_references[1].audio_url.url:
 Only HTTPS URLs are allowed". The beat's voice (`audio:`, and every talking shot) and the guide
-render (`guide:`) therefore need a hosted https URL. vidgen has no host set up yet, so those shots
-are blocked (`inline_media: images`) or have a problem (`inline_media: all`), and `run --pay`
-refuses them before anything is sent. Shots made only from words and pictures (establishing
-shots, action shots without `audio:` / `guide:`) work today.
+render (`guide:`) therefore need a hosted https URL. vidgen can share them for you through a
+short-lived Cloudflare quick tunnel once you turn it on (`videogen: {host: quick_tunnel}`; see
+[section 5](#5-sharing-voice-and-video-inputs-safely)). Without it those shots are blocked
+(`inline_media: images`) or have a problem (`inline_media: all`), and `run --pay` refuses them
+before anything is sent. Shots made only from words and pictures (establishing shots, action
+shots without `audio:` / `guide:`) need no host.
 
 **Picture sizes.** Sheet pictures are large (2048x3642, 5-7 MB each); six of them made a 48 MB
 request, more than the 21 MB vidgen sends. vidgen now sends each picture as a smaller copy
@@ -74,7 +76,7 @@ title: The Early Ferry
 format: {width: 1080, height: 1920, fps: 30}
 voice: {provider: kokoro, voice: bf_emma}
 voices: {theo_voice: {voice: am_michael, label: Theo}}
-videogen: {provider: openrouter, budget_usd: 2.0}
+videogen: {provider: openrouter, budget_usd: 2.0, host: quick_tunnel}   # host: shares the talking shot's voice (section 5)
 style_sheet: {palette: [slate blue, sea green, warm orange], lens: "35 mm", notes: "soft overcast light", frames: 1, frame_prompt: "a foggy harbour"}
 characters:
   - name: theo
@@ -97,7 +99,7 @@ vidgen generate sheets --pay         # the reference pictures (look at them in a
 #   set approved: true on each sheet you like (no shot uses a sheet before)
 vidgen tts                           # the voices (the talking shot is lip-synced to them)
 vidgen generate inputs --guide       # cuts each shot's voice, guide render and first frame
-vidgen generate plan                 # nothing blocked? (a talking shot stays blocked until its voice is hosted)
+vidgen generate plan                 # nothing blocked? it also lists the files a run would share
 vidgen generate run --pay            # the clips, each kept as a take with QA and a contact sheet
 vidgen generate takes                # look at every contact sheet and QA finding
 vidgen generate pick --shot closeup_b1 --take 1
@@ -115,7 +117,116 @@ The scene under a generated shot still matters: it is what shows when no take is
 the guide render shows the model, and what the take fades from and to. A stage scene with the
 characters in place is a good fallback.
 
-## 5. Takes, QA and picking
+## 5. Sharing voice and video inputs safely
+
+**Why it is needed.** A talking shot is lip-synced to the beat's own voice, and a guide render
+shows the model how the scene moves. OpenRouter will only take sound and video as a web address
+(https), not as a file inside the request. So for those shots the files have to be reachable on
+the internet for a moment, long enough for the video provider to download them.
+
+**How vidgen does it.** It is off until you write `videogen: {host: quick_tunnel}` in
+`video.yaml`. Then, for each paid shot that has a voice or guide, `vidgen generate run --pay`:
+
+1. copies **only that shot's** `audio.mp3` / `guide.mp4` into a new temporary folder outside
+   your project, under random names (nothing else of your project, its `build/` folder or your
+   computer is ever reachable; pictures still go inside the request, not through the tunnel);
+2. starts a tiny web server on your own computer that answers only those exact addresses, which
+   contain a long random secret part; anything else gets "not found";
+3. starts Cloudflare's free `cloudflared` program, which gives the server a temporary public
+   address such as `https://some-random-words.trycloudflare.com` (no Cloudflare account needed);
+4. checks through that public address that the files arrive whole; if not, it stops and closes
+   everything, and nothing is sent to OpenRouter or paid;
+5. sends the job with the secret addresses, and closes everything again as soon as the job is
+   finished or failed (before the clip is downloaded), or 30 seconds after the provider fetched
+   every file, or after 15 minutes at most, whichever comes first. Ctrl+C or an error closes it
+   too. Closing stops `cloudflared`, stops the server and deletes the copies.
+
+Each shot gets its own tunnel and its own secret, so no file stays reachable while other shots
+are made. **What this means for you:** for those few minutes, anyone who has the full address
+could download that shot's voice or guide clip; the address is random, never printed and never
+written to disk, and it stops working when the tunnel closes. Do not turn the host on for
+recordings you would not send to the video provider anyway. Settings: `host_max_minutes` (15,
+the hard limit), `host_grace_seconds` (30), `tunnel_protocol` (`http2`, works on most
+networks; `quic` or `auto` otherwise), `cloudflared` (the program's path, when it is not
+found).
+
+**What the ledger records** (`videogen-ledger.jsonl`, next to the paid jobs): `host_open` with
+the tunnel's host name and each shared file's name, size and SHA-256 fingerprint (never the
+secret address); `host_fetch` for every download of a shared file (which file, GET or HEAD,
+the answer and the bytes sent; vidgen's own check is one of them); `host_close` with the reason
+(`done`: the job ended; `all files fetched`; `max lifetime`; `error: ...`; `interrupted`),
+how long it was open and whether the copies were deleted. No addresses of who downloaded are
+kept.
+
+### Test on Windows
+
+1. Install `cloudflared` (free), then **open a new terminal** so it is found:
+
+   ```bash
+   winget install Cloudflare.cloudflared
+   cloudflared --version
+   ```
+
+2. Check the tunnel alone. This is free: it shares one tiny text file vidgen makes up, fetches
+   it back through the public address and closes; nothing goes to OpenRouter.
+
+   ```bash
+   vidgen generate host-test
+   ```
+
+   OK looks like this (the address differs every time):
+
+   ```text
+   sharing 1 file(s) (34 bytes) through a Cloudflare quick tunnel for at most 15 min; starting cloudflared
+   public address some-random-words.trycloudflare.com (the files' paths have a secret part); checking it serves the files
+     ok   public address answers HEAD with the file's length (some-random-words.trycloudflare.com)
+     ok   GET through the tunnel returns the same bytes (HTTP 200, 34 bytes)
+     ok   the address without the secret answers 404 (HTTP 404)
+     ok   a wrong secret answers 404 (HTTP 404)
+   quick tunnel closed (done); temporary copies deleted
+   host test OK: some-random-words.trycloudflare.com served the file and refused other paths; closed (done)
+   ```
+
+   `vidgen generate host-test --keep 60` keeps it open a minute and prints the full address, to
+   open in a browser. If it fails: "cloudflared was not found" means a new terminal is needed
+   (or set `videogen: {cloudflared: "C:/Program Files (x86)/cloudflared/cloudflared.exe"}`);
+   "stopped without a quick tunnel address" or "never served" usually means a firewall,
+   antivirus or company network blocks Cloudflare (try `tunnel_protocol: quic` or `auto`, or
+   another network). Run it again before deciding: a brand new address sometimes needs a few
+   seconds more.
+
+3. See what a run would share, without paying. In your project, with `host: quick_tunnel` set,
+   the voices made (`vidgen tts`) and the inputs cut (`vidgen generate inputs`):
+
+   ```bash
+   vidgen generate plan --shot closeup_b1
+   ```
+
+   The shot is no longer blocked, and it lists exactly the files it would share:
+
+   ```text
+     audio: build/videogen/closeup_b1/audio.mp3 (the beat's voice, 3.43 s)
+     would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most 15 min; copies under random names behind a secret path; pictures are not shared, they go inline):
+       build/videogen/closeup_b1/audio.mp3 (55,214 bytes)
+   ```
+
+4. One paid talking shot (heygen/avatar-iv, about $0.05 per second: a 4 s line is about $0.20;
+   it needs `budget_usd`):
+
+   ```bash
+   vidgen generate run --pay --shot closeup_b1
+   vidgen generate ledger
+   ```
+
+   It prints the sharing lines as in step 2, then `quick tunnel closed (done)` once the job is
+   finished, then the new take. In `videogen-ledger.jsonl` you find, in order: `host_open`, a
+   `host_fetch` (vidgen's own check, `HEAD`), `submit`, a `host_fetch` for each download by the
+   provider (usually one `GET` of the whole file), `host_close` with `reason: done`, and the
+   job's `completed` line with its cost. No provider download recorded means the provider did
+   not fetch the voice through the tunnel: tell the developers (DESIGN §115). If the provider refuses the job, the tunnel is closed
+   the same way and the error is shown with the secret part replaced by `<secret>`.
+
+## 6. Takes, QA and picking
 
 Each clip becomes `takes/<shot>/<n>.mp4` with `<n>.json` (model, cost, QA) and
 `<n>.contact.png`. QA checks the length, the aspect ratio and size, black and frozen stretches,
@@ -124,7 +235,7 @@ pick it; warnings are for you to judge on the contact sheet. To get another take
 request (another `seed`, a clearer prompt, another model): the same request is never paid again.
 `--take none` keeps vidgen's own picture for that beat. Commit `takes/` (paid footage).
 
-## 6. In the film
+## 7. In the film
 
 The shown take covers its beat (from the beat's start to the next beat's; the last beat of a
 scene keeps it to the scene's end), scaled and cropped to the format (`fit: cover`, or `contain`
@@ -133,7 +244,7 @@ fading from and to vidgen's picture of the beat (`crossfade`; a cut at scene edg
 two takes). Captions, overlays and titles are drawn on top; the voice, music and effects are
 vidgen's mix.
 
-## 7. Publishing
+## 8. Publishing
 
 When the film shows takes, the description file ends with "Includes AI-generated footage
 (models)." and `vidgen lint` notes each scene (`generated_footage`). Platforms ask you to disclose

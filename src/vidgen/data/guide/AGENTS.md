@@ -187,7 +187,7 @@ commands are tools with the same JSON documents: `guide`, `plan`, `init`, `valid
 `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
 `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic`, and `studio_sessions`, `studio_read`,
 `studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio`, and
-`generate_plan`, `generate_run`, `generate_status`, `generate_takes`, `generate_pick` for generated video shots (options in snake_case: `per_beat`,
+`generate_plan`, `generate_run`, `generate_status`, `generate_takes`, `generate_pick`, `generate_host_test` for generated video shots (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery`, `character_sheet` and `generate_takes` their pictures. `render` previews by default. `tts`,
@@ -3934,6 +3934,15 @@ scenes:
   "Includes AI-generated footage (models)" and lint's `generated_footage` reminds you to mark the
   upload as altered or synthetic content. Video generation is not eligible for Zero Data
   Retention: send no private faces or material you may not share.
+- **Voice and guide inputs** (talking shots, `audio:`, `guide:`): OpenRouter takes sound and
+  video only as https URLs, so these shots stay blocked until the user opts in with
+  `videogen: {host: quick_tunnel}` (default `none`). Then each paid shot shares only its own
+  `audio.mp3` / `guide.mp4` (copies, random names, a secret path) through its own Cloudflare
+  quick tunnel while its job runs, at most `host_max_minutes` (15), and closes it when the job
+  ends. Needs `cloudflared` (Windows `winget install Cloudflare.cloudflared`). Check it free
+  first with `vidgen generate host-test`; `generate plan` lists exactly which files a run would
+  share. Ask the user before turning the host on: the files are reachable on the public
+  internet by anyone with the address for those minutes.
 
 ### Your content and third-party services
 

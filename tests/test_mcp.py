@@ -207,7 +207,7 @@ TOOLS = {
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview", "story_draft", "shorts_suggest",
     "music_template", "music_patches", "music_render", "music_check", "audio_check",
     "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
-    "generate_plan", "generate_run", "generate_status", "generate_takes", "generate_pick",
+    "generate_plan", "generate_run", "generate_status", "generate_takes", "generate_pick", "generate_host_test",
 }
 
 

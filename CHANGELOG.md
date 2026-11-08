@@ -5,13 +5,22 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–305)
+## Unreleased (Steps 193–306)
+
+### Generated video: talking shots and guides through the quick tunnel (Step 306)
+
+- New `videogen.host: none | quick_tunnel` (default `none`: nothing changes). With `quick_tunnel`, `vidgen generate run --pay` shares a shot's voice (`audio.mp3`) and guide render (`guide.mp4`) through its own Cloudflare quick tunnel: opened and checked just before the job is submitted (if the check fails, nothing is sent or paid), closed as soon as the job is completed or failed (before the download), or once the provider fetched every file plus `host_grace_seconds`, or after `host_max_minutes`, whichever comes first. One tunnel per shot, so no file stays reachable while other shots are made. Talking shots (heygen/avatar-iv lip-sync) and shots with `guide:` can now be paid for.
+- `vidgen generate plan` no longer blocks those shots when the host is on, and lists per shot exactly which files a run would share, their sizes and the tunnel's maximum lifetime (JSON `shared`, `share_max_minutes`); without `cloudflared` the shot is blocked with the install hints; without the host the blocked reason names `videogen: {host: quick_tunnel}`.
+- A provider error that quotes a shared URL is shown with the secret part replaced by `<secret>`.
+- MCP: `generate_host_test` (the free check); `generate_plan` / `generate_run` follow the CLI.
+- Safer sharing: a file reached through a linked folder inside the project (or a Windows junction) is refused; the public check accepts a `HEAD` answer without `Content-Length` (still refuses a wrong one); on Windows without `taskkill` cloudflared itself is stopped.
+- Cookbook section "Sharing voice and video inputs safely", with a "Test on Windows" walkthrough (install, `host-test`, a dry plan, one paid talking shot).
 
 ### Generated video: sharing audio / video inputs through a Cloudflare quick tunnel (Step 305)
 
 - New `vidgen.videogen.host`: shares exactly the given files (copies under random names in a temporary folder outside the project; links refused) from a tiny local server on 127.0.0.1 that answers only `GET` / `HEAD` of `/<secret>/<name>` (404 for everything else, no listing, no `Server` header), through `cloudflared tunnel --url ... --no-autoupdate --protocol http2`; every file is checked through the public `https://<words>.trycloudflare.com` address before use; cloudflared (its whole process tree), the server and the copies are closed and deleted when the work ends, on an error or Ctrl+C, after every file was fetched plus a grace period, or at a hard maximum lifetime (15 min). The ledger records `host_open` (host name only, files with size and SHA-256), `host_fetch` and `host_close`.
 - `vidgen generate host-test [PROJECT] [--keep SECONDS] [--json]`: a free check of the tunnel (one tiny text file shared, fetched back, other paths checked for 404, closed); nothing goes to OpenRouter. A missing `cloudflared` names how to install it (Windows `winget install Cloudflare.cloudflared`, macOS `brew install cloudflared`).
-- New `videogen` settings: `cloudflared`, `tunnel_protocol` (`http2` | `quic` | `auto`), `host_max_minutes`, `host_grace_seconds`. Paid runs do not use the tunnel yet (Step 306 adds `videogen.host: quick_tunnel`).
+- New `videogen` settings: `cloudflared`, `tunnel_protocol` (`http2` | `quic` | `auto`), `host_max_minutes`, `host_grace_seconds`. Paid runs use it with `videogen.host: quick_tunnel` (Step 306).
 
 ### 3D scenes: `guide_passes` takes the command-line forms (Step 304)
 

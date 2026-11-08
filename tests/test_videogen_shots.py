@@ -27,6 +27,7 @@ from vidgen.videogen.models import Catalog, parse_models
 from vidgen.videogen.run import ledger_path
 from vidgen.videogen.sheets import character_sheet, project_sheets, run_sheets, style_sheet
 from vidgen.videogen.shots import pick_aspect, plan_shots, project_shots, shot_problems
+from test_videogen_host import fake_cloudflared  # noqa: F401 - the fixture
 
 DATA = Path(__file__).parent / "data" / "openrouter_video_models.json"
 DOC = json.loads(DATA.read_text(encoding="utf-8"))
@@ -450,3 +451,100 @@ def test_cli_plan_text_and_json(make_project, tmp_path: Path, monkeypatch: pytes
     assert "sheets: 3 picture(s) to make" in capsys.readouterr().out
     assert cli.main(["generate", "plan", str(root), "--pay"]) != 0
     assert "never pays" in capsys.readouterr().err
+
+
+# ----- hosted audio / video through a quick tunnel (DESIGN.md §115.2) ----------------------------------
+
+
+def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
+    make_project, tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    import tempfile
+
+    from test_videogen_host import FAKE_HOST, local_fetch
+
+    from vidgen.videogen.host import HostSettings, ShareOptions
+    from vidgen.videogen.mock import MockOpenRouter, MockVideoProvider
+    from vidgen.videogen.openrouter import Response
+    from vidgen.videogen.shots import NO_HOST_BLOCKED
+    from vidgen.videogen.workflow import run_shots
+
+    temp = tmp_path / "tmp"
+    temp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(temp))   # the share folders land here
+    videogen = {"provider": "mock", "budget_usd": 2.0, "host": "quick_tunnel", "cloudflared": fake_cloudflared[1]}
+    root = make_project(shot_config(TALK, WIDE, videogen=videogen))
+    run_sheets(Project.load(root), pay=True, provider=StubImages(), out=lambda line: None)
+    approve(root)
+    project = Project.load(root)
+    tone(project.audio_dir / "talk.mp3", 3.0)
+    make_inputs(project, project_shots(project, CATALOG), out=lambda line: None)
+    audio = root / "build" / "videogen" / "talk" / "audio.mp3"
+
+    # the plan: not blocked; exactly the voice would be shared, for at most 15 min; pictures are not
+    talk, wide = plan_shots(project, catalog=CATALOG).shots
+    assert talk.shot.blocked == [] and talk.shot.problems == [] and talk.shot.share_minutes == 15
+    assert [i.path for i in talk.shot.shared] == [audio] and wide.shot.share_minutes is None
+    text = "\n".join(talk.lines(root))
+    assert "would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most 15 min" in text
+    assert f"    build/videogen/talk/audio.mp3 ({audio.stat().st_size:,} bytes)" in text
+    monkeypatch.setattr("vidgen.videogen.models.load_catalog", lambda *a, **k: CATALOG)
+    assert cli.main(["generate", "plan", str(root), "--json", "--shot", "talk"]) == 0
+    (doc,) = json.loads(capsys.readouterr().out)["shots"]
+    assert doc["shared"] == [{"path": "build/videogen/talk/audio.mp3", "bytes": audio.stat().st_size}] and doc["share_max_minutes"] == 15
+    # without the host: blocked with the way out; without cloudflared: blocked with the install hints
+    off = Project.load(make_project(shot_config(TALK), folder="off"))
+    assert NO_HOST_BLOCKED in plan_shots(off, catalog=CATALOG).shots[0].shot.blocked
+    missing = Project.load(make_project(shot_config(TALK, videogen={**videogen, "cloudflared": "nowhere/cloudflared"}), folder="missing"))
+    assert any("winget install Cloudflare.cloudflared" in b for b in project_shots(missing, CATALOG)[0].blocked)
+
+    fetch = local_fetch(tmp_path)
+    settings = HostSettings(url_timeout=10, verify_timeout=1.0, verify_interval=0.05, grace_seconds=30)
+    lines: list[str] = []
+    share = ShareOptions(settings, out=lines.append, executable=fake_cloudflared, fetch=fetch)
+    ledger = Ledger(ledger_path(root, "mock"))
+    start = len(ledger.events())   # the sheet pictures
+
+    def audio_url(body: bytes | None) -> str:
+        return json.loads(body or b"{}")["input_references"][-1]["audio_url"]["url"]
+
+    # a provider error quoting the URL: the secret is not passed on; the tunnel is closed; nothing paid
+    def refusing(method: str, url: str, headers: Any, body: bytes | None, timeout: float) -> Response:
+        return Response(400, json.dumps({"error": {"code": 400, "message": f"Invalid reference URL: {audio_url(body)}"}}).encode(), {})
+
+    provider = MockVideoProvider(MockOpenRouter())
+    provider._transport = refusing
+    with pytest.raises(VidgenError) as caught:
+        run_shots(project, pay=True, shot_ids=["talk"], provider=provider, catalog=CATALOG, share=share, out=lines.append)
+    message = str(caught.value)
+    assert "Invalid reference URL: https://" in message and "/<secret>/" in message
+    assert [e["event"] for e in ledger.events()[start:]] == ["host_open", "host_fetch", "host_close"]   # the check's HEAD; no job
+    assert ledger.events()[-1]["reason"] == "error: VidgenError" and list(temp.iterdir()) == []
+
+    # the paid run: the provider fetches the voice through the tunnel when the job is submitted
+    api = MockOpenRouter(cost=0.2)
+    got: list[tuple[str, Response]] = []
+
+    def provider_side(method: str, url: str, headers: Any, body: bytes | None, timeout: float) -> Response:
+        if method == "POST":
+            got.append((audio_url(body), fetch("GET", audio_url(body), 5)))
+        return api(method, url, headers, body, timeout)
+
+    provider = MockVideoProvider(api)
+    provider._transport = provider_side
+    before = len(ledger.events())
+    report = run_shots(project, pay=True, shot_ids=["talk"], provider=provider, catalog=CATALOG, share=share, out=lines.append)
+    assert [s.status for s in report.shots] == ["paid"] and provider.uploader is None
+    ((url, answer),) = got
+    assert url.startswith(f"https://{FAKE_HOST}/") and url.endswith(".mp3") and "audio" not in url
+    assert answer.status == 200 and answer.body == audio.read_bytes()
+    assert list(temp.iterdir()) == [], "the share folder was not deleted"
+    events = ledger.events()[before:]
+    names = [e["event"] for e in events]
+    assert names.index("host_open") < names.index("submit") < names.index("host_close") < names.index("completed")
+    assert [(e["method"], e["status"]) for e in events if e["event"] == "host_fetch"] == [("HEAD", 200), ("GET", 200)]
+    closed = next(e for e in events if e["event"] == "host_close")
+    assert closed["reason"] == "done" and closed["folder_deleted"] is True   # closed once the job ended, before the download
+    secret = url.split("/")[3]
+    assert secret not in ledger.path.read_text(encoding="utf-8") and all(secret not in line for line in lines)
+    assert any("at most 15 min" in line for line in lines) and any("quick tunnel closed (done)" in line for line in lines)

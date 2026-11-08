@@ -142,6 +142,30 @@ def _safe_suffix(source: Path) -> str:
     return suffix if re.fullmatch(r"\.[a-z0-9]{1,8}", suffix) else ""
 
 
+def _link_on_the_way(source: Path, root: Path | None) -> Path | None:
+    """``source`` itself when it is a link, else the first folder between the project and it that
+    is one (a link in ``build/videogen/<shot>/`` must not lead elsewhere; folders above the project
+    are not checked). Windows junctions count as links (Python 3.12+ can tell them)."""
+    if _is_link(source):
+        return source
+    if root is None:
+        return None
+    try:
+        rest = source.absolute().relative_to(root.absolute()).parts[:-1]
+    except ValueError:
+        return None
+    folder = root.absolute()
+    for part in rest:
+        folder = folder / part
+        if _is_link(folder):
+            return folder
+    return None
+
+
+def _is_link(path: Path) -> bool:
+    return path.is_symlink() or bool(getattr(path, "is_junction", lambda: False)())
+
+
 def copy_into_share(sources: Sequence[Path], folder: Path, root: Path | None = None) -> list[SharedFile]:
     """Copy each source into ``folder`` under a new random name (extension kept), with its size
     and SHA-256. Refuses a symlink, a missing file, anything but a regular file, and a source
@@ -150,8 +174,9 @@ def copy_into_share(sources: Sequence[Path], folder: Path, root: Path | None = N
     seen: set[Path] = set()
     for source in sources:
         source = Path(source)
-        if source.is_symlink():
-            raise VidgenError(f"{source}: is a symbolic link; vidgen shares only regular files, never links")
+        link = _link_on_the_way(source, root)
+        if link is not None:
+            raise VidgenError(f"{source}: {'is' if link == source else f'goes through {link}, which is'} a symbolic link; vidgen shares only regular files, never links")
         if not source.is_file():
             raise VidgenError(f"{source}: not a file, nothing to share")
         key = source.resolve()
@@ -343,6 +368,8 @@ def stop_process_tree(process: subprocess.Popen[Any], wait_seconds: float = 5.0)
         if process.poll() is None and taskkill:
             # check=False: taskkill fails when the process ended in between, which is the goal.
             subprocess.run([taskkill, "/PID", str(process.pid), "/T", "/F"], capture_output=True, check=False)
+        elif process.poll() is None:
+            process.kill()   # no taskkill: at least cloudflared itself
     else:
         try:
             os.killpg(process.pid, signal.SIGTERM)
@@ -441,7 +468,8 @@ def urllib_fetch(method: str, url: str, timeout: float) -> Response:
 
 
 def verify_public(url: str, shared: SharedFile, fetch: Fetch, *, timeout: float, interval: float, sleep: Callable[[float], None] = time.sleep) -> int:
-    """Ask the public address for ``shared`` (HEAD) until it answers 200 with the file's length,
+    """Ask the public address for ``shared`` (HEAD) until it answers 200 with the file's length (or
+    no length: a proxy may leave it out of a HEAD answer; a wrong length is refused),
     retrying every ``interval`` s for ``timeout`` s (a new quick tunnel name takes a few seconds
     to reach DNS); returns the attempts. A :class:`VidgenError` with the last answer otherwise."""
     deadline = time.monotonic() + timeout
@@ -452,7 +480,7 @@ def verify_public(url: str, shared: SharedFile, fetch: Fetch, *, timeout: float,
         try:
             answer = fetch("HEAD", url, min(15.0, max(1.0, timeout)))
             length = answer.headers.get("content-length")
-            if answer.status == 200 and length == str(shared.size):
+            if answer.status == 200 and (length is None or length == str(shared.size)):
                 return attempts
             last = f"HTTP {answer.status}" + (f", length {length} instead of {shared.size}" if answer.status == 200 else "")
         except (OSError, VidgenError) as exc:
@@ -579,6 +607,11 @@ class QuickTunnelHost:
                 return self._url(shared)
         raise VidgenError(f"{source} is not shared by this host")
 
+    def redact(self, text: str) -> str:
+        """``text`` without this host's secret (e.g. a provider's error that quotes a URL)."""
+        secret = self.server.secret if self.server is not None else None
+        return text.replace(secret, "<secret>") if secret else text
+
     def urls(self) -> dict[Path, str]:
         """Every shared source with its public URL."""
         return {shared.source: self._url(shared) for shared in self.files}
@@ -683,6 +716,27 @@ class QuickTunnelHost:
                     return False
                 time.sleep(0.2)
         return False
+
+
+@dataclass(frozen=True)
+class ShareOptions:
+    """How a paid run opens one host per shot (``videogen.host: quick_tunnel``): the settings,
+    where progress lines go, and (tests) a fake cloudflared and network."""
+
+    settings: HostSettings = field(default_factory=HostSettings)
+    out: Callable[[str], None] | None = None
+    executable: Sequence[str] | None = None
+    fetch: Fetch | None = None
+
+    @classmethod
+    def from_config(cls, settings: Any, out: Callable[[str], None] | None = None) -> ShareOptions:
+        """From a :class:`vidgen.config.VideogenConfig`."""
+        return cls(HostSettings.from_config(settings), out)
+
+    def host(self, sources: Sequence[Path], root: Path, ledger: Ledger | None) -> QuickTunnelHost:
+        """A host (not open yet) for ``sources`` of the project ``root``; it closes by itself once
+        every file was fetched (plus the grace period) or at the maximum lifetime."""
+        return QuickTunnelHost(sources, root=root, settings=self.settings, ledger=ledger, executable=self.executable, fetch=self.fetch, out=self.out)
 
 
 def _size_text(size: int) -> str:

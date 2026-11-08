@@ -21979,6 +21979,7 @@ Built:
 Open: a talking shot cannot drop its audio (`audio: none` is refused for `talking`), so until a
 host exists (owner's choice) heygen/avatar-iv and the sample's quay_b1 / closeup_b1 cannot be
 paid for; whether video models accept inline pictures (harbour_b1 is the first such job to try).
+Step 306 adds the host (`videogen.host: quick_tunnel`, §115).
 
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
@@ -22507,7 +22508,7 @@ with `vidgen generate host-test`.
 - **Settings** (`HostSettings.from_config(videogen)`): `videogen.cloudflared` (null),
   `tunnel_protocol: http2 | quic | auto` (http2: TCP 443, which more networks allow than QUIC's
   UDP 7844), `host_max_minutes` (15, at most 120), `host_grace_seconds` (30).
-  `videogen.host: none | quick_tunnel` (off by default) comes with Step 306, which uses the host.
+  `videogen.host: none | quick_tunnel` (off by default) switches it on for paid runs (§115.2).
 - **Self-test** `host_self_test(settings, keep_seconds=, out=)` and **`vidgen generate host-test
   [PROJECT] [--keep SECONDS] [--json]`**: free, needs no key and sends nothing to OpenRouter. It
   writes one tiny text file (`vidgen host test <random>`) in its own temporary folder, shares it
@@ -22527,3 +22528,86 @@ with `vidgen generate host-test`.
   exiting, printing nothing, not starting; a public address that never works (only HEADs sent, the
   ledger's open / close); a wrong length; the self-test (and a tampered answer failing it); the
   CLI outside a project (text and JSON); the config keys.
+
+### 115.2 Wiring: paid runs, the plan, MCP (Step 306)
+
+- **The switch.** `videogen.host: none | quick_tunnel`, default `none`: without it everything is
+  as before (a shot with audio / video inputs is blocked with `shots.NO_HOST_BLOCKED`, which
+  names the setting and `host-test`; with `inline_media: all` it is a problem). With
+  `quick_tunnel` such a shot is not blocked or a problem for that reason; `Shot.share_minutes`
+  is `host_max_minutes` and `Shot.shared` its audio / video inputs. When `find_cloudflared`
+  fails the shot is blocked with the install hints (the plan is free, so the check is cheap:
+  `which` and a few `is_file`).
+- **One tunnel per shot** (the owner's decision, Step 306). A tunnel for the whole run would
+  keep every shot's voice reachable while other shots' jobs run (minutes each) and would need a
+  lifetime longer than the 15 min limit for a long run; one per shot shares only that shot's
+  files, with its own secret, for that one job. The cost is a few seconds of start-up and check
+  per shot. Split parts (`<beat>_p<n>`) are shots of their own, so each gets its own tunnel.
+- **In `generate_clip`** (`run.py`): after the cache, an earlier job, the model checks, the key
+  and the budget (so a tunnel is never opened for a run that would be refused),
+  `hosted_inputs(sendable)` lists the local audio / video files. If there are any and a
+  `ShareOptions` is given (or `videogen.host: quick_tunnel` makes the default one), a
+  `QuickTunnelHost` is opened (copies, server, cloudflared, every file checked through the
+  public address: a failure here closes everything and raises before anything is sent or
+  paid); the provider's `uploader` is set to `host.url_of` for the submit only (restored in
+  `finally`); then `submit`, the `submit` ledger line and `provider.wait(job)` run inside the
+  `with` block, so the tunnel closes (`done`) as soon as the job reaches a final state
+  (completed, failed, cancelled, expired), before the download and before the job's final
+  ledger line. It closes earlier by itself `host_grace_seconds` after every file was fetched by
+  a complete `GET`, and at `host_max_minutes` whatever happens (a provider that only `HEAD`s
+  files, or fetches late, is cut off by the lifetime: accepted). A `VidgenError` inside the
+  block (a refused submit, a poll timeout) closes it (`error: VidgenError`) and is raised again
+  with `host.redact(...)` (the secret replaced by `<secret>`: OpenRouter's 400 quotes the
+  reference URL); Ctrl+C closes it (`interrupted`). A job resumed from the ledger (it timed out
+  earlier) is only polled: no tunnel is opened again (providers fetch inputs when the job
+  starts). Without a host the provider's `media_url` still stops the submit with a clear error.
+- **`run_shots`** builds `ShareOptions.from_config(settings, out=...)` once when the host is on
+  (its progress lines indented under the run's) and passes it to every shot; `share=` replaces
+  it (tests: fake cloudflared and network). The dry run never opens a host.
+- **The plan** prints, for a shot that would be shared (not cached, no earlier job), the line
+  "would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most
+  N min; copies under random names behind a secret path; pictures are not shared, they go
+  inline):" and each file with its size (`not made yet` while missing). JSON per shot:
+  `shared: [{path, bytes}]` (empty when nothing would be shared) and `share_max_minutes`.
+  `--pay` is still required to share anything.
+- **MCP**: `generate_host_test` (`keep` 0-300 s; read-only, open-world; JSON mode, so the URL
+  with its secret is never in the answer); `generate_plan` / `generate_run` run the CLI and so
+  follow the setting.
+- **Docs**: `docs/COOKBOOK-GENERATED-VIDEO.md` §5 "Sharing voice and video inputs safely" (what is
+  shared, for how long, what the ledger records, "Test on Windows": winget, `host-test`, a dry
+  `plan`, one paid talking shot); CONFIG (setting, quick tunnel bullet, plan JSON, MCP); the
+  guide / AGENTS.md (the key and to ask the user before turning it on).
+- **Tests** (`tests/test_videogen_shots.py`): a talking shot with the host on — the plan (not
+  blocked, exactly the voice listed with its size, JSON), host off (blocked with the setting),
+  cloudflared missing (blocked with the install hints); a paid run on the mock API with the fake
+  cloudflared: a provider error quoting the URL is redacted, the ledger has open / the check's
+  fetch / close and no job; then the provider fetches the voice through the tunnel during the
+  submit, the bytes match, the ledger order is `host_open` < `submit` < `host_close` (`done`) <
+  `completed`, the share folder is gone, the secret is in no ledger line or printed line, the
+  provider's `uploader` is restored.
+
+### 115.3 Review of Steps 305–306
+
+Checked against the security requirements of the brief; fixed in Step 306:
+
+- **Links in folders.** `O_NOFOLLOW` checks only the last part of a path, so a linked folder
+  inside the project (e.g. `build/videogen/<shot>` pointing elsewhere) would have been followed.
+  `copy_into_share` now refuses a source when any folder between the project and the file is a
+  link (folders above the project are not checked: a project under a linked home folder still
+  works). Windows junctions count as links where Python can tell them (3.12+ `is_junction`).
+- **HEAD without `Content-Length`.** A proxy may drop the length from a `HEAD` answer; the check
+  now accepts 200 without a length and still refuses a wrong one (host-test's `GET` compares the
+  bytes).
+- **Windows without `taskkill`.** `stop_process_tree` did nothing there until the 5 s wait ran
+  out; it now kills cloudflared itself at once (cloudflared starts no children on Windows).
+- **The secret in errors.** A provider error quoting the reference URL would have printed the
+  secret (harmless once the tunnel is closed, but against "never shown"); redacted now.
+
+Checked and kept: only exact `GET` / `HEAD` paths answer (query strings, traversal, other
+methods: 404); no `Server` header; `Cache-Control: no-store` (Cloudflare caches `.mp3` / `.mp4`
+by extension unless the origin says no-store); the server binds 127.0.0.1 only; requests are
+kept in memory without client addresses; the ledger has the host name, never the path's secret;
+`host_open` is written before the checks so every open has a close; `close` is idempotent and
+runs every step; an `atexit` hook closes a host left open. Open (needs the owner on Windows):
+the real tunnel, `taskkill`, and whether OpenRouter's providers fetch with `GET` (the ledger's
+`host_fetch` lines will show it on the first paid talking shot).

@@ -791,6 +791,19 @@ def build_server(root: Path) -> Any:
         options = {"pay": not dry_run, "shot": shot, "budget": budget, "variant": variant}
         return answer(await call(ctx, args_of(["generate", "run"], [str(where(project))], options), heavy=True))
 
+    @tool("Check the Cloudflare quick tunnel that shares a shot's voice / guide with the video provider "
+          "(videogen.host: quick_tunnel), free: shares one tiny generated text file, fetches it back through the public "
+          "address, checks other paths answer 404, closes. Needs cloudflared; sends nothing to OpenRouter.",
+          ToolAnnotations.model_validate({"readOnlyHint": True, "openWorldHint": True}))
+    async def generate_host_test(
+        ctx: Context,
+        project: Project = ".",
+        keep: Annotated[float | None, Field(ge=0, le=300, description="seconds to keep the tunnel open after the check")] = None,
+        variant: Variant = None,
+    ) -> Any:
+        options = {"keep": keep, "variant": variant}
+        return answer(await call(ctx, args_of(["generate", "host-test"], [str(where(project))], options), heavy=True))
+
     @tool("Generated shots' status: each shot's takes and the one the film shows, the budget, the credit line and the "
           "disclosure reminder (free).", read_only)
     async def generate_status(ctx: Context, project: Project = ".", variant: Variant = None) -> Any:

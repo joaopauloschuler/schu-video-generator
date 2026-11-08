@@ -2021,6 +2021,9 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
                              "frame_image": i.frame, "ready": i.ready} for i in s.shot.inputs],
                  "estimate_usd": s.estimate.cost if s.estimate is not None else None, "cached": s.cached, "left_after_usd": s.left_after,
                  "request_bytes": s.request_bytes,
+                 "shared": [{"path": i.path.relative_to(root).as_posix() if i.path.is_relative_to(root) else str(i.path),
+                             "bytes": i.path.stat().st_size if i.ready else None} for i in s.shot.shared] if s.shot.share_minutes is not None and not s.cached and not s.previous_job else [],
+                 "share_max_minutes": s.shot.share_minutes,
                  "notes": [*s.shot.notes, *s.check.notes], "problems": [*s.shot.problems, *s.check.problems], "blocked": s.shot.blocked,
                  "prompt": s.shot.prompt}
                 for s in plan.shots
@@ -2453,7 +2456,8 @@ def build_parser() -> argparse.ArgumentParser:
         "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
         "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
         "shot's voice (and with --guide its draft render) into build/videogen/; run: generate the ready shots (a dry run; --pay pays, within "
-        "the budget, stopping at the first failure, never retrying) and keep each clip as a take with QA and a contact sheet; status: each "
+        "the budget, stopping at the first failure, never retrying; with videogen.host: quick_tunnel each shot's voice / guide is shared "
+        "through its own quick tunnel while its job runs) and keep each clip as a take with QA and a contact sheet; status: each "
         "shot's takes and the one shown, the credit line; takes: every take with its QA findings and contact sheet; pick: choose a shot's "
         "take (--shot ID --take N | none | auto); ledger: the project's paid jobs, what they cost and what the budget has left; host-test: "
         "share one tiny generated text file through a Cloudflare quick tunnel, fetch it back through the public address and close "

@@ -16,9 +16,13 @@ dry-run plan of ``vidgen generate plan``.
 - **Prompt**: the kind's framing and the shot's ``prompt``, the setting, the characters' sheet
   words, the line said, the style sheet's words and "no on-screen text".
 - **Blocked**: a shot whose sheets are not approved, whose inputs are not made yet, or whose audio
-  / video needs a hosted URL (``videogen.inline_media: images``) is planned and priced but not
-  ready to pay for. With ``inline_media: all`` the audio / video would go inline, which OpenRouter
-  refuses: that is a problem (``run --pay`` refuses it before sending).
+  / video needs a hosted URL (``videogen.host: none``) is planned and priced but not ready to pay
+  for. With ``inline_media: all`` (and no host) the audio / video would go inline, which
+  OpenRouter refuses: that is a problem (``run --pay`` refuses it before sending).
+- **Shared** (``videogen.host: quick_tunnel``, DESIGN.md §115): a paid run shares the shot's audio
+  / video inputs (:attr:`Shot.shared`) through a Cloudflare quick tunnel while its job runs; the
+  plan lists exactly those files and the tunnel's maximum lifetime; without ``cloudflared`` the
+  shot is blocked with the install hints.
 - **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
   smaller copies, :mod:`vidgen.videogen.pictures`, made here into ``build/videogen/pictures/``);
   over :data:`~vidgen.videogen.openrouter.MAX_INLINE_BYTES` is a problem.
@@ -53,7 +57,13 @@ NO_TEXT = "No on-screen text, captions, subtitles or logos"
 #: "Only HTTPS URLs are allowed" for an inline audio reference, Step 296).
 INLINE_AUDIO_VIDEO_PROBLEM = (
     "audio/video references must be https URLs; OpenRouter refuses inline audio/video — "
-    "remove `audio:`/`guide:` from the shot or host the files"
+    "remove `audio:`/`guide:` from the shot or host the files (videogen: {host: quick_tunnel})"
+)
+#: The blocked reason of a shot with audio / video inputs and no host.
+NO_HOST_BLOCKED = (
+    "audio / video inputs need a hosted URL (OpenRouter refuses inline audio / video): set videogen: {host: quick_tunnel} "
+    "to share only this shot's files through a Cloudflare quick tunnel while its job runs (check it first, free: "
+    "`vidgen generate host-test`)"
 )
 #: Picture files a shot may name in ``refs`` / ``first_frame``.
 PICTURE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
@@ -110,6 +120,14 @@ class Shot:
     scene_start: float = 0.0
     #: Where the shot's scene ends on the planned timeline (its fade-out and hold included).
     scene_end: float = 0.0
+    #: With ``videogen.host: quick_tunnel``: the tunnel's maximum lifetime in minutes (``None``:
+    #: nothing is shared, no host or no audio / video input).
+    share_minutes: float | None = None
+
+    @property
+    def shared(self) -> list[ShotInput]:
+        """The inputs a paid run would share through the host (audio and video; pictures go inline)."""
+        return [i for i in self.inputs if i.kind != "image"]
 
     @property
     def folder(self) -> str:
@@ -303,11 +321,20 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
     made_here = [i for i in shot.inputs if i.path.is_relative_to(project.root / INPUTS_DIR)]
     if any(not i.ready for i in made_here):
         shot.blocked.append(f"inputs not made yet: `vidgen generate inputs{' --guide' if spec.guide or source == 'render' else ''}`")
-    if any(i.kind != "image" for i in shot.inputs):
-        if project.config.videogen.inline_media == "all":
+    if shot.shared:
+        settings = project.config.videogen
+        if settings.host == "quick_tunnel":
+            from vidgen.videogen.host import find_cloudflared
+
+            shot.share_minutes = settings.host_max_minutes
+            try:
+                find_cloudflared(settings.cloudflared)
+            except VidgenError as exc:
+                shot.blocked.append(str(exc))
+        elif settings.inline_media == "all":
             shot.problems.append(f"{where}: {INLINE_AUDIO_VIDEO_PROBLEM}")
         else:
-            shot.blocked.append("audio / video inputs need a hosted URL (none is set up; OpenRouter refuses inline audio / video)")
+            shot.blocked.append(NO_HOST_BLOCKED)
 
 
 def _windows(project: Project, scene: SceneConfig, fps: int) -> list[float]:
@@ -454,9 +481,14 @@ class ShotPlan:
                 trim = shot.duration - shot.length
                 lines.append(f"  length: asks for {shot.duration} s, trimmed to {shot.length:.2f} s later" if trim > 1e-6 else f"  length: {shot.duration} s")
         for item in shot.inputs:
-            shown = item.path.relative_to(root).as_posix() if item.path.is_relative_to(root) else str(item.path)
             role = item.role + (" (frame image)" if item.frame else " (reference)" if item.role in ("portrait", "first_frame") else "")
-            lines.append(f"  {role}: {shown} ({item.what}{'' if item.ready else '; not made yet'})")
+            lines.append(f"  {role}: {_shown(item.path, root)} ({item.what}{'' if item.ready else '; not made yet'})")
+        if shot.share_minutes is not None and not self.cached and not self.previous_job:
+            lines.append(
+                f"  would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most {shot.share_minutes:g} min; "
+                "copies under random names behind a secret path; pictures are not shared, they go inline):"
+            )
+            lines += [f"    {_shown(i.path, root)} ({share_size(i)})" for i in shot.shared]
         if self.cached:
             lines.append("  cached: the clip is already made (nothing to pay)")
         if self.previous_job:
@@ -475,6 +507,18 @@ class ShotPlan:
         lines += [f"  blocked: {b}" for b in shot.blocked]
         lines.append(f"  prompt: {shot.prompt}")
         return lines
+
+
+def _shown(path: Path, root: Path) -> str:
+    return path.relative_to(root).as_posix() if path.is_relative_to(root) else str(path)
+
+
+def share_size(item: ShotInput) -> str:
+    """The size of a shared input as the plan prints it (``not made yet`` while missing)."""
+    if not item.ready:
+        return "not made yet"
+    size = item.path.stat().st_size
+    return f"{size / 1e6:.2f} MB" if size >= 100_000 else f"{size:,} bytes"
 
 
 def _clock(seconds: float) -> str:
@@ -580,6 +624,6 @@ def plan_shots(
 
 
 __all__ = [
-    "INPUTS_DIR", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "pick_aspect", "plan_shots", "project_shots",
+    "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "pick_aspect", "plan_shots", "project_shots",
     "shot_problems", "shot_prompt", "video_ratio",
 ]

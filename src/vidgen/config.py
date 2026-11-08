@@ -1024,6 +1024,8 @@ class VideogenConfig(_Strict):
     """Seconds a placed clip fades in from and out to vidgen's own picture of the beat at its edges (0: a cut); a shot's crossfade: overrides it."""
     color_match: float = Field(default=0.5, ge=0, le=1)
     """Light colour matching of placed clips (0 = as made, 1 = full): evens out colour casts (grey world) and exposure, so clips of different models sit together."""
+    host: Literal["none", "quick_tunnel"] = "none"
+    """How local audio / video inputs (a shot's voice, its guide render) reach the provider: none (they are not sent; such shots are blocked) or quick_tunnel (a paid run shares only that shot's files through a Cloudflare quick tunnel while its job runs, at most host_max_minutes)."""
     cloudflared: str | None = Field(default=None, min_length=1)
     """The cloudflared program for the quick tunnel that shares audio / video inputs (a path or a command name; default: cloudflared on PATH)."""
     tunnel_protocol: Literal["http2", "quic", "auto"] = "http2"

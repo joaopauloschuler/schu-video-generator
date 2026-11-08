@@ -15,6 +15,14 @@ or ``budget_usd=``; with both, the lower). In order:
    :mod:`vidgen.videogen.pictures`), ``submit`` line in the ledger, poll, the terminal line
    with ``usage.cost``, download, sidecar ``<hash>.json``.
 
+Local audio / video inputs (a shot's voice, its guide render) are shared through a Cloudflare
+quick tunnel (:mod:`vidgen.videogen.host`, ``videogen.host: quick_tunnel`` or ``share=``): one
+tunnel for this one job, opened (and checked through its public address) after every other check
+and before the submit, closed as soon as the job reaches a final state (completed, failed, ...),
+before the download; earlier when the provider fetched every file (plus the grace period) or at
+the maximum lifetime; also on an error or Ctrl+C. A job resumed from the ledger is only polled:
+no tunnel is opened again. Without a host such inputs stop the submit with a clear error.
+
 The mock provider (``videogen.provider: mock``) keeps its own ledger,
 ``videogen-ledger.mock.jsonl``, so trying the flow never touches the real spending record.
 """
@@ -37,6 +45,7 @@ from vidgen.videogen.pictures import sendable_request
 
 if TYPE_CHECKING:
     from vidgen.config import VideogenConfig
+    from vidgen.videogen.host import ShareOptions
 
 log = logging.getLogger("vidgen.videogen")
 
@@ -119,6 +128,11 @@ class ClipResult:
         return self.job.cost if self.job is not None else None
 
 
+def hosted_inputs(request: VideoRequest) -> list[Path]:
+    """The local audio / video files of ``request`` (what a host must share; pictures go inline)."""
+    return [m.path for m in (*request.frame_images, *request.references) if m.kind != "image" and m.url is None and m.path is not None]
+
+
 def _cap(settings: VideogenConfig, budget_usd: float | None) -> float | None:
     caps = [c for c in (settings.budget_usd, budget_usd) if c is not None]
     return min(caps) if caps else None
@@ -155,9 +169,10 @@ def plan_clip(
 def generate_clip(
     root: Path, settings: VideogenConfig, request: VideoRequest, *, pay: bool = False,
     provider: OpenRouterVideoProvider | None = None, catalog: Catalog | None = None,
-    budget_usd: float | None = None, duration: float | None = None, again: bool = False,
+    budget_usd: float | None = None, duration: float | None = None, again: bool = False, share: ShareOptions | None = None,
 ) -> ClipResult:
-    """Plan ``request`` and, with ``pay``, generate it (see the module docstring). Raises
+    """Plan ``request`` and, with ``pay``, generate it (see the module docstring). ``share``: how
+    local audio / video inputs are hosted (default: ``videogen.host``). Raises
     :class:`VidgenError` when a paid run is refused or the job fails."""
     chosen = provider if provider is not None else (get_provider(settings) if pay else None)
     name = chosen.name if chosen is not None else settings.provider
@@ -180,12 +195,38 @@ def generate_clip(
     if plan.refusal:
         raise VidgenError(f"not paying for {request.model}: {plan.refusal}")
     assert plan.estimate is not None
-    job = chosen.submit(sendable_request(request, root), plan.check.drop)
+    sendable = sendable_request(request, root)
+    local = hosted_inputs(sendable)
+    if share is None and local and settings.host == "quick_tunnel":
+        from vidgen.videogen.host import ShareOptions
+
+        share = ShareOptions.from_config(settings)
+    if not local or share is None:
+        job = _submit(ledger, chosen, plan, sendable)
+        return _finish(root, ledger, chosen, plan, job, recorded=False)
+    host = share.host(local, root, ledger)
+    with host:   # closed when the block ends: the job reached a final state (or an error / Ctrl+C)
+        previous = chosen.uploader
+        chosen.uploader = host.url_of
+        try:
+            job = _submit(ledger, chosen, plan, sendable)
+            job = chosen.wait(job)
+        except VidgenError as exc:   # a provider's error may quote a URL: never pass the secret on
+            raise VidgenError(host.redact(str(exc)), details=exc.details) from None
+        finally:
+            chosen.uploader = previous
+    return _finish(root, ledger, chosen, plan, job, recorded=False)
+
+
+def _submit(ledger: Ledger, provider: OpenRouterVideoProvider, plan: ClipPlan, request: VideoRequest) -> JobState:
+    """Submit the paid job and record it."""
+    assert plan.estimate is not None
+    job = provider.submit(request, plan.check.drop)
     ledger.append(
-        "submit", job_id=job.id, provider=name, model=request.model, request_hash=plan.key,
+        "submit", job_id=job.id, provider=provider.name, model=plan.request.model, request_hash=plan.key,
         estimate_usd=plan.estimate.cost,
     )
-    return _finish(root, ledger, chosen, plan, job, recorded=False)
+    return job
 
 
 def _finish(root: Path, ledger: Ledger, provider: OpenRouterVideoProvider, plan: ClipPlan, job: JobState, *, recorded: bool) -> ClipResult:

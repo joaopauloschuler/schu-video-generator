@@ -12,6 +12,11 @@ order. Without ``pay`` it is a dry run (nothing sent, paid or written). With ``p
 - every clip returned (paid now, cached, or an earlier job downloaded) becomes a take
   (:func:`vidgen.videogen.takes.add_take`: QA and contact sheet);
 - the first failure stops the run (no automatic retry of a paid job; what was done is kept).
+
+With ``videogen.host: quick_tunnel`` a shot with audio / video inputs gets its own quick tunnel
+(one per shot, never one for the whole run: each tunnel shares only that shot's files and closes
+when its job ends, so no file stays reachable while other shots are made); its progress lines go
+to ``out``.
 """
 
 from __future__ import annotations
@@ -19,13 +24,16 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.videogen.models import Catalog, load_catalog, money
 from vidgen.videogen.openrouter import OpenRouterVideoProvider
 from vidgen.videogen.takes import Take, add_take, chosen_take, load_picks, takes_of
+
+if TYPE_CHECKING:
+    from vidgen.videogen.host import ShareOptions
 
 #: The reminder printed wherever the film shows generated footage.
 DISCLOSURE = (
@@ -76,15 +84,21 @@ class RunReport:
 def run_shots(
     project: Project, *, pay: bool = False, budget_usd: float | None = None, shot_ids: Sequence[str] = (),
     out: Callable[[str], None] = print, provider: OpenRouterVideoProvider | None = None, catalog: Catalog | None = None,
+    share: ShareOptions | None = None,
 ) -> RunReport:
-    """Generate the project's shots (see the module docstring). Raises :class:`VidgenError` when a
-    paid run is refused (nothing paid) or stopped by a failure (``details``: the outcomes)."""
+    """Generate the project's shots (see the module docstring). ``share`` replaces how audio / video
+    inputs are hosted (default: ``videogen.host``). Raises :class:`VidgenError` when a paid run is
+    refused (nothing paid) or stopped by a failure (``details``: the outcomes)."""
     from vidgen.videogen.run import _cap, generate_clip
     from vidgen.videogen.shots import plan_shots
 
     root = project.root
     settings = project.config.videogen
     catalog = catalog if catalog is not None else load_catalog()
+    if share is None and settings.host == "quick_tunnel":
+        from vidgen.videogen.host import ShareOptions
+
+        share = ShareOptions.from_config(settings, out=lambda line: out(f"  {line}"))
     plan = plan_shots(project, catalog=catalog, budget_usd=budget_usd, shot_ids=shot_ids)
     report = RunReport(paid=pay)
     if pay:
@@ -115,6 +129,7 @@ def run_shots(
         try:
             result = generate_clip(
                 root, settings, request, pay=pay, provider=provider, catalog=catalog, budget_usd=budget_usd, duration=shot.priced_seconds,
+                share=share,
             )
         except VidgenError as exc:
             report.shots.append(ShotRun(shot.id, "failed", model, item.cost, message=str(exc)))
