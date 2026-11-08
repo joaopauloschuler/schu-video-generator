@@ -25478,3 +25478,37 @@ project), repo work is generic.
   a mask colour can still move when a new id clashes with an existing one and sorts before it
   (~2 % per pair); build JSON files are written 0600 by `write_text_atomic` (project-wide);
   old pass files stay when passes are switched off; the stand-in lint is sphere-based.
+
+## Step 303 — 3D scenes: `guide_passes: all` in YAML (Phase AI)
+
+- **Built** (owner's request; DESIGN §114.14): `all` works in both places. A `3d` scene's
+  `guide_passes: all` (the string YAML gives for `all`) means all three passes, the same as
+  `true` and as `vidgen render --guide-passes all`. `true`, `false` and lists work as before
+  (lists still sorted into drawing order and checked with did-you-mean; `[all]` still all three).
+  Any other string is refused when the config is read (`Scene3D.parse_params` → `VidgenError`):
+  `guide_passes: 'al' is not true, false, all or a list of depth, outline, mask; did you mean
+  'all'?`; a string that names passes (`depth` or `depth,mask`) gets `; write a list: [depth,
+  mask]` instead. Strings pydantic already read as booleans (`"yes"`, `"true"`, `"off"`...) stay
+  booleans, as before.
+- **Public interface**: `Scene3DParams.guide_passes` is typed `bool | Literal["all"] | list[str]`
+  (the JSON schema of `vidgen schema` now has `{"const": "all"}` in its `anyOf`);
+  `Scene3DParams._guide_passes` is a `mode="before"` validator and turns `all` into `True`, so
+  the stored value (and `passes()`) is the same as for `true`. New constant `spec.BOOL_WORDS`.
+  `vidgen.api`, the CLI and the MCP tool unchanged.
+- **Decisions**: `all` is stored as `True` rather than kept as a string, so code reading
+  `guide_passes` sees one of three shapes as before. Case matters (`ALL` is refused with "did you
+  mean 'all'"), like the CLI's `parse_passes`. A comma string is refused in YAML rather than
+  parsed like the CLI's `--guide-passes depth,mask`: the owner asked for `all` only, and a YAML
+  list is the documented form; the error shows the list to write.
+- **Files**: `src/vidgen/three_d/spec.py`; `tests/test_scene_3d_passes.py` (3 tests, one
+  parametrized ×5: YAML `all`, refused strings, the params JSON schema); `docs/CONFIG.md` (pass
+  text and `guide_passes` row), `docs/COOKBOOK-3D.md` (§5), `docs/gallery/3d.md` (the param row,
+  edited by hand to match `gallery._param_rows`; no media regenerated), guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (chooser row, "Guide passes" paragraph),
+  DESIGN §114.14, CHANGELOG, tasklist.
+- **Tests run and passed** (one file per command, `capped` + `timeout`): `test_scene_3d_passes`
+  not render (28, 2 render deselected), `test_scene_3d` not render (21), `test_guide` (92),
+  `test_docs` (80), `test_gallery` not render (19), `test_schema -k "examples_validate or 3d"`
+  (23, 94 s). Not run: render tests (no rendering behaviour changed), the rest of `test_schema`,
+  the full suite.
+- **Known gaps**: none new; Step 302's other open points stand.

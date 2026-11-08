@@ -5,6 +5,8 @@ with did-you-mean messages."""
 from __future__ import annotations
 
 import re
+from typing import Any, Literal
+
 from pydantic import Field, field_validator, model_validator
 
 from vidgen.cellworld.model import did_you_mean
@@ -16,6 +18,8 @@ from vidgen.translation import TranslatableStr
 SHAPES: tuple[str, ...] = ("box", "sphere", "cylinder", "cone", "torus", "plane", "arrow", "label", "group", "standin")
 #: Names a scene description keeps for itself (a track's target ``camera``).
 RESERVED_IDS: frozenset[str] = frozenset({"camera"})
+#: Strings pydantic reads as a boolean: ``guide_passes`` leaves them to it (``"yes"`` is ``true``).
+BOOL_WORDS: frozenset[str] = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "true", "y", "yes"})
 #: The id of the scene's ``floor`` (taken when the scene has one).
 FLOOR_ID = "floor"
 _ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
@@ -226,16 +230,25 @@ class Scene3DParams(SceneParams):
     """A square floor the objects stand on: true, or {size, color, y} (an object with id floor)."""
     objects: list[Object3D] = Field(default_factory=list)
     """The objects: [{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}]; object actions (object_move, object_walk...) move them."""
-    guide_passes: bool | list[str] = False
-    """Also draw guide passes of the 3D picture (same frames, camera and timing; labels left out), stored beside its clip: true (all), or a list of depth (near white, far dark), outline (white edges on black, like a line drawing), mask (each object one flat colour, with a colour table); also `vidgen render --guide-passes`."""
+    guide_passes: bool | Literal["all"] | list[str] = False
+    """Also draw guide passes of the 3D picture (same frames, camera and timing; labels left out), stored beside its clip: true or all (all three), or a list of depth (near white, far dark), outline (white edges on black, like a line drawing), mask (each object one flat colour, with a colour table); also `vidgen render --guide-passes`."""
     depth_range: tuple[float, float] | None = None
     """[near, far]: the distances from the camera the depth pass shows as white and as its darkest grey (default: fitted to the objects over the whole shot; the floor is clamped to it)."""
 
-    @field_validator("guide_passes")
+    @field_validator("guide_passes", mode="before")
     @classmethod
-    def _guide_passes(cls, v: bool | list[str]) -> bool | list[str]:
-        from vidgen.three_d.passes import parse_passes
+    def _guide_passes(cls, v: Any) -> Any:
+        from vidgen.three_d.passes import ALL_PASSES, GUIDE_PASSES, parse_passes
 
+        if isinstance(v, str) and v.strip() == ALL_PASSES:
+            return True
+        if isinstance(v, str) and v.strip().lower() not in BOOL_WORDS:
+            names = [n.strip() for n in v.split(",") if n.strip()]
+            if names and all(n in GUIDE_PASSES for n in names):
+                hint = f"; write a list: [{', '.join(names)}]"
+            else:
+                hint = did_you_mean(v.strip().lower(), (ALL_PASSES, *GUIDE_PASSES))
+            raise ValueError(f"guide_passes: {v!r} is not true, false, {ALL_PASSES} or a list of {', '.join(GUIDE_PASSES)}{hint}")
         return list(parse_passes(v)) if isinstance(v, list) else v
 
     @field_validator("depth_range")

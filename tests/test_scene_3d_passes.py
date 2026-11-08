@@ -82,6 +82,44 @@ def test_yaml_switch_is_off_by_default_and_checked() -> None:
         Scene3D.parse_params({"guide_passes": ["outlines"]}, "s", THEME)
 
 
+def test_yaml_all_means_every_pass_like_the_cli() -> None:
+    import yaml
+
+    from vidgen.scenes.scene_3d import Scene3D
+
+    raw = yaml.safe_load("guide_passes: all")
+    assert raw == {"guide_passes": "all"}
+    assert Scene3D.parse_params(raw, "s", THEME).passes() == GUIDE_PASSES == parse_passes("all")
+    assert params(guide_passes=False).passes() == ()
+    assert params(guide_passes=[]).passes() == ()
+
+
+@pytest.mark.parametrize(("value", "hint"), [
+    ("al", "did you mean 'all'"),
+    ("ALL", "did you mean 'all'"),
+    ("depht", "did you mean 'depth'"),
+    ("depth,mask", r"write a list: \[depth, mask\]"),
+    ("everything", "not true, false, all or a list of depth, outline, mask"),
+])
+def test_yaml_other_strings_are_refused_with_a_hint(value: str, hint: str) -> None:
+    from vidgen.scenes.scene_3d import Scene3D
+
+    with pytest.raises(VidgenError, match=hint):
+        Scene3D.parse_params({"guide_passes": value}, "s", THEME)
+
+
+def test_schema_accepts_all_and_lists() -> None:
+    import jsonschema
+
+    from vidgen import registry, schema
+
+    doc = schema.params_schema(registry.get("3d"), [THEME])
+    check = jsonschema.Draft202012Validator(doc)
+    for good in (True, False, "all", ["depth", "mask"]):
+        assert not list(check.iter_errors({"guide_passes": good})), good
+    assert list(check.iter_errors({"guide_passes": "everything"}))
+
+
 def test_cli_option_reaches_the_worker() -> None:
     from vidgen.cli import _guide_passes, build_parser
     from vidgen.render.worker import build_parser as worker_parser

@@ -5,7 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–302)
+## Unreleased (Steps 193–303)
+
+### 3D scenes: `guide_passes: all` (Step 303)
+
+- A `3d` scene's `guide_passes: all` now asks for all three guide passes, like `vidgen render --guide-passes all` (before, only `true` or a list worked in YAML). Other strings are refused with a hint: `al` → did you mean `all`, `depth,mask` → write a list `[depth, mask]`. The JSON schema (`vidgen schema`) accepts `all`.
 
 ### 3D scenes: docs, example and review (Step 302)
 

@@ -22377,8 +22377,11 @@ layers over the clip, never in it.
   a `Vector3` of the hex digits / 255, so the PNG holds exactly the table's colour (tested). A
   stand-in's nose has its colour; an arrow's shaft and head one colour.
 
-**Asking for them** (off by default). The `3d` param `guide_passes: true | [depth, outline,
-mask]` (`parse_passes`, did-you-mean; `Scene3DParams.passes()`), part of the params and so of
+**Asking for them** (off by default). The `3d` param `guide_passes: true | all | [depth, outline,
+mask]` (`parse_passes`, did-you-mean; `Scene3DParams.passes()`; since Step 303 the string `all`
+is read as `true`, like `--guide-passes all`, and any other string is refused with did-you-mean,
+or with "write a list" when it names passes, e.g. `depth,mask`; strings pydantic reads as a
+boolean, such as `"yes"`, stay booleans), part of the params and so of
 the render fingerprint; and `vidgen render --guide-passes [LIST]` (alone = all; MCP `render`
 `guide_passes`) for every `3d` scene of the run: `render_project(guide_passes=)` → worker
 `--guide-passes depth,mask` → `scene.guide_passes` (a `NarratedScene` attribute, like

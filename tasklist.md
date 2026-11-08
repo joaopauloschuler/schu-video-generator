@@ -1764,6 +1764,9 @@ molecules, planets, glTF models, realistic materials and shadows, rigs, any AI o
 ### Step 302 — Docs, example, critical review
 - [x] `docs/COOKBOOK-3D.md`, CONFIG / guide; a small example (9:16 Short, a few seconds: shapes, two stand-ins, camera moves) under examples/ with its guide passes rendered (media not committed); a critical review of 298–301 with fixes — done as the cookbook, guide topic `three-d` (alias `3d`), `examples/3d-short` (YAML only, `guide_passes: true`), the gallery `crate` sample with object actions; owner's answers to Step 301 applied (depth fitted to the objects with the floor clamped + `depth_range`, white-on-black outline, dark-grey floor in the mask, mask colours from ids); review fixes (page load errors, dead `progress`, shared `view_basis`, box-tight depth extents); findings in HANDOFF
 
+### Step 303 — `guide_passes: all` in YAML
+- [x] The owner's request: `all` works in both places — a `3d` scene's `guide_passes: all` (a string) means all three passes, like `vidgen render --guide-passes all`; `true`, `false` and lists unchanged; other strings refused with did-you-mean (or "write a list" for `depth,mask`) — done in `Scene3DParams._guide_passes` (a before-validator; type `bool | 'all' | list[str]`, so the JSON schema accepts it); docs, guide, DESIGN §114.14; tests in `test_scene_3d_passes.py`
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

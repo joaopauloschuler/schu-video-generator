@@ -82,7 +82,7 @@ checks that the speaker is on screen and not hidden while it talks.
 
 ## 5. Guide passes
 
-`guide_passes: true` (or `vidgen render --guide-passes`) also draws three plainer videos of the 3D
+`guide_passes: true` (or `guide_passes: all`, or `vidgen render --guide-passes`) also draws three plainer videos of the 3D
 picture, with exactly its frames, camera and timing, beside the 3D clip in
 `build/<quality>/three_d/`. They are inputs for tools that need the scene's layout rather than
 its look (later: a video model that repaints the scene in a style of its own):

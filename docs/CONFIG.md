@@ -6080,7 +6080,7 @@ camera and motion):
 | `outline` | **only the edges**, white lines on black (as edge inputs of video models expect), like a line drawing: each object's outline, the sharp edges of a box or a cylinder, and where an object hides part of itself. | `<scene id>.outline.mkv` |
 | `mask` | **each object in one flat colour of its own** (no light, no shading, no soft edges) on black, so a tool can tell exactly which pixels belong to which object. The floor is a neutral dark grey (`#404040`). Each object's colour comes from its `id`, so adding, removing or reordering objects keeps the others' colours (only when two ids happen to pick the same colour does one of them, the later in the alphabet, take another). The colour of each object is in a table, `<scene id>.mask-colors.json`: `colors` (object id → `#rrggbb`; the floor as `floor`), `objects` (id, shape, colour, parent; a stand-in also with its `name`) and `names` (stand-in name → colour). A group has no colour of its own (its children have theirs); a stand-in's nose has the stand-in's colour. | `<scene id>.mask.mkv` + `.mask-colors.json` |
 
-Ask for them with `guide_passes:` in the scene's params (`true` for all three, or a list such as
+Ask for them with `guide_passes:` in the scene's params (`true` or `all` for all three, or a list such as
 `[depth, mask]`), or for every `3d` scene of a render with `vidgen render --guide-passes` (all
 three) or `--guide-passes depth,mask`. They have exactly the frames, camera and timing of the
 scene's 3D clip (frame *n* of a pass is frame *n* of the clip), are lossless clips in the same
@@ -6099,7 +6099,7 @@ name objects by their `id`.
 | `light` | `{ambient, sun, sun_from, color}` | `{ambient: 0.5, sun: 2.5, sun_from: [-2, 6, 4], color: "#ffffff"}` | strength of the even light (0–5) and of the sun (0–10), the direction the sun shines from (towards the origin), the colour of both |
 | `floor` | `true` or `{size, color, y}` | none | a square floor (a `plane` with id `floor`): `size` 12, `color` `surface`, at height `y` 0 |
 | `objects` | list | `[]` | each `{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}`: `id` names it (letters, digits, `_`, `-`; unique; not `camera`), `shape` (above; default `box`), `size`, `color` (default `accent`), `position` of its centre, `rotation` in degrees, `spin` in degrees per second, `parent` an object written before it, `text` a label's text, `to` an arrow's tip (an object's id: it follows the object when it moves), `visible: false` hidden until `object_show`, `name` a stand-in's name, `voice` the voice that says a stand-in's lines (default its id; for lint), `screen_size: true` a label keeps the size on screen it has at the start |
-| `guide_passes` | `true` or list | `false` | also draw the [guide passes](#3d) `depth`, `outline`, `mask` beside the clip (`true`: all three); `vidgen render --guide-passes` asks for them in every `3d` scene |
+| `guide_passes` | `true`, `all` or list | `false` | also draw the [guide passes](#3d) `depth`, `outline`, `mask` beside the clip (`true` or `all`: all three; a list such as `[depth, mask]`: those); `vidgen render --guide-passes` asks for them in every `3d` scene |
 | `depth_range` | `[near, far]` | fitted to the objects | the distances from the camera the `depth` pass shows as white and as its darkest grey (0 ≤ near < far) |
 
 #### 3d object actions

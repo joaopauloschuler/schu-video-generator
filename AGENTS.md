@@ -406,7 +406,7 @@ project's own scene types, in its theme).
 | a photo or illustration | `image` | `path`, `generate`, `caption`, `fit`, `ken_burns` |
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute` |
-| simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; also the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
+| simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or a list; also the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -3190,7 +3190,7 @@ depth, `camera_dolly` a small push-in, `camera_move` to pull back at the end.
 turns it and walks it there; `object_face` turns it to whom it talks to. Give its beats its
 `voice`, so lint checks the speaker is on screen.
 
-**Guide passes.** `guide_passes: true` (or `vidgen render --guide-passes`) also draws `depth`
+**Guide passes.** `guide_passes: true` or `all` (or `vidgen render --guide-passes`) also draws `depth`
 (near white, far dark grey; one range for the shot, fitted to the objects, or `depth_range`),
 `outline` (white edges on black) and `mask` (each object one flat colour from its id, the floor
 dark grey, with `<scene>.mask-colors.json`), same frames and camera, beside the 3D clip.
