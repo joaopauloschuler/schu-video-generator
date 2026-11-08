@@ -25907,3 +25907,17 @@ project), repo work is generic.
 - **Known gaps**: whether removing the sheet words moves the speaker is untested (no paid run); a framing word in a clause that also describes appearance stays; a clip paid before this step whose guide was later re-cut to other bytes is not recognised (a re-cut is already a new request).
 - **Spending**: nothing paid, no key read, no network, no cloudflared.
 - **How to test / tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`, `PYTHONPATH=src`, `-m "not render"`): `test_videogen_guided_prompts` (20, 4.0 s), `test_videogen_shots` (30), `test_videogen_3d_guide` (15, 1 deselected), `test_videogen_input_freshness` (17, 1 deselected), `test_videogen`, `test_videogen_compose`, `test_guide` (92), `test_docs` (80). Not run: `test_schema` (no schema change), render tests, `test_mcp`, the full suite.
+
+## Step 314 — Cookbook rule: a 3D guide and a starting picture for every shot
+
+**What was built.** A documentation rule set by the owner after a paid Short made from words and reference pictures alone came out incoherent (the model cannot guess whether a character runs far to near or near to far): no shot goes to a video model without a 3D guide video and at least the starting picture of the scene.
+
+**Files touched.** `docs/COOKBOOK-GENERATED-VIDEO.md` (the rule before section 1; the kinds table; the section 4 example is now a `3d` scene with `guide: depth` and `first_frame: render`; the section 6 example gains `first_frame: render`), `examples/3d-to-video/video.yaml` (the same line), `tasklist.md`.
+
+**Public interfaces.** None changed.
+
+**Decisions.** Documentation only, as asked: the rule is not enforced in code, and the cookbook says so. The section 4 example moved from `heygen/avatar-iv` (no video guide) to `bytedance/seedance-2.0-mini`. `first_frame: render` is used in the examples because it needs no extra file, and the rule names a picture file of the shot as the better choice.
+
+**Known gaps / TODOs.** `vidgen generate plan` does not block a shot without a guide and a first frame. vidgen has no step that paints a first frame of a shot from the reference pictures and the 3D layout. Whether Seedance accepts a first frame together with reference pictures and a guide in one request has not been run. `src/vidgen/data/guide/AGENTS.md` does not state the rule yet.
+
+**How to test.** `pytest tests/test_docs.py tests/test_videogen_3d_guide.py -m "not render"`.

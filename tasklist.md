@@ -1789,6 +1789,9 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 314 — Cookbook rule: a 3D guide and a starting picture for every shot
+- [x] `docs/COOKBOOK-GENERATED-VIDEO.md` states the rule, and its examples follow it; the rule is documentation only (not enforced in code)
+
 ### Step 313 — Guided shots leave the framing to the guide
 - [x] A guided `kind: talking` shot says "{who}, speaking" instead of the close-up wording; the sheet's framing instructions are left out of a guided shot's prompt (`shots.without_framing`) and `generate plan` notes what was left out (text and JSON); unguided prompts byte-identical; a guided shot paid for under the earlier wording is blocked, not paid again (DESIGN §113.12)
 

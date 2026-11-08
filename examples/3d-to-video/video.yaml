@@ -50,3 +50,4 @@ scenes:
           setting: a quiet town square at the end of the afternoon
           characters: [ana, ben]                # their reference sheets go in as pictures
           guide: depth                          # the depth pass of the beat, not the normal 3D view
+          first_frame: render                   # the starting picture (better: a picture file of the shot)

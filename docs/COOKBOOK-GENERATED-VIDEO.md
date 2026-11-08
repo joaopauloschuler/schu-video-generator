@@ -6,6 +6,18 @@ everything else: the story and timing, the voices, captions, overlays, titles, m
 final assembly. By default the model's own sound is not used (every job is sent with
 `generate_audio: false`); section 8 says how to keep it. Reference: [CONFIG.md, Generated video](CONFIG.md#generated-video-videogen-vidgen-generate).
 
+**The rule: a 3D guide and a starting picture for every shot.** No shot goes to a video model
+without both a 3D guide video (`guide: depth`, `outline`, `mask` or `true`, from a `type: 3d` scene
+built for that shot: section 6) and at least the starting picture of the scene (`first_frame:`).
+Words and reference pictures alone do not say where anyone stands or which way they move: a model
+cannot guess whether a character runs from far to near or from near to far, and shots made
+separately will not agree with each other. Build one world for all the shots, look at the guides
+(`vidgen generate inputs --guide`), and only then pay. A picture file of the shot is the best
+starting picture; `first_frame: render` is the plain 3D view and can pull the clip towards that
+look. A model that takes no video guide or no first frame cannot be used for a shot. vidgen does
+not enforce this rule: `vidgen generate plan` does not block a shot without them, so check each
+shot's inputs in the plan.
+
 ## 1. When it is worth it
 
 Generated video costs money (about $0.03-0.60 per second of clip, per take) and can fail
@@ -14,9 +26,9 @@ footage vidgen cannot draw; keep diagrams, text, charts and explanations as scen
 
 | kind | model (examples) | inputs | good for |
 |---|---|---|---|
-| `talking` | `heygen/avatar-iv` ($0.05/s) | a portrait (the speaker's sheet) + the beat's own voice (hosted) | a lip-synced close-up of a line (with a guide, the guide sets the framing: section 6) |
-| `action` | `bytedance/seedance-2.0-fast` | the characters' sheets, the style frame (+ the voice and a guide render, hosted) | people doing something |
-| `establishing` | `google/veo-3.1-lite` (4/6/8 s) | words (+ an optional first frame) | a place, a mood, a transition |
+| `talking` | `bytedance/seedance-2.0-mini` | a first frame + the speaker's sheet + the beat's own voice + a 3D guide (hosted) | a lip-synced line (the guide sets the framing: section 6) |
+| `action` | `bytedance/seedance-2.0-fast` | a first frame + the characters' sheets, the style frame + a 3D guide (+ the voice, hosted) | people doing something |
+| `establishing` | `google/veo-3.1-lite` (4/6/8 s; check `vidgen generate models` for what it accepts) | a first frame + a 3D guide + words | a place, a mood, a transition |
 
 ## 2. Cost control
 
@@ -93,13 +105,16 @@ characters:
     reference_sheet: {prompt: "a man in his twenties, curly red hair, round glasses, green cardigan"}
 scenes:
   - id: closeup
-    type: stage
-    set: beach
-    params: {characters: [{name: theo}]}
+    type: 3d
+    params:
+      floor: {size: 14, color: "#2b3242"}
+      camera: {position: [0, 1.5, 3.5], look_at: [0, 1.4, 0], fov: 40}
+      objects:
+        - {id: theo, shape: standin, name: Theo, color: primary, position: [0, 0.8, 0]}
     beats:
       - text: "It is not late. It is early for being on time."
         voice: theo_voice
-        generated_shot: {kind: talking, model: heygen/avatar-iv, setting: the ferry quay in the fog}
+        generated_shot: {kind: talking, model: bytedance/seedance-2.0-mini, setting: the ferry quay in the fog, guide: depth, first_frame: render}
 ```
 
 ```bash
@@ -123,8 +138,8 @@ The printed and recorded cost of each picture is OpenRouter's reported `usage.co
 estimate marked "estimated" when it reports none.
 
 The scene under a generated shot still matters: it is what shows when no take is picked, what
-the guide render shows the model, and what the take fades from and to. A stage scene with the
-characters in place is a good fallback.
+the guide render shows the model, and what the take fades from and to. Under the rule above it is a `3d` scene with the
+characters in place.
 
 **After an edit, cut again.** `vidgen generate inputs` records what each file in
 `build/videogen/<shot>/` was cut from (`inputs.json`). If you then change the scene, the beat's text
@@ -326,6 +341,7 @@ scenes:
           setting: a quiet town square at the end of the afternoon
           characters: [ana, ben]                # their reference sheets go in as pictures
           guide: depth                          # the depth pass of the beat, not the normal 3D view
+          first_frame: render                   # the starting picture (better: a picture file of the shot)
 ```
 
 The same project is in `examples/3d-to-video/video.yaml`.
