@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–306)
+## Unreleased (Steps 193–307)
+
+### Generated video: a 3D scene's guide pass as a shot's guide (Step 307)
+
+- `generated_shot.guide` now takes `true | false | render | depth | outline | mask`. `true` (= `render`) is unchanged: the beat's silent draft render. On a `3d` scene, `depth`, `outline` or `mask` sends that guide pass of the beat instead, so a video model follows the 3D layout and camera move while it draws the look. Elsewhere such a value is refused when the config is read; a misspelt value gets a did-you-mean.
+- `vidgen generate inputs --guide` draws the pass with the scene's draft render (the 3D frames are reused; a current draft render is no longer rendered again) and cuts the beat's part exactly like `guide.mp4` (start, length, size, frame rate) into `build/videogen/<shot>/guide.<pass>.mp4`, converted from the lossless pass to H.264 / yuv420p (mask colours within a few levels inside each object; edges blend over a pixel or two). `first_frame: render` stays the normal render's first frame.
+- The prompt says what the guide is ("The guide video is a depth map (near is white, far is dark): follow its layout and camera motion."); a mask guide also lists the stand-ins' colours by name. Changing the pass is a new request (never the cached clip). `vidgen generate plan` names the pass in the shot's guide line and in the "would share" list (`videogen.host: quick_tunnel`); without a host the shot is blocked as before.
+- Cookbook: "From a 3D scene to a generated clip" (`docs/COOKBOOK-GENERATED-VIDEO.md` §6, linked from `docs/COOKBOOK-3D.md`): which pass to choose, the order of commands, the limits; new example `examples/3d-to-video`.
 
 ### Generated video: talking shots and guides through the quick tunnel (Step 306)
 

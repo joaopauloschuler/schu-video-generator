@@ -21981,6 +21981,70 @@ host exists (owner's choice) heygen/avatar-iv and the sample's quay_b1 / closeup
 paid for; whether video models accept inline pictures (harbour_b1 is the first such job to try).
 Step 306 adds the host (`videogen.host: quick_tunnel`, §115).
 
+### 113.8 A 3D scene's guide pass as a shot's guide (Step 307)
+
+Closes the gap between §114.14 (guide passes, "for video-to-video later") and generated shots.
+
+- **Config.** `generated_shot.guide: true | false | render | depth | outline | mask`
+  (`GuideChoice`, `GUIDE_CHOICES`); `true` = `render` (unchanged: the silent draft render).
+  `GeneratedShot.guide_source` → `render | depth | outline | mask | None`. A before-validator
+  refuses other strings with did-you-mean ("'dpeth' is not true, false, render, depth, outline,
+  mask (did you mean depth?)"); strings pydantic reads as booleans (`yes`, `off`) stay booleans.
+  `SceneConfig` refuses a pass on a scene that is not `type: 3d` when the config is read (a
+  `VidgenError` naming the beat, the scene and its type, and `guide: true` as the way out).
+  `generated_shot` stays out of scene fingerprints: nothing re-renders.
+- **Shots** (`shots.py`). The guide input is `build/videogen/<shot>/guide.<pass>.mp4`
+  (`guide_name`; the render stays `guide.mp4`), described in the plan as "depth pass of the
+  beat's 3D scene, N s" (`GUIDE_WHAT`). It is a `video` input like the render, so everything
+  else follows unchanged: `Shot.shared` (the plan's "would share" list with `host: quick_tunnel`),
+  `NO_HOST_BLOCKED` / `INLINE_AUDIO_VIDEO_PROBLEM` without a host, the inputs-not-made block.
+- **Prompt.** One sentence after the line and before the style (`GUIDE_PROMPTS`): depth "The
+  guide video is a depth map (near is white, far is dark): follow its layout and camera
+  motion"; outline "... an outline drawing (white edges on black): follow its shapes, layout and
+  camera motion"; mask "... a colour mask (each object one flat colour on black): follow its
+  layout and motion", then, for 1 to `MASK_NAMES_MAX` = 4 stand-ins, "Mask colours: Ana
+  #rrggbb, Ben #rrggbb" (stand-in `name`, else the display form of its id). The colours are
+  `passes.mask_colors` of the scene's objects (ids and shapes only, the floor first), the same
+  as the pass's table since §114.14's colours depend only on the set of ids. No sentence for
+  `render`: the old prompts (and so the old cache keys) are unchanged.
+- **Cache key.** The pass choice is in the request twice over: the guide file's contents (a
+  different clip) and the prompt sentence (so even identical bytes give another key; tested).
+  No new field in `canonical_request`: existing keys stay valid.
+- **Inputs** (`inputs.py`). `make_inputs` collects per scene the passes its shots need and asks
+  `render(project, scene, passes) -> SceneRender(video, starts, passes)` once per scene (tests
+  replace it). `_render_scene` loads the draft project, reuses the draft render while
+  `current_render(..., guide_passes=passes)` holds (before, `render_scenes` re-ran the worker each
+  time; the 3D frames were reused either way), else `render_scenes(..., guide_passes=passes)`
+  (new keyword, passed to the workers as `--guide-passes`): a render without the pass is made
+  again, reusing the clip (§114.14). The pass is `<draft render_dir>/three_d/<scene>.<pass>.mkv`,
+  frame n = the scene's frame n, so the cut is the render guide's: from the beat's start in the
+  scene's timings + the part's offset, `-t` the part's length, at the draft's size and fps.
+  `cut_pass` converts it: H.264, `yuv420p`, BT.709 limited range (converted with
+  `scale=out_color_matrix=bt709:out_range=tv` and tagged), `PASS_CRF` = 12 (the render guide keeps
+  ffmpeg's defaults). A missing pass file is a `VidgenError`.
+- **First frame** (decision): `first_frame: render` is always the **normal** render's first
+  frame past a fade, also with a pass guide (cut from the scene video to a temporary file, then
+  `first_frame`): a grey or flat-coloured first picture would steer the model to that look. A
+  pass guide alone writes no `first_frame.png` and no `guide.mp4`.
+- **Mask colours in the MP4** (measured on a 160x90 draft of the test scene): inside an object
+  every pixel within 6 levels of its table colour; ~2.5 % of the pixels (object edges: 4:2:0
+  shares one colour sample per 2x2 block) differ more, up to ~90 levels; snapping each pixel to
+  the nearest table colour gave the lossless mask back (100 % of pixels) at that size. The `.mkv`
+  stays exact.
+- **Docs**: `docs/COOKBOOK-GENERATED-VIDEO.md` §6 "From a 3D scene to a generated clip" (sections
+  after it renumbered 7–9), linked from `docs/COOKBOOK-3D.md` §5; `examples/3d-to-video`
+  (YAML only); CONFIG; the guide.
+- **Tests** `tests/test_videogen_3d_guide.py` (16, one render): the values and their sources,
+  did-you-mean, a pass on a `text_card` scene refused, the input and prompt, the mask names
+  equal the real description's table, four different hashes for render / depth / outline / mask
+  with identical files, the plan's guide line, blocked without a host, shared with it, the
+  converted pass (H.264, yuv420p, size, frame count as `-t` cuts the render guide, the first frame
+  from the render, the missing pass refused), a real draft render of a mask guide (frames, size,
+  colours within 6 levels inside the crate, the second run reusing the render), the cookbook
+  YAML = the example and validates.
+- **Open**: whether Seedance (or any OpenRouter provider) uses a depth / outline / mask video
+  reference as a control signal or only as loose inspiration is not known (no paid run yet).
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in
@@ -22404,7 +22468,8 @@ the clip and any pass already drawn. `RenderResult.guide_passes` / JSON `guide_p
   fields `depth_range`, `mask_colors` in passes only). `render_project`, `current_render` and
   `render_scene` take `guide_passes=`; `RenderResult.guide_passes`.
 - Passes are separate lossless FFV1 clips (exact mask colours), not MP4s; converting for a video
-  model is the later video-to-video step's job.
+  model is the later video-to-video step's job (Step 307, §113.8: `generated_shot.guide: depth |
+  outline | mask` converts the beat's part to H.264 for the model).
 - One Chromium per pass (about 1 s each to start), reusing `make_3d_clip` unchanged rather than
   a multi-mode page session.
 - Labels and name tags are left out of every pass (the owner: pure 3D); the mask table still

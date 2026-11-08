@@ -3195,6 +3195,9 @@ turns it and walks it there; `object_face` turns it to whom it talks to. Give it
 `outline` (white edges on black) and `mask` (each object one flat colour from its id, the floor
 dark grey, with `<scene>.mask-colors.json`), same frames and camera, beside the 3D clip. Some of
 them: `guide_passes: depth`, `depth,mask` or `[depth, mask]`, as `--guide-passes` takes them.
+A beat's `generated_shot` on a `3d` scene can send one as its guide video (`guide: depth |
+outline | mask`; `true` = the normal 3D view): `vidgen generate inputs --guide` draws it and cuts
+`guide.<pass>.mp4` (see the generated video shots below and `docs/COOKBOOK-GENERATED-VIDEO.md` §6).
 
 **Lint.** `three_d_off_frame` (an object the beat is about is mostly outside the frame) and
 `three_d_hidden` (mostly behind a nearer one); look at `vidgen storyboard --per-beat 3` for the
@@ -3943,6 +3946,12 @@ scenes:
   first with `vidgen generate host-test`; `generate plan` lists exactly which files a run would
   share. Ask the user before turning the host on: the files are reachable on the public
   internet by anyone with the address for those minutes.
+- **A 3D scene as the guide** (`guide: depth | outline | mask`, only on a `3d` scene; `guide:
+  true` = `render`, the normal view): the clip follows the 3D layout and camera, the model draws
+  the look. `depth` suits most shots; `mask` keeps objects apart (the prompt lists the
+  stand-ins' colours); `outline` for edge guides. The first frame (`first_frame: render`) stays
+  the normal view. It is a video input, so it needs the quick tunnel too. Models may ignore
+  guides: try one cheap shot first.
 
 ### Your content and third-party services
 

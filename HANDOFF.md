@@ -25650,3 +25650,65 @@ project), repo work is generic.
   quick_tunnel}` `vidgen generate plan --shot closeup_b1` (lists the shared voice), then
   `vidgen generate run --pay --shot closeup_b1` (~$0.20) and `vidgen generate ledger` / the
   ledger's host lines.
+
+## Step 307 — 3D guide passes as generated-shot guides (Phase AJ)
+
+- **Built** (DESIGN §113.8): `generated_shot.guide: true | false | render | depth | outline |
+  mask`. `true` = `render` (unchanged: the beat's silent draft render, `guide.mp4`). On a `3d`
+  scene, `depth` / `outline` / `mask` send that guide pass of the beat as the video reference:
+  `vidgen generate inputs --guide` asks the draft render for the passes its shots need (one
+  render per scene; the 3D frames reused), cuts the beat's part from the lossless
+  `build/draft[_<variant>]/three_d/<scene>.<pass>.mkv` exactly like the render guide (beat start
+  in the scene timings + the part's offset, `-t` length, draft size and fps) and converts it
+  (`cut_pass`: H.264, yuv420p, BT.709 limited range, CRF 12) to
+  `build/videogen/<shot>/guide.<pass>.mp4`. The prompt gains one sentence about the guide
+  (`shots.GUIDE_PROMPTS`); a mask guide also lists "Mask colours: Ana #rrggbb, Ben #rrggbb" for 1-4
+  stand-ins (same colours as the pass table). The plan's input line reads "guide:
+  build/videogen/<shot>/guide.depth.mp4 (depth pass of the beat's 3D scene, N s)" and the file is
+  in "would share" with `host: quick_tunnel`; without a host the shot is blocked as before.
+- **Validation**: unknown strings are refused when the config is read, with did-you-mean
+  (`'dpeth' is not true, false, render, depth, outline, mask (did you mean depth?)`); a pass on a
+  scene that is not `type: 3d` is refused by `SceneConfig` (`beats[0].generated_shot.guide: mask
+  is a guide pass of a 3d scene, but scene 'plaza' is a text_card scene; use guide: true ...`).
+  `yes` / `off` and the other bool words stay booleans.
+- **Decisions**: (1) `first_frame: render` stays the **normal** render's first frame with a pass
+  guide (a grey / flat-colour first picture would steer the model's look); a pass guide alone
+  writes neither `guide.mp4` nor `first_frame.png`. (2) The pass reaches the cache key through the
+  guide file's contents and the prompt sentence; no new `canonical_request` field, so existing
+  keys (and the `render` prompts) are unchanged. (3) `_render_scene` now reuses a current draft
+  render (`current_render(..., guide_passes=)`) instead of running the worker every time
+  (`inputs.py`'s docstring already claimed reuse). (4) CRF 12 for passes (flat areas and 1 px
+  lines show compression); the render guide keeps ffmpeg's defaults. (5) The mask names list only
+  stand-ins, by `name` else the display form of the id, and only up to four (`MASK_NAMES_MAX`).
+- **Mask loss, measured** (160x90 draft, the test scene): inside each object within 6 levels of
+  the table colour; ~2.5 % of pixels (edges; 4:2:0 chroma per 2x2 block) off by more, up to ~90;
+  nearest-table-colour snapping recovered 100 % of the pixels. Documented in CONFIG and the
+  cookbook.
+- **Public interfaces** (not in `vidgen.api`): `config.GuideChoice`, `GUIDE_CHOICES`,
+  `GeneratedShot.guide` typed `bool | GuideChoice`, `GeneratedShot.guide_source`;
+  `shots.GUIDE_PROMPTS`, `GUIDE_WHAT`, `MASK_NAMES_MAX`, `guide_name`; `inputs.SceneRender`,
+  `cut_pass`, `PASS_CRF`, `PASS_COLOR_ARGS`; **changed**: the `render=` hook of `make_inputs` is now
+  `(project, scene_id, passes) -> SceneRender` (was `-> (video, starts)`; the one test using it is
+  updated); `render.pipeline.render_scenes(..., guide_passes=())`.
+- **Files**: `src/vidgen/config.py`, `src/vidgen/videogen/{shots,inputs}.py`,
+  `src/vidgen/render/pipeline.py`, `src/vidgen/cli.py` (`--guide` help); new `tests/test_videogen_3d_guide.py`, changed
+  `tests/test_videogen_shots.py` (stub signature); docs `COOKBOOK-GENERATED-VIDEO.md` (new §6
+  "From a 3D scene to a generated clip", old 6-8 now 7-9), `COOKBOOK-3D.md` (§5 link),
+  `CONFIG.md`, guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`; new
+  `examples/3d-to-video/video.yaml` (YAML only; validate and lint clean); DESIGN §113.8 + §114.15
+  note, CHANGELOG, tasklist (Step 307 under Phase AJ).
+- **Tests run and passed** (one file per command, `/home/claude/bin/capped` + `timeout`):
+  `test_videogen_3d_guide` not render (15, 2.9 s) and render (1, 11.5 s: real Chromium draft
+  render of a mask guide), `test_videogen_shots` (21), `test_videogen` (26), `test_config` (21),
+  `test_videogen_compose` not render (17), `test_docs` (80), `test_guide` (92),
+  `test_scene_3d_passes` not render (36), `test_schema -k "examples_validate or 3d or generated"`
+  (24, 101 s, includes the new example). Not run: other render suites, the rest of `test_schema`,
+  `test_mcp` (unchanged tools), the full suite.
+- **Spending**: nothing paid, no key read, no network, no real cloudflared (the plan tests use
+  the fake one).
+- **Known gaps / open questions**: no paid run yet, so it is unknown whether Seedance (or any
+  OpenRouter provider) treats a depth / outline / mask video as a control signal or as loose
+  inspiration (the cookbook says so); the guide is the draft's low resolution (DRAFT_SHORT_SIDE),
+  same as the render guide; old `guide*.mp4` files stay in `build/videogen/<shot>/` when `guide:`
+  changes (not sent: only the listed input is); the plan JSON has no separate `guide` key (the
+  input's path names the pass).

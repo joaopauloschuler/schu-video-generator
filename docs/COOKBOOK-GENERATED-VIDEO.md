@@ -226,7 +226,112 @@ kept.
    not fetch the voice through the tunnel: tell the developers (DESIGN §115). If the provider refuses the job, the tunnel is closed
    the same way and the error is shown with the secret part replaced by `<secret>`.
 
-## 6. Takes, QA and picking
+## 6. From a 3D scene to a generated clip
+
+**The idea.** A `3d` scene ([COOKBOOK-3D.md](COOKBOOK-3D.md)) gives you exact control over the
+layout: where the box stands, where each person walks, how the camera moves and when. A video
+model gives you the look: real people, light, textures. A generated shot on a 3D scene can send
+the model a plain "map" of the 3D picture as its guide video, so the clip keeps your layout and
+camera while the model paints the rest. Your 3D scene stays in the film as the fallback (no take
+picked) and as what the take fades from and to.
+
+**Which guide to send** (`guide:` of the beat's `generated_shot`):
+
+| `guide:` | what the model gets | choose it when |
+|---|---|---|
+| `true` (= `render`) | the normal 3D view, as a silent draft | the colours and shapes of your scene should show through |
+| `depth` | grey by distance: near white, far dark, the background black | most shots: it carries the layout, the shapes and the camera move without your placeholder colours |
+| `outline` | white edges on black, like a line drawing | the model takes edge or line-art guides, or the shapes' contours matter most |
+| `mask` | each object one flat colour of its own on black | you want the model to keep each object apart (who is where); the prompt lists the stand-ins' colours by name |
+
+`depth`, `outline` and `mask` work only when the beat's scene is `type: 3d` (`vidgen validate`
+says so otherwise). The first frame (`first_frame: render`) is always the normal 3D view, never
+the pass: a grey or flat-coloured first picture would push the model towards that look. The
+characters still come from their reference sheets.
+
+```yaml
+title: Ana looks inside the crate
+format: {width: 1080, height: 1920, fps: 30}
+voices:
+  ana: {}
+videogen: {provider: openrouter, budget_usd: 2.0, host: quick_tunnel}   # host: the guide is a video, it needs https (section 5)
+style_sheet: {palette: [warm sand, deep teal], notes: "soft late-afternoon light", frames: 1, frame_prompt: "a quiet town square"}
+characters:
+  - name: ana
+    voice: ana
+    reference_sheet: {prompt: "a woman in her thirties, short black hair, red jacket, dark trousers"}
+  - name: ben
+    reference_sheet: {prompt: "a tall man in his fifties, grey beard, blue work coat"}
+scenes:
+  - id: square
+    type: 3d
+    params:
+      floor: {size: 14, color: "#2b3242"}
+      camera: {position: [0, 3.0, 5.5], look_at: [0, 0.7, -0.5], fov: 56}
+      objects:
+        - {id: crate, shape: box, size: 0.9, position: [0, 0.45, -1.2], color: accent}
+        - {id: ana, shape: standin, name: Ana, color: primary, position: [-1.7, 0.8, 1], rotation: [0, 90, 0]}
+        - {id: ben, shape: standin, name: Ben, color: secondary, position: [1.7, 0.8, -0.4], rotation: [0, -90, 0]}
+    beats:
+      - id: walk
+        voice: ana
+        text: "I'll walk over to the crate and look inside."
+        actions:
+          - {object_walk: ana, at: "@walk", to: crate}
+          - {object_face: ben, at: "@crate", to: ana}
+          - {action: camera_dolly, by: 0.8, at: "@look"}
+        generated_shot:
+          kind: action
+          model: bytedance/seedance-2.0-fast
+          prompt: she walks to the wooden crate and lifts its lid while he turns to watch her
+          setting: a quiet town square at the end of the afternoon
+          characters: [ana, ben]                # their reference sheets go in as pictures
+          guide: depth                          # the depth pass of the beat, not the normal 3D view
+```
+
+The same project is in `examples/3d-to-video/video.yaml`.
+
+**The order of commands:**
+
+```bash
+vidgen validate                      # the 3D scene and the shot (a misspelt guide: gets a did-you-mean)
+vidgen render --preview              # optional: look at the 3D scene first (add --guide-passes depth to see the pass)
+vidgen generate sheets --pay         # Ana's and Ben's reference pictures, then set approved: true on each
+vidgen tts                           # optional here (the shot sends no voice); it fixes the beat's timing
+vidgen generate inputs --guide       # draft render + its depth pass, cut to the beat: build/videogen/walk/guide.depth.mp4
+vidgen generate plan                 # "guide: build/videogen/walk/guide.depth.mp4 (depth pass of the beat's 3D scene, ...)"
+vidgen generate host-test            # free: checks the quick tunnel works on this computer
+vidgen generate run --pay --shot walk
+```
+
+`vidgen generate inputs --guide` renders the scene as a draft with the passes the shots need
+(the 3D frames are reused when nothing changed), takes exactly the beat's part (the same start,
+length, size and frame rate as `guide.mp4` would have) and converts the lossless pass to the
+MP4 the provider gets (H.264, yuv420p). The plan names the pass in the shot's `guide:` line and,
+with `host: quick_tunnel`, in the "would share" list; changing `guide:` is a new request (a new
+clip and a new price), never the cached one. The prompt gets one sentence about the guide, for
+example "The guide video is a depth map (near is white, far is dark): follow its layout and
+camera motion."; a mask guide adds "Mask colours: Ana #ff8ce2, Ben #8cffd4." (up to four
+stand-ins).
+
+**Limits:**
+
+- **It needs a host.** OpenRouter takes video inputs only as https addresses, so a guide (any
+  kind) needs `videogen: {host: quick_tunnel}` (section 5). Without it the shot is blocked.
+- **Depth contrast.** One depth range covers the whole shot. A camera that flies in close and
+  pulls far back within one beat leaves the objects in a narrow band of greys; keep big camera
+  moves for separate beats, or set the scene's `depth_range: [near, far]`.
+- **Mask colours are close, not exact, in the MP4.** Inside each object the colour stays within
+  a few levels of the table (`build/draft/three_d/<scene>.mask-colors.json`); along object edges
+  the MP4's halved colour resolution blends neighbouring colours over a pixel or two. The
+  lossless `.mkv` beside it is exact.
+- **Models may ignore a guide.** Not every model or provider uses video references
+  (BytePlus Seedance 2 and newer do; others may ignore them without saying so), and none
+  promises to follow a guide exactly. Try one cheap shot first and look at the take.
+- Labels and name tags are never in a pass (only the 3D shapes), and the guide is the draft's
+  low resolution: it is for layout and motion, not detail.
+
+## 7. Takes, QA and picking
 
 Each clip becomes `takes/<shot>/<n>.mp4` with `<n>.json` (model, cost, QA) and
 `<n>.contact.png`. QA checks the length, the aspect ratio and size, black and frozen stretches,
@@ -235,7 +340,7 @@ pick it; warnings are for you to judge on the contact sheet. To get another take
 request (another `seed`, a clearer prompt, another model): the same request is never paid again.
 `--take none` keeps vidgen's own picture for that beat. Commit `takes/` (paid footage).
 
-## 7. In the film
+## 8. In the film
 
 The shown take covers its beat (from the beat's start to the next beat's; the last beat of a
 scene keeps it to the scene's end), scaled and cropped to the format (`fit: cover`, or `contain`
@@ -244,7 +349,7 @@ fading from and to vidgen's picture of the beat (`crossfade`; a cut at scene edg
 two takes). Captions, overlays and titles are drawn on top; the voice, music and effects are
 vidgen's mix.
 
-## 8. Publishing
+## 9. Publishing
 
 When the film shows takes, the description file ends with "Includes AI-generated footage
 (models)." and `vidgen lint` notes each scene (`generated_footage`). Platforms ask you to disclose

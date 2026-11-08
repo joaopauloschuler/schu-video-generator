@@ -1,0 +1,52 @@
+# From a 3D scene to a generated clip (docs/COOKBOOK-GENERATED-VIDEO.md, section 6): a 9:16 `3d`
+# scene (a floor, a crate, two stand-ins) whose one beat is also a generated action shot. The shot
+# sends the beat's depth pass as its guide video (`guide: depth`), so the clip keeps the 3D
+# layout and camera move while the model draws Ana and Ben from their reference sheets.
+# Needs the 3d extra (pip install "schu-video-generator[3d]" && python -m playwright install chromium);
+# paying needs an OpenRouter key, the budget below and cloudflared for the quick tunnel.
+#
+#   vidgen validate examples/3d-to-video
+#   vidgen generate sheets examples/3d-to-video --pay      # then approved: true on each sheet
+#   vidgen generate inputs examples/3d-to-video --guide    # build/videogen/walk/guide.depth.mp4
+#   vidgen generate plan examples/3d-to-video              # free: inputs, what is shared, the estimate
+#   vidgen generate host-test examples/3d-to-video         # free: the quick tunnel works here
+#   vidgen generate run examples/3d-to-video --pay --shot walk
+#
+# No audio and no media are committed.
+title: Ana looks inside the crate
+format: {width: 1080, height: 1920, fps: 30}
+voices:
+  ana: {}
+videogen: {provider: openrouter, budget_usd: 2.0, host: quick_tunnel}   # host: the guide is a video, it needs https (section 5)
+style_sheet: {palette: [warm sand, deep teal], notes: "soft late-afternoon light", frames: 1, frame_prompt: "a quiet town square"}
+characters:
+  - name: ana
+    voice: ana
+    reference_sheet: {prompt: "a woman in her thirties, short black hair, red jacket, dark trousers"}
+  - name: ben
+    reference_sheet: {prompt: "a tall man in his fifties, grey beard, blue work coat"}
+scenes:
+  - id: square
+    type: 3d
+    params:
+      floor: {size: 14, color: "#2b3242"}
+      camera: {position: [0, 3.0, 5.5], look_at: [0, 0.7, -0.5], fov: 56}
+      objects:
+        - {id: crate, shape: box, size: 0.9, position: [0, 0.45, -1.2], color: accent}
+        - {id: ana, shape: standin, name: Ana, color: primary, position: [-1.7, 0.8, 1], rotation: [0, 90, 0]}
+        - {id: ben, shape: standin, name: Ben, color: secondary, position: [1.7, 0.8, -0.4], rotation: [0, -90, 0]}
+    beats:
+      - id: walk
+        voice: ana
+        text: "I'll walk over to the crate and look inside."
+        actions:
+          - {object_walk: ana, at: "@walk", to: crate}
+          - {object_face: ben, at: "@crate", to: ana}
+          - {action: camera_dolly, by: 0.8, at: "@look"}
+        generated_shot:
+          kind: action
+          model: bytedance/seedance-2.0-fast
+          prompt: she walks to the wooden crate and lifts its lid while he turns to watch her
+          setting: a quiet town square at the end of the afternoon
+          characters: [ana, ben]                # their reference sheets go in as pictures
+          guide: depth                          # the depth pass of the beat, not the normal 3D view

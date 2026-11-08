@@ -21,7 +21,7 @@ from vidgen import cli
 from vidgen.errors import VidgenError
 from vidgen.imagegen import GeneratedPicture, ImageRequest
 from vidgen.project import Project
-from vidgen.videogen.inputs import cut_audio, first_frame, make_inputs
+from vidgen.videogen.inputs import SceneRender, cut_audio, first_frame, make_inputs
 from vidgen.videogen.ledger import Ledger
 from vidgen.videogen.models import Catalog, parse_models
 from vidgen.videogen.run import ledger_path
@@ -352,9 +352,9 @@ def test_make_inputs_cuts_voice_and_guide(make_project) -> None:
     scene_clip = write_clip(root / "fake" / "s1.mp4", seconds=8.0, size="54x96", audio=False)
     act = shots[1]
 
-    def render(_project: Project, scene_id: str) -> tuple[Path, dict[str, float]]:
-        assert scene_id == "s1"
-        return scene_clip, {"talk": 0.0, "act": shots[0].length}
+    def render(_project: Project, scene_id: str, passes: tuple[str, ...]) -> SceneRender:
+        assert scene_id == "s1" and passes == ()
+        return SceneRender(scene_clip, {"talk": 0.0, "act": shots[0].length})
 
     written = make_inputs(project, [act], guide=True, out=lambda line: None, render=render)
     assert [p.name for p in written] == ["audio.mp3", "guide.mp4", "first_frame.png"]

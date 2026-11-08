@@ -10,11 +10,14 @@ dry-run plan of ``vidgen generate plan``.
   beat's length is sent as nothing and priced in whole seconds.
 - **Inputs** (made by :mod:`vidgen.videogen.inputs` into ``build/videogen/<shot>/``): the
   beat's voice cut to the part (``audio.mp3``), a silent low-resolution render of the part
-  (``guide.mp4``), its first frame (``first_frame.png``); pictures of approved reference sheets
+  (``guide.mp4``) or, on a ``3d`` scene with ``guide: depth | outline | mask``, that guide pass
+  of the part (``guide.<pass>.mp4``, DESIGN.md §113.8), the render's first frame
+  (``first_frame.png``); pictures of approved reference sheets
   (:mod:`vidgen.videogen.sheets`) and your own pictures. The first frame goes in as a frame image
   where the model lists ``first_frame``, else as a picture reference.
 - **Prompt**: the kind's framing and the shot's ``prompt``, the setting, the characters' sheet
-  words, the line said, the style sheet's words and "no on-screen text".
+  words, the line said, what a guide pass is (:data:`GUIDE_PROMPTS`; a mask also lists the
+  stand-ins' colours), the style sheet's words and "no on-screen text".
 - **Blocked**: a shot whose sheets are not approved, whose inputs are not made yet, or whose audio
   / video needs a hosted URL (``videogen.host: none``) is planned and priced but not ready to pay
   for. With ``inline_media: all`` (and no host) the audio / video would go inline, which
@@ -53,6 +56,21 @@ FRAMING: dict[str, str] = {
     "establishing": "Establishing shot",
 }
 NO_TEXT = "No on-screen text, captions, subtitles or logos"
+#: What a guide pass is, said in the prompt when one is sent as the guide (DESIGN.md §113.8).
+GUIDE_PROMPTS: dict[str, str] = {
+    "depth": "The guide video is a depth map (near is white, far is dark): follow its layout and camera motion",
+    "outline": "The guide video is an outline drawing (white edges on black): follow its shapes, layout and camera motion",
+    "mask": "The guide video is a colour mask (each object one flat colour on black): follow its layout and motion",
+}
+#: A mask guide's prompt lists the stand-ins' colours when the scene has at most this many.
+MASK_NAMES_MAX = 4
+#: What the plan says each guide is.
+GUIDE_WHAT: dict[str, str] = {
+    "render": "silent draft render",
+    "depth": "depth pass of the beat's 3D scene",
+    "outline": "outline pass of the beat's 3D scene",
+    "mask": "mask pass of the beat's 3D scene",
+}
 #: The problem of a shot whose voice or guide would go inline (OpenRouter answered HTTP 400
 #: "Only HTTPS URLs are allowed" for an inline audio reference, Step 296).
 INLINE_AUDIO_VIDEO_PROBLEM = (
@@ -151,6 +169,12 @@ class Shot:
         return float(math.ceil(self.length - 1e-9)) if self.duration is None else None
 
 
+def guide_name(source: str) -> str:
+    """The guide file of a shot: ``guide.mp4`` for the draft render, ``guide.<pass>.mp4`` for a
+    guide pass of a ``3d`` scene."""
+    return "guide.mp4" if source == "render" else f"guide.{source}.mp4"
+
+
 def _ratio(text: str) -> float:
     a, _, b = text.partition(":")
     return float(a) / float(b)
@@ -218,11 +242,36 @@ def shot_prompt(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -
     if spec.line:
         text = " ".join(shot.beat.text.replace('"', "'").split())
         parts.append(f'{display_name(shot.speaker)} says: "{text}"' if shot.speaker else f'Spoken over the shot: "{text}"')
+    guide = spec.guide_source
+    if guide in GUIDE_PROMPTS:
+        parts.append(GUIDE_PROMPTS[guide])
+        if guide == "mask":
+            parts += _mask_names(project, shot.scene_id)
     style = project.config.style_sheet
     if style is not None and style.words():
         parts.append(f"Style: {style.words()}")
     parts.append(NO_TEXT)
     return " ".join(_sentence(p) for p in parts)
+
+
+def _mask_names(project: Project, scene_id: str) -> list[str]:
+    """``["Mask colours: Ana #rrggbb, Ben #rrggbb"]`` for the stand-ins of ``scene_id`` (by
+    name, else id) when there are 1 to :data:`MASK_NAMES_MAX`; else nothing. The colours are
+    the mask pass's own (:func:`~vidgen.three_d.passes.mask_colors`: they depend only on the ids)."""
+    from vidgen.three_d.passes import mask_colors
+    from vidgen.three_d.spec import FLOOR_ID, Scene3DParams
+
+    scene = project.scene(scene_id)
+    try:
+        params = Scene3DParams.model_validate(scene.params)
+    except ValueError:   # the scene's own problem, reported by vidgen validate
+        return []
+    standins = [o for o in params.objects if o.shape == "standin"]
+    if not standins or len(standins) > MASK_NAMES_MAX:
+        return []
+    objects = ([{"id": FLOOR_ID, "shape": "plane"}] if params.floor is not None else []) + [{"id": o.id, "shape": o.shape} for o in params.objects]
+    colors = mask_colors({"objects": objects})
+    return ["Mask colours: " + ", ".join(f"{o.name or display_name(o.id)} {colors[o.id]}" for o in standins)]
 
 
 def _picture(project: Project, value: str, where: str, problems: list[str]) -> Path | None:
@@ -312,15 +361,16 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
                 used.add(path)
     if spec.wants_audio:
         shot.inputs.append(ShotInput("audio", "audio", folder / "audio.mp3", f"the beat's voice, {shot.length:.2f} s"))
-    if spec.guide:
-        shot.inputs.append(ShotInput("guide", "video", folder / "guide.mp4", f"silent draft render, {shot.length:.2f} s"))
+    guide = spec.guide_source
+    if guide is not None:
+        shot.inputs.append(ShotInput("guide", "video", folder / guide_name(guide), f"{GUIDE_WHAT[guide]}, {shot.length:.2f} s"))
     for owner in sorted(needs):
         sheet = sheets.get(owner)
         if sheet is not None and sheet.problem():
             shot.blocked.append(sheet.problem() or "")
     made_here = [i for i in shot.inputs if i.path.is_relative_to(project.root / INPUTS_DIR)]
     if any(not i.ready for i in made_here):
-        shot.blocked.append(f"inputs not made yet: `vidgen generate inputs{' --guide' if spec.guide or source == 'render' else ''}`")
+        shot.blocked.append(f"inputs not made yet: `vidgen generate inputs{' --guide' if guide or source == 'render' else ''}`")
     if shot.shared:
         settings = project.config.videogen
         if settings.host == "quick_tunnel":
@@ -624,6 +674,6 @@ def plan_shots(
 
 
 __all__ = [
-    "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "pick_aspect", "plan_shots", "project_shots",
+    "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "pick_aspect", "plan_shots", "project_shots",
     "shot_problems", "shot_prompt", "video_ratio",
 ]

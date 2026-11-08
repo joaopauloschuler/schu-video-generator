@@ -2472,7 +2472,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
     p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")
     p.add_argument("--keep", type=float, metavar="SECONDS", help="host-test: keep the tunnel open this long after the check (the address is printed to try in a browser)")
-    p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with guide: true or first_frame: render (a draft render of their scenes)")
+    p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with a guide: (true, or depth / outline / mask on a 3d scene) or first_frame: render (a draft render of their scenes)")
     p.set_defaults(func=cmd_generate)
 
     p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")

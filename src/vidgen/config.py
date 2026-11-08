@@ -3233,6 +3233,12 @@ def strip_emphasis(text: str) -> str:
 
 #: Kinds of generated video shots (DESIGN.md §113.3).
 ShotKind = Literal["talking", "action", "establishing"]
+#: What a generated shot's ``guide:`` sends (DESIGN.md §113.8): the beat's draft render, or one of
+#: the guide passes of its ``3d`` scene.
+GuideChoice = Literal["render", "depth", "outline", "mask"]
+GUIDE_CHOICES: tuple[str, ...] = ("render", "depth", "outline", "mask")
+#: Strings pydantic reads as booleans (``guide: yes`` stays ``true``).
+_BOOL_WORDS = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "true", "y", "yes"})
 
 
 class GeneratedShot(_Strict):
@@ -3254,8 +3260,8 @@ class GeneratedShot(_Strict):
     """Reference pictures: a character's name (its reference sheet), style (the style sheet's frames and references) or a picture file (relative to the project); default: the shot's characters and style."""
     audio: Literal["beat", "none"] | None = None
     """beat: the beat's own voice, cut to the beat's exact length, goes in as an audio reference (lip-sync); none: no audio; default beat for talking shots, none otherwise."""
-    guide: bool = False
-    """true: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion)."""
+    guide: bool | GuideChoice = False
+    """true or render: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion); depth, outline or mask (the beat's scene must be a 3d scene): that guide pass of the 3D picture instead, same length and size."""
     first_frame: str | None = Field(default=None, min_length=1)
     """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), none, or a picture file; default sheet for talking shots, none otherwise."""
     seed: int | None = Field(default=None, ge=0)
@@ -3272,6 +3278,23 @@ class GeneratedShot(_Strict):
     """How a take fills the frame: cover (scaled to fill, the overhang cut off) or contain (all of it, black bars)."""
     crossfade: float | None = Field(default=None, ge=0, le=2)
     """Seconds the take fades in and out over vidgen's picture at the beat's edges; default videogen.crossfade (0.25)."""
+
+    @field_validator("guide", mode="before")
+    @classmethod
+    def _guide_word(cls, v: Any) -> Any:
+        if isinstance(v, str) and v not in GUIDE_CHOICES and v.strip().lower() not in _BOOL_WORDS:
+            close = difflib.get_close_matches(v.lower(), GUIDE_CHOICES, n=1)
+            hint = f" (did you mean {close[0]}?)" if close else ""
+            raise ValueError(f"{v!r} is not true, false, {', '.join(GUIDE_CHOICES)}{hint}; depth, outline and mask are guide passes of a 3d scene")
+        return v
+
+    @property
+    def guide_source(self) -> str | None:
+        """What goes in as the guide video: ``render`` (``guide: true``), ``depth``, ``outline``,
+        ``mask``, or ``None`` (no guide)."""
+        if self.guide is False:
+            return None
+        return "render" if self.guide is True else self.guide
 
     @model_validator(mode="after")
     def _check_shot(self) -> GeneratedShot:
@@ -3520,6 +3543,13 @@ class SceneConfig(_Strict):
                 raise ValueError(f"beats[{j}] cite: scene '{self.id}' has no references to cite (add references: [{{label, doi}}])")
             for cite in beat.cite:
                 cite_index(self, cite)
+        for j, beat in enumerate(self.beats):
+            guide = beat.generated_shot.guide_source if beat.generated_shot is not None else None
+            if guide not in (None, "render") and self.type != "3d":
+                raise ValueError(
+                    f"beats[{j}].generated_shot.guide: {guide} is a guide pass of a 3d scene, but scene '{self.id}' is a "
+                    f"{self.type} scene; use guide: true (its draft render), or make the scene type: 3d"
+                )
         return self
 
     @model_validator(mode="before")

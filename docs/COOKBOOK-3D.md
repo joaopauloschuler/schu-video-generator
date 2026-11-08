@@ -99,6 +99,13 @@ Ask for some of them as in the command line: `guide_passes: depth`, `guide_passe
 The passes are lossless `.mkv` clips (exact mask colours); convert them when a tool wants MP4 or
 PNG frames. They hold only the 3D shapes: no title, captions, overlays, labels or name tags.
 
+**A pass as the guide of a generated clip.** A beat of a `3d` scene can be made into real-looking
+footage by a video model that follows the 3D layout: give the beat a `generated_shot` with
+`guide: depth` (or `outline`, `mask`; `guide: true` sends the normal 3D view).
+`vidgen generate inputs --guide` draws the pass and converts the beat's part to MP4 for the
+model. The walkthrough, which pass to choose and the limits:
+[COOKBOOK-GENERATED-VIDEO.md, From a 3D scene to a generated clip](COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip).
+
 ## 6. Checking
 
 - `vidgen validate` names unknown object ids with a did-you-mean (in params and actions), camera

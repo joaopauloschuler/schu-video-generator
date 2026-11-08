@@ -2867,7 +2867,8 @@ scenes:
           characters: [mara, theo]          # default: the speaker (talking, action), nobody (establishing)
           refs: [mara, theo, style]         # sheets by name, style, or picture files; default: characters + style
           audio: beat                       # beat | none; default beat for talking shots
-          guide: true                       # a silent draft render of the beat as a video reference
+          guide: true                       # a silent draft render of the beat as a video reference (true = render);
+                                            # on a 3d scene also depth | outline | mask: that guide pass instead
           first_frame: none                 # sheet | render | none | a picture file; default sheet for talking
           seed: 7
           resolution: 480p                  # default: the model's lowest
@@ -2889,7 +2890,18 @@ scenes:
   into `build/videogen/<shot>/`: `audio.mp3` (the beat's own voice from its narration MP3, cut
   to the shot's exact length and padded with silence: run `vidgen tts` first), and with
   `--guide` (it renders the scene as a draft) `guide.mp4` (silent, the draft format: low
-  resolution in the video's shape) and `first_frame.png`.
+  resolution in the video's shape) and `first_frame.png`. With `guide: depth`, `outline` or
+  `mask` (only on a `3d` scene; elsewhere `vidgen validate` refuses it) the draft render also
+  draws that guide pass (reusing the 3D frames), and the shot gets `guide.<pass>.mp4` instead of
+  `guide.mp4`: the same part of the beat at the same size and frame rate, converted from the
+  lossless pass to H.264 / yuv420p (BT.709, CRF 12). Mask colours stay within a few levels
+  inside each object; at object edges the halved colour resolution of yuv420p blends
+  neighbouring colours over a pixel or two (snap each pixel to the nearest colour of
+  `<scene>.mask-colors.json` to get the exact mask back). `first_frame: render` stays the normal
+  render's first frame. The prompt says what the guide is ("The guide video is a depth map
+  ..."); a mask guide also lists the stand-ins' colours by name (up to four stand-ins). The pass
+  is part of the request, so changing it is a new clip (never the cached one). Walkthrough:
+  [COOKBOOK-GENERATED-VIDEO.md, From a 3D scene to a generated clip](COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip).
 - **Lengths**: a shot covers its beat's window on the planned timeline (to the next beat's
   start). The model is asked for the shortest length it allows that covers it (trimmed later);
   a beat longer than the model's longest clip is split into equal parts (`<beat>_p1`, `_p2`...).

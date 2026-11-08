@@ -442,9 +442,12 @@ def _render_scenes(
     return runs
 
 
-def render_scenes(project: Project, preview: bool, scene_ids: list[str], jobs: int = 1, frames: int = 0) -> SceneRuns:
-    """Render only ``scene_ids`` (with narration sounds, ``frames`` stills per beat), without
-    joining the video; used by ``vidgen storyboard``.
+def render_scenes(
+    project: Project, preview: bool, scene_ids: list[str], jobs: int = 1, frames: int = 0, guide_passes: tuple[str, ...] = (),
+) -> SceneRuns:
+    """Render only ``scene_ids`` (with narration sounds, ``frames`` stills per beat, and the
+    ``guide_passes`` of ``3d`` scenes), without joining the video; used by ``vidgen storyboard``
+    and ``vidgen generate inputs --guide``.
 
     Checks the scenes and (if any is rendered) warns about missing/stale audio like
     :func:`render_project`, then runs
@@ -464,7 +467,7 @@ def render_scenes(project: Project, preview: bool, scene_ids: list[str], jobs: i
         warn_audio(project)
         warn_images(project)
         remove_file(project.render_dir(preview) / "frames" / "index.json")
-        return _render_scenes(project, preview, scene_ids, no_audio=False, keep_going=False, jobs=jobs, frames=frames)
+        return _render_scenes(project, preview, scene_ids, no_audio=False, keep_going=False, jobs=jobs, frames=frames, guide_passes=guide_passes)
 
 
 @dataclass
