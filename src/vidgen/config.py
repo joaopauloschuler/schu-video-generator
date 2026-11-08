@@ -1009,6 +1009,9 @@ OPENROUTER_QUALITIES: tuple[str, ...] = ("auto", "low", "medium", "high", "xhigh
 #: Where a generated shot's sound comes from: mix (vidgen's voice and music; the model is asked
 #: for no sound) or model (the model makes the clip's own sound and vidgen keeps it).
 SoundChoice = Literal["mix", "model"]
+#: Where a generated shot's starting picture goes: frame (sent as a first frame image, today's
+#: behaviour) or guide (spliced into the start of the guide video; no frame image is sent).
+FirstFrameIn = Literal["frame", "guide"]
 
 
 class VideogenModelSettings(_Strict):
@@ -1016,6 +1019,10 @@ class VideogenModelSettings(_Strict):
 
     sound: SoundChoice | None = None
     """This model's sound setting (mix or model), above videogen.sound and below a shot's own sound:; default: videogen.sound."""
+    first_frame_in: FirstFrameIn | None = None
+    """Where this model's shots take their starting picture (frame or guide), above videogen.first_frame_in and below a shot's own first_frame_in:; default: videogen.first_frame_in."""
+    first_frame_with_references: bool | None = None
+    """Whether this model uses references sent with a first frame: false blocks a shot that sends both (the plan names first_frame_in: guide), true lets it through; default vidgen's own record (false for bytedance/seedance-*, unknown and not blocked for other models)."""
 
 
 class VideogenConfig(_Strict):
@@ -1046,8 +1053,12 @@ class VideogenConfig(_Strict):
     """Hard limit in minutes on how long a quick tunnel stays open, whatever happens; it must leave room for poll_timeout (a shot is blocked otherwise). A tunnel closes as soon as its job reaches a final state."""
     sound: SoundChoice = "mix"
     """Where shots get their sound: mix (vidgen's voice and music; the model is asked for none) or model (the model makes the clip's own sound, kept for a video_clip scene; a placed take still plays vidgen's mix). Above it: videogen.models.<model>.sound, then a shot's sound:."""
+    first_frame_in: FirstFrameIn = "frame"
+    """Where shots take their starting picture: frame (a first frame image) or guide (spliced into the guide video, for models that take a first frame or references, never both). Above it: videogen.models.<model>.first_frame_in, then a shot's first_frame_in:."""
+    first_frame_dissolve: float = Field(default=0.4, gt=0, le=2)
+    """Seconds the starting picture dissolves into the guide with first_frame_in: guide; the combined guide stays as long as the guide and it is the guide's dissolve, not the film's."""
     models: dict[str, VideogenModelSettings] = Field(default_factory=dict)
-    """Settings per video model, by its OpenRouter id, e.g. {"bytedance/seedance-2.0-mini": {sound: model}}; other models keep videogen.sound."""
+    """Settings per video model, by its OpenRouter id, e.g. {"bytedance/seedance-2.0-mini": {sound: model, first_frame_in: guide}}; other models keep videogen.sound and videogen.first_frame_in."""
 
     @field_validator("models")
     @classmethod
@@ -1062,6 +1073,12 @@ class VideogenConfig(_Strict):
         entry under ``models``, else ``sound``."""
         entry = self.models.get(model)
         return shot_sound or (entry.sound if entry is not None else None) or self.sound
+
+    def first_frame_in_for(self, model: str, shot_first_frame_in: FirstFrameIn | None = None) -> FirstFrameIn:
+        """Where a shot of ``model`` takes its starting picture: its own ``shot_first_frame_in``,
+        else this model's entry under ``models``, else ``first_frame_in``."""
+        entry = self.models.get(model)
+        return shot_first_frame_in or (entry.first_frame_in if entry is not None else None) or self.first_frame_in
 
 
 class StyleSheet(_Strict):
@@ -3308,6 +3325,8 @@ class GeneratedShot(_Strict):
     """Seconds the take fades in and out over vidgen's picture at the beat's edges; default videogen.crossfade (0.25)."""
     sound: SoundChoice | None = None
     """mix: vidgen's voice and music (the model is asked for no sound); model: the model makes the clip's own sound and vidgen keeps it (play it with a video_clip scene; a placed take still plays vidgen's mix). Default: videogen.models.<model>.sound, then videogen.sound, then mix."""
+    first_frame_in: FirstFrameIn | None = None
+    """frame: the first_frame: picture goes in as a first frame image; guide: it is spliced into the start of the guide video and no frame image is sent (for models that take a first frame or references, never both; needs guide: and first_frame:). Default: videogen.models.<model>.first_frame_in, then videogen.first_frame_in, then frame."""
 
     @field_validator("guide", mode="before")
     @classmethod

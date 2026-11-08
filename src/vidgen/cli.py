@@ -2049,7 +2049,7 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
             shots=[
                 {"id": s.shot.id, "kind": s.shot.spec.kind, "model": s.shot.spec.model, "scene": s.shot.scene_id, "beat": s.shot.beat.id,
                  "start": round(s.shot.start, 3), "length": round(s.shot.length, 3), "duration": s.shot.duration,
-                 "resolution": s.shot.resolution, "aspect_ratio": s.shot.aspect_ratio, "sound": s.shot.sound,
+                 "resolution": s.shot.resolution, "aspect_ratio": s.shot.aspect_ratio, "sound": s.shot.sound, "first_frame_in": s.shot.first_frame_in,
                  "inputs": [{"role": i.role, "kind": i.kind, "path": i.path.relative_to(root).as_posix() if i.path.is_relative_to(root) else str(i.path),
                              "frame_image": i.frame, "ready": i.ready} for i in s.shot.inputs],
                  "estimate_usd": s.estimate.cost if s.estimate is not None else None, "cached": s.cached, "left_after_usd": s.left_after,

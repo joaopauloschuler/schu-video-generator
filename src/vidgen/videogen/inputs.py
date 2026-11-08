@@ -9,7 +9,10 @@
   that guide pass of the draft render (the lossless ``.mkv`` beside the 3D clip, drawn when
   missing), as H.264 / yuv420p at the draft's size and frame rate;
 - ``first_frame.png``: the first frame of the draft render of the part (the first one not dark,
-  when the scene fades in from black); always the normal render, also with a guide pass.
+  when the scene fades in from black); always the normal render, also with a guide pass;
+- ``guide[.<pass>].opening.mp4`` (``first_frame_in: guide``): that guide with the shot's starting
+  picture as its first frame, dissolving into it over ``videogen.first_frame_dissolve`` seconds,
+  same length, size and frame rate (DESIGN.md §113.13). This one is sent, not the plain guide.
 
 Free and local (ffmpeg and vidgen's own renderer); the cuts are made again on every run, the
 draft render is reused while current. ``inputs.json`` beside them records what each file was cut
@@ -23,6 +26,7 @@ import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from vidgen.errors import VidgenError
 from vidgen.project import Project
@@ -72,6 +76,33 @@ def cut_pass(ffmpeg: str, source: Path, dest: Path, start: float, length: float)
         ["-ss", f"{start:.6f}", "-i", str(source), "-t", f"{length:.6f}", "-an", *PASS_COLOR_ARGS,
          "-c:v", "libx264", "-crf", str(PASS_CRF), "-pix_fmt", "yuv420p", str(dest)],
         f"converting the guide pass for {dest.parent.name}",
+    )
+
+
+#: H.264 quality of a guide with its starting picture (CRF; the picture must survive the cut).
+OPENING_CRF = 16
+
+
+def make_opening_guide(ffmpeg: str, picture: Path, guide: Path, dest: Path, dissolve_seconds: float) -> None:
+    """``dest``: the guide video ``guide`` with ``picture`` (cropped to fill) as its first frame,
+    dissolving into the guide over ``dissolve_seconds`` (at most the guide's length); same length,
+    size and frame rate as ``guide``, never longer, silent."""
+    from vidgen.render.ffmpeg import probe, run_ffmpeg
+
+    info = probe(guide)
+    fade = min(dissolve_seconds, info.duration)
+    size = f"{info.width}:{info.height}"
+    graph = (
+        f"[0:v]scale={size}:force_original_aspect_ratio=increase,crop={size},setsar=1,format=yuv420p,fps={info.fps},settb=AVTB[p];"
+        f"[1:v]setsar=1,format=yuv420p,fps={info.fps},settb=AVTB[g];"
+        f"[p][g]xfade=transition=fade:duration={fade:.6f}:offset=0,format=yuv420p[v]"
+    )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    run_ffmpeg(
+        ffmpeg,
+        ["-loop", "1", "-framerate", str(info.fps), "-t", f"{fade:.6f}", "-i", str(picture), "-i", str(guide), "-filter_complex", graph, "-map", "[v]",
+         "-t", f"{info.duration:.6f}", "-an", "-c:v", "libx264", "-crf", str(OPENING_CRF), "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dest)],
+        f"putting the starting picture into the guide for {dest.parent.name}",
     )
 
 
@@ -141,6 +172,23 @@ def _passes_by_scene(shots: Sequence[Shot]) -> dict[str, tuple[str, ...]]:
     return {scene: tuple(p for p in GUIDE_PASSES if p in modes) for scene, modes in wanted.items()}
 
 
+def _write_opening_guide(ffmpeg: str, project: Project, shot: Shot, plain: Path, source: dict[str, Any], written: list[Path], out: Callable[[str], None]) -> None:
+    """Make and record the guide ``plain`` with ``shot``'s starting picture (``source``: what
+    ``plain`` was cut from). Nothing for a shot with no starting picture to put in."""
+    from vidgen.videogen.freshness import opening_source, record_input
+
+    picture, kind = shot.opening_picture, shot.spec.guide_source
+    if picture is None or kind is None:   # a shot with no guide has a problem of its own in the plan
+        return
+    if not picture.is_file():
+        raise VidgenError(f"shot {shot.id}: the starting picture {picture.name} does not exist yet (first_frame_in: guide needs it: make the sheet, or check first_frame:)")
+    dest = plain.with_name(guide_name(kind, opening=True))
+    make_opening_guide(ffmpeg, picture, plain, dest, shot.opening_dissolve_seconds)
+    record_input(dest, {**source, **opening_source(shot)})
+    written.append(dest)
+    out(f"{shot.id}: guide with its starting picture {dest.relative_to(project.root).as_posix()} ({shot.opening_dissolve_seconds:g} s dissolve)")
+
+
 def make_inputs(
     project: Project, shots: Sequence[Shot], *, guide: bool = False, out: Callable[[str], None] = print,
     render: Callable[[Project, str, tuple[str, ...]], SceneRender] | None = None,
@@ -192,6 +240,7 @@ def make_inputs(
             record_input(frame, made_from)
             written += [clip, frame]
             out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} and its first frame ({shot.length:.2f} s, silent)")
+            _write_opening_guide(ffmpeg, project, shot, clip, made_from, written, out)
             continue
         lossless = scene.passes.get(kind)
         if lossless is None or not lossless.is_file():
@@ -209,7 +258,8 @@ def make_inputs(
             record_input(frame, sources.render(shot, "render", scene.fingerprint))
             written.append(frame)
             out(f"{shot.id}: first frame {frame.relative_to(project.root).as_posix()} (from the normal render)")
+        _write_opening_guide(ffmpeg, project, shot, clip, sources.render(shot, kind, scene.fingerprint), written, out)
     return written
 
 
-__all__ = ["SceneRender", "cut_audio", "cut_pass", "cut_video", "first_frame", "make_inputs"]
+__all__ = ["SceneRender", "cut_audio", "cut_pass", "cut_video", "first_frame", "make_inputs", "make_opening_guide"]

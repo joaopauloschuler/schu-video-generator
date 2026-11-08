@@ -25,6 +25,8 @@ and before the submit, which is refused unless the tunnel is still open with roo
 reaches a final state (completed, failed, ...), before the download, or at the maximum lifetime
 (a provider may fetch again after queueing, so a finished fetch does not close it); also on an
 error or Ctrl+C. A job resumed from the ledger is only polled: no tunnel is opened again.
+After a job, a hosted file the provider never fetched with a ``GET`` becomes a warning
+(:attr:`ClipResult.warnings`; vidgen's own ``HEAD`` checks do not count, DESIGN.md §113.13).
 Without a host such inputs stop the submit with a clear error. Whatever the provider says with
 the shared address in it is redacted before it leaves this module (:mod:`vidgen.videogen.redaction`).
 
@@ -37,6 +39,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -129,6 +132,8 @@ class ClipResult:
     path: Path | None = None
     job: JobState | None = None
     paid: bool = False
+    #: Warnings about the job (a hosted input the provider never downloaded); never an error.
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def cost(self) -> float | None:
@@ -139,6 +144,22 @@ class ClipResult:
 def hosted_inputs(request: VideoRequest) -> list[Path]:
     """The local audio / video files of ``request`` (what a host must share; pictures go inline)."""
     return [m.path for m in (*request.frame_images, *request.references) if m.kind != "image" and m.url is None and m.path is not None]
+
+
+#: What a hosted input is called in the warning about what the provider downloaded.
+_HOSTED_WHAT = {"audio": "the voice", "video": "the guide"}
+
+
+def unfetched_warnings(events: Sequence[dict[str, Any]], labels: Sequence[str], kinds: Mapping[str, str]) -> list[str]:
+    """A warning naming each of the hosted files ``labels`` that no ``host_fetch`` ``GET`` in
+    ``events`` reached with a status below 400 (``HEAD`` s are vidgen's own checks); ``kinds``
+    gives a label's input kind (``audio``, ``video``). Never holds a shared address."""
+    fetched = {e.get("file") for e in events if e.get("event") == "host_fetch" and e.get("method") == "GET" and int(e.get("status") or 0) < 400}
+    missing = [_HOSTED_WHAT.get(kinds.get(label, ""), label) for label in labels if label not in fetched]
+    if not missing:
+        return []
+    names = " and ".join(missing) if len(missing) < 3 else f"{', '.join(missing[:-1])} and {missing[-1]}"
+    return [f"the provider never downloaded {names} (vidgen hosted them for this job; the clip may not use them)"]
 
 
 def _cap(settings: VideogenConfig, budget_usd: float | None) -> float | None:
@@ -221,6 +242,7 @@ def generate_clip(
     if problem:
         raise VidgenError(f"not paying for {request.model}: {problem}")
     host = share.host(local, root, ledger)
+    earlier_events = len(ledger.events())
     with host:   # closed when the block ends: the job reached a final state (or an error / Ctrl+C)
         previous = chosen.uploader
         chosen.uploader = host.url_of
@@ -233,9 +255,12 @@ def generate_clip(
         finally:
             chosen.uploader = previous
     try:
-        return _finish(root, ledger, chosen, plan, job, recorded=False)
+        result = _finish(root, ledger, chosen, plan, job, recorded=False)
     except VidgenError as exc:   # a failed job's error, raised after the tunnel closed
         raise _without_secret(exc, host) from None
+    kinds = {m.path: m.kind for m in (*sendable.frame_images, *sendable.references) if m.path is not None}
+    result.warnings = unfetched_warnings(ledger.events()[earlier_events:], [f.label for f in host.files], {f.label: kinds.get(f.source, "") for f in host.files})
+    return result
 
 
 def _without_secret(exc: VidgenError, host: QuickTunnelHost) -> VidgenError:

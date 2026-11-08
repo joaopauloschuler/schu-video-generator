@@ -11,7 +11,8 @@ the cut inputs: per file its SHA-256 and what it was made from. The plan
   :func:`~vidgen.render.fingerprint.scene_fingerprint` (a draft ignores picked takes,
   :mod:`vidgen.videogen.compose`, so a pick never marks an input as changed), the draft's size and
   frame rate (a draft's ``draft:`` settings are not in the fingerprint), the part's offset and
-  length and the guide kind.
+  length and the guide kind; a guide with its starting picture (``first_frame_in: guide``) also
+  the SHA-256 of the picture and the dissolve's length.
 
 A narration MP3 whose ``.hash`` says it no longer matches the beat's text is reported as well
 (cutting it again would only cut the same old voice): ``vidgen tts`` comes first.
@@ -34,6 +35,8 @@ RECORD_NAME = "inputs.json"
 RECORD_VERSION = 1
 #: What differs between a recorded source and the current one, in the order it is reported.
 _CHANGE_REASONS: tuple[tuple[str, str], ...] = (
+    ("opening_picture_sha256", "the starting picture changed"),
+    ("opening_dissolve", "the dissolve length changed"),
     ("narration_sha256", "the beat's narration MP3 changed"),
     ("scene_fingerprint", "the scene changed (its config, a beat's text, voice or timing, assets, or vidgen)"),
     ("draft", "the draft's size or frame rate changed"),
@@ -50,6 +53,12 @@ def _part(shot: Shot) -> dict[str, float]:
 def voice_source(mp3: Path, shot: Shot) -> dict[str, Any]:
     """What ``shot``'s voice is cut from: the narration MP3 ``mp3`` and the part."""
     return {"narration_sha256": file_sha256(mp3), **_part(shot)}
+
+
+def opening_source(shot: Shot) -> dict[str, Any]:
+    """What ``shot``'s starting picture adds to its guide's source (the picture must exist)."""
+    assert shot.opening_picture is not None
+    return {"opening_picture_sha256": file_sha256(shot.opening_picture), "opening_dissolve": round(shot.opening_dissolve_seconds, 6)}
 
 
 def _read_record(path: Path) -> dict[str, Any]:
@@ -172,6 +181,10 @@ class InputSources:
             source = voice_source(self._mp3(shot), shot)
         else:
             source = self.render(shot, (shot.spec.guide_source or "render") if item.role == "guide" else "render")
+            if item.role == "guide" and shot.opening_picture is not None:
+                if not shot.opening_picture.is_file():
+                    return "the starting picture is missing"
+                source = {**source, **opening_source(shot)}
         wrote = record.get("source")
         if wrote != source:
             wrote = wrote if isinstance(wrote, dict) else {}
@@ -179,4 +192,4 @@ class InputSources:
         return None if record.get("sha256") == file_sha256(item.path) else "the file was changed after it was cut"
 
 
-__all__ = ["RECORD_NAME", "InputSources", "StaleInputs", "record_input", "voice_source"]
+__all__ = ["RECORD_NAME", "InputSources", "StaleInputs", "opening_source", "record_input", "voice_source"]

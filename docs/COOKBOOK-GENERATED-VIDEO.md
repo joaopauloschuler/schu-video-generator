@@ -18,6 +18,22 @@ look. A model that takes no video guide or no first frame cannot be used for a s
 not enforce this rule: `vidgen generate plan` does not block a shot without them, so check each
 shot's inputs in the plan.
 
+**Some models take a first frame or references, never both.** Seedance (`bytedance/seedance-*`) has
+two separate modes: a first-frame job, or a reference job (pictures, a video and audio). A request
+with both runs as a first-frame job and leaves the references out with no error: the provider never
+downloads the voice or the guide, and it bills the no-reference price. On such a model the rule is
+met with `first_frame_in: guide`: the starting picture becomes the first frame of the guide video, dissolving
+into it, so the guide and the references all go in one reference job and no first frame is sent. The
+setting is `generated_shot.first_frame_in`, `videogen.models.<model>.first_frame_in` or
+`videogen.first_frame_in` (`frame` by default); `videogen.first_frame_dissolve` sets the dissolve
+(0.4 s by default, always inside the guide's own length). `vidgen generate plan` and `run` block a
+shot that sends a first frame and references to a model known to do this (a shot already paid for
+is only noted), naming `first_frame_in: guide`; models with no evidence are not blocked.
+`videogen.models.<model>.first_frame_with_references: true` overrides the block. After each hosted job, vidgen compares
+what the provider actually downloaded (`GET`s in the ledger) with what it hosted, and warns in the
+run output and the take's record: "the provider never downloaded the voice and the guide" means
+that the clip was made without them.
+
 ## Plan the shots first
 
 A video model paints what you tell it; it does not understand the story or the place. Plan in this
@@ -74,8 +90,25 @@ a guide and $0.191 with one, and listed prices at 720p are more than double. A 1
 about 120 clips of 5 s: roughly $23 for one take of each, plus about $5 for starting pictures, before
 any retake. Decide the budget and how many retakes you can afford before you start.
 
-**Not proven yet.** Sending a first frame, reference pictures and a guide in one request has not been
-run on a real model, and neither has starting a clip from the last frame of the one before it.
+**What was measured** (paid runs on `bytedance/seedance-2.0-mini`). A first frame together with
+references runs as a first frame only: nothing is downloaded, and the job costs $0.177 instead of
+$0.191 for 5 s. With `first_frame_in: guide` the provider downloads the voice and the guide (billed
+$0.191), and the cut between two shots made this way was judged very good by the owner. The limits:
+the opening is close to the picture, not exact (SSIM 0.87-0.88; a true first frame gave 0.81-0.98);
+the model sets its own speech timing (a word expected at the start came at 3.16 s); it is still
+unproven that the guide steers big movements; and clear file names on the hosted files did not
+change what was downloaded. **Limits per request, from third-party pages, not official: 9 images,
+3 videos, 3 audio files.**
+
+**A recipe for one shot after another.**
+
+1. Make the starting picture (above) of the first shot.
+2. Fit the 3D figures to it: in the `type: 3d` scene, move the stand-ins until a draft of the scene lines up with
+   the picture, so the guide agrees with what the picture shows.
+3. Make the shot with `guide: depth`, `first_frame: <the picture>` and `first_frame_in: guide`.
+4. Start the next shot from its last frame, by hand for now: take the clip's last frame
+   (for example `ffmpeg -sseof -0.05 -i takes/<shot>/<n>.mp4 -frames:v 1 assets/next_start.png`),
+   use it as the next shot's starting picture and go back to step 2. A later step adds this to vidgen.
 
 ## 1. When it is worth it
 
@@ -85,8 +118,8 @@ footage vidgen cannot draw; keep diagrams, text, charts and explanations as scen
 
 | kind | model (examples) | inputs | good for |
 |---|---|---|---|
-| `talking` | `bytedance/seedance-2.0-mini` | a first frame + the speaker's sheet + the beat's own voice + a 3D guide (hosted) | a lip-synced line (the guide sets the framing: section 6) |
-| `action` | `bytedance/seedance-2.0-fast` | a first frame + the characters' sheets, the style frame + a 3D guide (+ the voice, hosted) | people doing something |
+| `talking` | `bytedance/seedance-2.0-mini` | a 3D guide opening on the starting picture (`first_frame_in: guide`) + the speaker's sheet + the beat's own voice (hosted) | a lip-synced line (the guide sets the framing: section 6) |
+| `action` | `bytedance/seedance-2.0-fast` | a 3D guide opening on the starting picture (`first_frame_in: guide`) + the characters' sheets, the style frame (+ the voice, hosted) | people doing something |
 | `establishing` | `google/veo-3.1-lite` (4/6/8 s; check `vidgen generate models` for what it accepts) | a first frame + a 3D guide + words | a place, a mood, a transition |
 
 ## 2. Cost control
@@ -173,7 +206,7 @@ scenes:
     beats:
       - text: "It is not late. It is early for being on time."
         voice: theo_voice
-        generated_shot: {kind: talking, model: bytedance/seedance-2.0-mini, setting: the ferry quay in the fog, guide: depth, first_frame: render}
+        generated_shot: {kind: talking, model: bytedance/seedance-2.0-mini, setting: the ferry quay in the fog, guide: depth, first_frame: render, first_frame_in: guide}
 ```
 
 ```bash
@@ -359,7 +392,8 @@ picked) and as what the take fades from and to.
 
 `depth`, `outline` and `mask` work only when the beat's scene is `type: 3d` (`vidgen validate`
 says so otherwise). The first frame (`first_frame: render`) is always the normal 3D view, never
-the pass: a grey or flat-coloured first picture would push the model towards that look. The
+the pass: a grey or flat-coloured first picture would push the model towards that look. With
+`first_frame_in: guide` that picture opens the guide video (`guide.<pass>.opening.mp4`). The
 characters still come from their reference sheets.
 
 ```yaml
@@ -401,6 +435,7 @@ scenes:
           characters: [ana, ben]                # their reference sheets go in as pictures
           guide: depth                          # the depth pass of the beat, not the normal 3D view
           first_frame: render                   # the starting picture (better: a picture file of the shot)
+          first_frame_in: guide                 # Seedance takes a first frame or references, never both: the picture opens the guide
 ```
 
 The same project is in `examples/3d-to-video/video.yaml`.
@@ -412,8 +447,8 @@ vidgen validate                      # the 3D scene and the shot (a misspelt gui
 vidgen render --preview              # optional: look at the 3D scene first (add --guide-passes depth to see the pass)
 vidgen generate sheets --pay         # Ana's and Ben's reference pictures, then set approved: true on each
 vidgen tts                           # optional here (the shot sends no voice); it fixes the beat's timing
-vidgen generate inputs --guide       # draft render + its depth pass, cut to the beat: build/videogen/walk/guide.depth.mp4
-vidgen generate plan                 # "guide: build/videogen/walk/guide.depth.mp4 (depth pass of the beat's 3D scene, ...)"
+vidgen generate inputs --guide       # draft render + its depth pass, cut to the beat, with the starting picture spliced in: build/videogen/walk/guide.depth.opening.mp4
+vidgen generate plan                 # "guide: build/videogen/walk/guide.depth.opening.mp4 (depth pass of the beat's 3D scene, opening on first frame of the beat's render, ...)"
 vidgen generate host-test            # free: checks the quick tunnel works on this computer
 vidgen generate run --pay --shot walk
 ```

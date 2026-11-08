@@ -188,6 +188,48 @@ def _read_cache(path: Path) -> tuple[float, Any] | None:
         return None
 
 
+# ----- what vidgen knows of a model that the list does not say -------------------------------------
+
+
+#: Model id prefixes known to run a first-frame job or a reference job, never both: with a
+#: first frame the job is accepted and the references are silently left out (DESIGN.md §113.13).
+#: Only models with evidence are listed.
+FIRST_FRAME_OR_REFERENCES: tuple[str, ...] = ("bytedance/seedance-",)
+
+
+def known_first_frame_with_references(model: str) -> bool | None:
+    """Whether vidgen knows ``model`` uses references sent with a first frame (``None``: unknown)."""
+    return False if model.startswith(FIRST_FRAME_OR_REFERENCES) else None
+
+
+@dataclass(frozen=True)
+class GuideOpeningTemplate:
+    """How a ``first_frame_in: guide`` prompt names its inputs for one kind of model: ``opens``
+    takes ``{video}``, ``shows`` takes ``{pictures}``, ``{s}`` and ``{who}``, ``voice`` takes
+    ``{audio}`` and ``{who}``; the token fields take the input's number ``{n}`` of its kind."""
+
+    opens: str
+    shows: str = "{pictures} show{s} {who}"
+    voice: str = "{audio} is {who}'s voice"
+    image_token: str = "@image{n}"
+    video_token: str = "@video{n}"
+    audio_token: str = "@audio{n}"
+
+
+#: The role sentence per model id prefix (a model with none gets no sentence).
+GUIDE_OPENING_TEMPLATES: dict[str, GuideOpeningTemplate] = {
+    "bytedance/seedance-": GuideOpeningTemplate(
+        "{video} opens on the exact starting picture of this scene and then shows the movement as a plain 3D layout: "
+        "begin the clip on that picture and follow the layout's positions and movement",
+    ),
+}
+
+
+def guide_opening_template(model: str) -> GuideOpeningTemplate | None:
+    """The role sentence's template of ``model`` (``None``: none, no sentence is added)."""
+    return next((template for prefix, template in GUIDE_OPENING_TEMPLATES.items() if model.startswith(prefix)), None)
+
+
 # ----- checking a request ------------------------------------------------------------------------
 
 

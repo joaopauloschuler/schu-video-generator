@@ -222,5 +222,5 @@ def test_cookbook_example_validates_and_matches_the_example(tmp_path: Path) -> N
     problems, _ = validate_all(project, keep_going=True)
     assert not problems, problems
     (shot,) = project_shots(project, CATALOG)
-    assert shot.spec.guide_source == "depth" and shot.inputs[-1].path.name == "guide.depth.mp4"
+    assert shot.spec.guide_source == "depth" and shot.first_frame_in == "guide" and shot.inputs[-1].path.name == "guide.depth.opening.mp4"
     assert "COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip" in (root / "docs" / "COOKBOOK-3D.md").read_text(encoding="utf-8")

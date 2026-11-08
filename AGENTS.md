@@ -3962,6 +3962,22 @@ scenes:
   first with `vidgen generate host-test`; `generate plan` lists exactly which files a run would
   share. Ask the user before turning the host on: the files are reachable on the public
   internet by anyone with the address for those minutes.
+- **Where the starting picture goes** (`first_frame_in: frame | guide`: `generated_shot`, then
+  `videogen.models.<model>`, then `videogen`, default `frame`; `videogen.first_frame_dissolve`, default
+  0.4 s): `guide` puts the shot's `first_frame:` picture into the guide video
+  (`guide[.<pass>].opening.mp4`, made by `vidgen generate inputs --guide`, as long as the plain guide,
+  the picture dissolving into the guide) and sends no first frame; the shot needs a `guide:` and a
+  starting picture. Seedance (`bytedance/seedance-*`) takes a first frame or references, never both:
+  a request with both silently loses the references (nothing downloaded, the no-reference price),
+  so `generate plan` / `run` block such a shot (a shot already paid for gets a note), naming
+  `first_frame_in: guide`; `videogen.models.<model>.first_frame_with_references: true` overrides it, and
+  models vidgen has no evidence about are not blocked. With `first_frame_in: guide` on a model with a
+  template (Seedance) the prompt starts with a role sentence (`@video1` opens on the starting
+  picture, `@image1` and so on are who, `@audio1` is whose voice), built from the actual order of the
+  inputs; shots with `first_frame_in: frame` keep their prompt exactly. Measured on seedance-2.0-mini: the
+  opening is close to the picture (SSIM 0.87-0.88), not exact, and the model sets its own speech timing.
+  After a hosted job vidgen compares what the provider `GET` from the tunnel with what it hosted and
+  warns in the run output and the take's record; the warning is never an error.
 - **A submit with no known outcome** (`vidgen generate plan` / `run` / `status` / `ledger` say
   "no known outcome"; vidgen was stopped or an answer was lost after a paid request was sent):
   it may have been charged, so vidgen will not pay for that shot again by itself and counts it

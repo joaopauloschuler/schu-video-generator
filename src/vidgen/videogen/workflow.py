@@ -158,10 +158,14 @@ def run_shots(
             run.take, run.new_take = add_take(
                 root, shot.id, result.path, key=result.plan.key, model=model, provider=result.plan.provider,
                 job_id=result.job.id if result.job else None, cost=result.cost, length=shot.length, width=fmt.width, height=fmt.height, sound=shot.sound,
+                warnings=result.warnings,
             )
             what = "new take" if run.new_take else "already take"
             cost = f", {money(result.cost)}" if result.cost is not None else ""
             out(f"shot {shot.id}: {status}{cost}: {what} {run.take.number} ({run.take.path.relative_to(root).as_posix()}, {run.take.qa.get('summary')})")
+            for warning in result.warnings:
+                out(f"shot {shot.id}: warning: {warning}")
+            run.message = "; ".join(result.warnings)
         else:
             out(f"shot {shot.id}: cached clip ({result.path.relative_to(root).as_posix()}); --pay keeps it as a take (free)")
         report.shots.append(run)

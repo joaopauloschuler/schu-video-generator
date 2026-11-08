@@ -2780,7 +2780,9 @@ videogen:
   host_max_minutes: 20      # a quick tunnel closes after this long at the latest (5-120); see "Quick tunnel" for when vidgen is killed
   sound: mix                # mix (vidgen's voice and music; generate_audio false) | model (the clip's own sound; generate_audio true)
   models:                   # per video model, by its OpenRouter id
-    "bytedance/seedance-2.0-mini": {sound: model}
+    "bytedance/seedance-2.0-mini": {sound: model, first_frame_in: guide, first_frame_with_references: false}
+  first_frame_in: frame     # frame (a first frame image) | guide (spliced into the guide video; no frame image is sent)
+  first_frame_dissolve: 0.4 # seconds the starting picture dissolves into the guide with first_frame_in: guide
 ```
 
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
@@ -2908,6 +2910,7 @@ scenes:
           fit: cover                        # cover (fill, overhang cut off) | contain (all of it, black bars)
           crossfade: null                   # seconds; default videogen.crossfade
           sound: null                       # mix | model; default videogen.models.<model>.sound, then videogen.sound (mix)
+          first_frame_in: null              # frame | guide; default videogen.models.<model>.first_frame_in, then videogen.first_frame_in (frame)
 ```
 
 - **Sheets**: `vidgen generate sheets [PROJECT] [--sheet NAME] [--pay]` lists the pictures and
@@ -2997,6 +3000,22 @@ scenes:
   takes/<shot>/<n>.mp4`). With no beats and a `duration` it plays at volume 1; with narration at
   0.25 (`volume:` sets it). vidgen does not time captions or word-anchored actions from the clip's
   sound.
+- **Where the starting picture goes** (`generated_shot.first_frame_in`, `videogen.models.<id>.first_frame_in`,
+  `videogen.first_frame_in`, in that order; default `frame`): `frame` sends it as a first frame image. `guide`
+  splices it into the start of the guide video: `vidgen generate inputs --guide` writes
+  `build/videogen/<shot>/guide[.<pass>].opening.mp4`, as long as the plain guide, with the picture as its
+  first frame dissolving into the guide over `videogen.first_frame_dissolve` seconds (default 0.4), and
+  no first frame image is sent. The shot needs a `guide:` and a starting picture (`first_frame:`, resolved as usual);
+  either missing is a problem in the plan. `first_frame_in: guide` adds a role sentence to the prompt on a model with a template (Seedance),
+  built from the actual order of the inputs; other prompts are unchanged. Changing the starting picture or the
+  dissolve marks the guide as changed, so it cannot be paid for by mistake (`vidgen generate inputs --guide`
+  makes it again).
+- **A first frame with references** (`videogen.models.<id>.first_frame_with_references`; default vidgen's
+  record: false for `bytedance/seedance-*`, unknown for other models): `false` is a problem in `generate plan` / `run` for a shot sending both
+  (a shot already paid for is noted, not blocked), naming `first_frame_in: guide`; `true` overrides vidgen's record. Unknown models are not blocked.
+- **Downloads**: after a job with hosted inputs, vidgen compares them with the `host_fetch` `GET`s in the
+  ledger and warns in the run output and the take's record ("the provider never downloaded the voice and the
+  guide"), only for files actually hosted and never as an error.
 - **Credits and disclosure**: when the film shows takes, the description file
   (`<output>_chapters.txt`) ends with "Includes AI-generated footage (model, ...)." and the lint
   rule `generated_footage` (info) reminds you to disclose AI-generated footage where the platform

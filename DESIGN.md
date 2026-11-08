@@ -22200,6 +22200,41 @@ A shot **has a guide** when `generated_shot.guide_source` is not `None` (`true`,
   in the film. To pay for the new wording the owner sets or changes `seed:` on the shot (or edits its `prompt:`), which changes both keys.
   Open: a clip paid before this step whose guide was later re-cut to different bytes has another key and is not recognised; a re-cut is already a new request.
 
+### 113.13 The starting picture in the guide, and what the provider really downloaded (Step 316)
+
+Paid experiments (2026-11-08, `bytedance/seedance-2.0-mini`): Seedance has separate first/last-frame and reference modes.
+A request with `frame_images` and `input_references` is accepted but runs as first-frame only: the provider never downloads
+the hosted voice or guide (the ledger shows only vidgen's own `HEAD`s) and it bills the no-guide price ($0.177 vs $0.191 for
+5 s), with no error. Putting the starting picture into the guide (frame 1 the picture, dissolving into the guide) and sending no
+frame image made the provider download voice and guide ($0.191), the clip opened close to the picture (SSIM 0.87-0.88 versus
+0.81-0.98 for a true first frame) and the owner judged the cut between shots made this way very good.
+
+- **Setting** (`FirstFrameIn`, `frame` | `guide`): `generated_shot.first_frame_in`, then `videogen.models.<id>.first_frame_in`,
+  then `videogen.first_frame_in` (default `frame`), `VideogenConfig.first_frame_in_for`, as `sound_for` (Step 312).
+- **With `guide`** (`Shot.first_frame_in`): the shot needs a guide and a starting picture (`first_frame` resolved as today; either
+  missing is `shot.problems`). `_resolve_inputs` sets `Shot.opening_picture` and sends no first frame; the picture is not counted
+  in `used`, so a sheet picture stays available as a reference. The plan shows it; the guide input is
+  `guide_name(kind, opening=True)` (`guide[.<pass>].opening.mp4`).
+- **The combined guide** (`inputs.make_opening_guide`, made by `make_inputs` after the plain guide): `xfade` of the picture (cover,
+  crop) and the guide with `-t` the plain guide's length; length, size and fps from `probe` of the plain guide; the dissolve
+  (`videogen.first_frame_dissolve`, default 0.4 s, at most the guide's length) never lengthens the clip (`-t` caps the output).
+  `make_inputs` records `{..source.., opening_picture_sha256, opening_dissolve}` for it in `inputs.json`; `freshness._change` compares them
+  (`_CHANGE_REASONS`: "the starting picture changed", "the dissolve length changed"), so `generate plan` blocks an edit
+  before it can be paid for and a re-cut clears it.
+- **Role sentence** (`shots._guide_opening_sentences`, `models.GUIDE_OPENING_TEMPLATES`, by model id prefix; Seedance only so far): the prompt
+  of a `first_frame_in: guide` shot starts with "{video} opens on the exact starting picture ..." and who each `@imageN` / `@audioN`
+  is, numbered per kind by the order the references are sent (`ShotInput.owner` names a sheet's character). No template, no sentence.
+  Shots not using `guide` build their prompt through the old path, so paid shots keep their key.
+- **Block** (`models.known_first_frame_with_references`, `videogen.models.<id>.first_frame_with_references`, `shots._first_frame_with_references_problem`):
+  a shot with a true first frame and any reference on a model known to separate the modes (`bytedance/seedance-*`) is a plan
+  problem (`shot.problems`) naming `first_frame_in: guide`, a note when the clip or job is already paid for (`shot.cached` / earlier job). The user can
+  override with `first_frame_with_references: true`; models with no evidence are not listed and never blocked.
+- **What the provider really downloaded** (`run.unfetched_warnings`): after a hosted job, the hosted files (`host.files`) are compared with the `host_fetch`
+  `GET`s of status < 400 of this tunnel's ledger events (`HEAD`s are vidgen's own checks). A missing one is a warning (`ClipResult.warnings`), printed by `run_shots` and
+  kept in the take's `info["warnings"]` (`add_take(warnings=)`). Never an error, only for files actually hosted, and the message names the voice and the guide,
+  never an address. The mock provider opens no tunnel, so it has none.
+- **Not in this step**: meaningful file names, `first_frame: last_of:`, hard cuts in `video_clip`, an opening-frame QA score, an overlay preview.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

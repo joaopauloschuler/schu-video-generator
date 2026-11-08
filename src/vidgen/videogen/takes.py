@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -144,11 +145,11 @@ def pick_take(root: Path, shot_id: str, take: str, known: list[str]) -> Take | N
 
 def add_take(
     root: Path, shot_id: str, clip: Path, *, key: str, model: str, provider: str, job_id: str | None, cost: float | None,
-    length: float, width: int, height: int, sound: str = "mix",
+    length: float, width: int, height: int, sound: str = "mix", warnings: Sequence[str] = (),
 ) -> tuple[Take, bool]:
     """Keep ``clip`` (the cached clip of request ``key``) as the shot's next take, with its QA
-    report (for a ``length`` s shot in a ``width`` x ``height`` video, ``sound`` its setting) and
-    contact sheet; the take that already holds ``key`` when there is one. Returns it and whether
+    report (for a ``length`` s shot in a ``width`` x ``height`` video, ``sound`` its setting),
+    the job's ``warnings`` (kept in its record) and contact sheet; the take that already holds ``key`` when there is one. Returns it and whether
     it is new."""
     from vidgen.videogen.qa import check_clip, contact_sheet
 
@@ -166,6 +167,8 @@ def add_take(
         "source": clip.relative_to(root).as_posix() if clip.is_relative_to(root) else str(clip), "length": round(length, 3),
         "time": utc_now(), "qa": report.to_json(),
     }
+    if warnings:
+        info["warnings"] = list(warnings)
     write_text_atomic(path.with_suffix(".json"), json.dumps(info, indent=1, ensure_ascii=True) + "\n")
     take = Take(shot_id, number, path, info)
     contact_sheet(path, take.contact, title=f"shot {shot_id}, take {number}: {model} ({provider})", report=report)

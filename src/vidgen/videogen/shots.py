@@ -36,6 +36,11 @@ dry-run plan of ``vidgen generate plan``.
   ``model`` (``generate_audio: true``): ``generated_shot.sound``, else
   ``videogen.models.<model>.sound``, else ``videogen.sound``. A model the list says cannot make
   sound is blocked, one it says nothing about gets a note.
+- **Where the starting picture goes** (:attr:`Shot.first_frame_in`, DESIGN.md §113.13): ``frame``
+  (a first frame image) or ``guide`` (spliced into the guide video, ``guide_name(kind,
+  opening=True)``; no frame image is sent and the prompt starts with a role sentence where the
+  model has a template). A shot that would send a true first frame and references to a model
+  known to separate the modes is a problem (or a note when already paid for).
 - **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
   smaller copies, :mod:`vidgen.videogen.pictures`, made here into ``build/videogen/pictures/``);
   over :data:`~vidgen.videogen.openrouter.MAX_INLINE_BYTES` is a problem.
@@ -49,13 +54,16 @@ from collections.abc import Iterable, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any
 
-from vidgen.config import BeatConfig, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
+from vidgen.config import BeatConfig, FirstFrameIn, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.videogen import MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
 from vidgen.videogen.ledger import BudgetState, Ledger, SubmitIntent, intent_refusal, intent_text
-from vidgen.videogen.models import TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, money, snap_duration
+from vidgen.videogen.models import (
+    TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, guide_opening_template, known_first_frame_with_references, money, snap_duration,
+)
 from vidgen.videogen.sheets import STYLE, Sheet, character_sheet, plan_sheets, style_sheet
 from vidgen.videogen.takes import takes_of
 
@@ -126,6 +134,14 @@ EARLIER_WORDING_BLOCKED = (
     "sent with a guide), so a run would pay for a new clip; not paid again by itself. The earlier take stays in the film. "
     "To pay for a new take with the new wording: set or change seed: on the shot, or change its prompt:"
 )
+#: The problem of a shot that sends a true first frame and references to a model that separates
+#: the two modes (DESIGN.md §113.13).
+FIRST_FRAME_WITH_REFERENCES_PROBLEM = (
+    "{model} takes a first frame or references, never both: with this shot's first frame the job would be accepted and the voice, "
+    "the guide and the pictures ignored (no error, the no-reference price). Set first_frame_in: guide to put the starting picture "
+    "into the guide, or leave first_frame: out to send the references alone; videogen.models.{model}.first_frame_with_references: true "
+    "overrides this"
+)
 #: What the plan says each sound setting is.
 SOUND_WHAT: dict[str, str] = {
     "mix": "vidgen's voice and music; the model is asked for no sound",
@@ -138,13 +154,15 @@ PICTURE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 @dataclass(frozen=True)
 class ShotInput:
     """One input of a shot: its ``role`` (``first_frame``, ``reference``, ``audio``, ``guide``),
-    kind, file, what it is (``what``) and whether it goes in as a frame image."""
+    kind, file, what it is (``what``), whether it goes in as a frame image and whose reference
+    sheet it comes from (``owner``, for the role sentence)."""
 
     role: str
     kind: str
     path: Path
     what: str
     frame: bool = False
+    owner: str | None = None
 
     @property
     def ready(self) -> bool:
@@ -193,6 +211,13 @@ class Shot:
     fake_addresses: bool = False
     #: The shot's resolved sound setting (``mix`` or ``model``).
     sound: SoundChoice = "mix"
+    #: Where the shot's starting picture goes (``frame`` or ``guide``).
+    first_frame_in: FirstFrameIn = "frame"
+    #: ``first_frame_in: guide``: the starting picture put into the guide, and how long it
+    #: dissolves into the guide (``opening_what`` says what the picture is, for the plan).
+    opening_picture: Path | None = None
+    opening_what: str = ""
+    opening_dissolve_seconds: float = 0.0
     #: A guided shot's prompt under the earlier wording, when it differs from :attr:`prompt` (else
     #: empty): what a clip paid for before the wording changed was asked with.
     earlier_prompt: str = ""
@@ -225,10 +250,12 @@ class Shot:
         return float(math.ceil(self.length - 1e-9)) if self.duration is None else None
 
 
-def guide_name(source: str) -> str:
+def guide_name(source: str, *, opening: bool = False) -> str:
     """The guide file of a shot: ``guide.mp4`` for the draft render, ``guide.<pass>.mp4`` for a
-    guide pass of a ``3d`` scene."""
-    return "guide.mp4" if source == "render" else f"guide.{source}.mp4"
+    guide pass of a ``3d`` scene; with ``opening``, the guide with the shot's starting picture
+    (``guide.opening.mp4``, ``guide.<pass>.opening.mp4``, for ``first_frame_in: guide``)."""
+    base = "guide" if source == "render" else f"guide.{source}"
+    return f"{base}{'.opening' if opening else ''}.mp4"
 
 
 def inputs_command(project: Project, guide: bool) -> str:
@@ -351,7 +378,47 @@ def _prompt_text(project: Project, shot: Shot, sheets: dict[str, Sheet | None], 
     if style is not None and style.words():
         parts.append(f"Style: {style.words()}")
     parts.append(NO_TEXT)
-    return " ".join(_sentence(p) for p in parts)
+    opening = _guide_opening_sentences(shot)
+    return " ".join(_sentence(p) for p in [*opening, *parts])
+
+
+def _guide_opening_sentences(shot: Shot) -> list[str]:
+    """The role sentences of a ``first_frame_in: guide`` prompt, numbered by the actual order of
+    its references (:attr:`ShotInput.owner`, per kind); none without a template or a guide."""
+    template = guide_opening_template(shot.spec.model) if shot.first_frame_in == "guide" else None
+    if template is None:
+        return []
+    video = audio = ""
+    tokens: dict[str, list[str]] = {}
+    images = videos = audios = 0
+    for item in shot.inputs:
+        if item.frame:
+            continue
+        if item.kind == "image":
+            images += 1
+            if item.owner is not None:
+                tokens.setdefault(item.owner, []).append(template.image_token.format(n=images))
+        elif item.kind == "video":
+            videos += 1
+            video = video or template.video_token.format(n=videos)
+        elif item.kind == "audio":
+            audios += 1
+            audio = audio or template.audio_token.format(n=audios)
+    if not video:
+        return []
+    sentences = [template.opens.format(video=video)]
+    shows = [template.shows.format(pictures=_joined(found), s="s" if len(found) == 1 else "", who=display_name(owner)) for owner, found in tokens.items()]
+    if shows:
+        sentences.append(", ".join(shows))
+    if audio:
+        who = display_name(shot.speaker) if shot.speaker else "the narrator"
+        sentences.append(template.voice.format(audio=audio, who=who))
+    return sentences
+
+
+def _joined(tokens: list[str]) -> str:
+    """``a``, ``a and b``, ``a, b and c``."""
+    return " and ".join(tokens) if len(tokens) < 3 else f"{', '.join(tokens[:-1])} and {tokens[-1]}"
 
 
 def _left_out_notes(shot: Shot, sheets: dict[str, Sheet | None]) -> list[str]:
@@ -441,7 +508,14 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
     elif source != "none":
         first = _picture(project, source, f"{where}.first_frame", shot.problems)
         what = "your picture"
-    if first is not None:
+    in_guide = shot.first_frame_in == "guide"
+    if in_guide:   # the picture goes into the guide video: nothing is sent as a first frame
+        shot.opening_picture, shot.opening_what = first, what
+        if source == "none":
+            shot.problems.append(f"{where}: first_frame_in: guide needs a starting picture (first_frame: a picture file, render or sheet)")
+        if spec.guide_source is None:
+            shot.problems.append(f"{where}: first_frame_in: guide needs a guide video to put the picture in (guide: true, depth, outline or mask)")
+    elif first is not None:
         role = "first_frame" if frame_ok else "portrait" if spec.kind == "talking" else "first_frame"
         shot.inputs.append(ShotInput(role, "image", first, what, frame=frame_ok))
         used.add(first)
@@ -474,7 +548,7 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             needs.add(value)
             for picture in sheet.pictures:
                 if picture.request.path not in used:
-                    shot.inputs.append(ShotInput("reference", "image", picture.request.path, f"{value} sheet, {picture.label}"))
+                    shot.inputs.append(ShotInput("reference", "image", picture.request.path, f"{value} sheet, {picture.label}", owner=value))
                     used.add(picture.request.path)
         elif "/" not in value and "." not in value:
             names = [n for n in sheets if n != STYLE]
@@ -488,7 +562,11 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
         shot.inputs.append(ShotInput("audio", "audio", folder / "audio.mp3", f"the beat's voice, {shot.length:.2f} s"))
     guide = spec.guide_source
     if guide is not None:
-        shot.inputs.append(ShotInput("guide", "video", folder / guide_name(guide), f"{GUIDE_WHAT[guide]}, {shot.length:.2f} s"))
+        opening = shot.opening_picture is not None
+        about = f", opening on {what}" if opening else ""
+        shot.inputs.append(ShotInput("guide", "video", folder / guide_name(guide, opening=opening), f"{GUIDE_WHAT[guide]}{about}, {shot.length:.2f} s"))
+    if in_guide and not any(i.kind == "image" for i in shot.inputs) and shot.characters:
+        shot.notes.append("no reference pictures go in with first_frame_in: guide: the model sees the characters only through the guide's opening; add refs: to send their sheets too")
     for owner in sorted(needs):
         sheet = sheets.get(owner)
         if sheet is not None and sheet.problem():
@@ -531,6 +609,19 @@ def _check_sound(shot: Shot) -> None:
         shot.notes.append(f"{model.id} does not say whether it can make sound: generate_audio true is sent; the take may have no sound of its own")
     if shot.spec.place:
         shot.notes.append("sound: model: a placed take plays vidgen's mix, not the clip's sound; to hear the clip's sound use place: false and a video_clip scene")
+
+
+def _first_frame_with_references_problem(shot: Shot, models: dict[str, Any]) -> str | None:
+    """The problem of a shot sending a true first frame and references to a model known to
+    separate the modes (:data:`FIRST_FRAME_WITH_REFERENCES_PROBLEM`), else ``None``; ``models``:
+    ``videogen.models`` (an entry's ``first_frame_with_references`` overrides vidgen's record)."""
+    if shot.model is None or not any(i.frame for i in shot.inputs) or all(i.frame for i in shot.inputs):
+        return None
+    entry = models.get(shot.model.id)
+    takes_both = entry.first_frame_with_references if entry is not None and entry.first_frame_with_references is not None else known_first_frame_with_references(shot.model.id)
+    if takes_both is not False:
+        return None
+    return f"{shot.location}: " + FIRST_FRAME_WITH_REFERENCES_PROBLEM.format(model=shot.model.id)
 
 
 def _windows(project: Project, scene: SceneConfig, fps: int) -> list[float]:
@@ -605,6 +696,7 @@ def _beat_shots(
             id=beat.id if parts == 1 else f"{beat.id}_p{k + 1}", scene_id=scene.id, beat=beat, spec=spec, location=where,
             start=start + k * length, offset=k * length, length=length, part=k + 1, parts=parts, speaker=speaker,
             characters=chosen, model=model, problems=list(problems), sound=config.videogen.sound_for(spec.model, spec.sound),
+            first_frame_in=config.videogen.first_frame_in_for(spec.model, spec.first_frame_in), opening_dissolve_seconds=config.videogen.first_frame_dissolve,
         )
         if model is not None:
             shot.duration = snap_duration(length, model.durations) if model.durations else None
@@ -688,6 +780,9 @@ class ShotPlan:
                 trim = shot.duration - shot.length
                 lines.append(f"  length: asks for {shot.duration} s, trimmed to {shot.length:.2f} s later" if trim > 1e-6 else f"  length: {shot.duration} s")
         lines.append(f"  sound: {shot.sound} ({SOUND_WHAT[shot.sound]})")
+        if shot.first_frame_in == "guide":
+            shown = _shown(shot.opening_picture, root) if shot.opening_picture is not None else "none"
+            lines.append(f"  starting picture: {shown} ({shot.opening_what or 'not chosen'}) goes into the guide, {shot.opening_dissolve_seconds:g} s dissolve; no first frame image is sent")
         for item in shot.inputs:
             role = item.role + (" (frame image)" if item.frame else " (reference)" if item.role in ("portrait", "first_frame") else "")
             lines.append(f"  {role}: {_shown(item.path, root)} ({item.what}{'' if item.ready else '; not made yet'})")
@@ -825,6 +920,7 @@ def plan_shots(
     sources = InputSources(project)
     for shot in shots:
         item = ShotPlan(shot, shot.request())
+        modes_problem = _first_frame_with_references_problem(shot, settings.models)
         if item.request is not None and shot.model is not None:
             if all(i.ready for i in shot.inputs):
                 clip = plan_clip(project.root, settings, item.request, catalog=catalog, budget_usd=budget_usd, duration=shot.priced_seconds)
@@ -847,6 +943,11 @@ def plan_shots(
             else:
                 item.check = check_request(item.request, shot.model)
                 item.estimate = estimate(item.request, shot.model, duration=shot.priced_seconds)
+        if modes_problem is not None:
+            if item.cached or item.previous_job or EARLIER_WORDING_BLOCKED in shot.blocked:   # already paid for: reused free, nothing new is lost
+                shot.notes.append(f"{modes_problem} (this clip is already paid for: it is reused free)")
+            else:
+                shot.problems.append(modes_problem)
         stale = sources.stale(shot)
         if stale is not None and (item.cached or item.previous_job):
             shot.notes.append(stale.reuse_note)
@@ -862,6 +963,6 @@ def plan_shots(
 
 
 __all__ = [
-    "EARLIER_WORDING_BLOCKED", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "pick_aspect", "plan_shots", "project_shots",
+    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "pick_aspect", "plan_shots", "project_shots",
     "shot_problems", "shot_prompt", "video_ratio", "without_framing",
 ]

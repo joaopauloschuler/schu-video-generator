@@ -7,7 +7,7 @@
 #
 #   vidgen validate examples/3d-to-video
 #   vidgen generate sheets examples/3d-to-video --pay      # then approved: true on each sheet
-#   vidgen generate inputs examples/3d-to-video --guide    # build/videogen/walk/guide.depth.mp4
+#   vidgen generate inputs examples/3d-to-video --guide    # build/videogen/walk/guide.depth.opening.mp4
 #   vidgen generate plan examples/3d-to-video              # free: inputs, what is shared, the estimate
 #   vidgen generate host-test examples/3d-to-video         # free: the quick tunnel works here
 #   vidgen generate run examples/3d-to-video --pay --shot walk
@@ -51,3 +51,4 @@ scenes:
           characters: [ana, ben]                # their reference sheets go in as pictures
           guide: depth                          # the depth pass of the beat, not the normal 3D view
           first_frame: render                   # the starting picture (better: a picture file of the shot)
+          first_frame_in: guide                 # Seedance takes a first frame or references, never both: the picture opens the guide
