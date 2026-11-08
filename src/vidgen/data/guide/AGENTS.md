@@ -3972,7 +3972,12 @@ scenes:
   the look. `depth` suits most shots; `mask` keeps objects apart (the prompt lists the
   stand-ins' colours); `outline` for edge guides. The first frame (`first_frame: render`) stays
   the normal view. It is a video input, so it needs the quick tunnel too. Models may ignore
-  guides: try one cheap shot first.
+  guides: try one cheap shot first. With any guide (also `guide: true`) the prompt leaves the
+  framing to it: a talking shot says "Ana, speaking" instead of "Talking close-up of Ana, facing
+  the camera, speaking", and framing instructions in the sheet text are left out of the prompt
+  (the plan's `note:` quotes them; a clause that also describes clothes or hair stays whole). The sheet
+  pictures are unchanged. A guided shot paid for under the earlier wording is blocked, not paid
+  again; `seed:` or `prompt:` on the shot asks for a new take with the new wording.
 
 ### Your content and third-party services
 

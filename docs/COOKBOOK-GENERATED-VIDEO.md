@@ -14,7 +14,7 @@ footage vidgen cannot draw; keep diagrams, text, charts and explanations as scen
 
 | kind | model (examples) | inputs | good for |
 |---|---|---|---|
-| `talking` | `heygen/avatar-iv` ($0.05/s) | a portrait (the speaker's sheet) + the beat's own voice (hosted) | a lip-synced close-up of a line |
+| `talking` | `heygen/avatar-iv` ($0.05/s) | a portrait (the speaker's sheet) + the beat's own voice (hosted) | a lip-synced close-up of a line (with a guide, the guide sets the framing: section 6) |
 | `action` | `bytedance/seedance-2.0-fast` | the characters' sheets, the style frame (+ the voice and a guide render, hosted) | people doing something |
 | `establishing` | `google/veo-3.1-lite` (4/6/8 s) | words (+ an optional first frame) | a place, a mood, a transition |
 
@@ -364,6 +364,15 @@ stand-ins).
   a few levels of the table (`build/draft/three_d/<scene>.mask-colors.json`); along object edges
   the MP4's halved colour resolution blends neighbouring colours over a pixel or two. The
   lossless `.mkv` beside it is exact.
+- **The guide decides the framing.** A shot with any guide (also `guide: true`) does not ask for
+  it in words. A `talking` shot's prompt starts "Ana, speaking." instead of "Talking close-up of
+  Ana, facing the camera, speaking", and the framing instructions in the character's sheet text
+  (centred, whole body, front view...) are left out of the prompt under `Characters:`; the plan's
+  `note:` quotes what was left out and why. A clause that also describes the character (clothes,
+  hair, ...) stays whole, so write framing in sentences of its own. The sheet picture is
+  unchanged, and unguided shots keep their wording exactly. A guided shot paid for before this wording changed is
+  blocked, not paid again: its take stays in the film; set or change `seed:` on the shot (or its
+  `prompt:`) to pay for a new take with the new wording.
 - **Models may ignore a guide.** Not every model or provider uses video references
   (BytePlus Seedance 2 and newer do; others may ignore them without saying so), and none
   promises to follow a guide exactly. Try one cheap shot first and look at the take.

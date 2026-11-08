@@ -1789,6 +1789,9 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 313 — Guided shots leave the framing to the guide
+- [x] A guided `kind: talking` shot says "{who}, speaking" instead of the close-up wording; the sheet's framing instructions are left out of a guided shot's prompt (`shots.without_framing`) and `generate plan` notes what was left out (text and JSON); unguided prompts byte-identical; a guided shot paid for under the earlier wording is blocked, not paid again (DESIGN §113.12)
+
 ### Step 312 — A model's own sound, per model; video references in token estimates
 - [x] `generated_shot.sound` > `videogen.models.<id>.sound` > `videogen.sound` > `mix`; `model` sends `generate_audio: true` (provider body, cache key: `mix` requests keep their keys); plan shows the value, blocks a model listed as unable, notes an unknown one; the price choice follows it; the mock's job with sound returns a tone; the token estimate counts a video reference (real charges of seedance-2.0-mini); a `video_clip` scene plays a `sound: model` take (volume 1 silent, 0.25 under narration; documented, no re-timing of captions); QA notes where the sound is heard
 

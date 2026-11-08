@@ -17,7 +17,10 @@ dry-run plan of ``vidgen generate plan``.
   where the model lists ``first_frame``, else as a picture reference.
 - **Prompt**: the kind's framing and the shot's ``prompt``, the setting, the characters' sheet
   words, the line said, what a guide pass is (:data:`GUIDE_PROMPTS`; a mask also lists the
-  stand-ins' colours), the style sheet's words and "no on-screen text".
+  stand-ins' colours), the style sheet's words and "no on-screen text". A shot with a guide video
+  (DESIGN.md §113.12) leaves the framing to the guide: a talking shot says
+  :data:`GUIDED_TALKING_FRAMING`, and the framing instructions of the characters' sheet words are
+  left out (:func:`without_framing`; the plan notes what was left out).
 - **Blocked**: a shot whose sheets are not approved, whose inputs are not made yet or no longer
   match what they were cut from (:mod:`vidgen.videogen.freshness`; a shot already cached or with
   an earlier job is reused free and only gets a note), or whose audio / video needs a hosted URL
@@ -27,6 +30,8 @@ dry-run plan of ``vidgen generate plan``.
   / video inputs (:attr:`Shot.shared`) through a Cloudflare quick tunnel while its job runs; the
   plan lists exactly those files and the tunnel's maximum lifetime; without ``cloudflared`` the
   shot is blocked with the install hints.
+- **Earlier wording**: a guided shot paid for under the earlier prompt wording is blocked, not
+  paid again by itself (:data:`EARLIER_WORDING_BLOCKED`).
 - **Sound** (:attr:`Shot.sound`, DESIGN.md §113.11): ``mix`` (no sound asked of the model) or
   ``model`` (``generate_audio: true``): ``generated_shot.sound``, else
   ``videogen.models.<model>.sound``, else ``videogen.sound``. A model the list says cannot make
@@ -39,18 +44,20 @@ dry-run plan of ``vidgen generate plan``.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Iterable, Sequence
 from contextlib import nullcontext
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from vidgen.config import BeatConfig, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
-from vidgen.videogen import MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean
+from vidgen.videogen import MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
 from vidgen.videogen.ledger import BudgetState, Ledger, SubmitIntent, intent_refusal, intent_text
 from vidgen.videogen.models import TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, money, snap_duration
 from vidgen.videogen.sheets import STYLE, Sheet, character_sheet, plan_sheets, style_sheet
+from vidgen.videogen.takes import takes_of
 
 #: Where the cut inputs of each shot are written, relative to the project (rebuilt any time).
 INPUTS_DIR = Path("build") / "videogen"
@@ -60,7 +67,32 @@ FRAMING: dict[str, str] = {
     "action": "Action shot",
     "establishing": "Establishing shot",
 }
+#: Replaces ``FRAMING["talking"]`` when the shot has a guide video: the guide decides where the
+#: speaker is and which way they face, so the prompt must not ask for a close-up.
+GUIDED_TALKING_FRAMING = "{who}, speaking"
 NO_TEXT = "No on-screen text, captions, subtitles or logos"
+#: Words that instruct how a picture is framed. Hyphenated forms ("self-centred") do not count.
+_FRAMING_WORDS = re.compile(
+    r"(?<![\w-])(?:cent(?:red|ered)|(?:centre|center|middle) of the (?:picture|frame|image|shot|screen)"
+    r"|(?:whole|full)[- ]body|full[- ]length|close[- ]?up|head[- ]and[- ]shoulders|from head to (?:toe|foot)"
+    r"|(?:front|side|back|rear|three[- ]quarter|profile)[- ]view|front[- ]facing|fac(?:es|ing) (?:the camera|forward)"
+    r"|looking (?:at|into) the camera|in (?:the )?frame|waist[- ]up|(?:medium|wide)[- ]shot)(?![\w-])",
+    re.IGNORECASE,
+)
+#: A clause naming any of these describes the character: it is kept even with framing words in it.
+_APPEARANCE_WORDS = re.compile(
+    r"\b(?:hair(?:ed)?|beard(?:ed)?|moustache|mustache|eyes?|eyebrows?|skin|freckles?|scars?|tattoos?|jackets?|coats?|raincoats?|"
+    r"shirts?|blouses?|sweaters?|jumpers?|hoodies?|dress(?:es)?|skirts?|trousers|pants|jeans|shorts|suits?|uniforms?|"
+    r"shoes|boots|sneakers|hats?|caps?|helmets?|scar(?:f|ves)|glasses|gloves)\b",
+    re.IGNORECASE,
+)
+#: Clauses that only make a sheet picture clean ("exactly one character", "not a split image");
+#: they are left out only next to a framing clause in the same sentence.
+_SHEET_ONLY_CLAUSE = re.compile(
+    r"^(?:(?:exactly|only|just)\s+)?(?:a\s+|one\s+)?(?:single\s+)?(?:character|person|figure|subject)(?:\s+only)?[,;.]?$"
+    r"|^(?:alone|solo)[,;.]?$|^(?:not|no|never)\s",
+    re.IGNORECASE,
+)
 #: What a guide pass is, said in the prompt when one is sent as the guide (DESIGN.md §113.8).
 GUIDE_PROMPTS: dict[str, str] = {
     "depth": "The guide video is a depth map (near is white, far is dark): follow its layout and camera motion",
@@ -87,6 +119,12 @@ NO_HOST_BLOCKED = (
     "audio / video inputs need a hosted URL (OpenRouter refuses inline audio / video): set videogen: {host: quick_tunnel} "
     "to share only this shot's files through a Cloudflare quick tunnel while its job runs (check it first, free: "
     "`vidgen generate host-test`)"
+)
+#: The blocked reason of a guided shot already paid for under the earlier prompt wording.
+EARLIER_WORDING_BLOCKED = (
+    "this guided shot was paid for already under vidgen's earlier prompt wording (close-up words and sheet framing words are no longer "
+    "sent with a guide), so a run would pay for a new clip; not paid again by itself. The earlier take stays in the film. "
+    "To pay for a new take with the new wording: set or change seed: on the shot, or change its prompt:"
 )
 #: What the plan says each sound setting is.
 SOUND_WHAT: dict[str, str] = {
@@ -155,6 +193,9 @@ class Shot:
     fake_addresses: bool = False
     #: The shot's resolved sound setting (``mix`` or ``model``).
     sound: SoundChoice = "mix"
+    #: A guided shot's prompt under the earlier wording, when it differs from :attr:`prompt` (else
+    #: empty): what a clip paid for before the wording changed was asked with.
+    earlier_prompt: str = ""
 
     @property
     def shared(self) -> list[ShotInput]:
@@ -246,11 +287,48 @@ def _sentence(text: str) -> str:
     return text if text.endswith((".", "!", "?", '."', '!"', '?"')) else text + "."
 
 
+def without_framing(words: str) -> tuple[str, list[str]]:
+    """``words`` (a character's sheet text) without its picture-framing instructions, and the
+    pieces left out. A sentence with a framing clause loses its framing clauses and the clauses
+    that only make the sheet picture clean; a sentence with none is kept as it is, and so is a
+    clause that also describes the character, even with framing words in it."""
+    kept_sentences: list[str] = []
+    removed: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", words):
+        clauses = re.split(r"(?<=[,;])\s+", sentence)
+        if not any(_is_framing_clause(c) for c in clauses):
+            kept_sentences.append(sentence)
+            continue
+        kept = [c for c in clauses if not _is_left_out(c)]
+        removed.append(" ".join(c for c in clauses if _is_left_out(c)).rstrip(",;. "))
+        if kept:
+            kept_sentences.append(" ".join(kept).rstrip(",;. ") + ".")
+    if not removed:
+        return words, []
+    return " ".join(kept_sentences).rstrip("."), removed
+
+
+def _is_framing_clause(clause: str) -> bool:
+    return bool(_FRAMING_WORDS.search(clause)) and not _APPEARANCE_WORDS.search(clause)
+
+
+def _is_left_out(clause: str) -> bool:
+    """Whether ``clause``, of a sentence with a framing clause, leaves the shot prompt."""
+    return _is_framing_clause(clause) or (bool(_SHEET_ONLY_CLAUSE.search(clause.strip())) and not _APPEARANCE_WORDS.search(clause))
+
+
 def shot_prompt(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -> str:
     """The prompt of ``shot`` (see the module docstring)."""
+    return _prompt_text(project, shot, sheets, guided=shot.spec.guide_source is not None)
+
+
+def _prompt_text(project: Project, shot: Shot, sheets: dict[str, Sheet | None], *, guided: bool) -> str:
+    """The prompt; ``guided`` leaves framing to the guide (with ``False``, also a guided shot's
+    prompt under the earlier wording: the guide sentence depends on the shot, not on this flag)."""
     spec = shot.spec
     who = shot.speaker or (shot.characters[0] if shot.characters else None)
-    head = FRAMING[spec.kind].format(who=display_name(who) if who else "the speaker")
+    framing = GUIDED_TALKING_FRAMING if guided and spec.kind == "talking" else FRAMING[spec.kind]
+    head = framing.format(who=display_name(who) if who else "the speaker")
     parts = [f"{head}: {_clean(spec.prompt)}" if spec.prompt.strip() else head]
     if spec.setting:
         parts.append(f"Setting: {_clean(spec.setting)}")
@@ -258,7 +336,8 @@ def shot_prompt(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -
         described = []
         for name in shot.characters:
             sheet = sheets.get(name)
-            described.append(f"{display_name(name)} ({sheet.notes})" if sheet is not None and sheet.notes else display_name(name))
+            words = (without_framing(sheet.notes)[0] if guided else sheet.notes) if sheet is not None else ""
+            described.append(f"{display_name(name)} ({words})" if words else display_name(name))
         parts.append("Characters: " + "; ".join(described))
     if spec.line:
         text = " ".join(shot.beat.text.replace('"', "'").split())
@@ -273,6 +352,31 @@ def shot_prompt(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -
         parts.append(f"Style: {style.words()}")
     parts.append(NO_TEXT)
     return " ".join(_sentence(p) for p in parts)
+
+
+def _left_out_notes(shot: Shot, sheets: dict[str, Sheet | None]) -> list[str]:
+    """A plan note for each character of a guided shot whose sheet words lost framing instructions."""
+    notes = []
+    for name in shot.characters:
+        sheet = sheets.get(name)
+        removed = without_framing(sheet.notes)[1] if sheet is not None else []
+        if removed:
+            left_out = "; ".join(f'"{r}"' for r in removed)
+            notes.append(f"{display_name(name)}'s sheet words left out of this prompt, because the guide decides where the character is and how the shot is framed (the sheet itself is unchanged): {left_out}")
+    return notes
+
+
+def _paid_under_earlier_wording(root: Path, ledger: Ledger, shot: Shot, request: VideoRequest) -> bool:
+    """Whether a clip of ``shot`` under its earlier prompt wording was paid for (a clip, a take or a
+    job of that request; ``request``'s inputs exist)."""
+    from vidgen.videogen.run import clip_path
+
+    if not shot.earlier_prompt:
+        return False
+    key = request_hash(replace(request, prompt=shot.earlier_prompt))
+    if clip_path(root, key).is_file() or any(t.info.get("key") == key for t in takes_of(root, shot.id)):
+        return True
+    return any(j.request_hash == key and j.status in (None, "completed") for j in ledger.jobs())
 
 
 def _mask_names(project: Project, scene_id: str) -> list[str]:
@@ -511,6 +615,10 @@ def _beat_shots(
         _resolve_inputs(project, shot, sheets)
         _check_sound(shot)
         shot.prompt = shot_prompt(project, shot, sheets)
+        if spec.guide_source is not None:
+            earlier = _prompt_text(project, shot, sheets, guided=False)
+            shot.earlier_prompt = earlier if earlier != shot.prompt else ""
+            shot.notes += _left_out_notes(shot, sheets)
         shots.append(shot)
     return shots
 
@@ -725,6 +833,8 @@ def plan_shots(
                 item.unresolved_intent = clip.unresolved_intent
                 if clip.unresolved_intent is not None:
                     shot.blocked.append(intent_refusal(clip.unresolved_intent))
+                elif not clip.cached and clip.previous_job is None and _paid_under_earlier_wording(project.root, ledger, shot, item.request):
+                    shot.blocked.append(EARLIER_WORDING_BLOCKED)
                 item.check = clip.check
                 item.estimate = clip.estimate or estimate(item.request, shot.model, duration=shot.priced_seconds)
                 if not clip.cached:
@@ -752,6 +862,6 @@ def plan_shots(
 
 
 __all__ = [
-    "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "pick_aspect", "plan_shots", "project_shots",
-    "shot_problems", "shot_prompt", "video_ratio",
+    "EARLIER_WORDING_BLOCKED", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "pick_aspect", "plan_shots", "project_shots",
+    "shot_problems", "shot_prompt", "video_ratio", "without_framing",
 ]

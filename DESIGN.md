@@ -22164,6 +22164,42 @@ differently.
   where it is heard); `sound: model` with a silent clip is a warning.
 - **Mock**: a job with `generate_audio: true` returns a clip with a sine tone (`synthetic_clip(audio=True)`).
 
+### 113.12 Guided shots leave the framing to the guide (Step 313)
+
+Paid experiments (2026-11-08, `bytedance/seedance-2.0-mini` with a depth guide): a `kind: talking` shot's
+"Talking close-up of ..., facing the camera, speaking" pushed the camera in although the guide's camera is static;
+the same shot as `kind: action` kept the camera still and the ball followed the guide. The speaker stayed centred in
+every take although the guide places them low on the right; the sheet prompt copied under `Characters:` said
+"alone and centred in the middle of the picture, ... the whole body visible". That second cause is untested.
+
+A shot **has a guide** when `generated_shot.guide_source` is not `None` (`true`, `render`, `depth`, `outline`, `mask`:
+`_resolve_inputs` always adds the guide input then). Applies to `render` guides too.
+
+- **Talking wording** (`shots.GUIDED_TALKING_FRAMING`): `{who}, speaking`, for example "Ana, speaking." No "close-up" and no
+  "facing the camera": the guide decides both. Action and establishing wording are unchanged. The references, the speaker and
+  `GUIDE_PROMPTS` are unchanged.
+- **Sheet words** (`shots.without_framing`, used only for the `Characters:` text of a guided shot): the sentence and
+  clause filter works on the joined text of `reference_sheet.prompt` + `.notes`. A sentence containing a clause that matches
+  `_FRAMING_WORDS` (centred/centered, centre or middle of the picture/frame/image, whole/full body, full-length, close-up,
+  head and shoulders, from head to toe, front/side/back/three-quarter view, facing the camera, in frame, waist-up, medium/wide shot)
+  loses its framing clauses (commas and semicolons separate clauses) and any clauses that only make a sheet picture clean
+  next to them (`_SHEET_ONLY_CLAUSE`: "exactly one single character", "alone", clauses starting "not"/"no"/"never"). A sentence with
+  no framing clause is kept whole, byte for byte (an isolated "Not a split image." stays). A clause naming clothes, hair or similar
+  (`_APPEARANCE_WORDS`) is never removed, even with framing words in it ("Full-body portrait of a woman in a red jacket" stays
+  whole): losing appearance is the worse error, and the owner can rewrite such a sentence. Whole-sentence dropping (the owner's suggestion)
+  was not used because it loses appearance in "A woman in a red jacket, centred in the frame". The sheet's picture prompts and `Sheet.notes`
+  are untouched, so sheet fingerprints and approved sheets stay valid. `generated_shot.prompt` and `setting` are never edited.
+  The style sheet's words (`Style:`) are the config's palette/era/lens/notes, not a sheet picture prompt, so they do not flow the same way: not filtered.
+- **Plan** (`_left_out_notes`): a `note:` per character whose sheet words lost anything, quoting what was left out and why; in the
+  JSON plan under the shot's `notes`. No note when nothing was removed.
+- **Unguided shots**: `_prompt_text(guided=False)` is the old code path, byte-identical (pinned from the pre-change code).
+- **A guided shot paid before this step**: its new prompt is a new request key, so it is not "cached" and no earlier job matches. The plan
+  rebuilds the prompt under the earlier wording (`Shot.earlier_prompt`, `_prompt_text(guided=False)`) and looks for a clip, a take
+  (`info.key`) or a ledger job (`status` `None` or `completed`) of that key (`_paid_under_earlier_wording`). If it finds one and the new key
+  has no clip and no earlier job, the shot is **blocked** (`EARLIER_WORDING_BLOCKED`): `run --pay` skips it and pays nothing; the earlier take stays
+  in the film. To pay for the new wording the owner sets or changes `seed:` on the shot (or edits its `prompt:`), which changes both keys.
+  Open: a clip paid before this step whose guide was later re-cut to different bytes has another key and is not recognised; a re-cut is already a new request.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in
