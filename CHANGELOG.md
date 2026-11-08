@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–308)
+## Unreleased (Steps 193–309)
+
+### Generated video: a paid job does not lose its inputs or get paid twice (Step 309)
+
+- During a paid run a quick tunnel now stays open until the job reaches a final state (or `host_max_minutes`): it no longer closes after every file was fetched, because a provider may fetch again after queueing the job. This is a longer exposure traded for not losing a paid job. **`videogen.host_grace_seconds` is removed**: like any unknown key, it now stops the config with a clear error; delete it from `video.yaml`.
+- `host_max_minutes` defaults to 20 (was 15) and must be between 5 and 120. It must leave room for `poll_timeout` plus opening the tunnel and submitting; otherwise a shot with hosted inputs is blocked and the message gives the numbers. Lowering `poll_timeout` is how to keep the tunnel short on purpose.
+- A paid submit is refused (nothing sent or paid) when its tunnel has closed or has too little time left; `url_of` refuses a closed tunnel.
+- Before every paid POST a `submit_intent` line is on disk. A submit cut off by Ctrl+C, a crash or a lost answer has no known outcome: the next run does not pay for it again by itself, and `plan` / `run` / `status` / `ledger` say what happened. New `vidgen generate resolve --intent ID --not-charged | --job JOB_ID | --charged [--cost USD]` records the outcome. Until resolved it counts against the budget at its estimate.
 
 ### Generated video: no paid job from inputs that are out of date (Step 308)
 

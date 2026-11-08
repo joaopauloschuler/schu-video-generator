@@ -49,7 +49,7 @@ if mode == "ok":
 time.sleep(60)
 '''
 
-SETTINGS = HostSettings(url_timeout=10, verify_timeout=1.0, verify_interval=0.05, grace_seconds=0.2)
+SETTINGS = HostSettings(url_timeout=10, verify_timeout=1.0, verify_interval=0.05)
 
 
 @pytest.fixture
@@ -214,7 +214,7 @@ def test_open_verify_fetch_close_with_the_ledger(tmp_path: Path, fake_cloudflare
     fetch = local_fetch(tmp_path)
     lines: list[str] = []
     with QuickTunnelHost([audio, guide], root=project, settings=SETTINGS, ledger=ledger, executable=fake_cloudflared,
-                         fetch=fetch, close_when_fetched=False, out=lines.append) as host:
+                         fetch=fetch, out=lines.append) as host:
         folder = host.folder
         assert folder is not None and not folder.resolve().is_relative_to(project.resolve())
         url = host.url_of(audio)
@@ -235,7 +235,7 @@ def test_open_verify_fetch_close_with_the_ledger(tmp_path: Path, fake_cloudflare
     events = ledger.events()
     assert [e["event"] for e in events][0] == "host_open" and events[-1]["event"] == "host_close"
     opened = events[0]
-    assert opened["host"] == FAKE_HOST and opened["max_seconds"] == 900.0
+    assert opened["host"] == FAKE_HOST and opened["max_seconds"] == 1200.0
     assert opened["files"][0] == {"name": "build/videogen/shot1/audio.mp3", "size": audio.stat().st_size,
                                   "sha256": copy_into_share([audio], tmp_path)[0].sha256}
     fetches = [e for e in events if e["event"] == "host_fetch"]
@@ -244,20 +244,8 @@ def test_open_verify_fetch_close_with_the_ledger(tmp_path: Path, fake_cloudflare
                                                                        ("build/videogen/shot1/audio.mp3", "GET", 200)}
     assert events[-1]["reason"] == "done" and events[-1]["folder_deleted"] is True
     assert ledger.jobs() == []   # host events are not jobs
-    assert any("at most 15 min" in line for line in lines) and any("closed (done)" in line for line in lines)
+    assert any("at most 20 min" in line for line in lines) and any("closed (done)" in line for line in lines)
     assert all(secret not in line for line in lines)
-
-
-def test_closes_after_every_file_was_fetched(tmp_path: Path, fake_cloudflared: list[str]) -> None:
-    project, audio, guide = sources(tmp_path)
-    fetch = local_fetch(tmp_path)
-    with QuickTunnelHost([audio, guide], root=project, settings=SETTINGS, executable=fake_cloudflared, fetch=fetch) as host:
-        fetch("GET", host.url_of(audio), 5)
-        assert not host.wait_closed(0.5), "closed before every file was fetched"
-        fetch("GET", host.url_of(guide), 5)
-        assert host.wait_closed(3)
-        assert host.close_reason == "all files fetched" and not host.folder.exists()
-    assert host.close_reason == "all files fetched"
 
 
 def test_hard_maximum_lifetime(tmp_path: Path, fake_cloudflared: list[str]) -> None:
@@ -367,10 +355,12 @@ def test_self_test_and_the_cli(tmp_path: Path, fake_cloudflared: list[str], monk
 def test_config_keys() -> None:
     from vidgen.config import VideogenConfig
 
-    settings = HostSettings.from_config(VideogenConfig(cloudflared="C:/tools/cloudflared.exe", tunnel_protocol="quic", host_max_minutes=5, host_grace_seconds=10))
-    assert settings == HostSettings(cloudflared="C:/tools/cloudflared.exe", protocol="quic", max_seconds=300.0, grace_seconds=10.0)
+    settings = HostSettings.from_config(VideogenConfig(cloudflared="C:/tools/cloudflared.exe", tunnel_protocol="quic", host_max_minutes=5))
+    assert settings == HostSettings(cloudflared="C:/tools/cloudflared.exe", protocol="quic", max_seconds=300.0)
     assert HostSettings.from_config(VideogenConfig()) == HostSettings()
     with pytest.raises(ValueError):
-        VideogenConfig(host_max_minutes=0)
+        VideogenConfig(host_max_minutes=4.9)
+    with pytest.raises(ValueError, match="host_grace_seconds"):   # removed in Step 309: an unknown key, like any other
+        VideogenConfig(host_grace_seconds=10)
     with pytest.raises(ValueError):
         VideogenConfig(tunnel_protocol="tcp")

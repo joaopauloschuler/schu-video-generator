@@ -159,8 +159,9 @@ def test_paid_flow_with_the_mock(tmp_path: Path) -> None:
     body = api.submits[0].body
     assert body == {"model": "google/veo-3.1-lite", "prompt": "a lighthouse at dusk", "duration": 4, "resolution": "720p", "aspect_ratio": "9:16", "generate_audio": False}
     events = Ledger(ledger_path(tmp_path, "mock")).events()
-    assert [e["event"] for e in events] == ["submit", "completed"]
-    assert events[0]["estimate_usd"] == pytest.approx(0.12) and events[1]["cost_usd"] == 0.25
+    assert [e["event"] for e in events] == ["submit_intent", "submit", "completed"]
+    assert events[1]["estimate_usd"] == pytest.approx(0.12) and events[2]["cost_usd"] == 0.25
+    assert events[1]["intent_id"] == events[0]["intent_id"]
     sidecar = json.loads(result.path.with_suffix(".json").read_text(encoding="utf-8"))
     assert sidecar["job_id"] == "mock-job-1" and sidecar["cost_usd"] == 0.25
     assert not (tmp_path / "videogen-ledger.jsonl").exists()            # the mock keeps its own ledger
@@ -215,12 +216,12 @@ def test_timeout_then_resume_without_paying_twice(tmp_path: Path) -> None:
     slow = MockVideoProvider(api, clock=lambda: float(next(ticks)))
     with pytest.raises(VidgenError, match="still pending after 900 s; it was paid for"):
         generate_clip(tmp_path, settings(), request(), pay=True, provider=slow, catalog=CATALOG)
-    assert [e["event"] for e in Ledger(ledger_path(tmp_path, "mock")).events()] == ["submit"]
+    assert [e["event"] for e in Ledger(ledger_path(tmp_path, "mock")).events()] == ["submit_intent", "submit"]
     plan = plan_clip(tmp_path, settings(), request(), catalog=CATALOG)
     assert plan.previous_job is not None and "not paid again" in "\n".join(plan.lines())
     result = run(tmp_path, request(), api)
     assert result.path is not None and result.path.is_file() and len(api.submits) == 1
-    assert [e["event"] for e in Ledger(ledger_path(tmp_path, "mock")).events()] == ["submit", "completed"]
+    assert [e["event"] for e in Ledger(ledger_path(tmp_path, "mock")).events()] == ["submit_intent", "submit", "completed"]
 
 
 # ----- errors ----------------------------------------------------------------------------------
@@ -239,14 +240,15 @@ def test_submit_errors_are_clear_and_not_retried(tmp_path: Path, status: int, me
     api = MockOpenRouter(submit_error=(status, message))
     with pytest.raises(VidgenError, match=expected):
         run(tmp_path, request(), api)
-    assert len(api.submits) == 1 and Ledger(ledger_path(tmp_path, "mock")).events() == []
+    assert len(api.submits) == 1 and [e["event"] for e in Ledger(ledger_path(tmp_path, "mock")).events()] == ["submit_intent", "intent_resolved"]
+    assert Ledger(ledger_path(tmp_path, "mock")).spent() == 0.0 and Ledger(ledger_path(tmp_path, "mock")).unresolved_intents() == []
 
 
 def test_failed_and_expired_jobs(tmp_path: Path) -> None:
     api = MockOpenRouter(states=("pending", "failed"), error="Output flagged by moderation", cost=None)
     with pytest.raises(VidgenError, match="refused under the provider's content policy: Output flagged"):
         run(tmp_path, request(), api)
-    assert [e["event"] for e in Ledger(ledger_path(tmp_path, "mock")).events()] == ["submit", "failed"]
+    assert [e["event"] for e in Ledger(ledger_path(tmp_path, "mock")).events()] == ["submit_intent", "submit", "failed"]
     api = MockOpenRouter(states=("pending", "expired"), error="output expired")
     with pytest.raises(VidgenError, match="expired before its video was downloaded.*new paid job"):
         run(tmp_path, request(seed=2), api)

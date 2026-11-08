@@ -16,8 +16,9 @@ shares exactly the files it is given, for as short a time as it can:
    reaches DNS) before anything is sent to a provider;
 5. :meth:`QuickTunnelHost.close` stops cloudflared (its whole process tree), the server, and
    deletes the temporary folder: when the caller's ``with`` block ends (also on an error or
-   Ctrl+C), once every file was fetched and the grace period passed, or at the hard maximum
-   lifetime, whichever comes first.
+   Ctrl+C; for a paid run, when its job reaches a final state), or at the hard maximum lifetime,
+   whichever comes first. A provider may fetch a file again after queueing the job, so a fetch
+   never closes it early (the owner's decision, Step 309: a longer exposure, no lost paid job).
 
 The ledger gets ``host_open`` (the host name only, never the secret path; each file's name,
 size and SHA-256), ``host_fetch`` (file, method, status, bytes) and ``host_close`` (reason).
@@ -29,6 +30,7 @@ import atexit
 import hashlib
 import http.client
 import logging
+import math
 import mimetypes
 import os
 import re
@@ -75,18 +77,32 @@ class HostSettings:
 
     cloudflared: str | None = None
     protocol: str = "http2"
-    max_seconds: float = 900.0
-    grace_seconds: float = 30.0
+    max_seconds: float = 1200.0
     url_timeout: float = 60.0
     verify_timeout: float = 60.0
     verify_interval: float = 2.0
+    #: Seconds kept free beyond the wait: the longest submit POST (120 s) and the last poll's sleep (60 s).
+    submit_margin: float = 180.0
 
     @classmethod
     def from_config(cls, settings: Any) -> HostSettings:
         """From a :class:`vidgen.config.VideogenConfig`."""
         return cls(
             cloudflared=settings.cloudflared, protocol=settings.tunnel_protocol,
-            max_seconds=settings.host_max_minutes * 60.0, grace_seconds=settings.host_grace_seconds,
+            max_seconds=settings.host_max_minutes * 60.0,
+        )
+
+    def lifetime_problem(self, poll_timeout: float) -> str | None:
+        """Why a job waited on for ``poll_timeout`` s does not fit in this tunnel's lifetime (it
+        could then be left waiting on a closed tunnel), else ``None``."""
+        needed = poll_timeout + self.submit_margin + self.url_timeout
+        if self.max_seconds >= needed:
+            return None
+        return (
+            f"host_max_minutes ({self.max_seconds / 60:g} min) does not cover poll_timeout ({poll_timeout:g} s) plus opening the tunnel and submitting "
+            f"({needed:.0f} s in all), so a job could be left waiting on a closed tunnel: set host_max_minutes to at least {math.ceil(needed / 60)} (at most 120), "
+            f"or poll_timeout to at most {max(0, int(self.max_seconds - self.submit_margin - self.url_timeout))} s (vidgen then stops waiting sooner and closes "
+            "the tunnel; the job keeps running and a later run polls it)"
         )
 
 
@@ -496,8 +512,6 @@ def verify_public(url: str, shared: SharedFile, fetch: Fetch, *, timeout: float,
 @dataclass
 class _State:
     opened_at: float = 0.0
-    fetched: set[str] = field(default_factory=set)
-    last_fetch: float = 0.0
     close_reason: str | None = None
 
 
@@ -506,9 +520,8 @@ class QuickTunnelHost:
 
     Use it as a context manager: ``with QuickTunnelHost(paths, ...) as host: host.url_of(path)``.
     ``open`` returns only once every file was checked through the public address. ``ledger``
-    (optional) records ``host_open`` / ``host_fetch`` / ``host_close``. ``close_when_fetched``:
-    close by itself ``grace_seconds`` after every file was fetched in full (GET). ``executable``
-    (the cloudflared command, e.g. a fake for tests) and ``fetch`` replace the real ones.
+    (optional) records ``host_open`` / ``host_fetch`` / ``host_close``. ``executable`` (the
+    cloudflared command, e.g. a fake for tests) and ``fetch`` replace the real ones.
     """
 
     def __init__(
@@ -520,7 +533,6 @@ class QuickTunnelHost:
         ledger: Ledger | None = None,
         executable: Sequence[str] | None = None,
         fetch: Fetch | None = None,
-        close_when_fetched: bool = True,
         out: Callable[[str], None] | None = None,
     ) -> None:
         if not sources:
@@ -531,7 +543,6 @@ class QuickTunnelHost:
         self.ledger = ledger
         self.executable = list(executable) if executable is not None else None
         self.fetch = fetch
-        self.close_when_fetched = close_when_fetched
         self.out = out or (lambda line: None)
         self.folder: Path | None = None
         self.files: list[SharedFile] = []
@@ -596,11 +607,14 @@ class QuickTunnelHost:
         self._watchdog.start()
 
     def _url(self, shared: SharedFile) -> str:
+        if not self.is_open:
+            raise VidgenError(f"the quick tunnel is closed ({self.close_reason or 'not open yet'}); its addresses no longer work")
         assert self.public_base is not None
         return f"{self.public_base}/{shared.name}"
 
     def url_of(self, source: Path) -> str:
-        """The public URL of a shared source (secret included: hand it to the provider only)."""
+        """The public URL of a shared source (secret included: hand it to the provider only); a
+        :class:`VidgenError` when the host is closed."""
         wanted = Path(source).resolve()
         for shared in self.files:
             if shared.source.resolve() == wanted:
@@ -619,8 +633,8 @@ class QuickTunnelHost:
     # -- while open ------------------------------------------------------------------------------
     @property
     def is_open(self) -> bool:
-        """Whether the files are still reachable (not closed yet)."""
-        return self.server is not None and not self._closed.is_set()
+        """Whether the files are still reachable (not closed yet, and not closing)."""
+        return self.server is not None and self._state.close_reason is None and not self._closed.is_set()
 
     @property
     def requests(self) -> list[RequestRecord]:
@@ -636,6 +650,21 @@ class QuickTunnelHost:
         """Seconds left before the hard maximum lifetime."""
         return max(0.0, self._state.opened_at + self.settings.max_seconds - time.monotonic())
 
+    def ensure_time_for_job(self, poll_timeout: float) -> None:
+        """Raise a :class:`VidgenError` unless the host is open and has time left for a submit and
+        a wait of ``poll_timeout`` s (the ``submit_margin`` on top): called just before a paid
+        submit. Opening counts against the lifetime, so a slow start uses it up."""
+        if not self.is_open:
+            raise VidgenError(f"the quick tunnel is already closed ({self.close_reason or 'not open'}); nothing was sent or paid. Try again, or `vidgen generate host-test` to check the tunnel")
+        needed = poll_timeout + self.settings.submit_margin
+        left = self.remaining_seconds()
+        if left < needed:
+            raise VidgenError(
+                f"the quick tunnel has only {left:.0f} s left of its {self.settings.max_seconds / 60:g} min limit (opening it took {self.settings.max_seconds - left:.0f} s) "
+                f"and a job may need {needed:.0f} s (poll_timeout and {self.settings.submit_margin:g} s to submit); nothing was sent or paid. "
+                "Try again, or raise host_max_minutes / lower poll_timeout"
+            )
+
     def wait_closed(self, timeout: float | None = None) -> bool:
         """Wait until it closed (by itself or by another thread); whether it did."""
         return self._closed.wait(timeout)
@@ -649,22 +678,11 @@ class QuickTunnelHost:
         if shared is None:
             return
         self._append("host_fetch", file=shared.label, method=record.method, status=record.status, bytes=record.bytes)
-        if record.method == "GET" and record.status == 200 and record.bytes == shared.size:
-            with self._lock:
-                self._state.fetched.add(shared.label)
-                self._state.last_fetch = time.monotonic()
-
-    def all_fetched(self) -> bool:
-        """Whether every file was fetched in full at least once (GET)."""
-        return bool(self.files) and self._state.fetched >= {f.label for f in self.files}
 
     def _watch(self) -> None:
         while not self._closed.wait(0.1):
-            now = time.monotonic()
-            if now >= self._state.opened_at + self.settings.max_seconds:
+            if time.monotonic() >= self._state.opened_at + self.settings.max_seconds:
                 self.close("max lifetime")
-            elif self.close_when_fetched and self.all_fetched() and now >= self._state.last_fetch + self.settings.grace_seconds:
-                self.close("all files fetched")
 
     # -- closing ---------------------------------------------------------------------------------
     def _close_at_exit(self) -> None:
@@ -734,8 +752,8 @@ class ShareOptions:
         return cls(HostSettings.from_config(settings), out)
 
     def host(self, sources: Sequence[Path], root: Path, ledger: Ledger | None) -> QuickTunnelHost:
-        """A host (not open yet) for ``sources`` of the project ``root``; it closes by itself once
-        every file was fetched (plus the grace period) or at the maximum lifetime."""
+        """A host (not open yet) for ``sources`` of the project ``root``; it closes when the
+        caller's ``with`` block ends or at the maximum lifetime, not when a file was fetched."""
         return QuickTunnelHost(sources, root=root, settings=self.settings, ledger=ledger, executable=self.executable, fetch=self.fetch, out=self.out)
 
 
@@ -777,7 +795,7 @@ def host_self_test(
         content = f"vidgen host test {secrets.token_hex(8)}\n".encode()
         source = source_folder / "host-test.txt"
         source.write_bytes(content)
-        host = QuickTunnelHost([source], settings=settings, executable=executable, fetch=fetch, close_when_fetched=False, out=out)
+        host = QuickTunnelHost([source], settings=settings, executable=executable, fetch=fetch, out=out)
         with host:
             checks.append(("public address answers HEAD with the file's length", True, host.host_name or ""))
             url = host.url_of(source)

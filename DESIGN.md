@@ -22087,6 +22087,42 @@ generate inputs` used to reach a paid job as the old voice or guide.
   every scene; a vidgen upgrade does too.
 - `generate status` uses `project_shots`, not the plan, and does not show this block.
 
+### 113.10 Submits with no known outcome (Step 309)
+
+A Ctrl+C or crash during the POST, or a lost answer, left no `submit` line, so a re-run could pay
+for the same request twice while the provider had accepted the first. Now:
+
+- **Intent first.** `_submit` passes `on_sending` to `provider.submit`, which calls it once the
+  body is built and the size check passed, just before the POST: `Ledger.record_intent` writes
+  `submit_intent {intent_id, provider, model, request_hash, estimate_usd}` (`Ledger.append` now
+  `fsync`s every line). A body that never left (too large, a missing input) writes no intent.
+- **Resolved how.** The `submit` line carries `intent_id` when the POST answered with a job. An
+  answer that means no job exists (`SubmitRefused`: HTTP 4xx except 408) appends
+  `intent_resolved {outcome: refused}`. Everything else (no answer, a timeout, 408, 5xx, a 2xx
+  vidgen cannot read, Ctrl+C, a crash, a `submit` line that could not be written) leaves it
+  unresolved: the message appended to the error says what to do.
+- **Re-run.** `plan_clip` sets `ClipPlan.unresolved_intent` (when no earlier job of the request
+  applies; a cached clip or an earlier job returns before it) and `refusal` is
+  `ledger.intent_refusal`: not paid, `again=True` does not bypass it. `plan_shots` adds it to the
+  shot's `blocked` and `ShotPlan.unresolved_intent`, and the plan does not add a new cost for the
+  shot (the estimate is in the budget already); `run_shots(pay=True)` refuses the whole run on a
+  selected shot with one (the fix needs the owner; `--shot` selects others).
+- **Budget choice.** An unresolved intent counts at its estimate in `Ledger.spent`, like a job with
+  no reported cost: the provider may have charged it, and a budget that left it out could be
+  exceeded. An orphan (the request was edited, so no shot matches it) still counts until
+  resolved and is listed by `plan`, `status` and `generate ledger`. Older vidgen versions ignore
+  the new events and do not count intents; nothing in the ledger format changes for them.
+- **Way out.** `vidgen generate resolve [PROJECT] --intent ID --not-charged | --job JOB_ID |
+  --charged [--cost USD]` (`Ledger.resolve_intent`): `--not-charged` frees the budget and the next
+  run pays; `--job` writes a `submit` line (with `intent_id`), so the next run polls and
+  downloads that job free; `--charged` keeps it counted (at USD or the estimate) and the next
+  run pays again, knowingly. Refused: an unknown id, an already resolved intent, a job id
+  already in the ledger.
+- **Readers**: `generate ledger` (text: unresolved ones; JSON `intents`, all), `generate plan`
+  (a line per unresolved one; JSON `unresolved_intents`, per-shot `unresolved_intent`), `generate
+  status` (a line; JSON `unresolved_intents`), `spent`. `sheets.run_sheets` is unchanged: sheet
+  pictures still write `submit` before the call (no intent; see known gaps).
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in
@@ -22558,7 +22594,7 @@ with `vidgen generate host-test`.
 `vidgen.videogen.host` (not in `vidgen.api`):
 
 - **What is shared.** `QuickTunnelHost(sources, root=, settings=, ledger=, executable=, fetch=,
-  close_when_fetched=True, out=)` takes the exact files to share (a shot's audio / video inputs)
+  out=)` takes the exact files to share (a shot's audio / video inputs)
   and `copy_into_share` copies each into a fresh `tempfile.mkdtemp(prefix="vidgen-share-")`
   folder (refused when it would lie inside the project) under a new random name
   (`secrets.token_hex(8)` + the lower-case extension), with its size and SHA-256. A symlink, a
@@ -22602,10 +22638,9 @@ with `vidgen generate host-test`.
   the folder, and `folder_deleted: false` in the ledger). Reasons: `done` (the `with` block ended),
   `error: <type>` (an exception in it), `interrupted` (Ctrl+C in it), `failed to open` /
   `interrupted while opening` (anything going wrong in `open`, which closes before re-raising),
-  `all files fetched` (every file fetched in full by a `GET`, then `host_grace_seconds` without
-  another full fetch; only with `close_when_fetched`), `max lifetime` (`host_max_minutes` after
-  `open` began, whatever happens), `vidgen exited` (an `atexit` hook). A watchdog thread checks
-  the last two every 0.1 s.
+  `max lifetime` (`host_max_minutes` after `open` began, whatever happens), `vidgen exited` (an
+  `atexit` hook). A watchdog thread checks the lifetime every 0.1 s. (Step 309 removed the
+  `all files fetched` close: §115.4.)
 - **Ledger** (the project's `videogen-ledger.jsonl` when one is given; host events are not jobs,
   `Ledger.jobs()` ignores them): `host_open {host, files: [{name, size, sha256}], max_seconds}`
   once the address is known (the host name only, never a URL with the secret; `name` is the
@@ -22614,12 +22649,12 @@ with `vidgen generate host-test`.
   mid-file), `host_close {host, reason, seconds_open, requests, not_found, folder_deleted}`.
 - **Settings** (`HostSettings.from_config(videogen)`): `videogen.cloudflared` (null),
   `tunnel_protocol: http2 | quic | auto` (http2: TCP 443, which more networks allow than QUIC's
-  UDP 7844), `host_max_minutes` (15, at most 120), `host_grace_seconds` (30).
+  UDP 7844), `host_max_minutes` (20, 5-120; §115.4).
   `videogen.host: none | quick_tunnel` (off by default) switches it on for paid runs (§115.2).
 - **Self-test** `host_self_test(settings, keep_seconds=, out=)` and **`vidgen generate host-test
   [PROJECT] [--keep SECONDS] [--json]`**: free, needs no key and sends nothing to OpenRouter. It
   writes one tiny text file (`vidgen host test <random>`) in its own temporary folder, shares it
-  (`close_when_fetched` off), and checks: the public `HEAD` (by opening), a `GET` returns the
+  and checks: the public `HEAD` (by opening), a `GET` returns the
   same bytes, the address without the secret and a wrong secret answer 404. `--keep` keeps the
   tunnel open that long afterwards (capped by the maximum lifetime) and prints the full URL to
   try in a browser; without `--keep` the URL with its secret is never printed. A failed check is
@@ -22660,9 +22695,7 @@ with `vidgen generate host-test`.
   `finally`); then `submit`, the `submit` ledger line and `provider.wait(job)` run inside the
   `with` block, so the tunnel closes (`done`) as soon as the job reaches a final state
   (completed, failed, cancelled, expired), before the download and before the job's final
-  ledger line. It closes earlier by itself `host_grace_seconds` after every file was fetched by
-  a complete `GET`, and at `host_max_minutes` whatever happens (a provider that only `HEAD`s
-  files, or fetches late, is cut off by the lifetime: accepted). A `VidgenError` inside the
+  ledger line. It closes at `host_max_minutes` whatever happens (§115.4). A `VidgenError` inside the
   block (a refused submit, a poll timeout) closes it (`error: VidgenError`) and is raised again
   with `host.redact(...)` (the secret replaced by `<secret>`: OpenRouter's 400 quotes the
   reference URL); Ctrl+C closes it (`interrupted`). A job resumed from the ledger (it timed out
@@ -22718,3 +22751,29 @@ kept in memory without client addresses; the ledger has the host name, never the
 runs every step; an `atexit` hook closes a host left open. Open (needs the owner on Windows):
 the real tunnel, `taskkill`, and whether OpenRouter's providers fetch with `GET` (the ledger's
 `host_fetch` lines will show it on the first paid talking shot).
+
+### 115.4 Keeping the tunnel for the job, and refusing a submit without one (Step 309)
+
+- **No close on fetched.** The owner's decision: during a generate run the tunnel stays open until
+  the job reaches a final state, bounded by `host_max_minutes`. `close_when_fetched`, the grace
+  period, `HostSettings.grace_seconds`, `all_fetched` and `videogen.host_grace_seconds` are gone:
+  a complete `GET` did not mean the provider was done, and in-flight requests, `HEAD`s and partial
+  `GET`s never extended the grace. host-test already passed `close_when_fetched=False`. The trade
+  is a longer exposure for a slow job, against never cutting off a job already paid for. The
+  removed key follows the strict config: `host_grace_seconds` is an unknown-key error like any
+  other (the setting existed only in Unreleased).
+- **`host_max_minutes`** default 20 (was 15), range 5-120. **`HostSettings.lifetime_problem(poll_timeout)`**:
+  `max_seconds` must be at least `poll_timeout + submit_margin (180 s: the longest POST, 120 s, and the
+  last poll's sleep, 60 s) + url_timeout`. Otherwise `_resolve_inputs` blocks the shot (with the
+  numbers) and `generate_clip` refuses before opening a tunnel. The deliberate way to run with a
+  short tunnel is a smaller `poll_timeout`: vidgen stops waiting sooner and closes the tunnel, the
+  job keeps running and a later run polls it (`generate resolve` is not involved; no tunnel is
+  opened again, as §115.2).
+- **`QuickTunnelHost.ensure_time_for_job(poll_timeout)`**, just before the submit: a `VidgenError`
+  (nothing sent or paid) unless the host is open and has `poll_timeout + submit_margin` left.
+  `opened_at` is set before cloudflared starts and the watchdog runs only after verification,
+  so a slow start eats the lifetime; this check is what catches it (`is_open` is false while
+  closing). `url_of` / `urls` raise on a closed host.
+- **The `max lifetime` line** still fires during a job that runs past the limit; `poll_timeout`
+  ends before it with the defaults. A provider that has not fetched yet when the wait ends
+  has no input: accepted and documented, it is a job the owner chose to stop waiting for.

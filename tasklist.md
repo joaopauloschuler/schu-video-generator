@@ -1789,6 +1789,8 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 309 — Money safety: the tunnel, the submit, and interrupted submits
+- [x] During a generate run the quick tunnel stays open until the job reaches a final state (bounded by `host_max_minutes`), no longer closed after every file was fetched; `close_when_fetched`, the grace period and `host_grace_seconds` removed (docs say the longer exposure is the price); `host_max_minutes` default 20, range 5-120, must leave room for `poll_timeout` (shots blocked, `generate_clip` refuses); a paid submit is refused when the tunnel is closed or nearly out of time; `url_of` refuses a closed host; a `submit_intent` line is on disk before every paid POST and a request with an unknown outcome is not paid again until `vidgen generate resolve --intent ID --not-charged | --job JOB_ID | --charged`; plan, run, status, `generate ledger` and the budget show and count it
 
 ---
 

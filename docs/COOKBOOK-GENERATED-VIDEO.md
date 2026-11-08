@@ -29,6 +29,14 @@ footage vidgen cannot draw; keep diagrams, text, charts and explanations as scen
 - Same request, same clip: the cache (`assets/generated_video/`) and the ledger make sure a
   request is never paid twice; a job still running when vidgen stops waiting is polled by the next
   run, never submitted again. No paid job is retried automatically; the first failure stops a run.
+- A submit that is cut off (Ctrl+C, a crash or a lost answer after the request was sent) may still
+  have been accepted and charged. vidgen wrote a `submit_intent` line to the ledger before sending,
+  so the next run does not pay for that shot again by itself: `generate plan`, `run`, `status` and
+  `ledger` show "no known outcome", and the shot's error tells you what to run. Look at your
+  OpenRouter account's activity, then `vidgen generate resolve --intent ID` with `--not-charged`
+  (the next run pays), `--job JOB_ID` (the next run polls and downloads it, free) or
+  `--charged [--cost USD]` (the next run pays again, knowingly). Until then the intent counts
+  against the budget at its estimate, because the money may be gone.
 - Ask for the lowest resolution the model lists and the shortest length it allows (vidgen does
   both by default; the clip is trimmed to the beat). A Short at 480p-720p looks fine on a phone.
 - Draft first: try one shot (`--shot ID`) with the cheapest model before the whole video.
@@ -153,25 +161,33 @@ the internet for a moment, long enough for the video provider to download them.
    address such as `https://some-random-words.trycloudflare.com` (no Cloudflare account needed);
 4. checks through that public address that the files arrive whole; if not, it stops and closes
    everything, and nothing is sent to OpenRouter or paid;
-5. sends the job with the secret addresses, and closes everything again as soon as the job is
-   finished or failed (before the clip is downloaded), or 30 seconds after the provider fetched
-   every file, or after 15 minutes at most, whichever comes first. Ctrl+C or an error closes it
-   too. Closing stops `cloudflared`, stops the server and deletes the copies.
+5. checks the tunnel is still open with enough time left (otherwise nothing is sent or paid),
+   sends the job with the secret addresses, and closes everything again as soon as the job is
+   finished or failed (before the clip is downloaded), or after 20 minutes at most, whichever
+   comes first. Ctrl+C or an error closes it too. Closing stops `cloudflared`, stops the server
+   and deletes the copies.
+
+**It stays open for the whole job on purpose.** The tunnel no longer closes when the provider
+has downloaded every file: some providers check the file when the job is submitted and download
+it again when the job leaves the queue, and closing early would lose a job already paid for.
+The price is a tunnel that can stay open for the job's whole wait, at most the limit below.
 
 Each shot gets its own tunnel and its own secret, so no file stays reachable while other shots
 are made. **What this means for you:** for those few minutes, anyone who has the full address
 could download that shot's voice or guide clip; the address is random, never printed and never
 written to disk, and it stops working when the tunnel closes. Do not turn the host on for
-recordings you would not send to the video provider anyway. Settings: `host_max_minutes` (15,
-the hard limit), `host_grace_seconds` (30), `tunnel_protocol` (`http2`, works on most
-networks; `quic` or `auto` otherwise), `cloudflared` (the program's path, when it is not
-found).
+recordings you would not send to the video provider anyway. Settings: `host_max_minutes` (20,
+the hard limit; 5-120; it must leave room for `poll_timeout`, or such shots are blocked with
+the numbers to change: a smaller `poll_timeout` is how to keep the tunnel short on purpose,
+vidgen then stops waiting sooner and a later run polls the job), `tunnel_protocol` (`http2`,
+works on most networks; `quic` or `auto` otherwise), `cloudflared` (the program's path, when
+it is not found).
 
 **What the ledger records** (`videogen-ledger.jsonl`, next to the paid jobs): `host_open` with
 the tunnel's host name and each shared file's name, size and SHA-256 fingerprint (never the
 secret address); `host_fetch` for every download of a shared file (which file, GET or HEAD,
 the answer and the bytes sent; vidgen's own check is one of them); `host_close` with the reason
-(`done`: the job ended; `all files fetched`; `max lifetime`; `error: ...`; `interrupted`),
+(`done`: the job ended; `max lifetime`; `error: ...`; `interrupted`),
 how long it was open and whether the copies were deleted. No addresses of who downloaded are
 kept.
 
@@ -194,7 +210,7 @@ kept.
    OK looks like this (the address differs every time):
 
    ```text
-   sharing 1 file(s) (34 bytes) through a Cloudflare quick tunnel for at most 15 min; starting cloudflared
+   sharing 1 file(s) (34 bytes) through a Cloudflare quick tunnel for at most 20 min; starting cloudflared
    public address some-random-words.trycloudflare.com (the files' paths have a secret part); checking it serves the files
      ok   public address answers HEAD with the file's length (some-random-words.trycloudflare.com)
      ok   GET through the tunnel returns the same bytes (HTTP 200, 34 bytes)
@@ -223,7 +239,7 @@ kept.
 
    ```text
      audio: build/videogen/closeup_b1/audio.mp3 (the beat's voice, 3.43 s)
-     would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most 15 min; copies under random names behind a secret path; pictures are not shared, they go inline):
+     would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most 20 min; copies under random names behind a secret path; pictures are not shared, they go inline):
        build/videogen/closeup_b1/audio.mp3 (55,214 bytes)
    ```
 
@@ -237,7 +253,7 @@ kept.
 
    It prints the sharing lines as in step 2, then `quick tunnel closed (done)` once the job is
    finished, then the new take. In `videogen-ledger.jsonl` you find, in order: `host_open`, a
-   `host_fetch` (vidgen's own check, `HEAD`), `submit`, a `host_fetch` for each download by the
+   `host_fetch` (vidgen's own check, `HEAD`), `submit_intent`, `submit`, a `host_fetch` for each download by the
    provider (usually one `GET` of the whole file), `host_close` with `reason: done`, and the
    job's `completed` line with its cost. No provider download recorded means the provider did
    not fetch the voice through the tunnel: tell the developers (DESIGN §115). If the provider refuses the job, the tunnel is closed

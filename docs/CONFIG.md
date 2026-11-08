@@ -2777,8 +2777,7 @@ videogen:
   host: none                # none | quick_tunnel: share a shot's voice / guide through a Cloudflare quick tunnel while its job runs
   cloudflared: null         # the cloudflared program for the quick tunnel (default: cloudflared on PATH)
   tunnel_protocol: http2    # http2 (TCP 443) | quic (UDP 7844) | auto (cloudflared's choice)
-  host_max_minutes: 15      # a quick tunnel closes after this long, whatever happens
-  host_grace_seconds: 30    # ...or this long after every shared file was fetched
+  host_max_minutes: 20      # a quick tunnel closes after this long, whatever happens (5-120)
 ```
 
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
@@ -2791,7 +2790,12 @@ videogen:
   request (model, prompt, settings, input files by content) is cached in
   `assets/generated_video/<key>.mp4`: it is never paid twice. A job still running when the
   wait ends is polled again by the next run, not submitted again. The mock provider keeps its
-  own `videogen-ledger.mock.jsonl`.
+  own `videogen-ledger.mock.jsonl`. Before each paid submit a `submit_intent` line is written
+  to disk. If vidgen is stopped or the answer is lost after the request is sent, that intent
+  has no known outcome: the provider may have accepted and charged it, so vidgen counts it at
+  its estimate and refuses to pay for that request again until you say what happened with
+  `vidgen generate resolve` (below). It is a separate way out from the cache: a clip already in
+  `assets/generated_video/` is used as usual.
 - **Inputs**: pictures (first / last frame, references) are sent inline as data URLs, as smaller
   copies (longest side at most 1280 px, JPEG quality 90, PNG only when the picture has
   transparency) cached in `build/videogen/pictures/`; the original files are untouched. A
@@ -2807,9 +2811,15 @@ videogen:
   first (if that fails, nothing is sent or paid). Only copies of that shot's own audio / video
   files are shared (pictures go inline as before), under random names behind a secret path,
   from a temporary folder outside the project. The tunnel closes as soon as the job reaches a
-  final state (completed or failed, before the download), or `host_grace_seconds` after the
-  provider fetched every file, or after `host_max_minutes`, whichever comes first (also on an
-  error or Ctrl+C); then cloudflared is stopped and the copies deleted. The ledger records
+  final state (completed or failed, before the download), or after `host_max_minutes`, whichever
+  comes first (also on an error or Ctrl+C); then cloudflared is stopped and the copies deleted.
+  A finished download does not close it, because a provider may fetch a file again after
+  queueing the job: the tunnel can stay open a little longer in exchange for not losing a paid
+  job. `host_max_minutes` must leave room for `poll_timeout` plus the time to open the tunnel
+  and submit (with the defaults: 20 min against 900 s); otherwise such shots are blocked. To
+  keep the tunnel short on purpose, lower `poll_timeout`: vidgen stops waiting sooner and closes
+  the tunnel while the job keeps running, and a later run polls it. A paid submit is refused
+  (nothing sent or paid) when the tunnel has closed or has too little time left. The ledger records
   `host_open` (the host name, each file's name, size and SHA-256; never the secret path),
   `host_fetch` (file, method, status, bytes) and `host_close` (reason). `vidgen generate plan`
   lists per shot exactly which files a run would share and for how long; a shot is blocked when
@@ -2824,6 +2834,13 @@ videogen:
   ratios, frame images, estimated price per second without audio) from the public list (no key);
   cached for a day in vidgen's cache folder and read from there offline (`--refresh` fetches it
   again). `vidgen generate ledger` shows the project's jobs, what they cost and what is left.
+- **A submit with no known outcome**: `vidgen generate plan`, `run`, `status` and `ledger` name
+  it. Say what happened (check your OpenRouter account's activity first) with
+  `vidgen generate resolve [PROJECT] --intent ID` and exactly one of: `--not-charged` (nothing
+  was charged: the next run pays for the shot), `--job JOB_ID` (the job exists: the next run
+  polls and downloads it, free), `--charged [--cost USD]` (charged but nothing to fetch; counted
+  at USD or its estimate: the next run pays again, knowingly). `run --pay` refuses the whole run
+  while a selected shot has one (`--shot` selects the others).
 
 ### Shots, sheets and inputs (`generated_shot`, `reference_sheet`, `style_sheet`)
 
@@ -16307,12 +16324,16 @@ Generated video (DESIGN.md §113). `vidgen generate models --json`:
 `vidgen generate ledger PROJECT --json`: `action` (`ledger`), `ledger` (the file), `provider`,
 `budget_usd` (float \| null), `spent_usd`, `remaining_usd` (null without a budget), `jobs`
 (`{job_id, model, request_hash, status, estimate_usd, cost_usd, charged_usd, submitted}`;
-`status` `null` while open, `charged_usd` what the job counts against the budget).
+`status` `null` while open, `charged_usd` what the job counts against the budget), `intents`
+(`{intent_id, model, request_hash, estimate_usd, time, outcome, cost_usd, job_id, charged_usd}`:
+every submit intent; `outcome` `null` while nothing is known, else `refused`, `not_charged`,
+`charged` or `job`). `spent_usd` includes the intents' `charged_usd`.
+`vidgen generate resolve PROJECT --intent ID ... --json`: `action` (`resolve`), `intent` (as above).
 
 `vidgen generate plan PROJECT --json`: `action` (`plan`), `clips_usd`, `sheets_usd`, `total_usd`,
-`budget_usd`, `spent_usd`, `remaining_usd`, `shots` (`{id, kind, model, scene, beat, start,
-length, duration, resolution, aspect_ratio, inputs: [{role, kind, path, frame_image, ready}],
-estimate_usd, cached, left_after_usd, request_bytes, shared: [{path, bytes}], share_max_minutes, notes, problems,
+`budget_usd`, `spent_usd`, `remaining_usd`, `unresolved_intents` (as `intents` above), `shots`
+(`{id, kind, model, scene, beat, start, length, duration, resolution, aspect_ratio, inputs: [{role, kind, path, frame_image, ready}],
+estimate_usd, cached, left_after_usd, request_bytes, unresolved_intent (the id, or `null`), shared: [{path, bytes}], share_max_minutes, notes, problems,
 blocked, prompt}`; `shared` the files a paid run would share through the quick tunnel (empty without
 `host: quick_tunnel`, when cached or already paid; `bytes` `null` until made), `share_max_minutes`
 the tunnel's maximum lifetime (`null` when nothing is shared);
@@ -16329,7 +16350,7 @@ cost_usd, take, take_path, new_take, qa, contact_sheet, message}`; `status` `wou
 stops the run: `ok` false, `error.details.shots` the outcomes so far. `vidgen generate status
 --json`: `action` (`status`), `shots` (`{shot, kind, model, takes, shown, picked, blocked}`),
 `budget_usd`, `spent_usd`, `remaining_usd`, `credit` (the credit line, or `null`),
-`disclosure`. `vidgen generate takes --json`: `action` (`takes`), `shots` (`{shot, shown, takes:
+`disclosure`, `unresolved_intents` (as `intents` above). `vidgen generate takes --json`: `action` (`takes`), `shots` (`{shot, shown, takes:
 [{take, path, model, cost_usd, qa, contact_sheet}]}`; `qa`: `{width, height, fps, duration,
 audio, summary, checks: [{check, severity, message}], metrics}`). `vidgen generate pick --json`:
 `action` (`pick`), `shot`, `shown` (the take number, or `null`: vidgen's own picture).

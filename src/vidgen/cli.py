@@ -1928,7 +1928,7 @@ def cmd_soundfont(args: argparse.Namespace) -> int:
 def cmd_generate(args: argparse.Namespace) -> CommandResult:
     """Generated video (DESIGN.md §113): ``models`` lists OpenRouter's video models (public list,
     cached; works offline from the cache); ``ledger`` shows a project's spending and budget."""
-    from vidgen.videogen.ledger import BudgetState, Ledger
+    from vidgen.videogen.ledger import BudgetState, Ledger, intent_text
     from vidgen.videogen.models import load_catalog, model_line, money
     from vidgen.videogen.run import ledger_path
 
@@ -1955,6 +1955,8 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         return _generate_shots(args)
     if args.action in ("run", "status", "takes", "pick"):
         return _generate_workflow(args)
+    if args.action == "resolve":
+        return _generate_resolve(args)
     project = Project.load(args.project)
     settings = project.config.videogen
     ledger = Ledger(ledger_path(project.root, settings.provider))
@@ -1969,12 +1971,42 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
                  "cost_usd": j.cost_usd, "charged_usd": j.charged, "submitted": j.submitted}
                 for j in jobs
             ],
+            intents=[i.to_json() for i in ledger.intents()],
         )
     print(f"ledger: {ledger.path} ({len(jobs)} job(s), provider {settings.provider})")
     for j in jobs:
         cost = money(j.cost_usd) if j.cost_usd is not None else f"no cost reported, counted at the estimate {money(j.estimate_usd or 0.0)}"
         print(f"  {j.submitted} {j.job_id} {j.model} {j.status or 'open'}: {cost}")
+    for intent in ledger.unresolved_intents():
+        print(f"  unresolved submit: {intent_text(intent)}")
     print(budget.text())
+    return 0
+
+
+def _generate_resolve(args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate resolve --intent ID --not-charged | --charged [--cost USD] | --job JOB_ID``
+    (DESIGN.md §113.10): the owner records what happened to a submit whose outcome is unknown."""
+    from vidgen.videogen.ledger import CHARGED, NOT_CHARGED, Ledger
+    from vidgen.videogen.run import ledger_path
+
+    if args.pay:
+        raise VidgenError("`generate resolve` never pays; drop --pay")
+    if not args.intent or sum([args.not_charged, args.charged, args.job is not None]) != 1:
+        raise VidgenError("resolve needs --intent ID and exactly one of --not-charged, --charged [--cost USD], --job JOB_ID (`vidgen generate ledger` lists the intents)")
+    if args.job is not None and not args.job.strip():
+        raise VidgenError("--job: the job's id")
+    if args.cost is not None and not args.charged:
+        raise VidgenError("--cost goes with --charged")
+    if args.cost is not None and args.cost < 0:
+        raise VidgenError("--cost: US dollars, 0 or more")
+    project = Project.load(args.project, variant=args.variant)
+    ledger = Ledger(ledger_path(project.root, project.config.videogen.provider))
+    outcome = CHARGED if args.charged else NOT_CHARGED
+    intent = ledger.resolve_intent(args.intent, outcome, cost_usd=args.cost, job_id=args.job)
+    if args.json:
+        return jsonout.envelope("generate", True, action="resolve", intent=intent.to_json())
+    what = {CHARGED: "counted as charged; the next run may pay for this request again", NOT_CHARGED: "not charged; the next run may pay for this request"}
+    print(f"intent {intent.intent_id}: {what.get(intent.outcome or '', f'it is job {intent.job_id} now; the next run polls and downloads it, free')}")
     return 0
 
 
@@ -2013,6 +2045,7 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
         return jsonout.envelope(
             "generate", True, action="plan", clips_usd=plan.clips_cost, sheets_usd=plan.sheets_cost, total_usd=plan.total,
             budget_usd=plan.budget.cap_usd, spent_usd=plan.budget.spent_usd, remaining_usd=plan.budget.remaining_usd,
+            unresolved_intents=[i.to_json() for i in plan.unresolved_intents],
             shots=[
                 {"id": s.shot.id, "kind": s.shot.spec.kind, "model": s.shot.spec.model, "scene": s.shot.scene_id, "beat": s.shot.beat.id,
                  "start": round(s.shot.start, 3), "length": round(s.shot.length, 3), "duration": s.shot.duration,
@@ -2021,6 +2054,7 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
                              "frame_image": i.frame, "ready": i.ready} for i in s.shot.inputs],
                  "estimate_usd": s.estimate.cost if s.estimate is not None else None, "cached": s.cached, "left_after_usd": s.left_after,
                  "request_bytes": s.request_bytes,
+                 "unresolved_intent": s.unresolved_intent.intent_id if s.unresolved_intent else None,
                  "shared": [{"path": i.path.relative_to(root).as_posix() if i.path.is_relative_to(root) else str(i.path),
                              "bytes": i.path.stat().st_size if i.ready else None} for i in s.shot.shared] if s.shot.share_minutes is not None and not s.cached and not s.previous_job else [],
                  "share_max_minutes": s.shot.share_minutes,
@@ -2451,7 +2485,7 @@ def build_parser() -> argparse.ArgumentParser:
         "quick tunnel that shares audio / video inputs (free)",
     )
     p.add_argument(
-        "action", choices=["models", "plan", "sheets", "inputs", "run", "status", "takes", "pick", "ledger", "host-test"],
+        "action", choices=["models", "plan", "sheets", "inputs", "run", "status", "takes", "pick", "ledger", "resolve", "host-test"],
         help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
         "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
         "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
@@ -2459,7 +2493,8 @@ def build_parser() -> argparse.ArgumentParser:
         "the budget, stopping at the first failure, never retrying; with videogen.host: quick_tunnel each shot's voice / guide is shared "
         "through its own quick tunnel while its job runs) and keep each clip as a take with QA and a contact sheet; status: each "
         "shot's takes and the one shown, the credit line; takes: every take with its QA findings and contact sheet; pick: choose a shot's "
-        "take (--shot ID --take N | none | auto); ledger: the project's paid jobs, what they cost and what the budget has left; host-test: "
+        "take (--shot ID --take N | none | auto); ledger: the project's paid jobs, what they cost and what the budget has left; resolve: "
+        "say what happened to a submit whose outcome is unknown (--intent ID and --not-charged, --job JOB_ID or --charged [--cost USD]); host-test: "
         "share one tiny generated text file through a Cloudflare quick tunnel, fetch it back through the public address and close "
         "(free: needs cloudflared, sends nothing to OpenRouter)",
     )
@@ -2471,6 +2506,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--pay", action="store_true", help="run, sheets: pay for the clips / pictures (needs a budget); without it a dry run")
     p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
     p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")
+    p.add_argument("--intent", metavar="ID", help="resolve: the unresolved submit (`vidgen generate ledger` lists them)")
+    p.add_argument("--not-charged", action="store_true", help="resolve: the provider did not charge it; the next run may pay for the request")
+    p.add_argument("--charged", action="store_true", help="resolve: it was charged but there is no job to fetch; the next run may pay again, knowingly")
+    p.add_argument("--cost", type=float, metavar="USD", help="resolve --charged: what was charged (default: its estimate)")
+    p.add_argument("--job", metavar="JOB_ID", help="resolve: the job this submit became; the next run polls and downloads it, free")
     p.add_argument("--keep", type=float, metavar="SECONDS", help="host-test: keep the tunnel open this long after the check (the address is printed to try in a browser)")
     p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with a guide: (true, or depth / outline / mask on a 3d scene) or first_frame: render (a draft render of their scenes)")
     p.set_defaults(func=cmd_generate)

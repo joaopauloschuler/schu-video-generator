@@ -481,17 +481,17 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
     make_inputs(project, project_shots(project, CATALOG), out=lambda line: None)
     audio = root / "build" / "videogen" / "talk" / "audio.mp3"
 
-    # the plan: not blocked; exactly the voice would be shared, for at most 15 min; pictures are not
+    # the plan: not blocked; exactly the voice would be shared, for at most 20 min; pictures are not
     talk, wide = plan_shots(project, catalog=CATALOG).shots
-    assert talk.shot.blocked == [] and talk.shot.problems == [] and talk.shot.share_minutes == 15
+    assert talk.shot.blocked == [] and talk.shot.problems == [] and talk.shot.share_minutes == 20
     assert [i.path for i in talk.shot.shared] == [audio] and wide.shot.share_minutes is None
     text = "\n".join(talk.lines(root))
-    assert "would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most 15 min" in text
+    assert "would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most 20 min" in text
     assert f"    build/videogen/talk/audio.mp3 ({audio.stat().st_size:,} bytes)" in text
     monkeypatch.setattr("vidgen.videogen.models.load_catalog", lambda *a, **k: CATALOG)
     assert cli.main(["generate", "plan", str(root), "--json", "--shot", "talk"]) == 0
     (doc,) = json.loads(capsys.readouterr().out)["shots"]
-    assert doc["shared"] == [{"path": "build/videogen/talk/audio.mp3", "bytes": audio.stat().st_size}] and doc["share_max_minutes"] == 15
+    assert doc["shared"] == [{"path": "build/videogen/talk/audio.mp3", "bytes": audio.stat().st_size}] and doc["share_max_minutes"] == 20
     # without the host: blocked with the way out; without cloudflared: blocked with the install hints
     off = Project.load(make_project(shot_config(TALK), folder="off"))
     assert NO_HOST_BLOCKED in plan_shots(off, catalog=CATALOG).shots[0].shot.blocked
@@ -499,7 +499,7 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
     assert any("winget install Cloudflare.cloudflared" in b for b in project_shots(missing, CATALOG)[0].blocked)
 
     fetch = local_fetch(tmp_path)
-    settings = HostSettings(url_timeout=10, verify_timeout=1.0, verify_interval=0.05, grace_seconds=30)
+    settings = HostSettings(url_timeout=10, verify_timeout=1.0, verify_interval=0.05)
     lines: list[str] = []
     share = ShareOptions(settings, out=lines.append, executable=fake_cloudflared, fetch=fetch)
     ledger = Ledger(ledger_path(root, "mock"))
@@ -518,7 +518,9 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
         run_shots(project, pay=True, shot_ids=["talk"], provider=provider, catalog=CATALOG, share=share, out=lines.append)
     message = str(caught.value)
     assert "Invalid reference URL: https://" in message and "/<secret>/" in message
-    assert [e["event"] for e in ledger.events()[start:]] == ["host_open", "host_fetch", "host_close"]   # the check's HEAD; no job
+    names = [e["event"] for e in ledger.events()[start:]]
+    assert names[0] == "host_open" and names[-1] == "host_close"
+    assert sorted(names[1:-1]) == ["host_fetch", "intent_resolved", "submit_intent"]   # the check's HEAD; a refused submit; no job
     assert ledger.events()[-1]["reason"] == "error: VidgenError" and list(temp.iterdir()) == []
 
     # the paid run: the provider fetches the voice through the tunnel when the job is submitted
@@ -547,4 +549,4 @@ def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
     assert closed["reason"] == "done" and closed["folder_deleted"] is True   # closed once the job ended, before the download
     secret = url.split("/")[3]
     assert secret not in ledger.path.read_text(encoding="utf-8") and all(secret not in line for line in lines)
-    assert any("at most 15 min" in line for line in lines) and any("quick tunnel closed (done)" in line for line in lines)
+    assert any("at most 20 min" in line for line in lines) and any("quick tunnel closed (done)" in line for line in lines)

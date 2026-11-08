@@ -1030,10 +1030,8 @@ class VideogenConfig(_Strict):
     """The cloudflared program for the quick tunnel that shares audio / video inputs (a path or a command name; default: cloudflared on PATH)."""
     tunnel_protocol: Literal["http2", "quic", "auto"] = "http2"
     """How cloudflared connects to Cloudflare: http2 (TCP port 443, works on most networks), quic (UDP 7844) or auto (cloudflared's choice)."""
-    host_max_minutes: float = Field(default=15.0, gt=0, le=120)
-    """Hard limit in minutes on how long a quick tunnel stays open, whatever happens."""
-    host_grace_seconds: float = Field(default=30.0, ge=0, le=600)
-    """Seconds a quick tunnel stays open after the provider fetched every shared file (it may fetch again)."""
+    host_max_minutes: float = Field(default=20.0, ge=5, le=120)
+    """Hard limit in minutes on how long a quick tunnel stays open, whatever happens; it must leave room for poll_timeout (a shot is blocked otherwise). A tunnel closes as soon as its job reaches a final state."""
 
 
 class StyleSheet(_Strict):

@@ -25756,3 +25756,60 @@ project), repo work is generic.
   `test_generate_inputs_renders_the_mask_pass` (1, no Chromium here), so its new assertion has not
   run. Not run: other render suites, `test_mcp` (no MCP change), the full suite.
 - **Spending**: nothing paid, no key read, no real tunnel (mock provider, fake cloudflared).
+
+## Step 309 — Money safety: the tunnel, the submit, and interrupted submits
+
+- **Built** (DESIGN §113.10, §115.4): three defects from a review, each reproduced first on the
+  unchanged code. (1) `QuickTunnelHost` no longer closes when every file was fetched: during a
+  run the tunnel stays open until the job reaches a final state, bounded by `host_max_minutes`.
+  Reproduced before: a second `GET` cut at 1,081,476 of 62,914,560 bytes. (2) `generate_clip` calls
+  `host.ensure_time_for_job(poll_timeout)` just before the submit; `url_of` / `urls` raise on a
+  closed host. Reproduced before: `is_open=False` at the POST, `paid=True`. (3) `_submit` writes a
+  `submit_intent` line to disk before the POST; a request with an intent of no known outcome is
+  not paid again until `vidgen generate resolve`. Reproduced before: Ctrl+C after the provider
+  accepted left no ledger file, and the re-run made a second job.
+- **Files**: `src/vidgen/videogen/{host,ledger,openrouter,run,shots,workflow}.py`,
+  `src/vidgen/{cli,config}.py`; new `tests/test_videogen_submit_safety.py`; changed
+  `tests/test_videogen{,_host,_shots}.py`; docs `DESIGN.md`, `CHANGELOG.md`, `docs/CONFIG.md`,
+  `docs/COOKBOOK-GENERATED-VIDEO.md`, guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`,
+  `tasklist.md`.
+- **Public interfaces** (not in `vidgen.api`): command `vidgen generate resolve [PROJECT] --intent
+  ID --not-charged | --job JOB_ID | --charged [--cost USD]`; `ledger.SubmitIntent`,
+  `Ledger.record_intent / intents / unresolved_intents / resolve_intent`, `intent_refusal`,
+  `intent_text`; `openrouter.SubmitRefused`, `submit(..., on_sending=)`;
+  `HostSettings.lifetime_problem`, `submit_margin`; `QuickTunnelHost.ensure_time_for_job`;
+  `ClipPlan.unresolved_intent`, `ShotPlan.unresolved_intent`, `VideoGenPlan.unresolved_intents`;
+  JSON `intents` / `unresolved_intents` / `unresolved_intent`. **Removed**:
+  `videogen.host_grace_seconds`, `HostSettings.grace_seconds`, `close_when_fetched`, `all_fetched`.
+- **Decisions / deviations**: (1) The grace setting is removed, not kept unused: host-test never
+  used the close, and the strict config makes an old key an unknown-key error, like any other (the
+  setting existed only in Unreleased; no shim). (2) `host_max_minutes` default 20 (was 15), range
+  5-120: 15 min equalled `poll_timeout`'s 900 s. The rule is `max_seconds >= poll_timeout + 180 s +
+  url_timeout`; a shot that fails it is blocked (a per-shot block, not a config error, so a film
+  can still render), and `generate_clip` refuses before opening a tunnel. A smaller `poll_timeout`
+  is the documented way to keep the tunnel short on purpose. (3) An unresolved intent counts at its
+  estimate in `spent`: the provider may have charged it, and leaving it out could break the hard
+  cap. An owner's `--not-charged` gives it back. (4) HTTP 4xx except 408 means no job exists and
+  clears the intent by itself; 408, 5xx, no answer and an unreadable 2xx stay unresolved. (5)
+  `run --pay` refuses the whole run on a selected shot with an unresolved intent, like Step 308's
+  changed inputs; `--shot` selects the others. (6) `again=True` does not bypass an intent.
+- **Known gaps**: sheet pictures keep their own flow (`submit` before the call, no intent): a
+  re-run after Ctrl+C during a picture pays for it again and overwrites that line (same job id),
+  so the first estimate is no longer counted. MCP has no `resolve` tool (the CLI does it; the
+  refusal names the command). Not checked against a live account: that a 4xx never leaves a job,
+  and that OpenRouter's activity page shows enough to decide (a job id in particular). `fsync` covers
+  the ledger file, not its folder entry, so a power cut just after the ledger is first created could
+  lose it. A provider that first fetches after vidgen stopped waiting finds the tunnel closed.
+  The watchdog still starts after verification, so opening can overrun the lifetime; the check before
+  the submit catches that. Two runs of one project at once are not guarded. An older vidgen reading
+  this ledger ignores intents and would not count or respect them. Out of scope here (later steps):
+  termination signals and Ctrl+C during close, redaction of failed-job errors, `provider: mock`
+  opening a real tunnel.
+- **Spending**: nothing paid, no key read, no network, no real cloudflared (mock provider, fake
+  cloudflared, a real local server).
+- **How to test / tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`,
+  `timeout 280`, `PYTHONPATH=src`): `test_videogen_submit_safety` (12, 16 s; real local server,
+  fake cloudflared, real sleeps), `test_videogen_host` (11), `test_videogen` (26),
+  `test_videogen_shots` not render (21), `test_videogen_compose` not render (17),
+  `test_videogen_input_freshness` not render (17), `test_guide` + `test_docs` (172), `test_config`
+  (21). Not run: render tests, `test_mcp` (no MCP change), `test_schema`, the full suite.

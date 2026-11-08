@@ -199,6 +199,11 @@ def parse_job(body: bytes, fallback_id: str | None = None) -> JobState:
     )
 
 
+class SubmitRefused(VidgenError):
+    """OpenRouter answered a submit with an error that means no job was created (HTTP 4xx
+    except 408). Any other failure of a submit leaves its outcome unknown."""
+
+
 class OpenRouterVideoProvider:
     """OpenRouter's video API. ``transport`` (the network), ``sleep`` and ``clock`` are
     injectable for tests; ``environ`` is where the key is read (default ``os.environ``)."""
@@ -262,7 +267,8 @@ class OpenRouterVideoProvider:
             if answer is not None and answer.status < 400:
                 return answer
             if answer is not None and (not retry or answer.status not in RETRY_STATUS or attempt >= self.retries):
-                raise http_error(answer.status, answer.body, what, secret)
+                error = http_error(answer.status, answer.body, what, secret)
+                raise SubmitRefused(str(error)) if what == "submit" and 400 <= answer.status < 500 and answer.status != 408 else error
             wait = httpapi.retry_after(_Headers(answer.headers)) if answer is not None else None  # type: ignore[arg-type]
             self._sleep(min(wait if wait is not None else self.poll_interval * 2**attempt, self.max_interval))
             attempt += 1
@@ -312,14 +318,20 @@ class OpenRouterVideoProvider:
 
     # ----- the job ---------------------------------------------------------------------------
 
-    def submit(self, request: VideoRequest, drop: set[str] | frozenset[str] = frozenset()) -> JobState:
-        """Submit one paid job (never retried). Raises :class:`VidgenError`."""
+    def submit(
+        self, request: VideoRequest, drop: set[str] | frozenset[str] = frozenset(), *, on_sending: Callable[[], None] | None = None,
+    ) -> JobState:
+        """Submit one paid job (never retried). ``on_sending`` runs once the request is ready, just
+        before it is sent (nothing is sent if it raises). Raises :class:`VidgenError`
+        (:class:`SubmitRefused` when the answer means no job exists)."""
         data = json.dumps(self.request_body(request, drop)).encode("utf-8")
         if len(data) > MAX_INLINE_BYTES:
             raise VidgenError(
                 f"the request is {len(data) / 1e6:.1f} MB with its inline inputs, more than vidgen sends ({MAX_INLINE_BYTES / 1e6:.0f} MB): "
                 "use smaller inputs or host them and pass their URLs"
             )
+        if on_sending is not None:
+            on_sending()
         answer = self._send("POST", VIDEOS_URL, data, "submit", retry=False)
         job = parse_job(answer.body)
         log.info("submitted video job %s (%s)", job.id, request.model)

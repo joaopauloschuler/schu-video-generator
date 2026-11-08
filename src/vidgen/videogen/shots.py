@@ -44,7 +44,7 @@ from vidgen.config import BeatConfig, GeneratedShot, SceneConfig, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.videogen import MediaInput, VideoRequest, did_you_mean
-from vidgen.videogen.ledger import BudgetState, Ledger
+from vidgen.videogen.ledger import BudgetState, Ledger, SubmitIntent, intent_refusal, intent_text
 from vidgen.videogen.models import TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, money, snap_duration
 from vidgen.videogen.sheets import STYLE, Sheet, character_sheet, plan_sheets, style_sheet
 
@@ -381,13 +381,16 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
     if shot.shared:
         settings = project.config.videogen
         if settings.host == "quick_tunnel":
-            from vidgen.videogen.host import find_cloudflared
+            from vidgen.videogen.host import HostSettings, find_cloudflared
 
             shot.share_minutes = settings.host_max_minutes
             try:
                 find_cloudflared(settings.cloudflared)
             except VidgenError as exc:
                 shot.blocked.append(str(exc))
+            lifetime = HostSettings.from_config(settings).lifetime_problem(settings.poll_timeout)
+            if lifetime:
+                shot.blocked.append(lifetime)
         elif settings.inline_media == "all":
             shot.problems.append(f"{where}: {INLINE_AUDIO_VIDEO_PROBLEM}")
         else:
@@ -518,11 +521,14 @@ class ShotPlan:
     #: The shot's cut inputs no longer match what they were cut from and a run would pay for it
     #: (the same text is in ``shot.blocked``); ``run --pay`` refuses (nothing sent or paid).
     changed_inputs: str | None = None
+    #: The ledger's unresolved submit intent of this request (``shot.blocked`` says what to do):
+    #: ``run --pay`` refuses, and the plan counts no new cost for the shot.
+    unresolved_intent: SubmitIntent | None = None
 
     @property
     def cost(self) -> float:
         """What the shot would cost now (0 when cached or already paid; unknown counts 0)."""
-        if self.cached or self.previous_job or self.estimate is None or self.estimate.cost is None:
+        if self.cached or self.previous_job or self.unresolved_intent or self.estimate is None or self.estimate.cost is None:
             return 0.0
         return self.estimate.cost
 
@@ -595,6 +601,8 @@ class VideoGenPlan:
     sheets_todo: int = 0
     sheets_unknown: int = 0
     sheet_lines: list[str] = field(default_factory=list)
+    #: Ledger intents with no known outcome (of any request); they count in the budget at their estimate.
+    unresolved_intents: list[SubmitIntent] = field(default_factory=list)
 
     @property
     def clips_cost(self) -> float:
@@ -621,6 +629,7 @@ class VideoGenPlan:
         left = self.budget.remaining_usd
         after = f", {money(max(0.0, left - self.total))} after this plan" if left is not None else ""
         out.append(f"{self.budget.text()}{after}" + (" - OVER THE BUDGET" if left is not None and self.total > left + 1e-9 else ""))
+        out += [f"unresolved submit: {intent_text(i)}" for i in self.unresolved_intents]
         blocked = sum(1 for s in self.shots if s.shot.blocked)
         problems = sum(1 for s in self.shots if s.shot.problems or s.check.problems)
         out.append(f"dry run: nothing was sent or paid; {blocked} shot(s) blocked, {problems} with problems")
@@ -655,7 +664,10 @@ def plan_shots(
     sheet_cost, sheet_unknown = sheets.cost
     from vidgen.videogen.sheets import sheet_lines
 
-    plan = VideoGenPlan([], budget, sheet_cost, len(sheets.plan.todo), sheet_unknown, sheet_lines(sheets, project.root, prompts=False)[:-1] if sheets.sheets else [])
+    plan = VideoGenPlan(
+        [], budget, sheet_cost, len(sheets.plan.todo), sheet_unknown, sheet_lines(sheets, project.root, prompts=False)[:-1] if sheets.sheets else [],
+        ledger.unresolved_intents(),
+    )
     left = budget.remaining_usd - sheet_cost if budget.remaining_usd is not None else None
     sources = InputSources(project)
     for shot in shots:
@@ -665,6 +677,9 @@ def plan_shots(
                 clip = plan_clip(project.root, settings, item.request, catalog=catalog, budget_usd=budget_usd, duration=shot.priced_seconds)
                 item.cached = clip.cached
                 item.previous_job = clip.previous_job.job_id if clip.previous_job is not None else None
+                item.unresolved_intent = clip.unresolved_intent
+                if clip.unresolved_intent is not None:
+                    shot.blocked.append(intent_refusal(clip.unresolved_intent))
                 item.check = clip.check
                 item.estimate = clip.estimate or estimate(item.request, shot.model, duration=shot.priced_seconds)
                 if not clip.cached:

@@ -11,17 +11,21 @@ or ``budget_usd=``; with both, the lower). In order:
    refused with a did-you-mean, before anything is paid;
 4. the estimate (:func:`vidgen.videogen.models.estimate`) against what the budget has left;
 5. without ``pay``: the plan (a dry run; nothing is sent);
-6. with ``pay``: submit (one attempt; local pictures as their smaller copies,
-   :mod:`vidgen.videogen.pictures`), ``submit`` line in the ledger, poll, the terminal line
-   with ``usage.cost``, download, sidecar ``<hash>.json``.
+6. with ``pay``: a ``submit_intent`` line on disk, the submit (one attempt; local pictures as
+   their smaller copies, :mod:`vidgen.videogen.pictures`), ``submit`` line in the ledger, poll,
+   the terminal line with ``usage.cost``, download, sidecar ``<hash>.json``. A request with an
+   intent of no known outcome is refused until the owner runs ``vidgen generate resolve``
+   (:func:`vidgen.videogen.ledger.intent_refusal`): it is never paid again by itself.
 
 Local audio / video inputs (a shot's voice, its guide render) are shared through a Cloudflare
 quick tunnel (:mod:`vidgen.videogen.host`, ``videogen.host: quick_tunnel`` or ``share=``): one
 tunnel for this one job, opened (and checked through its public address) after every other check
-and before the submit, closed as soon as the job reaches a final state (completed, failed, ...),
-before the download; earlier when the provider fetched every file (plus the grace period) or at
-the maximum lifetime; also on an error or Ctrl+C. A job resumed from the ledger is only polled:
-no tunnel is opened again. Without a host such inputs stop the submit with a clear error.
+and before the submit, which is refused unless the tunnel is still open with room for the wait
+(:meth:`~vidgen.videogen.host.QuickTunnelHost.ensure_time_for_job`). It closes as soon as the job
+reaches a final state (completed, failed, ...), before the download, or at the maximum lifetime
+(a provider may fetch again after queueing, so a finished fetch does not close it); also on an
+error or Ctrl+C. A job resumed from the ledger is only polled: no tunnel is opened again.
+Without a host such inputs stop the submit with a clear error.
 
 The mock provider (``videogen.provider: mock``) keeps its own ledger,
 ``videogen-ledger.mock.jsonl``, so trying the flow never touches the real spending record.
@@ -38,9 +42,9 @@ from typing import TYPE_CHECKING, Any
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_text_atomic
 from vidgen.videogen import CLIPS_DIR, LEDGER_NAME, JobState, VideoRequest, canonical_request, request_hash
-from vidgen.videogen.ledger import BudgetState, Ledger, LedgerJob, refusal, utc_now
+from vidgen.videogen.ledger import BudgetState, Ledger, LedgerJob, SubmitIntent, intent_refusal, refusal, utc_now
 from vidgen.videogen.models import Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, load_catalog, money
-from vidgen.videogen.openrouter import OpenRouterVideoProvider, job_failure
+from vidgen.videogen.openrouter import OpenRouterVideoProvider, SubmitRefused, job_failure
 from vidgen.videogen.pictures import sendable_request
 
 if TYPE_CHECKING:
@@ -79,6 +83,7 @@ class ClipPlan:
     provider: str
     cached: bool = False
     previous_job: LedgerJob | None = None
+    unresolved_intent: SubmitIntent | None = None
     model: VideoModel | None = None
     check: RequestCheck = field(default_factory=RequestCheck)
     estimate: Estimate | None = None
@@ -154,6 +159,8 @@ def plan_clip(
     jobs = [j for j in ledger.jobs() if j.request_hash == key]
     if jobs and jobs[-1].status in (None, "completed") and not again:
         plan.previous_job = jobs[-1]
+    unresolved = ledger.unresolved_intents(key) if plan.previous_job is None else []
+    plan.unresolved_intent = unresolved[-1] if unresolved else None
     plan.budget = BudgetState(_cap(settings, budget_usd), ledger.spent())
     model = (catalog or load_catalog()).find(request.model)
     plan.model = model
@@ -161,6 +168,8 @@ def plan_clip(
     plan.estimate = estimate(request, model, duration=duration)
     if plan.check.problems:
         plan.refusal = "the model does not take these settings (see the problems)"
+    elif plan.unresolved_intent is not None:
+        plan.refusal = intent_refusal(plan.unresolved_intent)
     elif plan.previous_job is None:
         plan.refusal = refusal(plan.budget, plan.estimate.cost, request.model)
     return plan
@@ -204,11 +213,15 @@ def generate_clip(
     if not local or share is None:
         job = _submit(ledger, chosen, plan, sendable)
         return _finish(root, ledger, chosen, plan, job, recorded=False)
+    problem = share.settings.lifetime_problem(chosen.poll_timeout)
+    if problem:
+        raise VidgenError(f"not paying for {request.model}: {problem}")
     host = share.host(local, root, ledger)
     with host:   # closed when the block ends: the job reached a final state (or an error / Ctrl+C)
         previous = chosen.uploader
         chosen.uploader = host.url_of
         try:
+            host.ensure_time_for_job(chosen.poll_timeout)
             job = _submit(ledger, chosen, plan, sendable)
             job = chosen.wait(job)
         except VidgenError as exc:   # a provider's error may quote a URL: never pass the secret on
@@ -219,12 +232,31 @@ def generate_clip(
 
 
 def _submit(ledger: Ledger, provider: OpenRouterVideoProvider, plan: ClipPlan, request: VideoRequest) -> JobState:
-    """Submit the paid job and record it."""
+    """Submit the paid job and record it: the intent goes to disk before the POST, the ``submit``
+    line (which resolves it) after. Any other failure than a refused submit leaves the intent
+    open, so a later run cannot pay for this request again by itself."""
     assert plan.estimate is not None
-    job = provider.submit(request, plan.check.drop)
+    estimate_usd = plan.estimate.cost
+    intent: SubmitIntent | None = None
+
+    def record_intent() -> None:
+        nonlocal intent
+        intent = ledger.record_intent(provider.name, plan.request.model, plan.key, estimate_usd)
+
+    try:
+        job = provider.submit(request, plan.check.drop, on_sending=record_intent)
+    except SubmitRefused:
+        assert intent is not None
+        ledger.resolve_intent(intent.intent_id, "refused")
+        raise
+    except VidgenError as exc:
+        if intent is None:   # stopped before anything was sent (a request too large, say)
+            raise
+        raise VidgenError(f"{exc}\n{intent_refusal(intent)}", details=exc.details) from None
+    assert intent is not None
     ledger.append(
         "submit", job_id=job.id, provider=provider.name, model=plan.request.model, request_hash=plan.key,
-        estimate_usd=plan.estimate.cost,
+        estimate_usd=estimate_usd, intent_id=intent.intent_id,
     )
     return job
 

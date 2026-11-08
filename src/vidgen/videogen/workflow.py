@@ -6,8 +6,9 @@ order. Without ``pay`` it is a dry run (nothing sent, paid or written). With ``p
 - a budget is required (``videogen.budget_usd`` or ``budget_usd``; with both, the lower);
 - a selected shot with problems refuses the whole run, and so does a selected shot whose cut
   inputs changed since they were cut (:mod:`vidgen.videogen.freshness`; a free re-cut fixes it, a
-  cached clip or earlier job does not count) and an estimate of the ready shots over what the
-  budget has left, before anything is paid or a tunnel opened;
+  cached clip or earlier job does not count), a selected shot with an unresolved submit (an
+  earlier submit whose outcome is unknown: ``vidgen generate resolve``) and an estimate of the
+  ready shots over what the budget has left, before anything is paid or a tunnel opened;
 - each ready shot then goes through :func:`vidgen.videogen.run.generate_clip` (``pay=True``,
   ``duration=shot.priced_seconds``; the ledger keeps the running budget); blocked shots are
   skipped and named;
@@ -91,6 +92,7 @@ def run_shots(
     """Generate the project's shots (see the module docstring). ``share`` replaces how audio / video
     inputs are hosted (default: ``videogen.host``). Raises :class:`VidgenError` when a paid run is
     refused (nothing paid) or stopped by a failure (``details``: the outcomes)."""
+    from vidgen.videogen.ledger import intent_refusal
     from vidgen.videogen.run import _cap, generate_clip
     from vidgen.videogen.shots import plan_shots
 
@@ -114,6 +116,10 @@ def run_shots(
         if changed:
             text = "\n  ".join(f"{s.shot.id}: {s.changed_inputs}" for s in changed)
             raise VidgenError(f"not paying: inputs changed since they were cut (nothing was sent or paid):\n  {text}")
+        unresolved = [s for s in plan.shots if s.unresolved_intent is not None]
+        if unresolved:
+            text = "\n  ".join(f"{s.shot.id}: {intent_refusal(s.unresolved_intent)}" for s in unresolved if s.unresolved_intent is not None)
+            raise VidgenError(f"not paying: an earlier submit has no known outcome (nothing was sent or paid in this run):\n  {text}")
         ready = [s for s in plan.shots if not s.shot.blocked]
         due = sum(s.cost for s in ready)
         left = plan.budget.remaining_usd
@@ -196,7 +202,7 @@ def status_lines(project: Project, catalog: Catalog | None) -> tuple[list[str], 
     """``vidgen generate status``: per shot its takes and the one shown; the film's credit line
     and the disclosure reminder. Returns the text and its JSON."""
     from vidgen.videogen.compose import credit_line
-    from vidgen.videogen.ledger import BudgetState, Ledger
+    from vidgen.videogen.ledger import BudgetState, Ledger, intent_text
     from vidgen.videogen.run import ledger_path
     from vidgen.videogen.shots import project_shots
 
@@ -224,11 +230,13 @@ def status_lines(project: Project, catalog: Catalog | None) -> tuple[list[str], 
     ledger = Ledger(ledger_path(root, settings.provider))
     budget = BudgetState(settings.budget_usd, ledger.spent())
     lines.append(budget.text())
+    unresolved = ledger.unresolved_intents()
+    lines += [f"unresolved submit: {intent_text(i)}" for i in unresolved]
     credit = credit_line(project)
     if credit:
         lines += [f"credits: {credit} (added to the description file <output>_chapters.txt)", DISCLOSURE]
     doc = {"shots": shots_json, "budget_usd": budget.cap_usd, "spent_usd": budget.spent_usd, "remaining_usd": budget.remaining_usd,
-           "credit": credit or None, "disclosure": DISCLOSURE if credit else None}
+           "credit": credit or None, "disclosure": DISCLOSURE if credit else None, "unresolved_intents": [i.to_json() for i in unresolved]}
     return lines, doc
 
 

@@ -3944,11 +3944,16 @@ scenes:
   video only as https URLs, so these shots stay blocked until the user opts in with
   `videogen: {host: quick_tunnel}` (default `none`). Then each paid shot shares only its own
   `audio.mp3` / `guide.mp4` (copies, random names, a secret path) through its own Cloudflare
-  quick tunnel while its job runs, at most `host_max_minutes` (15), and closes it when the job
-  ends. Needs `cloudflared` (Windows `winget install Cloudflare.cloudflared`). Check it free
+  quick tunnel while its job runs, at most `host_max_minutes` (20), and closes it when the job
+  ends, not when a file was fetched. Needs `cloudflared` (Windows `winget install Cloudflare.cloudflared`). Check it free
   first with `vidgen generate host-test`; `generate plan` lists exactly which files a run would
   share. Ask the user before turning the host on: the files are reachable on the public
   internet by anyone with the address for those minutes.
+- **A submit with no known outcome** (`vidgen generate plan` / `run` / `status` / `ledger` say
+  "no known outcome"; vidgen was stopped or an answer was lost after a paid request was sent):
+  it may have been charged, so vidgen will not pay for that shot again by itself and counts it
+  at its estimate. Tell the user; do not guess. They check their OpenRouter activity, then
+  `vidgen generate resolve --intent ID --not-charged | --job JOB_ID | --charged [--cost USD]`.
 - **A 3D scene as the guide** (`guide: depth | outline | mask`, only on a `3d` scene; `guide:
   true` = `render`, the normal view): the clip follows the 3D layout and camera, the model draws
   the look. `depth` suits most shots; `mask` keeps objects apart (the prompt lists the
