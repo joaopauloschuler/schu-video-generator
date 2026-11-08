@@ -515,7 +515,8 @@ def validate_warnings(project: Project) -> list[str]:
     (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
     line of their own voice (§69.34), dubbed voices that lose their kind or merge (§80) and
     composed music without the ``music`` extra or the SoundFont (§85), and a Short that is not
-    vertical or longer than its ``max_seconds`` (§101)."""
+    vertical or longer than its ``max_seconds`` (§101), and ``3d`` scenes without Playwright or
+    its Chromium (§114.4)."""
     from vidgen.carry import carry_warnings
     from vidgen.cuts import shorts_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
@@ -526,6 +527,7 @@ def validate_warnings(project: Project) -> list[str]:
     from vidgen.music import music_warnings
     from vidgen.music_pieces import piece_warnings
     from vidgen.overlap import overlap_warnings
+    from vidgen.three_d.browser import install_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
     from vidgen.tts import tts_warnings
@@ -553,6 +555,7 @@ def validate_warnings(project: Project) -> list[str]:
         + music_warnings(project.config)
         + piece_warnings(project.config, project.root)
         + shorts_warnings(project)
+        + install_warnings(project)
     )
 
 

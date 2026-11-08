@@ -6021,53 +6021,106 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 
 ### `3d`
 
-**Simple 3D** (Phase AI, DESIGN §114): objects seen by a fixed camera under one default light
-(an even ambient part plus a sun) over a background colour, drawn by **three.js** in headless
-Chromium. The picture fills the frame from the first frame; `spin` keeps an object turning
-through every beat; beat 1 fades the `title` in (on a plate at the top); the scene fades out
-at the end. Overlays and captions are drawn over the 3D picture as over any scene. Only the `box`
-shape exists yet (Step 299 adds more shapes, groups and camera moves).
+**Simple 3D** (Phase AI, DESIGN §114): objects — boxes, spheres, cylinders, cones, tori, planes,
+arrows and text labels, in named groups — seen by a camera under one default light (an even
+ambient part plus a sun) over a background colour, drawn by **three.js** in headless Chromium.
+The picture fills the frame from the first frame; `spin` keeps an object (or a group) turning
+through every beat; the camera stands still or moves on beats and words with the
+[camera actions](#3d-camera-actions); beat 1 fades the `title` in (on a plate at the top); the
+scene fades out at the end. Overlays and captions are drawn over the 3D picture as over any scene.
 
 **Needs the `3d` extra**: `pip install "schu-video-generator[3d]"`, then
 `python -m playwright install chromium` (Windows: `py -m pip install "schu-video-generator[3d]"`,
 then `py -m playwright install chromium`). Without them, rendering a `3d` scene stops with that
-hint; `vidgen validate` and every other scene type work without them. Nothing is fetched from the
-network while rendering: three.js (0.186.1) ships with schu-video-generator, and WebGL runs on
-Chromium's software renderer (SwiftShader), so the same YAML gives the same pixels on any machine
-with the same Playwright version.
+hint, and `vidgen validate` warns about it in a project that has a `3d` scene (a quick look for
+Playwright and its Chromium folder; no browser is started); every other scene type works without
+them. Nothing is fetched from the network while rendering: three.js (0.186.1) and the labels' font
+(Inter Bold) ship with schu-video-generator, and WebGL runs on Chromium's software renderer
+(SwiftShader), so the same YAML gives the same pixels on any machine with the same Playwright version.
 
 **Units and angles.** Positions and sizes are in scene units, y is up; the default camera stands
 at `[3, 2.5, 5]` and looks at the origin. `rotation` is in degrees about x, y and z (applied in
 that order), `spin` in degrees per second. `fov` is the angle across the frame's **shorter side**,
 so the same subject fills a 16:9 and a 9:16 frame alike (the long side sees more).
 
+**Shapes.** `size` is `[width, height, depth]` or one number for all three; each shape is centred
+on its `position`.
+
+| shape | `size` | default size | |
+|---|---|---|---|
+| `box` | `[width, height, depth]` | 1 | |
+| `sphere` | diameters (`[2, 1, 2]`: a flattened ball) | 1 | |
+| `cylinder`, `cone` | `[width, height, depth]`, standing on y | 1 | |
+| `torus` | `[outer width, thickness, outer depth]`, lying flat | `[1, 0.25, 1]` | the thickness must be less than the width and depth |
+| `plane` | `[width, -, depth]`, flat and facing up (seen from both sides) | 4 | tilt it with `rotation` |
+| `arrow` | `[thickness, length, thickness]`, pointing up (+y) | `[0.08, 1, 0.08]` | with `to`, its tail is `position` and its tip `to`: a point, or an object's id (it stops at the object's edge) |
+| `label` | its text height, one number | 0.3 | `text` on a plate (the theme's `surface`), always facing the camera; colour default `text` |
+| `group` | none | — | draws nothing; objects with `parent: <its id>` move and turn with it |
+
+**Groups.** An object with `parent: tower` (an object written before it) has its `position` and
+`rotation` in that object's frame: it moves and turns with it (a group's `spin` carries its
+children round). Usually the parent is a `group`, but any object may be one (a label above a box).
+
 **Frames and the cache.** Before the scene plays, its frames are drawn (frame *n* at
 *t = n / fps*) into a lossless clip `build/<quality>[_<variant>]/three_d/<scene id>.mkv`, with the
-scene description beside it (`<scene id>.json`: objects with their ids, camera, lights,
-timeline). A later render reuses the clip while the description, the page, three.js and the
-Playwright version are unchanged; `--force` renders the scene again but still reuses the clip
-(delete the clip to draw it again).
+scene description beside it (`<scene id>.json`: objects with their ids and parents, camera, lights,
+timeline with the camera's path). A later render reuses the clip while the description, the page,
+three.js and the Playwright version are unchanged; `--force` renders the scene again but still
+reuses the clip (delete the clip to draw it again).
 
-[Action targets](#beat-actions): `view` (the 3D picture), `title`.
+[Action targets](#beat-actions): `view` (the 3D picture), `title`. The camera actions name objects
+by their `id`.
 
 | param | type | default | |
 |---|---|---|---|
 | `title` | str | `""` | heading over the 3D picture, on a plate in the theme's `surface` colour |
 | `background` | color | the theme's `background` | colour behind the objects |
-| `camera` | `{position, look_at, fov}` | `{position: [3, 2.5, 5], look_at: [0, 0, 0], fov: 40}` | where the camera stands, the point in the middle of the frame, the field of view in degrees (10–120) across the shorter side |
+| `camera` | `{position, look_at, fov}` | `{position: [3, 2.5, 5], look_at: [0, 0, 0], fov: 40}` | where the camera stands at the start, what it looks at (a point, or an object's id: its centre), the field of view in degrees (10–120) across the shorter side |
 | `light` | `{ambient, sun, sun_from, color}` | `{ambient: 0.5, sun: 2.5, sun_from: [-2, 6, 4], color: "#ffffff"}` | strength of the even light (0–5) and of the sun (0–10), the direction the sun shines from (towards the origin), the colour of both |
-| `objects` | list | `[]` | each `{id, shape, size, color, position, rotation, spin}`: `id` names it (letters, digits, `_`, `-`; unique; not `camera`), `shape` `box`, `size` `[width, height, depth]` (default `[1, 1, 1]`), `color` (default `accent`), `position` of its centre (default `[0, 0, 0]`), `rotation` in degrees, `spin` in degrees per second |
+| `floor` | `true` or `{size, color, y}` | none | a square floor (a `plane` with id `floor`): `size` 12, `color` `surface`, at height `y` 0 |
+| `objects` | list | `[]` | each `{id, shape, size, color, position, rotation, spin, parent, text, to}`: `id` names it (letters, digits, `_`, `-`; unique; not `camera`), `shape` (above; default `box`), `size`, `color` (default `accent`), `position` of its centre, `rotation` in degrees, `spin` in degrees per second, `parent` an object written before it, `text` a label's text, `to` an arrow's tip |
+
+#### 3d camera actions
+
+Beat actions of `3d` scenes. Like every action they fall due at `at` (a fraction of the beat, or
+a word it says: `at: "@tower"`) and last `run_time` seconds — by default until the end of their
+beat; a camera move may run on into the next beats, and the next camera action stops it where it
+is. Each starts from where the camera is then. `easing: smooth` (default; eases in and out) or
+`linear`. `vidgen validate` checks the object ids (with a did-you-mean) and replays the moves in
+order: a dolly past the point looked at, or an orbit from right above its centre, is a problem.
+
+| action | target | options | |
+|---|---|---|---|
+| `camera_orbit` | an object (optional) | `degrees` (90), `up` (0), `around` | circle the object's centre, the point `around`, or the point looked at: `degrees` around the vertical axis (positive: counter-clockwise seen from above, the camera moving to its right), rising by `up` units; it ends looking at the centre |
+| `camera_dolly` | none | `by` (required) | push in towards the point looked at by `by` units (negative: pull back) |
+| `camera_fly_to` | an object (required) | `distance` | fly to the object: it ends looking at its centre from the direction it looked before, close enough that the object fills about 60 % of the frame's shorter side (or `distance` units away) |
+| `camera_look_at` | an object, or none with `point` | `point` | turn (standing still) to look at the object or `[x, y, z]` |
+| `camera_move` | none | `to` (required), `look_at` | move to stand at `to`, ending looking at `look_at` (an object or a point; default: what it looks at now) |
 
 ```yaml
-- id: crate
+- id: town
   type: 3d
   params:
-    title: "A box in 3D"
-    camera: {position: [3, 2.5, 5], look_at: [0, 0, 0], fov: 40}
+    title: "Shapes, groups and a moving camera"
+    floor: {size: 14, color: "#2a3140"}
+    camera: {position: [6, 4, 8], look_at: [0, 1.4, 0], fov: 46}
     objects:
-      - {id: crate, shape: box, size: [1.6, 1.6, 1.6], color: accent, rotation: [0, 20, 0], spin: [0, 30, 0]}
+      - {id: tower, shape: group, spin: [0, 15, 0]}          # its children turn with it
+      - {id: base, parent: tower, shape: cylinder, size: [1, 2, 1], position: [0, 1, 0], color: primary}
+      - {id: roof, parent: tower, shape: cone, size: [1.4, 1, 1.4], position: [0, 2.5, 0]}
+      - {id: tag, parent: tower, shape: label, text: "Tower", position: [0, 3.5, 0]}
+      - {id: ball, shape: sphere, size: 0.9, position: [2.4, 0.45, 0.5], color: highlight}
+      - {id: ring, shape: torus, size: [1.3, 0.22, 1.3], position: [-2.2, 0.11, 0.8], color: secondary}
+      - {id: pointer, shape: arrow, position: [3.4, 2.6, 1.4], to: ball, color: text}
   beats:
-    - text: "A 3D scene: a box under one light, seen by a fixed camera."
+    - text: "A small town of shapes: a tower, a ball and a ring."
+    - text: "The camera circles the tower slowly, then flies to the ball."
+      actions:
+        - {camera_orbit: tower, at: "@circles", degrees: 100, run_time: 1.6}
+        - {camera_fly_to: ball, at: "@flies"}           # until the end of the beat
+    - text: "Finally it pulls back to see the whole town again."
+      actions:
+        - {action: camera_move, at: "@pulls", to: [-5, 6, 9], look_at: [0, 1.2, 0]}
 ```
 
 ### `quote`
@@ -13998,7 +14051,7 @@ a title card, a `transform` of a bar).
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `screenshot` | `title`, `image`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
-| `3d` | `view`, `title` | dim, highlight, zoom | `view` is the whole 3D picture (as a `video_clip`'s `clip`); the objects are not targets yet |
+| `3d` | `view`, `title` | dim, highlight, zoom, camera_orbit, camera_fly_to | `view` is the whole 3D picture (as a `video_clip`'s `clip`); the objects are not Manim targets: the [camera actions](#3d-camera-actions) name them by id |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |

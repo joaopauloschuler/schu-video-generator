@@ -131,8 +131,8 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified
     insets, a spotlight; in a browser, window or phone frame; a caption), `video_clip` (B-roll, screen
     recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration),
-    `3d` (simple 3D drawn by three.js in headless Chromium: a box under one light, a fixed camera;
-    the `3d` extra);
+    `3d` (simple 3D drawn by three.js in headless Chromium: shapes, labels and groups under one light,
+    a camera that orbits, pushes in or flies to an object on a word; the `3d` extra);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,

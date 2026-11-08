@@ -25210,3 +25210,70 @@ project), repo work is generic.
   objects are not action targets); a `zoom` on `view` enlarges the decoded pixels (no sharper
   redraw); `vidgen validate` does not check that Playwright is installed (a render stops with the
   hint); the clip is not deleted when a scene is removed.
+
+## Step 299 — 3D scenes: shapes, groups and camera moves (Phase AI)
+
+- **Built** (DESIGN §114.7–114.10): `3d` objects can be `box`, `sphere`, `cylinder`, `cone`,
+  `torus` (lying flat), `plane` (flat, both sides), `arrow` (along +y; with `to` a point or an
+  object id, from its `position` to the object's edge), `label` (text on a `surface` plate, a
+  camera-facing sprite in the bundled Inter Bold, served to the page and loaded with `FontFace`)
+  and `group` (draws nothing); `size` is a vector or one number, with per-shape defaults
+  (`DEFAULT_SIZES`); `color` defaults to `accent` (labels `text`); `floor: true | {size, color, y}`
+  adds a plane with id `floor`. Groups: `parent: <id>` (an object written earlier) puts an
+  object in that object's frame; a parent's `spin` carries its children. `camera.look_at` may name
+  an object. The camera moves with five beat actions (`scenes/scene_3d_actions.py`):
+  `camera_orbit` (target/`around`/the point looked at, `degrees`, `up`), `camera_dolly` (`by`),
+  `camera_fly_to` (target, `distance`; default the object fills 60 % of the fov), `camera_look_at`
+  (target or `point`), `camera_move` (`to`, `look_at`), all with `easing: smooth | linear`, timed
+  by `at` (fraction or `"@word"`) and `run_time` (default: to the end of the beat; may run into
+  later beats; the next camera action stops it). They are non-animating cues: `Scene3D.camera_moves`
+  reads `action_times` before the frames are drawn and `three_d/camera.py` turns the moves into
+  per-frame `position` / `look_at` tracks of `camera` (eased in Python; the page only
+  interpolates). `three_d/world.py` mirrors the page's transforms (XYZ Euler, parents, spin) for
+  object centres, arrows and fly-to framing. `vidgen validate`: object ids with did-you-mean (in
+  params and in the actions), the moves replayed in order (`action_sequence_problems`:
+  `camera_problems`), arrows of zero length and a camera on its look-at object
+  (`validate_project`: `check_3d_scene`), and a **warning** when a project with a `3d` scene has no
+  Playwright or no Chromium folder for its pinned revision (`browser.missing_dependency`,
+  `install_warnings`; no browser started).
+- **Public interface**: `vidgen.api` + `CameraMove`, `camera_problems`, `check_3d_scene`,
+  `Floor3D`; `scene_description(..., camera_moves=)`. Description still version 1 (fields added:
+  `parent`, label `text` / `plate` / `plate_opacity`; groups without `size` / `color`). New actions
+  `camera_orbit`, `camera_dolly`, `camera_fly_to`, `camera_look_at`, `camera_move`.
+- **Decisions / deviations**: groups are a flat list with `parent` (parent first), not nested
+  `children:` — params stay non-recursive (schema, list-scenes, translation walker) and match the
+  description; camera moves are beat actions (reuse word timing, validation locations,
+  shorthand) rather than a `moves:` param; the target of a camera action is an object id, not a
+  Manim target (`scene_targets = False`), so `view` / `title` stay the only targets and `dim:
+  tower` is still an unknown target; camera keys per frame instead of a JS-side orbit
+  interpolation (exact data for guide passes / video-to-video; ~2 vectors per moving frame); a move
+  cut by the next one stops where it is (its easing keeps its own length); labels are sprites
+  sized in scene units (they shrink with distance) and drawn in Inter Bold whatever the theme's
+  font; `floor` typed `Floor3D | bool | None` so the JSON schema accepts `floor: true`. Open
+  questions of Step 298 applied: three.js stays unminified; validate warns only with a `3d` scene.
+- **Files**: new `src/vidgen/three_d/{world,camera}.py`, `src/vidgen/scenes/scene_3d_actions.py`,
+  `tests/test_scene_3d_camera.py`; changed `three_d/{spec,description,browser}.py`,
+  `scenes/{scene_3d,__init__}.py`, `data/three/vidgen3d.js`, `api.py`, `cli.py`
+  (`validate_warnings`), `tests/test_scene_3d.py` (parent key, font served, `sphre`),
+  `tests/test_actions.py` (action list), `docs/CONFIG.md` (`3d` section, shapes table, "3d camera
+  actions", targets row), guide + `AGENTS.md` (chooser row, snippet, five action rows),
+  `examples/gallery/video.yaml` (`crate`: floor, label, ball, arrow, orbit + fly-to),
+  `docs/gallery/{3d.md,README.md,media/3d-*}` (regenerated with `vidgen gallery --types 3d`),
+  `README.md`, DESIGN §2 tree + §114, CHANGELOG, tasklist.
+- **Tests run and passed** (one file at a time, `capped`/`capped3g` + `timeout`):
+  `test_scene_3d_camera` not render (30, 2.3 s) and render (2, 7 s: every shape drawn, a fly-to on a
+  word in a real render), `test_scene_3d` all (22, 16.7 s), `test_actions` (21), `test_actions_coverage`
+  (12) + `-k "register_their_target_names and 3d"` render (1), `test_guide` (91), `test_docs` (79),
+  `test_gallery` (19), `test_api` (10), `test_extensions` (25), `test_json_output` (21),
+  `test_builtin_scenes` not render (176), `test_schema -k examples_validate_against_their_schema`
+  (22, 93 s). Not run: the rest of `test_schema`, `test_mcp`, other render suites.
+- **Stills**: `/home/claude/work/scratch/s299/{still-16x9-orbit.png, still-16x9-fly-to.png,
+  still-9x16-captions.png}` from `/home/claude/work/scratch/s299/demo` (a floor, a tower group
+  with a label, a ball with an arrow pointing at it, a torus, a crate; orbit on "@circles", fly-to
+  on "@flies", move back on "@pulls"; 9:16 with karaoke captions).
+- **Known gaps / next (300)**: objects do not move yet except `spin` (Step 300's `move_to` etc.
+  should add object tracks; `World.position(id, t)` then needs those tracks for fly-to of a moving
+  object — today it uses rest pose + spin); camera actions with the same name as Step 300's object
+  actions must not collide (`look_at` and `turn` are stage actions already); no `fov` zoom move;
+  labels ignore the theme's font; at render a move that cannot be made is a `VidgenError` naming
+  the scene but not the action (validate names it).

@@ -17,21 +17,113 @@ function vec(v) {
   return new THREE.Vector3(v[0], v[1], v[2]);
 }
 
+const SEGMENTS = 48;
+// The font of labels (vidgen's bundled Inter Bold, served with the page): the same text on every machine.
+const LABEL_FONT = 'vidgen-label';
+const LABEL_PX = 96;          // canvas pixels of a label's text height
+const LABEL_PAD = 0.35;       // padding around the text, in text heights
+
+// A mesh's geometry: unit shapes scaled to the object's size in the geometry itself, so the
+// object's own scale stays 1 and its children keep their size.
 function geometry(obj) {
+  const [w, h, d] = obj.size;
+  let g;
   if (obj.shape === 'box') {
-    const [w, h, d] = obj.size;
     return new THREE.BoxGeometry(w, h, d);
+  } else if (obj.shape === 'sphere') {
+    g = new THREE.SphereGeometry(0.5, SEGMENTS, SEGMENTS / 2);
+  } else if (obj.shape === 'cylinder') {
+    g = new THREE.CylinderGeometry(0.5, 0.5, 1, SEGMENTS);
+  } else if (obj.shape === 'cone') {
+    g = new THREE.ConeGeometry(0.5, 1, SEGMENTS);
+  } else if (obj.shape === 'torus') {
+    // outer width w, thickness h, lying flat (the ring in the x-z plane); depth d by scaling
+    const tube = h / 2;
+    g = new THREE.TorusGeometry(w / 2 - tube, tube, SEGMENTS / 2, SEGMENTS * 2);
+    g.rotateX(-Math.PI / 2);
+    g.scale(1, 1, d / w);
+    return g;
+  } else if (obj.shape === 'plane') {
+    g = new THREE.PlaneGeometry(w, d);
+    g.rotateX(-Math.PI / 2);   // facing up
+    return g;
+  } else {
+    throw new Error(`unknown shape '${obj.shape}'`);
   }
-  throw new Error(`unknown shape '${obj.shape}'`);
+  g.scale(w, h, d);
+  return g;
 }
 
+function material(obj) {
+  const side = obj.shape === 'plane' ? THREE.DoubleSide : THREE.FrontSide;
+  return new THREE.MeshLambertMaterial({ color: obj.color, side });
+}
+
+// An arrow along +y, centred: a shaft and a cone head, size [thickness, length, thickness].
+function arrow(obj) {
+  const [t, length] = obj.size;
+  const head = Math.min(3.5 * t, 0.45 * length);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(t / 2, t / 2, length - head, SEGMENTS / 2), material(obj));
+  shaft.position.y = -head / 2;
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(1.25 * t, head, SEGMENTS / 2), material(obj));
+  tip.position.y = length / 2 - head / 2;
+  const group = new THREE.Group();
+  group.add(shaft, tip);
+  return group;
+}
+
+// A label: its text on a rounded plate, always facing the camera, size = the text's height.
+function label(obj) {
+  const font = `bold ${LABEL_PX}px ${LABEL_FONT}`;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = font;
+  const pad = LABEL_PAD * LABEL_PX;
+  canvas.width = Math.ceil(ctx.measureText(obj.text).width + 2 * pad);
+  canvas.height = Math.ceil(LABEL_PX * 1.25 + 2 * pad);
+  ctx.font = font;
+  ctx.globalAlpha = obj.plate_opacity;
+  ctx.fillStyle = obj.plate;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, canvas.width, canvas.height, pad);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = obj.color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(obj.text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+  const height = obj.size[1] * canvas.height / LABEL_PX;
+  sprite.scale.set(height * canvas.width / canvas.height, height, 1);
+  return sprite;
+}
+
+function build(obj) {
+  if (obj.shape === 'group') return new THREE.Group();
+  if (obj.shape === 'arrow') return arrow(obj);
+  if (obj.shape === 'label') return label(obj);
+  return new THREE.Mesh(geometry(obj), material(obj));
+}
+
+// Objects come parents first; a child's position and rotation are in its parent's frame.
 function addObject(obj) {
-  const mesh = new THREE.Mesh(geometry(obj), new THREE.MeshLambertMaterial({ color: obj.color }));
-  mesh.name = obj.id;
-  setVector(mesh, 'position', obj.position);
-  setVector(mesh, 'rotation', obj.rotation);
-  scene.add(mesh);
-  named.set(obj.id, mesh);
+  const node = build(obj);
+  node.name = obj.id;
+  node.userData.id = obj.id;
+  node.traverse((part) => { part.userData.id = obj.id; });
+  setVector(node, 'position', obj.position);
+  setVector(node, 'rotation', obj.rotation);
+  if (obj.parent) {
+    const parent = named.get(obj.parent);
+    if (!parent) throw new Error(`object '${obj.id}': unknown parent '${obj.parent}'`);
+    parent.add(node);
+  } else {
+    scene.add(node);
+  }
+  named.set(obj.id, node);
 }
 
 function addLight(light) {
@@ -113,11 +205,18 @@ function applyDrawMode(mode) {
   if (!DRAW_MODES.includes(mode)) throw new Error(`unknown draw mode '${mode}'`);
 }
 
-function load(desc) {
+async function loadFont() {
+  const face = new FontFace(LABEL_FONT, 'url(inter-bold.ttf)');
+  await face.load();
+  document.fonts.add(face);
+}
+
+async function load(desc) {
   if (desc.version !== DESCRIPTION_VERSION) {
     throw new Error(`scene description version ${desc.version}; this page reads ${DESCRIPTION_VERSION}`);
   }
   description = desc;
+  if (desc.objects.some((o) => o.shape === 'label')) await loadFont();
   const canvas = document.getElementById('stage');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, alpha: false });
   renderer.setPixelRatio(1);

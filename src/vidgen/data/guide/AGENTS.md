@@ -405,7 +405,7 @@ project's own scene types, in its theme).
 | a photo or illustration | `image` | `path`, `generate`, `caption`, `fit`, `ken_burns` |
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute` |
-| simple 3D: objects seen by a camera, turning (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, size, color, position, rotation in degrees, spin in degrees per second), `camera` (position, look_at, fov), `light` (ambient, sun, sun_from, color), `background` |
+| simple 3D: shapes and labels seen by a camera that stands still or moves on words (orbit, push in, fly to an object), groups that turn together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -1644,9 +1644,16 @@ and contrasts are left alone ("photons do not leave tracks" is fine).
   type: 3d
   params:
     title: "A crate in 3D"
+    floor: true
     objects:
-      - {id: crate, shape: box, size: [1.6, 1.6, 1.6], color: accent, rotation: [0, 20, 0], spin: [0, 30, 0]}
-  beats: [{text: "A crate turns slowly in front of the camera."}]
+      - {id: crate, shape: box, size: 1.6, position: [0, 0.8, 0], rotation: [0, 20, 0], spin: [0, 30, 0]}
+      - {id: tag, parent: crate, shape: label, text: "Crate", position: [0, 1.2, 0]}   # turns with it
+  beats:
+    - text: "A crate turns slowly in front of the camera."
+    - text: "The camera circles it, then flies in close."
+      actions:
+        - {camera_orbit: crate, at: "@circles", degrees: 90, run_time: 1.5}
+        - {camera_fly_to: crate, at: "@flies"}
 - id: saying
   type: quote
   params: {text: "Simplicity is prerequisite for reliability.", author: "Edsger W. Dijkstra"}
@@ -1897,6 +1904,11 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `flyby` | on an `orbit` with a `flyby`: the closest approach on a word (`- action: flyby`) | when the narration says the probe swings past |
 | `pause` | on an `orbit`: hold the clock still from a word (`- action: pause`) until a `coast` (or the end of the beat); the panel says "clock paused" | while the narration explains a moment (the launch window) |
 | `coast` | on an `orbit`: run the clock again after a `pause` (`- action: coast`) | when the narration moves on |
+| `camera_orbit` | on a `3d` scene: circle the camera around an object (`- camera_orbit: tower`, `degrees: 90`, `up`) or the point it looks at | one camera move per idea; let it finish before the next |
+| `camera_dolly` | on a `3d` scene: push in towards what the camera looks at (`- action: camera_dolly`, `by: 2`; negative pulls back) | when the narration gets to a detail |
+| `camera_fly_to` | on a `3d` scene: fly to an object so it fills the frame (`- camera_fly_to: ball`) | when the narration names the object |
+| `camera_look_at` | on a `3d` scene: turn the camera to an object (`- camera_look_at: ball`) or a `point` | a small turn reads better than a long flight |
+| `camera_move` | on a `3d` scene: move the camera to `to: [x, y, z]`, looking at `look_at` (an object or a point) | to pull back to the whole scene |
 | `corotate` | on an `orbit` with a three-body `system`: turn the view into the frame rotating with the pair (`- action: corotate`, `run_time: 2`): both primaries and the Lagrange points stand still, trails redraw in that frame | "now let the frame turn with Jupiter" (a Trojan's tadpole appears) |
 | `inertial` | on an `orbit` with a three-body `system`: turn the view back to the fixed stars (`- action: inertial`) | "seen from the stars again" |
 | `antiparticles` | on a `standard_model` chart: turn quark and lepton cells into their antiparticles (`- action: antiparticles` for all, or `antiparticles: "group:leptons"`): the charge reverses, the symbol takes its bar or sign (ū, ν̄ₑ, e⁺), the name changes; `until:` turns them back | "every particle has an antiparticle with the opposite charge" |

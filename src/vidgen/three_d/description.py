@@ -8,13 +8,18 @@ Version 1::
      "camera": {"fov", "position", "look_at", "near", "far"},
      "lights": [{"id": "ambient", "kind": "ambient", "color", "intensity"},
                 {"id": "sun", "kind": "sun", "color", "intensity", "position"}],
-     "objects": [{"id", "shape", "size", "color", "position", "rotation"}],
+     "objects": [{"id", "shape", "parent", "size", "color", "position", "rotation"
+                  (+ "text", "plate" for a label)}],
      "timeline": {"beats": [{"id", "start", "end"}],
                   "tracks": [{"target", "property", "easing", "keys": [{"t", "value"}]}]}}
 
 Times are seconds from the scene's start; frame ``n`` shows ``t = n / fps``. A track sets a
 property (``position``, ``rotation`` in degrees, the camera's ``look_at``) of an object (by id)
-or of ``camera`` from its keys, eased between neighbours and held outside them.
+or of ``camera`` from its keys, eased between neighbours and held outside them. Objects come in
+the order the page builds them: a ``parent`` (an id, or ``null``) before its children, whose
+position and rotation are in its frame. A group has ``shape: group`` and no ``size``/``color``.
+Camera moves (Step 299) are ``position`` and ``look_at`` tracks of ``camera`` with a key per
+frame while it moves.
 """
 
 from __future__ import annotations
@@ -25,7 +30,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from vidgen.theme import Theme
+from vidgen.three_d.camera import CameraMove, camera_tracks, start_pose
 from vidgen.three_d.spec import Object3D, Scene3DParams
+from vidgen.three_d.world import World
 
 DESCRIPTION_VERSION = 1
 #: Ways the page can draw a scene; Step 301 adds the guide passes (depth, outline, mask).
@@ -53,21 +60,46 @@ def hex6(color: str) -> str:
     return "#" + digits[:6].lower()
 
 
-def _vector(v: tuple[float, float, float]) -> list[float]:
+def _vector(v: Any) -> list[float]:
     return [round(float(c), 6) for c in v]
 
 
-def _spin_track(obj: Object3D, duration: float) -> dict[str, Any] | None:
+#: A label's plate: the theme colour behind its text and its opacity (as ``text_plate``'s).
+LABEL_PLATE, LABEL_PLATE_OPACITY = "surface", 0.88
+
+
+def _spin_track(obj_id: str, rotation: tuple[float, float, float], spin: tuple[float, float, float], duration: float) -> dict[str, Any] | None:
     """A linear rotation track over the scene for an object with a ``spin``."""
-    if not any(obj.spin):
+    if not any(spin):
         return None
-    end = [r + s * duration for r, s in zip(obj.rotation, obj.spin)]
+    end = [r + s * duration for r, s in zip(rotation, spin)]
     return {
-        "target": obj.id,
+        "target": obj_id,
         "property": "rotation",
         "easing": "linear",
-        "keys": [{"t": 0.0, "value": _vector(obj.rotation)}, {"t": round(duration, 6), "value": _vector(tuple(end))}],
+        "keys": [{"t": 0.0, "value": _vector(rotation)}, {"t": round(duration, 6), "value": _vector(tuple(end))}],
     }
+
+
+def _objects(params: Scene3DParams, world: World, theme: Theme) -> list[dict[str, Any]]:
+    """The description's objects: the floor, then ``params.objects`` as the world places them."""
+    sources: dict[str, Object3D] = {o.id: o for o in params.objects}
+    out = []
+    for placed in world.objects.values():
+        entry: dict[str, Any] = {"id": placed.id, "shape": placed.shape, "parent": placed.parent}
+        if placed.shape != "group":
+            obj = sources.get(placed.id)
+            token = obj.color_token() if obj is not None else params.floor.color  # type: ignore[union-attr]
+            entry["size"] = _vector(placed.size)
+            entry["color"] = hex6(theme.color(token))
+        entry["position"] = _vector(placed.position)
+        entry["rotation"] = _vector(placed.rotation)
+        if placed.shape == "label":
+            entry["text"] = sources[placed.id].text
+            entry["plate"] = hex6(theme.color(LABEL_PLATE))
+            entry["plate_opacity"] = LABEL_PLATE_OPACITY
+        out.append(entry)
+    return out
 
 
 def scene_description(
@@ -79,10 +111,12 @@ def scene_description(
     fps: int,
     frames: int,
     beats: list[BeatSpan],
+    camera_moves: list[CameraMove] | None = None,
     draw_mode: str = "normal",
 ) -> dict[str, Any]:
     """The description of a ``3d`` scene with validated ``params`` (colours resolved with
-    ``theme``) for ``frames`` frames of ``width`` x ``height`` at ``fps``."""
+    ``theme``) for ``frames`` frames of ``width`` x ``height`` at ``fps``, the camera moved by
+    ``camera_moves``. ``ValueError`` for an arrow or a camera move that cannot be made."""
     if draw_mode not in DRAW_MODES:
         raise ValueError(f"unknown draw mode {draw_mode!r}")
     duration = frames / fps
@@ -90,7 +124,10 @@ def scene_description(
     norm = sum(c * c for c in light.sun_from) ** 0.5
     sun_position = tuple(c / norm * SUN_DISTANCE for c in light.sun_from)
     light_color = hex6(theme.color(light.color))
-    tracks = [t for t in (_spin_track(o, duration) for o in params.objects) if t is not None]
+    world = World(params)
+    camera = start_pose(params, world)
+    spins = (_spin_track(p.id, p.rotation, p.spin, duration) for p in world.objects.values())
+    tracks = [t for t in spins if t is not None] + camera_tracks(params, world, camera_moves or [], fps, frames)
     return {
         "version": DESCRIPTION_VERSION,
         "width": int(width),
@@ -102,8 +139,8 @@ def scene_description(
         "background": hex6(theme.color(params.background) if params.background else theme.background),
         "camera": {
             "fov": float(params.camera.fov),
-            "position": _vector(params.camera.position),
-            "look_at": _vector(params.camera.look_at),
+            "position": _vector(camera.position),
+            "look_at": _vector(camera.look_at),
             "near": CAMERA_NEAR,
             "far": CAMERA_FAR,
         },
@@ -111,17 +148,7 @@ def scene_description(
             {"id": "ambient", "kind": "ambient", "color": light_color, "intensity": float(light.ambient)},
             {"id": "sun", "kind": "sun", "color": light_color, "intensity": float(light.sun), "position": _vector(sun_position)},
         ],
-        "objects": [
-            {
-                "id": o.id,
-                "shape": o.shape,
-                "size": _vector(o.size),
-                "color": hex6(theme.color(o.color)),
-                "position": _vector(o.position),
-                "rotation": _vector(o.rotation),
-            }
-            for o in params.objects
-        ],
+        "objects": _objects(params, world, theme),
         "timeline": {
             "beats": [{"id": b.id, "start": round(b.start, 6), "end": round(b.end, 6)} for b in beats],
             "tracks": tracks,

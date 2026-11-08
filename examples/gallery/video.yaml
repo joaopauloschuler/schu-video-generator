@@ -19,7 +19,7 @@
 #   vidgen storyboard examples/gallery --scene morph --per-beat 3   # code morphing from a loop to a comprehension, on a word
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
-#   vidgen storyboard examples/gallery --scene crate               # a 3D box (needs the 3d extra and Chromium)
+#   vidgen storyboard examples/gallery --scene crate               # 3D shapes and a camera move (needs the 3d extra and Chromium)
 #   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
 #   vidgen list-music examples/gallery --render-dir build/music  # the music beds (this video: calm, ducked) as WAVs
 #   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour,
@@ -528,12 +528,20 @@ scenes:
   - id: crate
     type: 3d              # three.js in headless Chromium (pip install "schu-video-generator[3d]")
     params:
-      title: "A box in 3D"
-      camera: {position: [3, 2.5, 5], look_at: [0, 0, 0], fov: 40}   # fov: across the shorter side
+      title: "Shapes in 3D"
+      floor: true                                                    # a plane with id floor
+      camera: {position: [4, 3, 6], look_at: [0, 0.8, 0], fov: 40}   # fov: across the shorter side
       objects:
-        - {id: crate, shape: box, size: [1.6, 1.6, 1.6], color: accent, rotation: [0, 20, 0], spin: [0, 30, 0]}
+        - {id: crate, shape: box, size: 1.4, position: [-0.6, 0.7, 0], color: accent, rotation: [0, 20, 0], spin: [0, 30, 0]}
+        - {id: tag, parent: crate, shape: label, text: "Crate", position: [0, 1.1, 0]}   # turns with the crate
+        - {id: ball, shape: sphere, size: 0.8, position: [1.4, 0.4, 0.6], color: highlight}
+        - {id: pointer, shape: arrow, position: [2.4, 2.2, 1], to: ball, color: text}
     beats:
-      - text: "A 3D scene: a box under one light, seen by a fixed camera."
+      - text: "A 3D scene: a crate and a ball under one light."
+      - text: "The camera circles the crate, then flies to the ball."
+        actions:
+          - {camera_orbit: crate, at: "@circles", degrees: 80, run_time: 1.5}
+          - {camera_fly_to: ball, at: "@flies"}
 
   - id: derive
     type: equation_derivation   # steps morph into each other; earlier ones stay above, dimmed, aligned at "="

@@ -261,9 +261,11 @@ src/vidgen/
                           # contact sheets), takes.py (takes, picks), compose.py (placements, credit line),
                           # workflow.py (`generate run | status`; §113.4)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
-  three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, objects), description.py
-                          # (the scene description JSON, its cache key), browser.py (Playwright + Chromium: the
-                          # page, frames, the lossless clip), clip.py (`make_3d_clip`: drawn or reused)
+  three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
+                          # (object transforms, groups, centres), camera.py (camera moves -> tracks),
+                          # description.py (the scene description JSON, its cache key), browser.py (Playwright +
+                          # Chromium: the page, frames, the lossless clip; the validate warning), clip.py
+                          # (`make_3d_clip`: drawn or reused)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14),
@@ -22017,7 +22019,7 @@ clip frame *k* (checked by comparing the rendered scene with the clip, `test_sce
 ### 114.2 Params (Step 298)
 
 `Scene3DParams` (`three_d/spec.py`; exported by `vidgen.api` with `Camera3D`, `Light3D`,
-`Object3D`): `title`, `background` (theme colour or hex; default the theme's background),
+`Object3D`; Step 299 extends it, §114.7): `title`, `background` (theme colour or hex; default the theme's background),
 `camera: {position = [3, 2.5, 5], look_at = [0, 0, 0], fov = 40 (10–120)}`, `light: {ambient = 0.5
 (0–5), sun = 2.5 (0–10), sun_from = [-2, 6, 4], color = #ffffff}`, `objects: [{id, shape = box,
 size = [1, 1, 1], color = accent, position = [0, 0, 0], rotation = [0, 0, 0] (degrees, XYZ order),
@@ -22113,3 +22115,106 @@ scene again but reuses an unchanged clip.
   every built-in in `test_builtin_scenes.py` leaves `3d` out, and the per-type target render in
   `test_actions_coverage.py` skips it without Playwright; `test_scene_3d.py` renders it (and
   skips when Chromium is missing).
+
+### 114.7 Shapes, labels and groups (Step 299)
+
+`Object3D.shape` is one of `SHAPES`: `box`, `sphere`, `cylinder`, `cone`, `torus`, `plane`,
+`arrow`, `label`, `group`. `size` is `[w, h, d]` or one number for all three, default per shape
+(`DEFAULT_SIZES`: 1; `plane` 4 and flat, `[w, 0, d]`; `torus` `[1, 0.25, 1]` = outer width,
+thickness, outer depth, lying flat; `arrow` `[0.08, 1, 0.08]` = thickness, length; `label` 0.3 =
+text height; `group` none). `color` defaults to `accent` (a label: `text`). The page builds unit
+geometries scaled **in the geometry** (`geometry.scale`), never `mesh.scale`, so an object's
+children keep their own size.
+
+- **Arrow.** Along +y, centred: a shaft cylinder and a cone head (head length `min(3.5 t, 0.45 L)`,
+  radius `1.25 t`), one `THREE.Group` named by the id (every part carries `userData.id` for
+  Step 301's masks). With `to` (a point, or an object id: the arrow stops at the edge of the
+  object's sphere, `World.focus`), Python works out the centre, the length and the rotation
+  (`euler_xyz` of the turn from +y to the direction, three.js's XYZ decomposition), so the page
+  only ever draws "an arrow along +y"; `to` with a `rotation` is an error.
+- **Label.** `text` drawn on a 2D canvas (Inter Bold, vidgen's bundled font, served to the page as
+  `inter-bold.ttf` and loaded with `FontFace` before the first frame, so labels are the same on
+  every machine) on a rounded plate in the theme's `surface` at 0.88 (as `text_plate`), shown as a
+  `THREE.Sprite`: it always faces the camera, its size is in scene units (it gets smaller with
+  distance) and other objects can hide it. `rotation` does not turn it.
+- **Groups.** `parent: <id>` names an object written **earlier** in `objects` (cycles impossible,
+  and the page builds in list order); the child's `position` / `rotation` are in its parent's frame
+  and the parent's `spin` carries it round. Any object may be a parent; `shape: group` draws
+  nothing. Flat with `parent`, not nested `children:` lists: the params stay non-recursive (the
+  schema, `list-scenes` and the translation walker handle them as before) and map one-to-one onto
+  the description.
+- **Floor.** `floor: true | {size: 12, color: surface, y: 0}`: a `plane` with id `floor`, first
+  in the description (the id is then taken).
+- **References** (`camera.look_at`, `to`, `parent`, the camera actions' targets) are object ids,
+  checked with did-you-mean (`cellworld.did_you_mean`).
+
+`three_d/world.py` (`World(params)`) mirrors the page's transforms in numpy: `matrix(id, t)` =
+parent's matrix · T(position) · R(rotation + spin · t) with R = Rx · Ry · Rz (three.js XYZ);
+`position(id, t)`; `focus(id, t)` the centre and radius of a sphere around an object (a group:
+around all its descendants; a label's width estimated from its text). The camera moves and arrows
+use it; Step 300's actions can.
+
+The description (still version 1; only fields were added) lists objects parents first with
+`parent` (`null` at the top), groups without `size` / `color`, labels with `text`, `plate`,
+`plate_opacity`. The page's `load` is async (it awaits the font when there are labels).
+
+### 114.8 Camera moves (Step 299)
+
+The camera at the start is `params.camera` (`look_at` may be an object id: its centre at t = 0).
+It moves with five **beat actions** (`scenes/scene_3d_actions.py`): `camera_orbit` (around the
+vertical axis through an object, `around`, or the point looked at; `degrees`, positive =
+counter-clockwise from above, the camera moving to its right; `up`; it ends looking at the
+centre), `camera_dolly` (`by` units towards the point looked at: push-in / pull-back),
+`camera_fly_to` (to an object: it keeps the direction it looks from and stops where the object's
+sphere fills `FILL` = 60 % of the shorter side's fov, or at `distance`), `camera_look_at` (turn to
+an object or `point`), `camera_move` (to `to`, looking at `look_at` or as before). All take
+`easing: smooth | linear`.
+
+**Why beat actions.** They reuse vidgen's beat and word timing unchanged: `at` (a fraction, or
+`"@word"` resolved from the estimate and refined by the beat's audio, §87.2), `run_time`, the
+did-you-mean of unknown actions, `vidgen validate`'s locations (`beats[1].actions[0].target`), and
+the shorthand `- camera_fly_to: ball`. They are non-animating cues (`animates = False`, like the
+orbit scene's `burn`, §98.5): the 3D frames are drawn before the scene plays, so
+`Scene3D.camera_moves` reads `action_times(name, 0.0)` (the due time on the scene's clock in whole
+frames, as the runner counts) and builds `CameraMove(kind, start, end, easing, ...)` s; `cue` does
+nothing. `scene_targets = False`: the target is an object id, checked by `scene_problems` against
+`params.object_ids()`, so `view` / `title` stay the only Manim targets.
+
+**Timing.** A move lasts `run_time` seconds, default until the end of its beat's window; it may
+run on into later beats (a camera move is not undone, unlike a 2D `zoom`). Moves are taken in
+time order, each from the pose the camera has when it starts; a move still running when the next
+starts **stops there** (its easing keeps its own length, so it is not squeezed). Moves are clipped
+to the clip's last frame.
+
+**In the description** (`three_d/camera.py`, `camera_tracks`): two tracks on `camera`,
+`position` and `look_at`, `linear`, with **one key per frame** from each move's first frame to its
+last; the eased path (an orbit is an arc, not a straight line) is computed in Python (`move_path`,
+`ease` = the page's `smooth`), so the page only interpolates and every frame's camera is explicit
+data for guide passes and video-to-video. Without moves there are no camera tracks. Between moves
+the tracks hold. Size: two vectors per moving frame (a 3 s move at 30 fps is about 180 keys).
+
+**Checks.** `Scene3D.action_sequence_problems` replays the moves in beat and `at` order, each run
+to its end (`camera_problems`): a dolly to or past the point looked at, an orbit from right above
+its centre, a camera ending on what it looks at are problems at the action's location.
+`Scene3D.validate_project` builds the world (`check_3d_scene`): an arrow whose tip is its tail, a
+camera standing on the object it looks at. At render, a move that still cannot be made (timing
+cut it differently) is a `VidgenError` naming the scene.
+
+### 114.9 `vidgen validate` and a missing browser (Step 299)
+
+`browser.missing_dependency()` is a cheap check, no browser started: Playwright importable
+(`importlib.util.find_spec`), and the folder of the Chromium build it pins
+(`driver/package/browsers.json`: `chromium-<rev>` or `chromium_headless_shell-<rev>`) in
+Playwright's browsers folder (`PLAYWRIGHT_BROWSERS_PATH`, `0` = inside the package, else
+`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`). It
+returns `INSTALL_HINT`, `BROWSER_HINT` or `None` (also `None` when it cannot tell).
+`install_warnings(project)` turns it into a `vidgen validate` **warning** — only when the project
+has a `3d` scene — so non-3D projects never see it and validation never fails for it.
+
+### 114.10 Public interface and decisions (Step 299)
+
+- `vidgen.api` gains `CameraMove`, `camera_problems`, `check_3d_scene` and `Floor3D`;
+  `scene_description` takes `camera_moves=`.
+- The vendored three.js stays unminified (2.1 MB; the owner's answer to Step 298's question).
+- The labels' font is part of the page digest (the 3D clip cache key).
+

@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–298)
+## Unreleased (Steps 193–299)
+
+### 3D scenes: shapes, groups and camera moves (Step 299)
+
+- `3d` scenes have more shapes: `sphere`, `cylinder`, `cone`, `torus`, `plane`, `arrow` (with `to`: from its position to a point or an object), `label` (text on a plate that always faces the camera, in vidgen's bundled Inter Bold) and `group` (draws nothing); `size` may be one number; a `floor`.
+- Groups: an object with `parent: <id>` moves and turns with that object (a group's `spin` carries its children).
+- The camera moves on beats and words with new beat actions: `camera_orbit`, `camera_dolly` (push in / pull back), `camera_fly_to`, `camera_look_at` and `camera_move`, timed by `at` (a fraction or `"@word"`) and `run_time`, `easing: smooth | linear`; `camera.look_at` may name an object.
+- `vidgen validate` checks object ids (did-you-mean), replays the camera moves (a dolly past its point, an orbit from right above its centre) and warns when a project with a `3d` scene has no Playwright or Chromium (a quick check; no browser started).
+- `vidgen.api` gains `CameraMove`, `camera_problems`, `check_3d_scene` and `Floor3D`; `scene_description` takes `camera_moves`.
 
 ### 3D scenes: the `3d` scene type (Step 298)
 

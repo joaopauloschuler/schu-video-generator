@@ -46,7 +46,8 @@ def project_with(make_project, scenes: list[dict[str, Any]], **overrides: Any) -
 #: unknown-action message and the schema's enum all list them).
 BUILTIN_ACTIONS = [
     "action_potential", "advance", "alarm", "amplify", "analyse", "annotate", "antiparticles", "birds",
-    "blow_away", "boost", "build", "burn", "callout", "cap", "checkpoint", "chi_square", "cleave", "close",
+    "blow_away", "boost", "build", "burn", "callout", "camera_dolly", "camera_fly_to", "camera_look_at",
+    "camera_move", "camera_orbit", "cap", "checkpoint", "chi_square", "cleave", "close",
     "coast", "collapse", "compute", "convert", "corotate", "count", "couplings", "cross_over", "deduce",
     "dematerialise", "diffuse", "dim", "drive_to", "drop_fruit", "drug", "effect", "emote", "endocytosis", "enter",
     "exit", "exocytosis", "explode", "export", "fill", "fit", "flow", "flyby", "focus", "fold", "follow",

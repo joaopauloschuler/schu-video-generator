@@ -13,7 +13,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import json
 import os
+import sys
 from collections.abc import Callable
 from functools import lru_cache
 from importlib import metadata
@@ -25,18 +27,21 @@ import numpy as np
 
 from vidgen import DIST_NAME
 from vidgen.errors import VidgenError
+from vidgen.fonts import FONTS_DIR
 
 #: The vendored three.js build and vidgen's page.
 PAGE_DIR = Path(__file__).resolve().parent.parent / "data" / "three"
 #: Files the page is made of (served to the browser and part of the cache key).
 PAGE_FILES: tuple[str, ...] = ("page.html", "vidgen3d.js", "three.module.js", "three.core.js")
+#: Other files served to the page, by the name it asks for: the labels' font (bundled Inter Bold).
+EXTRA_FILES: dict[str, Path] = {"inter-bold.ttf": FONTS_DIR / "Inter" / "Inter-Bold.ttf"}
 #: The origin the page is served on (``.invalid`` never resolves; requests are answered locally).
 PAGE_ORIGIN = "http://vidgen-3d.invalid/"
 #: Chromium flags: WebGL through ANGLE on SwiftShader (same pixels on every machine).
 CHROMIUM_ARGS: tuple[str, ...] = ("--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist")
 #: How long loading the page may take (milliseconds).
 LOAD_TIMEOUT_MS = 60_000
-_CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8"}
+_CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".ttf": "font/ttf"}
 
 INSTALL_HINT = (
     f'3D scenes need Playwright and its Chromium: pip install "{DIST_NAME}[3d]", then '
@@ -67,11 +72,16 @@ def playwright_version() -> str | None:
 
 @lru_cache(maxsize=1)
 def page_digest() -> str:
-    """Digest of the page files (vidgen's page and the vendored three.js)."""
+    """Digest of the page files (vidgen's page, the vendored three.js, the labels' font)."""
     digest = hashlib.sha256()
-    for name in PAGE_FILES:
-        digest.update(name.encode("utf-8") + b"\0" + hashlib.sha256((PAGE_DIR / name).read_bytes()).digest())
+    for name, path in _served().items():
+        digest.update(name.encode("utf-8") + b"\0" + hashlib.sha256(path.read_bytes()).digest())
     return digest.hexdigest()
+
+
+def _served() -> dict[str, Path]:
+    """Every file the page may ask for, by name."""
+    return {**{name: PAGE_DIR / name for name in PAGE_FILES}, **EXTRA_FILES}
 
 
 def engine_id() -> str:
@@ -83,11 +93,56 @@ def _serve(route: Any) -> None:
     """Answer the page's requests from :data:`PAGE_DIR`; refuse everything else."""
     url = route.request.url
     name = url[len(PAGE_ORIGIN):].split("?", 1)[0] if url.startswith(PAGE_ORIGIN) else ""
-    if name not in PAGE_FILES:
+    path = _served().get(name)
+    if path is None:
         route.abort()
         return
-    path = PAGE_DIR / name
     route.fulfill(status=200, body=path.read_bytes(), headers={"Content-Type": _CONTENT_TYPES[path.suffix]})
+
+
+def _browsers_dir() -> Path:
+    """Where Playwright keeps its browsers (``PLAYWRIGHT_BROWSERS_PATH``, else its default per system)."""
+    env = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if env == "0":
+        import playwright
+
+        return Path(playwright.__file__).resolve().parent / "driver" / "package" / ".local-browsers"
+    if env:
+        return Path(env).expanduser()
+    if sys.platform == "win32":
+        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "ms-playwright"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches" / "ms-playwright"
+    return Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "ms-playwright"
+
+
+def missing_dependency() -> str | None:
+    """Why a ``3d`` scene could not render here (:data:`INSTALL_HINT` or :data:`BROWSER_HINT`),
+    or ``None``; a cheap check (no browser started): Playwright importable, and the folder of
+    the Chromium build it pins present. Unknown (its ``browsers.json`` unreadable): ``None``."""
+    import importlib.util
+
+    spec = importlib.util.find_spec("playwright")
+    if spec is None:
+        return INSTALL_HINT
+    origin = Path(spec.origin).parent if spec.origin else None
+    try:
+        listed = json.loads((origin / "driver" / "package" / "browsers.json").read_text(encoding="utf-8"))["browsers"]  # type: ignore[operator]
+        folders = [f"{b['name'].replace('-', '_')}-{b['revision']}" for b in listed if b["name"] in ("chromium", "chromium-headless-shell")]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if not folders:
+        return None
+    root = _browsers_dir()
+    return None if any((root / f).is_dir() for f in folders) else BROWSER_HINT
+
+
+def install_warnings(project: Any) -> list[str]:
+    """``vidgen validate``'s warning when the project has ``3d`` scenes and
+    :func:`missing_dependency` finds Playwright or its Chromium missing (none otherwise)."""
+    scenes = [s.id for s in project.config.scenes if s.type == "3d"]
+    problem = missing_dependency() if scenes else None
+    return [f"3d scenes ({', '.join(scenes)}) cannot render here: {problem}"] if problem else []
 
 
 def _browser_error(exc: Exception) -> VidgenError:
@@ -196,4 +251,4 @@ def write_clip(description: dict[str, Any], path: Path, progress: Callable[[int,
         partial.unlink(missing_ok=True)
 
 
-__all__ = ["BROWSER_HINT", "INSTALL_HINT", "PageRenderer", "engine_id", "page_digest", "playwright_version", "write_clip"]
+__all__ = ["BROWSER_HINT", "INSTALL_HINT", "PageRenderer", "engine_id", "install_warnings", "missing_dependency", "page_digest", "playwright_version", "write_clip"]

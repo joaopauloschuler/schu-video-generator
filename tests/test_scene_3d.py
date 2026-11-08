@@ -1,6 +1,6 @@
-"""The ``3d`` scene type (Step 298, DESIGN.md §114): params, the scene description, the page's
+"""The ``3d`` scene type (Steps 298–299, DESIGN.md §114): params, the scene description, the page's
 file serving and the missing-dependency errors without a browser; a few tiny renders through
-Playwright's Chromium (skipped when it is missing)."""
+Playwright's Chromium (skipped when it is missing). Shapes, groups and camera moves: test_scene_3d_camera.py."""
 
 from __future__ import annotations
 
@@ -54,6 +54,7 @@ def test_registered_with_its_params() -> None:
 
 def test_unknown_shape_and_key_suggest_the_right_name() -> None:
     assert "did you mean 'box'?" in errors_of(objects=[{"id": "a", "shape": "boxx"}])
+    assert "did you mean 'sphere'?" in errors_of(objects=[{"id": "a", "shape": "sphre"}])
     assert "posiiton" in (text := errors_of(objects=[{"id": "a", "posiiton": [0, 0, 0]}])) and "position" in text
     assert "came" in (text := errors_of(came={"fov": 30})) and "camera" in text
 
@@ -83,7 +84,7 @@ def test_description_holds_objects_camera_lights_and_timeline() -> None:
     assert d["version"] == 1 and d["draw_mode"] == "normal"
     assert (d["width"], d["height"], d["fps"], d["frames"], d["duration"]) == (160, 90, 10, 4, 0.4)
     assert d["background"] == "#102030"
-    assert d["objects"] == [{"id": "crate", "shape": "box", "size": [1.0, 1.0, 1.0], "color": "#aabbcc", "position": [1.0, 0.5, 0.0], "rotation": [0.0, 0.0, 0.0]}]
+    assert d["objects"] == [{"id": "crate", "shape": "box", "parent": None, "size": [1.0, 1.0, 1.0], "color": "#aabbcc", "position": [1.0, 0.5, 0.0], "rotation": [0.0, 0.0, 0.0]}]
     assert [light["id"] for light in d["lights"]] == ["ambient", "sun"]
     sun = d["lights"][1]["position"]
     assert np.linalg.norm(sun) == pytest.approx(20.0, abs=1e-4) and sun[1] > 0
@@ -134,6 +135,7 @@ def test_page_serves_only_its_own_files() -> None:
     for url, kind in [
         (browser.PAGE_ORIGIN + "vidgen3d.js", "fulfill"),
         (browser.PAGE_ORIGIN + "three.module.js?x=1", "fulfill"),
+        (browser.PAGE_ORIGIN + "inter-bold.ttf", "fulfill"),
         (browser.PAGE_ORIGIN + "LICENSE", "abort"),
         (browser.PAGE_ORIGIN + "../spec.py", "abort"),
         ("https://cdn.jsdelivr.net/npm/three/build/three.module.js", "abort"),
