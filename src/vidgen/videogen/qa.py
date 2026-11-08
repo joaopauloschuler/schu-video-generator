@@ -13,6 +13,10 @@ and reports:
   (0-255 levels): over :data:`FLICKER_LIMIT` a warning;
 - **cuts**: a frame-to-frame change far above the clip's usual one (a cut inside the clip, which
   the beat did not ask for) is a warning;
+- **opening**: with a known starting picture, the SSIM of the clip's first frame against it
+  (:func:`picture_similarity`, grey, :data:`OPENING_WIDTH` px wide; the better of the picture cropped
+  to fill and stretched, because a provider may do either when the shapes differ);
+  under :data:`OPENING_WARNING` a warning, a rough guide;
 - **sound**: the clip's own sound is noted, with where it is heard (a shot with ``sound: mix`` never
   uses it; ``sound: model`` keeps it for a ``video_clip`` scene). ``sound: model`` with a silent
   clip is a warning.
@@ -43,6 +47,11 @@ CUT_FACTOR, CUT_MIN = 6.0, 30.0
 BLACK_RUN, FROZEN_RUN = 0.5, 1.0
 #: Width (px) the clip is decoded at for the checks.
 CHECK_WIDTH = 64
+#: SSIM of a clip's first frame against its starting picture under which QA warns. A rough guide:
+#: real clips measured 0.81 and 0.98 with a true first frame, 0.87 and 0.88 with the picture in the guide.
+OPENING_WARNING = 0.7
+#: Width (px) both pictures are compared at, and the SSIM window's side and step (px).
+OPENING_WIDTH, SSIM_WINDOW, SSIM_STEP = 320, 8, 4
 
 Severity = Literal["info", "warning", "error"]
 
@@ -94,9 +103,10 @@ class QAReport:
     def lines(self) -> list[str]:
         """The report as text (a header, then one line per finding)."""
         m = self.metrics
+        opening = f", opening match {m['opening_similarity']:.2f}" if "opening_similarity" in m else ""
         head = (
             f"{self.width}x{self.height}, {self.fps:g} fps, {self.duration:.2f} s; {self.summary()} "
-            f"(flicker {m.get('flicker', 0):.1f}, longest frozen {m.get('frozen_run', 0):.1f} s, black {m.get('black_share', 0) * 100:.0f}%)"
+            f"(flicker {m.get('flicker', 0):.1f}, longest frozen {m.get('frozen_run', 0):.1f} s, black {m.get('black_share', 0) * 100:.0f}%{opening})"
         )
         return [head, *(f"  {c.severity}: {c.message}" for c in self.checks)]
 
@@ -142,9 +152,38 @@ def _runs(mask: np.ndarray) -> int:
     return best
 
 
-def check_clip(path: Path, *, length: float, width: int, height: int, sound: str = "mix") -> QAReport:
+def picture_similarity(first: np.ndarray, second: np.ndarray) -> float:
+    """The SSIM (at most 1) of two grey pictures of one size (0-255), averaged over
+    :data:`SSIM_WINDOW` px squares every :data:`SSIM_STEP` px."""
+    k1, k2 = (0.01 * 255) ** 2, (0.03 * 255) ** 2
+    shape = (SSIM_WINDOW, SSIM_WINDOW)
+    a = np.lib.stride_tricks.sliding_window_view(first.astype(np.float64), shape)[::SSIM_STEP, ::SSIM_STEP].reshape(-1, SSIM_WINDOW**2)
+    b = np.lib.stride_tricks.sliding_window_view(second.astype(np.float64), shape)[::SSIM_STEP, ::SSIM_STEP].reshape(-1, SSIM_WINDOW**2)
+    mean_a, mean_b = a.mean(axis=1), b.mean(axis=1)
+    covariance = ((a - mean_a[:, None]) * (b - mean_b[:, None])).mean(axis=1)
+    ssim = ((2 * mean_a * mean_b + k1) * (2 * covariance + k2)) / ((mean_a**2 + mean_b**2 + k1) * (a.var(axis=1) + b.var(axis=1) + k2))
+    return float(ssim.mean())
+
+
+def opening_similarity(path: Path, picture: Path, rate: float) -> float:
+    """The SSIM of the first frame of the clip ``path`` (decoded at ``rate``) against ``picture``:
+    the better of cropping the picture to the frame's shape and stretching it to it (real clips:
+    a first frame image is cropped, a picture in a guide video reached the clip stretched)."""
+    from PIL import Image, ImageOps
+
+    from vidgen.render.ffmpeg import decode_gray_frames
+
+    frame = decode_gray_frames(path, OPENING_WIDTH, rate, 1.0 / rate + 0.5)[0]
+    with Image.open(picture) as opened:
+        grey = opened.convert("L")
+    size = (frame.shape[1], frame.shape[0])
+    return max(picture_similarity(frame, np.asarray(fitted)) for fitted in (ImageOps.fit(grey, size, Image.LANCZOS), grey.resize(size, Image.LANCZOS)))
+
+
+def check_clip(path: Path, *, length: float, width: int, height: int, sound: str = "mix", opening_picture: Path | None = None) -> QAReport:
     """Check the clip ``path`` meant for a shot of ``length`` seconds in a ``width`` x ``height``
-    video, its ``sound`` setting being ``mix`` or ``model`` (see the module docstring)."""
+    video, its ``sound`` setting being ``mix`` or ``model``, against the shot's starting picture
+    ``opening_picture`` when it has one (see the module docstring)."""
     from vidgen.render.ffmpeg import decode_gray_frames
 
     w, h, fps, duration, audio = probe(path)
@@ -201,6 +240,15 @@ def check_clip(path: Path, *, length: float, width: int, height: int, sound: str
         if cuts and flicker <= FLICKER_LIMIT:
             times = ", ".join(f"{t:.2f} s" for t in cuts[:5])
             checks.append(QACheck("cuts", "warning", f"abrupt change at {times} (a cut inside the clip?)"))
+    if opening_picture is not None:
+        try:
+            match = opening_similarity(path, opening_picture, rate)
+        except (OSError, ValueError, IndexError, VidgenError) as exc:
+            checks.append(QACheck("opening", "info", f"could not compare the first frame with the starting picture {opening_picture.name}: {exc}"))
+        else:
+            report.metrics["opening_similarity"] = match
+            if match < OPENING_WARNING:
+                checks.append(QACheck("opening", "warning", f"the first frame matches the starting picture {match:.2f} (SSIM; warning under {OPENING_WARNING:g}, a rough guide: real clips measured 0.81-0.98)"))
     if sound == "model" and not audio:
         checks.append(QACheck("sound", "warning", "sound: model, but the clip has no sound of its own"))
     elif sound == "model":
@@ -251,4 +299,4 @@ def contact_sheet(path: Path, out: Path, *, title: str = "", report: QAReport | 
     return out
 
 
-__all__ = ["QACheck", "QAReport", "check_clip", "contact_sheet"]
+__all__ = ["OPENING_WARNING", "QACheck", "QAReport", "check_clip", "contact_sheet", "opening_similarity", "picture_similarity"]

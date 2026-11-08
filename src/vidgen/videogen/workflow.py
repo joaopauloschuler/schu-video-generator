@@ -12,6 +12,8 @@ order. Without ``pay`` it is a dry run (nothing sent, paid or written). With ``p
 - each ready shot then goes through :func:`vidgen.videogen.run.generate_clip` (``pay=True``,
   ``duration=shot.priced_seconds``; the ledger keeps the running budget); blocked shots are
   skipped and named;
+- a ``first_frame: last_of:`` shot is skipped as blocked when the take its source shows changed
+  during this run (it was planned against the old picture);
 - every clip returned (paid now, cached, or an earlier job downloaded) becomes a take
   (:func:`vidgen.videogen.takes.add_take`: QA and contact sheet);
 - the first failure stops the run (no automatic retry of a paid job; what was done is kept).
@@ -138,6 +140,13 @@ def run_shots(
             report.shots.append(ShotRun(shot.id, "blocked", model, item.cost, message="; ".join(shot.blocked)))
             out(f"shot {shot.id}: blocked ({'; '.join(shot.blocked)}): skipped")
             continue
+        if pay and shot.last_of is not None:
+            shown = chosen_take(root, shot.last_of)
+            if shown is None or shot.last_of_take is None or shown.number != shot.last_of_take.number:
+                message = f"shot {shot.last_of} now shows another take than this shot was planned against: run `vidgen generate inputs`, look at the take, then plan again"
+                report.shots.append(ShotRun(shot.id, "blocked", model, item.cost, message=message))
+                out(f"shot {shot.id}: blocked ({message}): skipped")
+                continue
         try:
             result = generate_clip(
                 root, settings, request, pay=pay, provider=provider, catalog=catalog, budget_usd=budget_usd, duration=shot.priced_seconds,
@@ -158,7 +167,7 @@ def run_shots(
             run.take, run.new_take = add_take(
                 root, shot.id, result.path, key=result.plan.key, model=model, provider=result.plan.provider,
                 job_id=result.job.id if result.job else None, cost=result.cost, length=shot.length, width=fmt.width, height=fmt.height, sound=shot.sound,
-                warnings=result.warnings,
+                warnings=result.warnings, opening_picture=shot.starting_picture,
             )
             what = "new take" if run.new_take else "already take"
             cost = f", {money(result.cost)}" if result.cost is not None else ""

@@ -2901,7 +2901,7 @@ scenes:
           audio: beat                       # beat | none; default beat for talking shots
           guide: true                       # a silent draft render of the beat as a video reference (true = render);
                                             # on a 3d scene also depth | outline | mask: that guide pass instead
-          first_frame: none                 # sheet | render | none | a picture file; default sheet for talking
+          first_frame: none                 # sheet | render | none | a picture file | last_of:<shot id> (last frame of that shot's take); default sheet for talking
           seed: 7
           resolution: 480p                  # default: the model's lowest
           aspect_ratio: "9:16"              # default: the model's nearest to the format
@@ -2975,7 +2975,10 @@ scenes:
 - **QA** of every take: duration (shorter than the shot: its last frame holds), aspect ratio
   (what `cover` cuts off) and size (scaled up more than 2x), black (error when all black,
   warning from 0.5 s), frozen (error when nothing moves, warning from 1 s), flicker (brightness
-  jumping from frame to frame, warning over 3 levels of 255), abrupt cuts inside the clip, and
+  jumping from frame to frame, warning over 3 levels of 255), abrupt cuts inside the clip,
+  the **opening match** when the shot has a starting picture (a first frame image or the picture in the guide: the SSIM,
+  0 to 1, grey, the better of the picture cropped to fill and stretched, of the clip's first frame against it, `metrics.opening_similarity` in `<n>.json`, shown on the contact sheet;
+  a warning under 0.7, a rough guide: real clips measured 0.81-0.98 with a true first frame, 0.87-0.88 with the picture in the guide), and
   its own sound (noted, with where it can be heard; `sound: model` with a silent clip is a warning). `vidgen generate takes [PROJECT] [--shot ID]` lists them
   with their findings and contact sheets: look at the sheets before picking.
 - **Pick**: `vidgen generate pick [PROJECT] --shot ID --take N | none | auto` (in
@@ -3010,6 +3013,16 @@ scenes:
   built from the actual order of the inputs; other prompts are unchanged. Changing the starting picture or the
   dissolve marks the guide as changed, so it cannot be paid for by mistake (`vidgen generate inputs --guide`
   makes it again).
+- **The last frame of another shot** (`first_frame: last_of:<shot id>`, in either `first_frame_in` mode): `vidgen generate inputs`
+  (no `--guide` needed) cuts the last decoded frame of the take that shot shows (`generate status`: the picked take, else the newest
+  without QA errors) to `build/videogen/<shot>/last_of.<source>.<take>.png` and records it in `inputs.json`. A beat's id
+  means its last part. Problems in the plan: an unknown shot, the shot itself, or shots that wait for each other. A source
+  with no take to show blocks the shot, and a run never pays for a shot and the clip it starts from in one pass (the owner looks at each
+  clip first; a run also skips a shot whose source's shown take changed while it ran). Picking another take of the source makes the
+  shot stale (`vidgen generate plan` says so, `run --pay` refuses): `vidgen generate inputs` cuts the new picture.
+- **Overlay** (`build/videogen/<shot>/overlay.png`, made by `vidgen generate inputs --guide` for a shot with a starting picture and a guide): the picture
+  (cropped to fill) blended half and half over the first frame of the plain guide (past a fade in from black for a render guide), never the combined
+  guide. It checks the fit of the 3D figures before paying. Never sent.
 - **A first frame with references** (`videogen.models.<id>.first_frame_with_references`; default vidgen's
   record: false for `bytedance/seedance-*`, unknown for other models): `false` is a problem in `generate plan` / `run` for a shot sending both
   (a shot already paid for is noted, not blocked), naming `first_frame_in: guide`; `true` overrides vidgen's record. Unknown models are not blocked.
@@ -6091,6 +6104,7 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 | `loop` | bool | `false` | start again when the scene outlasts the clip (else the last frame holds) |
 | `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration (linear; 1 = as recorded, a mono recording at that level on both channels) |
 | `mute` | bool | `false` | leave the clip's sound out |
+| `fade` | bool | `true` | `false`: a hard cut, for generated takes that join with a plain cut: the clip is on screen from the first frame (no fade in, title and caption still enter) and the scene has no 0.5 s fade-out; use with `transition: cut`, the default |
 | `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` ([`screenshot`](#screenshot); kinds `box`, `circle`, `arrow`, `spotlight`) |
 | `frame`, `url` | `none` \| `browser` \| `window` \| `phone`, str | `none`, `""` | a frame drawn around the clip (not with `bleed`); `url` for `browser` |
 | `units` | `fraction` \| `px` | `fraction` | how callout areas are written (of the whole picture) |

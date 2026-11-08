@@ -160,7 +160,7 @@ def timed_beats(project: Project) -> tuple[list[TimedBeat], dict[str, float]]:
     """Every narrated beat of ``project`` timed by its plan (narration audio when there is some,
     else the word-count estimate), and the fade-out (``outro``) of each scene type in seconds."""
     from vidgen import extensions, registry
-    from vidgen.videoplan import VideoPlan
+    from vidgen.videoplan import VideoPlan, scene_outro
 
     config = project.config
     voices = project.voice_names()
@@ -171,6 +171,7 @@ def timed_beats(project: Project) -> tuple[list[TimedBeat], dict[str, float]]:
         for spec in config.scenes:
             entry = registry.find(spec.type)
             outros[spec.type] = float(getattr(entry.cls, "outro", 0.0)) if entry is not None else 0.0
+            outros[spec.id] = scene_outro(spec)   # by scene: a scene's params can change it
         holds = [plan.transition(i + 1).hold / plan.fps if i + 1 < len(slots) else 0.0 for i in range(len(slots))]
     beats: list[TimedBeat] = []
     run = 0
@@ -178,7 +179,7 @@ def timed_beats(project: Project) -> tuple[list[TimedBeat], dict[str, float]]:
         if spec.silent or not spec.beats:
             run += 1
             continue
-        narrated_end = slot.duration - outros[spec.type] - holds[i]
+        narrated_end = slot.duration - outros[spec.id] - holds[i]
         for k, (beat, beat_slot) in enumerate(zip(spec.beats, slot.beats)):
             following = slot.beats[k + 1].start if k + 1 < len(slot.beats) else narrated_end
             beats.append(TimedBeat(
@@ -250,7 +251,7 @@ def cut_seconds(beats: Sequence[TimedBeat], outros: Mapping[str, float], card: f
         if not entries or entries[-1][0] != b.scene:
             entries.append((b.scene, b.scene_index))
     types = {b.scene: b.scene_type for b in beats}
-    return sum(b.seconds for b in beats) + sum(outros.get(types[s], 0.0) for s, _ in entries) + card
+    return sum(b.seconds for b in beats) + sum(outros.get(s, outros.get(types[s], 0.0)) for s, _ in entries) + card
 
 
 def candidate_windows(beats: Sequence[TimedBeat], outros: Mapping[str, float], min_seconds: float, max_seconds: float,

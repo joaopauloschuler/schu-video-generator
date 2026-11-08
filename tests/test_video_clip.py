@@ -22,7 +22,7 @@ from conftest import clip_frame_index, minimal_config, write_clip
 from test_actions import beat_total, beats, render
 from test_builtin_scenes import cls_of
 from test_schema import errors
-from vidgen import api, registry, schema
+from vidgen import api, extensions, registry, schema
 from vidgen.cli import check_project
 from vidgen.clips import ClipMobject, ClipReader, ClipTiming, atempo_chain, clip_audio, fit_speed, probe_clip
 from vidgen.errors import VidgenError
@@ -422,3 +422,32 @@ def test_extending_clip_example_renders(make_project, clip: Path, media: Path) -
     x = round(movie[0].shape[1] * (scene.clip.get_x() / 14.222 + 0.5))
     shown = [grey(movie[n], x=x) for n in (12, 15, 22, 25)]
     assert shown == [2, 5, 2, 5] and scene.clip.playback.reader is None   # a 2 s loop, closed
+
+
+# ----- a hard cut (fade: false) ----------------------------------------------------------------------
+
+
+def test_fade_false_has_no_outro_and_the_plan_agrees(make_project, clip: Path) -> None:
+    from vidgen.videoplan import VideoPlan, scene_outro
+
+    project = load(make_project, clip, [clip_scene(fade=False)])
+    spec = project.config.scenes[0]
+    with extensions.project_session(project):
+        assert scene_outro(spec) == 0.0 and cls_of("video_clip").outro_seconds({}) == 0.5
+        assert VideoPlan(project, 5).scenes[0].duration == pytest.approx(3.2)   # the beat, no fade-out
+
+
+def test_fade_must_be_a_real_boolean() -> None:
+    assert "fade" in cls_of("video_clip").Params.model_fields
+    with pytest.raises(ValueError):
+        cls_of("video_clip").Params(path="a.mp4", fade="no")
+
+
+@pytest.mark.render
+def test_a_hard_cut_shows_the_clip_from_the_first_frame_and_adds_nothing(make_project, clip: Path, media: Path) -> None:
+    project = load(make_project, clip, [clip_scene(region="bleed", fit="cover", mute=True, fade=False)])
+    scene = render(project, "v", media)
+    movie = movie_frames(scene)
+    assert len(movie) == 16   # 3.2 s at 5 fps: no 0.5 s fade-out
+    assert grey(movie[0]) == 0 and movie[0].mean() > 15  # the first frame is the clip's, not a fade in from black
+    assert movie[-1].mean() > 15   # no fade to black at the end

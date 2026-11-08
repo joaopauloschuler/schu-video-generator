@@ -357,7 +357,7 @@ def test_make_inputs_cuts_voice_and_guide(make_project) -> None:
         return SceneRender(scene_clip, {"talk": 0.0, "act": shots[0].length})
 
     written = make_inputs(project, [act], guide=True, out=lambda line: None, render=render)
-    assert [p.name for p in written] == ["audio.mp3", "guide.mp4", "first_frame.png"]
+    assert [p.name for p in written] == ["audio.mp3", "guide.mp4", "first_frame.png", "overlay.png"]
     from vidgen.render.ffmpeg import probe
 
     info = probe(root / "build" / "videogen" / "act" / "guide.mp4")

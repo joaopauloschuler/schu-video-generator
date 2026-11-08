@@ -288,6 +288,7 @@ class NarratedScene(MovingCameraScene):
         # one colour per concept (DESIGN.md §87.3): text built from here on draws the terms
         set_active_terms(scene_terms(self.project.config, spec, theme))
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
+        self.outro = type(self).outro_seconds(spec.params)
         spec = with_auto_actions(spec, type(self).auto_actions(self.project, spec, self.params))
         self.spec = spec  # with the actions automatic directing adds (DESIGN.md §69.23)
         problem = type(self).check_beat_count(len(spec.beats))
@@ -882,8 +883,14 @@ class NarratedScene(MovingCameraScene):
             with self.narrate(i) as d:
                 yield beat, d
 
-    #: Seconds of fade-out added by :meth:`finish` (built-in scenes use 0.5).
+    #: Seconds of fade-out added by :meth:`finish` (built-in scenes use 0.5). A scene whose params
+    #: change it overrides :meth:`outro_seconds`; the instance then holds that scene's value.
     outro: float = 0.0
+
+    @classmethod
+    def outro_seconds(cls, params: Mapping[str, Any]) -> float:
+        """Seconds of fade-out of a scene with these raw ``params`` (default: :attr:`outro`)."""
+        return float(cls.outro)
 
     def timeline(self) -> Iterator[tuple[int, float]]:
         """Like :meth:`narrate_all` but yields ``(index, d)`` and also works for silent scenes.

@@ -22235,6 +22235,18 @@ frame image made the provider download voice and guide ($0.191), the clip opened
   never an address. The mock provider opens no tunnel, so it has none.
 - **Not in this step**: meaningful file names, `first_frame: last_of:`, hard cuts in `video_clip`, an opening-frame QA score, an overlay preview.
 
+### 113.14 One shot after another: last_of, hard cuts, the opening match, the overlay (Step 317)
+
+- **`first_frame: last_of:<shot id>`** (`GeneratedShot.last_of_shot`, a beat's id means its last part). `shots._link_last_of` runs after every shot of
+  the project is known (`project_shots` builds all the shots first; `_fill_shot` then resolves inputs and prompts): an unknown shot, the shot itself and a
+  cycle are problems; a source with no take to show (`takes.chosen_take`, the rule of `generate status`) blocks the shot. The picture is
+  `build/videogen/<shot>/last_of.<source>.<take>.png`, cut by `inputs.last_frame` (`-sseof -0.5 -update 1 -vsync 0`: the last decoded frame; `-sseof -0.08` wrote no file on a real clip) and recorded in `inputs.json`.
+  `freshness._last_of_moved`: the current picture is not cut yet and an earlier one is recorded (another take is shown) makes the shot stale, so
+  `run --pay` refuses; `run_shots` also skips a shot whose source's shown take changed during the run. A no-take source is a blocked reason rather than a problem, so `run --pay` still pays for its source in the same command, and never for both.
+- **Hard cut** (`video_clip` param `fade: false`). `NarratedScene.outro_seconds(params)` is a new overridable classmethod (default `outro`), read by the instance (`self.outro`) and by `videoplan.scene_outro` (also `thumbnail`, `shorts_suggest`), so the planned timeline and the render agree. The picture is added before the first beat, so `entrance("clip")` plays nothing; title and caption still enter.
+- **Opening match** (`qa.opening_similarity`, `picture_similarity`): SSIM of the clip's first frame against `Shot.starting_picture` (a true first frame image or the picture in the guide; not a picture sent as a reference), grey at 320 px wide, 8 px squares every 4 px, the better of the picture cropped to fill and stretched (a clip made from a first frame image was cropped, one from a picture in the guide reached the clip stretched, when the shapes differ: real takes measured 0.98 cropped vs 0.73 stretched and 0.69 cropped vs 0.85 stretched). `metrics.opening_similarity` in the take's `qa` (kept also as `opening_picture`), the head line of `QAReport.lines` (contact sheet), a warning under `OPENING_WARNING` = 0.7 (a rough guide; real clips measured 0.81-0.98 with a true first frame, 0.87-0.88 with the picture in the guide). A picture that cannot be read is an `info` finding.
+- **Overlay** (`inputs.make_overlay`, `OVERLAY_NAME` = `overlay.png`): the starting picture blended 50% over the plain guide's first frame (past a fade in from black for a render guide), written by `generate inputs --guide` for a shot with a starting picture and a guide; never sent, not in `inputs.json`.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

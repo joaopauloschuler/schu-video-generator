@@ -1789,6 +1789,9 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 317 — One shot after another: last_of, hard cuts, the opening match, the overlay
+- [x] `first_frame: last_of:<shot id>` (either `first_frame_in` mode; the shown take's last decoded frame cut to `build/videogen/<shot>/last_of.<source>.<take>.png`, recorded in `inputs.json`; problems for an unknown shot, itself, a cycle; a source with no take blocks, never chained in one run; another pick makes the shot stale); `video_clip` `fade: false` (hard cut: no fade in, no fade-out); QA `opening_similarity` (SSIM, warning under 0.7) in the take's record and contact sheet; `generate inputs --guide` writes `overlay.png` (picture over the plain guide's first frame); cookbook, guide, CONFIG, DESIGN §113.14
+
 ### Step 316 — The starting picture in the guide; a first frame with references blocked; what the provider downloaded
 - [x] `first_frame_in: frame | guide` (shot, model, video), `videogen.first_frame_dissolve`; `generate inputs --guide` makes `guide[.<pass>].opening.mp4` (recorded in `inputs.json`: stale when the picture or dissolve change); a per-model role sentence for guide mode; `generate plan` / `run` block a true first frame with references on `bytedance/seedance-*` (`first_frame_with_references`, user override); after a hosted job a warning when the provider never downloaded a file (run output, take record); cookbook, guide, DESIGN §113.13
 
@@ -2015,6 +2018,7 @@ Quality (what an agent's video looks like)
 - [ ] `vidgen screenplay` on a level: the directions' `at` times are estimated as on a plain stage (a wide level's walks take longer), no `climbs` verb, a level only through a front-matter or `--cast` set (Step 155)
 
 Nice-to-have / performance
+- [ ] Automated testing should be limited to 5 minutes, not more (owner's request, 2026-11-08). Today `tests/test_schema.py` alone hits the 280 s limit of a single test command.
 - [ ] Platform levels that the camera rises over render at about 2.4x real time at 854x480 (sky of the platform example: 47.9 s in 113 s): most of it is Manim's PIL transform of each tile chunk in view on every frame; draw the chunks in view into one picture per frame, or cut chunks by rows (Step 155)
 - [ ] Drafts: beat starts are rounded to whole frames per beat (a draft drifts up to ~0.2 s from the final over a scene); a light change still redraws the whole draft frame; animatics have no crossfade and no `--final` (Steps 137, 138)
 - [ ] `--jobs auto`: a cgroup CPU quota (`cpu.max`) is not read; one per-job figure (1.5 GB) whatever the format (a 4K render needs about 2.5 GB); the Windows and macOS memory readings are tested with mocks only (Step 117)

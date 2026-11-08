@@ -3286,6 +3286,10 @@ GUIDE_CHOICES: tuple[str, ...] = ("render", "depth", "outline", "mask")
 _BOOL_WORDS = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "true", "y", "yes"})
 
 
+#: ``generated_shot.first_frame: last_of:<shot id>``: start from the last frame of that shot's take.
+LAST_OF_PREFIX = "last_of:"
+
+
 class GeneratedShot(_Strict):
     """A beat's ``generated_shot:`` (DESIGN.md §113.3): the beat is shown by a clip a video model
     makes (``vidgen generate plan`` lists it with its inputs and estimated cost). Not the
@@ -3308,7 +3312,7 @@ class GeneratedShot(_Strict):
     guide: bool | GuideChoice = False
     """true or render: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion); depth, outline or mask (the beat's scene must be a 3d scene): that guide pass of the 3D picture instead, same length and size."""
     first_frame: str | None = Field(default=None, min_length=1)
-    """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), none, or a picture file; default sheet for talking shots, none otherwise."""
+    """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), none, a picture file, or last_of:<shot id> (the last frame of the take that shot shows; made by `vidgen generate inputs`); default sheet for talking shots, none otherwise."""
     seed: int | None = Field(default=None, ge=0)
     """Seed sent to models that take one (not guaranteed to repeat a clip)."""
     resolution: str | None = Field(default=None, min_length=1)
@@ -3351,6 +3355,8 @@ class GeneratedShot(_Strict):
             raise ValueError(f"OpenRouter model ids look like author/name (e.g. bytedance/seedance-2.0-fast), not {self.model!r}")
         if self.kind == "talking" and self.audio == "none":
             raise ValueError("a talking shot is lip-synced to the beat's voice: leave audio out (or audio: beat), or make it an action shot")
+        if self.first_frame is not None and self.first_frame.startswith(LAST_OF_PREFIX) and self.last_of_shot is None:
+            raise ValueError(f"first_frame: {LAST_OF_PREFIX} needs a shot id, e.g. {LAST_OF_PREFIX}intro_b1")
         return self
 
     @property
@@ -3362,6 +3368,13 @@ class GeneratedShot(_Strict):
     def first_frame_source(self) -> str:
         """``sheet``, ``render``, ``none`` or a picture file (``first_frame`` or the kind's default)."""
         return self.first_frame or ("sheet" if self.kind == "talking" else "none")
+
+    @property
+    def last_of_shot(self) -> str | None:
+        """The shot named by ``first_frame: last_of:<id>``, else ``None``."""
+        if self.first_frame is None or not self.first_frame.startswith(LAST_OF_PREFIX):
+            return None
+        return self.first_frame.removeprefix(LAST_OF_PREFIX).strip() or None
 
 
 class BeatConfig(_Strict):

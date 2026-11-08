@@ -12,7 +12,11 @@
   when the scene fades in from black); always the normal render, also with a guide pass;
 - ``guide[.<pass>].opening.mp4`` (``first_frame_in: guide``): that guide with the shot's starting
   picture as its first frame, dissolving into it over ``videogen.first_frame_dissolve`` seconds,
-  same length, size and frame rate (DESIGN.md §113.13). This one is sent, not the plain guide.
+  same length, size and frame rate (DESIGN.md §113.13). This one is sent, not the plain guide;
+- ``last_of.<source>.<take>.png`` (``first_frame: last_of:``): the last decoded frame of the take
+  the source shot shows (no ``--guide`` needed);
+- ``overlay.png``: the shot's starting picture blended over the first frame of its plain guide,
+  to check the fit of the 3D figures before paying. Never sent.
 
 Free and local (ffmpeg and vidgen's own renderer); the cuts are made again on every run, the
 draft render is reused while current. ``inputs.json`` beside them records what each file was cut
@@ -106,6 +110,44 @@ def make_opening_guide(ffmpeg: str, picture: Path, guide: Path, dest: Path, diss
     )
 
 
+#: The file that shows the starting picture over the plain guide, in the shot's folder.
+OVERLAY_NAME = "overlay.png"
+#: Seconds before a take's end decoded to find its last frame (a shorter seek can write no file).
+LAST_FRAME_SEEK = 0.5
+
+
+def last_frame(ffmpeg: str, source: Path, dest: Path) -> None:
+    """``dest``: the last decoded frame of the video ``source`` (PNG)."""
+    from vidgen.render.ffmpeg import run_ffmpeg
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.unlink(missing_ok=True)
+    run_ffmpeg(ffmpeg, ["-sseof", f"-{LAST_FRAME_SEEK:g}", "-i", str(source), "-update", "1", "-vsync", "0", str(dest)], f"taking the last frame of {source.name}")
+    if not dest.is_file():
+        raise VidgenError(f"could not take the last frame of {source}: ffmpeg wrote no picture")
+
+
+def make_overlay(ffmpeg: str, picture: Path, guide: Path, dest: Path, *, past_fade: bool) -> None:
+    """``dest``: ``picture`` (cropped to fill) blended half and half over the first frame of the
+    plain ``guide`` (``past_fade``: the first frame past a fade in from black)."""
+    from PIL import Image, ImageOps
+
+    from vidgen.render.ffmpeg import run_ffmpeg
+
+    with tempfile.TemporaryDirectory(prefix="vidgen-overlay-") as scratch:
+        frame = Path(scratch) / "guide.png"
+        if past_fade:
+            first_frame(ffmpeg, guide, frame)
+        else:
+            run_ffmpeg(ffmpeg, ["-i", str(guide), "-frames:v", "1", str(frame)], f"taking the guide's first frame for {dest.parent.name}")
+        with Image.open(frame) as opened:
+            base = opened.convert("RGB")
+    with Image.open(picture) as opened:
+        top = ImageOps.fit(opened.convert("RGB"), base.size, Image.LANCZOS)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    Image.blend(base, top, 0.5).save(dest)
+
+
 #: A frame below this share of the brightest frame's mean grey (in the first
 #: :data:`FADE_SEARCH` seconds) is taken for part of a fade in.
 FADED = 0.7
@@ -189,6 +231,34 @@ def _write_opening_guide(ffmpeg: str, project: Project, shot: Shot, plain: Path,
     out(f"{shot.id}: guide with its starting picture {dest.relative_to(project.root).as_posix()} ({shot.opening_dissolve_seconds:g} s dissolve)")
 
 
+def _write_last_of_picture(ffmpeg: str, project: Project, shot: Shot, written: list[Path], out: Callable[[str], None]) -> None:
+    """Cut and record the picture of a ``first_frame: last_of:`` shot, or say what it waits for."""
+    from vidgen.videogen.freshness import last_of_source, record_input
+
+    if shot.last_of_picture is None or shot.last_of_take is None:
+        out(f"{shot.id}: no starting picture yet (first_frame: last_of:{shot.spec.last_of_shot}; `vidgen generate plan` says why)")
+        return
+    last_frame(ffmpeg, shot.last_of_take.path, shot.last_of_picture)
+    record_input(shot.last_of_picture, last_of_source(shot))
+    written.append(shot.last_of_picture)
+    out(f"{shot.id}: starting picture {shot.last_of_picture.relative_to(project.root).as_posix()} (last frame of shot {shot.last_of}, take {shot.last_of_take.number})")
+
+
+def _write_overlay(ffmpeg: str, project: Project, shot: Shot, plain: Path, written: list[Path], out: Callable[[str], None]) -> None:
+    """Make the picture that shows ``shot``'s starting picture over its plain guide ``plain``
+    (nothing for a shot with no starting picture; a note when the picture does not exist yet)."""
+    picture = shot.starting_picture
+    if picture is None:
+        return
+    if not picture.is_file():
+        out(f"{shot.id}: no overlay yet: the starting picture {picture.name} does not exist")
+        return
+    dest = plain.with_name(OVERLAY_NAME)
+    make_overlay(ffmpeg, picture, plain, dest, past_fade=shot.spec.guide_source == "render")
+    written.append(dest)
+    out(f"{shot.id}: starting picture over the plain guide {dest.relative_to(project.root).as_posix()} (check that the 3D figures fit before paying)")
+
+
 def make_inputs(
     project: Project, shots: Sequence[Shot], *, guide: bool = False, out: Callable[[str], None] = print,
     render: Callable[[Project, str, tuple[str, ...]], SceneRender] | None = None,
@@ -217,6 +287,8 @@ def make_inputs(
             record_input(dest, voice_source(source, shot))
             written.append(dest)
             out(f"{shot.id}: voice {dest.relative_to(project.root).as_posix()} ({shot.length:.2f} s)")
+        if shot.spec.last_of_shot is not None:
+            _write_last_of_picture(ffmpeg, project, shot, written, out)
         kind = shot.spec.guide_source
         wants_frame = shot.spec.first_frame_source == "render"
         if kind is None and not wants_frame:
@@ -241,6 +313,7 @@ def make_inputs(
             written += [clip, frame]
             out(f"{shot.id}: guide {clip.relative_to(project.root).as_posix()} and its first frame ({shot.length:.2f} s, silent)")
             _write_opening_guide(ffmpeg, project, shot, clip, made_from, written, out)
+            _write_overlay(ffmpeg, project, shot, clip, written, out)
             continue
         lossless = scene.passes.get(kind)
         if lossless is None or not lossless.is_file():
@@ -259,7 +332,8 @@ def make_inputs(
             written.append(frame)
             out(f"{shot.id}: first frame {frame.relative_to(project.root).as_posix()} (from the normal render)")
         _write_opening_guide(ffmpeg, project, shot, clip, sources.render(shot, kind, scene.fingerprint), written, out)
+        _write_overlay(ffmpeg, project, shot, clip, written, out)
     return written
 
 
-__all__ = ["SceneRender", "cut_audio", "cut_pass", "cut_video", "first_frame", "make_inputs", "make_opening_guide"]
+__all__ = ["OVERLAY_NAME", "SceneRender", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "make_opening_guide", "make_overlay"]

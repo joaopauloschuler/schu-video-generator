@@ -41,6 +41,11 @@ dry-run plan of ``vidgen generate plan``.
   opening=True)``; no frame image is sent and the prompt starts with a role sentence where the
   model has a template). A shot that would send a true first frame and references to a model
   known to separate the modes is a problem (or a note when already paid for).
+- **The last frame of another shot** (``first_frame: last_of:<shot id>``, DESIGN.md §113.14): the
+  picture is cut from the take that shot shows (:func:`~vidgen.videogen.takes.chosen_take`) into
+  ``build/videogen/<shot>/last_of.<source>.<take>.png``. An unknown shot, the shot itself or a
+  cycle is a problem; a source with no take blocks the shot, so a run never pays for it in the
+  same pass as the clip it starts from.
 - **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
   smaller copies, :mod:`vidgen.videogen.pictures`, made here into ``build/videogen/pictures/``);
   over :data:`~vidgen.videogen.openrouter.MAX_INLINE_BYTES` is a problem.
@@ -65,7 +70,7 @@ from vidgen.videogen.models import (
     TIER_SHORT_SIDE, Catalog, Estimate, RequestCheck, VideoModel, check_request, estimate, guide_opening_template, known_first_frame_with_references, money, snap_duration,
 )
 from vidgen.videogen.sheets import STYLE, Sheet, character_sheet, plan_sheets, style_sheet
-from vidgen.videogen.takes import takes_of
+from vidgen.videogen.takes import Take, chosen_take, takes_of
 
 #: Where the cut inputs of each shot are written, relative to the project (rebuilt any time).
 INPUTS_DIR = Path("build") / "videogen"
@@ -218,9 +223,22 @@ class Shot:
     opening_picture: Path | None = None
     opening_what: str = ""
     opening_dissolve_seconds: float = 0.0
+    #: ``first_frame: last_of:``: the shot it starts from, the take that shot shows (``None``: no
+    #: take yet) and the picture cut from that take (``None``: no take yet).
+    last_of: str | None = None
+    last_of_take: Take | None = None
+    last_of_picture: Path | None = None
     #: A guided shot's prompt under the earlier wording, when it differs from :attr:`prompt` (else
     #: empty): what a clip paid for before the wording changed was asked with.
     earlier_prompt: str = ""
+
+    @property
+    def starting_picture(self) -> Path | None:
+        """The picture the clip should open on: the one in the guide, or the first frame image
+        (``None``: no such picture; a picture sent only as a reference is not one)."""
+        if self.opening_picture is not None:
+            return self.opening_picture
+        return next((i.path for i in self.inputs if i.frame), None)
 
     @property
     def shared(self) -> list[ShotInput]:
@@ -256,6 +274,11 @@ def guide_name(source: str, *, opening: bool = False) -> str:
     (``guide.opening.mp4``, ``guide.<pass>.opening.mp4``, for ``first_frame_in: guide``)."""
     base = "guide" if source == "render" else f"guide.{source}"
     return f"{base}{'.opening' if opening else ''}.mp4"
+
+
+def last_of_name(source: str, take: int) -> str:
+    """The picture cut from take ``take`` of shot ``source`` (in the folder of the shot using it)."""
+    return f"last_of.{source}.{take}.png"
 
 
 def inputs_command(project: Project, guide: bool) -> str:
@@ -505,6 +528,9 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             needs.add(owner)
     elif source == "render":
         first, what = folder / "first_frame.png", "first frame of the beat's render"
+    elif spec.last_of_shot is not None:
+        if shot.last_of_picture is not None and shot.last_of_take is not None:
+            first, what = shot.last_of_picture, f"last frame of shot {shot.last_of}, take {shot.last_of_take.number}"
     elif source != "none":
         first = _picture(project, source, f"{where}.first_frame", shot.problems)
         what = "your picture"
@@ -657,17 +683,78 @@ def project_shots(project: Project, catalog: Catalog | None) -> list[Shot]:
             windows = _windows(project, scene, fps)
             for j, (beat, beat_slot, window) in enumerate(zip(scene.beats, slot.beats, windows)):
                 if beat.generated_shot is not None:
-                    found = _beat_shots(project, scene, beat, f"scenes[{i}].beats[{j}].generated_shot", slot.start + beat_slot.start, window, catalog, sheets)
+                    found = _beat_shots(project, scene, beat, f"scenes[{i}].beats[{j}].generated_shot", slot.start + beat_slot.start, window, catalog)
                     for shot in found:
                         shot.scene_start, shot.scene_end = slot.start, slot.start + slot.duration
                     shots += found
+        _link_last_of(project, shots, parts_known=catalog is not None)
+        for shot in shots:
+            _fill_shot(project, shot, sheets)
     return shots
 
 
+def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool) -> None:
+    """Find the source of every ``first_frame: last_of:`` shot among ``shots``: its problems (an
+    unknown shot, itself, a cycle), or the take to cut from, or why it is blocked. A beat's id
+    means its last part; ``parts_known`` false (no model list): ``<beat>_p<n>`` is taken on trust."""
+    ids = {s.id: s for s in shots}
+    last_part = {s.beat.id: s.id for s in shots}
+    sources: dict[str, str] = {}
+    for shot in shots:
+        name = shot.spec.last_of_shot
+        if name is None:
+            continue
+        source = name if name in ids else last_part.get(name)
+        split = re.fullmatch(r"(.+)_p\d+", name)
+        if source is None and not parts_known and split is not None and split[1] in last_part:
+            source = name
+        where = f"{shot.location}.first_frame"
+        if source is None:
+            shot.problems.append(f"{where}: last_of: no shot {name!r}{did_you_mean(name, list(ids))}; shots: {', '.join(ids) or 'none'}")
+        elif (ids[source].beat.id if source in ids else source.rpartition("_p")[0]) == shot.beat.id:
+            shot.problems.append(f"{where}: last_of:{name}: a shot cannot start from its own last frame")
+        else:
+            sources[shot.id] = source
+    for shot in shots:
+        source = sources.get(shot.id)
+        if source is None:
+            continue
+        chain, at = [shot.id], source
+        while at in sources and at not in chain:
+            chain.append(at)
+            at = sources[at]
+        if at == shot.id:
+            shot.problems.append(f"{shot.location}.first_frame: last_of: these shots wait for each other's last frame: {' -> '.join([*chain, at])}")
+            continue
+        shot.last_of = source
+        take = chosen_take(project.root, source)
+        if take is None:
+            why = "shows no take (none is picked, or every take has QA errors)" if takes_of(project.root, source) else "has no take yet"
+            shot.blocked.append(
+                f"first_frame: last_of:{source}: shot {source} {why}. Make it first (`vidgen generate run --pay --shot {source}`), look at the take, "
+                "then plan this shot again: a run never pays for a shot and the clip it starts from in one pass"
+            )
+            continue
+        shot.last_of_take, shot.last_of_picture = take, project.root / INPUTS_DIR / shot.id / last_of_name(source, take.number)
+        if shot.parts > 1 and shot.part == 1:
+            shot.notes.append(f"this beat is split into {shot.parts} parts: every part starts from the last frame of shot {source}")
+
+
+def _fill_shot(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -> None:
+    """Fill ``shot``'s inputs, its sound checks and its prompt (every shot id is known by now)."""
+    _resolve_inputs(project, shot, sheets)
+    _check_sound(shot)
+    shot.prompt = shot_prompt(project, shot, sheets)
+    if shot.spec.guide_source is not None:
+        earlier = _prompt_text(project, shot, sheets, guided=False)
+        shot.earlier_prompt = earlier if earlier != shot.prompt else ""
+        shot.notes += _left_out_notes(shot, sheets)
+
+
 def _beat_shots(
-    project: Project, scene: SceneConfig, beat: BeatConfig, where: str, start: float, window: float,
-    catalog: Catalog | None, sheets: dict[str, Sheet | None],
+    project: Project, scene: SceneConfig, beat: BeatConfig, where: str, start: float, window: float, catalog: Catalog | None,
 ) -> list[Shot]:
+    """The shot(s) of ``beat``: ids, timing and model only (:func:`_fill_shot` does the rest)."""
     spec = beat.generated_shot
     assert spec is not None
     config = project.config
@@ -704,13 +791,6 @@ def _beat_shots(
             shot.aspect_ratio = spec.aspect_ratio or pick_aspect(config, model)
             if parts > 1 and k == 0:
                 shot.notes.append(f"the beat ({window:.2f} s) is longer than {model.id}'s longest clip ({max(model.durations or [0])} s): split into {parts} parts")
-        _resolve_inputs(project, shot, sheets)
-        _check_sound(shot)
-        shot.prompt = shot_prompt(project, shot, sheets)
-        if spec.guide_source is not None:
-            earlier = _prompt_text(project, shot, sheets, guided=False)
-            shot.earlier_prompt = earlier if earlier != shot.prompt else ""
-            shot.notes += _left_out_notes(shot, sheets)
         shots.append(shot)
     return shots
 
@@ -963,6 +1043,6 @@ def plan_shots(
 
 
 __all__ = [
-    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "pick_aspect", "plan_shots", "project_shots",
+    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "last_of_name", "pick_aspect", "plan_shots", "project_shots",
     "shot_problems", "shot_prompt", "video_ratio", "without_framing",
 ]

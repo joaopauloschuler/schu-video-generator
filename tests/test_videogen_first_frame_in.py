@@ -195,7 +195,7 @@ def test_a_first_frame_render_works_in_guide_mode(make_project) -> None:
     edit(root, lambda data: data["scenes"][0]["beats"][0]["generated_shot"].update(first_frame="render"))
     project = Project.load(root)
     written = make_inputs(project, project_shots(project, CATALOG), guide=True, out=lambda line: None, render=stub_render(root, passes=("depth",)))
-    assert sorted(p.name for p in written) == ["first_frame.png", "guide.depth.mp4", "guide.depth.opening.mp4"]
+    assert sorted(p.name for p in written) == ["first_frame.png", "guide.depth.mp4", "guide.depth.opening.mp4", "overlay.png"]
     assert changed(plan_of(root)) == ""
 
 

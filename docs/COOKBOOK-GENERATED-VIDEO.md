@@ -83,7 +83,10 @@ speaks later than the voice file, up to about 0.9 s in our runs, so keep lines s
   goes into the prompt as a spoken line.
 - A portrait project needs its own `preview: {width: 480, height: 854, fps: 24}`: the default preview
   is landscape at 15 fps.
-- A `video_clip` scene fades in and spends its last 0.5 s fading out, and has no hard-cut option yet.
+- A `video_clip` scene fades in and spends its last 0.5 s fading out. For takes that must join with a
+  plain cut, set `fade: false` on each `video_clip` (with `transition: cut`, the default): the clip is on
+  screen from the first frame and the scene ends with its last narrated frame, so no fade or black
+  gap comes between the takes.
 
 **What it costs.** Measured on `bytedance/seedance-2.0-mini` at 480p: a 5 s clip cost $0.177 without
 a guide and $0.191 with one, and listed prices at 720p are more than double. A 10-minute film is
@@ -104,11 +107,22 @@ change what was downloaded. **Limits per request, from third-party pages, not of
 
 1. Make the starting picture (above) of the first shot.
 2. Fit the 3D figures to it: in the `type: 3d` scene, move the stand-ins until a draft of the scene lines up with
-   the picture, so the guide agrees with what the picture shows.
-3. Make the shot with `guide: depth`, `first_frame: <the picture>` and `first_frame_in: guide`.
-4. Start the next shot from its last frame, by hand for now: take the clip's last frame
-   (for example `ffmpeg -sseof -0.05 -i takes/<shot>/<n>.mp4 -frames:v 1 assets/next_start.png`),
-   use it as the next shot's starting picture and go back to step 2. A later step adds this to vidgen.
+   the picture, so the guide agrees with what the picture shows. `vidgen generate inputs --guide` writes
+   `build/videogen/<shot>/overlay.png`: the starting picture blended half and half over the first frame of the
+   plain guide. Open it and check that the figures sit on what the picture shows; this costs nothing. (With
+   `first_frame_in: guide` the overlay uses the plain guide, not the combined one, whose first frame is the picture.)
+3. Make the shot with `guide: depth`, `first_frame: <the picture>` and `first_frame_in: guide`. Check the take: its
+   QA lines and contact sheet give `opening match` (how close its first frame is to the starting picture, SSIM from 0
+   to 1). Under 0.7 is a warning, a rough guide only: real clips measured 0.81 and 0.98 with a true first frame,
+   0.87 and 0.88 with the picture in the guide.
+4. Start the next shot from that shot's last frame: `first_frame: last_of:<shot id>` on the next shot, in either
+   `first_frame_in` mode. `vidgen generate inputs` cuts the last frame of the take that shot shows (the picked take, or
+   the newest without QA errors, the rule of `vidgen generate status`) into
+   `build/videogen/<next shot>/last_of.<shot>.<take>.png`. Pick the take you want first: picking another take afterwards
+   makes the next shot stale, and it cannot be paid for until you run `vidgen generate inputs` again. Go back to step 2.
+   A shot whose source has no take is blocked, and vidgen never pays for the two in one run, so you can look at each
+   clip before you pay for the next: `vidgen generate run --pay --shot <shot>`, look at the take, `generate pick`, cut, then run
+   the next one.
 
 ## 1. When it is worth it
 
@@ -244,8 +258,8 @@ or timing, the narration MP3 or the draft size, `vidgen generate plan` blocks th
 `vidgen generate run --pay` refuses to start while a shot is blocked this way, so a run never pays
 to send an old voice or guide. Cutting again is free (`--guide` renders the draft, which can take a
 while). When the words of a line changed, run `vidgen tts` first: the plan says so. Inputs cut by an
-older vidgen have no record and are blocked the same way. Not a change: picking a take, or editing
-the shot's own `prompt`, `model` or `seed`. Making new sheet pictures or adding files under
+older vidgen have no record and are blocked the same way. Not a change: picking a take (except for a
+shot that starts from it with `first_frame: last_of:`), or editing the shot's own `prompt`, `model` or `seed`. Making new sheet pictures or adding files under
 `assets/` does count for guides, because a render depends on `assets/`. A shot whose clip was
 already paid for is reused free with a note, even after an edit; a new cut is a new request, paid
 again.
