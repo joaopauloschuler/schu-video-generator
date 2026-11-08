@@ -5,7 +5,16 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–299)
+## Unreleased (Steps 193–300)
+
+### 3D scenes: object actions and character stand-ins (Step 300)
+
+- Objects of a `3d` scene change on beats and words with ten new beat actions: `object_move` (to / by), `object_path` (a smooth curve through points, `turn` to face along it), `object_rotate`, `object_spin` (turns about an axis), `object_scale`, `object_show` / `object_hide` (fade or grow; objects may start with `visible: false`), `object_highlight` (a glow in the theme's highlight colour), `object_walk` and `object_face`; timed by `at` and `run_time`, `easing: smooth | linear`; a group's children come along.
+- Character stand-ins: `shape: standin`, a capsule with a nose showing where it faces and its `name` above its head; `object_walk` turns it and walks it to a point or up to an object (bobbing with its steps), `object_face` turns it to face an object or a point.
+- The camera follows a moving object: `camera_fly_to` keeps its distance to it, `camera_look_at` and `camera.look_at` keep looking at it; an arrow with `to: <object>` follows it too. Every frame's pose is worked out by vidgen and written into the scene description.
+- Labels may keep their size on screen (`screen_size: true`).
+- `vidgen lint`: `three_d_off_frame` and `three_d_hidden` warn when an object the beat is about (its actions name it, or a stand-in says the line, `voice:`) is mostly outside the frame or hidden behind a nearer object.
+- `vidgen.api` gains `ObjectChange`, `plan_world`, `framing_3d` and `hex6`; `scene_description` takes `object_changes`.
 
 ### 3D scenes: shapes, groups and camera moves (Step 299)
 

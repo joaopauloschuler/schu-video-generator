@@ -262,7 +262,9 @@ src/vidgen/
                           # workflow.py (`generate run | status`; §113.4)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
-                          # (object transforms, groups, centres), camera.py (camera moves -> tracks),
+                          # (object transforms, groups, centres), motion.py (object actions -> per-frame
+                          # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
+                          # moves -> tracks, following objects),
                           # description.py (the scene description JSON, its cache key), browser.py (Playwright +
                           # Chromium: the page, frames, the lossless clip; the validate warning), clip.py
                           # (`make_3d_clip`: drawn or reused)
@@ -22051,7 +22053,8 @@ data (moves are tracks on `camera`), times are seconds on the scene's clock with
 included (Step 299–300 time moves to beats and words), and a **track** sets one property of one
 target from keys, eased between neighbours (`linear`, `smooth`) and held outside them. Step 298
 uses one kind: `spin` becomes a linear `rotation` track from 0 to the clip's end. Properties:
-`position`, `rotation` (degrees), and the camera's `look_at`.
+`position`, `rotation` (degrees), and the camera's `look_at`; Step 300 adds `scale`, `opacity`
+([v]), `emissive` ([r, g, b]) and an arrow's `length` ([L]) (§114.11).
 
 **Draw mode (hook for Step 301).** `draw_mode` (only `normal`; `DRAW_MODES`) is in the
 description and checked by the page's `applyDrawMode`; depth / outline / mask passes are new
@@ -22218,3 +22221,90 @@ has a `3d` scene — so non-3D projects never see it and validation never fails 
 - The vendored three.js stays unminified (2.1 MB; the owner's answer to Step 298's question).
 - The labels' font is part of the page digest (the 3D clip cache key).
 
+
+### 114.11 Object actions and character stand-ins (Step 300)
+
+**Stand-ins.** `shape: standin` (`size` `[w, h, d]`, taller than wide; default `[0.5, 1.6, 0.5]`;
+centred on `position`, so it stands on a floor at `y = h / 2`): the page builds a capsule, a cone
+"nose" on its front (+z unturned, at 0.28 h above the centre, in the body colour made darker or
+lighter: `nose_color`) and, with `name`, a label sprite (as `label`, text height 0.14 h) above its
+head. `voice` (default its id) is the voice that says its lines (for lint, §114.12). Other new
+object fields: `visible: false` (hidden until `object_show`; description `opacity: 0`), a label's
+`screen_size: true` (`sizeAttenuation` off and the sprite divided by its depth from the camera at
+the start, `screen_depth` in the description: it keeps its size on screen).
+
+**Ten beat actions**, all `object_<kind>` (owner's decision: no collision with the stage's
+`look_at`, `turn`, `walk_to`... or the 2D `highlight`; the same scheme as `camera_`):
+`object_move` (`to` / `by`), `object_path` (`points`, `smooth` = Catmull-Rom through the start and
+the points, else straight; constant speed by arc length; `turn` = yaw along the tangent),
+`object_rotate` (`to` / `by`, Euler degrees), `object_spin` (`turns` about `axis`), `object_scale`
+(`to`: a number or a vector), `object_show` / `object_hide` (`style: fade | grow`),
+`object_highlight` (`color` default theme `highlight`, `strength`), `object_walk` (stand-ins only;
+`to`: `[x, z]` or an object id, stopping `WALK_GAP` from its sphere; `speed`; easing default
+`linear`) and `object_face` (yaw to an object or point, the shorter way). Like the camera actions
+they are non-animating cues (`_ThreeDAction`: target an object id, did-you-mean, `scene_problems`
+for a walk of a box, a glowing label, turning an arrow with `to`...); `Scene3D.object_changes`
+reads `action_times` and builds `ObjectChange`s. Length: `run_time`, else `seconds` (show, hide,
+face: 0.6 s), else to the end of the beat; a walk without `run_time` lasts its turn (0.4 s per
+half turn) plus distance / speed.
+
+**Motion (`three_d/motion.py`).** Every object has five channels with rest values: `position`
+(the param, an arrow's tail), `rotation` (without `spin`), `scale` (1), `appear` = [opacity,
+grow] and `glow` (an sRGB emissive colour). A change becomes one or two **segments** (frames
+first..end, a value per frame); in one channel of one object a segment that starts later cuts the
+earlier one at its first frame (it starts from the value there), except `glow`, where segments
+overlap and the brightest wins. Changes are planned in start order; a change that needs another
+object's place (walk to it, face it) reads it at its own first frame, from the segments planned
+so far — exact, since later changes do not alter earlier frames. A walk is a turn segment
+(rotation, ≤ 25 % of its time) and a position segment that waits for the turn, then moves with a
+bob of 2.5 % of the height, `round(distance / (0.38 h))` steps, ending at rest height.
+
+`World.attach(motion)` (`plan_world`) makes `matrix(id, t)` = parent · T(position) · R(rotation +
+spin · t) · S(scale × grow) at frame `round(t · fps)` (cached; cleared when a segment is added),
+`opacity(id, t)` the product along its parents. `World.follow(id, t)` = the object's sphere at
+rest carried along by its origin's movement (a turning group does not wobble what follows it; an
+object growing in keeps its full size). Arrows with `to` are posed per time from their tail and
+`follow(to)` (a loop of arrows is an error; pointing at its own child is a params error).
+
+**Tracks.** `object_tracks` writes, per object, one key per frame while a channel changes
+(`held_keys`: a frame is kept where the value differs from a neighbour, so held stretches cost
+two keys and a still channel none): `position`, `rotation` (+ spin; a spin alone keeps its 2-key
+track), `scale`, `opacity` [v], `emissive` [r, g, b], and for an arrow following a moving object
+`position`, `rotation`, `length` [L]. The page: `scale` sets `node.scale` (children scale too),
+an arrow's shaft and head are unit meshes stretched by `setLength`, and `applyLooks` sets each
+part's material opacity (× parents'; transparent and no depth write below 1; invisible at 0) and
+emissive (the brightest of itself and its parents). The description stays version 1.
+
+**The camera follows** (owner's decision 3; `three_d/camera.py`). A camera state is two
+`Ref`s, position and look-at, each a point or a point carried by an object since a time.
+`camera.look_at: <id>` follows from the start; during a move every reference is evaluated at the
+frame's time; when a move ends, `camera_fly_to` / an orbit around an object leave the position
+attached to the object (it keeps its distance) and `camera_look_at` / `camera_move` / an orbit
+leave the look-at on it; a move cut by the next one freezes where it was. `camera_poses` gives a
+pose per frame, `camera_tracks` keeps the frames where it changes (Step 299's tracks are
+unchanged for still objects).
+
+### 114.12 Lint: off frame and hidden (Step 300)
+
+`Scene3D.layout_keys` adds `three_d: {objects, spoken}` to every still of the layout dump:
+`framing_3d(description, world, t)` projects each shown object's sphere (`World.focus`, opacity ≥
+0.5) with the camera of the description at `t` (`camera_at`, the page's projection and `fov`
+rule), samples 64 points of the disc and gives the share **off** the frame (1 behind the camera)
+and the share **hidden** by nearer covering objects' discs (shrunk to 85 %; planes, labels,
+arrows, groups and the object's own group never cover). `spoken` (`spoken_objects`) = the ids
+the beat's object and camera actions name + stand-ins whose `voice` (default id) is the beat's
+voice (or the scene's). Rules (`lint/three_d_rule.py`, still scope, mid-beat stills too, skipped
+while a 2D `zoom` cuts the view): `three_d_off_frame` (`max_off` 0.5) and `three_d_hidden`
+(`max_hidden` 0.7), both warnings. Cheap (no pixels, no browser): an estimate — tall stand-ins
+count as their sphere.
+
+### 114.13 Public interface and decisions (Step 300)
+
+- `vidgen.api` gains `ObjectChange`, `plan_world`, `framing_3d`, `hex6`; `scene_description` takes
+  `object_changes=`. New lint rules `three_d_off_frame`, `three_d_hidden` (`LINT_RULES`, last).
+- `object_highlight` is a 3D glow (emissive), not wired into the 2D `dim` / `highlight` machinery
+  (owner's decision 2): the objects stay non-Manim targets.
+- Poses are resolved per frame in Python and stored in the description (owner's decision 3):
+  guide passes and video-to-video get every frame as data; the page only interpolates.
+- `Scene3D.description` plans the world once more for lint (`self._world`) after
+  `scene_description` (cheap next to drawing the frames).

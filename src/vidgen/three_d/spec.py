@@ -1,5 +1,6 @@
-"""The YAML side of a ``3d`` scene (DESIGN.md §114.2, §114.7): the params models for its camera,
-light, floor and objects (shapes, labels, arrows, groups), checked with did-you-mean messages."""
+"""The YAML side of a ``3d`` scene (DESIGN.md §114.2, §114.7, §114.11): the params models for its
+camera, light, floor and objects (shapes, labels, arrows, groups, character stand-ins), checked
+with did-you-mean messages."""
 
 from __future__ import annotations
 
@@ -10,8 +11,9 @@ from vidgen.cellworld.model import did_you_mean
 from vidgen.scene import SceneParams, ThemeColor
 from vidgen.translation import TranslatableStr
 
-#: Shapes an object can have (``group`` draws nothing: its children move with it).
-SHAPES: tuple[str, ...] = ("box", "sphere", "cylinder", "cone", "torus", "plane", "arrow", "label", "group")
+#: Shapes an object can have (``group`` draws nothing: its children move with it; ``standin`` is a
+#: character stand-in: a capsule with a nose showing where it faces, and a name above it).
+SHAPES: tuple[str, ...] = ("box", "sphere", "cylinder", "cone", "torus", "plane", "arrow", "label", "group", "standin")
 #: Names a scene description keeps for itself (a track's target ``camera``).
 RESERVED_IDS: frozenset[str] = frozenset({"camera"})
 #: The id of the scene's ``floor`` (taken when the scene has one).
@@ -33,6 +35,7 @@ DEFAULT_SIZES: dict[str, Vec3] = {
     "arrow": (0.08, 1.0, 0.08),
     "label": (0.0, 0.3, 0.0),
     "group": (0.0, 0.0, 0.0),
+    "standin": (0.5, 1.6, 0.5),
 }
 #: Each shape's colour when ``color`` is not given.
 DEFAULT_COLORS: dict[str, str] = {"label": "text"}
@@ -105,9 +108,9 @@ class Object3D(SceneParams):
     id: str
     """Name of the object (letters, digits, _ and -); actions, groups and guide passes use it."""
     shape: str = "box"
-    """box, sphere, cylinder, cone, torus, plane, arrow, label (text that faces the camera) or group (draws nothing; its children move with it)."""
+    """box, sphere, cylinder, cone, torus, plane, arrow, label (text that faces the camera), group (draws nothing; its children move with it) or standin (a character stand-in: a capsule with a nose showing where it faces, +z unturned)."""
     size: float | Vec3 | None = None
-    """[width, height, depth] in scene units, or one number for all three (a plane: [width, -, depth]; an arrow: [thickness, length, thickness]; a torus: [outer width, thickness, outer depth]; a label: its text height, one number). Default 1 (a plane 4, a torus [1, 0.25, 1], an arrow [0.08, 1, 0.08], a label 0.3)."""
+    """[width, height, depth] in scene units, or one number for all three (a plane: [width, -, depth]; an arrow: [thickness, length, thickness]; a torus: [outer width, thickness, outer depth]; a label: its text height, one number). Default 1 (a plane 4, a torus [1, 0.25, 1], an arrow [0.08, 1, 0.08], a label 0.3, a stand-in [0.5, 1.6, 0.5])."""
     color: ThemeColor | None = None
     """Colour (theme token or #hex); default accent (a label: text)."""
     position: Vec3 = (0.0, 0.0, 0.0)
@@ -121,7 +124,15 @@ class Object3D(SceneParams):
     text: TranslatableStr | None = None
     """A label's text."""
     to: Vec3 | str | None = None
-    """An arrow's tip: [x, y, z] (in its parent's frame), or the id of an object it points at (it stops at its edge)."""
+    """An arrow's tip: [x, y, z] (in its parent's frame), or the id of an object it points at (it stops at its edge and follows it when it moves)."""
+    visible: bool = True
+    """false: hidden at the start (the action object_show brings it in)."""
+    name: TranslatableStr | None = None
+    """A stand-in's name, shown above its head."""
+    voice: str | None = None
+    """The voice (from voices) that speaks a stand-in's lines (default: its id); lint checks that a stand-in is on screen while it speaks."""
+    screen_size: bool = False
+    """A label keeps the size on screen it has at the start, however near or far the camera goes (default: it gets smaller with distance)."""
 
     @field_validator("id")
     @classmethod
@@ -142,6 +153,14 @@ class Object3D(SceneParams):
             raise ValueError("text: only a label has a text (shape: label)")
         if shape == "label" and not (self.text or "").strip():
             raise ValueError("text: a label needs a text")
+        if self.name is not None and shape != "standin":
+            raise ValueError("name: only a stand-in has a name (shape: standin); a label shows text (shape: label, text: ...)")
+        if self.voice is not None and shape != "standin":
+            raise ValueError("voice: only a stand-in speaks (shape: standin)")
+        if self.screen_size and shape != "label":
+            raise ValueError("screen_size: only a label keeps its size on screen (shape: label)")
+        if shape == "standin" and isinstance(self.size, (int, float)):
+            raise ValueError("size: a stand-in's size is [width, height, depth] (e.g. [0.5, 1.6, 0.5])")
         if self.to is not None and shape != "arrow":
             raise ValueError("to: only an arrow points somewhere (shape: arrow)")
         if self.to is not None and any(self.rotation):
@@ -158,6 +177,10 @@ class Object3D(SceneParams):
             raise ValueError(f"size: {list(self.size)} must be positive in every direction")
         if isinstance(self.size, (int, float)) and self.size <= 0:
             raise ValueError(f"size: {self.size:g} must be positive")
+        if shape == "standin":
+            width, height, depth = self.resolved_size()
+            if height <= max(width, depth):
+                raise ValueError(f"size: a stand-in must be taller ({height:g}) than wide and deep")
         if shape == "torus":
             width, thick, depth = self.resolved_size()
             if thick >= min(width, depth):
@@ -202,7 +225,7 @@ class Scene3DParams(SceneParams):
     floor: Floor3D | bool | None = None
     """A square floor the objects stand on: true, or {size, color, y} (an object with id floor)."""
     objects: list[Object3D] = Field(default_factory=list)
-    """The objects: [{id, shape, size, color, position, rotation, spin, parent, text, to}]."""
+    """The objects: [{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}]; object actions (object_move, object_walk...) move them."""
 
     @field_validator("floor")
     @classmethod
@@ -228,9 +251,25 @@ class Scene3DParams(SceneParams):
         for k, obj in enumerate(self.objects):
             if isinstance(obj.to, str) and obj.to not in ids:
                 raise ValueError(f"objects[{k}].to: no object {obj.to!r}{did_you_mean(obj.to, ids)}")
+            if isinstance(obj.to, str) and obj.id in self.ancestors(obj.to):
+                raise ValueError(f"objects[{k}].to: '{obj.to}' moves with the arrow '{obj.id}' (its parent); an arrow cannot point at its own part")
         if isinstance(self.camera.look_at, str) and self.camera.look_at not in ids:
             raise ValueError(f"camera.look_at: no object {self.camera.look_at!r}{did_you_mean(self.camera.look_at, ids)}")
         return self
+
+    def ancestors(self, object_id: str) -> list[str]:
+        """The parents of ``object_id``, nearest first."""
+        parents = {o.id: o.parent for o in self.objects}
+        out: list[str] = []
+        current = parents.get(object_id)
+        while current is not None and current not in out:
+            out.append(current)
+            current = parents.get(current)
+        return out
+
+    def object(self, object_id: str) -> Object3D | None:
+        """The object with ``object_id`` (``None`` for the floor or an unknown id)."""
+        return next((o for o in self.objects if o.id == object_id), None)
 
     def object_ids(self) -> list[str]:
         """The ids of the scene's objects (the floor's first, when it has one)."""

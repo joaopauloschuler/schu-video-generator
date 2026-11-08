@@ -6056,6 +6056,7 @@ on its `position`.
 | `arrow` | `[thickness, length, thickness]`, pointing up (+y) | `[0.08, 1, 0.08]` | with `to`, its tail is `position` and its tip `to`: a point, or an object's id (it stops at the object's edge) |
 | `label` | its text height, one number | 0.3 | `text` on a plate (the theme's `surface`), always facing the camera; colour default `text` |
 | `group` | none | — | draws nothing; objects with `parent: <its id>` move and turn with it |
+| `standin` | `[width, height, depth]` (taller than wide) | `[0.5, 1.6, 0.5]` | a character stand-in: a capsule with a nose on its front (+z unturned; turn it with `rotation: [0, 90, 0]` or `object_face`), its `name` above its head; centred on `position`, so it stands on the floor at `y: 0.8` |
 
 **Groups.** An object with `parent: tower` (an object written before it) has its `position` and
 `rotation` in that object's frame: it moves and turns with it (a group's `spin` carries its
@@ -6068,8 +6069,8 @@ timeline with the camera's path). A later render reuses the clip while the descr
 three.js and the Playwright version are unchanged; `--force` renders the scene again but still
 reuses the clip (delete the clip to draw it again).
 
-[Action targets](#beat-actions): `view` (the 3D picture), `title`. The camera actions name objects
-by their `id`.
+[Action targets](#beat-actions): `view` (the 3D picture), `title`. The camera and object actions
+name objects by their `id`.
 
 | param | type | default | |
 |---|---|---|---|
@@ -6078,7 +6079,64 @@ by their `id`.
 | `camera` | `{position, look_at, fov}` | `{position: [3, 2.5, 5], look_at: [0, 0, 0], fov: 40}` | where the camera stands at the start, what it looks at (a point, or an object's id: its centre), the field of view in degrees (10–120) across the shorter side |
 | `light` | `{ambient, sun, sun_from, color}` | `{ambient: 0.5, sun: 2.5, sun_from: [-2, 6, 4], color: "#ffffff"}` | strength of the even light (0–5) and of the sun (0–10), the direction the sun shines from (towards the origin), the colour of both |
 | `floor` | `true` or `{size, color, y}` | none | a square floor (a `plane` with id `floor`): `size` 12, `color` `surface`, at height `y` 0 |
-| `objects` | list | `[]` | each `{id, shape, size, color, position, rotation, spin, parent, text, to}`: `id` names it (letters, digits, `_`, `-`; unique; not `camera`), `shape` (above; default `box`), `size`, `color` (default `accent`), `position` of its centre, `rotation` in degrees, `spin` in degrees per second, `parent` an object written before it, `text` a label's text, `to` an arrow's tip |
+| `objects` | list | `[]` | each `{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}`: `id` names it (letters, digits, `_`, `-`; unique; not `camera`), `shape` (above; default `box`), `size`, `color` (default `accent`), `position` of its centre, `rotation` in degrees, `spin` in degrees per second, `parent` an object written before it, `text` a label's text, `to` an arrow's tip (an object's id: it follows the object when it moves), `visible: false` hidden until `object_show`, `name` a stand-in's name, `voice` the voice that says a stand-in's lines (default its id; for lint), `screen_size: true` a label keeps the size on screen it has at the start |
+
+#### 3d object actions
+
+Beat actions of `3d` scenes that change one object, named by its `id` (`- object_move: ball`);
+its children (`parent:`) move, turn, scale, appear and glow with it. Timed like the camera actions
+(`at`, `run_time`, `easing: smooth | linear`); without `run_time` a change lasts until the end of
+its beat, except `object_show`, `object_hide`, `object_face` (0.6 s) and `object_walk` (its
+distance at `speed`). Each starts from where the object is then; the next action of the same kind
+of change on the same object (moving: move, path, walk; turning: rotate, spin, face, walk's turn)
+stops one still running. `object_` keeps them apart from the stage's `look_at`, `turn`, `walk_to`
+and the 2D `highlight`. Every frame's pose is worked out in Python and written into the scene
+description, so camera moves and arrows follow a moving object.
+
+| action | target | options | |
+|---|---|---|---|
+| `object_move` | an object | `to` or `by` | move its centre to `to: [x, y, z]` or by `by: [dx, dy, dz]` (in its parent's frame) |
+| `object_path` | an object | `points` (required), `smooth` (true), `turn` (false) | move along a smooth curve (straight lines with `smooth: false`) from where it is through `points`, at an even speed; `turn: true` turns it to face along the path |
+| `object_rotate` | an object | `to` or `by` | turn to `to: [x, y, z]` degrees or by `by` (XYZ, like `rotation`); not an arrow with `to` |
+| `object_spin` | an object | `turns` (1), `axis` (`y`) | spin `turns` full turns about its own `x`, `y` or `z` |
+| `object_scale` | an object | `to` (required) | grow or shrink to `to` times its size (a number, or `[x, y, z]`) |
+| `object_show` | an object | `style` (`fade`) | bring in an object with `visible: false`: fade in, or `grow` from nothing |
+| `object_hide` | an object | `style` (`fade`) | take it away: fade out, or shrink to nothing (`grow`) |
+| `object_highlight` | an object | `color` (`highlight`), `strength` (0.6) | glow in `color` (rising and falling over 0.25 s), until the end of the beat or for `run_time` seconds; not a label |
+| `object_walk` | a stand-in | `to` (required), `speed` (1.4), `easing` (`linear`) | turn towards `to` and walk there: `[x, z]` on the ground (it keeps its height), or an object's id (it stops in front of it); it bobs with its steps |
+| `object_face` | an object | `to` (required) | turn about the vertical, the shorter way, so its front (a stand-in's nose) faces `to`: an object's id, `[x, z]` or `[x, y, z]` |
+
+```yaml
+- id: plaza
+  type: 3d
+  params:
+    floor: true
+    camera: {position: [5, 4.5, 9], look_at: [0, 1, 0], fov: 46}
+    objects:
+      - {id: ana, shape: standin, name: "Ana", color: primary, position: [-3, 0.8, 1], rotation: [0, 90, 0]}
+      - {id: ben, shape: standin, name: "Ben", color: secondary, position: [3, 0.8, -1], rotation: [0, -90, 0]}
+      - {id: crate, shape: box, position: [0, 0.5, -2.5]}
+      - {id: ball, shape: sphere, size: 0.7, position: [1.5, 0.35, 2], color: highlight, visible: false}
+      - {id: pointer, shape: arrow, position: [-1.2, 2.4, 3.2], to: ana, color: text}   # follows Ana
+  beats:
+    - text: "Ana and Ben stand on a small plaza with a crate."
+      actions:
+        - {object_highlight: crate, at: "@crate"}
+    - voice: ana                                    # a voice named ana (voices:): Ana's line
+      text: "I will walk over to the crate and look at Ben."
+      actions:
+        - {object_walk: ana, at: "@walk", to: crate}
+        - {object_face: ana, at: "@Ben", to: ben}
+        - {object_show: ball, at: "@crate", style: grow}
+    - text: "The ball rolls along a path, and the camera follows Ben."
+      actions:
+        - {object_path: ball, at: "@ball", points: [[0, 0.35, 3], [-2.5, 1.2, 2.5]], run_time: 2}
+        - {object_walk: ben, at: "@follows", to: [0.5, 1.5]}
+        - {camera_fly_to: ben, at: "@camera", distance: 5}
+```
+
+`vidgen lint` checks the objects a beat is about (named by its object or camera actions, or a
+stand-in saying the line): `three_d_off_frame` and `three_d_hidden` ([lint](#lint)).
 
 #### 3d camera actions
 
@@ -6096,6 +6154,11 @@ order: a dolly past the point looked at, or an orbit from right above its centre
 | `camera_fly_to` | an object (required) | `distance` | fly to the object: it ends looking at its centre from the direction it looked before, close enough that the object fills about 60 % of the frame's shorter side (or `distance` units away) |
 | `camera_look_at` | an object, or none with `point` | `point` | turn (standing still) to look at the object or `[x, y, z]` |
 | `camera_move` | none | `to` (required), `look_at` | move to stand at `to`, ending looking at `look_at` (an object or a point; default: what it looks at now) |
+
+**Following a moving object.** An object a camera action names (or `camera.look_at`) is followed
+while it moves (object actions below): during the move, and after it — after `camera_fly_to` the
+camera keeps its distance to the object, after `camera_look_at` (or a `camera_orbit` / `camera_move`
+ending on an object) it keeps looking at it — until the next camera action.
 
 ```yaml
 - id: town
@@ -14051,7 +14114,7 @@ a title card, a `transform` of a bar).
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `screenshot` | `title`, `image`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
-| `3d` | `view`, `title` | dim, highlight, zoom, camera_orbit, camera_fly_to | `view` is the whole 3D picture (as a `video_clip`'s `clip`); the objects are not Manim targets: the [camera actions](#3d-camera-actions) name them by id |
+| `3d` | `view`, `title` | dim, highlight, zoom, camera_orbit, camera_fly_to, object_walk, object_highlight | `view` is the whole 3D picture (as a `video_clip`'s `clip`); the objects are not Manim targets: the [camera actions](#3d-camera-actions) and [object actions](#3d-object-actions) name them by id |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
@@ -14974,6 +15037,8 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `overlay_face` | warning | outside a Short, a [`hud`](#hud)'s text or panel plate covering at least `min_cover` (0.15) of a character's face (the HUD places its texts clear of faces by itself; this catches what it could not: a close-up with a face in every corner). Fix: frame the face away from the corners (a shot or zoom), `compact: true`, fewer `lines` |
 | `shorts_length` | error | a Short planned longer than `shorts.max_seconds` (60): reported on the video's last scene. Fix: fewer beats or scenes in the `cut`, a shorter end card |
 | `generated_footage` | info | a scene shows generated video takes (`vidgen generate`): a reminder to disclose AI-generated footage when publishing (YouTube "Altered or synthetic content", TikTok's AI-generated label); the description file already says so |
+| `three_d_off_frame` | warning | in a `3d` scene, an object the beat is about (an object or camera action of the beat names it, or a stand-in whose `voice` says the line) is at least `max_off` (0.5) outside the frame, or behind the camera, at a beat-end or mid-beat still. Fix: `camera_fly_to` / `camera_look_at` it, or move it into view |
+| `three_d_hidden` | warning | in a `3d` scene, an object the beat is about is at least `max_hidden` (0.7) covered by nearer objects (estimated from the objects' spheres; floors, labels, arrows and its own group do not count). Fix: `camera_orbit` round, or move one of them |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -15065,6 +15130,8 @@ lint:
     overlay_face: {min_cover: 0.15}         # a hud's text or plate over a face (share of the face's box); not in a Short
     shorts_length: {}                       # default severity error; in a Short only
     generated_footage: {}                   # default severity info; scenes showing generated takes
+    three_d_off_frame: {max_off: 0.5}       # share of a 3d object (the beat is about) outside the frame
+    three_d_hidden: {max_hidden: 0.7}       # share of it covered by nearer objects
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any

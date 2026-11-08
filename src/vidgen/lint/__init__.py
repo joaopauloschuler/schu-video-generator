@@ -25,7 +25,8 @@ from vidgen.lint import plot_rule as _plot_rule  # noqa: F401, I001 - registers 
 from vidgen.lint import orbit_rule as _orbit_rule  # noqa: F401, I001 - registers the orbital rules (as in LINT_RULES)
 from vidgen.lint import particle_rule as _particle_rule  # noqa: F401, I001 - registers the particle-physics rules (as in LINT_RULES)
 from vidgen.lint import shorts_rule as _shorts_rule  # noqa: F401, I001 - registers the Shorts rules (as in LINT_RULES)
-from vidgen.lint import generated_rule as _generated_rule  # noqa: F401, I001 - registers generated_footage (last, as in LINT_RULES)
+from vidgen.lint import generated_rule as _generated_rule  # noqa: F401, I001 - registers generated_footage (as in LINT_RULES)
+from vidgen.lint import three_d_rule as _three_d_rule  # noqa: F401, I001 - registers the 3d rules (last, as in LINT_RULES)
 from vidgen.lint.findings import Finding
 from vidgen.lint.report import report_lines
 from vidgen.lint.rules import RULES, SEVERITIES, Issue, Rule, SceneContext, StillContext, rule

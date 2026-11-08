@@ -25277,3 +25277,65 @@ project), repo work is generic.
   actions must not collide (`look_at` and `turn` are stage actions already); no `fov` zoom move;
   labels ignore the theme's font; at render a move that cannot be made is a `VidgenError` naming
   the scene but not the action (validate names it).
+
+## Step 300 — 3D scenes: object actions and character stand-ins (Phase AI)
+
+- **Built** (DESIGN §114.11–114.13): ten beat actions on `3d` objects, named `object_<kind>` (the
+  owner's answer: no collision with the stage's `look_at` / `turn` / `walk_to` or the 2D
+  `highlight`; same scheme as `camera_`): `object_move` (to / by), `object_path` (smooth or straight
+  through `points`, `turn` along it), `object_rotate`, `object_spin` (turns about an axis),
+  `object_scale`, `object_show` / `object_hide` (fade or grow; `visible: false` objects),
+  `object_highlight` (emissive glow, theme `highlight`), `object_walk` (stand-ins: turn, walk to
+  `[x, z]` or up to an object, bob) and `object_face` (yaw to an object or a point). Shape
+  `standin` (capsule + nose + `name` tag; `voice` for lint). Label `screen_size: true`. Every
+  frame's pose is planned in Python (`three_d/motion.py`: five channels per object, segments cut
+  by later ones, targets read at a change's start) and written as tracks; `World` reads the motion,
+  so `camera_fly_to` (keeps its distance afterwards), `camera_look_at` / `camera.look_at` (keep
+  looking) and arrows `to: <object>` (position, rotation, `length` tracks) follow moving objects.
+  Page: stand-ins, `scale` / `opacity` / `emissive` / `length` properties, `applyLooks` (opacity
+  and glow through groups). Lint: `three_d_off_frame` and `three_d_hidden` (projected spheres per
+  still, `three_d/framing.py`; only objects the beat is about: named by its actions, or a stand-in
+  saying the line).
+- **Public interface**: `vidgen.api` + `ObjectChange`, `plan_world`, `framing_3d`, `hex6`;
+  `scene_description(..., object_changes=)`; `camera.py` gains `Ref`, `CameraState`, `MovePath`
+  (`path(u, t=None)`, `end_state(t)`), `start_state`, `camera_poses`, `follow`; `World` gains
+  `attach`, `follow`, `arrow_pose`, `opacity`, `within` (was `_within`). Description still version
+  1 (new object fields `opacity`, `nose`, `name*`, `screen_depth`; new track properties). New lint
+  rules + config models `ThreeDOffFrameRule`, `ThreeDHiddenRule` (last in `LINT_RULES`).
+- **Decisions / deviations**: highlight is 3D-native, not the 2D `dim`/`highlight` (owner);
+  per-frame keys with held stretches dropped (`held_keys`) instead of every frame of the clip;
+  followed objects use their rest sphere carried by their origin (`World.follow`) so a spinning
+  group does not shake the camera; `object_walk` only for stand-ins, `[x, z]` keeps the height;
+  targets of walk/face are read at the change's start (exact ordering, no circular dependency);
+  stand-ins are centred on `position` like every shape (stand on a floor at `y: 0.8`); the lint is
+  a sphere estimate (a stand-in in front of a box may count as covering more than it does; the 0.7
+  threshold keeps false alarms down); the world is planned twice per render (description, then
+  for lint) — cheap next to drawing.
+- **Files**: new `src/vidgen/three_d/{motion,framing}.py`, `src/vidgen/lint/three_d_rule.py`,
+  `tests/test_scene_3d_actions.py`; changed `three_d/{spec,world,camera,description}.py`,
+  `scenes/{scene_3d,scene_3d_actions}.py`, `data/three/vidgen3d.js`, `api.py`, `config.py`,
+  `lint/__init__.py`, `tests/test_actions.py` (action list, did-you-mean now also names
+  `object_highlight`), `docs/CONFIG.md` (`standin` row, object fields, "3d object actions", camera
+  following, lint table + defaults, targets row), guide + `AGENTS.md` (chooser row, `meeting`
+  snippet, ten action rows, two lint rows), `README.md`, DESIGN §2 tree + §114.3 + §114.11–13,
+  CHANGELOG, tasklist.
+- **Tests run and passed** (one file at a time, `capped`/`capped3g` + `timeout`):
+  `test_scene_3d_actions` all (25, incl. 2 render: page pixels for stand-in / glow / show / arrow
+  length, and a real `lint_project` finding a speaking stand-in behind a wall and a ball rolled
+  off frame), `test_scene_3d` all (22), `test_scene_3d_camera` all (32), `test_actions` (28),
+  `test_actions_coverage` not render (12) + `-k "register_their_target_names and 3d"` (1),
+  `test_lint` not render (22), `test_guide` (91), `test_docs` (79), `test_api` (10),
+  `test_extensions` (25), `test_json_output` (21), `test_gallery` (19), `test_builtin_scenes` not
+  render (176), `test_schema` all (76, in two runs), `test_mcp` (22). Not run: other render suites.
+- **Stills**: `/home/claude/work/scratch/s300/{still-16x9-highlight.png, still-16x9-walk-show.png,
+  still-9x16-fly-to-follow.png}` from `/home/claude/work/scratch/s300/demo` (two stand-ins, a
+  crate glowing on "@crate", Ana walking to the crate with the arrow following her, a ball growing
+  in and rolling along a path, Ben walking while the camera flies to him and follows; 9:16 with
+  karaoke captions). `vidgen lint` on the demo: clean.
+- **Known gaps / next (301)**: guide passes should colour by `userData.id` (a stand-in's nose and
+  name tag carry its id); the stand-in has no arms or walk cycle beyond the bob; `object_face` turns
+  about the parent's vertical only (tilted parents give odd yaw); `object_highlight` does nothing
+  visible on a label (refused by validate) and glows through every child of a group; lint uses
+  spheres (tall shapes overestimated) and only checks stills (beat ends and mid-beat); no lint for
+  a stand-in walking through another object; the gallery example (`crate`) does not show object
+  actions yet (Step 302's example will).

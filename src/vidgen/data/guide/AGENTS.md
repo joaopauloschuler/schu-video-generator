@@ -405,7 +405,7 @@ project's own scene types, in its theme).
 | a photo or illustration | `image` | `path`, `generate`, `caption`, `fit`, `ken_burns` |
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute` |
-| simple 3D: shapes and labels seen by a camera that stands still or moves on words (orbit, push in, fly to an object), groups that turn together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move |
+| simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -1654,6 +1654,24 @@ and contrasts are left alone ("photons do not leave tracks" is fine).
       actions:
         - {camera_orbit: crate, at: "@circles", degrees: 90, run_time: 1.5}
         - {camera_fly_to: crate, at: "@flies"}
+- id: meeting
+  type: 3d
+  params:
+    floor: true
+    camera: {position: [0, 3, 8], look_at: [0, 0.8, 0]}
+    objects:
+      - {id: ana, shape: standin, name: "Ana", color: primary, position: [-2.5, 0.8, 0], rotation: [0, 90, 0]}
+      - {id: ben, shape: standin, name: "Ben", color: secondary, position: [2.5, 0.8, 0], rotation: [0, -90, 0]}
+      - {id: gift, shape: box, size: 0.4, position: [0, 0.2, 1], visible: false}
+  beats:
+    - text: "Ana walks over to Ben."
+      actions:
+        - {object_walk: ana, at: "@walks", to: ben}
+    - text: "A gift appears between them and glows."
+      actions:
+        - {object_show: gift, at: "@appears", style: grow}
+        - {object_highlight: gift, at: "@glows"}
+        - {object_face: ben, at: "@gift", to: gift}
 - id: saying
   type: quote
   params: {text: "Simplicity is prerequisite for reliability.", author: "Edsger W. Dijkstra"}
@@ -1909,6 +1927,16 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `camera_fly_to` | on a `3d` scene: fly to an object so it fills the frame (`- camera_fly_to: ball`) | when the narration names the object |
 | `camera_look_at` | on a `3d` scene: turn the camera to an object (`- camera_look_at: ball`) or a `point` | a small turn reads better than a long flight |
 | `camera_move` | on a `3d` scene: move the camera to `to: [x, y, z]`, looking at `look_at` (an object or a point) | to pull back to the whole scene |
+| `object_move` | on a `3d` scene: move an object to `to: [x, y, z]` or `by` (`- object_move: ball`); its children come along; the camera and arrows follow it | when the narration says where it goes |
+| `object_path` | on a `3d` scene: move an object along a smooth curve through `points` (`turn: true` faces along it) | a journey with a few stops |
+| `object_rotate` | on a `3d` scene: turn an object to `to: [x, y, z]` degrees or `by` | "it tips over", "the lid opens" |
+| `object_spin` | on a `3d` scene: spin an object `turns` times about `axis` (y) during the beat | a quick spin on a word; `spin:` in params turns it all the time |
+| `object_scale` | on a `3d` scene: grow or shrink an object to `to` times its size | "it doubles in size" |
+| `object_show` | on a `3d` scene: bring in an object written with `visible: false` (fade, or `style: grow`) | on the word that names it |
+| `object_hide` | on a `3d` scene: take an object away (fade, or `style: grow` shrinks it) | when it is done with |
+| `object_highlight` | on a `3d` scene: make an object glow (theme `highlight`) until the end of the beat | when the narration names it (the 2D `highlight` works on `view`/`title` only) |
+| `object_walk` | on a `3d` scene: a stand-in turns and walks to `to` (`[x, z]` or an object's id: it stops in front of it) | "Ana walks over to the crate" |
+| `object_face` | on a `3d` scene: turn an object (a stand-in's nose) to face `to` (an object's id or a point) | before a stand-in talks to another |
 | `corotate` | on an `orbit` with a three-body `system`: turn the view into the frame rotating with the pair (`- action: corotate`, `run_time: 2`): both primaries and the Lagrange points stand still, trails redraw in that frame | "now let the frame turn with Jupiter" (a Trojan's tadpole appears) |
 | `inertial` | on an `orbit` with a three-body `system`: turn the view back to the fixed stars (`- action: inertial`) | "seen from the stars again" |
 | `antiparticles` | on a `standard_model` chart: turn quark and lepton cells into their antiparticles (`- action: antiparticles` for all, or `antiparticles: "group:leptons"`): the charge reverses, the symbol takes its bar or sign (ū, ν̄ₑ, e⁺), the name changes; `until:` turns them back | "every particle has an antiparticle with the opposite charge" |
@@ -3982,6 +4010,8 @@ install; `vidgen validate` warns when it is missing.
 | `overlay_face` | a `hud`'s text or plate over a character's face (outside Shorts) | frame the face away from the corners, `compact: true`, fewer `lines` |
 | `shorts_length` (error) | a Short longer than `shorts.max_seconds` (60) | leave out beats or scenes in `cut:`, a shorter `end_card` |
 | `generated_footage` (info) | the scene shows AI-generated video takes | nothing to fix: when publishing, mark the video as altered or synthetic content where the platform asks |
+| `three_d_off_frame` | in a `3d` scene, an object the beat is about (its actions name it, or a stand-in says the line) is mostly outside the frame | `camera_fly_to` / `camera_look_at` it, or move it into view |
+| `three_d_hidden` | in a `3d` scene, an object the beat is about is mostly hidden behind a nearer one | `camera_orbit` round it, or move one of them |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

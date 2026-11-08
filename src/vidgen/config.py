@@ -1143,6 +1143,8 @@ LINT_RULES: tuple[str, ...] = (
     "overlay_face",
     "shorts_length",
     "generated_footage",
+    "three_d_off_frame",
+    "three_d_hidden",
 )
 RuleName = Literal[
     "off_frame",
@@ -1228,6 +1230,8 @@ RuleName = Literal[
     "overlay_face",
     "shorts_length",
     "generated_footage",
+    "three_d_off_frame",
+    "three_d_hidden",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1803,6 +1807,20 @@ class GeneratedFootageRule(RuleConfig):
     """``generated_footage``: a scene shows generated video takes (DESIGN.md §113.4): disclose AI-generated footage where the platform asks."""
 
 
+class ThreeDOffFrameRule(RuleConfig):
+    """``three_d_off_frame``: in a ``3d`` scene, an object the beat is about (an object or camera action names it, or a stand-in says the line) mostly outside the frame or behind the camera (DESIGN.md §114.12)."""
+
+    max_off: Fraction = 0.5
+    """Share of the object's sphere outside the frame from which it is reported."""
+
+
+class ThreeDHiddenRule(RuleConfig):
+    """``three_d_hidden``: in a ``3d`` scene, an object the beat is about mostly hidden behind nearer objects (DESIGN.md §114.12; estimated from the objects' spheres)."""
+
+    max_hidden: Fraction = 0.7
+    """Share of the object's sphere (the part in the frame) nearer objects cover from which it is reported."""
+
+
 class LintRules(_Strict):
     """Per-rule settings of ``vidgen lint``."""
 
@@ -1972,6 +1990,10 @@ class LintRules(_Strict):
     """A Short (shorts:) longer than its max_seconds (default: error)."""
     generated_footage: GeneratedFootageRule = Field(default_factory=GeneratedFootageRule)
     """A scene showing AI-generated takes: a reminder to disclose it when publishing (default: info)."""
+    three_d_off_frame: ThreeDOffFrameRule = Field(default_factory=ThreeDOffFrameRule)
+    """In a 3d scene, an object the beat is about mostly off the frame (default: warning)."""
+    three_d_hidden: ThreeDHiddenRule = Field(default_factory=ThreeDHiddenRule)
+    """In a 3d scene, an object the beat is about mostly hidden behind nearer objects (default: warning)."""
 
 
 class LintConfig(_Strict):

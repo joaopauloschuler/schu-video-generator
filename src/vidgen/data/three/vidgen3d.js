@@ -1,5 +1,6 @@
 // vidgen's 3D page (DESIGN.md §114): builds a three.js scene from vidgen's scene description
-// (JSON, version 1) and draws the frame at a time vidgen gives. Time comes only from frame(t):
+// (JSON, version 1: shapes, labels, groups, stand-ins; tracks of position, rotation, scale,
+// opacity, emissive glow, arrow length and the camera) and draws the frame at a time vidgen gives. Time comes only from frame(t):
 // no requestAnimationFrame, no clock, no randomness, so the same description gives the same
 // pixels.
 import * as THREE from './three.module.js';
@@ -59,16 +60,44 @@ function material(obj) {
   return new THREE.MeshLambertMaterial({ color: obj.color, side });
 }
 
-// An arrow along +y, centred: a shaft and a cone head, size [thickness, length, thickness].
+// An arrow along +y, centred: a shaft and a cone head, size [thickness, length, thickness]. Both
+// parts are unit-high meshes stretched to their length, so a `length` track can change it.
 function arrow(obj) {
-  const [t, length] = obj.size;
-  const head = Math.min(3.5 * t, 0.45 * length);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(t / 2, t / 2, length - head, SEGMENTS / 2), material(obj));
-  shaft.position.y = -head / 2;
-  const tip = new THREE.Mesh(new THREE.ConeGeometry(1.25 * t, head, SEGMENTS / 2), material(obj));
-  tip.position.y = length / 2 - head / 2;
+  const t = obj.size[0];
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(t / 2, t / 2, 1, SEGMENTS / 2), material(obj));
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(1.25 * t, 1, SEGMENTS / 2), material(obj));
   const group = new THREE.Group();
   group.add(shaft, tip);
+  group.userData.setLength = (length) => {
+    const head = Math.min(3.5 * t, 0.45 * length);
+    shaft.scale.y = length - head;
+    shaft.position.y = -head / 2;
+    tip.scale.y = head;
+    tip.position.y = length / 2 - head / 2;
+  };
+  group.userData.setLength(obj.size[1]);
+  return group;
+}
+
+// A character stand-in: a capsule (size [width, height, depth]) with a nose on its front (+z)
+// showing where it faces, and its name above its head.
+function standin(obj) {
+  const [w, h, d] = obj.size;
+  const r = Math.min(w, d) / 2;
+  const body = new THREE.CapsuleGeometry(r, Math.max(h - 2 * r, 0), 8, SEGMENTS);
+  body.scale(w / (2 * r), 1, d / (2 * r));
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(body, material(obj)));
+  const nose = new THREE.ConeGeometry(0.22 * w, 0.55 * w, SEGMENTS / 2);
+  nose.rotateX(Math.PI / 2);   // pointing +z
+  const noseMesh = new THREE.Mesh(nose, new THREE.MeshLambertMaterial({ color: obj.nose }));
+  noseMesh.position.set(0, 0.28 * h, d / 2 + 0.2 * w);
+  group.add(noseMesh);
+  if (obj.name) {
+    const tag = label({ text: obj.name, size: [0, obj.name_size, 0], color: obj.name_color, plate: obj.plate, plate_opacity: obj.plate_opacity });
+    tag.position.y = h / 2 + obj.name_gap + obj.name_size;
+    group.add(tag);
+  }
   return group;
 }
 
@@ -96,7 +125,11 @@ function label(obj) {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
-  const height = obj.size[1] * canvas.height / LABEL_PX;
+  // screen_size: the size it has at the start, wherever the camera goes (three.js then
+  // multiplies the scale by the depth, so divide by the depth at the start)
+  const depth = obj.screen_depth || 1;
+  if (obj.screen_depth) sprite.material.sizeAttenuation = false;
+  const height = obj.size[1] * canvas.height / LABEL_PX / depth;
   sprite.scale.set(height * canvas.width / canvas.height, height, 1);
   return sprite;
 }
@@ -105,6 +138,7 @@ function build(obj) {
   if (obj.shape === 'group') return new THREE.Group();
   if (obj.shape === 'arrow') return arrow(obj);
   if (obj.shape === 'label') return label(obj);
+  if (obj.shape === 'standin') return standin(obj);
   return new THREE.Mesh(geometry(obj), material(obj));
 }
 
@@ -116,6 +150,9 @@ function addObject(obj) {
   node.traverse((part) => { part.userData.id = obj.id; });
   setVector(node, 'position', obj.position);
   setVector(node, 'rotation', obj.rotation);
+  node.userData.opacity = obj.opacity ?? 1;
+  node.userData.emissive = [0, 0, 0];
+  node.userData.parentId = obj.parent || null;
   if (obj.parent) {
     const parent = named.get(obj.parent);
     if (!parent) throw new Error(`object '${obj.id}': unknown parent '${obj.parent}'`);
@@ -158,6 +195,15 @@ function setVector(target, property, value) {
     target.rotation.set(r(value[0]), r(value[1]), r(value[2]), 'XYZ');
   } else if (property === 'look_at') {
     target.userData.lookAt = value;
+  } else if (property === 'scale') {
+    target.scale.set(value[0], value[1], value[2]);
+  } else if (property === 'opacity') {
+    target.userData.opacity = value[0];
+  } else if (property === 'emissive') {
+    target.userData.emissive = value;
+  } else if (property === 'length') {
+    if (!target.userData.setLength) throw new Error(`'${target.name}' is not an arrow; it has no length`);
+    target.userData.setLength(value[0]);
   } else {
     throw new Error(`unknown property '${property}'`);
   }
@@ -192,10 +238,37 @@ function targetOf(id) {
   return target;
 }
 
+// Opacity and glow of each object: its own times its parents' (opacity) or the brightest of
+// them (glow), set on the materials of its own parts; an object at opacity 0 is not drawn.
+function applyLooks() {
+  const looks = new Map();
+  for (const obj of description.objects) {
+    const node = named.get(obj.id);
+    const parent = looks.get(node.userData.parentId);
+    const own = node.userData.emissive;
+    const look = {
+      opacity: node.userData.opacity * (parent ? parent.opacity : 1),
+      emissive: parent ? own.map((c, i) => Math.max(c, parent.emissive[i])) : own,
+    };
+    looks.set(obj.id, look);
+    node.visible = look.opacity > 0;
+    node.traverse((part) => {
+      if (part.userData.id !== obj.id || !part.material) return;
+      const m = part.material;
+      const fading = look.opacity < 1 || part.isSprite;
+      if (m.transparent !== fading) { m.transparent = fading; m.needsUpdate = true; }
+      m.opacity = look.opacity;
+      m.depthWrite = look.opacity >= 1;
+      if (m.emissive) m.emissive.setRGB(look.emissive[0], look.emissive[1], look.emissive[2], THREE.SRGBColorSpace);
+    });
+  }
+}
+
 function applyTimeline(t) {
   for (const track of description.timeline.tracks) {
     setVector(targetOf(track.target), track.property, trackValue(track, t));
   }
+  applyLooks();
   camera.lookAt(vec(camera.userData.lookAt));
   camera.updateMatrixWorld();
 }
@@ -216,7 +289,7 @@ async function load(desc) {
     throw new Error(`scene description version ${desc.version}; this page reads ${DESCRIPTION_VERSION}`);
   }
   description = desc;
-  if (desc.objects.some((o) => o.shape === 'label')) await loadFont();
+  if (desc.objects.some((o) => o.shape === 'label' || o.name)) await loadFont();
   const canvas = document.getElementById('stage');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, alpha: false });
   renderer.setPixelRatio(1);
