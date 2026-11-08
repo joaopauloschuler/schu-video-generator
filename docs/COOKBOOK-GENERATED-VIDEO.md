@@ -18,6 +18,65 @@ look. A model that takes no video guide or no first frame cannot be used for a s
 not enforce this rule: `vidgen generate plan` does not block a shot without them, so check each
 shot's inputs in the plan.
 
+## Plan the shots first
+
+A video model paints what you tell it; it does not understand the story or the place. Plan in this
+order and look at each step before you pay for the next.
+
+1. **Write a story the viewer can follow without a mental map.** Everyone does what they do for a
+   reason a viewer gets at once.
+2. **Build one 3D world per location.** Every shot in that place is a camera placed in the same
+   `type: 3d` world, so positions and distances always agree. Reuse the worlds and the character
+   sheets across a film; they are built once.
+3. **Keep the geography clear** (see below), with one scene per shot.
+4. **Look at each scene as its own video in the normal coloured 3D view** (`vidgen render
+   --preview`). The depth guide is what the model gets, but it is hard for people to read.
+5. **Paint the starting picture of each shot and approve it** (see below).
+6. **Only then pay for video** (section 4).
+
+**Geography.** The camera may go anywhere; what the viewer must not lose is where things are and
+which way people are going. In the one Short we tried with many camera positions and no guides, the
+view turned around between shots, so a run away from the ferry and a run towards it looked the same
+and the film made no sense. This guidance is standard film practice; it has not been tested on a
+video model across many shots:
+
+- Open each location with a wide shot that shows where everything is.
+- Keep the camera on one side of the action (the 180-degree rule): if she runs left to right in one
+  shot, she keeps running left to right in the next. To change sides, show the camera moving or cut
+  away first.
+- Each clip gets one camera position or one simple move, set by its 3D guide. A camera that never
+  moves is an option for a very short film or a single gag, not a rule for a long one.
+
+**The starting picture.** vidgen has no command that paints one, so it is a manual step: give an
+image model that takes input pictures (OpenRouter's `bytedance-seed/seedream-4.5`, about $0.04 a
+picture) a still of the 3D view as its first reference, plus crops of the character sheet, and put
+the result under `assets/` for `first_frame:`. Leave `name:` off the stand-ins for that still, or
+the name tags can turn into text in the picture. The model takes the 3D view as a suggestion, not as
+geometry: check that what the story needs is still in the picture (an edge to fall off, room to walk
+into), and repaint if not.
+
+**Prompts and sound.** One clear action and at most one speaker per clip. Say in words which way
+people move and that the camera stays still, if it does. For lip sync, use `sound: model` with the
+beat's voice as the reference (section 8): the model keeps the voice and matches the lips, but it
+speaks later than the voice file, up to about 0.9 s in our runs, so keep lines short and leave room.
+
+**Traps.**
+
+- A beat needs text, and a shot's length is that text's voice plus the beat's `pause:`. A silent
+  shot therefore has placeholder text: set `audio: none` and `line: false` on it, or the placeholder
+  goes into the prompt as a spoken line.
+- A portrait project needs its own `preview: {width: 480, height: 854, fps: 24}`: the default preview
+  is landscape at 15 fps.
+- A `video_clip` scene fades in and spends its last 0.5 s fading out, and has no hard-cut option yet.
+
+**What it costs.** Measured on `bytedance/seedance-2.0-mini` at 480p: a 5 s clip cost $0.177 without
+a guide and $0.191 with one, and listed prices at 720p are more than double. A 10-minute film is
+about 120 clips of 5 s: roughly $23 for one take of each, plus about $5 for starting pictures, before
+any retake. Decide the budget and how many retakes you can afford before you start.
+
+**Not proven yet.** Sending a first frame, reference pictures and a guide in one request has not been
+run on a real model, and neither has starting a clip from the last frame of the one before it.
+
 ## 1. When it is worth it
 
 Generated video costs money (about $0.03-0.60 per second of clip, per take) and can fail

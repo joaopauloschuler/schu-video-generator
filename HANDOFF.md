@@ -25921,3 +25921,17 @@ project), repo work is generic.
 **Known gaps / TODOs.** `vidgen generate plan` does not block a shot without a guide and a first frame. vidgen has no step that paints a first frame of a shot from the reference pictures and the 3D layout. Whether Seedance accepts a first frame together with reference pictures and a guide in one request has not been run. `src/vidgen/data/guide/AGENTS.md` does not state the rule yet.
 
 **How to test.** `pytest tests/test_docs.py tests/test_videogen_3d_guide.py -m "not render"`.
+
+## Step 315 — Cookbook: plan the shots first
+
+**What was built.** A new section "Plan the shots first" before section 1 of `docs/COOKBOOK-GENERATED-VIDEO.md`: the order of work with a look at each step, one 3D world per location, keeping the geography clear (wide shot, 180-degree rule, one camera position or simple move per clip), painting the starting picture by hand, prompts and sound, traps, measured costs including a 10-minute film, and what has not been proven.
+
+**Files touched.** `docs/COOKBOOK-GENERATED-VIDEO.md`, `tasklist.md`.
+
+**Public interfaces.** None changed.
+
+**Decisions.** The section is unnumbered so that sections 1-9 and their links keep their numbers. The owner rejected a general "fixed camera" rule because it cannot work for a 10-minute film; the geography rules replace it and are marked as untested guidance. Starting pictures are documented as a manual step because vidgen has no command for them.
+
+**Known gaps / TODOs.** No `vidgen generate frames` command. `video_clip` has no hard-cut option. A first frame, reference pictures and a guide in one request, and starting a clip from the previous clip's last frame, have not been run on a real model. `src/vidgen/data/guide/AGENTS.md` does not carry this planning section.
+
+**How to test.** `pytest tests/test_docs.py tests/test_videogen_3d_guide.py -m "not render"`.
