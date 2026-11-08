@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–307)
+## Unreleased (Steps 193–308)
+
+### Generated video: no paid job from inputs that are out of date (Step 308)
+
+- `vidgen generate inputs` now records what each cut file was made from in `build/videogen/<shot>/inputs.json`. When the scene, the beat's text or timing, the narration MP3 or the draft size changed afterwards, `vidgen generate plan` (text and JSON) blocks the shot and names the free command that cuts it again (`vidgen generate inputs`, with `--guide` when a render input changed).
+- `vidgen generate run --pay` refuses the whole run on such a shot before anything is sent or a tunnel opens. Inputs cut before this version have no record and are blocked the same way: cut them again once.
+- A shot whose clip or job already exists is still reused free, with a note. Picking a take or editing a shot's prompt does not count as a change. A narration MP3 that no longer matches its text asks for `vidgen tts` first.
 
 ### Generated video: a 3D scene's guide pass as a shot's guide (Step 307)
 

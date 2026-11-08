@@ -2902,6 +2902,11 @@ scenes:
   ..."); a mask guide also lists the stand-ins' colours by name (up to four stand-ins). The pass
   is part of the request, so changing it is a new clip (never the cached one). Walkthrough:
   [COOKBOOK-GENERATED-VIDEO.md, From a 3D scene to a generated clip](COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip).
+- **Inputs after an edit**: `inputs.json` in `build/videogen/<shot>/` records what each file was
+  cut from. A shot whose inputs no longer match (scene, beat text or timing, narration MP3, draft
+  size, or no record yet) is blocked in `vidgen generate plan` with the free command to cut them
+  again, and `vidgen generate run --pay` refuses the run; a clip already paid for is reused free
+  with a note.
 - **Lengths**: a shot covers its beat's window on the planned timeline (to the next beat's
   start). The model is asked for the shortest length it allows that covers it (trimmed later);
   a beat longer than the model's longest clip is split into equal parts (`<beat>_p1`, `_p2`...).

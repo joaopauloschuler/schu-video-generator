@@ -22045,6 +22045,48 @@ Closes the gap between §114.14 (guide passes, "for video-to-video later") and g
 - **Open**: whether Seedance (or any OpenRouter provider) uses a depth / outline / mask video
   reference as a control signal or only as loose inspiration is not known (no paid run yet).
 
+### 113.9 Cut inputs that no longer match their sources (Step 308)
+
+`ShotInput.ready` only says a file exists, and `generate run` never cuts, so an edit after `vidgen
+generate inputs` used to reach a paid job as the old voice or guide.
+
+- **Record**: `make_inputs` writes `build/videogen/<shot>/inputs.json` (`videogen/freshness.py`,
+  `{version, inputs: {<file>: {sha256, source}}}`; merged, so a cut without `--guide` keeps the
+  guide's entry). Not one of the `written` files, and never shared (the host shares only listed
+  inputs).
+- **Sources**: the voice: `narration_sha256` (`soundfont.file_sha256` of the beat's MP3), `offset`,
+  `length`. A render input (`guide*.mp4`, `first_frame.png`): `scene_fingerprint` of the **draft**
+  project, `draft` (`[width, height, fps]`: `draft:` is left out of the fingerprint), `guide` (the
+  kind; `render` for the first frame), `offset`, `length`. The fingerprint at the cut is the one the
+  worker recorded in the render's timings. The beat's start is not recorded: it follows from
+  inputs the fingerprint covers.
+- **What counts**: a draft has no placements (`compose._wants_placing`), so a picked take changes
+  nothing; `generated_shot` is outside the fingerprint, so prompt / model / seed edits change
+  nothing either (they change the request instead). Beat text and timing, 3D params, MP3s (size and
+  time), assets and vidgen's own source are inside it. Anything inside it marks every render input
+  of the **scene**, as it does the scene's render. A guide of another kind is another file with its
+  own entry: `guide: depth` to `outline` is "not made yet" until cut.
+- **Check** (`InputSources.stale`, called by `plan_shots` once per shot whose cut inputs all exist;
+  free, offline, no render): no entry, another source or another file hash is a reason. A voice
+  whose `.hash` no longer matches the beat's text or voice (`tts.cache.audio_status`) is one too,
+  and asks for `vidgen tts` first: cutting the same MP3 again would not help (an MP3 without a
+  `.hash` is the owner's own and counts as current).
+- **Result**: `blocked: inputs changed since they were cut (<file>: <reason>; ...): run `vidgen
+  generate inputs[ --guide][ --variant V]` (free) before paying` (`--guide` only when a render input
+  changed), also in the plan's JSON `blocked`; `ShotPlan.changed_inputs`. `run_shots(pay=True)`
+  refuses the **whole run** on such a shot before the first submit (like a shot with problems: the
+  fix is free, and a run with holes would pay for part of a film); without `--pay` it is skipped as
+  blocked. MCP's `generate_plan` / `generate_run` run the CLI and follow.
+- **Free reuse**: a shot with a cached clip or an earlier job of this exact request is not paid
+  again, so it is not blocked: it gets a note (the clip comes from the old inputs; a re-cut makes a
+  new, paid request).
+- **Variants** share `build/videogen/<shot>/`: inputs cut for one variant read as changed for
+  another whose fingerprint differs, and the command names `--variant`.
+- **Known false alarms** (safe direction: a free re-cut, though `--guide` renders the draft): new
+  files under `assets/`, including sheet pictures in `assets/sheets/`, change the fingerprint of
+  every scene; a vidgen upgrade does too.
+- `generate status` uses `project_shots`, not the plan, and does not show this block.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

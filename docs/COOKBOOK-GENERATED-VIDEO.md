@@ -117,6 +117,23 @@ The scene under a generated shot still matters: it is what shows when no take is
 the guide render shows the model, and what the take fades from and to. A stage scene with the
 characters in place is a good fallback.
 
+**After an edit, cut again.** `vidgen generate inputs` records what each file in
+`build/videogen/<shot>/` was cut from (`inputs.json`). If you then change the scene, the beat's text
+or timing, the narration MP3 or the draft size, `vidgen generate plan` blocks the shot:
+
+```text
+  blocked: inputs changed since they were cut (guide.mp4: the scene changed (its config, a beat's text, voice or timing, assets, or vidgen)): run `vidgen generate inputs --guide` (free) before paying
+```
+
+`vidgen generate run --pay` refuses to start while a shot is blocked this way, so a run never pays
+to send an old voice or guide. Cutting again is free (`--guide` renders the draft, which can take a
+while). When the words of a line changed, run `vidgen tts` first: the plan says so. Inputs cut by an
+older vidgen have no record and are blocked the same way. Not a change: picking a take, or editing
+the shot's own `prompt`, `model` or `seed`. Making new sheet pictures or adding files under
+`assets/` does count for guides, because a render depends on `assets/`. A shot whose clip was
+already paid for is reused free with a note, even after an edit; a new cut is a new request, paid
+again.
+
 ## 5. Sharing voice and video inputs safely
 
 **Why it is needed.** A talking shot is lip-synced to the beat's own voice, and a guide render

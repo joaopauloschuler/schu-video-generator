@@ -18,9 +18,10 @@ dry-run plan of ``vidgen generate plan``.
 - **Prompt**: the kind's framing and the shot's ``prompt``, the setting, the characters' sheet
   words, the line said, what a guide pass is (:data:`GUIDE_PROMPTS`; a mask also lists the
   stand-ins' colours), the style sheet's words and "no on-screen text".
-- **Blocked**: a shot whose sheets are not approved, whose inputs are not made yet, or whose audio
-  / video needs a hosted URL (``videogen.host: none``) is planned and priced but not ready to pay
-  for. With ``inline_media: all`` (and no host) the audio / video would go inline, which
+- **Blocked**: a shot whose sheets are not approved, whose inputs are not made yet or no longer
+  match what they were cut from (:mod:`vidgen.videogen.freshness`; a shot already cached or with
+  an earlier job is reused free and only gets a note), or whose audio / video needs a hosted URL
+  (``videogen.host: none``) is planned and priced but not ready to pay for. With ``inline_media: all`` (and no host) the audio / video would go inline, which
   OpenRouter refuses: that is a problem (``run --pay`` refuses it before sending).
 - **Shared** (``videogen.host: quick_tunnel``, DESIGN.md §115): a paid run shares the shot's audio
   / video inputs (:attr:`Shot.shared`) through a Cloudflare quick tunnel while its job runs; the
@@ -173,6 +174,12 @@ def guide_name(source: str) -> str:
     """The guide file of a shot: ``guide.mp4`` for the draft render, ``guide.<pass>.mp4`` for a
     guide pass of a ``3d`` scene."""
     return "guide.mp4" if source == "render" else f"guide.{source}.mp4"
+
+
+def inputs_command(project: Project, guide: bool) -> str:
+    """The command that cuts ``project``'s inputs (the free re-cut a blocked shot asks for)."""
+    variant = f" --variant {project.variant}" if project.variant else ""
+    return f"vidgen generate inputs{' --guide' if guide else ''}{variant}"
 
 
 def _ratio(text: str) -> float:
@@ -370,7 +377,7 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
             shot.blocked.append(sheet.problem() or "")
     made_here = [i for i in shot.inputs if i.path.is_relative_to(project.root / INPUTS_DIR)]
     if any(not i.ready for i in made_here):
-        shot.blocked.append(f"inputs not made yet: `vidgen generate inputs{' --guide' if guide or source == 'render' else ''}`")
+        shot.blocked.append(f"inputs not made yet: `{inputs_command(project, bool(guide) or source == 'render')}`")
     if shot.shared:
         settings = project.config.videogen
         if settings.host == "quick_tunnel":
@@ -508,6 +515,9 @@ class ShotPlan:
     over_budget: bool = False
     #: Bytes of the request body with its inline pictures (``None``: inputs not all made yet).
     request_bytes: int | None = None
+    #: The shot's cut inputs no longer match what they were cut from and a run would pay for it
+    #: (the same text is in ``shot.blocked``); ``run --pay`` refuses (nothing sent or paid).
+    changed_inputs: str | None = None
 
     @property
     def cost(self) -> float:
@@ -625,6 +635,7 @@ def plan_shots(
     with a did-you-mean) and of the sheet pictures still to make. Free: the public model lists
     may be fetched (``catalog`` / ``lookup`` replace them in tests); nothing is sent or paid. The
     only files written are the smaller copies of ready shots' pictures in ``build/videogen/pictures/``."""
+    from vidgen.videogen.freshness import InputSources
     from vidgen.videogen.models import load_catalog
     from vidgen.videogen.openrouter import MAX_INLINE_BYTES, request_bytes
     from vidgen.videogen.run import _cap, ledger_path, plan_clip
@@ -646,6 +657,7 @@ def plan_shots(
 
     plan = VideoGenPlan([], budget, sheet_cost, len(sheets.plan.todo), sheet_unknown, sheet_lines(sheets, project.root, prompts=False)[:-1] if sheets.sheets else [])
     left = budget.remaining_usd - sheet_cost if budget.remaining_usd is not None else None
+    sources = InputSources(project)
     for shot in shots:
         item = ShotPlan(shot, shot.request())
         if item.request is not None and shot.model is not None:
@@ -665,6 +677,12 @@ def plan_shots(
             else:
                 item.check = check_request(item.request, shot.model)
                 item.estimate = estimate(item.request, shot.model, duration=shot.priced_seconds)
+        stale = sources.stale(shot)
+        if stale is not None and (item.cached or item.previous_job):
+            shot.notes.append(stale.reuse_note)
+        elif stale is not None:
+            item.changed_inputs = stale.blocked
+            shot.blocked.append(stale.blocked)
         if left is not None:
             left -= item.cost
             item.left_after = max(0.0, left)
@@ -674,6 +692,6 @@ def plan_shots(
 
 
 __all__ = [
-    "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "pick_aspect", "plan_shots", "project_shots",
+    "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "pick_aspect", "plan_shots", "project_shots",
     "shot_problems", "shot_prompt", "video_ratio",
 ]

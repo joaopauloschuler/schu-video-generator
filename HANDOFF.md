@@ -25712,3 +25712,47 @@ project), repo work is generic.
   same as the render guide; old `guide*.mp4` files stay in `build/videogen/<shot>/` when `guide:`
   changes (not sent: only the listed input is); the plan JSON has no separate `guide` key (the
   input's path names the pass).
+
+## Step 308 — Cut inputs that no longer match are not paid for
+
+- **Built** (DESIGN §113.9): `vidgen generate inputs` writes `build/videogen/<shot>/inputs.json`:
+  per cut file its SHA-256 and what it was made from (voice: narration MP3 SHA-256, offset, length;
+  render inputs: the draft project's `scene_fingerprint`, draft size and fps, guide kind, offset,
+  length). `plan_shots` compares that with the current state, free and offline. A shot whose inputs
+  differ or have no record is blocked (text and JSON `blocked`) with the exact command: `vidgen
+  generate inputs[ --guide][ --variant V]`; `run_shots(pay=True)` refuses the whole run before any
+  submit or tunnel. A voice whose `.hash` no longer matches the beat's text asks for `vidgen tts`
+  first. MCP's `generate_plan` / `generate_run` run the CLI, so no MCP change.
+- **Cached / earlier job**: not blocked; a note says the clip comes from the old inputs and that a
+  re-cut is a new paid request.
+- **Files**: new `src/vidgen/videogen/freshness.py`, `tests/test_videogen_input_freshness.py`;
+  changed `src/vidgen/videogen/{inputs,shots,workflow}.py`, `tests/test_videogen_3d_guide.py` (one
+  assertion in the render test); docs `DESIGN.md` (§113.9), `CHANGELOG.md`, `docs/CONFIG.md`,
+  `docs/COOKBOOK-GENERATED-VIDEO.md`, guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`,
+  `tasklist.md`. `videogen/host.py` not touched.
+- **Public interfaces** (not in `vidgen.api`): `freshness.InputSources`, `StaleInputs`,
+  `record_input`, `voice_source`, `RECORD_NAME`; `shots.inputs_command`;
+  `ShotPlan.changed_inputs`; `inputs.SceneRender.fingerprint` (optional, default `None`).
+- **Decisions / deviations**: (1) `run --pay` refuses the whole run, not only the changed shot (other
+  blocked shots are still skipped): a re-cut is free, and `--shot` selects the others. (2) The record
+  also holds each cut file's own SHA-256, so an interrupted cut or a hand-changed file counts as
+  changed. (3) The draft size and fps are recorded because `draft:` is outside the fingerprint. (4)
+  The beat's start in the render is not recorded: the fingerprint covers what determines it, and the
+  plan cannot know it without a render. (5) The narration `.hash` check was added beyond the
+  sidecar: a talking shot has no render input, so a changed beat text with an old MP3 would otherwise
+  pass. (6) The check lives in `plan_shots`, not `_resolve_inputs`: `project_shots` runs inside
+  `scene_fingerprint` for projects with takes.
+- **Known gaps**: `generate status` does not show this block (it uses `project_shots`). New files
+  under `assets/`, including sheet pictures in `assets/sheets/` (checked: one new file changes the
+  draft fingerprint), and a vidgen upgrade mark every guide of the scene as changed: a free re-cut,
+  but `--guide` renders the draft. Files a scene reads from outside the fingerprint's coverage are
+  not noticed (as for renders). Editing a beat's text with an MP3 that has no `.hash` is noticed only
+  for render inputs. `vidgen generate clip`-style direct calls of `generate_clip` are not checked.
+- **Tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`,
+  `PYTHONPATH=src` because the installed `vidgen` is a non-editable copy): `test_videogen_input_freshness`
+  not render (17, 7.2 s) and render (1, 9.2 s: a real Manim draft render, the worker's fingerprint
+  equals the plan's), `test_videogen_shots` not render (21), `test_videogen_3d_guide` not render (15),
+  `test_videogen_compose` not render (17), `test_guide` (92), `test_docs` (80). **Skipped**:
+  `test_generate_inputs_renders_the_mask_pass` (1, no Chromium here), so its new assertion has not
+  run. Not run: other render suites, `test_mcp` (no MCP change), the full suite.
+- **Spending**: nothing paid, no key read, no real tunnel (mock provider, fake cloudflared).

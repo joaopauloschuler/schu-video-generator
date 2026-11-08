@@ -3933,6 +3933,9 @@ scenes:
   `generate takes` (look at every contact sheet and QA finding) → `generate pick --shot ID
   --take N` → `vidgen render`. A take with QA errors (black, frozen) is not shown unless picked;
   `--take none` keeps vidgen's own picture. A new take needs a changed request (another `seed`).
+  After any edit to the scene, the line or its MP3, `generate plan` blocks the shot ("inputs changed
+  since they were cut") and `run --pay` refuses: run the command the plan names (`generate inputs`,
+  free; `vidgen tts` first when the plan says so).
   Takes are paid footage: commit `takes/`. When the film shows takes, the description file says
   "Includes AI-generated footage (models)" and lint's `generated_footage` reminds you to mark the
   upload as altered or synthetic content. Video generation is not eligible for Zero Data

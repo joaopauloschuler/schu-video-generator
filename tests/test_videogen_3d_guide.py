@@ -198,6 +198,8 @@ def test_generate_inputs_renders_the_mask_pass(make_project) -> None:
     assert error <= 6   # yuv420p at CRF 12: flat colours stay within a few levels inside an object
     again = make_inputs(project, [shot], guide=True, out=lambda line: None)   # the draft render is reused
     assert [p.name for p in again] == ["guide.mask.mp4"]
+    (item,) = plan_shots(Project.load(root), catalog=CATALOG).shots
+    assert not any(b.startswith("inputs changed") for b in item.shot.blocked)   # the worker's fingerprint is the plan's
 
 
 # ----- docs and example ------------------------------------------------------------------------------

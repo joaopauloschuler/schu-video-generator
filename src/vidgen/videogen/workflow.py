@@ -4,8 +4,10 @@
 order. Without ``pay`` it is a dry run (nothing sent, paid or written). With ``pay``:
 
 - a budget is required (``videogen.budget_usd`` or ``budget_usd``; with both, the lower);
-- a selected shot with problems refuses the whole run, and so does an estimate of the ready shots
-  over what the budget has left, before anything is paid;
+- a selected shot with problems refuses the whole run, and so does a selected shot whose cut
+  inputs changed since they were cut (:mod:`vidgen.videogen.freshness`; a free re-cut fixes it, a
+  cached clip or earlier job does not count) and an estimate of the ready shots over what the
+  budget has left, before anything is paid or a tunnel opened;
 - each ready shot then goes through :func:`vidgen.videogen.run.generate_clip` (``pay=True``,
   ``duration=shot.priced_seconds``; the ledger keeps the running budget); blocked shots are
   skipped and named;
@@ -108,6 +110,10 @@ def run_shots(
         if broken:
             text = "\n  ".join(f"{s.shot.id}: {p}" for s in broken for p in [*s.shot.problems, *s.check.problems])
             raise VidgenError(f"not paying: fix these shots first (nothing was paid):\n  {text}")
+        changed = [s for s in plan.shots if s.changed_inputs]
+        if changed:
+            text = "\n  ".join(f"{s.shot.id}: {s.changed_inputs}" for s in changed)
+            raise VidgenError(f"not paying: inputs changed since they were cut (nothing was sent or paid):\n  {text}")
         ready = [s for s in plan.shots if not s.shot.blocked]
         due = sum(s.cost for s in ready)
         left = plan.budget.remaining_usd

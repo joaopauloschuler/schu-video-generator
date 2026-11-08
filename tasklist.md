@@ -1787,6 +1787,9 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 ### Step 307 — 3D guide passes as generated-shot guides
 - [x] `generated_shot.guide: true | false | render | depth | outline | mask` (`true` = `render`, unchanged; depth / outline / mask only on a `3d` scene, else a config error; did-you-mean); `vidgen generate inputs --guide` draws the pass with the draft render (3D frames reused), cuts the beat's part like `guide.mp4` and converts it to H.264 / yuv420p (`guide.<pass>.mp4`); `first_frame: render` stays the normal render; the pass in the request hash and the prompt (one sentence; a mask lists the stand-ins' colours); the plan names it, also in "would share"; cookbook "From a 3D scene to a generated clip" (linked from COOKBOOK-3D §5), CONFIG, guide, DESIGN §113.8, `examples/3d-to-video` — done; tests `test_videogen_3d_guide.py` (16, one render)
 
+### Step 308 — Cut inputs that no longer match are not paid for
+- [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
