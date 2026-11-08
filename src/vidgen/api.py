@@ -668,6 +668,7 @@ from vidgen.three_d.clip import make_3d_clip  # noqa: E402
 from vidgen.three_d.description import BeatSpan, hex6, plan_world, scene_description  # noqa: E402
 from vidgen.three_d.framing import framing_3d  # noqa: E402
 from vidgen.three_d.motion import ObjectChange  # noqa: E402
+from vidgen.three_d.passes import GUIDE_PASSES, guide_pass, make_guide_passes, mask_table  # noqa: E402
 from vidgen.three_d.spec import Camera3D, Floor3D, Light3D, Object3D, Scene3DParams  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
@@ -984,6 +985,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "ClipInfo",
     "ClipMobject",
     "make_3d_clip",
+    "make_guide_passes",
+    "GUIDE_PASSES",
+    "guide_pass",
+    "mask_table",
     "CameraMove",
     "camera_problems",
     "check_3d_scene",

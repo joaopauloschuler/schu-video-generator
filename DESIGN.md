@@ -267,7 +267,8 @@ src/vidgen/
                           # moves -> tracks, following objects),
                           # description.py (the scene description JSON, its cache key), browser.py (Playwright +
                           # Chromium: the page, frames, the lossless clip; the validate warning), clip.py
-                          # (`make_3d_clip`: drawn or reused)
+                          # (`make_3d_clip`: drawn or reused), passes.py (guide passes: depth, outline,
+                          # mask; §114.14)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14),
@@ -22056,9 +22057,9 @@ uses one kind: `spin` becomes a linear `rotation` track from 0 to the clip's end
 `position`, `rotation` (degrees), and the camera's `look_at`; Step 300 adds `scale`, `opacity`
 ([v]), `emissive` ([r, g, b]) and an arrow's `length` ([L]) (§114.11).
 
-**Draw mode (hook for Step 301).** `draw_mode` (only `normal`; `DRAW_MODES`) is in the
-description and checked by the page's `applyDrawMode`; depth / outline / mask passes are new
-modes of the same description, so they share camera and timing by construction.
+**Draw mode.** `draw_mode` (`DRAW_MODES`: `normal`, and Step 301's guide passes `depth`,
+`outline`, `mask`, §114.14) is in the description and applied by the page's `applyDrawMode`; a
+pass is the same description with another mode, so it shares camera and timing by construction.
 
 ### 114.4 The page and the browser
 
@@ -22308,3 +22309,81 @@ count as their sphere.
   guide passes and video-to-video get every frame as data; the page only interpolates.
 - `Scene3D.description` plans the world once more for lint (`self._world`) after
   `scene_description` (cheap next to drawing the frames).
+
+### 114.14 Guide passes: depth, outline, mask (Step 301)
+
+**What they are for.** The same 3D picture drawn three plainer ways, for tools that need a scene's
+layout, not its look — later the video-to-video step (camera, layout and motion from vidgen, the
+look from a video model), which is not built here. In plain words:
+
+- **depth**: grey by distance from the camera, **near white, far dark**, the empty background
+  black. It tells a model the shapes and how far away things are.
+- **outline**: **only the edges**, black lines on white, like a line drawing.
+- **mask**: **each object one flat colour of its own** on black (no light, no blending at the
+  edges), with a table object id → colour, so a tool knows exactly which pixels are which object.
+
+**One description, another draw mode.** `three_d/passes.py`, `guide_pass(description, world,
+mode)` = the normal description with `draw_mode: mode` and, for `depth`, `depth_range: [near,
+far]`, for `mask`, `mask_colors: {id: "#rrggbb"}`; camera, tracks, frames and objects are the
+same dict entries, so a pass has exactly the clip's frames, camera and timing (frame *n* of a pass
+is frame *n* of the clip). `scene_description(..., draw_mode=mode)` returns the same. Drawn and
+cached by `make_3d_clip(folder, "<scene>.<mode>", ...)` (its own key and record, as §114.5),
+beside the clip: `<render_dir>/three_d/<scene>.<mode>.mkv` + `.json`; the mask's table is written
+to `<scene>.mask-colors.json` (`mask_table`: `{scene, background: "#000000", colors: {id: colour},
+objects: [{id, shape, color, parent (+ name for a stand-in)}], names: {stand-in name: colour}}`).
+
+**The page.** In a pass every mesh part of an object gets a flat `ShaderMaterial` of the pass
+(keeping its `side`): the values are written as they are (no colour management, no tone mapping,
+no light), the renderer is made without antialiasing (a mask colour or a depth grey is never
+blended at an edge), sprites (labels, a stand-in's name tag) are hidden, and an object is drawn
+when its opacity is ≥ 0.5 (no fading, no glow). Captions, overlays and the title are Manim's
+layers over the clip, never in it.
+
+- **depth**: `v = clamp((far − z) / (far − near))`, z the distance along the view (camera space),
+  linear. *Why one range per shot:* a range per frame would make the same object change grey as
+  others move (flicker). `depth_range(description, world)` looks at up to `DEPTH_SAMPLES` = 120
+  frames (evenly spread, first and last): the camera of the description at that time
+  (`framing.camera_at`), every shown object in view — a plane by a 17 × 17 grid of its points
+  inside the view (a floor reaching under the camera would otherwise make the range start at the
+  lens), every other shape by its sphere (`World.focus`) — and widens the result by `DEPTH_PAD`
+  = 5 % of its span at each end (the nearest point not clipped white, the farthest a dark grey
+  apart from the black background). *Why linear, not 1/distance:* tried both on stills; with a
+  floor reaching far back, 1/distance left the objects in the middle almost black.
+- **outline**: each frame is drawn twice into float render targets (one: view-space normal and
+  depth; two: the object's number, 1-based in description order, 0 = background), then a quad
+  with an edge shader writes black where the object changes to the right or below (silhouettes,
+  one object in front of another), where normals differ by more than ~37° (`NORMAL_COS` 0.8:
+  creases of boxes, cylinder caps, a stand-in's nose) or where 1/depth is not linear across three
+  pixels (`DEPTH_STEP`, an object hiding part of itself: 1/depth is linear on a flat face, so its
+  second difference is 0); white elsewhere. Lines are about 1 px per 540 px of the shorter side.
+- **mask**: `mask_colors(description)`: every drawn object (not groups, not labels) in description
+  order gets HSV(golden-angle hue, 0.85, 1.0 or 0.72) → `#rrggbb`, unique, never black. The page
+  writes the colour from a `Vector3` of the hex digits / 255, so the PNG holds exactly the table's
+  colour (tested). A stand-in's nose has its colour; an arrow's shaft and head one colour.
+
+**Asking for them** (off by default). The `3d` param `guide_passes: true | [depth, outline,
+mask]` (`parse_passes`, did-you-mean; `Scene3DParams.passes()`), part of the params and so of
+the render fingerprint; and `vidgen render --guide-passes [LIST]` (alone = all; MCP `render`
+`guide_passes`) for every `3d` scene of the run: `render_project(guide_passes=)` → worker
+`--guide-passes depth,mask` → `scene.guide_passes` (a `NarratedScene` attribute, like
+`is_preview`). `Scene3D._draw_view` draws the union after the clip and sets
+`guide_passes_made`, which the worker records in the scene's timings (`render.guide_passes`). A
+reused render counts as usable for a request only when it made those passes and their files are
+there (`_has_guide_passes`, like `--frames`' stills); otherwise the scene renders again, reusing
+the clip and any pass already drawn. `RenderResult.guide_passes` / JSON `guide_passes`
+(scene id → files) and a `guide passes (<scene>): ...` line in the CLI output list them.
+
+### 114.15 Public interface and decisions (Step 301)
+
+- `vidgen.api` gains `GUIDE_PASSES`, `guide_pass`, `make_guide_passes`, `mask_table`;
+  `DRAW_MODES` = `normal`, `depth`, `outline`, `mask`; the description stays version 1 (new
+  fields `depth_range`, `mask_colors` in passes only). `render_project`, `current_render` and
+  `render_scene` take `guide_passes=`; `RenderResult.guide_passes`.
+- Passes are separate lossless FFV1 clips (exact mask colours), not MP4s; converting for a video
+  model is the later video-to-video step's job.
+- One Chromium per pass (about 1 s each to start), reusing `make_3d_clip` unchanged rather than
+  a multi-mode page session.
+- Labels and name tags are left out of every pass (the owner: pure 3D); the mask table still
+  names stand-ins by `name`.
+- Lint stays sphere-based (owner's decision; masks are not used for lint); stand-ins stay centred
+  on `position`.

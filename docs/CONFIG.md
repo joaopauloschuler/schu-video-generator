@@ -6069,6 +6069,25 @@ timeline with the camera's path). A later render reuses the clip while the descr
 three.js and the Playwright version are unchanged; `--force` renders the scene again but still
 reuses the clip (delete the clip to draw it again).
 
+**Guide passes** (off by default). The same 3D picture can also be drawn three plainer ways, as
+videos beside the clip. They are meant for tools that need the *layout* of a scene rather than its
+look (for instance, later, a video model that repaints the scene in a new style while keeping its
+camera and motion):
+
+| pass | what it shows | file |
+|---|---|---|
+| `depth` | how far each point is from the camera: **near is white, far is dark**, the empty background black. One range of distances is used for the whole shot (worked out from where the objects and the camera go), so the greys do not flicker as things move; a thing that comes closer gets lighter. It tells a model the shapes and distances. | `<scene id>.depth.mkv` |
+| `outline` | **only the edges**, black lines on white, like a line drawing: each object's outline, the sharp edges of a box or a cylinder, and where an object hides part of itself. | `<scene id>.outline.mkv` |
+| `mask` | **each object in one flat colour of its own** (no light, no shading, no soft edges) on black, so a tool can tell exactly which pixels belong to which object. The colour of each object is in a table, `<scene id>.mask-colors.json`: `colors` (object id → `#rrggbb`), `objects` (id, shape, colour, parent; a stand-in also with its `name`) and `names` (stand-in name → colour). A group has no colour of its own (its children have theirs); a stand-in's nose has the stand-in's colour. | `<scene id>.mask.mkv` + `.mask-colors.json` |
+
+Ask for them with `guide_passes:` in the scene's params (`true` for all three, or a list such as
+`[depth, mask]`), or for every `3d` scene of a render with `vidgen render --guide-passes` (all
+three) or `--guide-passes depth,mask`. They have exactly the frames, camera and timing of the
+scene's 3D clip (frame *n* of a pass is frame *n* of the clip), are lossless clips in the same
+folder (`build/<quality>[_<variant>]/three_d/`), and are reused like the clip while nothing changed.
+They hold only the 3D shapes: no labels or name tags, no title, captions or overlays. A scene
+rendered before without the passes asked for is rendered again (its 3D clip is reused).
+
 [Action targets](#beat-actions): `view` (the 3D picture), `title`. The camera and object actions
 name objects by their `id`.
 
@@ -6080,6 +6099,7 @@ name objects by their `id`.
 | `light` | `{ambient, sun, sun_from, color}` | `{ambient: 0.5, sun: 2.5, sun_from: [-2, 6, 4], color: "#ffffff"}` | strength of the even light (0–5) and of the sun (0–10), the direction the sun shines from (towards the origin), the colour of both |
 | `floor` | `true` or `{size, color, y}` | none | a square floor (a `plane` with id `floor`): `size` 12, `color` `surface`, at height `y` 0 |
 | `objects` | list | `[]` | each `{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}`: `id` names it (letters, digits, `_`, `-`; unique; not `camera`), `shape` (above; default `box`), `size`, `color` (default `accent`), `position` of its centre, `rotation` in degrees, `spin` in degrees per second, `parent` an object written before it, `text` a label's text, `to` an arrow's tip (an object's id: it follows the object when it moves), `visible: false` hidden until `object_show`, `name` a stand-in's name, `voice` the voice that says a stand-in's lines (default its id; for lint), `screen_size: true` a label keeps the size on screen it has at the start |
+| `guide_passes` | `true` or list | `false` | also draw the [guide passes](#3d) `depth`, `outline`, `mask` beside the clip (`true`: all three); `vidgen render --guide-passes` asks for them in every `3d` scene |
 
 #### 3d object actions
 
@@ -15924,6 +15944,7 @@ difference between two palette colours).
 | `audio` | bool | `false` with `--no-audio` |
 | `format` | object | `{width, height, fps}` of this render |
 | `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |
+| `guide_passes` | object | the [guide pass](#3d) files of each `3d` scene whose render has them, by scene id (`{}` without) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
 | `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: schu-video-generator wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |

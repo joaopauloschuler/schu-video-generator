@@ -894,6 +894,7 @@ def render_document(
             "chapters": None if result.chapters is None else _path(result.chapters),
             "thumbnail": None if result.thumbnail is None else _path(result.thumbnail.path),
         },
+        guide_passes={sid: [_path(f) for f in files] for sid, files in result.guide_passes.items()},
         duration=result.duration,
         elapsed=round(elapsed, 3),
         mix=timings.get("mix"),

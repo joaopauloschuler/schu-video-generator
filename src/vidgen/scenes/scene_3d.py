@@ -3,7 +3,8 @@ the scene's title, the overlays and the captions.
 
 Before the scene plays, its frames are drawn into a lossless clip
 (``<render_dir>/three_d/<scene_id>.mkv``, with the scene description beside it as ``.json``) and
-reused while the description and the page are unchanged; the clip is then a ``ClipMobject``
+reused while the description and the page are unchanged (so are the guide passes asked for,
+``<scene_id>.<pass>.mkv``); the clip is then a ``ClipMobject``
 filling the frame, so stills, fades and the layout dump see it like any picture.
 """
 
@@ -185,5 +186,13 @@ class Scene3D(NarratedScene):
 
     def _draw_view(self) -> Path:
         """The clip of the 3D frames (drawn now, or reused while its description and the page
-        are unchanged)."""
-        return make_3d_clip(self.project.render_dir(self.is_preview) / "three_d", self.spec.id, self.description())
+        are unchanged), and the guide passes asked for (``guide_passes``, ``--guide-passes``)
+        beside it (DESIGN.md §114.14)."""
+        folder = self.project.render_dir(self.is_preview) / "three_d"
+        description = self.description()
+        clip = make_3d_clip(folder, self.spec.id, description)
+        passes = tuple(p for p in GUIDE_PASSES if p in self.params.passes() or p in self.guide_passes)
+        if passes:
+            make_guide_passes(folder, self.spec.id, description, self._world, passes)
+        self.guide_passes_made = passes
+        return clip

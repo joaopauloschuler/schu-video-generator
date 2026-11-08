@@ -1,17 +1,19 @@
 // vidgen's 3D page (DESIGN.md §114): builds a three.js scene from vidgen's scene description
 // (JSON, version 1: shapes, labels, groups, stand-ins; tracks of position, rotation, scale,
-// opacity, emissive glow, arrow length and the camera) and draws the frame at a time vidgen gives. Time comes only from frame(t):
+// opacity, emissive glow, arrow length and the camera) and draws the frame at a time vidgen
+// gives, as it looks or as a guide pass (depth, outline, mask). Time comes only from frame(t):
 // no requestAnimationFrame, no clock, no randomness, so the same description gives the same
 // pixels.
 import * as THREE from './three.module.js';
 
 const DESCRIPTION_VERSION = 1;
-const DRAW_MODES = ['normal'];
+const DRAW_MODES = ['normal', 'depth', 'outline', 'mask'];
 
 let renderer = null;
 let scene = null;
 let camera = null;
 let description = null;
+let outline = null;        // the outline pass's buffers and edge shader
 const named = new Map();   // object id -> THREE.Object3D
 
 function vec(v) {
@@ -251,6 +253,11 @@ function applyLooks() {
       emissive: parent ? own.map((c, i) => Math.max(c, parent.emissive[i])) : own,
     };
     looks.set(obj.id, look);
+    if (description.draw_mode !== 'normal') {
+      // a guide pass: flat, no fading or glow; shown from half opacity, labels never
+      node.visible = look.opacity >= 0.5 && !node.isSprite;
+      continue;
+    }
     node.visible = look.opacity > 0;
     node.traverse((part) => {
       if (part.userData.id !== obj.id || !part.material) return;
@@ -273,9 +280,145 @@ function applyTimeline(t) {
   camera.updateMatrixWorld();
 }
 
-// The hook for guide passes (Step 301: depth, outline, mask): only 'normal' exists now.
-function applyDrawMode(mode) {
+// ----- guide passes (DESIGN.md §114.14) -----------------------------------------------------
+// Every part of every object gets the pass's own flat material (no light); labels and name tags
+// are hidden. Values are written as they are (no colour conversion), so a mask colour or a depth
+// grey reaches the PNG exactly.
+
+const PASS_VERTEX = `
+varying vec3 vNormal;
+varying float vDepth;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vNormal = normalMatrix * normal;
+  vDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}`;
+
+// depth: near (depth_range[0]) white, far (depth_range[1]) black, linear in the distance along the view
+const DEPTH_FRAGMENT = `
+uniform float near;
+uniform float far;
+varying float vDepth;
+void main() {
+  float v = clamp((far - vDepth) / (far - near), 0.0, 1.0);
+  gl_FragColor = vec4(vec3(v), 1.0);
+}`;
+
+const MASK_FRAGMENT = `
+uniform vec3 color;
+void main() { gl_FragColor = vec4(color, 1.0); }`;
+
+// outline, first step: the view-space normal and depth (channel 0) or the object's number (channel 1)
+const GBUFFER_FRAGMENT = `
+uniform float channel;
+uniform float objectId;
+varying vec3 vNormal;
+varying float vDepth;
+void main() {
+  vec3 n = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
+  gl_FragColor = channel < 0.5 ? vec4(n, vDepth) : vec4(objectId, 0.0, 0.0, 1.0);
+}`;
+
+const QUAD_VERTEX = `
+varying vec2 vUv;
+void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+
+// outline, second step: black where the object changes (its silhouette), where the surface
+// bends sharply (a crease: normals more than ~37 degrees apart) or where an object hides part of
+// itself (a step in depth: 1 / depth is linear across a flat face, so its second difference is 0)
+const EDGE_FRAGMENT = `
+uniform sampler2D tNormal;
+uniform sampler2D tId;
+uniform vec2 texel;
+varying vec2 vUv;
+const float NORMAL_COS = 0.8;
+const float DEPTH_STEP = 0.02;
+float idAt(vec2 o) { return texture2D(tId, vUv + o).r; }
+vec4 gAt(vec2 o) { return texture2D(tNormal, vUv + o); }
+void main() {
+  vec2 dx = vec2(texel.x, 0.0);
+  vec2 dy = vec2(0.0, texel.y);
+  float id = idAt(vec2(0.0));
+  bool edge = idAt(dx) != id || idAt(-dy) != id;
+  if (!edge && id > 0.5) {
+    vec4 c = gAt(vec2(0.0));
+    vec4 r = gAt(dx);
+    vec4 b = gAt(-dy);
+    edge = dot(c.xyz, r.xyz) < NORMAL_COS || dot(c.xyz, b.xyz) < NORMAL_COS;
+    if (!edge && idAt(-dx) == id && idAt(dy) == id) {
+      float ic = 1.0 / c.w;
+      float sx = abs(1.0 / gAt(-dx).w + 1.0 / r.w - 2.0 * ic);
+      float sy = abs(1.0 / gAt(dy).w + 1.0 / b.w - 2.0 * ic);
+      edge = max(sx, sy) > DEPTH_STEP * ic;
+    }
+  }
+  gl_FragColor = vec4(vec3(edge ? 0.0 : 1.0), 1.0);
+}`;
+
+function rgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return new THREE.Vector3(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
+
+function passMaterial(desc, obj, number, side, channel) {
+  const mode = desc.draw_mode;
+  if (mode === 'depth') {
+    const [near, far] = desc.depth_range;
+    return new THREE.ShaderMaterial({ vertexShader: PASS_VERTEX, fragmentShader: DEPTH_FRAGMENT, side, uniforms: { near: { value: near }, far: { value: far } } });
+  }
+  if (mode === 'mask') {
+    const color = desc.mask_colors[obj.id];
+    if (!color) throw new Error(`mask: no colour for object '${obj.id}'`);
+    return new THREE.ShaderMaterial({ vertexShader: PASS_VERTEX, fragmentShader: MASK_FRAGMENT, side, uniforms: { color: { value: rgb(color) } } });
+  }
+  return new THREE.ShaderMaterial({ vertexShader: PASS_VERTEX, fragmentShader: GBUFFER_FRAGMENT, side, uniforms: { channel, objectId: { value: number } } });
+}
+
+// The outline pass's buffers (float, one value per pixel, no filtering) and its edge shader on a
+// quad covering the frame; lines are about 1 px per 540 px of the shorter side.
+function outlineBuffers(width, height) {
+  const options = { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true };
+  const geometryBuffer = new THREE.WebGLRenderTarget(width, height, options);
+  const idBuffer = new THREE.WebGLRenderTarget(width, height, options);
+  const px = Math.max(1, Math.round(Math.min(width, height) / 540));
+  const edges = new THREE.ShaderMaterial({
+    vertexShader: QUAD_VERTEX, fragmentShader: EDGE_FRAGMENT, depthTest: false, depthWrite: false,
+    uniforms: { tNormal: { value: geometryBuffer.texture }, tId: { value: idBuffer.texture }, texel: { value: new THREE.Vector2(px / width, px / height) } },
+  });
+  const quad = new THREE.Scene();
+  quad.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), edges));
+  return { geometryBuffer, idBuffer, quad, quadCamera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), channel: { value: 0 } };
+}
+
+function applyDrawMode(desc) {
+  const mode = desc.draw_mode;
   if (!DRAW_MODES.includes(mode)) throw new Error(`unknown draw mode '${mode}'`);
+  if (mode === 'normal') return;
+  if (mode === 'depth' && !desc.depth_range) throw new Error('depth pass without depth_range');
+  if (mode === 'mask' && !desc.mask_colors) throw new Error('mask pass without mask_colors');
+  if (mode === 'outline') outline = outlineBuffers(desc.width, desc.height);
+  scene.background = mode === 'outline' ? null : new THREE.Color(0, 0, 0);
+  desc.objects.forEach((obj, k) => {
+    named.get(obj.id).traverse((part) => {
+      if (part.userData.id !== obj.id) return;
+      if (part.isSprite) { part.visible = false; return; }
+      if (!part.isMesh) return;
+      part.material = passMaterial(desc, obj, k + 1, part.material.side, outline && outline.channel);
+    });
+  });
+}
+
+function renderOutline() {
+  renderer.setClearColor(0x000000, 0);
+  for (const [channel, target] of [[0, outline.geometryBuffer], [1, outline.idBuffer]]) {
+    outline.channel.value = channel;
+    renderer.setRenderTarget(target);
+    renderer.clear();
+    renderer.render(scene, camera);
+  }
+  renderer.setRenderTarget(null);
+  renderer.render(outline.quad, outline.quadCamera);
 }
 
 async function loadFont() {
@@ -291,7 +434,9 @@ async function load(desc) {
   description = desc;
   if (desc.objects.some((o) => o.shape === 'label' || o.name)) await loadFont();
   const canvas = document.getElementById('stage');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, alpha: false });
+  // guide passes without antialiasing: a mask colour or a depth grey is never blended at an edge
+  const antialias = desc.draw_mode === 'normal';
+  renderer = new THREE.WebGLRenderer({ canvas, antialias, preserveDrawingBuffer: true, alpha: false });
   renderer.setPixelRatio(1);
   renderer.setSize(desc.width, desc.height, false);
   scene = new THREE.Scene();
@@ -303,16 +448,18 @@ async function load(desc) {
   setVector(camera, 'position', cam.position);
   setVector(camera, 'look_at', cam.look_at);
   named.clear();
+  outline = null;
   desc.lights.forEach(addLight);
   desc.objects.forEach(addObject);
-  applyDrawMode(desc.draw_mode);
+  applyDrawMode(desc);
   return { three: THREE.REVISION };
 }
 
 // Draw the frame at t seconds and return it as a PNG data URL.
 function frame(t) {
   applyTimeline(t);
-  renderer.render(scene, camera);
+  if (outline) renderOutline();
+  else renderer.render(scene, camera);
   return renderer.domElement.toDataURL('image/png');
 }
 

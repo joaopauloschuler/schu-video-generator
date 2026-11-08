@@ -400,6 +400,7 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
         "chapters": str((root / "output" / "out_preview_chapters.txt").resolve()),
         "thumbnail": None,
     }
+    assert doc["guide_passes"] == {}
     intro, second = doc["chapters"]  # the intro chapter before the first chapter (DESIGN.md §52)
     assert (intro["title"], intro["intro"], intro["start"], second["title"], second["scene"]) == ("Intro", True, 0.0, "Second", "b")
     assert second["start"] == pytest.approx(doc["scenes"][1]["start"]) and second["end"] == pytest.approx(doc["duration"])

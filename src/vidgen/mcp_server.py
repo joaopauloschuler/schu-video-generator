@@ -710,12 +710,14 @@ def build_server(root: Path) -> Any:
         force: Annotated[bool, Field(description="render every scene again, even unchanged ones")] = False,
         max_scenes: Annotated[int | None, Field(ge=1, description="render at most this many scenes, then stop without joining "
                                                 "if more are left (call again to go on): a long final render in steps")] = None,
+        guide_passes: Annotated[str | None, Field(description="also draw guide passes of every 3d scene beside its 3D clip: "
+                                                  "'all', or a comma list of depth, outline, mask")] = None,
         all_languages: AllLanguages = False,
     ) -> Any:
         options = {
             "preview": preview and not draft, "draft": draft, "scene": scene, "variant": variant, "no-audio": no_audio,
             "audio-only": audio_only, "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force, "max-scenes": max_scenes,
-            "all-languages": all_languages,
+            "guide-passes": guide_passes, "all-languages": all_languages,
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 

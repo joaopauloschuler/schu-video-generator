@@ -100,8 +100,8 @@ def test_description_defaults_and_theme_colours() -> None:
     assert d["background"] == hex6(THEME.background)
     assert d["objects"][0]["color"] == hex6(THEME.color("accent"))
     assert d["timeline"]["tracks"] == []   # nothing spins
-    with pytest.raises(ValueError):
-        scene_description(params(), THEME, width=16, height=9, fps=10, frames=1, beats=[], draw_mode="depth")
+    with pytest.raises(ValueError, match="unknown draw mode 'sketch'"):   # depth, outline, mask: test_scene_3d_passes.py
+        scene_description(params(), THEME, width=16, height=9, fps=10, frames=1, beats=[], draw_mode="sketch")
 
 
 def test_hex6() -> None:

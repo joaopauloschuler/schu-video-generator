@@ -4,6 +4,8 @@
   (JSON: objects with ids, camera, lights, background, timeline, draw mode) the page reads.
 - :mod:`vidgen.three_d.browser` drives the page (``data/three``: vendored three.js and
   ``vidgen3d.js``) through Playwright and writes the frames to a lossless clip.
+- :mod:`vidgen.three_d.passes` draws the guide passes (depth, outline, mask) of a scene beside
+  its clip: the same description in another draw mode.
 
 Playwright is an optional extra (``schu-video-generator[3d]``); nothing here imports it until
 a 3D scene renders.

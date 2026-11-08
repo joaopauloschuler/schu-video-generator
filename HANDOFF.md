@@ -25339,3 +25339,63 @@ project), repo work is generic.
   spheres (tall shapes overestimated) and only checks stills (beat ends and mid-beat); no lint for
   a stand-in walking through another object; the gallery example (`crate`) does not show object
   actions yet (Step 302's example will).
+
+## Step 301 — 3D scenes: guide passes (Phase AI)
+
+- **Built** (DESIGN §114.14–114.15): a `3d` scene can also be drawn as three guide passes, lossless
+  clips beside its 3D clip with exactly its frames, camera and timing: `depth` (near white, far
+  dark, background black; linear over **one** range for the whole shot, `depth_range`, so it does
+  not flicker), `outline` (black edges on white: silhouettes, creases, self-occlusion; an edge
+  shader over normal/depth and object-number float buffers) and `mask` (each drawn object one flat
+  unique colour on black, no antialiasing; table `<scene>.mask-colors.json`: `colors` id →
+  colour, `objects`, `names` stand-in name → colour). Labels and name tags are not drawn in any
+  pass; title, captions and overlays are Manim layers and never in the clips. A pass is the scene
+  description with another `draw_mode` (+ `depth_range` / `mask_colors`), drawn and cached by
+  the unchanged `make_3d_clip` as `build/<q>[_<variant>]/three_d/<scene>.<pass>.mkv` + `.json`.
+  Off by default: `guide_passes: true | [depth, outline, mask]` (3d param, did-you-mean) or
+  `vidgen render --guide-passes [LIST]` (alone = all; MCP `render` `guide_passes`), passed to the
+  worker (`--guide-passes`), set on the scene (`NarratedScene.guide_passes`), recorded in the
+  scene's timings (`render.guide_passes`); a reused render without the requested passes (or with
+  their files gone) is rendered again, reusing the clip. The CLI prints a `guide passes (<scene>)`
+  line; `--json` has `guide_passes` (scene id → files) at the top level.
+- **Public interface**: `vidgen.api` + `GUIDE_PASSES`, `guide_pass`, `make_guide_passes`,
+  `mask_table`; `DRAW_MODES` gains `depth`, `outline`, `mask` and `scene_description(...,
+  draw_mode=)` returns a pass's description; `render_project` / `current_render` /
+  `render_scene` take `guide_passes=`; `RenderResult.guide_passes`. New module
+  `three_d/passes.py` (`parse_passes`, `mask_colors`, `depth_range`, `pass_files`, ...).
+  Description still version 1.
+- **Decisions / deviations**: depth is linear in camera-space z (1/distance was tried: with a
+  floor reaching far back the objects went almost black); the range comes from Python (planes
+  sampled on a 17 × 17 grid inside the view, other shapes by their sphere, ≤ 120 frames, padded
+  5 %) rather than a measuring pre-pass in the browser; one Chromium per pass (~1 s each);
+  objects drawn in a pass from opacity 0.5 (no fades, no glow); mask colours by description order
+  (golden-angle hues), so adding an object can change later colours — the table is the
+  reference; JSON keeps `outputs` as plain paths and adds `guide_passes` beside it. Owner's
+  answers to Step 300 applied: stand-ins stay centred, lint stays sphere-based, gallery left to 302.
+- **Files**: new `src/vidgen/three_d/passes.py`, `tests/test_scene_3d_passes.py`; changed
+  `data/three/vidgen3d.js` (pass shaders, `applyDrawMode`, `renderOutline`, no antialias in
+  passes), `three_d/{description,spec}.py`, `scenes/scene_3d.py`, `scene.py`, `render/{pipeline,
+  worker}.py`, `cli.py`, `jsonout.py`, `mcp_server.py`, `api.py`, `tests/test_scene_3d.py` (the
+  unknown draw mode is now `sketch`), `tests/test_json_output.py`, `docs/CONFIG.md` (guide passes
+  explained, `guide_passes` row, JSON `guide_passes`), guide + `AGENTS.md` (chooser row),
+  `README.md` (render row), DESIGN §2 tree + §114.3 + §114.14–15, CHANGELOG, tasklist.
+- **Tests run and passed** (one file per command, `capped`/`capped3g` + `timeout`):
+  `test_scene_3d_passes` all (18, incl. 2 render: pixels of each pass — mask colours exact and
+  only the table's, depth grey with near lighter than far, outline only black/white with the box's
+  silhouette, cache reuse; a real `render_project` with `guide_passes: [mask]` in YAML then
+  `guide_passes=("depth",)`: same frame count, no title/caption in the mask, clip reused, third
+  run renders nothing), `test_scene_3d` (22), `test_scene_3d_camera` (32), `test_scene_3d_actions`
+  (25), `test_render` not render (8), `test_api` (10), `test_extensions` (25), `test_json_output`
+  not render (21) and render (2), `test_jobs` (24), `test_project` (24), `test_guide` (91),
+  `test_docs` (79), `test_builtin_scenes` not render (176), `test_actions_coverage` not render
+  (12), `test_lint` not render (22), `test_mcp` (22), `test_schema -k "examples_validate or 3d"`
+  (22). Not run: other render suites, the rest of `test_schema`.
+- **Stills**: `/home/claude/work/scratch/s301/{passes-16x9.png, passes-16x9-fly-to.png,
+  passes-9x16.png}` — each one frame of the clip, depth, outline and mask side by side, from
+  `/home/claude/work/scratch/s301/demo` (Step 300's plaza with `guide_passes: [depth, mask]` in
+  YAML, then `--guide-passes` for all; 16:9 and the 9:16 variant with captions).
+- **Known gaps / next (302)**: the example's guide passes (gallery / examples) are Step 302's;
+  passes are FFV1 `.mkv` (a video model will want MP4/PNG frames: the video-to-video step);
+  depth contrast is low for objects in front of a long floor (one linear range for the shot);
+  outline lines are ~1 px per 540 px and not antialiased; the floor gets a mask colour like any
+  object (often a large red area); old pass files are not deleted when passes are switched off.

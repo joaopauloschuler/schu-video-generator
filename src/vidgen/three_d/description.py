@@ -4,7 +4,8 @@ be stored next to the render, hashed for the cache and read again by later passe
 Version 1::
 
     {"version": 1, "width": px, "height": px, "fps": n, "frames": n, "duration": s,
-     "draw_mode": "normal", "background": "#rrggbb",
+     "draw_mode": "normal" | "depth" | "outline" | "mask", "background": "#rrggbb",
+     (+ "depth_range": [near, far] for depth, "mask_colors": {id: "#rrggbb"} for mask)
      "camera": {"fov", "position", "look_at", "near", "far"},
      "lights": [{"id": "ambient", "kind": "ambient", "color", "intensity"},
                 {"id": "sun", "kind": "sun", "color", "intensity", "position"}],
@@ -40,8 +41,9 @@ from vidgen.three_d.spec import Object3D, Scene3DParams
 from vidgen.three_d.world import World
 
 DESCRIPTION_VERSION = 1
-#: Ways the page can draw a scene; Step 301 adds the guide passes (depth, outline, mask).
-DRAW_MODES: tuple[str, ...] = ("normal",)
+#: Ways the page can draw a scene: as it looks, or one of the guide passes (§114.14:
+#: ``three_d/passes.py``).
+DRAW_MODES: tuple[str, ...] = ("normal", "depth", "outline", "mask")
 #: Nearest and farthest distance the camera draws (scene units).
 CAMERA_NEAR, CAMERA_FAR = 0.1, 500.0
 #: Distance of the sun from the origin along ``sun_from`` (only its direction matters).
@@ -145,7 +147,8 @@ def scene_description(
     """The description of a ``3d`` scene with validated ``params`` (colours resolved with
     ``theme``) for ``frames`` frames of ``width`` x ``height`` at ``fps``, the objects changed by
     ``object_changes`` and the camera moved by ``camera_moves``. ``ValueError`` for an arrow, an
-    object change or a camera move that cannot be made."""
+    object change or a camera move that cannot be made. Another ``draw_mode`` than ``normal``
+    gives that guide pass's description (:func:`vidgen.three_d.passes.guide_pass`)."""
     if draw_mode not in DRAW_MODES:
         raise ValueError(f"unknown draw mode {draw_mode!r}")
     duration = frames / fps
@@ -156,14 +159,14 @@ def scene_description(
     world = plan_world(params, fps, frames, object_changes)
     camera = start_pose(params, world)
     tracks = object_tracks(world, duration) + camera_tracks(params, world, camera_moves or [], fps, frames)
-    return {
+    described = {
         "version": DESCRIPTION_VERSION,
         "width": int(width),
         "height": int(height),
         "fps": int(fps),
         "frames": int(frames),
         "duration": round(duration, 6),
-        "draw_mode": draw_mode,
+        "draw_mode": "normal",
         "background": hex6(theme.color(params.background) if params.background else theme.background),
         "camera": {
             "fov": float(params.camera.fov),
@@ -182,6 +185,11 @@ def scene_description(
             "tracks": tracks,
         },
     }
+    if draw_mode == "normal":
+        return described
+    from vidgen.three_d.passes import guide_pass
+
+    return guide_pass(described, world, draw_mode)
 
 
 def description_key(description: dict[str, Any], engine: str) -> str:

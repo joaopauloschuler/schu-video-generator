@@ -226,6 +226,15 @@ class Scene3DParams(SceneParams):
     """A square floor the objects stand on: true, or {size, color, y} (an object with id floor)."""
     objects: list[Object3D] = Field(default_factory=list)
     """The objects: [{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}]; object actions (object_move, object_walk...) move them."""
+    guide_passes: bool | list[str] = False
+    """Also draw guide passes of the 3D picture (same frames, camera and timing; labels left out), stored beside its clip: true (all), or a list of depth (near white, far dark), outline (edges like a line drawing), mask (each object one flat colour, with a colour table); also `vidgen render --guide-passes`."""
+
+    @field_validator("guide_passes")
+    @classmethod
+    def _guide_passes(cls, v: bool | list[str]) -> bool | list[str]:
+        from vidgen.three_d.passes import parse_passes
+
+        return list(parse_passes(v)) if isinstance(v, list) else v
 
     @field_validator("floor")
     @classmethod
@@ -266,6 +275,12 @@ class Scene3DParams(SceneParams):
             out.append(current)
             current = parents.get(current)
         return out
+
+    def passes(self) -> tuple[str, ...]:
+        """The guide passes ``guide_passes`` asks for (DESIGN.md §114.14), in drawing order."""
+        from vidgen.three_d.passes import parse_passes
+
+        return parse_passes(self.guide_passes)
 
     def object(self, object_id: str) -> Object3D | None:
         """The object with ``object_id`` (``None`` for the floor or an unknown id)."""

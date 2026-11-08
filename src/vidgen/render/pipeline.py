@@ -69,6 +69,8 @@ class RenderResult:
     ``<output>_chapters.txt`` when one was written (the video has chapters and
     ``chapters.youtube``), else ``None``; ``thumbnail`` the thumbnail written after the join
     (with a ``thumbnail:`` config and ``auto``, DESIGN.md §53), else ``None``.
+    ``guide_passes``: the guide pass files of each ``3d`` scene whose render has them (DESIGN.md
+    §114.14), by scene id.
     """
 
     output: Path
@@ -83,6 +85,7 @@ class RenderResult:
     frames_index: Path | None = None
     chapters: Path | None = None
     thumbnail: ThumbnailResult | None = None
+    guide_passes: dict[str, list[Path]] = field(default_factory=dict)
 
 
 @dataclass
@@ -167,9 +170,12 @@ def warn_images(project: Project) -> None:
         log.warning("generated image not made yet for %s; a placeholder is shown - run `vidgen imagegen` first", shown)
 
 
-def _usable_render(project: Project, preview: bool, scene_id: str, no_audio: bool, frames: int = 0) -> bool:
+def _usable_render(
+    project: Project, preview: bool, scene_id: str, no_audio: bool, frames: int = 0, guide_passes: tuple[str, ...] = ()
+) -> bool:
     """True if a previous render of the scene exists and matches the current format/audio mode
-    (and, when ``frames`` stills per beat are requested, was made with them)."""
+    (and, when ``frames`` stills per beat are requested, was made with them; when
+    ``guide_passes`` are requested and the scene is a ``3d`` one, it drew them and they are there)."""
     video = scene_video_path(project, preview, scene_id)
     timings_file = scene_timings_path(project, preview, scene_id)
     if not (video.is_file() and timings_file.is_file()):
@@ -185,15 +191,49 @@ def _usable_render(project: Project, preview: bool, scene_id: str, no_audio: boo
         and meta.get("fps") == fmt.fps
         and (no_audio or meta.get("audio") is True)
         and (not frames or (meta.get("frames") == frames and _has_stills(project, preview, scene_id)))
+        and _has_guide_passes(project, preview, scene_id, meta, guide_passes)
     )
 
 
-def current_render(project: Project, preview: bool, scene_id: str, no_audio: bool, frames: int = 0) -> bool:
+def _has_guide_passes(project: Project, preview: bool, scene_id: str, meta: dict[str, Any], guide_passes: tuple[str, ...]) -> bool:
+    """Whether the render (its ``meta``) of a ``3d`` scene drew ``guide_passes`` and their files
+    are there (other scene types have none to draw: always true)."""
+    if not guide_passes or project.scene(scene_id).type != "3d":
+        return True
+    from vidgen.three_d.passes import pass_files
+
+    made = meta.get("guide_passes") or []
+    folder = project.render_dir(preview) / "three_d"
+    return all(p in made for p in guide_passes) and all(f.is_file() for f in pass_files(folder, scene_id, guide_passes))
+
+
+def guide_pass_outputs(project: Project, preview: bool) -> dict[str, list[Path]]:
+    """The guide pass files of each ``3d`` scene whose current render drew some (its timings
+    record them), by scene id (DESIGN.md §114.14)."""
+    from vidgen.three_d.passes import pass_files
+
+    out: dict[str, list[Path]] = {}
+    for spec in project.config.scenes:
+        if spec.type != "3d":
+            continue
+        try:
+            meta = json.loads(scene_timings_path(project, preview, spec.id).read_text(encoding="utf-8")).get("render", {})
+        except (OSError, ValueError):
+            continue
+        files = [f for f in pass_files(project.render_dir(preview) / "three_d", spec.id, meta.get("guide_passes") or []) if f.is_file()]
+        if files:
+            out[spec.id] = files
+    return out
+
+
+def current_render(
+    project: Project, preview: bool, scene_id: str, no_audio: bool, frames: int = 0, guide_passes: tuple[str, ...] = ()
+) -> bool:
     """True if the scene's render is usable (:func:`_usable_render`) and was made from the inputs
     it has now (its recorded render fingerprint matches, DESIGN.md §63)."""
     from vidgen.render.fingerprint import scene_fingerprint
 
-    if not _usable_render(project, preview, scene_id, no_audio, frames):
+    if not _usable_render(project, preview, scene_id, no_audio, frames, guide_passes):
         return False
     try:
         meta = json.loads(scene_timings_path(project, preview, scene_id).read_text(encoding="utf-8")).get("render", {})
@@ -220,7 +260,9 @@ def _tail(text: str, lines: int = TAIL_LINES) -> str:
     return "\n".join(cleaned[-lines:])
 
 
-def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, live: bool, frames: int = 0) -> _WorkerRun:
+def _run_worker(
+    project: Project, preview: bool, scene_id: str, no_audio: bool, live: bool, frames: int = 0, guide_passes: tuple[str, ...] = ()
+) -> _WorkerRun:
     """Run the worker for one scene; its output is captured (and echoed to stderr if ``live``)."""
     cmd = [
         sys.executable, "-m", "vidgen.render.worker", str(project.config_file), scene_id,
@@ -234,6 +276,8 @@ def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, 
         cmd.append("--progress")
     if frames:
         cmd += ["--frames", str(frames)]
+    if guide_passes:
+        cmd += ["--guide-passes", ",".join(guide_passes)]
     if project.bare:
         cmd.append("--bare")
     # Scenes never need the ElevenLabs key: keep it out of the processes that run scene code.
@@ -337,7 +381,8 @@ def with_carried(project: Project, preview: bool, scene_ids: list[str]) -> list[
 
 
 def _render_scenes(
-    project: Project, preview: bool, scene_ids: list[str], no_audio: bool, keep_going: bool, jobs: int, frames: int = 0
+    project: Project, preview: bool, scene_ids: list[str], no_audio: bool, keep_going: bool, jobs: int, frames: int = 0,
+    guide_passes: tuple[str, ...] = (),
 ) -> SceneRuns:
     """Render ``scene_ids`` with up to ``jobs`` workers (and what their carries need,
     :func:`with_carried`; a scene that carries objects starts after the scene before it).
@@ -358,7 +403,7 @@ def _render_scenes(
 
     def task(index: int, scene_id: str) -> _WorkerRun:
         say(f"[{index}/{total}] {scene_id}: rendering")
-        return _run_worker(project, preview, scene_id, no_audio, live, frames)
+        return _run_worker(project, preview, scene_id, no_audio, live, frames, guide_passes)
 
     for run in _runs(task, scene_ids, jobs, carry.carried_from(project.config)):
         if run.returncode != 0:
@@ -764,6 +809,7 @@ def render_project(
     frames: int = 0,
     force: bool = False,
     max_scenes: int | None = None,
+    guide_passes: tuple[str, ...] = (),
 ) -> RenderResult:
     """Render ``project`` (already loaded with its variant) and write the final MP4 + SRT.
 
@@ -776,6 +822,9 @@ def render_project(
     a :class:`VidgenError` listing the failed scenes is raised at the end.
     ``frames``: also save that many PNG stills per beat of every scene (1: the end of each beat)
     under ``build/.../frames/``; reused scenes without such stills are rendered again. 0: none.
+    ``guide_passes``: also draw these guide passes (``depth``, ``outline``, ``mask``) of every
+    ``3d`` scene, beside its 3D clip (DESIGN.md §114.14); reused ``3d`` scenes without them are
+    rendered again (their 3D clip is reused).
     ``max_scenes``: render at most that many of the scenes to render (config order); when more
     are left, the video is not joined and a :class:`VidgenError` names them (details
     ``rendered`` / ``remaining``): running again goes on with them, as every finished scene's
@@ -801,11 +850,11 @@ def render_project(
         warn_audio(project)
         warn_images(project)
         if selected:  # those, and the scenes without a usable render
-            to_render = [sid for sid in known if sid in selected or not _usable_render(project, preview, sid, no_audio, frames)]
+            to_render = [sid for sid in known if sid in selected or not _usable_render(project, preview, sid, no_audio, frames, guide_passes)]
         elif force:
             to_render = known
         else:  # what changed since its render (a storyboard's or lint's renders are reused)
-            to_render = [sid for sid in known if not current_render(project, preview, sid, no_audio, frames)]
+            to_render = [sid for sid in known if not current_render(project, preview, sid, no_audio, frames, guide_passes)]
         ctx = hooks.dispatch(
             "pre_render",
             project,
@@ -821,7 +870,7 @@ def render_project(
             to_render, later = to_render[:max_scenes], to_render[max_scenes:]
         frames_index = project.render_dir(preview) / "frames" / "index.json"
         remove_file(frames_index)  # rewritten below when stills are requested; never stale
-        runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames)
+        runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames, guide_passes)
         if runs.failed:
             raise VidgenError(
                 f"{len(runs.failed)} scene(s) failed: {', '.join(f['scene'] for f in runs.failed)}; "
@@ -871,6 +920,7 @@ def render_project(
             warnings=runs.warnings,
             frames_index=index,
             chapters=chapters_file,
+            guide_passes=guide_pass_outputs(project, preview),
         )
     if wants_thumbnail:  # after the session: a frame thumbnail may render a scene
         from vidgen.thumbnail import make_thumbnail

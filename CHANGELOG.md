@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–300)
+## Unreleased (Steps 193–301)
+
+### 3D scenes: guide passes (Step 301)
+
+- A `3d` scene can also be drawn as three plainer videos beside its 3D clip, with exactly its frames, camera and timing: `depth` (near white, far dark; one range for the whole shot, so it does not flicker), `outline` (edges only, black on white, like a line drawing) and `mask` (each object one flat colour on black, with a table object id → colour, stand-ins also by name, in `<scene>.mask-colors.json`). They hold only the 3D shapes (no labels, title, captions or overlays), are lossless, and are reused like the clip.
+- Off by default: ask with `guide_passes: true` (or `[depth, mask]`) in a `3d` scene, or `vidgen render --guide-passes [depth,outline,mask]` for every `3d` scene (MCP `render` takes `guide_passes`). Files: `build/<quality>/three_d/<scene>.<pass>.mkv`; listed in the render's output (`guide_passes` in `--json`).
+- `vidgen.api` gains `GUIDE_PASSES`, `guide_pass`, `make_guide_passes` and `mask_table`; `scene_description` accepts `draw_mode` `depth`, `outline` and `mask`.
 
 ### 3D scenes: object actions and character stand-ins (Step 300)
 

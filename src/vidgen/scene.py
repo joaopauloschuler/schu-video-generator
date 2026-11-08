@@ -335,6 +335,11 @@ class NarratedScene(MovingCameraScene):
         #: leave out what only decorates (idle motion, wind, shadows, motion effects, particles,
         #: the light's grade...), never a timing, a position, an action or the lip sync.
         self.is_draft = bool(getattr(self.project, "draft", False))
+        #: Guide passes asked for by ``vidgen render --guide-passes`` (set by the render worker;
+        #: a ``3d`` scene draws them, DESIGN.md §114.14) and those the scene drew (recorded in
+        #: its timings, so a later run knows whether its render has them).
+        self.guide_passes: tuple[str, ...] = ()
+        self.guide_passes_made: tuple[str, ...] = ()
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:

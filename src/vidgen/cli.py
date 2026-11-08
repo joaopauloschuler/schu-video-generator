@@ -850,6 +850,7 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
         frames=frames,
         force=args.force,
         max_scenes=args.max_scenes,
+        guide_passes=_guide_passes(args),
     )
     if args.json:
         return jsonout.render_document(project, result, args.preview or args.draft, time.monotonic() - started)
@@ -863,11 +864,23 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
         print(f"frames:    {result.frames_index}")
     if result.thumbnail is not None:
         print(f"thumbnail: {result.thumbnail.path}")
+    for scene_id, files in result.guide_passes.items():
+        print(f"guide passes ({scene_id}): {', '.join(f.name for f in files)} in {files[0].parent}")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
     mix = result.timings.get("mix")
     if mix is not None:
         print(f"loudness:  {_loudness_line(mix)}")
     return 0
+
+
+def _guide_passes(args: argparse.Namespace) -> tuple[str, ...]:
+    """The guide passes ``--guide-passes`` asks for (DESIGN.md §114.14)."""
+    from vidgen.three_d.passes import parse_passes
+
+    try:
+        return parse_passes(args.guide_passes, "--guide-passes")
+    except ValueError as exc:
+        raise VidgenError(str(exc)) from None
 
 
 def _render_audio(args: argparse.Namespace, project: Project, started: float) -> CommandResult:
@@ -876,7 +889,7 @@ def _render_audio(args: argparse.Namespace, project: Project, started: float) ->
 
     video_only = [name for name, given in (
         ("--scene", args.scene), ("--no-audio", args.no_audio), ("--frames", args.frames or args.frames_per_beat),
-        ("--max-scenes", args.max_scenes), ("--keep-going", args.keep_going),
+        ("--max-scenes", args.max_scenes), ("--keep-going", args.keep_going), ("--guide-passes", args.guide_passes),
     ) if given]
     if video_only:
         raise VidgenError(f"{', '.join(video_only)}: not with an audio-only render (no scene is rendered)")
@@ -2452,6 +2465,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
     p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
+    p.add_argument(
+        "--guide-passes", nargs="?", const="all", metavar="LIST",
+        help="also draw guide passes of every 3d scene, beside its 3D clip (build/.../three_d/<scene>.<pass>.mkv): depth (near white, "
+        "far dark), outline (edges like a line drawing), mask (each object one flat colour; table <scene>.mask-colors.json); "
+        "alone: all three, else a comma list such as depth,mask; also guide_passes: in a 3d scene",
+    )
     p.add_argument(
         "--max-scenes", type=int, metavar="N",
         help="render at most N scenes in this run, then stop without joining if more are left (run again to go on; "

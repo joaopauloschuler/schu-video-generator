@@ -1,7 +1,7 @@
 """Render one scene in its own process (DESIGN.md §5.2)::
 
     python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview|draft
-        [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare]
+        [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare] [--guide-passes LIST]
 
 Writes ``<render_dir>/scenes/<scene_id>.mp4`` and ``<render_dir>/timings/<scene_id>.json``
 (``render_dir`` = ``build/<final|preview|draft>[_<variant>]``); with ``--frames N``, also N PNG stills
@@ -32,6 +32,7 @@ from vidgen import __version__
 from vidgen.errors import VidgenError
 from vidgen.fileio import locked_message, remove_file, write_text_atomic
 from vidgen.project import Project
+from vidgen.three_d.passes import parse_passes
 
 #: Manim's units on the shorter side of the frame (Manim's default frame height).
 FRAME_SHORT_SIDE = 8.0
@@ -199,6 +200,7 @@ def render_scene(
     frames: int = 0,
     bare: bool = False,
     draft: bool = False,
+    guide_passes: tuple[str, ...] = (),
 ) -> Path:
     """Render one scene in this process (Manim's global config is modified); returns its video.
 
@@ -208,6 +210,7 @@ def render_scene(
     ``_bare`` folders; a frame thumbnail without overlays, DESIGN.md §53).
     ``draft``: render a draft (DESIGN.md §74): the project loaded as a draft (its folders and
     format), the scene with :attr:`~vidgen.scene.NarratedScene.is_draft` (and ``is_preview``).
+    ``guide_passes``: the guide passes a ``3d`` scene draws besides its own (DESIGN.md §114.14).
     Call it only in a fresh process: this is the body of the worker.
     """
     from vidgen import carry, extensions, registry
@@ -251,6 +254,7 @@ def render_scene(
         scene = cls(spec, project, theme, audio=audio, capture=capture)
         scene.carried_in = carried_in
         scene.is_preview = preview
+        scene.guide_passes = tuple(guide_passes)
         layer = scene.overlay_layer
         if layer is not None and scene.overlay_head:  # a push / wipe moves the first frames (§50)
             layer.split_head(scene.overlay_head, scene_overlay_path(project, preview, scene_id))
@@ -279,6 +283,7 @@ def render_scene(
         "fps": fmt.fps,
         "audio": audio,
         "frames": frames,
+        "guide_passes": list(scene.guide_passes_made),
         "vidgen": __version__,
         "fingerprint": fingerprint,
     }
@@ -325,6 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--progress", action="store_true", help="show Manim's progress bars")
     parser.add_argument("--frames", type=int, default=0, metavar="N", help="save N PNG stills per beat (default: 0)")
     parser.add_argument("--bare", action="store_true", help="render without overlays into build/..._bare")
+    parser.add_argument("--guide-passes", default="", metavar="LIST", help="a 3d scene also draws these guide passes (depth,outline,mask)")
     return parser
 
 
@@ -340,7 +346,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         render_scene(
             args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames,
-            args.bare, args.quality == "draft",
+            args.bare, args.quality == "draft", parse_passes(args.guide_passes),
         )
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)
