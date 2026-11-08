@@ -259,7 +259,8 @@ src/vidgen/
                           # sheets.py (reference / style sheets), shots.py (per-beat shots, the plan),
                           # inputs.py (the cut voice, guide render, first frame; §113.3), qa.py (checks,
                           # contact sheets), takes.py (takes, picks), compose.py (placements, credit line),
-                          # workflow.py (`generate run | status`; §113.4)
+                          # workflow.py (`generate run | status`; §113.4), host.py (audio / video inputs
+                          # shared through a Cloudflare quick tunnel, `generate host-test`; §115)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
@@ -22430,3 +22431,99 @@ the clip and any pass already drawn. `RenderResult.guide_passes` / JSON `guide_p
   their box.
 - `vidgen.api` is unchanged; `Scene3DParams` gains `depth_range`, `guide_pass` and
   `make_guide_passes` take `depth=`; `passes.py` gains `FLOOR_MASK`, `MASK_PALETTE`.
+
+## 115. Hosted inputs through a Cloudflare Quick Tunnel (Phase AJ, Steps 305–306)
+
+OpenRouter's video API takes pictures inline but audio and video references only as `https://`
+URLs (HTTP 400 "Only HTTPS URLs are allowed", §113.7), so talking shots (`audio:`) and shots with
+`guide:` could not be paid for. The owner chose a host that needs no account: a **Cloudflare
+Quick Tunnel** (`cloudflared tunnel --url http://127.0.0.1:<port>` prints a random
+`https://<words>.trycloudflare.com` address that forwards to a local port). The owner's priority
+is to share only what is needed, for as short a time as possible. Step 305 builds the host and a
+free self-test; Step 306 wires it into `generate run --pay`, the plan, MCP and the cookbook.
+The cloud workspace cannot reach Cloudflare (proxy 403, port 7844 blocked): everything is tested
+with a fake `cloudflared` and a real local server; the owner tests the real tunnel on Windows
+with `vidgen generate host-test`.
+
+### 115.1 The host (Step 305)
+
+`vidgen.videogen.host` (not in `vidgen.api`):
+
+- **What is shared.** `QuickTunnelHost(sources, root=, settings=, ledger=, executable=, fetch=,
+  close_when_fetched=True, out=)` takes the exact files to share (a shot's audio / video inputs)
+  and `copy_into_share` copies each into a fresh `tempfile.mkdtemp(prefix="vidgen-share-")`
+  folder (refused when it would lie inside the project) under a new random name
+  (`secrets.token_hex(8)` + the lower-case extension), with its size and SHA-256. A symlink, a
+  folder, a missing file or a file given twice is a `VidgenError`; the source is opened with
+  `O_NOFOLLOW` where the system has it. The project, `build/` or any user path is never served:
+  only the copies exist in the served folder.
+- **The server** (`ShareServer`, stdlib `ThreadingHTTPServer`): bound to `127.0.0.1`, port 0 (a
+  random free port, `allow_reuse_address` off, no host name lookup), answers only `GET` / `HEAD`
+  of the exact paths `/<secret>/<name>` (`secret = secrets.token_urlsafe(24)`, a new one per
+  host; the query string must be empty) with the file's `Content-Type` (`openrouter.MEDIA_TYPES`,
+  `.txt` as UTF-8 text), `Content-Length`, `Cache-Control: no-store`, `X-Content-Type-Options:
+  nosniff`. Everything else (other paths, `/`, `/<secret>/`, any other method) is a 404 with a
+  10-byte body; no directory listing, no `Server` header. Requests are kept in memory
+  (`RequestRecord`: time, method, path with the secret replaced by `<secret>`, status, bytes,
+  file) and never written with client addresses; `log_message` writes nothing. Per-connection
+  socket timeout 30 s; `Connection: close`. (CPython itself folds a leading `//` of a request
+  path into `/`, so `//<secret>/<name>` is the same file.)
+- **The tunnel** (`TunnelProcess`): `tunnel_command(executable, port, protocol)` =
+  `cloudflared tunnel --url http://127.0.0.1:<port> --no-autoupdate [--protocol http2|quic]`
+  (`auto`: no `--protocol`); started with list arguments in its own process group (POSIX
+  `start_new_session`, Windows `CREATE_NEW_PROCESS_GROUP`, so Ctrl+C reaches vidgen, which then
+  stops it); its output (stdout + stderr) read by a thread, the last 200 lines kept for error
+  messages; the address is the first `https://<name>.trycloudflare.com` in it (not
+  `api.trycloudflare.com`), waited for `url_timeout` (60 s). An exit without an address quotes
+  cloudflared's last lines and names the usual causes (outgoing connections to Cloudflare,
+  `~/.cloudflared/config.yml`). `find_cloudflared(setting)`: `videogen.cloudflared` (a path or a
+  command name), else `cloudflared` on PATH, else where winget installs it on Windows
+  (`%ProgramFiles(x86)%`, `%ProgramFiles%`, `%LOCALAPPDATA%` `\cloudflared\cloudflared.exe`); else
+  a `VidgenError` with the install hints (Windows `winget install Cloudflare.cloudflared` and a new
+  terminal, macOS `brew install cloudflared`, Linux Cloudflare's downloads page, the setting).
+- **Checked before use.** After the address appears the host waits (at most 15 s) for
+  cloudflared's "Registered tunnel connection" line (an early DNS query of a new name can be
+  cached as "not found"), then `verify_public` asks the public URL of every file with `HEAD`
+  until it answers 200 with the file's length, every `verify_interval` (2 s) for
+  `verify_timeout` (60 s). If it never does, everything is closed and a `VidgenError` says
+  nothing was sent to a provider and points to `host-test`.
+- **Closed as soon as possible** (`close(reason)`, idempotent, each step even when an earlier
+  one fails): cloudflared first (`stop_process_tree`: Windows `taskkill /PID <pid> /T /F`,
+  elsewhere SIGTERM to its process group, SIGKILL after 5 s), then the server, then the temporary
+  folder (`shutil.rmtree`, retried 5 × 0.2 s for Windows file locks; a failure is a warning naming
+  the folder, and `folder_deleted: false` in the ledger). Reasons: `done` (the `with` block ended),
+  `error: <type>` (an exception in it), `interrupted` (Ctrl+C in it), `failed to open` /
+  `interrupted while opening` (anything going wrong in `open`, which closes before re-raising),
+  `all files fetched` (every file fetched in full by a `GET`, then `host_grace_seconds` without
+  another full fetch; only with `close_when_fetched`), `max lifetime` (`host_max_minutes` after
+  `open` began, whatever happens), `vidgen exited` (an `atexit` hook). A watchdog thread checks
+  the last two every 0.1 s.
+- **Ledger** (the project's `videogen-ledger.jsonl` when one is given; host events are not jobs,
+  `Ledger.jobs()` ignores them): `host_open {host, files: [{name, size, sha256}], max_seconds}`
+  once the address is known (the host name only, never a URL with the secret; `name` is the
+  source relative to the project), `host_fetch {file, method, status, bytes}` for every request
+  of a shared file (the host's own `HEAD` checks included; status 499 when the client went away
+  mid-file), `host_close {host, reason, seconds_open, requests, not_found, folder_deleted}`.
+- **Settings** (`HostSettings.from_config(videogen)`): `videogen.cloudflared` (null),
+  `tunnel_protocol: http2 | quic | auto` (http2: TCP 443, which more networks allow than QUIC's
+  UDP 7844), `host_max_minutes` (15, at most 120), `host_grace_seconds` (30).
+  `videogen.host: none | quick_tunnel` (off by default) comes with Step 306, which uses the host.
+- **Self-test** `host_self_test(settings, keep_seconds=, out=)` and **`vidgen generate host-test
+  [PROJECT] [--keep SECONDS] [--json]`**: free, needs no key and sends nothing to OpenRouter. It
+  writes one tiny text file (`vidgen host test <random>`) in its own temporary folder, shares it
+  (`close_when_fetched` off), and checks: the public `HEAD` (by opening), a `GET` returns the
+  same bytes, the address without the secret and a wrong secret answer 404. `--keep` keeps the
+  tunnel open that long afterwards (capped by the maximum lifetime) and prints the full URL to
+  try in a browser; without `--keep` the URL with its secret is never printed. A failed check is
+  a `VidgenError` naming it (exit code 1), after closing. In a folder without a project the
+  default settings apply; the test writes nothing to a ledger.
+- **Tests** `tests/test_videogen_host.py` (12): random names, hashes, labels; links / folders /
+  missing / duplicate files refused; the real server's exact paths, HEAD, 404s (wrong secret,
+  listing, traversal, query, other methods), no `Server` header, no secret or address in its
+  records; the command line and the install hints; open → verify → fetch → close with a fake
+  cloudflared (a Python script that prints a trycloudflare address and starts a child process):
+  arguments, the process tree gone, the folder deleted, the ledger without the secret; closing
+  after every file was fetched; the maximum lifetime; Ctrl+C and errors in the block; cloudflared
+  exiting, printing nothing, not starting; a public address that never works (only HEADs sent, the
+  ledger's open / close); a wrong length; the self-test (and a tampered answer failing it); the
+  CLI outside a project (text and JSON); the config keys.

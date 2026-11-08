@@ -1024,6 +1024,14 @@ class VideogenConfig(_Strict):
     """Seconds a placed clip fades in from and out to vidgen's own picture of the beat at its edges (0: a cut); a shot's crossfade: overrides it."""
     color_match: float = Field(default=0.5, ge=0, le=1)
     """Light colour matching of placed clips (0 = as made, 1 = full): evens out colour casts (grey world) and exposure, so clips of different models sit together."""
+    cloudflared: str | None = Field(default=None, min_length=1)
+    """The cloudflared program for the quick tunnel that shares audio / video inputs (a path or a command name; default: cloudflared on PATH)."""
+    tunnel_protocol: Literal["http2", "quic", "auto"] = "http2"
+    """How cloudflared connects to Cloudflare: http2 (TCP port 443, works on most networks), quic (UDP 7844) or auto (cloudflared's choice)."""
+    host_max_minutes: float = Field(default=15.0, gt=0, le=120)
+    """Hard limit in minutes on how long a quick tunnel stays open, whatever happens."""
+    host_grace_seconds: float = Field(default=30.0, ge=0, le=600)
+    """Seconds a quick tunnel stays open after the provider fetched every shared file (it may fetch again)."""
 
 
 class StyleSheet(_Strict):

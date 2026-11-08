@@ -1770,6 +1770,20 @@ molecules, planets, glTF models, realistic materials and shadows, rigs, any AI o
 ### Step 304 — `guide_passes` takes the command-line forms in YAML
 - [x] The owner's request: every form of `--guide-passes` also works in a `3d` scene's `guide_passes` — one name (`depth`), a comma list (`depth,mask`, `depth, mask`), `all`; `true`, `false` and lists unchanged; unknown names refused with did-you-mean — done by moving `parse_passes` (with `GUIDE_PASSES`, `ALL_PASSES`) into `three_d/spec.py`, used by the CLI, the worker and `Scene3DParams._guide_passes` alike (re-exported from `three_d/passes.py`); type `bool | str (pattern) | list[str]`, so the JSON schema accepts the strings; docs, guide, DESIGN §114.14; tests in `test_scene_3d_passes.py`
 
+
+## Phase AJ — Hosted inputs via a Cloudflare Quick Tunnel (DESIGN §115)
+
+OpenRouter takes audio and video references only as https URLs, so talking shots and shots with
+`guide:` need a host. The owner's choice: a Cloudflare Quick Tunnel (no account), sharing only
+the shot's own files, for as short a time as possible, off by default. Tested in the workspace
+with a fake cloudflared; the owner tests the real tunnel on Windows with `host-test`.
+
+### Step 305 — The host (module, safety, fakes)
+- [x] `videogen/host.py`: copies of only the given files in a fresh temporary folder outside the project with random names (links refused); a stdlib server on 127.0.0.1 (random port) answering only GET / HEAD of `/<secret>/<file>`, 404 otherwise, no listing, no banner, requests kept in memory; `cloudflared tunnel --url ... --no-autoupdate [--protocol http2]` with an injectable command, the trycloudflare address parsed with a timeout; every file checked through the public address (HEAD, retried); closed (process tree, server, folder) on end / error / Ctrl+C, after every file was fetched + grace, or at the maximum lifetime; ledger `host_open` / `host_fetch` / `host_close`; missing cloudflared → install hints, `videogen.cloudflared`; `vidgen generate host-test [--keep SECONDS]` (free) — done as `QuickTunnelHost`, `ShareServer`, `TunnelProcess`, `host_self_test`, settings `cloudflared`, `tunnel_protocol`, `host_max_minutes`, `host_grace_seconds`; tests `test_videogen_host.py` (12)
+
+### Step 306 — Wiring, docs, review
+- [ ] `vidgen generate run --pay` uses the host for shots with audio / video inputs when `videogen.host: quick_tunnel` (one tunnel per shot, or per run if clearly safe; documented); `plan` stops flagging those shots and lists what would be shared (files, sizes, for at most N minutes; `--pay` still required); MCP follows the CLI; cookbook section "Sharing voice and video inputs safely"; guide / AGENTS.md if keys changed; critical review of 305–306 with fixes
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

@@ -1949,6 +1949,8 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         print("prices: vidgen's conservative estimates from the listed SKUs (~: per video token, estimated); the model's audio is never generated")
         print("references: pictures on every model; audio / video references only where the provider supports them (e.g. Seedance 2.x)")
         return 0
+    if args.action == "host-test":
+        return _generate_host_test(args)
     if args.action in ("plan", "sheets", "inputs"):
         return _generate_shots(args)
     if args.action in ("run", "status", "takes", "pick"):
@@ -2026,6 +2028,35 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
         )
     for line in plan.lines(root):
         print(line)
+    return 0
+
+
+def _generate_host_test(args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate host-test [PROJECT] [--keep SECONDS]`` (DESIGN.md §115): a free check of
+    the quick tunnel; the project (when there is one) gives its ``videogen`` settings."""
+    from vidgen.config import VideogenConfig
+    from vidgen.project import find_config_file
+    from vidgen.videogen.host import HostSettings, host_self_test
+
+    if args.pay:
+        raise VidgenError("`generate host-test` is free and never pays; drop --pay")
+    if args.keep is not None and args.keep < 0:
+        raise VidgenError("--keep: seconds, 0 or more")
+    try:
+        find_config_file(args.project)
+        has_project = True
+    except VidgenError:
+        if args.project != ".":
+            raise
+        has_project = False   # no project here: the default settings
+    settings = Project.load(args.project, variant=args.variant).config.videogen if has_project else VideogenConfig()
+    out = (lambda line: None) if args.json else print
+    result = host_self_test(HostSettings.from_config(settings), keep_seconds=args.keep or 0.0, out=out)
+    if args.json:
+        doc = result.to_json()
+        del doc["ok"]   # a failed test raises, so the envelope's ok is the test's
+        return jsonout.envelope("generate", True, action="host-test", **doc)
+    print(f"host test OK: {result.host} served the file and refused other paths; closed ({result.close_reason})")
     return 0
 
 
@@ -2413,17 +2444,20 @@ def build_parser() -> argparse.ArgumentParser:
         "generate",
         help="generated video shots through OpenRouter's video API: models lists the video models; plan lists the shots with their inputs "
         "and cost; sheets makes the reference sheets; inputs cuts the shots' inputs; run makes the clips (a dry run unless --pay); status, "
-        "takes and pick show and choose the takes the film shows; ledger shows the spending and budget",
+        "takes and pick show and choose the takes the film shows; ledger shows the spending and budget; host-test checks the Cloudflare "
+        "quick tunnel that shares audio / video inputs (free)",
     )
     p.add_argument(
-        "action", choices=["models", "plan", "sheets", "inputs", "run", "status", "takes", "pick", "ledger"],
+        "action", choices=["models", "plan", "sheets", "inputs", "run", "status", "takes", "pick", "ledger", "host-test"],
         help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
         "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
         "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
         "shot's voice (and with --guide its draft render) into build/videogen/; run: generate the ready shots (a dry run; --pay pays, within "
         "the budget, stopping at the first failure, never retrying) and keep each clip as a take with QA and a contact sheet; status: each "
         "shot's takes and the one shown, the credit line; takes: every take with its QA findings and contact sheet; pick: choose a shot's "
-        "take (--shot ID --take N | none | auto); ledger: the project's paid jobs, what they cost and what the budget has left",
+        "take (--shot ID --take N | none | auto); ledger: the project's paid jobs, what they cost and what the budget has left; host-test: "
+        "share one tiny generated text file through a Cloudflare quick tunnel, fetch it back through the public address and close "
+        "(free: needs cloudflared, sends nothing to OpenRouter)",
     )
     project_arg(p)
     p.add_argument("--refresh", action="store_true", help="models: fetch the list again even when the cached copy is recent")
@@ -2433,6 +2467,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--pay", action="store_true", help="run, sheets: pay for the clips / pictures (needs a budget); without it a dry run")
     p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
     p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")
+    p.add_argument("--keep", type=float, metavar="SECONDS", help="host-test: keep the tunnel open this long after the check (the address is printed to try in a browser)")
     p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with guide: true or first_frame: render (a draft render of their scenes)")
     p.set_defaults(func=cmd_generate)
 

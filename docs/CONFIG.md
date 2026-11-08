@@ -2774,6 +2774,10 @@ videogen:
   poll_timeout: 900         # seconds to wait for a job (it keeps running; a later run polls it again)
   crossfade: 0.25           # seconds a placed take fades in from / out to vidgen's picture (0: a cut)
   color_match: 0.5          # light colour matching of placed takes, 0 (as made) - 1
+  cloudflared: null         # the cloudflared program for the quick tunnel (default: cloudflared on PATH)
+  tunnel_protocol: http2    # http2 (TCP 443) | quic (UDP 7844) | auto (cloudflared's choice)
+  host_max_minutes: 15      # a quick tunnel closes after this long, whatever happens
+  host_grace_seconds: 30    # ...or this long after every shared file was fetched
 ```
 
 - **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
@@ -2794,6 +2798,15 @@ videogen:
   https URLs: OpenRouter refuses them inline (HTTP 400 "Only HTTPS URLs are allowed"), so with
   `inline_media: all` a shot with `audio:` or `guide:` has a problem in the plan and `run --pay`
   refuses it.
+- **Quick tunnel** (DESIGN.md §115): audio and video inputs can be shared through a Cloudflare
+  quick tunnel (free, no account; needs `cloudflared`: Windows `winget install
+  Cloudflare.cloudflared`, macOS `brew install cloudflared`). Only copies of the shot's own
+  files are shared, under random names behind a secret path, from a temporary folder outside
+  the project, for at most `host_max_minutes`; then cloudflared is stopped and the copies
+  deleted. `vidgen generate host-test [PROJECT] [--keep SECONDS]` checks it for free: it shares
+  one tiny text file, fetches it back through the public address, checks that other paths
+  answer 404 and closes (`--keep`: stays open that long and prints the address to try in a
+  browser). Using it for paid runs comes with Step 306 (`videogen.host`).
 - **Privacy**: video generation is not eligible for OpenRouter's Zero Data Retention: the
   provider keeps the output for a short time so it can be downloaded.
 - `vidgen generate models` lists OpenRouter's video models (durations, resolutions, aspect
@@ -16288,6 +16301,9 @@ stops the run: `ok` false, `error.details.shots` the outcomes so far. `vidgen ge
 [{take, path, model, cost_usd, qa, contact_sheet}]}`; `qa`: `{width, height, fps, duration,
 audio, summary, checks: [{check, severity, message}], metrics}`). `vidgen generate pick --json`:
 `action` (`pick`), `shot`, `shown` (the take number, or `null`: vidgen's own picture).
+`vidgen generate host-test --json`: `action` (`host-test`), `host` (the quick tunnel's host
+name; the URL with its secret is never in the document), `close_reason`, `checks` (`{check, ok,
+detail}`). A failed check: `ok` false and the error names it.
 
 ### `vidgen character-sheet --json`
 

@@ -25552,3 +25552,50 @@ project), repo work is generic.
   full suite. ruff is not installed in the venv.
 - **Known gaps**: `guide_passes:` with no value (YAML null) is still refused, as before; it is not
   a command-line form.
+
+## Step 305 — Hosted inputs: the quick tunnel host and `generate host-test` (Phase AJ)
+
+- **Built** (DESIGN §115.1): `src/vidgen/videogen/host.py` — `copy_into_share` (copies of the
+  given files only, random `token_hex(8)` names with the extension, SHA-256 and size; symlinks,
+  folders, missing and duplicate files refused; `O_NOFOLLOW` where available), `ShareServer`
+  (stdlib `ThreadingHTTPServer` on 127.0.0.1:0; only GET / HEAD of exact `/<secret>/<name>`,
+  `secret = token_urlsafe(24)`; 404 for every other path and method; no listing, no `Server`
+  header, no stderr logging; `RequestRecord`s in memory with the secret masked and no client
+  address), `TunnelProcess` (`cloudflared tunnel --url http://127.0.0.1:<port> --no-autoupdate
+  [--protocol http2|quic]` in its own process group, output read in a thread, the trycloudflare
+  address parsed with a timeout, waits for "Registered tunnel connection"), `stop_process_tree`
+  (Windows `taskkill /T /F`, POSIX process group SIGTERM → SIGKILL), `find_cloudflared`
+  (setting, PATH, winget's install folders; install hints otherwise), `verify_public` (HEAD
+  until 200 with the right length, retried), `QuickTunnelHost` (context manager; closes on end /
+  error / Ctrl+C / `atexit`, after every file was fetched + grace, at the max lifetime; ledger
+  `host_open` / `host_fetch` / `host_close`; the URL with its secret is never written to disk or
+  printed), `host_self_test`. CLI `vidgen generate host-test [PROJECT] [--keep SECONDS] [--json]`.
+  Config `videogen.{cloudflared, tunnel_protocol, host_max_minutes, host_grace_seconds}`.
+- **Decisions**: the `host: none | quick_tunnel` switch is left to Step 306 (it would do nothing
+  yet); host-test needs no project (defaults outside one) and writes no ledger; the host's own
+  verification HEADs are recorded as `host_fetch` too (honest record; "fetched" for the auto-close
+  counts only complete GETs); `host_open` is written as soon as the address exists (before the
+  checks), so a failed check still leaves an open/close pair; the query string must be empty
+  (exact paths); CPython folds a leading `//` into `/` itself (same file, accepted); no Range
+  support (a full 200 answer is valid HTTP); `--keep` is the only way the full URL is printed.
+- **Files**: new `src/vidgen/videogen/host.py`, `tests/test_videogen_host.py`; changed
+  `src/vidgen/config.py` (4 `VideogenConfig` fields), `src/vidgen/cli.py` (`host-test` action,
+  `--keep`, `_generate_host_test`), docs `CONFIG.md` (settings, quick tunnel bullet, JSON),
+  DESIGN §115 + module tree, CHANGELOG, tasklist (Phase AJ, 305 ticked). Guide / AGENTS.md
+  unchanged (Step 306 does it with the `host` key). Not in `vidgen.api`.
+- **Tests run and passed** (one file at a time, `/home/claude/bin/capped` + `timeout`, `-m "not
+  render"`): `test_videogen_host` (12, 7.7 s), `test_docs` (80), `test_config` (21),
+  `test_json_output` (21, 2 deselected), `test_videogen` (26). Not run: `test_schema` (187 s; only
+  optional fields with defaults were added), the full suite. No rendering code changed.
+- **Spending**: nothing paid, no key read, no network (no real cloudflared run).
+- **Not verified**: a real tunnel (the workspace cannot reach Cloudflare); the exact text
+  cloudflared prints on Windows (the parser looks for any `https://<name>.trycloudflare.com`);
+  `taskkill` on Windows; whether OpenRouter's providers fetch with GET (HEAD-only fetchers would
+  never trigger the "all files fetched" close; the max lifetime still applies).
+- **How the owner tests on Windows**: `winget install Cloudflare.cloudflared`, a new terminal,
+  `vidgen generate host-test` (prints each check and "host test OK"); `--keep 60` to open the
+  printed address in a browser; corporate networks blocking UDP: `tunnel_protocol: http2` is the
+  default already.
+- **Next (306)**: `videogen.host: quick_tunnel`, the host as the provider's `uploader` inside
+  `run --pay` (open before submit, close after the job ends; per shot), the plan's "would share"
+  lines, MCP, cookbook section, guide, review.

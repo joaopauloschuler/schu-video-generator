@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–304)
+## Unreleased (Steps 193–305)
+
+### Generated video: sharing audio / video inputs through a Cloudflare quick tunnel (Step 305)
+
+- New `vidgen.videogen.host`: shares exactly the given files (copies under random names in a temporary folder outside the project; links refused) from a tiny local server on 127.0.0.1 that answers only `GET` / `HEAD` of `/<secret>/<name>` (404 for everything else, no listing, no `Server` header), through `cloudflared tunnel --url ... --no-autoupdate --protocol http2`; every file is checked through the public `https://<words>.trycloudflare.com` address before use; cloudflared (its whole process tree), the server and the copies are closed and deleted when the work ends, on an error or Ctrl+C, after every file was fetched plus a grace period, or at a hard maximum lifetime (15 min). The ledger records `host_open` (host name only, files with size and SHA-256), `host_fetch` and `host_close`.
+- `vidgen generate host-test [PROJECT] [--keep SECONDS] [--json]`: a free check of the tunnel (one tiny text file shared, fetched back, other paths checked for 404, closed); nothing goes to OpenRouter. A missing `cloudflared` names how to install it (Windows `winget install Cloudflare.cloudflared`, macOS `brew install cloudflared`).
+- New `videogen` settings: `cloudflared`, `tunnel_protocol` (`http2` | `quic` | `auto`), `host_max_minutes`, `host_grace_seconds`. Paid runs do not use the tunnel yet (Step 306 adds `videogen.host: quick_tunnel`).
 
 ### 3D scenes: `guide_passes` takes the command-line forms (Step 304)
 
