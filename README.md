@@ -945,6 +945,7 @@ my_video/
   casting, rooms and stereo, score and sound design, the drama checks, a file per chapter;
   [docs/COOKBOOK-GENERATED-VIDEO.md](docs/COOKBOOK-GENERATED-VIDEO.md) — shots made by video models
   through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
+  [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
   [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
   in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;

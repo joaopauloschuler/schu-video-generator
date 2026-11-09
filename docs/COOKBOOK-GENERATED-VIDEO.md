@@ -5,6 +5,7 @@ dawn. schu-video-generator can have a video model on OpenRouter make those shots
 everything else: the story and timing, the voices, captions, overlays, titles, music and the
 final assembly. By default the model's own sound is not used (every job is sent with
 `generate_audio: false`); section 8 says how to keep it. Reference: [CONFIG.md, Generated video](CONFIG.md#generated-video-videogen-vidgen-generate).
+For the same workflow as text a person gives to an AI agent, card by card, see [COOKBOOK-DIRECTING-YOUR-AI.md](COOKBOOK-DIRECTING-YOUR-AI.md).
 
 **The rule: a 3D guide and a starting picture for every shot.** No shot goes to a video model
 without both a 3D guide video (`guide: depth`, `outline`, `mask` or `true`, from a `type: 3d` scene

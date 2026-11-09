@@ -1789,6 +1789,11 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 320 — The tutorial script and the cookbook of instructions for directing an AI
+- [x] `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: 18 instruction cards in order, with what the AI does and what to check; linked from `docs/COOKBOOK.md`, `docs/COOKBOOK-GENERATED-VIDEO.md`, `README.md` and the guide (`AGENTS.md`, both copies)
+- [x] Tutorial script at `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` (outside the repo), with the same cards word for word
+- [ ] For the owner before publishing: the docs and commands are not on `origin/main` yet (see HANDOFF Step 320)
+
 ### Step 319 — Paint starting pictures, split a sheet, label file references, the last-frame overlay, assemble takes
 - [x] A. `vidgen generate frames`: `paint_first_frame:`, `input_references` on OpenRouter's image API, dry run, `--pay`, cache, ledger and budget; `first_frame: painted`
 - [x] B. `vidgen split-sheet`: panels by grid or boxes, names, Lanczos scale (byte-identical to the owner's cut)

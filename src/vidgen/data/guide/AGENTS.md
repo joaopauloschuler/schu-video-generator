@@ -3923,7 +3923,7 @@ scenes:
   of shapes, capped and thinned: worse than a PNG). Text in an SVG is removed — keep words in
   schu-video-generator's captions. No SVG model has a ZDR endpoint (2026-10-08).
 - **Generated video shots** (a beat's `generated_shot: {kind: talking | action | establishing,
-  model, prompt, setting, ...}`; `docs/COOKBOOK-GENERATED-VIDEO.md`): a video model on OpenRouter
+  model, prompt, setting, ...}`; `docs/COOKBOOK-GENERATED-VIDEO.md`; `docs/COOKBOOK-DIRECTING-YOUR-AI.md` has the workflow as instructions a person gives an AI): a video model on OpenRouter
   makes the beat's picture; schu-video-generator keeps the timing, voices, captions, overlays and
   music (by default the model's own sound is not used; see **A model's own sound** below). Expensive (about $0.03-0.60 per second), so: a few
   shots that need real footage, the lowest resolution, 4-5 s. The order: `vidgen generate plan`
