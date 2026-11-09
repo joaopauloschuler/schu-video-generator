@@ -18,7 +18,8 @@
 - ``overlay.png``: the shot's starting picture blended over the first frame of its plain guide,
   to check the fit of the 3D figures before paying. Never sent;
 - ``overlay.last.png``: the same picture over the plain guide's last frame: an object that appears
-  only later in the shot is where the guide puts it. Never sent;
+  only later in the shot is where the guide puts it, and everything that moved or appeared between
+  the guide's first and last frames is drawn at full strength with a magenta outline. Never sent;
 - ``layout.png`` (``vidgen generate frames``, not this module's run): the first frame of the beat's
   draft render, the picture a painted starting picture keeps the composition of (:func:`layout_picture`).
 
@@ -132,28 +133,76 @@ def last_frame(ffmpeg: str, source: Path, dest: Path) -> None:
         raise VidgenError(f"could not take the last frame of {source}: ffmpeg wrote no picture")
 
 
+#: The longer side of the overlays, in pixels (the guide is only a draft: small objects need room).
+OVERLAY_LONG_SIDE = 1600
+#: Grey levels a guide pixel must change by between the first and last frame to count as moved.
+CHANGE_LEVELS = 6
+#: Above this share of the picture changed, the whole frame moved (a camera move or a fade): nothing is outlined.
+MAX_CHANGED_SHARE = 0.6
+#: The outline of what moved or appeared on ``overlay.last.png``, and its reach around it in guide pixels (odd).
+OUTLINE_COLOR = (255, 0, 255)
+OUTLINE_REACH = 7
+
+
+def changed_mask(first: Any, last: Any) -> Any:
+    """The ``L`` mask (255: changed) of what moved or appeared between the frames ``first`` and
+    ``last`` of a guide (same size), specks left by compression removed; ``None`` when nothing
+    changed or when the whole frame did (:data:`MAX_CHANGED_SHARE`)."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+
+    a, b = (np.asarray(frame.convert("L"), dtype=np.int16) for frame in (first, last))
+    changed = (np.abs(a - b) >= CHANGE_LEVELS).astype(np.uint8) * 255
+    mask = Image.fromarray(changed).filter(ImageFilter.MedianFilter(3))
+    share = float(np.asarray(mask).mean()) / 255
+    return mask if 0 < share <= MAX_CHANGED_SHARE else None
+
+
 def make_overlay(ffmpeg: str, picture: Path, guide: Path, dest: Path, *, past_fade: bool, at_end: bool = False) -> None:
     """``dest``: ``picture`` (cropped to fill) blended half and half over the first frame of the
     plain ``guide`` (``past_fade``: the first frame past a fade in from black), or over its last
-    frame (``at_end``)."""
-    from PIL import Image, ImageOps
+    frame (``at_end``, with what moved or appeared since the first frame at full strength and
+    ringed: :func:`changed_mask`), scaled so its longer side is :data:`OVERLAY_LONG_SIDE`."""
+    import numpy as np
+    from PIL import Image, ImageFilter, ImageOps
 
     from vidgen.render.ffmpeg import run_ffmpeg
 
     with tempfile.TemporaryDirectory(prefix="vidgen-overlay-") as scratch:
-        frame = Path(scratch) / "guide.png"
+        start_path = Path(scratch) / "first.png"
+        run_ffmpeg(ffmpeg, ["-i", str(guide), "-frames:v", "1", str(start_path)], f"taking the guide's first frame for {dest.parent.name}")
+        with Image.open(start_path) as opened:
+            start = opened.convert("RGB")
         if at_end:
+            frame = Path(scratch) / "last.png"
             last_frame(ffmpeg, guide, frame)
         elif past_fade:
+            frame = Path(scratch) / "faded.png"
             first_frame(ffmpeg, guide, frame)
         else:
-            run_ffmpeg(ffmpeg, ["-i", str(guide), "-frames:v", "1", str(frame)], f"taking the guide's first frame for {dest.parent.name}")
+            frame = start_path
         with Image.open(frame) as opened:
             base = opened.convert("RGB")
+    size = _overlay_size(base.size)
+    enlarged = base.resize(size, Image.BICUBIC)
     with Image.open(picture) as opened:
-        top = ImageOps.fit(opened.convert("RGB"), base.size, Image.LANCZOS)
+        top = ImageOps.fit(opened.convert("RGB"), size, Image.LANCZOS)
+    blended = Image.blend(enlarged, top, 0.5)
+    mask = changed_mask(start, base) if at_end else None
+    if mask is not None:
+        blended.paste(enlarged, mask=mask.resize(size, Image.NEAREST))   # the late object in the guide, full strength
+        grown = mask.filter(ImageFilter.MaxFilter(OUTLINE_REACH))        # the ring is drawn at the guide's scale
+        ring = Image.fromarray(np.where(np.asarray(mask) > 0, 0, np.asarray(grown)).astype(np.uint8)).resize(size, Image.NEAREST)
+        blended.paste(OUTLINE_COLOR, mask=ring)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    Image.blend(base, top, 0.5).save(dest)
+    blended.save(dest)
+
+
+def _overlay_size(guide_size: tuple[int, int]) -> tuple[int, int]:
+    """The guide's shape with its longer side :data:`OVERLAY_LONG_SIDE` (never below the guide's size)."""
+    width, height = guide_size
+    scale = max(1.0, OVERLAY_LONG_SIDE / max(width, height))
+    return round(width * scale), round(height * scale)
 
 
 #: A frame below this share of the brightest frame's mean grey (in the first
@@ -268,7 +317,7 @@ def _write_overlay(ffmpeg: str, project: Project, shot: Shot, plain: Path, writt
     last = plain.with_name(OVERLAY_LAST_NAME)
     make_overlay(ffmpeg, picture, plain, last, past_fade=False, at_end=True)
     written.append(last)
-    out(f"{shot.id}: starting picture over the plain guide's last frame {last.relative_to(project.root).as_posix()} (check where anything that appears later in the shot ends up)")
+    out(f"{shot.id}: starting picture over the plain guide's last frame {last.relative_to(project.root).as_posix()} (what moved or appeared by the end is outlined in magenta; check where it ends up)")
 
 
 def layout_picture(project: Project, shot: Shot, *, render: Callable[[Project, str, tuple[str, ...]], SceneRender] | None = None) -> Path:
@@ -366,4 +415,4 @@ def make_inputs(
     return written
 
 
-__all__ = ["OVERLAY_LAST_NAME", "OVERLAY_NAME", "SceneRender", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "make_opening_guide", "make_overlay"]
+__all__ = ["CHANGE_LEVELS", "OVERLAY_LAST_NAME", "OVERLAY_LONG_SIDE", "OVERLAY_NAME", "SceneRender", "changed_mask", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "make_opening_guide", "make_overlay"]

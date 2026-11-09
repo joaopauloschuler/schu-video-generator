@@ -142,9 +142,11 @@ change what was downloaded. **Limits per request, from third-party pages, not of
 2. Fit the 3D figures to it: in the `type: 3d` scene, move the stand-ins until a draft of the scene lines up with
    the picture, so the guide agrees with what the picture shows. `vidgen generate inputs --guide` writes
    `build/videogen/<shot>/overlay.png` (the starting picture blended half and half over the first frame of the
-   plain guide) and `overlay.last.png` (the same picture over the plain guide's last frame). Open both and check
-   that the figures sit on what the picture shows, this costs nothing. `overlay.last.png` shows what the first
-   overlay cannot: an object that only appears later in the shot, where the guide puts it. A guide showing an arm
+   plain guide) and `overlay.last.png` (the same picture over the plain guide's last frame), both enlarged to 1600
+   pixels on the longer side. Open both and check that the figures sit on what the picture shows, this costs
+   nothing. `overlay.last.png` shows what the first overlay cannot: an object that only appears later in the shot,
+   where the guide puts it, and everything that moved or appeared between the guide's first and last frames is drawn
+   at full strength inside a magenta outline, so even a small late object can be found. A guide showing an arm
    rising through the concrete, instead of in the water beside it, is a guide error you can only see there. (Both
    overlays use the plain guide, not the combined one.)
 3. Make the shot with `guide: depth`, `first_frame: <the picture>` and `first_frame_in: guide`. Check the take: its
@@ -601,7 +603,8 @@ themselves at any join, each clip's sound level the same as the take's.
 
 ## 9. Publishing
 
-When the film shows takes, the description file ends with "Includes AI-generated footage
+When the film shows takes, laid over beats or played by `video_clip` scenes from `takes/<shot>/<n>.mp4`
+as in the `film.yaml` route of section 8, the description file ends with "Includes AI-generated footage
 (models)." and `vidgen lint` notes each scene (`generated_footage`). Platforms ask you to disclose
 realistic AI-generated footage: tick YouTube's "Altered or synthetic content" when uploading, and
 use TikTok's AI-generated content label. The models' and OpenRouter's terms apply to the clips.

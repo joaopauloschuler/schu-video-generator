@@ -106,15 +106,39 @@ def _parts(root: Path, beat_shot: str) -> list[str]:
     return parts or [beat_shot]
 
 
+def clip_takes(project: Project, scene_id: str | None = None) -> list[tuple[str, int, str]]:
+    """``(shot, take number, model)`` of the takes that ``video_clip`` scenes (of ``scene_id``, or
+    every one) play from ``takes/<shot>/<n>.mp4``: the film of ``film.yaml`` (DESIGN.md §113.16),
+    which lays no generated shot over a beat. The model is ``?`` without a sidecar."""
+    from vidgen.videogen.takes import takes_of
+
+    found: list[tuple[str, int, str]] = []
+    for scene in project.config.scenes:
+        if scene.type != "video_clip" or (scene_id is not None and scene.id != scene_id):
+            continue
+        raw = scene.params.get("path")
+        path = Path(raw) if isinstance(raw, str) else None
+        if path is None or path.is_absolute() or len(path.parts) != 3 or path.parts[0] != TAKES_DIR.name or not path.stem.isdigit():
+            continue
+        take = next((t for t in takes_of(project.root, path.parts[1]) if t.number == int(path.stem)), None)
+        if take is not None:
+            found.append((take.shot, take.number, take.model))
+    return found
+
+
 def placed_models(project: Project) -> list[str]:
-    """The models whose takes the film shows (sorted, distinct)."""
-    return sorted({p.model for p in scene_placements(project)})
+    """The models whose takes the film shows (sorted, distinct; a take without a sidecar has none)."""
+    placed = {p.model for p in scene_placements(project)} | {model for _, _, model in clip_takes(project)}
+    return sorted(placed - {"?"})
 
 
 def credit_line(project: Project) -> str:
-    """``Includes AI-generated footage (model, model).`` when the film shows takes, else ``""``."""
+    """``Includes AI-generated footage (model, model).`` when the film shows takes (laid over beats
+    or played by ``video_clip`` scenes; without the models when no take names one), else ``""``."""
     models = placed_models(project)
-    return f"Includes AI-generated footage ({', '.join(models)})." if models else ""
+    if models:
+        return f"Includes AI-generated footage ({', '.join(models)})."
+    return "Includes AI-generated footage." if clip_takes(project) or scene_placements(project) else ""
 
 
-__all__ = ["Placement", "credit_line", "placed_models", "scene_placements"]
+__all__ = ["Placement", "clip_takes", "credit_line", "placed_models", "scene_placements"]

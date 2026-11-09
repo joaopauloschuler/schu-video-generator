@@ -1789,6 +1789,12 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 321 — The tutorial's cards fixed after a fresh agent followed them (voice, refs, shots, readable overlays, disclosure)
+- [x] Cards 1, 3, 4, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17 corrected, identical in `docs/COOKBOOK-DIRECTING-YOUR-AI.md` and the script (compared by program); "A complete shot" example in the cookbook; "the director"
+- [x] S1 readable overlays (1600 px, what moved or appeared outlined in magenta on `overlay.last.png`)
+- [x] S2 `vidgen list-music` text without synthesis (3 s); S3 plan note for a line with no voice input; S4 disclosure for `video_clip` takes; S5 orphaned MP3s of a config without beats
+- [~] S5 empty `.srt`: left, pinned by `tests/test_render.py` (`result.srt.read_text(...) == ""`)
+
 ### Step 320 — The tutorial script and the cookbook of instructions for directing an AI
 - [x] `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: 18 instruction cards in order, with what the AI does and what to check; linked from `docs/COOKBOOK.md`, `docs/COOKBOOK-GENERATED-VIDEO.md`, `README.md` and the guide (`AGENTS.md`, both copies)
 - [x] Tutorial script at `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` (outside the repo), with the same cards word for word

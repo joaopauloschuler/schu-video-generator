@@ -1870,18 +1870,20 @@ def _decibels(value: float) -> float | None:
     return round(value, 1) if math.isfinite(value) else None
 
 
-def music_entries(root: Path | None, preview_dir: Path | None = None) -> list[dict[str, Any]]:
+def music_entries(root: Path | None, preview_dir: Path | None = None, *, analyse: bool = True) -> list[dict[str, Any]]:
     """The beds, the project's pieces (score files, origin ``score``,
     :func:`vidgen.music_pieces.piece_entry`: also ``path``, ``title``, ``time``, ``bars``,
     ``loop``, ``sections``, ``problems``) and the project's ``assets/music`` files described for
     ``vidgen list-music``: ``{name, origin, description, use, tempo, key, chords, loop_seconds,
     duration, channels, loudness, preview}`` (beds: their loop; files: as decoded; ``preview``: a
-    WAV of the bed written to ``preview_dir``, else ``None``)."""
+    WAV of the bed written to ``preview_dir``, else ``None``). With ``analyse`` false the beds
+    are described without being made (minutes in all): ``loudness`` ``None``, ``loop_seconds`` the
+    bed's declared length; previews need the beds, so ``preview_dir`` makes them anyway."""
     entries: list[dict[str, Any]] = []
     for bed in BUILTIN_BEDS.values():
-        data = bed_loop(bed.name)
+        data = bed_loop(bed.name) if analyse or preview_dir is not None else None
         preview = None
-        if preview_dir is not None:
+        if preview_dir is not None and data is not None:
             preview = preview_dir / f"{bed.name}.wav"
             write_wav(preview, data)
         entries.append(
@@ -1893,10 +1895,10 @@ def music_entries(root: Path | None, preview_dir: Path | None = None) -> list[di
                 "tempo": bed.tempo,
                 "key": bed.key,
                 "chords": list(bed.chords),
-                "loop_seconds": round(len(data) / RATE, 3),
+                "loop_seconds": round(len(data) / RATE, 3) if data is not None else round(bed.seconds, 3),
                 "duration": None,
                 "channels": 2,
-                "loudness": _decibels(integrated_loudness(data)),
+                "loudness": _decibels(integrated_loudness(data)) if data is not None else None,
                 "preview": preview,
             }
         )

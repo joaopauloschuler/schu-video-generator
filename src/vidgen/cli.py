@@ -1566,7 +1566,7 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     from vidgen import composer, synth
 
     preview_dir = Path(args.render_dir).resolve() if args.render_dir else None
-    entries = music.music_entries(root, preview_dir)
+    entries = music.music_entries(root, preview_dir, analyse=args.json)   # the text list needs no synthesis
     if args.json:
         return jsonout.list_music_document(root, entries, preview_dir, composer.mood_entries(), composer.instrument_entries())
     for e in entries:

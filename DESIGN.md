@@ -22266,6 +22266,15 @@ frame image made the provider download voice and guide ($0.191), the clip opened
 - **`vidgen split-sheet`** (`videogen.split_sheet.split_sheet`, top-level CLI, no project): crops with ffmpeg's `crop` and, with `--scale` other than 1, `scale=...:flags=lanczos` (Pillow's Lanczos gave SSIM 0.81 and 0.97 on the two panels compared with the owner's ffmpeg-cut panels; the same ffmpeg filters give byte-identical PNGs). `--columns/--rows/--gap` cut equal panels and must divide into whole pixels; `--box X,Y,W,H` is repeated.
 - **Assembly** (documented recipe, no code): a film of picked takes is a second config (`film.yaml`) of `video_clip` scenes with `path: takes/<shot>/<n>.mp4`, `region: bleed`, `fade: false`, no beats and `duration:` the take's length, rendered with `vidgen render film.yaml --preview`. `place: false` on the shots stops the plan's note about a placed take's sound and keeps the shots from being laid over vidgen's own scenes; the takes themselves are not read by the generate commands from `film.yaml`.
 
+### 113.17 Readable overlays, the film's disclosure, faster music list, the shot-with-a-line note (Step 321)
+
+- **Overlays.** `make_overlay` enlarges both overlays to `OVERLAY_LONG_SIDE` (1600) pixels on the longer side (the guide with bicubic, the picture with Lanczos), blended 50% as before. `at_end` also compares the guide's first and last frames (`changed_mask`: grey change >= `CHANGE_LEVELS`, 6, median-filtered; nothing above `MAX_CHANGED_SHARE`, 0.6, of the frame, a camera move or a fade): the changed area shows the guide at full strength with a magenta ring around it, drawn at the guide's scale (`OUTLINE_REACH`, 7 pixels) so a small late object is found. Still never sent.
+- **Disclosure of the film.yaml route.** `compose.clip_takes(project, scene_id)` finds `video_clip` scenes whose `path` is `takes/<shot>/<n>.mp4` (the `Take`'s sidecar names the model); `credit_line` and the `generated_footage` lint rule count them with placed takes, so the description file and lint carry the AI-footage line (§113.4).
+- **`vidgen list-music`** (`music_entries(analyse=False)`): the text list describes each bed from its `Bed` entry (`loop_seconds` = `Bed.seconds`, which equals the synthesised loop's length for all 17 beds: checked once by comparing `--json`), so it needs no synthesis (about 3 s). `--json` and `--render-dir` still make the beds.
+- **`vidgen generate plan`** notes a shot with a spoken line (`line` true) and `sound: model` but no voice input (`audio` not `beat`): the model invents the voice.
+- **Orphaned MP3s**: a config without any beat (a `film.yaml` of clips) reports none.
+- `narration.pad` and `pause:`: a beat lasts its voice plus `pause:`, or plus `narration.pad` when there is no `pause:`; the pad is not added on top of a pause.
+
 ## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
 
 Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in

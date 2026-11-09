@@ -3962,8 +3962,8 @@ scenes:
   paid twice. A shot uses it with `first_frame: painted` (blocked until it exists). Leave `name:` off the stand-ins, or the name tags can become text in the picture.
   `vidgen split-sheet PICTURE --columns N [--rows N] [--gap PX] | --box X,Y,W,H ... --names a,b --scale 3 --out DIR` cuts one sheet into named panels.
   A file reference can say what it shows (`refs: [{file: path, shows: morag}]`); the role sentence names it in real order.
-  `generate inputs --guide` also writes `overlay.last.png` (the starting picture over the guide's last frame) so an object appearing later can be checked.
-  A film of picked takes with hard cuts: `place: false` on the shots, one `video_clip` per take (`path: takes/<shot>/<n>.mp4`, `fade: false`, `region: bleed`, no beats, `duration:` the take's length) in a separate `film.yaml`, then `vidgen render film.yaml --preview`.
+  `generate inputs --guide` also writes `overlay.last.png` (the starting picture over the guide's last frame, with whatever moved or appeared since the guide's first frame at full strength inside a magenta outline) so an object appearing later can be found and checked; both overlays are enlarged to 1600 pixels on the longer side.
+  A film of picked takes with hard cuts: `place: false` on the shots, one `video_clip` per take (`path: takes/<shot>/<n>.mp4`, `fade: false`, `region: bleed`, no beats, `duration:` the take's length) in a separate `film.yaml` with its own `output:` name, then `vidgen render film.yaml --preview` (the description file and lint then carry the AI-generated disclosure). A beat lasts its voice plus `pause:` (or `narration.pad` without one), and the rendered scene about 0.5 s more, so the plan's shot window is shorter than the scene. An action shot sends no voice unless `audio: beat`; `vidgen generate plan` notes a shot with a line, `sound: model` and no voice input.
 - **Voice and guide inputs** (talking shots, `audio:`, `guide:`): OpenRouter takes sound and
   video only as https URLs, so these shots stay blocked until the user opts in with
   `videogen: {host: quick_tunnel}` (default `none`). Then each paid shot shares only its own

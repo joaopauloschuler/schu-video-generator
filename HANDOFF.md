@@ -26022,3 +26022,36 @@ project), repo work is generic.
 - **Decisions**: no new code, DESIGN.md untouched (no contract change); `tasklist.md` Step 320 left with one open item for the owner. No test added: the owner's rule is no pytest until the suite runs under 5 minutes, and a doc-link test would be unverified.
 - **Spending**: nothing paid; no key read; no OpenRouter requests; no renders.
 - **Tests**: none run, on the owner's instruction. `cmp` shows the two `AGENTS.md` copies identical.
+
+## Step 321 — The tutorial's cards fixed after a fresh agent followed them: voice, refs, one shot at a time, readable overlays, disclosure
+
+- **Why**: a fresh agent followed the 18 cards literally with no paid calls and found that the voice would not be sent, three shots would be blocked, the overlays could not show a small late object, and the film.yaml route had no disclosure.
+- **Built (software, DESIGN §113.17)**: (S1) `make_overlay` writes both overlays at 1600 pixels on the longer side; `overlay.last.png` also compares the guide's first and last frames (`changed_mask`) and shows what moved or appeared at full strength inside a magenta outline. (S2) `vidgen list-music` text no longer synthesises the beds (`music_entries(analyse=False)`); `--json` and `--render-dir` still do. (S3) a plan note for a spoken line with `sound: model` and no voice input. (S4) `compose.clip_takes` finds `video_clip` scenes on `takes/<shot>/<n>.mp4`: `credit_line` and the `generated_footage` lint rule count them. (S5) `orphaned_audio` reports nothing for a config without beats.
+- **Built (docs)**: cards 1, 3, 4, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17 in `docs/COOKBOOK-DIRECTING-YOUR-AI.md` and `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` (identical, compared by program); the "A complete shot" example in the cookbook; "the director" for the person directing the film; `docs/COOKBOOK-GENERATED-VIDEO.md` overlay wording and section 9; `docs/CONFIG.md`, `DESIGN.md`, guide + `AGENTS.md` (identical).
+- **Files**: `src/vidgen/{cli,music}.py`, `src/vidgen/lint/run.py`, `src/vidgen/tts/cache.py`, `src/vidgen/videogen/{compose,inputs,shots}.py`, the docs above, `tests/test_videogen_step321.py` (new), `tasklist.md`.
+- **Public interfaces** (not in `vidgen.api`): `make_overlay` unchanged in signature; `inputs.changed_mask`, `compose.clip_takes`, `music_entries(analyse=)`.
+- **Decisions / deviations**: (1) The brief's formula "scene = voice + narration.pad + pause:" is wrong: `pause:` replaces `narration.pad` (config.py, `BeatConfig.pause`; measured: voice 2.376 s + pause 2.3 s = 4.676 s; the plan's window is 4.63 s, the rendered scene 5.125 s, its fade-out). Card 9 states the true rule. (2) Card 17 starts at `music: {source: <bed>, volume: 6}`, not 0: with default `duck.clips` the music is 12 dB down for the whole of each clip, measured takes' sound is about -20 LUFS and a bed at volume 0 ducked is about -40 LUFS. (3) S5's empty `.srt` left: `tests/test_render.py` pins `result.srt.read_text(encoding="utf-8") == ""` for a silent scene. (4) Card 9 and others are longer; the script's estimated length is now about 17 min 28 s (was 16 min 14 s).
+- **Known gaps**: a fresh agent has not re-run the cards with real payment; the `audio: beat` requirement and the labelled refs were verified in the plan, not in a paid job; the music level of volume 6 was checked by level arithmetic and one render, not by ear; the example's `shows:` labels were not exercised against a video model.
+- **Spending**: nothing paid. `/home/bpsa/app/video-projects/get-it-all-in` was not modified (a copy was used). No key was read or printed.
+- **Tests**: **pytest was not run, on the owner's instruction.** Written but unrun: `tests/test_videogen_step321.py`; the existing overlay tests of `tests/test_videogen_shot_chain.py` and `tests/test_videogen_3d_guide.py` also unrun.
+- **Verification by running the real program** (`V` = `env -u OPENROUTER_API_KEY PYTHONPATH=src python -m vidgen`; `pytest` not run; folders under the scratchpad `v321/`):
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Card 4 no scenes | `V validate` on a `video.yaml` with `videogen:` and no scenes (and `scenes: []`) | `scenes: Field required` / `at least 1 item`: the card says not to expect a pass yet |
+| Card 7 | `V generate sheets` (dry run), `imagegen: {provider: openrouter, model: bytedance-seed/seedream-4.5}` | `would make ...: 9:16, openrouter bytedance-seed/seedream-4.5, $0.040` per picture, OpenRouter prices of 2026-11-09 |
+| Card 9 | new project `v321/new`: `V tts`, voices measured (2.376, 1.464, 3.000, 2.040 s), `V render --preview --jobs 1` | `build/preview/scenes/shot{1..4}.mp4`, scenes 5.125 and 5.083 s: voice plus `pause:` plus the 0.5 s fade-out; plan shot window 4.63 s |
+| Card 9 example | `V validate` on the cookbook's yaml | `ok` |
+| Card 10 | `V generate frames --shot shot1` | Layout plus 3 labelled references (`shows the woman`, ...), `$0.040`, nothing paid |
+| Card 12 | shot 1 only: `guide: depth`, `first_frame_in: guide`, `V generate inputs --guide --shot shot1` | 5 inputs, overlays written at 901x1600 |
+| Card 13 | `V generate plan --shot shot1` | Lists `reference: ... (your picture, shows the woman)`, ... and `audio: build/videogen/shot1/audio.mp3`, not blocked |
+| Card 14 | `V generate pick`, inputs for shots 2-4, `V generate plan` | All 4 shots: 0 blocked, 0 problems (`audio:` on shots 1, 2, 4; shot 3 silent) |
+| S1 fish, Card 15 | `V generate inputs --guide --shot shot4` on the card test project; `overlay.last.png` viewed | The small late fish appears at its bucket position inside a clear magenta ring |
+| S1 arm | same on a copy of get-it-all-in shot 4; viewed | The rising arm appears standing in the water with a magenta outline |
+| Card 16, S4 | `film.yaml` with `output: card321-film`, `V render film.yaml --preview --jobs 1`; `V lint film.yaml --preview --jobs 1` | 3D preview `new_preview.mp4` unchanged (same md5); `card321-film_preview.mp4` 20.33 s; description file `Includes AI-generated footage (bytedance/seedance-2.0-mini).`; lint `generated_footage` on all 4 scenes |
+| Card 17 | `music: {source: calm, volume: 6}` render | `music: calm`, `volume 6`, `duck 12` in the render's mix record; -17.6 LUFS before normalising |
+| S2 | `V list-music` | 3.4 s (was up to 1 min 42 s); `--json` unchanged (1 min 59 s), all 17 beds' `loop_seconds` equal in text and JSON |
+| S3 | plan on a copy of `video.yaml` with `audio: none` on shot 2 | `note: sound: model and a spoken line, but no voice input: ... set audio: beat` |
+| S5 orphans | `V validate film.yaml` | No orphaned MP3 line (`video.yaml` beside it had 4 beats' MP3s) |
+| Cards | program comparing each `**Card N**` block in both files | 18 of 18 identical |
+| Guide | `cmp AGENTS.md src/vidgen/data/guide/AGENTS.md` | Identical |

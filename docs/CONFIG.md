@@ -3031,7 +3031,8 @@ scenes:
   (cropped to fill) blended half and half over the first frame of the plain guide (past a fade in from black for a render guide), never the combined
   guide. It checks the fit of the 3D figures before paying. Never sent.
 - **Last-frame overlay** (`build/videogen/<shot>/overlay.last.png`, written with `overlay.png`): the same picture over the plain guide's last frame, so
-  an object that only appears later in the shot shows where the guide puts it. Never sent.
+  an object that only appears later in the shot shows where the guide puts it; everything that moved or appeared between the guide's first and last frames is drawn at full
+  strength with a magenta outline (nothing is outlined when the whole frame changed, a camera move or a fade). Both overlays are enlarged to 1600 pixels on the longer side. Never sent.
 - **A painted starting picture** (`vidgen generate frames [PROJECT] [--shot ID] [--pay]`, a shot with `paint_first_frame:`): a dry run by default; it renders
   the beat's first frame as a draft (`build/videogen/<shot>/layout.png`), lists the input pictures in the order they are sent (the layout first) and
   estimates the price. `--pay` paints it with `paint_first_frame.model` (default `bytedance-seed/seedream-4.5`, OpenRouter `input_references`) within
@@ -3573,7 +3574,7 @@ music:                                 # a list of cues: changing tracks
   - {source: bright, from: results}    # from scene results to the end
 ```
 
-**Built-in beds** (`vidgen list-music` describes them, `--render-dir DIR` writes one loop of
+**Built-in beds** (`vidgen list-music` describes them from their settings without making them, a few seconds; `--json` also measures each bed, about two minutes; `--render-dir DIR` writes one loop of
 each as WAV): seamless loops, generated in one to seven seconds when the video is joined
 (`ascent` takes about 17 s). The
 first five are light; the next five (Step 179) are documentary beds with a soft kick and a synth

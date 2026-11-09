@@ -681,6 +681,8 @@ def _check_sound(shot: Shot) -> None:
         shot.notes.append(f"{model.id} does not say whether it can make sound: generate_audio true is sent; the take may have no sound of its own")
     if shot.spec.place:
         shot.notes.append("sound: model: a placed take plays vidgen's mix, not the clip's sound; to hear the clip's sound use place: false and a video_clip scene")
+    if shot.spec.line and not shot.spec.wants_audio:
+        shot.notes.append("sound: model and a spoken line, but no voice input: the model invents the speaker's voice; set audio: beat to send the beat's voice")
 
 
 def _first_frame_with_references_problem(shot: Shot, models: dict[str, Any]) -> str | None:
