@@ -58,6 +58,7 @@ This section is written for you, the AI agent. The person may direct the film wi
 - `audio: none` and `line: false` on a shot with no speech (Card 9). Without `line: false` the placeholder text goes into the prompt.
 - `guide: depth` and `first_frame_in: guide` on a shot that has reference pictures (Cards 12 and 14): this model takes a first frame or references, never both (Card 11 tells what happened when both were sent; vidgen now blocks such a shot).
 - `output:` in `film.yaml` (Card 16), so that the film does not overwrite the 3D preview.
+- `first_frame: assets/frames/<its file>` as soon as the person accepts a painted picture, before any stand-in moves ([Card 12](#7-the-picture-inside-the-guide)). With `first_frame: painted`, vidgen finds the picture by a key made from the current layout; moved stand-ins and the next `vidgen generate frames`, even a dry run, make a new layout. The shot is then blocked as "not painted yet" and another $0.04 is quoted for a picture you already have. Never pay for it again; pin the file.
 
 ## 1. Get set up
 
@@ -123,7 +124,7 @@ If you have a style sheet picture (your characters and place side by side, made 
 **Card 6**
 
 ```text
-Here is my style sheet picture: [file name]. It has [number] panels side by side. Measure the gap between the panels in pixels, then cut the picture into one reference picture per panel with vidgen split-sheet, at scale 3, into assets/refs, and name each panel for what it shows, for example woman_full, woman_face, harbour. Show me the panels.
+Here is my style sheet picture: [file name]. It has [number] panels side by side. Measure the gap between the panels in pixels, then cut the picture into one reference picture per panel with vidgen split-sheet, at scale 3, into assets/refs, and name each panel for what it shows, for example woman_full, woman_face, harbour. If the panels are not evenly spaced, do not use columns and gap: measure each panel and give it its own --box X,Y,W,H in pixels, in reading order. Show me the panels.
 ```
 
 If you do not have one (the film did not use this route, so check the price and the result):
@@ -134,7 +135,7 @@ If you do not have one (the film did not use this route, so check the price and 
 I have no style sheet. In video.yaml set imagegen to provider openrouter with the model bytedance-seed/seedream-4.5. For my two made-up stylised characters, write a reference_sheet prompt each, and write a style_sheet with one frame of the place. Do not base them on real people. Run vidgen generate sheets without --pay and tell me the price, then stop. After my go, pay, show me each picture, and set approved: true only on the ones I accept.
 ```
 
-AI does: measures the gap between panels and runs `vidgen split-sheet` with `--columns`, `--gap`, `--names`, `--scale 3`, `--out assets/refs`, or sets `imagegen: {provider: openrouter, model: bytedance-seed/seedream-4.5}` (the default, `openai gpt-image-1`, needs a different key), writes the sheet entries and runs `vidgen generate sheets`.
+AI does: measures the gap between panels and runs `vidgen split-sheet` with `--columns`, `--gap`, `--names`, `--scale 3`, `--out assets/refs` (panels not evenly spaced: one `--box X,Y,W,H` per panel instead of `--columns` and `--gap`, which would refuse the sheet or cut it in the wrong places), or sets `imagegen: {provider: openrouter, model: bytedance-seed/seedream-4.5}` (the default, `openai gpt-image-1`, needs a different key), writes the sheet entries and runs `vidgen generate sheets`.
 You check: clean panels, nothing cut off, useful names.
 
 **Card 8**
@@ -185,11 +186,11 @@ Why: with `bytedance/seedance-2.0-mini`, a first frame together with references 
 **Card 12**
 
 ```text
-On shot 1 only, set guide: depth and first_frame_in: guide, so that the starting picture goes inside the guide video and no first frame is sent, and keep its refs so that the reference pictures go with the clip. Run vidgen generate inputs --guide --shot shot1 and show me build/videogen/shot1/overlay.png and overlay.last.png. Move the 3D stand-ins until they sit on what the picture shows, then show me again. All of this is free.
+On shot 1 only, set guide: depth and first_frame_in: guide, so that the starting picture goes inside the guide video and no first frame is sent, and keep its refs so that the reference pictures go with the clip. Before moving anything, pin the picture I accepted: replace first_frame: painted with first_frame: assets/frames/<the file vidgen generate frames named>, because moving the stand-ins changes the layout and painted would then look for a new picture. Never pay to paint that picture again. Run vidgen generate inputs --guide --shot shot1 and show me build/videogen/shot1/overlay.png and overlay.last.png. Move the 3D stand-ins until they sit on what the picture shows, cut the inputs again with the same command, then show me again. All of this is free.
 ```
 
-AI does: `guide: depth` and `first_frame_in: guide` on shot 1 only (the next shots get theirs in Card 14, when each has a starting picture), keeping its `refs`, `vidgen generate inputs --guide --shot shot1` (writes `guide.depth.opening.mp4`, `overlay.png`, `overlay.last.png`), moves the stand-ins.
-You check: in `overlay.png` the 3D figures sit on the picture. Free.
+AI does: `guide: depth` and `first_frame_in: guide` on shot 1 only (the next shots get theirs in Card 14, when each has a starting picture), keeping its `refs`, `first_frame: assets/frames/shot1_<key>.png` (`paint_first_frame` can stay; do not run `vidgen generate frames` for this shot again unless you ask for a repaint: it would quote a new picture), `vidgen generate inputs --guide --shot shot1` (writes `guide.depth.opening.mp4`, `overlay.png`, `overlay.last.png`), moves the stand-ins, cuts the inputs again.
+You check: `first_frame` names the file in `assets/frames`; in `overlay.png` the 3D figures sit on the picture. Free.
 
 **Card 13**
 
@@ -257,7 +258,7 @@ You check: tick the platform's AI label when you upload: "Altered or synthetic c
 
 ## A complete shot
 
-What Card 9 and the later cards build, in one place. The beat's `id` is the shot's id (a beat without `id` gets `<scene>_b1`), so `--shot shot1` selects it. `sound: model` can stay on `videogen` (Card 4) instead of each shot; `place: false` keeps the take out of vidgen's own video (`film.yaml` of Card 16 plays it).
+What Card 9 and the later cards build, in one place. The beat's `id` is the shot's id (a beat without `id` gets `<scene>_b1`), so `--shot shot1` selects it. `sound: model` can stay on `videogen` (Card 4) instead of each shot; `place: false` keeps the take out of vidgen's own video (`film.yaml` of Card 16 plays it). A stand-in's `position` is its centre, so one 1.6 tall on a pier whose top is at y=1 has y=1.8.
 
 ```yaml
 scenes:
@@ -268,7 +269,7 @@ scenes:
       floor: {size: 40, color: "#20303a"}
       objects:   # write the same objects (and camera) into every scene: there is no shared world
         - {id: pier, shape: box, size: [3, 1, 34], position: [0, 0.5, -13], color: "#9aa0a6"}
-        - {id: woman, shape: standin, color: "#e3b13a", position: [-0.8, 1.0, 0.2]}
+        - {id: woman, shape: standin, color: "#e3b13a", position: [-0.8, 1.8, 0.2]}
     beats:
       - id: shot1   # the beat's id: `vidgen generate plan --shot shot1`, `run --pay --shot shot1`
         voice: woman
@@ -283,7 +284,7 @@ scenes:
           prompt: "She poses on the pier and calls to the man behind the camera."
           place: false
           guide: depth   # with a starting picture and first_frame_in: guide, the depth pass opens on it
-          first_frame: painted   # shot 1; later shots: last_of:shot1
+          first_frame: painted   # shot 1, until the picture is accepted, then its file: assets/frames/shot1_<key>.png (Card 12); later shots: last_of:shot1
           first_frame_in: guide
           paint_first_frame:
             prompt: "A woman in a yellow jacket stands on the left of a concrete pier."

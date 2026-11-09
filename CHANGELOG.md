@@ -7,6 +7,10 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### The director's cookbook: three traps removed (Step 324)
+
+- `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: Card 12 pins an accepted painted picture by its file before the stand-ins move, so that it is not blocked or quoted again; the example stand-in stands on the pier and the text says a stand-in's `position` is its centre; Card 6 uses one `--box` per panel when panels are not evenly spaced.
+
 ### An AI given only short prompts finds the cookbook's cards (Step 323)
 
 - `docs/COOKBOOK-DIRECTING-YOUR-AI.md` opens with a section for the AI: each of the tutorial's 11 short prompts maps to its long cards and to the points where the AI must stop and wait, with the safety rules and the details that must not be left out. The README and the author guide point to it.

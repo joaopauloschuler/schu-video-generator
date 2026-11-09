@@ -1789,6 +1789,13 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 324 — Three snags found by following the short prompts
+- [x] Card 12 (and the required details): pin the accepted painted picture by its file before moving stand-ins; never pay for it again
+- [x] "A complete shot": the stand-in stands on the pier (y=1.8); a stand-in's `position` is its centre
+- [x] Card 6: panels not evenly spaced take one `--box X,Y,W,H` each
+- [ ] For the owner: a dry run of `vidgen generate frames` re-cuts `layout.png` and can block a shot using `first_frame: painted` (reported in HANDOFF; code unchanged)
+- [ ] For the owner: `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` was off limits; its Cards 6 and 12 now differ from the cookbook
+
 ### Step 323 — An AI given only short prompts finds and follows the long cards
 - [x] `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: section "For the AI: when the person gives short prompts": the 11 prompts mapped to the 18 cards with each stop, safety rules, Card 4's defaults, required details
 - [x] Pointers near the top of `README.md` and both `AGENTS.md` copies; the existing pointer in `docs/COOKBOOK.md` now mentions short prompts
