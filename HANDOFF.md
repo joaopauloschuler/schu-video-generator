@@ -25972,3 +25972,11 @@ project), repo work is generic.
 | 316b. Combined guide | `ffprobe` and `ffmpeg ssim` on `guide.depth.opening.mp4` | Length equals plain guide (4.916667 s, 118 frames, both); first frame vs picture: SSIM Y 0.986, All 0.927 |
 | 316c. True first frame + refs on Seedance | `V generate plan`, `V generate run --budget 0.01` | `problem: ... takes a first frame or references, never both ... Set first_frame_in: guide ...`; run skipped |
 | Schema | `V schema`, `V validate` with new fields, bad values | `first_frame_in`, `first_frame_dissolve`, `first_frame_with_references`, `first_frame` (last_of in its doc) and video_clip `fade` present; valid config `ok`; refused: `first_frame_in: sideways`, `first_frame: last_of:`, `first_frame_dissolve: 9`, `fade: "no"` |
+
+## Step 318 — Correct the opening-match figures in the docs
+
+**What:** the cookbook, both `AGENTS.md`, `docs/CONFIG.md` and `DESIGN.md` said a true first frame scored 0.81-0.98 and the picture in the guide 0.87-0.88. The 0.81 came from a comparison that stretched the picture when the clip had been cropped, and 0.87-0.88 were ffmpeg colour scores. They now give what `opening match` reports: 0.98-0.985 for a true first frame, 0.83-0.85 for the picture in the guide (four real takes, measured in Step 317).
+
+**Files:** `docs/COOKBOOK-GENERATED-VIDEO.md`, `AGENTS.md`, `src/vidgen/data/guide/AGENTS.md`, `docs/CONFIG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`. No code or public interface changed.
+
+**How it was checked:** pytest was not run, on the owner's instruction, until the suite runs in under 5 minutes. A search shows no old figure left, and `cmp` shows the two `AGENTS.md` copies identical.

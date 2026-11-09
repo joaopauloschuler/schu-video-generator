@@ -1789,6 +1789,9 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 318 — Correct the opening-match figures in the docs
+- [x] The cookbook, guide, CONFIG and DESIGN quoted 0.81 for a true first frame (a comparison that stretched the picture) and colour SSIM for the picture in the guide; they now give the `opening match` values.
+
 ### Step 317 — One shot after another: last_of, hard cuts, the opening match, the overlay
 - [x] `first_frame: last_of:<shot id>` (either `first_frame_in` mode; the shown take's last decoded frame cut to `build/videogen/<shot>/last_of.<source>.<take>.png`, recorded in `inputs.json`; problems for an unknown shot, itself, a cycle; a source with no take blocks, never chained in one run; another pick makes the shot stale); `video_clip` `fade: false` (hard cut: no fade in, no fade-out); QA `opening_similarity` (SSIM, warning under 0.7) in the take's record and contact sheet; `generate inputs --guide` writes `overlay.png` (picture over the plain guide's first frame); cookbook, guide, CONFIG, DESIGN §113.14
 

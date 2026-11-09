@@ -2978,7 +2978,7 @@ scenes:
   jumping from frame to frame, warning over 3 levels of 255), abrupt cuts inside the clip,
   the **opening match** when the shot has a starting picture (a first frame image or the picture in the guide: the SSIM,
   0 to 1, grey, the better of the picture cropped to fill and stretched, of the clip's first frame against it, `metrics.opening_similarity` in `<n>.json`, shown on the contact sheet;
-  a warning under 0.7, a rough guide: real clips measured 0.81-0.98 with a true first frame, 0.87-0.88 with the picture in the guide), and
+  a warning under 0.7, a rough guide: real clips measured 0.98-0.985 with a true first frame, 0.83-0.85 with the picture in the guide), and
   its own sound (noted, with where it can be heard; `sound: model` with a silent clip is a warning). `vidgen generate takes [PROJECT] [--shot ID]` lists them
   with their findings and contact sheets: look at the sheets before picking.
 - **Pick**: `vidgen generate pick [PROJECT] --shot ID --take N | none | auto` (in

@@ -3975,7 +3975,7 @@ scenes:
   template (Seedance) the prompt starts with a role sentence (`@video1` opens on the starting
   picture, `@image1` and so on are who, `@audio1` is whose voice), built from the actual order of the
   inputs; shots with `first_frame_in: frame` keep their prompt exactly. Measured on seedance-2.0-mini: the
-  opening is close to the picture (SSIM 0.87-0.88), not exact, and the model sets its own speech timing.
+  opening is close to the picture (`opening match` 0.83-0.85), not exact, and the model sets its own speech timing.
   `first_frame: last_of:<shot id>` starts a shot from the last frame of the take that shot shows (either mode; `vidgen generate inputs` cuts
   `build/videogen/<shot>/last_of.<source>.<take>.png`): pick the take first, since another pick makes the next shot stale. A source with no take
   blocks the shot and a run never pays for both in one pass: pay, look at the clip, then the next. QA gives each take with a starting

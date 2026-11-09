@@ -97,7 +97,7 @@ any retake. Decide the budget and how many retakes you can afford before you sta
 references runs as a first frame only: nothing is downloaded, and the job costs $0.177 instead of
 $0.191 for 5 s. With `first_frame_in: guide` the provider downloads the voice and the guide (billed
 $0.191), and the cut between two shots made this way was judged very good by the owner. The limits:
-the opening is close to the picture, not exact (SSIM 0.87-0.88; a true first frame gave 0.81-0.98);
+the opening is close to the picture, not exact (`opening match` 0.83-0.85; a true first frame gave 0.98-0.985);
 the model sets its own speech timing (a word expected at the start came at 3.16 s); it is still
 unproven that the guide steers big movements; and clear file names on the hosted files did not
 change what was downloaded. **Limits per request, from third-party pages, not official: 9 images,
@@ -113,8 +113,8 @@ change what was downloaded. **Limits per request, from third-party pages, not of
    `first_frame_in: guide` the overlay uses the plain guide, not the combined one, whose first frame is the picture.)
 3. Make the shot with `guide: depth`, `first_frame: <the picture>` and `first_frame_in: guide`. Check the take: its
    QA lines and contact sheet give `opening match` (how close its first frame is to the starting picture, SSIM from 0
-   to 1). Under 0.7 is a warning, a rough guide only: real clips measured 0.81 and 0.98 with a true first frame,
-   0.87 and 0.88 with the picture in the guide.
+   to 1). Under 0.7 is a warning, a rough guide only: real clips measured 0.98 and 0.985 with a true first frame,
+   0.83 and 0.85 with the picture in the guide.
 4. Start the next shot from that shot's last frame: `first_frame: last_of:<shot id>` on the next shot, in either
    `first_frame_in` mode. `vidgen generate inputs` cuts the last frame of the take that shot shows (the picked take, or
    the newest without QA errors, the rule of `vidgen generate status`) into
