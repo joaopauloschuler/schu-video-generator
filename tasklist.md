@@ -1789,6 +1789,13 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 322 — A plain install brings every Python package
+- [x] `pdf`, `stt`, `mcp`, `kokoro`, `music`, `3d` packages moved to base `dependencies`; the six extras kept, empty; `dev` the only real extra
+- [x] Docs, guide, DESIGN §116, examples and error messages no longer tell a user to pip install a package; a missing package says to reinstall schu-video-generator; Chromium stays in vidgen's error message
+- [x] Card 1 of `docs/COOKBOOK-DIRECTING-YOUR-AI.md` replaced
+- [~] `misaki[zh]` added; `misaki[ja]` left out (pyopenjtalk has no wheels): owner to decide about Japanese Kokoro voices
+- [ ] For the owner: Card 1 in `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` not updated (that folder was off limits in this step)
+
 ### Step 321 — The tutorial's cards fixed after a fresh agent followed them (voice, refs, shots, readable overlays, disclosure)
 - [x] Cards 1, 3, 4, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17 corrected, identical in `docs/COOKBOOK-DIRECTING-YOUR-AI.md` and the script (compared by program); "A complete shot" example in the cookbook; "the director"
 - [x] S1 readable overlays (1600 px, what moved or appeared outlined in magenta on `overlay.last.png`)

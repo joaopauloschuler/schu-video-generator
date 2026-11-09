@@ -49,7 +49,7 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   −28 LUFS, the same music every time; `music: momentum` is all it takes. Three of them,
   `tidewater`, `skyline` and `time_of_flight`, are written in schu-video-generator's own score format.
 - **Music composed for your video** in 8 moods, played with real instruments (the GeneralUser GS
-  SoundFont; optional `music` extra). It follows the video: a mood per scene, scene changes on bar
+  SoundFont). It follows the video: a mood per scene, scene changes on bar
   lines, swells on reveals, a closing cadence.
 - **Mixed like a finished video**: music cues per range of scenes, ducked under the narration only,
   the whole mix normalised to −16 LUFS with a true-peak limiter.
@@ -133,7 +133,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration),
     `3d` (simple 3D drawn by three.js in headless Chromium: shapes, labels, groups and character
     stand-ins under one light that move, turn, appear, glow and walk on words, a camera that orbits,
-    pushes in or flies to an object and follows it; the `3d` extra);
+    pushes in or flies to an object and follows it);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -328,7 +328,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   narrated play mode ([reference](docs/CONFIG.md#slides-vidgen-slides)). `--format pdf` writes
   a PDF instead: a slide per page, or with `--notes` notes pages (slide, narration, page
   numbers), an optional title page, bookmarks by chapter and the `metadata:` as document
-  properties (optional extra `schu-video-generator[pdf]`; [reference](docs/CONFIG.md#pdf-deck---format-pdf)).
+  properties ([reference](docs/CONFIG.md#pdf-deck---format-pdf)).
 - **Burned-in captions**: `- {type: captions}` puts the narration into the picture, cut at
   phrase boundaries like the SRT, with the scenes laid out clear of it; `style: karaoke` shows a
   few big words at a time with the spoken one highlighted, for vertical / social videos. Word
@@ -345,7 +345,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   are re-voiced, and `vidgen tts --dry-run` shows what they will say
   ([reference](docs/CONFIG.md#pronunciation-pronunciation)).
 - **Readback check**: `vidgen readback` transcribes the narration MP3s with speech to text
-  (faster-whisper locally, extra `schu-video-generator[stt]`, or ElevenLabs) and compares them with the beat
+  (faster-whisper locally, or ElevenLabs) and compares them with the beat
   texts: a word error rate per beat, the words expected and heard ("K-Phi-3" said "kay fye three",
   heard "kay five three"), and a suggested fix — a pronunciation entry for a term misheard in
   several beats, regenerating a beat that lost words. It also lists single words to listen to
@@ -383,8 +383,8 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   (Kokoro, Voxtral, Gemini TTS, ...; `OPENROUTER_API_KEY`, priced per character, estimated by
   `vidgen tts --dry-run`), or `voice: {provider: kokoro, voice: af_heart}` voices it on your own
   computer with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) — free, offline after a
-  one-time 330 MB download, English word timings for karaoke captions (optional extra
-  `schu-video-generator[kokoro]`, below). One TTS provider per video — named voices change the
+  one-time 330 MB download, English word timings for karaoke captions (Python 3.10-3.12).
+  One TTS provider per video — named voices change the
   voice, not the provider — and a variant may switch the whole video to another one
   ([reference](docs/CONFIG.md#narration-providers)).
 - **Lines with feeling**: `emotion: excited` (or `sad`, `whisper`, `doubtful`... 13 in all, or
@@ -420,7 +420,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   (EBU R128) with a −1.5 dBTP true-peak limiter (`audio: {normalize, target_lufs, true_peak}`;
   narration-only videos keep their level unless `normalize: true`); `vidgen render` reports the
   measured loudness and `vidgen list-music` describes the beds in words ([reference](docs/CONFIG.md#background-music-music)).
-  With the `music` extra, `music: {compose: {mood: calm}}` composes original music in one of eight
+  `music: {compose: {mood: calm}}` composes original music in one of eight
   moods (calm, focused, curious, upbeat for explainers; playful, sleepy, tense, triumphant for
   cartoons), played with real instruments ([reference](docs/CONFIG.md#composed-music-compose)):
   composed for the video's timings, every scene change on a bar line, a mood per scene
@@ -465,7 +465,7 @@ Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools �
 `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
-video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).
+video. It uses the official MCP Python SDK, which comes with a plain install.
 
 Claude Desktop (`claude_desktop_config.json`; on Windows give the full path of `vidgen.exe` in
 the venv's `Scripts` folder if `vidgen` is not on the PATH):
@@ -525,7 +525,9 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
    pip install .                       # or `pip install -e ".[dev]"` to work on schu-video-generator itself
    vidgen --version
    ```
-   This installs Manim, pydantic, PyYAML and PyAV (pre-built wheels; no compiler needed).
+   This installs every Python package schu-video-generator uses: Manim, pydantic, PyYAML, PyAV, Kokoro
+   with PyTorch (Python 3.10–3.12), Playwright, symusic, faster-whisper, fpdf2 and the MCP SDK
+   (pre-built wheels; no compiler needed). You never install a Python package yourself.
 4. **Fonts**: nothing to install. schu-video-generator bundles Inter (sans), Source Serif 4 (serif) and
    JetBrains Mono NL (code), all SIL Open Font License (see `THIRD_PARTY_NOTICES.md`). Any
    installed font works too, e.g. `theme: {font: Segoe UI}`.
@@ -536,44 +538,41 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
 6. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
    [MiKTeX](https://miktex.org/download) (it includes `dvisvgm`; allow it to install missing
    packages on the fly) and open a new terminal.
-7. Optional, only for PDF slide decks (`vidgen slides --format pdf`): `pip install ".[pdf]"`
-   (fpdf2, pure Python).
-8. Optional, only for `vidgen readback` with local speech to text: `pip install ".[stt]"`
-   (faster-whisper; its first run downloads the Whisper model from the Hugging Face Hub, ~500 MB
+7. PDF slide decks (`vidgen slides --format pdf`): nothing to install.
+8. `vidgen readback` with local speech to text: nothing to install (faster-whisper's first run
+   downloads the Whisper model from the Hugging Face Hub, ~500 MB
    for `small`).
 9. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
    `setx OPENAI_API_KEY your_key`, or, with `imagegen: {provider: openrouter, model: ...}`, an
    **OpenRouter API key** (from <https://openrouter.ai/keys>), `setx OPENROUTER_API_KEY your_key`;
    then open a new terminal. Each is read only from its variable, never written anywhere. The
    same OpenRouter key voices the narration with `voice: {provider: openrouter, ...}`.
-10. Optional, only for `vidgen mcp` (the MCP server for AI agents): `pip install ".[mcp]"`.
-11. Optional, only for free local narration (`voice: {provider: kokoro}`):
-    `pip install ".[kokoro]"` — PyTorch (Windows wheels from PyPI are CPU-only, ~250 MB), the
-    `kokoro` package and its phonemizer. **Python 3.10–3.12**: the `kokoro` package declares no
-    support for 3.13 yet, so make this virtual environment with `py -3.12 -m venv .venv` (on 3.13
-    the extra installs nothing and `vidgen tts` prints the command that installs it anyway, which
-    worked on 3.13: `pip install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4"
-    "spacy>=3.8,<4" "spacy-curated-transformers<0.4"`). No API key. The first `vidgen tts` downloads
+10. `vidgen mcp` (the MCP server for AI agents): nothing to install.
+11. Free local narration (`voice: {provider: kokoro}`): nothing more to install — PyTorch
+    (Windows wheels from PyPI are CPU-only, ~250 MB), the `kokoro` package and its phonemizer come
+    with the plain install. **Python 3.10–3.12**: the `kokoro` package declares no support for 3.13
+    yet, so make this virtual environment with `py -3.12 -m venv .venv` (on 3.13 it is left out
+    and `vidgen tts` says so). No API key. The first `vidgen tts` downloads
     the model from Hugging Face (`kokoro-v1_0.pth`, 327 MB, plus ~0.5 MB per voice) into
     `%USERPROFILE%\.cache\huggingface\hub` (set `HF_HOME` to move it), and for English voices
     spaCy's small English model (13 MB, installed with pip); after that it works offline.
     **espeak-ng** (Kokoro's pronunciation for Spanish, French, Hindi, Italian and Portuguese, and
-    for English words missing from its dictionary) comes inside the `espeakng-loader` wheel that
-    the extra installs, and kokoro loads that copy: nothing else to install. If `vidgen tts` says
-    espeak-ng cannot be loaded, run `pip install --force-reinstall espeakng-loader`; installing
-    espeak-ng itself (`espeak-ng.msi` from <https://github.com/espeak-ng/espeak-ng/releases>) only
+    for English words missing from its dictionary) comes inside the `espeakng-loader` wheel, and
+    kokoro loads that copy: nothing else to install. If `vidgen tts` says espeak-ng cannot be
+    loaded, reinstall schu-video-generator; installing espeak-ng itself (`espeak-ng.msi` from <https://github.com/espeak-ng/espeak-ng/releases>) only
     helps older kokoro / misaki versions, which find it through the environment variable
-    `PHONEMIZER_ESPEAK_LIBRARY=C:\Program Files\eSpeak NG\libespeak-ng.dll`. Japanese and Chinese
-    voices also need `pip install "misaki[ja]"` / `"misaki[zh]"`.
-12. Optional, only for composed music (music written as notes and played with real instruments,
-    Phase N): `pip install ".[music]"` (symusic 0.5.9, ~3 MB). The SoundFont it plays with,
+    `PHONEMIZER_ESPEAK_LIBRARY=C:\Program Files\eSpeak NG\libespeak-ng.dll`. Japanese voices are not
+    available: `pyopenjtalk` has no pre-built release and would need a C++ compiler, so use
+    another voice provider for Japanese.
+12. Composed music (music written as notes and played with real instruments, Phase N): symusic
+    0.5.9 comes with the plain install. The SoundFont it plays with,
     GeneralUser GS 2.0.3 (32.3 MB, free for commercial use), is downloaded on first use into
     `%LOCALAPPDATA%\vidgen\soundfonts` and checked against its SHA-256; `vidgen soundfont fetch`
     downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
     Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
     by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
-13. Optional, only for `3d` scenes (three.js in headless Chromium, Phase AI): `pip install ".[3d]"`
-    (Playwright), then `py -m playwright install chromium` (downloads Chromium, ~150 MB, once).
+13. Optional, only for `3d` scenes (three.js in headless Chromium, Phase AI): the plain install
+    brings Playwright; `py -m playwright install chromium` downloads the browser (~150 MB, once).
     three.js itself ships with schu-video-generator; nothing is fetched while rendering.
 
 If PowerShell refuses to run `Activate.ps1`, run
@@ -593,7 +592,7 @@ git clone https://github.com/joaopauloschuler/schu-video-generator.git
 cd schu-video-generator
 python3 -m venv .venv
 source .venv/bin/activate
-pip install .                  # or: pip install ".[mcp,pdf]" for the MCP server and PDF slides
+pip install .                  # brings every Python package schu-video-generator uses
 
 # 3. Check it works: render the bundled example as a quick preview
 vidgen --version
@@ -608,37 +607,30 @@ export OPENAI_API_KEY=your_key                # generated pictures (vidgen image
 export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter and/or voice.provider: openrouter
 
 # 6. Optional: free local narration with Kokoro (voice.provider: kokoro); Python 3.10-3.12 only
-pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU-only PyTorch (~200 MB)
-pip install ".[kokoro]"
 sudo apt install espeak-ng                    # optional fallback: kokoro uses the copy bundled in espeakng-loader
 
-# 7. Optional: composed music (symusic); the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
-pip install ".[music]"
+# 7. Optional: composed music; the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
 vidgen soundfont fetch                        # or let the first composed render download it
 
 # 8. Optional: 3d scenes (three.js in headless Chromium through Playwright)
-pip install ".[3d]"
 python -m playwright install chromium         # add --with-deps if Chromium's system libraries are missing
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
 pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
 `sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
-terminal needs `source .venv/bin/activate` again before running `vidgen`. The optional extras
-work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`, `".[music]"`, `".[3d]"`
+terminal needs `source .venv/bin/activate` again before running `vidgen`.
 (macOS keeps the SoundFont in `~/Library/Caches/vidgen`).
 
-**Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (with 3.13 the extra installs
-nothing: use `python3.12 -m venv .venv`, or the forced install of Windows step 11, which worked on
-3.13 here). Installing CPU-only PyTorch first, as in step 6, keeps
-it small: PyPI's Linux PyTorch brings the CUDA libraries along (about 5 GB with `triton` and the
-`nvidia-*` packages); if you do have an NVIDIA GPU, that is the one to keep, and `voice: {device:
-cuda}` uses it. The first `vidgen tts` downloads the model from Hugging Face (`kokoro-v1_0.pth`,
+**Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (on 3.13 it is left out: use
+`python3.12 -m venv .venv`). PyPI's Linux PyTorch brings the CUDA libraries along, so the plain
+install downloads about 3.3 GB (about 3 GB of it PyTorch, `triton` and the `nvidia-*` packages); with
+an NVIDIA GPU, `voice: {device: cuda}` uses them. The first `vidgen tts` downloads the model from Hugging Face (`kokoro-v1_0.pth`,
 327 MB, plus ~0.5 MB per voice) into `~/.cache/huggingface/hub` (`HF_HOME` moves it) and, for
 English, spaCy's `en_core_web_sm` (13 MB, with pip); later runs need no network. espeak-ng comes
 bundled in the `espeakng-loader` wheel; `sudo apt install espeak-ng` does no harm and is the
-fallback named by schu-video-generator's error if the bundled library cannot be loaded. Japanese / Chinese:
-`pip install "misaki[ja]"` / `"misaki[zh]"`.
+fallback named by schu-video-generator's error if the bundled library cannot be loaded. Japanese
+voices are not available (`pyopenjtalk` needs a C++ compiler); Chinese voices come with the plain install.
 
 ### macOS
 
@@ -657,13 +649,13 @@ vidgen storyboard               # contact sheets of every beat -> build/preview/
 vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
 vidgen tts --dry-run            # what would be sent to the TTS (pronunciation applied), how many characters (OpenRouter: est. cost)
 vidgen tts                      # generate narration MP3s (only new/changed beats)
-vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words (schu-video-generator[stt])
+vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words
 vidgen imagegen --dry-run       # pictures of generate: params still to make, their prompts and estimated cost
 vidgen render                   # final render -> output/my_video.mp4 + .srt (+ my_video_chapters.txt with chapters)
 vidgen thumbnail                # output/my_video_thumbnail.png (also written by render with a thumbnail: section)
 vidgen export gif --scene intro # exports/my_video_intro.gif
 vidgen slides --final --audio   # exports/my_video_slides.html: the video as a narrated slide deck
-vidgen slides --final --format pdf --notes   # exports/my_video_notes.pdf: slides with the narration (schu-video-generator[pdf])
+vidgen slides --final --format pdf --notes   # exports/my_video_notes.pdf: slides with the narration
 ```
 
 Edit `video.yaml` (reference: [docs/CONFIG.md](docs/CONFIG.md)) and repeat. Until audio exists,
@@ -675,7 +667,7 @@ narration.
 | command | |
 |---|---|
 | `vidgen init DIR [--example minimal] [--json]` | create a new project (DIR must not exist or be empty) |
-| `vidgen mcp [--root DIR]` | the MCP server (stdio) giving an AI agent's client these commands as tools, inside DIR only (needs `schu-video-generator[mcp]`; also `vidgen-mcp`) |
+| `vidgen mcp [--root DIR]` | the MCP server (stdio) giving an AI agent's client these commands as tools, inside DIR only (also `vidgen-mcp`) |
 | `vidgen plan INPUT [--output DIR\|FILE] [--title TEXT] [--format 16:9\|9:16] [--preset NAME] [--language TAG] [--force] [--json]` | a draft project from a Markdown outline or a plain-text script (deterministic, no AI): scenes chosen from its headings and cues, narration cut into beats, on-screen texts compressed, a `# plan:` reason and `# TODO:`s per scene; prints scenes, estimated length and TODO count, and validates the draft |
 | `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents ([AGENTS.md](AGENTS.md)): all of it, one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant, including variants that do not load), estimated length, audio status, generated pictures |
@@ -685,13 +677,13 @@ narration.
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen list-pronunciation [PROJECT] [--json]` | schu-video-generator's built-in pronunciation entries per TTS engine and language (Kokoro American English: `epoch`, `README`, `JSON`, ...); in a project, the lists its voices use, what the project replaces or removes and the beats each entry changes |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood), the project's pieces (score files in `assets/music`: key, tempo, length, title, description) and its `assets/music` audio files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
-| `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to (needs the `music` extra) |
+| `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to |
 | `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with schu-video-generator's own instruments and writes a WAV or MP3; also takes a project piece's or a built-in bed's name ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
 | `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
 | `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
-| `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when the `music` extra and the SoundFont are there |
+| `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when symusic and the SoundFont are there |
 | `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
@@ -710,7 +702,7 @@ narration.
 | `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks, reactions, gestures and close-ups `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
 | `vidgen screenplay INPUT [--out DIR\|FILE] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]` | a cartoon project from a screenplay (no AI): one `stage` scene per `# Scene:` heading (`set:` line: background or a room, props and furniture, marks), a `card` per `# Card:` heading, one beat per `NAME (manner): line` or narrator paragraph, `[stage directions]` mapped to walks, entrances, exits, jumps, looks, gestures and effect symbols (others kept as `# TODO:`), generated looks (well contrasted; `--species`: animals) and voices for undeclared characters (`--cast`: include a series' cast and sets), `auto_direct: true`; validates the project |
 | `vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider P] [--json]` | write N original characters that differ clearly (silhouette, colours, accessories, voice kind and voice) as an include file (`cast.yaml`) for `include:` or `vidgen screenplay --cast`; the same seed gives the same cast |
-| `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N\|auto] [--force] [--output-dir DIR] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter; needs `schu-video-generator[pdf]`) |
+| `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N\|auto] [--force] [--output-dir DIR] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter) |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
 `render` and `thumbnail` write the MP4, SRT, chapter list and thumbnail into `<project>/output/`
@@ -915,7 +907,7 @@ my_video/
 - [examples/3d-short](examples/3d-short/video.yaml) — "Two friends and a ball", a 9:16 Short of
   about 15 s in one `3d` scene: shapes, two stand-ins who walk and turn to each other, a ball that
   appears, rolls and glows, four camera moves on spoken words, karaoke captions, and its guide
-  passes (depth, outline, mask); needs the `3d` extra (no media committed).
+  passes (depth, outline, mask) (no media committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

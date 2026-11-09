@@ -4,7 +4,7 @@ A configurable generator for narrated, animated explainer videos (Manim + Eleven
 The project and pip distribution are called `schu-video-generator`; the command (`vidgen`, also
 `vidgen-mcp`) and the Python package (`vidgen`, `src/vidgen/`) are `vidgen`, and so is every name
 below unless it says otherwise. `vidgen.DIST_NAME` (`"schu-video-generator"`) is used where the
-distribution is meant: install hints of the optional extras (`schu-video-generator[pdf|stt|mcp]`),
+distribution is meant: the reinstall hint (`errors.REINSTALL`, Step 322),
 the PDF deck's creator and the HTML deck's `generator`, and the MCP server's advertised name. The
 JSON envelope key `vidgen`, the `vidgen://` MCP resources and `--version` (`vidgen 0.3.0`) keep
 the command's name.
@@ -236,7 +236,7 @@ src/vidgen/
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
-  tts/kokoro.py           # local Kokoro-82M provider (extra schu-video-generator[kokoro]): engine, MP3, timings (§68)
+  tts/kokoro.py           # local Kokoro-82M provider (Python 3.10-3.12): engine, MP3, timings (§68)
   kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, weighted blends, validate warnings (§68, §72)
   tts/prosody.py          # an emotion applied to speech: pauses by word timings, soft-limited gain, pitch filter (§72)
   emotions.py             # emotion: the table (speed, pitch, gain, pauses), manner words (§72; no manim)
@@ -244,7 +244,7 @@ src/vidgen/
   hud.py                  # a heads-up display's motion: alert blink, lines, heart beats and trace, scan level and wave (§102.5; no manim)
   tts/effects.py          # EffectProvider: any provider's audio through a voice's effect (§100.2)
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
-                          # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
+                          # get_stt_provider), faster_whisper.py (local), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
   speech_flags.py         # word flags: low recogniser confidence, pauses inside sentences, differences; fixes (§78; no manim)
   textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
@@ -292,7 +292,7 @@ src/vidgen/
   musicfit.py             # composed music that follows the video: bar lines at scene changes, per-scene moods, swells, pauses, cadence, stings (§84)
   score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
   soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
-  synth.py                # composed music played with symusic (optional extra music): install check, per-part render, numpy mix, reverb, cache (§81, §82; no manim)
+  synth.py                # composed music played with symusic: install check, per-part render, numpy mix, reverb, cache (§81, §82; no manim)
   mix.py                  # the final mix: music placement, ducking, normalisation, limiter (§48; no manim)
   loudness.py             # BS.1770-4 integrated loudness and true peak, block by block (§48; no manim)
   transitions.py          # scene transitions: effective transition, frame math, colour fade and irises (§69.45), voice track, xfade names (§49-50; no manim)
@@ -4337,14 +4337,14 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   / `--separate` with a PDF, and PDF-only `--notes` / `--title-page` / `--paper` with HTML, are
   errors (`cli._slides_options`, before loading). `--image-format` / `--quality` defaults now
   depend on the format (HTML webp q80, PDF jpeg q85), so the parser's defaults are `None`.
-- **Library** (`vidgen/slides_pdf.py`): **fpdf2** as the optional extra `schu-video-generator[pdf]`
+- **Library** (`vidgen/slides_pdf.py`): **fpdf2**, a base dependency since Step 322
   (`fpdf2>=2.7.9`; also in `dev`, with `pypdf` for the tests). Decision: fpdf2 is pure Python
   (≈ 340 KB), embeds subsets of TrueType fonts with a ToUnicode map (extractable, searchable
   Unicode text — pt-BR accents), writes outlines, page labels, document info / XMP and alt text,
   and embeds JPEG files as they are (`DCTDecode`, no re-encode). Its dependency fontTools (~5 MB
-  wheel with compiled speed-ups, pure-Python fallback) and LGPL-3.0 licence are why it is an
-  extra, not a base dependency; schu-video-generator does not bundle it. Without it, `make_slides_pdf` raises
-  `VidgenError('... pip install "schu-video-generator[pdf]" ...')` before rendering anything. Alternatives
+  wheel with compiled speed-ups, pure-Python fallback) and LGPL-3.0 licence were why it was an
+  extra until Step 322; schu-video-generator does not bundle it. Without it, `make_slides_pdf` raises
+  `VidgenError(incomplete_install("fpdf2"))` before rendering anything. Alternatives
   rejected: cairo's PDF surface (already installed with Manim) cannot load a font file through
   pycairo (fontconfig / Windows system fonts only) — the bundled Inter would not be guaranteed;
   ReportLab is several times larger for what this needs. fontTools' INFO logging (subsetting steps) is set to
@@ -4412,7 +4412,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   `word_texts()` / `word_times()`; `get_stt_provider(project)`; `stt_settings(project) ->
   {provider, model, language}` (resolved defaults, no provider import: the cache and the lint
   rule use it). Constructing a provider loads nothing and needs no key.
-  - `faster_whisper` (`stt/faster_whisper.py`, optional extra `schu-video-generator[stt]` =
+  - `faster_whisper` (`stt/faster_whisper.py`, base dependency since Step 322:
     `faster-whisper>=1.0`; not in `dev`: ~70 MB of CTranslate2 / ONNX Runtime and a model
     download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(audio,
     language, beam_size=5, word_timestamps=True, condition_on_previous_text=False,
@@ -4420,7 +4420,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     words are not cut). `audio` is the beat decoded by schu-video-generator (`load_audio`: the ffmpeg
     executable via `render.ffmpeg.decode_mono(path, 16000)`, 1-D float32, since Step 141; PyAV
     before), not the path: faster-whisper's own decoder passes `metadata_errors`, which PyAV 19
-    removed. Each word keeps its `probability` (§78). Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
+    removed. Each word keeps its `probability` (§78). Missing package → `VidgenError(incomplete_install("faster-whisper"))`; a model
     that cannot load (download refused, bad folder) → `VidgenError` naming the model.
   - `elevenlabs` (`stt/elevenlabs.py`): `POST /v1/speech-to-text`, multipart (`model_id`
     `scribe_v1`, `language_code` when known, `timestamps_granularity=word`,
@@ -4796,7 +4796,7 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
 ## 62. Refinements (Step 59, MCP server)
 
 - **`vidgen mcp [--root DIR]`** (and the console script `vidgen-mcp`): a Model Context Protocol
-  server on stdio, optional extra `schu-video-generator[mcp]` = the official MCP Python SDK (`mcp>=1.19`).
+  server on stdio, the official MCP Python SDK (`mcp>=1.19`, a base dependency since Step 322).
   Written against SDK 2.x's `MCPServer` (`mcp.server.mcpserver`); with a 1.x SDK it uses
   `FastMCP` (the same decorator API; 1.19 is the first that passes a returned `CallToolResult`
   through). Results are built as `CallToolResult.model_validate({...camelCase wire names...})`,
@@ -5311,10 +5311,9 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   nothing imports `kokoro` / torch until the first beat (validate, render, dry run never do; tested
   via `sys.modules`). `check_credentials` = `check_installed(lang)`: the extra
   (`find_spec("kokoro")`), `misaki[ja]` / `[zh]` (pyopenjtalk / jieba), `espeakng_loader` for
-  espeak languages → `VidgenError` with the command (`pip install "schu-video-generator[kokoro]"`;
-  on Python > 3.12 also the forced install that worked on 3.13: `--ignore-requires-python` +
-  `spacy>=3.8,<4`, `spacy-curated-transformers<0.4`, without which pip backtracks to a spaCy 4
-  pre-release sdist that fails to build). `KokoroEngine(device)`: one `KPipeline` per language,
+  espeak languages → `VidgenError` saying to reinstall schu-video-generator (Step 322; on Python > 3.12
+  to use a Python 3.12 virtual environment instead; `misaki[ja]`: another voice provider, as its
+  pyopenjtalk has no wheels). `KokoroEngine(device)`: one `KPipeline` per language,
   the first one's `KModel` passed to the next (`model=`), shared by every voice of the process
   (`shared_engine`, module dict) = loaded once per `vidgen tts`. `synthesize_timed`: pipeline
   called with `split_pattern=None`, results' float audio → 16-bit PCM (`pcm16`) → MP3 with ffmpeg
@@ -5353,8 +5352,9 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   files and blends `a,b` checked per part), voice of another language than `lang`, `lang` not the
   video language (a / b both English: fine), `timestamps` with a language without timings, the
   extra or `misaki[ja]` / `[zh]` not installed.
-- **Packaging**: extra `kokoro = ["kokoro>=0.9.4; python_version < '3.13'"]` (on 3.13 the extra
-  installs nothing instead of failing a combined `.[dev,kokoro]`; schu-video-generator explains); package data
+- **Packaging**: base dependencies `kokoro>=0.9.4` and `misaki[zh]>=0.9.4`, each with
+  `python_version < '3.13'` (on 3.13 the install leaves them out instead of failing; schu-video-generator
+  explains; Step 322). `misaki[ja]` is not a dependency (pyopenjtalk has no wheels and would need a C++ compiler); package data
   `data/kokoro/*`. Nothing of Kokoro is bundled (THIRD_PARTY_NOTICES).
 - **Live** (this workspace, 2026-10-09): Hugging Face's file CDN and Xet hosts are blocked by
   the egress proxy, so the weights and three voices were fetched from Kokoro-FastAPI's GitHub
@@ -10406,9 +10406,9 @@ Reference: docs/CONFIG.md "SoundFont (`soundfont`, `vidgen soundfont`)". Phase N
 written as notes with symusic 0.5.9 and the GeneralUser GS SoundFont (research report and
 listening test after Step 144); this section covers what has to be installed and downloaded.
 
-- **Extra** `music = ["symusic==0.5.9"]` (exact: 0.6.0's `Synthesizer.render` fails with a
-  TypeError). `synth.require_symusic()` imports it or raises `VidgenError` naming
-  `pip install "schu-video-generator[music]"`, also when another version is installed;
+- **Base dependency** `symusic==0.5.9` (exact: 0.6.0's `Synthesizer.render` fails with a
+  TypeError). `synth.require_symusic()` imports it or raises `VidgenError` saying
+  to reinstall schu-video-generator, also when another version is installed;
   `synth.symusic_status()` is the one-line state for `vidgen soundfont info`. Nothing imports
   symusic at load time. symusic's own `BuiltInSF` downloader (pySmartDL) is not used.
 - **Default SoundFont** (`vidgen/soundfont.py`): GeneralUser GS 2.0.3, `URL` =
@@ -10547,8 +10547,8 @@ Reference: docs/CONFIG.md "Composed music (`compose`)" and "`vidgen music previe
   around the piece; `loop: false` plays the piece and its tail once. `crossfade` does not apply.
   Without symusic 0.5.9 (`fallback_bed(cue)`) the mood's bed plays (`Mood.bed`: calm → calm,
   focused / tense → pulse, curious / upbeat / triumphant → bright, playful → cartoon, sleepy →
-  lullaby) with a warning naming the install command; the summary then says `kind: bed`,
-  `source: "compose: <mood> (bed <bed>: no music extra)"`.
+  lullaby) with a warning saying to reinstall; the summary then says `kind: bed`,
+  `source: "compose: <mood> (bed <bed>: no symusic)"`.
 - **Instruments**: 42 friendly names → GM programs with a playable range and words, and 5 drum
   kits. Not offered, measured with GeneralUser GS 2.0.3 and symusic 0.5.9: pizzicato strings
   (45) and xylophone (13) render a 5 ms click and silence (FluidR3 Mono plays its pizzicato), and
@@ -22381,10 +22381,10 @@ frames in order with PyAV as FFV1 (`bgr0`, lossless) in Matroska, to `<path>.par
 Measured: about 60 ms per frame at 540x960 and 130 ms at 1920x1080 (SwiftShader + PNG), plus
 about 1 s to start Chromium.
 
-**Missing dependencies.** Playwright is the optional extra `schu-video-generator[3d]`
-(`playwright>=1.40`); it is imported only when a `3d` scene renders. Not installed:
-`VidgenError(INSTALL_HINT)` = `pip install "schu-video-generator[3d]"`, then `python -m playwright
-install chromium` (Windows: `py -m pip install ...`, `py -m playwright install chromium`). Chromium
+**Missing dependencies.** Playwright is a base dependency (`playwright>=1.40`, Step 322); it is
+imported only when a `3d` scene renders. Not installed: `VidgenError(INSTALL_HINT)` = reinstall
+schu-video-generator, then `python -m playwright install chromium` (Windows: `py -m playwright install
+chromium`). Chromium
 missing (Playwright's "Executable doesn't exist"): `VidgenError(BROWSER_HINT)`. Other launch
 failures: "cannot start Chromium for a 3D scene: <first line>". `vidgen validate` and every other
 scene type never need Playwright.
@@ -23018,3 +23018,28 @@ redacted either; and a job polled by a later run has no host at all. `vidgen.vid
 inputs stay on this machine). `inline_media: all` without a host stays a problem, since it describes
 the real API; `vidgen generate host-test` still opens a real tunnel on purpose. Tests of a real host
 use a stand-in provider whose name is not `mock` (`tests/test_videogen_host.HostedStandIn`).
+
+## 116. Every Python package is a base dependency (Step 322)
+
+Owner's rule: "If we ask the user to install any python dependency, we are doing something wrong.
+Dependencies should be listed in the source code." So a plain `pip install` of the distribution
+brings every Python package a user needs: `dependencies` in `pyproject.toml` holds fpdf2,
+faster-whisper, mcp, kokoro and misaki[zh], symusic (exact pin) and playwright. The extras
+`pdf`, `stt`, `mcp`, `kokoro`, `music` and `3d` stay defined, empty, so older install commands
+still work without a warning; `dev` is the only real extra (for developers of vidgen).
+
+- **Markers**: `kokoro` and `misaki[zh]` carry `python_version < '3.13'` (kokoro 0.9.4 and
+  misaki declare Python < 3.13). On 3.13 `install_message` says to use a Python 3.12 virtual
+  environment; the old forced install command (`--ignore-requires-python`) is gone.
+- **Left out**: `misaki[ja]`. Its pyopenjtalk has no wheels, so listing it would make every
+  install need a C++ compiler and no environment marker can express that. Japanese Kokoro
+  voices stop with `kokoro.JAPANESE_NOTE`, which says to use another voice provider.
+- **Hints**: a missing package is an incomplete install, so the message says to reinstall the
+  distribution and never to pip install the package: `errors.REINSTALL` and
+  `errors.incomplete_install(package)`. The imports stay lazy and guarded, so a broken
+  environment still gets a clear message.
+- **Chromium** is a browser download, not a Python package: `browser.BROWSER_HINT` keeps
+  `python -m playwright install chromium`, and that error message is what tells an AI what to run.
+- **Size**: on Linux x86_64 PyPI's PyTorch brings the CUDA libraries, about 3.3 GB of downloads
+  for a plain install on Python 3.12 (Step 322, summed from PyPI's file sizes). The CPU-only
+  PyTorch index cannot be expressed as a dependency that works on every platform.

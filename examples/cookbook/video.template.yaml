@@ -15,7 +15,7 @@ theme:
   colors: {background: "#0B0F1A", surface: "#121829", primary: "#4CC9F0", secondary: "#A78BFA",
            highlight: "#FFD166", tertiary: "#5EEAD4", accent: "#FF6B8B"}
 
-# Free and local, good for drafts (needs the kokoro extra: pip install "schu-video-generator[kokoro]"):
+# Free and local, good for drafts (Python 3.10-3.12):
 voice: {provider: kokoro, voice: af_heart}
 # Most natural, paid per character (key in the ELEVENLABS_API_KEY environment variable;
 # always check `vidgen tts --dry-run` first):

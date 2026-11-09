@@ -1,8 +1,7 @@
 # A small 3D Short (9:16, about 13 s): a `3d` scene with shapes, two character stand-ins that walk
 # and turn to face each other, camera moves on spoken words and karaoke captions; its guide passes
-# (depth, outline, mask) are drawn beside the 3D clip. Needs the 3d extra:
-#   pip install "schu-video-generator[3d]" && python -m playwright install chromium
-#   (Windows: py -m pip install "schu-video-generator[3d]" && py -m playwright install chromium)
+# (depth, outline, mask) are drawn beside the 3D clip. Needs Chromium, once:
+#   python -m playwright install chromium   (Windows: py -m playwright install chromium)
 #
 #   vidgen validate examples/3d-short
 #   vidgen lint examples/3d-short

@@ -6,6 +6,16 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
+from vidgen import DIST_NAME
+
+#: What to do when a package of vidgen's own dependencies is absent or has the wrong version.
+REINSTALL = f"reinstall {DIST_NAME} with pip in this Python environment (pip install . from its folder)"
+
+
+def incomplete_install(package: str) -> str:
+    """The message for a missing ``package``: a plain install brings it, so vidgen is what to reinstall."""
+    return f"this installation of {DIST_NAME} is incomplete ({package} is missing): {REINSTALL}"
+
 
 @dataclass(frozen=True)
 class Problem:

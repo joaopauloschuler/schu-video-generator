@@ -10,7 +10,7 @@
 #   vidgen validate examples/iso-web-page                        # checks the short variant too
 #   vidgen lint examples/iso-web-page [--variant short]          # incl. iso_labels, said_before_shown
 #   vidgen storyboard examples/iso-web-page --per-beat 2 [--variant short]
-#   vidgen tts examples/iso-web-page                             # Kokoro: local and free (the kokoro extra)
+#   vidgen tts examples/iso-web-page                             # Kokoro: local and free
 #   vidgen render examples/iso-web-page [--preview] [--variant short]
 #
 # Facts (simplified, checked): a browser first resolves the site's name to an IP address through

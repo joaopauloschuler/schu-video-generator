@@ -13,8 +13,8 @@ storytelling, or simply to make something because you want to. We hope you enjoy
 One practical note: you usually work inside someone's session, and narration (ElevenLabs or OpenRouter) and
 generated images (OpenAI or OpenRouter) cost that person money. For your own projects, stay with the free parts
 — storyboards, previews timed from word counts, the built-in icons, themes, music and sound
-effects — or ask before spending on voices or images. A real voice can be free too: where the
-optional Kokoro extra is installed (`schu-video-generator[kokoro]`), `voice: {provider: kokoro}`
+effects — or ask before spending on voices or images. A real voice can be free too: on Python 3.10-3.12,
+`voice: {provider: kokoro}`
 narrates on the computer itself at no cost (see `vidgen guide audio`).
 
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
@@ -142,7 +142,7 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
    `vidgen animatic` is quicker still once the storyboard's stills are current (seconds, no
    rendering): `<output>_animatic.mp4`, those stills held in time with the narration, with the
    audio and the subtitles, to check the pacing.
-10. **`vidgen readback`** (optional extra `schu-video-generator[stt]`): speech-to-text of the MP3s against
+10. **`vidgen readback`**: speech-to-text of the MP3s against
     your texts; it names misheard terms and suggests a pronunciation entry, and lists the
     **words to check**: heard with low confidence or after an odd pause inside a sentence, with
     their time in the beat and in the video. Fix, `vidgen tts`, and `vidgen lint` again (its
@@ -406,7 +406,7 @@ project's own scene types, in its theme).
 | a photo or illustration | `image` | `path`, `generate`, `caption`, `fit`, `ken_burns` |
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut) |
-| simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
+| simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -3167,8 +3167,8 @@ Run `vidgen lint` in 16:9 and 9:16.
 ## 3D: simple scenes with shapes and stand-ins
 
 One scene type, `3d`, draws plain shapes, labels and character stand-ins with one light, seen by
-a camera that stands still or moves on words (three.js in headless Chromium; the `3d` extra:
-`pip install "schu-video-generator[3d]"` and `python -m playwright install chromium`). It is for
+a camera that stands still or moves on words (three.js in headless Chromium; if Chromium is missing, vidgen's error gives the command
+`python -m playwright install chromium`). It is for
 explaining where things are and what moves where, not for realism. Every param: `docs/CONFIG.md`;
 the craft in full: `docs/COOKBOOK-3D.md` in the schu-video-generator repository; a whole example:
 `examples/3d-short` (a 9:16 Short of about 15 s: two stand-ins, a ball, four camera moves, captions,
@@ -3371,8 +3371,8 @@ the audio is stored all the same.
 **A free local voice: Kokoro.** `voice: {provider: kokoro, voice: af_heart}` runs the open
 Kokoro-82M model on the computer itself: no key, no account, nothing to pay, offline after a
 one-time download (~330 MB from Hugging Face; `vidgen tts --dry-run` says when it is still to
-come). It needs the optional extra (`pip install "schu-video-generator[kokoro]"`, Python
-3.10-3.12); without it `vidgen tts` says what to install. This is the voice for your own
+come). It comes with a plain install on Python 3.10-3.12 (Kokoro has no Python 3.13 release;
+there `vidgen tts` says so). This is the voice for your own
 projects: re-voicing after every script change costs nothing, and over MCP a real `tts` run needs
 no `confirm_cost`. English is its strength (`af_heart` and `af_bella` are the best voices, then
 `bf_emma` for British English; males: `am_michael`, `am_fenrir`, `bm_george`), and English beats
@@ -3544,9 +3544,9 @@ win). `vidgen list-music` describes each mood and instrument in words.
   before a short last line (≤ 8 words), whose closing chord then lands as the line ends.
   `music_pause: false` turns either off.
 - **Stings** (`sting: reveal | comic | sad`) are played by the music's own instruments, in its key.
-- **Without the extra.** Composed music needs `pip install "schu-video-generator[music]"`; the first
-  render downloads the SoundFont (32 MB, once; `vidgen soundfont fetch` does it now). Without the
-  extra `vidgen validate` warns and the mood's built-in bed plays instead (`calm` → calm,
+- **Without symusic.** symusic comes with a plain install; the first
+  render downloads the SoundFont (32 MB, once; `vidgen soundfont fetch` does it now). Without
+  symusic `vidgen validate` warns and the mood's built-in bed plays instead (`calm` → calm,
   `focused` / `tense` → pulse, `curious` / `upbeat` / `triumphant` → bright, `playful` → cartoon,
   `sleepy` → lullaby), so the video still renders. `vidgen music preview --mood M` writes a piece
   as WAV and MIDI to listen to (MCP `music_preview`). Drafts and animatics play it too; storyboards
@@ -3871,7 +3871,7 @@ scenes:
 
 - **Slides**: `vidgen slides --final` writes a self-contained HTML deck to `exports/` (a slide
   per beat, the narration as speaker notes; `--audio` for a narrated deck); `--format pdf
-  --notes` a PDF with notes pages (extra `schu-video-generator[pdf]`). A video built with one reveal per beat
+  --notes` a PDF with notes pages. A video built with one reveal per beat
   is a good deck for free; check `--mode scene` for a compact one.
 - **GIFs and clips**: `vidgen export gif --scene ID --max-mb 5` (a palette GIF within a size
   budget, for READMEs and chats), `vidgen export clip --scene ID --with-audio` (an MP4 part).

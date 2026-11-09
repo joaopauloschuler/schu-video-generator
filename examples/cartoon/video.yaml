@@ -5,7 +5,7 @@
 #   vidgen validate examples/cartoon
 #   vidgen storyboard examples/cartoon                     # beat ends and half-way stills of each move
 #   vidgen lint examples/cartoon
-#   vidgen tts examples/cartoon                            # needs pip install "schu-video-generator[kokoro]"
+#   vidgen tts examples/cartoon                            # Kokoro: Python 3.10-3.12
 title: "The Box Kite"
 output: box_kite
 theme: {preset: soft_pastel}

@@ -24,8 +24,7 @@ from typing import Any
 
 import numpy as np
 
-from vidgen import DIST_NAME
-from vidgen.errors import VidgenError
+from vidgen.errors import incomplete_install, VidgenError
 from vidgen.fonts import FONTS_DIR
 
 #: The vendored three.js build and vidgen's page.
@@ -43,9 +42,8 @@ LOAD_TIMEOUT_MS = 60_000
 _CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".ttf": "font/ttf"}
 
 INSTALL_HINT = (
-    f'3D scenes need Playwright and its Chromium: pip install "{DIST_NAME}[3d]", then '
-    "python -m playwright install chromium (Windows: py -m pip install "
-    f'"{DIST_NAME}[3d]", then py -m playwright install chromium)'
+    f'3D scenes need Playwright and its Chromium: {incomplete_install("Playwright")}, then '
+    "python -m playwright install chromium (Windows: py -m playwright install chromium)"
 )
 BROWSER_HINT = (
     "Playwright's Chromium is not installed: run python -m playwright install chromium "

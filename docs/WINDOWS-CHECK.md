@@ -15,7 +15,7 @@ cd video-generator
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 python --version
-pip install ".[pdf,mcp,kokoro]"
+pip install .
 vidgen --version
 ffmpeg -version
 ```

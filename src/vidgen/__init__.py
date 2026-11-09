@@ -5,5 +5,5 @@ Python package are ``vidgen``.
 """
 
 __version__ = "0.3.0"
-#: The distribution name (``pip install schu-video-generator``; extras ``schu-video-generator[pdf]``...).
+#: The distribution name (``pip install schu-video-generator``).
 DIST_NAME = "schu-video-generator"

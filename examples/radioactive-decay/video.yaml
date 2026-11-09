@@ -13,7 +13,7 @@
 #   vidgen validate examples/radioactive-decay       # checks the short variant too
 #   vidgen lint examples/radioactive-decay [--variant short]   # incl. the calc_* and plot_* rules
 #   vidgen storyboard examples/radioactive-decay --per-beat 2 [--variant short]
-#   vidgen tts examples/radioactive-decay            # Kokoro: local and free (the kokoro extra)
+#   vidgen tts examples/radioactive-decay            # Kokoro: local and free
 #   vidgen render examples/radioactive-decay [--preview] [--variant short]
 #
 # Data: assets/counts.csv and assets/nuclei.csv are illustrative, written by make_data.py (seeded,

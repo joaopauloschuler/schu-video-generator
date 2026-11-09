@@ -11,7 +11,7 @@ one and the title, author and date. The PDF has the ``metadata:`` title / author
 video's language, and an outline (bookmarks): chapters, the slides under them.
 
 The PDF is written with `fpdf2 <https://py-pdf.github.io/fpdf2/>`_ (pure Python, embeds subsets
-of TrueType fonts): the optional extra ``schu-video-generator[pdf]``; without it the command says how to add it.
+of TrueType fonts): it comes with a plain install.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from typing import Any
 
 from vidgen import DIST_NAME, __version__
 from vidgen.deck import Deck, DeckMode, DeckSlide, deck_frames
-from vidgen.errors import VidgenError
+from vidgen.errors import incomplete_install, VidgenError
 from vidgen.fileio import write_bytes_atomic
 from vidgen.fonts import FONTS_DIR, SANS_FAMILY
 from vidgen.project import Project
@@ -91,7 +91,7 @@ def _fpdf() -> Any:
         import fpdf
     except ImportError:
         raise VidgenError(
-            f'the PDF deck needs fpdf2, an optional dependency: pip install "{DIST_NAME}[pdf]" (or pip install fpdf2)'
+            f'the PDF deck needs fpdf2: {incomplete_install("fpdf2")}'
         ) from None
     # fontTools logs every step of the font subsetting at INFO (the CLI shows INFO)
     logging.getLogger("fontTools").setLevel(logging.WARNING)

@@ -99,7 +99,7 @@ play every built-in sound.
 
 ## Composed music
 
-With the `music` extra, `music: {compose: {mood: curious}}` writes original music for the
+`music: {compose: {mood: curious}}` writes original music for the
 video and plays it with real instruments: every scene change on a bar line, a mood per
 scene, swells on reveals and a closing cadence. Eight moods:
 

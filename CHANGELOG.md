@@ -7,6 +7,12 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### A plain install brings every Python package (Step 322)
+
+- `pip install` of schu-video-generator now installs fpdf2, faster-whisper, the MCP SDK, Kokoro and its Mandarin packages (Python 3.10-3.12), symusic and Playwright. The extras `pdf`, `stt`, `mcp`, `kokoro`, `music` and `3d` remain, empty, so older commands still work.
+- A missing package is reported as an incomplete installation with the advice to reinstall schu-video-generator. No message or document tells a user to pip install a package. Chromium remains a separate download named in vidgen's own error message.
+- Kokoro's Japanese voices are not available from a plain install: pyopenjtalk has no wheels and would need a C++ compiler.
+
 ### Generated video: a provider's error never shows the shared address; the mock shares nothing (Step 311)
 
 - A provider's error that quotes a quick tunnel address no longer shows its secret path, wherever it appears: a failed job's error (which used to escape the redaction), submit and download errors, exception details, `ShotRun.message`, `--json`, MCP. This also works for a job polled by a later run, when the tunnel is long gone. Ledger lines never hold the path either.

@@ -17,7 +17,7 @@ vidgen lint examples/gps-time-of-flight
 vidgen music template time_of_flight --out my_theme.yaml   # the bed's very score, to start from
 vidgen music check time_of_flight --out build/check        # the report below
 vidgen music render time_of_flight --out time_of_flight.mp3
-vidgen tts examples/gps-time-of-flight          # Kokoro (the kokoro extra): local and free
+vidgen tts examples/gps-time-of-flight          # Kokoro: local and free
 vidgen render examples/gps-time-of-flight
 ```
 

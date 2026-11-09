@@ -33,8 +33,7 @@ class Scene3D(NarratedScene):
     object_show, object_hide, object_highlight, object_walk, object_face); the camera stands
     still or moves (camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move),
     following an object that moves; beat 1 fades the title in; the scene fades out at the end. Frames are drawn by three.js in headless
-    Chromium (``pip install "schu-video-generator[3d]"`` and ``python -m playwright install
-    chromium``).
+    Chromium (once: ``python -m playwright install chromium``).
 
     Action targets: ``view`` (the 3D picture), ``title`` (if any); the camera and object
     actions name objects by id.

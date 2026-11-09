@@ -24,10 +24,10 @@ Replace `[...]` with your own details; `shot1`, `take N` are examples.
 **Card 1**
 
 ```text
-Install schu-video-generator from https://github.com/joaopauloschuler/schu-video-generator . Clone the repository so that its docs folder is on this computer, and install it in a Python 3.10, 3.11 or 3.12 virtual environment (the kokoro extra does not install on 3.13) with the extras 3d, kokoro and music. Install the Chromium browser that its 3D scenes need. Then check that vidgen generate --help lists the action frames, and tell me. If it does not, stop and tell me.
+Install schu-video-generator from https://github.com/joaopauloschuler/schu-video-generator . Clone the repository so that its docs folder is on this computer, and install it with pip in a Python 3.12 virtual environment. Then check that vidgen generate --help lists the action frames, and tell me. If it does not, stop and tell me.
 ```
 
-AI does: clones the repository, installs it with its extras on Python 3.10-3.12 (`pyproject.toml` limits the `kokoro` extra to Python below 3.13), installs Chromium, runs `vidgen generate --help`.
+AI does: clones the repository, installs it with pip on Python 3.12 (a plain install brings every Python package; Kokoro has no Python 3.13 release), runs `vidgen generate --help`. If a 3D scene later needs the Chromium browser, vidgen's error message gives the AI the command.
 You check: the AI says `frames` is listed.
 
 **Card 2**

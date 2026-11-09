@@ -20,7 +20,7 @@ from vidgen.sfx import RATE, write_wav
 from vidgen.soundfont import default_path
 
 HAS_SYMUSIC = synth.symusic_version() == synth.SYMUSIC_VERSION
-needs_symusic = pytest.mark.skipif(not HAS_SYMUSIC, reason=f"symusic {synth.SYMUSIC_VERSION} (the music extra) is not installed")
+needs_symusic = pytest.mark.skipif(not HAS_SYMUSIC, reason=f"symusic {synth.SYMUSIC_VERSION} is not installed")
 
 
 def _score(**extra: Any) -> Score:
@@ -117,7 +117,7 @@ def test_midi_export(tmp_path: Path) -> None:
 
 def test_missing_extra_is_a_clear_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(synth, "symusic_version", lambda: None)
-    with pytest.raises(VidgenError, match=r'needs the optional extra: pip install "schu-video-generator\[music\]"'):
+    with pytest.raises(VidgenError, match="needs symusic: this installation"):
         write_midi(_score(), tmp_path / "x.mid")
 
 

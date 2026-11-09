@@ -3,7 +3,7 @@
 
 ``voice: {provider: kokoro, voice: af_heart, speed: 1.0, lang: a, device: cpu}`` voices every
 beat with hexgrad's Kokoro-82M (https://huggingface.co/hexgrad/Kokoro-82M, Apache-2.0) through
-its ``kokoro`` package (the optional extra ``schu-video-generator[kokoro]``: PyTorch, misaki's
+its ``kokoro`` package (a dependency on Python 3.10-3.12: PyTorch, misaki's
 grapheme-to-phoneme, a bundled espeak-ng). Nothing here imports ``kokoro`` or PyTorch until a
 beat is voiced, so ``vidgen validate`` / ``render`` and the other commands work without them.
 
@@ -33,7 +33,7 @@ from typing import Any
 from vidgen import DIST_NAME, kokoro_voices
 from vidgen.config import VoiceConfig
 from vidgen.emotions import Prosody
-from vidgen.errors import VidgenError
+from vidgen.errors import incomplete_install, REINSTALL, VidgenError
 from vidgen.tts import prosody
 
 #: The model repository and weights file (v1.0, SHA256 496dba11...); both are in each beat's hash.
@@ -41,19 +41,17 @@ REPO_ID = "hexgrad/Kokoro-82M"
 WEIGHTS = "kokoro-v1_0.pth"
 #: Sample rate of Kokoro's audio (mono float samples).
 SAMPLE_RATE = 24000
-INSTALL_COMMAND = f'pip install "{DIST_NAME}[kokoro]"'
 #: The newest Python the kokoro package (0.9.4) declares support for.
 NEWEST_PYTHON = (3, 12)
-#: Installs kokoro on a newer Python anyway (worked on 3.13 on 2026-10-09; the spaCy pins stop
-#: pip from backtracking to a spaCy 4 pre-release that does not build).
-FORCED_INSTALL = (
-    'pip install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4" "spacy>=3.8,<4" '
-    '"spacy-curated-transformers<0.4"'
-)
 #: Languages read through espeak-ng (English uses it only for words missing from its dictionary).
 ESPEAK_LANGS = frozenset({"e", "f", "h", "i", "p"})
-#: Languages needing one more misaki extra: lang -> (a module of it, the install command).
-LANG_EXTRAS: dict[str, tuple[str, str]] = {"j": ("pyopenjtalk", 'pip install "misaki[ja]"'), "z": ("jieba", 'pip install "misaki[zh]"')}
+#: Why Japanese is not brought by a plain install (DESIGN.md §68).
+JAPANESE_NOTE = (
+    "pyopenjtalk has no pre-built release, so it would make every install need a C++ compiler and "
+    f"{DIST_NAME} does not bring it: use another voice provider for Japanese"
+)
+#: Languages needing one more misaki extra: lang -> (a module of it, what to tell the user).
+LANG_EXTRAS: dict[str, tuple[str, str]] = {"j": ("pyopenjtalk", JAPANESE_NOTE), "z": ("jieba", incomplete_install("jieba"))}
 #: Share of a beat's words the word timings must cover to be stored (else: estimated).
 MIN_TIMED_SHARE = 0.8
 #: Words in an exception that mean the model or a voice could not be downloaded (seen: httpx
@@ -76,17 +74,13 @@ def module_available(name: str) -> bool:
 
 
 def install_message() -> str:
-    """How to install the extra (and what to do on a Python the kokoro package does not support)."""
-    text = (
-        f"voice.provider kokoro needs the optional extra: {INSTALL_COMMAND} "
-        "(PyTorch and Kokoro's packages; the model itself is downloaded on the first run)"
-    )
+    """What to do when the kokoro package is absent: reinstall, or on a Python it does not support, change Python."""
     if sys.version_info[:2] > NEWEST_PYTHON:
-        text += (
-            f". The kokoro package (0.9.4) supports Python 3.10-3.12 and this is Python {sys.version_info[0]}.{sys.version_info[1]}, "
-            f"so the extra installs nothing here: use a Python 3.12 virtual environment, or install it anyway: {FORCED_INSTALL}"
+        return (
+            f"voice.provider kokoro cannot run here: the kokoro package (0.9.4) supports Python 3.10-3.12 and this is Python "
+            f"{sys.version_info[0]}.{sys.version_info[1]}, so it is not installed: install {DIST_NAME} in a Python 3.12 virtual environment"
         )
-    return text
+    return f"voice.provider kokoro needs its packages: {incomplete_install('the kokoro package')}"
 
 
 def hf_cache_dir() -> Path:
@@ -117,7 +111,7 @@ def download_note() -> str:
 
 def run_notes(voices: Iterable[VoiceConfig]) -> list[str]:
     """Notes for a dry run / a run with Kokoro beats: free and local, the download still to come,
-    the extra or a language package not installed."""
+    the kokoro package or a language package not installed."""
     voices = list(voices)
     devices = sorted({v.device for v in voices})
     notes = [f"Kokoro-82M runs on this computer ({', '.join(devices)}): free, no API key"]
@@ -132,7 +126,7 @@ def run_notes(voices: Iterable[VoiceConfig]) -> list[str]:
 
 
 def check_installed(lang: str | None) -> None:
-    """Raise :class:`VidgenError` naming what to install when the extra, a language's misaki
+    """Raise :class:`VidgenError` saying what to do when the kokoro package, a language's misaki
     extra or espeak-ng (bundled by ``espeakng-loader``) is missing."""
     if not module_available("kokoro"):
         raise VidgenError(install_message())
@@ -147,7 +141,7 @@ def espeak_message(lang: str | None, detail: str) -> str:
     use = f"lang {lang} ({kokoro_voices.lang_name(lang)})" if lang in ESPEAK_LANGS else "English words missing from its dictionary"
     return (
         f"espeak-ng could not be loaded ({detail}); Kokoro reads {use} with it. It normally comes with the "
-        "espeakng-loader package that the kokoro extra installs: pip install --force-reinstall espeakng-loader. "
+        f"espeakng-loader package that {DIST_NAME} installs: {REINSTALL}. "
         "Or install espeak-ng itself: Linux `sudo apt install espeak-ng`; Windows the espeak-ng .msi from "
         "https://github.com/espeak-ng/espeak-ng/releases"
     )
@@ -371,7 +365,7 @@ class KokoroProvider:
     # ----- synthesis -------------------------------------------------------------------------
 
     def check_credentials(self) -> None:
-        """No key: raise :class:`VidgenError` naming what to install when the extra (or this
+        """No key: raise :class:`VidgenError` saying what to do when the kokoro package (or this
         language's packages) is missing."""
         if self._engine is None:
             check_installed(self.lang)
@@ -467,7 +461,7 @@ def voice_warnings(voice: VoiceConfig, where: str, language: str | None) -> list
 
 
 def install_warnings(voices: Iterable[VoiceConfig]) -> list[str]:
-    """``vidgen validate``'s warnings when Kokoro beats cannot be voiced here yet (the extra or a
+    """``vidgen validate``'s warnings when Kokoro beats cannot be voiced here yet (the kokoro package or a
     language's packages missing; ``vidgen tts`` would refuse)."""
     voices = [v for v in voices if v.provider == "kokoro"]
     if not voices:

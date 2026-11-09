@@ -254,9 +254,10 @@ def composed_available() -> str:
     """``""`` when composed clips can be made here (symusic and the cached default SoundFont,
     never downloaded by this page), else why not."""
     from vidgen import soundfont, synth
+    from vidgen.errors import REINSTALL
 
     if synth.symusic_version() is None:
-        return f"the `music` extra is not installed (`{synth.INSTALL_COMMAND}`)"
+        return f"symusic is not installed ({REINSTALL})"
     if not soundfont.default_path().is_file():
         return "the SoundFont is not downloaded (`vidgen soundfont fetch`)"
     return ""
@@ -498,7 +499,7 @@ def page_text(composed_pieces: Sequence[composer.Piece], composed_note: str) -> 
         "",
         "## Composed music",
         "",
-        "With the `music` extra, `music: {compose: {mood: curious}}` writes original music for the",
+        "`music: {compose: {mood: curious}}` writes original music for the",
         "video and plays it with real instruments: every scene change on a bar line, a mood per",
         "scene, swells on reveals and a closing cadence. Eight moods:",
         "",

@@ -574,8 +574,7 @@ pronunciation:
 
 - ElevenLabs reads its key from `ELEVENLABS_API_KEY` (OpenRouter TTS: `OPENROUTER_API_KEY`).
   Check keys for presence only; never print them.
-- Kokoro is an optional extra: `pip install "schu-video-generator[kokoro]"` (or `pip install
-  -e ".[kokoro]"` from a checkout). The first `vidgen tts` downloads the model. On Python 3.13 see
+- Kokoro comes with a plain install on Python 3.10-3.12. The first `vidgen tts` downloads the model. On Python 3.13 see
   the install note in `docs/CONFIG.md` ("Kokoro on this computer").
 - **TTS cache:** a beat is re-voiced only when its spoken text (pronunciation applied) or the voice
   settings change. Rewording one beat re-voices only that beat; changing a dictionary entry

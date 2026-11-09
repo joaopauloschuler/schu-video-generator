@@ -1614,8 +1614,8 @@ class Source:
             if kind == "composed":
                 from vidgen.synth import symusic_status
 
-                log.warning("music: compose (mood %s) needs the music extra (symusic: %s); playing the built-in bed '%s' instead", cue.compose.mood, symusic_status(), bed)  # type: ignore[union-attr]
-                self.kind, self.label = "bed", f"{cue.label} (bed {bed}: no music extra)"
+                log.warning("music: compose (mood %s) needs symusic (%s); playing the built-in bed '%s' instead", cue.compose.mood, symusic_status(), bed)  # type: ignore[union-attr]
+                self.kind, self.label = "bed", f"{cue.label} (bed {bed}: no symusic)"
             data = bed_loop(bed)
             self.seamless = True
             self.data = data
@@ -1799,7 +1799,7 @@ def music_warnings(config: VideoConfig) -> list[str]:
     if any(bed is not None for _, bed in beds):
         plays = ", ".join(f"{label} plays the bed '{bed}'" for label, bed in beds if bed is not None)
         scene_moods = " (scenes' compose settings are not played)" if any(_compose_keys(s.music) for s in config.scenes) else ""
-        return [f"music: composed music needs the music extra (symusic {symusic_status()}); until then {plays}{scene_moods}"]
+        return [f"music: composed music needs symusic ({symusic_status()}); until then {plays}{scene_moods}"]
     if config.soundfont is None and not soundfont.default_path().is_file():
         return [
             f"music: composed music plays with the {soundfont.NAME} SoundFont, not downloaded yet: run `vidgen soundfont "
@@ -1850,7 +1850,7 @@ def music_summary_line(entry: dict[str, Any]) -> str:
     if entry["kind"] == "composed":
         text += ", composed for the video" if entry["fitted"] else (", looped" if entry["plays"] == "composed" else "")
         if entry["plays"] != "composed":
-            text += f" -> {entry['plays']} (no music extra)"
+            text += f" -> {entry['plays']} (no symusic)"
     elif entry["kind"] == "score":
         text += ", a project piece (score file, rendered at the join)"
     span = f" ({entry['from'] or 'start'} to {entry['to'] or 'end'})" if entry["from"] or entry["to"] else ""

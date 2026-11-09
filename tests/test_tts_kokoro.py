@@ -1,7 +1,7 @@
 """Step 65: local Kokoro-82M narration (``voice.provider: kokoro``, DESIGN.md §68).
 
 Everything runs with a fake ``KPipeline`` (no PyTorch, no model); the one real synthesis test
-is skipped unless the ``kokoro`` package is importable (the optional extra)."""
+is skipped unless the ``kokoro`` package is importable."""
 
 from __future__ import annotations
 
@@ -228,24 +228,24 @@ def test_missing_extra_is_a_clear_error(make_project, monkeypatch: pytest.Monkey
     root = make_project(kokoro_config())
     assert main(["tts", str(root)]) == 1
     err = capsys.readouterr().err
-    assert f'pip install "{DIST_NAME}[kokoro]"' in err and "Traceback" not in err
+    assert f"install {DIST_NAME}" in err and "Traceback" not in err
     assert not (root / "audio").exists() or not list((root / "audio").glob("*.mp3"))
-    assert any(w.startswith(f'voice.provider: voice.provider kokoro needs the optional extra: pip install "{DIST_NAME}[kokoro]"')
+    assert any(w.startswith("voice.provider: voice.provider kokoro")
                for w in validate_warnings(Project.load(root)))
     monkeypatch.setattr(kk, "NEWEST_PYTHON", (3, 9))
-    assert "supports Python 3.10-3.12" in kk.install_message() and "--ignore-requires-python" in kk.install_message()
+    assert "supports Python 3.10-3.12" in kk.install_message() and "Python 3.12 virtual environment" in kk.install_message()
 
 
 def test_language_packages_and_espeak_are_named(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(kk, "module_available", lambda name: name == "kokoro")
-    with pytest.raises(VidgenError, match=r'needs more packages: pip install "misaki\[ja\]"'):
+    with pytest.raises(VidgenError, match=r"needs more packages: pyopenjtalk has no pre-built release"):
         kk.check_installed("j")
     with pytest.raises(VidgenError, match="espeak-ng could not be loaded .* lang p \\(Brazilian Portuguese\\)"):
         kk.check_installed("p")
     kk.check_installed("a")  # English needs neither
     message = kk.explain(RuntimeError("espeak not installed on your system"), "e", "cpu")
     assert "sudo apt install espeak-ng" in message and "espeak-ng .msi" in message and "espeakng-loader" in message
-    assert "misaki[zh]" in kk.explain(ModuleNotFoundError("No module named 'jieba'", name="jieba"), "z", "cpu")
+    assert "reinstall" in kk.explain(ModuleNotFoundError("No module named 'jieba'", name="jieba"), "z", "cpu")
     assert "set voice.device: cpu" in kk.explain(RuntimeError("CUDA requested but not available"), "a", "cuda")
     xet = kk.explain(RuntimeError("Task error: CAS Client Error: Request middleware error: error sending request"), "a", "cpu")
     assert xet.startswith("cannot download Kokoro-82M from Hugging Face") and "HF_HUB_DISABLE_XET=1" in xet
@@ -467,7 +467,7 @@ def test_mcp_tts_runs_kokoro_without_confirm_cost(tmp_path: Path, monkeypatch: p
         real = error_text(await client.call_tool("tts", {"project": "local", "dry_run": False}))
         assert "confirm_cost" not in real  # the run itself was attempted (no extra in the test venv: it says so)
         if not kk.module_available("kokoro"):
-            assert f"{DIST_NAME}[kokoro]" in real
+            assert f"install {DIST_NAME}" in real
         paid = error_text(await client.call_tool("tts", {"project": "paid", "dry_run": False}))
         assert "confirm_cost=true" in paid
 
@@ -480,7 +480,7 @@ def test_mcp_tts_runs_kokoro_without_confirm_cost(tmp_path: Path, monkeypatch: p
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not kk.module_available("kokoro"), reason='needs the kokoro extra: pip install ".[kokoro]"')
+@pytest.mark.skipif(not kk.module_available("kokoro"), reason="needs the kokoro package (Python 3.10-3.12)")
 def test_real_kokoro_synthesis(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     """One English sentence through the real model (downloads it on first use) and back."""
     from vidgen.speech import speech_bounds

@@ -134,7 +134,7 @@ def test_mcp_command_without_the_sdk(monkeypatch: pytest.MonkeyPatch, capsys: py
     for name in ("mcp", "mcp.server", "mcp.server.mcpserver", "mcp.server.fastmcp"):
         monkeypatch.setitem(sys.modules, name, None)
     assert main(["mcp"]) == 1
-    assert 'pip install "schu-video-generator[mcp]"' in capsys.readouterr().err
+    assert "reinstall schu-video-generator" in capsys.readouterr().err
 
 
 # ----- helpers (no SDK) ---------------------------------------------------------------------------

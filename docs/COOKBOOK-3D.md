@@ -13,15 +13,13 @@ on spoken words, karaoke captions, and its guide passes. The
 
 ## 1. Setting up
 
-The `3d` extra is optional; nothing else in schu-video-generator needs it:
+A plain install brings Playwright. The Chromium browser is a separate download, needed once:
 
 ```
-pip install "schu-video-generator[3d]"
 python -m playwright install chromium
 ```
 
-On Windows: `py -m pip install "schu-video-generator[3d]"`, then
-`py -m playwright install chromium`. Without them a render stops with that hint, and
+On Windows: `py -m playwright install chromium`. Without it a render stops with that command, and
 `vidgen validate` warns (only when the project has a `3d` scene). Nothing is fetched while rendering: three.js is part of the package.
 
 ## 2. Building a scene
