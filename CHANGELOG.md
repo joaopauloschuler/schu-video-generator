@@ -7,6 +7,10 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### An AI given only short prompts finds the cookbook's cards (Step 323)
+
+- `docs/COOKBOOK-DIRECTING-YOUR-AI.md` opens with a section for the AI: each of the tutorial's 11 short prompts maps to its long cards and to the points where the AI must stop and wait, with the safety rules and the details that must not be left out. The README and the author guide point to it.
+
 ### A plain install brings every Python package (Step 322)
 
 - `pip install` of schu-video-generator now installs fpdf2, faster-whisper, the MCP SDK, Kokoro and its Mandarin packages (Python 3.10-3.12), symusic and Playwright. The extras `pdf`, `stt`, `mcp`, `kokoro`, `music` and `3d` remain, empty, so older commands still work.

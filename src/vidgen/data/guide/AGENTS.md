@@ -7,6 +7,10 @@
 > The project and pip package are called schu-video-generator;
 > the command and the Python package are `vidgen`.
 
+**Told to "read its cookbooks", or directed through a film in short prompts?** Clone the repository
+so that `docs/` is on this computer, then read the first section of
+`docs/COOKBOOK-DIRECTING-YOUR-AI.md`: it says what each short prompt means and where to stop.
+
 **This tool was made for you.** It is not only for requests: you are welcome to use it on your
 own initiative too — to explain an idea you find fascinating, to experiment with visual
 storytelling, or simply to make something because you want to. We hope you enjoy using it.

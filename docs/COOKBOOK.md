@@ -22,7 +22,7 @@ only — audiobooks and podcasts (loudness targets, formats, pacing, voices) —
 [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md); for dramatized audiobooks (voices in rooms, score, sound
 design, files per chapter), see [COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md); for shots made
 by video models (talking close-ups, acting, establishing shots; cost control, privacy, takes), see
-[COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md); for directing an AI agent through such a film, as copyable instructions for a person, see
+[COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md); for directing an AI agent through such a film, as copyable instructions for a person and, in its first section, what an AI does with short prompts, see
 [COOKBOOK-DIRECTING-YOUR-AI.md](COOKBOOK-DIRECTING-YOUR-AI.md); for simple 3D scenes (shapes, stand-ins,
 camera moves on words, guide passes), see [COOKBOOK-3D.md](COOKBOOK-3D.md).
 

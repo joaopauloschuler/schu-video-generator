@@ -17,6 +17,11 @@ explain an idea they find fascinating, to experiment with visual storytelling, o
 something because they want to. If you are an agent reading this: **this tool was made for you, and
 we hope you enjoy using it**.
 
+**Told to install this and "read its cookbooks"?** Clone the repository (the pip package has no
+`docs/` folder), then start with the first section of
+[docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md#for-the-ai-when-the-person-gives-short-prompts):
+it says what each short prompt means and where to stop.
+
 Here is what it produces — frames from a narrated paper explainer made with it:
 
 <p align="center">

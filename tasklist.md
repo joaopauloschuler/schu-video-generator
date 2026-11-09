@@ -1789,6 +1789,11 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 323 — An AI given only short prompts finds and follows the long cards
+- [x] `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: section "For the AI: when the person gives short prompts": the 11 prompts mapped to the 18 cards with each stop, safety rules, Card 4's defaults, required details
+- [x] Pointers near the top of `README.md` and both `AGENTS.md` copies; the existing pointer in `docs/COOKBOOK.md` now mentions short prompts
+- [ ] For the owner: `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` was off limits in this step; the intro of the cookbook now says the video uses short prompts
+
 ### Step 322 — A plain install brings every Python package
 - [x] `pdf`, `stt`, `mcp`, `kokoro`, `music`, `3d` packages moved to base `dependencies`; the six extras kept, empty; `dev` the only real extra
 - [x] Docs, guide, DESIGN §116, examples and error messages no longer tell a user to pip install a package; a missing package says to reinstall schu-video-generator; Chromium stays in vidgen's error message
