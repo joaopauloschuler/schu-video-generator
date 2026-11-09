@@ -306,17 +306,27 @@ def run_sheets(
     if not pay or not result.plan.todo:
         return result
     plan = result.plan
+    chosen = provider if provider is not None else get_image_provider(project)
+    if project.config.videogen.key_via_proxy and hasattr(chosen, "key_via_proxy"):
+        chosen.key_via_proxy = True   # the proxy adds the OpenRouter key for the sheets too (§113.4)
+    result.paid = pay_for_pictures(plan, result.budget, chosen, ledger, out, what="sheet picture", then="look at them, then set approved: true")
+    return result
+
+
+def pay_for_pictures(
+    plan: ImagegenPlan, budget: BudgetState, chosen: ImageProvider, ledger: Ledger, out: Callable[[str], None], *, what: str, then: str,
+) -> float:
+    """Make every picture of ``plan.todo`` (one request each), each recorded in the video ledger
+    and written beside its sidecar; returns the US dollars counted (reported, else estimated).
+    Refuses (:class:`VidgenError`) with a problem, with no budget, or with a price unknown or above
+    what ``budget`` has left. ``what`` names one picture in messages; ``then`` ends the last line."""
     problems = [p for r in plan.todo for p in plan.problems.get(r.key, [])]
     if problems:
         raise VidgenError("cannot make these pictures:\n  " + "\n  ".join(problems))
     total, unknown = plan.cost
-    model = plan.todo[0].model
-    why = refusal(result.budget, None if unknown else total, model)
+    why = refusal(budget, None if unknown else total, plan.todo[0].model)
     if why:
-        raise VidgenError(f"not paying for the sheet pictures: {why}")
-    chosen = provider if provider is not None else get_image_provider(project)
-    if project.config.videogen.key_via_proxy and hasattr(chosen, "key_via_proxy"):
-        chosen.key_via_proxy = True   # the proxy adds the OpenRouter key for the sheets too (§113.4)
+        raise VidgenError(f"not paying for the {what}s: {why}")
     chosen.check_credentials()
     check_requests = getattr(chosen, "check_requests", None)
     if callable(check_requests):
@@ -331,7 +341,7 @@ def run_sheets(
             picture = chosen.generate(request)
         except VidgenError as exc:
             ledger.append("failed", job_id=job, cost_usd=None, cost_source="estimate")
-            raise VidgenError(f"sheet picture {request.path.name}: {exc}\n({n - 1} of {len(plan.todo)} made before the error; run again to continue)") from None
+            raise VidgenError(f"{what} {request.path.name}: {exc}\n({n - 1} of {len(plan.todo)} made before the error; run again to continue)") from None
         source = "reported" if picture.cost is not None else "estimate"
         ledger.append("completed", job_id=job, cost_usd=picture.cost, cost_source=source)
         write_bytes_atomic(request.path, picture.data)
@@ -342,12 +352,11 @@ def run_sheets(
         else:
             estimated += estimate or 0.0
         out(f"[{n}/{len(plan.todo)}] made {request.path.name} ({time.monotonic() - started:.1f} s, {cost_words(picture.cost, estimate, chosen.name)})")
-    result.paid = reported + estimated
     counted = [f"{money(reported)} reported by {chosen.name}"] if reported or not estimated else []
     if estimated:
         counted.append(f"{money(estimated)} estimated (not reported)")
-    out(f"done: {len(plan.todo)} picture(s) made ({" + ".join(counted)}); look at them, then set approved: true")
-    return result
+    out(f"done: {len(plan.todo)} picture(s) made ({' + '.join(counted)}); {then}")
+    return reported + estimated
 
 
 __all__ = ["SHEETS_DIR", "STYLE", "Sheet", "SheetPicture", "SheetsPlan", "character_sheet", "plan_sheets", "project_sheets", "run_sheets", "sheet_lines", "style_sheet"]

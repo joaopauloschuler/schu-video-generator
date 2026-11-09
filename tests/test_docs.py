@@ -58,6 +58,8 @@ MODELS: list[type[BaseModel]] = [
     config.StyleSheet,
     config.ReferenceSheet,
     config.GeneratedShot,
+    config.FileRef,
+    config.PaintFirstFrame,
     config.OverlayConfig,
     config.SfxConfig,
     config.SfxCue,

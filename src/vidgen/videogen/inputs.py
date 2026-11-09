@@ -16,7 +16,11 @@
 - ``last_of.<source>.<take>.png`` (``first_frame: last_of:``): the last decoded frame of the take
   the source shot shows (no ``--guide`` needed);
 - ``overlay.png``: the shot's starting picture blended over the first frame of its plain guide,
-  to check the fit of the 3D figures before paying. Never sent.
+  to check the fit of the 3D figures before paying. Never sent;
+- ``overlay.last.png``: the same picture over the plain guide's last frame: an object that appears
+  only later in the shot is where the guide puts it. Never sent;
+- ``layout.png`` (``vidgen generate frames``, not this module's run): the first frame of the beat's
+  draft render, the picture a painted starting picture keeps the composition of (:func:`layout_picture`).
 
 Free and local (ffmpeg and vidgen's own renderer); the cuts are made again on every run, the
 draft render is reused while current. ``inputs.json`` beside them records what each file was cut
@@ -110,8 +114,9 @@ def make_opening_guide(ffmpeg: str, picture: Path, guide: Path, dest: Path, diss
     )
 
 
-#: The file that shows the starting picture over the plain guide, in the shot's folder.
+#: The files that show the starting picture over the plain guide's first and last frame, in the shot's folder.
 OVERLAY_NAME = "overlay.png"
+OVERLAY_LAST_NAME = "overlay.last.png"
 #: Seconds before a take's end decoded to find its last frame (a shorter seek can write no file).
 LAST_FRAME_SEEK = 0.5
 
@@ -127,16 +132,19 @@ def last_frame(ffmpeg: str, source: Path, dest: Path) -> None:
         raise VidgenError(f"could not take the last frame of {source}: ffmpeg wrote no picture")
 
 
-def make_overlay(ffmpeg: str, picture: Path, guide: Path, dest: Path, *, past_fade: bool) -> None:
+def make_overlay(ffmpeg: str, picture: Path, guide: Path, dest: Path, *, past_fade: bool, at_end: bool = False) -> None:
     """``dest``: ``picture`` (cropped to fill) blended half and half over the first frame of the
-    plain ``guide`` (``past_fade``: the first frame past a fade in from black)."""
+    plain ``guide`` (``past_fade``: the first frame past a fade in from black), or over its last
+    frame (``at_end``)."""
     from PIL import Image, ImageOps
 
     from vidgen.render.ffmpeg import run_ffmpeg
 
     with tempfile.TemporaryDirectory(prefix="vidgen-overlay-") as scratch:
         frame = Path(scratch) / "guide.png"
-        if past_fade:
+        if at_end:
+            last_frame(ffmpeg, guide, frame)
+        elif past_fade:
             first_frame(ffmpeg, guide, frame)
         else:
             run_ffmpeg(ffmpeg, ["-i", str(guide), "-frames:v", "1", str(frame)], f"taking the guide's first frame for {dest.parent.name}")
@@ -256,7 +264,29 @@ def _write_overlay(ffmpeg: str, project: Project, shot: Shot, plain: Path, writt
     dest = plain.with_name(OVERLAY_NAME)
     make_overlay(ffmpeg, picture, plain, dest, past_fade=shot.spec.guide_source == "render")
     written.append(dest)
-    out(f"{shot.id}: starting picture over the plain guide {dest.relative_to(project.root).as_posix()} (check that the 3D figures fit before paying)")
+    out(f"{shot.id}: starting picture over the plain guide's first frame {dest.relative_to(project.root).as_posix()} (check that the 3D figures fit before paying)")
+    last = plain.with_name(OVERLAY_LAST_NAME)
+    make_overlay(ffmpeg, picture, plain, last, past_fade=False, at_end=True)
+    written.append(last)
+    out(f"{shot.id}: starting picture over the plain guide's last frame {last.relative_to(project.root).as_posix()} (check where anything that appears later in the shot ends up)")
+
+
+def layout_picture(project: Project, shot: Shot, *, render: Callable[[Project, str, tuple[str, ...]], SceneRender] | None = None) -> Path:
+    """Write and return ``build/videogen/<shot>/layout.png``: the first frame of the part of the
+    draft render of ``shot``'s scene (made once, reused while current; ``render`` replaces it in tests)."""
+    from vidgen.render.ffmpeg import find_ffmpeg
+
+    ffmpeg = find_ffmpeg()
+    scene = (render or _render_scene)(project, shot.scene_id, ())
+    if shot.beat.id not in scene.starts:
+        raise VidgenError(f"shot {shot.id}: the render of scene {shot.scene_id} has no beat {shot.beat.id}")
+    dest = project.root / INPUTS_DIR / shot.id / "layout.png"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="vidgen-frame-") as scratch:
+        part = Path(scratch) / "render.mp4"
+        cut_video(ffmpeg, scene.video, part, scene.starts[shot.beat.id] + shot.offset, shot.length)
+        first_frame(ffmpeg, part, dest)
+    return dest
 
 
 def make_inputs(
@@ -336,4 +366,4 @@ def make_inputs(
     return written
 
 
-__all__ = ["OVERLAY_NAME", "SceneRender", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "make_opening_guide", "make_overlay"]
+__all__ = ["OVERLAY_LAST_NAME", "OVERLAY_NAME", "SceneRender", "layout_picture", "cut_audio", "cut_pass", "cut_video", "first_frame", "last_frame", "make_inputs", "make_opening_guide", "make_overlay"]

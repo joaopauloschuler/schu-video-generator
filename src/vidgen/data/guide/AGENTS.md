@@ -3927,8 +3927,10 @@ scenes:
   makes the beat's picture; schu-video-generator keeps the timing, voices, captions, overlays and
   music (by default the model's own sound is not used; see **A model's own sound** below). Expensive (about $0.03-0.60 per second), so: a few
   shots that need real footage, the lowest resolution, 4-5 s. The order: `vidgen generate plan`
-  (free) → `generate sheets --pay` → look, `approved: true` → `vidgen tts` → `generate inputs
-  --guide` → `generate plan` (nothing blocked; tell the user the total) → `generate run --pay`
+  (free) → `generate sheets --pay` → look, `approved: true` (or cut one sheet picture into named
+  panels with `vidgen split-sheet`) → `vidgen tts` → `generate frames --pay` (a shot's `paint_first_frame:`,
+  a starting picture from its 3D first frame and references; look at it before paying for a clip) →
+  `generate inputs --guide` → `generate plan` (nothing blocked; tell the user the total) → `generate run --pay`
   (needs `videogen.budget_usd`; stops at the first failure, never retries, never pays twice) →
   `generate takes` (look at every contact sheet and QA finding) → `generate pick --shot ID
   --take N` → `vidgen render`. A take with QA errors (black, frozen) is not shown unless picked;
@@ -3953,6 +3955,15 @@ scenes:
   takes/<shot>/<n>.mp4, region: bleed}, beats: [], duration: <the clip's length>}` plays it at
   volume 1 (a `video_clip` with narration plays it at 0.25; `volume:` sets it). The limit: vidgen
   does not time captions or word-anchored actions from a clip's sound.
+- **Painted starting pictures** (`generated_shot.paint_first_frame: {prompt, refs, seed, model,
+  resolution}`, `vidgen generate frames [--pay] [--shot ID]`, dry run by default): `bytedance-seed/seedream-4.5`
+  ($0.04 flat, `input_references`) paints from the beat's first frame (the layout, whose composition, camera and positions
+  it must keep) and the reference pictures, into `assets/frames/<shot>_<key>.png`, inside `videogen.budget_usd`, never
+  paid twice. A shot uses it with `first_frame: painted` (blocked until it exists). Leave `name:` off the stand-ins, or the name tags can become text in the picture.
+  `vidgen split-sheet PICTURE --columns N [--rows N] [--gap PX] | --box X,Y,W,H ... --names a,b --scale 3 --out DIR` cuts one sheet into named panels.
+  A file reference can say what it shows (`refs: [{file: path, shows: morag}]`); the role sentence names it in real order.
+  `generate inputs --guide` also writes `overlay.last.png` (the starting picture over the guide's last frame) so an object appearing later can be checked.
+  A film of picked takes with hard cuts: `place: false` on the shots, one `video_clip` per take (`path: takes/<shot>/<n>.mp4`, `fade: false`, `region: bleed`, no beats, `duration:` the take's length) in a separate `film.yaml`, then `vidgen render film.yaml --preview`.
 - **Voice and guide inputs** (talking shots, `audio:`, `guide:`): OpenRouter takes sound and
   video only as https URLs, so these shots stay blocked until the user opts in with
   `videogen: {host: quick_tunnel}` (default `none`). Then each paid shot shares only its own

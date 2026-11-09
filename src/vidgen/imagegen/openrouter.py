@@ -23,6 +23,7 @@ import urllib.error
 import urllib.parse
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from vidgen import DIST_NAME, httpapi
@@ -268,7 +269,15 @@ def check_request(request: ImageRequest, info: ModelInfo) -> RequestCheck:
             "and imagegen.model to a raster model)"
         )
     refs = params.get("input_references")
-    if isinstance(refs, dict) and isinstance(refs.get("min"), int) and refs["min"] >= 1:
+    count = len(request.input_references)
+    if count:
+        if not isinstance(refs, dict):
+            check.problems.append(f"{model} takes no input pictures (input_references): choose a model that does, e.g. bytedance-seed/seedream-4.5")
+        else:
+            limit = refs.get("max")
+            if isinstance(limit, int) and count > limit:
+                check.problems.append(f"{model} takes at most {limit} input pictures, not {count}: use fewer refs")
+    elif isinstance(refs, dict) and isinstance(refs.get("min"), int) and refs["min"] >= 1:
         check.problems.append(f"{model} edits an input picture (needs {refs['min']}+): choose a text-to-image model")
     if request.aspect_ratio is not None:
         ratios = info.values("aspect_ratio")
@@ -285,8 +294,8 @@ def check_request(request: ImageRequest, info: ModelInfo) -> RequestCheck:
 def request_body(request: ImageRequest, info: ModelInfo | None = None) -> dict[str, Any]:
     """JSON body of ``POST /images``: model, prompt, one picture, then either ``size`` (an
     explicit WIDTHxHEIGHT) or ``aspect_ratio`` (+ ``resolution``), ``quality``, ``seed`` (unless
-    the model is known to take none) and ``output_format``: ``svg`` for a vector picture, else
-    ``png`` when the model lists it."""
+    the model is known to take none), ``output_format`` (``svg`` for a vector picture, else
+    ``png`` when the model lists it) and ``input_references`` (each input picture as a data URL)."""
     body: dict[str, Any] = {"model": request.model, "prompt": request.text, "n": 1}
     if request.explicit_size:
         body["size"] = request.size
@@ -305,7 +314,15 @@ def request_body(request: ImageRequest, info: ModelInfo | None = None) -> dict[s
         body["output_format"] = "svg"
     elif formats and "png" in formats:
         body["output_format"] = "png"
+    if request.input_references:
+        body["input_references"] = [_input_reference(path) for path in request.input_references]
     return body
+
+
+def _input_reference(path: Path) -> dict[str, Any]:
+    """``path`` as the ``image_url`` entry of ``input_references`` (an inline data URL)."""
+    media = {".png": "image/png", ".webp": "image/webp"}.get(path.suffix.lower(), "image/jpeg")
+    return {"type": "image_url", "image_url": {"url": f"data:{media};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"}}
 
 
 # ----- the response ------------------------------------------------------------------------------

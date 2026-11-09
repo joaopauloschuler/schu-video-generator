@@ -3288,6 +3288,36 @@ _BOOL_WORDS = frozenset({"0", "off", "f", "false", "n", "no", "1", "on", "t", "t
 
 #: ``generated_shot.first_frame: last_of:<shot id>``: start from the last frame of that shot's take.
 LAST_OF_PREFIX = "last_of:"
+#: ``generated_shot.first_frame: painted``: the picture ``vidgen generate frames`` painted for the shot.
+PAINTED_FIRST_FRAME = "painted"
+#: The image model ``vidgen generate frames`` uses when a shot does not name one.
+DEFAULT_PAINT_MODEL = "bytedance-seed/seedream-4.5"
+
+
+class FileRef(_Strict):
+    """A picture file of a shot's ``refs:`` with what it shows, so the prompt's role sentence can
+    name it (a plain string in ``refs:`` is the same picture without a label)."""
+
+    file: str = Field(min_length=1)
+    """The picture file, relative to the project."""
+    shows: str | None = Field(default=None, min_length=1)
+    """What the picture shows, for the prompt's role sentence ("@image1 shows Morag"): a character's name, or your own words (written as given), e.g. "the harbour"."""
+
+
+class PaintFirstFrame(_Strict):
+    """A shot's ``paint_first_frame:`` (DESIGN.md §113.15): how ``vidgen generate frames`` paints
+    its starting picture from the first frame of the beat's 3D render and reference pictures."""
+
+    prompt: str = Field(min_length=1)
+    """What the finished picture shows: who stands where, the place, the light. vidgen adds that the first input picture is a plain layout whose composition, camera and positions must be kept, and which other picture shows whom."""
+    refs: list[Annotated[str, Field(min_length=1)] | FileRef] | None = None
+    """Reference pictures sent after the layout, as in the shot's refs: (a character, style, a picture file, or {file, shows}); default: the shot's own refs (its characters and style). At most the model's limit minus one (Seedream 4.5: 13)."""
+    seed: int | None = Field(default=None, ge=0)
+    """Another number asks for another picture of the same prompt (part of the cache key)."""
+    model: str = Field(default=DEFAULT_PAINT_MODEL, min_length=3)
+    """The OpenRouter image model that paints it; it must take input pictures (`input_references`)."""
+    resolution: Literal["512", "768", "1K", "1.5K", "2K", "4K"] = "2K"
+    """Resolution tier sent with the aspect ratio of the video's format (a model that lists fewer tiers is refused by the dry run)."""
 
 
 class GeneratedShot(_Strict):
@@ -3305,14 +3335,14 @@ class GeneratedShot(_Strict):
     """Where the shot is, e.g. "a rainy harbour at dawn"."""
     characters: list[Identifier] | None = None
     """Who is in the shot (names from characters:); default: the beat's speaker for talking and action shots, nobody for establishing shots."""
-    refs: list[Annotated[str, Field(min_length=1)]] | None = None
-    """Reference pictures: a character's name (its reference sheet), style (the style sheet's frames and references) or a picture file (relative to the project); default: the shot's characters and style."""
+    refs: list[Annotated[str, Field(min_length=1)] | FileRef] | None = None
+    """Reference pictures: a character's name (its reference sheet), style (the style sheet's frames and references), a picture file (relative to the project) or {file: path, shows: morag}: a picture file with what it shows, so the prompt's role sentence names it; default: the shot's characters and style."""
     audio: Literal["beat", "none"] | None = None
     """beat: the beat's own voice, cut to the beat's exact length, goes in as an audio reference (lip-sync); none: no audio; default beat for talking shots, none otherwise."""
     guide: bool | GuideChoice = False
     """true or render: a low-resolution silent render of the beat by vidgen (the draft format) goes in as a video reference (composition and motion); depth, outline or mask (the beat's scene must be a 3d scene): that guide pass of the 3D picture instead, same length and size."""
     first_frame: str | None = Field(default=None, min_length=1)
-    """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), none, a picture file, or last_of:<shot id> (the last frame of the take that shot shows; made by `vidgen generate inputs`); default sheet for talking shots, none otherwise."""
+    """The first frame: sheet (the character's first reference-sheet view), render (the first frame of the beat's render), none, a picture file, painted (the picture `vidgen generate frames` painted from paint_first_frame:), or last_of:<shot id> (the last frame of the take that shot shows; made by `vidgen generate inputs`); default sheet for talking shots, none otherwise."""
     seed: int | None = Field(default=None, ge=0)
     """Seed sent to models that take one (not guaranteed to repeat a clip)."""
     resolution: str | None = Field(default=None, min_length=1)
@@ -3329,6 +3359,8 @@ class GeneratedShot(_Strict):
     """Seconds the take fades in and out over vidgen's picture at the beat's edges; default videogen.crossfade (0.25)."""
     sound: SoundChoice | None = None
     """mix: vidgen's voice and music (the model is asked for no sound); model: the model makes the clip's own sound and vidgen keeps it (play it with a video_clip scene; a placed take still plays vidgen's mix). Default: videogen.models.<model>.sound, then videogen.sound, then mix."""
+    paint_first_frame: PaintFirstFrame | None = None
+    """How `vidgen generate frames` paints this shot's starting picture from the first frame of the beat's 3D render and reference pictures; use it with first_frame: painted, or give first_frame: the painted file the command names."""
     first_frame_in: FirstFrameIn | None = None
     """frame: the first_frame: picture goes in as a first frame image; guide: it is spliced into the start of the guide video and no frame image is sent (for models that take a first frame or references, never both; needs guide: and first_frame:). Default: videogen.models.<model>.first_frame_in, then videogen.first_frame_in, then frame."""
 
@@ -3357,6 +3389,10 @@ class GeneratedShot(_Strict):
             raise ValueError("a talking shot is lip-synced to the beat's voice: leave audio out (or audio: beat), or make it an action shot")
         if self.first_frame is not None and self.first_frame.startswith(LAST_OF_PREFIX) and self.last_of_shot is None:
             raise ValueError(f"first_frame: {LAST_OF_PREFIX} needs a shot id, e.g. {LAST_OF_PREFIX}intro_b1")
+        if self.first_frame == PAINTED_FIRST_FRAME and self.paint_first_frame is None:
+            raise ValueError("first_frame: painted needs paint_first_frame: {prompt: ...} on the shot (what `vidgen generate frames` paints)")
+        if self.paint_first_frame is not None and "/" not in self.paint_first_frame.model.strip("/"):
+            raise ValueError(f"paint_first_frame.model: OpenRouter model ids look like author/name (e.g. {DEFAULT_PAINT_MODEL}), not {self.paint_first_frame.model!r}")
         return self
 
     @property
@@ -3366,7 +3402,7 @@ class GeneratedShot(_Strict):
 
     @property
     def first_frame_source(self) -> str:
-        """``sheet``, ``render``, ``none`` or a picture file (``first_frame`` or the kind's default)."""
+        """``sheet``, ``render``, ``none``, ``painted`` or a picture file (``first_frame`` or the kind's default)."""
         return self.first_frame or ("sheet" if self.kind == "talking" else "none")
 
     @property

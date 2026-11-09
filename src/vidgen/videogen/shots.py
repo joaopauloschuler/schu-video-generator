@@ -46,6 +46,8 @@ dry-run plan of ``vidgen generate plan``.
   ``build/videogen/<shot>/last_of.<source>.<take>.png``. An unknown shot, the shot itself or a
   cycle is a problem; a source with no take blocks the shot, so a run never pays for it in the
   same pass as the clip it starts from.
+- **A painted starting picture** (``first_frame: painted``, DESIGN.md §113.15): the picture
+  ``vidgen generate frames`` made from ``paint_first_frame:``; until it exists the shot is blocked.
 - **Size**: the plan of a ready shot gives the request's size with its inline pictures (sent as
   smaller copies, :mod:`vidgen.videogen.pictures`, made here into ``build/videogen/pictures/``);
   over :data:`~vidgen.videogen.openrouter.MAX_INLINE_BYTES` is a problem.
@@ -61,7 +63,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from vidgen.config import BeatConfig, FirstFrameIn, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
+from vidgen.config import PAINTED_FIRST_FRAME, BeatConfig, FileRef, FirstFrameIn, GeneratedShot, SceneConfig, SoundChoice, VideoConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.videogen import MOCK_PROVIDER, MediaInput, VideoRequest, did_you_mean, request_hash
@@ -159,8 +161,9 @@ PICTURE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 @dataclass(frozen=True)
 class ShotInput:
     """One input of a shot: its ``role`` (``first_frame``, ``reference``, ``audio``, ``guide``),
-    kind, file, what it is (``what``), whether it goes in as a frame image and whose reference
-    sheet it comes from (``owner``, for the role sentence)."""
+    kind, file, what it is (``what``), whether it goes in as a frame image, whose reference
+    sheet or character it shows (``owner``, for the role sentence), a ``shows:`` text that names
+    no character (``shows``, written as given), and whether it is a style picture (``style``)."""
 
     role: str
     kind: str
@@ -168,6 +171,13 @@ class ShotInput:
     what: str
     frame: bool = False
     owner: str | None = None
+    shows: str | None = None
+    style: bool = False
+
+    @property
+    def label(self) -> str | None:
+        """What the picture shows, as a prompt writes it (``None``: not labelled)."""
+        return display_name(self.owner) if self.owner is not None else self.shows
 
     @property
     def ready(self) -> bool:
@@ -406,9 +416,13 @@ def _prompt_text(project: Project, shot: Shot, sheets: dict[str, Sheet | None], 
 
 
 def _guide_opening_sentences(shot: Shot) -> list[str]:
-    """The role sentences of a ``first_frame_in: guide`` prompt, numbered by the actual order of
-    its references (:attr:`ShotInput.owner`, per kind); none without a template or a guide."""
-    template = guide_opening_template(shot.spec.model) if shot.first_frame_in == "guide" else None
+    """The role sentences of a prompt, numbered by the actual order of the references
+    (:attr:`ShotInput.label`, per kind). ``first_frame_in: guide``: the guide, the labelled
+    pictures and the voice (none without a template or a guide). Otherwise only a shot whose
+    ``refs`` label a picture (``{file, shows}``) gets a sentence, naming its labelled pictures."""
+    in_guide = shot.first_frame_in == "guide"
+    labelled = any(isinstance(value, FileRef) and value.shows for value in shot.spec.refs or [])
+    template = guide_opening_template(shot.spec.model) if in_guide or labelled else None
     if template is None:
         return []
     video = audio = ""
@@ -419,21 +433,21 @@ def _guide_opening_sentences(shot: Shot) -> list[str]:
             continue
         if item.kind == "image":
             images += 1
-            if item.owner is not None:
-                tokens.setdefault(item.owner, []).append(template.image_token.format(n=images))
+            if item.label is not None:
+                tokens.setdefault(item.label, []).append(template.image_token.format(n=images))
         elif item.kind == "video":
             videos += 1
             video = video or template.video_token.format(n=videos)
         elif item.kind == "audio":
             audios += 1
             audio = audio or template.audio_token.format(n=audios)
-    if not video:
+    if in_guide and not video:
         return []
-    sentences = [template.opens.format(video=video)]
-    shows = [template.shows.format(pictures=_joined(found), s="s" if len(found) == 1 else "", who=display_name(owner)) for owner, found in tokens.items()]
+    sentences = [template.opens.format(video=video)] if in_guide else []
+    shows = [template.shows.format(pictures=_joined(found), s="s" if len(found) == 1 else "", who=who) for who, found in tokens.items()]
     if shows:
         sentences.append(", ".join(shows))
-    if audio:
+    if audio and in_guide:
         who = display_name(shot.speaker) if shot.speaker else "the narrator"
         sentences.append(template.voice.format(audio=audio, who=who))
     return sentences
@@ -506,6 +520,66 @@ def _sheet_of(name: str, sheets: dict[str, Sheet | None]) -> Sheet | None:
     return sheets[name]
 
 
+def _default_refs(project: Project, shot: Shot) -> list[str | FileRef]:
+    """The references of a shot without ``refs:``: none for a talking model (it animates one
+    portrait), else the shot's characters and the style sheet."""
+    if shot.spec.kind == "talking":
+        return []
+    return [*shot.characters, *([STYLE] if project.config.style_sheet is not None else [])]
+
+
+def reference_inputs(
+    project: Project, values: Sequence[str | FileRef], sheets: dict[str, Sheet | None], used: set[Path], needs: set[str], where: str, problems: list[str],
+) -> list[ShotInput]:
+    """The picture references of ``values`` (a ``refs:`` list) in order, each file once (``used``
+    is filled; ``needs`` collects the sheets used; ``problems`` the bad entries, at ``where``)."""
+    found: list[ShotInput] = []
+
+    def add(path: Path, what: str, *, owner: str | None = None, shows: str | None = None, style: bool = False) -> None:
+        if path not in used:
+            found.append(ShotInput("reference", "image", path, what, owner=owner, shows=shows, style=style))
+            used.add(path)
+
+    names = {n for n in sheets if n != STYLE}
+    for value in values:
+        if isinstance(value, FileRef):
+            path = _picture(project, value.file, where, problems)
+            if path is None:
+                continue
+            owner = value.shows if value.shows in names else None
+            label = f", shows {display_name(owner) if owner else value.shows}" if value.shows else ""
+            add(path, f"your picture{label}", owner=owner, shows=None if owner else value.shows)
+        elif value == STYLE:
+            sheet = sheets.get(STYLE)
+            if sheet is None:
+                problems.append(f"{where}: style, but the video has no style_sheet:")
+                continue
+            if sheet.pictures:
+                needs.add(STYLE)
+            for picture in sheet.pictures:
+                add(picture.request.path, f"style sheet, {picture.label}", style=True)
+            for ref in project.config.style_sheet.references if project.config.style_sheet else []:
+                path = _picture(project, ref, "style_sheet.references", problems)
+                if path is not None:
+                    add(path, "style reference", style=True)
+        elif value in sheets:
+            sheet = sheets[value]
+            if sheet is None:
+                problems.append(f"{where}: character {value!r} has no reference_sheet")
+                continue
+            needs.add(value)
+            for picture in sheet.pictures:
+                add(picture.request.path, f"{value} sheet, {picture.label}", owner=value)
+        elif "/" not in value and "." not in value:
+            listed = [n for n in sheets if n != STYLE]
+            problems.append(f"{where}: unknown character {value!r}{did_you_mean(value, [*listed, STYLE])}; characters: {', '.join(listed) or 'none'}")
+        else:
+            path = _picture(project, value, where, problems)
+            if path is not None:
+                add(path, "your picture")
+    return found
+
+
 def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -> None:
     """Fill ``shot.inputs`` and its problems / blocked reasons."""
     spec, folder, where = shot.spec, project.root / INPUTS_DIR / shot.id, shot.location
@@ -531,6 +605,14 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
     elif spec.last_of_shot is not None:
         if shot.last_of_picture is not None and shot.last_of_take is not None:
             first, what = shot.last_of_picture, f"last frame of shot {shot.last_of}, take {shot.last_of_take.number}"
+    elif source == PAINTED_FIRST_FRAME:
+        from vidgen.videogen.frames import painted_picture
+
+        painted = painted_picture(project, shot, sheets)
+        if painted is not None:
+            first, what = painted, "the painted starting picture"
+        else:
+            shot.blocked.append(f"first_frame: painted, but this shot's picture is not painted yet: `vidgen generate frames --pay --shot {shot.id}` (a dry run without --pay shows it first), then look at it")
     elif source != "none":
         first = _picture(project, source, f"{where}.first_frame", shot.problems)
         what = "your picture"
@@ -547,43 +629,7 @@ def _resolve_inputs(project: Project, shot: Shot, sheets: dict[str, Sheet | None
         used.add(first)
         if not frame_ok and shot.model is not None:
             shot.notes.append(f"{shot.model.id} lists no first-frame images: the {role.replace('_', ' ')} goes in as a picture reference")
-    # a talking model animates one portrait: no other pictures unless refs: names them
-    default_refs = [] if spec.kind == "talking" else list(shot.characters) + ([STYLE] if project.config.style_sheet is not None else [])
-    for value in spec.refs if spec.refs is not None else default_refs:
-        if value == STYLE:
-            sheet = sheets.get(STYLE)
-            if sheet is None:
-                shot.problems.append(f"{where}.refs: style, but the video has no style_sheet:")
-                continue
-            if sheet.pictures:
-                needs.add(STYLE)
-            for picture in sheet.pictures:
-                if picture.request.path not in used:
-                    shot.inputs.append(ShotInput("reference", "image", picture.request.path, f"style sheet, {picture.label}"))
-                    used.add(picture.request.path)
-            for ref in project.config.style_sheet.references if project.config.style_sheet else []:
-                path = _picture(project, ref, "style_sheet.references", shot.problems)
-                if path is not None and path not in used:
-                    shot.inputs.append(ShotInput("reference", "image", path, "style reference"))
-                    used.add(path)
-        elif value in sheets:
-            sheet = sheets[value]
-            if sheet is None:
-                shot.problems.append(f"{where}.refs: character {value!r} has no reference_sheet")
-                continue
-            needs.add(value)
-            for picture in sheet.pictures:
-                if picture.request.path not in used:
-                    shot.inputs.append(ShotInput("reference", "image", picture.request.path, f"{value} sheet, {picture.label}", owner=value))
-                    used.add(picture.request.path)
-        elif "/" not in value and "." not in value:
-            names = [n for n in sheets if n != STYLE]
-            shot.problems.append(f"{where}.refs: unknown character {value!r}{did_you_mean(value, [*names, STYLE])}; characters: {', '.join(names) or 'none'}")
-        else:
-            path = _picture(project, value, f"{where}.refs", shot.problems)
-            if path is not None and path not in used:
-                shot.inputs.append(ShotInput("reference", "image", path, "your picture"))
-                used.add(path)
+    shot.inputs += reference_inputs(project, shot.spec.refs if shot.spec.refs is not None else _default_refs(project, shot), sheets, used, needs, f"{where}.refs", shot.problems)
     if spec.wants_audio:
         shot.inputs.append(ShotInput("audio", "audio", folder / "audio.mp3", f"the beat's voice, {shot.length:.2f} s"))
     guide = spec.guide_source
@@ -659,6 +705,14 @@ def _windows(project: Project, scene: SceneConfig, fps: int) -> list[float]:
     return [round(w.window * fps) / fps for w in beat_windows(lines, project.config.narration.pad, fps)]
 
 
+def project_sheet_map(project: Project) -> dict[str, Sheet | None]:
+    """Each character's reference sheet by name (``None``: it has none) and the style sheet."""
+    sheets: dict[str, Sheet | None] = {e.name: character_sheet(project, e.name) for e in project.config.characters}
+    if project.config.style_sheet is not None:
+        sheets[STYLE] = style_sheet(project)
+    return sheets
+
+
 def project_shots(project: Project, catalog: Catalog | None) -> list[Shot]:
     """Every generated shot of ``project`` in video order. ``catalog``: the video model list
     (``None``: models are not checked; no lengths, no prices)."""
@@ -667,10 +721,7 @@ def project_shots(project: Project, catalog: Catalog | None) -> list[Shot]:
 
     config = project.config
     fps = config.format.fps
-    names = [e.name for e in config.characters]
-    sheets: dict[str, Sheet | None] = {name: character_sheet(project, name) for name in names}
-    if config.style_sheet is not None:
-        sheets[STYLE] = style_sheet(project)
+    sheets = project_sheet_map(project)
     shots: list[Shot] = []
     # scene lengths need the scene types (their fade-out); inside a session they are registered
     registered = all(registry.find(spec.type) is not None for spec in config.scenes)
@@ -743,6 +794,10 @@ def _link_last_of(project: Project, shots: Sequence[Shot], *, parts_known: bool)
 def _fill_shot(project: Project, shot: Shot, sheets: dict[str, Sheet | None]) -> None:
     """Fill ``shot``'s inputs, its sound checks and its prompt (every shot id is known by now)."""
     _resolve_inputs(project, shot, sheets)
+    if shot.spec.paint_first_frame is not None:
+        from vidgen.videogen.frames import paint_references
+
+        shot.problems += paint_references(project, shot, sheets)[1]
     _check_sound(shot)
     shot.prompt = shot_prompt(project, shot, sheets)
     if shot.spec.guide_source is not None:
@@ -1043,6 +1098,6 @@ def plan_shots(
 
 
 __all__ = [
-    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "last_of_name", "pick_aspect", "plan_shots", "project_shots",
+    "EARLIER_WORDING_BLOCKED", "FIRST_FRAME_WITH_REFERENCES_PROBLEM", "project_sheet_map", "reference_inputs", "GUIDED_TALKING_FRAMING", "GUIDE_PROMPTS", "INPUTS_DIR", "NO_HOST_BLOCKED", "Shot", "ShotInput", "ShotPlan", "VideoGenPlan", "lowest_resolution", "guide_name", "inputs_command", "last_of_name", "pick_aspect", "plan_shots", "project_shots",
     "shot_problems", "shot_prompt", "video_ratio", "without_framing",
 ]

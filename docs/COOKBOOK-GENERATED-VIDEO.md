@@ -63,13 +63,45 @@ video model across many shots:
 - Each clip gets one camera position or one simple move, set by its 3D guide. A camera that never
   moves is an option for a very short film or a single gag, not a rule for a long one.
 
-**The starting picture.** vidgen has no command that paints one, so it is a manual step: give an
-image model that takes input pictures (OpenRouter's `bytedance-seed/seedream-4.5`, about $0.04 a
-picture) a still of the 3D view as its first reference, plus crops of the character sheet, and put
-the result under `assets/` for `first_frame:`. Leave `name:` off the stand-ins for that still, or
-the name tags can turn into text in the picture. The model takes the 3D view as a suggestion, not as
-geometry: check that what the story needs is still in the picture (an edge to fall off, room to walk
-into), and repaint if not.
+**The starting picture.** `vidgen generate frames` paints it for you. On the shot, say what the
+picture shows and which reference pictures to use, and point `first_frame:` at it:
+
+```text
+generated_shot:
+  kind: action
+  model: bytedance/seedance-2.0-mini
+  guide: depth
+  first_frame: painted        # the picture `vidgen generate frames` painted for this shot
+  first_frame_in: guide
+  refs:                       # file references can say what they show
+    - {file: assets/refs/morag_full.png, shows: morag}
+    - {file: assets/refs/tam_full.png, shows: tam}
+  paint_first_frame:
+    prompt: "The woman stands on the left further along the pier, posing with one hand on her hip. The man is nearer the camera on the right, seen from behind, holding a phone up."
+    refs:                     # default: the shot's own refs
+      - {file: assets/refs/morag_full.png, shows: morag}
+      - {file: assets/refs/tam_full.png, shows: tam}
+      - {file: assets/refs/harbour.png, shows: the look and colours of the harbour}
+```
+
+`vidgen generate frames` is a dry run: it renders the beat's first frame as a draft (the **layout**,
+`build/videogen/<shot>/layout.png`, sent as the first input picture with an instruction to keep its
+composition, camera and positions), lists the input pictures in the order they are sent, and prices
+the picture (`bytedance-seed/seedream-4.5` by default, 0-14 input pictures, flat $0.04 a picture,
+9:16 and 2K from the video's shape). `vidgen generate frames --pay --shot <shot>` makes it inside
+`videogen.budget_usd`, records it in the ledger and stores it as `assets/frames/<shot>_<key>.png` with
+a `.json` sidecar; the same request is never paid twice, and a changed prompt, layout or reference
+picture is a new file. Look at the picture before you pay for a clip (the output says so): the model
+takes the layout as a strong suggestion, not as geometry, so check that what the story needs is
+still in the picture (an edge to fall off, room to walk into), and repaint with another `seed` if not.
+Leave `name:` off the stand-ins of that scene (the dry run notes it), or the name tags can turn into
+text in the picture. The picture is ready for `first_frame: painted` (or `first_frame:` with the file
+the command names).
+
+**Reference pictures from one style sheet.** A sheet with several views side by side is cut into
+named panels: `vidgen split-sheet assets/style_sheet.webp --columns 6 --gap 10 --names
+morag_full,morag_side,morag_face,harbour,tam_face,tam_full --scale 3 --out assets/refs` writes one PNG per
+panel (or use `--box X,Y,W,H` for each panel), enlarged with Lanczos. Then use them in `refs:`.
 
 **Prompts and sound.** One clear action and at most one speaker per clip. Say in words which way
 people move and that the camera stays still, if it does. For lip sync, use `sound: model` with the
@@ -86,7 +118,7 @@ speaks later than the voice file, up to about 0.9 s in our runs, so keep lines s
 - A `video_clip` scene fades in and spends its last 0.5 s fading out. For takes that must join with a
   plain cut, set `fade: false` on each `video_clip` (with `transition: cut`, the default): the clip is on
   screen from the first frame and the scene ends with its last narrated frame, so no fade or black
-  gap comes between the takes.
+  gap comes between the takes. Section 8 has the recipe for a whole film of takes.
 
 **What it costs.** Measured on `bytedance/seedance-2.0-mini` at 480p: a 5 s clip cost $0.177 without
 a guide and $0.191 with one, and listed prices at 720p are more than double. A 10-minute film is
@@ -105,12 +137,15 @@ change what was downloaded. **Limits per request, from third-party pages, not of
 
 **A recipe for one shot after another.**
 
-1. Make the starting picture (above) of the first shot.
+1. Paint the starting picture of the first shot (`vidgen generate frames`, above) and look at it.
 2. Fit the 3D figures to it: in the `type: 3d` scene, move the stand-ins until a draft of the scene lines up with
    the picture, so the guide agrees with what the picture shows. `vidgen generate inputs --guide` writes
-   `build/videogen/<shot>/overlay.png`: the starting picture blended half and half over the first frame of the
-   plain guide. Open it and check that the figures sit on what the picture shows; this costs nothing. (With
-   `first_frame_in: guide` the overlay uses the plain guide, not the combined one, whose first frame is the picture.)
+   `build/videogen/<shot>/overlay.png` (the starting picture blended half and half over the first frame of the
+   plain guide) and `overlay.last.png` (the same picture over the plain guide's last frame). Open both and check
+   that the figures sit on what the picture shows, this costs nothing. `overlay.last.png` shows what the first
+   overlay cannot: an object that only appears later in the shot, where the guide puts it. A guide showing an arm
+   rising through the concrete, instead of in the water beside it, is a guide error you can only see there. (Both
+   overlays use the plain guide, not the combined one.)
 3. Make the shot with `guide: depth`, `first_frame: <the picture>` and `first_frame_in: guide`. Check the take: its
    QA lines and contact sheet give `opening match` (how close its first frame is to the starting picture, SSIM from 0
    to 1). Under 0.7 is a warning, a rough guide only: real clips measured 0.98 and 0.985 with a true first frame,
@@ -541,6 +576,27 @@ else is mixed over it:
 
 It plays at volume 1 (`volume:` changes it; a `video_clip` scene with narration plays the clip's
 sound at 0.25). vidgen does not time captions or word-anchored actions from the clip's sound.
+
+**A whole film of takes, joined with hard cuts.** Set `place: false` on every generated shot in the
+project's `video.yaml` (so the shots stay in `generate` without being laid over vidgen's scenes), and put the
+picked takes in a separate config file beside it, for example `film.yaml`, one `video_clip` per shot:
+
+```yaml
+title: Get It All In
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 480, height: 854, fps: 24}
+output: get-it-all-in
+scenes:
+  - {id: film_shot1, type: video_clip, duration: 5.088, params: {path: takes/shot1/2.mp4, region: bleed, fit: cover, fade: false}}
+  - {id: film_shot2, type: video_clip, duration: 5.088, params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false}}
+```
+
+Each scene has no `beats`, so `duration:` is the take's length in seconds (`ffprobe -show_entries
+format=duration takes/shot1/2.mp4`, or the `.json` beside the take), `fade: false` gives a plain cut, and the clip's
+own sound plays at volume 1. Then `vidgen render film.yaml --preview` joins them. Render the preview
+first, and check the frames around each join (no dark frames) before the final render. Measured on the four
+picked takes of "Get It All In" at 480x854: 20.33 s, 4 shots in order, no frame darker than the takes
+themselves at any join, each clip's sound level the same as the take's.
 
 ## 9. Publishing
 

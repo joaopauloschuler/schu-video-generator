@@ -152,7 +152,7 @@ def test_inputs_convert_the_pass_cut_like_the_render(make_project) -> None:
     lines: list[str] = []
     written = make_inputs(project, [shot], guide=True, out=lines.append, render=render)
     assert asked == [("plaza", ("depth",))]
-    assert [p.name for p in written] == ["guide.depth.mp4", "first_frame.png", "overlay.png"]
+    assert [p.name for p in written] == ["guide.depth.mp4", "first_frame.png", "overlay.png", "overlay.last.png"]
     folder = root / "build" / "videogen" / "act"
     info = probe(folder / "guide.depth.mp4")
     assert info.duration == pytest.approx(shot.length, abs=0.25) and (info.width, info.height) == (54, 96)

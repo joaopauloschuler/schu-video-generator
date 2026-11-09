@@ -1789,6 +1789,14 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 319 — Paint starting pictures, split a sheet, label file references, the last-frame overlay, assemble takes
+- [x] A. `vidgen generate frames`: `paint_first_frame:`, `input_references` on OpenRouter's image API, dry run, `--pay`, cache, ledger and budget; `first_frame: painted`
+- [x] B. `vidgen split-sheet`: panels by grid or boxes, names, Lanczos scale (byte-identical to the owner's cut)
+- [x] C. Final assembly recipe by `vidgen render`: `video_clip`, `place: false`, a take path, `fade: false`, no beats (verified on a copy of the saved project)
+- [x] D. `refs: [{file, shows}]` in the role sentence, in input order; other shots' prompts unchanged
+- [x] E. `overlay.last.png`: the starting picture over the plain guide's last frame
+- [x] Docs (cookbook, CONFIG, AGENTS copy, DESIGN). Pytest not run, on the owner's instruction
+
 ### Step 318 — Correct the opening-match figures in the docs
 - [x] The cookbook, guide, CONFIG and DESIGN quoted 0.81 for a true first frame (a comparison that stretched the picture) and colour SSIM for the picture in the guide; they now give the `opening match` values.
 

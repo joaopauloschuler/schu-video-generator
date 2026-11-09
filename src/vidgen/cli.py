@@ -1951,7 +1951,7 @@ def cmd_generate(args: argparse.Namespace) -> CommandResult:
         return 0
     if args.action == "host-test":
         return _generate_host_test(args)
-    if args.action in ("plan", "sheets", "inputs"):
+    if args.action in ("plan", "sheets", "inputs", "frames"):
         return _generate_shots(args)
     if args.action in ("run", "status", "takes", "pick"):
         return _generate_workflow(args)
@@ -2011,7 +2011,7 @@ def _generate_resolve(args: argparse.Namespace) -> CommandResult:
 
 
 def _generate_shots(args: argparse.Namespace) -> CommandResult:
-    """``vidgen generate plan | sheets | inputs`` (DESIGN.md §113.3)."""
+    """``vidgen generate plan | sheets | inputs | frames`` (DESIGN.md §113.3, §113.15)."""
     from vidgen.videogen.inputs import make_inputs
     from vidgen.videogen.models import load_catalog
     from vidgen.videogen.sheets import run_sheets
@@ -2029,8 +2029,10 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
                          "pictures": [p.request.path.relative_to(project.root).as_posix() for p in s.pictures]} for s in result.sheets],
             )
         return 0
+    if args.action == "frames":
+        return _generate_frames(project, args)
     if args.pay:
-        raise VidgenError(f"--pay is for `vidgen generate run` and `generate sheets`; `generate {args.action}` never pays")
+        raise VidgenError(f"--pay is for `vidgen generate run`, `generate sheets` and `generate frames`; `generate {args.action}` never pays")
     if args.action == "inputs":
         catalog = load_catalog()
         shots = [s for s in project_shots(project, catalog) if not args.shot or s.id in args.shot or s.beat.id in args.shot]
@@ -2068,6 +2070,25 @@ def _generate_shots(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def _generate_frames(project: Project, args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate frames``: paint the shots' starting pictures (DESIGN.md §113.15)."""
+    from vidgen.videogen.frames import run_frames, select_paint_shots
+    from vidgen.videogen.models import load_catalog
+    from vidgen.videogen.shots import project_shots
+
+    shots = select_paint_shots(project_shots(project, load_catalog()), args.shot or ())
+    result = run_frames(project, shots, pay=args.pay, out=(lambda line: None) if args.json else print)
+    if args.json:
+        total, unknown = result.cost
+        return jsonout.envelope(
+            "generate", True, action="frames", paid=args.pay, paid_usd=result.paid, estimate_usd=total, unknown_prices=unknown,
+            todo=[r.path.relative_to(project.root).as_posix() for r in result.plan.todo],
+            frames=[{"shot": f.shot.id, "picture": f.request.path.relative_to(project.root).as_posix() if f.request is not None else None,
+                     "made": f.request.exists if f.request is not None else False, "problems": f.problems} for f in result.frames],
+        )
+    return 0
+
+
 def _generate_host_test(args: argparse.Namespace) -> CommandResult:
     """``vidgen generate host-test [PROJECT] [--keep SECONDS]`` (DESIGN.md §115): a free check of
     the quick tunnel; the project (when there is one) gives its ``videogen`` settings."""
@@ -2094,6 +2115,22 @@ def _generate_host_test(args: argparse.Namespace) -> CommandResult:
         del doc["ok"]   # a failed test raises, so the envelope's ok is the test's
         return jsonout.envelope("generate", True, action="host-test", **doc)
     print(f"host test OK: {result.host} served the file and refused other paths; closed ({result.close_reason})")
+    return 0
+
+
+def cmd_split_sheet(args: argparse.Namespace) -> CommandResult:
+    """``vidgen split-sheet``: cut a style sheet picture into named panels (DESIGN.md §113.16)."""
+    from vidgen.videogen.split_sheet import split_sheet
+
+    panels = split_sheet(
+        Path(args.picture), out_dir=Path(args.out) if args.out else None, names=args.names.split(",") if args.names else None,
+        columns=args.columns, rows=args.rows, gap=args.gap, boxes=args.box or None, scale=args.scale,
+    )
+    if args.json:
+        return jsonout.envelope("split-sheet", True, panels=[{"name": p.name, "path": str(p.path), "box": list(p.box), "size": list(p.size)} for p in panels])
+    for panel in panels:
+        print(f"{panel.path} ({panel.size[0]}x{panel.size[1]}, from x {panel.box[0]}, y {panel.box[1]}, {panel.box[2]}x{panel.box[3]} of the sheet)")
+    print(f"{len(panels)} panel(s) written")
     return 0
 
 
@@ -2482,14 +2519,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="generated video shots through OpenRouter's video API: models lists the video models; plan lists the shots with their inputs "
         "and cost; sheets makes the reference sheets; inputs cuts the shots' inputs; run makes the clips (a dry run unless --pay); status, "
         "takes and pick show and choose the takes the film shows; ledger shows the spending and budget; host-test checks the Cloudflare "
-        "quick tunnel that shares audio / video inputs (free)",
+        "quick tunnel that shares audio / video inputs (free); frames paints shots' starting pictures from their 3D scene and reference "
+        "pictures (a dry run unless --pay)",
     )
     p.add_argument(
-        "action", choices=["models", "plan", "sheets", "inputs", "run", "status", "takes", "pick", "ledger", "resolve", "host-test"],
+        "action", choices=["models", "plan", "sheets", "inputs", "frames", "run", "status", "takes", "pick", "ledger", "resolve", "host-test"],
         help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
         "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
         "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
-        "shot's voice (and with --guide its draft render) into build/videogen/; run: generate the ready shots (a dry run; --pay pays, within "
+        "shot's voice (and with --guide its draft render) into build/videogen/; frames: paint each shot's starting picture from its paint_first_frame: (a dry run; --pay paints, within the budget, into assets/frames/; a shot uses it with first_frame: painted); run: generate the ready shots (a dry run; --pay pays, within "
         "the budget, stopping at the first failure, never retrying; with videogen.host: quick_tunnel each shot's voice / guide is shared "
         "through its own quick tunnel while its job runs) and keep each clip as a take with QA and a contact sheet; status: each "
         "shot's takes and the one shown, the credit line; takes: every take with its QA findings and contact sheet; pick: choose a shot's "
@@ -2500,10 +2538,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     project_arg(p)
     p.add_argument("--refresh", action="store_true", help="models: fetch the list again even when the cached copy is recent")
-    p.add_argument("--variant", metavar="NAME", help="plan, sheets, inputs, run, status, takes, pick: apply a named variant")
-    p.add_argument("--shot", action="append", metavar="ID", help="plan, inputs, run, takes: only this shot or beat (repeatable); pick: the shot")
+    p.add_argument("--variant", metavar="NAME", help="plan, sheets, inputs, frames, run, status, takes, pick: apply a named variant")
+    p.add_argument("--shot", action="append", metavar="ID", help="plan, inputs, frames, run, takes: only this shot or beat (repeatable); pick: the shot")
     p.add_argument("--sheet", action="append", metavar="NAME", help="sheets: only this character's sheet, or style (repeatable)")
-    p.add_argument("--pay", action="store_true", help="run, sheets: pay for the clips / pictures (needs a budget); without it a dry run")
+    p.add_argument("--pay", action="store_true", help="run, sheets, frames: pay for the clips / pictures (needs a budget); without it a dry run")
     p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
     p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")
     p.add_argument("--intent", metavar="ID", help="resolve: the unresolved submit (`vidgen generate ledger` lists them)")
@@ -2514,6 +2552,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keep", type=float, metavar="SECONDS", help="host-test: keep the tunnel open this long after the check (the address is printed to try in a browser)")
     p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with a guide: (true, or depth / outline / mask on a 3d scene) or first_frame: render (a draft render of their scenes)")
     p.set_defaults(func=cmd_generate)
+
+    p = sub.add_parser("split-sheet", help="cut a style sheet picture into named panels (PNG), by columns and rows or by explicit boxes")
+    p.add_argument("picture", help="the sheet picture (png, jpg, webp)")
+    p.add_argument("--columns", type=int, metavar="N", help="columns of equal panels, left to right")
+    p.add_argument("--rows", type=int, metavar="N", help="rows of equal panels, top to bottom (default 1)")
+    p.add_argument("--gap", type=int, default=0, metavar="PX", help="pixels between panels (with --columns / --rows)")
+    p.add_argument("--box", action="append", metavar="X,Y,W,H", help="a panel in pixels, in reading order (repeatable; instead of --columns / --rows)")
+    p.add_argument("--names", metavar="A,B,C", help="file names of the panels, in order (default panel1, panel2, ...)")
+    p.add_argument("--scale", type=float, default=1.0, metavar="N", help="scale each panel by this factor with Lanczos resampling (default 1)")
+    p.add_argument("--out", metavar="DIR", help="folder for the panels (default <sheet name>_panels beside the picture)")
+    json_arg(p)
+    p.set_defaults(func=cmd_split_sheet)
 
     p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")
     project_arg(p)

@@ -206,6 +206,18 @@ def test_inputs_write_the_overlay_from_the_plain_guide(make_project) -> None:
     assert (root / "build" / "videogen" / "act" / "overlay.png").is_file() and any("overlay.png" in line for line in lines)
 
 
+def test_the_last_frame_overlay_uses_the_guides_last_frame(tmp_path: Path) -> None:
+    from PIL import Image
+
+    guide = tmp_path / "guide.mp4"
+    write_clip(guide, seconds=1.0)
+    picture = tmp_path / "pic.png"
+    Image.new("RGB", (160, 90), (255, 0, 0)).save(picture)
+    dest = tmp_path / "out" / "overlay.last.png"
+    make_overlay(find_ffmpeg(), picture, guide, dest, past_fade=False, at_end=True)
+    assert dest.is_file()
+
+
 def test_a_shot_with_no_starting_picture_gets_no_overlay(make_project) -> None:
     root = make_project(config(shot_of("act", guide=True)), folder="noov")
     project = Project.load(root)

@@ -2897,11 +2897,18 @@ scenes:
           prompt: she hands him a folded map  # what happens; style, setting, characters and line are added
           setting: the ferry quay in the fog
           characters: [mara, theo]          # default: the speaker (talking, action), nobody (establishing)
-          refs: [mara, theo, style]         # sheets by name, style, or picture files; default: characters + style
+          refs: [mara, theo, style]         # sheets by name, style, picture files, or {file: path, shows: mara} (file: required; shows: a character or your own words, for the role sentence; default none); default: characters + style
           audio: beat                       # beat | none; default beat for talking shots
           guide: true                       # a silent draft render of the beat as a video reference (true = render);
                                             # on a 3d scene also depth | outline | mask: that guide pass instead
-          first_frame: none                 # sheet | render | none | a picture file | last_of:<shot id> (last frame of that shot's take); default sheet for talking
+          first_frame: none                 # sheet | render | none | a picture file | painted (made by generate frames) | last_of:<shot id> (last frame of that shot's take); default sheet for talking
+          paint_first_frame: null           # null (default); {prompt, refs, seed, model, resolution}: how `vidgen generate frames` paints the starting picture
+          # paint_first_frame:
+          #   prompt: "who stands where..."   # what the picture shows (required)
+          #   refs: [...]                     # as refs: above; default: the shot's own refs (at most the model's limit minus one, the layout being the first input)
+          #   seed: null                      # another number asks for another picture (part of the cache key)
+          #   model: bytedance-seed/seedream-4.5   # the OpenRouter image model; default bytedance-seed/seedream-4.5 (must take input_references)
+          #   resolution: 2K                  # 512 | 768 | 1K | 1.5K | 2K | 4K; default 2K
           seed: 7
           resolution: 480p                  # default: the model's lowest
           aspect_ratio: "9:16"              # default: the model's nearest to the format
@@ -3023,6 +3030,19 @@ scenes:
 - **Overlay** (`build/videogen/<shot>/overlay.png`, made by `vidgen generate inputs --guide` for a shot with a starting picture and a guide): the picture
   (cropped to fill) blended half and half over the first frame of the plain guide (past a fade in from black for a render guide), never the combined
   guide. It checks the fit of the 3D figures before paying. Never sent.
+- **Last-frame overlay** (`build/videogen/<shot>/overlay.last.png`, written with `overlay.png`): the same picture over the plain guide's last frame, so
+  an object that only appears later in the shot shows where the guide puts it. Never sent.
+- **A painted starting picture** (`vidgen generate frames [PROJECT] [--shot ID] [--pay]`, a shot with `paint_first_frame:`): a dry run by default; it renders
+  the beat's first frame as a draft (`build/videogen/<shot>/layout.png`), lists the input pictures in the order they are sent (the layout first) and
+  estimates the price. `--pay` paints it with `paint_first_frame.model` (default `bytedance-seed/seedream-4.5`, OpenRouter `input_references`) within
+  `videogen.budget_usd`, records it in the ledger and stores it as `assets/frames/<shot>_<key>.png` with a sidecar; a changed prompt, layout or reference is a new
+  file, the same request is never paid twice. A shot uses it with `first_frame: painted` (or `first_frame:` with the file the command names); until it exists the
+  shot is blocked. `first_frame: painted` without `paint_first_frame:` is refused by `vidgen validate`. Look at the picture before paying for a clip.
+- **File reference labels** (`refs:` items `{file: path, shows: morag}`, `file` required, `shows` a character name or your own words): the prompt's role sentence names those
+  pictures in their actual input order (`@image1 and @image2 show Morag`); a shot with no `shows` keeps its prompt exactly. Works in both `first_frame_in`
+  modes (without `first_frame_in: guide` only the labelled pictures are named).
+- **Split a sheet into panels** (`vidgen split-sheet PICTURE --columns N [--rows N] [--gap PX] | --box X,Y,W,H ... [--names A,B,C] [--scale N] [--out DIR]`): free, cuts one
+  picture into named PNGs by a grid (panels must divide into whole pixels) or by explicit boxes, enlarged with ffmpeg's Lanczos (`crop`, then `scale:flags=lanczos`).
 - **A first frame with references** (`videogen.models.<id>.first_frame_with_references`; default vidgen's
   record: false for `bytedance/seedance-*`, unknown for other models): `false` is a problem in `generate plan` / `run` for a shot sending both
   (a shot already paid for is noted, not blocked), naming `first_frame_in: guide`; `true` overrides vidgen's record. Unknown models are not blocked.
