@@ -23044,7 +23044,7 @@ still work without a warning; `dev` is the only real extra (for developers of vi
   for a plain install on Python 3.12 (Step 322, summed from PyPI's file sizes). The CPU-only
   PyTorch index cannot be expressed as a dependency that works on every platform.
 
-## 117. A clip that continues the one before: `match_previous` (Step 325)
+## 117. A clip that continues the one before: `match_previous` (Steps 325, 326)
 
 A film of generated takes is a list of `video_clip` scenes joined by plain cuts (§113). A take
 made with `first_frame: last_of:<shot>` starts from the last frame of the take before, but the
@@ -23056,7 +23056,8 @@ of the last frame of shot 2 is [141.6 126.7 130.0] and of the first frame of sho
 `false`). At the cut the clip's first frame is given the brightness and colour of the previous
 clip's last shown frame, and the correction eases away, so that `seconds` after the cut the
 clip shows its own pixels again. No frame is added, removed or blended; durations and sound do
-not change.
+not change. A dissolve over a few frames is a separate setting, off by default (see "Dissolve"
+below).
 
 - **Where it applies** (`clip_join.match_previous_problem`; `vidgen validate` reports each case
   at `scenes[i].params.match_previous`, and the scene's render raises the same text as a
@@ -23094,9 +23095,8 @@ not change.
   calls. What it returns is a `clips.FrameTreatment` (`state(played)`, `apply(frame, state)`),
   set as `ClipMobject.playback.treatment`: `ClipMobject.get_pixel_array` applies it to each
   decoded frame before the mobject's opacity and tint, and the state is part of its one-frame
-  cache key. A second treatment of the same join (a short blend of the opening frames with
-  `ClipJoin.reference` at the size shown) is another `FrameTreatment` built in
-  `opening_treatment`. Neither name is in `vidgen.api`.
+  cache key. `ClipJoin.treatment(settings, fps)` chooses the treatment: a `GainMatch`, or with
+  a dissolve a `JoinTreatment` (gain, then blend). Neither name is in `vidgen.api`.
 - **Cache** (`render/fingerprint.py`): the param is in the scene's params, so changing it
   renders that scene again and no other. A scene with `match_previous` also carries
   `match_previous: [fingerprint of the scene before, size and time of its clip file]`, so a
@@ -23108,3 +23108,50 @@ not change.
   each cut has the level of the uncorrected render (131.2 against 131.1, 125.3 against 125.2,
   120.2 against 120.1); with `hold: true` all three cuts are within ±0.1 % and shot 4 plays
   about 26 % brighter than its file.
+
+**Dissolve (Step 326).** After the gain, what is left of the flicker at such a cut is the picture
+itself: the model draws fine texture differently and shifts the picture by about 2 pixels (at
+496x864). `match_previous: {dissolve: N}` blends this clip's first N frames with the previous
+clip's last shown frame, held still. It is off by default (`dissolve: 0`), and `match_previous:
+true` does exactly what it did in Step 325: the owner wants a dissolve only on request.
+
+- **Settings** (`clip_join.MatchPrevious`): `dissolve` is a whole number of frames from 0 to 12
+  (`MAX_DISSOLVE`), usable with `seconds` and `hold`. `level: false` switches the gain off and
+  leaves the dissolve alone; it is an error without a dissolve, and with `seconds` or `hold`
+  (they set the gain).
+- **N counts frames of the render being made.** A preview at 24 fps and a final render at 30 fps
+  both blend N frames, so `dissolve: 3` lasts 0.125 s in the first and 0.1 s in the second.
+  `JoinTreatment` gets the rate from the planned timeline (`VideoPlan.fps`) and finds the frame
+  as `round(played · fps)`.
+- **Weights** (`clip_join.dissolve_weight`): frame *k* after the cut (0 = the first) shows
+  `(N − k) / (N + 1)` of the previous frame and the rest of its own. With N = 3: 0.75, 0.5,
+  0.25, then 0 from frame 3 on. Counting the frame before the cut as weight 1, the weight falls
+  in N + 1 equal steps, so the change at the cut is no larger than the change between any two
+  frames of the dissolve, and the first frame is not a repeat of the previous one.
+- **Order** (`clip_join.JoinTreatment.apply`): the frame gets its gain first (`apply_gains`),
+  then `blend` mixes its colour channels with the reference (rounded; the frame's alpha is
+  kept). The reference is `ClipJoin.reference(size)` at the size of the frame being treated: the
+  previous clip's last shown frame, treated as its own scene shows it, decoded once per size and
+  kept. So both pictures of the blend are at the same level. From frame N on the state is the
+  gain's alone, and `None` once that has eased to 1: `state` is `(gains | None, weight)`,
+  hashable, and part of the one-frame cache key.
+- **Skipped together.** `ClipJoin.treatment` runs the same `measure_match` for a dissolve, with
+  or without `level`, so a pair of frames that is not a continuation gets neither gain nor
+  dissolve, in the one warning. A dissolve also needs both scenes to show a picture of the same
+  shape (`ClipJoin.shape_problem`, within 1 %; true for two `fit: cover` scenes, or two clips
+  of the same shape with the same `fit`), because the blend lays one picture on the other pixel
+  for pixel; otherwise the whole treatment is skipped with a warning that names the two shapes.
+- **Chain.** A previous scene shorter than its own dissolve still shows it at its last frame;
+  `opening_treatment` then asks for that scene's treatment first (`_shows_at`), as for `hold`.
+- **Cache.** `dissolve` and `level` are in the scene's params, so changing either renders that
+  scene again and no other.
+- **Measured** (the same four takes, preview 480x854 at 24 fps; mean absolute difference of
+  RGB, 0 to 255, between consecutive frames). Inside the shots of the joined MP4 the median is
+  0.61 and the 90th percentile 1.71. At the three cuts, frame before to first frame after:
+  7.09, 6.74 and 5.80 with `match_previous: true`; 2.75, 2.71 and 2.44 with `{dissolve: 3}`,
+  followed by 1.4 to 2.0 for each of the next three frame pairs and 0.55 to 0.65 after them.
+  On the frames handed to Manim, before the video encoder, the same step is 7.11, 6.71 and 5.73
+  against 1.76, 1.65 and 1.41 (a quarter each, as the weights say); the rest of the MP4 figure
+  is the encoder, which codes each scene on its own (the frames of shots 2 to 4 that the
+  dissolve does not touch still differ by 1.6 to 2.0 between the two MP4s). Both films have 488
+  frames, 20.33 s, −19.3 LUFS and the same decoded sound, sample for sample.

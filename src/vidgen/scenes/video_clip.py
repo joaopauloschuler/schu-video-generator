@@ -4,7 +4,8 @@ browser / window / phone frame, with a title and a caption), trimmed, sped up or
 looped or held on its last frame, its sound mixed under the narration, and callouts drawn on top
 step by step like the ``screenshot`` scene's. With ``match_previous`` a clip that continues the
 clip of the scene before (a generated take made from that take's last frame) starts in its
-brightness and colour (``vidgen.clip_join``, DESIGN.md §117).
+brightness and colour and, on request, dissolves out of its last frame over a few frames
+(``vidgen.clip_join``, DESIGN.md §117).
 
 The clip is a ``ClipMobject`` (``vidgen.api``): its frames are decoded as the render reaches
 them, so stills, the layout dump, ``vidgen lint`` and beat actions see it like any picture.
@@ -90,7 +91,7 @@ class VideoClip(Screenshot):
         fade: bool = Field(default=True, strict=True)
         """false: a hard cut. The clip is on screen from the scene's first frame (no fade in) and the scene ends with its last narrated frame (no 0.5 s fade-out), so generated takes join with a plain cut (with transition: cut, the default)."""
         match_previous: StrictBool | MatchPrevious = False
-        """true or {seconds, hold}: this clip continues the clip of the scene before (a take generated from its last frame). Its first frame is given that frame's brightness and colour (one gain per colour channel) and the correction eases away over seconds (default 1; hold: true keeps it for the whole clip). Both scenes need fade: false and region: bleed, with a cut between them. Skipped with a warning when the two frames are not a continuation."""
+        """true or {seconds, hold, dissolve, level}: this clip continues the clip of the scene before (a take generated from its last frame). Its first frame is given that frame's brightness and colour (one gain per colour channel) and the correction eases away over seconds (default 1; hold: true keeps it for the whole clip). dissolve: N (0-12, default 0: none) also blends the clip's first N frames, counted in the render being made, with that last frame held still; level: false leaves brightness and colour alone (the dissolve only). Both scenes need fade: false and region: bleed, with a cut between them. Skipped with a warning when the two frames are not a continuation."""
         units: Literal["fraction", "px"] = "fraction"
         """Callout areas in fractions of the clip's picture (0-1, from its top-left corner, before any cover crop) or in its pixels."""
         picture_word: ClassVar[str] = "clip"
@@ -203,8 +204,9 @@ class VideoClip(Screenshot):
         return timing
 
     def _match_previous(self) -> FrameTreatment | None:
-        """The colour match with the clip of the scene before (``match_previous``); ``None``,
-        with a warning, when the two frames at the cut are not a continuation."""
+        """The colour match and the dissolve with the clip of the scene before
+        (``match_previous``); ``None``, with a warning, when the two frames at the cut are not a
+        continuation."""
         cfg = self.project.config
         index = [s.id for s in cfg.scenes].index(self.spec.id)
         problem = match_previous_problem(cfg, index)

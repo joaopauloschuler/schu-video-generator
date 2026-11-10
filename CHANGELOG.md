@@ -7,6 +7,12 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### A dissolve of a few frames where one generated take continues another, on request (Step 326)
+
+- `video_clip`'s `match_previous` takes two more settings. `dissolve: N` (0 to 12, default 0) blends the clip's first N frames with the previous clip's last frame, held still, the previous frame's share falling in equal steps (N = 3: 75 %, 50 %, 25 %). N counts frames of the render being made (preview or final). `level: false` blends without the correction of brightness and colour. No frame is added or removed; durations and sound do not change.
+- `match_previous: true` is unchanged: it never blends.
+- Measured on four takes at preview size (mean absolute difference of RGB between the frame before and the first frame after each cut, 0 to 255): 7.09, 6.74 and 5.80 with `match_previous: true`; 2.75, 2.71 and 2.44 with `{dissolve: 3}`. Inside the shots the median is 0.61.
+
 ### No flash where one generated take continues another (Step 325)
 
 - `video_clip` has a new param `match_previous: true | {seconds, hold}`. Where a clip continues the clip of the scene before (a take generated from its last frame, which video models draw about 8 % darker), its first frame is given that frame's brightness and colour, one gain per colour channel, and the correction eases away within `seconds` (default 1). No frames are blended or added; durations and sound do not change.

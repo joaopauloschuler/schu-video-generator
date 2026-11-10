@@ -1789,6 +1789,16 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 326 — A dissolve of a few frames where a clip continues the one before, on request
+- [x] `match_previous: {dissolve: N}` (0–12 frames of the render being made, default 0): the first N frames are blended with the previous clip's last shown frame, weights `(N − k) / (N + 1)`, after the gain (`clip_join.JoinTreatment`, DESIGN §117)
+- [x] `level: false`: the dissolve without the gain; an error without a dissolve or with `seconds` / `hold`
+- [x] `match_previous: true` unchanged (never blends)
+- [x] Skipped with the gain, in the same warning, when the frames are not a continuation; skipped when the two scenes do not show a picture of the same shape
+- [x] Measured on the four takes of "Get It All In" at 480x854: frame difference at the cuts 7.09 / 6.74 / 5.80 matched, 2.75 / 2.71 / 2.44 with `{dissolve: 3}` (1.76 / 1.65 / 1.41 before the encoder); frames, duration and sound identical
+- [x] CONFIG, cookbook (generated video §8), guide / AGENTS.md, CHANGELOG
+- [~] Tests added to `tests/test_clip_join.py`, **not run with pytest** (owner's rule); each new test body was run once by a plain script
+- [ ] Not tried: a final-size (1080x1920, 30 fps) render, `{dissolve: N, level: false}` and `hold` with a dissolve in a real render; nobody watched the previews
+
 ### Step 325 — A clip that continues the one before matches its brightness and colour
 - [x] `video_clip` param `match_previous: true | {seconds: 1.0, hold: false}`: one gain per colour channel from the previous clip's last shown frame and this clip's first (64 x 64, decoded from the files), eased to 1 by smoothstep over `seconds`; `hold` keeps it and chains (`vidgen/clip_join.py`, DESIGN §117)
 - [x] `vidgen validate`: needs a `video_clip` directly before, a cut, `fade: false` and `region: bleed` on both

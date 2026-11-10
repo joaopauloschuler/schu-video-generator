@@ -6121,7 +6121,7 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 | `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration (linear; 1 = as recorded, a mono recording at that level on both channels) |
 | `mute` | bool | `false` | leave the clip's sound out |
 | `fade` | bool | `true` | `false`: a hard cut, for generated takes that join with a plain cut: the clip is on screen from the first frame (no fade in, title and caption still enter) and the scene has no 0.5 s fade-out; use with `transition: cut`, the default |
-| `match_previous` | bool \| `{seconds, hold}` | `false` | this clip continues the clip of the scene before (a take generated from its last frame): its first frame gets that frame's brightness and colour, one gain per colour channel, and the correction eases away over `seconds` (default `1.0`); `hold: true` keeps it for the whole clip. See below |
+| `match_previous` | bool \| `{seconds, hold, dissolve, level}` | `false` | this clip continues the clip of the scene before (a take generated from its last frame): its first frame gets that frame's brightness and colour, one gain per colour channel, and the correction eases away over `seconds` (default `1.0`); `hold: true` keeps it for the whole clip. `dissolve: N` (0–12 frames, default `0`: none) also blends the first N frames with that last frame; `level: false` leaves brightness and colour alone. See below |
 | `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` ([`screenshot`](#screenshot); kinds `box`, `circle`, `arrow`, `spotlight`) |
 | `frame`, `url` | `none` \| `browser` \| `window` \| `phone`, str | `none`, `""` | a frame drawn around the clip (not with `bleed`); `url` for `browser` |
 | `units` | `fraction` \| `px` | `fraction` | how callout areas are written (of the whole picture) |
@@ -6148,6 +6148,27 @@ their files): use it for two or three takes, not for a long film. The correction
 with a warning that gives the numbers, when the two frames are not a continuation: a channel
 gain outside 0.8–1.25, pictures that still differ by more than 4 % of full scale after the
 gain, or a frame too dark to measure. A held chain's gain stops at 0.67–1.5.
+
+**`dissolve`** is for what the gain leaves: the video model also draws fine texture a little
+differently and shifts the picture by a pixel or two, which shows as a small jump. It is off
+unless you ask for it; `match_previous: true` never blends.
+
+```yaml
+- {id: film_shot2, type: video_clip, duration: 5.088,
+   params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false, match_previous: {dissolve: 3}}}
+```
+
+The clip's first N frames are mixed with the previous clip's last frame, held still: with
+`dissolve: 3` they show 75 %, 50 % and 25 % of it (in general `(N − k) / (N + 1)` for frame
+*k*, counted from 0), and from frame N on the clip is not blended. No frame is added or removed
+and durations and sound stay as they are. N is a whole number from 0 to 12 and counts frames of
+the render being made: 3 frames are 0.125 s in a 24 fps preview and 0.1 s in a 30 fps final
+render. The gain still applies (with `seconds` and `hold` as above) and is applied first, so the
+two pictures mixed are at the same level; `{dissolve: 3, level: false}` blends without
+correcting brightness and colour (`level: false` cannot be combined with `seconds` or `hold`).
+A pair of frames that is not a continuation gets neither, in one warning. Both scenes must show
+the same part of the frame (two `fit: cover` scenes do); if not, the treatment is skipped with
+a warning.
 
 ```yaml
 - id: clip

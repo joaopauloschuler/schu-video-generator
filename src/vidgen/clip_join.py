@@ -6,8 +6,10 @@ A video model draws the picture it starts from a little darker or with another t
 flickers. :class:`ClipJoin` is the one place that knows the previous clip's last shown frame
 (:meth:`ClipJoin.reference`) and this clip's first (:meth:`ClipJoin.opening`); from them it makes
 the *treatment* of this clip's opening frames (a :class:`vidgen.clips.FrameTreatment`), which
-``ClipMobject`` applies to each decoded frame. The treatment here is :class:`GainMatch`: a gain
-per colour channel that makes the first frame's mean colour the reference's, eased back to 1.
+``ClipMobject`` applies to each decoded frame. :class:`GainMatch` is a gain per colour channel
+that makes the first frame's mean colour the reference's, eased back to 1. :class:`JoinTreatment`
+adds the dissolve asked for with ``match_previous: {dissolve: N}``: the first N frames are
+blended with the reference, held still.
 
 Nothing here reads a rendered scene: the previous clip's last shown frame is decoded from its
 file at the time the planned timeline gives, so scenes still render in any order.
@@ -15,12 +17,13 @@ file at the time the planned timeline gives, so scenes still render in any order
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from pydantic import Field, ValidationError
+from pydantic import Field, StrictInt, ValidationError, model_validator
 
 from vidgen.clips import ClipReader, ClipTiming, FrameTreatment, clip_timing, cover_crop, probe_clip
 from vidgen.errors import Problem
@@ -44,18 +47,37 @@ MAX_DIFFERENCE = 0.04
 MIN_LEVEL = 4.0
 #: Size (width, height) in pixels the two frames are measured at.
 MEASURE_PIXELS = (64, 64)
+#: Most frames a dissolve at the cut may take (``match_previous: {dissolve: N}``).
+MAX_DISSOLVE = 12
+#: Largest relative difference between the shapes (width / height) of the two pictures shown
+#: that a dissolve accepts: it blends them pixel on pixel.
+SHAPE_TOLERANCE = 0.01
 
 Gains = tuple[float, float, float]
 Size = tuple[int, int]
 
 
 class MatchPrevious(SceneParams):
-    """How ``match_previous`` corrects the clip: ``{seconds, hold}``."""
+    """How ``match_previous`` treats the clip: ``{seconds, hold, dissolve, level}``."""
 
     seconds: float = Field(default=1.0, gt=0.0, le=30.0)
     """Seconds after the cut over which the correction eases away (the clip shows its own pixels from then on)."""
     hold: bool = False
     """Keep the full correction for the whole clip (the next clip then matches this clip's corrected last frame)."""
+    dissolve: StrictInt = Field(default=0, ge=0, le=MAX_DISSOLVE)
+    """Frames of the render being made (preview or final) that are blended with the previous clip's last shown frame, held still (0: none)."""
+    level: bool = True
+    """false: no correction of brightness and colour, only the dissolve."""
+
+    @model_validator(mode="after")
+    def _level_checks(self) -> MatchPrevious:
+        if not self.level:
+            if self.dissolve == 0:
+                raise ValueError("level: false leaves nothing to do without a dissolve (give dissolve: 1 or more, or leave match_previous out)")
+            given = sorted(self.model_fields_set & {"seconds", "hold"})
+            if given:
+                raise ValueError(f"{given[0]}: sets the correction of brightness and colour, which level: false switches off")
+        return self
 
 
 @dataclass(frozen=True)
@@ -135,6 +157,62 @@ class GainMatch:
         return apply_gains(frame, state)
 
 
+def dissolve_weight(frame: int, frames: int) -> float:
+    """The weight of the previous clip's last frame in frame ``frame`` (0 = the first after the
+    cut) of a dissolve of ``frames`` frames: equal steps of ``1 / (frames + 1)`` from that frame
+    (weight 1, the frame before the cut) down to 0 at frame ``frames``. Three frames: 0.75, 0.5,
+    0.25, so the first frame after the cut is already a quarter this clip's."""
+    return max(frames - max(frame, 0), 0) / (frames + 1)
+
+
+def blend(frame: np.ndarray, reference: np.ndarray, weight: float) -> np.ndarray:
+    """``frame`` with its colour channels mixed with ``reference``'s (same size, RGB or RGBA,
+    uint8): ``weight`` of the reference, the rest of the frame, rounded; a new array, the
+    frame's alpha kept."""
+    out = frame.copy()
+    mixed = frame[..., :3].astype(np.float32) * (1.0 - weight) + reference[..., :3].astype(np.float32) * weight
+    out[..., :3] = np.clip(np.rint(mixed), 0, 255).astype(np.uint8)
+    return out
+
+
+#: What a :class:`JoinTreatment` does to one frame: the gains (``None``: none) and the weight of
+#: the previous clip's last frame.
+JoinState = tuple[Gains | None, float]
+
+
+class JoinTreatment:
+    """The gain and the dissolve of one join as a :class:`vidgen.clips.FrameTreatment`: each of
+    the first ``dissolve`` frames (of a render at ``fps`` frames per second) gets its gain
+    (``gain``; ``None``: none) and is then blended with ``reference(size)``, the previous clip's
+    last shown frame at the frame's size (width, height), by :func:`dissolve_weight`. Later
+    frames get the gain alone."""
+
+    def __init__(self, gain: GainMatch | None, dissolve: int, fps: float, reference: Callable[[Size], np.ndarray]) -> None:
+        self.gain = gain
+        self.dissolve = dissolve
+        self.fps = fps
+        self._reference = reference
+        self._held: tuple[Size, np.ndarray] | None = None
+
+    def state(self, played: float) -> JoinState | None:
+        """The gains and the reference's weight ``played`` seconds after the cut (``None`` once
+        both do nothing)."""
+        gains = self.gain.state(played) if self.gain is not None else None
+        weight = round(dissolve_weight(round(played * self.fps), self.dissolve), 4)
+        return None if gains is None and weight == 0.0 else (gains, weight)
+
+    def apply(self, frame: np.ndarray, state: JoinState) -> np.ndarray:
+        gains, weight = state
+        if gains is not None:
+            frame = apply_gains(frame, gains)
+        if weight == 0.0:
+            return frame
+        size = (frame.shape[1], frame.shape[0])
+        if self._held is None or self._held[0] != size:
+            self._held = (size, self._reference(size))
+        return blend(frame, self._held[1], weight)
+
+
 def measure_match(
     reference: np.ndarray, opening: np.ndarray, settings: MatchPrevious, shown_reference: np.ndarray | None = None
 ) -> tuple[GainMatch | None, str]:
@@ -195,6 +273,35 @@ class ClipJoin:
         decoded = self.reference(MEASURE_PIXELS, treated=False)
         shown = self.reference(MEASURE_PIXELS) if self.previous_treatment is not None else None
         return measure_match(decoded, self.opening(MEASURE_PIXELS), settings, shown)
+
+    def shape_problem(self) -> str | None:
+        """Why the two pictures cannot be blended pixel on pixel (``None``: they can): the parts
+        of the two clips shown do not have the same shape."""
+        before, after = (_shown_aspect(clip) for clip in (self.previous, self.current))
+        if abs(before / after - 1.0) <= SHAPE_TOLERANCE:
+            return None
+        return f"the previous clip shows a picture {before:.3f} times as wide as high and this one {after:.3f}, so a dissolve cannot lay one on the other (use the same fit on both scenes)"
+
+    def treatment(self, settings: MatchPrevious, fps: float) -> tuple[FrameTreatment | None, str]:
+        """What ``settings`` does to this clip's frames in a render at ``fps`` frames per second,
+        and a line saying what was measured; ``None`` and the reason when the clip does not
+        continue the one before (:func:`measure_match`, also for a dissolve alone)."""
+        problem = self.shape_problem() if settings.dissolve else None
+        if problem is not None:
+            return None, problem
+        gain, text = self.gain_match(settings)
+        if gain is None or not settings.dissolve:
+            return gain, text
+        weights = ", ".join(f"{dissolve_weight(k, settings.dissolve):.2f}" for k in range(settings.dissolve))
+        text += f"; dissolve over {settings.dissolve} frames (the previous frame's weights {weights})"
+        if not settings.level:
+            text += ", brightness and colour left as they are"
+        return JoinTreatment(gain if settings.level else None, settings.dissolve, fps, self.reference), text
+
+
+def _shown_aspect(clip: ShownClip) -> float:
+    """Width / height of the part of ``clip`` its scene shows."""
+    return probe_clip(clip.path).aspect * clip.crop[2] / clip.crop[3]
 
 
 # ----- the two scenes of a join --------------------------------------------------------------------
@@ -270,15 +377,23 @@ def shown_clip(project: Any, plan: VideoPlan, index: int, frame_aspect: float) -
 def opening_treatment(project: Any, plan: VideoPlan, index: int, frame_aspect: float) -> tuple[FrameTreatment | None, str]:
     """What scene ``index`` does to its clip's opening frames to continue the clip of the scene
     before (``match_previous``), and a line saying what was measured or why nothing is done.
-    The scene before is asked the same first when its own correction still shows at its last
-    frame (``hold``, or a scene shorter than the easing), so held corrections do not drift."""
+    The scene before is asked the same first when its own treatment still shows at its last
+    frame (``hold``, or a scene shorter than the easing or the dissolve), so held corrections do
+    not drift. A dissolve counts frames at ``plan.fps``."""
     settings = _match_settings(_clip_params(project.config.scenes[index]))
     if settings is None or match_previous_problem(project.config, index) is not None:
         return None, "match_previous is off or cannot apply here"
     previous = shown_clip(project, plan, index - 1, frame_aspect)
     before = _match_settings(_clip_params(project.config.scenes[index - 1]))
     previous_treatment = None
-    if before is not None and (before.hold or previous.last_played < before.seconds):
+    if before is not None and _shows_at(before, previous.last_played, plan.fps):
         previous_treatment, _ = opening_treatment(project, plan, index - 1, frame_aspect)
     join = ClipJoin(previous, shown_clip(project, plan, index, frame_aspect), previous_treatment)
-    return join.gain_match(settings)
+    return join.treatment(settings, plan.fps)
+
+
+def _shows_at(settings: MatchPrevious, played: float, fps: float) -> bool:
+    """Whether a clip treated by ``settings`` may still be treated ``played`` seconds after its
+    cut."""
+    levelled = settings.level and (settings.hold or played < settings.seconds)
+    return levelled or round(played * fps) < settings.dissolve

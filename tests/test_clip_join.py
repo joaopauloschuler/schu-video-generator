@@ -1,7 +1,8 @@
 """Step 325: ``video_clip`` ``match_previous`` (``vidgen.clip_join``): the gain per colour channel
 between the previous clip's last frame and this clip's first, its easing, the limits that skip
 it, the frame treatment of ``ClipMobject``, what ``vidgen validate`` rejects, and the scene
-fingerprint. No scene is rendered."""
+fingerprint. Step 326: the dissolve at the cut (``match_previous: {dissolve: N}``): its weights,
+its combination with the gain, its settings. No scene is rendered."""
 
 from __future__ import annotations
 
@@ -21,11 +22,14 @@ from vidgen.clip_join import (
     MAX_DIFFERENCE,
     ClipJoin,
     GainMatch,
+    JoinTreatment,
     MatchPrevious,
     ShownClip,
     apply_gains,
+    blend,
     channel_gains,
     correction_left,
+    dissolve_weight,
     measure_match,
     opening_treatment,
     picture_difference,
@@ -125,6 +129,67 @@ def test_params_accept_true_or_settings() -> None:
             cls.validate_params({**base, "match_previous": bad}, Theme())
 
 
+# ----- the dissolve (Step 326) ----------------------------------------------------------------------
+
+
+def test_dissolve_weights_fall_in_equal_steps_to_zero() -> None:
+    assert [dissolve_weight(k, 3) for k in range(-1, 5)] == [0.75, 0.75, 0.5, 0.25, 0.0, 0.0]
+    assert dissolve_weight(0, 1) == 0.5 and dissolve_weight(0, 0) == 0.0
+    weights = [1.0] + [dissolve_weight(k, 12) for k in range(13)]   # 1.0: the frame before the cut
+    assert [round(a - b, 6) for a, b in zip(weights, weights[1:])] == [round(1 / 13, 6)] * 13
+
+
+def test_blend_mixes_colour_and_keeps_alpha() -> None:
+    frame = np.full((2, 2, 4), (100, 50, 0, 200), dtype=np.uint8)
+    reference = np.full((2, 2, 4), (200, 50, 101, 255), dtype=np.uint8)
+    assert blend(frame, reference, 0.75)[0, 0].tolist() == [175, 50, 76, 200]
+    assert np.array_equal(blend(frame, reference, 0.0), frame) and frame[0, 0, 0] == 100   # a new array
+
+
+def test_join_treatment_blends_after_the_gain() -> None:
+    asked: list[tuple[int, int]] = []
+
+    def reference(size: tuple[int, int]) -> np.ndarray:
+        asked.append(size)
+        return np.full((size[1], size[0], 4), 200, dtype=np.uint8)
+
+    treatment = JoinTreatment(GainMatch((1.1, 1.1, 1.1), seconds=1.0), dissolve=3, fps=24.0, reference=reference)
+    states = [treatment.state(k / 24) for k in range(4)]
+    assert [s[1] for s in states] == [0.75, 0.5, 0.25, 0.0] and states[0][0] == (1.1, 1.1, 1.1)
+    assert all(hash(s) is not None for s in states) and states[3][0] is not None   # the gain is still easing
+    assert treatment.state(1.0) is None and treatment.state(5.0) is None
+    frame = np.full((3, 5, 4), 100, dtype=np.uint8)
+    shown = treatment.apply(frame, ((1.1, 1.1, 1.1), 0.75))
+    assert shown[0, 0].tolist() == [178, 178, 178, 100]          # 0.75 x 200 + 0.25 x (100 x 1.1)
+    assert treatment.apply(frame, ((1.1, 1.1, 1.1), 0.0))[0, 0, 0] == 110
+    treatment.apply(frame, (None, 0.5))
+    assert asked == [(5, 3)]                                      # (width, height), fetched once
+
+
+def test_join_treatment_without_the_gain_ends_with_the_dissolve() -> None:
+    treatment = JoinTreatment(None, dissolve=2, fps=30.0, reference=lambda size: np.zeros((size[1], size[0], 4), np.uint8))
+    assert [treatment.state(k / 30) for k in range(4)] == [(None, 0.6667), (None, 0.3333), None, None]
+    frame = np.full((2, 2, 4), 90, dtype=np.uint8)
+    assert treatment.apply(frame, (None, 0.3333))[0, 0].tolist() == [60, 60, 60, 90]
+
+
+def test_params_accept_a_dissolve() -> None:
+    cls = cls_of("video_clip")
+    base = {"path": "assets/clip.mp4", "region": "bleed", "fade": False}
+
+    def settings(value: Any) -> Any:
+        return cls.validate_params({**base, "match_previous": value}, Theme()).match_previous
+
+    assert MatchPrevious().dissolve == 0 and MatchPrevious().level is True       # true stays the gain alone
+    both = settings({"dissolve": 3, "seconds": 0.5})
+    assert (both.dissolve, both.seconds, both.level) == (3, 0.5, True)
+    assert settings({"dissolve": 12, "level": False}).level is False
+    for bad in ({"dissolve": 13}, {"dissolve": -1}, {"dissolve": 1.5}, {"dissolve": True}, {"level": False},
+                {"dissolve": 3, "level": False, "hold": True}, {"dissolve": 3, "level": False, "seconds": 2}):
+        with pytest.raises(ValidationError):
+            settings(bad)
+
+
 # ----- projects (a test clip, nothing rendered) -----------------------------------------------------
 
 
@@ -203,6 +268,55 @@ def test_opening_treatment_of_a_scene(make_project, clip: Path) -> None:
     assert opening_treatment(project, plan, 2, 16 / 9)[0] is None   # match_previous is off on c
 
 
+def dissolved(make_project, clip: Path, setting: dict[str, Any], **params: Any) -> tuple[Any, str]:
+    """The treatment of scene ``b`` (opens on frame 14, grey 175) after ``a`` (ends on 15, 186)."""
+    project = load(make_project, clip, [
+        {**take("a", trim=[2.4, 3.2], **params), "duration": 0.8},
+        {**take("b", trim=[2.8, 4.0], match_previous=setting), "duration": 1.2},
+    ])
+    cls_of("video_clip")
+    return opening_treatment(project, VideoPlan(project, 5), 1, 16 / 9)
+
+
+def test_opening_treatment_with_a_dissolve(make_project, clip: Path) -> None:
+    treatment, text = dissolved(make_project, clip, {"dissolve": 2})
+    assert isinstance(treatment, JoinTreatment) and treatment.fps == 5 and "dissolve over 2 frames" in text
+    assert treatment.gain is not None and treatment.gain.gains == pytest.approx((186 / 175,) * 3, abs=0.02)
+    assert [treatment.state(k / 5)[1] for k in range(3)] == [0.6667, 0.3333, 0.0]
+    frame = np.full((8, 8, 4), 175, dtype=np.uint8)
+    shown = treatment.apply(frame, treatment.state(0.0))
+    assert shown.shape == frame.shape and int(shown[0, 0, 0]) == pytest.approx(186, abs=2)   # same level both sides
+
+
+def test_a_dissolve_alone_leaves_the_level(make_project, clip: Path) -> None:
+    treatment, text = dissolved(make_project, clip, {"dissolve": 2, "level": False})
+    assert isinstance(treatment, JoinTreatment) and treatment.gain is None and "left as they are" in text
+    assert treatment.state(0.0) == (None, 0.6667) and treatment.state(0.4) is None
+    frame = np.full((8, 8, 4), 175, dtype=np.uint8)
+    assert int(treatment.apply(frame, (None, 0.6667))[0, 0, 0]) == pytest.approx(182, abs=2)   # 2/3 of 186, 1/3 of 175
+
+
+def test_a_dissolve_is_skipped_with_the_match(make_project, clip: Path) -> None:
+    project = load(make_project, clip, [
+        {**take("a", trim=[0.0, 0.8]), "duration": 0.8},                          # ends on frame 3 (grey 47)
+        {**take("b", trim=[2.8, 4.0], match_previous={"dissolve": 2, "level": False}), "duration": 1.2},
+    ])
+    cls_of("video_clip")
+    treatment, text = opening_treatment(project, VideoPlan(project, 5), 1, 16 / 9)
+    assert treatment is None and "does not continue the one before" in text
+
+
+def test_a_dissolve_needs_the_same_part_of_the_frame(make_project, clip: Path) -> None:
+    treatment, _ = dissolved(make_project, clip, {"dissolve": 2}, fit="contain")
+    assert treatment is not None                         # a 16:9 clip whole in a 16:9 frame: the same part as b
+    project = load(make_project, clip, [
+        {**take("a", trim=[2.4, 3.2], fit="contain"), "duration": 0.8},
+        {**take("b", trim=[2.8, 4.0], fit="cover", match_previous={"dissolve": 2}), "duration": 1.2},
+    ])
+    treatment, text = opening_treatment(project, VideoPlan(project, 5), 1, 1.0)
+    assert treatment is None and "dissolve cannot lay one on the other" in text
+
+
 def test_fingerprint_follows_the_scene_before(make_project, clip: Path) -> None:
     root = load(make_project, clip, [take("a")]).root
 
@@ -218,3 +332,6 @@ def test_fingerprint_follows_the_scene_before(make_project, clip: Path) -> None:
     assert [x == y for x, y in zip(matched, trimmed)] == [False, False, True]    # the scene before changed: b follows
     unmatched = prints([take("a", trim=[0, 2]), take("b"), take("c")])
     assert unmatched[1] == plain[1]                                             # without the param b does not follow
+    dissolving = prints([take("a"), take("b", match_previous={"dissolve": 3}), take("c")])
+    longer = prints([take("a"), take("b", match_previous={"dissolve": 4}), take("c")])
+    assert len({matched[1], dissolving[1], longer[1]}) == 3 and dissolving[0] == matched[0]

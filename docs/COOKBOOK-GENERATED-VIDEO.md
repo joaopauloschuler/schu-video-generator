@@ -630,6 +630,33 @@ the corrected one, so the gains add up: on these takes shot 4 plays 26 % brighte
 bright areas burn out. Use `hold` for two or three takes at most. What the correction does not remove: a
 change of the picture itself at the cut (a face or a hand drawn slightly differently).
 
+**A dissolve of a few frames, on request.** After the brightness match, the cut can still show a small
+jump: the model draws fine texture differently and shifts the picture by a pixel or two. If you see it,
+ask for a dissolve:
+
+```yaml
+  - {id: film_shot2, type: video_clip, duration: 5.088, params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false, match_previous: {dissolve: 3}}}
+```
+
+The clip's first 3 frames are mixed with the previous clip's last frame, held still (75 %, 50 % and 25 %
+of it); from the 4th frame on the clip is not blended. No frame is added or removed, and durations and
+sound do not change. The number counts frames of the render being made (3 frames are 0.125 s in a 24 fps
+preview, 0.1 s in a 30 fps final render); the most is 12. It is off unless you write it: `match_previous:
+true` never blends. The brightness match still runs, before the blend; `{dissolve: 3, level: false}`
+blends without it. Measured on the same four takes (preview; how much one frame differs from the next,
+mean absolute difference of RGB on a scale of 0 to 255; inside the shots the usual value is 0.6, and 1.7
+for the fastest tenth of the frames):
+
+| cut | `match_previous: true`: frame before to first frame after | `{dissolve: 3}`: the same pair | `{dissolve: 3}`: the next three pairs |
+|---|---|---|---|
+| shot 1 to 2 | 7.09 | 2.75 | 1.74, 1.99, 1.88 |
+| shot 2 to 3 | 6.74 | 2.71 | 1.62, 1.94, 1.69 |
+| shot 3 to 4 | 5.80 | 2.44 | 1.41, 1.72, 1.56 |
+
+Both films have the same 488 frames, 20.33 s and sound. A dissolve trades the one-frame jump for four
+frames of slight softness, in which anything that moves shows a faint double outline; keep it short, and
+leave it out where the plain match already looks clean.
+
 ## 9. Publishing
 
 When the film shows takes, laid over beats or played by `video_clip` scenes from `takes/<shot>/<n>.mp4`
