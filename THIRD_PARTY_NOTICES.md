@@ -71,6 +71,18 @@ The geometry was converted (antimeridian cuts, ring orientation, coordinates rou
 and label points and aliases were added; the `source` entry of the file records this. The same
 notices ship with the data as `src/vidgen/data/geo/LICENSE`.
 
+## three.js
+
+The `3d` scene type draws with **three.js** (https://threejs.org), bundled as package data in
+`src/vidgen/data/three/`: `three.module.js` and `three.core.js` unmodified from the npm package
+`three` 0.186.1 (`build/`; SHA-256 `9052042d676cb0fdc1ddfefe193053f34b7ac0513a616fdac4535d49987812ea`
+and `9edde002b066a9a05676a6127f67735b62baf399bdea529f2f7e31657da769e6`), under the **MIT
+License**, © 2010-2026 three.js authors; the licence text is `src/vidgen/data/three/LICENSE`.
+The page loads them from the package, never from the network. **Playwright** (optional `3d`
+extra; Apache-2.0, © Microsoft) drives the headless Chromium it downloads with
+`playwright install chromium` (Chromium: BSD-style licence and its third-party notices); neither
+is bundled.
+
 ## Sound effects and music beds
 
 The built-in sound effects and the three music beds are synthesised by schu-video-generator's own code (no

@@ -2757,6 +2757,304 @@ of real people or brands that could mislead, and say that pictures are generated
 matters to the viewer. The `revised_prompt` in the sidecar shows what the model made of the
 prompt.
 
+## Generated video (`videogen`, `vidgen generate`)
+
+Selected shots can be made by generative video models through OpenRouter's video API (Phase
+AH, DESIGN.md §113). vidgen keeps the story, timing, text, captions, music and assembly; by
+default the model's own sound is not used (the job is sent with `generate_audio: false`; see
+`sound` below for the model's own sound). Generation costs money, so nothing is paid unless a run is given `--pay` **and** the project has a budget.
+The workflow, cost control and privacy: [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md).
+
+```yaml
+videogen:
+  provider: openrouter      # openrouter (paid) | mock (a fake API: no key, nothing sent, no quick tunnel)
+  budget_usd: 2.0           # hard cap for this project; paying needs it (default: null)
+  key_via_proxy: false      # true: a network proxy adds the key; vidgen sends no Authorization header (clips and sheets)
+  inline_media: images      # images | all (all: audio / video would go inline, which OpenRouter refuses: a plan problem)
+  poll_timeout: 900         # seconds to wait for a job (it keeps running; a later run polls it again)
+  crossfade: 0.25           # seconds a placed take fades in from / out to vidgen's picture (0: a cut)
+  color_match: 0.5          # light colour matching of placed takes, 0 (as made) - 1
+  host: none                # none | quick_tunnel: share a shot's voice / guide through a Cloudflare quick tunnel while its job runs
+  cloudflared: null         # the cloudflared program for the quick tunnel (default: cloudflared on PATH)
+  tunnel_protocol: http2    # http2 (TCP 443) | quic (UDP 7844) | auto (cloudflared's choice)
+  host_max_minutes: 20      # a quick tunnel closes after this long at the latest (5-120); see "Quick tunnel" for when vidgen is killed
+  sound: mix                # mix (vidgen's voice and music; generate_audio false) | model (the clip's own sound; generate_audio true)
+  models:                   # per video model, by its OpenRouter id
+    "bytedance/seedance-2.0-mini": {sound: model, first_frame_in: guide, first_frame_with_references: false}
+  first_frame_in: frame     # frame (a first frame image) | guide (spliced into the guide video; no frame image is sent)
+  first_frame_dissolve: 0.4 # seconds the starting picture dissolves into the guide with first_frame_in: guide
+```
+
+- **The key**: `OPENROUTER_API_KEY` in the environment, read only when a paid request is made,
+  never stored, logged or shown. Or `key_via_proxy: true` (or `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`)
+  when the network's proxy adds `Authorization: Bearer ...` for openrouter.ai itself.
+- **Spending**: `videogen-ledger.jsonl` in the project records every paid job (submit with
+  its estimate, then the reported cost). Before each job vidgen estimates its price from the
+  model list and refuses it when the estimate is above what the budget has left; a job without
+  a reported cost counts at its estimate. Jobs are never retried automatically, and the same
+  request (model, prompt, settings, input files by content) is cached in
+  `assets/generated_video/<key>.mp4`: it is never paid twice. A job still running when the
+  wait ends is polled again by the next run, not submitted again. The mock provider keeps its
+  own `videogen-ledger.mock.jsonl`. Before each paid submit a `submit_intent` line is written
+  to disk. If vidgen is stopped or the answer is lost after the request is sent, that intent
+  has no known outcome: the provider may have accepted and charged it, so vidgen counts it at
+  its estimate and refuses to pay for that request again until you say what happened with
+  `vidgen generate resolve` (below). It is a separate way out from the cache: a clip already in
+  `assets/generated_video/` is used as usual.
+- **Inputs**: pictures (first / last frame, references) are sent inline as data URLs, as smaller
+  copies (longest side at most 1280 px, JPEG quality 90, PNG only when the picture has
+  transparency) cached in `build/videogen/pictures/`; the original files are untouched. A
+  request larger than 21 MB is refused before it is sent. Audio and video references must be
+  https URLs: OpenRouter refuses them inline (HTTP 400 "Only HTTPS URLs are allowed"), so with
+  `inline_media: all` a shot with `audio:` or `guide:` has a problem in the plan and `run --pay`
+  refuses it, unless `host: quick_tunnel` shares them (below).
+- **Quick tunnel** (`host: quick_tunnel`, off by default; DESIGN.md §115): audio and video
+  inputs are shared through a Cloudflare quick tunnel (free, no account; needs `cloudflared`:
+  Windows `winget install Cloudflare.cloudflared`, macOS `brew install cloudflared`; or
+  `cloudflared: <path>`). `vidgen generate run --pay` opens one tunnel per shot that has a voice
+  or guide, just before its job is submitted, and checks the files through the public address
+  first (if that fails, nothing is sent or paid). Only copies of that shot's own audio / video
+  files are shared (pictures go inline as before), under random names behind a secret path,
+  from a temporary folder outside the project. The tunnel closes as soon as the job reaches a
+  final state (completed or failed, before the download), or after `host_max_minutes`, whichever
+  comes first (also on an error or Ctrl+C); then cloudflared is stopped and the copies deleted.
+  A termination signal (SIGTERM, SIGHUP) closes it the same way and ends vidgen. If vidgen is
+  killed outright (SIGKILL, Task Manager, a cancelled MCP call), a small watcher process that
+  outlives vidgen stops cloudflared and deletes the copies at once (on Windows a Job Object stops
+  cloudflared). Only when the watcher is killed too (or the computer loses power) can copies
+  remain: the next tunnel opened deletes such folders, and a cloudflared still running then
+  serves nothing and must be stopped by hand (it never stays reachable with the files, since
+  the local server ended with vidgen).
+  A finished download does not close it, because a provider may fetch a file again after
+  queueing the job: the tunnel can stay open a little longer in exchange for not losing a paid
+  job. `host_max_minutes` must leave room for `poll_timeout` plus the time to open the tunnel
+  and submit (with the defaults: 20 min against 900 s); otherwise such shots are blocked. To
+  keep the tunnel short on purpose, lower `poll_timeout`: vidgen stops waiting sooner and closes
+  the tunnel while the job keeps running, and a later run polls it. A paid submit is refused
+  (nothing sent or paid) when the tunnel has closed or has too little time left. The ledger records
+  `host_open` (the host name, each file's name, size and SHA-256; never the secret path),
+  `host_fetch` (file, method, status, bytes) and `host_close` (reason). `vidgen generate plan`
+  lists per shot exactly which files a run would share and for how long; a shot is blocked when
+  `cloudflared` is not found. An error from the provider that quotes a shared address is shown
+  and stored with its secret path replaced by `<secret>` (also for a job polled by a later run). With
+  `provider: mock` nothing is shared: no `cloudflared`, no tunnel, fake addresses, and no block
+  for a missing host. A job resumed by a later run (it timed out) is only polled: no
+  tunnel is opened again. `vidgen generate host-test [PROJECT] [--keep SECONDS]` checks it for
+  free: it shares one tiny text file, fetches it back through the public address, checks that
+  other paths answer 404 and closes (`--keep`: stays open that long and prints the address to
+  try in a browser).
+- **Privacy**: video generation is not eligible for OpenRouter's Zero Data Retention: the
+  provider keeps the output for a short time so it can be downloaded.
+- `vidgen generate models` lists OpenRouter's video models (durations, resolutions, aspect
+  ratios, frame images, estimated price per second without audio) from the public list (no key);
+  cached for a day in vidgen's cache folder and read from there offline (`--refresh` fetches it
+  again). `vidgen generate ledger` shows the project's jobs, what they cost and what is left.
+- **A submit with no known outcome**: `vidgen generate plan`, `run`, `status` and `ledger` name
+  it. Say what happened (check your OpenRouter account's activity first) with
+  `vidgen generate resolve [PROJECT] --intent ID` and exactly one of: `--not-charged` (nothing
+  was charged: the next run pays for the shot), `--job JOB_ID` (the job exists: the next run
+  polls and downloads it, free), `--charged [--cost USD]` (charged but nothing to fetch; counted
+  at USD or its estimate: the next run pays again, knowingly). `run --pay` refuses the whole run
+  while a selected shot has one (`--shot` selects the others).
+
+### Shots, sheets and inputs (`generated_shot`, `reference_sheet`, `style_sheet`)
+
+A beat is shown by a generated clip when it has a `generated_shot:` (not the scenes' `generate:`
+param, which makes a still picture). Characters get generated reference pictures with
+`reference_sheet:` (not the drawn `vidgen character-sheet`), and the look of every shot is set
+by the top-level `style_sheet:`.
+
+```yaml
+style_sheet:
+  palette: [slate blue, sea green, warm orange]   # words or a list (also `palette: muted blues`)
+  era: present day
+  lens: 35 mm, shallow depth of field
+  notes: soft overcast light, light film grain
+  references: [assets/look/ref.png]   # your own pictures, sent as style references to every shot
+  frames: 1                  # style frames to generate (0-4)
+  frame_prompt: a foggy harbour with a ferry quay   # what they show (default: a representative still)
+  seed: null
+  approved: false            # true once you have looked at the frames
+characters:
+  - name: mara
+    voice: mara_voice
+    reference_sheet:
+      prompt: a woman in her forties, short dark hair, yellow oilskin jacket
+      views: [front, three_quarter, side]   # front, three_quarter, side, back; the first is the portrait
+      expressions: [smiling]                # more pictures, front view head and shoulders
+      notes: calm, moves briskly            # words for shot prompts only
+      seed: null
+      approved: false
+scenes:
+  - id: quay
+    type: stage
+    beats:
+      - text: "Hold the map, Theo."
+        voice: mara_voice
+        generated_shot:
+          kind: action                      # talking | action | establishing
+          model: bytedance/seedance-2.0-fast
+          prompt: she hands him a folded map  # what happens; style, setting, characters and line are added
+          setting: the ferry quay in the fog
+          characters: [mara, theo]          # default: the speaker (talking, action), nobody (establishing)
+          refs: [mara, theo, style]         # sheets by name, style, picture files, or {file: path, shows: mara} (file: required; shows: a character or your own words, for the role sentence; default none); default: characters + style
+          audio: beat                       # beat | none; default beat for talking shots
+          guide: true                       # a silent draft render of the beat as a video reference (true = render);
+                                            # on a 3d scene also depth | outline | mask: that guide pass instead
+          first_frame: none                 # sheet | render | none | a picture file | painted (made by generate frames) | last_of:<shot id> (last frame of that shot's take); default sheet for talking
+          paint_first_frame: null           # null (default); {prompt, refs, seed, model, resolution}: how `vidgen generate frames` paints the starting picture
+          # paint_first_frame:
+          #   prompt: "who stands where..."   # what the picture shows (required)
+          #   refs: [...]                     # as refs: above; default: the shot's own refs (at most the model's limit minus one, the layout being the first input)
+          #   seed: null                      # another number asks for another picture (part of the cache key)
+          #   model: bytedance-seed/seedream-4.5   # the OpenRouter image model; default bytedance-seed/seedream-4.5 (must take input_references)
+          #   resolution: 2K                  # 512 | 768 | 1K | 1.5K | 2K | 4K; default 2K
+          seed: 7
+          resolution: 480p                  # default: the model's lowest
+          aspect_ratio: "9:16"              # default: the model's nearest to the format
+          line: true                        # the beat's text in the prompt as what is said
+          place: true                       # show the shown take over the beat (false: keep vidgen's picture)
+          fit: cover                        # cover (fill, overhang cut off) | contain (all of it, black bars)
+          crossfade: null                   # seconds; default videogen.crossfade
+          sound: null                       # mix | model; default videogen.models.<model>.sound, then videogen.sound (mix)
+          first_frame_in: null              # frame | guide; default videogen.models.<model>.first_frame_in, then videogen.first_frame_in (frame)
+```
+
+- **Sheets**: `vidgen generate sheets [PROJECT] [--sheet NAME] [--pay]` lists the pictures and
+  their estimated price (a dry run); with `--pay` the image provider (`imagegen:`) makes them
+  into `assets/sheets/<owner>_<view>_<key>.png` (commit them: they cost money). Paying needs
+  `videogen.budget_usd`; each picture is recorded in the video ledger, so the cap covers sheets
+  and clips together. Look at the pictures, then set `approved: true`: no video job uses a sheet
+  before. An approved sheet is never made again; when its prompt changes its pictures are missing
+  and its shots are blocked until you set `approved: false` and make them again.
+- **Inputs**: `vidgen generate inputs [PROJECT] [--shot ID] [--guide]` cuts each shot's inputs
+  into `build/videogen/<shot>/`: `audio.mp3` (the beat's own voice from its narration MP3, cut
+  to the shot's exact length and padded with silence: run `vidgen tts` first), and with
+  `--guide` (it renders the scene as a draft) `guide.mp4` (silent, the draft format: low
+  resolution in the video's shape) and `first_frame.png`. With `guide: depth`, `outline` or
+  `mask` (only on a `3d` scene; elsewhere `vidgen validate` refuses it) the draft render also
+  draws that guide pass (reusing the 3D frames), and the shot gets `guide.<pass>.mp4` instead of
+  `guide.mp4`: the same part of the beat at the same size and frame rate, converted from the
+  lossless pass to H.264 / yuv420p (BT.709, CRF 12). Mask colours stay within a few levels
+  inside each object; at object edges the halved colour resolution of yuv420p blends
+  neighbouring colours over a pixel or two (snap each pixel to the nearest colour of
+  `<scene>.mask-colors.json` to get the exact mask back). `first_frame: render` stays the normal
+  render's first frame. The prompt says what the guide is ("The guide video is a depth map
+  ..."); a mask guide also lists the stand-ins' colours by name (up to four stand-ins). The pass
+  is part of the request, so changing it is a new clip (never the cached one). Walkthrough:
+  [COOKBOOK-GENERATED-VIDEO.md, From a 3D scene to a generated clip](COOKBOOK-GENERATED-VIDEO.md#6-from-a-3d-scene-to-a-generated-clip).
+- **Inputs after an edit**: `inputs.json` in `build/videogen/<shot>/` records what each file was
+  cut from. A shot whose inputs no longer match (scene, beat text or timing, narration MP3, draft
+  size, or no record yet) is blocked in `vidgen generate plan` with the free command to cut them
+  again, and `vidgen generate run --pay` refuses the run; a clip already paid for is reused free
+  with a note.
+- **Lengths**: a shot covers its beat's window on the planned timeline (to the next beat's
+  start). The model is asked for the shortest length it allows that covers it (trimmed later);
+  a beat longer than the model's longest clip is split into equal parts (`<beat>_p1`, `_p2`...).
+  A model that takes no duration (heygen/avatar-iv) follows its audio and is priced in whole
+  seconds.
+- **Frame images**: the first frame goes in as a frame image where the model lists
+  `first_frame`, else as a picture reference (heygen/avatar-iv's portrait).
+- **Audio and video inputs** need a hosted https URL: with `videogen.host: quick_tunnel` the plan
+  lists the files a run would share; without it their shots are blocked (`inline_media:
+  images`) or problems (`inline_media: all`; OpenRouter refuses inline audio / video).
+- **The plan**: `vidgen generate plan [PROJECT] [--shot ID] [--budget USD] [--json]` lists every
+  shot (time in the video, model, resolution, aspect ratio, requested and trimmed length, each
+  input and whether it is made, the request's size with its inline pictures, the estimate, what
+  the budget has left after it, notes, problems,
+  what blocks it, the prompt), the sheets' pictures still to make, the total and the budget.
+  Nothing is sent or paid; `vidgen validate` reports unknown characters and pictures with a
+  did-you-mean (`plan` also checks the models and their settings).
+
+### Run, takes and the film (`vidgen generate run | status | takes | pick`)
+
+- **Run**: `vidgen generate run [PROJECT] [--shot ID]... [--budget USD] [--pay] [--json]`.
+  Without `--pay` a dry run: what would be generated and the estimate; nothing is sent, paid or
+  written. With `--pay` (a budget is required: `videogen.budget_usd` or `--budget`, the lower of
+  both): a shot with problems, or ready shots estimated above what the budget has left, refuse
+  the whole run before anything is paid; then each ready shot is generated in video order
+  (blocked ones are skipped and named), each clip becomes a take, and the first failure stops
+  the run. A paid job is never retried automatically; a request already made is never paid
+  again (it comes from the cache, or an earlier job is downloaded).
+- **Takes**: `takes/<shot>/<n>.mp4` (n = 1, 2, ...) with `<n>.json` (model, provider, job, cost,
+  cache key, QA report) and `<n>.contact.png`. Commit or back up `takes/` (paid footage). A new
+  take of a shot needs a different request (e.g. another `seed`, prompt or model).
+- **QA** of every take: duration (shorter than the shot: its last frame holds), aspect ratio
+  (what `cover` cuts off) and size (scaled up more than 2x), black (error when all black,
+  warning from 0.5 s), frozen (error when nothing moves, warning from 1 s), flicker (brightness
+  jumping from frame to frame, warning over 3 levels of 255), abrupt cuts inside the clip,
+  the **opening match** when the shot has a starting picture (a first frame image or the picture in the guide: the SSIM,
+  0 to 1, grey, the better of the picture cropped to fill and stretched, of the clip's first frame against it, `metrics.opening_similarity` in `<n>.json`, shown on the contact sheet;
+  a warning under 0.7, a rough guide: real clips measured 0.98-0.985 with a true first frame, 0.83-0.85 with the picture in the guide), and
+  its own sound (noted, with where it can be heard; `sound: model` with a silent clip is a warning). `vidgen generate takes [PROJECT] [--shot ID]` lists them
+  with their findings and contact sheets: look at the sheets before picking.
+- **Pick**: `vidgen generate pick [PROJECT] --shot ID --take N | none | auto` (in
+  `takes/picks.json`). A shot shows its picked take; `none`: vidgen's own picture; nothing
+  picked (`auto`): the newest take without QA errors. `vidgen generate status` lists each shot's
+  takes and the one shown, the budget, the credit line and the disclosure reminder.
+- **In the film**: `vidgen render` lays the shown take over its beat (from the beat's start to
+  the next beat's; the scene's last beat keeps it to the scene's end), scaled and cropped to the
+  format (`fit`), at the video's frame rate (the snapped clip is trimmed, a short one holds its
+  last frame), lightly colour matched (`color_match`), fading in from and out to vidgen's
+  picture of the beat (`crossfade`; none at a scene's edges, where the transitions join scenes,
+  and none between two takes). A placed take's sound is not used (even with `sound: model`: see **Sound** below); vidgen's overlays and captions
+  are drawn on top. The scene renders again when a take or pick changes; drafts (`--draft`, the
+  guide renders) show vidgen's own picture.
+- **Sound** (`generated_shot.sound`, `videogen.models.<id>.sound`, `videogen.sound`, in that order;
+  default `mix`): `model` sends `generate_audio: true` and keeps the clip's own sound; the setting
+  is part of the request's cache key, so a request is never served the other setting's clip, and
+  `mix` requests keep their old keys. `vidgen generate plan` shows the resolved value per shot, blocks a
+  shot whose model the list says cannot make sound and notes one it says nothing about. A placed
+  take still plays vidgen's mix (the model's sound is a new performance, not the beat's MP3): to
+  hear it, set `place: false` and show the take in a `video_clip` scene (`path:
+  takes/<shot>/<n>.mp4`). With no beats and a `duration` it plays at volume 1; with narration at
+  0.25 (`volume:` sets it). vidgen does not time captions or word-anchored actions from the clip's
+  sound.
+- **Where the starting picture goes** (`generated_shot.first_frame_in`, `videogen.models.<id>.first_frame_in`,
+  `videogen.first_frame_in`, in that order; default `frame`): `frame` sends it as a first frame image. `guide`
+  splices it into the start of the guide video: `vidgen generate inputs --guide` writes
+  `build/videogen/<shot>/guide[.<pass>].opening.mp4`, as long as the plain guide, with the picture as its
+  first frame dissolving into the guide over `videogen.first_frame_dissolve` seconds (default 0.4), and
+  no first frame image is sent. The shot needs a `guide:` and a starting picture (`first_frame:`, resolved as usual);
+  either missing is a problem in the plan. `first_frame_in: guide` adds a role sentence to the prompt on a model with a template (Seedance),
+  built from the actual order of the inputs; other prompts are unchanged. Changing the starting picture or the
+  dissolve marks the guide as changed, so it cannot be paid for by mistake (`vidgen generate inputs --guide`
+  makes it again).
+- **The last frame of another shot** (`first_frame: last_of:<shot id>`, in either `first_frame_in` mode): `vidgen generate inputs`
+  (no `--guide` needed) cuts the last decoded frame of the take that shot shows (`generate status`: the picked take, else the newest
+  without QA errors) to `build/videogen/<shot>/last_of.<source>.<take>.png` and records it in `inputs.json`. A beat's id
+  means its last part. Problems in the plan: an unknown shot, the shot itself, or shots that wait for each other. A source
+  with no take to show blocks the shot, and a run never pays for a shot and the clip it starts from in one pass (the owner looks at each
+  clip first; a run also skips a shot whose source's shown take changed while it ran). Picking another take of the source makes the
+  shot stale (`vidgen generate plan` says so, `run --pay` refuses): `vidgen generate inputs` cuts the new picture.
+- **Overlay** (`build/videogen/<shot>/overlay.png`, made by `vidgen generate inputs --guide` for a shot with a starting picture and a guide): the picture
+  (cropped to fill) blended half and half over the first frame of the plain guide (past a fade in from black for a render guide), never the combined
+  guide. It checks the fit of the 3D figures before paying. Never sent.
+- **Last-frame overlay** (`build/videogen/<shot>/overlay.last.png`, written with `overlay.png`): the same picture over the plain guide's last frame, so
+  an object that only appears later in the shot shows where the guide puts it; everything that moved or appeared between the guide's first and last frames is drawn at full
+  strength with a magenta outline (nothing is outlined when the whole frame changed, a camera move or a fade). Both overlays are enlarged to 1600 pixels on the longer side. Never sent.
+- **A painted starting picture** (`vidgen generate frames [PROJECT] [--shot ID] [--pay]`, a shot with `paint_first_frame:`): a dry run by default; it renders
+  the beat's first frame as a draft (`build/videogen/<shot>/layout.png`), lists the input pictures in the order they are sent (the layout first) and
+  estimates the price. `--pay` paints it with `paint_first_frame.model` (default `bytedance-seed/seedream-4.5`, OpenRouter `input_references`) within
+  `videogen.budget_usd`, records it in the ledger and stores it as `assets/frames/<shot>_<key>.png` with a sidecar; a changed prompt, layout or reference is a new
+  file, the same request is never paid twice. A shot uses it with `first_frame: painted` (or `first_frame:` with the file the command names); until it exists the
+  shot is blocked. `first_frame: painted` without `paint_first_frame:` is refused by `vidgen validate`. Look at the picture before paying for a clip.
+- **File reference labels** (`refs:` items `{file: path, shows: morag}`, `file` required, `shows` a character name or your own words): the prompt's role sentence names those
+  pictures in their actual input order (`@image1 and @image2 show Morag`); a shot with no `shows` keeps its prompt exactly. Works in both `first_frame_in`
+  modes (without `first_frame_in: guide` only the labelled pictures are named).
+- **Split a sheet into panels** (`vidgen split-sheet PICTURE --columns N [--rows N] [--gap PX] | --box X,Y,W,H ... [--names A,B,C] [--scale N] [--out DIR]`): free, cuts one
+  picture into named PNGs by a grid (panels must divide into whole pixels) or by explicit boxes, enlarged with ffmpeg's Lanczos (`crop`, then `scale:flags=lanczos`).
+- **A first frame with references** (`videogen.models.<id>.first_frame_with_references`; default vidgen's
+  record: false for `bytedance/seedance-*`, unknown for other models): `false` is a problem in `generate plan` / `run` for a shot sending both
+  (a shot already paid for is noted, not blocked), naming `first_frame_in: guide`; `true` overrides vidgen's record. Unknown models are not blocked.
+- **Downloads**: after a job with hosted inputs, vidgen compares them with the `host_fetch` `GET`s in the
+  ledger and warns in the run output and the take's record ("the provider never downloaded the voice and the
+  guide"), only for files actually hosted and never as an error.
+- **Credits and disclosure**: when the film shows takes, the description file
+  (`<output>_chapters.txt`) ends with "Includes AI-generated footage (model, ...)." and the lint
+  rule `generated_footage` (info) reminds you to disclose AI-generated footage where the platform
+  asks (YouTube's "Altered or synthetic content", TikTok's AI-generated label).
+
 ## Languages and translations
 
 A video in another language is usually a [variant](#variants) with a `language:` and a
@@ -3276,7 +3574,7 @@ music:                                 # a list of cues: changing tracks
   - {source: bright, from: results}    # from scene results to the end
 ```
 
-**Built-in beds** (`vidgen list-music` describes them, `--render-dir DIR` writes one loop of
+**Built-in beds** (`vidgen list-music` describes them from their settings without making them, a few seconds; `--json` also measures each bed, about two minutes; `--render-dir DIR` writes one loop of
 each as WAV): seamless loops, generated in one to seven seconds when the video is joined
 (`ascent` takes about 17 s). The
 first five are light; the next five (Step 179) are documentary beds with a soft kick and a synth
@@ -5827,6 +6125,7 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 | `loop` | bool | `false` | start again when the scene outlasts the clip (else the last frame holds) |
 | `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration (linear; 1 = as recorded, a mono recording at that level on both channels) |
 | `mute` | bool | `false` | leave the clip's sound out |
+| `fade` | bool | `true` | `false`: a hard cut, for generated takes that join with a plain cut: the clip is on screen from the first frame (no fade in, title and caption still enter) and the scene has no 0.5 s fade-out; use with `transition: cut`, the default |
 | `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` ([`screenshot`](#screenshot); kinds `box`, `circle`, `arrow`, `spotlight`) |
 | `frame`, `url` | `none` \| `browser` \| `window` \| `phone`, str | `none`, `""` | a frame drawn around the clip (not with `bleed`); `url` for `browser` |
 | `units` | `fraction` \| `px` | `fraction` | how callout areas are written (of the whole picture) |
@@ -5854,6 +6153,196 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
   params: {path: assets/city.mp4, region: bleed, fit: cover, trim: [12, 20], fit_duration: true, mute: true}
   beats:
     - text: "Full-bleed B-roll, trimmed and stretched over the sentence."
+```
+
+### `3d`
+
+**Simple 3D** (Phase AI, DESIGN §114): objects — boxes, spheres, cylinders, cones, tori, planes,
+arrows and text labels, in named groups — seen by a camera under one default light (an even
+ambient part plus a sun) over a background colour, drawn by **three.js** in headless Chromium.
+The picture fills the frame from the first frame; `spin` keeps an object (or a group) turning
+through every beat; the camera stands still or moves on beats and words with the
+[camera actions](#3d-camera-actions); beat 1 fades the `title` in (on a plate at the top); the
+scene fades out at the end. Overlays and captions are drawn over the 3D picture as over any scene.
+
+**Needs the `3d` extra**: `pip install "schu-video-generator[3d]"`, then
+`python -m playwright install chromium` (Windows: `py -m pip install "schu-video-generator[3d]"`,
+then `py -m playwright install chromium`). Without them, rendering a `3d` scene stops with that
+hint, and `vidgen validate` warns about it in a project that has a `3d` scene (a quick look for
+Playwright and its Chromium folder; no browser is started); every other scene type works without
+them. Nothing is fetched from the network while rendering: three.js (0.186.1) and the labels' font
+(Inter Bold) ship with schu-video-generator, and WebGL runs on Chromium's software renderer
+(SwiftShader), so the same YAML gives the same pixels on any machine with the same Playwright version.
+
+**Units and angles.** Positions and sizes are in scene units, y is up; the default camera stands
+at `[3, 2.5, 5]` and looks at the origin. `rotation` is in degrees about x, y and z (applied in
+that order), `spin` in degrees per second. `fov` is the angle across the frame's **shorter side**,
+so the same subject fills a 16:9 and a 9:16 frame alike (the long side sees more).
+
+**Shapes.** `size` is `[width, height, depth]` or one number for all three; each shape is centred
+on its `position`.
+
+| shape | `size` | default size | |
+|---|---|---|---|
+| `box` | `[width, height, depth]` | 1 | |
+| `sphere` | diameters (`[2, 1, 2]`: a flattened ball) | 1 | |
+| `cylinder`, `cone` | `[width, height, depth]`, standing on y | 1 | |
+| `torus` | `[outer width, thickness, outer depth]`, lying flat | `[1, 0.25, 1]` | the thickness must be less than the width and depth |
+| `plane` | `[width, -, depth]`, flat and facing up (seen from both sides) | 4 | tilt it with `rotation` |
+| `arrow` | `[thickness, length, thickness]`, pointing up (+y) | `[0.08, 1, 0.08]` | with `to`, its tail is `position` and its tip `to`: a point, or an object's id (it stops at the object's edge) |
+| `label` | its text height, one number | 0.3 | `text` on a plate (the theme's `surface`), always facing the camera; colour default `text` |
+| `group` | none | — | draws nothing; objects with `parent: <its id>` move and turn with it |
+| `standin` | `[width, height, depth]` (taller than wide) | `[0.5, 1.6, 0.5]` | a character stand-in: a capsule with a nose on its front (+z unturned; turn it with `rotation: [0, 90, 0]` or `object_face`), its `name` above its head; centred on `position`, so it stands on the floor at `y: 0.8` |
+
+**Groups.** An object with `parent: tower` (an object written before it) has its `position` and
+`rotation` in that object's frame: it moves and turns with it (a group's `spin` carries its
+children round). Usually the parent is a `group`, but any object may be one (a label above a box).
+
+**Frames and the cache.** Before the scene plays, its frames are drawn (frame *n* at
+*t = n / fps*) into a lossless clip `build/<quality>[_<variant>]/three_d/<scene id>.mkv`, with the
+scene description beside it (`<scene id>.json`: objects with their ids and parents, camera, lights,
+timeline with the camera's path). A later render reuses the clip while the description, the page,
+three.js and the Playwright version are unchanged; `--force` renders the scene again but still
+reuses the clip (delete the clip to draw it again).
+
+**Guide passes** (off by default). The same 3D picture can also be drawn three plainer ways, as
+videos beside the clip. They are meant for tools that need the *layout* of a scene rather than its
+look (for instance, later, a video model that repaints the scene in a new style while keeping its
+camera and motion):
+
+| pass | what it shows | file |
+|---|---|---|
+| `depth` | how far each point is from the camera: **near is white, far is dark grey**, the empty background black. One range of distances is used for the whole shot, so the greys do not flicker as things move; a thing that comes closer gets lighter. The range is fitted to the **objects** (where they and the camera go, the floor left out), so they get the most contrast; the floor and other planes nearer or farther than the objects stay white or the darkest grey. Set it yourself with `depth_range: [near, far]`. It tells a model the shapes and distances. | `<scene id>.depth.mkv` |
+| `outline` | **only the edges**, white lines on black (as edge inputs of video models expect), like a line drawing: each object's outline, the sharp edges of a box or a cylinder, and where an object hides part of itself. | `<scene id>.outline.mkv` |
+| `mask` | **each object in one flat colour of its own** (no light, no shading, no soft edges) on black, so a tool can tell exactly which pixels belong to which object. The floor is a neutral dark grey (`#404040`). Each object's colour comes from its `id`, so adding, removing or reordering objects keeps the others' colours (only when two ids happen to pick the same colour does one of them, the later in the alphabet, take another). The colour of each object is in a table, `<scene id>.mask-colors.json`: `colors` (object id → `#rrggbb`; the floor as `floor`), `objects` (id, shape, colour, parent; a stand-in also with its `name`) and `names` (stand-in name → colour). A group has no colour of its own (its children have theirs); a stand-in's nose has the stand-in's colour. | `<scene id>.mask.mkv` + `.mask-colors.json` |
+
+Ask for them with `guide_passes:` in the scene's params (`true` or `all` for all three; or some of
+them as one name, `depth`, a comma list, `depth,mask` or `depth, mask`, or a list, `[depth, mask]`),
+or for every `3d` scene of a render with `vidgen render --guide-passes` (all three) or
+`--guide-passes depth,mask`. The YAML string is read exactly like the option (an unknown name is
+refused with did-you-mean; `all` among the names means all three). They have exactly the frames, camera and timing of the
+scene's 3D clip (frame *n* of a pass is frame *n* of the clip), are lossless clips in the same
+folder (`build/<quality>[_<variant>]/three_d/`), and are reused like the clip while nothing changed.
+They hold only the 3D shapes: no labels or name tags, no title, captions or overlays. A scene
+rendered before without the passes asked for is rendered again (its 3D clip is reused).
+
+[Action targets](#beat-actions): `view` (the 3D picture), `title`. The camera and object actions
+name objects by their `id`.
+
+| param | type | default | |
+|---|---|---|---|
+| `title` | str | `""` | heading over the 3D picture, on a plate in the theme's `surface` colour |
+| `background` | color | the theme's `background` | colour behind the objects |
+| `camera` | `{position, look_at, fov}` | `{position: [3, 2.5, 5], look_at: [0, 0, 0], fov: 40}` | where the camera stands at the start, what it looks at (a point, or an object's id: its centre), the field of view in degrees (10–120) across the shorter side |
+| `light` | `{ambient, sun, sun_from, color}` | `{ambient: 0.5, sun: 2.5, sun_from: [-2, 6, 4], color: "#ffffff"}` | strength of the even light (0–5) and of the sun (0–10), the direction the sun shines from (towards the origin), the colour of both |
+| `floor` | `true` or `{size, color, y}` | none | a square floor (a `plane` with id `floor`): `size` 12, `color` `surface`, at height `y` 0 |
+| `objects` | list | `[]` | each `{id, shape, size, color, position, rotation, spin, parent, text, to, visible, name, voice, screen_size}`: `id` names it (letters, digits, `_`, `-`; unique; not `camera`), `shape` (above; default `box`), `size`, `color` (default `accent`), `position` of its centre, `rotation` in degrees, `spin` in degrees per second, `parent` an object written before it, `text` a label's text, `to` an arrow's tip (an object's id: it follows the object when it moves), `visible: false` hidden until `object_show`, `name` a stand-in's name, `voice` the voice that says a stand-in's lines (default its id; for lint), `screen_size: true` a label keeps the size on screen it has at the start |
+| `guide_passes` | `true`, `all`, name, comma list or list | `false` | also draw the [guide passes](#3d) `depth`, `outline`, `mask` beside the clip (`true` or `all`: all three; `depth`, `depth,mask` or `[depth, mask]`: those, read like `--guide-passes`); `vidgen render --guide-passes` asks for them in every `3d` scene |
+| `depth_range` | `[near, far]` | fitted to the objects | the distances from the camera the `depth` pass shows as white and as its darkest grey (0 ≤ near < far) |
+
+#### 3d object actions
+
+Beat actions of `3d` scenes that change one object, named by its `id` (`- object_move: ball`);
+its children (`parent:`) move, turn, scale, appear and glow with it. Timed like the camera actions
+(`at`, `run_time`, `easing: smooth | linear`); without `run_time` a change lasts until the end of
+its beat, except `object_show`, `object_hide`, `object_face` (0.6 s) and `object_walk` (its
+distance at `speed`). Each starts from where the object is then; the next action of the same kind
+of change on the same object (moving: move, path, walk; turning: rotate, spin, face, walk's turn)
+stops one still running. `object_` keeps them apart from the stage's `look_at`, `turn`, `walk_to`
+and the 2D `highlight`. Every frame's pose is worked out in Python and written into the scene
+description, so camera moves and arrows follow a moving object.
+
+| action | target | options | |
+|---|---|---|---|
+| `object_move` | an object | `to` or `by` | move its centre to `to: [x, y, z]` or by `by: [dx, dy, dz]` (in its parent's frame) |
+| `object_path` | an object | `points` (required), `smooth` (true), `turn` (false) | move along a smooth curve (straight lines with `smooth: false`) from where it is through `points`, at an even speed; `turn: true` turns it to face along the path |
+| `object_rotate` | an object | `to` or `by` | turn to `to: [x, y, z]` degrees or by `by` (XYZ, like `rotation`); not an arrow with `to` |
+| `object_spin` | an object | `turns` (1), `axis` (`y`) | spin `turns` full turns about its own `x`, `y` or `z` |
+| `object_scale` | an object | `to` (required) | grow or shrink to `to` times its size (a number, or `[x, y, z]`) |
+| `object_show` | an object | `style` (`fade`) | bring in an object with `visible: false`: fade in, or `grow` from nothing |
+| `object_hide` | an object | `style` (`fade`) | take it away: fade out, or shrink to nothing (`grow`) |
+| `object_highlight` | an object | `color` (`highlight`), `strength` (0.6) | glow in `color` (rising and falling over 0.25 s), until the end of the beat or for `run_time` seconds; not a label |
+| `object_walk` | a stand-in | `to` (required), `speed` (1.4), `easing` (`linear`) | turn towards `to` and walk there: `[x, z]` on the ground (it keeps its height), or an object's id (it stops in front of it); it bobs with its steps |
+| `object_face` | an object | `to` (required) | turn about the vertical, the shorter way, so its front (a stand-in's nose) faces `to`: an object's id, `[x, z]` or `[x, y, z]` |
+
+```yaml
+- id: plaza
+  type: 3d
+  params:
+    floor: true
+    camera: {position: [5, 4.5, 9], look_at: [0, 1, 0], fov: 46}
+    objects:
+      - {id: ana, shape: standin, name: "Ana", color: primary, position: [-3, 0.8, 1], rotation: [0, 90, 0]}
+      - {id: ben, shape: standin, name: "Ben", color: secondary, position: [3, 0.8, -1], rotation: [0, -90, 0]}
+      - {id: crate, shape: box, position: [0, 0.5, -2.5]}
+      - {id: ball, shape: sphere, size: 0.7, position: [1.5, 0.35, 2], color: highlight, visible: false}
+      - {id: pointer, shape: arrow, position: [-1.2, 2.4, 3.2], to: ana, color: text}   # follows Ana
+  beats:
+    - text: "Ana and Ben stand on a small plaza with a crate."
+      actions:
+        - {object_highlight: crate, at: "@crate"}
+    - voice: ana                                    # a voice named ana (voices:): Ana's line
+      text: "I will walk over to the crate and look at Ben."
+      actions:
+        - {object_walk: ana, at: "@walk", to: crate}
+        - {object_face: ana, at: "@Ben", to: ben}
+        - {object_show: ball, at: "@crate", style: grow}
+    - text: "The ball rolls along a path, and the camera follows Ben."
+      actions:
+        - {object_path: ball, at: "@ball", points: [[0, 0.35, 3], [-2.5, 1.2, 2.5]], run_time: 2}
+        - {object_walk: ben, at: "@follows", to: [0.5, 1.5]}
+        - {camera_fly_to: ben, at: "@camera", distance: 5}
+```
+
+`vidgen lint` checks the objects a beat is about (named by its object or camera actions, or a
+stand-in saying the line): `three_d_off_frame` and `three_d_hidden` ([lint](#lint)).
+
+#### 3d camera actions
+
+Beat actions of `3d` scenes. Like every action they fall due at `at` (a fraction of the beat, or
+a word it says: `at: "@tower"`) and last `run_time` seconds — by default until the end of their
+beat; a camera move may run on into the next beats, and the next camera action stops it where it
+is. Each starts from where the camera is then. `easing: smooth` (default; eases in and out) or
+`linear`. `vidgen validate` checks the object ids (with a did-you-mean) and replays the moves in
+order: a dolly past the point looked at, or an orbit from right above its centre, is a problem.
+
+| action | target | options | |
+|---|---|---|---|
+| `camera_orbit` | an object (optional) | `degrees` (90), `up` (0), `around` | circle the object's centre, the point `around`, or the point looked at: `degrees` around the vertical axis (positive: counter-clockwise seen from above, the camera moving to its right), rising by `up` units; it ends looking at the centre |
+| `camera_dolly` | none | `by` (required) | push in towards the point looked at by `by` units (negative: pull back) |
+| `camera_fly_to` | an object (required) | `distance` | fly to the object: it ends looking at its centre from the direction it looked before, close enough that the object fills about 60 % of the frame's shorter side (or `distance` units away) |
+| `camera_look_at` | an object, or none with `point` | `point` | turn (standing still) to look at the object or `[x, y, z]` |
+| `camera_move` | none | `to` (required), `look_at` | move to stand at `to`, ending looking at `look_at` (an object or a point; default: what it looks at now) |
+
+**Following a moving object.** An object a camera action names (or `camera.look_at`) is followed
+while it moves (object actions below): during the move, and after it — after `camera_fly_to` the
+camera keeps its distance to the object, after `camera_look_at` (or a `camera_orbit` / `camera_move`
+ending on an object) it keeps looking at it — until the next camera action.
+
+```yaml
+- id: town
+  type: 3d
+  params:
+    title: "Shapes, groups and a moving camera"
+    floor: {size: 14, color: "#2a3140"}
+    camera: {position: [6, 4, 8], look_at: [0, 1.4, 0], fov: 46}
+    objects:
+      - {id: tower, shape: group, spin: [0, 15, 0]}          # its children turn with it
+      - {id: base, parent: tower, shape: cylinder, size: [1, 2, 1], position: [0, 1, 0], color: primary}
+      - {id: roof, parent: tower, shape: cone, size: [1.4, 1, 1.4], position: [0, 2.5, 0]}
+      - {id: tag, parent: tower, shape: label, text: "Tower", position: [0, 3.5, 0]}
+      - {id: ball, shape: sphere, size: 0.9, position: [2.4, 0.45, 0.5], color: highlight}
+      - {id: ring, shape: torus, size: [1.3, 0.22, 1.3], position: [-2.2, 0.11, 0.8], color: secondary}
+      - {id: pointer, shape: arrow, position: [3.4, 2.6, 1.4], to: ball, color: text}
+  beats:
+    - text: "A small town of shapes: a tower, a ball and a ring."
+    - text: "The camera circles the tower slowly, then flies to the ball."
+      actions:
+        - {camera_orbit: tower, at: "@circles", degrees: 100, run_time: 1.6}
+        - {camera_fly_to: ball, at: "@flies"}           # until the end of the beat
+    - text: "Finally it pulls back to see the whole town again."
+      actions:
+        - {action: camera_move, at: "@pulls", to: [-5, 6, 9], look_at: [0, 1.2, 0]}
 ```
 
 ### `quote`
@@ -13784,6 +14273,7 @@ a title card, a `transform` of a bar).
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `screenshot` | `title`, `image`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
+| `3d` | `view`, `title` | dim, highlight, zoom, camera_orbit, camera_fly_to, object_walk, object_highlight | `view` is the whole 3D picture (as a `video_clip`'s `clip`); the objects are not Manim targets: the [camera actions](#3d-camera-actions) and [object actions](#3d-object-actions) name them by id |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
@@ -14705,6 +15195,9 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `shorts_safe_area` | warning | in a [Short](#cuts-and-shorts-cut-shorts) (`shorts:`; the layout dump's `shorts` box is the part of the frame the app leaves clear): text — the scene's or an overlay's — reaching more than `tolerance` (0.01 of the shorter side) into the parts the app covers (bottom 20 %, right 15 % by default); a character's face with at least `min_face` (0.25) of its box there; an overlay (a caption, the hook) over at least `min_cover` (0.1) of a face — for captions, any caption of the line being spoken (the layout dump's `reach` of the caption), not only the one in the still; for an overlay that keeps off faces (a `hud`) only its texts and panels' plates count, not its frame's lines over the whole picture. Beat-end and mid-beat stills: in a Short, `vidgen lint` renders 3 stills per beat (stills of a storyboard with 2 or more per beat are reused), so a face under the captions while a zoom is held part-way through a beat is found too. Faces of characters a `clear` shot hides are left out. Fix: a closer shot or zoom with the faces higher; the scene's own text inwards (overlays keep out of the covered parts by themselves) |
 | `overlay_face` | warning | outside a Short, a [`hud`](#hud)'s text or panel plate covering at least `min_cover` (0.15) of a character's face (the HUD places its texts clear of faces by itself; this catches what it could not: a close-up with a face in every corner). Fix: frame the face away from the corners (a shot or zoom), `compact: true`, fewer `lines` |
 | `shorts_length` | error | a Short planned longer than `shorts.max_seconds` (60): reported on the video's last scene. Fix: fewer beats or scenes in the `cut`, a shorter end card |
+| `generated_footage` | info | a scene shows generated video takes (`vidgen generate`): a reminder to disclose AI-generated footage when publishing (YouTube "Altered or synthetic content", TikTok's AI-generated label); the description file already says so |
+| `three_d_off_frame` | warning | in a `3d` scene, an object the beat is about (an object or camera action of the beat names it, or a stand-in whose `voice` says the line) is at least `max_off` (0.5) outside the frame, or behind the camera, at a beat-end or mid-beat still. Fix: `camera_fly_to` / `camera_look_at` it, or move it into view |
+| `three_d_hidden` | warning | in a `3d` scene, an object the beat is about is at least `max_hidden` (0.7) covered by nearer objects (estimated from the objects' spheres; floors, labels, arrows and its own group do not count). Fix: `camera_orbit` round, or move one of them |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -14795,6 +15288,9 @@ lint:
     shorts_safe_area: {tolerance: 0.01, min_face: 0.25, min_cover: 0.1}   # in a Short only; shares of a face's box (under the app's parts / an overlay)
     overlay_face: {min_cover: 0.15}         # a hud's text or plate over a face (share of the face's box); not in a Short
     shorts_length: {}                       # default severity error; in a Short only
+    generated_footage: {}                   # default severity info; scenes showing generated takes
+    three_d_off_frame: {max_off: 0.5}       # share of a 3d object (the beat is about) outside the frame
+    three_d_hidden: {max_hidden: 0.7}       # share of it covered by nearer objects
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -15266,7 +15762,12 @@ hand-offs (Step 198, "Music studio" above): `studio_sessions`, `studio_read` (`s
 score you mean to propose, in `build/mcp/studio/`), `studio_variations` (`session`, `version`,
 `shuffle`: four variations as whole scores with labels, Step 199) and `studio_propose` (`score`,
 `explanations` `{n1: ...}`, `summary`, `agent`, `session`, `base`) — these five work on files
-in the studio's session folders, in the server's process. Their parameters are the command's
+in the studio's session folders, in the server's process. Generated video (§113): `generate_plan`
+(`shot`, `budget`, `variant`; free), `generate_run` (`dry_run` default true, `confirm_cost`,
+`shot`, `budget`, `variant`), `generate_status`, `generate_takes` (`shot`, `images`: returns the
+takes' contact sheets as pictures), `generate_pick` (`shot`, `take`: a number, `none` or
+`auto`) and `generate_host_test` (`keep`; §115: the free quick tunnel check, never shows the
+secret address). Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
@@ -15280,9 +15781,10 @@ the long side, PNG (JPEG when a PNG would exceed 800 KB). `images` (default 3, a
 `image_offset` page through more; the document's `mcp_images` says `{total, offset, returned,
 next_offset}`. Stills are reused, so asking for the next page renders nothing.
 
-**Costs.** `tts` and `imagegen` are dry runs by default (free, no key): they list what would be
-made and its size (characters, estimated dollars). A real run needs `dry_run: false` **and**
-`confirm_cost: true`; without the latter the tool refuses before anything starts. `readback` asks
+**Costs.** `tts`, `imagegen` and `generate_run` are dry runs by default (free, no key): they list
+what would be made and its size (characters, estimated dollars). A real run needs `dry_run: false`
+**and** `confirm_cost: true`; without the latter the tool refuses before anything starts
+(`generate_run` also needs a budget, like `vidgen generate run --pay`). `readback` asks
 for `confirm_cost: true` when the project's `stt.provider` is a paid service (`elevenlabs`).
 
 **Folder.** Every path a tool takes (project, outputs, `init`'s folder, `plan`'s input) is relative
@@ -15302,7 +15804,7 @@ commands it runs but never returns it; documents carry only paths and results.
 **How it runs.** Every call starts `python -m vidgen <command> ... --json` in the root folder (a
 fresh process: Manim's configuration is process-global and a crashing scene or extension cannot
 take the server down) and turns the command's stderr lines into MCP progress notifications.
-Rendering calls (`storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+Rendering calls (`storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `generate_run`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`) run one at a time; cancelling a call stops its process and the
 render workers it started (the process group on macOS / Linux, the process tree on Windows).
 
@@ -15582,6 +16084,7 @@ difference between two palette colours).
 | `audio` | bool | `false` with `--no-audio` |
 | `format` | object | `{width, height, fps}` of this render |
 | `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |
+| `guide_passes` | object | the [guide pass](#3d) files of each `3d` scene whose render has them, by scene id (`{}` without) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
 | `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: schu-video-generator wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
@@ -15884,6 +16387,54 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 | `up_to_date` | list | keys whose picture exists (skipped) |
 | `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |
 | `elapsed` | float | seconds |
+
+### `vidgen generate --json`
+
+Generated video (DESIGN.md §113). `vidgen generate models --json`:
+
+| key | type | |
+|---|---|---|
+| `action` | str | `models` |
+| `source` | str | `live` (fetched now) or `cache` (vidgen's cached copy; offline, a warning says why) |
+| `fetched_at` | str | when the list was fetched (UTC) |
+| `models` | list | `{id, name, durations, resolutions, aspect_ratios, sizes, frame_images, generate_audio, seed, passthrough, pricing_skus, prices}` as OpenRouter lists them (`null`: not listed); `prices` vidgen's estimates per second without audio, one per resolution |
+
+`vidgen generate ledger PROJECT --json`: `action` (`ledger`), `ledger` (the file), `provider`,
+`budget_usd` (float \| null), `spent_usd`, `remaining_usd` (null without a budget), `jobs`
+(`{job_id, model, request_hash, status, estimate_usd, cost_usd, charged_usd, submitted}`;
+`status` `null` while open, `charged_usd` what the job counts against the budget), `intents`
+(`{intent_id, model, request_hash, estimate_usd, time, outcome, cost_usd, job_id, charged_usd}`:
+every submit intent; `outcome` `null` while nothing is known, else `refused`, `not_charged`,
+`charged` or `job`). `spent_usd` includes the intents' `charged_usd`.
+`vidgen generate resolve PROJECT --intent ID ... --json`: `action` (`resolve`), `intent` (as above).
+
+`vidgen generate plan PROJECT --json`: `action` (`plan`), `clips_usd`, `sheets_usd`, `total_usd`,
+`budget_usd`, `spent_usd`, `remaining_usd`, `unresolved_intents` (as `intents` above), `warnings` (config entries with no effect), `shots`
+(`{id, kind, model, scene, beat, start, length, duration, resolution, aspect_ratio, sound, inputs: [{role, kind, path, frame_image, ready}],
+estimate_usd, cached, left_after_usd, request_bytes, unresolved_intent (the id, or `null`), shared: [{path, bytes}], share_max_minutes, notes, problems,
+blocked, prompt}`; `shared` the files a paid run would share through the quick tunnel (empty without
+`host: quick_tunnel`, when cached or already paid; `bytes` `null` until made), `share_max_minutes`
+the tunnel's maximum lifetime (`null` when nothing is shared);
+`duration` `null` for a model that follows its audio; `request_bytes` the request's size with its
+inline pictures, `null` until the inputs are made or when cached). `vidgen generate sheets --json`: `action` (`sheets`), `paid`,
+`todo` (pictures to make), `estimate_usd`, `unknown_prices`, `paid_usd`, `sheets` (`{owner,
+location, approved, ready, status, pictures}`). `vidgen generate inputs --json`: `action`
+(`inputs`), `written`.
+
+`vidgen generate run PROJECT [--pay] --json`: `action` (`run`), `paid` (whether `--pay`),
+`cost_usd` (what this run's jobs reported), `shots` (`{shot, status, model, estimate_usd,
+cost_usd, take, take_path, new_take, qa, contact_sheet, message}`; `status` `would_generate`,
+`cached`, `paid`, `downloaded` (an earlier job), `blocked`, `problems` or `failed`). A failure
+stops the run: `ok` false, `error.details.shots` the outcomes so far. `vidgen generate status
+--json`: `action` (`status`), `shots` (`{shot, kind, model, takes, shown, picked, blocked}`),
+`budget_usd`, `spent_usd`, `remaining_usd`, `credit` (the credit line, or `null`),
+`disclosure`, `unresolved_intents` (as `intents` above). `vidgen generate takes --json`: `action` (`takes`), `shots` (`{shot, shown, takes:
+[{take, path, model, cost_usd, qa, contact_sheet}]}`; `qa`: `{width, height, fps, duration,
+audio, summary, checks: [{check, severity, message}], metrics}`). `vidgen generate pick --json`:
+`action` (`pick`), `shot`, `shown` (the take number, or `null`: vidgen's own picture).
+`vidgen generate host-test --json`: `action` (`host-test`), `host` (the quick tunnel's host
+name; the URL with its secret is never in the document), `close_reason`, `checks` (`{check, ok,
+detail}`). A failed check: `ok` false and the error names it.
 
 ### `vidgen character-sheet --json`
 

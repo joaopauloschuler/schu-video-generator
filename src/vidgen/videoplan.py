@@ -151,11 +151,16 @@ def beat_seconds(project: Project, beat_id: str, text: str) -> float:
     return _decoded_length(str(path), st.st_size, st.st_mtime_ns)
 
 
-def _outro(spec: SceneConfig) -> float:
+def scene_outro(spec: SceneConfig) -> float:
+    """Seconds of fade-out of the scene ``spec`` (0 for an unknown scene type; a scene type may
+    change it by its params: ``outro_seconds``)."""
     from vidgen import registry
 
     entry = registry.find(spec.type)
-    return float(getattr(entry.cls, "outro", 0.0)) if entry is not None else 0.0
+    if entry is None:
+        return 0.0
+    by_params = getattr(entry.cls, "outro_seconds", None)
+    return float(by_params(spec.params)) if by_params is not None else float(getattr(entry.cls, "outro", 0.0))
 
 
 class VideoPlan:
@@ -201,7 +206,7 @@ class VideoPlan:
         """Frames of scene ``i`` from its beats / duration and fade-out (no transition hold)."""
         if i not in self._own:
             spec = self._specs[i]
-            outro = _outro(spec)
+            outro = scene_outro(spec)
             outro_frames = math.ceil(outro * self.fps - 1e-9) if outro > 0 else 0
             if spec.silent:
                 duration = spec.duration or 0.0

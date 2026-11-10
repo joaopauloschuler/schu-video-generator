@@ -35,6 +35,7 @@ from vidgen.cartoon.host_directing import RevealStep, host_directions, starts_pr
 from vidgen.cartoon.effect_symbols import head_box
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
+from vidgen.generated_layer import GeneratedLayer
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays, shorts_area
@@ -287,6 +288,7 @@ class NarratedScene(MovingCameraScene):
         # one colour per concept (DESIGN.md §87.3): text built from here on draws the terms
         set_active_terms(scene_terms(self.project.config, spec, theme))
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
+        self.outro = type(self).outro_seconds(spec.params)
         spec = with_auto_actions(spec, type(self).auto_actions(self.project, spec, self.params))
         self.spec = spec  # with the actions automatic directing adds (DESIGN.md §69.23)
         problem = type(self).check_beat_count(len(spec.beats))
@@ -334,6 +336,11 @@ class NarratedScene(MovingCameraScene):
         #: leave out what only decorates (idle motion, wind, shadows, motion effects, particles,
         #: the light's grade...), never a timing, a position, an action or the lip sync.
         self.is_draft = bool(getattr(self.project, "draft", False))
+        #: Guide passes asked for by ``vidgen render --guide-passes`` (set by the render worker;
+        #: a ``3d`` scene draws them, DESIGN.md §114.14) and those the scene drew (recorded in
+        #: its timings, so a later run knows whether its render has them).
+        self.guide_passes: tuple[str, ...] = ()
+        self.guide_passes_made: tuple[str, ...] = ()
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:
@@ -379,6 +386,10 @@ class NarratedScene(MovingCameraScene):
                 box = mobject_region(mob) if overlay.reserves and mob is not None else None
                 if box is not None:
                     self._reserved.append(box)
+        #: Generated video takes laid over their beats, under the overlays (DESIGN.md §113.4),
+        #: or ``None`` without any.
+        self.generated_layer: GeneratedLayer | None = None
+        self._attach_generated()
         #: The cartoon host beside the content (``host:``, DESIGN.md §71), or ``None``.
         self.host: Any = None
         self._host_stays = False  # it stands on in the next scene, so it stays in the fade-out
@@ -423,6 +434,16 @@ class NarratedScene(MovingCameraScene):
         """The ``drawing:`` settings of this scene, later ones winning key by key: the video's
         (``stage`` adds its own ``drawing`` param)."""
         return [self.project.config.drawing]
+
+    def _attach_generated(self) -> None:
+        """Lay the picked takes of the scene's generated shots into its frames (inside the
+        overlay layer: overlays and captions are drawn over them)."""
+        from vidgen.videogen.compose import scene_placements
+
+        placements = scene_placements(self.project, self.spec.id)
+        if placements:
+            self.generated_layer = GeneratedLayer(self, placements)
+            self.generated_layer.attach()
 
     def _apply_drawing_style(self) -> None:
         """Resolve the scene's :attr:`drawing` style and install it on the camera and the renderer
@@ -862,8 +883,14 @@ class NarratedScene(MovingCameraScene):
             with self.narrate(i) as d:
                 yield beat, d
 
-    #: Seconds of fade-out added by :meth:`finish` (built-in scenes use 0.5).
+    #: Seconds of fade-out added by :meth:`finish` (built-in scenes use 0.5). A scene whose params
+    #: change it overrides :meth:`outro_seconds`; the instance then holds that scene's value.
     outro: float = 0.0
+
+    @classmethod
+    def outro_seconds(cls, params: Mapping[str, Any]) -> float:
+        """Seconds of fade-out of a scene with these raw ``params`` (default: :attr:`outro`)."""
+        return float(cls.outro)
 
     def timeline(self) -> Iterator[tuple[int, float]]:
         """Like :meth:`narrate_all` but yields ``(index, d)`` and also works for silent scenes.
@@ -1051,6 +1078,8 @@ class NarratedScene(MovingCameraScene):
             log.warning("scene '%s' lasts %.2f s; sound effects after its end play in the next scene: %s", self.spec.id, self.renderer.time, ", ".join(late))
         if self.capture is not None:
             self.capture.finish()
+        if self.generated_layer is not None:
+            self.generated_layer.close()
         super().tear_down()
 
     def timings(self) -> dict[str, Any]:
@@ -1065,6 +1094,8 @@ class NarratedScene(MovingCameraScene):
         }
         if self.sfx_log:
             data["sfx"] = [event.to_json() for event in self.sfx_log]
+        if self.generated_layer is not None:
+            data["generated"] = self.generated_layer.to_json()
         return data
 
     # ----- sound effects (DESIGN.md §47) -------------------------------------------------------

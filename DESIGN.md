@@ -251,6 +251,25 @@ src/vidgen/
   imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
                           # helpers, warnings), openai.py (OpenAI Images provider), openrouter.py (OpenRouter
                           # provider, §64; SVG and data-policy errors, §65), placeholder.py, run.py (`vidgen imagegen`)
+  videogen/               # generated video (§113): __init__.py (VideoRequest, MediaInput, cache key, JobState),
+                          # models.py (the public video model list, cache, checks, estimates), openrouter.py
+                          # (submit / poll / download, key or proxy mode, errors), mock.py (a fake API),
+                          # ledger.py (spending ledger, budget), run.py (cache, budget, pay or dry run),
+                          # pictures.py (smaller copies of pictures sent inline; §113.7),
+                          # sheets.py (reference / style sheets), shots.py (per-beat shots, the plan),
+                          # inputs.py (the cut voice, guide render, first frame; §113.3), qa.py (checks,
+                          # contact sheets), takes.py (takes, picks), compose.py (placements, credit line),
+                          # workflow.py (`generate run | status`; §113.4), host.py (audio / video inputs
+                          # shared through a Cloudflare quick tunnel, `generate host-test`; §115)
+  generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
+  three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
+                          # (object transforms, groups, centres), motion.py (object actions -> per-frame
+                          # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
+                          # moves -> tracks, following objects),
+                          # description.py (the scene description JSON, its cache key), browser.py (Playwright +
+                          # Chromium: the page, frames, the lossless clip; the validate warning), clip.py
+                          # (`make_3d_clip`: drawn or reused), passes.py (guide passes: depth, outline,
+                          # mask; §114.14)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14),
@@ -314,6 +333,7 @@ src/vidgen/
                           # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
+  data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -21452,3 +21472,1549 @@ writes split parts.
 - `cold_open: []` is "no cold open" (was an IndexError).
 - Verified: frame baseline 33 stills, max difference 0; pinned audio-only and video mixes
   unchanged (test_staging, test_audio_only, test_sound_design, test_scoring).
+
+## 113. Generated video shots through OpenRouter (Phase AH, Steps 292–297)
+
+Generative video models make selected shots (talking close-ups lip-synced to vidgen's own voice
+lines, acting shots guided by character / style sheets, establishing shots); vidgen keeps story,
+timing, text, captions, music, sound design and assembly. By default the model's own audio is not used
+(the job is sent with `generate_audio: false`; §113.11 for `sound: model`). Opt-in (`videogen:` and, from Step 293, per-beat
+`generated_shot:` specs, §113.3); nothing changes for existing projects. Steps 292–294 spend nothing (paid
+endpoints mocked); Step 295 cleans up the sheet prompts after the first paid sheet pictures
+(§113.6); Step 296 records the first answers of the real API and shrinks the pictures sent
+(§113.7); Step 297 is the owner-gated paid experiment (≤ US$2.00, 9:16, 4–5 s clips).
+
+### 113.1 API facts (checked 2026-11-07; no key used, nothing paid)
+
+Sources: OpenRouter's video skill page `openrouter.ai/skills/openrouter-video`, the multimodal
+guide `docs/guides/overview/multimodal/llms-full.txt` (video generation section), the cookbook
+page `docs/cookbook/video-generation/reference-to-video.md`, the Go SDK component pages
+`VideoGenerationRequest`, `InputReference`, `ContentPartAudio`, `AudioURL`, `ContentPartVideo`,
+the per-model pages `openrouter.ai/<model>/llms.txt` (heygen-video-1, seedance-2.5), and the
+public `GET /api/v1/videos/models` (fetched without a key; copy in
+`tests/data/openrouter_video_models.json`).
+
+- `POST /api/v1/videos` `{model (required), prompt (optional only for image-only models),
+  duration (int s), resolution | size "WxH" (interchangeable with resolution + aspect_ratio),
+  aspect_ratio, frame_images [{type: image_url, image_url: {url}, frame_type: first_frame |
+  last_frame}], input_references [{type: image_url | audio_url | video_url, <type>: {url}}],
+  generate_audio (default: the endpoint's flag), seed (determinism not guaranteed),
+  previous_job_id (continue / extend; same model and endpoint), callback_url (HTTPS webhook),
+  provider {order, only, ignore, options.<slug>.parameters.<key>}, session_id, user, trace}` →
+  202 `{id, polling_url, status: pending}`. "If both arrays are present, `frame_images` wins"
+  (image-to-video). An unlisted value is a 400; a listed one can still be refused by the
+  provider serving the call.
+- `GET /api/v1/videos/{id}` → `{id, status: pending | in_progress | completed | failed |
+  cancelled | expired, error, unsigned_urls, usage: {cost, is_byok}}`; poll about every 30 s.
+  `GET /api/v1/videos/{id}/content?index=0` (with the auth header) → the MP4 (`unsigned_urls`
+  are an alternative). vidgen uses the content endpoint.
+- `GET /api/v1/videos/models` (public): 33 models on 2026-11-07, each `{id, canonical_slug,
+  name, description, created, supported_resolutions, supported_aspect_ratios, supported_sizes,
+  supported_durations (often discrete: [4, 6, 8]), supported_frame_images, generate_audio,
+  seed, upscale_factor, creativity, pricing_skus: {name: price string}, allowed_passthrough_
+  parameters}` (`null` = not listed; heygen/avatar-iv and the edit / upscale models list no
+  durations). SKU names seen: `duration_seconds[_with_audio | _without_audio][_<tier>]`,
+  `cents_per_video_output_second_<tier>`, `cents_per_second_output[_<tier>]`,
+  `text_to_video_` / `image_to_video_duration_seconds_<tier>`, `reference_duration_seconds_
+  <tier>`, `long_duration_seconds_<tier>`, `cents_per_second_video_continuation_<tier>`,
+  `video_tokens[_<tier>][_without_audio | _with_video_input]` (Seedance), `cents_per_image_
+  input`, `reference_input_images`, `reference_images`, `minimum_cents_per_generation`,
+  `cents_per_megapixel_second_*` (upscaler).
+- Image references are honoured by all providers; audio and video references only by providers
+  that support them (BytePlus Seedance 2 and newer); others ignore them.
+- **Not eligible for Zero Data Retention**: the provider keeps the output a short time so it
+  can be retrieved; with ZDR enforced, video requests are not routed.
+- Errors: 402 / 429 / 413 / content-policy refusals are not documented on these pages (the
+  brief's list); vidgen maps them anyway (§113.2), plus 401 / 403 and failed / expired jobs.
+
+**The data-URL question (settled as far as the docs go).** `frame_images[].image_url.url`
+"is an https URL or a base64 data URL" (per-model pages) and the skill page says an image `url`
+"can be a public `https://` URL or a local-file data URL" (`data:<mime>;base64,<b64>`) for both
+`frame_images` and `input_references` (same entry shape). Confirmed: **pictures may be sent
+inline**. The reference-to-video cookbook describes only public HTTPS image URLs ("stable,
+directly downloadable"). For **audio_url and video_url no page says data URLs work**: the SDK's
+`AudioURL.url` / `VideoURL` have no description, and the only audio example (Seedance 2.5
+"lip-synced to the reference voiceover") uses a hosted https MP3. Not confirmed: inline audio /
+video; no size limits are documented (413 exists). So vidgen sends pictures inline, and for
+audio / video needs a hosted URL from a pluggable `uploader(Path) -> url` (none is chosen: the
+owner decides on a hosting service) or the opt-in `inline_media: all` (try it in Step 296 with
+the cheapest model: a rejected request is a 400 before generation). Without either, the request
+stops with an error naming both options. **Settled in Step 296 (§113.7): OpenRouter refuses
+inline audio** (HTTP 400 "Only HTTPS URLs are allowed"), so `inline_media: all` no longer sends
+audio / video inline.
+
+### 113.2 The provider layer (Step 292)
+
+- **Package** `vidgen.videogen` (not a render input: listed in `NOT_RENDER_INPUTS`; the
+  `videogen` config is excluded from scene fingerprints).
+  - `VideoRequest(model, prompt, duration, resolution | size, aspect_ratio, frame_images,
+    references, seed, previous_job_id, provider_options: {slug: {param: value}})` (checked:
+    `author/name`, duration > 0, not size and resolution, frame images with a frame type,
+    references without). `MediaInput(kind: image | audio | video, path | url, frame_type)`.
+  - `canonical_request` (cache version, every field, `generate_audio` as requested, files by
+    SHA-256 and size, never by name) and `request_hash` (24 hex digits of its SHA-256).
+  - `JobState(id, status, polling_url, cost, is_byok, error)`.
+- **Models** (`models.py`): `VideoModel.from_record`, `parse_models`, `load_catalog(refresh,
+  cache_path, fetch, now, max_age=1 day)` → `Catalog(models, fetched_at, source live | cache,
+  note)`: the cache (`<vidgen cache>/openrouter/video_models.json`, `{fetched_at, doc}`) when
+  young; else fetched (public, no key) and cached; offline the cache whatever its age (a note),
+  else an error. `Catalog.find` with did-you-mean. `check_request(request, model) ->
+  RequestCheck(problems, notes, drop)`: duration not listed → problem with the snapped length
+  (`snap_duration`: the shortest allowed ≥ the wanted, else the longest; "did you mean 6?"),
+  resolution / size / aspect ratio not listed → problem with did-you-mean, a frame type not
+  listed, a passthrough option not allowed; a setting the model lists nothing for (e.g.
+  avatar-iv's duration) → note and not sent (`drop`); a seed on a model without one → dropped.
+- **Estimates** (`estimate(request, model, duration=, minimum=True) -> Estimate(cost, basis)`):
+  `cents_*` SKUs / 100; per-second SKUs × seconds; token SKUs × `W × H × 24 fps × s / 1024`
+  (ByteDance's formula; it reproduces the listed "from ~$0.10/s" of seedance-2.5 at 480p);
+  `+` per-picture SKUs × input pictures; a `minimum_*` floor. Choosing among SKUs
+  (`_applicable`): continuation SKUs only with `previous_job_id`, `reference_*` only with
+  references, `with_video_input` only with a video reference, `image_to_video` with frame
+  images else `text_to_video`, then the request's tier (else the untiered SKUs, else all), then
+  `without_audio` when listed (the audio choice follows `generate_audio`, §113.11); the **highest** remaining SKU (e.g. heygen's `long_duration`):
+  a conservative budget. Without a duration: the model's longest. Without resolution / size: all
+  tiers (the highest). Unknown (no SKUs understood, no length) → `cost None`: a paid run refuses.
+  `price_lines(model)` (one second per tier, `~` for token prices, the floor apart) and
+  `model_line` for the listing.
+- **Provider** (`openrouter.py`, `OpenRouterVideoProvider(key_via_proxy, inline_media,
+  uploader, transport, sleep, clock, environ, timeout 120, poll_interval 10, max_interval 60,
+  poll_timeout 900, retries 4)`): `submit(request, drop)` (one attempt, never retried;
+  refuses a body > 20 MB before sending), `status(id)`, `wait(job)` (sleep 10 s × 1.5 per
+  poll up to 60 s; past `poll_timeout` a VidgenError saying the paid job keeps running and the
+  next run polls it), `download(id, dest)` (atomic write). Polls and the download retry 429 /
+  5xx / 524 / 529 and unreachable (Retry-After or backoff). `request_body`: model, prompt,
+  set fields minus `drop`, `generate_audio` (as requested), `frame_images`, `input_references`
+  (`{type: <kind>_url, <kind>_url: {url}}`), `provider.options`. `media_url`: hosted url as is;
+  a picture inline (`data:image/png;base64,...`); audio / video inline only with
+  `inline_media: all`, else the `uploader`, else an error. Transport protocol
+  `(method, url, headers, body, timeout) -> Response(status, body, headers)` (urllib by default).
+- **Key** (decision): `OPENROUTER_API_KEY` read from the environment at each request
+  (`read_key`; spaces / non-ASCII refused), sent only as `Authorization: Bearer`, scrubbed
+  from errors (`httpapi.scrub`), never logged. **Proxy mode**: `videogen.key_via_proxy: true` or
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1|true|yes|on` → no Authorization header and no key needed
+  (the sandbox's agent proxy injects it). The missing-key message names both.
+- **Errors** (`http_error`, `job_failure`): 402 credits (nothing charged), 429 rate limited
+  (paid jobs not retried), 413 too large (inline inputs: smaller or hosted), 401 / 403 key,
+  content-policy words (`content policy`, `moderation`, `safety`, `flagged`, ...) in any answer
+  or a failed job's error, 404 job gone, failed / cancelled / expired jobs (expired: "submitting
+  it again is a new paid job"); `error.message` of JSON bodies quoted.
+- **Mock** (`mock.py`): `MockOpenRouter` (a transport faking `/videos`: job ids
+  `mock-job-N`, `states` per poll, `cost`, `video` bytes, scripted `submit_error`, `poll_error`
+  ×`poll_errors`, failed / expired states with `error`; records requests) and
+  `MockVideoProvider` (proxy mode, no sleeping). `videogen.provider: mock` uses it.
+- **Ledger** (`ledger.py`): `videogen-ledger.jsonl` (mock: `videogen-ledger.mock.jsonl`),
+  append-only lines `{event: submit, job_id, provider, model, request_hash, estimate_usd, time}`
+  and `{event: completed | failed | cancelled | expired, job_id, cost_usd, is_byok, time}`; an
+  unreadable line is an error. `Ledger.jobs()`, `spent()` (reported cost, else the estimate —
+  open, timed-out and unreported jobs count), `BudgetState(cap, spent).remaining_usd`,
+  `refusal(budget, estimate, model)`: no cap, unknown estimate, estimate > remaining.
+- **Run** (`run.py`): `plan_clip(root, settings, request, catalog=, budget_usd=, duration=,
+  provider=, again=) -> ClipPlan` and `generate_clip(..., pay=False, provider=) -> ClipResult
+  (plan, path, job, paid, cost)`. Order: cache hit (`assets/generated_video/<hash>.mp4`) →
+  nothing sent; the ledger's last job of the same hash open or completed → polled / downloaded
+  (never resubmitted; `again=True` only after its output expired); model checks (problems refuse
+  before paying); estimate vs the cap (the lower of `videogen.budget_usd` and `budget_usd=`);
+  without `pay` the plan (`ClipPlan.lines()`: would generate / job reuse / estimate / budget /
+  notes / problems / refused / prompt); with `pay`: credentials, submit, `submit` line, wait,
+  terminal line, download, sidecar `<hash>.json` `{request, key, provider, job_id,
+  estimate_usd, cost_usd, bytes, time}`.
+- **Config** `videogen: {provider: openrouter | mock, budget_usd: null (≥ 0), key_via_proxy:
+  false, inline_media: images | all, poll_timeout: 900}` (`VideogenConfig`). Decision: a
+  `videogen:` section parallel to `imagegen:` rather than a top-level `generate:` (that name is
+  the scenes' image param and Step 293's per-beat spec).
+- **CLI** `vidgen generate models [--refresh] [--json]` (count, date, source; one line per
+  model: id | durations | resolutions | aspect ratios | frame images | estimated prices) and
+  `vidgen generate ledger [PROJECT] [--json]` (jobs, budget, spent, left). Step 293 adds `plan |
+  sheets | inputs` (§113.3), Step 294 `run [--pay] [--budget] | status | takes | pick`.
+- **Public** `vidgen.api`: `VideoRequest`, `MediaInput`, `generate_clip`, `plan_clip`.
+- **Tests** `tests/test_videogen.py` (mock only): cache keys by content, request errors,
+  model list / did-you-mean, checks (durations snapped, resolutions, frame types, passthrough,
+  dropped settings), estimates (per second, tiers, without audio, per token, per picture,
+  floors, unknown), catalog cache / offline / refresh, the paid flow (states, body, ledger,
+  sidecar, separate mock ledger), cache hit = no second submit, dry run sends nothing, cap /
+  estimate / unknown-price / settings refusals, ledger accounting, timeout then resume without a
+  second submit, 402 / 429 / 413 / content-policy submits (one attempt, no ledger line), failed
+  (policy) and expired jobs, polls retried on 429, inline pictures / hosted audio / uploader /
+  `inline_media: all`, proxy mode (config and env) sends no Authorization header, env mode sends
+  it and never logs or stores the key (scrubbed when echoed), config, the CLI.
+- **Not done (later steps)**: per-beat specs, sheets, guide renders, plans (293, §113.3); placing clips,
+  takes, QA, `run` / `status` CLI, MCP tools (294); a hosting `uploader`; the mock writes
+  placeholder bytes, not a playable MP4; estimates for upscale / edit models (`megapixel`) stay
+  unknown.
+
+### 113.3 Sheets, shot specs, inputs and the plan (Step 293)
+
+- **Names** (decision, avoiding collisions): `characters[].reference_sheet` (not `sheet`: `vidgen
+  character-sheet` is the drawn cartoon sheet), top-level `style_sheet:` (not `style`: the
+  image `style` words and scenes' `style` params), the beat key `generated_shot:` (not
+  `generate:`: the scenes' image param). All three are excluded from scene fingerprints
+  (`style_sheet` like `videogen`; `characters[].reference_sheet` and beats' `generated_shot` by
+  nested excludes), so adding them re-renders nothing.
+- **Config**: `ReferenceSheet {prompt, views: [front | three_quarter | side | back] (default
+  front, three_quarter, side; distinct), expressions, notes, seed, approved: false}`;
+  `StyleSheet {palette (words or list), era, lens, notes, references (your pictures), frames: 1
+  (0–4), frame_prompt, seed, approved: false}` with `words()`; `GeneratedShot {kind: talking |
+  action | establishing, model (author/name), prompt, setting, characters, refs, audio: beat |
+  none, guide: false, first_frame (sheet | render | none | a picture), seed, resolution,
+  aspect_ratio, line: true}`: a talking shot refuses `audio: none`; defaults: audio beat and
+  first frame sheet for talking, none otherwise.
+- **Sheets** (`videogen/sheets.py`): each picture is an `ImageRequest` made by `image_request`
+  (prompt, style, key rules of `generate:` pictures; the style words = `imagegen.style` +
+  `style_sheet.words()`) moved to `assets/sheets/<owner>_<label>_<key>.png` (+ `.json`
+  sidecar). Characters: one picture per view (full body, neutral expression, portrait), one per
+  expression (front, head and shoulders); the prompt words are in §113.6 (Step 295); style:
+  `frames` stills of `frame_prompt` in the video's shape (frames after the first get seed + n −
+  1). `Sheet {owner, location, approved, pictures, notes}`: `ready` = approved and all made;
+  `status()` / `problem()`. `run_sheets(pay=False)`: the dry run (pictures, prices via
+  `price_plan`); with `pay`: problems refuse, the budget refuses (no cap, unknown price, total >
+  left), then per picture a ledger `submit` (`image-<key>`, estimate), the call, `completed`
+  with the reported cost (`failed`: counted at the estimate), the files. An approved sheet with
+  missing pictures (its prompt changed) is never made again: blocked until `approved: false`.
+  The ledger is the real one unless the image provider is named `mock` (tests).
+- **Shots** (`videogen/shots.py`, `project_shots(project, catalog)`): per beat with a spec, the
+  window on the planned timeline (`VideoPlan` start; `beat_windows` at the video's fps, as
+  renders time it). Lengths: `snap_duration` of the part; a beat longer than the model's longest
+  is split into `ceil(window / longest)` equal parts `<beat>_p<n>` (offset into the beat); a
+  model without durations: the request's duration is the part rounded up (dropped by
+  `check_request`), priced with `duration=` that many seconds. Resolution: the spec's or the
+  model's lowest; aspect ratio: the spec's or the listed one nearest the format (log ratio).
+  Speaker: the character whose `voice` is the beat's voice. Characters: the spec's, else the
+  speaker (talking, action) or none (establishing). Inputs (`ShotInput {role, kind, path, what,
+  frame}`): the first frame (sheet: the speaker's / first character's first picture; render:
+  `build/videogen/<shot>/first_frame.png`; a picture) as a frame image where the model lists
+  `first_frame`, else as a picture reference (avatar-iv lists no frame images); refs (default:
+  the characters' sheets and `style`; talking: none) — a name → all its sheet pictures, `style` →
+  the frames and `style_sheet.references`, else a picture file; audio → `audio.mp3`; guide →
+  `guide.mp4`. Blocked (planned and priced, not ready to pay): a sheet not ready, an input not
+  made yet, audio / video with `inline_media: images` (no uploader yet). Problems (with
+  did-you-mean): unknown model (from the catalog), characters, refs, missing pictures, a talking
+  shot without a speaker or sheet. `shot_problems` gives the catalog-free ones to `vidgen
+  validate`.
+- **Prompt** (`shot_prompt`): "<framing>: <prompt>." (talking: "Talking close-up of <Speaker>,
+  facing the camera, speaking"; "Action shot"; "Establishing shot"), "Setting: ...",
+  "Characters: Name (sheet prompt; notes); ...", `<Speaker> says: "<text>"` (or "Spoken over
+  the shot", without a speaker; `line: false` leaves it out), "Style: <style words>", "No
+  on-screen text, captions, subtitles or logos." Names display capitalised (`old_tom` → Old
+  Tom).
+- **Inputs** (`videogen/inputs.py`, `make_inputs(project, shots, guide=, render=)`): the voice
+  from the beat's narration MP3 (`vidgen tts` first): `apad`, `atrim` from the part's offset for
+  exactly its length, MP3 mono 44.1 kHz 128 kb/s; with `guide` the scene rendered as a draft
+  (`Project.load(..., draft=True)`, `render_scenes`, reused while current), cut from the beat's
+  real start in the scene's timings + the offset for the length, silent H.264, and its first
+  frame past a fade in (the first frame at least 0.7 × as bright as the brightest of the first
+  1.5 s). Without `--guide` the renders are skipped with a message.
+- **Plan** (`plan_shots(project, catalog=, budget_usd=, shot_ids=, lookup=) -> VideoGenPlan`):
+  per shot the request, `check_request`, `estimate` (with every input made: `plan_clip`, so a
+  cached clip or an earlier job counts 0), what the budget has left after it (the cap minus the
+  ledger's spent minus the sheets' estimate minus the shots before; `over_budget`); the sheets'
+  pictures still to make and their estimate; totals. `lines()`: per shot "shot <id> (<kind>,
+  scene, beat, part, video time, length): model, resolution, aspect", the length line (asks for
+  N s, trimmed to x later | follows the audio, priced as N s), each input (made or not), cached /
+  earlier job, estimate, budget left, notes, problems, blocked, prompt; the sheets; "total: ...
+  clips ..., sheets ...; together $x", the budget line ("OVER THE BUDGET" when it is), "dry run:
+  nothing was sent or paid; n shot(s) blocked, m with problems".
+- **CLI**: `vidgen generate plan [PROJECT] [--shot ID]... [--budget USD] [--variant NAME]
+  [--json]`, `vidgen generate sheets [PROJECT] [--sheet NAME]... [--pay] [--json]`, `vidgen
+  generate inputs [PROJECT] [--shot ID]... [--guide] [--json]`; `--pay` on plan / inputs is an
+  error (294 adds `run --pay`).
+- **Public** `vidgen.api`: `plan_shots`, `project_shots`, `project_sheets`.
+- **Tests** `tests/test_videogen_shots.py` (17; a stub image provider, the model fixture):
+  config and its errors, fingerprints unchanged, sheet pictures / prompts / status, dry run pays
+  nothing, pay needs a budget, pay records the ledger and never makes a picture twice, approval
+  freezes a sheet, over-budget refusal, talking (length from audio, portrait as a reference,
+  prompt), action (inputs, frame image, snapped length), split beats, nearest aspect ratio,
+  validation with did-you-mean (also through `validate_all`), the voice cut exactly, the first
+  frame past a fade, inputs with a stub render, the plan's prices / budget / blocked reasons /
+  text, ready once approved and cut, the CLI (text, JSON, sheets, `--pay` refused).
+- **Sample** (for Step 295): `scratch/s293/sample` — 9:16, two characters with sheets, a style
+  sheet, an establishing shot (veo-3.1-lite, 720p, 4 s: $0.12), an action shot
+  (seedance-2.0-fast, 480p, 4 s, six sheet pictures + style frame + voice + guide: ~$0.095) and
+  a talking close-up (avatar-iv, 720p, 5 s: $0.25); seven sheet pictures (seedream-4.5,
+  $0.04 each: $0.28); together ~$0.745 of the $2.00 budget.
+- **Not done (294 / 295)**: placing clips, trimming, takes, QA, `run` / `status`, MCP; a hosting
+  uploader (audio / video inline only with `inline_media: all`, unconfirmed); whether avatar-iv
+  takes the portrait as an input reference (its record lists no frame images) and whether a
+  240-pixel guide is accepted are open until Step 295.
+
+### 113.4 Takes in the film, QA and the workflow (Step 294)
+
+- **Run** (`videogen/workflow.py`, `run_shots(project, pay=, budget_usd=, shot_ids=, out=,
+  provider=, catalog=) -> RunReport`): the plan (`plan_shots`) in video order. Without `pay` a
+  dry run (nothing sent, paid or written; `would_generate` per ready shot, the total). With
+  `pay`: no cap (config or argument) → refused; any selected shot with problems → refused; the
+  ready shots' estimate above what is left → refused (all before anything is paid). Then per
+  shot: problems / blocked → skipped and named; else `generate_clip(root, settings,
+  shot.request(), pay=True, duration=shot.priced_seconds, budget_usd=, catalog=)` (the ledger is
+  re-read per job: the running budget); the clip (paid, cached, or an earlier job downloaded) →
+  `add_take`. The first `VidgenError` stops the run (`details.shots`: the outcomes so far); no
+  retry. `ShotRun.status`: `would_generate | cached | paid | downloaded | blocked | problems |
+  failed`.
+- **Takes** (`videogen/takes.py`): `takes/<shot>/<n>.mp4` + `<n>.json` `{shot, take, key,
+  model, provider, job_id, cost_usd, source, length, time, qa}` + `<n>.contact.png`; a clip whose
+  cache key is already a take is not added again. Picks in `takes/picks.json` `{shot: n |
+  "none"}`. `chosen_take`: the picked take; `none` → none (vidgen's picture); nothing picked
+  (`auto`) → the newest take without QA errors. `pick_take(root, shot, "N" | "none" | "auto",
+  known)` with did-you-mean. Decision: picks in a JSON file, not in `video.yaml` (no rewriting
+  the author's YAML; takes are files anyway). A new take needs a new request (seed, prompt,
+  model): the cache never pays twice.
+- **QA** (`videogen/qa.py`, `check_clip(path, length=, width=, height=) -> QAReport`): decoded
+  grey at 64 px wide at the clip's own rate (≤ 30 fps, so frame-to-frame flicker is not aliased
+  away). Duration < shot − 1 frame → warning (holds); aspect ratio off by > 2 % → warning (what
+  `cover` cuts); scaled up > 2× → warning; black frames (mean < 16 and 99th percentile < 40):
+  all → error, a run ≥ 0.5 s → warning; frozen (mean abs change < 0.6): all → error, ≥ 1 s →
+  warning; flicker = mean |Lₜ − (Lₜ₋₁ + Lₜ₊₁)/2| of the frame means > 3 → warning; cuts = a change
+  > max(30, 6 × median change) outside black → warning (not reported when flickering); a sound
+  stream → info. `contact_sheet(path, out, title, report, count 8, columns 4, thumb 200)`: evenly
+  spaced frames with times under the title and the report lines (PIL).
+- **Placing** (`videogen/compose.py`, `scene_placements(project, scene_id=None) -> [Placement
+  (scene, shot, take, number, model, start, length, fit, fade_in, fade_out, color_match)]`): only
+  when not a draft, `takes/` exists and some beat has a `generated_shot` with `place: true`
+  (otherwise nothing is computed: existing projects pay nothing). From `project_shots(project,
+  None)` (no model list in a render worker): start = the beat's planned start − the scene's
+  (`Shot.scene_start`, new), length = its window; a beat split by the model's longest clip has
+  folders `<beat>_p1..n` and the parts share the window equally (as planned). The scene's last
+  beat keeps its take to the scene's end (`Shot.scene_end`, new: fade-out and hold), so vidgen's
+  picture never flashes between takes. Fades (`crossfade`, default `videogen.crossfade` 0.25 s)
+  only against vidgen's picture: none at a scene's start or end (the film's transitions join
+  scenes) and none where two takes meet (a cut).
+- **In the render** (`vidgen/generated_layer.py`, `GeneratedLayer(scene, placements)`; a render
+  input): attached in `NarratedScene.__init__` right after the overlay layer, so the frame flow
+  is colour fade → drawing texture → **take** → overlays / captions → frame capture → file:
+  overlays and captions are drawn on the take, stills and the layout dump see it. For frames in a
+  window the scene's picture is replaced by `ClipReader(take, size, crop).frame(t − start)`
+  (`cover`: centred crop to the frame's aspect, `contain`: fitted on black): the frame showing
+  at each render frame's time (fps conform; a short take holds its last frame, a long one is cut);
+  colour gains `color_gains(samples, strength)` = (grey-world balance × exposure towards mean
+  118)^strength, each within 0.8-1.25, from 8 frames at 32 px (`videogen.color_match`, default
+  0.5; 0 = as made); alpha ramps for the fades. A frozen wait is split into single frames inside
+  windows only. The take's sound is never read. The scene's timings get `generated: [{shot,
+  take, model, start, length}]`.
+- **Fingerprint**: a scene's fingerprint gains `generated` (each placement: the take's path, size
+  and mtime, start, length, fit, fades, colour match) only when it shows takes, so a new take or
+  pick renders that scene alone and other projects' fingerprints are unchanged; files under
+  `assets/generated_video/` (the clip cache) are left out of the `assets` digest (they reach
+  renders only as takes; before, every downloaded clip made every scene stale).
+- **Credits and disclosure**: `credit_line(project)` = "Includes AI-generated footage (models,
+  sorted)." appended to the description file `<output>_chapters.txt` (also when there are no
+  chapters or references); lint rule `generated_footage` (scene scope, default info, last in
+  `LINT_RULES`): each scene showing takes, with a reminder to mark the upload as altered or
+  synthetic content (YouTube) / AI-generated (TikTok). `vidgen generate status` prints both.
+- **Config**: `videogen.crossfade` (0.25, 0-2 s), `videogen.color_match` (0.5, 0-1);
+  `generated_shot.place` (true), `fit` (cover | contain), `crossfade` (null). All excluded from
+  fingerprints as before; what placing uses is in `generated`.
+- **CLI**: `vidgen generate run [PROJECT] [--shot ID]... [--budget USD] [--pay] [--variant]
+  [--json]`, `status`, `takes [--shot ID]`, `pick --shot ID --take N | none | auto`; `--pay` on any
+  other action but `sheets` is an error.
+- **MCP**: `generate_plan` (read only), `generate_run` (paid annotation; `dry_run` default true;
+  `dry_run: false` needs `confirm_cost: true`, then `--pay`), `generate_status`,
+  `generate_takes` (the contact sheets as pictures, paged), `generate_pick`.
+- **Mock** (fixes to §113.2): a completed job's content is a playable H.264 MP4 made by FFmpeg
+  (`synthetic_clip`: `testsrc2` of the submitted duration, the submitted aspect ratio at the
+  resolution tier's short side, 360 without one; `video=` bytes still override), and
+  `synthetic_clip(path, w, h, s, fps, pattern=testsrc | bars | black | frozen | flicker | cut,
+  audio=)` makes QA's test clips. `MockVideoProvider()` without an `api` (the `provider: mock`
+  setting) uses job ids `mock-<8 hex>-N`: before, every run started at `mock-job-1` and the mock
+  ledger (keyed by job id) counted repeated runs once.
+- **Proxy mode for sheets** (fix): the OpenRouter image provider honours
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY` and, through `vidgen generate sheets`, `videogen.key_via_proxy`
+  (no key read, no Authorization header); before, sheets needed `OPENROUTER_API_KEY` even when
+  the proxy adds the key.
+- **Public** `vidgen.api`: `run_shots`, `check_clip`, `scene_placements`.
+- **Tests** `tests/test_videogen_compose.py` (18; synthetic clips): QA of good / black / bars
+  (still) / frozen / flicker / cut / short and wide clips, the contact sheet, the mock's MP4,
+  takes (dedupe, numbering, picks, QA errors not shown unless picked, did-you-mean), colour gains,
+  placements (windows, fades, last beat to the scene's end, `none`, `place: false`, drafts) and
+  fingerprints, a render (9:16 at 90×160: the take fills the beat under a watermark, the other
+  beats unchanged, only that scene re-rendered, the scene timings, the credit line), the
+  workflow (dry run sends nothing, pay makes takes, a second run is cached and pays nothing, no
+  budget / over budget refused before anything is sent, the first failure stops without retry),
+  the CLI and the lint rule. Frame baseline: 33 stills, max difference 0.
+- **The sample** (Step 295): `scratch/s293/sample` is voiced (Kokoro, Python 3.12 venv) and its
+  inputs are cut (`quay_b1` voice 3.57 s + guide + first frame, `closeup_b1` voice 4.27 s); only
+  the unmade sheets block its shots. A mock copy (`scratch/s294/sample-mock`, stand-in sheets)
+  ran end to end: three takes, a 9:16 preview with the takes placed, contact sheets, the credit
+  line and the lint notes.
+
+### 113.5 Review of Steps 292–294
+
+What holds: nothing can be paid without `--pay` (or the MCP's two flags) and a cap; the cap is
+checked against conservative estimates before each job and for a whole run up front; the ledger
+records a job before it is polled, so a crash or timeout never leads to a second payment; the
+cache and the ledger's open jobs stop repeat payments of the same request; the key is never
+logged or stored; the model's audio is never asked for or used; placing takes is invisible to
+projects without them (fingerprints and the 33-still baseline unchanged).
+
+Fixed in 294: the mock's repeated job ids (its ledger undercounted), its placeholder bytes (no
+playable clip), the clip cache inside the `assets` digest (every downloaded clip re-rendered
+every scene), and sheets without proxy mode (the image provider needed `OPENROUTER_API_KEY` even
+when the proxy adds it).
+
+Open, by weight:
+1. **Unverified against the real API** (297, the paid experiment, settles it; inline audio was
+   refused in Step 296, §113.7): avatar-iv taking the portrait as an input reference, Seedance accepting a 240-pixel
+   guide, the real 402 / 429 / 413 / moderation bodies, and what `usage.cost` reports. A
+   rejected inline request should fail before generation (a 400), costing nothing.
+2. **No hosting uploader**: audio and video inputs need hosted https URLs (inline is refused,
+   §113.7); without a host, talking shots and shots with `audio:` / `guide:` stay blocked. Choosing a host is the owner's decision.
+3. **QA thresholds** come from synthetic clips; real footage (handheld, fast motion, a dark
+   scene) may need tuning: black and frozen errors are conservative, the rest are warnings.
+4. **Lint under a take**: layout rules still read vidgen's own objects of a beat that a take
+   covers (e.g. `look_alike`, text overlap) and may report what is not seen.
+5. **Timing at the edges**: the scene's last beat holds its take through the fade-out; a take
+   asked for the beat's window (e.g. 4 s for 3.67 s) then holds its last frame for the rest
+   (~0.2-0.5 s). Asking for the window plus the scene's outro would cost a step more on discrete
+   lengths (4 → 6 s on veo); left as is.
+6. **Sheets in `assets/sheets/`** still count as assets: making them re-renders every scene once
+   (render time, not money). They may be used as pictures by scenes, so they stay in.
+7. **Colour matching** is grey-world: it pulls deliberately tinted footage (golden hour) towards
+   neutral at half strength; `color_match: 0` turns it off.
+8. A mock job that timed out cannot be resumed (each run has its own fake API); real jobs can.
+
+### 113.6 Cleaner sheet prompts and real image costs (Step 295)
+
+The first paid sheet pictures (seedream-4.5, the s293 sample, 7 pictures, 2026-11-07) kept the
+characters consistent but made poor references: the palette word "warm lamp orange" drew orange
+lamps in 6 of 7 pictures; Theo's role ("sells ferry tickets") drew a counter, a ticket booth and
+a sign "SELD FICKETS" (the style frame had a cut-off "CKET" sign); backgrounds were not plain,
+Theo's front view was cut at the waist, Mara's side view was three-quarter; the lens words
+(35 mm, handheld, shallow depth of field) fought a studio reference. `videogen/sheets.py` now
+builds:
+
+- **Character pictures** (`CHARACTER_SETUP`, `BACKDROP`, `WHO`, `VIEW_WORDS`): "Character model
+  sheet picture of one person: full body from head to toe, whole figure in frame, <view>, neutral
+  expression, arms relaxed at the sides, empty hands, standing on a plain seamless light grey
+  studio backdrop, even soft studio light, nothing else in the picture. Who the person is (draw
+  only the person and their clothes): <prompt>. No props." (expressions: "head and shoulders,
+  <front view>, <expression> expression, <backdrop>"). Views: front "facing the camera squarely,
+  body and face straight on"; three_quarter "body and face turned 45 degrees to the left, both
+  eyes visible"; side "strict 90-degree profile, facing left, only one eye visible"; back "seen
+  straight from behind, the face not visible".
+- **Exclusions** go in the request's `negative` (`CHARACTER_EXCLUDE`, `FRAME_EXCLUDE`; merged
+  with `imagegen.negative`). Every provider sends it as "Avoid: ..." at the end of the prompt
+  text (`compose_prompt`), since OpenRouter's `/images` takes no negative-prompt field. Character
+  pictures: text, letters, words, numbers, signs, signage, logos, labels, captions, watermarks,
+  props, objects in the hands, furniture, counters, booths, lamps, scenery, buildings, other
+  people, cropped head or feet. Style frames: the text / signage part only.
+- **Look words** (`_look_words(project, reference=)`): the palette as "colour palette: <colours>
+  (colours only, not objects: the colours of the clothing and the lighting tint)" and "era:
+  <era>" for both. Character pictures then take only those words of `imagegen.style` and
+  `style_sheet.notes` (split at commas) that are not shot-only (`_SHOT_ONLY`: lens / mm / depth
+  of field / bokeh / handheld / camera / close-up / wide angle / dolly / tracking words, and
+  scene-lighting clauses ending in "light" / "lighting"), and never `style_sheet.lens`. Style
+  frames keep the whole look ("(colours only, not objects)", the lens, the notes) and say "a still
+  of the film with no writing anywhere". Video shot prompts (`shot_prompt`,
+  `StyleSheet.words()`) are unchanged.
+- The prompts changed, so the picture keys changed: the old pictures stay in `assets/sheets/`
+  but every sheet reads "not made yet" (an approved sheet would be blocked until `approved:
+  false`).
+
+**Costs.** The ledger of that run shows `cost_usd` 0.04 per picture in `completed` events, and
+`run_sheets` writes `cost_usd` only from `GeneratedPicture.cost` (`usage.cost` of the response):
+OpenRouter's response reported $0.04 (the list price, as with seedream-5-0-flash in §66) while
+the account's usage rose only ~$0.16 for all 7 (~$0.023 each). vidgen keeps recording what the
+response reports, and now says where a number comes from:
+
+- `GeneratedPicture.usage` / `RawPicture.usage` (new, default `None`): the numeric fields of
+  the response's `usage` as sent; the sidecar keeps them under `usage`, so a later run can be
+  compared with the account's activity page.
+- Sidecars (`sidecar_document(..., estimate=, usage=)`): `cost_usd` + `cost_source: reported`
+  when the response has `usage.cost`; else the estimate with `cost_source: estimate`; neither: no
+  cost. Sheet ledger events (`completed`, `failed`) carry `cost_source` too (`cost_usd` stays the
+  reported cost or `null`; `Ledger.spent` counts `null` at the estimate, unchanged).
+- Printed lines (`imagegen.run.cost_words`): `$0.023 reported by openrouter`, `estimated $0.040
+  (not reported by openrouter)`, `cost not reported by openrouter`; the sheets' `done:` line
+  splits "reported" and "estimated". `vidgen imagegen` uses the same words.
+- Budget safety is unchanged: the check before paying still uses the estimate (`refusal`).
+
+Open: whether `usage.cost` over-reports for every image model or only for seedream-4.5 routed to a
+cheaper provider; asking `GET /generation` (as the TTS path does, §66) after a picture would
+give the billed `total_cost`, at the price of a key-authenticated lookup per picture.
+
+### 113.7 What the API accepted, and smaller pictures (Step 296)
+
+The owner's first paid attempt at clips (2026-11-07, the s293 sample; nothing was charged for
+any of these) gave three answers:
+
+1. **Request size.** `vidgen generate run --pay --shot quay_b1` (Seedance 2.0 Fast, 6 sheet
+   pictures + the style frame, voice, guide) stopped inside vidgen before sending: "the request
+   is 48.0 MB with its inline inputs, more than vidgen sends (21 MB)". The sheet pictures are
+   2048x3642 PNGs of 5-7 MB, sent at full size as data URLs.
+2. **Inline audio is refused.** heygen/avatar-iv: HTTP 400 "Invalid reference URL:
+   input_references[1].audio_url.url: Only HTTPS URLs are allowed". Audio (and so video)
+   references must be https URLs. Inline pictures are documented but not yet confirmed for a
+   video job (no video job has been accepted yet).
+3. **Account privacy settings.** With "ZDR endpoints only" on, every video model is refused with
+   HTTP 404 "ZDR violation (account settings)". `GET /api/v1/models` with the key is filtered by
+   the account's privacy settings (a free check: compare its count with and without the key) but
+   lists only text models; `GET /api/v1/videos/models` is not filtered by the key, so a model
+   listed there may still be refused for the account.
+
+Built:
+
+- **Smaller pictures** (`videogen/pictures.py`): `sendable_picture(path, root)` returns the file
+  to send for a local picture: the file itself when it is a JPEG / WebP whose longest side is at
+  most `PICTURE_MAX_SIDE` (1280 px), else a copy resized to that limit (LANCZOS) and saved as
+  JPEG quality `JPEG_QUALITY` (90), or PNG when the picture has transparency. Copies live in
+  `build/videogen/pictures/<sha256 of the source, 24 hex>_<max side>.jpg|.png`, made once; the
+  sources are never changed. `sendable_request(request, root)` swaps every local picture of a
+  request (frame images and picture references) for its copy; `generate_clip` submits that.
+  The cache key is still computed from the sources (`canonical_request` gains `pictures_sent:
+  {max_side, jpeg_quality}`, so a new rule makes a new key but a new Pillow version does not).
+  No model in the list names a largest reference size, so one limit serves all. The sample's
+  quay_b1: pictures 47.9 MB of base64 at full size, 0.99 MB as copies; its request (audio /
+  guide counted as hosted URLs) is 0.99 MB. The 21 MB guard (`MAX_INLINE_BYTES`) stays.
+- **Request size in the plan**: `openrouter.request_bytes(request, root)` (local audio / video
+  counted as hosted URLs) for every ready, uncached shot; `vidgen generate plan` prints
+  "request: X MB with its inline pictures (vidgen sends at most 21 MB)" and JSON
+  `request_bytes`; over the limit is a problem. The plan's only writes are those copies.
+- **Inline audio / video flagged**: a shot with an audio or video input under `inline_media:
+  all` has the problem "audio/video references must be https URLs; OpenRouter refuses inline
+  audio/video — remove `audio:`/`guide:` from the shot or host the files" (`shots.
+  INLINE_AUDIO_VIDEO_PROBLEM`), so `run --pay` refuses the run before sending; under
+  `inline_media: images` such shots stay blocked (hosted URL needed). The provider no longer
+  sends audio / video inline at all (`OpenRouterVideoProvider` lost its `inline_media`
+  argument): a local sound or clip needs the `uploader`, else an error. `inline_media` stays a
+  valid setting; both values send pictures inline.
+
+Open: a talking shot cannot drop its audio (`audio: none` is refused for `talking`), so until a
+host exists (owner's choice) heygen/avatar-iv and the sample's quay_b1 / closeup_b1 cannot be
+paid for; whether video models accept inline pictures (harbour_b1 is the first such job to try).
+Step 306 adds the host (`videogen.host: quick_tunnel`, §115).
+
+### 113.8 A 3D scene's guide pass as a shot's guide (Step 307)
+
+Closes the gap between §114.14 (guide passes, "for video-to-video later") and generated shots.
+
+- **Config.** `generated_shot.guide: true | false | render | depth | outline | mask`
+  (`GuideChoice`, `GUIDE_CHOICES`); `true` = `render` (unchanged: the silent draft render).
+  `GeneratedShot.guide_source` → `render | depth | outline | mask | None`. A before-validator
+  refuses other strings with did-you-mean ("'dpeth' is not true, false, render, depth, outline,
+  mask (did you mean depth?)"); strings pydantic reads as booleans (`yes`, `off`) stay booleans.
+  `SceneConfig` refuses a pass on a scene that is not `type: 3d` when the config is read (a
+  `VidgenError` naming the beat, the scene and its type, and `guide: true` as the way out).
+  `generated_shot` stays out of scene fingerprints: nothing re-renders.
+- **Shots** (`shots.py`). The guide input is `build/videogen/<shot>/guide.<pass>.mp4`
+  (`guide_name`; the render stays `guide.mp4`), described in the plan as "depth pass of the
+  beat's 3D scene, N s" (`GUIDE_WHAT`). It is a `video` input like the render, so everything
+  else follows unchanged: `Shot.shared` (the plan's "would share" list with `host: quick_tunnel`),
+  `NO_HOST_BLOCKED` / `INLINE_AUDIO_VIDEO_PROBLEM` without a host, the inputs-not-made block.
+- **Prompt.** One sentence after the line and before the style (`GUIDE_PROMPTS`): depth "The
+  guide video is a depth map (near is white, far is dark): follow its layout and camera
+  motion"; outline "... an outline drawing (white edges on black): follow its shapes, layout and
+  camera motion"; mask "... a colour mask (each object one flat colour on black): follow its
+  layout and motion", then, for 1 to `MASK_NAMES_MAX` = 4 stand-ins, "Mask colours: Ana
+  #rrggbb, Ben #rrggbb" (stand-in `name`, else the display form of its id). The colours are
+  `passes.mask_colors` of the scene's objects (ids and shapes only, the floor first), the same
+  as the pass's table since §114.14's colours depend only on the set of ids. No sentence for
+  `render`: the old prompts (and so the old cache keys) are unchanged.
+- **Cache key.** The pass choice is in the request twice over: the guide file's contents (a
+  different clip) and the prompt sentence (so even identical bytes give another key; tested).
+  No new field in `canonical_request`: existing keys stay valid.
+- **Inputs** (`inputs.py`). `make_inputs` collects per scene the passes its shots need and asks
+  `render(project, scene, passes) -> SceneRender(video, starts, passes)` once per scene (tests
+  replace it). `_render_scene` loads the draft project, reuses the draft render while
+  `current_render(..., guide_passes=passes)` holds (before, `render_scenes` re-ran the worker each
+  time; the 3D frames were reused either way), else `render_scenes(..., guide_passes=passes)`
+  (new keyword, passed to the workers as `--guide-passes`): a render without the pass is made
+  again, reusing the clip (§114.14). The pass is `<draft render_dir>/three_d/<scene>.<pass>.mkv`,
+  frame n = the scene's frame n, so the cut is the render guide's: from the beat's start in the
+  scene's timings + the part's offset, `-t` the part's length, at the draft's size and fps.
+  `cut_pass` converts it: H.264, `yuv420p`, BT.709 limited range (converted with
+  `scale=out_color_matrix=bt709:out_range=tv` and tagged), `PASS_CRF` = 12 (the render guide keeps
+  ffmpeg's defaults). A missing pass file is a `VidgenError`.
+- **First frame** (decision): `first_frame: render` is always the **normal** render's first
+  frame past a fade, also with a pass guide (cut from the scene video to a temporary file, then
+  `first_frame`): a grey or flat-coloured first picture would steer the model to that look. A
+  pass guide alone writes no `first_frame.png` and no `guide.mp4`.
+- **Mask colours in the MP4** (measured on a 160x90 draft of the test scene): inside an object
+  every pixel within 6 levels of its table colour; ~2.5 % of the pixels (object edges: 4:2:0
+  shares one colour sample per 2x2 block) differ more, up to ~90 levels; snapping each pixel to
+  the nearest table colour gave the lossless mask back (100 % of pixels) at that size. The `.mkv`
+  stays exact.
+- **Docs**: `docs/COOKBOOK-GENERATED-VIDEO.md` §6 "From a 3D scene to a generated clip" (sections
+  after it renumbered 7–9), linked from `docs/COOKBOOK-3D.md` §5; `examples/3d-to-video`
+  (YAML only); CONFIG; the guide.
+- **Tests** `tests/test_videogen_3d_guide.py` (16, one render): the values and their sources,
+  did-you-mean, a pass on a `text_card` scene refused, the input and prompt, the mask names
+  equal the real description's table, four different hashes for render / depth / outline / mask
+  with identical files, the plan's guide line, blocked without a host, shared with it, the
+  converted pass (H.264, yuv420p, size, frame count as `-t` cuts the render guide, the first frame
+  from the render, the missing pass refused), a real draft render of a mask guide (frames, size,
+  colours within 6 levels inside the crate, the second run reusing the render), the cookbook
+  YAML = the example and validates.
+- **Open**: whether Seedance (or any OpenRouter provider) uses a depth / outline / mask video
+  reference as a control signal or only as loose inspiration is not known (no paid run yet).
+
+### 113.9 Cut inputs that no longer match their sources (Step 308)
+
+`ShotInput.ready` only says a file exists, and `generate run` never cuts, so an edit after `vidgen
+generate inputs` used to reach a paid job as the old voice or guide.
+
+- **Record**: `make_inputs` writes `build/videogen/<shot>/inputs.json` (`videogen/freshness.py`,
+  `{version, inputs: {<file>: {sha256, source}}}`; merged, so a cut without `--guide` keeps the
+  guide's entry). Not one of the `written` files, and never shared (the host shares only listed
+  inputs).
+- **Sources**: the voice: `narration_sha256` (`soundfont.file_sha256` of the beat's MP3), `offset`,
+  `length`. A render input (`guide*.mp4`, `first_frame.png`): `scene_fingerprint` of the **draft**
+  project, `draft` (`[width, height, fps]`: `draft:` is left out of the fingerprint), `guide` (the
+  kind; `render` for the first frame), `offset`, `length`. The fingerprint at the cut is the one the
+  worker recorded in the render's timings. The beat's start is not recorded: it follows from
+  inputs the fingerprint covers.
+- **What counts**: a draft has no placements (`compose._wants_placing`), so a picked take changes
+  nothing; `generated_shot` is outside the fingerprint, so prompt / model / seed edits change
+  nothing either (they change the request instead). Beat text and timing, 3D params, MP3s (size and
+  time), assets and vidgen's own source are inside it. Anything inside it marks every render input
+  of the **scene**, as it does the scene's render. A guide of another kind is another file with its
+  own entry: `guide: depth` to `outline` is "not made yet" until cut.
+- **Check** (`InputSources.stale`, called by `plan_shots` once per shot whose cut inputs all exist;
+  free, offline, no render): no entry, another source or another file hash is a reason. A voice
+  whose `.hash` no longer matches the beat's text or voice (`tts.cache.audio_status`) is one too,
+  and asks for `vidgen tts` first: cutting the same MP3 again would not help (an MP3 without a
+  `.hash` is the owner's own and counts as current).
+- **Result**: `blocked: inputs changed since they were cut (<file>: <reason>; ...): run `vidgen
+  generate inputs[ --guide][ --variant V]` (free) before paying` (`--guide` only when a render input
+  changed), also in the plan's JSON `blocked`; `ShotPlan.changed_inputs`. `run_shots(pay=True)`
+  refuses the **whole run** on such a shot before the first submit (like a shot with problems: the
+  fix is free, and a run with holes would pay for part of a film); without `--pay` it is skipped as
+  blocked. MCP's `generate_plan` / `generate_run` run the CLI and follow.
+- **Free reuse**: a shot with a cached clip or an earlier job of this exact request is not paid
+  again, so it is not blocked: it gets a note (the clip comes from the old inputs; a re-cut makes a
+  new, paid request).
+- **Variants** share `build/videogen/<shot>/`: inputs cut for one variant read as changed for
+  another whose fingerprint differs, and the command names `--variant`.
+- **Known false alarms** (safe direction: a free re-cut, though `--guide` renders the draft): new
+  files under `assets/`, including sheet pictures in `assets/sheets/`, change the fingerprint of
+  every scene; a vidgen upgrade does too.
+- `generate status` uses `project_shots`, not the plan, and does not show this block.
+
+### 113.10 Submits with no known outcome (Step 309)
+
+A Ctrl+C or crash during the POST, or a lost answer, left no `submit` line, so a re-run could pay
+for the same request twice while the provider had accepted the first. Now:
+
+- **Intent first.** `_submit` passes `on_sending` to `provider.submit`, which calls it once the
+  body is built and the size check passed, just before the POST: `Ledger.record_intent` writes
+  `submit_intent {intent_id, provider, model, request_hash, estimate_usd}` (`Ledger.append` now
+  `fsync`s every line). A body that never left (too large, a missing input) writes no intent.
+- **Resolved how.** The `submit` line carries `intent_id` when the POST answered with a job. An
+  answer that means no job exists (`SubmitRefused`: HTTP 4xx except 408) appends
+  `intent_resolved {outcome: refused}`. Everything else (no answer, a timeout, 408, 5xx, a 2xx
+  vidgen cannot read, Ctrl+C, a crash, a `submit` line that could not be written) leaves it
+  unresolved: the message appended to the error says what to do.
+- **Re-run.** `plan_clip` sets `ClipPlan.unresolved_intent` (when no earlier job of the request
+  applies; a cached clip or an earlier job returns before it) and `refusal` is
+  `ledger.intent_refusal`: not paid, `again=True` does not bypass it. `plan_shots` adds it to the
+  shot's `blocked` and `ShotPlan.unresolved_intent`, and the plan does not add a new cost for the
+  shot (the estimate is in the budget already); `run_shots(pay=True)` refuses the whole run on a
+  selected shot with one (the fix needs the owner; `--shot` selects others).
+- **Budget choice.** An unresolved intent counts at its estimate in `Ledger.spent`, like a job with
+  no reported cost: the provider may have charged it, and a budget that left it out could be
+  exceeded. An orphan (the request was edited, so no shot matches it) still counts until
+  resolved and is listed by `plan`, `status` and `generate ledger`. Older vidgen versions ignore
+  the new events and do not count intents; nothing in the ledger format changes for them.
+- **Way out.** `vidgen generate resolve [PROJECT] --intent ID --not-charged | --job JOB_ID |
+  --charged [--cost USD]` (`Ledger.resolve_intent`): `--not-charged` frees the budget and the next
+  run pays; `--job` writes a `submit` line (with `intent_id`), so the next run polls and
+  downloads that job free; `--charged` keeps it counted (at USD or the estimate) and the next
+  run pays again, knowingly. Refused: an unknown id, an already resolved intent, a job id
+  already in the ledger.
+- **Readers**: `generate ledger` (text: unresolved ones; JSON `intents`, all), `generate plan`
+  (a line per unresolved one; JSON `unresolved_intents`, per-shot `unresolved_intent`), `generate
+  status` (a line; JSON `unresolved_intents`), `spent`. `sheets.run_sheets` is unchanged: sheet
+  pictures still write `submit` before the call (no intent; see known gaps).
+
+### 113.11 The model's own sound, and video references in token estimates (Step 312)
+
+Paid experiments on `bytedance/seedance-2.0-mini` (the beat's voice as an audio reference,
+`generate_audio: true`, two lines, two seeds) made a clip sound the owner judged to be the same
+person as the voice file and matching the lips. It is a new performance, drifting up to about 0.9 s
+later than the voice file, so the file cannot be laid over the clip. Other models may behave
+differently.
+
+- **The setting** (`SoundChoice`, `mix` | `model`): `generated_shot.sound`, then
+  `videogen.models.<model id>.sound` (`VideogenModelSettings`), then `videogen.sound` (default
+  `mix`); `VideogenConfig.sound_for(model, shot_sound)`. No model is special-cased; a `videogen.models`
+  id OpenRouter does not list is a warning in the plan (`VideoGenPlan.warnings`), not an error.
+- **Request** (`VideoRequest.generate_audio`, `Shot.sound`): in `canonical_request` and the
+  body. It was already in the canonical form as `false`, so `mix` requests keep their cache keys
+  (no new payment after upgrading); a `model` request has a different key.
+- **Plan**: `sound:` per shot (text and JSON); `generate_audio` false in the list blocks the shot
+  (`shot.blocked`: skipped, not refused for the whole run); unknown (`None`) is a note, the job
+  is still sent. A placed `model` take notes that a placed take plays vidgen's mix.
+- **Prices** (`_applicable`): `mix` keeps the `without_audio` choice; `model` removes
+  `without_audio` SKUs and, before the tier step, prefers `with_audio` ones (Seedance 2.0 mini charges
+  the same for both).
+- **Estimate of a video reference** (`estimate`, token SKUs): three real seedance-2.0-mini jobs
+  (480x854, 24 fps, 5 s, picture + audio + video references) were each charged $0.1907094 = 90,814 tokens
+  x $2.1e-06 exactly, so the `with_video_input` rate was the right SKU and the old token count (48,038)
+  was the error. 90,814 is 217 frames x 496 x 864 / 1024 (rounded down), with the real output 121 frames
+  at 496x864: the charge covers 96 more frames than the clip's, which the old estimate left out. The guide
+  video was 4.9 s long (117 frames at 24 fps in the last job), so 96 frames matches its whole seconds; the data
+  cannot tell whether that is the rule (all three guides were between 4 and 5 s). The estimate now counts each
+  video reference for as many seconds as the clip, at the request's tier size: `(1 + video references) x output
+  tokens` under a `with_video_input` SKU, $0.2018 for these jobs (5.8% above the real charge, on the
+  safe side). The budget check uses this estimate, so it refuses such shots earlier. Models
+  without a `with_video_input` SKU and shots without a video reference are unchanged; no other model's charges
+  were compared.
+- **In a film**: a placed take always plays vidgen's mix (`compose` handles only the picture). To
+  hear the model's sound: `place: false` and the take in a `video_clip` scene; with no beats it plays
+  at volume 1, with narration at 0.25 (`video_clip.UNDER_NARRATION`), `volume:` overrides. Out of scope:
+  timing captions or word-anchored actions from the clip's sound.
+- **QA** (`check_clip(..., sound=)`): a sounding clip is `info` (with `mix`: "never used"; with `model`:
+  where it is heard); `sound: model` with a silent clip is a warning.
+- **Mock**: a job with `generate_audio: true` returns a clip with a sine tone (`synthetic_clip(audio=True)`).
+
+### 113.12 Guided shots leave the framing to the guide (Step 313)
+
+Paid experiments (2026-11-08, `bytedance/seedance-2.0-mini` with a depth guide): a `kind: talking` shot's
+"Talking close-up of ..., facing the camera, speaking" pushed the camera in although the guide's camera is static;
+the same shot as `kind: action` kept the camera still and the ball followed the guide. The speaker stayed centred in
+every take although the guide places them low on the right; the sheet prompt copied under `Characters:` said
+"alone and centred in the middle of the picture, ... the whole body visible". That second cause is untested.
+
+A shot **has a guide** when `generated_shot.guide_source` is not `None` (`true`, `render`, `depth`, `outline`, `mask`:
+`_resolve_inputs` always adds the guide input then). Applies to `render` guides too.
+
+- **Talking wording** (`shots.GUIDED_TALKING_FRAMING`): `{who}, speaking`, for example "Ana, speaking." No "close-up" and no
+  "facing the camera": the guide decides both. Action and establishing wording are unchanged. The references, the speaker and
+  `GUIDE_PROMPTS` are unchanged.
+- **Sheet words** (`shots.without_framing`, used only for the `Characters:` text of a guided shot): the sentence and
+  clause filter works on the joined text of `reference_sheet.prompt` + `.notes`. A sentence containing a clause that matches
+  `_FRAMING_WORDS` (centred/centered, centre or middle of the picture/frame/image, whole/full body, full-length, close-up,
+  head and shoulders, from head to toe, front/side/back/three-quarter view, facing the camera, in frame, waist-up, medium/wide shot)
+  loses its framing clauses (commas and semicolons separate clauses) and any clauses that only make a sheet picture clean
+  next to them (`_SHEET_ONLY_CLAUSE`: "exactly one single character", "alone", clauses starting "not"/"no"/"never"). A sentence with
+  no framing clause is kept whole, byte for byte (an isolated "Not a split image." stays). A clause naming clothes, hair or similar
+  (`_APPEARANCE_WORDS`) is never removed, even with framing words in it ("Full-body portrait of a woman in a red jacket" stays
+  whole): losing appearance is the worse error, and the owner can rewrite such a sentence. Whole-sentence dropping (the owner's suggestion)
+  was not used because it loses appearance in "A woman in a red jacket, centred in the frame". The sheet's picture prompts and `Sheet.notes`
+  are untouched, so sheet fingerprints and approved sheets stay valid. `generated_shot.prompt` and `setting` are never edited.
+  The style sheet's words (`Style:`) are the config's palette/era/lens/notes, not a sheet picture prompt, so they do not flow the same way: not filtered.
+- **Plan** (`_left_out_notes`): a `note:` per character whose sheet words lost anything, quoting what was left out and why; in the
+  JSON plan under the shot's `notes`. No note when nothing was removed.
+- **Unguided shots**: `_prompt_text(guided=False)` is the old code path, byte-identical (pinned from the pre-change code).
+- **A guided shot paid before this step**: its new prompt is a new request key, so it is not "cached" and no earlier job matches. The plan
+  rebuilds the prompt under the earlier wording (`Shot.earlier_prompt`, `_prompt_text(guided=False)`) and looks for a clip, a take
+  (`info.key`) or a ledger job (`status` `None` or `completed`) of that key (`_paid_under_earlier_wording`). If it finds one and the new key
+  has no clip and no earlier job, the shot is **blocked** (`EARLIER_WORDING_BLOCKED`): `run --pay` skips it and pays nothing; the earlier take stays
+  in the film. To pay for the new wording the owner sets or changes `seed:` on the shot (or edits its `prompt:`), which changes both keys.
+  Open: a clip paid before this step whose guide was later re-cut to different bytes has another key and is not recognised; a re-cut is already a new request.
+
+### 113.13 The starting picture in the guide, and what the provider really downloaded (Step 316)
+
+Paid experiments (2026-11-08, `bytedance/seedance-2.0-mini`): Seedance has separate first/last-frame and reference modes.
+A request with `frame_images` and `input_references` is accepted but runs as first-frame only: the provider never downloads
+the hosted voice or guide (the ledger shows only vidgen's own `HEAD`s) and it bills the no-guide price ($0.177 vs $0.191 for
+5 s), with no error. Putting the starting picture into the guide (frame 1 the picture, dissolving into the guide) and sending no
+frame image made the provider download voice and guide ($0.191), the clip opened close to the picture (`opening match` 0.83-0.85 versus
+0.98-0.985 for a true first frame) and the owner judged the cut between shots made this way very good.
+
+- **Setting** (`FirstFrameIn`, `frame` | `guide`): `generated_shot.first_frame_in`, then `videogen.models.<id>.first_frame_in`,
+  then `videogen.first_frame_in` (default `frame`), `VideogenConfig.first_frame_in_for`, as `sound_for` (Step 312).
+- **With `guide`** (`Shot.first_frame_in`): the shot needs a guide and a starting picture (`first_frame` resolved as today; either
+  missing is `shot.problems`). `_resolve_inputs` sets `Shot.opening_picture` and sends no first frame; the picture is not counted
+  in `used`, so a sheet picture stays available as a reference. The plan shows it; the guide input is
+  `guide_name(kind, opening=True)` (`guide[.<pass>].opening.mp4`).
+- **The combined guide** (`inputs.make_opening_guide`, made by `make_inputs` after the plain guide): `xfade` of the picture (cover,
+  crop) and the guide with `-t` the plain guide's length; length, size and fps from `probe` of the plain guide; the dissolve
+  (`videogen.first_frame_dissolve`, default 0.4 s, at most the guide's length) never lengthens the clip (`-t` caps the output).
+  `make_inputs` records `{..source.., opening_picture_sha256, opening_dissolve}` for it in `inputs.json`; `freshness._change` compares them
+  (`_CHANGE_REASONS`: "the starting picture changed", "the dissolve length changed"), so `generate plan` blocks an edit
+  before it can be paid for and a re-cut clears it.
+- **Role sentence** (`shots._guide_opening_sentences`, `models.GUIDE_OPENING_TEMPLATES`, by model id prefix; Seedance only so far): the prompt
+  of a `first_frame_in: guide` shot starts with "{video} opens on the exact starting picture ..." and who each `@imageN` / `@audioN`
+  is, numbered per kind by the order the references are sent (`ShotInput.owner` names a sheet's character). No template, no sentence.
+  Shots not using `guide` build their prompt through the old path, so paid shots keep their key.
+- **Block** (`models.known_first_frame_with_references`, `videogen.models.<id>.first_frame_with_references`, `shots._first_frame_with_references_problem`):
+  a shot with a true first frame and any reference on a model known to separate the modes (`bytedance/seedance-*`) is a plan
+  problem (`shot.problems`) naming `first_frame_in: guide`, a note when the clip or job is already paid for (`shot.cached` / earlier job). The user can
+  override with `first_frame_with_references: true`; models with no evidence are not listed and never blocked.
+- **What the provider really downloaded** (`run.unfetched_warnings`): after a hosted job, the hosted files (`host.files`) are compared with the `host_fetch`
+  `GET`s of status < 400 of this tunnel's ledger events (`HEAD`s are vidgen's own checks). A missing one is a warning (`ClipResult.warnings`), printed by `run_shots` and
+  kept in the take's `info["warnings"]` (`add_take(warnings=)`). Never an error, only for files actually hosted, and the message names the voice and the guide,
+  never an address. The mock provider opens no tunnel, so it has none.
+- **Not in this step**: meaningful file names, `first_frame: last_of:`, hard cuts in `video_clip`, an opening-frame QA score, an overlay preview.
+
+### 113.14 One shot after another: last_of, hard cuts, the opening match, the overlay (Step 317)
+
+- **`first_frame: last_of:<shot id>`** (`GeneratedShot.last_of_shot`, a beat's id means its last part). `shots._link_last_of` runs after every shot of
+  the project is known (`project_shots` builds all the shots first; `_fill_shot` then resolves inputs and prompts): an unknown shot, the shot itself and a
+  cycle are problems; a source with no take to show (`takes.chosen_take`, the rule of `generate status`) blocks the shot. The picture is
+  `build/videogen/<shot>/last_of.<source>.<take>.png`, cut by `inputs.last_frame` (`-sseof -0.5 -update 1 -vsync 0`: the last decoded frame; `-sseof -0.08` wrote no file on a real clip) and recorded in `inputs.json`.
+  `freshness._last_of_moved`: the current picture is not cut yet and an earlier one is recorded (another take is shown) makes the shot stale, so
+  `run --pay` refuses; `run_shots` also skips a shot whose source's shown take changed during the run. A no-take source is a blocked reason rather than a problem, so `run --pay` still pays for its source in the same command, and never for both.
+- **Hard cut** (`video_clip` param `fade: false`). `NarratedScene.outro_seconds(params)` is a new overridable classmethod (default `outro`), read by the instance (`self.outro`) and by `videoplan.scene_outro` (also `thumbnail`, `shorts_suggest`), so the planned timeline and the render agree. The picture is added before the first beat, so `entrance("clip")` plays nothing; title and caption still enter.
+- **Opening match** (`qa.opening_similarity`, `picture_similarity`): SSIM of the clip's first frame against `Shot.starting_picture` (a true first frame image or the picture in the guide; not a picture sent as a reference), grey at 320 px wide, 8 px squares every 4 px, the better of the picture cropped to fill and stretched (a clip made from a first frame image was cropped, one from a picture in the guide reached the clip stretched, when the shapes differ: real takes measured 0.98 cropped vs 0.73 stretched and 0.69 cropped vs 0.85 stretched). `metrics.opening_similarity` in the take's `qa` (kept also as `opening_picture`), the head line of `QAReport.lines` (contact sheet), a warning under `OPENING_WARNING` = 0.7 (a rough guide; real clips measured 0.98-0.985 with a true first frame, 0.83-0.85 with the picture in the guide). A picture that cannot be read is an `info` finding.
+- **Overlay** (`inputs.make_overlay`, `OVERLAY_NAME` = `overlay.png`): the starting picture blended 50% over the plain guide's first frame (past a fade in from black for a render guide), written by `generate inputs --guide` for a shot with a starting picture and a guide; never sent, not in `inputs.json`.
+
+### 113.15 Painted starting pictures, file reference labels and the last-frame overlay (Step 319)
+
+- **`vidgen generate frames`** (`videogen.frames.run_frames`): a shot's `paint_first_frame: {prompt, refs, seed, model, resolution}` (`config.PaintFirstFrame`; default model
+  `bytedance-seed/seedream-4.5`, default resolution `2K`). `inputs.layout_picture` cuts the first frame of the beat's draft render to `build/videogen/<shot>/layout.png` (a dry run does this too: free).
+  `ImageRequest.input_references` (a tuple of paths, sendable copies made by `pictures.sendable_picture`) is sent as data URLs in OpenRouter's `input_references` (`imagegen.openrouter.request_body`; `check_request` refuses a model without that parameter or above its `max`). The image request uses a fixed
+  `ImagegenConfig(provider="openrouter", ...)` via `image_request(settings=)`, so `imagegen:` of the project does not affect it. The key is `sha1(base request key | SHA-256 of the layout and of each reference)`,
+  the file `assets/frames/<shot>_<key>.png` + `.json`. The first input is the layout, the prompt begins with `frames.LAYOUT_INSTRUCTION`; references are numbered in actual order, labelled via `ShotInput.label` (owner or `shows`) or the style flag.
+  Paying goes through `sheets.pay_for_pictures` (extracted from `run_sheets`, used by both): a budget and a known price are required, each picture has `image-<key>` `submit`/`completed` ledger lines, `OpenRouterImageProvider(retries=0)` so a dropped paid request is not retried.
+  `first_frame: painted` (`config.PAINTED_FIRST_FRAME`) resolves to the current request's file (`frames.painted_picture`); while it is missing the shot is blocked. `paint_first_frame` problems (bad refs) are in `shot.problems` (`vidgen validate`).
+  Observed: adding the painted file to `assets/` makes the draft render stale, but the re-rendered layout is byte-identical (same key). A layout from another machine could differ; the dry run would then list a new picture to pay for.
+- **File reference labels**: `generated_shot.refs` items may be `config.FileRef` (`{file, shows}`). `shots.reference_inputs` (extracted from `_resolve_inputs`, reused for `paint_first_frame.refs`) sets `ShotInput.owner` when `shows` names a character (displayed by `display_name`) or `ShotInput.shows` for other words (written as given). The role sentence (`shots._guide_opening_sentences`) numbers by actual input order; without `first_frame_in: guide`
+  a shot with a labelled file gets only the labels sentence. Shots with no `shows` get exactly their previous prompts (checked against the previous commit on all four paid shots: identical).
+- **Last-frame overlay** (`inputs.OVERLAY_LAST_NAME`, `overlay.last.png`): `make_overlay(at_end=True)` blends the starting picture over the plain guide's last frame (`inputs.last_frame`), printed next to the first-frame overlay. Never sent.
+
+### 113.16 Splitting a sheet into panels and joining takes (Step 319)
+
+- **`vidgen split-sheet`** (`videogen.split_sheet.split_sheet`, top-level CLI, no project): crops with ffmpeg's `crop` and, with `--scale` other than 1, `scale=...:flags=lanczos` (Pillow's Lanczos gave SSIM 0.81 and 0.97 on the two panels compared with the owner's ffmpeg-cut panels; the same ffmpeg filters give byte-identical PNGs). `--columns/--rows/--gap` cut equal panels and must divide into whole pixels; `--box X,Y,W,H` is repeated.
+- **Assembly** (documented recipe, no code): a film of picked takes is a second config (`film.yaml`) of `video_clip` scenes with `path: takes/<shot>/<n>.mp4`, `region: bleed`, `fade: false`, no beats and `duration:` the take's length, rendered with `vidgen render film.yaml --preview`. `place: false` on the shots stops the plan's note about a placed take's sound and keeps the shots from being laid over vidgen's own scenes; the takes themselves are not read by the generate commands from `film.yaml`.
+
+### 113.17 Readable overlays, the film's disclosure, faster music list, the shot-with-a-line note (Step 321)
+
+- **Overlays.** `make_overlay` enlarges both overlays to `OVERLAY_LONG_SIDE` (1600) pixels on the longer side (the guide with bicubic, the picture with Lanczos), blended 50% as before. `at_end` also compares the guide's first and last frames (`changed_mask`: grey change >= `CHANGE_LEVELS`, 6, median-filtered; nothing above `MAX_CHANGED_SHARE`, 0.6, of the frame, a camera move or a fade): the changed area shows the guide at full strength with a magenta ring around it, drawn at the guide's scale (`OUTLINE_REACH`, 7 pixels) so a small late object is found. Still never sent.
+- **Disclosure of the film.yaml route.** `compose.clip_takes(project, scene_id)` finds `video_clip` scenes whose `path` is `takes/<shot>/<n>.mp4` (the `Take`'s sidecar names the model); `credit_line` and the `generated_footage` lint rule count them with placed takes, so the description file and lint carry the AI-footage line (§113.4).
+- **`vidgen list-music`** (`music_entries(analyse=False)`): the text list describes each bed from its `Bed` entry (`loop_seconds` = `Bed.seconds`, which equals the synthesised loop's length for all 17 beds: checked once by comparing `--json`), so it needs no synthesis (about 3 s). `--json` and `--render-dir` still make the beds.
+- **`vidgen generate plan`** notes a shot with a spoken line (`line` true) and `sound: model` but no voice input (`audio` not `beat`): the model invents the voice.
+- **Orphaned MP3s**: a config without any beat (a `film.yaml` of clips) reports none.
+- `narration.pad` and `pause:`: a beat lasts its voice plus `pause:`, or plus `narration.pad` when there is no `pause:`; the pad is not added on top of a pause.
+
+## 114. 3D scenes with three.js (Phase AI, Steps 298–302)
+
+Video presentations with simple 3D. The owner's decisions: the engine is **three.js** in
+headless Chromium driven by **Playwright** (Python), not Blender or Manim's 3D; the look is clean
+and simple (plain colours, one default light; realism is not a goal); characters are simple
+stand-ins (Step 300). Later, 3D scenes are the input of video-to-video generation (camera, layout
+and motion from vidgen, the look from a video model; not built in this phase, it needs an https
+file host), so the design keeps a stable camera, exact timing, named objects and deterministic
+frames, and Step 301 adds guide passes (depth, outline, mask). Out of scope: molecules, planets,
+glTF models, realistic materials and shadows, rigs, any AI or paid call.
+
+### 114.1 How a `3d` scene renders (Step 298)
+
+A `3d` scene is a `NarratedScene` like every other type (`scenes/scene_3d.py`, `Scene3D`), so the
+render worker, beats, audio, timings, the render fingerprint, overlays, captions, stills, the
+layout dump and lint all work unchanged. Its `construct`:
+
+1. works out the scene's length before playing: the beats on the scene's clock from
+   `beat_window` (start = the whole frames of the beats before, end = start + `heard`), the
+   frames = Σ round(window × fps) (a silent scene: its `duration` minus the outro) + the outro's
+   frames + 2 spare frames (`SPARE_FRAMES`; a longer scene holds the last frame);
+2. builds the **scene description** (§114.3) for `config.pixel_width × pixel_height` at
+   `config.frame_rate`;
+3. `make_3d_clip(render_dir/three_d, scene id, description)` (§114.5) returns a lossless clip of
+   all frames, drawn now by one Chromium or reused;
+4. shows the clip as a `ClipMobject` (§38) covering the frame (`fit_box(frame, cover)`, decoded at
+   the size shown, copied pixel for pixel), playing from scene time 0; the title (a `text_plate` in
+   the header band, z-index 3) fades in at beat 1; `finish()` fades out over the 0.5 s outro.
+
+**Why a clip shown by Manim, not frames written over Manim's.** `generated_layer` (§113.4) replaces
+the scene's frames under the overlays, but then the scene's own title and anything Manim draws
+(callouts, actions later) would be covered. As a `ClipMobject` the 3D picture is the bottom layer
+of the scene, every Manim object and the overlay layer are drawn over it, and the existing
+`ClipMobject` code (decoding, fades, `dim` / `highlight` / `zoom` on target `view`) is reused. Cost:
+one lossless decode per frame plus Manim's image copy (measured: a 7 s scene at 320x180 renders in
+3–5 s including Chromium's start).
+
+**Frame alignment.** Frame *n* of the clip holds *t = n / fps*; output frame *k* of the scene shows
+clip frame *k* (checked by comparing the rendered scene with the clip, `test_scene_3d.py`).
+
+### 114.2 Params (Step 298)
+
+`Scene3DParams` (`three_d/spec.py`; exported by `vidgen.api` with `Camera3D`, `Light3D`,
+`Object3D`; Step 299 extends it, §114.7): `title`, `background` (theme colour or hex; default the theme's background),
+`camera: {position = [3, 2.5, 5], look_at = [0, 0, 0], fov = 40 (10–120)}`, `light: {ambient = 0.5
+(0–5), sun = 2.5 (0–10), sun_from = [-2, 6, 4], color = #ffffff}`, `objects: [{id, shape = box,
+size = [1, 1, 1], color = accent, position = [0, 0, 0], rotation = [0, 0, 0] (degrees, XYZ order),
+spin = [0, 0, 0] (degrees per second)}]`. Scene units, y up. Checks: object ids unique, matching
+`[A-Za-z_][A-Za-z0-9_-]*`, not `camera` (reserved: a track's target); `shape` among `SHAPES`
+with a did-you-mean (`cellworld.did_you_mean`); sizes positive; the camera not on its `look_at`;
+`sun_from` not zero; unknown keys get the usual did-you-mean. Targets: `view` (the 3D picture),
+`title`. The light values were chosen from stills: the top of a box brightest, its two visible
+sides clearly different.
+
+**`fov` across the shorter side.** three.js's `fov` is vertical; vidgen's is the angle across the
+frame's shorter side (the page converts for portrait frames), so a subject framed in 16:9 fills a
+9:16 frame alike and the long side sees more — the same rule as Manim's frame (shorter side 8
+units, §5.2).
+
+### 114.3 The scene description (JSON, version 1)
+
+`three_d/description.py`, `scene_description(params, theme, width=, height=, fps=, frames=,
+beats=, draw_mode="normal")`: `{version: 1, width, height, fps, frames, duration, draw_mode,
+background, camera: {fov, position, look_at, near: 0.1, far: 500}, lights: [{id: ambient, kind:
+ambient, color, intensity}, {id: sun, kind: sun, color, intensity, position (sun_from scaled to
+20 units)}], objects: [{id, shape, size, color, position, rotation}], timeline: {beats: [{id,
+start, end}], tracks: [{target, property, easing, keys: [{t, value}]}]}}`. Colours are resolved
+to `#rrggbb`; numbers rounded to 6 decimals, so the JSON (and its hash) is stable.
+
+It is the one contract between Python and the page, built so later steps only extend it:
+objects carry ids (actions, guide masks and video-to-video prompts refer to them), the camera is
+data (moves are tracks on `camera`), times are seconds on the scene's clock with the beats
+included (Step 299–300 time moves to beats and words), and a **track** sets one property of one
+target from keys, eased between neighbours (`linear`, `smooth`) and held outside them. Step 298
+uses one kind: `spin` becomes a linear `rotation` track from 0 to the clip's end. Properties:
+`position`, `rotation` (degrees), and the camera's `look_at`; Step 300 adds `scale`, `opacity`
+([v]), `emissive` ([r, g, b]) and an arrow's `length` ([L]) (§114.11).
+
+**Draw mode.** `draw_mode` (`DRAW_MODES`: `normal`, and Step 301's guide passes `depth`,
+`outline`, `mask`, §114.14) is in the description and applied by the page's `applyDrawMode`; a
+pass is the same description with another mode, so it shares camera and timing by construction.
+
+### 114.4 The page and the browser
+
+Package data `vidgen/data/three/`: `three.module.js` and `three.core.js` from the npm package
+`three` 0.186.1 (unmodified; SHA-256 in THIRD_PARTY_NOTICES.md; the npm package ships no minified
+build, so the two files weigh 2.1 MB), its `LICENSE` (MIT), `page.html` (one canvas) and
+`vidgen3d.js` (an ES module: `vidgen3d.load(description)` builds renderer, scene, camera, lights
+and meshes — `MeshLambertMaterial`, plain colours — and `vidgen3d.frame(t)` applies the tracks at
+`t`, renders and returns the canvas as a PNG data URL). No `requestAnimationFrame`, no clock, no
+randomness: the page draws only when asked, at the time it is given (`preserveDrawingBuffer`, so
+the read is the frame just drawn).
+
+`three_d/browser.py`, `PageRenderer(description)` (a context manager; one per scene render):
+starts Playwright and Chromium (`headless`, `--use-angle=swiftshader --enable-unsafe-swiftshader
+--ignore-gpu-blocklist`: WebGL on Chromium's software renderer, the same pixels whatever the
+graphics card), a context with the frame's size as viewport and `device_scale_factor 1`, and a
+route for **every** request: `http://vidgen-3d.invalid/<file>` is answered from `PAGE_FILES` in
+the package, anything else is aborted — so nothing is fetched from the network (ES-module imports
+need an http origin; `file://` modules are blocked by Chromium). `frame(n)` evaluates
+`vidgen3d.frame(n / fps)`, decodes the PNG (PIL) and checks its size; page errors and failed
+evaluations become `VidgenError("3D page: ...")`. `write_clip(description, path)` encodes the
+frames in order with PyAV as FFV1 (`bgr0`, lossless) in Matroska, to `<path>.partial` first.
+Measured: about 60 ms per frame at 540x960 and 130 ms at 1920x1080 (SwiftShader + PNG), plus
+about 1 s to start Chromium.
+
+**Missing dependencies.** Playwright is the optional extra `schu-video-generator[3d]`
+(`playwright>=1.40`); it is imported only when a `3d` scene renders. Not installed:
+`VidgenError(INSTALL_HINT)` = `pip install "schu-video-generator[3d]"`, then `python -m playwright
+install chromium` (Windows: `py -m pip install ...`, `py -m playwright install chromium`). Chromium
+missing (Playwright's "Executable doesn't exist"): `VidgenError(BROWSER_HINT)`. Other launch
+failures: "cannot start Chromium for a 3D scene: <first line>". `vidgen validate` and every other
+scene type never need Playwright.
+
+### 114.5 The cache
+
+`three_d/clip.py`, `make_3d_clip(folder, name, description)`: `folder/<name>.mkv` + `<name>.json`
+= `{key, description}`, with `key = sha256(engine + canonical JSON of the description)` and
+`engine = page digest (PAGE_FILES) + Playwright version` (which pins the Chromium build). The clip
+is reused when it exists and the stored key matches; otherwise the record is removed, the clip
+drawn and the record written last. `folder` is `<render_dir>/three_d` (per quality and variant).
+So: the scene-level render cache (fingerprint, §63) decides whether the scene renders at all — the
+page files are part of `vidgen_source_digest` (`data/three/*.html|*.js`); `--force` renders the
+scene again but reuses an unchanged clip.
+
+### 114.6 Public interface and decisions (Step 298)
+
+- `vidgen.api` gains `text_plate(text, fill, opacity=0.88)` (`layout.py`; the plate `video_clip`
+  used privately, now shared), `Scene3DParams`, `Camera3D`, `Light3D`, `Object3D`, `BeatSpan`,
+  `scene_description`, `make_3d_clip` — built-ins import only `vidgen.api`
+  (`test_builtins_use_only_the_public_api`).
+- One browser per scene render, not one per video: renders run in separate worker processes
+  (§5.2) and Chromium starts in about a second.
+- The 3D clip is a separate cached file, not frames streamed into Manim: it makes the scene
+  description and the frames an artefact Step 301 and video-to-video can use, and a caption or
+  title change re-renders the scene without drawing the 3D frames again.
+- `examples/gallery` has a `3d` scene (`crate`) and the gallery an entry. The shared render of
+  every built-in in `test_builtin_scenes.py` leaves `3d` out, and the per-type target render in
+  `test_actions_coverage.py` skips it without Playwright; `test_scene_3d.py` renders it (and
+  skips when Chromium is missing).
+
+### 114.7 Shapes, labels and groups (Step 299)
+
+`Object3D.shape` is one of `SHAPES`: `box`, `sphere`, `cylinder`, `cone`, `torus`, `plane`,
+`arrow`, `label`, `group`. `size` is `[w, h, d]` or one number for all three, default per shape
+(`DEFAULT_SIZES`: 1; `plane` 4 and flat, `[w, 0, d]`; `torus` `[1, 0.25, 1]` = outer width,
+thickness, outer depth, lying flat; `arrow` `[0.08, 1, 0.08]` = thickness, length; `label` 0.3 =
+text height; `group` none). `color` defaults to `accent` (a label: `text`). The page builds unit
+geometries scaled **in the geometry** (`geometry.scale`), never `mesh.scale`, so an object's
+children keep their own size.
+
+- **Arrow.** Along +y, centred: a shaft cylinder and a cone head (head length `min(3.5 t, 0.45 L)`,
+  radius `1.25 t`), one `THREE.Group` named by the id (every part carries `userData.id` for
+  Step 301's masks). With `to` (a point, or an object id: the arrow stops at the edge of the
+  object's sphere, `World.focus`), Python works out the centre, the length and the rotation
+  (`euler_xyz` of the turn from +y to the direction, three.js's XYZ decomposition), so the page
+  only ever draws "an arrow along +y"; `to` with a `rotation` is an error.
+- **Label.** `text` drawn on a 2D canvas (Inter Bold, vidgen's bundled font, served to the page as
+  `inter-bold.ttf` and loaded with `FontFace` before the first frame, so labels are the same on
+  every machine) on a rounded plate in the theme's `surface` at 0.88 (as `text_plate`), shown as a
+  `THREE.Sprite`: it always faces the camera, its size is in scene units (it gets smaller with
+  distance) and other objects can hide it. `rotation` does not turn it.
+- **Groups.** `parent: <id>` names an object written **earlier** in `objects` (cycles impossible,
+  and the page builds in list order); the child's `position` / `rotation` are in its parent's frame
+  and the parent's `spin` carries it round. Any object may be a parent; `shape: group` draws
+  nothing. Flat with `parent`, not nested `children:` lists: the params stay non-recursive (the
+  schema, `list-scenes` and the translation walker handle them as before) and map one-to-one onto
+  the description.
+- **Floor.** `floor: true | {size: 12, color: surface, y: 0}`: a `plane` with id `floor`, first
+  in the description (the id is then taken).
+- **References** (`camera.look_at`, `to`, `parent`, the camera actions' targets) are object ids,
+  checked with did-you-mean (`cellworld.did_you_mean`).
+
+`three_d/world.py` (`World(params)`) mirrors the page's transforms in numpy: `matrix(id, t)` =
+parent's matrix · T(position) · R(rotation + spin · t) with R = Rx · Ry · Rz (three.js XYZ);
+`position(id, t)`; `focus(id, t)` the centre and radius of a sphere around an object (a group:
+around all its descendants; a label's width estimated from its text). The camera moves and arrows
+use it; Step 300's actions can.
+
+The description (still version 1; only fields were added) lists objects parents first with
+`parent` (`null` at the top), groups without `size` / `color`, labels with `text`, `plate`,
+`plate_opacity`. The page's `load` is async (it awaits the font when there are labels).
+
+### 114.8 Camera moves (Step 299)
+
+The camera at the start is `params.camera` (`look_at` may be an object id: its centre at t = 0).
+It moves with five **beat actions** (`scenes/scene_3d_actions.py`): `camera_orbit` (around the
+vertical axis through an object, `around`, or the point looked at; `degrees`, positive =
+counter-clockwise from above, the camera moving to its right; `up`; it ends looking at the
+centre), `camera_dolly` (`by` units towards the point looked at: push-in / pull-back),
+`camera_fly_to` (to an object: it keeps the direction it looks from and stops where the object's
+sphere fills `FILL` = 60 % of the shorter side's fov, or at `distance`), `camera_look_at` (turn to
+an object or `point`), `camera_move` (to `to`, looking at `look_at` or as before). All take
+`easing: smooth | linear`.
+
+**Why beat actions.** They reuse vidgen's beat and word timing unchanged: `at` (a fraction, or
+`"@word"` resolved from the estimate and refined by the beat's audio, §87.2), `run_time`, the
+did-you-mean of unknown actions, `vidgen validate`'s locations (`beats[1].actions[0].target`), and
+the shorthand `- camera_fly_to: ball`. They are non-animating cues (`animates = False`, like the
+orbit scene's `burn`, §98.5): the 3D frames are drawn before the scene plays, so
+`Scene3D.camera_moves` reads `action_times(name, 0.0)` (the due time on the scene's clock in whole
+frames, as the runner counts) and builds `CameraMove(kind, start, end, easing, ...)` s; `cue` does
+nothing. `scene_targets = False`: the target is an object id, checked by `scene_problems` against
+`params.object_ids()`, so `view` / `title` stay the only Manim targets.
+
+**Timing.** A move lasts `run_time` seconds, default until the end of its beat's window; it may
+run on into later beats (a camera move is not undone, unlike a 2D `zoom`). Moves are taken in
+time order, each from the pose the camera has when it starts; a move still running when the next
+starts **stops there** (its easing keeps its own length, so it is not squeezed). Moves are clipped
+to the clip's last frame.
+
+**In the description** (`three_d/camera.py`, `camera_tracks`): two tracks on `camera`,
+`position` and `look_at`, `linear`, with **one key per frame** from each move's first frame to its
+last; the eased path (an orbit is an arc, not a straight line) is computed in Python (`move_path`,
+`ease` = the page's `smooth`), so the page only interpolates and every frame's camera is explicit
+data for guide passes and video-to-video. Without moves there are no camera tracks. Between moves
+the tracks hold. Size: two vectors per moving frame (a 3 s move at 30 fps is about 180 keys).
+
+**Checks.** `Scene3D.action_sequence_problems` replays the moves in beat and `at` order, each run
+to its end (`camera_problems`): a dolly to or past the point looked at, an orbit from right above
+its centre, a camera ending on what it looks at are problems at the action's location.
+`Scene3D.validate_project` builds the world (`check_3d_scene`): an arrow whose tip is its tail, a
+camera standing on the object it looks at. At render, a move that still cannot be made (timing
+cut it differently) is a `VidgenError` naming the scene.
+
+### 114.9 `vidgen validate` and a missing browser (Step 299)
+
+`browser.missing_dependency()` is a cheap check, no browser started: Playwright importable
+(`importlib.util.find_spec`), and the folder of the Chromium build it pins
+(`driver/package/browsers.json`: `chromium-<rev>` or `chromium_headless_shell-<rev>`) in
+Playwright's browsers folder (`PLAYWRIGHT_BROWSERS_PATH`, `0` = inside the package, else
+`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`). It
+returns `INSTALL_HINT`, `BROWSER_HINT` or `None` (also `None` when it cannot tell).
+`install_warnings(project)` turns it into a `vidgen validate` **warning** — only when the project
+has a `3d` scene — so non-3D projects never see it and validation never fails for it.
+
+### 114.10 Public interface and decisions (Step 299)
+
+- `vidgen.api` gains `CameraMove`, `camera_problems`, `check_3d_scene` and `Floor3D`;
+  `scene_description` takes `camera_moves=`.
+- The vendored three.js stays unminified (2.1 MB; the owner's answer to Step 298's question).
+- The labels' font is part of the page digest (the 3D clip cache key).
+
+
+### 114.11 Object actions and character stand-ins (Step 300)
+
+**Stand-ins.** `shape: standin` (`size` `[w, h, d]`, taller than wide; default `[0.5, 1.6, 0.5]`;
+centred on `position`, so it stands on a floor at `y = h / 2`): the page builds a capsule, a cone
+"nose" on its front (+z unturned, at 0.28 h above the centre, in the body colour made darker or
+lighter: `nose_color`) and, with `name`, a label sprite (as `label`, text height 0.14 h) above its
+head. `voice` (default its id) is the voice that says its lines (for lint, §114.12). Other new
+object fields: `visible: false` (hidden until `object_show`; description `opacity: 0`), a label's
+`screen_size: true` (`sizeAttenuation` off and the sprite divided by its depth from the camera at
+the start, `screen_depth` in the description: it keeps its size on screen).
+
+**Ten beat actions**, all `object_<kind>` (owner's decision: no collision with the stage's
+`look_at`, `turn`, `walk_to`... or the 2D `highlight`; the same scheme as `camera_`):
+`object_move` (`to` / `by`), `object_path` (`points`, `smooth` = Catmull-Rom through the start and
+the points, else straight; constant speed by arc length; `turn` = yaw along the tangent),
+`object_rotate` (`to` / `by`, Euler degrees), `object_spin` (`turns` about `axis`), `object_scale`
+(`to`: a number or a vector), `object_show` / `object_hide` (`style: fade | grow`),
+`object_highlight` (`color` default theme `highlight`, `strength`), `object_walk` (stand-ins only;
+`to`: `[x, z]` or an object id, stopping `WALK_GAP` from its sphere; `speed`; easing default
+`linear`) and `object_face` (yaw to an object or point, the shorter way). Like the camera actions
+they are non-animating cues (`_ThreeDAction`: target an object id, did-you-mean, `scene_problems`
+for a walk of a box, a glowing label, turning an arrow with `to`...); `Scene3D.object_changes`
+reads `action_times` and builds `ObjectChange`s. Length: `run_time`, else `seconds` (show, hide,
+face: 0.6 s), else to the end of the beat; a walk without `run_time` lasts its turn (0.4 s per
+half turn) plus distance / speed.
+
+**Motion (`three_d/motion.py`).** Every object has five channels with rest values: `position`
+(the param, an arrow's tail), `rotation` (without `spin`), `scale` (1), `appear` = [opacity,
+grow] and `glow` (an sRGB emissive colour). A change becomes one or two **segments** (frames
+first..end, a value per frame); in one channel of one object a segment that starts later cuts the
+earlier one at its first frame (it starts from the value there), except `glow`, where segments
+overlap and the brightest wins. Changes are planned in start order; a change that needs another
+object's place (walk to it, face it) reads it at its own first frame, from the segments planned
+so far — exact, since later changes do not alter earlier frames. A walk is a turn segment
+(rotation, ≤ 25 % of its time) and a position segment that waits for the turn, then moves with a
+bob of 2.5 % of the height, `round(distance / (0.38 h))` steps, ending at rest height.
+
+`World.attach(motion)` (`plan_world`) makes `matrix(id, t)` = parent · T(position) · R(rotation +
+spin · t) · S(scale × grow) at frame `round(t · fps)` (cached; cleared when a segment is added),
+`opacity(id, t)` the product along its parents. `World.follow(id, t)` = the object's sphere at
+rest carried along by its origin's movement (a turning group does not wobble what follows it; an
+object growing in keeps its full size). Arrows with `to` are posed per time from their tail and
+`follow(to)` (a loop of arrows is an error; pointing at its own child is a params error).
+
+**Tracks.** `object_tracks` writes, per object, one key per frame while a channel changes
+(`held_keys`: a frame is kept where the value differs from a neighbour, so held stretches cost
+two keys and a still channel none): `position`, `rotation` (+ spin; a spin alone keeps its 2-key
+track), `scale`, `opacity` [v], `emissive` [r, g, b], and for an arrow following a moving object
+`position`, `rotation`, `length` [L]. The page: `scale` sets `node.scale` (children scale too),
+an arrow's shaft and head are unit meshes stretched by `setLength`, and `applyLooks` sets each
+part's material opacity (× parents'; transparent and no depth write below 1; invisible at 0) and
+emissive (the brightest of itself and its parents). The description stays version 1.
+
+**The camera follows** (owner's decision 3; `three_d/camera.py`). A camera state is two
+`Ref`s, position and look-at, each a point or a point carried by an object since a time.
+`camera.look_at: <id>` follows from the start; during a move every reference is evaluated at the
+frame's time; when a move ends, `camera_fly_to` / an orbit around an object leave the position
+attached to the object (it keeps its distance) and `camera_look_at` / `camera_move` / an orbit
+leave the look-at on it; a move cut by the next one freezes where it was. `camera_poses` gives a
+pose per frame, `camera_tracks` keeps the frames where it changes (Step 299's tracks are
+unchanged for still objects).
+
+### 114.12 Lint: off frame and hidden (Step 300)
+
+`Scene3D.layout_keys` adds `three_d: {objects, spoken}` to every still of the layout dump:
+`framing_3d(description, world, t)` projects each shown object's sphere (`World.focus`, opacity ≥
+0.5) with the camera of the description at `t` (`camera_at`, the page's projection and `fov`
+rule), samples 64 points of the disc and gives the share **off** the frame (1 behind the camera)
+and the share **hidden** by nearer covering objects' discs (shrunk to 85 %; planes, labels,
+arrows, groups and the object's own group never cover). `spoken` (`spoken_objects`) = the ids
+the beat's object and camera actions name + stand-ins whose `voice` (default id) is the beat's
+voice (or the scene's). Rules (`lint/three_d_rule.py`, still scope, mid-beat stills too, skipped
+while a 2D `zoom` cuts the view): `three_d_off_frame` (`max_off` 0.5) and `three_d_hidden`
+(`max_hidden` 0.7), both warnings. Cheap (no pixels, no browser): an estimate — tall stand-ins
+count as their sphere.
+
+### 114.13 Public interface and decisions (Step 300)
+
+- `vidgen.api` gains `ObjectChange`, `plan_world`, `framing_3d`, `hex6`; `scene_description` takes
+  `object_changes=`. New lint rules `three_d_off_frame`, `three_d_hidden` (`LINT_RULES`, last).
+- `object_highlight` is a 3D glow (emissive), not wired into the 2D `dim` / `highlight` machinery
+  (owner's decision 2): the objects stay non-Manim targets.
+- Poses are resolved per frame in Python and stored in the description (owner's decision 3):
+  guide passes and video-to-video get every frame as data; the page only interpolates.
+- `Scene3D.description` plans the world once more for lint (`self._world`) after
+  `scene_description` (cheap next to drawing the frames).
+
+### 114.14 Guide passes: depth, outline, mask (Step 301)
+
+**What they are for.** The same 3D picture drawn three plainer ways, for tools that need a scene's
+layout, not its look — later the video-to-video step (camera, layout and motion from vidgen, the
+look from a video model), which is not built here. In plain words:
+
+- **depth**: grey by distance from the camera, **near white, far dark grey**, the empty background
+  black. It tells a model the shapes and how far away things are.
+- **outline**: **only the edges**, white lines on black (what edge inputs of video models expect),
+  like a line drawing (Step 302; Step 301 drew black on white).
+- **mask**: **each object one flat colour of its own** on black (no light, no blending at the
+  edges), the floor a neutral dark grey, with a table object id → colour, so a tool knows exactly
+  which pixels are which object.
+
+**One description, another draw mode.** `three_d/passes.py`, `guide_pass(description, world,
+mode)` = the normal description with `draw_mode: mode` and, for `depth`, `depth_range: [near,
+far]`, for `mask`, `mask_colors: {id: "#rrggbb"}`; camera, tracks, frames and objects are the
+same dict entries, so a pass has exactly the clip's frames, camera and timing (frame *n* of a pass
+is frame *n* of the clip). `scene_description(..., draw_mode=mode)` returns the same. Drawn and
+cached by `make_3d_clip(folder, "<scene>.<mode>", ...)` (its own key and record, as §114.5),
+beside the clip: `<render_dir>/three_d/<scene>.<mode>.mkv` + `.json`; the mask's table is written
+to `<scene>.mask-colors.json` (`mask_table`: `{scene, background: "#000000", colors: {id: colour},
+objects: [{id, shape, color, parent (+ name for a stand-in)}], names: {stand-in name: colour}}`).
+
+**The page.** In a pass every mesh part of an object gets a flat `ShaderMaterial` of the pass
+(keeping its `side`): the values are written as they are (no colour management, no tone mapping,
+no light), the renderer is made without antialiasing (a mask colour or a depth grey is never
+blended at an edge), sprites (labels, a stand-in's name tag) are hidden, and an object is drawn
+when its opacity is ≥ 0.5 (no fading, no glow). Captions, overlays and the title are Manim's
+layers over the clip, never in it.
+
+- **depth**: `u = clamp((far − z) / (far − near))`, z the distance along the view (camera space),
+  linear, drawn as `0.15 + 0.85 u` (the page's `DARKEST`): near white, far the darkest grey, so a
+  floor reaching past `far` stays that grey and only the empty background is black. *Why one range
+  per shot:* a range per frame would make the same object change grey as others move (flicker).
+  `depth_range(description, world)` (Step 302: fitted to the **objects**, owner's decision) looks
+  at up to `DEPTH_SAMPLES` = 120 frames (evenly spread, first and last): the camera of the
+  description at that time (`framing.view_basis`), every shown object in view except planes — its
+  extent along the view from its sphere (`World.focus`) and its box (the 8 corners of its size
+  through `World.matrix`; an arrow following an object: its current length), the tighter at each
+  end (an arrow's or a stand-in's sphere reaches far past it) — and widens the result by
+  `DEPTH_PAD` = 5 % of its span at each end. The floor and other planes are clamped to that range
+  (white in front of the objects, the darkest grey behind), so the objects get the contrast; a
+  scene of planes only fits its planes (a 17 × 17 grid of their points inside the view). The
+  scene's `depth_range: [near, far]` (0 ≤ near < far) replaces the fit. *Why linear, not
+  1/distance:* tried both on stills; with a floor reaching far back, 1/distance left the objects in
+  the middle almost black. *Why fitted to objects (Step 302):* fitted to everything in view, a
+  long floor took most of the range and the objects were nearly one grey.
+- **outline**: each frame is drawn twice into float render targets (one: view-space normal and
+  depth; two: the object's number, 1-based in description order, 0 = background), then a quad
+  with an edge shader writes white where the object changes to the right or below (silhouettes,
+  one object in front of another), where normals differ by more than ~37° (`NORMAL_COS` 0.8:
+  creases of boxes, cylinder caps, a stand-in's nose) or where 1/depth is not linear across three
+  pixels (`DEPTH_STEP`, an object hiding part of itself: 1/depth is linear on a flat face, so its
+  second difference is 0); black elsewhere. Lines are about 1 px per 540 px of the shorter side.
+- **mask**: `mask_colors(description)` (Step 302: stable between edits, owner's decision): the
+  floor `FLOOR_MASK` = `#404040` (neutral dark grey; in the table as `floor`); every other drawn
+  object (not groups, not labels) the colour of `MASK_PALETTE` (16 hues × 3 tones — bright,
+  dark, pale — 48 colours, never black or grey) at `sha256(id) mod 48`. A clash (two ids, one
+  colour) goes to the id **first in alphabetical order**; the other probes `MASK_PROBE` = 7 places
+  on (coprime with 48: every colour is tried; it changes hue and tone) to the first free one;
+  past 48 objects, a colour from the id's hash. So the colours depend only on the set of ids, not
+  their order: adding, removing or reordering objects changes another object's colour only when
+  their ids clash (then only the later one in the alphabet moves). The page writes the colour from
+  a `Vector3` of the hex digits / 255, so the PNG holds exactly the table's colour (tested). A
+  stand-in's nose has its colour; an arrow's shaft and head one colour.
+
+**Asking for them** (off by default). The `3d` param `guide_passes: true | all | [depth, outline,
+mask]` (`parse_passes`, did-you-mean; `Scene3DParams.passes()`; since Step 303 the string `all`
+is read as `true`, like `--guide-passes all`; since Step 304 every other string is read by the
+same `parse_passes` as `--guide-passes`, so `depth`, `depth,mask` and `depth, mask` work (stored
+as the list `[depth, mask]`, the same fingerprint as writing the list), empty items are skipped,
+an empty string is no pass, `all` among the names is all three, and an unknown name is refused
+with did-you-mean over the passes and `all`; strings pydantic reads as a boolean, such as
+`"yes"`, stay booleans), part of the params and so of
+the render fingerprint; and `vidgen render --guide-passes [LIST]` (alone = all; MCP `render`
+`guide_passes`) for every `3d` scene of the run: `render_project(guide_passes=)` → worker
+`--guide-passes depth,mask` → `scene.guide_passes` (a `NarratedScene` attribute, like
+`is_preview`). `Scene3D._draw_view` draws the union after the clip and sets
+`guide_passes_made`, which the worker records in the scene's timings (`render.guide_passes`). A
+reused render counts as usable for a request only when it made those passes and their files are
+there (`_has_guide_passes`, like `--frames`' stills); otherwise the scene renders again, reusing
+the clip and any pass already drawn. `RenderResult.guide_passes` / JSON `guide_passes`
+(scene id → files) and a `guide passes (<scene>): ...` line in the CLI output list them.
+
+### 114.15 Public interface and decisions (Step 301)
+
+- `vidgen.api` gains `GUIDE_PASSES`, `guide_pass`, `make_guide_passes`, `mask_table`;
+  `DRAW_MODES` = `normal`, `depth`, `outline`, `mask`; the description stays version 1 (new
+  fields `depth_range`, `mask_colors` in passes only). `render_project`, `current_render` and
+  `render_scene` take `guide_passes=`; `RenderResult.guide_passes`.
+- Passes are separate lossless FFV1 clips (exact mask colours), not MP4s; converting for a video
+  model is the later video-to-video step's job (Step 307, §113.8: `generated_shot.guide: depth |
+  outline | mask` converts the beat's part to H.264 for the model).
+- One Chromium per pass (about 1 s each to start), reusing `make_3d_clip` unchanged rather than
+  a multi-mode page session.
+- Labels and name tags are left out of every pass (the owner: pure 3D); the mask table still
+  names stand-ins by `name`.
+- Lint stays sphere-based (owner's decision; masks are not used for lint); stand-ins stay centred
+  on `position`.
+
+### 114.16 Docs, example and review (Step 302)
+
+- **Owner's decisions on Step 301's questions**, applied: depth fitted to the objects with the
+  floor clamped, `depth_range` override (§114.14); outline white lines on black (no black-on-white
+  setting yet); the floor's mask colour a neutral dark grey in the table as `floor`; mask colours
+  from the ids (§114.14); passes stay lossless `.mkv` (conversion is the video-to-video step's).
+- **Docs and example**: `docs/COOKBOOK-3D.md` (setting up, building a scene, the camera in 16:9
+  and 9:16, stand-ins, guide passes, checks, common mistakes); the guide topic `three-d` (`vidgen
+  guide 3d`: topic names start with a letter, `3d` is an alias); `examples/3d-short` (YAML only: a
+  9:16 Short of about 15 s, shapes, two stand-ins walking and facing, four camera moves, karaoke
+  captions, `guide_passes: true`); the gallery sample (the guide's `crate`) and
+  `examples/gallery`'s `crate` show object actions.
+- **Review fixes**: a page that does not load (a Playwright timeout, a crashed page) is a
+  `VidgenError("3D page did not load: ...")` and Chromium is closed (was a traceback); the unused
+  `progress` argument of `write_clip` is gone; a clip that cannot be replaced (Windows: open in a
+  player) is a `VidgenError` naming it; the camera basis is one helper
+  (`framing.view_basis`) for lint and the depth range; the depth extent of long thin objects uses
+  their box.
+- `vidgen.api` is unchanged; `Scene3DParams` gains `depth_range`, `guide_pass` and
+  `make_guide_passes` take `depth=`; `passes.py` gains `FLOOR_MASK`, `MASK_PALETTE`.
+
+## 115. Hosted inputs through a Cloudflare Quick Tunnel (Phase AJ, Steps 305–306)
+
+OpenRouter's video API takes pictures inline but audio and video references only as `https://`
+URLs (HTTP 400 "Only HTTPS URLs are allowed", §113.7), so talking shots (`audio:`) and shots with
+`guide:` could not be paid for. The owner chose a host that needs no account: a **Cloudflare
+Quick Tunnel** (`cloudflared tunnel --url http://127.0.0.1:<port>` prints a random
+`https://<words>.trycloudflare.com` address that forwards to a local port). The owner's priority
+is to share only what is needed, for as short a time as possible. Step 305 builds the host and a
+free self-test; Step 306 wires it into `generate run --pay`, the plan, MCP and the cookbook.
+The cloud workspace cannot reach Cloudflare (proxy 403, port 7844 blocked): everything is tested
+with a fake `cloudflared` and a real local server; the owner tests the real tunnel on Windows
+with `vidgen generate host-test`.
+
+### 115.1 The host (Step 305)
+
+`vidgen.videogen.host` (not in `vidgen.api`):
+
+- **What is shared.** `QuickTunnelHost(sources, root=, settings=, ledger=, executable=, fetch=,
+  out=)` takes the exact files to share (a shot's audio / video inputs)
+  and `copy_into_share` copies each into a fresh `tempfile.mkdtemp(prefix="vidgen-share-")`
+  folder (refused when it would lie inside the project) under a new random name
+  (`secrets.token_hex(8)` + the lower-case extension), with its size and SHA-256. A symlink, a
+  folder, a missing file or a file given twice is a `VidgenError`; the source is opened with
+  `O_NOFOLLOW` where the system has it. The project, `build/` or any user path is never served:
+  only the copies exist in the served folder.
+- **The server** (`ShareServer`, stdlib `ThreadingHTTPServer`): bound to `127.0.0.1`, port 0 (a
+  random free port, `allow_reuse_address` off, no host name lookup), answers only `GET` / `HEAD`
+  of the exact paths `/<secret>/<name>` (`secret = secrets.token_urlsafe(24)`, a new one per
+  host; the query string must be empty) with the file's `Content-Type` (`openrouter.MEDIA_TYPES`,
+  `.txt` as UTF-8 text), `Content-Length`, `Cache-Control: no-store`, `X-Content-Type-Options:
+  nosniff`. Everything else (other paths, `/`, `/<secret>/`, any other method) is a 404 with a
+  10-byte body; no directory listing, no `Server` header. Requests are kept in memory
+  (`RequestRecord`: time, method, path with the secret replaced by `<secret>`, status, bytes,
+  file) and never written with client addresses; `log_message` writes nothing. Per-connection
+  socket timeout 30 s; `Connection: close`. (CPython itself folds a leading `//` of a request
+  path into `/`, so `//<secret>/<name>` is the same file.)
+- **The tunnel** (`TunnelProcess`): `tunnel_command(executable, port, protocol)` =
+  `cloudflared tunnel --url http://127.0.0.1:<port> --no-autoupdate [--protocol http2|quic]`
+  (`auto`: no `--protocol`); started with list arguments in its own process group (POSIX
+  `start_new_session`, Windows `CREATE_NEW_PROCESS_GROUP`, so Ctrl+C reaches vidgen, which then
+  stops it); its output (stdout + stderr) read by a thread, the last 200 lines kept for error
+  messages; the address is the first `https://<name>.trycloudflare.com` in it (not
+  `api.trycloudflare.com`), waited for `url_timeout` (60 s). An exit without an address quotes
+  cloudflared's last lines and names the usual causes (outgoing connections to Cloudflare,
+  `~/.cloudflared/config.yml`). `find_cloudflared(setting)`: `videogen.cloudflared` (a path or a
+  command name), else `cloudflared` on PATH, else where winget installs it on Windows
+  (`%ProgramFiles(x86)%`, `%ProgramFiles%`, `%LOCALAPPDATA%` `\cloudflared\cloudflared.exe`); else
+  a `VidgenError` with the install hints (Windows `winget install Cloudflare.cloudflared` and a new
+  terminal, macOS `brew install cloudflared`, Linux Cloudflare's downloads page, the setting).
+- **Checked before use.** After the address appears the host waits (at most 15 s) for
+  cloudflared's "Registered tunnel connection" line (an early DNS query of a new name can be
+  cached as "not found"), then `verify_public` asks the public URL of every file with `HEAD`
+  until it answers 200 with the file's length, every `verify_interval` (2 s) for
+  `verify_timeout` (60 s). If it never does, everything is closed and a `VidgenError` says
+  nothing was sent to a provider and points to `host-test`.
+- **Closed as soon as possible** (`close(reason)`, idempotent, each step even when an earlier
+  one fails): cloudflared first (`stop_process_tree`: Windows `taskkill /PID <pid> /T /F`,
+  elsewhere SIGTERM to its process group, SIGKILL after 5 s), then the server, then the temporary
+  folder (`shutil.rmtree`, retried 5 × 0.2 s for Windows file locks; a failure is a warning naming
+  the folder, and `folder_deleted: false` in the ledger). Reasons: `done` (the `with` block ended),
+  `error: <type>` (an exception in it), `interrupted` (Ctrl+C in it), `failed to open` /
+  `interrupted while opening` (anything going wrong in `open`, which closes before re-raising),
+  `max lifetime` (`host_max_minutes` after `open` began, as long as vidgen runs; a killed vidgen:
+  §115.5), `terminated (SIGTERM)` / `(SIGHUP)` (§115.5), `vidgen exited` (an `atexit` hook). A watchdog thread checks the lifetime every 0.1 s. (Step 309 removed the
+  `all files fetched` close: §115.4.)
+- **Ledger** (the project's `videogen-ledger.jsonl` when one is given; host events are not jobs,
+  `Ledger.jobs()` ignores them): `host_open {host, files: [{name, size, sha256}], max_seconds}`
+  once the address is known (the host name only, never a URL with the secret; `name` is the
+  source relative to the project), `host_fetch {file, method, status, bytes}` for every request
+  of a shared file (the host's own `HEAD` checks included; status 499 when the client went away
+  mid-file), `host_close {host, reason, seconds_open, requests, not_found, folder_deleted}`.
+- **Settings** (`HostSettings.from_config(videogen)`): `videogen.cloudflared` (null),
+  `tunnel_protocol: http2 | quic | auto` (http2: TCP 443, which more networks allow than QUIC's
+  UDP 7844), `host_max_minutes` (20, 5-120; §115.4).
+  `videogen.host: none | quick_tunnel` (off by default) switches it on for paid runs (§115.2).
+- **Self-test** `host_self_test(settings, keep_seconds=, out=)` and **`vidgen generate host-test
+  [PROJECT] [--keep SECONDS] [--json]`**: free, needs no key and sends nothing to OpenRouter. It
+  writes one tiny text file (`vidgen host test <random>`) in its own temporary folder, shares it
+  and checks: the public `HEAD` (by opening), a `GET` returns the
+  same bytes, the address without the secret and a wrong secret answer 404. `--keep` keeps the
+  tunnel open that long afterwards (capped by the maximum lifetime) and prints the full URL to
+  try in a browser; without `--keep` the URL with its secret is never printed. A failed check is
+  a `VidgenError` naming it (exit code 1), after closing. In a folder without a project the
+  default settings apply; the test writes nothing to a ledger.
+- **Tests** `tests/test_videogen_host.py` (12): random names, hashes, labels; links / folders /
+  missing / duplicate files refused; the real server's exact paths, HEAD, 404s (wrong secret,
+  listing, traversal, query, other methods), no `Server` header, no secret or address in its
+  records; the command line and the install hints; open → verify → fetch → close with a fake
+  cloudflared (a Python script that prints a trycloudflare address and starts a child process):
+  arguments, the process tree gone, the folder deleted, the ledger without the secret; closing
+  after every file was fetched; the maximum lifetime; Ctrl+C and errors in the block; cloudflared
+  exiting, printing nothing, not starting; a public address that never works (only HEADs sent, the
+  ledger's open / close); a wrong length; the self-test (and a tampered answer failing it); the
+  CLI outside a project (text and JSON); the config keys.
+
+### 115.2 Wiring: paid runs, the plan, MCP (Step 306)
+
+- **The switch.** `videogen.host: none | quick_tunnel`, default `none`: without it everything is
+  as before (a shot with audio / video inputs is blocked with `shots.NO_HOST_BLOCKED`, which
+  names the setting and `host-test`; with `inline_media: all` it is a problem). With
+  `quick_tunnel` such a shot is not blocked or a problem for that reason; `Shot.share_minutes`
+  is `host_max_minutes` and `Shot.shared` its audio / video inputs. When `find_cloudflared`
+  fails the shot is blocked with the install hints (the plan is free, so the check is cheap:
+  `which` and a few `is_file`).
+- **One tunnel per shot** (the owner's decision, Step 306). A tunnel for the whole run would
+  keep every shot's voice reachable while other shots' jobs run (minutes each) and would need a
+  lifetime longer than the 15 min limit for a long run; one per shot shares only that shot's
+  files, with its own secret, for that one job. The cost is a few seconds of start-up and check
+  per shot. Split parts (`<beat>_p<n>`) are shots of their own, so each gets its own tunnel.
+- **In `generate_clip`** (`run.py`): after the cache, an earlier job, the model checks, the key
+  and the budget (so a tunnel is never opened for a run that would be refused),
+  `hosted_inputs(sendable)` lists the local audio / video files. If there are any and a
+  `ShareOptions` is given (or `videogen.host: quick_tunnel` makes the default one), a
+  `QuickTunnelHost` is opened (copies, server, cloudflared, every file checked through the
+  public address: a failure here closes everything and raises before anything is sent or
+  paid); the provider's `uploader` is set to `host.url_of` for the submit only (restored in
+  `finally`); then `submit`, the `submit` ledger line and `provider.wait(job)` run inside the
+  `with` block, so the tunnel closes (`done`) as soon as the job reaches a final state
+  (completed, failed, cancelled, expired), before the download and before the job's final
+  ledger line. It closes at `host_max_minutes` at the latest while vidgen runs (§115.4; a killed vidgen: §115.5). A `VidgenError` inside the
+  block (a refused submit, a poll timeout) closes it (`error: VidgenError`) and is raised again
+  with `host.redact(...)` (the secret path replaced by `<secret>`: OpenRouter's 400 quotes the
+  reference URL; all provider text is covered by §115.6); Ctrl+C closes it (`interrupted`). A job resumed from the ledger (it timed out
+  earlier) is only polled: no tunnel is opened again (providers fetch inputs when the job
+  starts). Without a host the provider's `media_url` still stops the submit with a clear error.
+- **`run_shots`** builds `ShareOptions.from_config(settings, out=...)` once when the host is on
+  (its progress lines indented under the run's) and passes it to every shot; `share=` replaces
+  it (tests: fake cloudflared and network). The dry run never opens a host.
+- **The plan** prints, for a shot that would be shared (not cached, no earlier job), the line
+  "would share through a public Cloudflare quick tunnel, only while this shot's job runs (at most
+  N min; copies under random names behind a secret path; pictures are not shared, they go
+  inline):" and each file with its size (`not made yet` while missing). JSON per shot:
+  `shared: [{path, bytes}]` (empty when nothing would be shared) and `share_max_minutes`.
+  `--pay` is still required to share anything.
+- **MCP**: `generate_host_test` (`keep` 0-300 s; read-only, open-world; JSON mode, so the URL
+  with its secret is never in the answer); `generate_plan` / `generate_run` run the CLI and so
+  follow the setting.
+- **Docs**: `docs/COOKBOOK-GENERATED-VIDEO.md` §5 "Sharing voice and video inputs safely" (what is
+  shared, for how long, what the ledger records, "Test on Windows": winget, `host-test`, a dry
+  `plan`, one paid talking shot); CONFIG (setting, quick tunnel bullet, plan JSON, MCP); the
+  guide / AGENTS.md (the key and to ask the user before turning it on).
+- **Tests** (`tests/test_videogen_shots.py`): a talking shot with the host on — the plan (not
+  blocked, exactly the voice listed with its size, JSON), host off (blocked with the setting),
+  cloudflared missing (blocked with the install hints); a paid run on the mock API with the fake
+  cloudflared: a provider error quoting the URL is redacted, the ledger has open / the check's
+  fetch / close and no job; then the provider fetches the voice through the tunnel during the
+  submit, the bytes match, the ledger order is `host_open` < `submit` < `host_close` (`done`) <
+  `completed`, the share folder is gone, the secret is in no ledger line or printed line, the
+  provider's `uploader` is restored.
+
+### 115.3 Review of Steps 305–306
+
+Checked against the security requirements of the brief; fixed in Step 306:
+
+- **Links in folders.** `O_NOFOLLOW` checks only the last part of a path, so a linked folder
+  inside the project (e.g. `build/videogen/<shot>` pointing elsewhere) would have been followed.
+  `copy_into_share` now refuses a source when any folder between the project and the file is a
+  link (folders above the project are not checked: a project under a linked home folder still
+  works). Windows junctions count as links where Python can tell them (3.12+ `is_junction`).
+- **HEAD without `Content-Length`.** A proxy may drop the length from a `HEAD` answer; the check
+  now accepts 200 without a length and still refuses a wrong one (host-test's `GET` compares the
+  bytes).
+- **Windows without `taskkill`.** `stop_process_tree` did nothing there until the 5 s wait ran
+  out; it now kills cloudflared itself at once (cloudflared starts no children on Windows).
+- **The secret in errors.** A provider error quoting the reference URL would have printed the
+  secret (harmless once the tunnel is closed, but against "never shown"); redacted now.
+
+Checked and kept: only exact `GET` / `HEAD` paths answer (query strings, traversal, other
+methods: 404); no `Server` header; `Cache-Control: no-store` (Cloudflare caches `.mp3` / `.mp4`
+by extension unless the origin says no-store); the server binds 127.0.0.1 only; requests are
+kept in memory without client addresses; the ledger has the host name, never the path's secret;
+`host_open` is written before the checks so every open has a close; `close` is idempotent and
+runs every step; an `atexit` hook closes a host left open. Open (needs the owner on Windows):
+the real tunnel, `taskkill`, and whether OpenRouter's providers fetch with `GET` (the ledger's
+`host_fetch` lines will show it on the first paid talking shot).
+
+### 115.4 Keeping the tunnel for the job, and refusing a submit without one (Step 309)
+
+- **No close on fetched.** The owner's decision: during a generate run the tunnel stays open until
+  the job reaches a final state, bounded by `host_max_minutes`. `close_when_fetched`, the grace
+  period, `HostSettings.grace_seconds`, `all_fetched` and `videogen.host_grace_seconds` are gone:
+  a complete `GET` did not mean the provider was done, and in-flight requests, `HEAD`s and partial
+  `GET`s never extended the grace. host-test already passed `close_when_fetched=False`. The trade
+  is a longer exposure for a slow job, against never cutting off a job already paid for. The
+  removed key follows the strict config: `host_grace_seconds` is an unknown-key error like any
+  other (the setting existed only in Unreleased).
+- **`host_max_minutes`** default 20 (was 15), range 5-120. **`HostSettings.lifetime_problem(poll_timeout)`**:
+  `max_seconds` must be at least `poll_timeout + submit_margin (180 s: the longest POST, 120 s, and the
+  last poll's sleep, 60 s) + url_timeout`. Otherwise `_resolve_inputs` blocks the shot (with the
+  numbers) and `generate_clip` refuses before opening a tunnel. The deliberate way to run with a
+  short tunnel is a smaller `poll_timeout`: vidgen stops waiting sooner and closes the tunnel, the
+  job keeps running and a later run polls it (`generate resolve` is not involved; no tunnel is
+  opened again, as §115.2).
+- **`QuickTunnelHost.ensure_time_for_job(poll_timeout)`**, just before the submit: a `VidgenError`
+  (nothing sent or paid) unless the host is open and has `poll_timeout + submit_margin` left.
+  `opened_at` is set before cloudflared starts and the watchdog runs only after verification,
+  so a slow start eats the lifetime; this check is what catches it (`is_open` is false while
+  closing). `url_of` / `urls` raise on a closed host.
+- **The `max lifetime` line** still fires during a job that runs past the limit; `poll_timeout`
+  ends before it with the defaults. A provider that has not fetched yet when the wait ends
+  has no input: accepted and documented, it is a job the owner chose to stop waiting for.
+
+### 115.5 Cleanup when vidgen is signalled, killed or interrupted during close (Step 310)
+
+A review showed a killed vidgen left cloudflared running and the temporary copies (which can
+include a voice file) on disk, and a second Ctrl+C during close abandoned the cleanup for good.
+`host_guard.py` (and the stand-alone `host_watcher.py`) are the fix. Layers, from the inside out:
+
+- **Resumable close** (`QuickTunnelHost.close`). Steps in order: `cloudflared`, `server`, `folder`,
+  `watcher`, `report` (ledger `host_close`, the progress line). A step that finishes (even by
+  failing with an `Exception`, a warning) is not run again. `KeyboardInterrupt` / `SystemExit`
+  during a step leaves that step unfinished, the remaining steps still run, and the exception is
+  raised once at the end; `_closed` is set only when every step finished. `report` waits for all
+  others. A later `close` (the `atexit` hook, the watchdog, a retry) runs the unfinished steps; the
+  first reason given stays. The watchdog resumes an abandoned close at once. A `close` from a
+  second thread waits for the first (bounded, 30 s, then a warning); a `close` re-entered from
+  the thread already closing (a signal handler) returns at once, so no deadlock. The `watcher` step
+  disarms the watcher only when cloudflared stopped and the folder is gone; otherwise it hands the
+  remainder to the watcher, which does it immediately.
+- **Termination signals** (`track_host` / `_on_termination`). While a host is open, SIGTERM, SIGHUP
+  (and Windows SIGBREAK) close every open host (reason `terminated (SIGTERM)` ...) and raise
+  `SystemExit(128 + signum)`, so the `with` block, `finally` and `atexit` run. `track_host`
+  installs a handler only from the main thread and only over the default disposition: a handler
+  someone set, or a `nohup`'s ignored SIGHUP, stays. The handlers go back to the default with the
+  last open host; a close in another thread cannot call `signal.signal`, so the handler stays
+  installed (inert, it re-raises the default) until the next main-thread close.
+- **The watcher** (`HostGuard`, `host_watcher.py`): a small `python -I -S` process per host, in its
+  own session (so `_kill`'s process-group SIGKILL in `mcp_server.py` does not reach it), started
+  right after the folder is made, holding stdin as a pipe from vidgen. It ignores
+  SIGINT/SIGTERM/SIGHUP. vidgen sends `tunnel <pid>` once cloudflared started (POSIX),
+  `tunnel-stopped` and `disarm`. End of stdin without `disarm` means vidgen is gone, however it
+  ended: the watcher stops cloudflared's process group (SIGTERM, SIGKILL after 5 s) and deletes
+  the folder. Never by process number alone: cloudflared inherits the write end of a second
+  pipe (`tunnel_fds`) whose read end the watcher holds; end-of-file on it means cloudflared is
+  gone, so a recycled number cannot be signalled. Chosen over `PR_SET_PDEATHSIG`: that is
+  Linux-only, needs `preexec_fn` (unsafe with threads), and fires on the death of the *thread*
+  that started the process. Its stdout/stderr are `DEVNULL`, so whoever reads vidgen's pipes
+  (MCP) does not wait for it. A watcher that cannot be started is a warning; the host still works.
+- **Windows** (`HostGuard.adopt`, `_job_for_process`): cloudflared is assigned to a Job Object with
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; the handle is held only by vidgen (not inheritable), so when
+  vidgen ends by any means the handle closes and Windows kills cloudflared (and any child). The watcher
+  there has no process number or pipe to check (`CREATE_NO_WINDOW`, stdin still): it deletes the
+  folder when its stdin ends. The job is closed when cloudflared has stopped. **Not run on Windows**:
+  a mocked kernel32 tests the calls and the structure layout (`ExtendedLimits`: 144 bytes on 64-bit).
+- **The stale sweep** (`sweep_stale_shares`, called by `open`). Each share folder holds a marker
+  file `.vidgen-host.lock`, locked (`flock` / `msvcrt.locking`) by the host that made it before any
+  copy is written; the operating system releases the lock when its holder ends. `open` deletes a
+  folder only when its marker lock can be taken. A folder of a running host (locked), one without
+  a marker (an older vidgen, or a stranger's folder) and anything not owned by the user are left
+  alone. A process number is never trusted here.
+
+**What still is not covered:** vidgen and the watcher both killed at once, or a power failure:
+copies stay until the next tunnel opens (the sweep), and a `cloudflared` left running stays
+until stopped by hand; it serves nothing, because the local server ended with vidgen. A SIGKILL
+in the few milliseconds between starting cloudflared and telling the watcher its process number
+(the folder is still deleted). A vidgen frozen but alive (SIGSTOP): the watchdog is frozen too
+and nothing closes the tunnel until it runs again. Windows: `taskkill /F /T` of vidgen also kills the
+watcher (the sweep then deletes the copies at the next open). **macOS**: POSIX code paths (pipes, process groups,
+`flock`) are used but not run there. **Windows**: nothing here has been run on Windows.
+
+### 115.6 Provider text never carries the shared address; the mock never shares (Step 311)
+
+A review showed the failed job's error was raised in `_finish`, outside the `except` that
+redacted, so it reached `ShotRun.message`, `--json` and MCP with the secret; `exc.details` was not
+redacted either; and a job polled by a later run has no host at all. `vidgen.videogen.redaction`:
+
+- `redact_shared_addresses(text)` needs no host: it replaces the path of any
+  `*.trycloudflare.com` address, plain, JSON-escaped, percent-encoded or cut off by a length
+  limit, with `<secret>` (the host name stays, it is in the ledger on purpose), and a path
+  of the host's shape (32-character secret + `/` + 16 hex digits) quoted without its host.
+- Every place provider text enters: `parse_job` (a job's `error`, submit and poll), `http_error`
+  (submit, poll and download answers), the transport error in `_send`. This covers a job resumed
+  after its host is gone.
+- `QuickTunnelHost.redact` adds the host's exact secret (a provider quoting the bare token);
+  `generate_clip` applies it to the message and details of every `VidgenError` inside the host's
+  block and from `_finish` (the failed job's error), so `run_shots`' `ShotRun.message`, its
+  `details`, `--json` and MCP (which runs the CLI) see only clean text.
+- `Ledger.append` filters every string field, so no line can hold the path. Provider error text
+  is not stored at all: terminal lines record only status, cost and `is_byok`; sidecars and takes
+  hold no error text.
+- Not covered: a bare secret with no file name quoted after the host is gone (no pattern can tell
+  it from a request id; it opens nothing without its file name, and that tunnel is closed).
+
+`provider: mock` (`MOCK_PROVIDER`) never shares: `generate_clip` ignores `share` and
+`videogen.host` for it and sends the mock's `uploader` address (`https://mock.invalid/<name>`);
+`_resolve_inputs` marks the shot `fake_addresses` instead of `share_minutes`, so the plan has no
+"would share" lines, no cloudflared lookup and no block for a missing host (one note says the
+inputs stay on this machine). `inline_media: all` without a host stays a problem, since it describes
+the real API; `vidgen generate host-test` still opens a real tunnel on purpose. Tests of a real host
+use a stand-in provider whose name is not `mock` (`tests/test_videogen_host.HostedStandIn`).

@@ -1712,6 +1712,132 @@ AI API calls; Kokoro (local) only.
 
 **Phase AG done** (Steps 288–291).
 
+## Phase AH — Generated video shots through OpenRouter (DESIGN §113)
+
+Generative video models (OpenRouter's video API) make selected shots — talking close-ups
+lip-synced to vidgen's own voice lines, acting shots guided by character / style sheets (and
+optionally a vidgen render), establishing shots — while vidgen keeps story, timing, text,
+captions, music, sound design and assembly. The model's audio is never used. Opt-in. Steps
+292–294 spend nothing (paid endpoints mocked); 295 cleans up the sheet prompts after the first
+paid sheet pictures; 296 shrinks the pictures and records the first API answers; 297 runs only
+with the owner's go-ahead.
+
+### Step 292 — Video provider layer
+- [x] `vidgen.videogen` (OpenRouter provider, mock provider): submit / poll (timeout, backoff) / download, cache by the canonical request (input files by hash), spending ledger + hard budget cap + estimates from the models list, dry run by default and `pay=True` explicit, key from `OPENROUTER_API_KEY` or proxy-injected mode, clear errors (402, 429, 413, content policy, expired, unsupported option with did-you-mean), the data-URL question settled from the docs, `vidgen generate models` (cached, offline from cache) — done as `videogen: {provider, budget_usd, key_via_proxy, inline_media, poll_timeout}`, `generate_clip` / `plan_clip`, `videogen-ledger.jsonl`, `vidgen generate models | ledger`; pictures inline as data URLs, audio / video hosted (or `inline_media: all`); tests `test_videogen.py`
+
+### Step 293 — Inputs and shot specs
+- [x] Character sheets and a style sheet generated with the image provider (`characters[].sheet: {views, expressions, prompt}`, `style: {palette, era, lens, notes, references}`), stored and `approved: true` before use; per-beat inputs cut by vidgen (the beat's voice-only audio, an optional low-res silent guide render, a first-frame still); the per-beat `generate:` spec (`kind: talking | action | establishing`, `model`, `refs`, `audio: beat`, `guide: true`, `seed`, prompt from style + scene + beat + sheet notes), durations snapped to the model (next allowed length, trimmed later; long beats split); validation + did-you-mean; dry-run `vidgen generate plan` with every shot's inputs and estimated cost — done with clearer names: `characters[].reference_sheet` (not the drawn `vidgen character-sheet`), top-level `style_sheet:`, the beat key `generated_shot:` (not the scenes' image `generate:`); `vidgen generate sheets [--pay] | inputs [--guide] | plan`; sheet pictures in `assets/sheets/`, paid against `videogen.budget_usd` and recorded in the ledger; sample project `scratch/s293/sample` (est. $0.745 with sheets); tests `test_videogen_shots.py`
+
+### Step 294 — Composition, QA and workflow
+- [x] Generated clips placed in the film for their beats (scale / crop, fps conform, light colour matching, audio off, crossfades; vidgen overlays, captions, titles on top); takes (`takes/<shot>/<n>.mp4`, pick one); QA on returned clips (duration, aspect / size, black or frozen frames, flicker, abrupt cuts) and a contact sheet per take; CLI `vidgen generate plan | run [--pay] [--budget] | status | takes | pick`; MCP tools (no paying without an explicit argument); credits line "includes AI-generated footage (model names)" and a lint reminder about disclosure; docs (CONFIG, guide → AGENTS.md, `docs/COOKBOOK-GENERATED-VIDEO.md` with privacy / ZDR and cost control); a critical review of 292–294 — done as `vidgen.generated_layer` (takes laid into the scene's frames under the overlay layer), `videogen/{compose,qa,takes,workflow}.py`, `generated_shot.{place, fit, crossfade}`, `videogen.{crossfade, color_match}`, `takes/picks.json`, lint `generated_footage` (info), MCP `generate_plan | run | status | takes | pick`; the mock returns a playable MP4; review fixes (mock job ids, clip cache out of the render fingerprint); the s293 sample voiced (Kokoro) and its inputs cut; tests `test_videogen_compose.py`
+
+### Step 295 — Cleaner reference sheet prompts, real image costs
+- [x] After the first paid sheet pictures (seedream-4.5: lamps drawn from the palette, a ticket booth and garbled signs from Theo's role, figures cut, side view not in profile): character pictures as clean model-sheet pictures (full body head to toe, plain seamless light grey backdrop, nothing else, strict view words, "who the person is ... No props"), an always-on exclusion (no text, signs, logos, labels, props, furniture, lamps, scenery) sent as the request's `negative` ("Avoid: ..." in the prompt text), the palette marked colours only, lens / handheld / depth-of-field and scene-lighting words left out of character pictures; style frames keep the full look plus the no-text exclusion; costs recorded from `usage.cost` with `cost_source: reported | estimate` (sidecar, sheet ledger events) and the response's `usage` kept in the sidecar, "estimated" in the printed line; the budget check still uses the estimate — done in `videogen/sheets.py`, `imagegen/{__init__,openrouter,run}.py`; tests in `test_videogen_shots.py`, `test_imagegen_openrouter.py`
+
+### Step 296 — Smaller pictures for video jobs, https-only audio / video
+- [x] After the first paid clip attempts (nothing charged): a 48 MB request (six 2048x3642 sheet PNGs inline), inline audio refused by OpenRouter (HTTP 400 "Only HTTPS URLs are allowed"), every video model refused with "ZDR endpoints only" on — pictures sent as smaller copies (longest side 1280 px, JPEG q90, PNG only with transparency) cached in `build/videogen/pictures/` by source hash and size, the 21 MB guard kept, the request size in `generate plan`; inline audio / video a plan problem (`run --pay` refuses it), never sent inline; findings in DESIGN §113.7 and `docs/COOKBOOK-GENERATED-VIDEO.md` (ZDR account setting, the free model-count check, https-only audio / video) — done in `videogen/pictures.py`, `videogen/{openrouter,run,shots}.py`; tests in `test_videogen.py`, `test_videogen_shots.py`
+
+### Step 297 — The paid experiment (LATER, gated on the owner's go-ahead)
+- [ ] With the owner's key, ≤ US$2.00 total, vertical 9:16 Shorts, lowest sensible resolution, 4–5 s clips
+
+## Phase AI — 3D scenes with three.js (DESIGN §114)
+
+Video presentations with simple 3D: three.js in headless Chromium driven by Playwright (an
+optional extra), deterministic frames (time set by vidgen, never a wall clock), a clean simple
+look (plain colours, one default light), simple character stand-ins. Later the 3D scenes feed
+video-to-video generation (camera, layout and motion from vidgen, the look from a model), so the
+design keeps a stable camera, exact timing, named objects and guide passes. Out of scope:
+molecules, planets, glTF models, realistic materials and shadows, rigs, any AI or paid call.
+
+### Step 298 — Renderer and scene type (foundation)
+- [x] `type: 3d`: frames drawn by three.js in headless Chromium through Playwright (one browser per scene render, frames in order, shown like other scenes' pictures); fixed camera, one default light (ambient + sun), background colour, a box; 16:9 and 9:16, preview and final, the render cache, captions / overlays / title on top; missing Playwright or Chromium a `VidgenError` with the install hint (Windows too); the scene description as JSON (objects with ids, camera, lights, timeline) and a draw-mode hook — done as `vidgen.three_d` (`spec`, `description`, `browser`, `clip`), the page and vendored three.js 0.186.1 in `data/three/` (served on a made-up origin, every other request refused, SwiftShader WebGL), frames written to a lossless FFV1 clip `build/<q>/three_d/<scene>.mkv` + description `.json`, reused by key, shown as a full-bleed `ClipMobject`; `spin` as a timeline track; extra `[3d]`; tests `test_scene_3d.py`
+
+### Step 299 — Shapes, groups, camera
+- [x] box, sphere, cylinder, cone, plane / floor, torus, arrow, text label; colour, size, position, rotation; named groups (children move with the group); camera: fixed, orbit, dolly / push-in, fly-to object, look-at; moves timed to beats and words; validation with did-you-mean — done as shapes in `spec.SHAPES` (+ `group`, `floor:`; `size` a number or a vector, defaults per shape; arrows with `to`; labels as camera-facing sprites in bundled Inter Bold), `parent:` groups (flat list, parent first), `three_d/world.py` (transforms, centres), the beat actions `camera_orbit`, `camera_dolly`, `camera_fly_to`, `camera_look_at`, `camera_move` (`scenes/scene_3d_actions.py`, cues planned by the scene through `action_times`; `at` fraction or word, `run_time`, easing) turned into per-frame camera tracks (`three_d/camera.py`); validate: ids with did-you-mean, moves replayed in order, and a warning when a project with a `3d` scene lacks Playwright / Chromium; tests `test_scene_3d_camera.py`
+
+### Step 300 — Actions and character stand-ins
+- [x] appear / disappear, move_to, rotate / spin, scale, highlight, follow a path; timed to beats / words, easing; stand-ins (capsule + facing nose, name, colour): walk to a point, turn to face something; lint: object off-frame, object hidden behind another while its line is spoken (if cheap) — done as the beat actions `object_move`, `object_path`, `object_rotate`, `object_spin`, `object_scale`, `object_show`, `object_hide`, `object_highlight` (emissive glow), `object_walk`, `object_face` (`scenes/scene_3d_actions.py`) planned per frame in Python (`three_d/motion.py`: five channels per object, read by `World`, written as tracks); shape `standin` (capsule, nose, `name`, `voice`), `visible: false`, label `screen_size`; camera moves, `camera.look_at` and arrows `to:` follow moving objects; lint `three_d_off_frame` / `three_d_hidden` from projected spheres (`three_d/framing.py`, `lint/three_d_rule.py`); tests `test_scene_3d_actions.py`
+
+### Step 301 — Guide passes
+- [x] Optional (off by default) depth, outline and mask videos of a 3D scene with the same camera and timing, stored alongside the render; mask colour table (object id → colour) as JSON; YAML switch and CLI; no AI calls — done as new draw modes of the same scene description (`three_d/passes.py`: `guide_pass` adds a shot-wide `depth_range` or the `mask_colors`; the page swaps every mesh's material for a flat shader, hides labels, no antialiasing; outline = normals/depth/object buffers + an edge shader), drawn and cached by `make_3d_clip` as `build/<q>/three_d/<scene>.<pass>.mkv` + `<scene>.mask-colors.json`; `guide_passes:` param and `vidgen render --guide-passes [LIST]` (worker `--guide-passes`, recorded in the scene's timings, renders lacking them redone; JSON `guide_passes`, MCP `guide_passes`); tests `test_scene_3d_passes.py`
+
+### Step 302 — Docs, example, critical review
+- [x] `docs/COOKBOOK-3D.md`, CONFIG / guide; a small example (9:16 Short, a few seconds: shapes, two stand-ins, camera moves) under examples/ with its guide passes rendered (media not committed); a critical review of 298–301 with fixes — done as the cookbook, guide topic `three-d` (alias `3d`), `examples/3d-short` (YAML only, `guide_passes: true`), the gallery `crate` sample with object actions; owner's answers to Step 301 applied (depth fitted to the objects with the floor clamped + `depth_range`, white-on-black outline, dark-grey floor in the mask, mask colours from ids); review fixes (page load errors, dead `progress`, shared `view_basis`, box-tight depth extents); findings in HANDOFF
+
+### Step 303 — `guide_passes: all` in YAML
+- [x] The owner's request: `all` works in both places — a `3d` scene's `guide_passes: all` (a string) means all three passes, like `vidgen render --guide-passes all`; `true`, `false` and lists unchanged; other strings refused with did-you-mean (or "write a list" for `depth,mask`) — done in `Scene3DParams._guide_passes` (a before-validator; type `bool | 'all' | list[str]`, so the JSON schema accepts it); docs, guide, DESIGN §114.14; tests in `test_scene_3d_passes.py`
+
+### Step 304 — `guide_passes` takes the command-line forms in YAML
+- [x] The owner's request: every form of `--guide-passes` also works in a `3d` scene's `guide_passes` — one name (`depth`), a comma list (`depth,mask`, `depth, mask`), `all`; `true`, `false` and lists unchanged; unknown names refused with did-you-mean — done by moving `parse_passes` (with `GUIDE_PASSES`, `ALL_PASSES`) into `three_d/spec.py`, used by the CLI, the worker and `Scene3DParams._guide_passes` alike (re-exported from `three_d/passes.py`); type `bool | str (pattern) | list[str]`, so the JSON schema accepts the strings; docs, guide, DESIGN §114.14; tests in `test_scene_3d_passes.py`
+
+
+## Phase AJ — Hosted inputs via a Cloudflare Quick Tunnel (DESIGN §115)
+
+OpenRouter takes audio and video references only as https URLs, so talking shots and shots with
+`guide:` need a host. The owner's choice: a Cloudflare Quick Tunnel (no account), sharing only
+the shot's own files, for as short a time as possible, off by default. Tested in the workspace
+with a fake cloudflared; the owner tests the real tunnel on Windows with `host-test`.
+
+### Step 305 — The host (module, safety, fakes)
+- [x] `videogen/host.py`: copies of only the given files in a fresh temporary folder outside the project with random names (links refused); a stdlib server on 127.0.0.1 (random port) answering only GET / HEAD of `/<secret>/<file>`, 404 otherwise, no listing, no banner, requests kept in memory; `cloudflared tunnel --url ... --no-autoupdate [--protocol http2]` with an injectable command, the trycloudflare address parsed with a timeout; every file checked through the public address (HEAD, retried); closed (process tree, server, folder) on end / error / Ctrl+C, after every file was fetched + grace, or at the maximum lifetime; ledger `host_open` / `host_fetch` / `host_close`; missing cloudflared → install hints, `videogen.cloudflared`; `vidgen generate host-test [--keep SECONDS]` (free) — done as `QuickTunnelHost`, `ShareServer`, `TunnelProcess`, `host_self_test`, settings `cloudflared`, `tunnel_protocol`, `host_max_minutes`, `host_grace_seconds`; tests `test_videogen_host.py` (12)
+
+### Step 306 — Wiring, docs, review
+- [x] `vidgen generate run --pay` uses the host for shots with audio / video inputs when `videogen.host: quick_tunnel` (one tunnel per shot, or per run if clearly safe; documented); `plan` stops flagging those shots and lists what would be shared (files, sizes, for at most N minutes; `--pay` still required); MCP follows the CLI; cookbook section "Sharing voice and video inputs safely"; guide / AGENTS.md if keys changed; critical review of 305–306 with fixes — done: one tunnel per shot (owner's decision), opened just before the submit and closed when the job reaches a final state (before the download), or after every file was fetched + grace, or at the maximum lifetime; `videogen.host: none | quick_tunnel` (default none); plan `would share` lines and JSON `shared` / `share_max_minutes`, blocked with install hints without cloudflared; provider errors redacted (`<secret>`); MCP `generate_host_test`; cookbook §5 with "Test on Windows"; guide / AGENTS.md; review fixes: links in folders under the project and Windows junctions refused, a HEAD answer without Content-Length accepted, Windows without taskkill kills cloudflared itself
+
+### Step 307 — 3D guide passes as generated-shot guides
+- [x] `generated_shot.guide: true | false | render | depth | outline | mask` (`true` = `render`, unchanged; depth / outline / mask only on a `3d` scene, else a config error; did-you-mean); `vidgen generate inputs --guide` draws the pass with the draft render (3D frames reused), cuts the beat's part like `guide.mp4` and converts it to H.264 / yuv420p (`guide.<pass>.mp4`); `first_frame: render` stays the normal render; the pass in the request hash and the prompt (one sentence; a mask lists the stand-ins' colours); the plan names it, also in "would share"; cookbook "From a 3D scene to a generated clip" (linked from COOKBOOK-3D §5), CONFIG, guide, DESIGN §113.8, `examples/3d-to-video` — done; tests `test_videogen_3d_guide.py` (16, one render)
+
+### Step 308 — Cut inputs that no longer match are not paid for
+- [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 321 — The tutorial's cards fixed after a fresh agent followed them (voice, refs, shots, readable overlays, disclosure)
+- [x] Cards 1, 3, 4, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17 corrected, identical in `docs/COOKBOOK-DIRECTING-YOUR-AI.md` and the script (compared by program); "A complete shot" example in the cookbook; "the director"
+- [x] S1 readable overlays (1600 px, what moved or appeared outlined in magenta on `overlay.last.png`)
+- [x] S2 `vidgen list-music` text without synthesis (3 s); S3 plan note for a line with no voice input; S4 disclosure for `video_clip` takes; S5 orphaned MP3s of a config without beats
+- [~] S5 empty `.srt`: left, pinned by `tests/test_render.py` (`result.srt.read_text(...) == ""`)
+
+### Step 320 — The tutorial script and the cookbook of instructions for directing an AI
+- [x] `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: 18 instruction cards in order, with what the AI does and what to check; linked from `docs/COOKBOOK.md`, `docs/COOKBOOK-GENERATED-VIDEO.md`, `README.md` and the guide (`AGENTS.md`, both copies)
+- [x] Tutorial script at `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` (outside the repo), with the same cards word for word
+- [ ] For the owner before publishing: the docs and commands are not on `origin/main` yet (see HANDOFF Step 320)
+
+### Step 319 — Paint starting pictures, split a sheet, label file references, the last-frame overlay, assemble takes
+- [x] A. `vidgen generate frames`: `paint_first_frame:`, `input_references` on OpenRouter's image API, dry run, `--pay`, cache, ledger and budget; `first_frame: painted`
+- [x] B. `vidgen split-sheet`: panels by grid or boxes, names, Lanczos scale (byte-identical to the owner's cut)
+- [x] C. Final assembly recipe by `vidgen render`: `video_clip`, `place: false`, a take path, `fade: false`, no beats (verified on a copy of the saved project)
+- [x] D. `refs: [{file, shows}]` in the role sentence, in input order; other shots' prompts unchanged
+- [x] E. `overlay.last.png`: the starting picture over the plain guide's last frame
+- [x] Docs (cookbook, CONFIG, AGENTS copy, DESIGN). Pytest not run, on the owner's instruction
+
+### Step 318 — Correct the opening-match figures in the docs
+- [x] The cookbook, guide, CONFIG and DESIGN quoted 0.81 for a true first frame (a comparison that stretched the picture) and colour SSIM for the picture in the guide; they now give the `opening match` values.
+
+### Step 317 — One shot after another: last_of, hard cuts, the opening match, the overlay
+- [x] `first_frame: last_of:<shot id>` (either `first_frame_in` mode; the shown take's last decoded frame cut to `build/videogen/<shot>/last_of.<source>.<take>.png`, recorded in `inputs.json`; problems for an unknown shot, itself, a cycle; a source with no take blocks, never chained in one run; another pick makes the shot stale); `video_clip` `fade: false` (hard cut: no fade in, no fade-out); QA `opening_similarity` (SSIM, warning under 0.7) in the take's record and contact sheet; `generate inputs --guide` writes `overlay.png` (picture over the plain guide's first frame); cookbook, guide, CONFIG, DESIGN §113.14
+
+### Step 316 — The starting picture in the guide; a first frame with references blocked; what the provider downloaded
+- [x] `first_frame_in: frame | guide` (shot, model, video), `videogen.first_frame_dissolve`; `generate inputs --guide` makes `guide[.<pass>].opening.mp4` (recorded in `inputs.json`: stale when the picture or dissolve change); a per-model role sentence for guide mode; `generate plan` / `run` block a true first frame with references on `bytedance/seedance-*` (`first_frame_with_references`, user override); after a hosted job a warning when the provider never downloaded a file (run output, take record); cookbook, guide, DESIGN §113.13
+
+### Step 315 — Cookbook: plan the shots first
+- [x] `docs/COOKBOOK-GENERATED-VIDEO.md` has the planning order, geography guidance, the manual starting picture, traps, measured costs and what is not proven
+
+### Step 314 — Cookbook rule: a 3D guide and a starting picture for every shot
+- [x] `docs/COOKBOOK-GENERATED-VIDEO.md` states the rule, and its examples follow it; the rule is documentation only (not enforced in code)
+
+### Step 313 — Guided shots leave the framing to the guide
+- [x] A guided `kind: talking` shot says "{who}, speaking" instead of the close-up wording; the sheet's framing instructions are left out of a guided shot's prompt (`shots.without_framing`) and `generate plan` notes what was left out (text and JSON); unguided prompts byte-identical; a guided shot paid for under the earlier wording is blocked, not paid again (DESIGN §113.12)
+
+### Step 312 — A model's own sound, per model; video references in token estimates
+- [x] `generated_shot.sound` > `videogen.models.<id>.sound` > `videogen.sound` > `mix`; `model` sends `generate_audio: true` (provider body, cache key: `mix` requests keep their keys); plan shows the value, blocks a model listed as unable, notes an unknown one; the price choice follows it; the mock's job with sound returns a tone; the token estimate counts a video reference (real charges of seedance-2.0-mini); a `video_clip` scene plays a `sound: model` take (volume 1 silent, 0.25 under narration; documented, no re-timing of captions); QA notes where the sound is heard
+
+### Step 311 — Provider text without the shared address; the mock shares nothing
+- [x] `redaction.redact_shared_addresses` (no host needed, any quoted form of a quick tunnel address) applied where provider text enters (`parse_job`, `http_error`, transport errors), `QuickTunnelHost.redact` on the message and details of everything `generate_clip` raises (submit, wait, `_finish`), and every `Ledger.append`; `provider: mock` never shares: fake uploader, no cloudflared, the plan has no "would share" lines and no host / cloudflared block; tests `test_videogen_redaction.py`, stand-in provider for host tests (DESIGN §115.6)
+
+### Step 310 — Cleanup when vidgen is signalled, killed or interrupted during close
+- [x] SIGTERM / SIGHUP close the host properly (handlers only from the main thread and only over the default disposition); a watcher process (`host_watcher.py`, own session, stdin held only by vidgen) stops cloudflared and deletes the folder when vidgen dies, never by a process number alone (cloudflared holds a pipe the watcher checks); Windows Job Object with kill-on-close; a marker file locked by the host lets `open` sweep stale `vidgen-share-*` folders without touching a running host's or a foreign one; close finished step by step, resumed after Ctrl+C, a second caller waits (bounded) (DESIGN §115.5). Windows and macOS not exercised; Windows calls tested with a mocked kernel32
+
+### Step 309 — Money safety: the tunnel, the submit, and interrupted submits
+- [x] During a generate run the quick tunnel stays open until the job reaches a final state (bounded by `host_max_minutes`), no longer closed after every file was fetched; `close_when_fetched`, the grace period and `host_grace_seconds` removed (docs say the longer exposure is the price); `host_max_minutes` default 20, range 5-120, must leave room for `poll_timeout` (shots blocked, `generate_clip` refuses); a paid submit is refused when the tunnel is closed or nearly out of time; `url_of` refuses a closed host; a `submit_intent` line is on disk before every paid POST and a request with an unknown outcome is not paid again until `vidgen generate resolve --intent ID --not-charged | --job JOB_ID | --charged`; plan, run, status, `generate ledger` and the budget show and count it
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
@@ -1914,6 +2040,7 @@ Quality (what an agent's video looks like)
 - [ ] `vidgen screenplay` on a level: the directions' `at` times are estimated as on a plain stage (a wide level's walks take longer), no `climbs` verb, a level only through a front-matter or `--cast` set (Step 155)
 
 Nice-to-have / performance
+- [ ] Automated testing should be limited to 5 minutes, not more (owner's request, 2026-11-08). Today `tests/test_schema.py` alone hits the 280 s limit of a single test command.
 - [ ] Platform levels that the camera rises over render at about 2.4x real time at 854x480 (sky of the platform example: 47.9 s in 113 s): most of it is Manim's PIL transform of each tile chunk in view on every frame; draw the chunks in view into one picture per frame, or cut chunks by rows (Step 155)
 - [ ] Drafts: beat starts are rounded to whole frames per beat (a draft drifts up to ~0.2 s from the final over a scene); a light change still redraws the whole draft frame; animatics have no crossfade and no `--final` (Steps 137, 138)
 - [ ] `--jobs auto`: a cgroup CPU quota (`cpu.max`) is not read; one per-job figure (1.5 GB) whatever the format (a 4K render needs about 2.5 GB); the Windows and macOS memory readings are tested with mocks only (Step 117)

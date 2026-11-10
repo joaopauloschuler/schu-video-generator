@@ -32,6 +32,7 @@ NARRATION = {"pad": 0.2, "words_per_second": 4.0}
 
 #: Params for every built-in scene type that give it every kind of target.
 SAMPLES: dict[str, dict[str, Any]] = {
+    "3d": {"title": "T", "objects": [{"id": "crate"}]},
     "title": {"kicker": "K", "title": "A title", "subtitle": "Sub", "authors": ["Me"], "icon": "rocket"},
     "text_card": {"text": "Hello"},
     "bullets": BULLETS,
@@ -292,6 +293,8 @@ def test_code_lines_of_a_file_are_counted_in_the_project(make_project) -> None:
 def test_builtin_scenes_register_their_target_names(kind: str, make_project, media: Path) -> None:
     """What ``construct`` registers is what ``target_names`` promised, and every target ends up
     on screen (the scene reveals all of them in its steps)."""
+    if kind == "3d":
+        pytest.importorskip("playwright.sync_api")   # drawn in Playwright's Chromium (tests/test_scene_3d.py)
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats(None, None)}])
     scene = render(project, "s", media)
     registered = sorted({n for t in scene.targets for n in t.names})   # a term: name per step that has the term
@@ -589,7 +592,7 @@ def test_a_type_without_targets_rejects_actions(make_project) -> None:
                     pass
     '''})
     (problem,) = project_problems(Project.load(root))
-    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, branching, branching_pie, bullets, calculation, card, cell, cell_cycle, chapter, code,")
+    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: 3d, bar_chart, branching, branching_pie, bullets, calculation, card, cell, cell_cycle, chapter, code,")
 
 
 def test_config_md_action_examples_validate(make_project) -> None:

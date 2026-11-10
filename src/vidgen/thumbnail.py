@@ -221,15 +221,16 @@ def _size_checks(result: ThumbnailResult) -> list[ThumbnailCheck]:
 
 def _frame_thumbnail(project: Project, preview: bool, spec: ThumbnailConfig, jobs: int) -> tuple[Image.Image, dict[str, Any], list[str]]:
     """The frame ``spec`` names, from the scene's render (made first when missing or stale)."""
-    from vidgen import extensions, registry
+    from vidgen import extensions
     from vidgen.render.pipeline import render_scenes
     from vidgen.render.worker import scene_timings_path, scene_video_path
+    from vidgen.videoplan import scene_outro
 
     assert spec.scene is not None
     source = project if spec.overlays is not False else project.without_overlays()
     scene = project.scene(spec.scene)
     with extensions.project_session(source):
-        outro = float(registry.get(scene.type).cls.outro)
+        outro = scene_outro(scene)
     rendered: list[str] = []
     if not render_current(source, preview, scene.id):
         rendered = render_scenes(source, preview, [scene.id], jobs=jobs).rendered

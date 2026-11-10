@@ -130,7 +130,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     step, choropleths, pins and flight-path arcs; Natural Earth data bundled);
   - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified
     insets, a spotlight; in a browser, window or phone frame; a caption), `video_clip` (B-roll, screen
-    recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration);
+    recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration),
+    `3d` (simple 3D drawn by three.js in headless Chromium: shapes, labels, groups and character
+    stand-ins under one light that move, turn, appear, glow and walk on words, a camera that orbits,
+    pushes in or flies to an object and follows it; the `3d` extra);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -569,6 +572,9 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
     downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
     Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
     by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
+13. Optional, only for `3d` scenes (three.js in headless Chromium, Phase AI): `pip install ".[3d]"`
+    (Playwright), then `py -m playwright install chromium` (downloads Chromium, ~150 MB, once).
+    three.js itself ships with schu-video-generator; nothing is fetched while rendering.
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
@@ -609,13 +615,17 @@ sudo apt install espeak-ng                    # optional fallback: kokoro uses t
 # 7. Optional: composed music (symusic); the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
 pip install ".[music]"
 vidgen soundfont fetch                        # or let the first composed render download it
+
+# 8. Optional: 3d scenes (three.js in headless Chromium through Playwright)
+pip install ".[3d]"
+python -m playwright install chromium         # add --with-deps if Chromium's system libraries are missing
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
 pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
 `sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
 terminal needs `source .venv/bin/activate` again before running `vidgen`. The optional extras
-work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`, `".[music]"`
+work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`, `".[music]"`, `".[3d]"`
 (macOS keeps the SoundFont in `~/Library/Caches/vidgen`).
 
 **Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (with 3.13 the extra installs
@@ -688,7 +698,7 @@ narration.
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
-| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME \| --all-languages] [--no-audio] [--keep-going] [--max-scenes N] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
+| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME \| --all-languages] [--no-audio] [--keep-going] [--max-scenes N] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--guide-passes [LIST]] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video; `--guide-passes` also draws the depth, outline and mask videos of every `3d` scene |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N\|auto] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 | `vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions \| --no-captions] [--jobs N\|auto] [--output-dir DIR] [--json]` | `<output>_animatic.mp4`: the storyboard's stills held in time with the narration, with the video's audio and the subtitles drawn on; joined by ffmpeg in seconds when the stills are current (see [docs/CONFIG.md](docs/CONFIG.md#animatic-vidgen-animatic)) |
 | `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME \| --all-languages] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--readback] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`; `--readback`: also transcribe and flag unclear words); exit code 1 on errors |
@@ -902,6 +912,10 @@ my_video/
   (125 GeV), a simulated spectrum with its bump, fit and local significance, four leptons, what
   five sigma means, and the announcement of 4 July 2012; a 9:16 variant; about 3:49 with Kokoro
   narration (no audio committed).
+- [examples/3d-short](examples/3d-short/video.yaml) — "Two friends and a ball", a 9:16 Short of
+  about 15 s in one `3d` scene: shapes, two stand-ins who walk and turn to each other, a ball that
+  appears, rolls and glows, four camera moves on spoken words, karaoke captions, and its guide
+  passes (depth, outline, mask); needs the `3d` extra (no media committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -928,7 +942,12 @@ my_video/
   [docs/COOKBOOK-AUDIO.md](docs/COOKBOOK-AUDIO.md) — audiobooks and podcasts without pictures:
   loudness presets and targets, formats, pacing, voices, checking a file;
   [docs/COOKBOOK-AUDIODRAMA.md](docs/COOKBOOK-AUDIODRAMA.md) — dramatized audiobooks: structure,
-  casting, rooms and stereo, score and sound design, the drama checks, a file per chapter.
+  casting, rooms and stereo, score and sound design, the drama checks, a file per chapter;
+  [docs/COOKBOOK-GENERATED-VIDEO.md](docs/COOKBOOK-GENERATED-VIDEO.md) — shots made by video models
+  through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
+  [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
+  [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
+  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

@@ -94,3 +94,12 @@ def write_clip(path: Path, seconds: float = 4.0, size: str = "64x36", fps: int =
 def clip_frame_index(grey: float) -> int:
     """The frame number of a :func:`write_clip` clip from a decoded pixel's grey value (0-255)."""
     return round(grey * 219 / 2550) - 1
+
+
+@pytest.fixture(autouse=True)
+def _no_sweep_of_the_real_temp_folder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A test never deletes real ``vidgen-share-*`` folders: tests of the sweep pass their own folder or run in a subprocess."""
+    from vidgen.videogen import host_guard
+
+    real_sweep = host_guard.sweep_stale_shares
+    monkeypatch.setattr(host_guard, "sweep_stale_shares", lambda temp_root=None: real_sweep(temp_root) if temp_root is not None else [])

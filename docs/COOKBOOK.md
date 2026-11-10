@@ -20,7 +20,11 @@ see [COOKBOOK-PARTICLES.md](COOKBOOK-PARTICLES.md); for isometric cartoons (map 
 frame in 16:9 and 9:16), see [COOKBOOK-ISO-CARTOONS.md](COOKBOOK-ISO-CARTOONS.md); for audio
 only — audiobooks and podcasts (loudness targets, formats, pacing, voices) — see
 [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md); for dramatized audiobooks (voices in rooms, score, sound
-design, files per chapter), see [COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md).
+design, files per chapter), see [COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md); for shots made
+by video models (talking close-ups, acting, establishing shots; cost control, privacy, takes), see
+[COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md); for directing an AI agent through such a film, as copyable instructions for a person, see
+[COOKBOOK-DIRECTING-YOUR-AI.md](COOKBOOK-DIRECTING-YOUR-AI.md); for simple 3D scenes (shapes, stand-ins,
+camera moves on words, guide passes), see [COOKBOOK-3D.md](COOKBOOK-3D.md).
 
 Reusable files are in [`examples/cookbook/`](../examples/cookbook/README.md):
 

@@ -272,7 +272,8 @@ def test_list_scenes_human_output_unchanged(tmp_path: Path, monkeypatch: pytest.
     monkeypatch.chdir(tmp_path)
     assert main(["list-scenes"]) == 0
     out = capsys.readouterr().out
-    assert re.match(r"bar_chart +builtin\n    title: str = ''   \(also: heading\)\n    labels: list\[str\]\n", out)
+    assert re.match(r"3d +builtin\n    title: str = ''   \(also: heading\)\n    background: color \| None = None\n", out)
+    assert re.search(r"\nbar_chart +builtin\n    title: str = ''   \(also: heading\)\n    labels: list\[str\]\n", out)
     assert "        start_scale: float = 1.0\n" in out and "{" not in out.splitlines()[0]
 
 
@@ -399,6 +400,7 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
         "chapters": str((root / "output" / "out_preview_chapters.txt").resolve()),
         "thumbnail": None,
     }
+    assert doc["guide_passes"] == {}
     intro, second = doc["chapters"]  # the intro chapter before the first chapter (DESIGN.md §52)
     assert (intro["title"], intro["intro"], intro["start"], second["title"], second["scene"]) == ("Intro", True, 0.0, "Second", "b")
     assert second["start"] == pytest.approx(doc["scenes"][1]["start"]) and second["end"] == pytest.approx(doc["duration"])

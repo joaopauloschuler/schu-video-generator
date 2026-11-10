@@ -23,6 +23,7 @@ import urllib.error
 import urllib.parse
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from vidgen import DIST_NAME, httpapi
@@ -268,7 +269,15 @@ def check_request(request: ImageRequest, info: ModelInfo) -> RequestCheck:
             "and imagegen.model to a raster model)"
         )
     refs = params.get("input_references")
-    if isinstance(refs, dict) and isinstance(refs.get("min"), int) and refs["min"] >= 1:
+    count = len(request.input_references)
+    if count:
+        if not isinstance(refs, dict):
+            check.problems.append(f"{model} takes no input pictures (input_references): choose a model that does, e.g. bytedance-seed/seedream-4.5")
+        else:
+            limit = refs.get("max")
+            if isinstance(limit, int) and count > limit:
+                check.problems.append(f"{model} takes at most {limit} input pictures, not {count}: use fewer refs")
+    elif isinstance(refs, dict) and isinstance(refs.get("min"), int) and refs["min"] >= 1:
         check.problems.append(f"{model} edits an input picture (needs {refs['min']}+): choose a text-to-image model")
     if request.aspect_ratio is not None:
         ratios = info.values("aspect_ratio")
@@ -285,8 +294,8 @@ def check_request(request: ImageRequest, info: ModelInfo) -> RequestCheck:
 def request_body(request: ImageRequest, info: ModelInfo | None = None) -> dict[str, Any]:
     """JSON body of ``POST /images``: model, prompt, one picture, then either ``size`` (an
     explicit WIDTHxHEIGHT) or ``aspect_ratio`` (+ ``resolution``), ``quality``, ``seed`` (unless
-    the model is known to take none) and ``output_format``: ``svg`` for a vector picture, else
-    ``png`` when the model lists it."""
+    the model is known to take none), ``output_format`` (``svg`` for a vector picture, else
+    ``png`` when the model lists it) and ``input_references`` (each input picture as a data URL)."""
     body: dict[str, Any] = {"model": request.model, "prompt": request.text, "n": 1}
     if request.explicit_size:
         body["size"] = request.size
@@ -305,7 +314,15 @@ def request_body(request: ImageRequest, info: ModelInfo | None = None) -> dict[s
         body["output_format"] = "svg"
     elif formats and "png" in formats:
         body["output_format"] = "png"
+    if request.input_references:
+        body["input_references"] = [_input_reference(path) for path in request.input_references]
     return body
+
+
+def _input_reference(path: Path) -> dict[str, Any]:
+    """``path`` as the ``image_url`` entry of ``input_references`` (an inline data URL)."""
+    media = {".png": "image/png", ".webp": "image/webp"}.get(path.suffix.lower(), "image/jpeg")
+    return {"type": "image_url", "image_url": {"url": f"data:{media};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"}}
 
 
 # ----- the response ------------------------------------------------------------------------------
@@ -313,12 +330,14 @@ def request_body(request: ImageRequest, info: ModelInfo | None = None) -> dict[s
 
 @dataclass(frozen=True)
 class RawPicture:
-    """A response's picture as sent: bytes, media type (may be ``None``), cost, revised prompt."""
+    """A response's picture as sent: bytes, media type (may be ``None``), cost, revised prompt
+    and the numbers of ``usage`` (``None`` without one)."""
 
     data: bytes
     media_type: str | None
     cost: float | None
     revised_prompt: str | None
+    usage: dict[str, float] | None = None
 
 
 def decode_response(body: bytes) -> RawPicture:
@@ -333,15 +352,20 @@ def decode_response(body: bytes) -> RawPicture:
     if not data:
         raise VidgenError("OpenRouter returned an empty picture")
     usage = doc.get("usage") if isinstance(doc, dict) else None
-    cost = usage.get("cost") if isinstance(usage, dict) else None
+    numbers = {k: float(v) for k, v in usage.items() if _is_number(v)} if isinstance(usage, dict) else None
     media = item.get("media_type")
     revised = item.get("revised_prompt")
     return RawPicture(
         data,
         media if isinstance(media, str) and media else None,
-        float(cost) if isinstance(cost, (int, float)) and not isinstance(cost, bool) else None,
+        numbers.get("cost") if numbers else None,
         revised if isinstance(revised, str) and revised.strip() else None,
+        numbers or None,
     )
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _is_vector(raw: RawPicture) -> bool:
@@ -359,10 +383,10 @@ def parse_response(body: bytes, format: str = "png") -> GeneratedPicture:
         from vidgen.svgclean import sanitize_svg
 
         sanitize_svg(raw.data, where="the SVG OpenRouter returned")  # raises if it cannot be shown
-        return GeneratedPicture(raw.data, raw.revised_prompt, raw.cost)
+        return GeneratedPicture(raw.data, raw.revised_prompt, raw.cost, raw.usage)
     if _is_vector(raw):
         raise VidgenError("OpenRouter returned a vector (SVG) picture: add format: svg to the generate: to store it as one, or choose a raster model")
-    return GeneratedPicture(as_png(raw.data, SERVICE), raw.revised_prompt, raw.cost)
+    return GeneratedPicture(as_png(raw.data, SERVICE), raw.revised_prompt, raw.cost, raw.usage)
 
 
 # ----- an account's data policy ------------------------------------------------------------------
@@ -452,9 +476,20 @@ class OpenRouterImageProvider:
         self._zdr = zdr
         self._info: dict[str, Lookup] = {}
 
+    #: The network proxy adds the key (``VIDGEN_OPENROUTER_KEY_VIA_PROXY=1``, or set by
+    #: ``vidgen generate sheets`` from ``videogen.key_via_proxy``): no key read, no header sent.
+    key_via_proxy = False
+
+    def _proxy(self) -> bool:
+        from vidgen.videogen.openrouter import proxy_mode
+
+        return proxy_mode(self.key_via_proxy, os.environ)
+
     def check_credentials(self) -> None:
-        """Raise :class:`VidgenError` with setup instructions if ``OPENROUTER_API_KEY`` is unset."""
-        read_api_key()
+        """Raise :class:`VidgenError` with setup instructions if ``OPENROUTER_API_KEY`` is unset
+        (nothing in proxy mode)."""
+        if not self._proxy():
+            read_api_key()
 
     def model_info(self, model: str) -> Lookup:
         """The model's public record (fetched once per provider)."""
@@ -479,11 +514,12 @@ class OpenRouterImageProvider:
 
     def generate(self, request: ImageRequest) -> GeneratedPicture:
         """The picture of ``request``. Raises :class:`VidgenError` on any failure."""
-        key = read_api_key()
+        key = "" if self._proxy() else read_api_key()
         lookup = self.model_info(request.model)
         info = lookup if isinstance(lookup, ModelInfo) else None
         data = json.dumps(request_body(request, info)).encode("utf-8")
-        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json", "Accept": "application/json", **APP_HEADERS}
+        auth = {"Authorization": f"Bearer {key}"} if key else {}
+        headers = {**auth, "Content-Type": "application/json", "Accept": "application/json", **APP_HEADERS}
         try:
             body = httpapi.post_with_retries(
                 API_URL, data, headers=headers, service=SERVICE, secret=key, timeout=self.timeout, retries=self.retries,

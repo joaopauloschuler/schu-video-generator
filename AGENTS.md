@@ -25,7 +25,8 @@ stories: levels, jumps, keys and doors), `iso` (isometric villages and rooms for
 pedigrees, chromosomes, variants, the lab, populations: notation, exactness, lint), `science`
 (plots and worked calculations: plot or chart, fits, live models, units, significant figures,
 lint), `orbits` (orbital mechanics: views, scale honesty, panels, manoeuvres, three bodies,
-dates, pacing, lint), `particle-physics` (particle-physics videos: planning, choosing the scene,
+dates, pacing, lint), `three-d` (simple 3D scenes: building a set, the camera in 16:9 and 9:16,
+stand-ins, guide passes, lint), `particle-physics` (particle-physics videos: planning, choosing the scene,
 natural units, simulated data, sources, significance, pacing, lint), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
@@ -185,11 +186,12 @@ commands are tools with the same JSON documents: `guide`, `plan`, `init`, `valid
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`,
 `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
 `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, `animatic`, and `studio_sessions`, `studio_read`,
-`studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio` (options in snake_case: `per_beat`,
+`studio_check`, `studio_variations`, `studio_propose` for music a person hands you from `vidgen studio`, and
+`generate_plan`, `generate_run`, `generate_status`, `generate_takes`, `generate_pick`, `generate_host_test` for generated video shots (options in snake_case: `per_beat`,
 `fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
-them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
-`imagegen` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry
+them; page with `image_offset`), `thumbnail`, `gallery`, `character_sheet` and `generate_takes` their pictures. `render` previews by default. `tts`,
+`imagegen` and `generate_run` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry
 run, tell the user what it will cost, and confirm only after they agree.
 
 <!-- topic: pacing (also: story, storytelling, text, narration, beats) -->
@@ -403,7 +405,8 @@ project's own scene types, in its theme).
 | where in the world | `map` | `title`, `view`, `steps`, `values`, `pins`, `arcs` |
 | a photo or illustration | `image` | `path`, `generate`, `caption`, `fit`, `ken_burns` |
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
-| footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute` |
+| footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut) |
+| simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together (needs the `3d` extra) | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -1612,6 +1615,8 @@ and contrasts are left alone ("photons do not leave tracks" is fine).
     - text: "Then we opened in London."
 ```
 
+Pictures, screenshots, clips and simple 3D (the 3D craft: `vidgen guide 3d`):
+
 ```yaml
 # pictures and media
 - id: harbour
@@ -1638,6 +1643,42 @@ and contrasts are left alone ("photons do not leave tracks" is fine).
   type: video_clip
   params: {path: assets/demo.mp4, trim: [1, 5], fit_duration: true, mute: true, caption: "The app, live"}
   beats: [{text: "Here it is running live."}]
+- id: crate
+  type: 3d
+  params:
+    title: "A crate in 3D"
+    floor: true
+    objects:
+      - {id: crate, shape: box, size: 1.6, position: [0, 0.8, 0], rotation: [0, 20, 0], spin: [0, 30, 0]}
+      - {id: tag, parent: crate, shape: label, text: "Crate", position: [0, 1.2, 0]}   # turns with it
+      - {id: ball, shape: sphere, size: 0.6, position: [2, 0.3, 1], color: highlight, visible: false}
+  beats:
+    - text: "A crate turns slowly in front of the camera."
+      actions:
+        - {object_highlight: crate, at: "@crate"}
+    - text: "A ball appears and rolls round it, and the camera circles in."
+      actions:
+        - {object_show: ball, at: "@appears", style: grow}
+        - {object_path: ball, at: "@rolls", points: [[1, 0.3, 2], [-1.6, 0.3, 1.4]], run_time: 1.5}
+        - {camera_orbit: crate, at: "@circles", degrees: 60, run_time: 1.5}
+- id: meeting
+  type: 3d
+  params:
+    floor: true
+    camera: {position: [0, 3, 8], look_at: [0, 0.8, 0]}
+    objects:
+      - {id: ana, shape: standin, name: "Ana", color: primary, position: [-2.5, 0.8, 0], rotation: [0, 90, 0]}
+      - {id: ben, shape: standin, name: "Ben", color: secondary, position: [2.5, 0.8, 0], rotation: [0, -90, 0]}
+      - {id: gift, shape: box, size: 0.4, position: [0, 0.2, 1], visible: false}
+  beats:
+    - text: "Ana walks over to Ben."
+      actions:
+        - {object_walk: ana, at: "@walks", to: ben}
+    - text: "A gift appears between them and glows."
+      actions:
+        - {object_show: gift, at: "@appears", style: grow}
+        - {object_highlight: gift, at: "@glows"}
+        - {object_face: ben, at: "@gift", to: gift}
 - id: saying
   type: quote
   params: {text: "Simplicity is prerequisite for reliability.", author: "Edsger W. Dijkstra"}
@@ -1888,6 +1929,21 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `flyby` | on an `orbit` with a `flyby`: the closest approach on a word (`- action: flyby`) | when the narration says the probe swings past |
 | `pause` | on an `orbit`: hold the clock still from a word (`- action: pause`) until a `coast` (or the end of the beat); the panel says "clock paused" | while the narration explains a moment (the launch window) |
 | `coast` | on an `orbit`: run the clock again after a `pause` (`- action: coast`) | when the narration moves on |
+| `camera_orbit` | on a `3d` scene: circle the camera around an object (`- camera_orbit: tower`, `degrees: 90`, `up`) or the point it looks at | one camera move per idea; let it finish before the next |
+| `camera_dolly` | on a `3d` scene: push in towards what the camera looks at (`- action: camera_dolly`, `by: 2`; negative pulls back) | when the narration gets to a detail |
+| `camera_fly_to` | on a `3d` scene: fly to an object so it fills the frame (`- camera_fly_to: ball`) | when the narration names the object |
+| `camera_look_at` | on a `3d` scene: turn the camera to an object (`- camera_look_at: ball`) or a `point` | a small turn reads better than a long flight |
+| `camera_move` | on a `3d` scene: move the camera to `to: [x, y, z]`, looking at `look_at` (an object or a point) | to pull back to the whole scene |
+| `object_move` | on a `3d` scene: move an object to `to: [x, y, z]` or `by` (`- object_move: ball`); its children come along; the camera and arrows follow it | when the narration says where it goes |
+| `object_path` | on a `3d` scene: move an object along a smooth curve through `points` (`turn: true` faces along it) | a journey with a few stops |
+| `object_rotate` | on a `3d` scene: turn an object to `to: [x, y, z]` degrees or `by` | "it tips over", "the lid opens" |
+| `object_spin` | on a `3d` scene: spin an object `turns` times about `axis` (y) during the beat | a quick spin on a word; `spin:` in params turns it all the time |
+| `object_scale` | on a `3d` scene: grow or shrink an object to `to` times its size | "it doubles in size" |
+| `object_show` | on a `3d` scene: bring in an object written with `visible: false` (fade, or `style: grow`) | on the word that names it |
+| `object_hide` | on a `3d` scene: take an object away (fade, or `style: grow` shrinks it) | when it is done with |
+| `object_highlight` | on a `3d` scene: make an object glow (theme `highlight`) until the end of the beat | when the narration names it (the 2D `highlight` works on `view`/`title` only) |
+| `object_walk` | on a `3d` scene: a stand-in turns and walks to `to` (`[x, z]` or an object's id: it stops in front of it) | "Ana walks over to the crate" |
+| `object_face` | on a `3d` scene: turn an object (a stand-in's nose) to face `to` (an object's id or a point) | before a stand-in talks to another |
 | `corotate` | on an `orbit` with a three-body `system`: turn the view into the frame rotating with the pair (`- action: corotate`, `run_time: 2`): both primaries and the Lagrange points stand still, trails redraw in that frame | "now let the frame turn with Jupiter" (a Trojan's tadpole appears) |
 | `inertial` | on an `orbit` with a three-body `system`: turn the view back to the fixed stars (`- action: inertial`) | "seen from the stars again" |
 | `antiparticles` | on a `standard_model` chart: turn quark and lepton cells into their antiparticles (`- action: antiparticles` for all, or `antiparticles: "group:leptons"`): the charge reverses, the symbol takes its bar or sign (ū, ν̄ₑ, e⁺), the name changes; `until:` turns them back | "every particle has an antiparticle with the opposite charge" |
@@ -3107,6 +3163,46 @@ Run `vidgen lint` in 16:9 and 9:16.
       actions: [{burn: "burn:1", at: "@burn"}]
 ```
 
+<!-- topic: three-d (also: 3d, threejs, three.js, 3d-scenes, stand-ins, standins, guide-passes) -->
+## 3D: simple scenes with shapes and stand-ins
+
+One scene type, `3d`, draws plain shapes, labels and character stand-ins with one light, seen by
+a camera that stands still or moves on words (three.js in headless Chromium; the `3d` extra:
+`pip install "schu-video-generator[3d]"` and `python -m playwright install chromium`). It is for
+explaining where things are and what moves where, not for realism. Every param: `docs/CONFIG.md`;
+the craft in full: `docs/COOKBOOK-3D.md` in the schu-video-generator repository; a whole example:
+`examples/3d-short` (a 9:16 Short of about 15 s: two stand-ins, a ball, four camera moves, captions,
+guide passes).
+
+**Building a set.** Scene units, y up, `floor: true` at y 0; a shape is centred on its
+`position`, so a box of height 1 stands at `y: 0.5`, a stand-in of height 1.6 at `y: 0.8`. Short,
+meaningful `id`s: actions, lint and the mask's colour table use them. `parent:` (written earlier)
+makes parts move together; `visible: false` plus `object_show` on a word brings a thing in.
+
+**The camera.** `fov` is across the frame's shorter side, so a 9:16 frame sees much more above and
+below: keep the set compact across, the camera close (`fov` 50–56, 5–6 units away), the objects in
+the middle band (title on top, captions below). One move per idea, timed to the word that names
+the thing: `camera_fly_to` an object (it follows it if it moves), `camera_orbit` 45–90° to show
+depth, `camera_dolly` a small push-in, `camera_move` to pull back at the end.
+
+**Stand-ins.** `shape: standin` with a `name` and a theme colour; its nose shows where it faces
+(+z unturned, `rotation: [0, 90, 0]` faces +x). `object_walk` (to `[x, z]` or up to an object)
+turns it and walks it there; `object_face` turns it to whom it talks to. Give its beats its
+`voice`, so lint checks the speaker is on screen.
+
+**Guide passes.** `guide_passes: true` or `all` (or `vidgen render --guide-passes`) also draws `depth`
+(near white, far dark grey; one range for the shot, fitted to the objects, or `depth_range`),
+`outline` (white edges on black) and `mask` (each object one flat colour from its id, the floor
+dark grey, with `<scene>.mask-colors.json`), same frames and camera, beside the 3D clip. Some of
+them: `guide_passes: depth`, `depth,mask` or `[depth, mask]`, as `--guide-passes` takes them.
+A beat's `generated_shot` on a `3d` scene can send one as its guide video (`guide: depth |
+outline | mask`; `true` = the normal 3D view): `vidgen generate inputs --guide` draws it and cuts
+`guide.<pass>.mp4` (see the generated video shots below and `docs/COOKBOOK-GENERATED-VIDEO.md` §6).
+
+**Lint.** `three_d_off_frame` (an object the beat is about is mostly outside the frame) and
+`three_d_hidden` (mostly behind a nearer one); look at `vidgen storyboard --per-beat 3` for the
+moves mid-beat.
+
 <!-- topic: particle-physics (also: particle, particle_physics, hep, higgs, standard-model, collider, feynman-diagrams) -->
 ## Particle physics: particles, collisions and discoveries
 
@@ -3826,6 +3922,95 @@ scenes:
   "flat illustration, simple shapes, few colours"); not for photos or soft lighting (thousands
   of shapes, capped and thinned: worse than a PNG). Text in an SVG is removed — keep words in
   schu-video-generator's captions. No SVG model has a ZDR endpoint (2026-10-08).
+- **Generated video shots** (a beat's `generated_shot: {kind: talking | action | establishing,
+  model, prompt, setting, ...}`; `docs/COOKBOOK-GENERATED-VIDEO.md`; `docs/COOKBOOK-DIRECTING-YOUR-AI.md` has the workflow as instructions a person gives an AI): a video model on OpenRouter
+  makes the beat's picture; schu-video-generator keeps the timing, voices, captions, overlays and
+  music (by default the model's own sound is not used; see **A model's own sound** below). Expensive (about $0.03-0.60 per second), so: a few
+  shots that need real footage, the lowest resolution, 4-5 s. The order: `vidgen generate plan`
+  (free) → `generate sheets --pay` → look, `approved: true` (or cut one sheet picture into named
+  panels with `vidgen split-sheet`) → `vidgen tts` → `generate frames --pay` (a shot's `paint_first_frame:`,
+  a starting picture from its 3D first frame and references; look at it before paying for a clip) →
+  `generate inputs --guide` → `generate plan` (nothing blocked; tell the user the total) → `generate run --pay`
+  (needs `videogen.budget_usd`; stops at the first failure, never retries, never pays twice) →
+  `generate takes` (look at every contact sheet and QA finding) → `generate pick --shot ID
+  --take N` → `vidgen render`. A take with QA errors (black, frozen) is not shown unless picked;
+  `--take none` keeps vidgen's own picture. A new take needs a changed request (another `seed`).
+  After any edit to the scene, the line or its MP3, `generate plan` blocks the shot ("inputs changed
+  since they were cut") and `run --pay` refuses: run the command the plan names (`generate inputs`,
+  free; `vidgen tts` first when the plan says so).
+  Takes are paid footage: commit `takes/`. When the film shows takes, the description file says
+  "Includes AI-generated footage (models)" and lint's `generated_footage` reminds you to mark the
+  upload as altered or synthetic content. Video generation is not eligible for Zero Data
+  Retention: send no private faces or material you may not share.
+- **A model's own sound** (`generated_shot.sound: model`, or `videogen.models: {"author/name":
+  {sound: model}}`, or `videogen.sound`; default `mix`): the job is sent with `generate_audio: true`
+  and the clip keeps the model's sound. Different models can behave differently, so choose per
+  model; the setting is part of the request, so changing it is a new paid clip. A model the list
+  says cannot make sound is blocked; one it says nothing about gets a note and may come back silent.
+  Bytedance Seedance 2.0 mini, given the beat's voice as a reference, made a sound the owner
+  judged to be the same voice and matching the lips, but it is a new performance, up to about 0.9 s
+  late against the voice file, so never lay the voice file over such a clip. A placed take always
+  plays vidgen's mix. To hear the clip's sound, use `place: false` and put the take
+  (`takes/<shot>/<n>.mp4`) in a `video_clip` scene: `{type: video_clip, params: {path:
+  takes/<shot>/<n>.mp4, region: bleed}, beats: [], duration: <the clip's length>}` plays it at
+  volume 1 (a `video_clip` with narration plays it at 0.25; `volume:` sets it). The limit: vidgen
+  does not time captions or word-anchored actions from a clip's sound.
+- **Painted starting pictures** (`generated_shot.paint_first_frame: {prompt, refs, seed, model,
+  resolution}`, `vidgen generate frames [--pay] [--shot ID]`, dry run by default): `bytedance-seed/seedream-4.5`
+  ($0.04 flat, `input_references`) paints from the beat's first frame (the layout, whose composition, camera and positions
+  it must keep) and the reference pictures, into `assets/frames/<shot>_<key>.png`, inside `videogen.budget_usd`, never
+  paid twice. A shot uses it with `first_frame: painted` (blocked until it exists). Leave `name:` off the stand-ins, or the name tags can become text in the picture.
+  `vidgen split-sheet PICTURE --columns N [--rows N] [--gap PX] | --box X,Y,W,H ... --names a,b --scale 3 --out DIR` cuts one sheet into named panels.
+  A file reference can say what it shows (`refs: [{file: path, shows: morag}]`); the role sentence names it in real order.
+  `generate inputs --guide` also writes `overlay.last.png` (the starting picture over the guide's last frame, with whatever moved or appeared since the guide's first frame at full strength inside a magenta outline) so an object appearing later can be found and checked; both overlays are enlarged to 1600 pixels on the longer side.
+  A film of picked takes with hard cuts: `place: false` on the shots, one `video_clip` per take (`path: takes/<shot>/<n>.mp4`, `fade: false`, `region: bleed`, no beats, `duration:` the take's length) in a separate `film.yaml` with its own `output:` name, then `vidgen render film.yaml --preview` (the description file and lint then carry the AI-generated disclosure). A beat lasts its voice plus `pause:` (or `narration.pad` without one), and the rendered scene about 0.5 s more, so the plan's shot window is shorter than the scene. An action shot sends no voice unless `audio: beat`; `vidgen generate plan` notes a shot with a line, `sound: model` and no voice input.
+- **Voice and guide inputs** (talking shots, `audio:`, `guide:`): OpenRouter takes sound and
+  video only as https URLs, so these shots stay blocked until the user opts in with
+  `videogen: {host: quick_tunnel}` (default `none`). Then each paid shot shares only its own
+  `audio.mp3` / `guide.mp4` (copies, random names, a secret path) through its own Cloudflare
+  quick tunnel while its job runs, at most `host_max_minutes` (20), and closes it when the job
+  ends, not when a file was fetched. Needs `cloudflared` (Windows `winget install Cloudflare.cloudflared`). Check it free
+  first with `vidgen generate host-test`; `generate plan` lists exactly which files a run would
+  share. Ask the user before turning the host on: the files are reachable on the public
+  internet by anyone with the address for those minutes.
+- **Where the starting picture goes** (`first_frame_in: frame | guide`: `generated_shot`, then
+  `videogen.models.<model>`, then `videogen`, default `frame`; `videogen.first_frame_dissolve`, default
+  0.4 s): `guide` puts the shot's `first_frame:` picture into the guide video
+  (`guide[.<pass>].opening.mp4`, made by `vidgen generate inputs --guide`, as long as the plain guide,
+  the picture dissolving into the guide) and sends no first frame; the shot needs a `guide:` and a
+  starting picture. Seedance (`bytedance/seedance-*`) takes a first frame or references, never both:
+  a request with both silently loses the references (nothing downloaded, the no-reference price),
+  so `generate plan` / `run` block such a shot (a shot already paid for gets a note), naming
+  `first_frame_in: guide`; `videogen.models.<model>.first_frame_with_references: true` overrides it, and
+  models vidgen has no evidence about are not blocked. With `first_frame_in: guide` on a model with a
+  template (Seedance) the prompt starts with a role sentence (`@video1` opens on the starting
+  picture, `@image1` and so on are who, `@audio1` is whose voice), built from the actual order of the
+  inputs; shots with `first_frame_in: frame` keep their prompt exactly. Measured on seedance-2.0-mini: the
+  opening is close to the picture (`opening match` 0.83-0.85), not exact, and the model sets its own speech timing.
+  `first_frame: last_of:<shot id>` starts a shot from the last frame of the take that shot shows (either mode; `vidgen generate inputs` cuts
+  `build/videogen/<shot>/last_of.<source>.<take>.png`): pick the take first, since another pick makes the next shot stale. A source with no take
+  blocks the shot and a run never pays for both in one pass: pay, look at the clip, then the next. QA gives each take with a starting
+  picture an `opening match` (SSIM of its first frame against the picture, in its record and on its contact sheet, a warning under 0.7, a rough guide).
+  `vidgen generate inputs --guide` writes `build/videogen/<shot>/overlay.png` (the picture blended over the plain guide's first frame): open it to check the
+  3D figures fit before paying. For takes that join with a plain cut, set `fade: false` on the `video_clip` scenes (no fade in, no 0.5 s fade-out).
+  After a hosted job vidgen compares what the provider `GET` from the tunnel with what it hosted and
+  warns in the run output and the take's record; the warning is never an error.
+- **A submit with no known outcome** (`vidgen generate plan` / `run` / `status` / `ledger` say
+  "no known outcome"; vidgen was stopped or an answer was lost after a paid request was sent):
+  it may have been charged, so vidgen will not pay for that shot again by itself and counts it
+  at its estimate. Tell the user; do not guess. They check their OpenRouter activity, then
+  `vidgen generate resolve --intent ID --not-charged | --job JOB_ID | --charged [--cost USD]`.
+- **A 3D scene as the guide** (`guide: depth | outline | mask`, only on a `3d` scene; `guide:
+  true` = `render`, the normal view): the clip follows the 3D layout and camera, the model draws
+  the look. `depth` suits most shots; `mask` keeps objects apart (the prompt lists the
+  stand-ins' colours); `outline` for edge guides. The first frame (`first_frame: render`) stays
+  the normal view. It is a video input, so it needs the quick tunnel too. Models may ignore
+  guides: try one cheap shot first. With any guide (also `guide: true`) the prompt leaves the
+  framing to it: a talking shot says "Ana, speaking" instead of "Talking close-up of Ana, facing
+  the camera, speaking", and framing instructions in the sheet text are left out of the prompt
+  (the plan's `note:` quotes them; a clause that also describes clothes or hair stays whole). The sheet
+  pictures are unchanged. A guided shot paid for under the earlier wording is blocked, not paid
+  again; `seed:` or `prompt:` on the shot asks for a new take with the new wording.
 
 ### Your content and third-party services
 
@@ -3945,6 +4130,9 @@ install; `vidgen validate` warns when it is missing.
 | `shorts_safe_area` | in a Short (`shorts:`), text or a face where the app covers the frame (bottom 20 %, right 15 %), or a caption / the hook over a face | a closer `shot` or `zoom` with the faces higher; move the scene's text inwards |
 | `overlay_face` | a `hud`'s text or plate over a character's face (outside Shorts) | frame the face away from the corners, `compact: true`, fewer `lines` |
 | `shorts_length` (error) | a Short longer than `shorts.max_seconds` (60) | leave out beats or scenes in `cut:`, a shorter `end_card` |
+| `generated_footage` (info) | the scene shows AI-generated video takes | nothing to fix: when publishing, mark the video as altered or synthetic content where the platform asks |
+| `three_d_off_frame` | in a `3d` scene, an object the beat is about (its actions name it, or a stand-in says the line) is mostly outside the frame | `camera_fly_to` / `camera_look_at` it, or move it into view |
+| `three_d_hidden` | in a `3d` scene, an object the beat is about is mostly hidden behind a nearer one | `camera_orbit` round it, or move one of them |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

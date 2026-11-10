@@ -33,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from vidgen.errors import VidgenError
 
 if TYPE_CHECKING:
+    from vidgen.config import ImagegenConfig
     from vidgen.project import Project
     from vidgen.theme import Theme
 
@@ -155,6 +156,9 @@ class ImageRequest:
     explicit_size: bool = True
     #: ``png`` (raster, stored as PNG) or ``svg`` (vector, stored as SVG; §65).
     format: str = "png"
+    #: Local pictures sent to the model with the prompt (``input_references``; OpenRouter only).
+    #: Their contents are part of the caller's cache key (:mod:`vidgen.videogen.frames`).
+    input_references: tuple[Path, ...] = ()
 
     @property
     def exists(self) -> bool:
@@ -204,12 +208,13 @@ class SceneImage:
 
 @dataclass(frozen=True)
 class GeneratedPicture:
-    """What a provider returns: PNG bytes, the prompt it actually used and what it charged in
-    US dollars, if it says."""
+    """What a provider returns: PNG bytes, the prompt it actually used, what it charged in
+    US dollars, if it says, and its usage numbers as sent (OpenRouter's ``usage``)."""
 
     data: bytes
     revised_prompt: str | None = None
     cost: float | None = None
+    usage: dict[str, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -316,11 +321,11 @@ def cartoon_style_words(project: Project, cartoon: bool) -> str:
     return " ".join(value.split()).rstrip(".") if cartoon and value else ""
 
 
-def image_request(project: Project, generate: GenerateImage, *, cartoon: bool = False) -> ImageRequest:
-    """``generate`` resolved with the project's ``imagegen:`` settings. ``cartoon``: the scene
-    type uses the video's ``cartoon_style`` (``stage``), added after the style words; without a
-    ``cartoon_style`` the request is the same either way."""
-    cfg = project.config.imagegen
+def image_request(project: Project, generate: GenerateImage, *, cartoon: bool = False, settings: ImagegenConfig | None = None) -> ImageRequest:
+    """``generate`` resolved with the project's ``imagegen:`` settings (``settings`` instead when
+    given). ``cartoon``: the scene type uses the video's ``cartoon_style`` (``stage``), added
+    after the style words; without a ``cartoon_style`` the request is the same either way."""
+    cfg = settings if settings is not None else project.config.imagegen
     styles = [style_words(generate.style if generate.style is not None else cfg.style), cartoon_style_words(project, cartoon)]
     style = "; ".join(dict.fromkeys(w for w in styles if w))
     negatives = [n.strip() for n in (generate.negative, cfg.negative or "") if n and n.strip()]

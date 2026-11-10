@@ -112,10 +112,11 @@ def _beat_ids_using(audio_dir: Path, project: Project) -> set[str]:
 def orphaned_audio(project: Project) -> list[Path]:
     """MP3s in ``project.audio_dir`` whose beat id no config sharing that folder uses (sorted).
 
-    They are only reported, never deleted.
+    They are only reported, never deleted. A config without any beat (a ``film.yaml`` of
+    ``video_clip`` scenes beside the ``video.yaml`` that made the voices) has no say: none.
     """
     audio_dir = project.audio_dir
-    if not audio_dir.is_dir():
+    if not audio_dir.is_dir() or not any(True for _ in project.beats()):
         return []
     known = {beat.id for _, beat in project.beats()} | _beat_ids_using(audio_dir, project)
     return sorted(p for p in audio_dir.glob("*.mp3") if p.is_file() and p.stem not in known)

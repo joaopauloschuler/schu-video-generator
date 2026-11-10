@@ -54,6 +54,12 @@ MODELS: list[type[BaseModel]] = [
     config.ConceptColorsRule,
     config.SttConfig,
     config.ImagegenConfig,
+    config.VideogenConfig,
+    config.StyleSheet,
+    config.ReferenceSheet,
+    config.GeneratedShot,
+    config.FileRef,
+    config.PaintFirstFrame,
     config.OverlayConfig,
     config.SfxConfig,
     config.SfxCue,
@@ -164,6 +170,26 @@ def test_audio_drama_cookbook_skeleton_is_valid_and_linked(tmp_path: Path) -> No
     assert not problems, problems
     for doc in ("docs/COOKBOOK.md", "docs/COOKBOOK-AUDIO.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
         assert "COOKBOOK-AUDIODRAMA.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
+
+
+def test_generated_video_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
+    """Step 294: the generated-video cookbook's project is valid, its talking shot resolves, and
+    the cookbooks, README, CONFIG and the guide point to it."""
+    from vidgen.cli import validate_all
+    from vidgen.project import Project
+    from vidgen.videogen.shots import project_shots
+
+    text = (ROOT / "docs" / "COOKBOOK-GENERATED-VIDEO.md").read_text(encoding="utf-8")
+    assert "Zero Data Retention" in text and "budget_usd" in text and "vidgen generate run --pay" in text
+    block = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)[0]
+    (tmp_path / "video.yaml").write_text(block, encoding="utf-8")
+    project = Project.load(tmp_path)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    (shot,) = project_shots(project, None)
+    assert shot.id == "closeup_b1" and shot.speaker == "theo" and shot.spec.kind == "talking"
+    for doc in ("docs/COOKBOOK.md", "README.md", "docs/CONFIG.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
+        assert "COOKBOOK-GENERATED-VIDEO.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
 GENETICS_TYPES = ("cross", "pedigree", "linkage_map", "karyotype", "mutation", "crispr", "dna_lab", "population", "gwas")
@@ -344,3 +370,31 @@ def test_docs_yaml_snippets_parse() -> None:
         text = (ROOT / doc).read_text(encoding="utf-8")
         for block in re.findall(r"```yaml\n(.*?)```", text, flags=re.S):
             yaml.safe_load(block.replace("[...]", "[]"))
+
+
+def test_the_3d_cookbook_and_its_example() -> None:
+    """Step 302: COOKBOOK-3D.md covers setting up, the set, the camera, stand-ins, guide passes
+    and checks; its example (examples/3d-short, YAML only) is a 9:16 Short with shapes, two
+    stand-ins and camera moves that validates; the docs point to both."""
+    from vidgen.cli import validate_all
+    from vidgen.project import Project
+
+    text = (ROOT / "docs" / "COOKBOOK-3D.md").read_text(encoding="utf-8")
+    for part in ("## 1. Setting up", "## 2. Building a scene", "## 3. The camera", "## 4. Objects and stand-ins", "## 5. Guide passes",
+                 "## 6. Checking", "## 7. Common mistakes", "py -m playwright install chromium", "depth_range", "#404040",
+                 "mask-colors.json", "`three_d_off_frame`", "`three_d_hidden`", "[`3d`](CONFIG.md#3d)", "examples/3d-short"):
+        assert part in text, part
+    example = ROOT / "examples" / "3d-short"
+    assert sorted(p.name for p in example.iterdir()) == ["video.yaml"]   # no media committed
+    project = Project.load(example)
+    problems, _ = validate_all(project, keep_going=True)
+    assert not problems, problems
+    assert (project.config.format.width, project.config.format.height) == (1080, 1920)
+    (scene,) = yaml.safe_load((example / "video.yaml").read_text(encoding="utf-8"))["scenes"]
+    assert scene["type"] == "3d" and scene["params"]["guide_passes"] is True
+    shapes = [o.get("shape", "box") for o in scene["params"]["objects"]]
+    assert shapes.count("standin") == 2 and {"box", "sphere", "cone", "torus", "arrow"} <= set(shapes)
+    actions = {a.get("action") or next(iter(a)) for b in scene["beats"] for a in b["actions"]}
+    assert {"object_walk", "object_face", "object_show", "camera_dolly", "camera_fly_to", "camera_move"} <= actions
+    for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
+        assert "COOKBOOK-3D.md" in (ROOT / doc).read_text(encoding="utf-8"), doc

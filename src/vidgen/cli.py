@@ -38,6 +38,7 @@ JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
     "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts", "audio",
+    "generate",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -357,6 +358,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.imagegen import imagegen_problems
     from vidgen.music import config_problems as music_problems
+    from vidgen.videogen.shots import shot_problems
     from vidgen.overlays import overlay_problems
     from vidgen.sfx import config_problems as sfx_problems
     from vidgen.soundfont import soundfont_problems
@@ -415,6 +417,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(Problem(loc, message) for loc, message in soundfont_problems(project.config.soundfont, project.root))
             problems.extend(thumbnail_problems(project, theme))
             problems.extend(Problem(loc, message) for loc, message in imagegen_problems(project))
+            problems.extend(Problem(loc, message) for loc, message in shot_problems(project))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
     return project.attributed(problems)
@@ -512,7 +515,8 @@ def validate_warnings(project: Project) -> list[str]:
     (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
     line of their own voice (§69.34), dubbed voices that lose their kind or merge (§80) and
     composed music without the ``music`` extra or the SoundFont (§85), and a Short that is not
-    vertical or longer than its ``max_seconds`` (§101)."""
+    vertical or longer than its ``max_seconds`` (§101), and ``3d`` scenes without Playwright or
+    its Chromium (§114.4)."""
     from vidgen.carry import carry_warnings
     from vidgen.cuts import shorts_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
@@ -523,6 +527,7 @@ def validate_warnings(project: Project) -> list[str]:
     from vidgen.music import music_warnings
     from vidgen.music_pieces import piece_warnings
     from vidgen.overlap import overlap_warnings
+    from vidgen.three_d.browser import install_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
     from vidgen.tts import tts_warnings
@@ -550,6 +555,7 @@ def validate_warnings(project: Project) -> list[str]:
         + music_warnings(project.config)
         + piece_warnings(project.config, project.root)
         + shorts_warnings(project)
+        + install_warnings(project)
     )
 
 
@@ -844,6 +850,7 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
         frames=frames,
         force=args.force,
         max_scenes=args.max_scenes,
+        guide_passes=_guide_passes(args),
     )
     if args.json:
         return jsonout.render_document(project, result, args.preview or args.draft, time.monotonic() - started)
@@ -857,11 +864,23 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
         print(f"frames:    {result.frames_index}")
     if result.thumbnail is not None:
         print(f"thumbnail: {result.thumbnail.path}")
+    for scene_id, files in result.guide_passes.items():
+        print(f"guide passes ({scene_id}): {', '.join(f.name for f in files)} in {files[0].parent}")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
     mix = result.timings.get("mix")
     if mix is not None:
         print(f"loudness:  {_loudness_line(mix)}")
     return 0
+
+
+def _guide_passes(args: argparse.Namespace) -> tuple[str, ...]:
+    """The guide passes ``--guide-passes`` asks for (DESIGN.md §114.14)."""
+    from vidgen.three_d.passes import parse_passes
+
+    try:
+        return parse_passes(args.guide_passes, "--guide-passes")
+    except ValueError as exc:
+        raise VidgenError(str(exc)) from None
 
 
 def _render_audio(args: argparse.Namespace, project: Project, started: float) -> CommandResult:
@@ -870,7 +889,7 @@ def _render_audio(args: argparse.Namespace, project: Project, started: float) ->
 
     video_only = [name for name, given in (
         ("--scene", args.scene), ("--no-audio", args.no_audio), ("--frames", args.frames or args.frames_per_beat),
-        ("--max-scenes", args.max_scenes), ("--keep-going", args.keep_going),
+        ("--max-scenes", args.max_scenes), ("--keep-going", args.keep_going), ("--guide-passes", args.guide_passes),
     ) if given]
     if video_only:
         raise VidgenError(f"{', '.join(video_only)}: not with an audio-only render (no scene is rendered)")
@@ -1547,7 +1566,7 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
     from vidgen import composer, synth
 
     preview_dir = Path(args.render_dir).resolve() if args.render_dir else None
-    entries = music.music_entries(root, preview_dir)
+    entries = music.music_entries(root, preview_dir, analyse=args.json)   # the text list needs no synthesis
     if args.json:
         return jsonout.list_music_document(root, entries, preview_dir, composer.mood_entries(), composer.instrument_entries())
     for e in entries:
@@ -1906,6 +1925,274 @@ def cmd_soundfont(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate(args: argparse.Namespace) -> CommandResult:
+    """Generated video (DESIGN.md §113): ``models`` lists OpenRouter's video models (public list,
+    cached; works offline from the cache); ``ledger`` shows a project's spending and budget."""
+    from vidgen.videogen.ledger import BudgetState, Ledger, intent_text
+    from vidgen.videogen.models import load_catalog, model_line, money
+    from vidgen.videogen.run import ledger_path
+
+    if args.action == "models":
+        catalog = load_catalog(refresh=args.refresh)
+        if catalog.note:
+            logging.getLogger("vidgen.videogen").warning(catalog.note)
+        stamp = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(catalog.fetched_at))
+        if args.json:
+            return jsonout.envelope(
+                "generate", True, action="models", source=catalog.source, fetched_at=stamp,
+                models=[m.to_json() for m in catalog.models],
+            )
+        print(f"{len(catalog.models)} video models on OpenRouter (list of {stamp}, {catalog.source}; --refresh fetches it again)")
+        print("model | durations | resolutions | aspect ratios | frame images | estimated price without audio")
+        for model in catalog.models:
+            print(f"  {model_line(model)}")
+        print("prices: vidgen's conservative estimates from the listed SKUs (~: per video token, estimated); the model's audio is never generated")
+        print("references: pictures on every model; audio / video references only where the provider supports them (e.g. Seedance 2.x)")
+        return 0
+    if args.action == "host-test":
+        return _generate_host_test(args)
+    if args.action in ("plan", "sheets", "inputs", "frames"):
+        return _generate_shots(args)
+    if args.action in ("run", "status", "takes", "pick"):
+        return _generate_workflow(args)
+    if args.action == "resolve":
+        return _generate_resolve(args)
+    project = Project.load(args.project)
+    settings = project.config.videogen
+    ledger = Ledger(ledger_path(project.root, settings.provider))
+    jobs = ledger.jobs()
+    budget = BudgetState(settings.budget_usd, ledger.spent())
+    if args.json:
+        return jsonout.envelope(
+            "generate", True, action="ledger", ledger=str(ledger.path.resolve()), provider=settings.provider,
+            budget_usd=budget.cap_usd, spent_usd=budget.spent_usd, remaining_usd=budget.remaining_usd,
+            jobs=[
+                {"job_id": j.job_id, "model": j.model, "request_hash": j.request_hash, "status": j.status, "estimate_usd": j.estimate_usd,
+                 "cost_usd": j.cost_usd, "charged_usd": j.charged, "submitted": j.submitted}
+                for j in jobs
+            ],
+            intents=[i.to_json() for i in ledger.intents()],
+        )
+    print(f"ledger: {ledger.path} ({len(jobs)} job(s), provider {settings.provider})")
+    for j in jobs:
+        cost = money(j.cost_usd) if j.cost_usd is not None else f"no cost reported, counted at the estimate {money(j.estimate_usd or 0.0)}"
+        print(f"  {j.submitted} {j.job_id} {j.model} {j.status or 'open'}: {cost}")
+    for intent in ledger.unresolved_intents():
+        print(f"  unresolved submit: {intent_text(intent)}")
+    print(budget.text())
+    return 0
+
+
+def _generate_resolve(args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate resolve --intent ID --not-charged | --charged [--cost USD] | --job JOB_ID``
+    (DESIGN.md §113.10): the owner records what happened to a submit whose outcome is unknown."""
+    from vidgen.videogen.ledger import CHARGED, NOT_CHARGED, Ledger
+    from vidgen.videogen.run import ledger_path
+
+    if args.pay:
+        raise VidgenError("`generate resolve` never pays; drop --pay")
+    if not args.intent or sum([args.not_charged, args.charged, args.job is not None]) != 1:
+        raise VidgenError("resolve needs --intent ID and exactly one of --not-charged, --charged [--cost USD], --job JOB_ID (`vidgen generate ledger` lists the intents)")
+    if args.job is not None and not args.job.strip():
+        raise VidgenError("--job: the job's id")
+    if args.cost is not None and not args.charged:
+        raise VidgenError("--cost goes with --charged")
+    if args.cost is not None and args.cost < 0:
+        raise VidgenError("--cost: US dollars, 0 or more")
+    project = Project.load(args.project, variant=args.variant)
+    ledger = Ledger(ledger_path(project.root, project.config.videogen.provider))
+    outcome = CHARGED if args.charged else NOT_CHARGED
+    intent = ledger.resolve_intent(args.intent, outcome, cost_usd=args.cost, job_id=args.job)
+    if args.json:
+        return jsonout.envelope("generate", True, action="resolve", intent=intent.to_json())
+    what = {CHARGED: "counted as charged; the next run may pay for this request again", NOT_CHARGED: "not charged; the next run may pay for this request"}
+    print(f"intent {intent.intent_id}: {what.get(intent.outcome or '', f'it is job {intent.job_id} now; the next run polls and downloads it, free')}")
+    return 0
+
+
+def _generate_shots(args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate plan | sheets | inputs | frames`` (DESIGN.md §113.3, §113.15)."""
+    from vidgen.videogen.inputs import make_inputs
+    from vidgen.videogen.models import load_catalog
+    from vidgen.videogen.sheets import run_sheets
+    from vidgen.videogen.shots import plan_shots, project_shots
+
+    project = Project.load(args.project, variant=args.variant)
+    if args.action == "sheets":
+        result = run_sheets(project, args.sheet or (), pay=args.pay, out=(lambda line: None) if args.json else print)
+        if args.json:
+            total, unknown = result.cost
+            return jsonout.envelope(
+                "generate", True, action="sheets", paid=args.pay, todo=[r.path.relative_to(project.root).as_posix() for r in result.plan.todo],
+                estimate_usd=total, unknown_prices=unknown, paid_usd=result.paid,
+                sheets=[{"owner": s.owner, "location": s.location, "approved": s.approved, "ready": s.ready, "status": s.status(),
+                         "pictures": [p.request.path.relative_to(project.root).as_posix() for p in s.pictures]} for s in result.sheets],
+            )
+        return 0
+    if args.action == "frames":
+        return _generate_frames(project, args)
+    if args.pay:
+        raise VidgenError(f"--pay is for `vidgen generate run`, `generate sheets` and `generate frames`; `generate {args.action}` never pays")
+    if args.action == "inputs":
+        catalog = load_catalog()
+        shots = [s for s in project_shots(project, catalog) if not args.shot or s.id in args.shot or s.beat.id in args.shot]
+        written = make_inputs(project, shots, guide=args.guide, out=(lambda line: None) if args.json else print)
+        if args.json:
+            return jsonout.envelope("generate", True, action="inputs", written=[p.relative_to(project.root).as_posix() for p in written])
+        print(f"{len(written)} input file(s) written in build/videogen/")
+        return 0
+    plan = plan_shots(project, budget_usd=args.budget, shot_ids=args.shot or ())
+    root = project.root
+    if args.json:
+        return jsonout.envelope(
+            "generate", True, action="plan", clips_usd=plan.clips_cost, sheets_usd=plan.sheets_cost, total_usd=plan.total,
+            budget_usd=plan.budget.cap_usd, spent_usd=plan.budget.spent_usd, remaining_usd=plan.budget.remaining_usd,
+            unresolved_intents=[i.to_json() for i in plan.unresolved_intents], warnings=plan.warnings,
+            shots=[
+                {"id": s.shot.id, "kind": s.shot.spec.kind, "model": s.shot.spec.model, "scene": s.shot.scene_id, "beat": s.shot.beat.id,
+                 "start": round(s.shot.start, 3), "length": round(s.shot.length, 3), "duration": s.shot.duration,
+                 "resolution": s.shot.resolution, "aspect_ratio": s.shot.aspect_ratio, "sound": s.shot.sound, "first_frame_in": s.shot.first_frame_in,
+                 "inputs": [{"role": i.role, "kind": i.kind, "path": i.path.relative_to(root).as_posix() if i.path.is_relative_to(root) else str(i.path),
+                             "frame_image": i.frame, "ready": i.ready} for i in s.shot.inputs],
+                 "estimate_usd": s.estimate.cost if s.estimate is not None else None, "cached": s.cached, "left_after_usd": s.left_after,
+                 "request_bytes": s.request_bytes,
+                 "unresolved_intent": s.unresolved_intent.intent_id if s.unresolved_intent else None,
+                 "shared": [{"path": i.path.relative_to(root).as_posix() if i.path.is_relative_to(root) else str(i.path),
+                             "bytes": i.path.stat().st_size if i.ready else None} for i in s.shot.shared] if s.shot.share_minutes is not None and not s.cached and not s.previous_job else [],
+                 "share_max_minutes": s.shot.share_minutes,
+                 "notes": [*s.shot.notes, *s.check.notes], "problems": [*s.shot.problems, *s.check.problems], "blocked": s.shot.blocked,
+                 "prompt": s.shot.prompt}
+                for s in plan.shots
+            ],
+        )
+    for line in plan.lines(root):
+        print(line)
+    return 0
+
+
+def _generate_frames(project: Project, args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate frames``: paint the shots' starting pictures (DESIGN.md §113.15)."""
+    from vidgen.videogen.frames import run_frames, select_paint_shots
+    from vidgen.videogen.models import load_catalog
+    from vidgen.videogen.shots import project_shots
+
+    shots = select_paint_shots(project_shots(project, load_catalog()), args.shot or ())
+    result = run_frames(project, shots, pay=args.pay, out=(lambda line: None) if args.json else print)
+    if args.json:
+        total, unknown = result.cost
+        return jsonout.envelope(
+            "generate", True, action="frames", paid=args.pay, paid_usd=result.paid, estimate_usd=total, unknown_prices=unknown,
+            todo=[r.path.relative_to(project.root).as_posix() for r in result.plan.todo],
+            frames=[{"shot": f.shot.id, "picture": f.request.path.relative_to(project.root).as_posix() if f.request is not None else None,
+                     "made": f.request.exists if f.request is not None else False, "problems": f.problems} for f in result.frames],
+        )
+    return 0
+
+
+def _generate_host_test(args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate host-test [PROJECT] [--keep SECONDS]`` (DESIGN.md §115): a free check of
+    the quick tunnel; the project (when there is one) gives its ``videogen`` settings."""
+    from vidgen.config import VideogenConfig
+    from vidgen.project import find_config_file
+    from vidgen.videogen.host import HostSettings, host_self_test
+
+    if args.pay:
+        raise VidgenError("`generate host-test` is free and never pays; drop --pay")
+    if args.keep is not None and args.keep < 0:
+        raise VidgenError("--keep: seconds, 0 or more")
+    try:
+        find_config_file(args.project)
+        has_project = True
+    except VidgenError:
+        if args.project != ".":
+            raise
+        has_project = False   # no project here: the default settings
+    settings = Project.load(args.project, variant=args.variant).config.videogen if has_project else VideogenConfig()
+    out = (lambda line: None) if args.json else print
+    result = host_self_test(HostSettings.from_config(settings), keep_seconds=args.keep or 0.0, out=out)
+    if args.json:
+        doc = result.to_json()
+        del doc["ok"]   # a failed test raises, so the envelope's ok is the test's
+        return jsonout.envelope("generate", True, action="host-test", **doc)
+    print(f"host test OK: {result.host} served the file and refused other paths; closed ({result.close_reason})")
+    return 0
+
+
+def cmd_split_sheet(args: argparse.Namespace) -> CommandResult:
+    """``vidgen split-sheet``: cut a style sheet picture into named panels (DESIGN.md §113.16)."""
+    from vidgen.videogen.split_sheet import split_sheet
+
+    panels = split_sheet(
+        Path(args.picture), out_dir=Path(args.out) if args.out else None, names=args.names.split(",") if args.names else None,
+        columns=args.columns, rows=args.rows, gap=args.gap, boxes=args.box or None, scale=args.scale,
+    )
+    if args.json:
+        return jsonout.envelope("split-sheet", True, panels=[{"name": p.name, "path": str(p.path), "box": list(p.box), "size": list(p.size)} for p in panels])
+    for panel in panels:
+        print(f"{panel.path} ({panel.size[0]}x{panel.size[1]}, from x {panel.box[0]}, y {panel.box[1]}, {panel.box[2]}x{panel.box[3]} of the sheet)")
+    print(f"{len(panels)} panel(s) written")
+    return 0
+
+
+def _generate_workflow(args: argparse.Namespace) -> CommandResult:
+    """``vidgen generate run | status | takes | pick`` (DESIGN.md §113.4)."""
+    from vidgen.videogen.takes import chosen_take, pick_take, takes_of
+    from vidgen.videogen.workflow import catalog_or_none, known_shots, run_shots, status_lines
+
+    project = Project.load(args.project, variant=args.variant)
+    root = project.root
+    if args.pay and args.action != "run":
+        raise VidgenError(f"--pay is for `vidgen generate run` and `generate sheets`; `generate {args.action}` never pays")
+    if args.action == "run":
+        report = run_shots(project, pay=args.pay, budget_usd=args.budget, shot_ids=args.shot or (), out=(lambda line: None) if args.json else print)
+        if args.json:
+            return jsonout.envelope("generate", True, action="run", paid=args.pay, cost_usd=report.cost_usd, shots=[s.to_json(root) for s in report.shots])
+        return 0
+    catalog = catalog_or_none()
+    if args.action == "status":
+        lines, doc = status_lines(project, catalog)
+        if args.json:
+            return jsonout.envelope("generate", True, action="status", **doc)
+        for line in lines:
+            print(line)
+        return 0
+    known = known_shots(project, catalog)
+    if args.action == "pick":
+        if not args.shot or len(args.shot) != 1 or args.take is None:
+            raise VidgenError("pick needs one --shot ID and --take N (or --take none: vidgen's own picture; --take auto: the newest take without QA errors)")
+        shown = pick_take(root, args.shot[0], args.take, known)
+        text = f"take {shown.number} ({shown.path.relative_to(root).as_posix()})" if shown else "vidgen's own picture (no take)"
+        if args.json:
+            return jsonout.envelope("generate", True, action="pick", shot=args.shot[0], shown=shown.number if shown else None)
+        print(f"shot {args.shot[0]} shows {text}; `vidgen render` lays it in (the scene renders again)")
+        return 0
+    if args.shot:
+        for wanted in args.shot:
+            if wanted not in known:
+                from vidgen.videogen import did_you_mean
+
+                raise VidgenError(f"no generated shot {wanted!r}{did_you_mean(wanted, known)}; shots: {', '.join(known) or 'none'}")
+    chosen = [s for s in known if not args.shot or s in args.shot]
+    if args.json:
+        doc = []
+        for shot in chosen:
+            shown = chosen_take(root, shot)
+            doc.append({"shot": shot, "shown": shown.number if shown else None,
+                        "takes": [{"take": t.number, "path": t.path.relative_to(root).as_posix(), "model": t.model, "cost_usd": t.info.get("cost_usd"),
+                                   "qa": t.qa, "contact_sheet": t.contact.relative_to(root).as_posix()} for t in takes_of(root, shot)]})
+        return jsonout.envelope("generate", True, action="takes", shots=doc)
+    for shot in chosen:
+        takes = takes_of(root, shot)
+        shown = chosen_take(root, shot)
+        print(f"shot {shot}: {len(takes)} take(s)")
+        for take in takes:
+            print(f"  {take.line(root, picked=shown is not None and shown.number == take.number)}")
+            for check in take.qa.get("checks", []):
+                print(f"    {check['severity']}: {check['message']}")
+            print(f"    contact sheet: {take.contact.relative_to(root).as_posix()}")
+    return 0
+
+
 def cmd_schema(args: argparse.Namespace) -> CommandResult:
     """Print the JSON Schema of video.yaml (or of one scene type's params, or of a scene)."""
     from vidgen import registry, schema
@@ -2227,6 +2514,57 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (its format, prompts and imagegen settings)")
     p.set_defaults(func=cmd_imagegen)
 
+    p = sub.add_parser(
+        "generate",
+        help="generated video shots through OpenRouter's video API: models lists the video models; plan lists the shots with their inputs "
+        "and cost; sheets makes the reference sheets; inputs cuts the shots' inputs; run makes the clips (a dry run unless --pay); status, "
+        "takes and pick show and choose the takes the film shows; ledger shows the spending and budget; host-test checks the Cloudflare "
+        "quick tunnel that shares audio / video inputs (free); frames paints shots' starting pictures from their 3D scene and reference "
+        "pictures (a dry run unless --pay)",
+    )
+    p.add_argument(
+        "action", choices=["models", "plan", "sheets", "inputs", "frames", "run", "status", "takes", "pick", "ledger", "resolve", "host-test"],
+        help="models: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices "
+        "(public list, no key; cached, works offline from the cache); plan: every generated shot with its inputs, length, estimated cost "
+        "and what the budget has left (a dry run); sheets: the reference sheets' pictures (a dry run; --pay makes them); inputs: cut each "
+        "shot's voice (and with --guide its draft render) into build/videogen/; frames: paint each shot's starting picture from its paint_first_frame: (a dry run; --pay paints, within the budget, into assets/frames/; a shot uses it with first_frame: painted); run: generate the ready shots (a dry run; --pay pays, within "
+        "the budget, stopping at the first failure, never retrying; with videogen.host: quick_tunnel each shot's voice / guide is shared "
+        "through its own quick tunnel while its job runs) and keep each clip as a take with QA and a contact sheet; status: each "
+        "shot's takes and the one shown, the credit line; takes: every take with its QA findings and contact sheet; pick: choose a shot's "
+        "take (--shot ID --take N | none | auto); ledger: the project's paid jobs, what they cost and what the budget has left; resolve: "
+        "say what happened to a submit whose outcome is unknown (--intent ID and --not-charged, --job JOB_ID or --charged [--cost USD]); host-test: "
+        "share one tiny generated text file through a Cloudflare quick tunnel, fetch it back through the public address and close "
+        "(free: needs cloudflared, sends nothing to OpenRouter)",
+    )
+    project_arg(p)
+    p.add_argument("--refresh", action="store_true", help="models: fetch the list again even when the cached copy is recent")
+    p.add_argument("--variant", metavar="NAME", help="plan, sheets, inputs, frames, run, status, takes, pick: apply a named variant")
+    p.add_argument("--shot", action="append", metavar="ID", help="plan, inputs, frames, run, takes: only this shot or beat (repeatable); pick: the shot")
+    p.add_argument("--sheet", action="append", metavar="NAME", help="sheets: only this character's sheet, or style (repeatable)")
+    p.add_argument("--pay", action="store_true", help="run, sheets, frames: pay for the clips / pictures (needs a budget); without it a dry run")
+    p.add_argument("--budget", type=float, metavar="USD", help="plan, run: a lower cap than videogen.budget_usd for this run")
+    p.add_argument("--take", metavar="N", help="pick: the take number to show, none (vidgen's own picture) or auto (the newest take without QA errors)")
+    p.add_argument("--intent", metavar="ID", help="resolve: the unresolved submit (`vidgen generate ledger` lists them)")
+    p.add_argument("--not-charged", action="store_true", help="resolve: the provider did not charge it; the next run may pay for the request")
+    p.add_argument("--charged", action="store_true", help="resolve: it was charged but there is no job to fetch; the next run may pay again, knowingly")
+    p.add_argument("--cost", type=float, metavar="USD", help="resolve --charged: what was charged (default: its estimate)")
+    p.add_argument("--job", metavar="JOB_ID", help="resolve: the job this submit became; the next run polls and downloads it, free")
+    p.add_argument("--keep", type=float, metavar="SECONDS", help="host-test: keep the tunnel open this long after the check (the address is printed to try in a browser)")
+    p.add_argument("--guide", action="store_true", help="inputs: also render the beats of shots with a guide: (true, or depth / outline / mask on a 3d scene) or first_frame: render (a draft render of their scenes)")
+    p.set_defaults(func=cmd_generate)
+
+    p = sub.add_parser("split-sheet", help="cut a style sheet picture into named panels (PNG), by columns and rows or by explicit boxes")
+    p.add_argument("picture", help="the sheet picture (png, jpg, webp)")
+    p.add_argument("--columns", type=int, metavar="N", help="columns of equal panels, left to right")
+    p.add_argument("--rows", type=int, metavar="N", help="rows of equal panels, top to bottom (default 1)")
+    p.add_argument("--gap", type=int, default=0, metavar="PX", help="pixels between panels (with --columns / --rows)")
+    p.add_argument("--box", action="append", metavar="X,Y,W,H", help="a panel in pixels, in reading order (repeatable; instead of --columns / --rows)")
+    p.add_argument("--names", metavar="A,B,C", help="file names of the panels, in order (default panel1, panel2, ...)")
+    p.add_argument("--scale", type=float, default=1.0, metavar="N", help="scale each panel by this factor with Lanczos resampling (default 1)")
+    p.add_argument("--out", metavar="DIR", help="folder for the panels (default <sheet name>_panels beside the picture)")
+    json_arg(p)
+    p.set_defaults(func=cmd_split_sheet)
+
     p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")
     project_arg(p)
     p.add_argument("--variant", metavar="NAME", help="the variant to translate (its translations: file, else translations/NAME.yaml)")
@@ -2256,6 +2594,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
     p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
+    p.add_argument(
+        "--guide-passes", nargs="?", const="all", metavar="LIST",
+        help="also draw guide passes of every 3d scene, beside its 3D clip (build/.../three_d/<scene>.<pass>.mkv): depth (near white, "
+        "far dark), outline (white edges on black, like a line drawing), mask (each object one flat colour; table <scene>.mask-colors.json); "
+        "alone: all three, else a comma list such as depth,mask; also guide_passes: in a 3d scene",
+    )
     p.add_argument(
         "--max-scenes", type=int, metavar="N",
         help="render at most N scenes in this run, then stop without joining if more are left (run again to go on; "

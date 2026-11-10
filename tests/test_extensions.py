@@ -263,7 +263,7 @@ def test_check_project_reports_unknown_types_and_params(ext_project) -> None:
     )
     problems = check_project(project)
     assert problems[0].startswith("scenes[1].type: unknown scene type 'loss_pannel'; did you mean 'loss_panel'?")
-    assert "known types: bar_chart, " in problems[0] and ", loss_panel, map, mass_spectrum, metabolism, molecule, mutation, network, number_line, orbit, pathway, pedigree, pie, plot, population, process, quote, scatter, screenshot, stage, standard_model, stat, table, terminal, text_card, timeline, title, video_clip)" in problems[0]
+    assert "known types: 3d, bar_chart, " in problems[0] and ", loss_panel, map, mass_spectrum, metabolism, molecule, mutation, network, number_line, orbit, pathway, pedigree, pie, plot, population, process, quote, scatter, screenshot, stage, standard_model, stat, table, terminal, text_card, timeline, title, video_clip)" in problems[0]
     assert any(p.startswith("scenes[2].params.values.x:") for p in problems)
     assert "scenes[2].params.colour: unknown parameter 'colour' (known: values, best)" in problems
     assert "scenes[3].params.text: Field required" in problems
@@ -334,7 +334,7 @@ def test_list_scenes_builtins_only(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert main(["list-scenes"]) == 0
     out = capsys.readouterr().out
     width = len("equation_derivation") + 2   # the longest built-in name sets the column
-    assert out.startswith("bar_chart".ljust(width) + "builtin\n")
+    assert out.startswith("3d".ljust(width) + "builtin\n")
     assert "\n" + "text_card".ljust(width) + "builtin\n    text: str\n    size: size = 'title'\n    color: color = 'text'\n" in out
     assert "\n" + "title".ljust(width) + "builtin\n" in out
 

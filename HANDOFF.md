@@ -24840,3 +24840,1218 @@ project), repo work is generic.
   gaps of Steps 288–290 stand (no musical ending at a file cut, no embedded chapter markers, no
   chapter files for videos, English-only credit wording, a walk's foley panned at its middle).
 - **Next**: Phase AG is complete.
+
+## Step 292 — Generated video: the provider layer (Phase AH plan)
+
+- **Built**: package `vidgen.videogen` — `VideoRequest` / `MediaInput` / `request_hash`
+  (canonical request, input files by SHA-256), `models.py` (OpenRouter's public
+  `/videos/models`, cached a day in `<vidgen cache>/openrouter/video_models.json`, offline from
+  the cache; `check_request` with did-you-mean and snapped durations; `estimate` from
+  `pricing_skus`: per second, per token (W×H×24×s/1024), per picture, floors, highest SKU that
+  could apply), `openrouter.py` (`OpenRouterVideoProvider`: submit once / poll with backoff and
+  timeout / download; key from `OPENROUTER_API_KEY` or proxy mode; 402 / 429 / 413 / 401 /
+  content-policy / failed / expired errors), `mock.py` (`MockOpenRouter` transport,
+  `MockVideoProvider`), `ledger.py` (`videogen-ledger.jsonl`, budget), `run.py`
+  (`plan_clip`, `generate_clip`: cache → earlier job resumed → checks → estimate vs cap → dry
+  run or paid job → ledger → download → sidecar). Config `videogen: {provider: openrouter |
+  mock, budget_usd, key_via_proxy, inline_media: images | all, poll_timeout}`. CLI `vidgen
+  generate models [--refresh] [--json]`, `vidgen generate ledger [PROJECT] [--json]`.
+- **Data-URL answer** (DESIGN §113.1): pictures may be inline data URLs (documented for
+  `frame_images`, and the skill page says so for image references too); for `audio_url` /
+  `video_url` no page confirms data URLs (only a hosted https MP3 example; SDK fields
+  undocumented; no size limits documented). So pictures go inline; audio / video need a hosted
+  URL (pluggable `uploader`, none chosen) or the opt-in `inline_media: all`; otherwise a clear
+  error.
+- **Decisions**: section name `videogen:` (not top-level `generate:`, which is the image param
+  and 293's per-beat spec); proxy mode via `videogen.key_via_proxy` or
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`; the ledger counts a job without a reported cost at its
+  estimate (open, timed out, failed without usage) — conservative; the mock keeps its own
+  ledger `videogen-ledger.mock.jsonl`; paying = `generate_clip(pay=True)` plus a budget (the
+  lower of config and argument); a timed-out job is polled by the next run, never resubmitted;
+  `again=True` resubmits only deliberately (expired output). The download uses
+  `/content?index=0` (works in proxy mode), not `unsigned_urls`.
+- **Files**: `src/vidgen/videogen/{__init__,models,openrouter,mock,ledger,run}.py` (new),
+  `config.py` (`VideogenConfig`, `VideoConfig.videogen`), `cli.py` (`cmd_generate`, parser,
+  `JSON_COMMANDS`), `api.py` (4 names), `render/fingerprint.py` (`videogen` excluded / not a
+  render input), docs `CONFIG.md` ("Generated video", `vidgen generate --json`), DESIGN §2 /
+  §113, CHANGELOG, tasklist (Phase AH plan 292–295). Tests `tests/test_videogen.py` (24),
+  fixture `tests/data/openrouter_video_models.json` (the public list of 2026-11-07),
+  `tests/test_docs.py` (+`VideogenConfig`).
+- **Tests run and passed** (one at a time, capped): `test_videogen` (24), `test_docs`,
+  `test_json_output`, `test_api`, `test_config`, `test_schema` (76, 3 min). No shared
+  rendering code changed (scene fingerprints unchanged by the new section, tested); frame
+  baseline not needed.
+- **Spending**: nothing paid; no key read or sent. Only free unauthenticated GETs of the public
+  model list and documentation pages.
+- **Known gaps**: no hosting `uploader`; the mock's clip bytes are a placeholder, not a playable
+  MP4 (294's composition tests will want a real tiny clip, e.g. ffmpeg `testsrc`); 402 / 429 /
+  413 bodies are modelled, not seen live; estimates are the highest applicable SKU (heygen's
+  `long_duration` lines may overestimate ~2x); token estimates assume 24 fps; upscale / edit
+  models' prices stay unknown; `vidgen generate` has no `plan` / `run` / `status` yet; no MCP
+  tool yet; nothing in the guide / AGENTS.md yet (294).
+- **Next (293)**: build per-beat `VideoRequest`s (`MediaInput` for sheets, first frames, guide
+  renders; voice audio as an `audio` reference — hosted or `inline_media: all`), snap durations
+  with `models.snap_duration`, print plans with `plan_clip(...).lines()`; pass the beat length as
+  `duration=` for models without a duration setting (avatar-iv).
+
+## Step 293 — Generated video: sheets, shot specs, inputs and the plan
+
+- **Built** (DESIGN §113.3): `characters[].reference_sheet {prompt, views, expressions, notes,
+  seed, approved}` and `style_sheet: {palette, era, lens, notes, references, frames,
+  frame_prompt, seed, approved}` — pictures made by the project's image provider into
+  `assets/sheets/<owner>_<label>_<key>.png` (`vidgen generate sheets [--sheet NAME] [--pay]`,
+  a dry run with prices unless `--pay`; paying needs `videogen.budget_usd`, each picture is an
+  `image-<key>` job in the video ledger, so one cap covers sheets and clips); shots use a sheet
+  only once `approved: true`, and an approved sheet is never made again. A beat's
+  `generated_shot: {kind: talking | action | establishing, model, prompt, setting, characters,
+  refs, audio, guide, first_frame, seed, resolution, aspect_ratio, line}` resolved into
+  requests (`project_shots`): the beat's window on the planned timeline, lengths snapped (the
+  next allowed, trimmed later), long beats split into `<beat>_p<n>`, avatar-iv priced in whole
+  seconds of its audio, lowest resolution, nearest aspect ratio, inputs (first frame as frame
+  image or, where the model lists none, a picture reference; sheet pictures; style frames;
+  your pictures; the voice; the guide), the prompt (framing + prompt, setting, characters with
+  sheet words, the line, style words, no on-screen text). `vidgen generate inputs [--shot]
+  [--guide]` cuts `build/videogen/<shot>/audio.mp3` (the beat's narration from the part's
+  offset, exactly its length, padded) and with `--guide` renders the scene as a draft and cuts
+  `guide.mp4` (silent) and `first_frame.png` (past a fade in). `vidgen generate plan [--shot]
+  [--budget] [--json]`: every shot (time, model, length, inputs made or not, estimate, budget
+  left after it, notes, problems, blocked reasons, prompt), the sheets, totals, the budget.
+  `vidgen validate` reports unknown characters / pictures and talking shots without a speaker
+  or sheet, with did-you-mean.
+- **Decisions**: names `reference_sheet` / `style_sheet` / `generated_shot` instead of the
+  brief's `sheet` / `style` / `generate` (collisions with `vidgen character-sheet`, the image
+  `style` and the scenes' `generate:` param); all three excluded from scene fingerprints (no
+  re-render). A talking shot takes only the portrait by default (no style refs). Shots that are
+  priced but not ready are "blocked" (sheet not approved / made, inputs not cut, audio or video
+  with `inline_media: images`), not refused. Sheet pictures count in the plan's total and
+  against the budget before the shots. The first frame of a render skips a fade in from black.
+  `--pay` exists only for `sheets` (294 adds `run --pay`). The cut voice is the narration MP3
+  only (no room, music or effects); the guide is the draft format (240 px short side, 8 fps).
+- **Files**: `src/vidgen/videogen/{sheets,shots,inputs}.py` (new), `config.py`
+  (`ReferenceSheet`, `StyleSheet`, `GeneratedShot`, fields on `CharacterEntry`, `BeatConfig`,
+  `VideoConfig`), `render/fingerprint.py` (excludes), `cli.py` (`generate plan | sheets |
+  inputs`, options, validate hook), `api.py` (`plan_shots`, `project_shots`,
+  `project_sheets`), docs `CONFIG.md` ("Shots, sheets and inputs", JSON), DESIGN §113.3 / module
+  tree, CHANGELOG, tasklist. Tests `tests/test_videogen_shots.py` (17), `tests/test_docs.py`
+  (+3 models).
+- **Sample** for Step 295: `/home/claude/work/scratch/s293/sample/video.yaml` (9:16, mara and
+  theo with sheets, a style sheet, `inline_media: all`, budget $2): establishing veo-3.1-lite
+  720p 4 s $0.120, action seedance-2.0-fast 480p 4 s (6 sheet pictures + style frame + voice +
+  guide) ~$0.095, talking avatar-iv 720p 5 s $0.250; 7 sheet pictures (seedream-4.5) $0.280;
+  together $0.745. Its plan output: `/home/claude/work/scratch/s293/sample-plan.txt`. A draft
+  render and guide cut of its quay scene were tried (240x426, 8 fps; first frame past the fade).
+- **Tests run and passed** (one at a time, capped): `test_videogen_shots` (17), `test_videogen`
+  (24), `test_docs` (78), `test_config`, `test_json_output`, `test_api`, `test_schema` (76),
+  fingerprint tests of `test_storyboard`, `test_includes`, `test_cuts_shorts`. No shared
+  rendering code changed (only config models and fingerprint excludes; a test checks the
+  fingerprint is unchanged by the new keys); frame baseline not needed.
+- **Spending**: nothing paid; no key read or sent. The plan fetched only the public video model
+  list (cache) and the public image model record (seedream-4.5's price).
+- **Known gaps**: Kokoro (the sample's voices) needs Python ≤ 3.12 — this workspace has 3.13, so
+  the sample has no narration yet (`vidgen tts` elsewhere, or switch voices to openrouter for
+  295); whether avatar-iv takes the portrait as an input reference (its record lists no frame
+  images) and whether Seedance accepts a 240 px guide and inline audio / video are unconfirmed
+  (295); no hosting uploader; no setting-per-scene shorthand (each shot has its own `setting`);
+  the voice cut has no room / emotion processing done at mix time; split parts of a talking shot
+  each get their own audio slice but are not stitched yet (294).
+- **Next (294)**: place clips at `Shot.start` for `Shot.length` (trim the snapped clip),
+  `generate run --pay` = for each ready shot `generate_clip(root, settings, shot.request(),
+  pay=True, duration=shot.priced_seconds)` with the plan's running budget; takes, QA, MCP,
+  credits, docs/guide.
+
+## Step 294 — Generated video: takes in the film, QA and the workflow
+
+- **Built** (DESIGN §113.4): `vidgen generate run [PROJECT] [--shot ID]... [--budget USD]
+  [--pay] [--json]` (`run_shots`: a dry run that sends and writes nothing; with `--pay` a budget
+  is required, a shot with problems or ready shots estimated above what is left refuse the whole
+  run before anything is paid, then each ready shot goes through `generate_clip(...,
+  pay=True, duration=shot.priced_seconds)` in video order with the ledger as the running budget,
+  blocked shots skipped, the first failure stops the run, nothing retried); every clip becomes a
+  take `takes/<shot>/<n>.mp4` + `<n>.json` + `<n>.contact.png` with QA (duration, aspect / size,
+  black, frozen, flicker, abrupt cuts, own sound); `vidgen generate takes | status | pick --shot
+  ID --take N | none | auto` (`takes/picks.json`; unpicked: the newest take without QA errors).
+  `vidgen render` lays the shown take over its beat (`vidgen/generated_layer.py`, attached right
+  after the overlay layer: overlays, captions and stills see the take): cover / contain to the
+  format, frame-rate conform via `ClipReader`, grey-world + exposure colour matching
+  (`videogen.color_match` 0.5), fades against vidgen's picture (`crossfade` 0.25 s; none at
+  scene edges or between takes), the scene's last beat held to the scene's end, sound never
+  read. Config `videogen.{crossfade, color_match}`, `generated_shot.{place, fit, crossfade}`.
+  Credit line "Includes AI-generated footage (models)." in `<output>_chapters.txt`; lint
+  `generated_footage` (info); MCP `generate_plan | generate_run | generate_status |
+  generate_takes | generate_pick` (`generate_run` pays only with `dry_run: false` +
+  `confirm_cost: true`); `docs/COOKBOOK-GENERATED-VIDEO.md` (cost control, ZDR / privacy);
+  guide + AGENTS.md; critical review (DESIGN §113.5).
+- **Fixes to 292–293**: the mock returns a playable MP4 shaped like the request
+  (`synthetic_clip`, which also makes QA's bad test clips) and unique job ids per run (the mock
+  ledger counted repeated runs once); `assets/generated_video/` left out of the render
+  fingerprint's assets (every downloaded clip made every scene stale); the OpenRouter image
+  provider (sheets) honours proxy mode (`VIDGEN_OPENROUTER_KEY_VIA_PROXY`, or
+  `videogen.key_via_proxy` via `generate sheets`), so 295 works with a proxy-injected key
+  (test in `test_imagegen_openrouter.py`).
+- **Decisions**: picks in `takes/picks.json`, not in `video.yaml`; placement from the planned
+  timeline via `project_shots(project, None)` (no model list in a render worker; split beats found
+  by their `takes/<beat>_p<n>` folders); a take with QA errors is shown only when picked; drafts
+  (and the guide renders) never show takes; fades only against vidgen's own picture; the scene's
+  last beat keeps its take through the fade-out (no flash of the cartoon between takes); the
+  fingerprint gains `generated` only for scenes that show takes.
+- **Files**: new `src/vidgen/generated_layer.py`, `src/vidgen/videogen/{compose,qa,takes,
+  workflow}.py`, `src/vidgen/lint/generated_rule.py`, `docs/COOKBOOK-GENERATED-VIDEO.md`,
+  `tests/test_videogen_compose.py`; changed `scene.py` (attach, close, timings), `config.py`,
+  `render/fingerprint.py`, `render/pipeline.py` (credit line), `videogen/{mock,shots}.py`
+  (`Shot.scene_start / scene_end`), `cli.py`, `mcp_server.py`, `api.py` (`run_shots`,
+  `check_clip`, `scene_placements`), `lint/{__init__,rules,run}.py`, docs CONFIG / COOKBOOK /
+  README / guide + AGENTS.md, DESIGN §113.4-113.5 and module tree, CHANGELOG, tasklist; tests
+  `test_videogen.py` (mock content), `test_mcp.py` (tool list), `test_particle_lint.py` (rule
+  order), `test_docs.py` (+ the cookbook's project and links).
+- **Tests run and passed** (one at a time, capped): `test_videogen_compose` (18, incl. a render),
+  `test_videogen` (24), `test_videogen_shots` (17), `test_particle_lint` + `test_mcp` (152),
+  `test_docs` (79), `test_guide` + `test_api` (101), `test_config` + `test_json_output` (44),
+  `test_schema` (76), `test_lint` (not render, 22), `test_imagegen_openrouter` (30),
+  `test_imagegen` + `test_videogen_shots` (52), fingerprint tests of `test_storyboard`,
+  `test_includes`, `test_cuts_shorts`. Frame baseline (shared rendering code changed:
+  `scene.py`): 33 stills, max difference 0. Audio untouched (the take's sound is never read).
+- **Spending**: nothing paid; no key read or sent. The sample was voiced with Kokoro (local,
+  free); the plan read the cached public model list.
+- **Sample**: `/home/claude/work/scratch/s293/sample` is now voiced (`audio/`, Kokoro via
+  `/home/claude/kvenv312`) and its inputs are cut (`build/videogen/quay_b1/{audio.mp3, guide.mp4,
+  first_frame.png}`, `closeup_b1/audio.mp3`); its plan shows only the unmade sheets blocking
+  (clips $0.465 + sheets $0.280 = $0.745 of $2.00). Mock copy
+  `/home/claude/work/scratch/s294/sample-mock` (stand-in sheets, provider mock): `run --pay` made
+  three takes (QA ok; quay_b1 warns 480p scaled up 2.3x), `render --preview` (540x960) placed
+  them under the overlays, `lint` lists the three `generated_footage` notes, the description
+  file has the credit line.
+- **Known gaps** (DESIGN §113.5): unverified against the real API (inline audio / video, the
+  avatar-iv portrait, the 240 px guide, real error bodies); no hosting uploader; QA thresholds
+  tuned on synthetic clips; layout lint still reads vidgen's objects under a take; a take shorter
+  than its beat plus the scene's outro holds its last frame; making sheets re-renders every scene
+  once; a timed-out mock job cannot be resumed. Kokoro reads the sample's lines fast (lint
+  `narration_speed` 3.6-3.75 w/s) — harmless for 295.
+- **Next (295, gated)**: with the owner's go-ahead and key (`OPENROUTER_API_KEY`, or
+  `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1` when the proxy injects it), in
+  `/home/claude/work/scratch/s293/sample`: `generate plan` → `generate sheets --pay` (~$0.28) →
+  look at `assets/sheets/` → `approved: true` on both sheets and the style sheet → `generate
+  plan` (nothing blocked) → `generate run --pay --shot harbour_b1` first (the cheapest, no audio:
+  checks the flow) → `generate run --pay` → `generate takes` (contact sheets) → `pick` →
+  `render --preview`. Record what the API accepts (inline audio / video, the portrait as a
+  reference, the guide size) and the reported costs in DESIGN §113.
+
+## Step 295 — Cleaner reference sheet prompts, real image costs
+
+- **Why**: the owner-approved sheet run (seedream-4.5, `scratch/s293/sample`, 7 pictures) gave
+  consistent characters but poor references: orange lamps from the palette word "warm lamp
+  orange" (6 of 7), a counter / ticket booth / "SELD FICKETS" sign from Theo's "sells ferry
+  tickets", a "CKET" sign in the style frame, busy backgrounds, Theo cut at the waist, Mara's
+  "side" view three-quarter, lens words fighting a studio look.
+- **Built** (DESIGN §113.6): `videogen/sheets.py` — character pictures as model-sheet pictures
+  ("full body from head to toe, whole figure in frame, <view>, neutral expression, arms relaxed
+  at the sides, empty hands, standing on a plain seamless light grey studio backdrop, even soft
+  studio light, nothing else in the picture. Who the person is (draw only the person and their
+  clothes): <prompt>. No props."), strict `VIEW_WORDS` (side = "strict 90-degree profile, facing
+  left"), always-on exclusions as the request's `negative` (`CHARACTER_EXCLUDE`,
+  `FRAME_EXCLUDE`), `_look_words(project, reference=)` (palette "colours only, not objects",
+  "era: ...", character pictures without `lens` and without shot-only clauses of the notes /
+  `imagegen.style`; style frames keep the full look + "no writing anywhere"). Costs: `usage`
+  numbers kept (`RawPicture.usage`, `GeneratedPicture.usage`, sidecar `usage`), sidecar
+  `cost_source: reported | estimate` (`sidecar_document(..., estimate=, usage=)`), sheet ledger
+  events with `cost_source`, printed lines from `imagegen.run.cost_words` ("$x reported by
+  openrouter" / "estimated $x (not reported by openrouter)"), the sheets' `done:` line splits
+  reported and estimated.
+- **Finding on the costs**: the sample's ledger and sidecars show `cost_usd: 0.04` per picture,
+  and `run_sheets` writes that field only from `GeneratedPicture.cost` = the response's
+  `usage.cost`. So vidgen already recorded the reported cost, not the estimate: OpenRouter's
+  response said $0.04 (the list price) while the account's usage rose ~$0.023 per picture. Step
+  295 cannot close that gap without a key; the kept `usage` block and `cost_source` make the
+  next run comparable with the activity page. Possible follow-up: `GET /generation` per picture
+  for the billed `total_cost`, as the TTS path does (DESIGN §66).
+- **Negative field**: OpenRouter's `/images` body has no negative-prompt field; `negative` is
+  folded into the prompt text as "Avoid: ..." by `compose_prompt` for every provider (unchanged
+  code), so sheets just set it.
+- **Public interfaces**: `GeneratedPicture.usage` (new optional field, default `None`);
+  `sidecar_document` gains keyword-only `estimate`, `usage`; new `imagegen.run.cost_words`.
+  Not in `vidgen.api`. Video shot prompts (`shot_prompt`, `StyleSheet.words()`) unchanged: the
+  palette there still reads "palette ... warm lamp orange" (Step 296 may want the same "colours
+  only" wording for clips).
+- **Effect on the sample**: all 7 picture keys changed; the old PNGs stay in `assets/sheets/`
+  (not deleted), every sheet reads "not made yet". The budget line counts the earlier $0.280.
+- **Files**: `src/vidgen/videogen/sheets.py`, `src/vidgen/imagegen/{__init__,openrouter,run}.py`,
+  `tests/test_videogen_shots.py` (+2 tests, 1 updated), `tests/test_imagegen_openrouter.py` (+1
+  test, 2 updated), DESIGN §113 (header, §113.3 wording, §113.6), CHANGELOG,
+  `docs/COOKBOOK-GENERATED-VIDEO.md` (sheet prompt note), tasklist (295 ticked; the paid
+  experiment renumbered to 296).
+- **Tests run** (one at a time, capped, `-m "not render"` where render tests exist):
+  `test_videogen_shots` (19 passed), `test_imagegen_openrouter` (31), `test_imagegen` (34, 1
+  deselected), `test_videogen` (24), `test_videogen_compose` (17, 1 deselected),
+  `test_vector_images` (26, 1 deselected), `test_docs` (79). No rendering code changed.
+- **Spending**: nothing paid, no key read. The dry run `vidgen generate sheets` read the public
+  seedream-4.5 price record (free, unauthenticated).
+- **Next (296, gated)**: as in Step 294's "Next": `generate sheets --pay` again (~$0.28 at the
+  estimate), look at `assets/sheets/`, approve, then the clips. Compare each sidecar's
+  `usage.cost` with the account's activity page.
+
+## Step 296 — Smaller pictures for video jobs, https-only audio / video flagged
+
+- **Why** (the owner's first paid clip attempts, 2026-11-07, nothing charged): `generate run
+  --pay --shot quay_b1` stopped inside vidgen at 48.0 MB (six 2048x3642 sheet PNGs of 5-7 MB +
+  the style frame, inline at full size; the guard is 21 MB); heygen/avatar-iv got HTTP 400
+  "Invalid reference URL: input_references[1].audio_url.url: Only HTTPS URLs are allowed"
+  (inline audio refused); with the account's "ZDR endpoints only" on, every video model got HTTP
+  404 "ZDR violation (account settings)". `GET /api/v1/models` with the key is filtered by the
+  privacy settings (text models only); `GET /api/v1/videos/models` is not.
+- **Built** (DESIGN §113.7): new `videogen/pictures.py` — `sendable_picture(path, root)` (a JPEG
+  / WebP within 1280 px is sent as is; else a copy, longest side `PICTURE_MAX_SIDE` = 1280,
+  JPEG `JPEG_QUALITY` = 90, PNG only with transparency, in
+  `build/videogen/pictures/<sha256[:24]>_<max side>.jpg|.png`, made once), `sendable_request`
+  (swaps local pictures of a request). `generate_clip` submits the sendable request; the cache
+  key still follows the sources (+ `pictures_sent: {max_side, jpeg_quality}` in
+  `canonical_request`, so every earlier key changed — no video clip or video job existed yet).
+  `openrouter.request_bytes(request, root)`; `ShotPlan.request_bytes`, the plan line "request: X
+  MB with its inline pictures (vidgen sends at most 21 MB)", JSON `request_bytes`, a problem
+  above 21 MB. A shot with audio / video inputs under `inline_media: all` now has the problem
+  `shots.INLINE_AUDIO_VIDEO_PROBLEM` (the brief's text), so `run --pay` refuses before sending;
+  under `inline_media: images` it stays blocked (message updated). The provider never sends
+  audio / video inline (`OpenRouterVideoProvider` and `MockVideoProvider` lost `inline_media`;
+  a local sound / clip needs `uploader`).
+- **Public interfaces**: `OpenRouterVideoProvider(inline_media=...)` removed (not in
+  `vidgen.api`); new `vidgen.videogen.pictures`, `openrouter.request_bytes`,
+  `ShotPlan.request_bytes`, `shots.INLINE_AUDIO_VIDEO_PROBLEM`; `videogen.inline_media` stays
+  (both values send pictures inline). Plan JSON gains `request_bytes`.
+- **Decisions**: the copy is made at send time from the source, not stored in the request, so
+  the cache key does not depend on Pillow's encoder bytes; small opaque PNGs also go as JPEG; no
+  model lists a largest reference size, so one limit for all; `generate plan` writes the copies
+  (its only writes; documented). The problem text tells talking shots to "remove `audio:`",
+  which a talking shot cannot (`audio: none` is refused): as the brief worded it; hosting is the
+  real way out.
+- **Sample** (`scratch/s293/sample`, `video.yaml` unchanged): quay_b1's pictures were 47.9 MB of
+  base64 at full size, 0.99 MB as copies; its request is 0.99 MB (audio and guide counted as
+  hosted URLs; inline they would add 0.11 MB). harbour_b1 0.3 MB, closeup_b1 0.1 MB. The plan now
+  shows quay_b1 and closeup_b1 with the inline audio / video problem (`inline_media: all`);
+  harbour_b1 (pictures only) is ready. Six copies in its `build/videogen/pictures/`.
+- **Files**: `src/vidgen/videogen/{pictures (new),__init__,openrouter,run,shots}.py`,
+  `src/vidgen/cli.py` (plan JSON), `src/vidgen/config.py` (`inline_media` doc), docs
+  `CONFIG.md`, `COOKBOOK-GENERATED-VIDEO.md` (ZDR account setting, the free count check,
+  https-only audio / video, picture sizes; the example drops `inline_media: all`), DESIGN §113
+  header / §113.1 / §113.5 / §113.7 and module tree, CHANGELOG, tasklist (296 ticked, the paid
+  experiment is now 297). Guide / AGENTS.md unchanged (no key it names changed). Tests
+  `tests/test_videogen.py` (+2, 1 updated), `tests/test_videogen_shots.py` (+1, 1 rewritten; the
+  stub image provider makes real PNGs).
+- **Tests run and passed** (one file at a time, `/home/claude/bin/capped` + `timeout`, `-m "not
+  render"`): `test_videogen` (26, 5.6 s), `test_videogen_shots` (20, 3.8 s), `test_docs` (79),
+  `test_videogen_compose` (17, 1 deselected), `test_json_output` (21, 2 deselected),
+  `test_schema` (76, 187 s), `test_config` (21), `test_api` (10). No rendering code changed.
+- **Spending**: nothing paid, no key read; no network beyond the cached public model list.
+- **Known gaps**: no hosting uploader, so talking shots and shots with `audio:` / `guide:` cannot
+  be paid for yet; inline pictures for video jobs still unconfirmed by a real accepted job; the
+  video shot prompts' palette still reads as objects ("warm amber orange"; §113.6 note).
+- **Next (297, gated)**: with the owner's go-ahead and ZDR-only turned off, `generate run --pay
+  --shot harbour_b1` (pictures only, $0.120) to confirm inline pictures and `usage.cost`; then
+  decide on a host for audio / video (or drop `audio:` / `guide:` from action shots).
+
+## Step 298 — 3D scenes: renderer and the `3d` scene type (Phase AI foundation)
+
+- **Built** (DESIGN §114): scene type `3d` (`scenes/scene_3d.py`, `Scene3D`): objects (only `box`
+  yet) seen by a fixed camera under one default light (ambient + sun) over a background colour,
+  drawn by three.js in headless Chromium through Playwright; `title` on a plate, overlays and
+  captions on top; 16:9 and 9:16 (`fov` across the shorter side); preview, final and draft; `spin`
+  (degrees per second) keeps an object turning. Before the scene plays, `make_3d_clip` draws every
+  frame (frame n at t = n / fps, set by vidgen) with one Chromium into a lossless FFV1 clip
+  `build/<q>[_<variant>]/three_d/<scene>.mkv` + `<scene>.json` `{key, description}`, reused while
+  the description, page files and Playwright version are unchanged; the clip is a full-bleed
+  `ClipMobject`, so stills, lint, fades and `dim` / `highlight` / `zoom` on target `view` work.
+  The **scene description** (JSON v1: size, fps, frames, draw_mode, background, camera, lights,
+  objects with ids, timeline with beats and tracks) is the contract later steps extend; tracks
+  (target, property, easing, keys) already drive `spin` and can drive the camera. `draw_mode`
+  (only `normal`) is the hook for Step 301's guide passes. three.js 0.186.1 vendored
+  (`data/three/three.{module,core}.js` + MIT `LICENSE`; `page.html`, `vidgen3d.js`); the page is
+  served on `http://vidgen-3d.invalid/`, every other request aborted (no network); WebGL on
+  SwiftShader. Missing Playwright / Chromium: `VidgenError` with `pip install
+  "schu-video-generator[3d]"` + `python -m playwright install chromium` (and the `py -m` Windows
+  wording). Extra `3d = ["playwright>=1.40"]`; `data/three/*` package data and part of the render
+  fingerprint.
+- **Public interface**: `vidgen.api` + `text_plate` (moved out of `video_clip`'s `_plate`, same
+  output), `Scene3DParams`, `Camera3D`, `Light3D`, `Object3D`, `BeatSpan`, `scene_description`,
+  `make_3d_clip`. Built-ins import only `vidgen.api`, hence the exports.
+- **Decisions / deviations**: frames are drawn into a cached clip and shown by Manim, not written
+  over Manim's frames like `generated_layer` (titles and later Manim objects stay on top; the
+  description + frames become an artefact for 301 and video-to-video); one browser per scene render
+  (workers are separate processes; Chromium starts in ~1 s); `fov` across the shorter side; light
+  defaults (ambient 0.5, sun 2.5 from [-2, 6, 4]) picked from stills; did-you-mean reuses
+  `cellworld.did_you_mean` (copies exist in `delivery.py`, `cuts.py`, `audio_check.py` —
+  consolidating them is outside this step); npm's `three` 0.186.1 has no minified build, so the
+  vendored files weigh 2.1 MB. The brief's "piped/encoded like other scenes" is met by Manim's own
+  encoder (the scene's frames go through the normal worker); the intermediate clip is written with
+  PyAV (no ffmpeg subprocess).
+- **Files**: new `src/vidgen/three_d/{__init__,spec,description,browser,clip}.py`,
+  `src/vidgen/scenes/scene_3d.py`, `src/vidgen/data/three/{three.module.js,three.core.js,LICENSE,
+  page.html,vidgen3d.js}`, `tests/test_scene_3d.py`, `docs/gallery/3d.md` + `media/3d-*.{png,gif}`;
+  changed `src/vidgen/{api,layout}.py`, `scenes/{__init__,video_clip}.py`, `render/fingerprint.py`,
+  `pyproject.toml`, `THIRD_PARTY_NOTICES.md`, `README.md`, `docs/CONFIG.md` (`3d` section, targets
+  table), `docs/gallery/README.md` (`vidgen gallery --types 3d`), guide + `AGENTS.md` (chooser row,
+  snippet), `examples/gallery/video.yaml` (scene `crate`), DESIGN §2 tree + §114, CHANGELOG,
+  tasklist (Phase AI added, 298 ticked); tests updated for the new first type name (`3d` sorts
+  before `bar_chart`): `test_builtin_scenes.py` (+ sample; its shared render leaves `3d` out),
+  `test_actions_coverage.py` (+ sample, render skipped without Playwright), `test_extensions.py`,
+  `test_json_output.py`.
+- **Tests run and passed** (one file at a time, `/home/claude/bin/capped` + `timeout`):
+  `test_scene_3d` not render (19, 2.2 s) and render (3, 18.6 s: determinism, a bad description,
+  16:9 + 9:16 with captions and the clip cache), `test_actions_coverage -k "register_their_target
+  _names and 3d"` (render, 1), `test_video_clip -k bleed` (render, 2) and not render (37),
+  `test_layout` (45), `test_docs` (79), `test_guide` (91), `test_gallery` (19), `test_builtin_scenes`
+  (176), `test_api` (10), `test_packaging` (2), `test_actions_coverage` (12), `test_extensions` (25),
+  `test_json_output` (21), `test_schema` (76, 184 s), `test_mcp` (20, 121 s), `test_storyboard -k
+  fingerprint` (1). Not run: the other render suites, the frame baseline (`text_plate` builds the
+  same plate as before).
+- **Environment**: Playwright 1.63.0 installed into `/home/claude/venv` (browsers from
+  `/opt/pw-browsers`, `playwright install` not run). three.js fetched once with `npm pack`.
+- **Stills**: `/home/claude/work/scratch/s298/{still-16x9.png, still-9x16-captions.png,
+  raw-3d-frame0.png}` from `/home/claude/work/scratch/s298/demo` (a floor and three boxes, one
+  spinning; 9:16 with karaoke captions and a watermark).
+- **Known gaps / next (299)**: only `box`; no groups, camera moves, word-timed tracks or actions
+  (the description's `tracks` and `beats` are ready for them); `view` is the only 3D target (the
+  objects are not action targets); a `zoom` on `view` enlarges the decoded pixels (no sharper
+  redraw); `vidgen validate` does not check that Playwright is installed (a render stops with the
+  hint); the clip is not deleted when a scene is removed.
+
+## Step 299 — 3D scenes: shapes, groups and camera moves (Phase AI)
+
+- **Built** (DESIGN §114.7–114.10): `3d` objects can be `box`, `sphere`, `cylinder`, `cone`,
+  `torus` (lying flat), `plane` (flat, both sides), `arrow` (along +y; with `to` a point or an
+  object id, from its `position` to the object's edge), `label` (text on a `surface` plate, a
+  camera-facing sprite in the bundled Inter Bold, served to the page and loaded with `FontFace`)
+  and `group` (draws nothing); `size` is a vector or one number, with per-shape defaults
+  (`DEFAULT_SIZES`); `color` defaults to `accent` (labels `text`); `floor: true | {size, color, y}`
+  adds a plane with id `floor`. Groups: `parent: <id>` (an object written earlier) puts an
+  object in that object's frame; a parent's `spin` carries its children. `camera.look_at` may name
+  an object. The camera moves with five beat actions (`scenes/scene_3d_actions.py`):
+  `camera_orbit` (target/`around`/the point looked at, `degrees`, `up`), `camera_dolly` (`by`),
+  `camera_fly_to` (target, `distance`; default the object fills 60 % of the fov), `camera_look_at`
+  (target or `point`), `camera_move` (`to`, `look_at`), all with `easing: smooth | linear`, timed
+  by `at` (fraction or `"@word"`) and `run_time` (default: to the end of the beat; may run into
+  later beats; the next camera action stops it). They are non-animating cues: `Scene3D.camera_moves`
+  reads `action_times` before the frames are drawn and `three_d/camera.py` turns the moves into
+  per-frame `position` / `look_at` tracks of `camera` (eased in Python; the page only
+  interpolates). `three_d/world.py` mirrors the page's transforms (XYZ Euler, parents, spin) for
+  object centres, arrows and fly-to framing. `vidgen validate`: object ids with did-you-mean (in
+  params and in the actions), the moves replayed in order (`action_sequence_problems`:
+  `camera_problems`), arrows of zero length and a camera on its look-at object
+  (`validate_project`: `check_3d_scene`), and a **warning** when a project with a `3d` scene has no
+  Playwright or no Chromium folder for its pinned revision (`browser.missing_dependency`,
+  `install_warnings`; no browser started).
+- **Public interface**: `vidgen.api` + `CameraMove`, `camera_problems`, `check_3d_scene`,
+  `Floor3D`; `scene_description(..., camera_moves=)`. Description still version 1 (fields added:
+  `parent`, label `text` / `plate` / `plate_opacity`; groups without `size` / `color`). New actions
+  `camera_orbit`, `camera_dolly`, `camera_fly_to`, `camera_look_at`, `camera_move`.
+- **Decisions / deviations**: groups are a flat list with `parent` (parent first), not nested
+  `children:` — params stay non-recursive (schema, list-scenes, translation walker) and match the
+  description; camera moves are beat actions (reuse word timing, validation locations,
+  shorthand) rather than a `moves:` param; the target of a camera action is an object id, not a
+  Manim target (`scene_targets = False`), so `view` / `title` stay the only targets and `dim:
+  tower` is still an unknown target; camera keys per frame instead of a JS-side orbit
+  interpolation (exact data for guide passes / video-to-video; ~2 vectors per moving frame); a move
+  cut by the next one stops where it is (its easing keeps its own length); labels are sprites
+  sized in scene units (they shrink with distance) and drawn in Inter Bold whatever the theme's
+  font; `floor` typed `Floor3D | bool | None` so the JSON schema accepts `floor: true`. Open
+  questions of Step 298 applied: three.js stays unminified; validate warns only with a `3d` scene.
+- **Files**: new `src/vidgen/three_d/{world,camera}.py`, `src/vidgen/scenes/scene_3d_actions.py`,
+  `tests/test_scene_3d_camera.py`; changed `three_d/{spec,description,browser}.py`,
+  `scenes/{scene_3d,__init__}.py`, `data/three/vidgen3d.js`, `api.py`, `cli.py`
+  (`validate_warnings`), `tests/test_scene_3d.py` (parent key, font served, `sphre`),
+  `tests/test_actions.py` (action list), `docs/CONFIG.md` (`3d` section, shapes table, "3d camera
+  actions", targets row), guide + `AGENTS.md` (chooser row, snippet, five action rows),
+  `examples/gallery/video.yaml` (`crate`: floor, label, ball, arrow, orbit + fly-to),
+  `docs/gallery/{3d.md,README.md,media/3d-*}` (regenerated with `vidgen gallery --types 3d`),
+  `README.md`, DESIGN §2 tree + §114, CHANGELOG, tasklist.
+- **Tests run and passed** (one file at a time, `capped`/`capped3g` + `timeout`):
+  `test_scene_3d_camera` not render (30, 2.3 s) and render (2, 7 s: every shape drawn, a fly-to on a
+  word in a real render), `test_scene_3d` all (22, 16.7 s), `test_actions` (21), `test_actions_coverage`
+  (12) + `-k "register_their_target_names and 3d"` render (1), `test_guide` (91), `test_docs` (79),
+  `test_gallery` (19), `test_api` (10), `test_extensions` (25), `test_json_output` (21),
+  `test_builtin_scenes` not render (176), `test_schema -k examples_validate_against_their_schema`
+  (22, 93 s). Not run: the rest of `test_schema`, `test_mcp`, other render suites.
+- **Stills**: `/home/claude/work/scratch/s299/{still-16x9-orbit.png, still-16x9-fly-to.png,
+  still-9x16-captions.png}` from `/home/claude/work/scratch/s299/demo` (a floor, a tower group
+  with a label, a ball with an arrow pointing at it, a torus, a crate; orbit on "@circles", fly-to
+  on "@flies", move back on "@pulls"; 9:16 with karaoke captions).
+- **Known gaps / next (300)**: objects do not move yet except `spin` (Step 300's `move_to` etc.
+  should add object tracks; `World.position(id, t)` then needs those tracks for fly-to of a moving
+  object — today it uses rest pose + spin); camera actions with the same name as Step 300's object
+  actions must not collide (`look_at` and `turn` are stage actions already); no `fov` zoom move;
+  labels ignore the theme's font; at render a move that cannot be made is a `VidgenError` naming
+  the scene but not the action (validate names it).
+
+## Step 300 — 3D scenes: object actions and character stand-ins (Phase AI)
+
+- **Built** (DESIGN §114.11–114.13): ten beat actions on `3d` objects, named `object_<kind>` (the
+  owner's answer: no collision with the stage's `look_at` / `turn` / `walk_to` or the 2D
+  `highlight`; same scheme as `camera_`): `object_move` (to / by), `object_path` (smooth or straight
+  through `points`, `turn` along it), `object_rotate`, `object_spin` (turns about an axis),
+  `object_scale`, `object_show` / `object_hide` (fade or grow; `visible: false` objects),
+  `object_highlight` (emissive glow, theme `highlight`), `object_walk` (stand-ins: turn, walk to
+  `[x, z]` or up to an object, bob) and `object_face` (yaw to an object or a point). Shape
+  `standin` (capsule + nose + `name` tag; `voice` for lint). Label `screen_size: true`. Every
+  frame's pose is planned in Python (`three_d/motion.py`: five channels per object, segments cut
+  by later ones, targets read at a change's start) and written as tracks; `World` reads the motion,
+  so `camera_fly_to` (keeps its distance afterwards), `camera_look_at` / `camera.look_at` (keep
+  looking) and arrows `to: <object>` (position, rotation, `length` tracks) follow moving objects.
+  Page: stand-ins, `scale` / `opacity` / `emissive` / `length` properties, `applyLooks` (opacity
+  and glow through groups). Lint: `three_d_off_frame` and `three_d_hidden` (projected spheres per
+  still, `three_d/framing.py`; only objects the beat is about: named by its actions, or a stand-in
+  saying the line).
+- **Public interface**: `vidgen.api` + `ObjectChange`, `plan_world`, `framing_3d`, `hex6`;
+  `scene_description(..., object_changes=)`; `camera.py` gains `Ref`, `CameraState`, `MovePath`
+  (`path(u, t=None)`, `end_state(t)`), `start_state`, `camera_poses`, `follow`; `World` gains
+  `attach`, `follow`, `arrow_pose`, `opacity`, `within` (was `_within`). Description still version
+  1 (new object fields `opacity`, `nose`, `name*`, `screen_depth`; new track properties). New lint
+  rules + config models `ThreeDOffFrameRule`, `ThreeDHiddenRule` (last in `LINT_RULES`).
+- **Decisions / deviations**: highlight is 3D-native, not the 2D `dim`/`highlight` (owner);
+  per-frame keys with held stretches dropped (`held_keys`) instead of every frame of the clip;
+  followed objects use their rest sphere carried by their origin (`World.follow`) so a spinning
+  group does not shake the camera; `object_walk` only for stand-ins, `[x, z]` keeps the height;
+  targets of walk/face are read at the change's start (exact ordering, no circular dependency);
+  stand-ins are centred on `position` like every shape (stand on a floor at `y: 0.8`); the lint is
+  a sphere estimate (a stand-in in front of a box may count as covering more than it does; the 0.7
+  threshold keeps false alarms down); the world is planned twice per render (description, then
+  for lint) — cheap next to drawing.
+- **Files**: new `src/vidgen/three_d/{motion,framing}.py`, `src/vidgen/lint/three_d_rule.py`,
+  `tests/test_scene_3d_actions.py`; changed `three_d/{spec,world,camera,description}.py`,
+  `scenes/{scene_3d,scene_3d_actions}.py`, `data/three/vidgen3d.js`, `api.py`, `config.py`,
+  `lint/__init__.py`, `tests/test_actions.py` (action list, did-you-mean now also names
+  `object_highlight`), `docs/CONFIG.md` (`standin` row, object fields, "3d object actions", camera
+  following, lint table + defaults, targets row), guide + `AGENTS.md` (chooser row, `meeting`
+  snippet, ten action rows, two lint rows), `README.md`, DESIGN §2 tree + §114.3 + §114.11–13,
+  CHANGELOG, tasklist.
+- **Tests run and passed** (one file at a time, `capped`/`capped3g` + `timeout`):
+  `test_scene_3d_actions` all (25, incl. 2 render: page pixels for stand-in / glow / show / arrow
+  length, and a real `lint_project` finding a speaking stand-in behind a wall and a ball rolled
+  off frame), `test_scene_3d` all (22), `test_scene_3d_camera` all (32), `test_actions` (28),
+  `test_actions_coverage` not render (12) + `-k "register_their_target_names and 3d"` (1),
+  `test_lint` not render (22), `test_guide` (91), `test_docs` (79), `test_api` (10),
+  `test_extensions` (25), `test_json_output` (21), `test_gallery` (19), `test_builtin_scenes` not
+  render (176), `test_schema` all (76, in two runs), `test_mcp` (22). Not run: other render suites.
+- **Stills**: `/home/claude/work/scratch/s300/{still-16x9-highlight.png, still-16x9-walk-show.png,
+  still-9x16-fly-to-follow.png}` from `/home/claude/work/scratch/s300/demo` (two stand-ins, a
+  crate glowing on "@crate", Ana walking to the crate with the arrow following her, a ball growing
+  in and rolling along a path, Ben walking while the camera flies to him and follows; 9:16 with
+  karaoke captions). `vidgen lint` on the demo: clean.
+- **Known gaps / next (301)**: guide passes should colour by `userData.id` (a stand-in's nose and
+  name tag carry its id); the stand-in has no arms or walk cycle beyond the bob; `object_face` turns
+  about the parent's vertical only (tilted parents give odd yaw); `object_highlight` does nothing
+  visible on a label (refused by validate) and glows through every child of a group; lint uses
+  spheres (tall shapes overestimated) and only checks stills (beat ends and mid-beat); no lint for
+  a stand-in walking through another object; the gallery example (`crate`) does not show object
+  actions yet (Step 302's example will).
+
+## Step 301 — 3D scenes: guide passes (Phase AI)
+
+- **Built** (DESIGN §114.14–114.15): a `3d` scene can also be drawn as three guide passes, lossless
+  clips beside its 3D clip with exactly its frames, camera and timing: `depth` (near white, far
+  dark, background black; linear over **one** range for the whole shot, `depth_range`, so it does
+  not flicker), `outline` (black edges on white: silhouettes, creases, self-occlusion; an edge
+  shader over normal/depth and object-number float buffers) and `mask` (each drawn object one flat
+  unique colour on black, no antialiasing; table `<scene>.mask-colors.json`: `colors` id →
+  colour, `objects`, `names` stand-in name → colour). Labels and name tags are not drawn in any
+  pass; title, captions and overlays are Manim layers and never in the clips. A pass is the scene
+  description with another `draw_mode` (+ `depth_range` / `mask_colors`), drawn and cached by
+  the unchanged `make_3d_clip` as `build/<q>[_<variant>]/three_d/<scene>.<pass>.mkv` + `.json`.
+  Off by default: `guide_passes: true | [depth, outline, mask]` (3d param, did-you-mean) or
+  `vidgen render --guide-passes [LIST]` (alone = all; MCP `render` `guide_passes`), passed to the
+  worker (`--guide-passes`), set on the scene (`NarratedScene.guide_passes`), recorded in the
+  scene's timings (`render.guide_passes`); a reused render without the requested passes (or with
+  their files gone) is rendered again, reusing the clip. The CLI prints a `guide passes (<scene>)`
+  line; `--json` has `guide_passes` (scene id → files) at the top level.
+- **Public interface**: `vidgen.api` + `GUIDE_PASSES`, `guide_pass`, `make_guide_passes`,
+  `mask_table`; `DRAW_MODES` gains `depth`, `outline`, `mask` and `scene_description(...,
+  draw_mode=)` returns a pass's description; `render_project` / `current_render` /
+  `render_scene` take `guide_passes=`; `RenderResult.guide_passes`. New module
+  `three_d/passes.py` (`parse_passes`, `mask_colors`, `depth_range`, `pass_files`, ...).
+  Description still version 1.
+- **Decisions / deviations**: depth is linear in camera-space z (1/distance was tried: with a
+  floor reaching far back the objects went almost black); the range comes from Python (planes
+  sampled on a 17 × 17 grid inside the view, other shapes by their sphere, ≤ 120 frames, padded
+  5 %) rather than a measuring pre-pass in the browser; one Chromium per pass (~1 s each);
+  objects drawn in a pass from opacity 0.5 (no fades, no glow); mask colours by description order
+  (golden-angle hues), so adding an object can change later colours — the table is the
+  reference; JSON keeps `outputs` as plain paths and adds `guide_passes` beside it. Owner's
+  answers to Step 300 applied: stand-ins stay centred, lint stays sphere-based, gallery left to 302.
+- **Files**: new `src/vidgen/three_d/passes.py`, `tests/test_scene_3d_passes.py`; changed
+  `data/three/vidgen3d.js` (pass shaders, `applyDrawMode`, `renderOutline`, no antialias in
+  passes), `three_d/{description,spec}.py`, `scenes/scene_3d.py`, `scene.py`, `render/{pipeline,
+  worker}.py`, `cli.py`, `jsonout.py`, `mcp_server.py`, `api.py`, `tests/test_scene_3d.py` (the
+  unknown draw mode is now `sketch`), `tests/test_json_output.py`, `docs/CONFIG.md` (guide passes
+  explained, `guide_passes` row, JSON `guide_passes`), guide + `AGENTS.md` (chooser row),
+  `README.md` (render row), DESIGN §2 tree + §114.3 + §114.14–15, CHANGELOG, tasklist.
+- **Tests run and passed** (one file per command, `capped`/`capped3g` + `timeout`):
+  `test_scene_3d_passes` all (18, incl. 2 render: pixels of each pass — mask colours exact and
+  only the table's, depth grey with near lighter than far, outline only black/white with the box's
+  silhouette, cache reuse; a real `render_project` with `guide_passes: [mask]` in YAML then
+  `guide_passes=("depth",)`: same frame count, no title/caption in the mask, clip reused, third
+  run renders nothing), `test_scene_3d` (22), `test_scene_3d_camera` (32), `test_scene_3d_actions`
+  (25), `test_render` not render (8), `test_api` (10), `test_extensions` (25), `test_json_output`
+  not render (21) and render (2), `test_jobs` (24), `test_project` (24), `test_guide` (91),
+  `test_docs` (79), `test_builtin_scenes` not render (176), `test_actions_coverage` not render
+  (12), `test_lint` not render (22), `test_mcp` (22), `test_schema -k "examples_validate or 3d"`
+  (22). Not run: other render suites, the rest of `test_schema`.
+- **Stills**: `/home/claude/work/scratch/s301/{passes-16x9.png, passes-16x9-fly-to.png,
+  passes-9x16.png}` — each one frame of the clip, depth, outline and mask side by side, from
+  `/home/claude/work/scratch/s301/demo` (Step 300's plaza with `guide_passes: [depth, mask]` in
+  YAML, then `--guide-passes` for all; 16:9 and the 9:16 variant with captions).
+- **Known gaps / next (302)**: the example's guide passes (gallery / examples) are Step 302's;
+  passes are FFV1 `.mkv` (a video model will want MP4/PNG frames: the video-to-video step);
+  depth contrast is low for objects in front of a long floor (one linear range for the shot);
+  outline lines are ~1 px per 540 px and not antialiased; the floor gets a mask colour like any
+  object (often a large red area); old pass files are not deleted when passes are switched off.
+
+## Step 302 — 3D scenes: docs, example and critical review (Phase AI, last step)
+
+- **Built** (DESIGN §114.14, §114.16): `docs/COOKBOOK-3D.md` (setting up the extra incl. Windows
+  wording, building a scene, the camera in 16:9 vs 9:16, stand-ins, guide passes, checks, common
+  mistakes), linked from `docs/COOKBOOK.md`, `README.md`, the guide; guide topic `three-d`
+  (aliases `3d`, `threejs`, `three.js`, `stand-ins`, `guide-passes`...; topic names must start with
+  a letter, so `vidgen guide 3d` works through the alias) and a pointer before the guide's media
+  snippets; `examples/3d-short/video.yaml` (YAML only: a 9:16 Short of ~14.6 s, one `3d` scene
+  with floor, box, cone+cylinder group, torus, sphere, arrow, two stand-ins with voices; walk, face,
+  show (grow), path, highlight; dolly, fly-to, move; karaoke captions; `guide_passes: true`;
+  validate and lint clean); the guide's `crate` sample (= the gallery sample) and
+  `examples/gallery`'s `crate` now show object actions (`object_highlight`, `object_show`,
+  `object_path`; the gallery one also a stand-in walking); gallery `3d` regenerated (16.3 MB in
+  docs/gallery, test_gallery passes; 3d.md had stale Step 299 params).
+- **Owner's decisions on Step 301 applied** (with tests): (1) depth range fitted to the objects
+  only (planes left out; a scene of planes only fits its planes), far mapped to a dark grey 0.15
+  (`DARKEST` in the page) and clamped, so the floor stays white in front / dark grey behind and
+  only the background is black; optional `depth_range: [near, far]` param (0 ≤ near < far);
+  (2) outline white lines on black (no black-on-white setting: optional, not built); (3) floor in
+  the mask `#404040`, in the table as `floor`; (4) mask colours from `sha256(id)` into a 48-colour
+  palette (16 hues × bright / dark / pale), clash → the id first in the alphabet keeps it, the other
+  probes 7 places on; past 48 objects a colour from the hash; depends only on the set of ids, not
+  their order; (5) passes stay lossless `.mkv`.
+- **Critical review of 298–301** — fixed:
+  1. `PageRenderer.__enter__`: a Playwright error while loading the page (`goto` / `wait_for_function`
+     timeout, a crashed page) escaped as a Playwright traceback; now `VidgenError("3D page did not
+     load: ...")` (the page's own error if it reported one) and Chromium/Playwright are closed; a
+     `KeyboardInterrupt` there also closes them.
+  2. `write_clip`: on Windows `os.replace` fails when the old clip is open in a player → a
+     `PermissionError` traceback; now a `VidgenError` naming the file (the partial file removed).
+  3. Dead code: `write_clip(progress=)` was never passed; removed.
+  4. Duplication: the camera basis (forward/right/up, fov tangents with the shorter-side rule) was
+     written twice (`framing_3d`, `depth_range`); now `framing.view_basis`.
+  5. Depth range: objects counted by their sphere — an arrow's or stand-in's sphere reaches far
+     past it, so `near` came out too near (example: 1.9 instead of 2.3 units); now the tighter of
+     sphere and box (8 corners through `World.matrix`, an arrow's current length) at each end.
+  6. Docs not matching behaviour: CLI `--guide-passes` help, `guide_passes` docstring, CONFIG pass
+     table and DESIGN said black edges / golden-angle mask colours; updated. `docs/gallery/3d.md`
+     lacked the Step 300–301 params (regenerated).
+  — checked, left as is: determinism (no clock or randomness in the page; ids hashed with sha256,
+  never `hash()`; JSON keys sorted for the cache key); Windows paths (pathlib, utf-8, `LOCALAPPDATA`
+  browsers dir, URL names not paths); performance (the page's and `framing.track_value`'s linear
+  key search is O(frames × keys): negligible next to 60–130 ms per drawn frame; the world is
+  planned twice per render — planning is lazy and cheap); error messages (validate names the
+  action of a bad camera move; at render the message names only the scene — known gap).
+- **Public interface**: `Scene3DParams.depth_range`; `guide_pass(..., depth=None)`,
+  `make_guide_passes(..., depth=None)`; `passes.FLOOR_MASK`, `MASK_PALETTE`, `MASK_HUES`,
+  `MASK_TONES`, `MASK_PROBE`, `BOX_CORNERS`; `framing.view_basis`; `write_clip(description, path)`
+  (no `progress`). `vidgen.api` unchanged. Description still version 1 (pass descriptions change:
+  new ranges/colours, so old pass clips are drawn again once).
+- **Files**: new `docs/COOKBOOK-3D.md`, `examples/3d-short/video.yaml`; changed
+  `src/vidgen/three_d/{passes,framing,spec,description,browser}.py`, `scenes/scene_3d.py`,
+  `data/three/vidgen3d.js` (depth `DARKEST`, edges white on black), `cli.py` (help), guide +
+  `AGENTS.md` (topic `three-d`, intro list, chooser row `depth_range`, `crate` sample, pointer),
+  `docs/CONFIG.md` (pass table, `depth_range` row), `docs/COOKBOOK.md`, `README.md` (cookbook and
+  example), `examples/gallery/video.yaml` (`crate`), `docs/gallery/{3d.md,README.md,media/3d-*}`,
+  `tests/{test_scene_3d,test_scene_3d_passes,test_docs,test_guide}.py`, DESIGN §114.14 + §114.16,
+  CHANGELOG, tasklist.
+- **Tests run and passed** (one file per command, `capped`/`capped3g` + `timeout`):
+  `test_scene_3d_passes` all (23, incl. 2 render: depth floor ≥ 35 grey, outline white edges),
+  `test_scene_3d` all (24: page-load error, clip in use), `test_scene_3d_camera` (32),
+  `test_scene_3d_actions` (25), `test_docs` (80), `test_guide` (92), `test_gallery` (20),
+  `test_api` (10), `test_extensions` (25), `test_builtin_scenes` not render (176),
+  `test_json_output` not render (21), `test_lint` not render (22), `test_actions_coverage` not
+  render + `register_their_target_names and 3d` (13), `test_schema -k "examples_validate or 3d"`
+  (23, incl. the new example). Not run: other render suites, the rest of `test_schema`, `test_mcp`.
+- **Stills / preview**: `/home/claude/work/scratch/s302/contact-sheet.png` (rows 1, 4.6, 8.5, 10,
+  13.5 s; columns: the rendered Short with title and karaoke captions, depth, outline, mask),
+  `/home/claude/work/scratch/s302/preview.mp4` (the 540x960 preview, 14.6 s),
+  `/home/claude/work/scratch/s302/passes-preview.mp4` (video + three passes side by side), from
+  `/home/claude/work/scratch/s302/example` (a copy of `examples/3d-short`).
+- **Known gaps / open questions**: one depth range per shot still loses contrast when the camera
+  flies close and pulls far back in the same scene (the example's range is 1.5–9.0 units; split
+  the shot or set `depth_range`); no black-on-white outline setting; `guide_passes: all` (a
+  string) is refused in YAML although `--guide-passes all` works (YAML takes `true` or a list);
+  a mask colour can still move when a new id clashes with an existing one and sorts before it
+  (~2 % per pair); build JSON files are written 0600 by `write_text_atomic` (project-wide);
+  old pass files stay when passes are switched off; the stand-in lint is sphere-based.
+
+## Step 303 — 3D scenes: `guide_passes: all` in YAML (Phase AI)
+
+- **Built** (owner's request; DESIGN §114.14): `all` works in both places. A `3d` scene's
+  `guide_passes: all` (the string YAML gives for `all`) means all three passes, the same as
+  `true` and as `vidgen render --guide-passes all`. `true`, `false` and lists work as before
+  (lists still sorted into drawing order and checked with did-you-mean; `[all]` still all three).
+  Any other string is refused when the config is read (`Scene3D.parse_params` → `VidgenError`):
+  `guide_passes: 'al' is not true, false, all or a list of depth, outline, mask; did you mean
+  'all'?`; a string that names passes (`depth` or `depth,mask`) gets `; write a list: [depth,
+  mask]` instead. Strings pydantic already read as booleans (`"yes"`, `"true"`, `"off"`...) stay
+  booleans, as before.
+- **Public interface**: `Scene3DParams.guide_passes` is typed `bool | Literal["all"] | list[str]`
+  (the JSON schema of `vidgen schema` now has `{"const": "all"}` in its `anyOf`);
+  `Scene3DParams._guide_passes` is a `mode="before"` validator and turns `all` into `True`, so
+  the stored value (and `passes()`) is the same as for `true`. New constant `spec.BOOL_WORDS`.
+  `vidgen.api`, the CLI and the MCP tool unchanged.
+- **Decisions**: `all` is stored as `True` rather than kept as a string, so code reading
+  `guide_passes` sees one of three shapes as before. Case matters (`ALL` is refused with "did you
+  mean 'all'"), like the CLI's `parse_passes`. A comma string is refused in YAML rather than
+  parsed like the CLI's `--guide-passes depth,mask`: the owner asked for `all` only, and a YAML
+  list is the documented form; the error shows the list to write.
+- **Files**: `src/vidgen/three_d/spec.py`; `tests/test_scene_3d_passes.py` (3 tests, one
+  parametrized ×5: YAML `all`, refused strings, the params JSON schema); `docs/CONFIG.md` (pass
+  text and `guide_passes` row), `docs/COOKBOOK-3D.md` (§5), `docs/gallery/3d.md` (the param row,
+  edited by hand to match `gallery._param_rows`; no media regenerated), guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (chooser row, "Guide passes" paragraph),
+  DESIGN §114.14, CHANGELOG, tasklist.
+- **Tests run and passed** (one file per command, `capped` + `timeout`): `test_scene_3d_passes`
+  not render (28, 2 render deselected), `test_scene_3d` not render (21), `test_guide` (92),
+  `test_docs` (80), `test_gallery` not render (19), `test_schema -k "examples_validate or 3d"`
+  (23, 94 s). Not run: render tests (no rendering behaviour changed), the rest of `test_schema`,
+  the full suite.
+- **Known gaps**: none new; Step 302's other open points stand.
+
+## Step 304 — 3D scenes: `guide_passes` takes the command-line forms in YAML (Phase AI)
+
+- **Built** (owner's request; DESIGN §114.14): every form `vidgen render --guide-passes` takes
+  also works in a `3d` scene's `guide_passes`, read by the same function (`parse_passes`), so
+  the two cannot drift: one name (`guide_passes: depth`), a comma list (`depth,mask`, spaces
+  allowed: `depth, mask`), empty items skipped (`depth,,mask,`), `all` (alone or among the names:
+  all three), an empty string (no pass, like `--guide-passes ""`). `true`, `false` and lists work
+  as before. An unknown name is refused with did-you-mean over the passes and `all`, in YAML and
+  on the command line alike: `guide_passes: no guide pass 'masc' (passes: depth, outline, mask,
+  or all); did you mean 'mask'?`. Step 303's "write a list" refusal of `depth,mask` is gone.
+  Strings pydantic reads as a boolean (`"yes"`, `"off"`...) stay booleans, as before (the CLI
+  refuses `--guide-passes yes`; YAML keeps `yes` = `true`, as the owner asked to keep booleans).
+- **Checked CLI forms**: `--guide-passes` alone (argparse `const="all"`), `all`, a name, a comma
+  list with or without spaces (quoted in the shell), empty items, `all` mixed in, `""` (none).
+  All of them now read the same in YAML. Case matters in both (`ALL` is refused, "did you mean
+  'all'"); the CLI now also suggests `all` for `al` (before it suggested only pass names).
+- **Public interface**: `parse_passes`, `GUIDE_PASSES` and `ALL_PASSES` moved from
+  `three_d/passes.py` to `three_d/spec.py` (no numpy import there); `passes.py` imports and
+  re-exports them, so `from vidgen.three_d.passes import parse_passes` and `vidgen.api.GUIDE_PASSES`
+  still work. `parse_passes(value, where)` with `where=""` gives the message without a prefix
+  (the params error already names `params.guide_passes`). New `spec.PASSES_PATTERN`.
+  `Scene3DParams.guide_passes` is typed `bool | Annotated[str, Field(pattern=PASSES_PATTERN)] |
+  list[str]`: the JSON schema (`vidgen schema`) accepts those strings and refuses others; the
+  before-validator turns every non-boolean string into `True` (`all`) or the list, so the stored
+  value keeps Step 303's three shapes and `depth,mask` has the fingerprint of `[depth, mask]`.
+  CLI, worker and MCP unchanged (they already used `parse_passes`).
+- **Files**: `src/vidgen/three_d/spec.py`, `src/vidgen/three_d/passes.py`;
+  `tests/test_scene_3d_passes.py` (Step 303's refused-strings test replaced: YAML and CLI give the
+  same passes for 7 forms, unknown names refused in both ×5, bool words, schema); `docs/CONFIG.md`
+  (pass text, param row), `docs/COOKBOOK-3D.md` (§5), `docs/gallery/3d.md` (param row, by hand to
+  match `gallery._param_rows`), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`
+  (chooser row, "Guide passes" paragraph), DESIGN §114.14, CHANGELOG, tasklist.
+- **Tests run and passed** (one file per command, `capped` + `timeout`): `test_scene_3d_passes`
+  not render (36), `test_scene_3d` not render (21), `test_guide` (92), `test_docs` (80),
+  `test_gallery` not render (19), `test_schema -k "examples_validate or 3d"` (23, 97 s),
+  `test_api` (10). Not run: render tests (no rendering changed), the rest of `test_schema`, the
+  full suite. ruff is not installed in the venv.
+- **Known gaps**: `guide_passes:` with no value (YAML null) is still refused, as before; it is not
+  a command-line form.
+
+## Step 305 — Hosted inputs: the quick tunnel host and `generate host-test` (Phase AJ)
+
+- **Built** (DESIGN §115.1): `src/vidgen/videogen/host.py` — `copy_into_share` (copies of the
+  given files only, random `token_hex(8)` names with the extension, SHA-256 and size; symlinks,
+  folders, missing and duplicate files refused; `O_NOFOLLOW` where available), `ShareServer`
+  (stdlib `ThreadingHTTPServer` on 127.0.0.1:0; only GET / HEAD of exact `/<secret>/<name>`,
+  `secret = token_urlsafe(24)`; 404 for every other path and method; no listing, no `Server`
+  header, no stderr logging; `RequestRecord`s in memory with the secret masked and no client
+  address), `TunnelProcess` (`cloudflared tunnel --url http://127.0.0.1:<port> --no-autoupdate
+  [--protocol http2|quic]` in its own process group, output read in a thread, the trycloudflare
+  address parsed with a timeout, waits for "Registered tunnel connection"), `stop_process_tree`
+  (Windows `taskkill /T /F`, POSIX process group SIGTERM → SIGKILL), `find_cloudflared`
+  (setting, PATH, winget's install folders; install hints otherwise), `verify_public` (HEAD
+  until 200 with the right length, retried), `QuickTunnelHost` (context manager; closes on end /
+  error / Ctrl+C / `atexit`, after every file was fetched + grace, at the max lifetime; ledger
+  `host_open` / `host_fetch` / `host_close`; the URL with its secret is never written to disk or
+  printed), `host_self_test`. CLI `vidgen generate host-test [PROJECT] [--keep SECONDS] [--json]`.
+  Config `videogen.{cloudflared, tunnel_protocol, host_max_minutes, host_grace_seconds}`.
+- **Decisions**: the `host: none | quick_tunnel` switch is left to Step 306 (it would do nothing
+  yet); host-test needs no project (defaults outside one) and writes no ledger; the host's own
+  verification HEADs are recorded as `host_fetch` too (honest record; "fetched" for the auto-close
+  counts only complete GETs); `host_open` is written as soon as the address exists (before the
+  checks), so a failed check still leaves an open/close pair; the query string must be empty
+  (exact paths); CPython folds a leading `//` into `/` itself (same file, accepted); no Range
+  support (a full 200 answer is valid HTTP); `--keep` is the only way the full URL is printed.
+- **Files**: new `src/vidgen/videogen/host.py`, `tests/test_videogen_host.py`; changed
+  `src/vidgen/config.py` (4 `VideogenConfig` fields), `src/vidgen/cli.py` (`host-test` action,
+  `--keep`, `_generate_host_test`), docs `CONFIG.md` (settings, quick tunnel bullet, JSON),
+  DESIGN §115 + module tree, CHANGELOG, tasklist (Phase AJ, 305 ticked). Guide / AGENTS.md
+  unchanged (Step 306 does it with the `host` key). Not in `vidgen.api`.
+- **Tests run and passed** (one file at a time, `/home/claude/bin/capped` + `timeout`, `-m "not
+  render"`): `test_videogen_host` (12, 7.7 s), `test_docs` (80), `test_config` (21),
+  `test_json_output` (21, 2 deselected), `test_videogen` (26). Not run: `test_schema` (187 s; only
+  optional fields with defaults were added), the full suite. No rendering code changed.
+- **Spending**: nothing paid, no key read, no network (no real cloudflared run).
+- **Not verified**: a real tunnel (the workspace cannot reach Cloudflare); the exact text
+  cloudflared prints on Windows (the parser looks for any `https://<name>.trycloudflare.com`);
+  `taskkill` on Windows; whether OpenRouter's providers fetch with GET (HEAD-only fetchers would
+  never trigger the "all files fetched" close; the max lifetime still applies).
+- **How the owner tests on Windows**: `winget install Cloudflare.cloudflared`, a new terminal,
+  `vidgen generate host-test` (prints each check and "host test OK"); `--keep 60` to open the
+  printed address in a browser; corporate networks blocking UDP: `tunnel_protocol: http2` is the
+  default already.
+- **Next (306)**: `videogen.host: quick_tunnel`, the host as the provider's `uploader` inside
+  `run --pay` (open before submit, close after the job ends; per shot), the plan's "would share"
+  lines, MCP, cookbook section, guide, review.
+
+## Step 306 — Hosted inputs: wiring, docs and review (Phase AJ, last step)
+
+- **Built** (DESIGN §115.2): `videogen.host: none | quick_tunnel` (default `none`). With
+  `quick_tunnel`, `generate_clip` opens one `QuickTunnelHost` per shot with local audio / video
+  inputs (`run.hosted_inputs`), after every other check and before the submit; the provider's
+  `uploader` is `host.url_of` for that submit only; submit + ledger `submit` + `wait` run inside
+  the `with` block, so the tunnel closes (`done`) when the job reaches a final state, before the
+  download (or earlier: all files fetched + grace, max lifetime; error / Ctrl+C). Provider errors
+  raised inside are redacted (`QuickTunnelHost.redact`, `<secret>`). New `host.ShareOptions`
+  (settings, out, fake executable / fetch for tests; `from_config`, `host(...)`);
+  `run_shots(..., share=)` and `generate_clip(..., share=)`. Plan: `Shot.shared`,
+  `Shot.share_minutes`, the "would share through a public Cloudflare quick tunnel ..." lines with
+  each file and size, JSON `shared` / `share_max_minutes`; blocked with the install hints when
+  cloudflared is not found; `shots.NO_HOST_BLOCKED` (names the setting) without the host;
+  `INLINE_AUDIO_VIDEO_PROBLEM` names it too. MCP `generate_host_test` (`keep`). Cookbook §5
+  "Sharing voice and video inputs safely" with "Test on Windows" (sections 5-7 renumbered 6-8;
+  the example's `videogen` gains `host: quick_tunnel`), CONFIG, guide + AGENTS.md, CLI help.
+- **Owner's decisions applied**: one tunnel per shot; the switch added now (default none);
+  HEAD-only providers are cut off by the lifetime (accepted), and the tunnel also closes when the
+  job reaches a final state.
+- **Review fixes to 305** (DESIGN §115.3): a source reached through a linked folder inside the
+  project (or a Windows junction) is refused; the public check accepts a HEAD answer without
+  Content-Length (a wrong one is still refused); Windows without `taskkill` kills cloudflared
+  at once; the secret is redacted from provider errors.
+- **Files**: `src/vidgen/config.py` (`host`), `src/vidgen/videogen/{host,run,shots,workflow}.py`,
+  `src/vidgen/cli.py` (plan JSON, help), `src/vidgen/mcp_server.py`, docs
+  `COOKBOOK-GENERATED-VIDEO.md`, `CONFIG.md`, guide + `AGENTS.md`, DESIGN §113.7 / §115,
+  CHANGELOG, tasklist (306 ticked). Tests: `tests/test_videogen_shots.py` (+1, imports the fake
+  cloudflared fixture from `test_videogen_host.py`), `tests/test_videogen_host.py` (2 extended:
+  linked folder, HEAD without length + `redact`), `tests/test_mcp.py` (tool list).
+- **Public interfaces**: not in `vidgen.api`. New `VideogenConfig.host`; `ShareOptions`,
+  `QuickTunnelHost.redact`, `run.hosted_inputs`, `shots.NO_HOST_BLOCKED`, `shots.share_size`,
+  `Shot.shared`, `Shot.share_minutes`; keyword `share=` on `generate_clip` and `run_shots`; plan
+  JSON `shared`, `share_max_minutes`; MCP tool `generate_host_test`.
+- **Tests run and passed** (one file at a time, `/home/claude/bin/capped` + `timeout`, `-m "not
+  render"`): `test_videogen_host` (12), `test_videogen_shots` (21), `test_videogen` (26),
+  `test_videogen_compose` (17, 1 deselected), `test_docs` (80), `test_guide` (92), `test_config`
+  (21), `test_json_output` (21, 2 deselected), `test_mcp` (20, 2 deselected). Not run:
+  `test_schema` (one optional field with a default), the full suite. No rendering code changed.
+- **Spending**: nothing paid, no key read, no network; cloudflared only as the fake script.
+- **Known gaps**: not verified against the real tunnel, Windows `taskkill`, or OpenRouter's
+  providers (do they GET the voice, how soon, more than once? the ledger's `host_fetch` lines of
+  the first paid talking shot will tell); a job resumed after a poll timeout gets no tunnel (fine
+  if providers fetch at job start); the progress lines of a host print before the shot's own
+  result line.
+- **How the owner tests on Windows**: cookbook §5 "Test on Windows": `winget install
+  Cloudflare.cloudflared`, new terminal, `vidgen generate host-test`, then with `videogen: {host:
+  quick_tunnel}` `vidgen generate plan --shot closeup_b1` (lists the shared voice), then
+  `vidgen generate run --pay --shot closeup_b1` (~$0.20) and `vidgen generate ledger` / the
+  ledger's host lines.
+
+## Step 307 — 3D guide passes as generated-shot guides (Phase AJ)
+
+- **Built** (DESIGN §113.8): `generated_shot.guide: true | false | render | depth | outline |
+  mask`. `true` = `render` (unchanged: the beat's silent draft render, `guide.mp4`). On a `3d`
+  scene, `depth` / `outline` / `mask` send that guide pass of the beat as the video reference:
+  `vidgen generate inputs --guide` asks the draft render for the passes its shots need (one
+  render per scene; the 3D frames reused), cuts the beat's part from the lossless
+  `build/draft[_<variant>]/three_d/<scene>.<pass>.mkv` exactly like the render guide (beat start
+  in the scene timings + the part's offset, `-t` length, draft size and fps) and converts it
+  (`cut_pass`: H.264, yuv420p, BT.709 limited range, CRF 12) to
+  `build/videogen/<shot>/guide.<pass>.mp4`. The prompt gains one sentence about the guide
+  (`shots.GUIDE_PROMPTS`); a mask guide also lists "Mask colours: Ana #rrggbb, Ben #rrggbb" for 1-4
+  stand-ins (same colours as the pass table). The plan's input line reads "guide:
+  build/videogen/<shot>/guide.depth.mp4 (depth pass of the beat's 3D scene, N s)" and the file is
+  in "would share" with `host: quick_tunnel`; without a host the shot is blocked as before.
+- **Validation**: unknown strings are refused when the config is read, with did-you-mean
+  (`'dpeth' is not true, false, render, depth, outline, mask (did you mean depth?)`); a pass on a
+  scene that is not `type: 3d` is refused by `SceneConfig` (`beats[0].generated_shot.guide: mask
+  is a guide pass of a 3d scene, but scene 'plaza' is a text_card scene; use guide: true ...`).
+  `yes` / `off` and the other bool words stay booleans.
+- **Decisions**: (1) `first_frame: render` stays the **normal** render's first frame with a pass
+  guide (a grey / flat-colour first picture would steer the model's look); a pass guide alone
+  writes neither `guide.mp4` nor `first_frame.png`. (2) The pass reaches the cache key through the
+  guide file's contents and the prompt sentence; no new `canonical_request` field, so existing
+  keys (and the `render` prompts) are unchanged. (3) `_render_scene` now reuses a current draft
+  render (`current_render(..., guide_passes=)`) instead of running the worker every time
+  (`inputs.py`'s docstring already claimed reuse). (4) CRF 12 for passes (flat areas and 1 px
+  lines show compression); the render guide keeps ffmpeg's defaults. (5) The mask names list only
+  stand-ins, by `name` else the display form of the id, and only up to four (`MASK_NAMES_MAX`).
+- **Mask loss, measured** (160x90 draft, the test scene): inside each object within 6 levels of
+  the table colour; ~2.5 % of pixels (edges; 4:2:0 chroma per 2x2 block) off by more, up to ~90;
+  nearest-table-colour snapping recovered 100 % of the pixels. Documented in CONFIG and the
+  cookbook.
+- **Public interfaces** (not in `vidgen.api`): `config.GuideChoice`, `GUIDE_CHOICES`,
+  `GeneratedShot.guide` typed `bool | GuideChoice`, `GeneratedShot.guide_source`;
+  `shots.GUIDE_PROMPTS`, `GUIDE_WHAT`, `MASK_NAMES_MAX`, `guide_name`; `inputs.SceneRender`,
+  `cut_pass`, `PASS_CRF`, `PASS_COLOR_ARGS`; **changed**: the `render=` hook of `make_inputs` is now
+  `(project, scene_id, passes) -> SceneRender` (was `-> (video, starts)`; the one test using it is
+  updated); `render.pipeline.render_scenes(..., guide_passes=())`.
+- **Files**: `src/vidgen/config.py`, `src/vidgen/videogen/{shots,inputs}.py`,
+  `src/vidgen/render/pipeline.py`, `src/vidgen/cli.py` (`--guide` help); new `tests/test_videogen_3d_guide.py`, changed
+  `tests/test_videogen_shots.py` (stub signature); docs `COOKBOOK-GENERATED-VIDEO.md` (new §6
+  "From a 3D scene to a generated clip", old 6-8 now 7-9), `COOKBOOK-3D.md` (§5 link),
+  `CONFIG.md`, guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`; new
+  `examples/3d-to-video/video.yaml` (YAML only; validate and lint clean); DESIGN §113.8 + §114.15
+  note, CHANGELOG, tasklist (Step 307 under Phase AJ).
+- **Tests run and passed** (one file per command, `/home/claude/bin/capped` + `timeout`):
+  `test_videogen_3d_guide` not render (15, 2.9 s) and render (1, 11.5 s: real Chromium draft
+  render of a mask guide), `test_videogen_shots` (21), `test_videogen` (26), `test_config` (21),
+  `test_videogen_compose` not render (17), `test_docs` (80), `test_guide` (92),
+  `test_scene_3d_passes` not render (36), `test_schema -k "examples_validate or 3d or generated"`
+  (24, 101 s, includes the new example). Not run: other render suites, the rest of `test_schema`,
+  `test_mcp` (unchanged tools), the full suite.
+- **Spending**: nothing paid, no key read, no network, no real cloudflared (the plan tests use
+  the fake one).
+- **Known gaps / open questions**: no paid run yet, so it is unknown whether Seedance (or any
+  OpenRouter provider) treats a depth / outline / mask video as a control signal or as loose
+  inspiration (the cookbook says so); the guide is the draft's low resolution (DRAFT_SHORT_SIDE),
+  same as the render guide; old `guide*.mp4` files stay in `build/videogen/<shot>/` when `guide:`
+  changes (not sent: only the listed input is); the plan JSON has no separate `guide` key (the
+  input's path names the pass).
+
+## Step 308 — Cut inputs that no longer match are not paid for
+
+- **Built** (DESIGN §113.9): `vidgen generate inputs` writes `build/videogen/<shot>/inputs.json`:
+  per cut file its SHA-256 and what it was made from (voice: narration MP3 SHA-256, offset, length;
+  render inputs: the draft project's `scene_fingerprint`, draft size and fps, guide kind, offset,
+  length). `plan_shots` compares that with the current state, free and offline. A shot whose inputs
+  differ or have no record is blocked (text and JSON `blocked`) with the exact command: `vidgen
+  generate inputs[ --guide][ --variant V]`; `run_shots(pay=True)` refuses the whole run before any
+  submit or tunnel. A voice whose `.hash` no longer matches the beat's text asks for `vidgen tts`
+  first. MCP's `generate_plan` / `generate_run` run the CLI, so no MCP change.
+- **Cached / earlier job**: not blocked; a note says the clip comes from the old inputs and that a
+  re-cut is a new paid request.
+- **Files**: new `src/vidgen/videogen/freshness.py`, `tests/test_videogen_input_freshness.py`;
+  changed `src/vidgen/videogen/{inputs,shots,workflow}.py`, `tests/test_videogen_3d_guide.py` (one
+  assertion in the render test); docs `DESIGN.md` (§113.9), `CHANGELOG.md`, `docs/CONFIG.md`,
+  `docs/COOKBOOK-GENERATED-VIDEO.md`, guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`,
+  `tasklist.md`. `videogen/host.py` not touched.
+- **Public interfaces** (not in `vidgen.api`): `freshness.InputSources`, `StaleInputs`,
+  `record_input`, `voice_source`, `RECORD_NAME`; `shots.inputs_command`;
+  `ShotPlan.changed_inputs`; `inputs.SceneRender.fingerprint` (optional, default `None`).
+- **Decisions / deviations**: (1) `run --pay` refuses the whole run, not only the changed shot (other
+  blocked shots are still skipped): a re-cut is free, and `--shot` selects the others. (2) The record
+  also holds each cut file's own SHA-256, so an interrupted cut or a hand-changed file counts as
+  changed. (3) The draft size and fps are recorded because `draft:` is outside the fingerprint. (4)
+  The beat's start in the render is not recorded: the fingerprint covers what determines it, and the
+  plan cannot know it without a render. (5) The narration `.hash` check was added beyond the
+  sidecar: a talking shot has no render input, so a changed beat text with an old MP3 would otherwise
+  pass. (6) The check lives in `plan_shots`, not `_resolve_inputs`: `project_shots` runs inside
+  `scene_fingerprint` for projects with takes.
+- **Known gaps**: `generate status` does not show this block (it uses `project_shots`). New files
+  under `assets/`, including sheet pictures in `assets/sheets/` (checked: one new file changes the
+  draft fingerprint), and a vidgen upgrade mark every guide of the scene as changed: a free re-cut,
+  but `--guide` renders the draft. Files a scene reads from outside the fingerprint's coverage are
+  not noticed (as for renders). Editing a beat's text with an MP3 that has no `.hash` is noticed only
+  for render inputs. `vidgen generate clip`-style direct calls of `generate_clip` are not checked.
+- **Tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`,
+  `PYTHONPATH=src` because the installed `vidgen` is a non-editable copy): `test_videogen_input_freshness`
+  not render (17, 7.2 s) and render (1, 9.2 s: a real Manim draft render, the worker's fingerprint
+  equals the plan's), `test_videogen_shots` not render (21), `test_videogen_3d_guide` not render (15),
+  `test_videogen_compose` not render (17), `test_guide` (92), `test_docs` (80). **Skipped**:
+  `test_generate_inputs_renders_the_mask_pass` (1, no Chromium here), so its new assertion has not
+  run. Not run: other render suites, `test_mcp` (no MCP change), the full suite.
+- **Spending**: nothing paid, no key read, no real tunnel (mock provider, fake cloudflared).
+
+## Step 309 — Money safety: the tunnel, the submit, and interrupted submits
+
+- **Built** (DESIGN §113.10, §115.4): three defects from a review, each reproduced first on the
+  unchanged code. (1) `QuickTunnelHost` no longer closes when every file was fetched: during a
+  run the tunnel stays open until the job reaches a final state, bounded by `host_max_minutes`.
+  Reproduced before: a second `GET` cut at 1,081,476 of 62,914,560 bytes. (2) `generate_clip` calls
+  `host.ensure_time_for_job(poll_timeout)` just before the submit; `url_of` / `urls` raise on a
+  closed host. Reproduced before: `is_open=False` at the POST, `paid=True`. (3) `_submit` writes a
+  `submit_intent` line to disk before the POST; a request with an intent of no known outcome is
+  not paid again until `vidgen generate resolve`. Reproduced before: Ctrl+C after the provider
+  accepted left no ledger file, and the re-run made a second job.
+- **Files**: `src/vidgen/videogen/{host,ledger,openrouter,run,shots,workflow}.py`,
+  `src/vidgen/{cli,config}.py`; new `tests/test_videogen_submit_safety.py`; changed
+  `tests/test_videogen{,_host,_shots}.py`; docs `DESIGN.md`, `CHANGELOG.md`, `docs/CONFIG.md`,
+  `docs/COOKBOOK-GENERATED-VIDEO.md`, guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`,
+  `tasklist.md`.
+- **Public interfaces** (not in `vidgen.api`): command `vidgen generate resolve [PROJECT] --intent
+  ID --not-charged | --job JOB_ID | --charged [--cost USD]`; `ledger.SubmitIntent`,
+  `Ledger.record_intent / intents / unresolved_intents / resolve_intent`, `intent_refusal`,
+  `intent_text`; `openrouter.SubmitRefused`, `submit(..., on_sending=)`;
+  `HostSettings.lifetime_problem`, `submit_margin`; `QuickTunnelHost.ensure_time_for_job`;
+  `ClipPlan.unresolved_intent`, `ShotPlan.unresolved_intent`, `VideoGenPlan.unresolved_intents`;
+  JSON `intents` / `unresolved_intents` / `unresolved_intent`. **Removed**:
+  `videogen.host_grace_seconds`, `HostSettings.grace_seconds`, `close_when_fetched`, `all_fetched`.
+- **Decisions / deviations**: (1) The grace setting is removed, not kept unused: host-test never
+  used the close, and the strict config makes an old key an unknown-key error, like any other (the
+  setting existed only in Unreleased; no shim). (2) `host_max_minutes` default 20 (was 15), range
+  5-120: 15 min equalled `poll_timeout`'s 900 s. The rule is `max_seconds >= poll_timeout + 180 s +
+  url_timeout`; a shot that fails it is blocked (a per-shot block, not a config error, so a film
+  can still render), and `generate_clip` refuses before opening a tunnel. A smaller `poll_timeout`
+  is the documented way to keep the tunnel short on purpose. (3) An unresolved intent counts at its
+  estimate in `spent`: the provider may have charged it, and leaving it out could break the hard
+  cap. An owner's `--not-charged` gives it back. (4) HTTP 4xx except 408 means no job exists and
+  clears the intent by itself; 408, 5xx, no answer and an unreadable 2xx stay unresolved. (5)
+  `run --pay` refuses the whole run on a selected shot with an unresolved intent, like Step 308's
+  changed inputs; `--shot` selects the others. (6) `again=True` does not bypass an intent.
+- **Known gaps**: sheet pictures keep their own flow (`submit` before the call, no intent): a
+  re-run after Ctrl+C during a picture pays for it again and overwrites that line (same job id),
+  so the first estimate is no longer counted. MCP has no `resolve` tool (the CLI does it; the
+  refusal names the command). Not checked against a live account: that a 4xx never leaves a job,
+  and that OpenRouter's activity page shows enough to decide (a job id in particular). `fsync` covers
+  the ledger file, not its folder entry, so a power cut just after the ledger is first created could
+  lose it. A provider that first fetches after vidgen stopped waiting finds the tunnel closed.
+  The watchdog still starts after verification, so opening can overrun the lifetime; the check before
+  the submit catches that. Two runs of one project at once are not guarded. An older vidgen reading
+  this ledger ignores intents and would not count or respect them. Out of scope here (later steps):
+  termination signals and Ctrl+C during close, redaction of failed-job errors, `provider: mock`
+  opening a real tunnel.
+- **Spending**: nothing paid, no key read, no network, no real cloudflared (mock provider, fake
+  cloudflared, a real local server).
+- **How to test / tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`,
+  `timeout 280`, `PYTHONPATH=src`): `test_videogen_submit_safety` (12, 16 s; real local server,
+  fake cloudflared, real sleeps), `test_videogen_host` (11), `test_videogen` (26),
+  `test_videogen_shots` not render (21), `test_videogen_compose` not render (17),
+  `test_videogen_input_freshness` not render (17), `test_guide` + `test_docs` (172), `test_config`
+  (21). Not run: render tests, `test_mcp` (no MCP change), `test_schema`, the full suite.
+
+## Step 310 — Cleanup when vidgen is signalled, killed or interrupted during close
+
+- **Reproduced first, on the unchanged code** (fake cloudflared, own `TMPDIR`): SIGTERM, SIGHUP and
+  SIGKILL each left cloudflared alive and the copies on disk; `KeyboardInterrupt` at the start of
+  `stop_process_tree` left the folder, the server thread and cloudflared, and every later close
+  did nothing; a concurrent close returned in 0.00 s with the folder still there.
+- **Built** (DESIGN §115.5): new `src/vidgen/videogen/host_guard.py` and the stand-alone
+  `host_watcher.py`. `QuickTunnelHost.close` runs resumable steps (cloudflared, server, folder,
+  watcher, report); Ctrl+C / `SystemExit` in a step does not stop the others and is re-raised at
+  the end; a later close (atexit, the watchdog, a retry) runs what is left; a concurrent close
+  waits (30 s, a warning), a re-entrant one returns at once. SIGTERM / SIGHUP / SIGBREAK close
+  the open hosts and raise `SystemExit(128+n)`; handlers only from the main thread and over the
+  default disposition. The watcher (own session, `python -I -S`, stdin pipe held only by vidgen)
+  stops cloudflared's group and deletes the folder when vidgen dies by any means, including MCP's
+  process-group SIGKILL, so `mcp_server.py` did not need changing. Windows: Job Object with
+  kill-on-close (ctypes, explicit signatures), watcher deletes the folder. Stale sweep at
+  `open`: folders whose locked marker `.vidgen-host.lock` can be taken; a running host's
+  folder, a folder without a marker and another user's are untouched.
+- **Decisions**: (1) A watcher rather than `PR_SET_PDEATHSIG`: Linux-only, needs `preexec_fn`, and
+  fires on the starting *thread's* death; the watcher also deletes the folder and works on macOS.
+  (2) The watcher never signals by process number alone: cloudflared inherits the write end of a
+  pipe whose read end the watcher checks (end-of-file = cloudflared gone). (3) "Belongs to a
+  running host" is a lock the OS releases, not a recorded process number (no reuse problem).
+  (4) A Python handler is only installed over the default disposition, never chained (a `nohup`
+  stays ignored). (5) A step that fails with an `Exception` is recorded, not retried; only
+  Ctrl+C / `SystemExit` leave a step unfinished. (6) The `watcher` step disarms only when
+  cloudflared stopped and the folder is gone; after an interrupted step it hands the rest to the
+  watcher, so the resumed close finds the work done.
+- **Files**: new `src/vidgen/videogen/{host_guard,host_watcher}.py`, `tests/test_videogen_host_cleanup.py`;
+  changed `src/vidgen/videogen/host.py`, `tests/conftest.py` (autouse: no test sweeps the real temp
+  folder); docs `DESIGN.md` (§115.1/2 wording, §115.5), `docs/CONFIG.md`,
+  `docs/COOKBOOK-GENERATED-VIDEO.md`, `CHANGELOG.md`, `tasklist.md`. Guide / AGENTS.md unchanged (no
+  key or command changed; they make no "whatever happens" claim).
+- **Public interfaces** (not in `vidgen.api`): `host_guard.{HostGuard, make_share_folder,
+  release_share_folder, sweep_stale_shares, track_host, untrack_host, SHARE_PREFIX, LOCK_NAME}`;
+  `QuickTunnelHost.close(reason, wait_seconds=30.0)`; `host.CLOSE_WAIT_SECONDS`;
+  `_start_process(command, keep_fds=())`. Ledger: `host_close` reason `terminated (SIGTERM|SIGHUP)`.
+- **Known gaps / not exercised**: Windows: nothing was run on Windows (Job Object: mocked kernel32,
+  structure layout 144 bytes checked; msvcrt lock, watcher start, `taskkill /F` of python: not run).
+  macOS: POSIX paths, not run. Still unprotected: both vidgen and the watcher killed (copies at
+  the next open; a cloudflared left running serves nothing, stop it by hand); a SIGKILL in the
+  milliseconds between starting cloudflared and telling the watcher; a frozen (SIGSTOP) vidgen; a
+  `fork` without exec while a host is open would keep the watcher's pipe open (vidgen does not
+  fork; everything is `subprocess`). Marker-less folders of older vidgens are never swept.
+- **Tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`,
+  `PYTHONPATH=src`, `-m "not render"`): `test_videogen_host_cleanup` + `test_videogen_host` (30, 18.5 s),
+  `test_videogen_submit_safety` (12), `test_videogen_shots` (21), `test_videogen` (26), `test_docs` +
+  `test_guide` (172). Not run: `test_mcp` (no MCP change), render tests, `test_schema`, the full suite.
+- **Spending**: nothing paid, no key read, no network, no real cloudflared.
+- **How the owner tests on Windows**: `vidgen generate host-test --keep 60` in one terminal, then in
+  Task Manager end the `python.exe`: `cloudflared.exe` must end at once and the folder
+  `%TEMP%\vidgen-share-*` go; a `taskkill /F /T` of python leaves the folder until the next
+  `host-test` (the sweep prints a line).
+
+## Step 311 — Provider text without the shared address; the mock shares nothing
+
+- **Reproduced first, on the unchanged code** (scripted provider, fake cloudflared): a failed job's error reached the exception message, `ShotRun.message` and `details["shots"]` with the full `https://*.trycloudflare.com/<secret>/<name>`; `exc.details` was passed on unredacted; a job polled by a later run (no host object) had the address in its message. Submit errors were already redacted by Step 306 (the secret, not the random file name). `provider: mock` with `host: quick_tunnel` looked for cloudflared in the plan and opened a real tunnel in `generate_clip`.
+- **Built** (DESIGN §115.6): new `src/vidgen/videogen/redaction.py`. `redact_shared_addresses(text)` needs no host: it replaces the path of any `*.trycloudflare.com` address (plain, JSON-escaped, percent-encoded, cut off) with `<secret>`, and a path of the host's shape (32-char secret + 16 hex digits) quoted without its host. Applied where provider text enters: `parse_job` (a job's `error`, submit and poll answers), `http_error`, the transport error in `_send`. `QuickTunnelHost.redact` adds the exact secret (a provider quoting the bare token); `generate_clip` applies it to the message and `details` of every `VidgenError` from the host's block and from `_finish` (`run._without_secret`). `Ledger.append` filters every string field. Provider error text was checked and is not stored anywhere: terminal ledger lines hold status, cost and `is_byok`; sidecars and takes hold no error text.
+- **The mock** (`MOCK_PROVIDER`): `generate_clip` ignores `share` and `videogen.host` for it; `MockVideoProvider` gets a default uploader (`https://mock.invalid/<name>`); the plan (`_resolve_inputs`) sets `Shot.fake_addresses` instead of `share_minutes`: no cloudflared lookup, no "would share" lines, no block for a missing host, one note ("these inputs stay on this machine"). JSON `shared: []`.
+- **Decisions / deviations**: (1) Redaction at the entry points, not only in `generate_clip`, because a job polled by a later run has no host and its secret is unknown (the secret is never stored). (2) The whole path is hidden, including the random file name (`.../<secret>`, was `.../<secret>/<name>`), so the pattern and the exact-secret forms give one result. (3) `run_shots` needs no change: its `details` are built from the already-clean message. (4) The two `except` blocks in `generate_clip` stay separate rather than one around the `with`, so a host closed by a refused submit still records `host_close` reason `error: VidgenError` (the ledger value in DESIGN §115.2). (5) Mock with no host is not blocked either (the old block told the user to set a host that mock now ignores); `inline_media: all` without a host stays a problem for mock, since it describes the real API and involves no sharing. (6) `generate host-test` still opens a real tunnel: it is an explicit command and does not use a provider.
+- **Files**: new `src/vidgen/videogen/redaction.py`, `tests/test_videogen_redaction.py`; changed `src/vidgen/videogen/{__init__,host,ledger,mock,openrouter,run,sheets,shots}.py`; tests `test_videogen{,_host,_shots,_3d_guide,_submit_safety}.py` (stand-in provider `test_videogen_host.HostedStandIn`, name `openrouter`, for tests of a real host; provider `openrouter` where a host block is asserted); docs `DESIGN.md` (§115.2, §115.6), `CHANGELOG.md`, `docs/CONFIG.md`, `docs/COOKBOOK-GENERATED-VIDEO.md`, `tasklist.md`. Guide / AGENTS.md unchanged (they do not mention the mock provider or redaction).
+- **Public interfaces** (not in `vidgen.api`): `videogen.MOCK_PROVIDER`; `redaction.{REDACTED, redact_shared_addresses, redact_value}`; `Shot.fake_addresses`; `MockVideoProvider`'s default `uploader`. `QuickTunnelHost.redact` output changed (whole path hidden).
+- **Known gaps**: a bare secret without its file name, quoted after the host is gone, cannot be told from a request id (it opens nothing without the file name, and that tunnel is closed). A provider error that re-encodes the address some other way (base64, a shortened link) is not recognised. A job id quoting the address is not filtered in the message (the id is the provider's own, not its error text; ledger lines are still filtered). Low-severity review findings were out of scope.
+- **Spending**: nothing paid, no key read, no network, no real cloudflared (fake script and mock; a separate cloudflared process running on the machine was left alone).
+- **How to test / tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`, `PYTHONPATH=src`, `-m "not render"`): `test_videogen_redaction` (18, 6.5 s), `test_videogen_shots` (21), `test_videogen_host` (11), `test_videogen_host_cleanup` (19), `test_videogen_submit_safety` (12), `test_videogen` (26), `test_videogen_3d_guide` (15), `test_videogen_input_freshness` (17), `test_videogen_compose` (17), `test_docs` (80), `test_guide` (92), `test_config` (21), `test_json_output` (21). `test_mcp`: 14 passed, 6 failed, and the same 6 fail on the unchanged code (checked in a worktree of the previous commit), so they are not from this step. Not run: render tests, `test_schema`, the full suite. `pytest tests/test_videogen_redaction.py` covers the paths above in about 7 s.
+
+## Step 312 — A model's own sound, per model; video references in token estimates
+
+- **Why**: paid experiments on `bytedance/seedance-2.0-mini` (the beat's voice as a reference, `generate_audio: true`) gave a clip sound the owner judged to be the same person as the voice file and matching the lips, as a new performance up to about 0.9 s late. Other models may differ, so this is a setting, not a Seedance rule.
+- **Built** (DESIGN §113.11): `SoundChoice` (`mix` | `model`), `GeneratedShot.sound`, `VideogenConfig.sound` (default `mix`), `VideogenConfig.models: {<model id>: {sound: ...}}`, `VideogenConfig.sound_for(model, shot_sound)`. Precedence: `generated_shot.sound` > `videogen.models.<id>.sound` > `videogen.sound` > `mix`. `VideoRequest.generate_audio` (default false), sent in the provider body and in `canonical_request`. `Shot.sound`; the plan prints `sound:` per shot (JSON field `sound`); `_check_sound` blocks a shot whose model the list says cannot make sound (`shot.blocked`, so a run skips it and pays for the others) and adds a note when the capability is `None`, and a note that a placed take plays vidgen's mix. `_applicable` follows the setting (below). The mock returns a clip with a sine tone when asked for sound. `check_clip(..., sound=)` and `add_take(..., sound=)`: QA says where the sound is heard, and warns about a silent `sound: model` clip. `VideoGenPlan.warnings` lists `videogen.models` ids OpenRouter does not have (a typo would otherwise have no effect).
+- **YAML names**: `videogen.models` was the proposal; kept, with a `sound` entry. No existing per-model settings pattern existed to follow (`voices:` is a map of named voices, not of model ids).
+- **Cache**: `generate_audio` was already `false` in the canonical form, so a `mix` request's key is byte-identical to before this step (`test_mix_request_keeps_its_cache_key` pins a key computed on the commit before; no re-paying after upgrading). A `model` request has another key.
+- **Prices** (`_applicable`): `mix` is unchanged (`without_audio` where listed); `model` drops `without_audio` SKUs and, before the tier step, keeps `with_audio` ones where listed (kling at 480p then prices `with_audio`; its `text_to_video` tier SKU has no sound). seedance-2.0-mini was charged the same with and without sound (real data), and a shot with a video reference has only the `with_video_input` SKU to choose.
+- **Estimate fix** (`estimate`, token SKUs): real charges, three seedance-2.0-mini jobs with a video reference (480x854, 24 fps, 5 s): $0.1907094 each = 90,814 tokens x $2.1e-06 exactly, so the rate key `video_tokens_with_video_input` was correct and the token count (48,038) was the error. 90,814 = 217 frames x 496 x 864 / 1024 (rounded down); the real clips are 496x864, 121 frames, so 96 frames are billed beyond the output. The guide was 4.9 s (117 frames in the last job), and 96 frames = 4 s = its whole seconds; all three guides were 4-5 s long, so the rounding rule itself cannot be told from this data. Change: under a `with_video_input` SKU each video reference counts for as many seconds as the clip (`(1 + video references) x output tokens`; the request's tier size). The same jobs now estimate $0.2018, 5.8% above the real charge. **The budget check uses this estimate** (`refusal`, `plan_clip`, the ledger's `submit_intent` line and the plan's total): shots with a video reference on such a model now cost about twice as much in the plan, so they are refused sooner against the cap. Models without a `with_video_input` SKU, and shots with no video reference, are unchanged; only seedance-2.0-mini was compared with real charges.
+- **Using the sound in a film** (read in `scenes/video_clip.py`, `_sound`, `clips.clip_audio`): a placed take's sound is never played (`compose` handles only the picture). The route is `place: false` and the take in a `video_clip` scene (`path: takes/<shot>/<n>.mp4`, which `check_clip` and `Project.asset` accept). Volume: 1 with no beats (silent scene with `duration:`), 0.25 (`UNDER_NARRATION`) with beats, `volume:` overrides; `test_a_take_with_its_own_sound_plays_at_full_volume_in_a_silent_clip_scene` renders a clip from `takes/` both ways. Documented in the guide, CONFIG and cookbook. **Out of scope and documented**: timing captions or word-anchored actions from the clip's sound (the docs say so).
+- **Decisions / deviations**: (1) The blocked case for a model that cannot make sound is `shot.blocked`, as asked, so `run --pay` skips the shot and pays for the others; it is not in `check_request` (which would refuse the whole run). `check_request` therefore does not check this; every paid route for a shot goes through the plan. (2) A `model` take can still be placed (the setting is not refused); the plan notes that a placed take plays vidgen's mix.
+- **Files**: `src/vidgen/config.py`, `src/vidgen/cli.py`, `src/vidgen/videogen/{__init__,mock,models,openrouter,qa,shots,takes,workflow}.py`, `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`, `docs/{CONFIG,COOKBOOK-GENERATED-VIDEO}.md`, `DESIGN.md`, `tasklist.md`, tests `test_videogen{,_shots,_compose}.py`, `test_video_clip.py`.
+- **Public interfaces** (not in `vidgen.api`): config names above; `VideoRequest.generate_audio`; `Shot.sound`; `check_clip`/`add_take` keyword `sound`; `VideoGenPlan.warnings`.
+- **Known gaps**: the estimate of a video reference assumes it is as long as the clip (generated shots' guides are cut to it; a direct request with a url reference of another length is not probed). Clip sizes returned by models differ from the tier's nominal size, which the estimate does not model. No `videogen.models` key checks beyond the plan's warning.
+- **Spending**: nothing paid; no key read; no network calls to OpenRouter; no cloudflared.
+- **How to test / tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`, `PYTHONPATH=src`, `-m "not render"` unless named): `test_videogen` (31), `test_videogen_shots` (30), `test_videogen_compose` (19, 1 deselected), `test_videogen_host` (11), `test_videogen_3d_guide` (15, 1 deselected), `test_videogen_submit_safety` (12), `test_videogen_input_freshness` (17, 1 deselected), `test_guide` (92), `test_docs` (80), `test_schema` (78, 273.6 s, the one slow file); render: the two sound tests of `test_video_clip` (new silent-scene test and `test_clip_sound_is_mixed_under_the_narration`). Not run: the rest of `test_video_clip`, `test_videogen_redaction`, `test_mcp`, the full suite.
+
+## Step 313 — Guided shots leave the framing to the guide
+
+- **Why**: paid experiments (2026-11-08, `bytedance/seedance-2.0-mini`, depth guide): "Talking close-up of ..., facing the camera, speaking" made the camera push in against a static guide (`kind: action` did not), and the speaker stayed centred in every take although the guide puts them low on the right; the sheet text copied under `Characters:` said "alone and centred in the middle of the picture, ... the whole body visible" (that cause is untested).
+- **Built** (DESIGN §113.12): in `src/vidgen/videogen/shots.py`, a shot with a guide (`spec.guide_source` not `None`: also `guide: true` / `render`) has `GUIDED_TALKING_FRAMING` = `{who}, speaking` for `kind: talking` (action and establishing wording unchanged) and sheet text through `without_framing` for `Characters:`. Reference pictures, speaker resolution, `GUIDE_PROMPTS` and the style words are unchanged. `generate plan` (text and JSON) gets one `note:` per character whose sheet words lost anything (quoted, with why). Unguided prompts go through `_prompt_text(guided=False)`, the old path, byte-identical (pinned against the prompt printed by the pre-change code in a worktree).
+- **Sheet filter**: not whole-sentence dropping (it would lose "A woman in a red jacket" from "A woman in a red jacket, centred in the frame"). A sentence with a framing clause (`_FRAMING_WORDS`) loses its framing clauses and clauses that only make a sheet picture clean (`_SHEET_ONLY_CLAUSE`); a sentence with no framing clause stays byte for byte; a clause naming clothes or hair (`_APPEARANCE_WORDS`) stays whole even with framing words in it ("Full-body portrait of a woman in a red jacket": the framing words stay, a limit, documented). The filter works on `Sheet.notes` (prompt + `reference_sheet.notes` joined with "; "); semicolons separate clauses, so a framing prompt sentence does not eat the notes. Sheet pictures and `Sheet.notes` untouched: sheet fingerprints and approvals stay valid.
+- **Decisions / deviations**: (1) Style words are not filtered: they are config palette/era/lens/notes, not a sheet picture prompt. (2) A guided shot paid for under the earlier wording: the prompt is new, so the request key is new and it would have been re-requested without warning; `plan_shots` now rebuilds the earlier prompt (`Shot.earlier_prompt`) and, when a clip, a take (`info.key`) or a ledger job of that key exists and the new key has none, blocks the shot (`EARLIER_WORDING_BLOCKED`). `run --pay` skips it, nothing is paid, the old take stays in the film. Set or change `seed:` (or `prompt:`) to pay for a new take; the guide already says a new take needs another seed. (3) `config.py` `kind` description ("a close-up of the speaker") not changed, to avoid a schema change.
+- **Public interfaces** (not in `vidgen.api`): `shots.GUIDED_TALKING_FRAMING`, `EARLIER_WORDING_BLOCKED`, `without_framing`, `Shot.earlier_prompt`.
+- **Files**: `src/vidgen/videogen/shots.py`, new `tests/test_videogen_guided_prompts.py`, `docs/COOKBOOK-GENERATED-VIDEO.md`, `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`, `DESIGN.md`, `tasklist.md`.
+- **Known gaps**: whether removing the sheet words moves the speaker is untested (no paid run); a framing word in a clause that also describes appearance stays; a clip paid before this step whose guide was later re-cut to other bytes is not recognised (a re-cut is already a new request).
+- **Spending**: nothing paid, no key read, no network, no cloudflared.
+- **How to test / tests run and passed** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`, `PYTHONPATH=src`, `-m "not render"`): `test_videogen_guided_prompts` (20, 4.0 s), `test_videogen_shots` (30), `test_videogen_3d_guide` (15, 1 deselected), `test_videogen_input_freshness` (17, 1 deselected), `test_videogen`, `test_videogen_compose`, `test_guide` (92), `test_docs` (80). Not run: `test_schema` (no schema change), render tests, `test_mcp`, the full suite.
+
+## Step 314 — Cookbook rule: a 3D guide and a starting picture for every shot
+
+**What was built.** A documentation rule set by the owner after a paid Short made from words and reference pictures alone came out incoherent (the model cannot guess whether a character runs far to near or near to far): no shot goes to a video model without a 3D guide video and at least the starting picture of the scene.
+
+**Files touched.** `docs/COOKBOOK-GENERATED-VIDEO.md` (the rule before section 1; the kinds table; the section 4 example is now a `3d` scene with `guide: depth` and `first_frame: render`; the section 6 example gains `first_frame: render`), `examples/3d-to-video/video.yaml` (the same line), `tasklist.md`.
+
+**Public interfaces.** None changed.
+
+**Decisions.** Documentation only, as asked: the rule is not enforced in code, and the cookbook says so. The section 4 example moved from `heygen/avatar-iv` (no video guide) to `bytedance/seedance-2.0-mini`. `first_frame: render` is used in the examples because it needs no extra file, and the rule names a picture file of the shot as the better choice.
+
+**Known gaps / TODOs.** `vidgen generate plan` does not block a shot without a guide and a first frame. vidgen has no step that paints a first frame of a shot from the reference pictures and the 3D layout. Whether Seedance accepts a first frame together with reference pictures and a guide in one request has not been run. `src/vidgen/data/guide/AGENTS.md` does not state the rule yet.
+
+**How to test.** `pytest tests/test_docs.py tests/test_videogen_3d_guide.py -m "not render"`.
+
+## Step 315 — Cookbook: plan the shots first
+
+**What was built.** A new section "Plan the shots first" before section 1 of `docs/COOKBOOK-GENERATED-VIDEO.md`: the order of work with a look at each step, one 3D world per location, keeping the geography clear (wide shot, 180-degree rule, one camera position or simple move per clip), painting the starting picture by hand, prompts and sound, traps, measured costs including a 10-minute film, and what has not been proven.
+
+**Files touched.** `docs/COOKBOOK-GENERATED-VIDEO.md`, `tasklist.md`.
+
+**Public interfaces.** None changed.
+
+**Decisions.** The section is unnumbered so that sections 1-9 and their links keep their numbers. The owner rejected a general "fixed camera" rule because it cannot work for a 10-minute film; the geography rules replace it and are marked as untested guidance. Starting pictures are documented as a manual step because vidgen has no command for them.
+
+**Known gaps / TODOs.** No `vidgen generate frames` command. `video_clip` has no hard-cut option. A first frame, reference pictures and a guide in one request, and starting a clip from the previous clip's last frame, have not been run on a real model. `src/vidgen/data/guide/AGENTS.md` does not carry this planning section.
+
+**How to test.** `pytest tests/test_docs.py tests/test_videogen_3d_guide.py -m "not render"`.
+
+## Step 316 — The starting picture in the guide; a first frame with references blocked; what the provider downloaded
+
+- **Why**: paid experiments today on `bytedance/seedance-2.0-mini` showed that Seedance runs first/last-frame or reference jobs, never both: with `frame_images` and `input_references` the job is accepted, runs as first-frame only, never downloads the hosted voice or guide and bills the no-guide price ($0.177 vs $0.191 for 5 s). Putting the starting picture into the guide (frame 1 the picture, dissolve 0.4 s, no frame image) made the provider download both and opened the clip close to the picture (SSIM 0.87-0.88); the owner judged the cut between shots very good.
+- **Built** (DESIGN §113.13): `FirstFrameIn` (`frame` | `guide`), `GeneratedShot.first_frame_in`, `VideogenConfig.first_frame_in` and `first_frame_dissolve` (default 0.4), `VideogenModelSettings.first_frame_in` and `first_frame_with_references`, `VideogenConfig.first_frame_in_for`; `Shot.first_frame_in`, `opening_picture`, `opening_what`, `opening_dissolve_seconds`; `ShotInput.owner`; `guide_name(kind, opening=True)` (`guide[.<pass>].opening.mp4`); `inputs.make_opening_guide` (xfade as in the proof, `-t` the plain guide's length so it never lengthens); `freshness.opening_source` and `_CHANGE_REASONS` (picture SHA-256 and dissolve in the guide's record); role sentence `shots._guide_opening_sentences`, `models.GUIDE_OPENING_TEMPLATES` / `guide_opening_template` (Seedance only; other models get none); `models.FIRST_FRAME_OR_REFERENCES` / `known_first_frame_with_references`, `shots.FIRST_FRAME_WITH_REFERENCES_PROBLEM` and the plan's problem (`_first_frame_with_references_problem`, plan_shots: problem, but a note for a clip already paid for, an earlier job or the Step 313 earlier-wording block); `run.unfetched_warnings`, `ClipResult.warnings`, `add_take(warnings=)`, the warning in `run_shots` (output line and `ShotRun.message`, and the take's `info["warnings"]`). Plan text shows `starting picture: ...` and JSON gains `first_frame_in`.
+- **Files**: `src/vidgen/config.py`, `src/vidgen/cli.py`, `src/vidgen/videogen/{freshness,inputs,models,run,shots,takes,workflow}.py`, `docs/{COOKBOOK-GENERATED-VIDEO,CONFIG}.md`, `DESIGN.md`, `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`, `examples/3d-to-video/video.yaml`, `tasklist.md`, new `tests/test_videogen_first_frame_in.py`, `tests/test_videogen_3d_guide.py` (the pin of the section 6 shot now expects `guide.depth.opening.mp4`: the example legitimately sends the combined guide).
+- **Public interfaces** (not in `vidgen.api`): config names above; `ClipResult.warnings`; `add_take` keyword `warnings`; `guide_name` keyword `opening`.
+- **Decisions / deviations**: (1) The block is a `shot.problems` entry as asked, added in `plan_shots` (not `project_shots`, which has no catalog at `validate`); an already paid clip (cached, earlier job or Step 313's earlier-wording block) gets a note instead, so nothing paid is thrown away. (2) The picture is not sent as a reference in `guide` mode, as in the proof; a plan note warns a talking shot with no `refs:` (no pictures of the character at all). (3) The combined guide's filter, CRF 16 and `+faststart` are the proof's; the plain guide stays on disk and only the combined one is sent. (4) The dissolve is a single `videogen.first_frame_dissolve`, not per shot. (5) `first_frame_with_references` and the role template are keyed by model-id prefix; only Seedance has them, nothing is asserted for other models.
+- **Known gaps**: no paid run in this step (nothing sent or paid; no key read); the prompt's role sentence wording is the proof's, untested beyond it. `Shot.opening_what` is plan text only. Not built (as agreed): meaningful file names, `first_frame: last_of:`, hard cuts in `video_clip`, an opening-frame QA score, an overlay preview. `vidgen generate plan` still does not enforce the 3D-guide-and-starting-picture rule as a whole.
+- **Spending**: nothing paid; no key read; no OpenRouter requests; no real cloudflared (the hosted tests use the fake one).
+- **How to test / tests run** (one command at a time, `systemd-run MemoryMax=1500M`, `timeout 280`, `PYTHONPATH=src`, `-m "not render"`): `test_videogen_first_frame_in` (35 passed, 105.0 s), `test_videogen_shots` (30), `test_videogen_input_freshness` (17, 1 deselected), `test_videogen_guided_prompts` (20), `test_videogen` (31), `test_videogen_compose` (19, 1 deselected), `test_videogen_host` (11), `test_videogen_submit_safety` (12), `test_videogen_redaction` (18), `test_videogen_3d_guide` (15, 1 deselected), and together `test_docs` + `test_guide` + `test_videogen_3d_guide` (187 passed, 1 deselected, 63.4 s). **`test_schema` is not verified**: the whole file was killed by the 280 s timeout (exit 124) while the machine was busy, and a narrower `-k` run was stopped on request; only `-k 3d-to-video` ran to the end (1 passed, 77 deselected, 37.8 s, 120 s limit). The other 77 cases, including the built-in schema checks that see the new config fields, did not run. Not run: render tests, `test_mcp`, the full suite.
+
+## Step 317 — One shot after another: last_of, hard cuts, the opening match, the overlay
+
+- **Built** (DESIGN §113.14): `first_frame: last_of:<shot id>` (`GeneratedShot.last_of_shot`, `config.LAST_OF_PREFIX`); `Shot.last_of`, `last_of_take`, `last_of_picture`, `starting_picture`; `shots._link_last_of` / `_fill_shot` (project_shots now builds all shots first, then resolves inputs and prompts); `shots.last_of_name`; `inputs.last_frame` (`-sseof -0.5 -update 1 -vsync 0`), `inputs.make_overlay`, `OVERLAY_NAME`; `freshness.last_of_source`, `InputSources._last_of_moved`, `_CHANGE_REASONS` entries; `workflow.run_shots` skip when the source's shown take changed during the run; `video_clip` param `fade: false` (strict bool); `NarratedScene.outro_seconds(params)` and instance `self.outro`; `videoplan.scene_outro` (used by `thumbnail` and `shorts_suggest` too, so plan and render agree); `qa.picture_similarity`, `qa.opening_similarity`, `OPENING_WARNING` = 0.7, `metrics.opening_similarity`, contact-sheet head line `opening match`; `add_take(opening_picture=)`, `info["opening_picture"]`.
+- **Files**: `src/vidgen/config.py`, `src/vidgen/scene.py`, `src/vidgen/scenes/video_clip.py`, `src/vidgen/videoplan.py`, `src/vidgen/thumbnail.py`, `src/vidgen/shorts_suggest.py`, `src/vidgen/videogen/{freshness,inputs,qa,shots,takes,workflow}.py`, `docs/{COOKBOOK-GENERATED-VIDEO,CONFIG}.md`, `DESIGN.md`, `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`, `tasklist.md`, new `tests/test_videogen_shot_chain.py`, `tests/test_video_clip.py`, pins in `tests/test_videogen_{3d_guide,first_frame_in,shots}.py`.
+- **Public interfaces** (not in `vidgen.api`): the config names above; `check_clip(..., opening_picture=)` (that function is in `vidgen.api`; the keyword has a default, so nothing that uses it changes), `NarratedScene.outro_seconds` (overridable classmethod; DESIGN §113.14 records it).
+- **Decisions / deviations**: (1) A source with no take is a blocked reason, not a problem: `run --pay` refuses a run with problems, so a problem would keep the source itself from being paid for. Unknown shot, itself and a cycle are problems, which also stop `vidgen validate`. (2) The opening match is grey (Y) at 320 px and takes the better of the picture cropped to fill and stretched, because real takes showed both behaviours when the picture's shape differs from the clip's: take 2 of shot1 (a first frame image) was cropped (0.98 cropped, 0.73 stretched), take 3 (the picture in the guide) reached the clip stretched (0.69 cropped, 0.85 stretched). Requested expected values 0.81 and 0.88 were measured as ffmpeg `All` (three planes) after a plain stretch; ffmpeg `Y` with cover cropping gives 0.90 for shot1 take 2, not 0.74. (3) `fade: false` keeps the title and caption entrances; only the clip's fade in and the outro go. (4) The tasklist item on the 5-minute test limit was added unticked, as asked.
+- **Known gaps**: the 0.7 threshold is calibrated from four takes only. `-vsync 0` is deprecated in newer ffmpeg (works in 6.1.1 here, not exercised on later versions). `generate run --pay` was not run; the run-time guard in `run_shots` (source's shown take changing during a run) was therefore only compiled and read, and "never pays for a shot and the clip it starts from in one pass" was checked through the plan. A beat split into parts with `last_of` starts every part from the same picture (a plan note says so).
+- **Spending**: nothing paid, no key read, no `--pay`, no cloudflared. `generate plan` and `generate inputs` read the video model list from its local cache (its file did not change during the run); no OpenRouter request was made.
+- **Tests**: **pytest was not run in this step, on the owner's instruction** (the suite is too slow; see the tasklist item). Written but unrun: `tests/test_videogen_shot_chain.py` (all of it, 20 tests), three new tests at the end of `tests/test_video_clip.py`, and the updated `written` lists in `tests/test_videogen_shots.py`, `tests/test_videogen_3d_guide.py`, `tests/test_videogen_first_frame_in.py`. Docs tests that may be affected and were not checked: `tests/test_docs.py`, `tests/test_guide.py`, `tests/test_videogen_3d_guide.py`, `tests/test_schema.py` (the video_clip param docstring and field docs may be checked there), `tests/test_shorts_suggest.py` (the outros by scene id). Checked instead with `python -m compileall` on changed files.
+- **Verification by running the real program, free** (`V` = `env PYTHONPATH=<repo>/src python -m vidgen ...`, on a copy of the owner's harbour-short project, `<scratchpad>/verify317`; `pytest` not run, nothing paid):
+
+| Check | Command | Result |
+| --- | --- | --- |
+| 1a. last_of frame equals the known last frame | `V generate pick --shot shot1 --take 2`, `V generate inputs --guide --shot shot2`, sha256sum and `ffmpeg ... ssim` of `build/videogen/shot2/last_of.shot1.2.png` vs `assets/frames/shot1_last.png` | Same SHA-256 `9959e771...`, SSIM All 1.000000, PSNR inf (byte-identical) |
+| 1b. Another pick makes the next shot stale | `V generate pick --shot shot1 --take 3`, `V generate plan --shot shot2`, `V generate run --shot shot2` | `blocked: inputs changed since they were cut (last_of.shot1.2.png: the take of shot shot1 it was cut from is no longer the one shown (now take 3)): run ... (free)`; dry run skips it |
+| 1c. Pick back after a re-cut | re-cut with take 3, pick take 2, `V generate plan` | `blocked: inputs changed ... guide.depth.opening.mp4: the starting picture changed` |
+| 1d. Problems | `V validate`, `V generate plan` with last_of unknown / self / cycle / no take | unknown: `no shot 'noshot' (did you mean shot2?)`; self: `a shot cannot start from its own last frame`; cycle: `shot1 -> shot2 -> shot1` (both shots, validate and plan); no take (a shot3 with no takes): plan `blocked: ... shot shot3 has no take yet ... never pays ... in one pass` |
+| 2. Hard cut, 180x320 10 fps, real takes, 2 `video_clip` scenes | `V render --jobs 1` on `fade: false` and default copies | Both rendered. `fade: false`: 98 frames, 9.80 s = 4.9 + 4.9 (scene timings), first frame YAVG 146.2, join frames 135.6 -> 133.6, min luma 126.3. Default: 108 frames, 10.80 s, first frames 30-44, join dips to 30.0 (fades as before) |
+| 3. QA score, against ffmpeg `All` values from the coordinator | `check_clip(..., opening_picture=)` called directly | shot2 take 2 **0.985** (expected ~0.98); shot2 take 3 **0.832** (~0.87; ffmpeg Y 0.828, All 0.872); shot1 take 2 **0.978** (~0.81, plain-stretch figure; ffmpeg cropped All 0.93, Y 0.90, see decision 2); shot1 take 3 **0.850** (~0.88; ffmpeg All 0.883, Y 0.842). No warning at 0.7 |
+| 3b. Record and contact sheet | `add_take` on a real take | `takes/shot2/4.json`: `opening_picture`, `metrics.opening_similarity: 0.832`; contact sheet head line reads `opening match 0.83` (viewed) |
+| 4. Overlay | `V generate inputs --guide --shot shot2` (guide mode) | `build/videogen/shot2/overlay.png` viewed: the picture blended with the plain depth guide (the stand-in shapes show through the figures, so not the combined guide) |
+| 316a. `first_frame_in: guide` passes validate/plan | `V validate`, `V generate plan --shot shot2` | `ok`; no problems; `starting picture ... goes into the guide ...; no first frame image is sent`; `guide: guide.depth.opening.mp4`; prompt starts with the role sentence `@video1 opens on ... @audio1 is Tam's voice.` |
+| 316b. Combined guide | `ffprobe` and `ffmpeg ssim` on `guide.depth.opening.mp4` | Length equals plain guide (4.916667 s, 118 frames, both); first frame vs picture: SSIM Y 0.986, All 0.927 |
+| 316c. True first frame + refs on Seedance | `V generate plan`, `V generate run --budget 0.01` | `problem: ... takes a first frame or references, never both ... Set first_frame_in: guide ...`; run skipped |
+| Schema | `V schema`, `V validate` with new fields, bad values | `first_frame_in`, `first_frame_dissolve`, `first_frame_with_references`, `first_frame` (last_of in its doc) and video_clip `fade` present; valid config `ok`; refused: `first_frame_in: sideways`, `first_frame: last_of:`, `first_frame_dissolve: 9`, `fade: "no"` |
+
+## Step 318 — Correct the opening-match figures in the docs
+
+**What:** the cookbook, both `AGENTS.md`, `docs/CONFIG.md` and `DESIGN.md` said a true first frame scored 0.81-0.98 and the picture in the guide 0.87-0.88. The 0.81 came from a comparison that stretched the picture when the clip had been cropped, and 0.87-0.88 were ffmpeg colour scores. They now give what `opening match` reports: 0.98-0.985 for a true first frame, 0.83-0.85 for the picture in the guide (four real takes, measured in Step 317).
+
+**Files:** `docs/COOKBOOK-GENERATED-VIDEO.md`, `AGENTS.md`, `src/vidgen/data/guide/AGENTS.md`, `docs/CONFIG.md`, `DESIGN.md`, `tasklist.md`, `HANDOFF.md`. No code or public interface changed.
+
+**How it was checked:** pytest was not run, on the owner's instruction, until the suite runs in under 5 minutes. A search shows no old figure left, and `cmp` shows the two `AGENTS.md` copies identical.
+
+## Step 319 — Paint starting pictures, split a sheet, label file references, the last-frame overlay, assemble takes
+
+- **Why**: the owner wants a tutorial showing humans how to instruct an AI to make a film like "Get It All In" with vidgen alone; several steps of that film were done by hand or with throwaway scripts.
+- **Built** (DESIGN §113.15-113.16): `vidgen generate frames` (`videogen/frames.py`, `paint_first_frame:` on a shot, `first_frame: painted`, `ImageRequest.input_references`, `input_references` in `imagegen/openrouter.py` body and checks, `sheets.pay_for_pictures` extracted from `run_sheets`, `inputs.layout_picture`, `image_request(settings=)`); `vidgen split-sheet` (`videogen/split_sheet.py`, top-level CLI); `generated_shot.refs` items `{file, shows}` (`config.FileRef`, `ShotInput.owner`/`shows`/`label`, role sentence in input order, `shots.reference_inputs` extracted from `_resolve_inputs`); `overlay.last.png` (`make_overlay(at_end=True)`, `OVERLAY_LAST_NAME`); assembly by `vidgen render` (documented recipe, no code needed).
+- **Files**: `src/vidgen/config.py`, `src/vidgen/cli.py`, `src/vidgen/imagegen/{__init__,openrouter}.py`, `src/vidgen/videogen/{frames (new), split_sheet (new), inputs, sheets, shots}.py`, `docs/{COOKBOOK-GENERATED-VIDEO,CONFIG}.md`, `DESIGN.md`, `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`, `tasklist.md`, tests below.
+- **Public interfaces** (not in `vidgen.api`): config `FileRef`, `PaintFirstFrame`, `generated_shot.paint_first_frame`, `first_frame: painted`, `refs` items; commands `vidgen generate frames`, `vidgen split-sheet`; `image_request(settings=)` keyword, `ImageRequest.input_references`, `make_overlay(at_end=)`.
+- **Decisions / deviations**: (1) `split-sheet` is a top-level command, not a `generate` action: it needs no project and takes a picture as its positional argument. (2) `split-sheet` uses ffmpeg (`crop`, `scale:flags=lanczos`), not Pillow: Pillow's Lanczos gave SSIM 0.81 and 0.97 on two panels against the owner's panels, while the ffmpeg filters give byte-identical PNGs. (3) Assembly needed no new code; the recipe is a second config `film.yaml` of `video_clip` scenes, because one config cannot both keep the shots' 3D scenes out of the film and generate shots. (4) Painting is always OpenRouter (`OpenRouterImageProvider(retries=0)`, so a dropped paid request is not retried), independent of `imagegen:`. `key_via_proxy` is honoured. (5) A dry run of `frames` renders the layout (free); the first run takes a draft render. (6) `refs: {shows}` free text (not a character name) is written as given; a typo is not refused, it just reads as written. (7) A note in the dry run warns about stand-in `name:` tags in the layout, which is not removed automatically: the test folder's config had `name:` removed by hand before paying.
+- **Known gaps**: no video model run, so a painted picture's opening has not been measured in a real clip. A layout from another machine could have different bytes (new key, new paid picture; the dry run would show it). `mock` provider does not paint (same as `generate sheets`). MCP tools have no frames or split-sheet tool. Pytest not run: the tests below are unverified.
+- **Spending**: $0.04 paid once in `/tmp/claude-1001/-home-bpsa-app-schu-video-generator/3020fd30-b164-4e8d-9d4d-86e1d52cd24c/scratchpad/step319/frames-test` (`bytedance-seed/seedream-4.5`, $0.04 reported by OpenRouter, budget $0.10, ledger entry `image-d5be52da386d8d4b`). No video calls, no `generate run --pay`, no cloudflared. The API key was never read or printed by me; vidgen read it only for the one paid request. `/home/bpsa/app/video-projects/get-it-all-in` was not modified.
+- **Tests**: **pytest was not run in this step, on the owner's instruction**. Written but unrun: `tests/test_videogen_frames.py` (all of it), `test_the_last_frame_overlay_uses_the_guides_last_frame` in `tests/test_videogen_shot_chain.py`, `written` lists updated in `tests/test_videogen_shots.py`, `tests/test_videogen_3d_guide.py`, `tests/test_videogen_first_frame_in.py`, `FileRef` and `PaintFirstFrame` added to the models of `tests/test_docs.py`. Tests that may be affected and were not checked: `tests/test_docs.py`, `tests/test_guide.py` (the two AGENTS files were compared with `cmp`: identical), `tests/test_schema.py`.
+- **Verification by running the real program** (`V` = `env PYTHONPATH=<repo>/src python -m vidgen`; `pytest` not run):
+
+| Check | Command | Result |
+| --- | --- | --- |
+| B. Reproduce the owner's cut | `V split-sheet sheet.webp --columns 6 --gap 10 --names morag_full,morag_side,morag_face,harbour,tam_face,tam_full --scale 3 --out panels` | All 6 panels: PSNR inf, SHA-256 identical to the saved project's `assets/refs/*.png` (975x1743 each); explicit `--box` also works |
+| B. Refused | `split-sheet` with 7 columns; 2 names for 6 panels; off-picture box; `a,b,c,d` box; missing file; `../x` name; `--columns` with `--box`; nothing to cut by; `--scale 0` | Each: `error:` with a clear message, exit 1 |
+| A. Dry run | `V generate frames .` in the new test folder (budget $0.10) | Layout cut from the draft render; inputs listed in order (layout + 5 labelled refs); `9:16, 2K, openrouter bytedance-seed/seedream-4.5, $0.040`; `dry run: nothing was sent or paid` |
+| A. Name-tag note | dry run with `name:` on the stand-ins | `note: the layout shows the name tags of Morag, Tam ...`; names removed in the test copy, layout re-rendered without tags |
+| A. Paid picture | `V generate frames . --pay` | One 1440x2560 PNG `assets/frames/shot1_d5be52da386d8d4b.png`, $0.040 reported, 43.8 s. Viewed: coherent starting picture, one Morag and one Tam (matching the references), the pier, the ferry, misty harbour, no text; composition follows the layout broadly (positions match, the ferry and Tam are larger than in the layout) |
+| A. No second payment | `V generate frames .` then `V generate frames . --pay` after the draft render went stale | `already painted, not paid again`; ledger still 2 lines (`submit`, `completed`), spent $0.040; the re-rendered layout is byte-identical (SHA-256 `5b28a07b...` before and after) |
+| A. Budget and refusals | budget $0.01 with a new seed; `--shot nope`; a project with no `paint_first_frame`; `generate plan --pay` | Refused with messages naming the reason; nothing sent; ledger unchanged |
+| A. In the plan | `V generate inputs --guide`, `V generate plan` | Painted picture goes into the guide, 5 inputs written, no first frame image; `first_frame: painted` with no picture: `blocked: ... not painted yet: vidgen generate frames --pay --shot shot1 ...` |
+| D. Role sentence | `V generate plan` with `refs` of `{file, shows}` | `@image1 and @image2 show Morag, @image3 and @image4 show Tam.`; mixed order with a plain file and free text: `@image1 shows Tam, @image3 shows the harbour, @image4 shows Morag`; frame mode (`first_frame: none`): `@image1 shows Morag, @image2 shows Tam.` |
+| D. Other prompts unchanged | `generate plan --json` with the previous commit's code and with this step's, on a copy of the saved project | All 4 paid shots: prompts identical, inputs identical, estimates identical, still `cached` |
+| E. Last-frame overlay | `V generate inputs --guide --shot shot4` on a copy of the saved project | Writes and names `overlay.png` and `overlay.last.png`; viewed: `overlay.last.png` shows the rising arm stand-in in the water at the right, which `overlay.png` does not |
+| C. Assembly | `V render film.yaml --preview --jobs 1` (`systemd-run` `MemoryMax=2500M`) on a copy of the saved project, the four picked takes | 69.8 s, `/tmp/claude-1001/-home-bpsa-app-schu-video-generator/3020fd30-b164-4e8d-9d4d-86e1d52cd24c/scratchpad/step319/film-test/output/get-it-all-in_preview.mp4`: vidgen reports 20.33 s; 488 video frames (20.33 s at 24 fps), 480x854, audio stream 20.333 s; ffprobe's format duration is 20.44 s (the video stream's), not measured further |
+| C. Joins | Each frame matched against the takes' frames (120x214 grey) | Frames 121/122 (t 5.04/5.08), 244/245, 367/368: each joins the end of one take directly to the next take's first frame (best match `shot1#119` of 0-120 -> `shot2#0`, `shot2#119` -> `shot3#0`, `shot3#119` -> `shot4#0`; one held last frame per take, because `duration: 5.088` is the sound's length and the video is 121 frames); mean luma over the joins 139.6 -> 128.9, 132.1 -> 122.1, 128.0 -> 117.8; lowest frame in the film 117.8, the first frame of shot 4 itself; shots in order |
+| C. Sound | Film audio against each take | Sample offset 2-5 ms; per-second RMS equal to the take's (e.g. 0.121 vs 0.121); RMS envelope correlation 0.993-0.999 per take |
+| Validate and schema | `V validate` on a config with `first_frame: painted`, `paint_first_frame`, `refs` with `{file, shows}`; bad values; `V schema` | Valid config `ok`. Refused: missing file in `refs` and `paint_first_frame.refs` (`no picture ... in the project`), empty `shows`, `showz` (did-you-mean), `{shows}` without `file`, `first_frame: painted` with no paint block, empty paint prompt, `model: nomodel`, `resolution: 9K`. `vidgen schema` has `FileRef` (`file`, `shows`) and `PaintFirstFrame` (`prompt`, `refs`, `seed`, `model`, `resolution`) |
+| Docs | `cmp AGENTS.md src/vidgen/data/guide/AGENTS.md`; first ```yaml block and section numbering of the cookbook | Identical; first yaml block still "The Early Ferry", section 6 block unchanged, sections 1-9 unchanged |
+
+## Step 320 — The tutorial script and the cookbook of instructions for directing an AI
+
+- **Why**: stage 2 of the tutorial plan: text only (nothing rendered, no video scenes, no paid calls). The owner wants power users to replicate "Get It All In" by directing an AI, so everything addressed to the human is what to tell the AI.
+- **Built**: `docs/COOKBOOK-DIRECTING-YOUR-AI.md`, 18 numbered instruction cards in order, each with what the AI does and what the human checks, plus what it cost, the measured limits and the working habits. Linked from `docs/COOKBOOK.md`, `docs/COOKBOOK-GENERATED-VIDEO.md`, `README.md`, the guide (`src/vidgen/data/guide/AGENTS.md`) and its copy `AGENTS.md`. The chapter-by-chapter script is outside the repo at `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` (narration, card, what the AI does, what to check, visual with its real source path, timing per chapter, asset list).
+- **Word-for-word agreement**: the cards were generated from a single list of texts, and a check compared the fenced text after every `**Card N**` in both files (18 of 18 identical). The generator is a scratchpad file, not part of the repo: a later edit of a card must be made in both files.
+- **Facts checked**: every command and field named exists (`vidgen --help`, `vidgen generate --help`, `vidgen split-sheet --help`, `vidgen render --help`, `vidgen schema`; the docs). Against the saved project and its files: ledger total $2.217 (16 completed jobs), the four clips $0.75, five paintings at $0.04, No Rush $0.709, research $0.843 (`guide-proof` ledger, 6 jobs), no provider `GET` of voice or guide for take 2 of shot 1 and for the clear-names run, `GET`s from take 3 of shot 1 on, opening match 0.847, 0.839, 0.861 in the takes' records and 0.832, 0.978, 0.985 from Step 317, one camera for all four shots, arm at x 1.25 then 2.38, the prompt changed too.
+- **Known gaps, for the owner**: (1) `origin/main` is far behind `a3` (Step 150 era, no generated video); `a3` on GitHub is one commit behind this tree. A viewer installing from the link gets no `vidgen generate` until a3 is merged: Card 1 checks for `frames` and stops, and the cookbook notes the Step 319 minimum. (2) No clip has yet been made from a picture produced by `vidgen generate frames`; the script says so. (3) No "before" `overlay.last.png` with the arm on the concrete exists (the failure was found by eye and the overlay made after the fix); it is free to make from `working-notes/video.shot4-take2.yaml` on a copy of the project, and the asset list marks it. (4) A viewer's style sheet comes from outside the tool, or by the `vidgen generate sheets` route (Card 7), which the film did not use. (5) The spending-limit setting for keys on the OpenRouter website is from general knowledge of the site, not from this project.
+- **Decisions**: no new code, DESIGN.md untouched (no contract change); `tasklist.md` Step 320 left with one open item for the owner. No test added: the owner's rule is no pytest until the suite runs under 5 minutes, and a doc-link test would be unverified.
+- **Spending**: nothing paid; no key read; no OpenRouter requests; no renders.
+- **Tests**: none run, on the owner's instruction. `cmp` shows the two `AGENTS.md` copies identical.
+
+## Step 321 — The tutorial's cards fixed after a fresh agent followed them: voice, refs, one shot at a time, readable overlays, disclosure
+
+- **Why**: a fresh agent followed the 18 cards literally with no paid calls and found that the voice would not be sent, three shots would be blocked, the overlays could not show a small late object, and the film.yaml route had no disclosure.
+- **Built (software, DESIGN §113.17)**: (S1) `make_overlay` writes both overlays at 1600 pixels on the longer side; `overlay.last.png` also compares the guide's first and last frames (`changed_mask`) and shows what moved or appeared at full strength inside a magenta outline. (S2) `vidgen list-music` text no longer synthesises the beds (`music_entries(analyse=False)`); `--json` and `--render-dir` still do. (S3) a plan note for a spoken line with `sound: model` and no voice input. (S4) `compose.clip_takes` finds `video_clip` scenes on `takes/<shot>/<n>.mp4`: `credit_line` and the `generated_footage` lint rule count them. (S5) `orphaned_audio` reports nothing for a config without beats.
+- **Built (docs)**: cards 1, 3, 4, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17 in `docs/COOKBOOK-DIRECTING-YOUR-AI.md` and `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` (identical, compared by program); the "A complete shot" example in the cookbook; "the director" for the person directing the film; `docs/COOKBOOK-GENERATED-VIDEO.md` overlay wording and section 9; `docs/CONFIG.md`, `DESIGN.md`, guide + `AGENTS.md` (identical).
+- **Files**: `src/vidgen/{cli,music}.py`, `src/vidgen/lint/run.py`, `src/vidgen/tts/cache.py`, `src/vidgen/videogen/{compose,inputs,shots}.py`, the docs above, `tests/test_videogen_step321.py` (new), `tasklist.md`.
+- **Public interfaces** (not in `vidgen.api`): `make_overlay` unchanged in signature; `inputs.changed_mask`, `compose.clip_takes`, `music_entries(analyse=)`.
+- **Decisions / deviations**: (1) The brief's formula "scene = voice + narration.pad + pause:" is wrong: `pause:` replaces `narration.pad` (config.py, `BeatConfig.pause`; measured: voice 2.376 s + pause 2.3 s = 4.676 s; the plan's window is 4.63 s, the rendered scene 5.125 s, its fade-out). Card 9 states the true rule. (2) Card 17 starts at `music: {source: <bed>, volume: 6}`, not 0: with default `duck.clips` the music is 12 dB down for the whole of each clip, measured takes' sound is about -20 LUFS and a bed at volume 0 ducked is about -40 LUFS. (3) S5's empty `.srt` left: `tests/test_render.py` pins `result.srt.read_text(encoding="utf-8") == ""` for a silent scene. (4) Card 9 and others are longer; the script's estimated length is now about 17 min 28 s (was 16 min 14 s).
+- **Known gaps**: a fresh agent has not re-run the cards with real payment; the `audio: beat` requirement and the labelled refs were verified in the plan, not in a paid job; the music level of volume 6 was checked by level arithmetic and one render, not by ear; the example's `shows:` labels were not exercised against a video model.
+- **Spending**: nothing paid. `/home/bpsa/app/video-projects/get-it-all-in` was not modified (a copy was used). No key was read or printed.
+- **Tests**: **pytest was not run, on the owner's instruction.** Written but unrun: `tests/test_videogen_step321.py`; the existing overlay tests of `tests/test_videogen_shot_chain.py` and `tests/test_videogen_3d_guide.py` also unrun.
+- **Verification by running the real program** (`V` = `env -u OPENROUTER_API_KEY PYTHONPATH=src python -m vidgen`; `pytest` not run; folders under the scratchpad `v321/`):
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Card 4 no scenes | `V validate` on a `video.yaml` with `videogen:` and no scenes (and `scenes: []`) | `scenes: Field required` / `at least 1 item`: the card says not to expect a pass yet |
+| Card 7 | `V generate sheets` (dry run), `imagegen: {provider: openrouter, model: bytedance-seed/seedream-4.5}` | `would make ...: 9:16, openrouter bytedance-seed/seedream-4.5, $0.040` per picture, OpenRouter prices of 2026-11-09 |
+| Card 9 | new project `v321/new`: `V tts`, voices measured (2.376, 1.464, 3.000, 2.040 s), `V render --preview --jobs 1` | `build/preview/scenes/shot{1..4}.mp4`, scenes 5.125 and 5.083 s: voice plus `pause:` plus the 0.5 s fade-out; plan shot window 4.63 s |
+| Card 9 example | `V validate` on the cookbook's yaml | `ok` |
+| Card 10 | `V generate frames --shot shot1` | Layout plus 3 labelled references (`shows the woman`, ...), `$0.040`, nothing paid |
+| Card 12 | shot 1 only: `guide: depth`, `first_frame_in: guide`, `V generate inputs --guide --shot shot1` | 5 inputs, overlays written at 901x1600 |
+| Card 13 | `V generate plan --shot shot1` | Lists `reference: ... (your picture, shows the woman)`, ... and `audio: build/videogen/shot1/audio.mp3`, not blocked |
+| Card 14 | `V generate pick`, inputs for shots 2-4, `V generate plan` | All 4 shots: 0 blocked, 0 problems (`audio:` on shots 1, 2, 4; shot 3 silent) |
+| S1 fish, Card 15 | `V generate inputs --guide --shot shot4` on the card test project; `overlay.last.png` viewed | The small late fish appears at its bucket position inside a clear magenta ring |
+| S1 arm | same on a copy of get-it-all-in shot 4; viewed | The rising arm appears standing in the water with a magenta outline |
+| Card 16, S4 | `film.yaml` with `output: card321-film`, `V render film.yaml --preview --jobs 1`; `V lint film.yaml --preview --jobs 1` | 3D preview `new_preview.mp4` unchanged (same md5); `card321-film_preview.mp4` 20.33 s; description file `Includes AI-generated footage (bytedance/seedance-2.0-mini).`; lint `generated_footage` on all 4 scenes |
+| Card 17 | `music: {source: calm, volume: 6}` render | `music: calm`, `volume 6`, `duck 12` in the render's mix record; -17.6 LUFS before normalising |
+| S2 | `V list-music` | 3.4 s (was up to 1 min 42 s); `--json` unchanged (1 min 59 s), all 17 beds' `loop_seconds` equal in text and JSON |
+| S3 | plan on a copy of `video.yaml` with `audio: none` on shot 2 | `note: sound: model and a spoken line, but no voice input: ... set audio: beat` |
+| S5 orphans | `V validate film.yaml` | No orphaned MP3 line (`video.yaml` beside it had 4 beats' MP3s) |
+| Cards | program comparing each `**Card N**` block in both files | 18 of 18 identical |
+| Guide | `cmp AGENTS.md src/vidgen/data/guide/AGENTS.md` | Identical |

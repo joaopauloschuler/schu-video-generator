@@ -52,7 +52,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
         "loudness.py", "mix.py", "music.py", "music_pieces.py", "studio", "studio_app", "musicfit.py", "composer.py", "score.py", "synth.py", "soundfont.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
         "slides_pdf.py", "stt", "readback.py", "speech_flags.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/openrouter.py",
         "imagegen/run.py", "guide.py", "gallery.py", "outline.py", "prose.py", "plan.py", "plan_yaml.py",
-        "mcp_server.py", "mcp_tools.py", "animatic.py",
+        "mcp_server.py", "mcp_tools.py", "animatic.py", "videogen",
     }
 )
 
@@ -85,10 +85,11 @@ def _render_input(path: Path) -> bool:
 def vidgen_source_digest() -> str:
     """Digest of vidgen's own Python source that renders depend on (built-in scenes, helpers,
     the scene base, the worker...; not :data:`NOT_RENDER_INPUTS`), of its bundled fonts and of
-    its vendored icons (SVGs and manifest)."""
+    its vendored icons (SVGs and manifest) and of the 3D page with its vendored three.js."""
     paths = [p for p in _files(_PACKAGE_DIR, ".py") if _render_input(p)]
     paths += [p for p in _files(_PACKAGE_DIR / "data" / "fonts") if p.suffix in (".ttf", ".otf")]
     paths += [p for p in _files(_PACKAGE_DIR / "data" / "icons") if p.suffix in (".svg", ".json")]
+    paths += [p for p in _files(_PACKAGE_DIR / "data" / "three") if p.suffix in (".html", ".js")]
     return _contents_digest(paths, _PACKAGE_DIR)
 
 
@@ -210,13 +211,16 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "draft",
         # spoken credits and a cold open are already scenes; audio_output is the audio-only file (§112.3)
         "credits", "cold_open", "audio_output",
+        # generated video (§113): the provider, budget and key settings, the style sheet; the clips are files
+        "videogen", "style_sheet",
     }
     if project.config.cut is not None:
         # a cut (§101) is already applied to the scenes (and its hook to the overlays, its end
         # card to the scenes): a change for one scene must not re-render the others. Left in
         # (null) without a cut, so other projects' renders stay current.
         excluded.add("cut")
-    config = project.config.model_dump(mode="json", exclude=excluded)
+    # characters' reference sheets (§113.3) are inputs of generated shots, not of renders
+    config = project.config.model_dump(mode="json", exclude={**dict.fromkeys(excluded, True), "characters": {"__all__": {"reference_sheet"}}})
     assets = project.root / "assets"
     data: dict[str, Any] = {
         "fingerprint": FINGERPRINT_VERSION,
@@ -228,10 +232,11 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # a scene's and a beat's ambience and a beat's motif (§112) are mixed when the video is joined: no pixels, no timing
         "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True,
                                                        "references": True, "figure_credit": True, "ambience": True,
-                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite", "ambience", "motif"}}}),
+                                                       "beats": {"__all__": {*JOIN_KEYS, "music_pause", "cite", "ambience", "motif", "generated_shot"}}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
-        "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
+        # generated clips (assets/generated_video, §113) reach renders only as takes ("generated" below)
+        "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets) if not path.is_relative_to(assets / "generated_video")},
         "overlays": _overlay_inputs(project),
         # the transition out of the scene changes its end: held instead of faded, faded to a
         # colour, or held longer (DESIGN.md §49)
@@ -285,5 +290,11 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     if before is not None:
         data["carry"] = [str(e) for e in spec.carry]
         data["carry_from"] = scene_fingerprint(project, before)
+    from vidgen.videogen.compose import scene_placements
+
+    placed = scene_placements(project, scene_id)
+    if placed:
+        # generated takes laid over beats (§113.4): the take files, where and how they go
+        data["generated"] = [p.fingerprint(project.root) for p in placed]
     text = json.dumps(data, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()

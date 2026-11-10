@@ -5,7 +5,128 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–291)
+## Unreleased (Steps 193–311)
+
+### Generated video: a provider's error never shows the shared address; the mock shares nothing (Step 311)
+
+- A provider's error that quotes a quick tunnel address no longer shows its secret path, wherever it appears: a failed job's error (which used to escape the redaction), submit and download errors, exception details, `ShotRun.message`, `--json`, MCP. This also works for a job polled by a later run, when the tunnel is long gone. Ledger lines never hold the path either.
+- `provider: mock` no longer opens a real quick tunnel, even with `videogen.host: quick_tunnel`: it never starts `cloudflared` or shares a file. Its audio / video inputs get fake addresses, so the free demo runs end to end with no host setting and without `cloudflared`, and `vidgen generate plan` says the inputs stay on this machine. `vidgen generate host-test` still opens a real tunnel when you ask for it.
+
+### Generated video: a killed vidgen cleans up after its quick tunnel (Step 310)
+
+- A termination signal (SIGTERM, SIGHUP) now closes an open quick tunnel properly (`host_close` with reason `terminated (SIGTERM)`) and ends vidgen, without replacing a handler someone else set.
+- If vidgen is killed outright (SIGKILL, a cancelled MCP call, Task Manager), a small watcher process stops `cloudflared` and deletes the temporary copies at once; on Windows a Job Object stops `cloudflared`. The next tunnel deletes folders left by a vidgen that is gone (never a running host's). Only if the watcher dies too can copies remain until then, and a `cloudflared` left running must be stopped by hand; it serves nothing.
+- A second Ctrl+C during closing no longer abandons the cleanup: closing is finished step by step and resumed, and a concurrent close waits for the first. Windows parts of this are not exercised here (mocked).
+
+### Generated video: a paid job does not lose its inputs or get paid twice (Step 309)
+
+- During a paid run a quick tunnel now stays open until the job reaches a final state (or `host_max_minutes`): it no longer closes after every file was fetched, because a provider may fetch again after queueing the job. This is a longer exposure traded for not losing a paid job. **`videogen.host_grace_seconds` is removed**: like any unknown key, it now stops the config with a clear error; delete it from `video.yaml`.
+- `host_max_minutes` defaults to 20 (was 15) and must be between 5 and 120. It must leave room for `poll_timeout` plus opening the tunnel and submitting; otherwise a shot with hosted inputs is blocked and the message gives the numbers. Lowering `poll_timeout` is how to keep the tunnel short on purpose.
+- A paid submit is refused (nothing sent or paid) when its tunnel has closed or has too little time left; `url_of` refuses a closed tunnel.
+- Before every paid POST a `submit_intent` line is on disk. A submit cut off by Ctrl+C, a crash or a lost answer has no known outcome: the next run does not pay for it again by itself, and `plan` / `run` / `status` / `ledger` say what happened. New `vidgen generate resolve --intent ID --not-charged | --job JOB_ID | --charged [--cost USD]` records the outcome. Until resolved it counts against the budget at its estimate.
+
+### Generated video: no paid job from inputs that are out of date (Step 308)
+
+- `vidgen generate inputs` now records what each cut file was made from in `build/videogen/<shot>/inputs.json`. When the scene, the beat's text or timing, the narration MP3 or the draft size changed afterwards, `vidgen generate plan` (text and JSON) blocks the shot and names the free command that cuts it again (`vidgen generate inputs`, with `--guide` when a render input changed).
+- `vidgen generate run --pay` refuses the whole run on such a shot before anything is sent or a tunnel opens. Inputs cut before this version have no record and are blocked the same way: cut them again once.
+- A shot whose clip or job already exists is still reused free, with a note. Picking a take or editing a shot's prompt does not count as a change. A narration MP3 that no longer matches its text asks for `vidgen tts` first.
+
+### Generated video: a 3D scene's guide pass as a shot's guide (Step 307)
+
+- `generated_shot.guide` now takes `true | false | render | depth | outline | mask`. `true` (= `render`) is unchanged: the beat's silent draft render. On a `3d` scene, `depth`, `outline` or `mask` sends that guide pass of the beat instead, so a video model follows the 3D layout and camera move while it draws the look. Elsewhere such a value is refused when the config is read; a misspelt value gets a did-you-mean.
+- `vidgen generate inputs --guide` draws the pass with the scene's draft render (the 3D frames are reused; a current draft render is no longer rendered again) and cuts the beat's part exactly like `guide.mp4` (start, length, size, frame rate) into `build/videogen/<shot>/guide.<pass>.mp4`, converted from the lossless pass to H.264 / yuv420p (mask colours within a few levels inside each object; edges blend over a pixel or two). `first_frame: render` stays the normal render's first frame.
+- The prompt says what the guide is ("The guide video is a depth map (near is white, far is dark): follow its layout and camera motion."); a mask guide also lists the stand-ins' colours by name. Changing the pass is a new request (never the cached clip). `vidgen generate plan` names the pass in the shot's guide line and in the "would share" list (`videogen.host: quick_tunnel`); without a host the shot is blocked as before.
+- Cookbook: "From a 3D scene to a generated clip" (`docs/COOKBOOK-GENERATED-VIDEO.md` §6, linked from `docs/COOKBOOK-3D.md`): which pass to choose, the order of commands, the limits; new example `examples/3d-to-video`.
+
+### Generated video: talking shots and guides through the quick tunnel (Step 306)
+
+- New `videogen.host: none | quick_tunnel` (default `none`: nothing changes). With `quick_tunnel`, `vidgen generate run --pay` shares a shot's voice (`audio.mp3`) and guide render (`guide.mp4`) through its own Cloudflare quick tunnel: opened and checked just before the job is submitted (if the check fails, nothing is sent or paid), closed as soon as the job is completed or failed (before the download), or once the provider fetched every file plus `host_grace_seconds`, or after `host_max_minutes`, whichever comes first. One tunnel per shot, so no file stays reachable while other shots are made. Talking shots (heygen/avatar-iv lip-sync) and shots with `guide:` can now be paid for.
+- `vidgen generate plan` no longer blocks those shots when the host is on, and lists per shot exactly which files a run would share, their sizes and the tunnel's maximum lifetime (JSON `shared`, `share_max_minutes`); without `cloudflared` the shot is blocked with the install hints; without the host the blocked reason names `videogen: {host: quick_tunnel}`.
+- A provider error that quotes a shared URL is shown with the secret part replaced by `<secret>`.
+- MCP: `generate_host_test` (the free check); `generate_plan` / `generate_run` follow the CLI.
+- Safer sharing: a file reached through a linked folder inside the project (or a Windows junction) is refused; the public check accepts a `HEAD` answer without `Content-Length` (still refuses a wrong one); on Windows without `taskkill` cloudflared itself is stopped.
+- Cookbook section "Sharing voice and video inputs safely", with a "Test on Windows" walkthrough (install, `host-test`, a dry plan, one paid talking shot).
+
+### Generated video: sharing audio / video inputs through a Cloudflare quick tunnel (Step 305)
+
+- New `vidgen.videogen.host`: shares exactly the given files (copies under random names in a temporary folder outside the project; links refused) from a tiny local server on 127.0.0.1 that answers only `GET` / `HEAD` of `/<secret>/<name>` (404 for everything else, no listing, no `Server` header), through `cloudflared tunnel --url ... --no-autoupdate --protocol http2`; every file is checked through the public `https://<words>.trycloudflare.com` address before use; cloudflared (its whole process tree), the server and the copies are closed and deleted when the work ends, on an error or Ctrl+C, after every file was fetched plus a grace period, or at a hard maximum lifetime (15 min). The ledger records `host_open` (host name only, files with size and SHA-256), `host_fetch` and `host_close`.
+- `vidgen generate host-test [PROJECT] [--keep SECONDS] [--json]`: a free check of the tunnel (one tiny text file shared, fetched back, other paths checked for 404, closed); nothing goes to OpenRouter. A missing `cloudflared` names how to install it (Windows `winget install Cloudflare.cloudflared`, macOS `brew install cloudflared`).
+- New `videogen` settings: `cloudflared`, `tunnel_protocol` (`http2` | `quic` | `auto`), `host_max_minutes`, `host_grace_seconds`. Paid runs use it with `videogen.host: quick_tunnel` (Step 306).
+
+### 3D scenes: `guide_passes` takes the command-line forms (Step 304)
+
+- A `3d` scene's `guide_passes` now takes every form `vidgen render --guide-passes` takes, read by the same function: one name (`guide_passes: depth`), a comma list (`depth,mask`, spaces allowed: `depth, mask`), `all`, `true`/`false` and lists as before. Step 303's "write a list" refusal of `depth,mask` is gone. An unknown name is refused with did-you-mean, in YAML and on the command line alike (`al` → did you mean `all`). The JSON schema (`vidgen schema`) accepts those strings.
+
+### 3D scenes: `guide_passes: all` (Step 303)
+
+- A `3d` scene's `guide_passes: all` now asks for all three guide passes, like `vidgen render --guide-passes all` (before, only `true` or a list worked in YAML). Other strings are refused with a hint: `al` → did you mean `all`, `depth,mask` → write a list `[depth, mask]`. The JSON schema (`vidgen schema`) accepts `all`.
+
+### 3D scenes: docs, example and review (Step 302)
+
+- `docs/COOKBOOK-3D.md`: setting up the `3d` extra, building a scene, the camera in 16:9 and 9:16, stand-ins, guide passes, checks and common mistakes; `vidgen guide 3d` (topic `three-d`) has the short version.
+- `examples/3d-short`: a 9:16 Short of about 15 s (shapes, two stand-ins who walk and turn to each other, a ball that appears, rolls and glows, four camera moves on words, karaoke captions, guide passes). The gallery's `3d` sample now shows object actions.
+- Guide passes: the `depth` range is fitted to the objects (the floor is clamped to it, so the objects get the contrast; far is a dark grey, only the background black) or set with the new `depth_range: [near, far]`; `outline` draws white lines on black; in the `mask` the floor is a neutral dark grey (`#404040`, listed as `floor`) and every other object's colour comes from its id, so adding or reordering objects keeps the others' colours.
+- A 3D page that does not load (a timeout, a crashed page) is a clear error instead of a traceback, and Chromium is closed.
+
+### 3D scenes: guide passes (Step 301)
+
+- A `3d` scene can also be drawn as three plainer videos beside its 3D clip, with exactly its frames, camera and timing: `depth` (near white, far dark; one range for the whole shot, so it does not flicker), `outline` (edges only, black on white, like a line drawing) and `mask` (each object one flat colour on black, with a table object id → colour, stand-ins also by name, in `<scene>.mask-colors.json`). They hold only the 3D shapes (no labels, title, captions or overlays), are lossless, and are reused like the clip.
+- Off by default: ask with `guide_passes: true` (or `[depth, mask]`) in a `3d` scene, or `vidgen render --guide-passes [depth,outline,mask]` for every `3d` scene (MCP `render` takes `guide_passes`). Files: `build/<quality>/three_d/<scene>.<pass>.mkv`; listed in the render's output (`guide_passes` in `--json`).
+- `vidgen.api` gains `GUIDE_PASSES`, `guide_pass`, `make_guide_passes` and `mask_table`; `scene_description` accepts `draw_mode` `depth`, `outline` and `mask`.
+
+### 3D scenes: object actions and character stand-ins (Step 300)
+
+- Objects of a `3d` scene change on beats and words with ten new beat actions: `object_move` (to / by), `object_path` (a smooth curve through points, `turn` to face along it), `object_rotate`, `object_spin` (turns about an axis), `object_scale`, `object_show` / `object_hide` (fade or grow; objects may start with `visible: false`), `object_highlight` (a glow in the theme's highlight colour), `object_walk` and `object_face`; timed by `at` and `run_time`, `easing: smooth | linear`; a group's children come along.
+- Character stand-ins: `shape: standin`, a capsule with a nose showing where it faces and its `name` above its head; `object_walk` turns it and walks it to a point or up to an object (bobbing with its steps), `object_face` turns it to face an object or a point.
+- The camera follows a moving object: `camera_fly_to` keeps its distance to it, `camera_look_at` and `camera.look_at` keep looking at it; an arrow with `to: <object>` follows it too. Every frame's pose is worked out by vidgen and written into the scene description.
+- Labels may keep their size on screen (`screen_size: true`).
+- `vidgen lint`: `three_d_off_frame` and `three_d_hidden` warn when an object the beat is about (its actions name it, or a stand-in says the line, `voice:`) is mostly outside the frame or hidden behind a nearer object.
+- `vidgen.api` gains `ObjectChange`, `plan_world`, `framing_3d` and `hex6`; `scene_description` takes `object_changes`.
+
+### 3D scenes: shapes, groups and camera moves (Step 299)
+
+- `3d` scenes have more shapes: `sphere`, `cylinder`, `cone`, `torus`, `plane`, `arrow` (with `to`: from its position to a point or an object), `label` (text on a plate that always faces the camera, in vidgen's bundled Inter Bold) and `group` (draws nothing); `size` may be one number; a `floor`.
+- Groups: an object with `parent: <id>` moves and turns with that object (a group's `spin` carries its children).
+- The camera moves on beats and words with new beat actions: `camera_orbit`, `camera_dolly` (push in / pull back), `camera_fly_to`, `camera_look_at` and `camera_move`, timed by `at` (a fraction or `"@word"`) and `run_time`, `easing: smooth | linear`; `camera.look_at` may name an object.
+- `vidgen validate` checks object ids (did-you-mean), replays the camera moves (a dolly past its point, an orbit from right above its centre) and warns when a project with a `3d` scene has no Playwright or Chromium (a quick check; no browser started).
+- `vidgen.api` gains `CameraMove`, `camera_problems`, `check_3d_scene` and `Floor3D`; `scene_description` takes `camera_moves`.
+
+### 3D scenes: the `3d` scene type (Step 298)
+
+- New scene type `3d`: objects seen by a fixed camera under one default light (ambient + sun) over a background colour, drawn by three.js in headless Chromium through Playwright; a title on a plate, overlays and captions on top; 16:9 and 9:16 (the camera's `fov` is measured across the shorter side, so a subject fills both alike). Only the `box` shape exists yet; `spin` keeps an object turning through the scene. Params `title`, `background`, `camera: {position, look_at, fov}`, `light: {ambient, sun, sun_from, color}`, `objects: [{id, shape, size, color, position, rotation, spin}]`; unknown shapes and keys get a did-you-mean.
+- Frames are deterministic: vidgen sets the time of every frame (frame n at n / fps), three.js 0.186.1 ships with schu-video-generator (MIT, `vidgen/data/three/`), nothing is fetched from the network, and WebGL runs on Chromium's software renderer. The frames go to a lossless clip `build/<quality>/three_d/<scene>.mkv` with the scene description as JSON beside it, reused while nothing that draws them changed.
+- Optional extra: `pip install "schu-video-generator[3d]"`, then `python -m playwright install chromium`; without them a `3d` scene stops with that hint (Windows wording too), and nothing else needs them.
+- `vidgen.api` gains `text_plate` (text on a rounded plate; `video_clip` uses it too), `Scene3DParams`, `Camera3D`, `Light3D`, `Object3D`, `BeatSpan`, `scene_description` and `make_3d_clip`.
+
+### Smaller pictures for video jobs, https-only audio / video (Step 296)
+
+- Pictures sent inline to a video model (frame images and picture references) go as smaller copies: longest side at most 1280 px, JPEG quality 90 (PNG when the picture has transparency), cached in `build/videogen/pictures/`; the sheet files are untouched. The s293 sample's action shot went from a 48 MB request (refused by vidgen's 21 MB limit) to about 1 MB. `vidgen generate plan` shows each ready shot's request size (`request_bytes` in `--json`).
+- OpenRouter refuses inline audio and video (HTTP 400 "Only HTTPS URLs are allowed"): with `videogen.inline_media: all`, a shot with `audio:` or `guide:` (and every talking shot) is now a problem in the plan and `run --pay` refuses it before sending; vidgen no longer sends sound or clips as data URLs.
+- `docs/COOKBOOK-GENERATED-VIDEO.md`: the account's "ZDR endpoints only" setting refuses every video model (HTTP 404), a free check of the privacy settings (the model count with and without the key), and the https-only rule for audio and video.
+
+### Cleaner reference sheet prompts, real image costs (Step 295)
+
+- Character sheet pictures are now clean model-sheet pictures: full body from head to toe on a plain seamless light grey backdrop with nothing else in the picture, strict view words (a side view is a 90-degree profile facing left), the description introduced as who the person is with "No props", and an always-on "Avoid: text, letters, signs, logos, labels, props, furniture, lamps, scenery, ...". The style sheet's palette is marked as colours only (it drew lamps from "warm lamp orange"); lens, handheld, depth-of-field and scene-lighting words stay out of character pictures. Style frames keep the full look and avoid text and signage. The new prompts make new pictures: sheets made before read "not made yet".
+- Picture costs say where they come from: sidecars and the sheets' ledger events have `cost_source: reported` (OpenRouter's `usage.cost`) or `estimate` (counted at the estimate, as before), the sidecar keeps the response's `usage` numbers, and the printed lines say "reported by openrouter" or "estimated". The budget check before paying is unchanged.
+
+### Generated video: takes in the film, QA, run (Step 294)
+
+- `vidgen generate run [--pay] [--budget USD] [--shot ID]`: a dry run, or (with `--pay` and a budget) each ready shot generated in order, the run refused up front when a shot has problems or the estimate is over what is left, stopped at the first failure, never retried, never paid twice. Each clip becomes a take `takes/<shot>/<n>.mp4` with QA (duration, aspect / size, black, frozen, flicker, abrupt cuts, its own sound) and a contact sheet; `vidgen generate takes | status | pick --shot ID --take N | none | auto`.
+- `vidgen render` lays the shown take over its beat under the overlays and captions: scaled / cropped to the format (`fit: cover | contain`), at the video's frame rate, lightly colour matched (`videogen.color_match`), with crossfades against vidgen's picture (`crossfade`); the take's sound is never used. Drafts show vidgen's own picture; a new take or pick renders only its scene again.
+- The description file ends with "Includes AI-generated footage (models)." and lint's `generated_footage` (info) reminds you to disclose it. MCP tools `generate_plan`, `generate_run` (paid only with `dry_run: false` and `confirm_cost: true`), `generate_status`, `generate_takes`, `generate_pick`. `docs/COOKBOOK-GENERATED-VIDEO.md` (cost control, privacy: no Zero Data Retention).
+- Fixes to Steps 292–293: the mock provider returns a playable MP4 and unique job ids (its ledger counted repeated runs once); downloaded clips in `assets/generated_video/` no longer make every scene's render stale; reference sheets work with a proxy-injected key (`VIDGEN_OPENROUTER_KEY_VIA_PROXY` / `videogen.key_via_proxy`).
+
+### Generated video: sheets, shot specs and the plan (Step 293)
+
+- A beat's `generated_shot: {kind: talking | action | establishing, model, prompt, setting, characters, refs, audio, guide, first_frame, seed, resolution, aspect_ratio, line}`: the beat shown by a generated clip, its length snapped to what the model makes (trimmed later; long beats split), its prompt built from the style sheet, setting, characters and line.
+- `characters[].reference_sheet` and `style_sheet:`: pictures made by the image provider (`vidgen generate sheets`, a dry run unless `--pay`; paid against `videogen.budget_usd`), used by shots only once `approved: true`.
+- `vidgen generate inputs [--guide]` cuts each shot's voice (exact length), and a silent draft render of the beat with its first frame; `vidgen generate plan` lists every shot with its inputs, length, estimated cost and what the budget has left (a dry run). `vidgen validate` names unknown characters and pictures with a did-you-mean.
+
+### Generated video: the provider layer (Step 292)
+
+- `videogen: {provider: openrouter | mock, budget_usd, key_via_proxy, inline_media, poll_timeout}`: OpenRouter's video API (submit, poll, download) behind a hard budget cap; nothing is paid without an explicit pay and a budget; a spending ledger `videogen-ledger.jsonl`; clips cached by request, never paid twice; the model's audio never generated.
+- `vidgen generate models`: OpenRouter's video models with durations, resolutions, aspect ratios, frame images and estimated prices (public list, no key; cached, works offline). `vidgen generate ledger`: jobs, costs, what the budget has left.
+- The key from `OPENROUTER_API_KEY`, or none when a network proxy adds it (`key_via_proxy: true` / `VIDGEN_OPENROUTER_KEY_VIA_PROXY=1`). `vidgen.api`: `VideoRequest`, `MediaInput`, `generate_clip`, `plan_clip`.
 
 ### Audio drama cookbook; Phase AG review (Step 291)
 

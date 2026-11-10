@@ -77,6 +77,7 @@ from vidgen.layout import (  # noqa: E402
     normalize_text,
     require_latex,
     shrink_to_fit,
+    text_plate,
     wrap_lines,
 )
 from vidgen.regions import (  # noqa: E402
@@ -141,6 +142,13 @@ from vidgen.voice_effects import VOICE_EFFECTS, VoiceEffect, effect_filter, voic
 from vidgen.translation import TextRef, TranslatableStr  # noqa: E402
 from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
+from vidgen.videogen import MediaInput, VideoRequest  # noqa: E402
+from vidgen.videogen.run import generate_clip, plan_clip  # noqa: E402
+from vidgen.videogen.sheets import project_sheets  # noqa: E402
+from vidgen.videogen.shots import plan_shots, project_shots  # noqa: E402
+from vidgen.videogen.compose import scene_placements  # noqa: E402
+from vidgen.videogen.qa import check_clip  # noqa: E402
+from vidgen.videogen.workflow import run_shots  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character, pixel_zoom  # noqa: E402
 from vidgen.cartoon.transition import ArmMove, BodyMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, PropReshape, Walk, feet_of  # noqa: E402
@@ -655,6 +663,13 @@ from vidgen.cartoon.iso_atmosphere import IsoFog, IsoReflections, IsoSwayer  # n
 from vidgen.world.iso_ambient import AMBIENT_DEFAULTS, AMBIENT_KEYS, AMBIENT_KINDS, AMBIENT_MAX, INDOOR_KINDS, AmbientCells, AmbientMove, AmbientPlan, AmbientPose, ambient_cells, ambient_counts, ambient_seed, around, cell_route, plan_ambient  # noqa: E402
 from vidgen.cartoon.iso_ambient import CritterLook, IsoCritter, critter_look, critter_shapes  # noqa: E402
 from vidgen.story_text import Story, read_story  # noqa: E402
+from vidgen.three_d.camera import CameraMove, camera_problems, check_3d_scene  # noqa: E402
+from vidgen.three_d.clip import make_3d_clip  # noqa: E402
+from vidgen.three_d.description import BeatSpan, hex6, plan_world, scene_description  # noqa: E402
+from vidgen.three_d.framing import framing_3d  # noqa: E402
+from vidgen.three_d.motion import ObjectChange  # noqa: E402
+from vidgen.three_d.passes import GUIDE_PASSES, guide_pass, make_guide_passes, mask_table  # noqa: E402
+from vidgen.three_d.spec import Camera3D, Floor3D, Light3D, Object3D, Scene3DParams  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
@@ -834,6 +849,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "wrap_lines",
     "normalize_text",
     "shrink_to_fit",
+    "text_plate",
     "distribute",
     "nice_ticks",
     "auto_format",
@@ -968,6 +984,25 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "CLIP_SUFFIXES",
     "ClipInfo",
     "ClipMobject",
+    "make_3d_clip",
+    "make_guide_passes",
+    "GUIDE_PASSES",
+    "guide_pass",
+    "mask_table",
+    "CameraMove",
+    "camera_problems",
+    "check_3d_scene",
+    "BeatSpan",
+    "scene_description",
+    "plan_world",
+    "hex6",
+    "ObjectChange",
+    "framing_3d",
+    "Scene3DParams",
+    "Camera3D",
+    "Floor3D",
+    "Light3D",
+    "Object3D",
     "ClipTiming",
     "clip_audio",
     "fit_speed",
@@ -982,6 +1017,16 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "world_countries",
     "GenerateImage",
     "generated_image",
+    "VideoRequest",
+    "MediaInput",
+    "generate_clip",
+    "plan_clip",
+    "plan_shots",
+    "project_shots",
+    "project_sheets",
+    "run_shots",
+    "check_clip",
+    "scene_placements",
     "VectorPicture",
     "load_vector",
     "PART_NAMES",

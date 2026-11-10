@@ -11,6 +11,7 @@ them, so stills, the layout dump, ``vidgen lint`` and beat actions see it like a
 import logging
 import tempfile
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any, ClassVar, Literal
 
 from vidgen.api import *
@@ -34,7 +35,7 @@ class VideoClip(Screenshot):
     playing when the scene starts and plays through every beat: the scene lasts as long as its
     narration (plus the fade-out), whatever the clip's length. A shorter clip holds its last
     frame (``loop: true`` starts it again; ``fit_duration: true`` changes its speed to fit); a
-    longer one is cut by the fade-out.
+    longer one is cut by the fade-out. ``fade: false`` is a hard cut: no fade in, no fade-out.
 
     Action targets: ``title``, ``clip`` (the picture with its frame), ``caption``,
     ``callout<N>``, ``callout:<label>``, ``step<N>``.
@@ -43,6 +44,11 @@ class VideoClip(Screenshot):
     outro = 0.5
     target_patterns = ("title", "clip", "caption", "callout<N>", "callout:<label>", "step<N>")
     picture_name: ClassVar[str] = "clip"
+
+    @classmethod
+    def outro_seconds(cls, params: Mapping[str, Any]) -> float:
+        """No fade-out with ``fade: false`` (a hard cut)."""
+        return 0.0 if params.get("fade") is False else float(cls.outro)
 
     class Params(Screenshot.Params):
         path: str
@@ -73,6 +79,8 @@ class VideoClip(Screenshot):
         """Volume of the clip's own sound (1 = as recorded, 0 = silent); default 0.25 under narration, 1 in a silent scene."""
         mute: bool = False
         """Leave out the clip's sound."""
+        fade: bool = Field(default=True, strict=True)
+        """false: a hard cut. The clip is on screen from the scene's first frame (no fade in) and the scene ends with its last narrated frame (no 0.5 s fade-out), so generated takes join with a plain cut (with transition: cut, the default)."""
         units: Literal["fraction", "px"] = "fraction"
         """Callout areas in fractions of the clip's picture (0-1, from its top-left corner, before any cover crop) or in its pixels."""
         picture_word: ClassVar[str] = "clip"
@@ -138,6 +146,8 @@ class VideoClip(Screenshot):
         clip.set_resolution(self._magnification())
         clip.play(self)
         self._sound(path, timing, window)
+        if not p.fade:   # on screen from the first frame: its entrance has nothing left to do
+            self.add(self._picture)
 
         def intro() -> list[Animation]:
             anims = self.entrance("clip") + (self.entrance("title") if title is not None else [])
@@ -269,9 +279,7 @@ class VideoClip(Screenshot):
 
     def _plate(self, text: Mobject) -> Mobject:
         """``text`` on a rounded plate in the theme's surface colour (readable over any picture)."""
-        plate = RoundedRectangle(width=text.width + 0.5, height=text.height + 0.3, corner_radius=0.12)
-        plate.set_fill(self.theme.color("surface"), opacity=0.88).set_stroke(width=0).move_to(text)
-        return Group(plate, text).set_z_index(3)
+        return text_plate(text, self.theme.color("surface"))
 
     def _picture_entrance(self) -> list[Animation]:
         if self.params.region == "bleed":

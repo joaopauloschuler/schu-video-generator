@@ -46,7 +46,8 @@ def project_with(make_project, scenes: list[dict[str, Any]], **overrides: Any) -
 #: unknown-action message and the schema's enum all list them).
 BUILTIN_ACTIONS = [
     "action_potential", "advance", "alarm", "amplify", "analyse", "annotate", "antiparticles", "birds",
-    "blow_away", "boost", "build", "burn", "callout", "cap", "checkpoint", "chi_square", "cleave", "close",
+    "blow_away", "boost", "build", "burn", "callout", "camera_dolly", "camera_fly_to", "camera_look_at",
+    "camera_move", "camera_orbit", "cap", "checkpoint", "chi_square", "cleave", "close",
     "coast", "collapse", "compute", "convert", "corotate", "count", "couplings", "cross_over", "deduce",
     "dematerialise", "diffuse", "dim", "drive_to", "drop_fruit", "drug", "effect", "emote", "endocytosis", "enter",
     "exit", "exocytosis", "explode", "export", "fill", "fit", "flow", "flyby", "focus", "fold", "follow",
@@ -54,7 +55,8 @@ BUILTIN_ACTIONS = [
     "hold", "hold_hands", "host_enter", "host_exit", "host_look", "host_move", "host_point", "host_react",
     "inertial", "inhibit", "jump", "keyframes", "kiss", "knock", "knockout", "launch", "lean_on", "let_go",
     "let_go_hands", "lie_on", "lift_off", "light", "lightning", "look_at", "lower", "materialise", "measure", "meet", "motor_walk",
-    "move_along", "mutate", "open", "osmosis", "pan", "particles", "pause", "pick_up", "polyadenylate",
+    "move_along", "mutate", "object_face", "object_hide", "object_highlight", "object_move", "object_path",
+    "object_rotate", "object_scale", "object_show", "object_spin", "object_walk", "open", "osmosis", "pan", "particles", "pause", "pick_up", "polyadenylate",
     "pose", "pour", "put_down", "rainbow", "raise", "ratio", "react", "rearrange", "regional", "relabel",
     "repair", "resample", "reveal", "ride_to", "risk", "run", "run_to", "sail_to", "say", "scan", "secrete",
     "set_state", "sfx", "shot", "shutters", "signal", "simulate", "sit_on", "splice", "stand_up",
@@ -218,7 +220,7 @@ def test_validate_reports_bad_actions(make_project) -> None:
     assert "targets: heading, item1, item:Write the beats" in by_location[f"{at}[0].target"][0]
     assert "forms: heading, item<N>, item:<text>" in by_location[f"{at}[0].target"][0]
     assert by_location[f"{at}[1].action"] == [
-        "unknown action 'higlight'; did you mean 'highlight' or 'light'? (known actions: " + ", ".join(BUILTIN_ACTIONS) + ")"
+        "unknown action 'higlight'; did you mean 'highlight' or 'light' or 'object_highlight'? (known actions: " + ", ".join(BUILTIN_ACTIONS) + ")"
     ]
     assert "less than or equal to 1" in by_location[f"{at}[2].opacity"][0]
     assert by_location[f"{at}[2].colour"] == ["unknown option 'colour' (known: opacity)"]
