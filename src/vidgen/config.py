@@ -392,7 +392,7 @@ class VoiceConfig(_Strict):
     """Text-to-speech voice: ElevenLabs (default), OpenRouter (DESIGN.md §66) or local Kokoro (§68)."""
 
     provider: Literal["elevenlabs", "openrouter", "kokoro"] = "elevenlabs"
-    """TTS provider of the whole video: elevenlabs (ELEVENLABS_API_KEY), openrouter (many TTS models through OpenRouter; OPENROUTER_API_KEY; needs model) or kokoro (Kokoro-82M on this computer, free; pip install "schu-video-generator[kokoro]")."""
+    """TTS provider of the whole video: elevenlabs (ELEVENLABS_API_KEY), openrouter (many TTS models through OpenRouter; OPENROUTER_API_KEY; needs model) or kokoro (Kokoro-82M on this computer, free; Python 3.10-3.12)."""
     voice_id: str = Field(default="nPczCjzI2devNBz1zQrb", min_length=1)
     """ElevenLabs voice id."""
     model_id: str = Field(default="eleven_multilingual_v2", min_length=1)
@@ -947,7 +947,7 @@ class SttConfig(_Strict):
     """The optional ``stt:`` section: the speech-to-text provider of ``vidgen readback`` (DESIGN.md §57)."""
 
     provider: Literal["faster_whisper", "elevenlabs"] = "faster_whisper"
-    """faster_whisper (local and free; pip install "schu-video-generator[stt]") or elevenlabs (ElevenLabs Speech to Text, paid; ELEVENLABS_API_KEY)."""
+    """faster_whisper (local and free) or elevenlabs (ElevenLabs Speech to Text, paid; ELEVENLABS_API_KEY)."""
     model: str | None = Field(default=None, min_length=1)
     """Model: a Whisper size (tiny, base, small, medium, large-v3, turbo; .en for English only) or a folder with a converted model; ElevenLabs: scribe_v1. Default: small.en for English, else small; scribe_v1."""
     language: Literal["auto"] | LanguageTag | None = None
@@ -2625,7 +2625,7 @@ class MusicCue(_Strict):
     source: str | None = Field(default=None, min_length=1)
     """A built-in bed (calm, pulse, bright, cartoon, lullaby, discovery, breakthrough, enigma, momentum, lab, ascent, horizon, beacon, neon, tidewater, skyline, time_of_flight; vidgen list-music), a project piece (a score file: my_theme for assets/music/my_theme.yaml) or an audio file under the project (e.g. assets/music/theme.mp3); give this or compose."""
     compose: Annotated[ComposeConfig | None, BeforeValidator(_compose_shorthand)] = Field(default=None, json_schema_extra=_mood_name_schema)
-    """Music composed from a mood instead of a source: a mood name or {mood, key, tempo, instruments, seed, bars}; needs the music extra."""
+    """Music composed from a mood instead of a source: a mood name or {mood, key, tempo, instruments, seed, bars}."""
     volume: float = Field(default=0.0, ge=-60, le=12)
     """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""
     start: float = Field(default=0.0, ge=0)

@@ -19,7 +19,7 @@
 #   vidgen storyboard examples/gallery --scene morph --per-beat 3   # code morphing from a loop to a comprehension, on a word
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
-#   vidgen storyboard examples/gallery --scene crate               # 3D shapes and a camera move (needs the 3d extra and Chromium)
+#   vidgen storyboard examples/gallery --scene crate               # 3D shapes and a camera move (needs Chromium)
 #   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
 #   vidgen list-music examples/gallery --render-dir build/music  # the music beds (this video: calm, ducked) as WAVs
 #   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour,
@@ -526,7 +526,7 @@ scenes:
       - text: "Callouts work on moving pictures too, one step per beat."
 
   - id: crate
-    type: 3d              # three.js in headless Chromium (pip install "schu-video-generator[3d]")
+    type: 3d              # three.js in headless Chromium 
     params:
       title: "Shapes in 3D"
       floor: true                                                    # a plane with id floor

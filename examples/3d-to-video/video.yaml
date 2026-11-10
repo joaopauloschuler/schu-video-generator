@@ -2,7 +2,7 @@
 # scene (a floor, a crate, two stand-ins) whose one beat is also a generated action shot. The shot
 # sends the beat's depth pass as its guide video (`guide: depth`), so the clip keeps the 3D
 # layout and camera move while the model draws Ana and Ben from their reference sheets.
-# Needs the 3d extra (pip install "schu-video-generator[3d]" && python -m playwright install chromium);
+# Needs Chromium, once (python -m playwright install chromium);
 # paying needs an OpenRouter key, the budget below and cloudflared for the quick tunnel.
 #
 #   vidgen validate examples/3d-to-video

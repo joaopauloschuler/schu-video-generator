@@ -11,7 +11,7 @@ screen come from schu-video-generator's particle model, and the narration says t
 vidgen validate examples/higgs-discovery           # the short (9:16) variant too
 vidgen lint examples/higgs-discovery [--variant short]   # incl. the particle_* rules
 vidgen storyboard examples/higgs-discovery --per-beat 2
-vidgen tts examples/higgs-discovery                # Kokoro (the kokoro extra): local and free
+vidgen tts examples/higgs-discovery                # Kokoro: local and free
 vidgen render examples/higgs-discovery [--variant short]
 ```
 

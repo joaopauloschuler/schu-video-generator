@@ -7,6 +7,32 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### A dissolve of a few frames where one generated take continues another, on request (Step 326)
+
+- `video_clip`'s `match_previous` takes two more settings. `dissolve: N` (0 to 12, default 0) blends the clip's first N frames with the previous clip's last frame, held still, the previous frame's share falling in equal steps (N = 3: 75 %, 50 %, 25 %). N counts frames of the render being made (preview or final). `level: false` blends without the correction of brightness and colour. No frame is added or removed; durations and sound do not change.
+- `match_previous: true` is unchanged: it never blends.
+- Measured on four takes at preview size (mean absolute difference of RGB between the frame before and the first frame after each cut, 0 to 255): 7.09, 6.74 and 5.80 with `match_previous: true`; 2.75, 2.71 and 2.44 with `{dissolve: 3}`. Inside the shots the median is 0.61.
+
+### No flash where one generated take continues another (Step 325)
+
+- `video_clip` has a new param `match_previous: true | {seconds, hold}`. Where a clip continues the clip of the scene before (a take generated from its last frame, which video models draw about 8 % darker), its first frame is given that frame's brightness and colour, one gain per colour channel, and the correction eases away within `seconds` (default 1). No frames are blended or added; durations and sound do not change.
+- Measured on four takes at preview size: the step in mean level at the three cuts goes from −7.4 … −7.8 % to within ±0.1 %.
+- `vidgen validate` rejects the param where it cannot apply (no `video_clip` before, a transition, a fade, a region other than `bleed`); a pair of frames that is not a continuation is left alone with a warning.
+
+### The director's cookbook: three traps removed (Step 324)
+
+- `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: Card 12 pins an accepted painted picture by its file before the stand-ins move, so that it is not blocked or quoted again; the example stand-in stands on the pier and the text says a stand-in's `position` is its centre; Card 6 uses one `--box` per panel when panels are not evenly spaced.
+
+### An AI given only short prompts finds the cookbook's cards (Step 323)
+
+- `docs/COOKBOOK-DIRECTING-YOUR-AI.md` opens with a section for the AI: each of the tutorial's 11 short prompts maps to its long cards and to the points where the AI must stop and wait, with the safety rules and the details that must not be left out. The README and the author guide point to it.
+
+### A plain install brings every Python package (Step 322)
+
+- `pip install` of schu-video-generator now installs fpdf2, faster-whisper, the MCP SDK, Kokoro and its Mandarin packages (Python 3.10-3.12), symusic and Playwright. The extras `pdf`, `stt`, `mcp`, `kokoro`, `music` and `3d` remain, empty, so older commands still work.
+- A missing package is reported as an incomplete installation with the advice to reinstall schu-video-generator. No message or document tells a user to pip install a package. Chromium remains a separate download named in vidgen's own error message.
+- Kokoro's Japanese voices are not available from a plain install: pyopenjtalk has no wheels and would need a C++ compiler.
+
 ### Generated video: a provider's error never shows the shared address; the mock shares nothing (Step 311)
 
 - A provider's error that quotes a quick tunnel address no longer shows its secret path, wherever it appears: a failed job's error (which used to escape the redaction), submit and download errors, exception details, `ShotRun.message`, `--json`, MCP. This also works for a job polled by a later run, when the tunnel is long gone. Ledger lines never hold the path either.

@@ -601,6 +601,62 @@ first, and check the frames around each join (no dark frames) before the final r
 picked takes of "Get It All In" at 480x854: 20.33 s, 4 shots in order, no frame darker than the takes
 themselves at any join, each clip's sound level the same as the take's.
 
+**Smoothing the cut between two takes.** A take made with `first_frame: last_of:<shot>` starts from the
+last frame of the take before, but the video model draws that picture a little darker, and the cut shows
+as a small flash. Add `match_previous: true` to the second scene (and to each later one that continues
+the scene before it):
+
+```yaml
+  - {id: film_shot2, type: video_clip, duration: 5.088, params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false, match_previous: true}}
+```
+
+vidgen then gives the clip's first frame the brightness and colour of the previous clip's last frame
+(one gain per colour channel) and eases the correction away, so that 1 second after the cut the clip
+shows its own pixels again. No frames are blended or added, and durations and sound stay as they are.
+`match_previous: {seconds: 0.5}` changes the time. Measured on the four picked takes of "Get It All In"
+(preview, mean level of the frame before and the frame after each cut):
+
+| cut | plain cut | `match_previous: true` |
+|---|---|---|
+| shot 1 to 2 | 139.9 to 129.3 (−7.6 %) | 139.9 to 139.9 (0.0 %), 131.2 after 1 s |
+| shot 2 to 3 | 132.4 to 122.6 (−7.4 %) | 132.4 to 132.5 (+0.1 %), 125.3 after 1 s |
+| shot 3 to 4 | 128.7 to 118.6 (−7.8 %) | 128.7 to 128.7 (0.0 %), 120.2 after 1 s |
+
+It needs a plain cut between two `video_clip` scenes that both have `fade: false` and `region: bleed`;
+`vidgen validate` says so otherwise. When the two frames are not a continuation (a different picture, or
+a gain outside 0.8 to 1.25), the render prints a warning with the numbers and leaves the clip as it is.
+`match_previous: {hold: true}` keeps the correction for the whole clip, and each next clip then matches
+the corrected one, so the gains add up: on these takes shot 4 plays 26 % brighter than its file and
+bright areas burn out. Use `hold` for two or three takes at most. What the correction does not remove: a
+change of the picture itself at the cut (a face or a hand drawn slightly differently).
+
+**A dissolve of a few frames, on request.** After the brightness match, the cut can still show a small
+jump: the model draws fine texture differently and shifts the picture by a pixel or two. If you see it,
+ask for a dissolve:
+
+```yaml
+  - {id: film_shot2, type: video_clip, duration: 5.088, params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false, match_previous: {dissolve: 3}}}
+```
+
+The clip's first 3 frames are mixed with the previous clip's last frame, held still (75 %, 50 % and 25 %
+of it); from the 4th frame on the clip is not blended. No frame is added or removed, and durations and
+sound do not change. The number counts frames of the render being made (3 frames are 0.125 s in a 24 fps
+preview, 0.1 s in a 30 fps final render); the most is 12. It is off unless you write it: `match_previous:
+true` never blends. The brightness match still runs, before the blend; `{dissolve: 3, level: false}`
+blends without it. Measured on the same four takes (preview; how much one frame differs from the next,
+mean absolute difference of RGB on a scale of 0 to 255; inside the shots the usual value is 0.6, and 1.7
+for the fastest tenth of the frames):
+
+| cut | `match_previous: true`: frame before to first frame after | `{dissolve: 3}`: the same pair | `{dissolve: 3}`: the next three pairs |
+|---|---|---|---|
+| shot 1 to 2 | 7.09 | 2.75 | 1.74, 1.99, 1.88 |
+| shot 2 to 3 | 6.74 | 2.71 | 1.62, 1.94, 1.69 |
+| shot 3 to 4 | 5.80 | 2.44 | 1.41, 1.72, 1.56 |
+
+Both films have the same 488 frames, 20.33 s and sound. A dissolve trades the one-frame jump for four
+frames of slight softness, in which anything that moves shows a faint double outline; keep it short, and
+leave it out where the plain match already looks clean.
+
 ## 9. Publishing
 
 When the film shows takes, laid over beats or played by `video_clip` scenes from `takes/<shot>/<n>.mp4`

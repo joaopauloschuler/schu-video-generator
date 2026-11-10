@@ -22,7 +22,7 @@ only — audiobooks and podcasts (loudness targets, formats, pacing, voices) —
 [COOKBOOK-AUDIO.md](COOKBOOK-AUDIO.md); for dramatized audiobooks (voices in rooms, score, sound
 design, files per chapter), see [COOKBOOK-AUDIODRAMA.md](COOKBOOK-AUDIODRAMA.md); for shots made
 by video models (talking close-ups, acting, establishing shots; cost control, privacy, takes), see
-[COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md); for directing an AI agent through such a film, as copyable instructions for a person, see
+[COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md); for directing an AI agent through such a film, as copyable instructions for a person and, in its first section, what an AI does with short prompts, see
 [COOKBOOK-DIRECTING-YOUR-AI.md](COOKBOOK-DIRECTING-YOUR-AI.md); for simple 3D scenes (shapes, stand-ins,
 camera moves on words, guide passes), see [COOKBOOK-3D.md](COOKBOOK-3D.md).
 
@@ -574,8 +574,7 @@ pronunciation:
 
 - ElevenLabs reads its key from `ELEVENLABS_API_KEY` (OpenRouter TTS: `OPENROUTER_API_KEY`).
   Check keys for presence only; never print them.
-- Kokoro is an optional extra: `pip install "schu-video-generator[kokoro]"` (or `pip install
-  -e ".[kokoro]"` from a checkout). The first `vidgen tts` downloads the model. On Python 3.13 see
+- Kokoro comes with a plain install on Python 3.10-3.12. The first `vidgen tts` downloads the model. On Python 3.13 see
   the install note in `docs/CONFIG.md` ("Kokoro on this computer").
 - **TTS cache:** a beat is re-voiced only when its spoken text (pronunciation applied) or the voice
   settings change. Rewording one beat re-voices only that beat; changing a dictionary entry

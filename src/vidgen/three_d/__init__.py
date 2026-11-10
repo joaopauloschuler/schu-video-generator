@@ -7,6 +7,5 @@
 - :mod:`vidgen.three_d.passes` draws the guide passes (depth, outline, mask) of a scene beside
   its clip: the same description in another draw mode.
 
-Playwright is an optional extra (``schu-video-generator[3d]``); nothing here imports it until
-a 3D scene renders.
+Playwright comes with a plain install; nothing here imports it until a 3D scene renders.
 """

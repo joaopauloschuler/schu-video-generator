@@ -14,19 +14,34 @@ dependencies = [
     "pydantic>=2.7",
     "pyyaml",
     "av",
+    # PDF slide decks (vidgen slides --format pdf).
+    "fpdf2>=2.7.9",
+    # Local speech to text (vidgen readback).
+    "faster-whisper>=1.0",
+    # The MCP server for AI agents (vidgen mcp).
+    "mcp>=1.19",
+    # Kokoro narration on this computer. kokoro 0.9.4 (and misaki) declare Python < 3.13; on 3.13
+    # the marker leaves it out and `vidgen tts` explains (DESIGN.md §68).
+    "kokoro>=0.9.4; python_version < '3.13'",
+    # Kokoro's Mandarin voices (pure Python). Japanese (misaki[ja]) is left out: its pyopenjtalk
+    # has no wheels, so it would make every install need a C++ compiler (DESIGN.md §68).
+    "misaki[zh]>=0.9.4; python_version < '3.13'",
+    # composed music (Phase N): 0.6.0's SoundFont render is broken, so the pin is exact.
+    "symusic==0.5.9",
+    # 3D scenes (Phase AI): three.js in headless Chromium; vidgen's error message gives the
+    # command that downloads the browser (`python -m playwright install chromium`).
+    "playwright>=1.40",
 ]
 
 [project.optional-dependencies]
-pdf = ["fpdf2>=2.7.9"]
-stt = ["faster-whisper>=1.0"]
-mcp = ["mcp>=1.19"]
-# kokoro 0.9.4 (and misaki) declare Python < 3.13; on 3.13 the extra installs nothing and
-# `vidgen tts` explains (DESIGN.md §68).
-kokoro = ["kokoro>=0.9.4; python_version < '3.13'"]
-# composed music (Phase N): 0.6.0's SoundFont render is broken, so the pin is exact.
-music = ["symusic==0.5.9"]
-# 3D scenes (Phase AI): three.js in headless Chromium; then `python -m playwright install chromium`.
-3d = ["playwright>=1.40"]
+# Every package a user needs is in `dependencies`. These names stay, empty, so that older install
+# commands such as `pip install "schu-video-generator[3d]"` still work without a warning.
+pdf = []
+stt = []
+mcp = []
+kokoro = []
+music = []
+3d = []
 dev = ["pytest", "jsonschema>=4.18", "pytest-xdist", "fpdf2>=2.7.9", "pypdf>=4", "mcp>=1.19"]
 
 [project.scripts]

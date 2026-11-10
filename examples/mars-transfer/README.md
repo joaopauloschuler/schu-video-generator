@@ -9,7 +9,7 @@ by the scenes from their model, and the narration says the same numbers (`vidgen
 vidgen validate examples/mars-transfer           # the short (9:16) variant too
 vidgen lint examples/mars-transfer [--variant short]   # incl. the orbit_* and calc_* rules
 vidgen storyboard examples/mars-transfer --per-beat 2
-vidgen tts examples/mars-transfer                # Kokoro (the kokoro extra): local and free
+vidgen tts examples/mars-transfer                # Kokoro: local and free
 vidgen render examples/mars-transfer [--variant short]
 ```
 

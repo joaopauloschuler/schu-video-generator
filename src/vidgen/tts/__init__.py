@@ -2,7 +2,7 @@
 
 - :func:`get_provider` returns the provider for a ``voice`` config: ElevenLabs
   (:mod:`vidgen.tts.elevenlabs`, the default), OpenRouter (:mod:`vidgen.tts.openrouter`) or
-  Kokoro on this computer (:mod:`vidgen.tts.kokoro`, an optional extra); one provider per video
+  Kokoro on this computer (:mod:`vidgen.tts.kokoro`); one provider per video
   (DESIGN.md §66, §68).
 - :func:`audio_status` tells, without an API key, which beats have up-to-date, stale or missing
   audio; ``vidgen render`` uses it to warn and ``vidgen validate`` to summarise.

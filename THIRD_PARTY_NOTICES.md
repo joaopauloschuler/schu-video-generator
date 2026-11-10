@@ -98,8 +98,8 @@ their own licences. Notably:
   (e.g. libx264/libx265). Using schu-video-generator as installed is unaffected, but redistributing a frozen or
   bundled application (PyInstaller and the like) that includes these wheels inherits their
   GPL/LGPL obligations.
-- **fpdf2** (optional `pdf` extra, PDF slide decks) is under the **LGPL-3.0**.
-- **Kokoro** (optional `kokoro` extra, local narration): the `kokoro` and `misaki` packages by
+- **fpdf2** (PDF slide decks) is under the **LGPL-3.0**.
+- **Kokoro** (installed on Python 3.10-3.12, local narration): the `kokoro` and `misaki` packages by
   hexgrad are under the **Apache-2.0** licence; they pull in PyTorch (BSD-style), spaCy (MIT),
   phonemizer-fork (GPL-3.0) and `espeakng-loader`, whose wheels bundle the espeak-ng library and
   data (**GPL-3.0**). Using them as installed is unaffected; redistributing a bundled application
@@ -112,7 +112,7 @@ their own licences. Notably:
   conditions on the audio you generate with it. schu-video-generator's bundled list of its voice names and grades
   (`vidgen/data/kokoro/voices.json`) is facts read from the model's repository on the date it names.
 
-- **symusic** (optional `music` extra, composed music; https://github.com/Yikai-Liao/symusic),
+- **symusic** (composed music; https://github.com/Yikai-Liao/symusic),
   version 0.5.9: **MIT License**, © 2023 the symusic authors. Its SoundFont renderer is
   **Prestosynth** (https://github.com/lzqlzzq/prestosynth), compiled into symusic: **MIT
   License**, © 2024 the Prestosynth authors. symusic's wheels also bundle two command-line

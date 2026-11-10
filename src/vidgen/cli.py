@@ -360,6 +360,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.music import config_problems as music_problems
     from vidgen.videogen.shots import shot_problems
     from vidgen.overlays import overlay_problems
+    from vidgen.clip_join import match_previous_problems
     from vidgen.sfx import config_problems as sfx_problems
     from vidgen.soundfont import soundfont_problems
     from vidgen.thumbnail import thumbnail_problems
@@ -412,6 +413,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(Problem(loc, message) for loc, message in term_color_problems(project.config, theme))
             problems.extend(iris_problems(project.config))
             problems.extend(carry_problems(project.config))
+            problems.extend(match_previous_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in soundfont_problems(project.config.soundfont, project.root))
@@ -1598,7 +1600,7 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
         print(f"previews: {preview_dir} (one loop of each bed as WAV)")
     print()
     print(f"composed music (music: {{compose: {{mood: NAME, key, tempo, instruments, seed, bars}}}}; symusic: {synth.symusic_status()};")
-    print("without the music extra the bed named below plays; `vidgen music preview --mood NAME` writes a WAV and a .mid):")
+    print("without symusic the bed named below plays; `vidgen music preview --mood NAME` writes a WAV and a .mid):")
     for m in composer.mood_entries():
         print(f"{m['name']}  {m['family']}  {m['key']}, {m['tempo']:g} BPM, {m['meter']}, {m['bars']} bars ({m['loop_seconds']:.0f} s loop)  [bed: {m['fallback_bed']}]")
         print(f"    description: {m['description']}")
@@ -2396,7 +2398,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--list", action="store_true", help="list the topics")
     p.set_defaults(func=cmd_guide)
 
-    p = sub.add_parser("mcp", help="run the MCP server (stdio) that gives AI agents vidgen's commands as tools (needs schu-video-generator[mcp])")
+    p = sub.add_parser("mcp", help="run the MCP server (stdio) that gives AI agents vidgen's commands as tools")
     p.add_argument("--root", metavar="DIR", default=".", help="the only folder the tools may read and write (default: the current folder)")
     p.set_defaults(func=cmd_mcp)
 
@@ -2437,7 +2439,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "music",
-        help="music tools: preview writes a composed piece in a mood as WAV and .mid (needs the music extra); render plays a score file; "
+        help="music tools: preview writes a composed piece in a mood as WAV and .mid; render plays a score file; "
         "check says how a score or audio file will sit under narration; "
         "patches describes the score files' instruments and effects; template writes a built-in bed as a score file; page writes the Listen page",
     )
@@ -2701,7 +2703,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
     project_arg(p)
-    p.add_argument("--format", choices=["html", "pdf"], default="html", help="an HTML deck (default) or a PDF (needs schu-video-generator[pdf])")
+    p.add_argument("--format", choices=["html", "pdf"], default="html", help="an HTML deck (default) or a PDF")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (a language variant gives translated notes)")
     quality = p.add_mutually_exclusive_group()
     quality.add_argument("--preview", action="store_true", help="use the preview format (the default; fast)")

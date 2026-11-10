@@ -175,7 +175,7 @@ def test_missing_playwright_names_the_install_commands(monkeypatch: pytest.Monke
     with pytest.raises(VidgenError) as exc:
         browser.PageRenderer(describe(params())).__enter__()
     text = str(exc.value)
-    assert 'pip install "schu-video-generator[3d]"' in text and "python -m playwright install chromium" in text
+    assert "reinstall schu-video-generator" in text and "python -m playwright install chromium" in text
     assert "py -m playwright install chromium" in text   # Windows wording
 
 

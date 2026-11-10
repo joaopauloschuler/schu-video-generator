@@ -10,7 +10,7 @@ it). The craft: [the science-charts cookbook](../../docs/COOKBOOK-SCIENCE-CHARTS
 vidgen validate examples/radioactive-decay        # the short (9:16) variant too
 vidgen lint examples/radioactive-decay [--variant short]   # incl. the calc_* and plot_* rules
 vidgen storyboard examples/radioactive-decay --per-beat 2
-vidgen tts examples/radioactive-decay              # Kokoro (the kokoro extra): local and free
+vidgen tts examples/radioactive-decay              # Kokoro: local and free
 vidgen render examples/radioactive-decay [--variant short]
 python examples/radioactive-decay/make_data.py     # writes assets/*.csv again (the same numbers)
 ```

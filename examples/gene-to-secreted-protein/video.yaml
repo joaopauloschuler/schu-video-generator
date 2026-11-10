@@ -14,7 +14,7 @@
 #   vidgen validate examples/gene-to-secreted-protein          # checks the short variant too
 #   vidgen lint examples/gene-to-secreted-protein [--variant short]   # incl. the science_* rules
 #   vidgen storyboard examples/gene-to-secreted-protein --per-beat 2 [--variant short]
-#   vidgen tts examples/gene-to-secreted-protein               # Kokoro: local and free (the kokoro extra)
+#   vidgen tts examples/gene-to-secreted-protein               # Kokoro: local and free
 #   vidgen readback examples/gene-to-secreted-protein          # faster-whisper, local
 #   vidgen render examples/gene-to-secreted-protein [--preview] [--variant short]
 #

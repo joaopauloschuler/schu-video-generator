@@ -9,7 +9,7 @@ the way the [cell-biology cookbook](../../docs/COOKBOOK-CELL-BIOLOGY.md) recomme
 vidgen validate examples/gene-to-secreted-protein          # the short (9:16) variant too
 vidgen lint examples/gene-to-secreted-protein               # incl. the science_* rules
 vidgen storyboard examples/gene-to-secreted-protein --per-beat 2
-vidgen tts examples/gene-to-secreted-protein                # Kokoro (the kokoro extra): local and free
+vidgen tts examples/gene-to-secreted-protein                # Kokoro: local and free
 vidgen render examples/gene-to-secreted-protein [--variant short]
 ```
 

@@ -14,7 +14,7 @@
 #   vidgen validate examples/mars-transfer           # checks the short variant too
 #   vidgen lint examples/mars-transfer [--variant short]   # incl. the orbit_* and calc_* rules
 #   vidgen storyboard examples/mars-transfer --per-beat 2 [--variant short]
-#   vidgen tts examples/mars-transfer                # Kokoro: local and free (the kokoro extra)
+#   vidgen tts examples/mars-transfer                # Kokoro: local and free
 #   vidgen render examples/mars-transfer [--preview] [--variant short]
 #
 # Numbers (all computed by schu-video-generator from its model; DESIGN §98): orbit radii are JPL Table 1's

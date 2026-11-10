@@ -260,7 +260,7 @@ def test_faster_whisper_provider(fake_faster_whisper: type[FakeWhisper], tmp_pat
 
 def test_faster_whisper_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "faster_whisper", None)  # import raises ImportError
-    with pytest.raises(VidgenError, match=r'pip install "schu-video-generator\[stt\]"'):
+    with pytest.raises(VidgenError, match="reinstall schu-video-generator"):
         FasterWhisperProvider("small", "en").check_available()
 
 

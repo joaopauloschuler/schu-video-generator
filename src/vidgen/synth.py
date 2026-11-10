@@ -1,5 +1,4 @@
-"""Composed music played with real instruments (DESIGN.md §81, §82): symusic (optional extra
-``music``) renders a :class:`~vidgen.score.Score` with a SoundFont (:mod:`vidgen.soundfont`).
+"""Composed music played with real instruments (DESIGN.md §81, §82): symusic renders a :class:`~vidgen.score.Score` with a SoundFont (:mod:`vidgen.soundfont`).
 Nothing here imports symusic until it is needed.
 
 symusic 0.5.9 ignores MIDI volume, pan and reverb, stops at the last note's release and returns
@@ -24,14 +23,12 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from vidgen import DIST_NAME
-from vidgen.errors import VidgenError
+from vidgen.errors import incomplete_install, REINSTALL, VidgenError
 
 if TYPE_CHECKING:
     from vidgen.score import Score
 
-INSTALL_COMMAND = f'pip install "{DIST_NAME}[music]"'
-#: The symusic release the extra pins; 0.6.0's SoundFont render fails (TypeError in ``render``).
+#: The symusic release pyproject.toml pins; 0.6.0's SoundFont render fails (TypeError in ``render``).
 SYMUSIC_VERSION = "0.5.9"
 #: Bumped when the mixing below changes, so cached renders are made again.
 RENDERER_VERSION = 2
@@ -63,22 +60,22 @@ def symusic_status() -> str:
     """One line on symusic: installed and usable, another version, or how to install it."""
     version = symusic_version()
     if version is None:
-        return f"not installed: {INSTALL_COMMAND}"
+        return f"not installed: {REINSTALL}"
     if version != SYMUSIC_VERSION:
-        return f"{version} installed, but schu-video-generator needs {SYMUSIC_VERSION}: {INSTALL_COMMAND}"
+        return f"{version} installed, but schu-video-generator needs {SYMUSIC_VERSION}: {REINSTALL}"
     return version
 
 
 def require_symusic() -> Any:
-    """Import and return the ``symusic`` module; :class:`VidgenError` naming the extra when it is
+    """Import and return the ``symusic`` module; :class:`VidgenError` saying to reinstall when it is
     missing or another version than :data:`SYMUSIC_VERSION` is installed."""
     version = symusic_version()
     if version is None:
-        raise VidgenError(f"composed music needs the optional extra: {INSTALL_COMMAND} (symusic {SYMUSIC_VERSION}, ~3 MB)")
+        raise VidgenError(f"composed music needs symusic: {incomplete_install(f'symusic {SYMUSIC_VERSION}')}")
     if version != SYMUSIC_VERSION:
         raise VidgenError(
             f"composed music needs symusic {SYMUSIC_VERSION}, and {version} is installed "
-            f"(0.6.0 cannot render with a SoundFont): {INSTALL_COMMAND}"
+            f"(0.6.0 cannot render with a SoundFont): {REINSTALL}"
         )
     import symusic
 

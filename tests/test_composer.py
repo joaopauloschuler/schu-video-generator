@@ -254,9 +254,9 @@ def test_without_the_extra_the_moods_bed_plays(tmp_path: Path, monkeypatch: pyte
     timings = {"scenes": [{"id": "a", "start": 0.0, "duration": 4.0, "beats": []}]}
     with caplog.at_level(logging.WARNING, logger="vidgen.music"):
         placement = mix.plan_music(project, timings, 4 * RATE)[0]
-    assert "playing the built-in bed 'lullaby' instead" in caplog.text and "pip install" in caplog.text
+    assert "playing the built-in bed 'lullaby' instead" in caplog.text and "reinstall" in caplog.text
     assert placement.source.seamless and placement.source.data is beds["lullaby"]
-    assert placement.summary()["kind"] == "bed" and placement.summary()["source"] == "compose: sleepy (bed lullaby: no music extra)"
+    assert placement.summary()["kind"] == "bed" and placement.summary()["source"] == "compose: sleepy (bed lullaby: no symusic)"
     assert {m: MOODS[m].bed for m in MOODS} == {
         "calm": "calm", "focused": "pulse", "curious": "bright", "upbeat": "bright",
         "playful": "cartoon", "sleepy": "lullaby", "tense": "pulse", "triumphant": "bright",
@@ -270,10 +270,10 @@ def test_validate_says_what_plays_without_the_extra_or_the_soundfont(
     monkeypatch.setattr(synth, "symusic_version", lambda: None)
     config = _config([{"compose": {"mood": "sleepy"}, "to": "a"}, {"source": "calm", "from": "b"}])
     (warning,) = music.music_warnings(config)
-    assert "needs the music extra (symusic not installed: pip install" in warning and "compose: sleepy plays the bed 'lullaby'" in warning
+    assert "needs symusic (not installed: reinstall" in warning and "compose: sleepy plays the bed 'lullaby'" in warning
     summary = music.music_summary(config)
     assert summary[0] == {"source": "compose: sleepy", "kind": "composed", "plays": "bed lullaby", "fitted": False, "from": None, "to": "a", "scenes": {}}
-    assert music.music_summary_line(summary[0]) == "compose: sleepy -> bed lullaby (no music extra) (start to a)"
+    assert music.music_summary_line(summary[0]) == "compose: sleepy -> bed lullaby (no symusic) (start to a)"
     assert music.music_summary_line(summary[1]) == "calm (b to end)"
 
     monkeypatch.setattr(synth, "symusic_version", lambda: synth.SYMUSIC_VERSION)

@@ -1789,6 +1789,46 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 326 — A dissolve of a few frames where a clip continues the one before, on request
+- [x] `match_previous: {dissolve: N}` (0–12 frames of the render being made, default 0): the first N frames are blended with the previous clip's last shown frame, weights `(N − k) / (N + 1)`, after the gain (`clip_join.JoinTreatment`, DESIGN §117)
+- [x] `level: false`: the dissolve without the gain; an error without a dissolve or with `seconds` / `hold`
+- [x] `match_previous: true` unchanged (never blends)
+- [x] Skipped with the gain, in the same warning, when the frames are not a continuation; skipped when the two scenes do not show a picture of the same shape
+- [x] Measured on the four takes of "Get It All In" at 480x854: frame difference at the cuts 7.09 / 6.74 / 5.80 matched, 2.75 / 2.71 / 2.44 with `{dissolve: 3}` (1.76 / 1.65 / 1.41 before the encoder); frames, duration and sound identical
+- [x] CONFIG, cookbook (generated video §8), guide / AGENTS.md, CHANGELOG
+- [~] Tests added to `tests/test_clip_join.py`, **not run with pytest** (owner's rule); each new test body was run once by a plain script
+- [ ] Not tried: a final-size (1080x1920, 30 fps) render, `{dissolve: N, level: false}` and `hold` with a dissolve in a real render; nobody watched the previews
+
+### Step 325 — A clip that continues the one before matches its brightness and colour
+- [x] `video_clip` param `match_previous: true | {seconds: 1.0, hold: false}`: one gain per colour channel from the previous clip's last shown frame and this clip's first (64 x 64, decoded from the files), eased to 1 by smoothstep over `seconds`; `hold` keeps it and chains (`vidgen/clip_join.py`, DESIGN §117)
+- [x] `vidgen validate`: needs a `video_clip` directly before, a cut, `fade: false` and `region: bleed` on both
+- [x] Skipped with a warning when not a continuation (gain outside 0.8–1.25, difference over 4 %, too dark); held chains limited to 0.67–1.5
+- [x] Scene fingerprint carries the previous scene's fingerprint and its clip file's size and time
+- [x] `clips.FrameTreatment` hook on `ClipMobject` (for the next step's blend), `clips.clip_timing`, `clips.cover_crop`
+- [x] Measured on the four takes of "Get It All In" at 480x854: step at the cuts −7.4 … −7.8 % plain, within ±0.1 % matched
+- [x] CONFIG, cookbook (generated video §8), guide / AGENTS.md, CHANGELOG
+- [~] Tests `tests/test_clip_join.py` written, **not run with pytest** (owner's rule); each test body was run once by a plain script
+- [ ] Not tried: a final-size (1080x1920) render; nobody watched the previews
+
+### Step 324 — Three snags found by following the short prompts
+- [x] Card 12 (and the required details): pin the accepted painted picture by its file before moving stand-ins; never pay for it again
+- [x] "A complete shot": the stand-in stands on the pier (y=1.8); a stand-in's `position` is its centre
+- [x] Card 6: panels not evenly spaced take one `--box X,Y,W,H` each
+- [ ] For the owner: a dry run of `vidgen generate frames` re-cuts `layout.png` and can block a shot using `first_frame: painted` (reported in HANDOFF; code unchanged)
+- [ ] For the owner: `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` was off limits; its Cards 6 and 12 now differ from the cookbook
+
+### Step 323 — An AI given only short prompts finds and follows the long cards
+- [x] `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: section "For the AI: when the person gives short prompts": the 11 prompts mapped to the 18 cards with each stop, safety rules, Card 4's defaults, required details
+- [x] Pointers near the top of `README.md` and both `AGENTS.md` copies; the existing pointer in `docs/COOKBOOK.md` now mentions short prompts
+- [ ] For the owner: `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` was off limits in this step; the intro of the cookbook now says the video uses short prompts
+
+### Step 322 — A plain install brings every Python package
+- [x] `pdf`, `stt`, `mcp`, `kokoro`, `music`, `3d` packages moved to base `dependencies`; the six extras kept, empty; `dev` the only real extra
+- [x] Docs, guide, DESIGN §116, examples and error messages no longer tell a user to pip install a package; a missing package says to reinstall schu-video-generator; Chromium stays in vidgen's error message
+- [x] Card 1 of `docs/COOKBOOK-DIRECTING-YOUR-AI.md` replaced
+- [~] `misaki[zh]` added; `misaki[ja]` left out (pyopenjtalk has no wheels): owner to decide about Japanese Kokoro voices
+- [ ] For the owner: Card 1 in `/home/bpsa/app/video-projects/how-to-direct-your-ai/script.md` not updated (that folder was off limits in this step)
+
 ### Step 321 — The tutorial's cards fixed after a fresh agent followed them (voice, refs, shots, readable overlays, disclosure)
 - [x] Cards 1, 3, 4, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17 corrected, identical in `docs/COOKBOOK-DIRECTING-YOUR-AI.md` and the script (compared by program); "A complete shot" example in the cookbook; "the director"
 - [x] S1 readable overlays (1600 px, what moved or appeared outlined in magenta on `overlay.last.png`)

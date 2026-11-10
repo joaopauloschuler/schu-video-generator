@@ -36,7 +36,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices`, `sets` and `variants` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `sets` | `{}` | named `stage` sets (`name: {background, layers, props, marks, light, wind...}`) a stage scene uses with `set: NAME`; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
-| `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
+| `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; Python 3.10-3.12; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
 | `characters` | `[]` | cartoon characters `{name, voice, look, colors}`, declared once and used by any scene; see [characters](#characters-characters) |
 | `host` | none | a cartoon host beside the content of every scene (not `stage` or `card` scenes): a character name, or `{character, side, size, place, floor, floor_color, facing, speaks, pose, expression, auto_direct}`; see [a host beside any scene](#a-host-beside-any-scene-host) |
@@ -488,8 +488,7 @@ vidgen slides [PROJECT] --format pdf [--notes] [--title-page] [--paper a4|letter
 ```
 
 The same slides as a PDF, by default `exports/<output>[_<variant>][_preview]_slides.pdf`
-(`_notes.pdf` with `--notes`). Needs the optional extra **`pip install "schu-video-generator[pdf]"`**
-([fpdf2](https://py-pdf.github.io/fpdf2/), pure Python); without it the command says so.
+(`_notes.pdf` with `--notes`). Uses [fpdf2](https://py-pdf.github.io/fpdf2/), which comes with a plain install.
 
 - **Slides** (the default): one slide per page, the page in the video's aspect ratio (16:9:
   960 x 540 pt = 13.33 x 7.5 in, like a widescreen presentation; 9:16: 540 x 960 pt), the
@@ -1272,9 +1271,8 @@ account requiring ZDR. To check a model: look for its id among the `model_id`s o
 ### Kokoro on this computer (`provider: kokoro`)
 
 [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) is a small open-weight voice
-model that runs locally: free, no key, no account, offline after the first download. It is an
-optional extra (PyTorch is large), installed with `pip install ".[kokoro]"` from a checkout or
-`pip install "schu-video-generator[kokoro]"` (install steps for Windows and Linux in the README).
+model that runs locally: free, no key, no account, offline after the first download. It comes
+with a plain install on Python 3.10-3.12 (PyTorch is large: see the README).
 
 ```yaml
 voice:
@@ -1309,7 +1307,7 @@ grades from the model's [VOICES.md](https://huggingface.co/hexgrad/Kokoro-82M/bl
 | `z` | Mandarin Chinese | `zh` | `zf_xiaobei` | 7 more `zf_` / `zm_` |
 
 A video `language:` Kokoro does not speak (German, say) without `lang` / `voice` is a config error.
-`j` needs `pip install "misaki[ja]"`, `z` `pip install "misaki[zh]"` besides the extra. `e`, `f`,
+`j` (Japanese) is not brought by a plain install: its `pyopenjtalk` has no pre-built release and would make every install need a C++ compiler, so use another voice provider for Japanese. `e`, `f`,
 `h`, `i`, `p` are read through espeak-ng (and English uses it for words missing from its
 dictionary); misaki loads the espeak-ng library bundled in the `espeakng-loader` wheel (Windows,
 Linux, macOS), so no system package is needed normally.
@@ -1328,10 +1326,8 @@ phonemizer. Then, measured on a 2-core cloud CPU, a 12-word sentence (4.8 s of s
 and a 2-word line 1.1 s: about 0.7x real time, so a 5-minute narration takes ~4 minutes. A laptop
 CPU is usually faster, a GPU much faster.
 
-**Python.** The `kokoro` package (0.9.4) declares Python 3.10-3.12. On 3.13 the extra installs
-nothing and `vidgen tts` prints a command that installs it anyway (it worked on 3.13 here): `pip
-install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4" "spacy>=3.8,<4"
-"spacy-curated-transformers<0.4"`.
+**Python.** The `kokoro` package (0.9.4) declares Python 3.10-3.12. On 3.13 it is not installed,
+and `vidgen tts` says to use a Python 3.12 virtual environment.
 
 **Word timings.** For English (`lang` a / b) Kokoro says when each word is spoken: schu-video-generator stores
 them as `audio/<beat_id>.align.json` for every beat (free, so `timestamps` is not needed) and
@@ -2432,7 +2428,7 @@ stt:
 
 | key | default | |
 |---|---|---|
-| `provider` | `faster_whisper` | `faster_whisper`: OpenAI's Whisper run locally (CTranslate2), free, no key; needs the optional extra `pip install "schu-video-generator[stt]"`, and downloads the model from the Hugging Face Hub on first use. `elevenlabs`: ElevenLabs Speech to Text, billed per audio hour, the same `ELEVENLABS_API_KEY` as `vidgen tts` |
+| `provider` | `faster_whisper` | `faster_whisper`: OpenAI's Whisper run locally (CTranslate2), free, no key; comes with a plain install, and downloads the model from the Hugging Face Hub on first use. `elevenlabs`: ElevenLabs Speech to Text, billed per audio hour, the same `ELEVENLABS_API_KEY` as `vidgen tts` |
 | `model` | none (the provider's default) | a Whisper size (`tiny`, `base`, `small`, `medium`, `large-v3`, `turbo`; `.en` sizes for English only; bigger = more accurate, slower) or a folder holding a converted model; ElevenLabs: `scribe_v1`. Default `small.en` for English, `small` otherwise; `scribe_v1` |
 | `language` | none (the video's) | the language of the audio (BCP-47, its language subtag is sent: `pt-BR` → `pt`), or `auto` (detected); default the video's [language](#languages-and-translations), English without one |
 | `device` | `auto` | `faster_whisper` only: `cpu`, `cuda` (an NVIDIA GPU), or `auto` (a GPU if there is one) |
@@ -3667,13 +3663,13 @@ way). Between two cues the first fades out at the end of its last scene and the 
 
 Music written as notes for the video and played with real instruments (a SoundFont), in a mood:
 an original piece every time (never a known tune), the same piece for the same settings. It
-needs the optional extra (`pip install "schu-video-generator[music]"`) and a
-[SoundFont](#soundfont-soundfont-vidgen-soundfont); without the extra, `vidgen validate` and
+needs symusic (it comes with a plain install) and a
+[SoundFont](#soundfont-soundfont-vidgen-soundfont); without symusic, `vidgen validate` and
 `vidgen render` warn and the built-in bed named for the mood below plays (scenes' compose settings
 are then ignored), so a project still renders. `vidgen validate` also warns while the default
 SoundFont is not downloaded yet (the first render downloads it) and prints a `music:` line per cue
 (`compose: playful, composed for the video; scenes storm: mood`, or `compose: playful -> bed
-cartoon (no music extra)`).
+cartoon (no symusic)`).
 
 ```yaml
 music: {compose: playful}              # a mood with its defaults
@@ -3800,7 +3796,7 @@ composes the project's first `compose:` cue (the options change it; another `--m
 that mood's defaults), or `--mood M` outside a project, renders it with the project's SoundFont and
 writes `DIR/<mood>-seed<S>.wav` (one pass plus the 3 s reverb tail, at −28 LUFS) and `.mid`
 (type 1, a track per part, section markers). It prints the key, tempo, parts, the chords of each
-phrase and the measured loudness and true peak. Needs the `music` extra. `--json`: see
+phrase and the measured loudness and true peak. `--json`: see
 [below](#vidgen-music---json); MCP tool `music_preview` (its `out` defaults to `build/mcp/music`
 under the server's root).
 
@@ -3815,7 +3811,7 @@ brightest) and a spectrogram PNG of the clip (32 px per second, 120 px high, 40 
 scale); a "made with the score format" section with links to the score-file docs and a row for
 each author-made piece that became a bed (`time_of_flight`: how it was made, the example with its
 log, a link to the bed's clip — no second copy); six clips that together play all the built-in
-sound effects (96 kbps mono) and one of the six ambience beds in turn; and, when the `music` extra
+sound effects (96 kbps mono) and one of the six ambience beds in turn; and, when symusic
 and the SoundFont are there (the page never downloads it), the first 15 s of the `curious` and
 `playful` moods. Every clip is made by schu-video-generator itself, so the page can be made again: the same
 schu-video-generator, FFmpeg (with libmp3lame), Pillow and symusic give byte-identical files. Takes about two
@@ -4287,14 +4283,13 @@ program, range, what it sounds like). JSON: see [below](#vidgen-list-music---jso
 ### SoundFont (`soundfont`, `vidgen soundfont`)
 
 Composed music (music written as notes and played with real instruments,
-[`compose:`](#composed-music-compose)) needs the optional extra and a SoundFont, a bank of
+[`compose:`](#composed-music-compose)) needs symusic and a SoundFont, a bank of
 recorded instruments:
 
-- **The extra**: `pip install "schu-video-generator[music]"` installs symusic 0.5.9 (MIT, ~3 MB
-  of wheels for Windows, macOS and Linux; the exact version because 0.6.0 cannot render with a
-  SoundFont). Without it, `vidgen validate` and `vidgen render` warn (naming this command) and
-  each `compose:` cue plays its mood's built-in bed instead; `vidgen music preview` stops with an
-  error naming it.
+- **symusic** 0.5.9 comes with a plain install (MIT, ~3 MB of wheels for Windows, macOS and
+  Linux; the exact version because 0.6.0 cannot render with a SoundFont). If it is missing,
+  `vidgen validate` and `vidgen render` warn and each `compose:` cue plays its mood's built-in
+  bed instead; `vidgen music preview` stops with an error saying to reinstall.
 - **The SoundFont**: by default **GeneralUser GS 2.0.3** (32.3 MB, General MIDI instruments and
   drum kits). schu-video-generator does not ship it: the first composed render (or `vidgen soundfont fetch`)
   downloads it from
@@ -6126,12 +6121,54 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 | `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration (linear; 1 = as recorded, a mono recording at that level on both channels) |
 | `mute` | bool | `false` | leave the clip's sound out |
 | `fade` | bool | `true` | `false`: a hard cut, for generated takes that join with a plain cut: the clip is on screen from the first frame (no fade in, title and caption still enter) and the scene has no 0.5 s fade-out; use with `transition: cut`, the default |
+| `match_previous` | bool \| `{seconds, hold, dissolve, level}` | `false` | this clip continues the clip of the scene before (a take generated from its last frame): its first frame gets that frame's brightness and colour, one gain per colour channel, and the correction eases away over `seconds` (default `1.0`); `hold: true` keeps it for the whole clip. `dissolve: N` (0–12 frames, default `0`: none) also blends the first N frames with that last frame; `level: false` leaves brightness and colour alone. See below |
 | `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` ([`screenshot`](#screenshot); kinds `box`, `circle`, `arrow`, `spotlight`) |
 | `frame`, `url` | `none` \| `browser` \| `window` \| `phone`, str | `none`, `""` | a frame drawn around the clip (not with `bleed`); `url` for `browser` |
 | `units` | `fraction` \| `px` | `fraction` | how callout areas are written (of the whole picture) |
 | `color`, `label_size` | color, size | `highlight`, `caption` | callout colour and label size |
 | `previous` | `fade` \| `dim` \| `keep` | `fade` | what happens to a step's callouts when the next starts |
 | `focus_scale` | number (1–4) | `2.0` | largest magnification of `focus: true` |
+
+**`match_previous`** removes the small flash at a cut between two generated takes, where the
+second was made from the last frame of the first and the video model drew it about 8 % darker.
+It needs the scene directly before to be a `video_clip`, a cut between them (no `transition`),
+and `fade: false` with `region: bleed` on both; `vidgen validate` rejects it anywhere else.
+
+```yaml
+- {id: film_shot2, type: video_clip, duration: 5.088,
+   params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false, match_previous: true}}
+```
+
+vidgen measures one gain per colour channel from the previous clip's last shown frame and this
+clip's first, applies it at the cut and eases it to 1 over `seconds`: from then on the clip
+shows its own pixels. Nothing is blended and no duration or sound changes. `{hold: true}` keeps
+the full gain to the end of the clip, and the next clip then matches this clip's corrected last
+frame, so the gains add up along a chain (three takes each 8 % darker end 26 % brighter than
+their files): use it for two or three takes, not for a long film. The correction is skipped,
+with a warning that gives the numbers, when the two frames are not a continuation: a channel
+gain outside 0.8–1.25, pictures that still differ by more than 4 % of full scale after the
+gain, or a frame too dark to measure. A held chain's gain stops at 0.67–1.5.
+
+**`dissolve`** is for what the gain leaves: the video model also draws fine texture a little
+differently and shifts the picture by a pixel or two, which shows as a small jump. It is off
+unless you ask for it; `match_previous: true` never blends.
+
+```yaml
+- {id: film_shot2, type: video_clip, duration: 5.088,
+   params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false, match_previous: {dissolve: 3}}}
+```
+
+The clip's first N frames are mixed with the previous clip's last frame, held still: with
+`dissolve: 3` they show 75 %, 50 % and 25 % of it (in general `(N − k) / (N + 1)` for frame
+*k*, counted from 0), and from frame N on the clip is not blended. No frame is added or removed
+and durations and sound stay as they are. N is a whole number from 0 to 12 and counts frames of
+the render being made: 3 frames are 0.125 s in a 24 fps preview and 0.1 s in a 30 fps final
+render. The gain still applies (with `seconds` and `hold` as above) and is applied first, so the
+two pictures mixed are at the same level; `{dissolve: 3, level: false}` blends without
+correcting brightness and colour (`level: false` cannot be combined with `seconds` or `hold`).
+A pair of frames that is not a continuation gets neither, in one warning. Both scenes must show
+the same part of the frame (two `fit: cover` scenes do); if not, the treatment is skipped with
+a warning.
 
 ```yaml
 - id: clip
@@ -6165,9 +6202,8 @@ through every beat; the camera stands still or moves on beats and words with the
 [camera actions](#3d-camera-actions); beat 1 fades the `title` in (on a plate at the top); the
 scene fades out at the end. Overlays and captions are drawn over the 3D picture as over any scene.
 
-**Needs the `3d` extra**: `pip install "schu-video-generator[3d]"`, then
-`python -m playwright install chromium` (Windows: `py -m pip install "schu-video-generator[3d]"`,
-then `py -m playwright install chromium`). Without them, rendering a `3d` scene stops with that
+**Needs Chromium**: a plain install brings Playwright; the browser is a separate download, once:
+`python -m playwright install chromium` (Windows: `py -m playwright install chromium`). Without it, rendering a `3d` scene stops with that
 hint, and `vidgen validate` warns about it in a project that has a `3d` scene (a quick look for
 Playwright and its Chromium folder; no browser is started); every other scene type works without
 them. Nothing is fetched from the network while rendering: three.js (0.186.1) and the labels' font
@@ -15736,8 +15772,8 @@ Then refine the draft like any project: read the comments, rewrite the narration
 
 `vidgen mcp [--root DIR]` (also the `vidgen-mcp` script) runs a [Model Context
 Protocol](https://modelcontextprotocol.io) server on stdin / stdout, so an AI agent's client
-(Claude Desktop, Claude Code, ...) can call vidgen's commands as **tools**. It needs the optional
-extra: `pip install "schu-video-generator[mcp]"` (the official MCP Python SDK, 1.19 or newer).
+(Claude Desktop, Claude Code, ...) can call vidgen's commands as **tools**. It uses the official
+MCP Python SDK (1.19 or newer), which comes with a plain install.
 The server calls itself `schu-video-generator`; configuration snippets (server key
 `schu-video-generator`, command `vidgen`): README "Use from an AI agent via MCP".
 
@@ -15877,7 +15913,7 @@ and the other variants are still checked (the human output does the same since S
 | `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
 | `images` | list | the [generated pictures](#generated-images-imagegen-vidgen-imagegen) of the base config, plus each variant whose pictures differ (none without `generate:` params): `{variant, generated, missing, pictures}`, `pictures` listing each distinct request once as `{key, scenes, path, exists, prompt}` |
 | `pronunciation_defaults` | object \| null | beat id → the [built-in pronunciation](#built-in-pronunciation-lists) entries that change its spoken text (only such beats; `{}` when none) |
-| `music` | list | the base config's music cues: `{source, kind, plays, fitted, from, to, scenes}` — `source` the bed, project piece, file or `compose: <mood>`; `kind` `bed`, `score` (a project piece), `file` or `composed`; `plays` what will play (`composed`, `score`, `file`, or `bed <name>`: a bed, or a composed cue's bed without the `music` extra); `fitted` composed for the video's timings; `scenes` scene id → the compose settings it changes (`["mood"]`...) |
+| `music` | list | the base config's music cues: `{source, kind, plays, fitted, from, to, scenes}` — `source` the bed, project piece, file or `compose: <mood>`; `kind` `bed`, `score` (a project piece), `file` or `composed`; `plays` what will play (`composed`, `score`, `file`, or `bed <name>`: a bed, or a composed cue's bed without symusic); `fitted` composed for the video's timings; `scenes` scene id → the compose settings it changes (`["mood"]`...) |
 
 `warnings` include the theme contrast warnings (`theme contrast: ...`, prefixed `[variant] `
 for a variant's own; they do not make `ok` false). When there are problems, `error` is
@@ -16061,7 +16097,7 @@ difference between two palette colours).
 | `clips`, `spectrograms` | list | the MP3s and PNGs written (`media/`) |
 | `bytes` | int | the page and its media together |
 | `composed` | bool | whether the composed moods' clips were made |
-| `composed_note` | str \| null | why not (no `music` extra, no SoundFont, `--no-composed`) |
+| `composed_note` | str \| null | why not (no symusic, no SoundFont, `--no-composed`) |
 
 ### `vidgen schema --json`
 

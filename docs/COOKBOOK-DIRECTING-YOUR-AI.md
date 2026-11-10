@@ -1,9 +1,11 @@
 # Cookbook: directing your AI to make a film
 
-schu-video-generator is used by AI agents, not typed by hand. This cookbook holds the instructions
-from the tutorial video "How to direct your AI to make a film", in the order the video gives them,
-as text you can copy without pausing. Each card is exactly what the video shows, word for word:
-paste it to your AI. You never type a command yourself; the "AI does" lines tell you what to expect.
+schu-video-generator is used by AI agents, not typed by hand. This cookbook holds the full
+instructions behind the tutorial video "How to direct your AI to make a film", in the order the video
+gives them, as text you can copy without pausing. The video says short prompts; each card here is the
+long form. Paste a card to your AI, or say a short prompt and your AI follows the matching cards
+([table below](#for-the-ai-when-the-person-gives-short-prompts)). You never type a command yourself;
+the "AI does" lines tell you what to expect.
 
 The example is "Get It All In": a 20-second portrait film (`bytedance/seedance-2.0-mini` through
 OpenRouter, 480p, `sound: model`). Measured figures are in [What it cost](#what-it-cost-and-what-is-measured);
@@ -19,15 +21,54 @@ Replace `[...]` with your own details; `shot1`, `take N` are examples.
 
 **Disclosure.** All the footage is AI-generated. Disclose it when you publish, and do not use the faces or voices of real people.
 
+## For the AI: when the person gives short prompts
+
+This section is written for you, the AI agent. The person may direct the film with the short prompts below instead of pasting the cards. Each short prompt means: carry out its cards in full, in order, with every detail the card states, and stop where the table says. A short prompt is not a lighter version of the cards. Before acting, read each card, its "AI does" and "You check" lines, and [A complete shot](#a-complete-shot) for the YAML. Match the person's words by meaning, not letter by letter. "Read its cookbooks" means this file and [COOKBOOK-GENERATED-VIDEO.md](COOKBOOK-GENERATED-VIDEO.md); read the other cookbooks only when a topic needs them.
+
+**Always on, from the first prompt, without being asked:** Card 5 (standing rules) and Card 11 (the ledger check after every paid shot).
+
+**Safety rules. They hold whatever the person's prompt leaves out.**
+
+- Every command with `--pay` needs the person's go for that one shot, given after you have shown the price or the plan. A go for one shot does not cover the next one. Prompt 9 ("Same for the other shots") is not a go for those shots. The one case that covers several pictures is Card 7's sheets, whose go is for the set you priced.
+- Never read, print or write the API key, and never ask for it in the chat. The only check allowed is the yes-or-no test of Card 3.
+- No real people's faces or voices, in references, voices or prompts, and nothing private (Card 2's website steps, Card 7). If a picture the person gives you seems to show a real person, stop and say so.
+
+| # | Short prompt | Cards | Where you stop and wait |
+|---|---|---|---|
+| 1 | Install schu-video-generator from https://github.com/joaopauloschuler/schu-video-generator and read its cookbooks. Tell me when it works. | 1, 2 | After reporting that `frames` is listed, the `host test OK` line and your one sentence on what the tunnel shares and for how long. If either check fails, stop and say so. |
+| 2 | Help me set my OpenRouter key without ever showing it to you. | 3, then 4 | First pass on the website steps listed under Card 2 (only the person can do them: a key with a spending limit, "ZDR endpoints only" off for that key, the privacy section) and say how to set the variable, then wait until the person says it is set. Then run the yes-or-no test. On yes, do Card 4 in a new folder outside the clone; report the two rules and the values you used. Stop. |
+| 3 | Here is my style sheet. Cut it into reference pictures. | 6; with no style sheet, 7 | Card 6: after showing the panels. Card 7: after the price (no `--pay`), then after showing the pictures; `approved: true` only on those the person accepts. |
+| 4 | Write a 20-second story: one place, two characters, four shots. Show me the table and wait. | 8 | After the table of shots, until the person's go. The two characters and the place are those of the reference pictures. |
+| 5 | Build the film as crude 3D and show me each shot. | 9 | After showing each scene as its own video, `build/preview/scenes/<shot>.mp4`. Nothing is paid here. |
+| 6 | Paint the starting picture of shot 1. Show me the price first. | 10 | After the layout and the price (no `--pay`). After the go and the one paid picture, stop again and show it. Ask before any repaint. |
+| 7 | Make shot 1. Show me the plan and wait for my go. | 12, 13; 15 if something appears later than the shot's first frame | After the overlays and the plan, until the go for shot 1. After `vidgen generate run --pay --shot shot1`, stop again: show the clip, its contact sheet, its opening match and the Card 11 ledger check. |
+| 8 | I approve take 2. Make shot 2, starting from the last frame of shot 1. | 14, 15 | After the overlays of shot 2, until the go. Then Card 13's loop for shot 2: stop at the plan until the go for that shot, pay, show, stop. "Take 2" is whichever take the person names. |
+| 9 | Same for the other shots, one at a time. | 14, 15, for each following shot | As in prompt 8, for each shot. Begin a shot only after the person has approved a take of the previous one; if they did not say which take, ask. |
+| 10 | Join the takes, add music that suits the story, and show me a preview. | 16, 17 | After showing the preview with music, the frames around each cut, and the bed you chose and why. No final render until the person approves. Before Card 16, pick the approved take of the last shot too (`vidgen generate pick`): Card 14 only picks a take when the next shot begins. If the person did not say which take, ask. |
+| 11 | Write the description, say it is AI-generated, and make the final render. | 18 | After giving the path of the final file; remind the person to tick the platform's AI label. This prompt is the approval of the preview; if no preview has been shown, show one and stop. |
+
+**Card 4's values are the defaults.** Where the person's prompts do not say otherwise, use what Card 4 fixes: portrait 1080x1920 at 30 fps, preview 480x854 at 24 fps, `provider: openrouter`, `budget_usd: 3`, `host: quick_tunnel`, `sound: model`, the model `bytedance/seedance-2.0-mini` at 480p. Tell the person these values when you report Card 4, so that they can change them.
+
+**Values the cards leave open.** `[file name]` and `[number]` of Card 6, and which take to approve, come from the person: ask if you cannot find them. If prompt 4 arrives and no reference pictures exist, ask whether the person has a style sheet (Card 6) or not (Card 7), because Card 10 needs them. If setting the key means restarting you (Card 3), tell the person to resume this same conversation; a new conversation must read this section again.
+
+**These details are required, not optional.** A short prompt never names them. Leaving out the first two silently drops the voice or the labels.
+
+- `audio: beat` on every shot with speech ([Card 9](#4-a-3d-model-for-every-shot); shape in [A complete shot](#a-complete-shot); Card 13's plan must show the `audio:` line). Without it the beat's voice is not sent: the model invents the speaker's voice, and `vidgen generate plan` only prints a note.
+- `shows:` labels on every reference picture, `refs: [{file, shows}]` ([Card 10](#5-the-starting-picture) for shot 1, on `paint_first_frame` and on `generated_shot`; [Card 14](#8-one-shot-leads-to-the-next) for the next shots). Without them the picture is still sent but the prompt cannot say who or what it shows.
+- `audio: none` and `line: false` on a shot with no speech (Card 9). Without `line: false` the placeholder text goes into the prompt.
+- `guide: depth` and `first_frame_in: guide` on a shot that has reference pictures (Cards 12 and 14): this model takes a first frame or references, never both (Card 11 tells what happened when both were sent; vidgen now blocks such a shot).
+- `output:` in `film.yaml` (Card 16), so that the film does not overwrite the 3D preview.
+- `first_frame: assets/frames/<its file>` as soon as the person accepts a painted picture, before any stand-in moves ([Card 12](#7-the-picture-inside-the-guide)). With `first_frame: painted`, vidgen finds the picture by a key made from the current layout; moved stand-ins and the next `vidgen generate frames`, even a dry run, make a new layout. The shot is then blocked as "not painted yet" and another $0.04 is quoted for a picture you already have. Never pay for it again; pin the file.
+
 ## 1. Get set up
 
 **Card 1**
 
 ```text
-Install schu-video-generator from https://github.com/joaopauloschuler/schu-video-generator . Clone the repository so that its docs folder is on this computer, and install it in a Python 3.10, 3.11 or 3.12 virtual environment (the kokoro extra does not install on 3.13) with the extras 3d, kokoro and music. Install the Chromium browser that its 3D scenes need. Then check that vidgen generate --help lists the action frames, and tell me. If it does not, stop and tell me.
+Install schu-video-generator from https://github.com/joaopauloschuler/schu-video-generator . Clone the repository so that its docs folder is on this computer, and install it with pip in a Python 3.12 virtual environment. Then check that vidgen generate --help lists the action frames, and tell me. If it does not, stop and tell me.
 ```
 
-AI does: clones the repository, installs it with its extras on Python 3.10-3.12 (`pyproject.toml` limits the `kokoro` extra to Python below 3.13), installs Chromium, runs `vidgen generate --help`.
+AI does: clones the repository, installs it with pip on Python 3.12 (a plain install brings every Python package; Kokoro has no Python 3.13 release), runs `vidgen generate --help`. If a 3D scene later needs the Chromium browser, vidgen's error message gives the AI the command.
 You check: the AI says `frames` is listed.
 
 **Card 2**
@@ -83,7 +124,7 @@ If you have a style sheet picture (your characters and place side by side, made 
 **Card 6**
 
 ```text
-Here is my style sheet picture: [file name]. It has [number] panels side by side. Measure the gap between the panels in pixels, then cut the picture into one reference picture per panel with vidgen split-sheet, at scale 3, into assets/refs, and name each panel for what it shows, for example woman_full, woman_face, harbour. Show me the panels.
+Here is my style sheet picture: [file name]. It has [number] panels side by side. Measure the gap between the panels in pixels, then cut the picture into one reference picture per panel with vidgen split-sheet, at scale 3, into assets/refs, and name each panel for what it shows, for example woman_full, woman_face, harbour. If the panels are not evenly spaced, do not use columns and gap: measure each panel and give it its own --box X,Y,W,H in pixels, in reading order. Show me the panels.
 ```
 
 If you do not have one (the film did not use this route, so check the price and the result):
@@ -94,7 +135,7 @@ If you do not have one (the film did not use this route, so check the price and 
 I have no style sheet. In video.yaml set imagegen to provider openrouter with the model bytedance-seed/seedream-4.5. For my two made-up stylised characters, write a reference_sheet prompt each, and write a style_sheet with one frame of the place. Do not base them on real people. Run vidgen generate sheets without --pay and tell me the price, then stop. After my go, pay, show me each picture, and set approved: true only on the ones I accept.
 ```
 
-AI does: measures the gap between panels and runs `vidgen split-sheet` with `--columns`, `--gap`, `--names`, `--scale 3`, `--out assets/refs`, or sets `imagegen: {provider: openrouter, model: bytedance-seed/seedream-4.5}` (the default, `openai gpt-image-1`, needs a different key), writes the sheet entries and runs `vidgen generate sheets`.
+AI does: measures the gap between panels and runs `vidgen split-sheet` with `--columns`, `--gap`, `--names`, `--scale 3`, `--out assets/refs` (panels not evenly spaced: one `--box X,Y,W,H` per panel instead of `--columns` and `--gap`, which would refuse the sheet or cut it in the wrong places), or sets `imagegen: {provider: openrouter, model: bytedance-seed/seedream-4.5}` (the default, `openai gpt-image-1`, needs a different key), writes the sheet entries and runs `vidgen generate sheets`.
 You check: clean panels, nothing cut off, useful names.
 
 **Card 8**
@@ -145,11 +186,11 @@ Why: with `bytedance/seedance-2.0-mini`, a first frame together with references 
 **Card 12**
 
 ```text
-On shot 1 only, set guide: depth and first_frame_in: guide, so that the starting picture goes inside the guide video and no first frame is sent, and keep its refs so that the reference pictures go with the clip. Run vidgen generate inputs --guide --shot shot1 and show me build/videogen/shot1/overlay.png and overlay.last.png. Move the 3D stand-ins until they sit on what the picture shows, then show me again. All of this is free.
+On shot 1 only, set guide: depth and first_frame_in: guide, so that the starting picture goes inside the guide video and no first frame is sent, and keep its refs so that the reference pictures go with the clip. Before moving anything, pin the picture I accepted: replace first_frame: painted with first_frame: assets/frames/<the file vidgen generate frames named>, because moving the stand-ins changes the layout and painted would then look for a new picture. Never pay to paint that picture again. Run vidgen generate inputs --guide --shot shot1 and show me build/videogen/shot1/overlay.png and overlay.last.png. Move the 3D stand-ins until they sit on what the picture shows, cut the inputs again with the same command, then show me again. All of this is free.
 ```
 
-AI does: `guide: depth` and `first_frame_in: guide` on shot 1 only (the next shots get theirs in Card 14, when each has a starting picture), keeping its `refs`, `vidgen generate inputs --guide --shot shot1` (writes `guide.depth.opening.mp4`, `overlay.png`, `overlay.last.png`), moves the stand-ins.
-You check: in `overlay.png` the 3D figures sit on the picture. Free.
+AI does: `guide: depth` and `first_frame_in: guide` on shot 1 only (the next shots get theirs in Card 14, when each has a starting picture), keeping its `refs`, `first_frame: assets/frames/shot1_<key>.png` (`paint_first_frame` can stay; do not run `vidgen generate frames` for this shot again unless you ask for a repaint: it would quote a new picture), `vidgen generate inputs --guide --shot shot1` (writes `guide.depth.opening.mp4`, `overlay.png`, `overlay.last.png`), moves the stand-ins, cuts the inputs again.
+You check: `first_frame` names the file in `assets/frames`; in `overlay.png` the 3D figures sit on the picture. Free.
 
 **Card 13**
 
@@ -217,7 +258,7 @@ You check: tick the platform's AI label when you upload: "Altered or synthetic c
 
 ## A complete shot
 
-What Card 9 and the later cards build, in one place. The beat's `id` is the shot's id (a beat without `id` gets `<scene>_b1`), so `--shot shot1` selects it. `sound: model` can stay on `videogen` (Card 4) instead of each shot; `place: false` keeps the take out of vidgen's own video (`film.yaml` of Card 16 plays it).
+What Card 9 and the later cards build, in one place. The beat's `id` is the shot's id (a beat without `id` gets `<scene>_b1`), so `--shot shot1` selects it. `sound: model` can stay on `videogen` (Card 4) instead of each shot; `place: false` keeps the take out of vidgen's own video (`film.yaml` of Card 16 plays it). A stand-in's `position` is its centre, so one 1.6 tall on a pier whose top is at y=1 has y=1.8.
 
 ```yaml
 scenes:
@@ -228,7 +269,7 @@ scenes:
       floor: {size: 40, color: "#20303a"}
       objects:   # write the same objects (and camera) into every scene: there is no shared world
         - {id: pier, shape: box, size: [3, 1, 34], position: [0, 0.5, -13], color: "#9aa0a6"}
-        - {id: woman, shape: standin, color: "#e3b13a", position: [-0.8, 1.0, 0.2]}
+        - {id: woman, shape: standin, color: "#e3b13a", position: [-0.8, 1.8, 0.2]}
     beats:
       - id: shot1   # the beat's id: `vidgen generate plan --shot shot1`, `run --pay --shot shot1`
         voice: woman
@@ -243,7 +284,7 @@ scenes:
           prompt: "She poses on the pier and calls to the man behind the camera."
           place: false
           guide: depth   # with a starting picture and first_frame_in: guide, the depth pass opens on it
-          first_frame: painted   # shot 1; later shots: last_of:shot1
+          first_frame: painted   # shot 1, until the picture is accepted, then its file: assets/frames/shot1_<key>.png (Card 12); later shots: last_of:shot1
           first_frame_in: guide
           paint_first_frame:
             prompt: "A woman in a yellow jacket stands on the left of a concrete pier."

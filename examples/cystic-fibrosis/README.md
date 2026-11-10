@@ -11,7 +11,7 @@ every number on screen is computed by the scenes, and the narration says the sam
 vidgen validate examples/cystic-fibrosis          # the short (9:16) variant too
 vidgen lint examples/cystic-fibrosis               # incl. the science_* and genetics_* rules
 vidgen storyboard examples/cystic-fibrosis --per-beat 2
-vidgen tts examples/cystic-fibrosis                # Kokoro (the kokoro extra): local and free
+vidgen tts examples/cystic-fibrosis                # Kokoro: local and free
 vidgen render examples/cystic-fibrosis [--variant short]
 ```
 

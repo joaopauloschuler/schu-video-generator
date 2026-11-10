@@ -11,7 +11,7 @@
 #   vidgen validate examples/gradient-descent [--variant short]
 #   vidgen lint examples/gradient-descent [--variant short]       # incl. said_before_shown
 #   vidgen storyboard examples/gradient-descent --per-beat 3 [--variant short]
-#   vidgen tts examples/gradient-descent                          # Kokoro: local and free (the kokoro extra)
+#   vidgen tts examples/gradient-descent                          # Kokoro: local and free
 #   vidgen readback examples/gradient-descent                     # what the voice said (faster-whisper, local)
 #   vidgen render examples/gradient-descent [--preview] [--variant short]
 #

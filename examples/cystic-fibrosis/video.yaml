@@ -17,7 +17,7 @@
 #   vidgen validate examples/cystic-fibrosis          # checks the short variant too
 #   vidgen lint examples/cystic-fibrosis [--variant short]   # incl. the science_* and genetics_* rules
 #   vidgen storyboard examples/cystic-fibrosis --per-beat 2 [--variant short]
-#   vidgen tts examples/cystic-fibrosis               # Kokoro: local and free (the kokoro extra)
+#   vidgen tts examples/cystic-fibrosis               # Kokoro: local and free
 #   vidgen render examples/cystic-fibrosis [--preview] [--variant short]
 #
 # Facts (textbook consensus: Strachan & Read, Human Molecular Genetics; Thompson & Thompson,

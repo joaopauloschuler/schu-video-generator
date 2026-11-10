@@ -47,14 +47,14 @@ def fake_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_missing_extra_names_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(synth, "symusic_version", lambda: None)
-    with pytest.raises(VidgenError, match=r'pip install "schu-video-generator\[music\]"'):
+    with pytest.raises(VidgenError, match="reinstall schu-video-generator"):
         synth.require_symusic()
-    assert synth.symusic_status() == f"not installed: {synth.INSTALL_COMMAND}"
+    assert synth.symusic_status() == f"not installed: {synth.REINSTALL}"
 
 
 def test_another_symusic_version_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(synth, "symusic_version", lambda: "0.6.0")
-    with pytest.raises(VidgenError, match=r"needs symusic 0\.5\.9, and 0\.6\.0 is installed.*\[music\]"):
+    with pytest.raises(VidgenError, match=r"needs symusic 0\.5\.9, and 0\.6\.0 is installed.*reinstall"):
         synth.require_symusic()
     assert "0.6.0 installed, but schu-video-generator needs 0.5.9" in synth.symusic_status()
 

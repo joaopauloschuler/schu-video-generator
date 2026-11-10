@@ -8,7 +8,7 @@ long-lived server must survive a crashing scene or extension, and the CLI alread
 one JSON document; the cost (~1 s of start-up) is small next to rendering. The command's stderr
 (its progress lines) becomes MCP progress notifications; cancelling a call kills the process.
 
-Optional extra ``schu-video-generator[mcp]`` (the official MCP Python SDK). Written against its ``MCPServer``
+Uses the official MCP Python SDK. Written against its ``MCPServer``
 (SDK 2.x; named ``FastMCP`` in 1.x, which is used when that is what is installed).
 
 No ``from __future__ import annotations`` here: the SDK reads the tools' parameter annotations,
@@ -34,7 +34,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field
 
 from vidgen import DIST_NAME, __version__
-from vidgen.errors import VidgenError
+from vidgen.errors import incomplete_install, VidgenError
 from vidgen.mcp_tools import (
     DEFAULT_IMAGES,
     MAX_IMAGES,
@@ -92,7 +92,7 @@ def _sdk() -> tuple[Any, Any, Any]:
             from mcp.server.fastmcp.exceptions import ToolError
         except ImportError:
             raise VidgenError(
-                f'the MCP server needs the optional MCP SDK: pip install "{DIST_NAME}[mcp]" (or pip install mcp)'
+                f'the MCP server needs the MCP SDK: {incomplete_install("mcp")}'
             ) from None
     return MCPServer, Context, ToolError
 
@@ -596,13 +596,13 @@ def build_server(root: Path) -> Any:
 
     @tool("Background music: the built-in beds and the project's assets/music files, and composed music's moods "
           "(music: {compose: MOOD}; explainers: calm, focused, curious, upbeat; cartoons: playful, sleepy, tense, "
-          "triumphant) and instrument names, each described in words, with whether the music extra is installed.", read_only)
+          "triumphant) and instrument names, each described in words, with whether symusic is installed.", read_only)
     async def list_music(ctx: Context, project: OptionalProject = None) -> Any:
         return answer(await call(ctx, args_of(["list-music"], [str(where(project))] if project else [])))
 
     @tool("Compose a piece of music in a mood (the project's first compose: cue, changed by the options, or mood "
           "alone) and write it as a WAV and a MIDI file to listen to; returns its key, tempo, parts, chords per "
-          "phrase and loudness. Needs the music extra (and downloads the SoundFont, 32 MB, on first use).", writes)
+          "phrase and loudness. Downloads the SoundFont (32 MB) on first use.", writes)
     async def music_preview(
         ctx: Context,
         project: OptionalProject = None,
@@ -859,7 +859,7 @@ def build_server(root: Path) -> Any:
         return answer(await call(ctx, args_of(["readback"], [str(path)], options), heavy=True))
 
     @tool("A slide deck of the video's key frames with the narration as speaker notes: one self-contained HTML "
-          "file (or a PDF, needs the extra schu-video-generator[pdf]).", writes)
+          "file (or a PDF).", writes)
     async def slides(
         ctx: Context,
         project: Project = ".",

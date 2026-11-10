@@ -18,7 +18,7 @@
 #   vidgen validate examples/higgs-discovery          # checks the short variant too
 #   vidgen lint examples/higgs-discovery [--variant short]   # incl. the particle_* rules
 #   vidgen storyboard examples/higgs-discovery --per-beat 2 [--variant short]
-#   vidgen tts examples/higgs-discovery               # Kokoro: local and free (the kokoro extra)
+#   vidgen tts examples/higgs-discovery               # Kokoro: local and free
 #   vidgen render examples/higgs-discovery [--preview] [--variant short]
 #
 # Every event is simulated from its seed (labelled "simulated data" / "simulated event" on screen):

@@ -2,7 +2,10 @@
 inside the scene while the narration runs: full-bleed or in a layout region (optionally in a
 browser / window / phone frame, with a title and a caption), trimmed, sped up or slowed down,
 looped or held on its last frame, its sound mixed under the narration, and callouts drawn on top
-step by step like the ``screenshot`` scene's.
+step by step like the ``screenshot`` scene's. With ``match_previous`` a clip that continues the
+clip of the scene before (a generated take made from that take's last frame) starts in its
+brightness and colour and, on request, dissolves out of its last frame over a few frames
+(``vidgen.clip_join``, DESIGN.md §117).
 
 The clip is a ``ClipMobject`` (``vidgen.api``): its frames are decoded as the render reaches
 them, so stills, the layout dump, ``vidgen lint`` and beat actions see it like any picture.
@@ -14,7 +17,13 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import Any, ClassVar, Literal
 
+from manim import config as render_config
+from pydantic import StrictBool
+
 from vidgen.api import *
+from vidgen.clip_join import MatchPrevious, match_previous_problem, opening_treatment
+from vidgen.clips import FrameTreatment, clip_timing
+from vidgen.videoplan import VideoPlan
 
 from .screenshot import CAPTION_GAP, CalloutSpec, Screenshot
 
@@ -81,6 +90,8 @@ class VideoClip(Screenshot):
         """Leave out the clip's sound."""
         fade: bool = Field(default=True, strict=True)
         """false: a hard cut. The clip is on screen from the scene's first frame (no fade in) and the scene ends with its last narrated frame (no 0.5 s fade-out), so generated takes join with a plain cut (with transition: cut, the default)."""
+        match_previous: StrictBool | MatchPrevious = False
+        """true or {seconds, hold, dissolve, level}: this clip continues the clip of the scene before (a take generated from its last frame). Its first frame is given that frame's brightness and colour (one gain per colour channel) and the correction eases away over seconds (default 1; hold: true keeps it for the whole clip). dissolve: N (0-12, default 0: none) also blends the clip's first N frames, counted in the render being made, with that last frame held still; level: false leaves brightness and colour alone (the dissolve only). Both scenes need fade: false and region: bleed, with a cut between them. Skipped with a warning when the two frames are not a continuation."""
         units: Literal["fraction", "px"] = "fraction"
         """Callout areas in fractions of the clip's picture (0-1, from its top-left corner, before any cover crop) or in its pixels."""
         picture_word: ClassVar[str] = "clip"
@@ -144,6 +155,8 @@ class VideoClip(Screenshot):
             self.target("caption", text, entrance=lambda: [FadeIn(caption, shift=UP * 0.1)])
         self._camera_at: tuple[float, tuple[float, float]] | None = None
         clip.set_resolution(self._magnification())
+        if p.match_previous:
+            clip.playback.treatment = self._match_previous()
         clip.play(self)
         self._sound(path, timing, window)
         if not p.fade:   # on screen from the first frame: its entrance has nothing left to do
@@ -179,10 +192,8 @@ class VideoClip(Screenshot):
         """The trim, the speed (fitted to ``window`` with ``fit_duration``) and the loop; warns
         when the last frame would hold for long."""
         p = self.params
-        start, end = p.trim if p.trim is not None else (0.0, info.duration)
-        end = min(end, info.duration)
-        speed = fit_speed(end - start, window, *p.fit_range) if p.fit_duration else p.speed
-        timing = ClipTiming(start, end, speed, p.loop)
+        timing = clip_timing(p, info, window)
+        speed = timing.speed
         if not p.loop and window - timing.length > HOLD_WARNING:
             log.warning(
                 "scene '%s': the clip plays %.1f s (at speed %.2g) but the scene runs %.1f s: its last frame holds for %.1f s (loop: true or fit_duration: true keep it moving)",
@@ -191,6 +202,23 @@ class VideoClip(Screenshot):
         elif timing.length > window + 0.5:
             log.info("scene '%s': %.1f s of the clip's %.1f s are shown (the scene ends first)", self.spec.id, window, timing.length)
         return timing
+
+    def _match_previous(self) -> FrameTreatment | None:
+        """The colour match and the dissolve with the clip of the scene before
+        (``match_previous``); ``None``, with a warning, when the two frames at the cut are not a
+        continuation."""
+        cfg = self.project.config
+        index = [s.id for s in cfg.scenes].index(self.spec.id)
+        problem = match_previous_problem(cfg, index)
+        if problem is not None:
+            raise VidgenError(f"scene '{self.spec.id}': match_previous: {problem}")
+        plan = self._video_plan or VideoPlan(self.project, int(render_config.frame_rate))
+        treatment, measured = opening_treatment(self.project, plan, index, self.frame_width / self.frame_height)
+        if treatment is None:
+            log.warning("scene '%s': match_previous is skipped: %s", self.spec.id, measured)
+        else:
+            log.info("scene '%s': match_previous: %s", self.spec.id, measured)
+        return treatment
 
     def _sound(self, path: Path, timing: ClipTiming, window: float) -> None:
         """Mix the clip's own sound into the scene's (under the narration), unless muted."""

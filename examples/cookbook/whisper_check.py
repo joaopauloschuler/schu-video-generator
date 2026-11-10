@@ -4,7 +4,7 @@ An optional standalone check next to ``vidgen readback`` (it pads each clip with
 prints the bare transcript). It is a stand-alone tool: run it from the project folder, do NOT put it in
 extensions/ (schu-video-generator imports every .py file there).
 
-    pip install faster-whisper            # once; needs ffmpeg on PATH
+    (faster-whisper comes with schu-video-generator; needs ffmpeg on PATH)
     python whisper_check.py audio/*.mp3
     python whisper_check.py --model small --pad 0.8 audio/intro_b1.mp3
 
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         from faster_whisper import WhisperModel
     except ImportError:
-        print("faster-whisper is not installed: pip install faster-whisper", file=sys.stderr)
+        print("faster-whisper is not installed: reinstall schu-video-generator", file=sys.stderr)
         return 2
     model = WhisperModel(args.model, device="cpu", compute_type="int8")
     for f in args.files:

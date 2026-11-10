@@ -196,7 +196,7 @@ def test_options_are_checked(meta_project: Path, monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.delitem(sys.modules, "fpdf")
     monkeypatch.setattr(builtins, "__import__", no_fpdf)
-    with pytest.raises(VidgenError, match=re.escape('pip install "schu-video-generator[pdf]"')):
+    with pytest.raises(VidgenError, match="reinstall schu-video-generator"):
         make_slides_pdf(project)
 
 

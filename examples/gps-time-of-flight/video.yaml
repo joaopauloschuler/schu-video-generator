@@ -7,7 +7,7 @@
 #   vidgen lint examples/gps-time-of-flight
 #   vidgen music check time_of_flight --out build/music-check    # the bed's score
 #   vidgen music template time_of_flight --out my_theme.yaml     # its score, to start from
-#   vidgen tts examples/gps-time-of-flight               # Kokoro: local and free (the kokoro extra)
+#   vidgen tts examples/gps-time-of-flight               # Kokoro: local and free
 #   vidgen render examples/gps-time-of-flight [--preview]
 #
 # Facts (checked): GPS satellites orbit about 20,200 km up (about thirty in service); light covers

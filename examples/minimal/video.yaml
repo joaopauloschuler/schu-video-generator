@@ -18,14 +18,14 @@
 #   vidgen tts examples/minimal --dry-run --voice guest          # the guest's beats and characters
 #   vidgen tts examples/minimal --dry-run --json                 # the same as JSON (what an MCP agent sees)
 #   vidgen tts examples/minimal --dry-run --variant openrouter   # voiced through OpenRouter: model, voice, estimated cost
-#   vidgen tts examples/minimal --variant kokoro                 # voiced locally by Kokoro, free (schu-video-generator[kokoro])
-#   vidgen mcp --root examples                                   # MCP server for an AI agent's client (schu-video-generator[mcp])
+#   vidgen tts examples/minimal --variant kokoro                 # voiced locally by Kokoro, free
+#   vidgen mcp --root examples                                   # MCP server for an AI agent's client
 #   vidgen storyboard examples/minimal --variant subtitled --scene note   # a two-speaker dialogue
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 #   vidgen translate-template examples/minimal --variant pt      # list / update the texts to translate
 #   vidgen validate examples/minimal                             # lists the texts pt leaves in English
 #   vidgen storyboard examples/minimal --variant pt              # the Portuguese video
-#   vidgen slides examples/minimal --format pdf --notes --variant pt   # PDF deck, Portuguese notes pages (schu-video-generator[pdf])
+#   vidgen slides examples/minimal --format pdf --notes --variant pt   # PDF deck, Portuguese notes pages
 # There is no narration audio in this example, so beats are timed from their word count
 # (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it (or
 # `vidgen tts --variant openrouter` with an OpenRouter key, or `--variant kokoro`: free, local).
@@ -69,7 +69,7 @@ variants:
       voice: en_paul_neutral
     voices:                       # the guest: drop its ElevenLabs keys, pick a Voxtral voice
       guest: {voice_id: null, settings: null, voice: gb_oliver_curious}
-  kokoro:                         # narrated by Kokoro-82M on this computer: free, no key (the kokoro extra);
+  kokoro:                         # narrated by Kokoro-82M on this computer: free, no key;
     voice:                        # audio in audio/kokoro/ (none committed); English beats get word timings
       provider: kokoro
       voice: af_heart
