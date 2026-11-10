@@ -360,6 +360,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.music import config_problems as music_problems
     from vidgen.videogen.shots import shot_problems
     from vidgen.overlays import overlay_problems
+    from vidgen.clip_join import match_previous_problems
     from vidgen.sfx import config_problems as sfx_problems
     from vidgen.soundfont import soundfont_problems
     from vidgen.thumbnail import thumbnail_problems
@@ -412,6 +413,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(Problem(loc, message) for loc, message in term_color_problems(project.config, theme))
             problems.extend(iris_problems(project.config))
             problems.extend(carry_problems(project.config))
+            problems.extend(match_previous_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in soundfont_problems(project.config.soundfont, project.root))

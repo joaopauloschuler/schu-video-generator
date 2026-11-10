@@ -409,7 +409,7 @@ project's own scene types, in its theme).
 | where in the world | `map` | `title`, `view`, `steps`, `values`, `pins`, `arcs` |
 | a photo or illustration | `image` | `path`, `generate`, `caption`, `fit`, `ken_burns` |
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
-| footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut) |
+| footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut), `match_previous` (no flash where a take continues the one before) |
 | simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
@@ -3996,7 +3996,7 @@ scenes:
   blocks the shot and a run never pays for both in one pass: pay, look at the clip, then the next. QA gives each take with a starting
   picture an `opening match` (SSIM of its first frame against the picture, in its record and on its contact sheet, a warning under 0.7, a rough guide).
   `vidgen generate inputs --guide` writes `build/videogen/<shot>/overlay.png` (the picture blended over the plain guide's first frame): open it to check the
-  3D figures fit before paying. For takes that join with a plain cut, set `fade: false` on the `video_clip` scenes (no fade in, no 0.5 s fade-out).
+  3D figures fit before paying. For takes that join with a plain cut, set `fade: false` on the `video_clip` scenes (no fade in, no 0.5 s fade-out). Where a take was made from the last frame of the take before (`first_frame: last_of:<shot>`), also set `match_previous: true` on its scene: the model draws that frame about 8 % darker, and this gives the clip's first frame the previous clip's brightness and colour, then eases back to the clip's own pixels within 1 s (`{seconds: 0.5}` changes the time; `{hold: true}` keeps the correction, which then adds up along a chain). Both scenes need `fade: false`, `region: bleed` and a cut between them; a pair that is not a continuation is left alone with a warning.
   After a hosted job vidgen compares what the provider `GET` from the tunnel with what it hosted and
   warns in the run output and the take's record; the warning is never an error.
 - **A submit with no known outcome** (`vidgen generate plan` / `run` / `status` / `ledger` say

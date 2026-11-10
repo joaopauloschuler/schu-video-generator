@@ -20,10 +20,10 @@ shown by a Manim mobject while the scene renders, and the clip's sound for the s
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Hashable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import av
 import numpy as np
@@ -125,12 +125,43 @@ class ClipTiming:
         return self.start + min(t, max(self.span - END_GAP, 0.0))
 
 
+def cover_crop(aspect: float, box_aspect: float) -> tuple[float, float, float, float]:
+    """The part ``(x, y, w, h)`` (fractions from the top-left corner) of a picture of ``aspect``
+    (width / height) that fills a box of ``box_aspect``, its excess cut equally from both sides."""
+    if box_aspect > aspect:  # wider box: cut top and bottom
+        h = aspect / box_aspect
+        return (0.0, (1 - h) / 2, 1.0, h)
+    w = box_aspect / aspect
+    return ((1 - w) / 2, 0.0, w, 1.0)
+
+
+class FrameTreatment(Protocol):
+    """A change to a clip's frames that depends on how long the clip has played (e.g. the
+    colour match of ``vidgen.clip_join``); set as ``ClipMobject.playback.treatment``."""
+
+    def state(self, played: float) -> Hashable | None:
+        """What the treatment does ``played`` seconds after the clip started (``None``: nothing,
+        the frame shows as decoded). Equal states give equal pictures from equal frames."""
+
+    def apply(self, frame: np.ndarray, state: Hashable) -> np.ndarray:
+        """``frame`` (RGBA, uint8) treated as ``state`` says, as a new array."""
+
+
 def fit_speed(span: float, window: float, low: float = 0.5, high: float = 2.0) -> float:
     """The speed that makes ``span`` seconds of clip last ``window`` seconds, kept within
     ``[low, high]`` (so a clip is never sped up or slowed down beyond recognition)."""
     if window <= 0:
         return high
     return float(min(high, max(low, span / window)))
+
+
+def clip_timing(params: Any, info: ClipInfo, window: float) -> ClipTiming:
+    """The part of the clip a scene with ``params`` plays and how: the trim, the speed (fitted
+    to ``window`` seconds with ``fit_duration``) and the loop."""
+    start, end = params.trim if params.trim is not None else (0.0, info.duration)
+    end = min(end, info.duration)
+    speed = fit_speed(end - start, window, *params.fit_range) if params.fit_duration else params.speed
+    return ClipTiming(start, end, speed, params.loop)
 
 
 def atempo_chain(speed: float) -> list[str]:
@@ -274,6 +305,8 @@ class _Playback:
         self.reader: ClipReader | None = None
         self.clock: Callable[[], float] | None = None
         self.started = 0.0
+        #: Applied to each decoded frame before the mobject's opacity / tint (``None``: nothing).
+        self.treatment: FrameTreatment | None = None
 
     def __deepcopy__(self, memo: dict[int, Any]) -> _Playback:
         return self
@@ -358,13 +391,7 @@ class ClipMobject(ImageMobject):
         both sides. Call before the clip is first drawn."""
         aspect = self.info.aspect
         if fit == "cover":
-            box = width / height
-            if box > aspect:  # wider box: cut top and bottom
-                h = aspect / box
-                self.playback.crop = (0.0, (1 - h) / 2, 1.0, h)
-            else:
-                w = box / aspect
-                self.playback.crop = ((1 - w) / 2, 0.0, w, 1.0)
+            self.playback.crop = cover_crop(aspect, width / height)
             w_shown, h_shown = width, height
         elif fit == "contain":
             self.playback.crop = (0.0, 0.0, 1.0, 1.0)
@@ -410,9 +437,13 @@ class ClipMobject(ImageMobject):
             return self.pixel_array
         frame, serial = self.playback.pixels(self.shown_pixels())
         mod = self.pixel_array
-        key = (id(self.playback.reader), serial, mod.tobytes())
+        treatment = self.playback.treatment
+        state = treatment.state(self.playback.played()) if treatment is not None else None
+        key = (id(self.playback.reader), serial, mod.tobytes(), state)
         if key == self._shown_key and self._shown is not None:
             return self._shown
+        if treatment is not None and state is not None:
+            frame = treatment.apply(frame, state)
         if np.array_equal(mod, _IDENTITY):
             shown = frame
         else:

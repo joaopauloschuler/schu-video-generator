@@ -16,6 +16,8 @@ With overlays, also what the planned timeline reads from every scene (``vidgen.v
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
+With ``match_previous`` (a ``video_clip`` continuing the clip before it, DESIGN.md §117): the
+fingerprint of the scene before and its clip file.
 Not the music and the final mix (``music``, ``audio``, a scene's ``music``, a beat's
 ``music_pause``): they are applied when
 the video is joined; nor ``chapters``, ``metadata`` and ``thumbnail`` (outputs made after it).
@@ -290,6 +292,13 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     if before is not None:
         data["carry"] = [str(e) for e in spec.carry]
         data["carry_from"] = scene_fingerprint(project, before)
+    index = [s.id for s in project.config.scenes].index(scene_id)
+    if index > 0 and spec.params.get("match_previous"):
+        # a clip matched to the clip of the scene before (DESIGN.md §117) reads that clip's last
+        # shown frame: that scene's render inputs and its clip file, wherever it is
+        previous = project.config.scenes[index - 1]
+        clip = previous.params.get("path")
+        data["match_previous"] = [scene_fingerprint(project, previous.id), _stat(project.root / clip) if isinstance(clip, str) else None]
     from vidgen.videogen.compose import scene_placements
 
     placed = scene_placements(project, scene_id)

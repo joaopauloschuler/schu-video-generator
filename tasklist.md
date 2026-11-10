@@ -1789,6 +1789,17 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+### Step 325 — A clip that continues the one before matches its brightness and colour
+- [x] `video_clip` param `match_previous: true | {seconds: 1.0, hold: false}`: one gain per colour channel from the previous clip's last shown frame and this clip's first (64 x 64, decoded from the files), eased to 1 by smoothstep over `seconds`; `hold` keeps it and chains (`vidgen/clip_join.py`, DESIGN §117)
+- [x] `vidgen validate`: needs a `video_clip` directly before, a cut, `fade: false` and `region: bleed` on both
+- [x] Skipped with a warning when not a continuation (gain outside 0.8–1.25, difference over 4 %, too dark); held chains limited to 0.67–1.5
+- [x] Scene fingerprint carries the previous scene's fingerprint and its clip file's size and time
+- [x] `clips.FrameTreatment` hook on `ClipMobject` (for the next step's blend), `clips.clip_timing`, `clips.cover_crop`
+- [x] Measured on the four takes of "Get It All In" at 480x854: step at the cuts −7.4 … −7.8 % plain, within ±0.1 % matched
+- [x] CONFIG, cookbook (generated video §8), guide / AGENTS.md, CHANGELOG
+- [~] Tests `tests/test_clip_join.py` written, **not run with pytest** (owner's rule); each test body was run once by a plain script
+- [ ] Not tried: a final-size (1080x1920) render; nobody watched the previews
+
 ### Step 324 — Three snags found by following the short prompts
 - [x] Card 12 (and the required details): pin the accepted painted picture by its file before moving stand-ins; never pay for it again
 - [x] "A complete shot": the stand-in stands on the pier (y=1.8); a stand-in's `position` is its centre

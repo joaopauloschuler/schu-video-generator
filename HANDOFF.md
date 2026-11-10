@@ -26093,3 +26093,44 @@ project), repo work is generic.
 - **Tests**: **pytest was not run, on the owner's instruction.** `tests/test_docs.py` and `tests/test_guide.py` were read: neither asserts anything about this cookbook, and `AGENTS.md` did not change.
 - **Verification**: a program on a scratch copy of the test project, with no render and no network, confirmed the lookup: a picture present for the key is found; one extra byte in `layout.png` gives no picture and the "not painted yet" block; the pinned file resolves with no block and no problem. The test agent's transcript shows the order described above. `vidgen split-sheet` with three `--box`, `--names` and `--scale 3` cut a test picture correctly.
 - **How to test**: follow Cards 10 and 12 on a project with a painted picture: after the pin, `vidgen generate plan --shot shot1` names the file and is not blocked by the picture.
+
+## Step 325 — A clip that continues the one before matches its brightness and colour
+
+- **Why**: a take generated from the last frame of the take before (`first_frame: last_of:<shot>`) comes back about 8 % darker, so the plain cut between the two `video_clip` scenes shows a small flash. The owner asked for a correction at the cut that eases away within 1 second, with no dissolve, no invented frames and no change to durations or sound. Nothing in vidgen did this before (searched `clips.py`, `scenes/video_clip.py`, `videogen`, the docs).
+- **Built**: `video_clip` param `match_previous: true | {seconds: 1.0, hold: false}` (default `false`). One gain per colour channel is measured between the previous clip's last shown frame and this clip's first (both decoded from their files at 64 x 64 through each scene's crop), applied to the decoded frames, and eased to 1 by smoothstep over `seconds`. `hold: true` keeps the gain for the whole clip, and the next clip then matches the corrected last frame. Details in DESIGN §117.
+- **Files**: new `src/vidgen/clip_join.py`, `tests/test_clip_join.py`; changed `src/vidgen/clips.py`, `src/vidgen/scenes/video_clip.py`, `src/vidgen/cli.py`, `src/vidgen/render/fingerprint.py`, `DESIGN.md` (§117), `docs/CONFIG.md`, `docs/COOKBOOK-GENERATED-VIDEO.md` (§8), `src/vidgen/data/guide/AGENTS.md` and `AGENTS.md` (identical), `CHANGELOG.md`, `tasklist.md`, `HANDOFF.md`.
+- **Public interfaces**: the config param `match_previous` of `video_clip`. `vidgen.api` did not change. Inside the package: `clips.FrameTreatment` (protocol: `state(played) -> Hashable | None`, `apply(frame, state) -> ndarray`), `ClipMobject.playback.treatment`, `clips.clip_timing(params, info, window)` (was `VideoClip._timing`), `clips.cover_crop(aspect, box_aspect)`; `clip_join.MatchPrevious`, `ShownClip`, `ClipJoin`, `GainMatch`, `measure_match`, `opening_treatment`, `match_previous_problem(s)`.
+- **Decisions / deviations**:
+  - Both scenes must have `fade: false` and `region: bleed`, with a cut between them, and the scene before must be of type `video_clip` exactly. With `bleed` the crop of each clip is known from the frame's shape alone, without the scene's layout; `vidgen validate` and the render both say what is missing.
+  - The reference is decoded from the previous clip's file at the time the planned timeline ends that scene (`VideoPlan.scene_duration − 1 / fps`), not read from a rendered scene, so scenes still render in any order and in parallel.
+  - Two ranges instead of one. `GAIN_RANGE` 0.8–1.25 judges whether the clip is a continuation, on frames as decoded. `APPLIED_RANGE` 0.67–1.5 only limits the gain applied, which a held chain can reach. The first held render used one range and skipped shot 4 (its gain against the corrected shot 3 was 1.26), leaving a 21 % step.
+  - `MAX_DIFFERENCE` 0.04 comes from the four takes: the three real joins measure 0.011–0.016 after the gain, the nine other pairings 0.049–0.084.
+  - The gain acts on the coded 8-bit values (no linear-light conversion): for 8 % that is within what the measurement resolves, and it keeps black at black.
+  - A skipped correction is a warning, not an error, so a film still renders when one pair is not a continuation.
+- **Measured** (four picked takes of "Get It All In", copied; preview 480x854, 24 fps; mean of R, G, B of frames of the joined MP4; before the cut / at the cut / +0.5 s / +1.0 s / +2.0 s / step):
+
+  | render | cut | before | at cut | +0.5 s | +1.0 s | +2.0 s | step |
+  |---|---|---|---|---|---|---|---|
+  | plain | to 2 | 139.9 | 129.3 | 130.8 | 131.1 | 132.2 | −7.59 % |
+  | plain | to 3 | 132.4 | 122.6 | 124.2 | 125.2 | 127.7 | −7.40 % |
+  | plain | to 4 | 128.7 | 118.6 | 120.0 | 120.1 | 120.3 | −7.82 % |
+  | `match_previous: true` | to 2 | 139.9 | 139.9 | 136.4 | 131.2 | 132.2 | +0.02 % |
+  | `match_previous: true` | to 3 | 132.4 | 132.5 | 129.5 | 125.3 | 127.7 | +0.06 % |
+  | `match_previous: true` | to 4 | 128.7 | 128.7 | 125.2 | 120.2 | 120.3 | −0.03 % |
+  | `{hold: true}` | to 2 | 139.9 | 140.0 | 141.5 | 141.9 | 143.1 | +0.03 % |
+  | `{hold: true}` | to 3 | 143.4 | 143.3 | 145.0 | 146.2 | 149.2 | −0.05 % |
+  | `{hold: true}` | to 4 | 150.4 | 150.2 | 152.0 | 152.1 | 152.3 | −0.08 % |
+
+  Each channel separately is within 0.3 levels (of 255) at every matched cut. All three films are 488 frames, 20.33 s, −19.3 LUFS, the same as the plain one. A pair that is not a continuation (shot 4's end, then shot 1) printed `warning: scene 's1': match_previous is skipped: gains R 0.787 G 0.788 B 0.798: outside 0.8-1.25, so this clip does not continue the one before` and rendered. Changing shot 3's `match_previous` rendered shots 3 and 4 again (held chain) and reused 1 and 2.
+- **Known gaps**:
+  - Only the level and colour balance are matched. A change of the picture itself at the cut (a face or hand drawn differently, a small shift) stays; that is the next step's blend.
+  - `hold` adds the gains up (shot 4 plays 26 % brighter than its file, bright areas burn out); a chain of about six takes reaches the 1.5 limit and a step returns.
+  - One gain per channel cannot follow a change of contrast or of the black level.
+  - A clip file outside `assets/` is still not followed by its own scene's fingerprint (as before this step); only the previous clip's size and time were added to the matching scene.
+  - The previous scene's fingerprint is part of the matching scene's, so any change to the scene before renders this one again, also changes that do not move its last frame.
+  - Not tried: a final-size render (1080x1920), clips with `speed`, `loop` or `fit_duration` in a real render (covered only through `clip_timing` in the logic), a previous scene with beats.
+  - Nobody watched the three previews; the numbers above are means of frames.
+- **Spending**: nothing paid; no key read; no network call.
+- **Tests**: `tests/test_clip_join.py` (16 test functions, no render). **pytest was not run, on the owner's instruction.** The body of each test was executed once by a plain script outside the repository, and all passed; `python -m compileall` passes on the touched files. `tests/test_docs.py` (needs `match_previous` in CONFIG's `video_clip` section) and `tests/test_guide.py` (the two guide copies identical) were satisfied by reading, not by running.
+- **How to test**: a config of `video_clip` scenes with `region: bleed`, `fit: cover`, `fade: false`, and `match_previous: true` from the second on; `vidgen validate film.yaml`, `vidgen render film.yaml --preview --jobs 1`, then compare the mean level of the last frame of each scene with the first of the next.
+- **For the next step (a blend at the cut)**: add it as another `clips.FrameTreatment`, or one object that does the gain and the blend, returned by `clip_join.opening_treatment`. `ClipJoin.reference(size)` gives the previous clip's last shown frame at any size, already treated as its scene shows it; ask for the size the clip is decoded at (`ClipMobject.playback`), and both scenes have the same bleed crop. `state(played)` must be hashable and `None` when nothing is done (it is in the one-frame cache key). The treatment runs in `ClipMobject.get_pixel_array` before opacity and tint. A new setting belongs in `MatchPrevious`; the fingerprint then picks it up through the scene's params.

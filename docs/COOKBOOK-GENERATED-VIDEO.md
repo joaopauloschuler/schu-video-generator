@@ -601,6 +601,35 @@ first, and check the frames around each join (no dark frames) before the final r
 picked takes of "Get It All In" at 480x854: 20.33 s, 4 shots in order, no frame darker than the takes
 themselves at any join, each clip's sound level the same as the take's.
 
+**Smoothing the cut between two takes.** A take made with `first_frame: last_of:<shot>` starts from the
+last frame of the take before, but the video model draws that picture a little darker, and the cut shows
+as a small flash. Add `match_previous: true` to the second scene (and to each later one that continues
+the scene before it):
+
+```yaml
+  - {id: film_shot2, type: video_clip, duration: 5.088, params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false, match_previous: true}}
+```
+
+vidgen then gives the clip's first frame the brightness and colour of the previous clip's last frame
+(one gain per colour channel) and eases the correction away, so that 1 second after the cut the clip
+shows its own pixels again. No frames are blended or added, and durations and sound stay as they are.
+`match_previous: {seconds: 0.5}` changes the time. Measured on the four picked takes of "Get It All In"
+(preview, mean level of the frame before and the frame after each cut):
+
+| cut | plain cut | `match_previous: true` |
+|---|---|---|
+| shot 1 to 2 | 139.9 to 129.3 (−7.6 %) | 139.9 to 139.9 (0.0 %), 131.2 after 1 s |
+| shot 2 to 3 | 132.4 to 122.6 (−7.4 %) | 132.4 to 132.5 (+0.1 %), 125.3 after 1 s |
+| shot 3 to 4 | 128.7 to 118.6 (−7.8 %) | 128.7 to 128.7 (0.0 %), 120.2 after 1 s |
+
+It needs a plain cut between two `video_clip` scenes that both have `fade: false` and `region: bleed`;
+`vidgen validate` says so otherwise. When the two frames are not a continuation (a different picture, or
+a gain outside 0.8 to 1.25), the render prints a warning with the numbers and leaves the clip as it is.
+`match_previous: {hold: true}` keeps the correction for the whole clip, and each next clip then matches
+the corrected one, so the gains add up: on these takes shot 4 plays 26 % brighter than its file and
+bright areas burn out. Use `hold` for two or three takes at most. What the correction does not remove: a
+change of the picture itself at the cut (a face or a hand drawn slightly differently).
+
 ## 9. Publishing
 
 When the film shows takes, laid over beats or played by `video_clip` scenes from `takes/<shot>/<n>.mp4`

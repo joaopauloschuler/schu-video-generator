@@ -23043,3 +23043,68 @@ still work without a warning; `dev` is the only real extra (for developers of vi
 - **Size**: on Linux x86_64 PyPI's PyTorch brings the CUDA libraries, about 3.3 GB of downloads
   for a plain install on Python 3.12 (Step 322, summed from PyPI's file sizes). The CPU-only
   PyTorch index cannot be expressed as a dependency that works on every platform.
+
+## 117. A clip that continues the one before: `match_previous` (Step 325)
+
+A film of generated takes is a list of `video_clip` scenes joined by plain cuts (§113). A take
+made with `first_frame: last_of:<shot>` starts from the last frame of the take before, but the
+video model draws that picture again a little darker: measured on "Get It All In", the mean RGB
+of the last frame of shot 2 is [141.6 126.7 130.0] and of the first frame of shot 3
+[131.7 116.4 120.5], a gain of about 1.08 on each channel. The eye sees a small flash at the cut.
+
+**Param.** `video_clip` gains `match_previous: true | {seconds: 1.0, hold: false}` (default
+`false`). At the cut the clip's first frame is given the brightness and colour of the previous
+clip's last shown frame, and the correction eases away, so that `seconds` after the cut the
+clip shows its own pixels again. No frame is added, removed or blended; durations and sound do
+not change.
+
+- **Where it applies** (`clip_join.match_previous_problem`; `vidgen validate` reports each case
+  at `scenes[i].params.match_previous`, and the scene's render raises the same text as a
+  `VidgenError`): the scene directly before is a `video_clip`, the transition between them is a
+  cut, and both scenes have `fade: false` and `region: bleed`. Not the first scene.
+- **Measure** (`clip_join.channel_gains`): both frames are decoded from their files at 64 x 64
+  pixels, each through its scene's crop (`fit: cover`), and the gain of a channel is the mean of
+  the previous clip's last shown frame divided by the mean of this clip's first frame, on the
+  coded 8-bit values. The previous clip's last shown frame is the one at `scene length − 1 /
+  fps` of the planned timeline (`VideoPlan.scene_duration`), through that scene's trim, speed,
+  `fit_duration` and loop (`clips.clip_timing`, shared with the scene). No rendered scene is
+  read, so scenes still render in any order and in parallel.
+- **Apply** (`clip_join.GainMatch`): each channel is multiplied by `1 + (gain − 1) · left`,
+  rounded and cut off at 255, where `left = 1 − smoothstep(played / seconds)`
+  (`correction_left`: 1 at the cut, 0.5 half way, 0 from `seconds` on; no jump in the level or
+  in its rate of change). From `seconds` on the frames are the decoded ones, untouched.
+- **`hold: true`** keeps the full gain for the whole clip. The next clip's reference is then
+  this clip's *corrected* last frame (`ClipJoin.reference`), so held corrections add up along a
+  chain instead of drifting: three takes each 8 % darker end at a gain of about 1.26. The same
+  happens without `hold` when a scene is shorter than its `seconds`.
+- **Limits.** `GAIN_RANGE = (0.8, 1.25)`: a channel gain outside it between the two frames *as
+  decoded* means the clip does not continue the one before. `MAX_DIFFERENCE = 0.04`: the same
+  when the two 64 x 64 pictures, after the gain, differ by more than 4 % of full scale (mean
+  absolute difference of their grey levels; on the four takes of "Get It All In" the three real
+  joins measure 0.011 to 0.016 and the nine other pairings 0.049 to 0.084). `MIN_LEVEL = 4`: a
+  channel whose mean is under 4 of 255 in either frame is too dark to measure. In each case the
+  scene logs a warning with the numbers and the clip plays uncorrected. `APPLIED_RANGE = (0.67,
+  1.5)` limits the gain applied; only a chain of held corrections reaches it, a step then stays
+  at that cut, and the scene's info line says so.
+- **Where the code is.** `vidgen/clip_join.py` is the one place that knows a join: `ShownClip`
+  (a clip as its scene shows it: file, timing, crop, seconds played at the scene's last frame),
+  `ClipJoin(previous, current, previous_treatment)` with `reference(size)` (the previous clip's
+  last shown frame, treated as its scene treats it) and `opening(size)`, and
+  `opening_treatment(project, plan, index, frame_aspect)`, which `VideoClip._match_previous`
+  calls. What it returns is a `clips.FrameTreatment` (`state(played)`, `apply(frame, state)`),
+  set as `ClipMobject.playback.treatment`: `ClipMobject.get_pixel_array` applies it to each
+  decoded frame before the mobject's opacity and tint, and the state is part of its one-frame
+  cache key. A second treatment of the same join (a short blend of the opening frames with
+  `ClipJoin.reference` at the size shown) is another `FrameTreatment` built in
+  `opening_treatment`. Neither name is in `vidgen.api`.
+- **Cache** (`render/fingerprint.py`): the param is in the scene's params, so changing it
+  renders that scene again and no other. A scene with `match_previous` also carries
+  `match_previous: [fingerprint of the scene before, size and time of its clip file]`, so a
+  change to the previous scene or its take renders this scene again; with `hold` that passes
+  down the chain, as the corrections do.
+- **Measured** (the four picked takes of "Get It All In", preview 480x854 at 24 fps, mean of R,
+  G and B of the frames of the joined MP4): the step at the three cuts is −7.6 %, −7.4 % and
+  −7.8 % without the param, and within ±0.1 % with it; with `seconds: 1` the frame 1.0 s after
+  each cut has the level of the uncorrected render (131.2 against 131.1, 125.3 against 125.2,
+  120.2 against 120.1); with `hold: true` all three cuts are within ±0.1 % and shot 4 plays
+  about 26 % brighter than its file.

@@ -6121,12 +6121,33 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 | `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration (linear; 1 = as recorded, a mono recording at that level on both channels) |
 | `mute` | bool | `false` | leave the clip's sound out |
 | `fade` | bool | `true` | `false`: a hard cut, for generated takes that join with a plain cut: the clip is on screen from the first frame (no fade in, title and caption still enter) and the scene has no 0.5 s fade-out; use with `transition: cut`, the default |
+| `match_previous` | bool \| `{seconds, hold}` | `false` | this clip continues the clip of the scene before (a take generated from its last frame): its first frame gets that frame's brightness and colour, one gain per colour channel, and the correction eases away over `seconds` (default `1.0`); `hold: true` keeps it for the whole clip. See below |
 | `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` ([`screenshot`](#screenshot); kinds `box`, `circle`, `arrow`, `spotlight`) |
 | `frame`, `url` | `none` \| `browser` \| `window` \| `phone`, str | `none`, `""` | a frame drawn around the clip (not with `bleed`); `url` for `browser` |
 | `units` | `fraction` \| `px` | `fraction` | how callout areas are written (of the whole picture) |
 | `color`, `label_size` | color, size | `highlight`, `caption` | callout colour and label size |
 | `previous` | `fade` \| `dim` \| `keep` | `fade` | what happens to a step's callouts when the next starts |
 | `focus_scale` | number (1–4) | `2.0` | largest magnification of `focus: true` |
+
+**`match_previous`** removes the small flash at a cut between two generated takes, where the
+second was made from the last frame of the first and the video model drew it about 8 % darker.
+It needs the scene directly before to be a `video_clip`, a cut between them (no `transition`),
+and `fade: false` with `region: bleed` on both; `vidgen validate` rejects it anywhere else.
+
+```yaml
+- {id: film_shot2, type: video_clip, duration: 5.088,
+   params: {path: takes/shot2/3.mp4, region: bleed, fit: cover, fade: false, match_previous: true}}
+```
+
+vidgen measures one gain per colour channel from the previous clip's last shown frame and this
+clip's first, applies it at the cut and eases it to 1 over `seconds`: from then on the clip
+shows its own pixels. Nothing is blended and no duration or sound changes. `{hold: true}` keeps
+the full gain to the end of the clip, and the next clip then matches this clip's corrected last
+frame, so the gains add up along a chain (three takes each 8 % darker end 26 % brighter than
+their files): use it for two or three takes, not for a long film. The correction is skipped,
+with a warning that gives the numbers, when the two frames are not a continuation: a channel
+gain outside 0.8–1.25, pictures that still differ by more than 4 % of full scale after the
+gain, or a frame too dark to measure. A held chain's gain stops at 0.67–1.5.
 
 ```yaml
 - id: clip

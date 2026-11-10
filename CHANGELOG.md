@@ -7,6 +7,12 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### No flash where one generated take continues another (Step 325)
+
+- `video_clip` has a new param `match_previous: true | {seconds, hold}`. Where a clip continues the clip of the scene before (a take generated from its last frame, which video models draw about 8 % darker), its first frame is given that frame's brightness and colour, one gain per colour channel, and the correction eases away within `seconds` (default 1). No frames are blended or added; durations and sound do not change.
+- Measured on four takes at preview size: the step in mean level at the three cuts goes from −7.4 … −7.8 % to within ±0.1 %.
+- `vidgen validate` rejects the param where it cannot apply (no `video_clip` before, a transition, a fade, a region other than `bleed`); a pair of frames that is not a continuation is left alone with a warning.
+
 ### The director's cookbook: three traps removed (Step 324)
 
 - `docs/COOKBOOK-DIRECTING-YOUR-AI.md`: Card 12 pins an accepted painted picture by its file before the stand-ins move, so that it is not blocked or quoted again; the example stand-in stands on the pier and the text says a stand-in's `position` is its centre; Card 6 uses one `--box` per panel when panels are not evenly spaced.
