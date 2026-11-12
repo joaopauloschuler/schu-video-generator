@@ -78,7 +78,11 @@ The `3d` scene type draws with **three.js** (https://threejs.org), bundled as pa
 `three` 0.186.1 (`build/`; SHA-256 `9052042d676cb0fdc1ddfefe193053f34b7ac0513a616fdac4535d49987812ea`
 and `9edde002b066a9a05676a6127f67735b62baf399bdea529f2f7e31657da769e6`), under the **MIT
 License**, © 2010-2026 three.js authors; the licence text is `src/vidgen/data/three/LICENSE`.
-The page loads them from the package, never from the network. **Playwright** (optional `3d`
+The page loads them from the package, never from the network. A chosen set of three.js add-ons
+for `web` scenes is bundled in `src/vidgen/data/three/addons/`: 23 files copied unmodified from
+`examples/jsm/` of the same npm package (same version, same MIT licence, a copy of which is
+`src/vidgen/data/three/addons/LICENSE`); `loaders/SVGLoader.js` contains a number parser that its
+comment says comes from svg-numbers (https://github.com/ppvg/svg-numbers, MIT License). **Playwright** (optional `3d`
 extra; Apache-2.0, © Microsoft) drives the headless Chromium it downloads with
 `playwright install chromium` (Chromium: BSD-style licence and its third-party notices); neither
 is bundled.

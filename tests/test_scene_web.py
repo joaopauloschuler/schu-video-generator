@@ -217,10 +217,11 @@ def test_the_theme_as_css_custom_properties() -> None:
 
 
 def test_vidgens_head_goes_first_in_the_page() -> None:
-    from vidgen.web.inputs import page_head, with_head
+    from vidgen.web.inputs import IMPORT_MAP, page_head, with_head
 
     head = page_head(None)
-    assert head == '<script type="importmap">{"imports": {"three": "/__vidgen__/three/three.module.js"}}</script>'
+    assert head == f'<script type="importmap">{json.dumps(IMPORT_MAP)}</script>'
+    assert IMPORT_MAP["imports"]["three"] == "/__vidgen__/three/three.module.js"
     assert with_head(b"<!DOCTYPE html><html lang=en><HEAD><script>", "<X>") == b"<!DOCTYPE html><html lang=en><HEAD><X><script>"
     assert with_head(b"<!doctype html><header>", "<X>") == b"<!doctype html><X><header>"
     assert with_head(b"<p>hi", "<X>") == b"<X><p>hi"

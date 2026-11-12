@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–333)
+## Unreleased (Steps 193–334)
+
+### three.js add-ons for `web` scenes (Step 334)
+
+- A `web` scene can import a chosen set of three.js add-ons, shipped with vidgen (three.js 0.186.1, MIT, about 390 kB): `GLTFLoader` (`.gltf` and `.glb` models), `BufferGeometryUtils`, `RoomEnvironment`, bloom (`EffectComposer`, `RenderPass`, `ShaderPass`, `UnrealBloomPass`, `OutputPass`), `CSS2DRenderer` labels, thick lines (`Line2`, `LineGeometry`, `LineMaterial`, `LineSegments2`, `LineSegmentsGeometry`), `RoundedBoxGeometry`, `SVGLoader` and `OrbitControls`. Import them as three.js's docs do: `import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js"` (the older `three/examples/jsm/…` works too); they share the page's one `THREE`.
+- Not shipped: 3D text, Draco / KTX2 / Meshopt decoders, other loaders and controls, VR / AR, physics, exporters, the GUI helper, WebGPU. Importing one stops the render with a message that names it and says how to copy the file into the project instead (before, Chromium's "Failed to resolve module specifier").
+- `vidgen guide web` has a table of the add-ons, an example (rounded box, environment light, bloom, an HTML label) and the rules found under vidgen's clock: load files in a `script:` with `new URL("./x.glb", import.meta.url)`, give a composer's scene a background (its picture is opaque), set `LineMaterial.resolution`, call `OrbitControls.update(t - last)`.
 
 ### `web` scenes taught and shown (Step 333)
 

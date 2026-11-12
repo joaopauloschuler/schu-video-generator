@@ -3311,7 +3311,8 @@ seeded from the scene id, so every render gives the same frames. A loop that add
 `requestAnimationFrame` works; a picture computed from `t` alone is simpler to get right. Not
 controlled (avoid them, or drive them from `frame`): `<audio>` (the scene has no sound of its
 own), animated GIF / WebP, web workers, iframes, `XMLHttpRequest` and dynamic `import()` (not
-waited for: load data with `await fetch("data.json")` in `load`), and `ResizeObserver` /
+waited for: load data with `await fetch(…)` in `load`; in a `script:`, name the file
+with `new URL("./data.json", import.meta.url)`), and `ResizeObserver` /
 `IntersectionObserver` callbacks. Ordinary timer, `requestAnimationFrame`, CSS and Web Animations
 code was measured frame-exact, and so was a Plotly.js `Plotly.animate` transition (d3 timers);
 other animation libraries (GSAP, anime.js, Motion, Lottie) use the same calls but were not tried.
@@ -3361,7 +3362,7 @@ estimated from the word count, so the reveal moves a little when the voice arriv
 looked up for you: `ctx.theme.colors[ctx.data.color]`.
 
 **three.js** comes with vidgen: `import * as THREE from "three"` in a `script:` or in a page's
-`<script type="module">` (only the core module; no `three/addons/`):
+`<script type="module">` (with a chosen set of its add-ons, below):
 
 ```js
 // extensions/cube.js
@@ -3387,6 +3388,105 @@ export function frame(t, ctx) {
 }
 ```
 
+**three.js add-ons.** These ship with vidgen, from the same three.js (0.186.1); import them as
+three.js's own docs do (`three/addons/…`; the older `three/examples/jsm/…` works too). They use
+the same `THREE` as your code.
+
+| for | import |
+|---|---|
+| glTF models (`.gltf`, `.glb`) | `import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js"` |
+| merging, fixing geometry | `import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js"` |
+| studio light and reflections | `import {RoomEnvironment} from "three/addons/environments/RoomEnvironment.js"` |
+| glow (bloom) | `EffectComposer`, `RenderPass`, `UnrealBloomPass`, `OutputPass`, `ShaderPass`: `"three/addons/postprocessing/<Name>.js"` |
+| HTML labels on 3D objects | `import {CSS2DRenderer, CSS2DObject} from "three/addons/renderers/CSS2DRenderer.js"` |
+| lines thicker than 1 px | `Line2`, `LineGeometry`, `LineMaterial`, `LineSegments2`, `LineSegmentsGeometry`: `"three/addons/lines/<Name>.js"` |
+| rounded boxes | `import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js"` |
+| shapes from SVG paths | `import {SVGLoader} from "three/addons/loaders/SVGLoader.js"` |
+| a camera turning round a target | `import {OrbitControls} from "three/addons/controls/OrbitControls.js"` |
+
+```js
+// extensions/studio.js: a rounded box lit by RoomEnvironment, a glowing ring, an HTML label
+import * as THREE from "three";
+import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js";
+import {RoomEnvironment} from "three/addons/environments/RoomEnvironment.js";
+import {EffectComposer} from "three/addons/postprocessing/EffectComposer.js";
+import {RenderPass} from "three/addons/postprocessing/RenderPass.js";
+import {UnrealBloomPass} from "three/addons/postprocessing/UnrealBloomPass.js";
+import {OutputPass} from "three/addons/postprocessing/OutputPass.js";
+import {CSS2DRenderer, CSS2DObject} from "three/addons/renderers/CSS2DRenderer.js";
+let scene, camera, composer, labels, box, ring;
+export function load(ctx) {
+  const renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: true});
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(ctx.theme.background);   // the composer's picture is opaque
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  camera = new THREE.PerspectiveCamera(35, ctx.width / ctx.height, 0.1, 50);
+  camera.position.set(0, 1.2, 6);
+  camera.lookAt(0, 0, 0);
+  box = new THREE.Mesh(new RoundedBoxGeometry(1.4, 1.4, 1.4, 6, 0.2),
+                       new THREE.MeshStandardMaterial({color: ctx.theme.colors.primary, metalness: 0.6, roughness: 0.3}));
+  box.position.x = -1.2;
+  const glow = new THREE.Color(ctx.theme.colors.accent).multiplyScalar(3);   // brighter than white: it blooms
+  ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.08, 16, 96), new THREE.MeshBasicMaterial({color: glow}));
+  ring.position.x = 1.3;
+  scene.add(box, ring);
+  composer = new EffectComposer(renderer);
+  composer.setSize(ctx.width, ctx.height);
+  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(ctx.width, ctx.height), 0.6, 0.3, 0.9));
+  composer.addPass(new OutputPass());
+  labels = new CSS2DRenderer();
+  labels.setSize(ctx.width, ctx.height);
+  labels.domElement.style.cssText = "position: absolute; left: 0; top: 0";
+  document.body.appendChild(labels.domElement);
+  const tag = document.createElement("div");
+  tag.textContent = "Rounded box";
+  tag.dataset.vidgenId = "box-label";
+  tag.style.cssText = "font: var(--vidgen-size-caption) var(--vidgen-font-body); color: var(--vidgen-text)";
+  const label = new CSS2DObject(tag);
+  label.position.set(-1.2, 1.15, 0);   // above the box
+  scene.add(label);
+}
+export function frame(t) {
+  box.rotation.set(0.4, t * 0.6, 0);
+  ring.rotation.set(0.5, t, 0);
+  composer.render();               // not renderer.render: the composer draws the scene and its glow
+  labels.render(scene, camera);
+}
+```
+
+Rules found by trying each add-on under vidgen's clock:
+
+- **Files a loader reads.** A `script:` runs in vidgen's own page, so a relative path is not
+  relative to your script: write `loader.loadAsync(new URL("./model.glb", import.meta.url).href)`
+  (in `load`, awaited). In a `page:` a path relative to the page works. `.gltf` (buffer embedded
+  or in a `.bin` beside it) and `.glb` load; compressed models (Draco, KTX2, Meshopt) do not.
+- **Glow and transparency.** `EffectComposer` draws an opaque picture (black where nothing is), so
+  give the scene a background (`scene.background = new THREE.Color(ctx.theme.background)`), as
+  above. Its colours match `renderer.render` exactly: `OutputPass` applies the tone mapping and
+  colour space once; add no second one.
+- **Labels.** `CSS2DRenderer` labels are page text: they take the theme variables, follow their
+  object, and lint reads them (name them with `data-vidgen-id`); over WebGL their contrast is not
+  checked.
+- **Thick lines.** `LineMaterial({linewidth: 8})` is in pixels only after
+  `material.resolution.set(ctx.width, ctx.height)`; then it stays 8 px at every frame size.
+- **`OrbitControls`** has its own idea of time: `update()` with no argument turns `1/60` s worth
+  per call, so the speed would follow the frame rate. Pass the time since the last frame:
+  `controls.update(t - last); last = t;` in `frame` (angle = `autoRotateSpeed` × 2π / 60 × t,
+  the same at every fps). Leave `enableDamping` off (it eases per call too). No mouse is needed.
+- **`RoomEnvironment`** lights `MeshStandardMaterial` (metal especially, which is black without
+  it) through `scene.environment`, made once in `load` as above.
+
+**Not shipped:** 3D text (`FontLoader`, `TextGeometry`: put text in HTML labels or the page),
+`DRACOLoader`, `KTX2Loader` and Meshopt (they run WebAssembly in workers, outside vidgen's clock,
+and weigh megabytes), other model loaders, HDR loaders, other controls, VR / AR, physics,
+exporters, the GUI helper, the WebGPU renderer and node materials. Importing one stops the render
+with `scene 'x': the page imports the three.js add-on 'loaders/DRACOLoader.js' …, which is not
+shipped with vidgen …`. To use one anyway, copy that file from three.js 0.186.1 (the npm package
+`three`, `examples/jsm/…`) into the project and import it by a relative path
+(`import {X} from "./lib/X.js"`); its `import … from "three"` keeps working.
+
 **Where the page goes.** `region: bleed` (the default): the page fills the frame edge to edge, a
 `title` sits on a plate over its top, and the captions are drawn over its bottom; keep text away
 from the edges and out of the bottom fifth. `region: body`: the page is laid out in the space
@@ -3405,7 +3505,7 @@ web font, an API): the request is refused with the warning `scene 'x': refused h
 scene cannot reach the internet; put the file in the project folder)` and the page renders
 without it. Put every library, picture, font and data file in the project folder and link it
 relatively (`<script src="lib/chart.js">`, `import {x} from "./lib/x.js"`). vidgen's own fonts and
-three.js need nothing.
+three.js and its shipped add-ons need nothing.
 
 **The lint loop.** `vidgen lint` reads the page's text at each still (its box, its size as drawn,
 its colour and what is behind it) and checks it with the usual rules: `off_frame`, `text_overlap`,
@@ -3443,6 +3543,7 @@ the text (here the video's background, since the canvas is transparent).
 | `page: file not found: extensions/hello.html (looked for …)` (validate) | the path is relative to the project folder (where `video.yaml` is) |
 | `scene 'x': JavaScript error in extensions/orbit.js line 7 in frame(t=0.500): TypeError: …` | your code threw; the file, line and time are given. At load: `… line 3 at load: …` |
 | `scene 'x': JavaScript error in extensions/x.js …: a module script did not load (a file it imports is missing or refused)` | an `import` names a missing file or a URL on the internet |
+| `scene 'x': the page imports the three.js add-on '…', which is not shipped with vidgen …` | an add-on vidgen does not ship (list above): copy the file into the project |
 | `warning: scene 'x': refused https://… (a web scene cannot reach the internet; …)` | a CDN script, web font or API: copy the file into the project |
 | `scene 'x': frame(t=0.500) in extensions/x.js did not return within 10 s: a loop that never ends or a promise that never settles …` | an endless loop, or waiting for something that never comes (a timer in `load`: time stands still there) |
 | `scene 'x': extensions/x.html did not become ready within 30 s …` | the page's load event never came (a module that never finishes) |

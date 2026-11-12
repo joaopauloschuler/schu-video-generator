@@ -36,7 +36,7 @@ from vidgen.browser.chromium import Chromium, first_line, playwright_version, pn
 from vidgen.errors import VidgenError
 from vidgen.web.entry import WebEntry
 from vidgen.web.inputs import page_head, page_shape, with_head
-from vidgen.web.loaded import VIDGEN_PREFIX, served_file
+from vidgen.web.loaded import THREE_VERSION, VIDGEN_PREFIX, served_file, unshipped_addon
 
 log = logging.getLogger("vidgen.web")
 
@@ -177,6 +177,19 @@ def error_message(scene_id: str, entry: WebEntry, error: dict[str, Any], when: s
     return f"scene '{scene_id}': JavaScript error in {where} {when}: {text}"
 
 
+def unshipped_addon_message(scene_id: str, addon: str) -> str:
+    """The message for a page importing a three.js add-on vidgen does not ship (``addon``:
+    its path under ``three/addons/``, e.g. ``loaders/DRACOLoader.js``)."""
+    name = addon.rsplit("/", 1)[-1]
+    return (
+        f"scene '{scene_id}': the page imports the three.js add-on '{addon}' (three/addons/{addon}), which is not "
+        f"shipped with vidgen (the shipped ones are listed in 'vidgen guide web'). To use it, copy {name} from "
+        f"three.js {THREE_VERSION} (the npm package 'three', examples/jsm/{addon}) into the project, e.g. "
+        f"extensions/lib/{name}, and import it by relative path ('./lib/{name}'); its own imports of 'three' "
+        "keep working, and any '../' import inside it needs that file copied beside it too"
+    )
+
+
 def renderer_pids(browser: Any) -> list[int]:
     """The process ids of a Chromium's renderer processes (``SystemInfo.getProcessInfo``), or
     none when Chromium does not tell."""
@@ -235,6 +248,7 @@ class WebPage:
         self.shape = dict(shape) if shape is not None else page_shape(size)
         self.refused: list[str] = []
         self.missing: list[str] = []
+        self.unshipped: list[str] = []
         self.loaded: dict[str, str | None] = {}
         self._chromium: Chromium | None = None
         self._page: Any = None
@@ -256,6 +270,13 @@ class WebPage:
         if rel == CANVAS_PATH and self.entry.kind == "script":
             body = with_head(canvas_page(self.entry.posix, self.size).encode("utf-8"), page_head(self.theme, self.shape))
             route.fulfill(status=200, body=body, headers={"Content-Type": CONTENT_TYPES[".html"]})
+            return
+        addon = unshipped_addon(rel)
+        if addon is not None:
+            if addon not in self.unshipped:
+                self.unshipped.append(addon)
+                log.warning("scene '%s': the three.js add-on %s is not shipped with vidgen", self.scene_id, addon)
+            route.fulfill(status=404, body="", headers={"Content-Type": CONTENT_TYPES[".txt"]})
             return
         path = served_file(self.root, rel)
         if path is None or not path.is_file():
@@ -285,10 +306,14 @@ class WebPage:
         return WEB_ORIGIN + (CANVAS_PATH if self.entry.kind == "script" else self.entry.posix)
 
     def _raise_first(self, errors: list[dict[str, Any]], when: str) -> None:
+        if errors and self.unshipped:
+            raise VidgenError(unshipped_addon_message(self.scene_id, self.unshipped[0]))
         if errors:
             raise VidgenError(error_message(self.scene_id, self.entry, errors[0], when))
 
     def _not_ready(self, exc: Exception) -> VidgenError:
+        if self.unshipped:
+            return VidgenError(unshipped_addon_message(self.scene_id, self.unshipped[0]))
         seconds = READY_TIMEOUT_MS / 1000
         unanswered = self.missing + self.refused
         detail = f"; not answered: {', '.join(unanswered)}" if unanswered else ""
@@ -400,4 +425,4 @@ class WebPage:
 
 __all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
            "content_type", "engine_id", "error_location", "error_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
-           "renderer_pids", "runtime_digest"]
+           "renderer_pids", "runtime_digest", "unshipped_addon_message"]

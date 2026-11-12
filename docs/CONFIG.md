@@ -6476,7 +6476,8 @@ the same scene id (another id, other numbers).
 **Hooks** (both optional): a page sets `window.vidgen = {load(ctx) {...}, frame(t, ctx) {...}}`; a
 `script:` module exports `load` and `frame`. `load(ctx)` runs once before frame 0, after the page's
 fonts, pictures and videos are ready; it may return a promise (awaited), so it is the place to load
-data (`await fetch("data.json")`). Time stands at 0 during `load`: a timer it waits for never fires.
+data (`await fetch("data.json")` in a `page:`; a `script:` runs in vidgen's page, so it names the
+file with `new URL("./data.json", import.meta.url)`). Time stands at 0 during `load`: a timer it waits for never fires.
 `frame(t, ctx)` runs at step 5 with `t` in seconds from the scene's start; it may return a promise.
 
 **Not controlled:** `<audio>` (a `web` scene has no sound), animated GIF and WebP pictures, web
@@ -6548,8 +6549,36 @@ body[data-beat="b2"] .step2, body[data-beat="b3"] .step2 { opacity: 1; }
 **three.js with no download.** `import * as THREE from "three"` loads the three.js vidgen ships
 (an import map vidgen puts at the start of the `<head>` of a `page:` and of the bare page); it
 is also served at `/__vidgen__/three/three.module.js`. Draw into `ctx.canvas` with
-`new THREE.WebGLRenderer({canvas: ctx.canvas})` and call `renderer.render` in `frame`. Only the
-core module is shipped (no `three/addons/`).
+`new THREE.WebGLRenderer({canvas: ctx.canvas})` and call `renderer.render` in `frame`.
+
+**three.js add-ons** (DESIGN §118.14). A chosen set of add-ons from the same three.js (0.186.1)
+ships too and is imported the usual way, `three/addons/<folder>/<Name>.js` (or the older
+`three/examples/jsm/…`), sharing the one `THREE`: `loaders/GLTFLoader.js`,
+`utils/BufferGeometryUtils.js`, `environments/RoomEnvironment.js`,
+`postprocessing/EffectComposer.js`, `RenderPass.js`, `ShaderPass.js`, `UnrealBloomPass.js`,
+`OutputPass.js` (with `Pass.js`, `MaskPass.js` and `shaders/CopyShader.js`,
+`LuminosityHighPassShader.js`, `OutputShader.js`, which they import), `renderers/CSS2DRenderer.js`,
+`lines/Line2.js`, `LineGeometry.js`, `LineMaterial.js`, `LineSegments2.js`,
+`LineSegmentsGeometry.js`, `geometries/RoundedBoxGeometry.js`, `loaders/SVGLoader.js`,
+`controls/OrbitControls.js` (and `utils/SkeletonUtils.js`, which `GLTFLoader` imports). They are
+served from `/__vidgen__/three/addons/` and recorded with the page's loaded files. Rules:
+
+- a loader in a `script:` resolves a relative path against vidgen's page, not the script: pass
+  `new URL("./model.glb", import.meta.url).href`; `.gltf` (embedded or `.bin` buffer) and `.glb`
+  load, compressed models (Draco, KTX2, Meshopt) do not;
+- `EffectComposer` gives an opaque picture (black where nothing is drawn): set
+  `scene.background`; its colours equal `renderer.render`'s (`OutputPass` applies tone mapping and
+  colour space once);
+- `LineMaterial`'s `linewidth` is in pixels once `material.resolution.set(ctx.width, ctx.height)`;
+- `OrbitControls.update()` without an argument turns 1/60 s per call (speed would follow the
+  frame rate): call `controls.update(t - last)` in `frame`; leave damping off;
+- `CSS2DRenderer` labels are page text: theme variables apply and lint reads them.
+
+Not shipped: `FontLoader` / `TextGeometry`, `DRACOLoader`, `KTX2Loader`, Meshopt, other model and
+HDR loaders, other controls, VR / AR, physics, exporters, the GUI helper, the WebGPU renderer and
+node materials. Importing one stops the render with `scene '<id>': the page imports the three.js
+add-on '<path>' (three/addons/<path>), which is not shipped with vidgen …` and says how to copy
+the file from three.js 0.186.1 into the project and import it by a relative path.
 
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript

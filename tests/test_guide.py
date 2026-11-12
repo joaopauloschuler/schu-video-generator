@@ -176,7 +176,9 @@ def test_the_web_topic_covers_web_scenes() -> None:
                  "**The theme.**", "**Revealing on the narration.**", "**Values from the YAML.**", "**three.js**",
                  "**Where the page goes.**", "**Both shapes from one page.**", "**No internet.**", "**The lint loop.**",
                  "**Usual mistakes**", "**Render cost.**", "examples/web", "data-vidgen-id", "`web_clipped`", "layout(t, ctx)",
-                 "data-beat", "data-orientation", 'import * as THREE from "three"', "were not tried"):
+                 "data-beat", "data-orientation", 'import * as THREE from "three"', "were not tried",
+                 "**three.js add-ons.**", "**Not shipped:**", "material.resolution.set", "controls.update(t - last)",
+                 "import.meta.url", "scene.background"):
         assert part in text, part
     assert "@" not in re.sub(r"```.*?```|`[^`]*`", "", text, flags=re.S), "a measurement placeholder is left"
     assert "vidgen guide web" in topic_text("scenes")
@@ -216,7 +218,8 @@ def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
     if missing_dependency() is not None:
         pytest.skip("no Chromium")
     files = web_topic_files()
-    assert set(files) == {"extensions/hello.html", "extensions/orbit.js", "extensions/cube.js", "extensions/fragment.js"}
+    assert set(files) == {"extensions/hello.html", "extensions/orbit.js", "extensions/cube.js", "extensions/studio.js",
+                          "extensions/fragment.js"}
     for rel, body in files.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(body, encoding="utf-8")
@@ -238,6 +241,8 @@ def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
         reading = web_page_layouts(tmp_path, tmp_path / "web", Path(rel).stem, params, **args, at=[9])[9]
         if rel == "extensions/hello.html":   # every step shown by the last beat, read by lint
             assert {t["name"] for t in reading["texts"]} == {"read", "clean", "draw"}
+        if rel == "extensions/studio.js":   # the add-ons' example: its HTML label is page text
+            assert [x["text"] for x in reading["texts"]] == ["Rounded box"]
         if rel == "extensions/orbit.js":
             declared = reading["declared"]
             assert [d["id"] for d in declared] == ["label"] and declared[0]["text"] == "3 moons"

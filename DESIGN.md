@@ -342,7 +342,8 @@ src/vidgen/
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
   data/web/               # clock.js, media.js, runtime.js (the virtual clock, animations, errors, hooks; joined and injected into a `web` page), canvas.html (§118),
                           # layout.js (reads the page's text after a screenshot, for lint; §118.12)
-  data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114)
+  data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
+                          # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -22378,7 +22379,8 @@ build, so the two files weigh 2.1 MB), its `LICENSE` (MIT), `page.html` (one can
 and meshes — `MeshLambertMaterial`, plain colours — and `vidgen3d.frame(t)` applies the tracks at
 `t`, renders and returns the canvas as a PNG data URL). No `requestAnimationFrame`, no clock, no
 randomness: the page draws only when asked, at the time it is given (`preserveDrawingBuffer`, so
-the read is the frame just drawn).
+the read is the frame just drawn). The `addons/` folder beside them (Step 334) is for `web`
+scenes only (§118.14): the `3d` page neither serves nor hashes it.
 
 `three_d/browser.py`, `PageRenderer(description)` (a context manager; one per scene render):
 starts Playwright and Chromium (`headless`, `--use-angle=swiftshader --enable-unsafe-swiftshader
@@ -23170,7 +23172,7 @@ true` does exactly what it did in Step 325: the owner wants a dissolve only on r
   dissolve does not touch still differ by 1.6 to 2.0 between the two MP4s). Both films have 488
   frames, 20.33 s, −19.3 LUFS and the same decoded sound, sample for sample.
 
-## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–333)
+## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334)
 
 The owner wants AI agents to write a scene as a web page. The owner's decisions: JavaScript in the
 project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
@@ -23179,7 +23181,8 @@ are accepted even when slow. Step 328 built the core described here, Step 329 th
 (§118.8), Step 330 what the page is given (§118.9, §118.10), Step 331 the region, the
 transparent background and the video's shape (§118.11), Step 332 lint of the page's text
 (§118.12), Step 333 the guide topic, `examples/web`, the gallery entry and the measured cost
-(§118.13); §118.7 says where each part is and what is left for after the phase.
+(§118.13), Step 334 a chosen set of three.js add-ons (§118.14); §118.7 says where each part is
+and what is left for after the phase.
 
 ### 118.1 How a `web` scene renders (Step 328)
 
@@ -23321,12 +23324,13 @@ virtual clock. 330 (§118.9, §118.10): theme as CSS variables and `ctx.theme`, 
 (`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js importable as `three`, every loaded
 file in the cache keys. 331 (§118.11): `region: bleed | body` and `title`, a transparent
 background, 9:16 from one page. 332 (§118.12): lint reads the page's text. 333 (§118.13): the
-guide topic `web`, `examples/web`, the gallery entry, the measured cost.
+guide topic `web`, `examples/web`, the gallery entry, the measured cost. 334 (§118.14): the
+three.js add-ons a page may import.
 
 Left for after the phase (also in the tasklist's backlog): no hard cut (`fade: false`) on `web`;
 a storyboard or lint still renders the whole scene (no still-only path); text in pictures, WebGL
-or an undeclared canvas is not read, nor contrast over a gradient or picture; only the core
-three.js module is served (no `three/addons/`); a page with its own import map (two maps) not
+or an undeclared canvas is not read, nor contrast over a gradient or picture; only a chosen
+set of three.js add-ons is served (§118.14); a page with its own import map (two maps) not
 tried; no animation library tried under the clock; nothing tried on Windows.
 
 ### 118.8 Time belongs to vidgen (Step 329)
@@ -23497,7 +23501,7 @@ the page stays in standards mode). The Python scene computes `theme` and `beats`
   two, which recent Chromium merges: not tried); `/__vidgen__/three/three.module.js` and `three.core.js` are served
   from `data/three` (`loaded.vidgen_file`), so a page can also import the URL. Checked in
   Chromium: `import * as THREE from "three"` from an inline module of a `page:` and from a
-  `script:` (`THREE.REVISION` = 186).
+  `script:` (`THREE.REVISION` = 186). Step 334 adds the add-ons (§118.14).
 
 ### 118.10 Every file the page loaded is in the cache keys (Step 330)
 
@@ -23752,3 +23756,49 @@ variant, the Step 330 and 331 demos.
   `Plotly.animate` transition started by a 500 ms timer: the bar's height read from the DOM equals
   the expected value at every frame from 0 to 2.9 s at 10 fps (0.2 → 1.0, exact; pixels within one
   row). GSAP, anime.js, Motion, Lottie and d3 are not on the machine; not tried.
+
+### 118.14 three.js add-ons (Step 334)
+
+- **What ships** (the owner's choice): from the npm package `three` 0.186.1 (the registry's
+  tarball, its `dist.integrity` sha512 and `shasum` checked; its `build/three.module.js` and
+  `three.core.js` byte-identical to §114.4's), 23 files of `examples/jsm/`, unmodified and in their
+  folders, under `data/three/addons/` with a copy of the MIT `LICENSE` (390 676 bytes in all):
+  `loaders/GLTFLoader.js`, `utils/BufferGeometryUtils.js`, `environments/RoomEnvironment.js`,
+  `postprocessing/{EffectComposer,RenderPass,ShaderPass,UnrealBloomPass,OutputPass}.js`,
+  `renderers/CSS2DRenderer.js`, `lines/{Line2,LineGeometry,LineMaterial,LineSegments2,LineSegmentsGeometry}.js`,
+  `geometries/RoundedBoxGeometry.js`, `loaders/SVGLoader.js`, `controls/OrbitControls.js`, and what
+  they import: `postprocessing/{Pass,MaskPass}.js`, `shaders/{CopyShader,LuminosityHighPassShader,OutputShader}.js`
+  and `utils/SkeletonUtils.js` (`GLTFLoader` imports `clone` from it). None imports a left-out file
+  or does a dynamic `import()`. `SVGLoader.js` carries a number parser credited in a comment to
+  svg-numbers (MIT); THIRD_PARTY_NOTICES says so. Left out: 3D text (`FontLoader`,
+  `TextGeometry`), `DRACOLoader`, `KTX2Loader`, Meshopt (WebAssembly in workers, outside the
+  clock, megabytes), other loaders, HDR loaders, other controls, VR / AR, physics, exporters, the
+  GUI helper, the WebGPU renderer and node materials.
+- **Manifest and serving**: `web/loaded.py` `THREE_ADDONS` (paths under `addons/`), `ADDONS_FOLDER`,
+  `THREE_VERSION`; `vidgen_file("three/addons/<path>")` answers only a manifest path. Package data
+  glob `data/three/**/*` (a built wheel lists all 29 files of `data/three/`).
+- **Import map** (`web/inputs.py` `IMPORT_MAP`): `"three"` as before, plus the prefixes
+  `"three/addons/"` and `"three/examples/jsm/"` → `/__vidgen__/three/addons/`. An add-on's own
+  `import … from "three"` resolves through the same map to the same URL, so one core module is
+  loaded (checked: `THREE.REVISION` 186, `instanceof THREE.BufferGeometry` across both spellings,
+  only `three.module.js` + `three.core.js` among the non-add-on files served).
+- **An unshipped add-on**: a request under `__vidgen__/three/addons/` that is not in the manifest
+  is a 404, a warning, and — when the page then fails to load — the error
+  `web/page.py unshipped_addon_message`: `scene '<id>': the page imports the three.js add-on
+  '<path>' (three/addons/<path>), which is not shipped with vidgen (the shipped ones are listed in
+  'vidgen guide web'). To use it, copy <Name>.js from three.js 0.186.1 (the npm package 'three',
+  examples/jsm/<path>) into the project, e.g. extensions/lib/<Name>.js, and import it by relative
+  path ('./lib/<Name>.js'); …` (before: Chromium's `Failed to resolve module specifier`).
+- **Cache**: the add-ons a page loads are in its loaded-files record (§118.10) like the core. The
+  `3d` scene is unchanged: its `PAGE_FILES` and `page_digest()` do not include `addons/` (digest
+  the same before and after). `vidgen_source_digest()` hashes every `.js` under `data/three/`, so
+  it changed once, as it does for any source change.
+- **Behaviour under vidgen's clock** (HANDOFF Step 334 has the measurements): a loader in a
+  `script:` resolves relative paths against vidgen's bare page (`/__vidgen__/canvas.html`), so a
+  file is named with `new URL("./x.glb", import.meta.url)`; `.gltf` (embedded or `.bin`) and `.glb`
+  load in `load(ctx)`. `EffectComposer`'s output is opaque: `RenderPass` without its own clear
+  colour leaves alpha 1 everywhere; with `clearColor` / `clearAlpha` 0 the alpha survives but a
+  bloom halo over transparency comes out wrong (colour above its alpha), so the rule is a scene
+  background. Composer colours equal `renderer.render`'s exactly (no bloom). `LineMaterial`
+  needs `resolution` = the page size. `OrbitControls.update()` turns 1/60 s per call (speed
+  follows fps); `update(t - last)` gives `autoRotateSpeed × 2π/60 × t` at any fps.

@@ -17,10 +17,16 @@ from typing import Any
 
 from vidgen.fonts import BUILTIN_ROLES, BUNDLED_FAMILIES
 from vidgen.scales import frame_orientation
-from vidgen.web.loaded import VIDGEN_PREFIX
+from vidgen.web.loaded import ADDONS_FOLDER, VIDGEN_PREFIX
 
-#: The import map vidgen puts in a page: the bare specifier ``three`` is the bundled three.js.
-IMPORT_MAP: dict[str, dict[str, str]] = {"imports": {"three": f"/{VIDGEN_PREFIX}three/three.module.js"}}
+#: The import map vidgen puts in a page: the bare specifier ``three`` is the bundled three.js,
+#: ``three/addons/...`` (and the older ``three/examples/jsm/...``) its shipped add-ons, whose own
+#: ``import ... from "three"`` resolves through the same map to the same module.
+IMPORT_MAP: dict[str, dict[str, str]] = {"imports": {
+    "three": f"/{VIDGEN_PREFIX}three/three.module.js",
+    "three/addons/": f"/{VIDGEN_PREFIX}three/{ADDONS_FOLDER}/",
+    "three/examples/jsm/": f"/{VIDGEN_PREFIX}three/{ADDONS_FOLDER}/",
+}}
 #: The id of the ``<style>`` element holding the theme's custom properties and font faces.
 THEME_STYLE_ID = "vidgen-theme"
 #: Aspect names a frame is given when its width / height is within :data:`ASPECT_TOLERANCE` of

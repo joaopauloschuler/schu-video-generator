@@ -1433,7 +1433,7 @@ render never depends on, or sends anything to, another site.
 
 | | Python scene type (`extensions/*.py`) | `web` scene (`page:` / `script:`) |
 |---|---|---|
-| language | Python with Manim (`vidgen.api`) | HTML, CSS, JavaScript (three.js bundled) |
+| language | Python with Manim (`vidgen.api`) | HTML, CSS, JavaScript (three.js and a chosen set of its add-ons bundled) |
 | reuse | a new type: many scenes, each with its own params | one page per scene; values through `data:` (`ctx.data`) |
 | text | vidgen's own (`T`, `fit_text`): fitted, translated, action targets | the page's own; lint reads it (canvas text: `layout(t, ctx)`) |
 | beat actions | your targets (`self.target(...)`), `highlight`, `zoom`, custom actions | `view` (the whole page) and `title`; the page reacts to beats itself (`data-beat`, `ctx.beats`) |
