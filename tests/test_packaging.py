@@ -5,11 +5,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from vidgen import DIST_NAME, __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.slow
 def test_distribution_name_version_and_commands() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")   # no tomllib on Python 3.10
     assert re.search(r'^name = "([^"]+)"$', pyproject, flags=re.M)[1] == DIST_NAME == "schu-video-generator"

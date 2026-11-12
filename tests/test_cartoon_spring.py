@@ -51,6 +51,7 @@ def test_settles_within_its_settle_time(spring: Spring) -> None:
         assert max(abs(1 - spring.step_response(settle + k * settle / 500)) for k in range(2000)) <= tolerance + 1e-9
 
 
+@pytest.mark.slow
 def test_no_overshoot_when_critically_damped() -> None:
     for spring in (Spring.tuned(3.0, 1.0), Spring.tuned(0.5, 1.0), Spring.tuned(2.0, 2.5)):
         assert spring.overshoot() == 0.0
@@ -61,6 +62,7 @@ def test_no_overshoot_when_critically_damped() -> None:
     assert Spring.tuned(3.0, 0.99).overshoot() > 0   # just below critical it does
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("spring", SPRINGS, ids=lambda s: f"zeta{s.damping_ratio:.2f}")
 def test_follow_matches_the_spring_equation(spring: Spring) -> None:
     def target(s: float) -> float:   # smooth, at rest before 0
@@ -73,6 +75,7 @@ def test_follow_matches_the_spring_equation(spring: Spring) -> None:
     assert spring.follow(target, 0.4) == spring.follow(target, 0.4)   # pure: no state between calls
 
 
+@pytest.mark.slow
 def test_follow_through_runs_on_the_spring_and_none_turns_it_off() -> None:
     assert follow_through(lambda s: min(max(s, 0.0), 1.0), 1.3, Spring.tuned(2.0, 1.0)) >= -1e-9   # critical: no swing back
     assert follow_through(lambda s: min(max(s, 0.0), 1.0), 1.3, FOLLOW_SPRING) < -0.1   # the default swings back

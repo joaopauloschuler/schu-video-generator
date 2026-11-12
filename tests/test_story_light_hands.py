@@ -71,6 +71,7 @@ def _pair() -> tuple[Any, Any]:
     return a, b
 
 
+@pytest.mark.slow
 def test_two_far_apart_step_in_until_their_hands_meet() -> None:
     a, b = _pair()
     hold = HandHold(a, b, 0.0)

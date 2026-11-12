@@ -87,6 +87,7 @@ def test_host_action_problems() -> None:
     assert "scenes[1].beats[0].actions[0]: host_point: scene 'bare' has no host" in lines
 
 
+@pytest.mark.slow
 def test_validate_checks_host_action_targets_and_scene_types(make_project) -> None:
     stage = {"id": "park", "type": "stage", "params": {"characters": ["kit"]}, "beats": [{"text": "Hi.", "actions": [{"host_look": "kit"}]}]}
     beats = [{"text": "One.", "actions": [{"host_point": "item9"}, {"host_move": "up"}]}, {"text": "Two.", "actions": [{"host_react": "happy", "effect": "glow"}]}]
@@ -235,6 +236,7 @@ def test_the_host_explainer_example_validates_and_is_directed() -> None:
 # ----- one tiny render ---------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_host_points_reacts_moves_and_leaves(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder

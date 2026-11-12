@@ -109,6 +109,7 @@ def play_to(anim: KeyedMotion, share: float) -> None:
     anim.interpolate(share)
 
 
+@pytest.mark.slow
 def test_keyed_motion_moves_turns_and_sizes_about_the_feet() -> None:
     from manim import Square
 
@@ -131,6 +132,7 @@ def test_keyed_motion_moves_turns_and_sizes_about_the_feet() -> None:
     assert box.keyed_feet == pytest.approx((3.0, 2.0, 0.0)) and box.get_center() == pytest.approx([3.0 - 0.5 * math.sin(math.pi / 4), 2.0 + 0.5 * math.cos(math.pi / 4), 0.0])   # turned about its feet
 
 
+@pytest.mark.slow
 def test_keyed_motion_poses_a_part() -> None:
     kit = figure("kit")
     kit.set_expression("sad")   # a mouth flipped upside down
@@ -145,6 +147,7 @@ def test_keyed_motion_poses_a_part() -> None:
         KeyedMotion(kit.parts["head"], lambda s: {}, part="head")
 
 
+@pytest.mark.slow
 def test_keyframes_action_on_a_character_a_part_and_back() -> None:
     pip = figure().shift([-4.0, -2.0, 0.0])
     scene = KeyFake(pip=pip)
@@ -245,6 +248,7 @@ def test_stage_names_the_parts_as_targets(make_project, monkeypatch) -> None:
 # ----- render ---------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_keyframes_on_a_stage(make_project, tmp_path: Path) -> None:
     """pip floats up and back down along a path; kit raises its arm by keys; the tree tilts."""

@@ -192,6 +192,7 @@ def narrated(sid: str, *texts: str, **extra: Any) -> dict[str, Any]:
 LONG = "First, you write the narration as a list of short beats, and then you render a preview of every scene in the video."
 
 
+@pytest.mark.slow
 def test_subtitles_show_one_cue_at_a_time_and_reserve_the_bottom(make_project) -> None:
     project = load(make_project, [narrated("a", "A short beat."), narrated("b", LONG, "The end.")], [{"type": "captions"}])
     (cap,) = built(project, "b")
@@ -214,6 +215,7 @@ def test_subtitles_show_one_cue_at_a_time_and_reserve_the_bottom(make_project) -
     assert cap.state(at - 0.05) is None
 
 
+@pytest.mark.slow
 def test_karaoke_highlights_the_spoken_word(make_project) -> None:
     project = load(make_project, [narrated("a", SENTENCE)], [{"type": "captions", "style": "words"}])
     (cap,) = built(project, "a", size=(180, 320))
@@ -276,6 +278,7 @@ def test_options_are_validated(make_project) -> None:
     assert {"overlays[0].style", "overlays[0].max_lines", "overlays[0].pop"} <= found
 
 
+@pytest.mark.slow
 def test_fingerprint_follows_alignments(make_project) -> None:
     project = load(make_project, [narrated("a", "Hello there.")], [{"type": "captions"}])
     before = scene_fingerprint(project, "a")
@@ -338,6 +341,7 @@ def test_tts_stores_alignments_when_asked(make_project, monkeypatch: pytest.Monk
 # ----- rendered + lint -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_captions_render_into_the_frames_and_the_layout_dump(make_project, tmp_path: Path) -> None:
     project = load(make_project, [bullets("s", beats=2)], [{"type": "captions"}])

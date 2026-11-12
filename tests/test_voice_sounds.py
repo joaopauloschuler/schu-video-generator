@@ -110,6 +110,7 @@ def test_spoken_texts_and_pinned_hashes(make_project) -> None:
     assert laugh.word_groups() == [[3], [4], [5, 6]]   # "Ha ha ha!" belongs to no written word
 
 
+@pytest.mark.slow
 def test_sound_times_and_the_mouth_around_them(make_project) -> None:
     project = sounds_project(make_project)   # no MP3s: estimated word times
     with_sound = beat_sound_spans(project, project.beat("mid"), 2.0)
@@ -167,6 +168,7 @@ def test_screenplay_keeps_sound_markers_in_the_line() -> None:
         parse_screenplay("KIT: [laugh]\n")
 
 
+@pytest.mark.slow
 def test_speakers_get_the_sound_s_face(make_project) -> None:
     project = acting_project(make_project, [
         {"text": "Oh no [gasp] it fell.", "voice": "pip_voice"},
@@ -185,6 +187,7 @@ def test_speakers_get_the_sound_s_face(make_project) -> None:
 # ----- render --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_breaths_play_and_laughs_show(make_project, tmp_path: Path) -> None:
     project = acting_project(make_project, [

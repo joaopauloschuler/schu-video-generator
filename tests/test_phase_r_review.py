@@ -34,6 +34,7 @@ WEB = {   # the example's trip, shortened
 # ----- the fit ---------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_labels_go_beside_the_blocks_when_above_and_below_overflow_a_wide_body() -> None:
     from vidgen.scenes.iso_diagram import IsoDiagram, _Placement
 
@@ -46,11 +47,13 @@ def test_labels_go_beside_the_blocks_when_above_and_below_overflow_a_wide_body()
     assert plan_.fits and plan_.scale == pytest.approx(2.0 / 1.2)    # the cap; 1.25 with the labels above and below
 
 
+@pytest.mark.slow
 def test_the_example_grid_fills_a_wide_body(make_project) -> None:
     _scene, made = plan(make_project, WEB, (854, 480))
     assert made.fits and made.scale > 1.25       # Step 175: 1.01 (the labels above and below set the height)
 
 
+@pytest.mark.slow
 def test_a_tall_frame_draws_the_grid_as_written_or_slanted_whichever_is_larger(make_project) -> None:
     p = params(**WEB)
     assert len(p.layouts(portrait=False)) == 1
@@ -115,6 +118,7 @@ def alpha(group) -> float:
     return max(float(np.max(m.fill_rgbas[:, 3])) for m in group.family_members_with_points())
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_focus_fades_out_the_labels_it_would_cut_and_brings_them_back(make_project, media: Path) -> None:
     acts = [[{"focus": "block:db", "scale": 3}], [{"focus": "diagram"}]]
@@ -129,6 +133,7 @@ def test_focus_fades_out_the_labels_it_would_cut_and_brings_them_back(make_proje
     assert not back._veiled and all(alpha(group) > 0.5 for group in back._parts["texts"].values())
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_raising_a_block_tilts_its_connectors_and_a_build_brings_the_floor_in_parts(make_project, media: Path) -> None:
     scenes = [{"id": "s", "type": "iso_diagram", "params": SCENE,

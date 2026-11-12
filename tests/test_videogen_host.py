@@ -261,6 +261,7 @@ def test_open_verify_fetch_close_with_the_ledger(tmp_path: Path, fake_cloudflare
     assert all(secret not in line for line in lines)
 
 
+@pytest.mark.slow
 def test_hard_maximum_lifetime(tmp_path: Path, fake_cloudflared: list[str]) -> None:
     project, audio, _ = sources(tmp_path)
     settings = HostSettings(url_timeout=10, verify_timeout=1, verify_interval=0.05, max_seconds=1.0)
@@ -270,6 +271,7 @@ def test_hard_maximum_lifetime(tmp_path: Path, fake_cloudflared: list[str]) -> N
         assert wait_dead(host.tunnel.process.pid)
 
 
+@pytest.mark.slow
 def test_ctrl_c_inside_the_block_closes_everything(tmp_path: Path, fake_cloudflared: list[str]) -> None:
     project, audio, _ = sources(tmp_path)
     ledger = Ledger(tmp_path / "ledger.jsonl")
@@ -285,6 +287,7 @@ def test_ctrl_c_inside_the_block_closes_everything(tmp_path: Path, fake_cloudfla
     assert host.close_reason == "error: RuntimeError" and not host.folder.exists()
 
 
+@pytest.mark.slow
 def test_cloudflared_failures_close_everything(tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
     project, audio, _ = sources(tmp_path)
     monkeypatch.setenv("FAKE_CF_MODE", "exit")
@@ -303,6 +306,7 @@ def test_cloudflared_failures_close_everything(tmp_path: Path, fake_cloudflared:
         QuickTunnelHost([audio], settings=SETTINGS, executable=[str(tmp_path / "no-such-program")]).open()
 
 
+@pytest.mark.slow
 def test_public_address_that_never_works_stops_before_anything_is_sent(tmp_path: Path, fake_cloudflared: list[str]) -> None:
     project, audio, _ = sources(tmp_path)
     ledger = Ledger(tmp_path / "ledger.jsonl")
@@ -333,6 +337,7 @@ def test_public_address_that_never_works_stops_before_anything_is_sent(tmp_path:
         assert host.is_open and host.redact(f"see {host.url_of(audio)}") == f"see https://{FAKE_HOST}/<secret>"
 
 
+@pytest.mark.slow
 def test_self_test_and_the_cli(tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     lines: list[str] = []
     result = host_self_test(SETTINGS, executable=fake_cloudflared, fetch=local_fetch(tmp_path), out=lines.append)

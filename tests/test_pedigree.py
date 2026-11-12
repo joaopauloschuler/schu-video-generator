@@ -236,6 +236,7 @@ def problems(make_project: Any, params: dict[str, Any], actions: list[list[dict[
     return [p.message for p in project_problems(project_with(make_project, [scene(params, actions)], narration=NARRATION))]
 
 
+@pytest.mark.slow
 def test_pedigree_scenes_are_validated(make_project) -> None:
     ar = {"individuals": AR, "carrier_frequency": "1/25"}
     ok = [[{"reveal": "generation:II"}, {"highlight": "person:II-2", "style": "box"}], [{"analyse": "modes"}],
@@ -262,6 +263,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_pedigree_scenes_render(size: tuple[int, int], make_project, media: Path) -> None:

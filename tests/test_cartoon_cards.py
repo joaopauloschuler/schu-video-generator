@@ -103,6 +103,7 @@ def test_first_scene_can_iris_in_but_not_out() -> None:
     assert effective(parse_config(_config(scenes=scenes)), 0).type == "iris_in"
 
 
+@pytest.mark.slow
 def test_plan_closes_and_opens_without_overlap(make_project: Any) -> None:
     project = Project.load(make_project(_config()))
     with extensions.project_session(project):
@@ -255,6 +256,7 @@ def test_screenplay_cards() -> None:
 # ----- renders --------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_card_render_reads_well(make_project: Any, tmp_path: Path) -> None:
     from test_cartoon_stage import render_with_layout
@@ -283,6 +285,7 @@ def _frames(path: Path) -> np.ndarray:
         return np.stack([f.to_ndarray(format="rgb24").astype(np.int16) for f in container.decode(video=0)])
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_irises_through_the_join(tmp_path: Path) -> None:
     """a (pip at left) -iris_out on pip-> later (a card with a sting) -iris_in on kit, red-> b (kit

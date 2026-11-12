@@ -1,0 +1,100 @@
+/* The water cycle cards (cycle.html). Sizes: the theme's (--vidgen-size-*, in px for this frame)
+   for text, the page's own viewport (vw / vh = the body region) for everything else. */
+html, body { margin: 0; height: 100%; }
+body {                                 /* no background: the video's own shows through */
+  font-family: var(--vidgen-font-body);
+  color: var(--vidgen-text);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+
+.cycle {
+  display: flex; flex-direction: row; gap: 3.5vw;
+  width: 100%; height: 100%; box-sizing: border-box; padding: 2vh 1vw;
+}
+.card {
+  --tone: var(--vidgen-primary);
+  position: relative; flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vh;
+  padding: 4vh 2vw; box-sizing: border-box;
+  background: var(--vidgen-surface);
+  border: 0.35vh solid color-mix(in srgb, var(--tone) 35%, transparent);
+  border-radius: 3vh;
+  text-align: center;
+  /* hidden until its beat; the transition plays when data-beat-index changes */
+  opacity: 0; transform: translateY(6vh) scale(0.94);
+  transition: opacity 0.6s ease-out, transform 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2), border-color 0.4s, box-shadow 0.4s;
+}
+.card[data-step="1"] { --tone: var(--vidgen-highlight); }
+.card[data-step="2"] { --tone: var(--vidgen-text); }
+.card[data-step="3"] { --tone: var(--vidgen-primary); }
+
+/* a chevron between two cards, in the gap */
+.card + .card::before {
+  content: ""; position: absolute; left: -2.7vw; top: 50%;
+  width: 1.4vw; height: 1.4vw; margin-top: -0.7vw;
+  border-top: 0.35vw solid var(--vidgen-dim); border-right: 0.35vw solid var(--vidgen-dim);
+  transform: rotate(45deg);
+}
+
+/* the reveal: card 1 on beat 0 (an entrance animation), card 2 from beat 1, card 3 from beat 2 */
+.card[data-step="1"] { animation: rise 0.8s 0.15s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(6vh) scale(0.94); } to { opacity: 1; transform: none; } }
+body[data-beat-index] .card[data-step="1"],
+body[data-beat-index="1"] .card[data-step="2"],
+body[data-beat-index="2"] .card[data-step="2"],body[data-beat-index="2"] .card[data-step="3"],
+body[data-beat-index="3"] .card[data-step="2"], body[data-beat-index="3"] .card[data-step="3"] {
+  opacity: 1; transform: none;
+}
+/* the card being narrated glows in its colour */
+body[data-beat-index="0"] .card[data-step="1"],
+body[data-beat-index="1"] .card[data-step="2"],
+body[data-beat-index="2"] .card[data-step="3"] {
+  border-color: var(--tone);
+  box-shadow: 0 0 5vh color-mix(in srgb, var(--tone) 30%, transparent);
+}
+/* the last beat: the glow runs round the three cards, over and over */
+body[data-beat-index="3"] .card { animation: round 2.4s linear infinite; }
+body[data-beat-index="3"] .card[data-step="2"] { animation-delay: 0.8s; }
+body[data-beat-index="3"] .card[data-step="3"] { animation-delay: 1.6s; }
+@keyframes round {
+  0%, 40%, 100% { border-color: color-mix(in srgb, var(--tone) 35%, transparent); box-shadow: none; }
+  12% { border-color: var(--tone); box-shadow: 0 0 5vh color-mix(in srgb, var(--tone) 40%, transparent); }
+}
+
+.art { height: 34vh; width: auto; flex: none; overflow: visible; }
+.words h2 {
+  margin: 0 0 1.2vh; font-family: var(--vidgen-font-heading); font-weight: 700;
+  font-size: var(--vidgen-size-body); line-height: 1.1; text-wrap: balance;
+}
+.words p { margin: 0; font-size: var(--vidgen-size-caption); line-height: 1.25; color: var(--vidgen-dim); text-wrap: balance; }
+
+/* pictures: theme colours, CSS animation (vidgen sets every animation to the video's time) */
+.sun circle { fill: var(--vidgen-highlight); }
+.rays { stroke: var(--vidgen-highlight); stroke-width: 4; stroke-linecap: round; transform-origin: 34px 34px; animation: spin 8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sea { fill: var(--vidgen-primary); }
+.wisp { fill: none; stroke: var(--vidgen-text); stroke-width: 3; stroke-linecap: round; animation: lift 2.4s ease-in infinite; }
+.w2 { animation-delay: 0.8s; } .w3 { animation-delay: 1.6s; }
+@keyframes lift { 0% { transform: translateY(8px); opacity: 0; } 30% { opacity: 0.9; } 100% { transform: translateY(-26px); opacity: 0; } }
+
+.cloud { fill: var(--vidgen-text); }
+.cloud.dark { fill: var(--vidgen-dim); }
+.drift { animation: drift 4s ease-in-out infinite alternate; }
+@keyframes drift { from { transform: translateX(-7px); } to { transform: translateX(7px); } }
+.dots circle { fill: var(--vidgen-primary); animation: gather 2s ease-in infinite; }
+.dots circle:nth-child(2) { animation-delay: 0.6s; } .dots circle:nth-child(3) { animation-delay: 1.2s; }
+@keyframes gather { 0% { transform: translateY(0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-34px); opacity: 0; } }
+
+.drop { stroke: var(--vidgen-primary); stroke-width: 4; stroke-linecap: round; animation: fall 0.9s linear infinite; }
+.d2 { animation-delay: 0.3s; } .d3 { animation-delay: 0.6s; } .d4 { animation-delay: 0.15s; }
+@keyframes fall { from { transform: translateY(-4px); opacity: 1; } to { transform: translateY(36px); opacity: 0; } }
+
+/* a vertical video: the cards stack, picture left, words right */
+[data-orientation="portrait"] .cycle { flex-direction: column; gap: 3vh; padding: 1vh 2vw; }
+[data-orientation="portrait"] .card { flex-direction: row; justify-content: flex-start; text-align: left; gap: 5vw; padding: 2vh 5vw; border-radius: 2vh; }
+[data-orientation="portrait"] .art { height: 19vh; }
+[data-orientation="portrait"] .card + .card::before {
+  left: 50%; top: -2.3vh; margin: 0 0 0 -1vh; width: 1.6vh; height: 1.6vh;
+  border-width: 0.4vh; transform: rotate(135deg);
+}

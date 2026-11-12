@@ -165,6 +165,7 @@ def test_a_door_opens_in_place() -> None:
     assert mirrored.get_right()[0] > mirrored.feet()[0] + closed / 2
 
 
+@pytest.mark.slow
 def test_a_walk_fades_out_through_a_door_and_comes_back_whole() -> None:
     from test_cartoon_moving import figure
 
@@ -190,6 +191,7 @@ def test_a_walk_fades_out_through_a_door_and_comes_back_whole() -> None:
 # ----- the stage's params --------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_room_params_doors_are_props_and_marks() -> None:
     params = stage_params(room={"windows": ["left", 0.7], "doors": [0.8, {"name": "back", "at": "far_left", "open": True}]},
                           characters=[{"name": "pip", "at": "door"}], props=["table"])
@@ -258,6 +260,7 @@ def test_actions_know_doors_and_keep_the_weather_out(make_project) -> None:
 # ----- render ---------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_room_at_night_with_a_character_coming_in_through_the_door(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen import extensions, registry
@@ -291,6 +294,7 @@ def test_a_room_at_night_with_a_character_coming_in_through_the_door(make_projec
     assert door not in shadows and kit in shadows   # a door in the wall casts no shadow
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_set_fades_in_as_one_picture(make_project, tmp_path: Path, monkeypatch) -> None:
     """While the room fades in, nothing shows through what stands in front of it (pip over the

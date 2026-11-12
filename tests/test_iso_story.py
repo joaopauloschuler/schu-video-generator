@@ -23,6 +23,7 @@ EXAMPLE = REPO / "examples" / "iso-story"
 # ----- the example -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("variant", [None, "short"])
 def test_the_example_validates_and_uses_phase_q(variant: str | None, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = shutil.copytree(EXAMPLE, tmp_path / "story", ignore=shutil.ignore_patterns("build", "output", "exports", "audio"))
@@ -46,6 +47,7 @@ def test_the_example_validates_and_uses_phase_q(variant: str | None, tmp_path: P
 # ----- what a character carries fades with it ----------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_held_thing_leaves_the_place_with_its_holder(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from vidgen.scenes import stage_iso

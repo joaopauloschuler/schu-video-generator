@@ -132,6 +132,7 @@ def light_project(make_project, actions: list[Any], *, scene_type: str = "stage"
     return Project.load(make_project(minimal_config(characters=CAST, voices=VOICES, scenes=scenes)))
 
 
+@pytest.mark.slow
 def test_validate_light_actions_and_param(make_project) -> None:
     good = [{"light": "night", "run_time": 3}, {"action": "light", "tint": "primary", "strength": 0.3, "at": 0.5}]
     assert check_project(light_project(make_project, good, params={"light": {"tint": "#FFAA66"}})) == []
@@ -156,6 +157,7 @@ def test_validate_light_actions_and_param(make_project) -> None:
 # ----- render ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_sunset_to_night_keeps_the_bubble_readable(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen import extensions, registry

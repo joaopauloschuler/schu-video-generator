@@ -227,6 +227,7 @@ def test_credit_and_client_errors_are_not_retried_and_hide_the_key(router: FakeR
     assert "HTTP 400" in str(err.value) and KEY not in str(err.value) and len(router.posts) == 2
 
 
+@pytest.mark.slow
 def test_missing_key(monkeypatch: pytest.MonkeyPatch, or_project) -> None:
     monkeypatch.delenv(orr.API_KEY_ENV, raising=False)
     calls: list[Any] = []

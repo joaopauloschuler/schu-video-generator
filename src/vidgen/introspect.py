@@ -77,6 +77,26 @@ _CODE_SUFFIX = re.compile(r" pA\d+$", re.MULTILINE)
 _MARKUP_TAG = re.compile(r"<[^>]*>")
 
 
+def _reserved_boxes(scene: NarratedScene, sx: float, sy: float) -> list[dict[str, Any]]:
+    """The overlays that keep part of the frame for themselves (``reserve``: bottom captions) and
+    that part, ``{overlay, type, box}`` (frame px): the scene's safe area leaves it out."""
+    from manim import config
+
+    from vidgen.overlays import mobject_region
+
+    layer = getattr(scene, "overlay_layer", None)
+    if layer is None:
+        return []
+    out = []
+    for overlay, mob in zip(layer.overlays, layer.mobjects):
+        box = mobject_region(mob) if overlay.reserves and mob is not None else None
+        if box is not None:
+            out.append({"overlay": overlay.id, "type": overlay.config.type,
+                        "box": [_r((box.x0 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - box.y1) * sy),
+                                _r((box.x1 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - box.y0) * sy)]})
+    return out
+
+
 def _hex(rgb: Iterable[float]) -> str:
     """``#RRGGBB`` for RGB components in 0..1."""
     r, g, b = (int(round(min(max(float(c), 0.0), 1.0) * 255)) for c in rgb)
@@ -133,6 +153,7 @@ class LayoutRecorder:
 
         camera = scene.camera
         objects = self.objects(scene, captured.pixels)
+        page = self._page_texts(scene, captured, objects)
         layer = scene.overlay_layer
         shown = layer.posed(captured.frame) if layer is not None else []
         if shown:
@@ -155,14 +176,38 @@ class LayoutRecorder:
                 },
                 **({"shot": dict(scene.camera_shot)} if getattr(scene, "camera_shot", None) else {}),
                 **(scene.layout_keys(captured.beat_id) if hasattr(scene, "layout_keys") else {}),
+                **page,
                 "objects": objects,
                 "overlays": [
                     {"id": overlay.id, "type": overlay.config.type, "settled": settled, "skip": list(overlay.lint_skip),
-                     **({"faces": True} if overlay.avoids_faces else {})}
+                     **({"faces": True} if overlay.avoids_faces else {}), **({"reserve": True} if overlay.reserves else {})}
                     for overlay, _, settled in shown
                 ],
             }
         )
+
+    def _page_texts(self, scene: NarratedScene, captured: CapturedFrame, objects: list[dict[str, Any]]) -> dict[str, Any]:
+        """A ``web`` scene's page (DESIGN.md §118.12): its texts, read from the page at this frame
+        (``scene.page_layout(frame)`` -> the reading and the mobject showing the page), go into
+        ``objects`` just above the page's picture, mapped to the box it is drawn in; returns the
+        frame's ``web`` key. Nothing when the scene has no page or the picture is not visible."""
+        hook = getattr(scene, "page_layout", None)
+        page = hook(captured.frame) if hook is not None else None
+        if page is None:
+            return {}
+        from vidgen.web.layout import page_summary, page_text_objects
+
+        reading, view = page
+        at = next((k for k, o in enumerate(objects) if o["id"] == self._id(view)), None)
+        if at is None:
+            return {}
+        shown = objects[at]
+        frame = (int(scene.camera.pixel_width), int(scene.camera.pixel_height))
+        texts = page_text_objects(reading, shown["bbox"], frame, float(shown["opacity"]))
+        for k, text in enumerate(texts):
+            text["order"] = shown["order"] + (k + 1) / (len(texts) + 1)
+        objects[at + 1:at + 1] = texts
+        return {"web": page_summary(reading, shown["bbox"], captured.frame)}
 
     def objects(self, scene: NarratedScene, pixels: np.ndarray) -> list[dict[str, Any]]:
         """The visible objects of ``scene`` as drawn in ``pixels`` (its current frame)."""
@@ -269,8 +314,10 @@ class LayoutRecorder:
             clear = shorts_area(project, frame_region())
             shorts = {"shorts": [_r((clear.x0 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - clear.y1) * sy),
                                  _r((clear.x1 + config.frame_width / 2) * sx), _r((config.frame_height / 2 - clear.y0) * sy)]}
+        reserved = _reserved_boxes(scene, sx, sy)
         return {
             **shorts,
+            **({"reserved": reserved} if reserved else {}),
             "version": LAYOUT_VERSION,
             "scene": scene.spec.id,
             "type": scene.spec.type,

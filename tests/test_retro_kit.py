@@ -87,6 +87,7 @@ def test_kinds_a_rocket_car_and_a_console_face() -> None:
 ISO = {"place": "indoor", "map": "#########\n#.......#\n#.l.k...#\n#.......#\n####+####", "spots": {"l": "here", "k": "there"}}
 
 
+@pytest.mark.slow
 def test_retro_keys_validate() -> None:
     good = stage_params(iso={**ISO, "style": "retro", "textures": {"floor": "checker"},
                              "objects": [{"object": "car", "at": "here", "kind": "rocket"}, {"object": "sunburst_clock", "at": {"column": 4, "row": 1}, "time": "03:27"},
@@ -135,6 +136,7 @@ def test_saucers_and_trains_glide() -> None:
     assert widths[1] > widths[0] and widths[2] > widths[1]   # a saucer wider than a pod, a train longer
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("front", [False, True])
 def test_retro_looks_draw(front: bool) -> None:
     colors = {"skin": "#F0D2B4", "clothes": "#3C6E71", "trim": "#F4EBDD", "outline": "#1F2430", "features": "#1F2430", "hair": "#2A1810",
@@ -149,6 +151,7 @@ def test_retro_looks_draw(front: bool) -> None:
         CharacterLook(accessories=["fedora", "hat"])
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_retro_street_renders_at_blue_hour(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

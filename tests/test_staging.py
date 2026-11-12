@@ -116,6 +116,7 @@ def test_follow_stage_from_the_characters_places() -> None:
 # ----- signal -------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_pan_law_and_moves() -> None:
     left = stage_voice(TONE, VoiceStaging(pan=-0.5))
     assert len(left) == RATE and _db(left[:, 0], left[:, 1]) == pytest.approx(7.66, abs=0.02)
@@ -139,6 +140,7 @@ def test_rooms_ring_out_in_order_and_decorrelate() -> None:
     assert 10 * math.log10(float(np.sum(left**2))) == pytest.approx(ROOM_PRESETS["hall"].wet_db, abs=0.01)
 
 
+@pytest.mark.slow
 def test_hall_decay_matches_its_rt60() -> None:
     ir = reverb_ir("hall", 0)
     spectrum = np.fft.rfft(ir, 2 * len(ir))
@@ -191,6 +193,7 @@ def test_mono_check(tmp_path: Path, right: float, ok: bool, fold: float | None) 
     assert measured.to_json()["correlation"] == pytest.approx(right, abs=0.001)
 
 
+@pytest.mark.slow
 def test_mono_check_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "x.wav"
     write_wav(path, np.stack([TONE[:, 0], -TONE[:, 0]], axis=1))
@@ -225,6 +228,7 @@ PINNED_RMS = [0.03958, 0.144599, 0.143564, 0.091011, 0.090911, 0.143437, 0.14336
               0.00734, 0.143375, 0.143282, 0.090624, 0.003207, 0.001814]
 
 
+@pytest.mark.slow
 def test_audio_only_render_is_pinned_without_staging(tmp_path: Path) -> None:
     project = Project.load(_write(tmp_path / "p", PIN))
     _voice_all(project)
@@ -249,6 +253,7 @@ def test_audio_only_render_is_pinned_without_staging(tmp_path: Path) -> None:
     assert render_audio(plain).output.read_bytes() == render_audio(project).output.read_bytes()
 
 
+@pytest.mark.slow
 def test_staged_render_places_the_voices(tmp_path: Path) -> None:
     data = {**PIN, "voices": {"b": {"voice_id": "other", "pan": "left"}}, "audio": {"music_width": 0.0}}
     data["sections"] = [PIN["sections"][0], {**PIN["sections"][1], "room": {"use": "hall", "narrator": True}}]
@@ -276,6 +281,7 @@ def test_staged_render_places_the_voices(tmp_path: Path) -> None:
     assert result.timings["stereo"]["preset"] == "mono" and result.timings["stereo"]["ok"]
 
 
+@pytest.mark.slow
 def test_music_width_zero_is_mono(tmp_path: Path) -> None:
     root = _write(tmp_path / "p", {"title": "t", "music": {"source": "calm"}, "audio": {"music_width": 0.0},
                                    "scenes": [{"id": "s", "type": "text_card", "params": {"text": "x"}, "duration": 2.0}]})
@@ -318,6 +324,7 @@ def _noise_voices(project: Project, seconds: float = 1.0) -> None:
         write_wav(project.audio_dir / f"{beat.id}.mp3", (0.05 * rng.standard_normal(round(seconds * RATE))).astype(np.float32))
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_video_scene_pans_and_rooms_its_voices(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data = {"title": "t", "voices": {"pip": {"voice_id": "p", "pan": "left"}}, "narration": {"pad": 0.4},
@@ -331,6 +338,7 @@ def test_a_video_scene_pans_and_rooms_its_voices(tmp_path: Path, monkeypatch: py
     assert _db(pip[:RATE, 0], pip[:RATE, 1]) > 5
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_follow_stage_pans_to_the_speaker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data = {"title": "t", "audio": {"follow_stage": True}, "narration": {"pad": 0.3},

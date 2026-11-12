@@ -158,6 +158,7 @@ def test_value_axis() -> None:
 # ----- layout helpers (16:9 and 9:16) ------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_chart_axes_fit_the_area_with_readable_labels(frame: str) -> None:
     area = safe_area()
     x = ChartAxis(1, 20, tuple(float(i) for i in range(1, 21)), tuple(str(i) for i in range(1, 21)), title="epoch")
@@ -183,6 +184,7 @@ def test_chart_axes_fit_the_area_with_readable_labels(frame: str) -> None:
     assert len(axes.lines) == 2 and len(axes.grid) > 0
 
 
+@pytest.mark.slow
 def test_chart_axes_keep_room_and_label_sizes_follow_the_theme(frame: str) -> None:
     area = safe_area()
     x, y = value_axis([0, 10]), value_axis([0, 5])
@@ -195,6 +197,7 @@ def test_chart_axes_keep_room_and_label_sizes_follow_the_theme(frame: str) -> No
     assert chart_label_size(8) == pytest.approx(readable_size())   # never below the floor
 
 
+@pytest.mark.slow
 def test_legend_spot_and_auto_legend(frame: str) -> None:
     plot = Region(-3, -3, 3, 3)
     assert np.allclose(legend_spot((1.0, 0.5), plot, []), [3 - 0.15 - 0.5, 3 - 0.15 - 0.25, 0])   # top right first
@@ -215,6 +218,7 @@ def test_legend_spot_and_auto_legend(frame: str) -> None:
     assert len(stacked) == 3 and len(chart_legend(entries, 10.0)) == 1
 
 
+@pytest.mark.slow
 def test_markers_title_and_caption(frame: str) -> None:
     for kind in ("circle", "square", "triangle", "diamond"):
         mark = chart_marker(kind, 0.1, "primary")
@@ -448,6 +452,7 @@ def test_histogram_bars_markers_and_highlight(make_project, media: Path) -> None
     assert [t.name for t in scene.targets if not scene.is_shown(t)] == []
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_histogram_percent_axis(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "h", "type": "histogram", "params": {"counts": [1, 3], "edges": [0, 1, 2], "percent": True}, "duration": 1.5}])
@@ -497,6 +502,7 @@ def test_bar_values_stay_readable_in_portrait(make_project, media: Path) -> None
     assert len({round(b.get_x(), 6) for b in bars}) < 5 or len({round(b.get_y(), 6) for b in bars}) == 5   # horizontal bars
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_line_chart_labels_and_legend(make_project, media: Path) -> None:
     p = {"x": [1, 2, 3, 4, 5, 6, 7, 8], "series": {"baseline": [2.1, 1.82, 1.66, 1.58, 1.53, 1.5, 1.49, 1.48],

@@ -146,6 +146,7 @@ def test_epistasis_and_linkage() -> None:
     assert males.phenotype_ratio == (1, 1) and "no crossing over" in males.notes[0]
 
 
+@pytest.mark.slow
 def test_branch_diagrams_and_size_limits() -> None:
     tri = plan(**TRI, parents=["AaBbCc", "AaBbCc"])
     assert tri.show == "branch" and tri.tree is not None and tri.tree.levels == ("seed shape", "seed colour", "flower colour")
@@ -202,6 +203,7 @@ def problems(make_project: Any, params: dict[str, Any], actions: list[list[dict[
     return [p.message for p in project_problems(project_with(make_project, [scene(params, actions)], narration=NARRATION))]
 
 
+@pytest.mark.slow
 def test_cross_scenes_are_validated(make_project) -> None:
     di = {"preset": "pea_dihybrid", "parents": ["RrYy", "RrYy"]}
     ok = [[{"form_gametes": "both"}], [{"fill": "row1", "by": "cell"}, {"fill": "row*"}], [{"count": "phenotypes"}, {"ratio": "phenotypes"}],
@@ -232,6 +234,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_cross_scenes_render(size: tuple[int, int], make_project, media: Path) -> None:

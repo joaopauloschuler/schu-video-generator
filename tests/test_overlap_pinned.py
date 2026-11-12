@@ -71,6 +71,7 @@ def test_planned_timeline_is_pinned(make_project) -> None:
     assert [round(s.start, 6) for s in plan.scenes] == SCENE_STARTS
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_rendered_timings_and_audio_are_pinned(make_project, tiny: None, monkeypatch: pytest.MonkeyPatch) -> None:
     project = _project(make_project)

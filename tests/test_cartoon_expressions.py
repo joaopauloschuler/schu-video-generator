@@ -109,6 +109,7 @@ def test_each_expression_shows_its_own_shapes_on_each_family(family: str, front:
         assert len(c.parts["cheeks"].get_all_points()) == 4 and len(c.parts["bristles"].get_all_points()) == 4   # one point, nothing drawn
 
 
+@pytest.mark.slow
 def test_the_rest_shapes_draw_nothing_even_when_faded() -> None:
     c = figure("person")
     for part in ("cheeks", "bristles"):
@@ -118,6 +119,7 @@ def test_the_rest_shapes_draw_nothing_even_when_faded() -> None:
         assert member.get_stroke_width() == 0
 
 
+@pytest.mark.slow
 def test_hair_fur_feathers_or_fright_lines_stand_up() -> None:
     def up(family: str) -> Character:
         return figure(family).set_expression("frightened")
@@ -134,6 +136,7 @@ def test_hair_fur_feathers_or_fright_lines_stand_up() -> None:
     assert figure("person").draw_order.index("bristles") < figure("person").draw_order.index("head") < figure("person").draw_order.index("cheeks")
 
 
+@pytest.mark.slow
 def test_tears_and_blush_sit_under_the_eyes() -> None:
     for family in ("person", "dog", "bird", "screen_robot"):
         for front in (False, True):
@@ -148,6 +151,7 @@ def test_tears_and_blush_sit_under_the_eyes() -> None:
     assert all(m.get_fill_opacity() == 0 for m in screen.family_members_with_points())   # glowing strokes on a screen
 
 
+@pytest.mark.slow
 def test_beaks_laugh_and_stick_out_a_tongue() -> None:
     for front in (False, True):
         bird = figure("bird", front=front)
@@ -157,6 +161,7 @@ def test_beaks_laugh_and_stick_out_a_tongue() -> None:
         assert "#E39AA2" in fills(bird.set_expression("tongue_out"), "mouth")
 
 
+@pytest.mark.slow
 def test_generated_shape_table_lists_the_new_shapes() -> None:
     for family in FAMILIES:
         c = figure(family)
@@ -209,6 +214,7 @@ def test_mood_motion() -> None:
     assert min(bounces) >= 0 and max(bounces) > 0.005   # the shoulders bounce up, never down
 
 
+@pytest.mark.slow
 def test_closed_eyes_never_blink_and_swirls_and_tears_alternate() -> None:
     open_eyes = figure("person", idle=True)
     assert "closed" in {s["eyes"] for s in step(open_eyes, 8.0)}   # a blink in 8 s (gaps of 2 to 6 s)
@@ -219,6 +225,7 @@ def test_closed_eyes_never_blink_and_swirls_and_tears_alternate() -> None:
         assert "closed" not in {s["eyes"] for s in shown}
 
 
+@pytest.mark.slow
 def test_dizzy_sways_with_the_feet_kept_and_frightened_shivers() -> None:
     c = figure("person", idle=True, height=3.0)
     feet, head = c.foot_point("left"), c.parts["head"].get_center()
@@ -309,6 +316,7 @@ def test_character_sheet_lists_the_new_expressions_and_mouths() -> None:
 # ----- render ---------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_moods_play_on_a_stage(make_project, tmp_path: Path) -> None:
     from test_cartoon_stage import render_with_layout

@@ -16,6 +16,9 @@ dependencies = [
     "av",
     # PDF slide decks (vidgen slides --format pdf).
     "fpdf2>=2.7.9",
+    # Reads the family, weight and style of the font files in a project's fonts/ folder. Every
+    # install already has it (fpdf2 requires it); named here because vidgen imports it itself.
+    "fonttools>=4.34",
     # Local speech to text (vidgen readback).
     "faster-whisper>=1.0",
     # The MCP server for AI agents (vidgen mcp).
@@ -52,12 +55,12 @@ vidgen-mcp = "vidgen.mcp_server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/**/*","data/openrouter/*", "data/three/*", "data/kokoro/*", "data/sets/*", "data/pronunciation/*", "studio/beds/*.yaml", "studio/data/*", "studio_app/static/*"]
+vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/**/*","data/openrouter/*", "data/three/**/*", "data/web/*", "data/web/libs/**/*", "data/kokoro/*", "data/sets/*", "data/pronunciation/*", "studio/beds/*.yaml", "studio/data/*", "studio_app/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
     "render: invokes Manim rendering (slow; deselect with -m \"not render\")",
-    "slow: the slowest render tests, several seconds each (quick run: -m \"not slow\")",
+    "slow: left out of the default run (tests/conftest.py); run them with -m slow, everything with -m \"slow or not slow\"",
     "ui: browser tests of vidgen studio's page (headless Chromium through Playwright; skipped without it)",
 ]

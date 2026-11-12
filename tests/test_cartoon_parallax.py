@@ -94,6 +94,7 @@ def test_marks_on_a_wide_stage() -> None:
     assert pip.height == pytest.approx(4.0)   # sizes still follow the frame's shorter side
 
 
+@pytest.mark.slow
 def test_hills_run_across_the_layer() -> None:
     from vidgen.scenes.stage import hill_outline
 
@@ -261,6 +262,7 @@ def test_lint_skips_frame_edges_when_the_camera_moved() -> None:
 # ----- render ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_stage_layers_move_with_the_camera(make_project, tmp_path: Path) -> None:
     beats = [

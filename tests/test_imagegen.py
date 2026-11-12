@@ -216,6 +216,7 @@ def test_text_in_prompt(prompt: str, found: str | None) -> None:
 # ----- the image scene's params, validate and render warnings --------------------------------------
 
 
+@pytest.mark.slow
 def test_image_params_need_path_or_generate() -> None:
     extensions.load_builtins()
     cls = registry.get("image").cls
@@ -440,6 +441,7 @@ def test_provider_seam_accepts_any_provider(gen_project) -> None:
 # ----- placeholders and the image scene -------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_placeholder_card(gen_project) -> None:
     project = gen_project()
     request = image_request(project, GenerateImage(prompt=PROMPT, aspect="portrait"))
@@ -459,6 +461,7 @@ def test_placeholder_card(gen_project) -> None:
     assert placeholder_path(project, request, Theme(ThemeConfig(preset="light_academic"))) != path
 
 
+@pytest.mark.slow
 def test_generated_image_is_the_picture_once_made(gen_project) -> None:
     project = gen_project()
     gen = GenerateImage(prompt=PROMPT)
@@ -468,6 +471,7 @@ def test_generated_image_is_the_picture_once_made(gen_project) -> None:
     assert generated_image(project, gen, Theme()) == image_request(project, gen).path
 
 
+@pytest.mark.slow
 def test_fingerprint_follows_imagegen_and_the_picture(gen_project) -> None:
     from vidgen.render.fingerprint import scene_fingerprint
 
@@ -488,6 +492,7 @@ def test_api_exports() -> None:
         assert name in api.__all__ and name in api.VIDGEN_NAMES and getattr(api, name).__doc__
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_image_scene_renders_placeholder_then_picture(gen_project, tmp_path: Path) -> None:
     from test_builtin_scenes import render_scene

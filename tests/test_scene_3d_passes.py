@@ -72,6 +72,7 @@ def test_unknown_pass_suggests_the_right_name() -> None:
         parse_passes("dpeth,mask", "--guide-passes")
 
 
+@pytest.mark.slow
 def test_yaml_switch_is_off_by_default_and_checked() -> None:
     from vidgen.scenes.scene_3d import Scene3D
 
@@ -294,6 +295,7 @@ def _hex(pixels: np.ndarray) -> set[str]:
     return {"#%02x%02x%02x" % tuple(int(c) for c in rgb) for rgb in np.unique(pixels.reshape(-1, 3), axis=0)}
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_passes_draw_depth_outline_and_mask(tmp_path: Path) -> None:
     _chromium_or_skip()

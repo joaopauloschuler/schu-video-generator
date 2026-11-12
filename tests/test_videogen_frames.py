@@ -4,12 +4,12 @@ Nothing is sent or paid: the image model is a stand-in, the layout comes from a 
 from __future__ import annotations
 
 import base64
-import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 from PIL import Image
+from test_imagegen_openrouter import info
 from test_videogen_first_frame_in import in_guide_project, picture_file, the_shot
 from test_videogen_input_freshness import stub_render
 from test_videogen_shots import CATALOG
@@ -37,6 +37,11 @@ def paint_project(make_project, **paint: Any) -> Path:
     return root
 
 
+def priced(models: list[str]) -> dict[str, ModelInfo]:
+    """The ``lookup=`` hook: OpenRouter's recorded answer for each model (its price and what it takes)."""
+    return {model: info(model) for model in models}
+
+
 class Painter:
     name = "openrouter"
     key_via_proxy = False
@@ -60,6 +65,7 @@ def _png() -> bytes:
     return buffer.getvalue()
 
 
+@pytest.mark.slow
 def test_prompt_numbers_pictures_after_the_layout(make_project) -> None:
     root = paint_project(make_project)
     project = Project.load(root)
@@ -77,19 +83,22 @@ def test_frames_pays_once_and_never_twice(make_project) -> None:
     shots = select_paint_shots(project_shots(project, CATALOG), ())
     painter = Painter()
     painter.generate = lambda request: (painter.calls.append(request), GeneratedPicture(_png(), cost=0.04))[1]  # type: ignore[method-assign]
-    run_frames(project, shots, pay=True, provider=painter, out=lambda line: None, lookup=lambda models: {}, render=stub_render)
+    run_frames(project, shots, pay=True, provider=painter, out=lambda line: None, lookup=priced, render=stub_render(root))
     assert len(painter.calls) == 1 and painter.calls[0].input_references
     again = select_paint_shots(project_shots(project, CATALOG), ())
-    result = run_frames(project, again, pay=True, provider=painter, out=lambda line: None, lookup=lambda models: {}, render=stub_render)
+    result = run_frames(project, again, pay=True, provider=painter, out=lambda line: None, lookup=priced, render=stub_render(root))
     assert len(painter.calls) == 1 and not result.plan.todo
 
 
 def test_frames_refuses_without_budget(make_project) -> None:
     root = paint_project(make_project)
     project = Project.load(root)
+    project.config.videogen.budget_usd = None   # the guide project sets one
     shots = select_paint_shots(project_shots(project, CATALOG), ())
+    painter = Painter()
     with pytest.raises(VidgenError, match="budget"):
-        run_frames(project, shots, pay=True, provider=Painter(), out=lambda line: None, lookup=lambda models: {}, render=stub_render)
+        run_frames(project, shots, pay=True, provider=painter, out=lambda line: None, lookup=priced, render=stub_render(root))
+    assert not painter.calls
 
 
 def test_frames_refuses_a_shot_without_paint(make_project) -> None:
@@ -98,8 +107,12 @@ def test_frames_refuses_a_shot_without_paint(make_project) -> None:
         select_paint_shots([the_shot(root)], ("act",))
 
 
+#: What the stand-in model takes for the shape and size :func:`_request` asks for.
+SIZE_PARAMS = {"aspect_ratio": {"type": "enum", "values": ["9:16"]}, "resolution": {"type": "enum", "values": ["2K"]}}
+
+
 def _info() -> ModelInfo:
-    return ModelInfo("author/model", ({"supported_parameters": {"input_references": {"type": "range", "min": 0, "max": 2}, "aspect_ratio": {"type": "enum", "values": ["9:16"]}}},))
+    return ModelInfo("author/model", ({"supported_parameters": {"input_references": {"type": "range", "min": 0, "max": 2}, **SIZE_PARAMS}},))
 
 
 def _request(tmp_path: Path, count: int) -> ImageRequest:
@@ -115,12 +128,15 @@ def test_input_references_go_in_the_body_as_data_urls(tmp_path: Path) -> None:
 
 
 def test_too_many_input_references_are_a_problem(tmp_path: Path) -> None:
-    assert "at most 2" in check_request(_request(tmp_path, 3), _info()).problems[0]
+    assert check_request(_request(tmp_path, 2), _info()).problems == []
+    (problem,) = check_request(_request(tmp_path, 3), _info()).problems
+    assert "at most 2" in problem
 
 
 def test_a_model_without_input_references_is_a_problem(tmp_path: Path) -> None:
-    info = ModelInfo("author/model", ({"supported_parameters": {"aspect_ratio": {"type": "enum", "values": ["9:16"]}}},))
-    assert "takes no input pictures" in check_request(_request(tmp_path, 1), info).problems[0]
+    info = ModelInfo("author/model", ({"supported_parameters": SIZE_PARAMS},))
+    (problem,) = check_request(_request(tmp_path, 1), info).problems
+    assert "takes no input pictures" in problem
 
 
 def test_grid_boxes_reproduces_the_owners_cut() -> None:
@@ -136,7 +152,7 @@ def test_split_sheet_writes_named_scaled_panels(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("kwargs, words", [
-    ({"columns": 7, "gap": 3}, "whole pixels"),
+    ({"columns": 7, "gap": 1}, "whole pixels"),   # (60 - 6 * 1) / 7 is not a whole number
     ({"boxes": ["0,0,999,999"]}, "not inside"),
     ({"columns": 2, "names": ["a"]}, "name"),
     ({"columns": 2, "names": ["a", "../x"]}, "file name"),
@@ -154,4 +170,4 @@ def test_split_sheet_refuses_bad_input(tmp_path: Path, kwargs: dict[str, Any], w
 def test_file_refs_label_the_role_sentence_in_input_order(make_project) -> None:
     root = in_guide_project(make_project, refs=[{"file": "assets/start.png", "shows": "ben"}])
     prompt = the_shot(root).prompt
-    assert "@image1" in prompt and json.dumps("Ben")[1:-1] in prompt
+    assert "@image1 shows ben." in prompt   # `shows` is written as given when it names no character of the cast

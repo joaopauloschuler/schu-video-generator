@@ -184,6 +184,7 @@ def stage_params(**params: Any) -> Any:
     return Stage.Params.model_validate({"iso": {**ISO, **params.pop("iso", {})}, **params})
 
 
+@pytest.mark.slow
 def test_the_ambient_setting() -> None:
     from vidgen.config import validation_problems
     from vidgen.scenes.stage import Stage
@@ -219,6 +220,7 @@ def ambient_project(make_project, beats: list[dict[str, Any]], **params: Any) ->
     return Project.load(make_project(minimal_config(characters=CAST, scenes=scenes)))
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_ambient_life_on_a_village(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -248,6 +250,7 @@ RIVER = """
 """
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_walkers_pick_up_lamplight_and_ducks_keep_off_a_boats_way(make_project, tmp_path: Path, monkeypatch) -> None:
     """Step 275: at night a lamp lights the walkers and the cat near it as it lights the

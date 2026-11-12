@@ -52,6 +52,7 @@ def test_blue_hour_is_crisp_its_colours_keep_their_hues() -> None:
                           grade_rgbas(np.array([[0.2, 0.4, 0.6, 1.0]]), tint_grade("#FF8A5C", 0.55, glow=(0.13, 0.04, 0.03))))
 
 
+@pytest.mark.slow
 def test_fill_lights_fades_and_flashes_carry_the_curve() -> None:
     blue = light_grade("blue_hour")
     warm = tint_grade("#FFE6C4", 1.0).multiply
@@ -68,6 +69,7 @@ def test_fill_lights_fades_and_flashes_carry_the_curve() -> None:
     assert stage_params(fill_light=0.5, fill_color="#FFE6C4").fill_color == "#FFE6C4"
 
 
+@pytest.mark.slow
 def test_bright_eyes_have_a_clear_white_a_fine_rim_and_a_catchlight() -> None:
     colors = {"skin": "#F0D2B4", "clothes": "#3C6E71", "outline": "#1F2430", "features": "#1F2430", "hair": "#2A1810"}
     eyes = {}
@@ -142,6 +144,7 @@ def test_posters_and_shelves_dress_the_walls() -> None:
         stage_params(iso={"place": "indoor", "map": ROOM, "objects": [{"object": "poster", "at": {"column": 4, "row": 1}, "kind": "atomm"}]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_room_framed_from_its_back_corner_renders(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

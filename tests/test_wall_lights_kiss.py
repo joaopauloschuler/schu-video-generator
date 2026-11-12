@@ -62,6 +62,7 @@ def test_a_hidden_blinking_light_is_not_drawn() -> None:
     assert max(seen) > 0.0   # the other blinks as before
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize(("spot", "hides"), [("front", True), ("back", False)])
 def test_a_character_in_front_of_a_console_hides_its_lights(make_project, tmp_path: Path, monkeypatch, spot: str, hides: bool) -> None:
@@ -88,6 +89,7 @@ def test_an_overlay_over_the_frame_does_not_hide_a_speaker() -> None:
     assert len(check("hidden_speaker", [pip, thing("tree", [280, 50, 420, 300], order=9)], overlays=hud_still)) == 1
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_kiss_while_holding_hands_lets_go_and_stays_in_place(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

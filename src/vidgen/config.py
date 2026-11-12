@@ -1200,6 +1200,7 @@ LINT_RULES: tuple[str, ...] = (
     "generated_footage",
     "three_d_off_frame",
     "three_d_hidden",
+    "web_clipped",
 )
 RuleName = Literal[
     "off_frame",
@@ -1287,6 +1288,7 @@ RuleName = Literal[
     "generated_footage",
     "three_d_off_frame",
     "three_d_hidden",
+    "web_clipped",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1876,6 +1878,13 @@ class ThreeDHiddenRule(RuleConfig):
     """Share of the object's sphere (the part in the frame) nearer objects cover from which it is reported."""
 
 
+class WebClippedRule(RuleConfig):
+    """``web_clipped``: in a ``web`` scene, page text cut by its own box or an ancestor's (``overflow`` other than visible), or by the page's box where the page does not reach the frame's edge (DESIGN.md §118.12)."""
+
+    tolerance: Fraction = 0.004
+    """How much of the text (fraction of the frame's shorter side) may be cut unflagged."""
+
+
 class LintRules(_Strict):
     """Per-rule settings of ``vidgen lint``."""
 
@@ -2049,6 +2058,8 @@ class LintRules(_Strict):
     """In a 3d scene, an object the beat is about mostly off the frame (default: warning)."""
     three_d_hidden: ThreeDHiddenRule = Field(default_factory=ThreeDHiddenRule)
     """In a 3d scene, an object the beat is about mostly hidden behind nearer objects (default: warning)."""
+    web_clipped: WebClippedRule = Field(default_factory=WebClippedRule)
+    """In a web scene, page text cut by its container (overflow: hidden) or by the page's box (default: error)."""
 
 
 class LintConfig(_Strict):

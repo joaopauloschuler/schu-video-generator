@@ -130,6 +130,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_block_built_mid_beat_grows_from_the_floor_on_its_first_frame(make_project, monkeypatch, media: Path) -> None:
     """The owner's case (examples/iso-web-page): built mid-beat with the floor under it coming
@@ -148,6 +149,7 @@ def test_a_block_built_mid_beat_grows_from_the_floor_on_its_first_frame(make_pro
     check_fades_in(frames, "floor")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_scenes_own_steps_grow_their_blocks_from_the_first_frame(make_project, monkeypatch, media: Path) -> None:
     """At the scene's start the heading and the floor fade in first (a crossfade shows these
@@ -170,6 +172,7 @@ def test_drop_and_fade_builds_start_unseen(make_project, monkeypatch, media: Pat
     check_fades_in(frames, "plate:g")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_reveal_and_building_the_whole_diagram_or_a_connector_start_from_nothing(make_project, monkeypatch, media: Path) -> None:
     acts = [[{"build": "diagram", "at": 0.3}]]
@@ -192,6 +195,7 @@ ISO_MAP = """
 """
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_an_iso_place_object_revealed_and_hidden_never_shows_at_full_early_or_late(make_project, monkeypatch, media: Path) -> None:
     """The same bug class on an iso stage (Step 168): a pine revealed in front of a lamp (whose
@@ -237,6 +241,7 @@ def test_an_iso_place_object_revealed_and_hidden_never_shows_at_full_early_or_la
     assert not scene._iso_follows
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_example_trip_builds_each_block_without_a_flash(make_project, monkeypatch, media: Path) -> None:
     """The example's first iso scene (shortened): every block built on its word."""

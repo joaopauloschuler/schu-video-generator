@@ -30,7 +30,8 @@ pedigrees, chromosomes, variants, the lab, populations: notation, exactness, lin
 (plots and worked calculations: plot or chart, fits, live models, units, significant figures,
 lint), `orbits` (orbital mechanics: views, scale honesty, panels, manoeuvres, three bodies,
 dates, pacing, lint), `three-d` (simple 3D scenes: building a set, the camera in 16:9 and 9:16,
-stand-ins, guide passes, lint), `particle-physics` (particle-physics videos: planning, choosing the scene,
+stand-ins, guide passes, lint), `web` (scenes you write in HTML, CSS and JavaScript: when,
+how, theme, beats, three.js, lint, cost), `particle-physics` (particle-physics videos: planning, choosing the scene,
 natural units, simulated data, sources, significance, pacing, lint), `overlays` (overlays,
 transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
@@ -140,9 +141,11 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
 8. **`vidgen tts`**: voices only new or changed beats (needs `ELEVENLABS_API_KEY`; costs money).
 9. **`vidgen render`** (`--preview` first): now timed by the real audio. Beats change length,
    so run `vidgen storyboard` and `vidgen lint` again: `narration_speed` and `dead_air` now
-   measure the real speech. For a cartoon, `vidgen render --draft` is faster still (about 8 fps,
-   240p, no idle motion, wind, shadows, particles or light grade; every timing, position, action
-   and the lip sync kept): `<output>_draft.mp4`, to watch the timing and staging before a preview.
+   measure the real speech. `vidgen render --draft` is faster still (240p at about 8 fps, at the
+   video's shape, in its own `build/draft`): `<output>_draft.mp4`, to watch the timing and staging
+   before a preview. It pays most for a cartoon (no idle motion, wind, shadows, particles or light
+   grade; every timing, position, action and the lip sync kept) and for a video with `web` scenes
+   (the page is drawn that small: 2 to 3 times faster than a preview, `vidgen guide web`).
    `vidgen animatic` is quicker still once the storyboard's stills are current (seconds, no
    rendering): `<output>_animatic.mp4`, those stills held in time with the narration, with the
    audio and the subtitles, to check the pacing.
@@ -411,6 +414,7 @@ project's own scene types, in its theme).
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut), `match_previous` (no flash where a take continues the one before) |
 | simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
+| a picture or animation no built-in draws, written yourself in HTML, CSS and JavaScript: a bespoke layout, CSS or SVG animation, a canvas drawing, your own three.js scene (`vidgen guide web`) | `web` | `page` (an HTML file of the project: any HTML, CSS, JavaScript) or `script` (a JavaScript module drawn on one canvas), `region` (bleed, body), `title`, `data` (values for the page); CSS animations, requestAnimationFrame, timers and the page's frame hook all follow the video's time; no internet while rendering |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -1683,11 +1687,22 @@ Pictures, screenshots, clips and simple 3D (the 3D craft: `vidgen guide 3d`):
         - {object_show: gift, at: "@appears", style: grow}
         - {object_highlight: gift, at: "@glows"}
         - {object_face: ben, at: "@gift", to: gift}
+- id: gears
+  type: web
+  params: {page: extensions/gears.html, region: body, title: "Two gears"}   # or script: extensions/gears.js (one canvas)
+  beats: [{text: "Two gears turn together."}]
 - id: saying
   type: quote
   params: {text: "Simplicity is prerequisite for reliability.", author: "Edsger W. Dijkstra"}
   beats: [{text: "As Dijkstra put it, simple systems are the reliable ones."}]
 ```
+
+A `web` scene is a page you write in HTML, CSS and JavaScript (`page:` an HTML file, or `script:` a
+module drawing on one canvas), screenshotted frame by frame: CSS animations, timers and
+`requestAnimationFrame` follow the video's time, the theme comes as CSS variables
+(`var(--vidgen-primary)`), `<body data-beat="b2">` reveals a part on its beat, `import * as THREE
+from "three"` loads three.js, and lint reads its text. Prefer a built-in type when one fits; how to
+write a good one, with working examples and the usual mistakes: `vidgen guide web`.
 
 ```yaml
 # maths and code
@@ -1832,7 +1847,10 @@ a geometric construction, a bespoke animation) and you would otherwise bend a bu
 it. Prefer built-ins whenever one fits: they are tested at 16:9 and 9:16, fit text to readable
 sizes, expose action targets and pass lint. Custom scenes should use regions
 (`self.region("body")`, `place(...)`) rather than fixed coordinates, and get checked with the
-same storyboard and lint loop.
+same storyboard and lint loop. If you would rather write the picture as a web page (HTML and CSS,
+a canvas, your own three.js), a `web` scene needs no Python: `vidgen guide web`. A Python scene
+type is the better choice for one you will reuse with new params, or one whose text and parts must
+be vidgen's own (action targets, fitted text); a `web` scene renders much more slowly.
 
 <!-- topic: design (also: visual, theme, themes, colors, colours, icons, accessibility) -->
 ## Visual design
@@ -1855,6 +1873,11 @@ theme:
   preset: brand_neutral
   colors: {primary: "#0B5FFF"}
 ```
+
+**Another font.** Put the font's `.ttf`, `.otf` or `.woff` file (and its licence) in the project's
+`fonts/` folder and name its family: `theme: {font: "Space Grotesk"}` (or one role: `fonts:
+{heading: "Space Grotesk"}`). Every scene, the captions and `web` pages then use it; the steps
+are under "Using another font" in `vidgen guide web`.
 
 **Colour roles.** Use the theme's tokens, not hex values, in params: `text` / `dim` for text,
 `primary` for the main element, `highlight` for "look here" (one thing per frame), `accent`
@@ -3207,6 +3230,477 @@ outline | mask`; `true` = the normal 3D view): `vidgen generate inputs --guide` 
 `three_d_hidden` (mostly behind a nearer one); look at `vidgen storyboard --per-beat 3` for the
 moves mid-beat.
 
+<!-- topic: web (also: html, css, javascript, js, canvas, web-scenes, web-scene, web-page, page, script) -->
+## Web scenes: a scene you write in HTML, CSS and JavaScript
+
+A `web` scene is a page you write. vidgen opens it in headless Chromium, takes a screenshot per
+frame and shows it like any other scene: under the captions and overlays, with transitions,
+narration and lint. JavaScript in your project runs as written, as the Python in `extensions/`
+does. A whole example to copy from: `examples/web` (a CSS page revealed on beats, a canvas drawing,
+a three.js planet; 16:9 and 9:16). Every param and detail: `docs/CONFIG.md`, section `web`.
+
+**When to use it.** A built-in scene type is still the first choice when one fits (`vidgen guide
+scenes`): it is laid out, revealed, timed and linted for you, and it is much faster to render.
+Write a `web` scene for a picture no built-in draws: a bespoke layout, an animation in CSS or SVG,
+a canvas drawing, a three.js scene of your own, an interactive-looking diagram, a styled mock-up
+of an app. Simple shapes and stand-ins seen by a moving camera: `3d` (no code). Footage or a
+screen recording: `video_clip`. A scene type you will reuse with new params in many scenes, or
+one that must move vidgen's own text and targets: a Python extension (`docs/EXTENDING.md`).
+
+**Two forms.** Give exactly one:
+
+- `page: extensions/name.html`: any HTML page of the project (its CSS, pictures, fonts and
+  modules load by relative links). Hooks go on `window.vidgen = {load(ctx) {…}, frame(t, ctx) {…}}`.
+- `script: extensions/name.js`: a JavaScript module; vidgen puts it on a bare page with one
+  transparent `<canvas>` the size of the page (`ctx.canvas`). Hooks are exports: `export function
+  frame(t, ctx) {…}`.
+
+Both hooks are optional and may be `async`: `load(ctx)` runs once before frame 0 (time stands at
+0 there), `frame(t, ctx)` before each screenshot, `t` in seconds from the scene's start. A page
+that only uses CSS needs no JavaScript at all.
+
+```yaml
+- id: hello
+  type: web
+  params: {page: extensions/hello.html, region: body, title: "Three steps"}
+  beats:
+    - {id: h1, text: "First, we read the data."}
+    - {id: h2, text: "Then we clean it."}
+    - {id: h3, text: "Last, we draw the chart."}
+- id: orbit
+  type: web
+  params: {script: extensions/orbit.js, data: {moons: 3}}
+  beats: [{text: "Three moons go round their planet."}]
+```
+
+```html
+<style>  /* extensions/hello.html: every colour, font and size from the theme; each step on its beat */
+  body { margin: 0; height: 100vh; display: flex; gap: 3vw; align-items: center; justify-content: center;
+         font-family: var(--vidgen-font-body); color: var(--vidgen-text); }   /* no background: the video's shows */
+  .step { padding: 4vh 3vw; border-radius: 2vh; background: var(--vidgen-surface);
+          font-size: var(--vidgen-size-body); opacity: 0; transform: translateY(4vh);
+          transition: opacity 0.5s, transform 0.5s; }
+  .step b { color: var(--vidgen-primary); }
+  body[data-beat="h1"] .s1, body[data-beat="h2"] :is(.s1, .s2), body[data-beat="h3"] .step { opacity: 1; transform: none; }
+  [data-orientation="portrait"] body { flex-direction: column; }
+</style>
+<div class="step s1" data-vidgen-id="read"><b>1</b> Read</div>
+<div class="step s2" data-vidgen-id="clean"><b>2</b> Clean</div>
+<div class="step s3" data-vidgen-id="draw"><b>3</b> Draw</div>
+```
+
+```js
+// extensions/orbit.js: draws the whole picture from t alone, so any frame can be drawn on its own
+const label = (ctx) => ({text: `${ctx.data.moons} moons`, size: ctx.theme.sizes.body, x: ctx.width * 0.08, y: ctx.height * 0.1,
+                         font: `700 ${ctx.theme.sizes.body}px ${ctx.theme.fonts.heading}`});
+export function frame(t, ctx) {
+  const c = ctx.canvas.getContext("2d");
+  const {width: w, height: h} = ctx, r = Math.min(w, h) * 0.32;
+  c.clearRect(0, 0, w, h);                     // transparent: the video's background shows
+  c.fillStyle = ctx.theme.colors.primary;
+  c.beginPath(); c.arc(w / 2, h / 2, r * 0.3, 0, 2 * Math.PI); c.fill();
+  for (let i = 0; i < ctx.data.moons; i++) {
+    const a = t * (1.2 - i * 0.3) + i * 2;     // radians: each moon at its own speed
+    c.fillStyle = ctx.theme.palette[(i + 1) % ctx.theme.palette.length];
+    c.beginPath(); c.arc(w / 2 + Math.cos(a) * r * (0.55 + i * 0.22), h / 2 + Math.sin(a) * r * (0.55 + i * 0.22), r * 0.07, 0, 2 * Math.PI); c.fill();
+  }
+  const l = label(ctx);
+  c.font = l.font; c.fillStyle = ctx.theme.colors.text; c.textBaseline = "top";
+  c.fillText(l.text, l.x, l.y);
+}
+```
+
+**Time belongs to vidgen.** Write ordinary web code: CSS animations and transitions, the Web
+Animations API (`element.animate`), SVG `<animate>`, `requestAnimationFrame` loops, `setTimeout`
+and `setInterval`, `Date.now()`, `performance.now()` and a `<video>` all follow the video's time,
+frame by frame, however slow the screenshots are; `Math.random` (and `crypto.getRandomValues`) is
+seeded from the scene id, so every render gives the same frames. A loop that adds a little each
+`requestAnimationFrame` works; a picture computed from `t` alone is simpler to get right. Not
+controlled (avoid them, or drive them from `frame`): `<audio>` (the scene has no sound of its
+own), animated GIF / WebP, web workers, iframes, `XMLHttpRequest` and dynamic `import()` (not
+waited for: load data with `await fetch("data.json")` in `load`; a relative path is relative to
+the page, or to the script of a `script:`), and `ResizeObserver` /
+`IntersectionObserver` callbacks. Ordinary timer, `requestAnimationFrame`, CSS and Web Animations
+code was measured frame-exact. anime.js, Motion, D3, Chart.js and lottie-web ship with vidgen and
+were run under the clock (the table "Animation and chart libraries" below says how to drive
+each); any other library must be a file in the project (below: no internet).
+
+**What the page is given**, `ctx`:
+
+| field | value |
+|---|---|
+| `width`, `height` | the page's size in CSS pixels (the whole frame, or the body region with `region: body`): the frame's own pixels, or with `design_width` the design window's ("Porting a page built in fixed pixels" below) |
+| `aspect`, `orientation` | the video's shape: `"16:9"`, `"9:16"`, `"1:1"`…; `landscape`, `portrait`, `square` |
+| `fps`, `frames`, `duration` | frame rate, frames drawn, their length in seconds (the beats, the 0.5 s fade-out) |
+| `canvas` | the bare page's canvas (`script:`), else `null` |
+| `theme` | `colors` (name → hex: `text`, `dim`, `primary`, `secondary`, `tertiary`, `accent`, `highlight`, `surface`…), `background`, `palette` (list), `fonts` (`heading`, `body`, `mono`… → family), `font_files` (the files in the project's `fonts/` folder: `[{family, weight, style, url}]`), `sizes` (`title`, `heading`, `body`, `caption`, `small` → CSS px for this frame) |
+| `data` | the scene's `data:` (`{}` without one) |
+| `beats` | `[{id, index, start, end, text, words: [{text, start, end}]}]`, seconds from the scene's start (`[]` without narration) |
+| `scene`, `frame`, `region` | the scene id, the video frame's `{width, height}`, `bleed` or `body` |
+
+**The theme.** vidgen puts CSS variables on `:root` before your own styles: `var(--vidgen-text)`,
+`--vidgen-primary` (one per colour), `--vidgen-background`, `--vidgen-palette-0`…,
+`--vidgen-font-heading` / `-body` / `-mono` (vidgen's own fonts and the ones in the project's `fonts/` folder, served with no download), and
+`--vidgen-size-title` / `-heading` / `-body` / `-caption` / `-small` (px: text that size is as tall
+as vidgen's own text of that size). Use them for every colour, font and text size: the page then
+matches the other scenes, follows a variant with another theme, and its text is big enough. Size
+the rest in `vw` / `vh` (of the page) or `%`, never fixed pixels, in a page you write for the
+video: the same page is drawn at the preview size, at 1080p and at 9:16. A page that already
+exists and is sized in fixed pixels needs no rewrite: give its window width as `design_width`
+("Porting a page built in fixed pixels" below).
+
+**Revealing on the narration.** `<body>` carries `data-beat` (the id of the beat being spoken: give
+your beats ids) and `data-beat-index` (from 0), changed exactly when the beat starts, so a CSS
+`transition` from it starts on time (`hello.html` above). In JavaScript, use the beats' times;
+a word's time reveals a thing on the word that names it:
+
+```js
+// in frame(t, ctx): the time "shower" is said in the second beat (else that beat's start)
+const beat = ctx.beats[1];
+const word = beat ? beat.words.find((w) => w.text.toLowerCase().startsWith("shower")) : undefined;
+const at = word ? word.start : beat ? beat.start : 0;
+const shown = Math.min(1, Math.max(0, (t - at) / 0.6));   // 0 → 1 over 0.6 s from that word
+```
+
+Words are timed like the captions (the voice's own timings once `vidgen tts` ran; before that,
+estimated from the word count, so the reveal moves a little when the voice arrives). A
+`vidgen-beat` event (`detail: {beat, index, previous, t}`) is also dispatched on each new beat.
+
+**Values from the YAML.** `params: {data: {moons: 3, label: "Moons", color: tertiary}}` is
+`ctx.data` (text, numbers, true / false, lists and mappings). A theme colour name in it is not
+looked up for you: `ctx.theme.colors[ctx.data.color]`.
+
+**three.js** comes with vidgen: `import * as THREE from "three"` in a `script:` or in a page's
+`<script type="module">` (with a chosen set of its add-ons, below):
+
+```js
+// extensions/cube.js
+import * as THREE from "three";
+let renderer, scene, camera, cube;
+export function load(ctx) {
+  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: true, alpha: true});   // alpha: the video's background shows
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(35, ctx.width / ctx.height, 0.1, 50);
+  camera.position.set(0, 1.2, 5);
+  camera.lookAt(0, 0, 0);
+  scene.add(new THREE.HemisphereLight(0xffffff, ctx.theme.background, 0.5));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+  sun.position.set(-3, 4, 3);
+  scene.add(sun);
+  cube = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), new THREE.MeshStandardMaterial({color: ctx.theme.colors.primary}));
+  scene.add(cube);
+}
+export function frame(t, ctx) {
+  cube.rotation.set(0.4, t * 0.8, 0);
+  renderer.render(scene, camera);
+}
+```
+
+**three.js add-ons.** These ship with vidgen, from the same three.js (0.186.1); import them as
+three.js's own docs do (`three/addons/…`; the older `three/examples/jsm/…` works too). They use
+the same `THREE` as your code.
+
+| for | import |
+|---|---|
+| glTF models (`.gltf`, `.glb`) | `import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js"` |
+| merging, fixing geometry | `import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js"` |
+| studio light and reflections | `import {RoomEnvironment} from "three/addons/environments/RoomEnvironment.js"` |
+| glow (bloom) | `EffectComposer`, `RenderPass`, `UnrealBloomPass`, `OutputPass`, `ShaderPass`: `"three/addons/postprocessing/<Name>.js"` |
+| HTML labels on 3D objects | `import {CSS2DRenderer, CSS2DObject} from "three/addons/renderers/CSS2DRenderer.js"` |
+| lines thicker than 1 px | `Line2`, `LineGeometry`, `LineMaterial`, `LineSegments2`, `LineSegmentsGeometry`: `"three/addons/lines/<Name>.js"` |
+| rounded boxes | `import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js"` |
+| shapes from SVG paths | `import {SVGLoader} from "three/addons/loaders/SVGLoader.js"` |
+| a camera turning round a target | `import {OrbitControls} from "three/addons/controls/OrbitControls.js"` |
+
+```js
+// extensions/studio.js: a rounded box lit by RoomEnvironment, a glowing ring, an HTML label
+import * as THREE from "three";
+import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js";
+import {RoomEnvironment} from "three/addons/environments/RoomEnvironment.js";
+import {EffectComposer} from "three/addons/postprocessing/EffectComposer.js";
+import {RenderPass} from "three/addons/postprocessing/RenderPass.js";
+import {UnrealBloomPass} from "three/addons/postprocessing/UnrealBloomPass.js";
+import {OutputPass} from "three/addons/postprocessing/OutputPass.js";
+import {CSS2DRenderer, CSS2DObject} from "three/addons/renderers/CSS2DRenderer.js";
+let scene, camera, composer, labels, box, ring;
+export function load(ctx) {
+  const renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: true});
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(ctx.theme.background);   // the composer's picture is opaque
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  camera = new THREE.PerspectiveCamera(35, ctx.width / ctx.height, 0.1, 50);
+  camera.position.set(0, 1.2, 6);
+  camera.lookAt(0, 0, 0);
+  box = new THREE.Mesh(new RoundedBoxGeometry(1.4, 1.4, 1.4, 6, 0.2),
+                       new THREE.MeshStandardMaterial({color: ctx.theme.colors.primary, metalness: 0.6, roughness: 0.3}));
+  box.position.x = -1.2;
+  const glow = new THREE.Color(ctx.theme.colors.accent).multiplyScalar(3);   // brighter than white: it blooms
+  ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.08, 16, 96), new THREE.MeshBasicMaterial({color: glow}));
+  ring.position.x = 1.3;
+  scene.add(box, ring);
+  composer = new EffectComposer(renderer);
+  composer.setSize(ctx.width, ctx.height);
+  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(ctx.width, ctx.height), 0.6, 0.3, 0.9));
+  composer.addPass(new OutputPass());
+  labels = new CSS2DRenderer();
+  labels.setSize(ctx.width, ctx.height);
+  labels.domElement.style.cssText = "position: absolute; left: 0; top: 0";
+  document.body.appendChild(labels.domElement);
+  const tag = document.createElement("div");
+  tag.textContent = "Rounded box";
+  tag.dataset.vidgenId = "box-label";
+  tag.style.cssText = "font: var(--vidgen-size-caption) var(--vidgen-font-body); color: var(--vidgen-text)";
+  const label = new CSS2DObject(tag);
+  label.position.set(-1.2, 1.15, 0);   // above the box
+  scene.add(label);
+}
+export function frame(t) {
+  box.rotation.set(0.4, t * 0.6, 0);
+  ring.rotation.set(0.5, t, 0);
+  composer.render();               // not renderer.render: the composer draws the scene and its glow
+  labels.render(scene, camera);
+}
+```
+
+Rules found by trying each add-on under vidgen's clock:
+
+- **Files a loader reads.** A relative path is relative to the page (`page:`) or to your script
+  (`script:`): `loader.loadAsync("model.glb")` (in `load`, awaited) reads the file beside it, and
+  so do `fetch("data.json")`, an image's `src` and a CSS `url()`. In a module that is not the
+  scene's script (one in another folder that the script imports), name a file beside that module
+  with `new URL("./model.glb", import.meta.url).href`. `.gltf` (buffer embedded
+  or in a `.bin` beside it) and `.glb` load; compressed models (Draco, KTX2, Meshopt) do not.
+- **Glow and transparency.** `EffectComposer` draws an opaque picture (black where nothing is), so
+  give the scene a background (`scene.background = new THREE.Color(ctx.theme.background)`), as
+  above. Its colours match `renderer.render` exactly: `OutputPass` applies the tone mapping and
+  colour space once; add no second one.
+- **Labels.** `CSS2DRenderer` labels are page text: they take the theme variables, follow their
+  object, and lint reads them (name them with `data-vidgen-id`); over WebGL their contrast is not
+  checked.
+- **Thick lines.** `LineMaterial({linewidth: 8})` is in pixels only after
+  `material.resolution.set(ctx.width, ctx.height)`; then it stays 8 px at every frame size.
+- **`OrbitControls`** has its own idea of time: `update()` with no argument turns `1/60` s worth
+  per call, so the speed would follow the frame rate. Pass the time since the last frame:
+  `controls.update(t - last); last = t;` in `frame` (angle = `autoRotateSpeed` × 2π / 60 × t,
+  the same at every fps). Leave `enableDamping` off (it eases per call too). No mouse is needed.
+- **`RoomEnvironment`** lights `MeshStandardMaterial` (metal especially, which is black without
+  it) through `scene.environment`, made once in `load` as above.
+
+**Not shipped:** 3D text (`FontLoader`, `TextGeometry`: put text in HTML labels or the page),
+`DRACOLoader`, `KTX2Loader` and Meshopt (they run WebAssembly in workers, outside vidgen's clock,
+and weigh megabytes), other model loaders, HDR loaders, other controls, VR / AR, physics,
+exporters, the GUI helper, the WebGPU renderer and node materials. Importing one stops the render
+with `scene 'x': the page imports the three.js add-on 'loaders/DRACOLoader.js' …, which is not
+shipped with vidgen …`. To use one anyway, copy that file from three.js 0.186.1 (the npm package
+`three`, `examples/jsm/…`) into the project and import it by a relative path
+(`import {X} from "./lib/X.js"`); its `import … from "three"` keeps working.
+
+**Animation and chart libraries.** These ship with vidgen: import them by name, in a
+`<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's
+clock. "Plays by itself" means the library's own loop follows the video's time from the scene's
+first frame, and two renders give the same frames.
+
+| library | import | how to drive it |
+|---|---|---|
+| anime.js 4.5.0 | `import {animate, createTimeline} from "animejs"` | plays by itself, about 12 ms ahead of the video. Frame-exact: `autoplay: false`, then `anim.seek(t * 1000)` in `frame(t)` (a timeline too) |
+| Motion 14.12.0 | `import {animate} from "motion"` | plays by itself, frame-exact (springs, sequences and `animate(0, 100, {onUpdate})` too). Do not seek it from `frame`: `controls.time = t` there shows one frame late |
+| D3 7.9.2 | `import * as d3 from "d3"` | `transition()` (with `delay` too) and `d3.timer` play by themselves, frame-exact; or set attributes from `t` in `frame(t)` with scales. A force layout by itself does one tick per video frame, so the picture changes with the fps: `simulation.stop()`, then `simulation.tick(n)` |
+| Chart.js 4.6.1 | `import Chart from "chart.js/auto"` | its animations play by themselves, frame-exact (a `chart.update()` from a timer too); or `animation: false` and `chart.update("none")` in `frame(t)` |
+| lottie-web 5.13.0 | `import lottie from "lottie-web"` | plays by itself (`autoplay: true`), frame-exact; or `autoplay: false` and `anim.goToAndStop(t * 1000, false)` in `frame(t)`. Give it `animationData` (the JSON, from `await fetch(…)`), not `path:` |
+| GSAP | not shipped (its licence): copy `dist/gsap.min.js` into the project, `<script src="lib/gsap.min.js"></script>` | call `gsap.ticker.lagSmoothing(0)`, then it plays by itself, frame-exact; or a paused timeline and `tl.time(t)` in `frame(t)` |
+
+D3, Chart.js and Motion are the packages' one-file builds, which also set `window.d3`,
+`window.Chart` and `window.Motion`. Chart.js comes with everything registered
+(`import {Chart} from "chart.js"` gives the same class; there is no `registerables`). lottie-web
+drew with its `svg` and `canvas` renderers. GSAP is not open source ("All rights reserved.
+Subject to the terms at https://gsap.com/standard-license"), so vidgen cannot ship it:
+`import gsap from "gsap"` stops the render with a message saying so. Tried with GSAP 3.15.1:
+`gsap.min.js` works from a `<script src>` (not as a module import); `index.js`, `gsap-core.js` and
+`CSSPlugin.js` copied into one folder work as `import gsap from "./lib/gsap/index.js"`. Without
+`lagSmoothing(0)` GSAP counts a step longer than 0.5 s as 33 ms. Any other library: put its file
+in the project (below: no internet).
+
+**Where the page goes.** `region: bleed` (the default): the page fills the frame edge to edge, a
+`title` sits on a plate over its top, and the captions are drawn over its bottom; keep text away
+from the edges and out of the bottom fifth. `region: body`: the page is laid out in the space
+under a title vidgen draws (`title: "…"`), clear of the margins and of bottom captions; the
+easiest way to keep text readable. What the page leaves transparent (no `background` on a page,
+`clearRect` on the canvas, three.js with `alpha: true`) shows the video's background; set
+`background: var(--vidgen-background)` to make it opaque.
+
+**Both shapes from one page.** `<html>` carries `data-aspect="16:9"` / `"9:16"` and
+`data-orientation="landscape"` / `"portrait"`, so CSS can switch layout:
+`[data-orientation="portrait"] .row {flex-direction: column}`; a script reads `ctx.orientation`.
+Look at both: `vidgen storyboard --variant vertical` (with a vertical variant, `vidgen guide social`).
+
+**Porting a page built in fixed pixels.** A page that already exists (a dashboard, a mock-up of
+an app) is usually sized in `px` for one browser window. Do not rewrite its sizes: give the scene
+the window width the page was designed for, `params: {page: extensions/dashboard.html,
+design_width: 1280}`. The page is then laid out in a window 1280 CSS pixels wide and as high as
+the scene's region gives (720 for a 16:9 page with `region: bleed`), and that picture is drawn at
+the video's size. The preview, the draft and the 1080p render show the same layout, and HTML
+text, SVG and CSS shapes are drawn at the output's pixels, not enlarged from a smaller picture.
+
+- **What the page sees** is its design window: `window.innerWidth`, `100vw`, media queries,
+  `getBoundingClientRect()` and `clientWidth` are in the design's pixels. `window.devicePixelRatio`
+  is the number of output pixels per CSS pixel: 1.5 for a 1280 design at 1920 px, about 0.67 at the
+  854 px preview.
+- **A canvas is sharp only when its code uses `devicePixelRatio`.** A canvas has the pixels its
+  code gives it: sized from `clientWidth` alone it is drawn at the design size and enlarged, so
+  its edges are soft at 1080p. Size it as on a high-density screen: `canvas.width =
+  Math.round(canvas.clientWidth * devicePixelRatio)` (the same for the height), then
+  `context.scale(devicePixelRatio, devicePixelRatio)` and draw in CSS pixels as before. With
+  three.js: `renderer.setPixelRatio(window.devicePixelRatio)` before `renderer.setSize(w, h)`.
+- **`ctx`.** `ctx.width` and `ctx.height` are the window in CSS pixels (1280 and 720 here), the
+  same numbers as `innerWidth` and `innerHeight`; the canvas of a `script:` has that many pixels
+  (multiply as above for a sharp one). `ctx.frame` stays the video frame in output pixels.
+  `ctx.theme.sizes` and `--vidgen-size-…` are CSS pixels that still draw text as tall as vidgen's.
+- **The height follows the region's shape**; there is no `design_height`, since a height that
+  disagrees with the region would squeeze or crop the page. A page designed for a phone, in a
+  9:16 video: `design_width: 390`. When the height is not a whole number of CSS pixels (a 1280
+  design at 854x480 is 719.4 high), the window is the next whole pixel (720) and the strip under
+  the frame's bottom edge, less than one CSS pixel, is not shown.
+- **Lint measures the text as it is drawn in the frame**: 12 px text in a 1280 design is 18 px in
+  a 1920 px frame, and `min_font`, `off_frame`, `safe_area`, `text_overlap` and `web_clipped`
+  judge that. Text that was fine on a desk monitor is often too small for a video: enlarge it in
+  the page.
+
+`design_width` is a whole number from 200 to 8192. Without it nothing changes: the window is the
+frame's (or the region's) own pixels.
+
+**No internet.** The page cannot load anything from the internet while rendering (a CDN script, a
+web font, an API): the request is refused with the warning `scene 'x': refused https://… (a web
+scene cannot reach the internet; put the file in the project folder)` and the page renders
+without it. Put every library, picture and data file in the project folder and link it
+relatively (`<script src="lib/x.js">`, `import {x} from "./lib/x.js"`); a font goes in `fonts/`
+(next paragraph). vidgen's own fonts, three.js and its shipped add-ons, and the libraries in the
+table above need nothing.
+
+**Using another font.** A page that links Google Fonts draws its text in a fallback font, with one
+warning per family: `scene 'x': the page asks Google Fonts for "Space Grotesk", but the internet is
+off during a render, so that text is drawn in a fallback font. Put the font's .ttf, .otf or .woff
+file in the project's fonts/ folder and remove the link to Google Fonts (…)`. The font has to be a
+file in the project before the render:
+
+1. **Get the font's files and its licence**, once, with a browser or a download tool. Two ways,
+   both tried with Space Grotesk (SIL Open Font License) on 2026-11-12:
+   - the font's own release: `SpaceGrotesk-2.0.0.zip` from the releases of
+     `github.com/floriankarsten/space-grotesk` holds `ttf/static/SpaceGrotesk-Regular.ttf`,
+     `-Bold.ttf`…, a variable `ttf/SpaceGrotesk[wght].ttf` and `OFL.txt`. (Google Fonts gives a
+     zip from its page in a browser; its address `fonts.google.com/download?family=…` answered a
+     download tool with a web page, not the zip.)
+   - the npm package `@fontsource/<name>`: the file
+     `registry.npmjs.org/@fontsource/space-grotesk/-/space-grotesk-5.3.0.tgz` (check it against the
+     `dist.integrity` the registry gives for that version) holds
+     `package/files/space-grotesk-latin-400-normal.woff`, `…-700-normal.woff`… and
+     `package/LICENSE`. Take the `.woff` files, not the `.woff2` ones.
+2. **Copy them into the project's `fonts/` folder** (sub-folders are fine): the regular and the
+   bold file, the italic one if you use it, and the licence file beside them. A variable font is
+   one file for every weight.
+3. **Name the family**, as the font names itself (`Space Grotesk`): for the whole video
+   `theme: {font: "Space Grotesk"}` or one role `theme: {fonts: {heading: "Space Grotesk"}}`
+   (titles, captions and every built-in scene; in a page `var(--vidgen-font-body)` /
+   `-heading`); or only in a page, `font-family: "Space Grotesk", sans-serif`. vidgen has already
+   declared an `@font-face` per file, with the family, weight and style it read from the file:
+   write none yourself.
+4. **Remove the link** to Google Fonts (`<link href="https://fonts.googleapis.com/…">` or an
+   `@import` of it).
+
+Formats: `.ttf` and `.otf`; `.woff` too (for its own text vidgen writes a `.ttf` copy in
+`build/fonts/`). vidgen does not read `.woff2` (`vidgen validate` says so): such a file is used
+only by a page whose own `@font-face` names it (`src: url("../fonts/x.woff2")`). Changing a file in
+`fonts/` renders every scene again. Checked on Linux by looking at frames (a `title` scene, the
+captions, a page's CSS and theme variable, the designed thumbnail; static `.ttf`, `.woff` and a
+variable `.ttf`); not tried on Windows or macOS.
+
+**The lint loop.** `vidgen lint` reads the page's text at each still (its box, its size as drawn,
+its colour and what is behind it) and checks it with the usual rules: `off_frame`, `text_overlap`,
+`min_font`, `contrast`, `safe_area` (also text under the captions, named so), plus `web_clipped`
+(text cut by `overflow: hidden` or by the page's box). Text hidden at that moment (opacity 0,
+`display: none`) is skipped, so a beat's reveal is checked once it shows.
+
+- Name what you will want to find in a message: `data-vidgen-id="price"` → `text '…' (page:
+  price)`; else lint names it by a CSS-like path (`div.card:nth-child(2) > h2`).
+- `data-vidgen-lint="off"` leaves out decoration (a big faint watermark), `"off:contrast"` one rule.
+- Text drawn on a canvas, in a picture or in WebGL cannot be read. Declare it, or lint checks
+  nothing of it: a `layout(t, ctx)` hook (an export of a script, or on `window.vidgen`) returns
+  `[{id, text, box: {x, y, width, height}, size, font, color, background}]` in page pixels. It is
+  called after the screenshot of a frame lint looks at and must not change the page:
+
+```js
+// in extensions/orbit.js: the label frame() draws, declared to lint (page pixels, width measured)
+export function layout(t, ctx) {
+  const l = label(ctx), c = ctx.canvas.getContext("2d");
+  c.font = l.font;
+  return [{id: "label", text: l.text, box: {x: l.x, y: l.y, width: c.measureText(l.text).width, height: l.size * 1.2},
+           size: l.size, font: l.font, color: ctx.theme.colors.text, background: ctx.theme.background}];
+}
+```
+
+Keep one function for what is drawn and what is declared (`label` here), so they never drift
+apart. `font` is the canvas font you drew with (or only its family); `background` is what is behind
+the text (here the video's background, since the canvas is transparent).
+
+**Usual mistakes** and what vidgen says:
+
+| you see | cause and fix |
+|---|---|
+| `scenes[0].params: give exactly one of page: (an HTML file) or script: (a JavaScript module)` | both or neither given |
+| `page: file not found: extensions/hello.html (looked for …)` (validate) | the path is relative to the project folder (where `video.yaml` is) |
+| `scene 'x': JavaScript error in extensions/orbit.js line 7 in frame(t=0.500): TypeError: …` | your code threw; the file, line and time are given. At load: `… line 3 at load: …` |
+| `scene 'x': JavaScript error in extensions/x.js …: a module script did not load (a file it imports is missing or refused)` | an `import` names a missing file or a URL on the internet |
+| `scene 'x': the page imports the three.js add-on '…', which is not shipped with vidgen …` | an add-on vidgen does not ship (list above): copy the file into the project |
+| `scene 'x': the page imports 'gsap', which is not shipped with vidgen. GSAP's licence …` | `import … from "gsap"`: copy GSAP into the project and load it from there (table above) |
+| `warning: scene 'x': refused https://… (a web scene cannot reach the internet; …)` | a CDN script or API: copy the file into the project |
+| `warning: scene 'x': the page asks Google Fonts for "…", but the internet is off during a render …` | a `<link>` to Google Fonts: put the font's file in `fonts/` and remove the link ("Using another font" above) |
+| `fonts/x.ttf: not a font file …` | a damaged or mislabelled file in `fonts/`: replace or remove it |
+| `scene 'x': frame(t=0.500) in extensions/x.js did not return within 10 s: a loop that never ends or a promise that never settles …` | an endless loop, or waiting for something that never comes (a timer in `load`: time stands still there) |
+| `scene 'x': extensions/x.html did not become ready within 30 s …` | the page's load event never came (a module that never finishes) |
+| `scenes[0].params.data: … data.when: 2026-01-01 is a date, not a JSON value` | quote dates in `data:` |
+| a white page | a `page:` with `background: white` of its own (or an old habit): leave the background out or use `var(--vidgen-background)` |
+| text too small for `min_font`, or a layout that only fits one shape | sizes in fixed px: use `var(--vidgen-size-…)` for text, `vw` / `vh` for the rest; for a page that already exists in fixed px, `design_width` ("Porting a page built in fixed pixels" above) |
+| a page that fills only a corner of the frame at 1080p, or runs off the preview or the draft | a page built in fixed px for one window: `design_width: <that window's width>` |
+| a canvas or three.js picture that is soft at 1080p in a scene with `design_width` | the canvas is drawn at the design size: multiply its size by `devicePixelRatio` (above) |
+| `scenes[0].params.design_width: 3 is not a window width a page is designed for …` | give the window's width in CSS pixels, 200 to 8192 |
+| lint finds nothing on a canvas scene | canvas text is not read: declare it with `layout(t, ctx)` |
+
+**Render cost.** Every frame is a screenshot of the whole page: a `web` scene renders far slower
+than a built-in one, and the time grows with the number of frames and with their size. Measured
+on a slow 1-CPU machine on two scenes of 20 s (a whole `vidgen render` of the scene, Chromium's
+start included, two runs each):
+
+| render | size at 16:9 | an HTML + SVG page | a three.js dashboard |
+|---|---|---|---|
+| `--draft` | 426x240, 8 fps | 36 s (1.8 s per second of video) | 54 s (2.7 s per second) |
+| `--preview` | 854x480, 15 fps | 99 s (4.9 s per second) | 127 s (6.3 s per second) |
+| final | 1920x1080, 30 fps | about 28 s per second | about 58 s per second |
+
+So a draft is about 2.5 times faster than a preview (2.7 and 2.3 times here), and a final render
+about 3.5 to 4 times slower than a preview (final: measured on 3 s cuts beside a preview of the
+same cut; a minute of 1080p `web` video is half an hour to an hour of rendering). The machine's
+own speed changed up to 4 times within an hour on the day of these measurements, so trust the
+ratios more than the seconds. Work in this order: `vidgen render --draft` to see the whole video
+move (240 px on the shorter side at the video's shape: 240x426 at 9:16, 240x240 at 1:1;
+`draft: {width: 480, height: 270, fps: 12}` in the config for a larger one), `--preview` and
+`vidgen lint` when the timing is right, the final render once. Keep `web` scenes short (a few
+beats each).
+
+- **A draft needs a page that scales.** Its window is 426 CSS pixels wide: a page sized in `vw`,
+  `vh`, `%` and `var(--vidgen-size-…)` looks the same as at 1080p, only smaller, and so does a
+  page with `design_width` (its window stays as wide as designed). A page in fixed pixels without
+  `design_width` runs off a draft.
+- **Lint and the storyboard never use a draft.** `vidgen storyboard` and `vidgen lint` render
+  the whole scene at the preview size (`--final`: the final size), into `build/preview`, so a
+  draft never causes a `min_font` finding. Lint's sizes are fractions of the frame, so the
+  preview's verdict holds for the final video; text that is hard to read at 240p is expected.
+- **Each size keeps its own frames** (`build/draft`, `build/preview`, `build/final`): a draft
+  never replaces a preview. An unchanged scene is not drawn again: the frames are kept with every
+  file the page loaded, and editing any of them (or its `data:`, the theme or the narration) draws
+  that scene again.
+
 <!-- topic: particle-physics (also: particle, particle_physics, hep, higgs, standard-model, collider, feynman-diagrams) -->
 ## Particle physics: particles, collisions and discoveries
 
@@ -4064,7 +4558,7 @@ install; `vidgen validate` warns when it is missing.
 | `max_words` | too much text on one frame | split the scene, shorten items, `dim_previous`, fewer columns |
 | `min_font` | text too small for the output | less content per scene (it was shrunk to fit), shorter labels, split the table / diagram / timeline |
 | `off_frame` | text cut off at the frame edge | shorter text; in a custom scene, place it in a region |
-| `safe_area` | text in the margin | as above; check reserving overlays |
+| `safe_area` | text in the margin, or under the captions (the message names the overlay that keeps that part of the frame) | as above; check reserving overlays; a `web` page: `region: body` |
 | `text_overlap` | two texts on top of each other | fewer or shorter labels; a custom scene's layout |
 | `covered_text` | a shape drawn over text | move the shape or the callout (`side:`) |
 | `label_spacing` | a callout label touches other text (a value, the title) | another `side:`, an `arrow` instead of a `label`, a shorter label |
@@ -4137,6 +4631,7 @@ install; `vidgen validate` warns when it is missing.
 | `generated_footage` (info) | the scene shows AI-generated video takes | nothing to fix: when publishing, mark the video as altered or synthetic content where the platform asks |
 | `three_d_off_frame` | in a `3d` scene, an object the beat is about (its actions name it, or a stand-in says the line) is mostly outside the frame | `camera_fly_to` / `camera_look_at` it, or move it into view |
 | `three_d_hidden` | in a `3d` scene, an object the beat is about is mostly hidden behind a nearer one | `camera_orbit` round it, or move one of them |
+| `web_clipped` (error) | in a `web` scene, page text cut by its own box or an ancestor's (`overflow: hidden`), or by the page's box (`region: body`) | shorter or smaller text, a box that grows; `data-vidgen-lint="off"` on text cut on purpose |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |
@@ -4156,5 +4651,10 @@ install; `vidgen validate` warns when it is missing.
   acronyms take longer to say. Re-check pacing after the real audio.
 - *`vidgen render --scene ID` re-joins the other scenes as they are*: render the scene before a
   new transition or carry too.
+- *`vidgen render --scene ID` rendered every scene*: the video is joined from every scene, so a
+  scene with no render yet at that quality and variant (`--preview`, `--draft` and each
+  `--variant` keep their own renders) is rendered too; a line `--scene ID: also rendering ...`
+  names them. The next `--scene ID` renders only that scene. To look at one scene without the
+  others, use `vidgen storyboard --scene ID`.
 - *`ffmpeg not found`*: install it and open a new terminal.
 - *`ffmpeg X.Y is too old`*: install ffmpeg 4.4 or newer.

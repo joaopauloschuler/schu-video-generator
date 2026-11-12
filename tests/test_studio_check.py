@@ -66,6 +66,7 @@ def test_a_fix_is_text_that_carries_edits() -> None:
     assert finding.edits == [{"fix": 1, "label": "lower pad by 2 dB", "ops": [{"op": "set", "path": "tracks.pad.volume", "value": -8}]}]
 
 
+@pytest.mark.slow
 def test_advice_edits_apply_to_the_score_and_the_cli_report_is_unchanged() -> None:
     text = yaml.safe_dump(LOUD, sort_keys=False)
     report = check_music_score(parse_music_score(LOUD, "loud.yaml"))
@@ -87,6 +88,7 @@ def test_advice_edits_apply_to_the_score_and_the_cli_report_is_unchanged() -> No
     assert "Apply" not in music_check_text(report)
 
 
+@pytest.mark.slow
 def test_build_advice_adds_a_riser_with_a_free_name() -> None:
     data = {**LOUD, "tracks": {"pad": {"instrument": "pad", "play": "chords"}, "riser": {"instrument": "pad", "play": "chords", "only": ["intro"]}}}
     report = check_music_score(parse_music_score(data, "flat.yaml"))
@@ -99,6 +101,7 @@ def test_build_advice_adds_a_riser_with_a_free_name() -> None:
         assert check_text(apply_edits(text, edit["ops"]))[2] == [], edit
 
 
+@pytest.mark.slow
 def test_the_check_from_kept_stems_is_the_cli_check() -> None:
     score = parse_music_score(LOUD, "loud.yaml")
     whole = check_dict(check_music_score(score))
@@ -119,6 +122,7 @@ def test_the_check_from_kept_stems_is_the_cli_check() -> None:
 # ----- the background check in the studio -----------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_studio_check_is_kept_and_its_advice_applied_as_a_version(app: StudioApp) -> None:
     app.load(text=yaml.safe_dump(LOUD, sort_keys=False))
     app.render()
@@ -141,6 +145,7 @@ def test_studio_check_is_kept_and_its_advice_applied_as_a_version(app: StudioApp
         app.apply_check(1, doc["key"], "99.0")
 
 
+@pytest.mark.slow
 def test_a_newer_check_supersedes_one_waiting_for_renders(tmp_path: Path) -> None:
     idle = threading.Event()
     asked: list[str] = []
@@ -190,6 +195,7 @@ def test_undo_redo_branches_rename_and_star(app: StudioApp) -> None:
         app.set_current(9)
 
 
+@pytest.mark.slow
 def test_sessions_are_listed_and_reopened(app: StudioApp) -> None:
     first = app.load(text=TINY)["session"]["id"]
     time.sleep(1.05)  # session ids have a second's resolution
@@ -204,6 +210,7 @@ def test_sessions_are_listed_and_reopened(app: StudioApp) -> None:
 # ----- exports ----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_export_lengths_and_levels() -> None:
     score = parse_music_score(yaml.safe_load(TINY), "tiny.yaml")
     once, facts = export_audio(score, "once", None, "video")
@@ -226,6 +233,7 @@ def test_export_lengths_and_levels() -> None:
     assert file_name("", 1, "wav", "loops", 4) == "piece-v1-4loops-video.wav"
 
 
+@pytest.mark.slow
 def test_exports_are_written_in_the_session_and_downloaded(app: StudioApp) -> None:
     app.load(text=TINY)
     yaml_doc = app.export(None, "yaml")
@@ -260,6 +268,7 @@ def test_save_to_project_follows_the_name_rule(tmp_path: Path) -> None:
     assert save_to_project(root, "old", TINY, overwrite=True)["path"] == "assets/music/old.yml"
 
 
+@pytest.mark.slow
 def test_routes(tmp_path: Path) -> None:
     root = tmp_path / "proj"
     root.mkdir()

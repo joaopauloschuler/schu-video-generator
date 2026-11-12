@@ -153,6 +153,7 @@ def dubbed_project(make_project, overlap: float | None = 0.3) -> Path:
     return root
 
 
+@pytest.mark.slow
 def test_variant_language_dubs_voices_into_its_own_audio_folder(make_project) -> None:
     root = dubbed_project(make_project)
     base, pt = Project.load(root), Project.load(root, variant="pt")

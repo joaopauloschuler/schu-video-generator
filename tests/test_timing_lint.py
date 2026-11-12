@@ -164,6 +164,7 @@ def test_narration_speed_from_audio_and_estimates(tmp_path: Path) -> None:
 # ----- runner ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_runner_reports_timing_findings(make_project) -> None:
     data = minimal_config(preview={"width": 854, "height": 480, "fps": 15})
     data["scenes"][0]["beats"] = [{"text": "In 2024, 37.5% of 128 GPUs"}, {"text": "Then 1.5 and 2.25 and 3.75 and 4.5"}]

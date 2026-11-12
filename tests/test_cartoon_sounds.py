@@ -59,6 +59,7 @@ def band_share(x: np.ndarray, low: float, high: float) -> float:
     return float(power[(freqs >= low) & (freqs <= high)].sum() / power.sum())
 
 
+@pytest.mark.slow
 def test_each_new_sound_generates_deterministically() -> None:
     for name in NEW_SOUNDS:
         assert name in sfx.BUILTIN_SOUNDS
@@ -70,6 +71,7 @@ def test_each_new_sound_generates_deterministically() -> None:
         assert len(shaped) == round(1.2 * RATE) and not np.array_equal(shaped[: len(default)], default)
 
 
+@pytest.mark.slow
 def test_a_knock_is_three_raps_and_a_creak_and_a_splash_sound_as_described() -> None:
     knock = sfx.synthesize("knock")
     window = int(0.02 * RATE)
@@ -87,6 +89,7 @@ def test_a_knock_is_three_raps_and_a_creak_and_a_splash_sound_as_described() -> 
     assert band_share(hard, 1000, 6000) > 0.4 and band_share(hard, 150, 700) > 0.05   # bright, with a low plunk
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("bed", "level", "seconds"),
     [("birdsong", BIRDSONG_LEVEL, 20.0), ("city", CITY_LEVEL, 16.0), ("room_tone", ROOM_TONE_LEVEL, 8.0),
@@ -104,6 +107,7 @@ def test_each_set_bed_is_a_seeded_seamless_loop_at_its_level(bed: str, level: fl
     assert not np.array_equal(loop[:, 0], loop[:, 1])   # wide
 
 
+@pytest.mark.slow
 def test_the_beds_sound_like_what_they_are() -> None:
     birds, city, room, crickets = (ambience.BEDS[b].loop()[:, 0] for b in SET_BEDS[:4])   # hum: tests/test_story_fx.py (Step 246)
     assert band_share(birds, 1800, 7000) > 0.8   # the songs, high
@@ -136,6 +140,7 @@ def test_automatic_ambience_rules() -> None:
     assert set_ambience(False, room=True, lights=day, rain=[], end=8.0) == []
 
 
+@pytest.mark.slow
 def test_a_stage_resolves_its_ambience_setting() -> None:
     from vidgen.scenes.stage import Stage
 
@@ -223,6 +228,7 @@ def test_knock_validates(make_project) -> None:
 # ----- renders -------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_room_knocks_creaks_shuts_and_has_its_room_tone(make_project, tmp_path: Path) -> None:
     beats = [
@@ -241,6 +247,7 @@ def test_a_room_knocks_creaks_shuts_and_has_its_room_tone(make_project, tmp_path
     assert scene.timings()["ambience"] == [{"bed": "room_tone", "start": 0.0, "end": round(float(scene.renderer.time), 6)}]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_birds_sing_by_day_until_the_night_falls(make_project, tmp_path: Path) -> None:
     beats = [{"text": "A sunny day in the park, with birds all around."}, {"text": "Then night falls.", "actions": [{"light": "night"}]}]

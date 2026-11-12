@@ -78,10 +78,53 @@ The `3d` scene type draws with **three.js** (https://threejs.org), bundled as pa
 `three` 0.186.1 (`build/`; SHA-256 `9052042d676cb0fdc1ddfefe193053f34b7ac0513a616fdac4535d49987812ea`
 and `9edde002b066a9a05676a6127f67735b62baf399bdea529f2f7e31657da769e6`), under the **MIT
 License**, © 2010-2026 three.js authors; the licence text is `src/vidgen/data/three/LICENSE`.
-The page loads them from the package, never from the network. **Playwright** (optional `3d`
+The page loads them from the package, never from the network. A chosen set of three.js add-ons
+for `web` scenes is bundled in `src/vidgen/data/three/addons/`: 23 files copied unmodified from
+`examples/jsm/` of the same npm package (same version, same MIT licence, a copy of which is
+`src/vidgen/data/three/addons/LICENSE`); `loaders/SVGLoader.js` contains a number parser that its
+comment says comes from svg-numbers (https://github.com/ppvg/svg-numbers, MIT License). **Playwright** (optional `3d`
 extra; Apache-2.0, © Microsoft) drives the headless Chromium it downloads with
 `playwright install chromium` (Chromium: BSD-style licence and its third-party notices); neither
 is bundled.
+
+## Animation and chart libraries for `web` scenes
+
+A `web` scene's page can import five JavaScript libraries bundled as package data in
+`src/vidgen/data/web/libs/<package>/`. Each is one build file copied unmodified from the npm
+package (the registry's tarball, its `dist.integrity` sha512 checked), with the package's licence
+file beside it as `LICENSE`:
+
+| Package | File (in the package) | Bytes | SHA-256 | Licence | Copyright |
+|---|---|---|---|---|---|
+| animejs 4.5.0 | `anime.esm.min.js` (`dist/bundles/`) | 118 678 | `a19015a1a92d52025a2fb6703b6d67eadd1cc2aeaf880770e96e04cf6aa07be1` | MIT | © 2025 Julian Garnier |
+| motion 14.12.0 | `motion.js` (`dist/`) | 188 678 | `a18fc08eb11c67658b34270bb71bc4ba806c87dbc1b720d7acd38c437844eee7` | MIT | © 2024 Motion B.V. |
+| d3 7.9.2 | `d3.min.js` (`dist/`) | 280 622 | `912111098ea99503a6f4967361d2bbdc9dbf58cf9c678c8e27e5b02d1a07f0c1` | ISC | © 2010-2026 Mike Bostock |
+| chart.js 4.6.1 | `chart.umd.min.js` (`dist/`) | 210 082 | `87364cc2b2a76a6684929e7d6b80b18a897794db38400caff1fcf1791c6925d2` | MIT | © 2014-2024 Chart.js Contributors |
+| lottie-web 5.13.0 | `lottie.min.js` (`build/player/esm/`) | 589 019 | `61cd35a14b6519b7b6073a32e1bb037dab613c2033a3141fc2611295acf6c18e` | MIT | © 2015 Bodymovin |
+
+Three of these files contain the code of other npm packages; the licence files of those packages
+are joined in `LICENSES-bundled.txt` beside the file (read from each package's latest version on
+the npm registry on 2026-11-12; the bundle may contain an earlier version):
+
+- `d3.min.js`: the 30 `d3-*` modules (ISC, © Mike Bostock; `d3-ease` BSD-3-Clause, with easing
+  equations © 2001 Robert Penner; `d3-scale-chromatic` includes ColorBrewer colours, © 2002
+  Cynthia Brewer, Mark Harrower and The Pennsylvania State University, Apache-style licence;
+  `d3-geo`'s licence file includes GeographicLib's, © 2008-2012 Charles Karney, MIT; `d3-delaunay` ISC, © Observable, Inc.
+  and Mapbox), `delaunator` (ISC, © Mapbox), `robust-predicates` (Unlicense, public domain) and
+  `internmap` (ISC, © Mike Bostock);
+- `chart.umd.min.js`: `@kurkle/color` (MIT, © 2018-2024 Jukka Kurkela);
+- `motion.js`: `framer-motion` (MIT, © 2018 Framer B.V.), `motion-dom` and `motion-utils` (MIT,
+  © 2024 Motion B.V.); the licence of `tslib` (0BSD, © Microsoft Corporation), a dependency the
+  package declares, is included too, though none of its helpers was found in the file.
+
+`lottie.min.js` keeps the notice of the seeded random generator it contains (seedrandom,
+© 2014 David Bau, MIT). `index.js` beside the d3, chart.js and motion files is written by
+schu-video-generator (an ES module that runs the package's UMD file and exports its names).
+
+**GSAP** (GreenSock) is not shipped and not bundled: the files of the npm package `gsap` 3.15.1
+carry "Copyright 2026, GreenSock. All rights reserved. Subject to the terms at
+https://gsap.com/standard-license" and the package has no licence file, so it cannot be
+redistributed under an open-source licence. A project may use its own copy under GSAP's terms.
 
 ## Sound effects and music beds
 

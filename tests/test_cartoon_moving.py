@@ -146,6 +146,7 @@ def play(anim: Any, frames: int = FPS) -> list[Any]:
     return seen
 
 
+@pytest.mark.slow
 def test_walk_moves_the_feet_and_ends_in_the_pose() -> None:
     c = plain().face("left").shift([-3.0, -2.0, 0.0])
     c.set_pose("pointing")
@@ -221,6 +222,7 @@ class StageFake(FakeScene):
         return self.following
 
 
+@pytest.mark.slow
 def test_walk_to_enter_and_exit_actions() -> None:
     pip = plain().shift([-4.0, -2.0, 0.0])
     scene = StageFake(pip=pip)
@@ -392,6 +394,7 @@ def test_walk_overlap_rule() -> None:
 # ----- render ------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_walk_on_a_stage(make_project, tmp_path: Path) -> None:
     """kit waits off stage until it enters; the camera follows pip walking right with its bubble."""

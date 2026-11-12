@@ -219,6 +219,7 @@ def _params(**over: Any) -> Any:
     return Detector.parse_params({"event": {"preset": "z_to_mumu", "seed": 3}, **over}, "d")
 
 
+@pytest.mark.slow
 def test_scene_params_are_checked() -> None:
     with pytest.raises(VidgenError, match="must be positive"):
         _params(field=0)
@@ -268,6 +269,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(320, 180), (180, 320)], ids=["landscape", "portrait"])
 def test_event_display_renders(size: tuple[int, int], make_project, media: Path) -> None:
@@ -287,6 +289,7 @@ def test_event_display_renders(size: tuple[int, int], make_project, media: Path)
             assert abs(m.get_x()) + m.width / 2 <= fw / 2 + 1e-3 and abs(m.get_y()) + m.height / 2 <= fh / 2 + 1e-3
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_missing_pt_arrow_points_away_from_the_visible(make_project, media: Path) -> None:
     scene = {"id": "w", "type": "detector", "params": {"event": {"particles": [{"particle": "e+", "pt": 40, "phi": 0}, {"particle": "nu_e", "pt": 40, "phi": 180}]},
@@ -314,6 +317,7 @@ def test_sqrt_of_a_sum_is_set_apart_from_the_next_factor() -> None:
     assert tex("2*sqrt(a+b)") == r"2\,\sqrt{a + b}"
 
 
+@pytest.mark.slow
 def test_model_columns_carry_axis_labels() -> None:
     from vidgen.plotcore.models import run_registered
 
@@ -325,6 +329,7 @@ def test_model_columns_carry_axis_labels() -> None:
     assert column.label == sim.labels["theta_min"]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_feynman_diagram_is_centred_without_a_rule_card(make_project, media: Path) -> None:
     scene = {"id": "f", "type": "feynman", "params": {"preset": "bhabha"},

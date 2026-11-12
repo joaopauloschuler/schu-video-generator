@@ -27,6 +27,10 @@ schu-video-generator names. Anything else in schu-video-generator is internal. (
 schu-video-generator distribution; installing it gives both the package and the `vidgen`
 command.)
 
+**Without Python:** a scene can also be a web page you write in HTML, CSS and JavaScript (the
+`web` scene type, [section 10](#10-web-scenes-a-scene-written-in-html-css-and-javascript)); it
+needs no extension module.
+
 Two complete examples: [examples/custom_scene](../examples/custom_scene) (a small video with one
 custom scene type, a helper module, a vertical variant and a hook) and
 [examples/kphi3](../examples/kphi3) (a 4-minute paper video made only of custom scenes).
@@ -1407,3 +1411,46 @@ scene that shows the narration its own way):
   `speaker_prefix(label)` (`"Ana:"`) are what `captions` uses.
 - `plate_contrast(color, plate, opacity)`: the contrast text keeps on a translucent plate over
   anything (the worse of the plate over black and over white).
+
+## 10. Web scenes: a scene written in HTML, CSS and JavaScript
+
+A `web` scene is the other way to draw a picture no built-in draws: a page in the project folder
+(`page: extensions/flow.html`) or a JavaScript module drawing on one canvas (`script:
+extensions/flow.js`), screenshotted in headless Chromium frame by frame. It is a built-in scene
+type, so nothing is registered: the YAML names the file, and `vidgen validate` checks that it
+exists. The full reference is [CONFIG.md `web`](CONFIG.md#web); the author's how-to, with working
+examples and the usual mistakes, is `vidgen guide web`; a whole example is
+[examples/web](../examples/web) (a CSS page revealed on narration beats, a canvas drawing with
+its text declared to lint, a three.js planet; 16:9 and 9:16).
+
+**Same trust as Python extensions.** JavaScript in the project is run as written, like the
+`*.py` files in `extensions/`: vidgen does not sandbox it beyond what a browser page is, and does
+not ask first. Open only projects you trust. What the page *cannot* do is reach the internet
+while rendering (every request outside the project folder is refused with a warning), so a
+render never depends on, or sends anything to, another site.
+
+**Which to write.**
+
+| | Python scene type (`extensions/*.py`) | `web` scene (`page:` / `script:`) |
+|---|---|---|
+| language | Python with Manim (`vidgen.api`) | HTML, CSS, JavaScript (three.js with a chosen set of its add-ons, anime.js, Motion, D3, Chart.js and lottie-web bundled) |
+| reuse | a new type: many scenes, each with its own params | one page per scene; values through `data:` (`ctx.data`) |
+| text | vidgen's own (`T`, `fit_text`): fitted, translated, action targets | the page's own; lint reads it (canvas text: `layout(t, ctx)`) |
+| beat actions | your targets (`self.target(...)`), `highlight`, `zoom`, custom actions | `view` (the whole page) and `title`; the page reacts to beats itself (`data-beat`, `ctx.beats`) |
+| time | `self.play`, `self.narrate` | the page's own CSS, timers and `requestAnimationFrame`, on vidgen's clock |
+| cost | about real time at the preview size | a screenshot per frame: several seconds per second of 1080p video |
+
+Choose Python for a scene type you will reuse with new params, or whose text and parts must be
+vidgen's own; choose `web` for a one-off picture that is easier to write as a page (CSS layout and
+animation, SVG, a canvas, your own three.js), or when you already have web code to show.
+
+**What the page is given** (CONFIG.md `web`): `ctx` (`width`, `height`, `aspect`, `orientation`,
+`fps`, `duration`, `canvas`, `theme`, `data`, `beats`), the theme as CSS variables
+(`var(--vidgen-primary)`, `var(--vidgen-font-heading)`, `var(--vidgen-size-body)`) with vidgen's
+fonts, `data-beat` on `<body>` and `data-aspect` / `data-orientation` on `<html>`, and
+`import * as THREE from "three"`. Optional hooks: `load(ctx)`, `frame(t, ctx)` and, for text
+drawn on a canvas, `layout(t, ctx)`; a page puts them on `window.vidgen`, a script exports them.
+
+**Promoting.** A page that proved useful in many videos is a candidate for a real scene type
+(section 7): a Python built-in can call `make_web_clip` (in `vidgen.api`, the code the `web` type
+uses) with its own params as `data`, as the `web` type does.

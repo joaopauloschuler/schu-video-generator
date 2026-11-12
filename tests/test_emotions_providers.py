@@ -100,6 +100,7 @@ def test_elevenlabs_settings_change_with_the_emotion(eleven: FakeAPI) -> None:
     assert tweaked.cache_key("Hi") == excited.cache_key("Hi")
 
 
+@pytest.mark.slow
 def test_eleven_v3_gets_the_audio_tag_before_the_line(make_project, eleven: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
     v3 = {"model_id": "eleven_v3", "context": False}
     root = make_project(with_emotions(v3, intro_b1="excited", custom={"like": "whisper", "gain": -6}))
@@ -161,6 +162,7 @@ def test_openrouter_instructions_carry_the_emotion(routed: FakeOpenRouter) -> No
     assert neutral.emotion is None and neutral.instructions is None
 
 
+@pytest.mark.slow
 def test_openrouter_without_instructions_changes_the_audio(routed: FakeOpenRouter, tmp_path: Path) -> None:
     assert tts.get_provider(VoiceConfig(**VOICE)).cache_key("Hello there.") == PLAIN_OPENROUTER_KEY
     pauses_only = tts.get_provider(VoiceConfig(**VOICE), prosody(EmotionConfig(pauses=1.5)))

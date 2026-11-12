@@ -106,6 +106,7 @@ def test_thunder_comes_later_quieter_longer_and_lower_the_farther_the_strike() -
     assert lo <= near.duration and far.duration <= hi
 
 
+@pytest.mark.slow
 def test_the_thunder_sound_is_generated_the_same_every_time() -> None:
     samples = sfx.synthesize("thunder", duration=2.0, intensity=0.8)
     assert len(samples) == round(2.0 * sfx.RATE) and np.all(np.isfinite(samples)) and samples[0] == samples[-1] == 0.0
@@ -229,6 +230,7 @@ def test_the_windows_flash_white() -> None:
 # ----- validation -------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_storm_options_validate(make_project) -> None:
     assert stage_params(particles=[{"kind": "rain", "lightning": True}]).particles[0].lightning is True
     assert stage_params(particles=[{"kind": "rain", "lightning": 5}]).particles[0].lightning == 5
@@ -293,6 +295,7 @@ STORM: dict[str, Any] = {
 }
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_lightning_flashes_the_set_with_a_bolt_then_a_rainbow_fades_in(make_project, tmp_path: Path, monkeypatch) -> None:
     """The same scene without the lightning and the rainbow gives the same pixels until the strike;
@@ -330,6 +333,7 @@ def test_lightning_flashes_the_set_with_a_bolt_then_a_rainbow_fades_in(make_proj
     assert order == [rainbow, scene.props["house"]]   # behind the house
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_sun_sets_across_the_sky_and_the_shadows_turn(make_project, tmp_path: Path, monkeypatch) -> None:
     """A light change with move_sun takes the sun from the top of the sky down to the right while

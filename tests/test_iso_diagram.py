@@ -184,6 +184,7 @@ def test_every_iso_shape_becomes_a_mobject() -> None:
     assert len(shapes_mobject(block_shapes(layout_iso_diagram([box("b")]).blocks["b"], "#336699"), to_scene, ink=None)) == 3
 
 
+@pytest.mark.slow
 def test_readable_ink() -> None:
     assert readable_ink("#F2A541", "#0F1115", "#E8EAED") == "#0F1115"
     assert readable_ink("#1D4ED8", "#0F1115", "#E8EAED") == "#E8EAED"
@@ -192,6 +193,7 @@ def test_readable_ink() -> None:
 # ----- params --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_params_shorthands_targets_and_arrangements() -> None:
     p = params(heading="H", blocks=["web", {"id": "db", "label": "Data", "shape": "database"}, {"id": "app", "layers": ["ui", "api"]}],
                groups=[{"id": "g", "blocks": ["web", "db"]}], edges=["web -> db: reads", "db --> app"])
@@ -248,6 +250,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)])
 def test_renders_every_target_inside_the_frame(make_project, media: Path, size: tuple[int, int]) -> None:

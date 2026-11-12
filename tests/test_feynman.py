@@ -188,6 +188,7 @@ def cls() -> Any:
     return registry.get("feynman").cls
 
 
+@pytest.mark.slow
 def test_params_and_targets() -> None:
     p = cls().validate_params({"preset": "bhabha", "title": "Bhabha"})
     assert p.time == "right" and p.reveal == "time" and p.process and p.time_axis
@@ -250,6 +251,7 @@ def _overlap(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     return w * h if w > 0 and h > 0 else 0.0
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(320, 180), (180, 320)], ids=["landscape", "portrait"])
 def test_diagram_renders_with_its_actions(size: tuple[int, int], make_project, media: Path) -> None:
@@ -276,6 +278,7 @@ def test_diagram_renders_with_its_actions(size: tuple[int, int], make_project, m
     assert all(_overlap(a, b) == 0 for i, a in enumerate(boxes) for b in boxes[i + 1:])
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_loops_spectators_and_time_up(make_project, media: Path) -> None:
     scenes = [{"id": "gg", "type": "feynman", "params": {"preset": "gg_to_h", "time": "up"}, "beats": [{"text": "two gluons make a higgs boson"}]},

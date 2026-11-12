@@ -292,6 +292,7 @@ def test_pie_portrait_puts_labels_that_do_not_fit_in_a_key(make_project, media: 
     assert keys and all(k.get_top()[1] < scene._center[1] - scene._radius for k in keys)   # below the pie
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_pie_per_beat_sweeps_one_slice_per_beat_and_early_reveal(make_project, media: Path) -> None:
     p = {"labels": ["a", "b", "c"], "values": [3, 2, 1], "reveal": "per_beat", "donut": True}
@@ -305,6 +306,7 @@ def test_pie_per_beat_sweeps_one_slice_per_beat_and_early_reveal(make_project, m
     assert np.allclose(hole.get_center()[:2], scene._center[:2], atol=0.2) and hole.width < 2 * scene._inner
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_heatmap_cells_colours_text_and_highlight(make_project, media: Path) -> None:
     p = {**GRID, "highlight": ["row:Tue", "cell1.1"]}
@@ -331,6 +333,7 @@ def test_heatmap_cells_colours_text_and_highlight(make_project, media: Path) -> 
     assert [t.name for t in scene.targets if not scene.is_shown(t)] == []
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_heatmap_rows_reveal_and_early_row(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "h", "type": "heatmap", "params": {**GRID, "reveal": "rows"}, "beats": beats(None, [{"reveal": "row3"}], None)}])

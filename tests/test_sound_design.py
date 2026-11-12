@@ -88,6 +88,7 @@ def test_setting_errors(data: dict[str, Any], message: str) -> None:
         config.BeatConfig.model_validate(data)
 
 
+@pytest.mark.slow
 def test_sections_take_ambience_and_a_pause_takes_a_room(tmp_path: Path) -> None:
     data = {**DRAMA, "sections": [*DRAMA["sections"], {"pause": 2.0, "ambience": "crickets", "room": "hall", "sfx": [{"sound": "knock", "room": True}]}]}
     project = Project.load(_write(tmp_path / "p", data))
@@ -141,6 +142,7 @@ def test_same_bed_plays_on_and_a_beat_starts_one(tmp_path: Path) -> None:
     assert len(rain) == 1 and rain[0]["start"] == pytest.approx(beat.start + 0.5 * beat.body) and rain[0]["gain"] == -3
 
 
+@pytest.mark.slow
 def test_designed_beds_in_the_mix(tmp_path: Path) -> None:
     project = Project.load(_write(tmp_path / "p", {"title": "t", "scenes": [{"id": "s", "type": "text_card", "params": {"text": "x"}, "duration": 6.0}]}))
     total = 6 * RATE
@@ -208,6 +210,7 @@ def test_an_event_in_a_room() -> None:
     assert placed(end, library)[0] == RATE - len(data)                                                                  # the dry sound ends there
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_video_scene_repeats_and_rooms_its_cues(tmp_path: Path) -> None:
     from manim import tempconfig
@@ -232,6 +235,7 @@ def test_a_video_scene_repeats_and_rooms_its_cues(tmp_path: Path) -> None:
     assert [round(b["time"] - a["time"], 6) for a, b in zip(steps, steps[1:])] == [0.4, 0.4] and steps[1]["params"]["pitch"] == -1.5
 
 
+@pytest.mark.slow
 def test_render_with_beds_and_cues(tmp_path: Path) -> None:
     project = Project.load(_write(tmp_path / "p", DRAMA))
     _voice_all(project)
@@ -262,6 +266,7 @@ PIN: dict[str, Any] = {
 }
 
 
+@pytest.mark.slow
 def test_unset_options_change_nothing(tmp_path: Path) -> None:
     plain = Project.load(_write(tmp_path / "a", PIN))
     _voice_all(plain)
@@ -345,6 +350,7 @@ def test_stage_sounds_without_pictures(tmp_path: Path) -> None:
         assert stage_sounds(off, _slots(off)[0]) == ([], [])
 
 
+@pytest.mark.slow
 def test_stage_sounds_in_the_render(tmp_path: Path) -> None:
     data = {**STAGE, "audio": {"scene_sounds": True}}
     data["scenes"] = [{**STAGE["scenes"][1], "room": "small_office"}]
@@ -355,6 +361,7 @@ def test_stage_sounds_in_the_render(tmp_path: Path) -> None:
     assert result.timings["mix"]["ambience"][0]["bed"] == "room_tone"
 
 
+@pytest.mark.slow
 def test_clip_sound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from vidgen import clips
 

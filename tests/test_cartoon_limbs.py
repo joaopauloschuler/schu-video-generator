@@ -86,6 +86,7 @@ def test_lower_segments_share_their_limbs_time_window() -> None:
 # ----- reach and plant on characters -------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_reach_puts_the_hand_on_the_point_with_a_natural_elbow() -> None:
     for facing in ("right", "left"):
         c = generated().face(facing).shift([1.0, -2.0, 0.0])
@@ -184,6 +185,7 @@ def test_walk_cycle_bends_the_knee_of_the_swinging_leg() -> None:
     assert "legs" not in state.parts and state.parts["body"].shift == (0.0, 0.0)   # no fixed bob: the walk grounds it
 
 
+@pytest.mark.slow
 def test_the_walk_keeps_a_sole_on_the_ground_and_ends_in_the_pose() -> None:
     c = generated()
     c.motion = "none"

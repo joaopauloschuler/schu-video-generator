@@ -311,6 +311,7 @@ DIALOGUE = [
 ]
 
 
+@pytest.mark.slow
 def test_stage_scene_directions_from_the_project(make_project) -> None:
     project = directed_project(make_project, DIALOGUE, params={"auto_direct": {"reactions": False}}, auto_direct=True)
     with extensions.project_session(project):
@@ -427,6 +428,7 @@ def test_storyboard_sheet_lists_a_beats_automatic_actions(tmp_path: Path) -> Non
 # ----- render --------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_directed_dialogue_renders(make_project, tmp_path: Path) -> None:
     project = directed_project(make_project, [
@@ -443,6 +445,7 @@ def test_a_directed_dialogue_renders(make_project, tmp_path: Path) -> None:
     assert ("park_b1", "PoseChange") in played and ("park_b2", "PoseChange") in played
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_storyboard_marks_the_automatic_actions(make_project, capsys) -> None:
     tiny = {"width": 160, "height": 90, "fps": 5}
@@ -457,6 +460,7 @@ def test_storyboard_marks_the_automatic_actions(make_project, capsys) -> None:
     assert frames["park_b1"][2]["react"] == "kit" and frames["park_b2"] == []   # kit acts itself; pip already looks at kit
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_gestures_and_a_closeup_render_and_lint_clean(make_project, capsys) -> None:
     """A long line with a stressed word, then a short answer: pip gestures, kit gets a close-up
@@ -492,6 +496,7 @@ def test_emphasis_marks_leave_the_text_but_not_the_marked_text() -> None:
     assert copied.marked_text == beat.marked_text
 
 
+@pytest.mark.slow
 def test_emphasis_marks_are_not_spoken_and_unmarked_hashes_are_unchanged(make_project) -> None:
     """The TTS gets the text without asterisks; a beat without marks keeps its cache key (pinned)."""
     from vidgen import tts

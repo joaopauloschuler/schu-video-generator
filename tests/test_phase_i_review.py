@@ -47,6 +47,7 @@ def write(path: Path, data: Any) -> Path:
 # ----- the examples end to end (no render) ----------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_screenplay_sample_to_a_directed_project(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     out = tmp_path / "humming_box"
     assert main(["screenplay", str(SAMPLE), "--out", str(out), "--json"]) == 0
@@ -69,6 +70,7 @@ def test_series_episodes_validate_with_their_includes(tmp_path: Path, episode: s
     assert any(b["actions"] for s in json_out(capsys)["scenes"] for b in s["beats"])
 
 
+@pytest.mark.slow
 def test_unused_voices_of_a_shared_cast_are_not_reported(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     shutil.copytree(SERIES / "shared", tmp_path / "shared")
     out = tmp_path / "episode_3"   # the sample's own characters; nib and olla do not speak in it
@@ -98,6 +100,7 @@ def svg_characters() -> list[Any]:
     return [build_character(CharacterEntry(**entry), theme=Theme(), root=SVG_EXAMPLE) for entry in data["characters"]]
 
 
+@pytest.mark.slow
 def test_every_built_in_seat_is_below_every_generated_characters_hips() -> None:
     lowest = min(build_character(CharacterEntry(name="x", look=look), theme=Theme()).hip_height() for look in generated_looks())
     lowest = min(lowest, *(c.hip_height() for c in svg_characters()))
@@ -105,6 +108,7 @@ def test_every_built_in_seat_is_below_every_generated_characters_hips() -> None:
         assert PROP_HEIGHTS[prop] * seat_y < lowest, prop
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("prop", sorted(PROP_SEATS))
 def test_seated_hips_on_the_seat_and_feet_on_the_ground(prop: str) -> None:
     seat = PROP_HEIGHTS[prop] * PROP_SEATS[prop][1]
@@ -165,6 +169,7 @@ def test_a_casts_own_includes_are_confined(tmp_path: Path, monkeypatch: pytest.M
         read_include_file(cast)
 
 
+@pytest.mark.slow
 def test_mcp_validate_refuses_an_svg_look_outside_the_root(tmp_path: Path) -> None:
     from test_mcp import error_text, run_session
 

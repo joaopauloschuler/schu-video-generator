@@ -18,6 +18,7 @@ Manim's global config is not re-entrant, which is why every scene gets a fresh p
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import shutil
@@ -32,7 +33,6 @@ from vidgen import __version__
 from vidgen.errors import VidgenError
 from vidgen.fileio import locked_message, remove_file, write_text_atomic
 from vidgen.project import Project
-from vidgen.three_d.passes import parse_passes
 
 #: Manim's units on the shorter side of the frame (Manim's default frame height).
 FRAME_SHORT_SIDE = 8.0
@@ -106,6 +106,23 @@ def frame_size(width: int, height: int) -> tuple[float, float]:
     return FRAME_SHORT_SIDE, FRAME_SHORT_SIDE * height / width
 
 
+def _text_cache_dir(texts: Path, scene_id: str, root: Path) -> Path:
+    """The folder of a scene's cached Text SVGs: ``texts / scene_id``. Manim names a cached text
+    by its family name, not by the font file, so when the project at ``root`` has font files the
+    folder's name also carries their digest (an added, changed or removed file starts an empty
+    cache), and the scene's folders for other sets of font files are removed."""
+    from vidgen.fonts import project_font_files
+
+    stats = [(path.relative_to(root).as_posix(), path.stat().st_size, path.stat().st_mtime_ns) for path in project_font_files(root)]
+    if not stats:
+        return texts / scene_id
+    current = texts / f"{scene_id}.{hashlib.sha256(repr(stats).encode('utf-8')).hexdigest()[:12]}"
+    for other in texts.glob(f"{scene_id}.*"):
+        if other != current:
+            shutil.rmtree(other, ignore_errors=True)
+    return current
+
+
 def configure_manim(
     project: Project, preview: bool, background: str, media_dir: Path, scene_id: str, progress: bool
 ) -> None:
@@ -129,7 +146,7 @@ def configure_manim(
     config.partial_movie_dir = str(media_dir / "videos" / scene_id / "partial")
     # Manim caches Text/Tex SVGs by content hash; parallel workers writing the same file at once
     # can read each other's half-written SVG, so every scene gets its own cache folders.
-    config.text_dir = str(media_dir / "texts" / scene_id)
+    config.text_dir = str(_text_cache_dir(media_dir / "texts", scene_id, project.root))
     config.tex_dir = str(media_dir / "Tex" / scene_id)
     config.output_file = scene_id
     config.progress_bar = "display" if progress else "none"
@@ -218,7 +235,7 @@ def render_scene(
     from vidgen.capture import FrameCapture, StillWriter
     from vidgen.fonts import register_bundled_fonts
     from vidgen.introspect import LayoutRecorder
-    from vidgen.render.fingerprint import scene_fingerprint
+    from vidgen.render.fingerprint import drawn_fingerprint, fingerprint_digest, fingerprint_inputs
 
     if frames < 0:
         raise VidgenError("frames per beat must not be negative")
@@ -231,7 +248,8 @@ def render_scene(
     theme = extensions.activate(project)
     spec = project.scene(scene_id)
     cls = registry.get(spec.type).cls
-    fingerprint = scene_fingerprint(project, scene_id)  # the inputs as they are when rendering starts
+    inputs = fingerprint_inputs(project, scene_id)  # the inputs as they are when rendering starts
+    fingerprint = fingerprint_digest(inputs)
     render_dir = project.render_dir(preview)
     # A failed render must not leave the previous render behind to be reused by `--scene`.
     for stale in (scene_video_path, scene_audio_path, scene_timings_path, scene_overlay_path, scene_carry_path):
@@ -275,6 +293,7 @@ def render_scene(
     finally:
         if temporary:
             shutil.rmtree(media_dir, ignore_errors=True)
+    fingerprint = drawn_fingerprint(inputs, project, preview, scene_id)  # a web page's files as it loaded them
     fmt = project.render_format(preview)
     timings = _round(scene.timings())
     timings["render"] = {
@@ -336,6 +355,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Worker entry point; returns the exit code."""
+    # imported here: it loads Manim, and vidgen.lint imports this module for its path functions
+    from vidgen.three_d.passes import parse_passes
+
     args = build_parser().parse_args(argv)
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(_LevelFormatter())

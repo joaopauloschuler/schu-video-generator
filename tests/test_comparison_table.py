@@ -139,6 +139,7 @@ def test_table_params_errors(params: dict[str, Any], message: str) -> None:
         cls_of("table").validate_params(params, Theme())
 
 
+@pytest.mark.slow
 def test_schema_accepts_points_and_mixed_cells() -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -210,6 +211,7 @@ def test_scenes_render_within_their_beats(kind: str, params: dict[str, Any], bea
         assert m.get_bottom()[1] >= safe.y0 - 0.05 and m.get_top()[1] <= safe.y1 + 0.05, t.name
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_comparison_reveals_one_column_per_beat(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "comparison", "params": {"columns": COLUMNS, "verdict": "V"}, "beats": three_beats()}])
@@ -235,6 +237,7 @@ def test_comparison_stacks_columns_in_portrait_and_aligns_rows_side_by_side(make
     assert first[0][0].get_bottom()[1] == pytest.approx(first[1][0].get_bottom()[1], abs=0.05)   # row 1 on one baseline
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_comparison_early_point_reveal_brings_its_column(make_project, media: Path) -> None:
     acts = beats([{"reveal": "col2.item2"}], None, None)

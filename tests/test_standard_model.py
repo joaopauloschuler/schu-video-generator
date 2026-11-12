@@ -24,6 +24,7 @@ def cls() -> Any:
     return registry.get("standard_model").cls
 
 
+@pytest.mark.slow
 def test_params_and_targets() -> None:
     p = cls().validate_params({"title": "The Standard Model"})
     assert p.show == ["mass", "charge", "spin", "name"] and p.reveal == "groups" and p.source and p.key and not p.antiparticles
@@ -80,6 +81,7 @@ def _overlap(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     return w * h if w > 0 and h > 0 else 0.0
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(320, 180), (180, 320)], ids=["landscape", "portrait"])
 def test_chart_renders_with_its_actions(size: tuple[int, int], make_project, media: Path) -> None:

@@ -127,6 +127,7 @@ def test_long_notes_continue(tmp_path: Path, no_render: list[list[str]]) -> None
     assert "Slide 2 / 5" in page_text(reader.pages[second - 1])
 
 
+@pytest.mark.slow
 def test_title_page_with_thumbnail_and_portrait(tmp_path: Path, no_render: list[list[str]]) -> None:  # noqa: F811
     root = write_project(tmp_path / "tall", {"scenes": scenes_config(), "preview": {"width": 54, "height": 96, "fps": 5}})
     project = Project.load(root)
@@ -163,6 +164,7 @@ def test_translated_notes_render_accents(tmp_path: Path, no_render: list[list[st
     assert reader.metadata.author == "João Paulo" and reader.trailer["/Root"]["/Lang"] == "pt-BR"
 
 
+@pytest.mark.slow
 def test_quality_and_width(meta_project: Path, tmp_path: Path) -> None:
     project = Project.load(meta_project)
     noise = Image.effect_noise((640, 360), 80).convert("RGB")  # hard to compress: sizes differ clearly
@@ -200,6 +202,7 @@ def test_options_are_checked(meta_project: Path, monkeypatch: pytest.MonkeyPatch
         make_slides_pdf(project)
 
 
+@pytest.mark.slow
 def test_cli(meta_project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, doc, _ = run_json(["slides", str(meta_project), "--format", "pdf", "--json", "--notes", "--title-page", "--paper", "letter"], capsys)
     assert code == 0 and doc["command"] == "slides" and doc["output_format"] == "pdf"

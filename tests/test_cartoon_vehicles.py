@@ -143,6 +143,7 @@ def _vehicle(kind: str, unit: float, x: float = 0.0) -> Any:
     return prop
 
 
+@pytest.mark.slow
 def test_a_rider_follows_its_seat_and_grows_with_the_vehicle() -> None:
     pip = figure()
     car = _vehicle("car", pip.character_height, x=1.0)
@@ -162,6 +163,7 @@ def test_a_rider_follows_its_seat_and_grows_with_the_vehicle() -> None:
     assert pip.facing == "left" and pip.feet() == pytest.approx(seat_point(car, 1))
 
 
+@pytest.mark.slow
 def test_a_cyclist_sits_on_the_saddle_and_pedals() -> None:
     kit = figure("kit")
     bike = _vehicle("bicycle", kit.character_height)
@@ -266,6 +268,7 @@ RIDE = [
 ]
 
 
+@pytest.mark.slow
 def test_validate_a_ride(make_project) -> None:
     assert check_project(street(make_project, RIDE)) == []
     bad = [{"text": "Wrong.", "actions": [{"get_in": "pip", "to": "tree"}, {"get_in": "kit", "to": "van"}, {"ride_to": "tree", "to": 0.5}]}]
@@ -292,6 +295,7 @@ def test_a_ride_rings_or_starts_its_engine_and_brakes() -> None:
     assert foley_cues(PlayedAction("ride_to", 0.0, 1.0)) == []   # no vehicle known: silent
 
 
+@pytest.mark.slow
 def test_ride_sounds_are_built_in() -> None:
     for name in ("bell", "engine", "brakes"):
         x = sfx.synthesize(name)
@@ -336,6 +340,7 @@ def test_lint_knows_riders() -> None:
 # ----- render ----------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_ride_with_riders(make_project, tmp_path: Path) -> None:
     """Pip gets in the car (drawn behind its side), kit on the bicycle (in front of it); the car
@@ -358,6 +363,7 @@ def test_a_ride_with_riders(make_project, tmp_path: Path) -> None:
     assert {"engine", "bell", "brakes"} <= sounds
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_vehicles_gallery_still(tmp_path: Path) -> None:
     from PIL import Image

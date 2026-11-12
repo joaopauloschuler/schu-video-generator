@@ -18,6 +18,7 @@ REPO = Path(__file__).resolve().parents[1]
 EXAMPLE = REPO / "examples" / "radioactive-decay"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("variant", [None, "short"])
 def test_the_example_validates_and_uses_plots_and_calculations(variant: str | None, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = shutil.copytree(EXAMPLE, tmp_path / "decay", ignore=shutil.ignore_patterns("build", "output", "audio"))

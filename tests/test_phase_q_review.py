@@ -165,6 +165,7 @@ def test_a_larger_flower_bed_or_bush_draws_a_clump_in_each_cell(kind: str, per_c
 # ----- a bare `on:` in the JSON Schema ----------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_bare_on_key_validates_against_the_schema_as_json_reads_it() -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -221,6 +222,7 @@ def test_object_state_messages_read_well() -> None:
 # ----- a tiny render: the wide view, a pan, a wide shot and lamplight --------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_wide_view_pan_and_lamplight_render(make_project, tmp_path: Path) -> None:
     from test_cartoon_stage import render_with_layout

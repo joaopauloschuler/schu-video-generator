@@ -35,6 +35,7 @@ def json_out(capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
 # ----- the example end to end (no render) -------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_example_validates_directs_and_uses_phase_k(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = shutil.copytree(EXAMPLE, tmp_path / "muffin")
     assert main(["validate", str(root), "--json"]) == 0
@@ -69,6 +70,7 @@ def test_the_screenplay_with_a_random_cast_of_dogs_and_people(tmp_path: Path, ca
     assert json_out(capsys)["ok"]
 
 
+@pytest.mark.slow
 def test_mcp_screenplay_and_validate_of_the_example(tmp_path: Path) -> None:
     from test_mcp import doc_of, run_session
 

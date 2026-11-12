@@ -58,6 +58,7 @@ def test_config_kinds_and_errors() -> None:
         parse_config(minimal_config(scenes=scenes, thumbnail={"scene": "card", "beat": 1}))
 
 
+@pytest.mark.slow
 def test_thumbnail_does_not_change_scene_fingerprints(make_project) -> None:
     base = Project.load(make_project(minimal_config(), folder="a"))
     changed = Project.load(make_project(minimal_config(thumbnail={"scene": "main", "overlays": False}), folder="b"))
@@ -112,6 +113,7 @@ def test_frame_number(make_project) -> None:
 # ----- designed thumbnails -----------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_designed_thumbnail_landscape_with_icon_and_jpeg(make_project) -> None:
     thumb = {"title": "Saving 77% of the parameters", "subtitle": "a short tour", "icon": "star", "jpeg": True}
     root = make_project(minimal_config(output="out", thumbnail=thumb))
@@ -148,6 +150,7 @@ def test_designed_thumbnail_vertical_preset_and_background(make_project) -> None
         assert small.size == (180, 320)
 
 
+@pytest.mark.slow
 def test_designed_checks_flag_long_titles_and_low_contrast(make_project) -> None:
     long_title = " ".join(["Extraordinarily"] * 14)
     root = make_project(minimal_config(thumbnail={"title": long_title, "subtitle": "x"}))
@@ -291,6 +294,7 @@ def rendered(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return root
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_render_writes_the_frame_thumbnail(rendered: Path) -> None:
     info = json.loads((rendered / "result.json").read_text(encoding="utf-8"))
@@ -321,6 +325,7 @@ def test_frame_thumbnail_without_overlays(rendered: Path) -> None:
     assert with_bar[1] > without[1] + 40  # the progress bar along the bottom edge only with overlays
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @needs_ffmpeg
 def test_export_gif_palette_and_budget(rendered: Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -346,6 +351,7 @@ def test_export_gif_palette_and_budget(rendered: Path, caplog: pytest.LogCapture
     assert len(loose.attempts) == 1 and loose.within_budget is True
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @needs_ffmpeg
 def test_export_clip_copy_or_encode(rendered: Path, capsys: pytest.CaptureFixture[str]) -> None:

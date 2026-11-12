@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+import pytest
 from conftest import minimal_config
 from vidgen.config import LINT_RULES, LintRules
 from vidgen.lint import RULES
@@ -55,6 +56,7 @@ def test_rules_are_registered_last_in_config_order() -> None:
     assert rules.orbit_conserved.tolerance == 0.01 and rules.orbit_period.tolerance == 0.05 and rules.orbit_date.days == 3.0
 
 
+@pytest.mark.slow
 def test_the_knowledge_does_not_import_manim() -> None:
     import subprocess
     import sys
@@ -95,6 +97,7 @@ def test_topics_and_clauses() -> None:
     assert oa.clause(s2, 0, 30, [(v.start, v.end) for v in qa.said_values(s2)]).startswith("Two hundred and fifty-nine days later")
 
 
+@pytest.mark.slow
 def test_dates_and_events() -> None:
     dates = oa.said_dates("On the first of June 2020; 13 October 2020; October 13, 2020; 2020-10-13; in October 2020; in 2021; in mid October.")
     assert [(d.precision, d.year, d.month, d.day) for d in dates] == [
@@ -133,6 +136,7 @@ def test_ratio_claims() -> None:
 # ----- the rules on projects --------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_periods_speeds_and_cross_scene(make_project) -> None:
     p = _project(make_project, [
         _scene("p", INNER, "Mercury races around the Sun in eighty-eight days.", "Mars takes three years to go around the Sun.",
@@ -192,6 +196,7 @@ def test_dates_scale_on_scenes(make_project) -> None:
     assert _rules_at(p, "lg") == [("orbit_scale", "lg_b2")]
 
 
+@pytest.mark.slow
 def test_conserved_and_crash(make_project) -> None:
     coarse = {**SUN, "bodies": [{"name": "Inner", "a": "1 AU", "e": 0.6, "mass": "3e27 kg"}, {"name": "Outer", "a": "1.6 AU", "e": 0.05, "nu": 120,
                                                                                                "mass": "3e27 kg"}], "dynamics": "nbody", "orbits": 3}
@@ -217,6 +222,7 @@ def test_conserved_and_crash(make_project) -> None:
     assert _found(p, "g") == []
 
 
+@pytest.mark.slow
 def test_examples_and_gallery_are_clean() -> None:
     import vidgen.scenes  # noqa: F401
 

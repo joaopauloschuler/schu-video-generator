@@ -183,6 +183,7 @@ def test_pronunciation_entries_by_language(make_project) -> None:
     assert Project.load(root, variant="pt").spoken_texts()["intro_b1"] == "LaTeX and djêisson."
 
 
+@pytest.mark.slow
 def test_variant_keeping_base_pronunciation_warns(make_project) -> None:
     data = minimal_config(pronunciation={"Hello": "heh-low"}, variants={"pt": {"language": "pt-BR"}, "ok": {"language": "pt-BR", "pronunciation": {"Hello": "olá"}}})
     root = make_project(data)
@@ -376,6 +377,8 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
         }
     ],
     "title": [{"title": "T:title T:hl", "subtitle": "T:sub", "kicker": "T:kicker", "authors": ["T:a"], "highlight": "T:hl"}],
+    "web": [{"page": "extensions/page.html"}],
+    "3d": [{"title": "T:title", "objects": [{"id": "crate"}, {"id": "tag", "shape": "label", "text": "T:text"}, {"id": "ana", "shape": "standin", "name": "T:name"}]}],
     "video_clip": [{"path": "x.mp4", "title": "T:title", "caption": "T:caption", "steps": [[{"box": BOX, "label": "T:c"}]]}],
 }
 SAMPLES["flowchart"] = SAMPLES["diagram"]
@@ -729,6 +732,7 @@ def test_project_texts_of_the_example() -> None:
 # ----- outputs -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_rendered_variant_outputs_are_translated(make_project) -> None:
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:

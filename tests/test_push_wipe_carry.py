@@ -106,6 +106,7 @@ def test_xfade_names_and_default_directions() -> None:
     assert xfade_name(TransitionConfig(type="crossfade"), False) == "fade" and direction(TransitionConfig(type="crossfade"), False) is None
 
 
+@pytest.mark.slow
 def test_validate_checks_carry_targets(make_project: Any) -> None:
     scenes = _config()["scenes"]
     scenes[2]["carry"] = ["titel -> heading", "icon -> nothing"]
@@ -132,6 +133,7 @@ def test_plan_overlaps_pushes_like_crossfades(make_project: Any) -> None:
     assert project.estimated_duration() == pytest.approx(Project.load(make_project(_config(), folder="x")).estimated_duration() - 1.8)
 
 
+@pytest.mark.slow
 def test_fingerprints_follow_carries(make_project: Any) -> None:
     root = make_project(_config())
     project = Project.load(root)
@@ -184,6 +186,7 @@ def _decode(path: Path) -> np.ndarray:
         return np.stack([f.to_ndarray(format="rgb24").astype(np.int16) for f in c.decode(video=0)])
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("kind", "axis", "new_side"),
     [("slideleft", 1, "end"), ("slideright", 1, "start"), ("wipeup", 0, "end"), ("wipedown", 0, "start")],
@@ -236,6 +239,7 @@ def test_graph_inputs_keep_a_frame_rate() -> None:
         assert not any(f.startswith("setpts") for f in filters[filters.index("fps=10"):]), chain
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kind", ["fade", "slideleft", "slideup", "wiperight", "wipedown", "smoothleft"])
 def test_every_transition_joins_with_the_ffmpeg_on_path(tmp_path: Path, kind: str) -> None:
     """Each transition through the real join with whatever ffmpeg is on PATH (Step 64: 7.1 failed

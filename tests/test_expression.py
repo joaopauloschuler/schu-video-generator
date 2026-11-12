@@ -200,6 +200,7 @@ def test_transcription_reads_the_template_and_pairs_the_rna() -> None:
     assert later.chain[0] == "m0" and len(later.chain) > len(pose.chain)
 
 
+@pytest.mark.slow
 def test_every_step_plays_and_translation_grows_the_chain_n_to_c() -> None:
     g = build_gene(GeneSpec(signal_peptide=True, glycosylation=True, introns=2, seed=3))
     stage = ExpressionStage(g, 18.0, 0.5)
@@ -239,6 +240,7 @@ def test_codons_and_anticodons_meet_in_the_sites() -> None:
 # ----- the route through a cell ------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_route_through_a_cell() -> None:
     world = build_cell_world(CellSpec())
     g = build_gene(GeneSpec(signal_peptide=True, glycosylation=True))
@@ -266,6 +268,7 @@ def scene(type_: str, params: dict[str, Any], actions: list[list[dict[str, Any]]
     return {"id": "s", "type": type_, "params": params, "beats": [{"text": "the gene is expressed step by step", "actions": a} for a in actions]}
 
 
+@pytest.mark.slow
 def test_gene_actions_are_validated(make_project) -> None:
     gene = {"gene": {"id": "g", "codons": 10, "introns": 1}}
     ok = [[{"transcribe": "g"}], [{"splice": "g"}], [{"polyadenylate": "g"}], [{"export": "g"}], [{"translate": "g"}], [{"fold": "g"}]]
@@ -294,6 +297,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_gene_close_up_renders(size: tuple[int, int], make_project, media: Path) -> None:
@@ -307,6 +311,7 @@ def test_gene_close_up_renders(size: tuple[int, int], make_project, media: Path)
     assert scene_.drawing.state["aa0"][2] > 0                       # the protein is drawn
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_gene_route_renders(make_project, media: Path) -> None:
     scenes = [{"id": "c", "type": "cell", "params": {"labels": False, "gene": {"id": "ins", "signal_peptide": True}},

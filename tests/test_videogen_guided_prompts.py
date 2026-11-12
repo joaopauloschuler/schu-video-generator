@@ -66,6 +66,7 @@ def paid_project(make_project):
 # ----- the guided talking wording -------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("guide", [True, "render"])
 def test_a_guided_talking_shot_asks_for_no_close_up(make_project, guide: Any) -> None:
     prompt = the_shot(make_project, guided_talking(guide)).prompt
@@ -144,6 +145,7 @@ def test_ordinary_words_are_not_framing(text: str) -> None:
 # ----- a shot paid for under the earlier wording ---------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_paid_guided_shot_is_blocked_not_paid_again(make_project) -> None:
     root, api = paid_project(make_project)
     item = plan_of(root)
@@ -152,12 +154,14 @@ def test_a_paid_guided_shot_is_blocked_not_paid_again(make_project) -> None:
     assert [s.status for s in report.shots] == ["blocked"] and len(api.submits) == 1
 
 
+@pytest.mark.slow
 def test_a_job_in_the_ledger_counts_without_its_clip(make_project) -> None:
     root, _api = paid_project(make_project)
     shutil.rmtree(root / "assets" / "generated_video")
     assert plan_of(root).shot.blocked == [EARLIER_WORDING_BLOCKED]
 
 
+@pytest.mark.slow
 def test_a_new_seed_lets_the_new_wording_be_paid(make_project) -> None:
     root, api = paid_project(make_project)
     edit(root, lambda d: d["scenes"][0]["beats"][0]["generated_shot"].update(seed=7))

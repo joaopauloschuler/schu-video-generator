@@ -79,7 +79,7 @@ src/vidgen/
   config.py               # pydantic v2 models for video.yaml (see §4)
   project.py              # Project: locate/load config, resolve paths, variants
   theme.py                # Theme object (colors, fonts, sizes, background, code style; precedence §19)
-  fonts.py                # bundled fonts (data/fonts/, OFL), Pango registration, font roles (§21)
+  fonts.py                # bundled fonts (data/fonts/, OFL), Pango registration, font roles (§21); the project's fonts/ folder (§119)
   presets.py              # theme presets: seven built-in presets (§19, §20)
   scales.py               # type scales compact / standard / large / auto, frame orientation (§20)
   themelist.py            # `vidgen list-themes`: preset listing, JSON entries, swatch PNG (§20)
@@ -198,7 +198,7 @@ src/vidgen/
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
                           # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
-                          # music_rule.py (project pieces, §93.10),
+                          # music_rule.py (project pieces, §93.10), three_d_rule.py (§114.12), web_rule.py (§118.12),
                           # color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
@@ -262,12 +262,19 @@ src/vidgen/
                           # workflow.py (`generate run | status`; §113.4), host.py (audio / video inputs
                           # shared through a Cloudflare quick tunnel, `generate host-test`; §115)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
+  browser/                # Chromium shared by `3d` and `web` (§118.5): chromium.py (start / stop, missing-browser
+                          # check and validate warning, FFV1 clip writer), timing.py (clip_plan: frames to draw;
+                          # planned_still_frames: the frames a capture takes stills of, §118.12)
+  web/                    # `web` scenes (§118): entry.py (page / script checks, fingerprint), page.py (serving
+                          # the project folder, errors, screenshots), clip.py (the cached clip), inputs.py (theme
+                          # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10),
+                          # layout.py (the page's text as layout objects, for lint; §118.12)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
                           # moves -> tracks, following objects),
-                          # description.py (the scene description JSON, its cache key), browser.py (Playwright +
-                          # Chromium: the page, frames, the lossless clip; the validate warning), clip.py
+                          # description.py (the scene description JSON, its cache key), browser.py (the 3D page in
+                          # Chromium, its frames; the lossless clip), clip.py
                           # (`make_3d_clip`: drawn or reused), passes.py (guide passes: depth, outline,
                           # mask; §114.14)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
@@ -333,7 +340,11 @@ src/vidgen/
                           # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
-  data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114)
+  data/web/               # clock.js, media.js, runtime.js (the virtual clock, animations, errors, hooks; joined and injected into a `web` page), canvas.html (§118),
+                          # layout.js (reads the page's text after a screenshot, for lint; §118.12)
+  data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
+                          # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
+  data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -1249,7 +1260,9 @@ vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider 
 ```
 PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
 or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
-and re-joins using the existing renders of the others (missing ones are rendered). Exit code
+and re-joins using the existing renders of the others (missing ones are rendered: each quality
+and each variant has its own renders, so the first `--scene` run there renders every scene, and
+prints `--scene ID: also rendering N other scene(s) (...)`, Step 337). Exit code
 non-zero on error.
 `render` prints one line per scene, then the output paths and the total duration (Step 45: and
 the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first prints `jobs: N
@@ -1260,7 +1273,10 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
 - `pytest -q` must pass at every step. No network, no API keys.
 - Tests that invoke Manim rendering are marked `@pytest.mark.render` and use tiny resolutions
   (e.g. 160x90 @ 5 fps); they run by default but can be skipped with `-m "not render"`. The
-  slowest of them are also marked `slow` (Step 22): `-m "not slow"` is a quick full-coverage-ish run.
+  slowest of them are also marked `slow` (Step 22). Since Step 327 a test marked `slow` is left
+  out of the default run (`tests/conftest.py`), and every test over about 0.4 s is marked: the
+  default run takes about 3–4 minutes on one CPU; `-m slow` runs only those, `-m "slow or not slow"`
+  everything, and a test named by node id always runs.
 - ffmpeg is required on PATH for render tests; skip with a clear reason if missing.
 
 ## 10. Refinements (Step 7, independent review)
@@ -10028,6 +10044,7 @@ Reference: docs/CONFIG.md "`emotion` with ElevenLabs and OpenRouter". The same `
 
 Reference: docs/CONFIG.md "Drafts". A draft is a render for checking timing and staging: small,
 slow-framed and without decoration, with every timing, position, action and the lip sync kept.
+Every scene type renders as a draft; what one gains for `web` scenes is measured in §118.18.
 
 - **Settings** (`config.py`): `draft: DraftConfig | None` (`width`, `height` together, `fps`, each
   optional, sizes even). `draft_format(format, draft)`: the set values, else
@@ -22366,7 +22383,8 @@ build, so the two files weigh 2.1 MB), its `LICENSE` (MIT), `page.html` (one can
 and meshes — `MeshLambertMaterial`, plain colours — and `vidgen3d.frame(t)` applies the tracks at
 `t`, renders and returns the canvas as a PNG data URL). No `requestAnimationFrame`, no clock, no
 randomness: the page draws only when asked, at the time it is given (`preserveDrawingBuffer`, so
-the read is the frame just drawn).
+the read is the frame just drawn). The `addons/` folder beside them (Step 334) is for `web`
+scenes only (§118.14): the `3d` page neither serves nor hashes it.
 
 `three_d/browser.py`, `PageRenderer(description)` (a context manager; one per scene render):
 starts Playwright and Chromium (`headless`, `--use-angle=swiftshader --enable-unsafe-swiftshader
@@ -22387,7 +22405,9 @@ schu-video-generator, then `python -m playwright install chromium` (Windows: `py
 chromium`). Chromium
 missing (Playwright's "Executable doesn't exist"): `VidgenError(BROWSER_HINT)`. Other launch
 failures: "cannot start Chromium for a 3D scene: <first line>". `vidgen validate` and every other
-scene type never need Playwright.
+scene type never need Playwright (except `web`, §118). Since Step 328 the launch, the hints, the
+missing-browser check and the clip writer live in `browser/chromium.py`, shared with `web`
+(§118.5); the 3D cache keys did not change.
 
 ### 114.5 The cache
 
@@ -23155,3 +23175,1034 @@ true` does exactly what it did in Step 325: the owner wants a dissolve only on r
   is the encoder, which codes each scene on its own (the frames of shots 2 to 4 that the
   dissolve does not touch still differ by 1.6 to 2.0 between the two MP4s). Both films have 488
   frames, 20.33 s, −19.3 LUFS and the same decoded sound, sample for sample.
+
+## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334, 336–337, 339)
+
+The owner wants AI agents to write a scene as a web page. The owner's decisions: JavaScript in the
+project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
+first version; the page cannot reach the internet while rendering; screenshots of the whole page
+are accepted even when slow. Step 328 built the core described here, Step 329 the virtual clock
+(§118.8), Step 330 what the page is given (§118.9, §118.10), Step 331 the region, the
+transparent background and the video's shape (§118.11), Step 332 lint of the page's text
+(§118.12), Step 333 the guide topic, `examples/web`, the gallery entry and the measured cost
+(§118.13), Step 334 a chosen set of three.js add-ons (§118.14), Step 336 five animation and
+chart libraries (§118.15), Step 339 `design_width` for a page built in fixed pixels (§118.17), Step 340 drafts of `web` scenes measured (§118.18); §118.7 says where each part is
+and what is left for after the phase.
+
+### 118.1 How a `web` scene renders (Step 328)
+
+A `web` scene is a `NarratedScene` (`scenes/web.py`, `Web`) built like the `3d` scene (§114.1):
+`clip_plan(scene, SPARE_FRAMES)` (`browser/timing.py`, shared with `3d`, which used to have it
+as `Scene3D._plan`) gives the number of frames (the beats' windows or a silent scene's duration,
+the 0.5 s outro, 2 spare frames); `make_web_clip` returns a lossless clip of that many
+screenshots at `config.pixel_width × pixel_height` (since Step 331: the size of the page's box,
+§118.11) and `config.frame_rate`; the clip is a `ClipMobject` covering the frame or the box
+(target `view`: `dim`, `highlight`, `zoom` work as on `3d`), then `timeline()` holds each beat
+(beat 1 fades in the `title`, Step 331) and `finish()` fades out. Frame *n* of the clip is the page at
+*t = n / fps*, shown as output frame *n*.
+
+### 118.2 Params and checks
+
+`page: <path>` (`.html`, `.htm`) or `script: <path>` (`.js`, `.mjs`), relative to the project
+folder; exactly one (a `model_validator` of `Web.Params`). `web/entry.py`: `entry_of(params)` ->
+`WebEntry(kind, path)`; `entry_problems(root, entry)` -> `"page: file not found: …"`, `"script:
+must be a path inside the project folder, got …"` (absolute or `..` out of the folder), `"script:
+expected a .js or .mjs file, got …"`; `vidgen validate` reports them at `scenes[i].params.page` /
+`.script` (the `validate_project` convention). The render checks again (`entry_path`) and stops
+with `scene '<id>': page: file not found: …`. Since Step 330 the author's own values go in `data:`
+(§118.9).
+
+### 118.3 The page, serving and errors
+
+`web/page.py`, `WebPage(root, entry, scene_id=, size=, fps=, frames=)` (a context manager, one per
+clip): starts `Chromium("a web scene", WEB_ARGS)` (§118.5; `WEB_ARGS` adds `--hide-scrollbars
+--force-color-profile=srgb` and, since Step 336, `--disable-partial-raster`, §118.15), a context with the frame's size as viewport and device scale 1 (with `design_width`: the design window and its scale, §118.17),
+the time zone `UTC` and locale `en-US`, the init script (`init_script(scene_id)`: `data/web/clock.js`,
+`media.js` and `runtime.js` joined in one function with the scene's random seed, §118.8) and a
+route for every request:
+
+- `http://vidgen-web.invalid/<path>` is answered from the project folder (`inside(root, path)`:
+  resolved, must stay in the folder), with a content type from `CONTENT_TYPES` (fixed table:
+  Windows' registry can map `.js` to `text/plain`, which Chromium refuses for a module), else
+  `mimetypes`. A file that is not there: 404 and a warning naming it (`favicon.ico` silent).
+  `Accept-Ranges: bytes`; a `Range: bytes=a-b` request is answered 206 with that part
+  (`byte_range`; Step 329: without it Chromium cannot seek a `<video>`, `seekable` is empty).
+- `__vidgen__/canvas.html` (only for a `script:` scene) is vidgen's bare page
+  (`data/web/canvas.html`: one `<canvas id="vidgen-canvas">` of the frame's size, black
+  background, an inline module `import * as hooks from "/<script>"` that copies the exports onto
+  `window.vidgen` and sets `window.__vidgen.ready`). A static import, so a syntax error in the
+  script is reported with its file and line (a dynamic `import()` rejects without them).
+- Any other URL is aborted and logged once as a warning: `scene '<id>': refused <url> (a web scene
+  cannot reach the internet; …)`. **Decision:** a warning, not an error — a page that links a web
+  font or a CDN script still renders (without it), and the warning says what was missing.
+  `data:` and `blob:` URLs never reach the route.
+
+`runtime.js` (run before any script of the page, top frame only) records every uncaught error
+(`window` `error` events: `ErrorEvent` with its file, line, column and the error's stack; a
+`<script>` that did not load) and every unhandled promise rejection into `window.__vidgen.errors`,
+and defines `window.__vidgen.start(info)` (builds `ctx`, waits for the page, runs `load`) and
+`window.__vidgen.frame(n)` (moves the clock to frame *n* and runs `window.vidgen.frame(t, ctx)`,
+§118.8; catches what the page throws; returns and clears the errors so far).
+
+Opening: `goto(…, wait_until="load")`, then `wait_for_function`: an error was recorded, or
+`document.readyState === "complete"` and (for a script) the module has run. Both wait at most
+`READY_TIMEOUT_MS` = 30 s; a timeout is `scene '<id>': <file> did not become ready within 30 s
+(its load event never came or a module never finished loading; not answered: <404s and refused
+URLs>)`. Then `start(info)`; any error so far stops the render. Frame *n*: `frame(n / fps)`; an
+error stops the render; then `page.screenshot(type="png")` of the viewport, decoded and checked
+for size (`png_pixels`).
+
+Error messages (`error_message`): `scene '<id>': JavaScript error in <file> line <n> <when>:
+<Error name>: <message>` with *when* `at load` or `in frame(t=0.500)`. The file and line come
+from the error event, else from the first frame of the stack that is a project file (not
+`__vidgen__/`); without either, the entry's path and no line. A `VidgenError`, so the worker
+prints it without a traceback. A hook that never returns is bounded since Step 329 (§118.8, time
+limits).
+
+### 118.4 The page contract (Step 328) and the cache
+
+- A `page:` sets `window.vidgen = {load(ctx) {…}, frame(t, ctx) {…}}`; a `script:` module exports
+  `load` and `frame` (its exports are copied onto `window.vidgen`, so a script may also set
+  `window.vidgen`). Both are optional and may be async. Without `frame`, every frame is a
+  screenshot of the page as it stands at the frame's time (§118.8).
+- `t`: seconds from the scene's start. `ctx = {scene, width, height, fps, frames, duration,
+  canvas}` (`duration` = frames / fps, the length of the clip; `canvas` = the bare page's canvas,
+  `null` on a page without `#vidgen-canvas`); Step 330 added `theme`, `data`, `beats` (§118.9).
+- `window.vidgen` is the page's object (the hooks it gives vidgen: `frame`; `load`, Step 329;
+  `layout`, Step 332) and `ctx` is vidgen's (what it gives the page; Steps 330 and 331 added
+  fields). Each step only added names, so a page written for Step 328 still works.
+- **Cache** (`web/clip.py`, `make_web_clip(root, folder, scene_id, params, size=, fps=,
+  frames=)`): `<render_dir>/web/<scene>.mkv` + `<scene>.json` = `{key, inputs}`, `inputs` =
+  `{version: 1, engine, scene, kind, path, sha256 (of the page or script file), width, height,
+  fps, frames}`, `engine` = digest of `clock.js`, `media.js`, `runtime.js` and `canvas.html`, the
+  Chromium flags, the time zone and locale, and the Playwright version (so a change to the clock
+  draws every web clip again; the random seed comes from `scene`, already in `inputs`); `key` = SHA-256 of the canonical JSON of `inputs`. Reused when the clip
+  exists and the keys match; else the record is removed, the clip drawn
+  (`write_ffv1_clip`, through a `.partial` file) and the record written last. Step 330 (version
+  2) adds `theme`, `data` and `beats` to `inputs` and the record's `loaded` map (§118.10).
+- **Render fingerprint** (§63): a `web` scene adds `web: {kind, path, sha256}` of its page or
+  script file (`entry_digest`), so an edit to that file renders the scene again; other scenes'
+  fingerprints are unchanged by this key. `data/web/*.html|js` are part of `vidgen_source_digest`.
+  Since Step 330 the key also holds every file the page loaded (§118.10).
+
+### 118.5 One Chromium for `3d` and `web` (Step 328)
+
+`browser/chromium.py` holds what both scene types use, moved out of `three_d/browser.py`:
+`CHROMIUM_ARGS`, `INSTALL_HINT` (now "3d and web scenes need Playwright and its Chromium: …"),
+`BROWSER_HINT` (unchanged), `sync_api()`, `playwright_version()`, `missing_dependency()`,
+`install_warnings(project)` (one warning per type in `BROWSER_SCENE_TYPES` the project uses:
+`3d scenes (a) cannot render here: …`, `web scenes (b, c) cannot render here: …`),
+`browser_error(exc, what)` ("cannot start Chromium for a web scene: …"), the context manager
+`Chromium(what, extra_args)` (Playwright + one headless Chromium, closed on exit),
+`write_ffv1_clip(path, fps, size, frames)` (the FFV1 writer `write_clip` had) and `png_pixels`.
+`three_d/browser.py` keeps the 3D page (`PAGE_FILES`, `page_digest`, `engine_id`, `_serve`,
+`PageRenderer`, `write_clip`) on top of them. **The `3d` cache keys did not change**: `engine_id()`
+is computed from the same files and Playwright version (checked: equal to the previous code's
+value), and the description is unchanged, so existing 3D clips are reused. One browser per clip,
+not per video, as for `3d` (§114.6).
+
+**Measured** (Step 328, this machine: 1 CPU, SwiftShader; drawing the clip only, Chromium start
+included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps: 88 ms per frame,
+2.1 s per second of video; a canvas script: 58 ms per frame, 1.4 s per second; the same page at
+1920x1080 at 30 fps: 432 ms per frame, 13 s per second of video.
+
+### 118.6 Public interface and decisions (Step 328)
+
+- `vidgen.api` gains `make_web_clip`, `web_entry_problems(root, params)` and `clip_plan(scene,
+  spare_frames)` (built-ins import only `vidgen.api`). Step 330: `make_web_clip(..., theme=None,
+  beats=())` (keyword arguments with defaults: earlier calls work unchanged), and two new names,
+  `web_page_inputs(scene, spans)` -> `(ctx.theme, ctx.beats)` of a scene being rendered and
+  `web_json_problem(value, path="data")` (the first part that is not a JSON value, or `None`).
+- `three_d.browser` no longer exports `BROWSER_HINT`, `INSTALL_HINT`, `missing_dependency`,
+  `install_warnings`, `playwright_version` (they are in `browser.chromium`); not part of
+  `vidgen.api`.
+- Screenshots (`page.screenshot`) rather than a canvas read-back: a page may be any HTML.
+- The scene has no title of its own: whether the page fills the frame or sits under a vidgen
+  title is Step 331's `region` (§118.11). Step 331: `vidgen.api` adds `web_page_shape(frame,
+  region="bleed")` (§118.11); `make_web_clip(..., shape=None)` (default: a page filling a frame of
+  its `size`, so earlier calls work unchanged).
+
+### 118.7 The phase step by step, and what is left
+
+328 (§118.1–118.6): the scene type, serving, errors, the shared Chromium. 329 (§118.8): the
+virtual clock. 330 (§118.9, §118.10): theme as CSS variables and `ctx.theme`, `ctx.data`, beats
+(`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js importable as `three`, every loaded
+file in the cache keys. 331 (§118.11): `region: bleed | body` and `title`, a transparent
+background, 9:16 from one page. 332 (§118.12): lint reads the page's text. 333 (§118.13): the
+guide topic `web`, `examples/web`, the gallery entry, the measured cost. 334 (§118.14): the
+three.js add-ons a page may import. 336 (§118.15): anime.js, Motion, D3, Chart.js and lottie-web
+shipped and measured under the clock; GSAP measured, not shipped.
+
+Left for after the phase (also in the tasklist's backlog): no hard cut (`fade: false`) on `web`;
+a storyboard or lint still renders the whole scene (no still-only path); text in pictures, WebGL
+or an undeclared canvas is not read, nor contrast over a gradient or picture; only a chosen
+set of three.js add-ons is served (§118.14); a page with its own import map (two maps) not
+tried; the shipped libraries' other features (§118.15 lists what was run); nothing tried on Windows.
+
+### 118.8 Time belongs to vidgen (Step 329)
+
+Any ordinary page renders frame by frame and the same on every render: vidgen owns the page's
+time. The code is three fragments in `data/web/` that `web/page.py` `init_script(scene_id)` joins,
+in this order, into one function run by Chromium before any script of the page (top frame only):
+`clock.js` (time, timers, animation frames, random numbers, fetch), `media.js` (animations, SVG,
+video), `runtime.js` (errors, hooks, the order of a frame).
+
+**Choice of mechanism.** Hand-written replacements in the page, chosen over two alternatives
+checked on this machine (Playwright 1.63, its Chromium headless shell):
+
+- CDP virtual time (`Emulation.setVirtualTimePolicy` with a budget): `performance.now` advanced
+  exactly, but `requestAnimationFrame` ran 3–9 times per 500 ms of virtual time (it follows
+  Chromium's real drawing), a 500 ms timer fired at 632.5 ms, and a 2 s CSS animation was at
+  26.7 px of 400 after 1.5 s (expected 300). Not usable.
+- Playwright's `page.clock` (its driver's `coreBundle.js`, a fake-timers library): integer
+  milliseconds (`Math.ceil`, so 1/24 s cannot be hit), `requestAnimationFrame` on its own 16 ms
+  grid (2 or 3 callbacks per frame at 24 fps, unevenly), and nothing for CSS, SVG, video or
+  `Math.random`; its code changes with the Playwright version, outside vidgen's control.
+
+The hand-written clock runs callbacks at exact frame times (fractional milliseconds), one round
+of animation frames per video frame, and covers CSS, SVG, video and random numbers; its source is
+in the clip key (§118.4). **`3d` is untouched**: `three_d/browser.py` and `browser/chromium.py` did
+not change, so 3D cache keys are the same.
+
+**The clock.** `nowMs` starts at 0 and stands still while the page loads and during `load`; it
+moves only when vidgen runs a frame. Replaced: `Date` (`new Date()` and `Date()` give
+`2026-01-01T00:00:00Z` + `nowMs`; with arguments, the browser's `Date`; `Date.now()` is the integer
+millisecond), `performance.now()` (= `nowMs`), `document.timeline.currentTime`, `setTimeout`,
+`setInterval`, `clearTimeout`, `clearInterval` (one id space), `requestAnimationFrame`,
+`cancelAnimationFrame`, `requestIdleCallback` (a 0 ms timer; `timeRemaining()` = 50) and
+`cancelIdleCallback`. Chromium's context runs in time zone `UTC`, locale `en-US`.
+
+**One frame** (`window.__vidgen.frame(n)`, the clock's target `n * 1000 / fps` ms):
+
+1. Timers: repeatedly the due timer (due time ≤ target) with the smallest due time, ties broken
+   by the order in which they were set (an interval counts as set again when it is rescheduled);
+   the clock is set to its due time, the callback runs, then one task passes (a `MessageChannel`
+   message, so the promises it resolved run, as after a task in a browser) and vidgen looks for new
+   animations (step 3's discovery, so a transition a timer started begins at that timer's time).
+   A timer set by a callback is due at the callback's time plus its delay and runs in this frame
+   if that is ≤ the target. Delays: not a number or negative = 0; a timer set from a callback
+   nested more than 5 deep gets at least 4 ms (the HTML rule, which also ends a zero-delay
+   loop: at most target/4 ms + 5 runs per frame). A 10 001st callback before one frame clears all
+   timers and is a JavaScript error ("more than 10000 timer callbacks before one frame"). An error
+   thrown by a callback is recorded and stops the render after the frame. Then the clock is set
+   to the target.
+2. Loading: waits until every `fetch()` the page started (and every `Response` body it reads) has
+   settled, and for every `<img>` of the document that is not complete (`decode()`, a broken one
+   skipped).
+3. Media (`placeMedia`): every animation in `document.getAnimations()` (CSS animations, CSS
+   transitions, `element.animate`) is followed: vidgen pauses it in Chromium and keeps its own
+   time (`t` at clock time `at`, playing or not, finished or not); a running animation starts at
+   0 when vidgen first sees it. Each frame it is set to `t + (now − at) × playbackRate`; a playing
+   one past its end (or below 0 when reversed) is finished with the native `finish()`, so its
+   `finished` promise and `finish` event come (the event when Chromium next draws). The page's
+   `play`, `pause`, `reverse`, `finish`, `cancel`, `updatePlaybackRate`, `currentTime`, `startTime`
+   (Step 336: read and set on vidgen's clock, `null` while paused; setting the browser's own
+   would let the animation run in real time, which Motion's start times did) and
+   `playbackRate` are wrapped to act on vidgen's time; `playState` reports the page's view. A CSS
+   animation that starts paused by `animation-play-state` and is set running by CSS is followed;
+   one paused by CSS after vidgen paused it is not (Chromium ignores CSS play state once the API
+   paused it). Every outermost `<svg>` is paused (`pauseAnimations`) and set to `now − (the
+   clock when vidgen first saw it)` with `setCurrentTime`. Every `<video>` (also one only drawn on
+   a canvas) is paused in Chromium; `autoplay` or the page's `play()` means "playing" (the
+   page's `play`, `pause`, `paused`, `currentTime` are wrapped); vidgen sets `currentTime` to its
+   time (looped or held at the end) and waits until it is not seeking and has the picture
+   (`readyState ≥ HAVE_CURRENT_DATA`), or has an error or no source.
+   Then (Step 330, §118.9) the narration beat: `data-beat` / `data-beat-index` on `<body>` follow
+   the frame's beat and a `vidgen-beat` event is dispatched when it changed, followed by one
+   task; the clock is at the target, and beats start on frame times (`clip_plan`), so a CSS
+   transition the attribute starts is first seen in step 3 and begins at the beat's start.
+4. Animation frames: one round: the callbacks requested before it, in request order, each with
+   `nowMs`, each followed by one task; one cancelled during the round is skipped; one requested
+   during the round runs next frame.
+5. `frame(t, ctx)` (`t = n / fps` seconds), awaited.
+6. Steps 2 and 3 again (what the round and `frame` started is set to this time), then the
+   errors since the last frame are returned and Python takes the screenshot.
+
+**Start** (`window.__vidgen.start(info)`, after the page's load event, clock at 0): `data-beat`
+of frame 0 (no event), fonts (since Step 330 every declared font face not loaded yet is loaded,
+then `document.fonts.ready`), pictures, fetches, media (videos ready), `load(ctx)` awaited, then
+fonts, pictures, fetches and media again. Step 2 of each frame also waits for
+`document.fonts.ready` (Step 330).
+
+**Random numbers**: `Math.random` is sfc32 seeded with four 32-bit words of
+SHA-256(`vidgen-web-random:<scene id>`) (`random_seed`), so the same id gives the same sequence and
+a different id another. **Decision:** `crypto.getRandomValues` (after the native call, which keeps
+its checks) and `crypto.randomUUID` are seeded too, from the other four words: libraries use them
+for ids and noise, and a page cannot reach anything that needs secret numbers. Not seeded:
+`crypto.subtle` keys.
+
+**Time limits** (`_TimeLimit` in `web/page.py`): `start` (fonts, pictures, videos, `load`) may take
+`LOAD_TIMEOUT_S` = 30 s, each frame (steps 1–6) `FRAME_TIMEOUT_S` = 10 s. Playwright's `evaluate`
+has no timeout, and a promise that never settles is not bounded by CDP's `Runtime.evaluate`
+`timeout` (checked), so a timer thread ends the page's renderer processes (their ids from
+`SystemInfo.getProcessInfo` after the page opened; `os.kill`, `SIGTERM`, `TerminateProcess` on
+Windows); the blocked call then fails and vidgen raises `scene '<id>': frame(t=0.500) in <file>
+did not return within 10 s: a loop that never ends or a promise that never settles, in the hook or
+in a timer, requestAnimationFrame callback, fetch, picture, font or video it waits for; vidgen
+stopped the page` (for `load(ctx)` with "(time stands still at 0 before frame 0, so a timer it
+waits for never fires)"). Without process ids (an older Chromium) there is no limit.
+
+**Not controlled** (documented in CONFIG): `<audio>`; animated GIF / WebP pictures; web workers
+and their timers; iframes; SVG animation in an `<img>` or `<object>`; `event.timeStamp`;
+`Intl.DateTimeFormat().format()` without a date (real now); `XMLHttpRequest` and dynamic
+`import()` (not waited for); `ResizeObserver` / `IntersectionObserver` callbacks (Chromium's
+drawing times); CSS pausing an animation after it ran; a page's own `svg.setCurrentTime`;
+events Chromium fires when it draws (`finish`, `animationend`, `transitionend`) come at its next
+drawing, which is before the screenshot but not at a defined point among the page's callbacks.
+
+**Measured** (1 CPU, 480x270, 24 fps, 72 frames, Chromium start included, one run each): a page
+with a CSS animation and transition 67 ms per frame (Step 328's code: 76), a
+`requestAnimationFrame` page 80 (79), a canvas script drawing in `requestAnimationFrame` 103 (209:
+real-time animation frames ran many times per screenshot). Frames of a page using CSS, timers,
+`requestAnimationFrame`, `Math.random`, SVG `<animate>` and `<video>`, rendered twice with the
+build folder deleted in between: decoded frames identical (Step 329, HANDOFF).
+
+### 118.9 What the page is given (Step 330)
+
+`web/inputs.py` builds it, `WebPage(..., theme=, data=, beats=)` passes it to `start(info)` (it
+becomes `ctx`), and `_serve` puts `page_head(theme)` right after the `<head>` tag of the entry page
+and of the bare page (`with_head`: else after `<html>`, else after the doctype, never before it, so
+the page stays in standards mode). The Python scene computes `theme` and `beats`
+(`web_page_inputs`, from `clip_plan`'s spans).
+
+- **`ctx.theme`** (`page_theme(theme, px_per_point)`): `preset`, `background`, `colors` (every
+  colour token), `palette`, `fonts` (family name for every role, `BUILTIN_ROLES` plus the theme's
+  own, and for the tokens `sans`, `serif`, `mono`, which win over a role of that name), `sizes`
+  (every size token in CSS pixels: `px_per_point = pixel_height / (72 × frame_height)`, since a
+  Manim font size is in points with one scene unit = one inch; measured: Inter cap height at size
+  48 is 0.4852 units = 0.7275 em of 48/72 units).
+- **CSS** (`theme_css`, in `<style id="vidgen-theme">` first in `<head>`, so the page's own rules
+  win): `@font-face` for each bundled family the theme names (regular 400, bold 700, italic 400;
+  `url("/__vidgen__/fonts/<folder>/<file>")`), then on `:root`: `--vidgen-<colour>`,
+  `--vidgen-background`, `--vidgen-palette-<i>`, `--vidgen-font-<role|sans|serif|mono>` (`"Family",
+  generic`: `serif` for the theme's serif family, `monospace` for its mono one, else `sans-serif`),
+  `--vidgen-size-<name>` (`px`). **Naming rule:** `--vidgen-` + a kind prefix with `-` (none for
+  colours) + the theme's name as written; theme names are identifiers (letters, digits, `_`), so
+  keeping their `_` means no name of one kind can equal another kind's `font-…` / `size-…` /
+  `palette-…`. The one overlap, a colour token named `background`, loses to the background (it
+  is written after the colours).
+- **Background decision:** a `page:` gets nothing forced (it uses the variables); the bare page of
+  a `script:` set `background: var(--vidgen-background, #000)` until Step 331, which made it
+  transparent (§118.11).
+- **Fonts:** at start every declared, unloaded `FontFace` is loaded (`settleFonts`), so text first
+  shown on a later frame is never drawn in a fallback; the files then count as loaded (§118.10).
+  A theme family that is not bundled gets no `@font-face` and comes from the machine's fonts.
+- **`ctx.data`** = the scene's `data:` (`Web.Params.data`, a mapping, default `{}`), checked by
+  `json_problem` in a `mode="before"` validator: text, finite numbers, booleans, null, lists and
+  mappings with text keys; else `scenes[i].params.data: … data.when: 2026-01-01 is a date, not a
+  JSON value …`. **Decisions:** the YAML name is `data` and the JS name `ctx.data` (one name both
+  sides; the tasklist wrote `ctx.params`, which would read as the scene's whole `params:`); theme
+  colour names in it are not resolved (a string meant literally would change), the page looks
+  them up in `ctx.theme.colors`.
+- **`ctx.beats`** (`page_beats`): `{id, index, start, end, text, words: [{text, start, end}]}` with
+  `start` / `end` from `clip_plan` (`end` = start + heard voice), the words by
+  `beat_word_times` (the stored alignment of the MP3, else estimated within its speech; the
+  captions' timing). A scene without beats: `[]`, no `data-beat`, no event.
+- **The beat in the DOM** (`runtime.js` `showBeat`): the beat of frame *n* is the last whose
+  `round(start × fps) ≤ n`. `<body>` `data-beat` (id) and `data-beat-index` (from 0) are set in
+  `start` (before `load`, no event) and each frame after the timers; a `CustomEvent('vidgen-beat',
+  {bubbles: true, detail: {beat, index, previous, t}})` is dispatched from `<body>` when the
+  frame's beat is not the one announced last (so also at frame 0). Both: id and index, so CSS can
+  match either.
+- **three.js**: an import map `{"imports": {"three": "/__vidgen__/three/three.module.js"}}` in
+  `page_head` (in both pages, before any module script; a page with its own import map then has
+  two, which recent Chromium merges: not tried); `/__vidgen__/three/three.module.js` and `three.core.js` are served
+  from `data/three` (`loaded.vidgen_file`), so a page can also import the URL. Checked in
+  Chromium: `import * as THREE from "three"` from an inline module of a `page:` and from a
+  `script:` (`THREE.REVISION` = 186). Step 334 adds the add-ons (§118.14).
+
+### 118.10 Every file the page loaded is in the cache keys (Step 330)
+
+- **Recording:** `WebPage._serve` notes each file it answers in `loaded` (`path -> SHA-256` of the
+  file, before vidgen's head is inserted): project files, vidgen's `__vidgen__/three/…` and
+  `__vidgen__/fonts/…`; a project file asked for but missing is `None` (creating it draws again;
+  `favicon.ico` is left out). It covers every frame, so a file first asked for on a later frame is
+  in. `make_web_clip` writes it to the record (`{key, inputs, loaded}`).
+- **Clip reuse:** the stored key equals the key of `inputs` *and* `loaded_changed(root,
+  loaded)` is empty (each recorded path hashed now, `served_file`); else the clip is drawn again
+  (logged: `<scene>: <files> changed since the web frames were drawn`).
+- **Render fingerprint:** `web` = `entry_digest` + `loaded` (the paths in the records of the
+  scene's final and preview clips of this project, hashed now) + `align` (stat of each beat's
+  `.align.json`, since `ctx.beats` holds word times). Theme, `data:`, beat texts and MP3s were
+  already in it. **First render** (no record yet): the worker takes `fingerprint_inputs` when it
+  starts and, after the scene rendered, `drawn_fingerprint` puts in the files as this render's
+  page loaded them (from the new record) for every path the records list then; so the next run's
+  fingerprint is equal when nothing changed (no second render), and differs as soon as one of
+  those files is edited, created or removed. A file edited during the render is caught too (its
+  recorded hash is the served one). A file the page stopped loading stays listed while the other
+  quality's record lists it.
+- **`--force`**: `render_project` removes the records (`forget_web_clips`) of the `web` scenes it
+  renders, so their frames are drawn again; without `--force` a re-render reuses an unchanged clip.
+- `3d` clips and keys are unchanged.
+
+### 118.11 A `web` scene fits with the rest of a video (Step 331)
+
+**Region and title** (`Web.Params`): `region: bleed | body` (default `bleed`) and `title` (the
+names `video_clip` uses for the same choice; `3d` has `title` too). `bleed`: the page fills the
+frame as before; a title is a `text_plate` in the header band over the page (as on `3d`).
+`body`: the title is `chart_title(title, area=safe_area)` (as on `video_clip`'s `region: body`) and
+the page's box is `safe_area.below(title, gap=0.45)`, or the whole safe area without a title (as
+`video_clip` does). The safe area already leaves out overlays with `reserve: true` (bottom
+captions) and, in a Short, the parts the app covers (§101), so the page box does too. The box's
+edges are moved to whole pixels (`scenes/web.py` `pixel_box`) and the page is drawn at the box's
+pixel size (the viewport, `ctx.width` / `ctx.height`, `100vw`), not the frame scaled down, so the
+`ClipMobject` (fit `cover` of that box) is copied pixel for pixel. Beat 1 fades the title in
+(`play_steps(d, [entrance("title")], fraction=0.6, cap=0.8)`, `3d`'s code); target `title`. The
+page itself is on screen from the first frame and the scene fades out over `outro` = 0.5 s, as
+on `3d` (`video_clip`, by contrast, fades its clip in on beat 1).
+
+**Transparency.** **Decision:** the frames keep their alpha. `WebPage` sets Chromium's default
+background to transparent once per page (CDP `Emulation.setDefaultBackgroundColorOverride`
+`{r: 0, g: 0, b: 0, a: 0}`, `TRANSPARENT`), so each `page.screenshot(type="png")` is RGBA with
+straight alpha; `png_pixels(..., alpha=True)` keeps it and `write_ffv1_clip(..., alpha=True)`
+stores FFV1 `bgra` (the `3d` clips stay `bgr0`: its keys are unchanged). `ClipMobject` already
+decodes `rgba`, and Manim's camera blends an `ImageMobject` with `Image.alpha_composite`
+(straight alpha), so what the page leaves transparent shows whatever vidgen draws behind it:
+today the theme background (the camera's background colour); transitions are joined from the
+finished scene videos, so they need nothing more. Alternatives measured (one CPU, a page with
+text, a semi-transparent box and a moving disc, 2 s, drawing + encoding the clip only):
+
+| | 480x270 @ 24 fps | 1920x1080 @ 30 fps |
+|---|---|---|
+| opaque: background override = theme colour, `bgr0` | 88 ms/frame, 0.35 MB | 427 ms/frame, 1.31 MB |
+| alpha: Playwright `omit_background=True` per screenshot | 90 ms/frame | 624 ms/frame, 1.79 MB |
+| alpha: override set once, `bgra` (chosen) | 72 ms/frame, 0.34 MB | 431 ms/frame, 1.79 MB |
+
+`omit_background` sends two extra CDP calls per screenshot (set and reset the override) and costs
++46 % at 1080p; setting the override once costs nothing measurable. Through `make_web_clip`
+(Chromium start included), Step 330's code against this one at 1080p: 306–348 vs 338–362 ms per
+frame (noise of the same size), clips 1.15 vs 1.79 MB per 2 s (+56 %, about 0.9 MB per second of
+1080p video in `build/`; equal at 480x270). Compositing at capture over the theme colour would save
+that disk but shows nothing vidgen draws behind a page and gives coloured (LCD) text edges at small
+sizes: Chromium uses sub-pixel text on an opaque background and greyscale text on a transparent
+one (seen in a zoomed crop at 480x270; at 1080p the large text was greyscale in both and the
+alpha frame blended over the theme colour matched the opaque one within 1 level on 127 175
+semi-transparent pixels). In a real render the Manim still of the `script:` page matched the clip's
+RGBA frame blended over the theme background exactly (max difference 0 on 5 234 and 1 074
+semi-transparent pixels of discs and text); reading the same frames as premultiplied would be off
+by up to 241 levels, a dark fringe. The bare page of a `script:` is now `background: transparent`
+(**decision**: it looked the same over the theme background, and a script's `clearRect` now shows
+what is behind). A `page:` without a background now shows the theme background instead of
+Chromium's white (documented as a change in CONFIG and CHANGELOG).
+
+**The video's shape** (`web/inputs.py` `page_shape(frame, region)`, exported as
+`vidgen.api.web_page_shape`): `{aspect, orientation, frame: {width, height}, region}`, spread into
+`ctx` (`ctx.aspect`, `ctx.orientation`, `ctx.frame`, `ctx.region`). `aspect_name(w, h)`: the
+nearest of `NAMED_ASPECTS` (`16:9`, `9:16`, `1:1`, `4:5`, `5:4`, `4:3`, `3:4`, `3:2`, `2:3`, `21:9`,
+`9:21`; the names of `--format`, the gallery and image generation) within 1 % (`854x480` and the
+`426x240` draft are `16:9`), else the reduced `W:H`. `orientation`: `scales.frame_orientation`
+(the 1.2 rule of vidgen's layouts). Both describe the video's frame, not the page's box (in
+`body` a 9:16 page box is nearly square; CSS media queries see the box). **Decision:** the
+attributes go on `<html>` (`data-aspect`, `data-orientation`), set by a classic inline script that
+`page_head` puts after the theme style and before the import map: it runs while the page is parsed,
+before any style or script of the page, when `<body>` may not exist yet; `:root[data-aspect]` and
+descendant selectors both work. `data-orientation` is given beside `data-aspect` because a rule for
+every portrait shape reads better as `[data-orientation="portrait"]`.
+
+**Cache.** Clip inputs version 3: `shape` and `alpha: true` added (and the viewport size was
+already there), `canvas.html` changed: every web clip is drawn once more. The render fingerprint
+already holds the scene params (`region`, `title`) and the format (so the frame size and aspect).
+
+**Verified** (Step 331, HANDOFF): a 4-scene video at 480x270, 12 fps (title, `web` page with
+`region: body` and a title, `web` script full-bleed with a title, title) with Kokoro narration,
+karaoke captions, `progress_bar`, `watermark`, `lower_third`, a crossfade, a push and a wipe; the
+same project as a 9:16 variant (270x480) and a Short (`shorts: true`), `--draft`, `vidgen
+storyboard`, `vidgen animatic`, `vidgen lint`, `vidgen validate`. A storyboard renders the `web`
+scene as every scene type is rendered for it (all its frames at preview size, then the stills);
+the clip is shared with `vidgen render --preview`.
+
+### 118.12 Lint reads the page (Step 332)
+
+`vidgen lint` checks the text a `web` page shows with the rules it uses for vidgen's own text. The
+page's text becomes layout objects (§15) of kind `text`, so no rule is written twice.
+
+**Reading** (`data/web/layout.js`, an async function of `t` evaluated by `WebPage.layout(n)`). An
+*item* is an element that holds visible text: the nearest ancestor of a text node whose computed
+`display` is not `inline` / `contents` (so `<p>Hello <b>you</b></p>` is one item; a flex or grid
+child is blockified, hence its own item), or an SVG `<text>` with its `<tspan>`s. Per item:
+`text` (its runs joined, white space collapsed), `box` (the union of `Range.getClientRects()` of
+its text nodes: the line boxes as drawn, every CSS transform applied; an SVG text's
+`getBoundingClientRect`), `font_px` (computed `font-size` times the scale on screen: the product,
+up the ancestors, of `sqrt|det|` of each computed `transform` matrix, the `scale` property and
+`zoom`; for SVG `sqrt|det|` of `getScreenCTM()`, which includes the viewBox and the page's CSS
+transforms, checked: a 10-unit SVG text in a 2x viewBox is 20 px), `cap_px` (`font_px` times the
+font's cap height in em, from canvas `measureText("H").actualBoundingBoxAscent` of the computed
+font; 0.7 when the font gives none), `color` / `colors` (`-webkit-text-fill-color`, else `color`;
+SVG `fill`; a `background-clip: text` or paint-server fill is `null`), `opacity` (the product of
+the ancestors' `opacity`, times the colour's alpha), `background` (the elements under the centre of
+its visible part, `document.elementsFromPoint`, from the item down: each solid background (SVG
+shapes: `fill` × `fill-opacity`) times its opacity is a layer, blended until opaque, then over the
+theme's background, which is what a transparent page shows; an `<img>`, `<canvas>`, `<video>`,
+`<iframe>`, SVG `<image>`, a `background-image` or a gradient fill gives `null` and
+`background_unknown`; when the item is not hit at its centre (`pointer-events: none`), its
+ancestors are the stack), `clipped` (the first box that cuts it: its own or an ancestor's with
+`overflow` other than `visible`, as far up as they contain it: an absolutely placed box skips
+ancestors until a positioned or transformed one, a fixed box until a transformed one; `<body>`
+and `<html>` are the viewport's), `cut` (the viewport cuts it), `visible` (the box minus every
+clip and the viewport). An item none of whose runs is visible (`visibility`, opacity under 0.01,
+no client rects: `display: none`, zero size) or whose visible part is empty is counted in `hidden`
+and left out. `name`: `data-vidgen-id`, else up to three segments of `tag.firstclass:nth-child(k)`
+(`nth-child` only with siblings of the same tag; `tag#id` ends the path; a named ancestor is
+`[id]`), deduplicated with ` (2)`. `lint`: the nearest `data-vidgen-lint`. Then
+`window.vidgen.layout(t, ctx)` (a page's, or a script's export), if any: its items' colours are
+normalised by a canvas `fillStyle`, `size` gives `cap` from `font`. `ctx` is the page's own (the
+runtime exposes it as `window.__vidgen.ctx`, so `runtime.js` changed: every web clip is drawn
+again once).
+
+**Order and side effects.** The reader runs after a frame's screenshot, never before one, so a
+reading never changes a frame (a `layout` hook that changes the page would change later frames:
+documented as not allowed). It touches no timer or random number of the page's.
+
+**When it is read, and the cache.** The scene (`Web._draw_view`) passes `make_web_clip(...,
+layout_frames=planned_still_frames(self))`: the frames its capture will take stills of
+(`browser/timing.py`: `capture.plan_targets` per beat over `round(window × fps)` frames, plus each
+beat's last frame; a silent scene's targets; `per_beat` of the scene's capture, 1 without one,
+so a plain render reads the beat ends too). Drawing reads those frames after their screenshots
+and writes `<scene>.layout.json` = `{key, reader, frames: {n: reading}}` beside the clip, with the
+clip's own key and the digest of `layout.js` (`reader`; not part of the clip key: a change to the
+reader does not draw frames again). At each still, `LayoutRecorder` calls `scene.page_layout(frame)`
+(`(reading, view mobject)` or `None`); the scene answers from memory or `web_page_layouts(...,
+at=[frame, *later planned frames])`, which returns what the record holds for that key and reader
+and reads the rest in **one** Chromium that steps the page frame by frame with `WebPage.advance`
+(the frame's clock, timers, animation frames and `frame(t, ctx)`, no screenshot) to the last
+missing frame, then adds them to the record. **Decision:** stepping, not jumping to frame *n*: a
+page's state can depend on every frame before it (`requestAnimationFrame` loops that accumulate,
+a canvas drawn over itself), and only stepping gives what the clip shows (checked: a page read by
+stepping equals the reading taken while drawing). Mid-action stills (`stage` only) are not
+predicted; a frame missed is read by stepping.
+
+**Measured** (1 CPU; `cards` page of Step 331, 440x129, 93 frames at 12 fps, two stills; two runs
+each): drawing 9.2 / 10.2 s without readings, 10.4 / 8.4 s with them (the two readings cost less
+than the noise; one reading is 10–40 ms on the fault pages); readings from the record 0.00 s;
+stepping without a record: 3.5 / 4.7 s for two stills up to frame 84, 2.6 / 3.4 s for one at
+frame 10 (Chromium start about 1.2–2.5 s, then 15–25 ms per frame stepped, against 90–100 ms per
+frame drawn). `vidgen lint --force` of the Step 331 demo's two web scenes (clips reused, stills
+rendered again): 40–44 s before Step 332, 38–45 s after (no difference beyond the noise).
+**Not done:** a storyboard or lint still renders the whole scene in Manim (every scene type does);
+a still-only path would need Manim to skip frames.
+
+**Into the layout dump** (`introspect.LayoutRecorder._page_texts`): the reading's items, mapped
+from the page's pixels to the frame through the box the view mobject occupies on screen (its image
+object's `bbox`: so a `zoom` or `dim` of target `view` is followed; opacity times the view's), are
+inserted right after that image object with `order` between it and the next object (so a `title`
+plate drawn over page text is `covered_text`'s), as `{id: "web:<name>", kind: "text", class:
+"WebText", source: "web", path: "web/<name>", name, tag, bbox, visible, opacity, order, text,
+font_px = cap_px, font_size_px, color, colors, backdrop, [backdrop_unknown], [clipped], [cut],
+[lint_off], [declared]}` (`web/layout.py` `page_text_objects`). `cut` keeps only the sides where
+the page's box is inside the frame (`region: body`); at the frame's edge `off_frame` sees the
+unclipped box. Declared items: `box {x, y, width, height}` (checked: `declared_problem`, a bad
+item is a warning and skipped), `cap` from `size` and `font` or 0.7 of the box's height, no
+`background` → `backdrop_unknown: "not declared"`. The frame gets `web: {box, size, frame, texts,
+declared, hidden, canvases}`. The dump's header gains `reserved: [{overlay, type, box}]` (the
+overlays with `reserve`, the part of the frame they keep; every scene type) and each frame's
+`overlays` entries `reserve: true`.
+
+**Rules.** Unchanged rules see the page's texts: `off_frame`, `safe_area`, `text_overlap`,
+`covered_text`, `min_font` (`cap_height` returns `cap_px` when an object has it), `contrast`
+(the DOM backdrop), `max_words`, `overlay_overlap`, `shorts_safe_area`, `said_before_shown` /
+`unsaid_reveal`. `describe` names a page text `text '…' (page: <name>)`. New rule `web_clipped`
+(`lint/web_rule.py`, error, `tolerance` 0.004 of the shorter side like `off_frame`): `clipped`
+sides over the tolerance → `is cut by its box <by> (overflow: hidden) at the right (129 px of the
+text hidden)`, else `cut` → `runs past the page's box at the bottom`. To report a fault once:
+`off_frame` and `safe_area` skip objects with `clipped` or `cut` (web_clipped's); `safe_area`
+names the overlay when the text lies in a `reserved` box (`is in the part of the frame overlay
+'captions' (captions) keeps for itself, outside the safe area …`; a page's text gets the hint
+`region: body`), and `overlay_overlap` skips scene text inside the part of the frame the overlay
+reserves (safe_area's finding) unless the camera moved (safe_area is then off). This changes
+findings for every scene type with text under bottom captions: one `safe_area` finding instead of
+`safe_area` plus `overlay_overlap`.
+
+**Opting out.** `data-vidgen-lint="off"` → `lint_off: ["all"]`; `"off:text_overlap,contrast"`
+(commas or spaces) → those names (`lint_opt_out`; an unknown name is logged once as a warning).
+`lint.run.rule_objects` drops an object from every rule its `lint_off` names (as an overlay
+type's `lint_skip`); `narration_rule._label_texts` drops `all`. The texts stay in the dump.
+`lint_ignore` also matches them by `name`, `path` or `text`.
+
+**Public interface.** `vidgen.api` adds `web_page_layouts(root, folder, scene_id, params, *, size,
+fps, frames, theme=None, beats=(), shape=None, at=())` and `planned_still_frames(scene)`;
+`make_web_clip(..., layout_frames=())` (default: no reading, earlier calls unchanged). The page
+contract gains the optional hook `layout(t, ctx)`. `WebPage` adds `advance(n)` and `layout(n)`;
+`web.page` `LAYOUT_FILE`, `layout_reader`, `layout_digest`; `web.clip` `layout_record_path`.
+
+**Verified** (Step 332, HANDOFF): a project of 12 one-fault `web` scenes at 480x270 and its 270x480
+variant, the Step 330 and 331 demos.
+
+### 118.13 Teaching it and proving it (Step 333)
+
+- **Guide topic** `web` (aliases `html`, `css`, `javascript`, `js`, `canvas`, `web-scenes`,
+  `web-scene`, `web-page`, `page`, `script`) in `data/guide/AGENTS.md`: when to use `web` rather
+  than a built-in, `3d`, `video_clip` or a Python extension; the two forms with a minimal page and a
+  minimal script; what follows the clock and what does not; the `ctx` table; theme variables;
+  revealing on `data-beat` and on word times; `data:`; three.js; `region` and transparency; one page
+  for both shapes; no internet; the lint loop (`data-vidgen-id`, `data-vidgen-lint`, `layout()`); the
+  usual mistakes with vidgen's messages; the render cost. Its pages and scripts are written so they
+  run as they stand: `tests/test_guide.py::test_the_web_topics_code_runs_in_chromium` writes each
+  (a fragment inside a `frame` hook) and draws it in Chromium with the YAML snippet's data and
+  beats; they were also rendered, validated and linted as a project at 16:9 and 9:16 (HANDOFF).
+- **Fix found by the example:** a declared item's `font` (`layout(t, ctx)`) was put after
+  `normal 400 100px`, so a canvas font (`"700 28px Inter"`, what a script draws with) made an
+  invalid font, the canvas kept its previous one, and the cap height came out about a tenth of the
+  size (`min_font` errors on correct text). `capRatio(font)` in `layout.js` now takes a canvas font
+  as it is (cap = ascent of "H" / its px size) and a family list at 100px; one the canvas refuses
+  gives 0.7. The reader's digest changed, so layout records are read again (clips are kept).
+- **`examples/web`** ("Where rain comes from", three scenes): `cycle` (`page:`, HTML + CSS only,
+  cards on `data-beat-index`, CSS `@keyframes` SVG, `region: body`), `rain` (`script:` canvas, rain
+  from the word "shower", `data:`, declared text measured with `measureText`), `globe` (`script:`
+  three.js by hand, low-poly planet, camera on beats, `region: bleed` with a title). Kokoro
+  narration (not committed).
+- **Gallery:** the guide's `scenes` snippet names `extensions/gears.html`; `gallery.sample_asset`
+  maps a `web` snippet's page or script (`WEB_SUFFIXES`) to `data/gallery/web/<name>` and
+  `_copy_files` copies it into the work project (`_is_web_entry`), so `vidgen gallery --types web`
+  renders the entry (`docs/gallery/web.md`).
+- **Measured** (1 CPU, drawing the frames only through `make_web_clip`, Chromium start included,
+  1920x1080 at 30 fps; HANDOFF Step 333): `cycle` (HTML + CSS page, 1760x668, 582 frames) 453 ms per
+  frame = 13.6 s per second of video; `rain` (canvas, 1760x660, 460 frames) 325 ms = 9.7 s; `globe`
+  (three.js on SwiftShader, 1920x1080, 518 frames) 550 ms = 16.5 s. Clips 46.5, 22.5 and 53.3 MB
+  (deleted after measuring).
+- **Animation library** (no download): the only one on the machine was Plotly.js 3.3.1 inside
+  gradio's front-end bundle (extracted with acorn into a scratch module). A linear 2 s
+  `Plotly.animate` transition started by a 500 ms timer: the bar's height read from the DOM equals
+  the expected value at every frame from 0 to 2.9 s at 10 fps (0.2 → 1.0, exact; pixels within one
+  row). GSAP, anime.js, Motion, Lottie and d3 are not on the machine; not tried (Step 336 tried
+  them: §118.15).
+
+### 118.14 three.js add-ons (Step 334)
+
+- **What ships** (the owner's choice): from the npm package `three` 0.186.1 (the registry's
+  tarball, its `dist.integrity` sha512 and `shasum` checked; its `build/three.module.js` and
+  `three.core.js` byte-identical to §114.4's), 23 files of `examples/jsm/`, unmodified and in their
+  folders, under `data/three/addons/` with a copy of the MIT `LICENSE` (390 676 bytes in all):
+  `loaders/GLTFLoader.js`, `utils/BufferGeometryUtils.js`, `environments/RoomEnvironment.js`,
+  `postprocessing/{EffectComposer,RenderPass,ShaderPass,UnrealBloomPass,OutputPass}.js`,
+  `renderers/CSS2DRenderer.js`, `lines/{Line2,LineGeometry,LineMaterial,LineSegments2,LineSegmentsGeometry}.js`,
+  `geometries/RoundedBoxGeometry.js`, `loaders/SVGLoader.js`, `controls/OrbitControls.js`, and what
+  they import: `postprocessing/{Pass,MaskPass}.js`, `shaders/{CopyShader,LuminosityHighPassShader,OutputShader}.js`
+  and `utils/SkeletonUtils.js` (`GLTFLoader` imports `clone` from it). None imports a left-out file
+  or does a dynamic `import()`. `SVGLoader.js` carries a number parser credited in a comment to
+  svg-numbers (MIT); THIRD_PARTY_NOTICES says so. Left out: 3D text (`FontLoader`,
+  `TextGeometry`), `DRACOLoader`, `KTX2Loader`, Meshopt (WebAssembly in workers, outside the
+  clock, megabytes), other loaders, HDR loaders, other controls, VR / AR, physics, exporters, the
+  GUI helper, the WebGPU renderer and node materials.
+- **Manifest and serving**: `web/loaded.py` `THREE_ADDONS` (paths under `addons/`), `ADDONS_FOLDER`,
+  `THREE_VERSION`; `vidgen_file("three/addons/<path>")` answers only a manifest path. Package data
+  glob `data/three/**/*` (a built wheel lists all 29 files of `data/three/`).
+- **Import map** (`web/inputs.py` `IMPORT_MAP`): `"three"` as before, plus the prefixes
+  `"three/addons/"` and `"three/examples/jsm/"` → `/__vidgen__/three/addons/`. An add-on's own
+  `import … from "three"` resolves through the same map to the same URL, so one core module is
+  loaded (checked: `THREE.REVISION` 186, `instanceof THREE.BufferGeometry` across both spellings,
+  only `three.module.js` + `three.core.js` among the non-add-on files served).
+- **An unshipped add-on**: a request under `__vidgen__/three/addons/` that is not in the manifest
+  is a 404, a warning, and — when the page then fails to load — the error
+  `web/page.py unshipped_addon_message`: `scene '<id>': the page imports the three.js add-on
+  '<path>' (three/addons/<path>), which is not shipped with vidgen (the shipped ones are listed in
+  'vidgen guide web'). To use it, copy <Name>.js from three.js 0.186.1 (the npm package 'three',
+  examples/jsm/<path>) into the project, e.g. extensions/lib/<Name>.js, and import it by relative
+  path ('./lib/<Name>.js'); …` (before: Chromium's `Failed to resolve module specifier`).
+- **Cache**: the add-ons a page loads are in its loaded-files record (§118.10) like the core. The
+  `3d` scene is unchanged: its `PAGE_FILES` and `page_digest()` do not include `addons/` (digest
+  the same before and after). `vidgen_source_digest()` hashes every `.js` under `data/three/`, so
+  it changed once, as it does for any source change.
+- **Behaviour under vidgen's clock** (HANDOFF Step 334 has the measurements): a loader in a
+  `script:` resolved relative paths against vidgen's bare page (`/__vidgen__/canvas.html`) until
+  Step 337 (§118.16: now against the script's folder), so a
+  file was named with `new URL("./x.glb", import.meta.url)`, which still works; `.gltf` (embedded or `.bin`) and `.glb`
+  load in `load(ctx)`. `EffectComposer`'s output is opaque: `RenderPass` without its own clear
+  colour leaves alpha 1 everywhere; with `clearColor` / `clearAlpha` 0 the alpha survives but a
+  bloom halo over transparency comes out wrong (colour above its alpha), so the rule is a scene
+  background. Composer colours equal `renderer.render`'s exactly (no bloom). `LineMaterial`
+  needs `resolution` = the page size. `OrbitControls.update()` turns 1/60 s per call (speed
+  follows fps); `update(t - last)` gives `autoRotateSpeed × 2π/60 × t` at any fps.
+
+### 118.15 Animation and chart libraries (Step 336)
+
+- **What ships**: five libraries, each one build file of its npm package, unmodified, under
+  `data/web/libs/<package>/` with the package's licence file as `LICENSE` (1 426 979 bytes in all;
+  the owner's limit was 1.5 MB). Each tarball came from `registry.npmjs.org` and its sha512
+  equals the registry's `dist.integrity`; the manifest (`web/libs.py` `WEB_LIBS`) holds each
+  file's SHA-256 and size, which `tests/test_web_libs.py` compares.
+
+  | package | version | licence | file (path in the package) | bytes | import |
+  |---|---|---|---|---|---|
+  | `animejs` | 4.5.0 | MIT | `anime.esm.min.js` (`dist/bundles/`, ESM) | 118 678 | `animejs` |
+  | `motion` | 14.12.0 | MIT | `motion.js` (`dist/`, UMD, global `Motion`) | 188 678 | `motion` |
+  | `d3` | 7.9.2 | ISC | `d3.min.js` (`dist/`, UMD, global `d3`) | 280 622 | `d3` |
+  | `chart.js` | 4.6.1 | MIT | `chart.umd.min.js` (`dist/`, UMD, global `Chart`) | 210 082 | `chart.js/auto`, `chart.js` |
+  | `lottie-web` | 5.13.0 | MIT | `lottie.min.js` (`build/player/esm/`, ESM) | 589 019 | `lottie-web` |
+
+- **UMD builds as modules**: `d3`, `chart.js` and `motion` have no one-file ES build (d3's
+  `d3.mjs` re-exports 30 packages, Chart.js's `chart.js` imports a chunk and `@kurkle/color`,
+  Motion's `dist/es` imports `framer-motion`). vidgen ships the UMD file unmodified and, beside
+  it, `index.js` (written by vidgen): `import './<file>'` runs the UMD file as a module (its
+  `this` is undefined, so it sets `globalThis.<Name>`), then `export default` that object and
+  `export const {…}` each of its names (578, 50 and 352 names, read from the global in Chromium;
+  a `slow` test compares them). So the globals `d3`, `Chart` and `Motion` exist too. Chart.js's
+  UMD build has everything registered and no `registerables` export. lottie-web's ES build is
+  not minified and its `lottie.version` reads `[[BM_VERSION]]` (the package's own state); its
+  UMD `lottie.min.js` is 305 704 bytes and could replace it behind a wrapper to save 283 kB.
+- **Licences of what a bundle contains**: `LICENSES-bundled.txt` beside the d3, Chart.js and
+  Motion files joins the licence files of the packages inside them (d3: 30 `d3-*`, `delaunator`,
+  `robust-predicates`, `internmap`; Chart.js: `@kurkle/color`; Motion: `framer-motion`,
+  `motion-dom`, `motion-utils`, `tslib`), read from each package's latest version on the registry
+  (ISC, MIT, BSD-3-Clause, 0BSD, Unlicense, and ColorBrewer's Apache-style licence in
+  `d3-scale-chromatic`). THIRD_PARTY_NOTICES lists them.
+- **GSAP is not shipped**: the npm package `gsap` 3.15.1 has no licence file; its `package.json`
+  says `"license": "Standard 'no charge' license: https://gsap.com/standard-license."` and every
+  file's header says "Copyright 2026, GreenSock. All rights reserved. Subject to the terms at
+  https://gsap.com/standard-license." That is not a licence an MIT project can redistribute
+  under (the terms themselves were not fetched: only the npm registry was allowed). The import
+  map names `gsap` as `/__vidgen__/libs/gsap/index.js`, a file vidgen does not have
+  (`web/libs.py` `NOT_SHIPPED`), so the render stops with `unshipped_lib_message` instead of
+  Chromium's `Failed to resolve module specifier`.
+- **Serving and the import map**: `web/libs.py` (`WebLib`, `WEB_LIBS`, `NOT_SHIPPED`, `lib_file`,
+  `unshipped_lib_message`); `web/loaded.py` `vidgen_file("libs/<package>/<file>")` answers only a
+  manifest file (not the licences), `unshipped_lib`; `web/inputs.py` `IMPORT_MAP` gains one
+  entry per specifier. Package data glob `data/web/libs/**/*`. The files a page loads are in its
+  loaded-files record (§118.10).
+- **Measured under the clock** (`WebPage`, 160x90 at 5 fps, one 2 s linear move of 100 px or its
+  like; "twice" = two fresh pages give identical pixels for frames 0–10; "alone" = frames 3 and
+  7 each drawn alone in a fresh page equal the same frames of the full run):
+
+  | case | value per frame | twice | alone |
+  |---|---|---|---|
+  | anime.js `animate` / `createTimeline`, own loop | 12 ms ahead (20.6 px for 20; also at 10, 24, 30 fps) | yes | yes |
+  | anime.js `autoplay: false` + `seek(t * 1000)` in `frame` (also a timeline) | exact | yes | yes |
+  | anime.js `waapi.animate` | exact | yes | yes |
+  | Motion `animate(el, {x})`, `{opacity}`, a spring, `animate(0, 100, {onUpdate})` | exact | yes | no: starts at its first animation frame |
+  | Motion sequence `animate([[…], […]])` | exact | yes | yes |
+  | Motion `controls.time = t` in `frame` (after `pause()` or with `autoplay: false`) | one frame late | yes | no |
+  | D3 `transition()` (also with `delay`), `d3.timer` | exact | yes | yes |
+  | D3 scales in `frame(t)` | exact | yes | yes |
+  | D3 `forceSimulation`, own timer | one tick per video frame | yes | no |
+  | D3 `forceSimulation` `stop()` + `tick(n)` in `frame` | set by `n` | yes | yes |
+  | Chart.js animation on creation (`responsive` on or off; a `script:` on `ctx.canvas`) | exact | yes | yes |
+  | Chart.js `chart.update()` from a timer at 1 s | exact from where the bars were | yes | no: starts from the undrawn first animation |
+  | Chart.js `animation: false` + `update("none")` in `frame` | exact | yes | yes |
+  | lottie-web `autoplay: true` (`svg`, `canvas`, `path:`) | exact (`currentFrame` 2 per frame at 10 fr/s) | yes | no: starts at its first animation frame |
+  | lottie-web `goToAndStop(t * 1000, false)` in `frame` (`svg`, `canvas`) | exact | yes | yes |
+  | GSAP 3.15.1 `gsap.to`, own ticker (ES files) | exact | yes | no: a step over 0.5 s counts as 33 ms (1.65 px for 30) |
+  | GSAP with `gsap.ticker.lagSmoothing(0)` (ES files; `gsap.min.js` from `<script src>`) | exact | yes | yes |
+  | GSAP paused timeline + `tl.time(t)` in `frame` | exact | yes | yes |
+
+  vidgen draws a `web` scene's frames in order from frame 0 (`web/clip.py`), so "alone: no" does
+  not change a render; it says the picture depends on the frames before it. `gsap.min.js` cannot
+  be imported as a module (`TypeError: Cannot set property window of #<Window>`); GSAP's
+  `index.js` + `gsap-core.js` + `CSSPlugin.js` in one folder import as a module. lottie-web's
+  `path:` loaded a 1 kB file in time, but it uses `XMLHttpRequest`, which vidgen does not wait
+  for (§118.8), so the guide says `animationData`.
+- **The clock fix** (`data/web/media.js`): `Animation.prototype.startTime` is wrapped like
+  `currentTime`. Motion sets `animation.startTime` to line an animation up with its own clock;
+  the browser's setter un-paused the animation on Chromium's real timeline until vidgen's next
+  placement, so Motion's frame 0 differed between renders (the box 10 to 17 px off in five
+  runs; identical after the fix). `tests/test_scene_web.py::test_an_animations_start_time_is_on_vidgens_clock`
+  fails on the old file (frame 0 at 10 px) and passes on the new.
+- **Whole tiles** (`web/page.py` `WEB_ARGS` + `--disable-partial-raster`): with Chromium's partial
+  raster, content at a fractional position that a script changed in an animation-frame callback
+  (some real time before the screenshot) could come out with one edge pixel different from one
+  render to the next, the DOM being identical. Seen with lottie-web's `svg` renderer in a
+  160x45 box (a 160x90 animation at half size): frame 2 had 2 variants in 10 fresh pages (one
+  pixel, 10 levels of 255), 3 variants with the SVG's own `translate3d` removed; and without any
+  library (a `<g>` moved by `setAttribute` in `requestAnimationFrame`): 1 run of 12 differed.
+  With the flag: 16 of 16 identical for each of the three pages, and equal to the picture of the
+  same DOM drawn once (a static page). Not slower (lottie page at 1280x720: 221 and 209 ms per
+  frame without, 153 and 116 ms with). The flag is in `engine_id()`, so every `web` clip is
+  drawn again once; `3d` scenes do not use `WEB_ARGS`. lottie-web's `canvas` renderer and a
+  change made in `frame(t)` did not vary without the flag (10 and 12 runs).
+- **Not verified**: each library beyond the calls in the table (anime.js scroll, draggable, text
+  and SVG helpers; Motion's `scroll`, `inView`, layout and view transitions; D3 zoom, brush,
+  drag, `d3.json` and other fetch helpers; Chart.js chart types other than bar and line, its
+  time scale, plugins; Lottie files with images, fonts,
+  expressions or audio, the `html` renderer); the UMD `lottie.min.js`; Windows.
+
+### 118.16 Relative URLs in a `script:` scene; what `render --scene` renders (Step 337)
+
+- **The base of a `script:` scene's page.** `web/page.py` `canvas_page` writes `<base href="/<the
+  script's folder>/">` into vidgen's bare page (`data/web/canvas.html`, `@BASE@`; `script_base`:
+  `/extensions/` for `extensions/x.js`, `/` for a script in the project folder, each part
+  percent-encoded). Before, the page's base was its own URL, `/__vidgen__/canvas.html`, so
+  `fetch("data.json")` in `extensions/x.js` asked for `__vidgen__/data.json` (a 404 and a
+  warning). Now every URL the browser resolves against the document base names a file beside
+  the script: `fetch`, an image's or video's `src`, `url()` in a style set from JavaScript or in
+  a `<style>` the script adds, `new URL(x, document.baseURI)`, a three.js loader's path.
+  Unchanged: `location` is still `/__vidgen__/canvas.html` (so `new URL(x, location.href)` is
+  not relative to the script); imports resolve against the importing module (`./dep.js`,
+  `import.meta.url`); bare imports go through the import map; vidgen's own URLs in the page are
+  absolute paths (`/__vidgen__/...`: the import map's addresses, the font faces, the import of
+  the script), so the base does not move them; an SVG paint named by fragment (`fill="url(#g)"`)
+  is still found in the page. The served file is recorded with the page's loaded files
+  (§118.10) under its project path (`extensions/data.json`), so an edit to it draws the clip
+  again. A `page:` scene is served as before (its base is the page's own URL).
+- **Why `<base>`** and not serving the bare page from the script's folder: a page URL there could
+  collide with a project file, and error messages and the loaded-file record tell vidgen's
+  files from the project's by the `__vidgen__/` prefix.
+- **Cache keys.** `canvas.html` is part of `runtime_digest()`, so `engine_id()` changed and every
+  `web` clip is drawn again once. The frames of `examples/web`'s two `script:` scenes (`rain`,
+  `globe`; 6 frames each at 160x90) are identical with and without the `<base>`, and so are the
+  files they load.
+- **`vidgen render --scene ID`** (§14, §63; no change of behaviour): `pipeline.scenes_to_render`
+  (taken out of `render_project`, so tests can ask which scenes are planned without rendering)
+  returns the named scenes and every other scene without a usable render (`_usable_render`),
+  because the video is joined from every scene. `render_dir` is one folder per quality and
+  variant (`build/final`, `build/final_<variant>`, `build/preview...`, `build/draft...`), so the
+  first `--scene` run for a variant or quality renders every scene; that is what the owner saw
+  (`--scene lines --variant small`, 13 scenes). Measured on a 4-scene project: first run in
+  `final`, `final_small`, `preview` and `draft` 4 rendered each; second run 1 rendered, 3
+  reused; `--scene lines --force` 1 (with `--scene`, `--force` adds no scene; it draws a `web`
+  scene's frames again); two `--scene`s 2; `--no-audio` after a render with sound 1.
+  `vidgen storyboard --scene` and `vidgen lint --scene` on an empty folder render only that
+  scene (they join nothing). New: `pipeline.also_rendered_note` gives the line
+  `--scene lines: also rendering 3 other scene(s) (one, three, four): the video is joined from
+  every scene, and <render_dir> has no render of them to reuse (...)`, printed by
+  `render_project` before the scenes (stderr with `--json`, as the other progress lines);
+  `--scene` and `--force` say so in `vidgen render --help`.
+
+### 118.17 `design_width`: a page built in fixed pixels (Step 339)
+
+**Why.** A fresh agent ported a dashboard built in CSS pixels for a window about 1280 px wide.
+The largest edit was rewriting about 100 `px` values into `calc(N * var(--u))` and scaling canvas
+line widths, so that the page fits the 854x480 preview and the 1920x1080 render. The owner
+approved a param that makes the rewrite unnecessary.
+
+**The param.** `design_width: <int>` on `web` (`Web.Params`, default none): the width, in CSS
+pixels, of the window the page was designed for. 200 to 8192 (`DESIGN_WIDTH_MIN` / `_MAX`); a
+value outside, a fraction, `true` or text is a validation error at `scenes[i].params.design_width`
+(`web/inputs.py` `design_width_problem`: `3 is not a window width a page is designed for (give the
+width in CSS pixels, 200 to 8192, e.g. 1280 for a desktop page or 390 for a phone page)`).
+
+**No `design_height`.** The page fills a box whose shape vidgen decides (the frame, or the body
+region). A design height that disagrees with that shape would have to squeeze the page, crop it or
+leave bars; a height that agrees adds nothing. So the height always follows the box: a 1280 design
+is 720 high in a 16:9 `bleed` page, and a phone page in a 9:16 video is `design_width: 390`.
+
+**Mechanism: the browser's device scale factor.** `web/inputs.py` `page_viewport(size,
+design_width)` -> `((design_width, ceil(size[1] / scale)), scale)` with `scale = size[0] /
+design_width` (`(size, 1.0)` without the param). `WebPage` opens its context with that viewport
+and `device_scale_factor=scale`. Chromium then lays the page out in the design window and
+rasterises it at `scale` device pixels per CSS pixel, so text, SVG and CSS shapes are drawn at the
+output's resolution; nothing is resampled by vidgen. It is the same at every quality (preview,
+draft, final) and for `bleed` and `body`, because only `size` differs. No file of
+`data/web/` changed.
+
+**Rounding.** The viewport is a whole number of CSS pixels, and the exact height (`size[1] /
+scale`) often is not (1280 at 854x480: 719.44). Measured in Chromium (Playwright's build here,
+13 size / width pairs): the screenshot is `round(viewport x scale)` pixels each way; the width
+came out exact in all 13 (the scale is a 32-bit float in Chromium: 1.92 reads back as
+1.9199999570846558). vidgen rounds the height **up**, so the screenshot is never shorter than
+`size`, and `web/page.py` `fit_pixels` cuts the rows over (at most `ceil(scale) + 1`; seen: 0, 1
+or 2) off the bottom. So the frames are exactly `size`, pixels are never stretched, and the strip
+of the window under the frame's bottom edge, less than one CSS pixel, is not shown (a `bottom: 0`
+element may lose that much). Rounding to the nearest pixel instead gave screenshots one row
+short in three of the 13 pairs, which would need padding or a resample. A screenshot of any
+other size is still the error `the page drew WxH px, expected WxH`.
+
+**What the page is told.**
+
+| | without the param | with `design_width` |
+|---|---|---|
+| `innerWidth` / `innerHeight`, `100vw` / `100vh`, media queries, `getBoundingClientRect` | the box's output pixels | the design window |
+| `devicePixelRatio` | 1 | `scale` (1.5 for 1280 at 1920; 0.667 at 854) |
+| `ctx.width`, `ctx.height` | the box's output pixels | the design window (CSS pixels; the height rounded up) |
+| the canvas of a `script:` (`canvas.html`) | the box's output pixels | the design window's pixels |
+| `ctx.frame`, `ctx.aspect`, `ctx.region` | the video frame (output px), its shape | the same |
+| `ctx.theme.sizes`, `--vidgen-size-…` | CSS px = output px | divided by `scale` (`scene_page_inputs(scene, spans, css_scale)`), so text is still as tall as vidgen's |
+
+Decision: `ctx.width` / `ctx.height` are always CSS pixels, the numbers `innerWidth` /
+`innerHeight` give, so a page never has two coordinate systems for layout. The price is that a
+canvas is not sharp by itself: the canvas of a `script:` has the design window's pixels, and any
+canvas drawn without `devicePixelRatio` is drawn at the design size and enlarged by Chromium
+(soft when `scale > 1`). A page that sizes its canvas by `devicePixelRatio` (the usual code for
+high-density screens; three.js `renderer.setPixelRatio(window.devicePixelRatio)`) has the
+output's pixels. Giving the `script:` canvas the output's pixels was rejected: a 2D script
+drawing in `ctx.width` coordinates would then fill only a corner.
+
+**Cache.** `clip_inputs(..., design_width=)` puts `design_width` among the inputs only when it
+is set, and `CLIP_VERSION` stays 3, so the key of every clip without the param is what it was
+(checked: `engine_id()` and the keys of the three `examples/web` entries are equal before and
+after this step). Stored clips are reused. The scene fingerprint changes once, as with any
+change of the source, so the scene's video is composed again from the stored clip. With the
+param, setting, changing or removing it changes the key; the theme's sizes in the key change
+with it. `make_web_clip` and `web_page_layouts` read the param from `params`
+(`design_width_of`).
+
+**Lint.** `data/web/layout.js` reports boxes and font sizes in CSS pixels with the window's
+`innerWidth` / `innerHeight`, and `web/layout.py` already maps a reading to the frame by `box
+width / reading width`, so with the param the same code gives output pixels: 12 px text of a
+1280 design is 18 px in a 1920 frame. `WebPage.layout` sets the reading's `height` to the part
+of the window the frame shows (`css_height`: 719.44, not 720), so both axes have the same
+scale. Fixed on the way: the `cut` of a text declared with `layout(t, ctx)` was left in page
+pixels (the other texts' was scaled); it is scaled now. No difference at scale 1.
+
+**Public interface.** `vidgen.api`: `web_page_viewport` (`page_viewport`),
+`web_design_width_problem` (`design_width_problem`); `web_page_inputs` takes an optional third
+argument `css_scale` (default 1). `WebPage(..., design_width=None)` with `.viewport`, `.scale`;
+`clip_inputs(..., design_width=None)`; `fit_pixels`; `css_height`; `design_width_of`.
+`browser.chromium.png_pixels(png, None, ...)` skips the size check.
+
+**Tested** (`tests/test_web_design_width.py`): 15 default (the param's checks and the validate
+message; the window and scale for six size / width pairs; `fit_pixels`; the inputs' keys
+without the param; a redraw when the param changes; lint objects and `min_font`, `off_frame`,
+`safe_area` on a 1280 reading at 1920x1080 and 854x480; a declared text's cut) and 6 `slow` in
+Chromium: a fixed-pixel page at 640x360 and 160x90 with `design_width: 320` (`innerWidth`,
+`clientWidth`, `devicePixelRatio`, a media query, `getBoundingClientRect`, `50vw`, `ctx`; a 160
+x 90 px box covers half the frame each way at both sizes; `bottom: 0` reaches the last row;
+lint's font size in output pixels); a 2D canvas with and without `devicePixelRatio` (hard edge
+against a blurred one); sizes whose window height is not whole (213x121 at 320, 500x281 at 260:
+exact frames); the page without the param; a `script:` and a three.js renderer
+(`setPixelRatio(devicePixelRatio)` gives a 150x75 buffer for a 100x50 canvas at scale 1.5); a
+render through the pipeline with `region: body`, a title and `design_width: 400` (the page
+under the title on the theme background, the theme's sizes divided by the scale).
+
+**Not done / not verified.** `web_clipped` and `text_overlap` were not run on a real
+`design_width` page (they use the same scaled boxes as the rules that were). A scale above 2.77
+or below 0.125 was not rendered. `ctx` has no field for the scale (`devicePixelRatio` is it).
+The strip under one CSS pixel at the bottom is lost when the height is not whole. Windows and
+macOS not tried. Found, not fixed: `examples/web/extensions/cycle.html` at 160x90 gives one of
+two different pictures for frames 0 and 3 from run to run, with the code before this step as
+well (four runs: two of each).
+
+### 118.18 A draft of a video with `web` scenes (Step 340)
+
+The owner approved "a fast draft size for web scenes, around 480x270 at 12 fps". It exists: §74's
+`vidgen render --draft`. **No option was added.**
+
+**What there was.** Three qualities, each with its own build folder and output name:
+
+| quality | default size and rate | set by | folder |
+|---|---|---|---|
+| final | `format` (1920x1080, 30 fps) | `format:`, a variant's `format` | `build/final[_<variant>]` |
+| `--preview` | 854x480, 15 fps | `preview: {width, height, fps}` (not reshaped for a vertical variant: the variant sets its own) | `build/preview[_<variant>]` |
+| `--draft` | 240 px on the shorter side at the format's shape (426x240, 240x426, 240x240), 8 fps | `draft: {width, height, fps}` | `build/draft[_<variant>]` |
+
+No `--quality` option and no size option on the command line. A `web` scene draws its clip into
+`render_dir / "web"` at `config.pixel_width` x `pixel_height` and `frame_rate`, so a draft's page
+is drawn at the draft's size into `build/draft/web/` with a key of its own (size and rate are
+among `clip_inputs`); `--draft` with `web` was first run in Step 331. A draft is smaller and
+slower-framed than the approved "about 480x270 at 12 fps" (0.8 against 1.6 million pixels a
+second), and faster for it, so it was kept as it is; `draft: {width: 480, height: 270, fps: 12}` gives that size.
+
+**Where the guide's wrong figure came from.** Step 333 verified `examples/web` in a copy whose
+`preview:` was set to 480x270 at 12 fps (to save time) and wrote its speed as "a whole preview
+render". The default preview draws 4 times the pixels a second.
+
+**`design_width`** (§118.17) needs nothing: the window stays `design_width` wide and the device
+scale becomes draft width / design width (0.333 for 1280 at 426). Without it the window is the
+draft's pixels, so the page must be fluid; said in the guide.
+
+**Lint.** `vidgen lint` and `vidgen storyboard` have no `--draft` (§74: they never use drafts)
+and it stays so: lint has two sizes to judge, the preview and the final, and a third would only
+repeat them. Its size rules are relative to the frame (`min_font`: cap height over the shorter
+side), so text of a page that scales is judged the same at every size, and a fixed-pixel page
+without `design_width`, which would be judged differently at 240p, is never read there. A draft
+therefore produces no finding at all, and no `min_font` noise. Tested
+(`test_lint_and_the_storyboard_never_use_a_draft`).
+
+**Measured** (1 CPU, one render at a time, `vidgen render --jobs 1`, the build folder deleted
+before each, the scene's own "done in" time: Chromium's start and the composing included) on
+copies of two trial projects: a narrated HTML + SVG page (bicycle gears, 20.3 s) and a silent
+three.js dashboard (20 s, with 120 s of simulation at load). Draft and preview in turn, twice:
+
+| | draft 426x240 @ 8 | preview 854x480 @ 15 | preview / draft |
+|---|---|---|---|
+| HTML + SVG, 20 s | 37.8 s, 33.8 s | 102.4 s, 95.2 s | 2.7, 2.8 |
+| three.js, 20 s | 54.2 s, 53.6 s | 126.1 s, 127.1 s | 2.3, 2.4 |
+
+A 3 s cut of each (the first beat; `duration: 3`), preview, final, draft in turn:
+
+| | draft | preview | final 1920x1080 @ 30 | final / preview |
+|---|---|---|---|---|
+| HTML + SVG, 3.7 s | 14.1 s | 29.6 s | 101.9 s (27.8 s per second) | 3.4 |
+| three.js, 3.0 s | 32.3 s | 41.3 s | 175.5 s (58.5 s per second) | 4.2 |
+
+From the cut and the whole render, per frame and per start: HTML + SVG 0.16 s a draft frame
+(start 9 s), 0.28 s a preview frame (14 s); three.js 0.16 s and 0.34 s (26–28 s: its simulation
+at load). A draft's frame costs about half a preview's with a quarter of its pixels, and a draft
+has about half the frames: hence 2.3 to 2.8 times, not 7.
+
+**The machine's speed was not steady.** An hour earlier the same commands took 105.8 s (draft)
+and 303.8 s (preview) for the first page and 187.7 s and 392.1 s for the second, and the final
+cuts 269.0 s and 120.8 s; 20 minutes later the second page's draft took 47.7 s. Nothing else was
+running (`top`); `/proc/stat` showed about 30% of the CPU's time in software interrupts and
+`/proc/pressure/cpu` 33–47% waiting, so the virtual machine itself was short of CPU. The
+two trial authors' whole final renders that morning took 1119 s and 1285 s (56 and 64 s per
+second) and their previews 90–99 s and 285–380 s. The tables above are the runs taken in turn
+within 20 minutes, with equal repeats; ratios are the result, seconds only an indication.
+
+**Where a frame's time goes** (first page, 24 frames, in a slow phase, so read the proportions):
+moving the clock and the page 31–38 ms at every size; the screenshot 409 ms at 426x240, 743 ms
+at 854x480, 1369 ms at 1920x1080; decoding the PNG 14 / 53 / 183 ms. A second screenshot of the
+same frame took a fifth of the first, by Playwright or by a bare `Page.captureScreenshot` alike,
+with equal pixels: the cost is Chromium drawing the changed page in software, not Playwright's
+call. Of a 3 s draft cut's worker (28 s under the profiler), 14 s were Python imports and 14 s
+the page's frames.
+
+**Tests** (`tests/test_web_draft.py`): the draft's window with `design_width` at 16:9, 9:16 and
+1:1; a draft's `web` folder and clip key differ from the preview's and the final's; `lint` and
+`storyboard` refuse `--draft`; `render --help` names the draft's size, rate and folder; one
+`slow` render of a `design_width` page as a draft (96x54 at 4 fps, the page saw its 400 px
+window, nothing in `build/preview`).
+
+**Not done.** A draft is 2.3 to 2.8 times faster than a preview, not more (above); fewer frames
+(`draft: {fps: 4}`) is the only quicker setting. A render prints no progress while a `web`
+scene's frames are drawn (a trial author could not tell a hang from slow work for 18 minutes).
+The final figures are from 3 s cuts, not whole renders.
+
+## 119. The project's own fonts: the `fonts/` folder (Step 338)
+
+Before this step a project's `fonts/` folder was read by nothing: a theme family that was not
+bundled had to be installed on the machine, and a `web` page could only use a font file through
+its own `@font-face`. Now the `.ttf`, `.otf` and `.woff` files under `<project>/fonts/` are used
+by the whole video.
+
+- **Reading** (`vidgen/fonts.py`): `project_font_files(root)` lists the files; `project_fonts(root)`
+  returns a `ProjectFont(path, rel, family, weight, italic)` per file, read with fontTools
+  (`_read_names`, cached by path, size and mtime): family = name 16 (typographic family), else
+  name 1; weight = `OS/2.usWeightClass`, or the `wght` range of `fvar`; italic = `fsSelection`
+  bit 0 or 9. A file fontTools cannot read is a `VidgenError` naming it. fontTools is named in
+  `pyproject.toml` (`fonttools>=4.34`); every install already had it through fpdf2.
+- **`.woff2` is not read.** fontTools needs the `brotli` package for it, which a plain install
+  does not bring, and no dependency was added. `font_warnings(root)` (in `validate_warnings`)
+  names each `.woff2` in `fonts/` that has no `.ttf` / `.otf` / `.woff` of the same file name
+  beside it. A page's own `@font-face` can still name a `.woff2` (Chromium reads it). The
+  `.woff2` files of `@fontsource/space-grotesk` 5.3.0 also carry a wrong family name
+  ("Space Grotesk Light" at weight 400); its `.woff` files are right.
+- **Pango** (ordinary scenes, captions, overlays): `register_project_fonts(root, build_dir)`
+  registers each file with `manimpango.register_font`, as `register_bundled_fonts` does (so the
+  same platform calls on Windows, macOS and Linux). A `.woff` is first written as a plain
+  `.ttf` / `.otf` to `build/fonts/<stem>-<sha12>.<suffix>` (`_sfnt_copy`: zlib only, written once,
+  renamed into place). `extensions.activate(project)` calls it, so the worker and every command
+  that activates a project have the fonts before any text is laid out.
+- **Manim's text cache.** Manim names a cached text SVG by the family name, not by the font file,
+  so a text first drawn in a fallback font was reused after the font file was added. With font
+  files in the project `render/worker.py` `_text_cache_dir` names the scene's cache folder
+  `media/texts/<scene>.<digest of the font files' paths, sizes and mtimes>` and removes the
+  scene's folders for other sets of files; without font files the folder is `media/texts/<scene>`
+  as before. (A font installed on the machine after a fallback render is still not noticed:
+  remove `build/`.)
+- **Fingerprint.** `fingerprint_inputs` adds `fonts` (path -> size and mtime, as for `assets`) when
+  the project has font files, so every scene is rendered again when one changes; absent without
+  font files, so other projects' renders stay current.
+- **`web` pages** (§118.9): `page_theme(theme, px_per_point, project_fonts)` adds
+  `font_files: [{family, weight, style, url}]` to `ctx.theme` (always present, `[]` without
+  files; `weight` is `"400"` or a variable font's `"300 700"`; `url` is `/fonts/...`, quoted), and
+  `theme_css` adds one `@font-face` per entry after the bundled ones (`project_font_faces`). The
+  files are served as project files, so they are in the clip's `loaded` record; `font_files` is
+  in the clip key with the rest of the theme.
+- **Pillow** (the designed thumbnail): `fonts.font_file(family, bold=, italic=)` returns the
+  registered project file nearest in style and weight (a `.woff`'s copy), else the bundled file;
+  `thumbnail._font` uses it and sets a variable font's weight axis (`_at_weight`).
+- **Google Fonts warning** (`web/page.py`): a refused request to `fonts.googleapis.com`
+  (`family=` of `css` / `css2`, split at `|`, the part before `:`) or `fonts.gstatic.com`
+  (`/s/<family folder>/`) gives `google_font_message`, once per family per scene (families
+  compared without spaces and case, so the style sheet's and a font file's request are one):
+  that the internet is off during a render, to put the file in `fonts/` and remove the link, and
+  `FONT_RECIPE` (the guide section). When `declared_families(theme)` has the family, it says only
+  to remove the link. The URL is still in `WebPage.refused`.
+- **Not done:** `.woff2` (above); `.ttc` collections; the placeholder pictures of `imagegen`, the
+  PDF slides and the contact sheets keep their bundled fonts; no check that a theme family exists
+  anywhere; a project font is not removed from Pango when another project is activated in the
+  same process (it stays known by its family name).
+- **Verified** (Linux, 640x360 at 10 fps, Space Grotesk from the font's release zip and from the
+  `@fontsource` tarball): a `title` scene, the captions, a page's `font-family` and
+  `var(--vidgen-font-body)` and the designed thumbnail are drawn in Space Grotesk with static
+  `.ttf`, with `.woff` and with the variable `.ttf`, and in a fallback font without the folder;
+  both scenes are rendered again after each change of `fonts/` and reused after none. Not tried
+  on Windows or macOS.

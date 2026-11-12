@@ -5,7 +5,108 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–311)
+## Unreleased (Steps 193–340)
+
+### A fast draft of a video with `web` scenes; the README names the six kinds of scene (Step 340)
+
+- No new option: `vidgen render --draft` (240 px on the shorter side at the video's shape, 8 fps, its own `build/draft`; `draft: {width, height, fps}` sets another size) already draws a `web` page at that size. It is now documented and measured for `web` scenes: about 2.5 times faster than `--preview` on two 20 s trial pages (an HTML + SVG page 36 s against 99 s, a three.js dashboard 54 s against 127 s, on a slow 1-CPU machine).
+- **Corrected:** the guide and `docs/CONFIG.md` said "a whole preview render at 480x270, 12 fps, about 2 s per second". That was a project whose `preview:` had been set to that size; the default preview is 854x480 at 15 fps and cost 4.9 and 6.3 s per second on those pages. Both now have one measured table (draft, preview, final).
+- Guide (`vidgen guide web`, "Render cost"): a page must scale (`vw` / `vh` / `%`, the theme's size variables, or `design_width`) to look right in a draft; lint and the storyboard never use a draft, so its small text causes no `min_font` finding. The workflow step and `vidgen render --help` name the draft for any video, not only cartoons.
+- README: a third block lists the six kinds of scene (Python-based presentation scenes, 3D, 2D cartoon, isometric cartoon, web, video-model shots), each linked.
+
+
+### `design_width`: a `web` page built in fixed pixels needs no rewrite (Step 339)
+
+- New param on `web` scenes: `design_width: 1280` (200 to 8192), the window width in CSS pixels the page was designed for. The page is laid out in a window that wide and as high as its region's shape gives, and drawn at the video's size at every quality: `innerWidth`, `100vw`, media queries, `getBoundingClientRect()` and `clientWidth` are the design's pixels, `window.devicePixelRatio` is output pixels per CSS pixel (1.5 for 1280 at 1920x1080). HTML text, SVG and CSS shapes are drawn at the output's resolution (Chromium's device scale factor; no enlarging).
+- A canvas is sharp only when its code multiplies its size by `devicePixelRatio` (three.js: `renderer.setPixelRatio(window.devicePixelRatio)`); otherwise it is drawn at the design size and enlarged. `ctx.width` / `ctx.height` and the canvas of a `script:` are the design window in CSS pixels; `ctx.frame` stays output pixels; the theme's sizes still draw text as tall as vidgen's.
+- The frames are always exactly the output's size: the window's height is rounded up to a whole CSS pixel and the rows over are cut off the bottom (under one CSS pixel of the page).
+- Lint judges the output size: 12 px text of a 1280 design is 18 px in a 1920 px frame. **Fixed:** the `cut` of a text declared with `layout(t, ctx)` was not scaled to frame pixels when the page was not drawn 1:1.
+- Without the param nothing changes and stored `web` clips are reused (their keys are the same).
+- Guide: "Porting a page built in fixed pixels" in `vidgen guide web`; `docs/CONFIG.md` `web`; DESIGN §118.17. Not tried on Windows or macOS.
+
+### A project's own fonts: the `fonts/` folder (Step 338)
+
+- vidgen uses the `.ttf`, `.otf` and `.woff` files in a project's `fonts/` folder for the whole video, with no installation: name the family in the theme (`theme: {font: "Space Grotesk"}` or a role in `fonts:`) and titles, captions, every built-in scene and the designed thumbnail are drawn in it; a `web` page gets an `@font-face` per file, so `font-family: "Space Grotesk"` and `var(--vidgen-font-body)` work there. The family, weight and style are read from each file. Changing a font file renders every scene again. `.woff2` files are not read (`vidgen validate` says so).
+- A `web` page that links Google Fonts gets a warning that names the family and says what to do, once per family: `scene 'x': the page asks Google Fonts for "Space Grotesk", but the internet is off during a render, so that text is drawn in a fallback font. Put the font's .ttf, .otf or .woff file in the project's fonts/ folder and remove the link to Google Fonts (see "Using another font" in `vidgen guide web`).`
+- **Fixed:** Manim's cache of laid-out texts is named by the family, so a text first drawn in a fallback font kept that font after the font became available. With files in `fonts/` the cache follows them.
+- Guide: "Using another font" in `vidgen guide web` (two ways to get a font's files, both tried); `docs/CONFIG.md` "Fonts".
+- `fonttools` is now named in the dependencies (every install already had it through fpdf2). Not tried on Windows or macOS.
+
+### Relative paths in a `script:` web scene; `render --scene` says what else it renders (Step 337)
+
+- **Fixed:** in a `web` scene with `script: extensions/x.js`, a relative URL is relative to the script's folder: `fetch("data.json")`, an image's or video's `src`, a CSS `url()`, `new URL(x, document.baseURI)` and a three.js loader's path name files beside the script. Before, they named files in vidgen's own page folder (`/__vidgen__/data.json`: not found). vidgen's page for a script now has a `<base>` of the script's folder. `new URL("./x.glb", import.meta.url)` and relative imports work as before; `page:` scenes are unchanged. Every `web` clip is drawn again once (the page file is part of the cache key).
+- `vidgen render --scene ID` on a quality or variant never rendered before (`--preview`, `--draft` and each `--variant` keep their own renders) renders every scene, as before, because the video is joined from every scene; it now prints which scenes it adds and why (`--scene lines: also rendering 3 other scene(s) (one, three, four): ...`). `vidgen render --help` says so for `--scene`, and that `--force` with `--scene` renders only those scenes.
+
+### Animation and chart libraries for `web` scenes (Step 336)
+
+- A `web` scene can import five libraries by name, shipped with vidgen (about 1.43 MB with their licences; each one build file of its npm package, unmodified): `import {animate} from "animejs"` (anime.js 4.5.0, MIT), `import {animate} from "motion"` (Motion 14.12.0, MIT), `import * as d3 from "d3"` (D3 7.9.2, ISC), `import Chart from "chart.js/auto"` (Chart.js 4.6.1, MIT) and `import lottie from "lottie-web"` (lottie-web 5.13.0, MIT). Each was run under vidgen's clock; `vidgen guide web` has a table saying how to drive each (which play by themselves frame-exactly, which need a seek from `frame(t)`).
+- GSAP is not shipped: its files say "All rights reserved. Subject to the terms at https://gsap.com/standard-license". `import gsap from "gsap"` stops the render with a message saying so and how to use a copy in the project; a copy works under the clock (`gsap.ticker.lagSmoothing(0)`, or a paused timeline and `tl.time(t)`).
+- **Fixed:** an animation's `startTime` (Web Animations API) is on vidgen's clock. Before, a page (or a library: Motion does it) that set `animation.startTime` let that animation run in real time until the next frame, so a frame could differ from one render to the next (seen: in five renders Motion's first frame drew a box 10, 10, 10, 11 and 17 px from its place).
+- **Fixed:** two renders of a `web` scene could differ in one edge pixel when a script moved content at a fractional position in a `requestAnimationFrame` callback (seen with a Lottie SVG at half size, and with plain `setAttribute`). `web` scenes now start Chromium with `--disable-partial-raster`; every `web` clip is drawn again once.
+
+### Every test passes (Step 335)
+
+- **Fixed:** importing `vidgen.render.worker` no longer loads Manim (it imported `vidgen.three_d.passes` at the top since Step 301). `vidgen.lint` imports the worker for two path functions, so `import vidgen.lint`, and with it `vidgen.cartoon.lighting`, `vidgen.cartoon.wind`, `vidgen.cartoon.iso_weather` and `vidgen.cartoon.iso_stage`, loaded Manim too. The worker now imports the passes when it runs. No command's output changes.
+- Tests only: the 53 tests that were failing (HANDOFF.md, Steps 327 and 335) pass, except one marked as an expected failure for a known bug (`scenes/video_clip.py` imports modules outside `vidgen.api`; `tasklist.md` backlog). `tests/conftest.py` makes a relative `PYTHONPATH` absolute, so `PYTHONPATH=src python -m pytest` tests the working tree in render workers too.
+
+### three.js add-ons for `web` scenes (Step 334)
+
+- A `web` scene can import a chosen set of three.js add-ons, shipped with vidgen (three.js 0.186.1, MIT, about 390 kB): `GLTFLoader` (`.gltf` and `.glb` models), `BufferGeometryUtils`, `RoomEnvironment`, bloom (`EffectComposer`, `RenderPass`, `ShaderPass`, `UnrealBloomPass`, `OutputPass`), `CSS2DRenderer` labels, thick lines (`Line2`, `LineGeometry`, `LineMaterial`, `LineSegments2`, `LineSegmentsGeometry`), `RoundedBoxGeometry`, `SVGLoader` and `OrbitControls`. Import them as three.js's docs do: `import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js"` (the older `three/examples/jsm/…` works too); they share the page's one `THREE`.
+- Not shipped: 3D text, Draco / KTX2 / Meshopt decoders, other loaders and controls, VR / AR, physics, exporters, the GUI helper, WebGPU. Importing one stops the render with a message that names it and says how to copy the file into the project instead (before, Chromium's "Failed to resolve module specifier").
+- `vidgen guide web` has a table of the add-ons, an example (rounded box, environment light, bloom, an HTML label) and the rules found under vidgen's clock: load files in a `script:` with `new URL("./x.glb", import.meta.url)`, give a composer's scene a background (its picture is opaque), set `LineMaterial.resolution`, call `OrbitControls.update(t - last)`.
+
+### `web` scenes taught and shown (Step 333)
+
+- `vidgen guide web` (also `html`, `css`, `javascript`, `canvas`): when to write a `web` scene rather than use a built-in, `3d`, `video_clip` or a Python extension; the two forms with minimal working examples; what follows the video's time and what does not; the `ctx` table; theme variables and fonts; revealing on beats and on spoken words; `data:`; three.js; `region` and transparency; one page for 16:9 and 9:16; no internet; the lint loop; the usual mistakes with their messages; the render cost.
+- `examples/web` ("Where rain comes from"): an HTML and CSS page whose cards come in on narration beats, a canvas rain gauge whose text is declared to lint with `layout()`, and a hand-written three.js planet whose camera moves on beats; validate and lint clean at 16:9 and 9:16.
+- The scene gallery has a `web` entry (`docs/gallery/web.md`); `vidgen gallery` ships the page the guide's snippet names.
+- **Fixed:** in a `layout(t, ctx)` declaration, `font` may now be the canvas font the text was drawn with (`"700 28px Inter"`) as well as a family (`"Inter"`); the canvas font form used to be measured as a tiny cap height, so `min_font` reported the text as about a tenth of its size.
+- `docs/EXTENDING.md` has a section on `web` scenes beside Python extensions (project JavaScript is trusted as `extensions/` Python is); `docs/CONFIG.md` `web` reordered into one reference.
+
+### Lint reads a `web` page (Step 332)
+
+- `vidgen lint` now checks the text a `web` page shows: at each still it asks the page for every element that holds visible text (and SVG `<text>`): its box mapped to the frame, its size as drawn (CSS transforms included), colour, what is behind it, opacity, and what clips it. The existing rules run on it (`off_frame`, `text_overlap`, `min_font`, `contrast`, `safe_area`, `overlay_overlap`, `max_words`, `shorts_safe_area`, `covered_text`); a new rule `web_clipped` (error) reports text cut by its own box (`overflow: hidden`) or by the page's box with `region: body`. Text a later beat reveals is checked once it shows.
+- `data-vidgen-id="gear"` names an element in the layout dump and in messages (`text 'Gears' (page: gear)`), else a short CSS-like path does; `data-vidgen-lint="off"` (or `"off:contrast"`) opts an element and its children out. Text drawn on a canvas cannot be read: a page or script declares it with `layout(t, ctx)` returning `[{id, text, box: {x, y, width, height}, size, color, background}]`.
+- Text under the captions (in the part of the frame a `reserve: true` overlay keeps) is now one `safe_area` finding naming the overlay, for every scene type; `overlay_overlap` leaves it to `safe_area`.
+- The layout dump has a `web` entry per still and the page's texts as objects (`class: WebText`), and a `reserved` list in its header; overlays carry `reserve`.
+- The reading is taken while the clip is drawn and kept beside it (`<scene>.layout.json`), so lint reads no page again; a frame not read then costs one Chromium start and a step per frame without screenshots. Every web clip is drawn again once. `vidgen.api` adds `web_page_layouts` and `planned_still_frames`; `make_web_clip` takes `layout_frames=`.
+
+### `web` scenes fit with the rest of a video (Step 331)
+
+- `region: bleed` (the default: the page fills the frame) or `region: body` (the page fills the safe area under a `title` that vidgen draws, clear of bottom captions and of a Short's covered parts). With `body` the page is laid out at the region's own size: its viewport and `ctx.width` / `ctx.height` are the region's pixels. `title` draws a heading as on `3d` (a plate over the page) or `video_clip` (above it); action target `title`.
+- Transparent pages: what a page leaves transparent shows the video's background, with exact blending of semi-transparent pixels. **Changed:** a page with no background used to show Chromium's white and now shows the theme's background; a `script:`'s bare page is now transparent (it was the theme background, so it looks the same). The frames are kept with their alpha (clips about 1.5× larger at 1080p, same speed).
+- One page for every shape: `ctx.aspect` (`"16:9"`, `"9:16"`, `"1:1"` …), `ctx.orientation`, `ctx.frame`, `ctx.region`, and `<html data-aspect="9:16" data-orientation="portrait">` so CSS can switch layout (`[data-aspect="9:16"] .row { flex-direction: column }`).
+- Checked with real renders: captions (karaoke too), `progress_bar`, `watermark`, `lower_third`, crossfade, push and wipe into and out of a `web` scene, `--draft`, a 9:16 variant and a Short, `vidgen storyboard`, `vidgen animatic`, `vidgen lint`, `vidgen validate`.
+- Every web clip is drawn again once. `vidgen.api` adds `web_page_shape`; `make_web_clip` takes `shape=`.
+
+### `web` scenes: what the page is given (Step 330)
+
+- The theme reaches the page: CSS variables on `:root` (`var(--vidgen-primary)`, `--vidgen-background`, `--vidgen-palette-0`, `--vidgen-font-heading`, `--vidgen-size-body` …) and `ctx.theme`. vidgen's bundled fonts are declared with `@font-face` and served with no download, so a page's text matches a `title` scene's. A `script:`'s bare page uses the theme background (it was black).
+- `params: {data: {...}}` (JSON values only, checked with the place of a bad value) arrives as `ctx.data`.
+- `ctx.beats`: each narration beat's id, start, end, text and word times. `<body data-beat="b2" data-beat-index="1">` follows the beat and a `vidgen-beat` event fires when it changes, so plain CSS can reveal a part on its beat.
+- `import * as THREE from "three"` loads the bundled three.js in a `page:` and a `script:`.
+- Editing any file the page loaded (styles, modules, pictures, fonts, fetched data, also one first asked for on a later frame) renders that scene again, and only it; `vidgen render --force` draws the frames again. Every web clip is drawn again once.
+- `vidgen.api` adds `web_page_inputs` and `web_json_problem`; `make_web_clip` takes `theme=` and `beats=`.
+
+### `web` scenes: time belongs to vidgen (Step 329)
+
+- A `web` page written the ordinary way now renders frame by frame and the same on every render: CSS animations and transitions, `element.animate`, `requestAnimationFrame`, `setTimeout` / `setInterval`, `Date`, `performance.now()`, SVG `<animate>` and `<video>` follow the video's time instead of the real clock. `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` give the same numbers for the same scene id. `Date.now()` starts at 2026-01-01T00:00:00Z, time zone UTC.
+- New optional hook `load(ctx)` (may be async), run once before frame 0, after the page's fonts, pictures and videos are ready. `frame(t, ctx)` and pages written for Step 328 work unchanged.
+- A `load` that does not return within 30 s or a frame within 10 s stops the render with the scene, the hook and the time, instead of hanging.
+- Videos in a page can be seeked: the project folder is served with byte ranges.
+- Every web clip is drawn again once (the clock is part of its cache key). `3d` clips are reused.
+
+### `web` scenes: a page written in HTML, CSS and JavaScript (Step 328)
+
+- New scene type `web`: `page: extensions/gears.html` (any HTML, CSS and JavaScript) or `script: extensions/gears.js` (a module drawn on one canvas that vidgen supplies). Before each frame vidgen calls the page's `frame(t, ctx)` (`window.vidgen.frame` on a page, an exported `frame` in a script), then takes a screenshot at the render's size and frame rate. The screenshots go into a cached clip, as for `3d`.
+- The project folder is served to the page, so relative links to styles, pictures, fonts and modules work. A request to the internet is refused with a warning naming the URL.
+- A missing file (also in `vidgen validate`), a JavaScript error at load or in `frame`, or a page not ready within 30 s stops the render with the scene, file and line.
+- `3d` and `web` share one Chromium module (`vidgen/browser/`); existing 3D clips stay valid. The install hint now reads "3d and web scenes need Playwright and its Chromium".
+- Measured on a 1-CPU machine: 1.4–2.1 s of drawing per second of video at 480x270 and 24 fps, 13 s at 1920x1080 and 30 fps.
+
+### The default test run leaves the slow tests out (Step 327)
+
+- `python -m pytest -q` now runs every test except those marked `slow`: 6258 of 8184 tests, 194 s on a 1-CPU machine (all tests: about 3.7 hours there). `-m slow` runs only the slow ones, `-m "slow or not slow"` everything; a test named by node id always runs. 1002 more test functions are marked `slow` (every one over about 0.4 s). No test was removed.
 
 ### A dissolve of a few frames where one generated take continues another, on request (Step 326)
 

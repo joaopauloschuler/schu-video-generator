@@ -144,6 +144,7 @@ def test_a_cut_drops_a_scene_overlay() -> None:
     assert kept["scenes"][0]["overlays"]["label"] == {"type": "lower_third", "at": "park_b1", "title": "Ana B."}
 
 
+@pytest.mark.slow
 def test_a_change_for_one_scene_of_a_cut_keeps_the_others_renders(make_project: Any) -> None:
     from vidgen.render.fingerprint import scene_fingerprint
 
@@ -241,6 +242,7 @@ def test_an_overlay_that_keeps_off_faces_counts_its_texts_and_panels_only() -> N
     assert len(found) == 1 and "overlay 'implant' covers 40% of the face of character 'ana'" in found[0]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_hud_in_a_short_keeps_its_meters_above_the_captions(make_project: Any, tmp_path: Path) -> None:
     from manim import tempconfig
@@ -307,6 +309,7 @@ def test_shorts_length() -> None:
 # ----- rendering -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_short_renders_with_hook_captions_and_end_card(make_project: Any) -> None:
     from vidgen.lint import lint_project
@@ -338,6 +341,7 @@ def test_a_short_renders_with_hook_captions_and_end_card(make_project: Any) -> N
     assert not [f for f in result.findings if f.scene == "cut_end" and f.rule in ("shorts_safe_area", "safe_area")]   # the card's words too
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("cut", [True, False])
 def test_a_cut_zoom_at_the_start_opens_the_scene_framed(make_project: Any, cut: bool) -> None:

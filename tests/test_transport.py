@@ -193,6 +193,7 @@ def test_motors_walk_to_their_end() -> None:
     assert d1 < d0                                                           # dynein: towards the − end
 
 
+@pytest.mark.slow
 def test_endocytosis_and_exocytosis_rules_and_shapes() -> None:
     bacterium = build_cell_world(CellSpec(kind="bacterium"))
     assert "bacteria do not take up material by endocytosis" in tf.endocytosis_problem(bacterium, None)
@@ -237,6 +238,7 @@ def problems_of(make_project: Any, scenes: list[dict[str, Any]]) -> list[str]:
     return [p.message for p in project_problems(project_with(make_project, scenes, narration=NARRATION))]
 
 
+@pytest.mark.slow
 def test_process_actions_are_validated(make_project) -> None:
     channel = {"molecules": [{"kind": "ion_channel", "id": "k", "ion": "K+"}], "solutes": ["K+", "Na+"]}
     found = problems_of(make_project, [molecule_scene([[{"transport": "k"}]], **channel)])
@@ -258,6 +260,7 @@ def test_process_actions_are_validated(make_project) -> None:
     assert any("motor_walk is a cell action" in m for m in problems_of(make_project, [molecule_scene([[{"motor_walk": "k"}]], **channel)]))
 
 
+@pytest.mark.slow
 def test_traffic_actions_are_validated(make_project) -> None:
     def cell(actions: list[list[dict[str, Any]]], **params: Any) -> dict[str, Any]:
         return {"id": "c", "type": "cell", "params": params, "beats": [{"text": "a motor walks along a microtubule", "actions": a} for a in actions]}
@@ -293,6 +296,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_molecule_processes_render(size: tuple[int, int], make_project, media: Path) -> None:
@@ -311,6 +315,7 @@ def test_molecule_processes_render(size: tuple[int, int], make_project, media: P
     assert scene.levels["o2"]["cytosol"] > 0.02                                     # oxygen moved in
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_cell_traffic_renders(make_project, media: Path) -> None:
     scenes = [{"id": "c", "type": "cell", "params": {"labels": False, "view": {"level": "complex", "on": "cell", "width": "400 nm"},

@@ -250,6 +250,7 @@ def test_number_line_trace_is_checked(make_project) -> None:
 # ----- rendering ----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_geometry_moves_on_words_in_both_formats(make_project, media: Path) -> None:
     beats = [{"text": "a right triangle and two vectors"},
@@ -276,6 +277,7 @@ def test_geometry_moves_on_words_in_both_formats(make_project, media: Path) -> N
             assert safe_area_of(size).contains(mob, tolerance=0.05), type(mob).__name__
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_number_line_reveals_per_beat_and_traces(make_project, media: Path) -> None:
     beats = [{"text": "one two three"}, {"text": "four five six"}, {"text": "seven eight nine ten", "actions": [{"trace": "point:p", "to": 4, "at": "@nine", "until": "n_b4"}]},

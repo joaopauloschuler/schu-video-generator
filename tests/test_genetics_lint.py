@@ -252,6 +252,7 @@ def test_rules_are_registered_in_config_order() -> None:
     assert LintRules().genetics_hwe.tolerance == 0.1
 
 
+@pytest.mark.slow
 def test_scene_rules(make_project) -> None:
     scenes = [
         {"id": "x", "type": "cross", "params": DIHYBRID, "beats": [{"text": "The offspring show a three to one ratio."}]},

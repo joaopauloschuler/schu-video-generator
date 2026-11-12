@@ -76,6 +76,7 @@ def test_a_pass_needs_a_3d_scene(make_project) -> None:
 # ----- shots, prompt, hash -------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_shot_sends_the_pass_and_says_what_it_is(make_project) -> None:
     project = Project.load(make_project(guide_config("depth")))
     (shot,) = project_shots(project, CATALOG)
@@ -135,6 +136,7 @@ def test_plan_names_the_pass_and_shares_it(make_project, fake_cloudflared: list[
 # ----- inputs ----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_inputs_convert_the_pass_cut_like_the_render(make_project) -> None:
     from vidgen.render.ffmpeg import probe
 
@@ -173,6 +175,7 @@ def test_inputs_convert_the_pass_cut_like_the_render(make_project) -> None:
 # ----- a real render (Chromium) ----------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_generate_inputs_renders_the_mask_pass(make_project) -> None:
     from test_scene_3d_passes import _chromium_or_skip, _frames

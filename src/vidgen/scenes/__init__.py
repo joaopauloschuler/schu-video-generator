@@ -128,6 +128,7 @@ from vidgen.scenes import (  # noqa: F401
     timeline,
     title,
     video_clip,
+    web,
     wind_action,
     world_map,
 )

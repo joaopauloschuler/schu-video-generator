@@ -155,6 +155,7 @@ def test_rules_are_registered_in_config_order() -> None:
         assert RULES[name].scope == "scene" and RULES[name].default == "warning"
 
 
+@pytest.mark.slow
 def test_cell_scale(make_project) -> None:
     cell = {"id": "c", "type": "cell", "params": {"contents": "none", "objects": [
         {"kind": "mitochondrion", "id": "big", "size": "7 um", "at": [0, 0]},
@@ -306,6 +307,7 @@ def test_fingerprints_change_only_where_citations_are(make_project) -> None:
     assert before["b"] != after["b"] and before["c"] != after["c"]   # the next scene's / its own
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_citations_are_drawn_as_a_footer_and_reserve_room(make_project, media: Path) -> None:
     from test_overlays import bullets, objects_of, project, render
@@ -320,6 +322,7 @@ def test_citations_are_drawn_as_a_footer_and_reserve_room(make_project, media: P
     assert rendered.safe_box.y0 > rendered.frame_safe.y0                           # the footer keeps the bullets clear
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_not_to_scale_note(make_project, media: Path) -> None:
     from test_overlays import project, render

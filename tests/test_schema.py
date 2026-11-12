@@ -67,11 +67,13 @@ def test_examples_validate_against_their_schema(example: Path, capsys: pytest.Ca
         assert errors(doc, deep_merge(data, override)) == [], name
 
 
+@pytest.mark.slow
 def test_template_validates_against_builtin_schema(builtin_schema: dict[str, Any]) -> None:
     data = yaml.safe_load(TEMPLATE.read_text(encoding="utf-8").replace("__TITLE__", '"T"'))
     assert errors(builtin_schema, data) == []
 
 
+@pytest.mark.slow
 def test_shot_mapping_may_name_one_character(builtin_schema: dict[str, Any]) -> None:
     """Step 106: `shot: {kind: closeup, of: juno, move: true}` validated but the schema wanted a list."""
     beat = {"text": "Hi.", "shot": {"kind": "closeup", "of": "kit", "move": True}}
@@ -256,6 +258,7 @@ def test_scene_option(capsys: pytest.CaptureFixture[str]) -> None:
     assert errors(doc, {"front": {**ring, "color": "nope"}, "rear": ring})
 
 
+@pytest.mark.slow
 def test_all_option_bundles_every_type(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)  # no project here: built-ins only
     doc = cli_schema(["--all"], capsys)
@@ -268,6 +271,7 @@ def test_all_option_bundles_every_type(capsys: pytest.CaptureFixture[str], monke
     assert errors(doc, scene(type="title", params={"text": "x"}))
 
 
+@pytest.mark.slow
 def test_default_is_the_whole_config(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
     doc = cli_schema([], capsys)
@@ -276,6 +280,7 @@ def test_default_is_the_whole_config(capsys: pytest.CaptureFixture[str], monkeyp
     assert doc["$schema"] == schema.DIALECT
 
 
+@pytest.mark.slow
 def test_unknown_scene_type(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["schema", str(ROOT / "examples" / "minimal"), "--scene", "titel"]) == 1
     captured = capsys.readouterr()
@@ -297,6 +302,7 @@ def test_json_envelope(capsys: pytest.CaptureFixture[str]) -> None:
     assert doc["error"]["kind"] == "usage"
 
 
+@pytest.mark.slow
 def test_invalid_config_still_gives_a_schema(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     write_files(
         tmp_path,

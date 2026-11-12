@@ -189,6 +189,7 @@ def _vehicle(kind: str, unit: float, x: float = 0.0) -> Any:
     return prop
 
 
+@pytest.mark.slow
 def test_riders_stand_in_a_balloon_and_fly_with_it() -> None:
     pip = figure()
     balloon = _vehicle("hot_air_balloon", pip.character_height, x=-2.0)
@@ -226,6 +227,7 @@ def test_a_boat_rides_from_where_it_rests() -> None:
     assert boat.afloat == pytest.approx((1.5, -2.0)) and boat.tilt == 0.0
 
 
+@pytest.mark.slow
 def test_the_wind_takes_a_balloon_downwind_and_a_flight_stays_in_the_frame() -> None:
     from types import SimpleNamespace
 
@@ -347,6 +349,7 @@ TRIP = [
 ]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_trip_on_the_water_and_in_the_air(make_project, tmp_path: Path) -> None:
     """Pip rides the boat across the water, bobbing; kit's balloon flies away out of the frame; the

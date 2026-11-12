@@ -42,6 +42,7 @@ def _score(**extra: Any) -> dict[str, Any]:
 # ----- a beat ends on its planned frame --------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_beat_ends_on_its_planned_frame_after_an_odd_number_of_frames(make_project, tmp_path: Path) -> None:
     """Step 189's captions were 2-3 frames late: a beat's window of a half frame (here 22.5 frames:
@@ -76,6 +77,7 @@ def test_a_beat_ends_on_its_planned_frame_after_an_odd_number_of_frames(make_pro
 # ----- holds across a section's end ------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_hold_goes_on_into_the_next_section() -> None:
     lead = {"instrument": "soft_lead"}
     split = parse_music_score(_score(sections=[{"name": "a", "bars": 1}, {"name": "b", "bars": 1}],
@@ -144,6 +146,7 @@ def _sweep_before(x: np.ndarray, cutoff: np.ndarray) -> np.ndarray:
     return out
 
 
+@pytest.mark.slow
 def test_swept_filter_is_bit_identical_to_the_one_before() -> None:
     x = np.random.default_rng(5).standard_normal((3 * RATE, 2))
     cutoff = np.concatenate([np.full(RATE, 600.0), np.geomspace(600, 4000, RATE), np.full(RATE, 4000.0)])
@@ -153,6 +156,7 @@ def test_swept_filter_is_bit_identical_to_the_one_before() -> None:
 # ----- the check: chords, lifts, risers --------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_check_finds_a_line_that_clashes_with_one_chord() -> None:
     bell = ["A5 - - - C6 - - - | E5 - - - A5 - - -", "F#5 - - - C#6 - - - | G#5 - - - F#5 - - -",
             "G5 - - - E5 - - - | C6 - - - B5 - - -", "G5 - - - D5 - - - | B5 - - - G5 - - -"]
@@ -167,6 +171,7 @@ def test_check_finds_a_line_that_clashes_with_one_chord() -> None:
     assert next(f for f in fine.findings if f.topic == "key").level == "ok"
 
 
+@pytest.mark.slow
 def test_check_lift_after_a_break_and_lift_advice_skips_build_only_parts() -> None:
     data = _score(
         progression="i VI III VII",
@@ -187,6 +192,7 @@ def test_check_lift_after_a_break_and_lift_advice_skips_build_only_parts() -> No
     assert "`arp` (pluck) plays in the intro" in advice and "`riser`" not in advice
 
 
+@pytest.mark.slow
 def test_check_build_advice_measures_a_quiet_riser() -> None:
     data = _score(
         sections=[{"name": "intro", "bars": 2}, {"name": "build", "bars": 4}],
@@ -225,6 +231,7 @@ def _project(root: Path, music_setting: Any, n: int = 2) -> Project:
     return Project.load(root)
 
 
+@pytest.mark.slow
 def test_a_cue_can_start_at_a_section(tmp_path: Path) -> None:
     project = _project(tmp_path, [{"source": "theme", "to": "s0"}, {"source": "theme", "from": "s1", "section": "lift", "start": 0.5}])
     assert music.config_problems(project.config, tmp_path) == []
@@ -243,6 +250,7 @@ def test_a_cue_can_start_at_a_section(tmp_path: Path) -> None:
 # ----- lint: only the part the video plays -----------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_lint_reports_what_the_cue_plays(tmp_path: Path) -> None:
     project = _project(tmp_path, {"source": "theme", "loop": False})  # 4 s of an 8 s piece, played once
     report = music_pieces.piece_check(tmp_path / "assets" / "music" / "theme.yaml")
@@ -262,6 +270,7 @@ def test_lint_reports_what_the_cue_plays(tmp_path: Path) -> None:
 # ----- names in vidgen music render / check ----------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_music_render_and_check_take_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     _project(tmp_path, "theme")
     monkeypatch.chdir(tmp_path)

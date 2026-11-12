@@ -116,6 +116,7 @@ def test_target_names() -> None:
     assert cls.target_names(params())[0] == "node1"
 
 
+@pytest.mark.slow
 def test_schema_accepts_shorthands_and_objects() -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -171,6 +172,7 @@ def test_diagram_renders_within_its_beats_and_the_safe_area(p: dict[str, Any], t
         assert safe.contains(t.mobject, tolerance=0.05), t.name
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_direction_follows_the_frame_and_can_be_forced(make_project, media: Path) -> None:
     chain = {"nodes": ["a", "b", "c"], "edges": ["a -> b -> c"]}
@@ -186,6 +188,7 @@ def test_direction_follows_the_frame_and_can_be_forced(make_project, media: Path
     assert forced["a"][1] > forced["b"][1] > forced["c"][1]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_arrowheads_end_on_the_target_outline_outside_the_node(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "diagram", "params": FLOW, "beats": three_beats()}])
@@ -228,6 +231,7 @@ def test_explicit_steps_and_edges_named_later(make_project, media: Path) -> None
     assert float(scene.renderer.time) == pytest.approx(beat_total(scene), abs=1.5 / FPS)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_highlight_path_colours_nodes_and_edges_and_dims_the_rest(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "diagram", "params": {**FLOW, "highlight": ["start", "ok", "ship"]}, "beats": three_beats()}])
@@ -246,6 +250,7 @@ def test_highlight_path_colours_nodes_and_edges_and_dims_the_rest(make_project, 
     assert max(m.get_fill_opacity() for m in d.nodes["fix"][-1].family_members_with_points()) == pytest.approx(scene.dimmed_opacity, abs=0.02)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_actions_on_nodes_and_edges(make_project, media: Path) -> None:
     acts = beats([{"reveal": "node:ship"}], [{"highlight": ["node:ok", "edge:ok->*"], "style": ["box"]}, {"dim": "node:fix", "at": 0.5}], [{"zoom": "node:ok"}])

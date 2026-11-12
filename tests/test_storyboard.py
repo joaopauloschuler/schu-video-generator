@@ -99,6 +99,7 @@ def test_compose_one_page(tmp_path: Path) -> None:
     assert [s.path for s in page.stills] == paths
 
 
+@pytest.mark.slow
 def test_compose_splits_long_videos_into_pages(tmp_path: Path) -> None:
     paths = still_files(tmp_path, (160, 90), 60)
     scenes = [sheet_scene(i + 1, 12, paths[i * 5 : i * 5 + 5]) for i in range(12)]
@@ -112,6 +113,7 @@ def test_compose_splits_long_videos_into_pages(tmp_path: Path) -> None:
     assert min(heights) > max(heights) / 3  # balanced: no nearly empty last page
 
 
+@pytest.mark.slow
 def test_compose_continued_scene_and_vertical_frames(tmp_path: Path) -> None:
     paths = still_files(tmp_path, (54, 96), 30)
     pages = compose_pages("Tall", "sub", [sheet_scene(1, 1, paths, per_beat=3)], (54, 96), detail=True, video_times=False)
@@ -165,6 +167,7 @@ def edit_config(root: Path, change: Any) -> None:
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
 
+@pytest.mark.slow
 def test_fingerprint_inputs(tmp_path: Path) -> None:
     root = fp_project(tmp_path)
 

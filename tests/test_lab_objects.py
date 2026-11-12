@@ -80,6 +80,7 @@ ISO = {"place": "indoor", "map": ROOM.replace("#.......#\n#.......#\n#.......#\n
        "spots": {"l": "desk", "k": "kiosk", "a": "here"}}
 
 
+@pytest.mark.slow
 def test_object_keys_validate() -> None:
     good = stage_params(iso={**ISO, "objects": [{"object": "laptop", "at": "desk", "open": False, "on": True},
                                                {"object": "wall_clock", "at": {"column": 4, "row": 1}, "time": "03:27"}]})
@@ -92,6 +93,7 @@ def test_object_keys_validate() -> None:
             stage_params(iso={**ISO, "objects": [bad]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_lab_objects_render_and_move(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -159,6 +161,7 @@ def test_glassware_keys_validate() -> None:
             stage_params(iso={**ISO, "objects": [bad]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_glassware_renders_and_moves_over_who_stands_behind(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -240,6 +243,7 @@ def test_workshop_keys_validate() -> None:
             stage_params(iso={**ISO, "objects": [bad]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_workshop_objects_render_and_move(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

@@ -56,6 +56,7 @@ def test_code_band_mixes_an_unreadable_syntax_colour_towards_the_text() -> None:
 # ----- a silent scene renders exactly the planned frames -------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_silent_scenes_render_the_planned_frames_on_half_frames(make_project) -> None:
     """5 fps, a 1.2 s chapter card: (1.2 - 0.5) x 5 is a half frame; plan and render used to round
@@ -190,6 +191,7 @@ def test_project_load_refuses_outside_files_only_when_confined(make_project, mon
 # ----- post_render hooks see the thumbnail ---------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_post_render_hook_runs_after_the_thumbnail(make_project) -> None:
     from vidgen.render.pipeline import render_project

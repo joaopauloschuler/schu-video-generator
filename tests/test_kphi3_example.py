@@ -25,6 +25,7 @@ SCENES = ["title", "sparsity", "equivalence", "method", "setup", "params", "loss
 BEATS_PER_SCENE = [2, 4, 3, 5, 4, 3, 3, 3]
 
 
+@pytest.mark.slow
 def test_example_validates_with_custom_scene_types_only() -> None:
     project = Project.load(EXAMPLE)
     assert check_project(project) == []

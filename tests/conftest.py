@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import textwrap
 from collections.abc import Callable, Iterator
@@ -20,6 +21,48 @@ LIVE_ZDR_404 = (
     'https://openrouter.ai/settings/privacy","code":404,"metadata":{"input_endpoint_count":1,"ineligibility_reasons":'
     '[{"reason":"zdr-violation-by-account","endpoint_count":1,"configure_url":"https://openrouter.ai/settings/privacy"}]}}}'
 )
+
+
+def _absolute_pythonpath() -> None:
+    """Make relative ``PYTHONPATH`` entries absolute, so that child processes import the vidgen
+    under test: a render worker runs in the project folder, where ``PYTHONPATH=src`` names nothing
+    (the worker then fails, or imports another installed vidgen)."""
+    entries = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+    if entries:
+        os.environ["PYTHONPATH"] = os.pathsep.join(str(Path(p).resolve()) for p in entries)
+
+
+_absolute_pythonpath()
+
+
+def _named_on_command_line(nodeid: str, named: list[str]) -> bool:
+    """True when ``nodeid`` is one of the tests named as ``file::test`` on the command line."""
+    nodeid = nodeid.replace("\\", "/")
+    for arg in named:
+        file, _, rest = arg.replace("\\", "/").partition("::")
+        tail = f"{Path(file).name}::{rest}"
+        start = nodeid.rfind(tail)
+        if start != -1 and (start == 0 or nodeid[start - 1] == "/") and nodeid[start + len(tail):][:1] in ("", "[", ":"):
+            return True
+    return False
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Leave ``slow`` tests out of the default run.
+
+    They run when the ``-m`` expression names ``slow`` (``-m slow``; everything:
+    ``-m "slow or not slow"``) or when a test is named by its node id (``file.py::test``).
+    """
+    if "slow" in (config.getoption("markexpr") or ""):
+        return
+    named = [arg for arg in config.args if "::" in arg]
+    kept, left_out = [], []
+    for item in items:
+        slow = item.get_closest_marker("slow") is not None
+        (left_out if slow and not _named_on_command_line(item.nodeid, named) else kept).append(item)
+    if left_out:
+        config.hook.pytest_deselected(items=left_out)
+        items[:] = kept
 
 
 def minimal_config(**overrides: Any) -> dict[str, Any]:

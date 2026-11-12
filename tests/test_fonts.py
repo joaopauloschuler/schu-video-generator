@@ -127,6 +127,7 @@ def _ink_widths(family: str, bold: bool) -> list[float]:
     return ratios
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_pango_renders_with_the_bundled_faces(tmp_path: Path) -> None:
     from manim import tempconfig
@@ -201,6 +202,7 @@ def test_only_editorial_presets_change_roles() -> None:
     assert changed == {"light_academic", "warm_editorial"}
 
 
+@pytest.mark.slow
 def test_api_register_theme_preset_accepts_font_families() -> None:
     import inspect
 

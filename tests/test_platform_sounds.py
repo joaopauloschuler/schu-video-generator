@@ -100,6 +100,7 @@ def _project(make_project, **params: Any) -> Project:
     return Project.load(make_project(minimal_config(characters=CAST, scenes=scenes)))
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_story_sounds_on_its_events(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from vidgen.cartoon.level_items import Collectible

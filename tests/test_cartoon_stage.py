@@ -61,6 +61,7 @@ def test_depth_scales_and_raises() -> None:
     assert feet_point(0.25, 1.0, 0.2, 16.0, 8.0) == pytest.approx((-4.0, -2.4 + FAR_RISE * 8))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "params",
     [
@@ -195,6 +196,7 @@ def render_with_layout(project: Project, scene_id: str, media: Path, recorder: A
     return scene, recorder.frames[0]["objects"]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_stage_renders_with_a_picture(make_project, tmp_path: Path) -> None:
     from PIL import Image

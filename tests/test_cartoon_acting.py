@@ -88,6 +88,7 @@ def test_action_needs() -> None:
 # ----- lip sync in step with the audio --------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_lip_sync_stays_in_step_through_a_pose_change() -> None:
     """The mouth follows the beat's clock (scene time), also while a PoseChange pauses the
     character's updaters: a frame-counting clock would fall behind by the change's length."""
@@ -236,6 +237,7 @@ class FakeScene:
     current_beat = BeatConfig(id="b", text="Hello there.")
 
 
+@pytest.mark.slow
 def test_emote_pose_react_and_their_undoing() -> None:
     c = figure()
     emote = use("emote", to="happy")
@@ -254,6 +256,7 @@ def test_emote_pose_react_and_their_undoing() -> None:
     assert c.state() == before
 
 
+@pytest.mark.slow
 def test_look_at_and_turn() -> None:
     from manim import Square
 
@@ -409,6 +412,7 @@ def test_action_schedule_in_the_beats(make_project) -> None:
 # ----- render ------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_dialogue_on_a_stage(make_project, tmp_path: Path) -> None:
     project = acting_project(make_project, [

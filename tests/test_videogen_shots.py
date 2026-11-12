@@ -253,6 +253,7 @@ def test_pay_refuses_over_budget(make_project) -> None:
 # ----- shots -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_talking_shot_follows_its_audio_and_sends_the_portrait_as_a_reference(make_project) -> None:
     project = Project.load(make_project(shot_config(TALK)))
     (shot,) = project_shots(project, CATALOG)
@@ -318,6 +319,7 @@ def test_validation_names_unknown_things_with_did_you_mean(make_project) -> None
 # ----- inputs ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_cut_audio_is_exact_and_padded(tmp_path: Path) -> None:
     from vidgen.render.ffmpeg import find_ffmpeg
 
@@ -328,6 +330,7 @@ def test_cut_audio_is_exact_and_padded(tmp_path: Path) -> None:
     assert seconds_of(tmp_path / "b.mp3") == pytest.approx(0.25, abs=0.06)
 
 
+@pytest.mark.slow
 def test_first_frame_skips_a_fade_in(tmp_path: Path) -> None:
     from vidgen.render.ffmpeg import find_ffmpeg
 
@@ -338,6 +341,7 @@ def test_first_frame_skips_a_fade_in(tmp_path: Path) -> None:
     assert (tmp_path / "f.png").is_file()
 
 
+@pytest.mark.slow
 def test_make_inputs_cuts_voice_and_guide(make_project) -> None:
     root = make_project(shot_config(TALK, ACT))
     project = Project.load(root)
@@ -510,6 +514,7 @@ def test_cli_plan_text_and_json(make_project, tmp_path: Path, monkeypatch: pytes
 # ----- hosted audio / video through a quick tunnel (DESIGN.md §115.2) ----------------------------------
 
 
+@pytest.mark.slow
 def test_quick_tunnel_shares_only_the_shots_voice_while_its_job_runs(
     make_project, tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:

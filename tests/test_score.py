@@ -159,6 +159,7 @@ def test_convolve_matches_numpy(monkeypatch: pytest.MonkeyPatch) -> None:
         assert np.allclose(got[:, c], np.convolve(x[:, c], impulse[:, c])[:5000])
 
 
+@pytest.mark.slow
 def test_mix_parts_level_pan_tail_and_peak() -> None:
     score = Score(
         tempo=120,
@@ -189,6 +190,7 @@ def test_mix_parts_pans_and_sets_volume() -> None:
     assert quiet[0] == pytest.approx(10 ** (-6 / 20), rel=1e-3)
 
 
+@pytest.mark.slow
 def test_balance_sets_the_parts_to_one_loudness_before_their_volume() -> None:
     def ratio(balance: bool) -> float:
         parts = [Part("a", [Note(0, 4, 60)], volume=-6, reverb=0), Part("ref", [Note(0, 4, 60)], reverb=0)]
@@ -200,6 +202,7 @@ def test_balance_sets_the_parts_to_one_loudness_before_their_volume() -> None:
     assert 20 * math.log10(ratio(True)) == pytest.approx(-6.0, abs=0.3)  # same loudness, then -6 dB
 
 
+@pytest.mark.slow
 def test_balance_measures_a_part_only_where_it_sounds(monkeypatch: pytest.MonkeyPatch) -> None:
     late = np.zeros((6 * RATE, 2))
     late[4 * RATE :] = _tone(2, 300.0, 0.01)  # a mood's part: silent until its scene
@@ -245,6 +248,7 @@ def _fake_soundfont(path: Path) -> Path:
     return path
 
 
+@pytest.mark.slow
 def test_composed_music_plays_as_a_music_cue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from vidgen import composer
 

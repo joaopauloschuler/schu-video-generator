@@ -526,8 +526,12 @@ aspect ratio works: the shorter side of the frame is always 8 Manim units, so 9:
 
 ### Drafts (`vidgen render --draft`)
 
-`vidgen render --draft` (MCP `render` with `draft: true`) is the fastest way to check a cartoon's
-timing and staging: everything is where and when it will be, without what only decorates.
+`vidgen render --draft` (MCP `render` with `draft: true`) is the fastest look at a whole video,
+for its timing and staging: everything is where and when it will be, small and at few frames a
+second, and a cartoon is drawn without what only decorates. Every scene type renders as a draft.
+A video with [`web`](#web) scenes gains much, because a page costs one screenshot per frame: a
+draft takes about half a preview's frames, each a quarter of its pixels (measured: about
+2.5 times faster than a preview; the figures are under [`web`](#web), "Render cost").
 
 - **Size and frame rate**: 240 pixels on the shorter side at the format's shape (426x240 for
   16:9, 240x426 for 9:16, 240x240 for 1:1; never larger than `format`), 8 fps (never more than
@@ -910,6 +914,21 @@ Bold, Italic), **Source Serif 4** (serif; Regular, Bold, Italic) and **JetBrains
 (monospace without coding ligatures, so code shows the characters as typed; Regular, Bold).
 Any installed font works too: write its family name (`font: Segoe UI`). A bundled family that is
 also installed system-wide is fine (either copy is used; they are the same font).
+
+**The project's own fonts (`fonts/`, Step 338).** vidgen uses every `.ttf`, `.otf` and `.woff`
+file under the project's `fonts/` folder (sub-folders too) for the whole video, with no
+installation: write the family name the font gives itself (`font: "Space Grotesk"`, or a role:
+`fonts: {heading: "Space Grotesk"}`). vidgen reads each file's family, weight and style with
+fontTools, registers the files for its own text (titles, captions, every built-in scene; a
+`.woff` through a `.ttf` copy it writes to `build/fonts/`), draws the designed thumbnail with them
+and declares them to [`web`](#web) pages with one `@font-face` per file. Keep the font's licence
+file beside it. A changed, added or removed font file renders every scene again. vidgen does not
+read `.woff2` files (that needs a package a plain install does not bring): `vidgen validate`
+warns `fonts/x.woff2: vidgen does not read .woff2 font files; …`, and such a file is used only by
+a `web` page whose own `@font-face` names it. A file in `fonts/` that is not a font stops the
+command: `fonts/x.ttf: not a font file vidgen can read (…)`. How to get a font's files:
+`vidgen guide web`, "Using another font". Checked on Linux; not tried on Windows or macOS (the
+files are registered the same way as the bundled ones).
 
 The theme has three family tokens: `font` (sans; default Inter), `font_serif` (default Source
 Serif 4) and `font_mono` (default JetBrains Mono NL). Built-in scenes ask for a font by
@@ -6380,6 +6399,359 @@ ending on an object) it keeps looking at it — until the next camera action.
       actions:
         - {action: camera_move, at: "@pulls", to: [-5, 6, 9], look_at: [0, 1.2, 0]}
 ```
+
+### `web`
+
+**A page you write** in HTML, CSS and JavaScript (Phase AK, DESIGN §118), screenshotted in
+headless Chromium at the render's frame rate and shown full-frame (`region: bleed`) or in the
+body region under a title vidgen draws (`region: body`); overlays and captions are drawn over it.
+The page is on screen from the first frame (no fade in, as on `3d`), beat 1 fades the title in,
+and the scene fades out over its last 0.5 s. JavaScript in the project is trusted
+like the Python in `extensions/`. Needs Chromium as the [`3d`](#3d) scene does (same install
+command, same `vidgen validate` warning).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `page` | path | — | an HTML file in the project folder (`extensions/gears.html`): any HTML, CSS and JavaScript |
+| `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the page, on a transparent background (what the script does not draw shows the video's background) |
+| `title` | str | `""` | a heading drawn by vidgen (in the theme's heading font): on a plate over the top of the page with `region: bleed` (as on `3d`), above the page with `region: body` (as on `video_clip`); action target `title` |
+| `region` | `bleed` \| `body` | `bleed` | `bleed`: the page fills the whole frame, edge to edge; `body`: the page fills the safe area below the title (the whole safe area without a title), clear of overlays that reserve room (bottom captions) and, in a Short, of the parts the app covers. The page is laid out at that size: its viewport, `ctx.width` / `ctx.height` and `100vw` / `100vh` are the region's pixels, not the frame squeezed |
+| `design_width` | int (200–8192) | — | for a page built in fixed pixels: the window width it was designed for, in CSS pixels (`1280`). The page is laid out in a window that wide and as high as its region's shape gives, and drawn at the video's size at every quality (see below) |
+| `data` | mapping | `{}` | values for the page, read as `ctx.data` (`{teeth: 24, color: primary}`): text, numbers, `true` / `false`, `null`, lists and mappings (a YAML date or a number key is an error naming its place, e.g. `data.when`); theme colour names are not looked up for you (`ctx.theme.colors[ctx.data.color]`) |
+
+Give exactly one of `page` and `script`.
+
+**`design_width`: a page built in fixed pixels** (Step 339, DESIGN §118.17). With `design_width:
+1280` the page's window is 1280 CSS pixels wide whatever the render's size, and Chromium draws it
+at the scale `output width / design_width` (its device scale factor), so the frames have the
+output's pixels and HTML text, SVG and CSS shapes are drawn at that resolution.
+
+| the page reads | value with `design_width: 1280` in a 16:9 `bleed` page |
+|---|---|
+| `window.innerWidth`, `100vw`, media queries, `getBoundingClientRect()`, `clientWidth` | 1280 wide, 720 high, at every quality |
+| `window.devicePixelRatio` | output pixels per CSS pixel: 1.5 at 1920x1080, 0.667 at 854x480 |
+| `ctx.width`, `ctx.height`, the canvas of a `script:` | 1280, 720 (CSS pixels) |
+| `ctx.frame` | the video frame in output pixels, as without the param |
+| `ctx.theme.sizes`, `--vidgen-size-…` | CSS pixels, divided by the scale so that text is still as tall as vidgen's |
+
+- The height is the region's: `design_width x region height / region width`, rounded up to a whole
+  CSS pixel. When that is not exact (719.4 for 1280 at 854x480) the window is 720 high and the
+  strip below the frame's bottom edge (under one CSS pixel) is cut off; the frames always have
+  exactly the output's size. There is no `design_height`: a height that disagrees with the
+  region's shape would squeeze or crop the page.
+- A canvas (2D or WebGL) is drawn at the pixels its code gives it. One sized from `clientWidth`
+  alone is drawn at the design size and enlarged (soft); one sized by `devicePixelRatio`
+  (`renderer.setPixelRatio(window.devicePixelRatio)` in three.js) has the output's pixels.
+- Lint maps the page's text to frame pixels as before: 12 px text of a 1280 design is 18 px in a
+  1920 px frame.
+- Without the param nothing changes, and the stored frames of such scenes are reused. Setting,
+  changing or removing it draws the scene's frames again.
+
+```yaml
+- id: gears
+  type: web
+  params: {page: extensions/gears.html, region: body, title: "How gears turn", data: {speed: 90}}
+  beats:
+    - {id: g1, text: "One gear turns on its own."}
+    - {id: g2, text: "Then its label appears."}
+```
+
+```html
+<!-- extensions/gears.html -->
+<link rel="stylesheet" href="gears.css">
+<style>
+  body { margin: 0; font-family: var(--vidgen-font-heading); }   /* no background: the video's shows */
+  #label { color: var(--vidgen-primary); opacity: 0; transition: opacity 0.5s; }
+  body[data-beat="g2"] #label { opacity: 1; }
+</style>
+<img id="gear" src="gear.svg" alt=""><h1 id="label">Gear</h1>
+<script>
+  const gear = document.getElementById("gear");
+  window.vidgen = { frame(t, ctx) { gear.style.transform = `rotate(${t * ctx.data.speed}deg)`; } };
+</script>
+```
+
+```js
+// extensions/ball.js, for params: {script: extensions/ball.js}
+export function frame(t, ctx) {
+  const c = ctx.canvas.getContext("2d");
+  c.clearRect(0, 0, ctx.width, ctx.height);   // transparent: the video's background shows
+  c.fillStyle = ctx.theme.colors.primary;
+  c.beginPath();
+  c.arc(40 + (ctx.width - 80) * (t / ctx.duration), ctx.height / 2, 30, 0, 2 * Math.PI);
+  c.fill();
+}
+```
+
+A whole example with a CSS page revealed on beats, a canvas drawing with declared text and a
+three.js planet, at 16:9 and 9:16: `examples/web`. How to write a good one, and the usual
+mistakes: `vidgen guide web`.
+
+**Files.** The project folder is served to the page on `http://vidgen-web.invalid/`, so relative
+links to styles, pictures, fonts and modules work (`<link rel="stylesheet" href="gears.css">`,
+`import {cog} from "./cog.js"`). A request for anything outside it (the internet) is refused and
+logged as a warning naming the URL; a file the page asks for that is not there is answered "not
+found" with a warning. The render goes on in both cases. A request to Google Fonts
+(`fonts.googleapis.com`, `fonts.gstatic.com`) gets its own warning, once per family: `scene 'x':
+the page asks Google Fonts for "Space Grotesk", but the internet is off during a render, so that
+text is drawn in a fallback font. Put the font's .ttf, .otf or .woff file in the project's fonts/
+folder and remove the link to Google Fonts (see "Using another font" in `vidgen guide web`).`
+When vidgen already declares that family to the page (a bundled font of the theme, or a file in
+`fonts/`), the warning only says to remove the link.
+
+**Time belongs to vidgen** (DESIGN §118.8). Write the page the ordinary way: CSS animations and
+transitions, `requestAnimationFrame` loops, `setTimeout`, `Date.now()`, `performance.now()`, SVG
+`<animate>`, a `<video>` and `Math.random` all follow the video's time, and the same scene gives the
+same frames on every render. Before any script of the page runs, vidgen replaces the page's clock:
+time stands at 0 while the page loads and then moves only from frame to frame (frame *n* at *n* /
+fps). For each frame vidgen, in this order:
+
+1. runs every `setTimeout` / `setInterval` callback due by the frame's time, in order of due time
+   (ties: in the order they were set), each at its own time; a timer set by a timer runs in the
+   same frame when it is due by then (from the 6th nested level on, a delay under 4 ms counts as
+   4 ms, as in browsers; more than 10 000 callbacks before one frame is an error);
+2. waits for the `fetch()` requests the page started and its `<img>` pictures;
+3. sets every CSS animation and transition, Web Animation (`element.animate`), SVG animation and
+   `<video>` to the frame's time (and waits for each video's picture);
+4. runs one round of `requestAnimationFrame` callbacks (those requested before the round, with
+   the frame's time in milliseconds; one requested inside a callback waits for the next frame);
+5. calls the page's `frame(t, ctx)`, if it has one;
+6. sets what steps 4–5 started to the frame's time, then takes the screenshot.
+
+Between steps 1 and 2 (the clock already at the frame's time) vidgen updates the narration beat
+(below), so a CSS transition the beat starts begins exactly when the beat does.
+
+`Date.now()` is `2026-01-01T00:00:00Z` plus the scene time, in the UTC time zone and the `en-US`
+locale. `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` give the same numbers for
+the same scene id (another id, other numbers).
+
+**Hooks** (both optional): a page sets `window.vidgen = {load(ctx) {...}, frame(t, ctx) {...}}`; a
+`script:` module exports `load` and `frame`. `load(ctx)` runs once before frame 0, after the page's
+fonts, pictures and videos are ready; it may return a promise (awaited), so it is the place to load
+data (`await fetch("data.json")`: a relative path is relative to the page, or to the script of a
+`script:`, whose page vidgen gives a `<base>` of the script's folder; `new URL("./data.json", import.meta.url)`
+names a file beside any module). Time stands at 0 during `load`: a timer it waits for never fires.
+`frame(t, ctx)` runs at step 5 with `t` in seconds from the scene's start; it may return a promise.
+
+**Not controlled:** `<audio>` (a `web` scene has no sound), animated GIF and WebP pictures, web
+workers and their timers, iframes, SVG animation in an `<img>` or `<object>`, `event.timeStamp`,
+`XMLHttpRequest` and dynamic `import()` (not waited for: use `load`), `ResizeObserver` and
+`IntersectionObserver` callbacks (they run when Chromium draws), an `animation-play-state` that CSS
+changes to `paused` after the animation started (pause it with `getAnimations()[i].pause()`, which
+vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets it every frame).
+
+**What the page is given** (DESIGN §118.9), `ctx`:
+
+| field | value |
+|---|---|
+| `scene` | the scene id |
+| `width`, `height` | the page's viewport in pixels: the frame (`region: bleed`) or the body region (`region: body`) |
+| `aspect` | the video's shape: `"16:9"`, `"9:16"`, `"1:1"`, `"4:5"`, … (the nearest of `16:9`, `9:16`, `1:1`, `4:5`, `5:4`, `4:3`, `3:4`, `3:2`, `2:3`, `21:9`, `9:21` within 1 %, so a 854x480 preview is `16:9`; else the reduced `W:H`) |
+| `orientation` | `landscape`, `portrait` or `square` (wider than 1.2 : 1, taller than 1 : 1.2, else square: the rule vidgen's own layouts use) |
+| `frame` | the video frame `{width, height}` in pixels (equal to `width`, `height` with `region: bleed`) |
+| `region` | `bleed` or `body` |
+| `fps`, `frames`, `duration` | the frame rate, the frames drawn and their length in seconds (the scene, its 0.5 s fade-out and 2 spare frames) |
+| `canvas` | the bare page's `<canvas>` (`script:`); `null` on a `page:` without `id="vidgen-canvas"` |
+| `theme` | `{preset, background, colors, palette, fonts, sizes}`: `colors` name → hex (`text`, `dim`, `accent`, `highlight`, `primary`, `secondary`, `tertiary`, `surface` and the project's own), `palette` a list of hex, `fonts` → family name for `sans`, `serif`, `mono` and every font role (`body`, `heading`, `quote`, `quote_mark`, `code` and the project's), `sizes` name → CSS pixels (`title` … `small` and the project's: text that size is as tall as vidgen's text of that size in this frame) |
+| `data` | the scene's `data:` (`{}` without one) |
+| `beats` | the scene's narration beats in order: `{id, index, start, end, text, words}`; `start` / `end` in seconds from the scene's start (when the beat's voice starts and ends; the next beat starts after the pause), `words` = `[{text, start, end}]` timed like the captions (the voice's stored timings, else estimated). A scene without narration: `[]` |
+
+**Theme as CSS variables.** vidgen puts a `<style id="vidgen-theme">` first in the page's
+`<head>` (before the page's own styles, which therefore win) with these custom properties on
+`:root`: `--vidgen-<colour>` per colour (`var(--vidgen-primary)`), `--vidgen-background`,
+`--vidgen-palette-<i>` (from 0), `--vidgen-font-<name>` per font role and for `sans`, `serif`,
+`mono` (a family list such as `"Source Serif 4", serif`) and `--vidgen-size-<name>` per size (in
+`px`). Names are the theme's as written, underscores kept (`--vidgen-font-quote_mark`). The same
+style sheet declares the bundled fonts (Inter, Source Serif 4, JetBrains Mono NL; regular, bold
+and italic) with `@font-face`, served by vidgen with no download, so `font-family:
+var(--vidgen-font-heading)` draws the same letters as a `title` scene. It also declares every
+font file in the project's `fonts/` folder (`.ttf`, `.otf`, `.woff`; [Fonts](#fonts)) with one
+`@font-face` per file (the family, weight and style read from the file; a variable font's weight
+range), so `font-family: "Space Grotesk"` works in a page with no rule of its own;
+`ctx.theme.font_files` lists them (`[{family, weight, style, url}]`). Any other theme family is
+looked up among the fonts installed on the machine.
+
+**Transparent background.** What the page leaves transparent shows the video's background (the
+theme's `background`): a `page:` without a background of its own, and the bare page of a
+`script:` (transparent since Step 331; a canvas the script clears with `clearRect` shows it too).
+Semi-transparent colours (`rgba(…)`, `opacity`, anti-aliased text edges) are blended with it
+exactly, without a dark or light edge. Set `background: var(--vidgen-background)` (or any colour)
+to make the page opaque (until Step 331 a page without a background showed Chromium's white).
+
+**One page for every shape.** `<html>` carries `data-aspect` (`ctx.aspect`) and `data-orientation`
+(`ctx.orientation`), set before the page's own styles and scripts, so CSS can switch layout by the
+video's shape, and the same page serves the 16:9 video, its 9:16 variant and a Short:
+
+```css
+.row { display: flex; flex-direction: row; }
+[data-aspect="9:16"] .row { flex-direction: column; }   /* or [data-orientation="portrait"] */
+```
+
+Both describe the video's frame, also with `region: body`; CSS media queries (`@media
+(orientation: portrait)`, `aspect-ratio`) see the page's own viewport. In a Short (`shorts: true`)
+`region: body` keeps the page out of the parts the app covers; with `region: bleed` the page
+covers the whole frame and keeping its text there is the page's job.
+
+**Reacting to narration in CSS.** From before `load` on, `<body>` carries `data-beat` (the id of
+the beat being narrated: the last one that started) and `data-beat-index` (from 0); each frame
+whose beat differs from the last one announced dispatches a `vidgen-beat` event (bubbling from
+`<body>`, so `window.addEventListener("vidgen-beat", …)` works) with `detail = {beat, index,
+previous, t}`, also at frame 0 for the first beat. A scene without narration has neither.
+
+```css
+.step2 { opacity: 0; transition: opacity 0.5s; }
+body[data-beat="b2"] .step2, body[data-beat="b3"] .step2 { opacity: 1; }
+```
+
+**three.js with no download.** `import * as THREE from "three"` loads the three.js vidgen ships
+(an import map vidgen puts at the start of the `<head>` of a `page:` and of the bare page); it
+is also served at `/__vidgen__/three/three.module.js`. Draw into `ctx.canvas` with
+`new THREE.WebGLRenderer({canvas: ctx.canvas})` and call `renderer.render` in `frame`.
+
+**three.js add-ons** (DESIGN §118.14). A chosen set of add-ons from the same three.js (0.186.1)
+ships too and is imported the usual way, `three/addons/<folder>/<Name>.js` (or the older
+`three/examples/jsm/…`), sharing the one `THREE`: `loaders/GLTFLoader.js`,
+`utils/BufferGeometryUtils.js`, `environments/RoomEnvironment.js`,
+`postprocessing/EffectComposer.js`, `RenderPass.js`, `ShaderPass.js`, `UnrealBloomPass.js`,
+`OutputPass.js` (with `Pass.js`, `MaskPass.js` and `shaders/CopyShader.js`,
+`LuminosityHighPassShader.js`, `OutputShader.js`, which they import), `renderers/CSS2DRenderer.js`,
+`lines/Line2.js`, `LineGeometry.js`, `LineMaterial.js`, `LineSegments2.js`,
+`LineSegmentsGeometry.js`, `geometries/RoundedBoxGeometry.js`, `loaders/SVGLoader.js`,
+`controls/OrbitControls.js` (and `utils/SkeletonUtils.js`, which `GLTFLoader` imports). They are
+served from `/__vidgen__/three/addons/` and recorded with the page's loaded files. Rules:
+
+- a loader resolves a relative path against the page, or against the script of a `script:`
+  (`loader.loadAsync("model.glb")`; `new URL("./model.glb", import.meta.url).href` works too, and
+  is the way in a module in another folder); `.gltf` (embedded or `.bin` buffer) and `.glb`
+  load, compressed models (Draco, KTX2, Meshopt) do not;
+- `EffectComposer` gives an opaque picture (black where nothing is drawn): set
+  `scene.background`; its colours equal `renderer.render`'s (`OutputPass` applies tone mapping and
+  colour space once);
+- `LineMaterial`'s `linewidth` is in pixels once `material.resolution.set(ctx.width, ctx.height)`;
+- `OrbitControls.update()` without an argument turns 1/60 s per call (speed would follow the
+  frame rate): call `controls.update(t - last)` in `frame`; leave damping off;
+- `CSS2DRenderer` labels are page text: theme variables apply and lint reads them.
+
+Not shipped: `FontLoader` / `TextGeometry`, `DRACOLoader`, `KTX2Loader`, Meshopt, other model and
+HDR loaders, other controls, VR / AR, physics, exporters, the GUI helper, the WebGPU renderer and
+node materials. Importing one stops the render with `scene '<id>': the page imports the three.js
+add-on '<path>' (three/addons/<path>), which is not shipped with vidgen …` and says how to copy
+the file from three.js 0.186.1 into the project and import it by a relative path.
+
+**Animation and chart libraries** (DESIGN §118.15). Five libraries ship with vidgen and are
+imported by name through the same import map; each is one build file of its npm package,
+unmodified, served from `/__vidgen__/libs/<package>/` and recorded with the page's loaded files:
+
+| library | import | under vidgen's clock |
+|---|---|---|
+| anime.js 4.5.0 (MIT) | `import {animate} from "animejs"` | plays by itself about 12 ms ahead; exact with `autoplay: false` and `anim.seek(t * 1000)` in `frame(t)` |
+| Motion 14.12.0 (MIT) | `import {animate} from "motion"` | plays by itself, exact; `controls.time = t` in `frame` shows one frame late |
+| D3 7.9.2 (ISC) | `import * as d3 from "d3"` | transitions and `d3.timer` play by themselves, exact; a force layout by itself ticks once per video frame (use `simulation.stop()` and `simulation.tick(n)`) |
+| Chart.js 4.6.1 (MIT) | `import Chart from "chart.js/auto"` (or `{Chart}` from `"chart.js"`) | animations play by themselves, exact; or `animation: false` and `chart.update("none")` in `frame(t)` |
+| lottie-web 5.13.0 (MIT) | `import lottie from "lottie-web"` | plays by itself, exact; or `autoplay: false` and `anim.goToAndStop(t * 1000, false)` in `frame(t)`; pass `animationData`, not `path:` |
+
+"Plays by itself" was measured with frames drawn in order from the scene's first frame, which is
+how vidgen always draws a `web` scene; a library that starts on its first animation frame
+(Motion, lottie-web) or keeps state between frames would not give the same picture for a frame
+drawn alone. D3, Chart.js and Motion are UMD builds behind a small ES module written by vidgen
+(`index.js`), so they also set `window.d3`, `window.Chart` and `window.Motion`. **GSAP is not
+shipped**: its files say "All rights reserved. Subject to the terms at
+https://gsap.com/standard-license", which is not a licence an MIT project can redistribute
+under; `import gsap from "gsap"` stops the render with `scene '<id>': the page imports 'gsap',
+which is not shipped with vidgen. …`. A copy in the project works (GSAP 3.15.1 tried):
+`dist/gsap.min.js` from a `<script src>`, with `gsap.ticker.lagSmoothing(0)` (without it a step
+over 0.5 s counts as 33 ms), or a paused timeline and `tl.time(t)` in `frame(t)`.
+
+**Errors** stop the render with the scene, file and line: a missing or misnamed file (also
+reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
+error or rejected promise at load, in a timer or callback, or in `frame`, and a page that is not
+ready within 30 s (its load event never came, or a module never finished loading). A `load` that
+does not return within 30 s, or a frame (its timers, callbacks and `frame`) that does not return
+within 10 s, stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
+10 s: a loop that never ends or a promise that never settles …`; vidgen ends the page's process.
+
+**Cache** (DESIGN §118.10). The screenshots, with their transparency, are written to a lossless clip
+`build/<quality>/web/<scene>.mkv` with `<scene>.json` beside it: what it was drawn from (the size,
+frame rate, length, theme, `data`, beats, the video's shape and the region, vidgen's clock) and every file the page loaded while it
+was drawn (the page or script, styles, pictures, fonts, modules, fetched data, videos; also one
+first asked for on a later frame, and one asked for but missing). The clip is reused, and the
+scene not rendered again, while all of that is unchanged; an edit to any of those files, to the
+scene's `data:`, the theme or the narration renders that scene again (and only it). `vidgen render
+--force` draws the frames again too. `vidgen storyboard` renders a `web` scene like every scene
+(all of its frames at preview size; the clip is then reused by `vidgen render --preview` and
+`vidgen animatic`).
+
+**Lint reads the page** (DESIGN §118.12). At each still lint looks at (the beat ends; more with
+`vidgen storyboard --per-beat N` or a Short), vidgen asks the page what text it shows: every
+element that holds visible text (with its inline children: `<p>Hello <b>you</b></p>` is one text)
+and every SVG `<text>`, with its box (mapped from the page to the frame), its size as drawn (CSS
+transforms included: `transform: scale(0.3)` on 24 px text is 7.2 px), its colour, what is behind
+it (the first background found under it, blended down to the video's background through
+transparent and half-transparent layers; over a picture, a canvas, a video or a gradient it is
+not known and contrast is not checked), its opacity through its ancestors, and what clips it.
+Text that is hidden (`display: none`, `visibility: hidden`, opacity under 0.01, a box of zero size,
+wholly clipped or off the page) is left out, so text a later beat reveals is checked once it shows.
+The page's text then goes through the same rules as vidgen's own: `off_frame`, `text_overlap`,
+`min_font`, `contrast`, `safe_area` (text under the captions is named so), `overlay_overlap`,
+`max_words`, `shorts_safe_area` in a Short, `covered_text` (a `title` plate over page text), plus
+`web_clipped` for text cut by its own box (`overflow: hidden`) or by the page's box with
+`region: body`. Each finding names the element:
+
+```
+error   web_clipped       clipped @ 0.9s: text 'A label too long for its card' (page: card) is cut by its box card (overflow: hidden) at the right (129 px of the text hidden); …
+warning safe_area         u1 @ 2.8s: text 'A note low in the frame' (page: low) is in the part of the frame overlay 'captions' (captions) keeps for itself, outside the safe area at the bottom (48 px into the bottom margin); …
+```
+
+- **Naming**: `data-vidgen-id="gear"` names an element (and the text it holds) in the layout dump
+  and in lint messages (`(page: gear)`), and `lint_ignore` can name it (`{rule: contrast, object:
+  gear}`); without it the name is a short CSS-like path (`div.card:nth-child(2) > h2`, `[gear] > h2`
+  under a named element, `p#note` for an `id`).
+- **Opting out**: `data-vidgen-lint="off"` on an element leaves it and everything inside out of
+  every rule (decorative text, a deliberate watermark); `data-vidgen-lint="off:text_overlap,contrast"`
+  only out of those rules (an unknown rule name is a warning). The texts stay in the layout dump.
+- **Text drawn on a canvas cannot be read** (nor text inside a picture or a WebGL scene). Declare it:
+  a page sets `window.vidgen.layout(t, ctx)`, a `script:` exports `layout(t, ctx)`, returning
+  `[{id, text, box: {x, y, width, height}, size, font, color, background, lint}]` in page pixels
+  (`text` and `box` needed; `size` is the font size in px and `font` the canvas font you drew with,
+  `"700 28px Inter"`, or only its family, `"Inter"`: vidgen measures the cap height from them, else
+  takes 0.7 of the box's height; without `background` contrast is not checked). It is
+  called after a frame's screenshot only when lint reads that frame, so it must not change the page:
+
+```js
+export function layout(t, ctx) {
+  return [{id: "score", text: "3 : 1", box: {x: 70, y: 106, width: 170, height: 30}, size: 28,
+           color: "#E8EAED", background: "#101418"}];
+}
+```
+
+**Render cost.** Every frame is a screenshot of the whole page, so a `web` scene renders far slower
+than a built-in one, and the time grows with the number of frames and their size. Measured on a
+slow 1-CPU machine on two scenes of 20 s (a whole `vidgen render` of the scene, Chromium's start
+included, two runs each; Step 340):
+
+| render | size at 16:9 | an HTML + SVG page | a three.js dashboard |
+|---|---|---|---|
+| `--draft` | 426x240, 8 fps | 36 s (1.8 s per second of video) | 54 s (2.7 s per second) |
+| `--preview` | 854x480, 15 fps | 99 s (4.9 s per second) | 127 s (6.3 s per second) |
+| final | 1920x1080, 30 fps | about 28 s per second | about 58 s per second |
+
+A draft is about 2.5 times faster than a preview, a final render about 3.5 to 4 times slower than
+a preview (final: 3 s cuts beside a preview of the same cut). The machine's speed changed up to 4
+times within an hour that day: trust the ratios more than the seconds. Work with
+[`vidgen render --draft`](#drafts-vidgen-render---draft) first; a page must scale to look right
+in one (sizes in `vw` / `vh` / `%` and the theme's size variables, or `design_width`). Lint and
+the storyboard never use a draft, so a draft causes no finding.
+Drawing the frames alone at 1920x1080, 30 fps, measured for `examples/web` in Step 333 on the same
+machine on a faster day: an HTML + CSS page 453 ms per frame, a canvas script 325 ms, a three.js
+scene 550 ms. Keep `web` scenes short.
+
+**Cost of lint.** The reading is taken while the clip is drawn, after the screenshot of each frame a still
+will show (about 10–40 ms each), and kept beside the clip (`build/<quality>/web/<scene>.layout.json`,
+under the clip's own key), so a later `vidgen lint` reads no page at all. When lint wants a frame
+that was not read (another `--per-beat`, a clip drawn before Step 332), vidgen opens the page once
+more and steps it frame by frame without screenshots up to the last frame it needs (a page's state
+can depend on every frame before: `requestAnimationFrame` loops, a canvas drawn over itself):
+about 2–3 s to start Chromium plus 15–25 ms per frame stepped, against 70–100 ms per frame drawn.
 
 ### `quote`
 
@@ -14310,6 +14682,7 @@ a title card, a `transform` of a bar).
 | `screenshot` | `title`, `image`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
 | `3d` | `view`, `title` | dim, highlight, zoom, camera_orbit, camera_fly_to, object_walk, object_highlight | `view` is the whole 3D picture (as a `video_clip`'s `clip`); the objects are not Manim targets: the [camera actions](#3d-camera-actions) and [object actions](#3d-object-actions) name them by id |
+| `web` | `view` | dim, highlight, zoom | `view` is the whole page (as a `video_clip`'s `clip`) |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
@@ -15002,9 +15375,12 @@ File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
            shot: {kind, subjects, near},      # a stage's shot on screen (shot:), absent outside
                                               # shots; near: over_shoulder only
            objects: [...],
-           overlays: [{id, type, settled, skip}]}]}   # overlays drawn in this still; settled:
+           web: {box, size, frame, texts, declared, hidden, canvases},   # web scenes only (below)
+           overlays: [{id, type, settled, skip, reserve}]}],   # overlays drawn in this still; settled:
                                      # false while one slides or fades; skip: lint rules not
-                                     # applied to its objects
+                                     # applied to its objects; reserve: true when it keeps its
+                                     # part of the frame (bottom captions)
+ reserved: [{overlay, type, box}]}   # only with such overlays: the part each keeps, px
 ```
 
 Coordinates are output-frame pixels: origin at the top-left corner, y downwards, the frame
@@ -15046,6 +15422,7 @@ Each object:
 | speech bubbles only: `bubble` | the name of the character speaking (on the bubble's shape and its text) |
 | `effect` only: `effect`, `effect_of` | an [effect symbol](#effect-symbols-effect) over a head (one object of kind `effect` named after the symbol): the symbol (`idea`) and the character it marks |
 | overlays only: `overlay` | the id of the [overlay](#overlays) it belongs to; overlay objects come after the scene's, their `path` starts with `overlay:<id>` and they are measured as drawn: fixed to the screen whatever the camera does |
+| a [`web`](#web) page's text only | `class: WebText`, `source: web`, `id` `web:<name>`, `path` `web/<name>`, `name` (the element's `data-vidgen-id`, else a short CSS-like path such as `div.card:nth-child(2) > h2`), `tag`, `cap_px` (the cap height as drawn, from the font's metrics and every CSS transform; `font_px` is the same), `font_size_px` (the CSS font size as drawn), `color` / `colors`, `backdrop` (what is behind it on the page, or `null` with `backdrop_unknown`: `picture`, `canvas`, `video`, `gradient`, `not declared`), `visible` (the part of `bbox` no box clips), `clipped` (`{by, overflow, sides}`), `cut` (`{side: px}` past the page's box), `lint_off` (rules it opted out of), `declared: true` (from `layout(t, ctx)`) |
 
 An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
 Parts with opacity 0 are not visible: they do not count in the box, and an object with no
@@ -15150,14 +15527,14 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | rule | default severity | finds |
 |---|---|---|
 | `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in or looks away from the frame's centre (`zoom`, `pan`, `follow`, a wide `stage`); never [particles](#particles), which cross the edges on purpose, nor a [level's tiles](#the-camera-on-a-level-follow) (the camera crops them), nor characters (`off_stage`'s) |
-| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in or moved (`pan`, `follow`), nor for [overlays](#overlays) (their place is deliberate) |
+| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in or moved (`pan`, `follow`), nor for [overlays](#overlays) (their place is deliberate). Text in the part of the frame an overlay with `reserve: true` keeps for itself (bottom captions; the layout dump's `reserved`) is reported naming it: `is in the part of the frame overlay 'captions' (captions) keeps for itself` |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
 | `label_spacing` | warning | a **label on its own plate** — a filled rounded shape without an outline, not in the background colour, drawn just behind one text and hugging it (a callout label, a tag) — closer than `min_gap` of the shorter side to another text (a bar's value, the title, a neighbour's label): it reads as part of that text. The text on the plate itself, texts inside the plate, lone symbols (a bullet) and the text framed by the callout's own mark (an outline in the plate's colour: a `box` tag sits on its edge by design) are not checked; cards, table rows, cells and code bands (several texts, or much larger than their text) are not labels |
 | `min_font` | warning; error below `error_size` | text whose cap height is below `min_size` of the shorter side. The cap height is the layout's `font_px` corrected for the text's letters (`font_px` of all-lowercase text is about its x-height); a lone symbol (`+`, `·`) is not checked |
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
-| `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
+| `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules. Text in the part of the frame a `reserve: true` overlay keeps (under the captions) is `safe_area`'s finding, not this rule's |
 | `host_overlap` | warning | the [host](#a-host-beside-any-scene-host) (its figure and floor line) sharing at least `min_overlap` of the smaller of two boxes with a scene object (text, shape, picture, character...) or an overlay's object (a caption, a lower third). Not reported: a scene object whose box holds the host's whole box (a backdrop: a full-frame picture, a band), particles, motion effects, the host's own pointer line and effect symbol. `covered_text` leaves the host over text to this rule. Scenes lay out beside the host, so a finding means something was drawn outside the scene's regions (a project scene type that ignores `self.safe_area`, a `zoom`): make the host smaller (`size`), move it (`side`, `place`) or `host: false` on that scene |
 | `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`), and not two 0.15 or more apart in depth (one behind the other); see [Moving](#moving) |
 | `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. In a [shot](#shots-shot) (other than `wide`) only the characters it frames are checked, wholly outside too: their face in a `medium`, `over_shoulder` or `closeup` shot, their whole box in a `two_shot`; the near character of an `over_shoulder` shot and characters the shot does not frame may be cut. Fix: put it on a mark inside the view, or pan to it (in a shot: keep it from walking out, or frame another shot) |
@@ -15234,6 +15611,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `generated_footage` | info | a scene shows generated video takes (`vidgen generate`): a reminder to disclose AI-generated footage when publishing (YouTube "Altered or synthetic content", TikTok's AI-generated label); the description file already says so |
 | `three_d_off_frame` | warning | in a `3d` scene, an object the beat is about (an object or camera action of the beat names it, or a stand-in whose `voice` says the line) is at least `max_off` (0.5) outside the frame, or behind the camera, at a beat-end or mid-beat still. Fix: `camera_fly_to` / `camera_look_at` it, or move it into view |
 | `three_d_hidden` | warning | in a `3d` scene, an object the beat is about is at least `max_hidden` (0.7) covered by nearer objects (estimated from the objects' spheres; floors, labels, arrows and its own group do not count). Fix: `camera_orbit` round, or move one of them |
+| `web_clipped` | error | in a [`web`](#web) scene, page text cut by more than `tolerance` (of the shorter side) by its own box or an ancestor's with `overflow` other than `visible` (named in the message: `cut by its box card (overflow: hidden) at the right`), or by the page's box where the page does not reach the frame's edge (`region: body`; at the frame's edge it is `off_frame`'s). `off_frame` and `safe_area` leave such text to this rule. Fix: shorter or smaller text, a box that grows; `data-vidgen-lint="off"` on text cut on purpose |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -15327,6 +15705,7 @@ lint:
     generated_footage: {}                   # default severity info; scenes showing generated takes
     three_d_off_frame: {max_off: 0.5}       # share of a 3d object (the beat is about) outside the frame
     three_d_hidden: {max_hidden: 0.7}       # share of it covered by nearer objects
+    web_clipped: {tolerance: 0.004}        # page text cut by its box (overflow) or the page's box
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any

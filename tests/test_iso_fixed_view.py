@@ -214,6 +214,7 @@ def test_lint_hints_quietly_at_the_whole_place_view_outdoors() -> None:
 # ----- rendered ----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_fixed_view_renders_at_its_scale(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder

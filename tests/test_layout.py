@@ -65,6 +65,7 @@ def text_media(tmp_path: Path) -> Iterator[None]:
         yield
 
 
+@pytest.mark.slow
 def test_fit_text_wraps_to_width(text_media: None) -> None:
     block = fit_text("the quick brown fox jumps over the lazy dog " * 3, 4.0, theme=Theme())
     assert block.width <= 4.0 + 1e-6
@@ -105,6 +106,7 @@ def test_fit_text_balance_evens_out_lines(text_media: None) -> None:
     assert len(fit_text("Short", 5.0, theme=Theme(), balance=True)) == 1
 
 
+@pytest.mark.slow
 def test_measure_text_estimates_fit_text(text_media: None) -> None:
     theme = Theme()
     for text, width in [("the quick brown fox jumps over the lazy dog " * 2, 4.0), ("Apollo 11", 3.0), ("one two three", 1.5)]:
@@ -125,6 +127,7 @@ def test_fit_text_highlight_colors_glyphs(text_media: None) -> None:
     assert colors.count("#FF0000") == 3
 
 
+@pytest.mark.slow
 def test_fit_text_keeps_letters_on_their_line_with_ligatures(text_media: None) -> None:
     """Step 221: the serif heading font draws "fi" as one glyph; Manim splits a Paragraph's
     glyphs into lines by counting characters, so "fibrosis in" took the next line's first letter

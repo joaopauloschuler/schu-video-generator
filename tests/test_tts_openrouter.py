@@ -256,6 +256,7 @@ def test_cache_key_covers_model_voice_instructions_speed() -> None:
     assert base.cache_key("Hi") != tts.get_provider(VoiceConfig()).cache_key("Hi")
 
 
+@pytest.mark.slow
 def test_pcm_only_model_is_converted_to_mp3(api: FakeOpenRouter, tmp_path: Path) -> None:
     api.speech = [PCM]
     p = provider(model="google/gemini-3.8-flash-lite-tts", voice="Kore")
@@ -376,6 +377,7 @@ def test_reported_cost_gives_up_without_failing(api: FakeOpenRouter, monkeypatch
     assert p2.reported_cost() == (0.0, 0) and p2.cost_problem == "1 audio response(s) came without an X-Generation-Id header"
 
 
+@pytest.mark.slow
 def test_run_says_why_the_cost_is_missing(make_project, api: FakeOpenRouter, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(or_config())
     api.costs = {f"gen-tts-{n}": http_error(404, "Generation not found") for n in (1, 2, 3)}
@@ -566,6 +568,7 @@ def test_validate_warnings_for_model_and_voice(make_project) -> None:
     assert not [w for w in validate_warnings(Project.load(root3)) if w.startswith("voice")]
 
 
+@pytest.mark.slow
 def test_readback_and_narration_speed_work_with_its_audio(make_project, api: FakeOpenRouter) -> None:
     from test_readback import FakeSTT
     from test_timing_lint import activity, beat

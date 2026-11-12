@@ -43,6 +43,7 @@ from vidgen.world.iso import OBJECT_KINDS, ObjectPlacing, parse_iso_map, place_o
 from vidgen.world.iso_view import ISO_RISE, Box3, iso_point
 
 
+@pytest.mark.slow
 def test_weather_rules_do_not_import_manim() -> None:
     code = "import sys, vidgen.cartoon.iso_weather, vidgen.cartoon.fog; assert 'manim' not in sys.modules"
     subprocess.run([sys.executable, "-c", code], check=True)
@@ -203,6 +204,7 @@ def stage_params(**params: Any) -> Any:
     return Stage.Params.model_validate({"iso": iso, **params})
 
 
+@pytest.mark.slow
 def test_fog_and_wind_on_an_iso_place() -> None:
     assert stage_params(fog=0.7).fog.density == 0.7
     assert stage_params(wind="windy", fog={"density": 0.4, "drift": 2}).fog.drift == 2
@@ -243,6 +245,7 @@ def test_weather_validates(make_project) -> None:
 # ----- a tiny render ------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_rain_fog_and_wind_on_a_place_at_night(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

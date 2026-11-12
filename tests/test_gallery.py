@@ -43,6 +43,12 @@ def builtin_gallery() -> list[gallery.GalleryType]:
         return gallery.gallery_types(None)
 
 
+def committed_gallery() -> list[gallery.GalleryType]:
+    """The types the committed docs/gallery shows (every built-in)."""
+    return builtin_gallery()
+
+
+@pytest.mark.slow
 def test_every_builtin_type_has_a_sample_from_the_guide() -> None:
     types = builtin_gallery()
     with registry.isolated():
@@ -70,6 +76,7 @@ def test_samples_prefer_a_real_picture_and_name_shipped_files() -> None:
         gallery.sample_asset("code", "assets/train.py")
 
 
+@pytest.mark.slow
 def test_a_config_snippet_brings_its_characters() -> None:
     stage = gallery.guide_samples()["stage"]
     assert stage.group == "cartoons" and stage.config["type"] == "stage"
@@ -86,6 +93,7 @@ def test_snippet_items_keep_the_guide_text() -> None:
     assert items == ["- id: a\n  type: stat\n", "- id: b\n  type: pie\n  params: {x: 1}\n"]
 
 
+@pytest.mark.slow
 def test_chooser_uses_cover_every_type() -> None:
     uses = gallery.chooser_uses()
     for t in builtin_gallery():
@@ -93,6 +101,7 @@ def test_chooser_uses_cover_every_type() -> None:
     assert uses["pie"].startswith("parts of a whole")
 
 
+@pytest.mark.slow
 def test_rendered_names() -> None:
     types = builtin_gallery()
     assert gallery.rendered_names(types, ["flowchart", "pie"]) == [n for n in (t.name for t in types) if n in ("diagram", "pie")]
@@ -109,6 +118,7 @@ def test_rendered_names() -> None:
 # ----- showcases ---------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_showcases_are_whole_valid_configs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import yaml
 
@@ -155,6 +165,7 @@ def test_clip_start_skips_the_empty_opening() -> None:
     assert gallery.clip_start(slow, 6) == gallery.CLIP_START_MAX
 
 
+@pytest.mark.slow
 def test_gif_can_open_on_its_held_end(tmp_path: Path) -> None:
     import subprocess
 
@@ -181,6 +192,7 @@ def test_gif_can_open_on_its_held_end(tmp_path: Path) -> None:
     assert first > 200 and abs(first - last) < 3 and early < 100
 
 
+@pytest.mark.slow
 def test_project_types_take_their_first_scene(tmp_path: Path) -> None:
     project = Project.load(ROOT / "examples" / "custom_scene")
     with extensions.project_session(project):
@@ -195,6 +207,7 @@ def test_project_types_take_their_first_scene(tmp_path: Path) -> None:
     assert gallery.work_config(list(types.values()), project, "neon")["theme"] == {"preset": "neon"}
 
 
+@pytest.mark.slow
 def test_cli_usage_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.chdir(tmp_path)
     assert cli.main(["gallery", "--types", "piechart", "-o", "out"]) == 1
@@ -208,9 +221,10 @@ def test_cli_usage_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
 # ----- the committed gallery ---------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_committed_gallery_lists_every_type_with_current_samples() -> None:
     index = (DOCS / "README.md").read_text(encoding="utf-8")
-    for t in builtin_gallery():
+    for t in committed_gallery():
         assert f"`{t.name}`" in index, f"docs/gallery/README.md misses {t.name}: run `vidgen gallery`"
         if t.alias_of is not None:
             continue
@@ -261,9 +275,10 @@ def test_committed_gallery_has_every_showcase() -> None:
     assert section.index("[`card`](card.md)") < section.index("(talk_in_a_room.md)") < section.index("## Isometric cartoons") < section.index("(iso_village.md)")
 
 
+@pytest.mark.slow
 def test_committed_gifs_are_light_and_open_on_their_end() -> None:
     gifs = sorted((DOCS / "media").glob("*.gif"))
-    assert len(gifs) == 2 * (len([t for t in builtin_gallery() if t.alias_of is None]) + len(gallery.SHOWCASES))
+    assert len(gifs) == 2 * (len([t for t in committed_gallery() if t.alias_of is None]) + len(gallery.SHOWCASES))
     for gif in gifs:
         assert gif.stat().st_size <= gallery.CLIP_MAX_BYTES, gif.name
         with Image.open(gif) as image:
@@ -296,7 +311,7 @@ def test_committed_gallery_is_within_its_size_budget() -> None:
 def test_every_gallery_entry_is_within_its_share() -> None:
     """Step 216: the budget grows by entries, so each entry (a type or a showcase: its GIFs,
     stills and page) is held to ENTRY_MAX."""
-    names = [t.name for t in builtin_gallery() if t.alias_of is None] + [s.name for s in gallery.SHOWCASES]
+    names = [t.name for t in committed_gallery() if t.alias_of is None] + [s.name for s in gallery.SHOWCASES]
     for name in names:
         parts = [DOCS / f"{name}.md"] + [DOCS / "media" / gallery.media_name(name, fmt, ext) for fmt in gallery.FORMATS for ext in (".png", ".gif")]
         size = sum(p.stat().st_size for p in parts)
@@ -323,6 +338,7 @@ def test_readme_and_guide_point_to_the_gallery() -> None:
 # ----- rendering ---------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_gallery_renders_a_few_types(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.chdir(tmp_path)

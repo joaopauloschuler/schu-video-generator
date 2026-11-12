@@ -97,6 +97,7 @@ def test_chapter_params_errors(params: dict[str, Any], message: str) -> None:
         cls_of("chapter").validate_params(params, Theme())
 
 
+@pytest.mark.slow
 def test_schema_accepts_a_number_or_a_mapping_as_comparison() -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -189,6 +190,7 @@ def value_text(scene: Any) -> str:
     return " ".join(part.original_text for part in line)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_stat_counts_to_the_formatted_value(project: Project, media: Path) -> None:
     scene, *_ = render_scene(project, "stat_unit", media, 160, 90)
@@ -261,6 +263,7 @@ def test_chapter_layouts(project: Project, media: Path, size: tuple[int, int]) -
     assert len([p for p in scene.play_log if not p.wait and p.beat is not None]) == 1   # all in beat 1
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_chapter_without_rule_never_draws_it(project: Project, media: Path) -> None:
     scene, *_ = render_scene(project, "chapter_text_number", media, 160, 90)

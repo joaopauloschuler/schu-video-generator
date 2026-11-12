@@ -24,6 +24,7 @@ def cell_cls() -> Any:
     return registry.get("cell").cls
 
 
+@pytest.mark.slow
 def test_params_shorthands_and_lengths() -> None:
     p = cell_cls().validate_params({"cell": "animal", "objects": ["lysosome", {"kind": "mitochondrion", "at": ["5 um", "-5500 nm"], "size": "1.5 um"}],
                                     "view": "tissue"})
@@ -90,6 +91,7 @@ def test_zoom_to_labels_are_validated(make_project) -> None:
     assert project_problems(fine) == []
 
 
+@pytest.mark.slow
 def test_yaml_reads_on_as_true() -> None:
     # YAML 1.1 reads the key `on` as true: {kind: ribosome, on: rough_er} must still mean on
     p = cell_cls().validate_params({"objects": [{"kind": "ribosome", True: "rough_er", "count": 3}], "view": {"level": "complex", True: "rough_er"}})
@@ -107,6 +109,7 @@ def pixels_of(scene: Any) -> float:
     return scene._frame[0] / float(scene.camera.frame.width)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_zoom_levels_detail_labels_and_scale_bar(size: tuple[int, int], make_project, media: Path) -> None:
@@ -142,6 +145,7 @@ def test_zoom_levels_detail_labels_and_scale_bar(size: tuple[int, int], make_pro
     assert piece.mobject.get_stroke_width() * 0.01 * scene.ref_pixels * pixels_of(scene) == pytest.approx(0.005 * px_per_um, rel=1e-3)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_start_view_labels_and_reveal_per_beat(make_project, media: Path) -> None:
     config = scene_config([None, None, None], reveal="per_beat", view={"level": "organelle", "on": "golgi"}, labels=True)
@@ -160,6 +164,7 @@ def _pieces_of(scene: Any, entry: str) -> list[Any]:
     return [p for p in scene.drawing.pieces if id(p.mobject) in family]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_dim_during_a_zoom_keeps_its_opacity(make_project, media: Path) -> None:
     # the 202 gap: a dim played while a zoom changes the level of detail left pieces at the wrong opacity
@@ -178,6 +183,7 @@ def test_a_dim_during_a_zoom_keeps_its_opacity(make_project, media: Path) -> Non
     assert {"2 nm", "5 nm", "100 nm", start_text} <= set(scene._bar_texts)          # texts for any zoom, a built-in zoom too
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("kind, size", [("plant", (160, 90)), ("bacterium", (90, 160))])
 def test_plant_and_bacterium_render(kind: str, size: tuple[int, int], make_project, media: Path) -> None:
@@ -191,6 +197,7 @@ def test_plant_and_bacterium_render(kind: str, size: tuple[int, int], make_proje
     assert len(shown) >= 4                                               # plasmodesma / envelope parts named
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_surface_style_and_cytoskeleton(make_project, media: Path) -> None:
     config = scene_config([None, [{"zoom_to": "kinesin", "at": "@mitochondrion"}], [{"zoom_to": "mito", "level": "complex", "at": "@ribosome"}]],

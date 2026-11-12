@@ -78,6 +78,7 @@ def _project(tmp_path: Path, config: dict[str, Any] | None = None, header: str =
 # ----- timing, windows, scores -------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_beats_are_timed_from_the_plan(tmp_path: Path) -> None:
     project = Project.load(_project(tmp_path))
     beats, outros = timed_beats(project)
@@ -171,6 +172,7 @@ def test_hooks_prefer_spoken_questions_then_templates(tmp_path: Path) -> None:
 # ----- suggestions written -----------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_suggest_write_and_validate(tmp_path: Path) -> None:
     folder = _project(tmp_path)
     project = Project.load(folder)
@@ -259,6 +261,7 @@ def test_errors(tmp_path: Path) -> None:
         write_suggestions(project, suggest_shorts(project, min_seconds=20, max_seconds=35), "../x.yaml")
 
 
+@pytest.mark.slow
 def test_cli_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     folder = _project(tmp_path)
     assert cli.main(["shorts", "suggest", str(folder), "--min", "20", "--max", "35", "--count", "2", "--json"]) == 0
@@ -304,6 +307,7 @@ They walked home in the evening with the torn kite between them. Tomorrow they w
 """
 
 
+@pytest.mark.slow
 def test_a_drafted_story_gets_shorts_that_validate(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     source = tmp_path / "kite.md"
     source.write_text(STORY, encoding="utf-8")

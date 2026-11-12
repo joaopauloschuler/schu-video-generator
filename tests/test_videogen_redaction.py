@@ -124,6 +124,7 @@ def test_a_submit_error_quoting_the_address(tmp_path: Path, fake_cloudflared: li
     assert bool(ledger.unresolved_intents()) is (status == 500)   # 400: no job exists; 500: outcome unknown
 
 
+@pytest.mark.slow
 def test_exception_details_are_redacted(tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
     project, audio, _ = sources(tmp_path)
     provider = HostedStandIn(MockOpenRouter())
@@ -141,6 +142,7 @@ def test_exception_details_are_redacted(tmp_path: Path, fake_cloudflared: list[s
     assert caught.value.details["count"] == 1
 
 
+@pytest.mark.slow
 def test_a_failed_shot_shows_no_address_in_its_outcome(make_project, tmp_path: Path, fake_cloudflared: list[str]) -> None:
     root = make_project(config(shot_of("a", audio="beat"), host="quick_tunnel", cloudflared=fake_cloudflared[1]))
     tone(root / "audio" / "a.mp3", 2.0)
@@ -219,6 +221,7 @@ def test_mock_plan_shares_nothing_and_does_not_block(make_project, monkeypatch: 
     assert "mock provider: these inputs stay on this machine" in text
 
 
+@pytest.mark.slow
 def test_mock_runs_a_voice_shot_end_to_end_for_free(make_project, monkeypatch: pytest.MonkeyPatch) -> None:
     no_cloudflared(monkeypatch)
     root = make_project(config(shot_of("a", audio="beat"), host="quick_tunnel"))

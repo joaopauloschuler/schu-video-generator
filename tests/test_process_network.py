@@ -149,6 +149,7 @@ def test_network_target_names() -> None:
                      "neuron2.2", "neuron2.3", "neuron2.4", "layer3", "layer:Out", "neuron3.1", "neuron3.2", "edges1"]
 
 
+@pytest.mark.slow
 def test_schema_accepts_shorthands_and_validate_checks_targets(make_project) -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -194,6 +195,7 @@ def test_process_renders_within_its_beats_and_the_safe_area(p: dict[str, Any], t
         assert safe.contains(t.mobject, tolerance=0.05), t.name
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_token_travels_to_each_stage_and_the_active_stage_is_emphasised(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "process", "params": {"stages": PIPE, "input": "in"}, "beats": n_beats(3)}])
@@ -211,6 +213,7 @@ def test_token_travels_to_each_stage_and_the_active_stage_is_emphasised(make_pro
     assert any("MoveAlongPath" in a for a in names)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_loop_returns_the_token_to_the_first_stage(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "process", "params": {"stages": ["a", "b", "c"], "loop": True}, "beats": n_beats(4)}])
@@ -237,6 +240,7 @@ def test_column_in_portrait_and_layout_override(make_project, media: Path) -> No
     assert render(project, "r", media, size=(90, 160)).plan.layout == "row"
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_early_stage_reveal_is_not_repeated(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "process", "params": {"stages": PIPE}, "beats": beats([{"reveal": "stage3"}], None, None)}])
@@ -311,6 +315,7 @@ def test_network_ellipsis_counts_edges_and_pass(make_project, media: Path) -> No
     assert any("LaggedStart" in a for a in last)   # the forward pass
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_network_caps_edges_and_highlights_a_path(make_project, media: Path) -> None:
     layers = [{"size": 12, "show": 12}, {"size": 12, "show": 12, "connect": "sparse:0.2"}, {"size": 3}]

@@ -84,6 +84,7 @@ def _built(project: Any, scene_id: str, size: tuple[int, int]) -> dict[str, Any]
     return {o.id: (o, mobject_region(m)) for o, m in zip(overlays, mobjects)}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("size", [(320, 180), (180, 320)], ids=["16:9", "9:16"])
 def test_lower_third_makes_way_for_bottom_captions(make_project, size: tuple[int, int]) -> None:
     lower = {"type": "lower_third", "scene": "a", "name": "Ada Lovelace", "title": "Mathematician", "align": "bottom"}

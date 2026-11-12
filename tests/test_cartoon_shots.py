@@ -170,6 +170,7 @@ def problems_of(project: Project) -> list[tuple[str, str]]:
         return actions.scene_actions(spec.type, cls, spec, params, theme)[1]
 
 
+@pytest.mark.slow
 def test_validate_checks_a_shots_characters_and_scene_type(make_project) -> None:
     assert problems_of(stage_project(make_project, [{"text": "Hi.", "shot": "over_shoulder kit pip"}, {"text": "Bye."}])) == []
     found = problems_of(stage_project(make_project, [{"text": "Hi.", "shot": "closeup tree"}, {"text": "Hi.", "shot": "closeup moss"}]))
@@ -247,6 +248,7 @@ def test_a_written_shot_stops_automatic_closeups_and_is_where_checks_look() -> N
 # ----- a tiny render ----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_shot_cuts_the_camera_and_the_next_beat_cuts_back(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder
@@ -268,6 +270,7 @@ def test_a_shot_cuts_the_camera_and_the_next_beat_cuts_back(make_project, tmp_pa
     assert scene.camera_shot is None and scene.shot_home is None
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_shot_inside_a_zooms_until_wins_for_its_beat_then_the_zoom_resumes(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder

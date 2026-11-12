@@ -34,6 +34,7 @@ def json_out(capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
 # ----- the example -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("variant", [None, "short"])
 def test_the_example_validates_and_uses_phase_o(variant: str | None, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = shutil.copytree(EXAMPLE, tmp_path / "story", ignore=shutil.ignore_patterns("build", "output", "exports", "audio"))
@@ -133,6 +134,7 @@ def test_a_refusal_lists_the_kind_it_wanted() -> None:
 # ----- stars over a tall level -------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_night_has_stars_over_a_tall_level(make_project, tmp_path: Path) -> None:
     """A level the camera rises over had no stars at night (they were kept clear of the heads at

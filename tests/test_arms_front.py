@@ -61,6 +61,7 @@ def visible_share(look: CharacterLook, arm: str, *, front: bool, arms: str) -> f
     return shown / total
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", sorted(LOOKS))
 def test_both_arms_show_in_the_side_and_front_views(name: str) -> None:
     look = LOOKS[name]
@@ -73,6 +74,7 @@ def test_the_classic_far_arm_of_a_tall_suit_is_mostly_hidden() -> None:
     assert visible_share(LOOKS["suit"], "arm_right", front=False, arms="classic") < 0.7
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", sorted(LOOKS))
 def test_front_arms_hang_clear_of_the_body(name: str) -> None:
     look = LOOKS[name]
@@ -88,6 +90,7 @@ def test_front_arms_hang_clear_of_the_body(name: str) -> None:
                 assert side * x >= edge + ARM_GAP, (name, front, arm)   # the hand out past the body (a pear's hips may touch it)
 
 
+@pytest.mark.slow
 def test_the_far_arm_is_drawn_over_the_body_and_under_the_near_arm() -> None:
     c = build_character(CharacterEntry(name="m", look=LOOKS["suit"]), theme=Theme(), arms="front")
     order = c.submobjects
@@ -124,11 +127,13 @@ def parts_digest(arms: str) -> str:
 CLASSIC_DIGEST = "74186fcf00744e83fedce63fdbb936ec5e10c911050ff3622844f72c4f482653"
 
 
+@pytest.mark.slow
 def test_classic_is_the_drawing_of_before() -> None:
     assert parts_digest("classic") == CLASSIC_DIGEST
     assert parts_digest("front") != CLASSIC_DIGEST
 
 
+@pytest.mark.slow
 def test_a_leaning_arm_still_reaches_its_point() -> None:
     c = build_character(CharacterEntry(name="e", look=LOOKS["lab_coat"]), theme=Theme(), height=3.0, arms="front")
     shoulder = c.shoulder_point("right")
@@ -137,6 +142,7 @@ def test_a_leaning_arm_still_reaches_its_point() -> None:
     assert np.allclose(c.hand_point("right")[:2], target[:2], atol=1e-6)
 
 
+@pytest.mark.slow
 def test_the_look_wins_over_the_video() -> None:
     entry = CharacterEntry(name="m", look=CharacterLook(body="tall", arms="classic"))
     a = build_character(entry, theme=Theme(), arms="front")
@@ -147,6 +153,7 @@ def test_the_look_wins_over_the_video() -> None:
     assert build_character(front, theme=Theme(), arms="classic").limb_rest("arm_right")[0] == b.limb_rest("arm_right")[0]
 
 
+@pytest.mark.slow
 def test_front_is_the_default_and_classic_opts_out() -> None:
     assert ARM_STYLES == ("classic", "front") and DEFAULT_ARMS == "front"
     assert parts_digest(DEFAULT_ARMS) == parts_digest("front")
@@ -162,6 +169,7 @@ def test_front_is_the_default_and_classic_opts_out() -> None:
         generate_parts(CharacterLook(), COLORS, arms="behind")
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("arms", [None, "classic"])
 def test_cartoon_arms_reaches_the_host_and_api_character(make_project, arms: str | None) -> None:
     from test_host import built_scene, config

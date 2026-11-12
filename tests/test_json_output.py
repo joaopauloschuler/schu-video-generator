@@ -81,6 +81,7 @@ def test_config_errors_carry_locations(make_project) -> None:
 # ----- validate ----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_validate_json_ok(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(minimal_config(title="Ação ✓", variants={"vertical": {"format": {"width": 1080, "height": 1920}}}))
     (root / "audio").mkdir()

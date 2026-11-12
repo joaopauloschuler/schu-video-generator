@@ -111,6 +111,7 @@ def test_sway_angles_from_the_seed() -> None:
     assert wind_phase("tree") != wind_phase("tree_2")
 
 
+@pytest.mark.slow
 def test_trailing_follows_the_spring() -> None:
     assert trail_degrees(Wind(0.0), 8.0) == 0.0
     wind = Wind(0.0, seed=4)
@@ -155,6 +156,7 @@ def _mean_and_max(values: list[float]) -> tuple[float, float]:
     return float(a.mean()), float(a.max())
 
 
+@pytest.mark.slow
 def test_strong_wind_shows_clearly() -> None:
     """Step 104 (Backlog "wind barely visible"): measured over 30 s. Before, a tree leaned 2.1° on
     average at windy and 3.6° at a gale, a scarf's end turned 12.5° / 20.9°."""
@@ -236,6 +238,7 @@ def test_blow_away_in_the_holdings_replay() -> None:
 # ----- characters (no render) --------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_trailing_pieces_of_generated_looks() -> None:
     plain = generated(body="round", hair="short", ears="round")
     assert not plain.has_trails
@@ -271,6 +274,7 @@ def wind_project(make_project, actions: list[Any], *, scene_type: str = "stage",
     return Project.load(make_project(minimal_config(characters=CAST, voices=VOICES, scenes=scenes)))
 
 
+@pytest.mark.slow
 def test_validate_wind_actions_and_param(make_project) -> None:
     good = [{"wind": 0.8, "run_time": 3}, {"wind": "calm", "at": 0.5}, {"action": "wind", "target": "-0.4", "at": 0.7}]
     assert check_project(wind_project(make_project, good, params={"wind": "breeze"})) == []
@@ -291,6 +295,7 @@ def test_validate_wind_actions_and_param(make_project) -> None:
             stage_params(wind=bad)
 
 
+@pytest.mark.slow
 def test_schema_takes_a_number_for_wind() -> None:
     from vidgen.schema import config_schema
 
@@ -326,6 +331,7 @@ def test_validate_blow_away(make_project) -> None:
     assert check_project(held) == [f"scenes[0].beats[1].actions[1].target: pip holds no prop then; pick_up one first"]
 
 
+@pytest.mark.slow
 def test_blow_away_out_of_a_hand_on_a_fake_stage() -> None:
     from test_cartoon_acting import run, target, use
     from test_cartoon_holding import stage
@@ -392,6 +398,7 @@ def frame_hashes(project: Project, media: Path, monkeypatch) -> tuple[Any, list[
     return scene, hashes
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_wind_zero_changes_nothing(make_project, tmp_path: Path, monkeypatch) -> None:
     plain, plain_frames = frame_hashes(windy_project(make_project, dict(WINDY_SET)), tmp_path / "a", monkeypatch)
@@ -400,6 +407,7 @@ def test_wind_zero_changes_nothing(make_project, tmp_path: Path, monkeypatch) ->
     assert len(plain_frames) > 10 and calm_frames == plain_frames   # pixel for pixel
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_windy_stage_sways_trails_and_calms_down(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen.cartoon.windblown import SwayingProp
@@ -437,6 +445,7 @@ def test_windy_stage_sways_trails_and_calms_down(make_project, tmp_path: Path, m
     assert len(frames) > 10
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_gust_blows_the_umbrella_out_of_a_hand(make_project, tmp_path: Path) -> None:
     """Step 104: pip holds the open umbrella; a gale blows it out of the hand and off the stage

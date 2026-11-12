@@ -101,6 +101,7 @@ def test_marks_are_inside_the_stage_and_clear_of_the_props(name: str) -> None:
                 assert right <= x - half or left >= x + half, (prop_name, x)
 
 
+@pytest.mark.slow
 def test_new_props_build_seat_and_lie_flat() -> None:
     for kind in OUTDOOR_PROPS:
         prop = draw_prop(kind, height=1.0, theme=Theme())
@@ -250,6 +251,7 @@ def test_an_unknown_set_lists_the_built_in_ones(make_project) -> None:
 # ----- render ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("name", ALL_SETS)
 def test_each_set_renders_lint_clean(name: str, make_project, tmp_path: Path) -> None:
@@ -266,6 +268,7 @@ def test_each_set_renders_lint_clean(name: str, make_project, tmp_path: Path) ->
     assert found == [], [issue.message for issue in found]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize(("name", "seat", "sitters"), [("living_room", "sofa", ("pip", "kit")), ("classroom", "school_desk", ("pip",))])
 def test_characters_sit_in_a_room(name: str, seat: str, sitters: tuple[str, ...], make_project, tmp_path: Path) -> None:

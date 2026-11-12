@@ -193,6 +193,7 @@ def frames(anim: Any, count: int = 60) -> list[Any]:
     return seen
 
 
+@pytest.mark.slow
 def test_walk_winds_up_trails_and_settles() -> None:
     c = figure().shift([-3.0, -2.0, 0.0])
     assert c.motion == "lively"
@@ -259,6 +260,7 @@ def test_gesture_and_pose_change_wind_up_and_overshoot() -> None:
     assert min(angles) < 0 and max(angles) > POINT_DEGREES and angles[-1] == pytest.approx(POINT_DEGREES)
 
 
+@pytest.mark.slow
 def test_none_plays_the_plain_motion() -> None:
     c = figure().shift([-3.0, -2.0, 0.0])
     walk = Walk(c, 2.0, motion="none")
@@ -279,6 +281,7 @@ def test_none_plays_the_plain_motion() -> None:
     assert angles == sorted(angles) and angles[-1] == pytest.approx(POINT_DEGREES)   # no wind-up, no overshoot
 
 
+@pytest.mark.slow
 def test_actions_time_the_wind_up_and_landing() -> None:
     pip = figure().shift([-4.0, -2.0, 0.0])
     scene = StageFake(pip=pip)
@@ -295,6 +298,7 @@ def test_actions_time_the_wind_up_and_landing() -> None:
 # ----- the setting: video, scene, character (nearest wins) ------------------------------------------
 
 
+@pytest.mark.slow
 def test_nearest_setting_wins(make_project) -> None:
     cast = [{"name": "pip"}, {"name": "kit", "cartoon_motion": "none"}]
     scenes = [{"id": "park", "type": "stage", "params": {"characters": ["pip", "kit"]}, "beats": [{"text": "Hi."}]}]
@@ -313,6 +317,7 @@ def test_nearest_setting_wins(make_project) -> None:
         Character([], name="x", motion="wild")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_stage_setting_reaches_its_characters(make_project, tmp_path: Path) -> None:
     cast = [{"name": "pip", "look": {"body": "bean"}}, {"name": "kit", "cartoon_motion": "lively"}]

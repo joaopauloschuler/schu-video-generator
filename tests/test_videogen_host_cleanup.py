@@ -109,6 +109,7 @@ def closed_reason(tmp_path: Path) -> str | None:
     return closes[-1]["reason"] if closes else None
 
 
+@pytest.mark.slow
 @posix_only
 @pytest.mark.parametrize("signum, name, code", [(signal.SIGTERM, "SIGTERM", 143), (signal.SIGHUP, "SIGHUP", 129)])
 def test_a_termination_signal_closes_the_host_properly(tmp_path: Path, driver: Driver, signum: int, name: str, code: int) -> None:
@@ -136,6 +137,7 @@ def test_a_hard_kill_is_cleaned_up_by_the_watcher(tmp_path: Path, driver: Driver
     assert closed_reason(tmp_path) is None   # the ledger has no close: only vidgen writes it
 
 
+@pytest.mark.slow
 @posix_only
 def test_a_kill_of_vidgen_and_its_watcher_is_swept_at_the_next_open(tmp_path: Path, driver: Driver, temp_root: Path, fake_cloudflared: list[str]) -> None:  # noqa: F811
     os.kill(driver.watcher_pid, signal.SIGKILL)
@@ -266,6 +268,7 @@ def test_an_interrupted_later_step_is_resumed_too(tmp_path: Path, fake_cloudflar
     assert [e["reason"] for e in ledger.events() if e["event"] == "host_close"] == ["done"]
 
 
+@pytest.mark.slow
 def test_a_second_close_waits_for_the_first(tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
     host, _ = open_host(tmp_path, fake_cloudflared)
     real_stop = host_module.stop_process_tree
@@ -285,6 +288,7 @@ def test_a_second_close_waits_for_the_first(tmp_path: Path, fake_cloudflared: li
     first.join(5)
 
 
+@pytest.mark.slow
 def test_a_second_close_gives_up_after_its_wait_and_the_closer_itself_never_waits(tmp_path: Path, fake_cloudflared: list[str], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:  # noqa: F811
     host, _ = open_host(tmp_path, fake_cloudflared)
     real_stop = host_module.stop_process_tree
@@ -315,6 +319,7 @@ def test_a_second_close_gives_up_after_its_wait_and_the_closer_itself_never_wait
     assert host.wait_closed(0) and not host.folder.exists()
 
 
+@pytest.mark.slow
 def test_handlers_set_by_others_stay_and_defaults_come_back(tmp_path: Path, fake_cloudflared: list[str]) -> None:  # noqa: F811
     custom = lambda signum, frame: None   # noqa: E731
     before = signal.signal(signal.SIGTERM, custom)
@@ -334,6 +339,7 @@ def test_handlers_set_by_others_stay_and_defaults_come_back(tmp_path: Path, fake
     assert signal.getsignal(signal.SIGTERM) == signal.SIG_DFL
 
 
+@pytest.mark.slow
 def test_the_handler_comes_and_goes_with_the_open_host_and_only_in_the_main_thread(tmp_path: Path, fake_cloudflared: list[str]) -> None:  # noqa: F811
     with QuickTunnelHost([sources(tmp_path)[1]], settings=SETTINGS, executable=fake_cloudflared, fetch=local_fetch(tmp_path)):
         assert signal.getsignal(signal.SIGTERM) == host_guard._on_termination

@@ -442,7 +442,7 @@ def test_nothing_to_transcribe_needs_no_provider(rb_project: Path, monkeypatch: 
     run_readback(project, provider=FakeSTT(), log=lambda s: None)
     monkeypatch.setitem(sys.modules, "faster_whisper", None)  # not installed: fine while all is cached
     assert run_readback(project, log=lambda s: None).cached == 3
-    with pytest.raises(VidgenError, match="schu-video-generator\\[stt\\]"):
+    with pytest.raises(VidgenError, match=r"installation of schu-video-generator is incomplete \(faster-whisper is missing\)"):
         run_readback(project, force=True, log=lambda s: None)
 
 
@@ -476,6 +476,7 @@ def test_cli_human_and_json(rb_project: Path, monkeypatch: pytest.MonkeyPatch, c
 # ----- the lint rule ------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_readback_rule_reads_only_cached_transcripts(make_project) -> None:
     root = make_project(readback_config(preview={"width": 854, "height": 480, "fps": 15}))
     project = Project.load(root)

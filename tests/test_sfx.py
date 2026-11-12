@@ -38,6 +38,7 @@ def test_builtin_set() -> None:
         assert len(sound.description) > 60 and sound.use, sound.name
 
 
+@pytest.mark.slow
 def test_synthesis_is_deterministic() -> None:
     first = {name: sfx.synthesize(name).copy() for name in sfx.BUILTIN_SOUNDS}
     sfx._builtin.cache_clear()
@@ -64,6 +65,7 @@ def test_sound_is_clean(name: str, intensity: float) -> None:
     assert level >= sfx.LOUDNESS_TARGET - 10  # only short, peak-limited sounds stay below the target
 
 
+@pytest.mark.slow
 def test_params_change_the_sound() -> None:
     assert len(sfx.synthesize("whoosh", duration=1.5)) == round(1.5 * RATE)
 
@@ -232,6 +234,7 @@ def _action_problems(actions: list[dict[str, Any]]) -> list[tuple[str, str]]:
     return scene_actions("text_card", cls, spec, cls.validate_params(spec.params), None)[1]
 
 
+@pytest.mark.slow
 def test_sfx_action_checks() -> None:
     assert _action_problems([{"sfx": "whoosh"}, {"sfx": "pop", "at": 0.5, "gain": -3, "params": {"pitch": 2}}]) == []
     assert _action_problems([{"action": "sfx", "sound": "riser", "align": "end", "params": {"duration": 1.5}}]) == []
@@ -294,6 +297,7 @@ def test_validate_reports_sounds(make_project: Any) -> None:
     assert "scenes[0].beats[0].actions[0].target" not in problems
 
 
+@pytest.mark.slow
 def test_list_sfx(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project()
     _tone_wav(root / "assets" / "sfx" / "ding.wav")
@@ -328,6 +332,7 @@ def test_list_scenes_shows_sfx_action(capsys: pytest.CaptureFixture[str]) -> Non
     assert "(at its time, does not animate)" in capsys.readouterr().out
 
 
+@pytest.mark.slow
 def test_schema_has_sfx(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["schema"]) == 0
     schema = json.loads(capsys.readouterr().out)

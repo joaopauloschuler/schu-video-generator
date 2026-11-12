@@ -112,6 +112,7 @@ def test_section_problems_name_the_sections(tmp_path: Path) -> None:
     assert project.from_sections and [str(p) for p in problems] == ["sections[2].beats[0].text: bad in sections[2]", "sections[0].title: x"]
 
 
+@pytest.mark.slow
 def test_no_youtube_chapter_warnings_for_audio_only_projects(tmp_path: Path) -> None:
     """Two chapters: too few for YouTube, which matters for a video, not for an audio-only project."""
     from vidgen.chapter_export import chapter_warnings
@@ -199,6 +200,7 @@ def rendered(tmp_path_factory: pytest.TempPathFactory) -> tuple[Project, Any]:
     return project, render_audio(project)
 
 
+@pytest.mark.slow
 def test_render_writes_only_the_sound(rendered: tuple[Project, Any]) -> None:
     project, result = rendered
     assert result.output == project.root / "output" / "talk.wav" and not (project.root / "output" / "talk.mp4").exists()
@@ -216,12 +218,14 @@ def test_render_writes_only_the_sound(rendered: tuple[Project, Any]) -> None:
     assert np.abs(voice[lo : lo + RATE // 2]).max() > np.abs(voice[: lo - RATE // 10]).max()   # the line, louder than the lead-in's music
 
 
+@pytest.mark.slow
 def test_render_is_deterministic(rendered: tuple[Project, Any]) -> None:
     project, result = rendered
     before = result.output.read_bytes()
     assert render_audio(project).output.read_bytes() == before
 
 
+@pytest.mark.slow
 def test_cli_audio_only_flag_and_conflicts(rendered: tuple[Project, Any], capsys: pytest.CaptureFixture[str]) -> None:
     project, _ = rendered
     assert cli.main(["render", str(project.root), "--audio-only", "--json"]) == 0
@@ -250,6 +254,7 @@ def test_mix_without_music_is_written_when_asked(tmp_path: Path) -> None:
 PINNED_RMS = [0.131923, 0.170006, 0.164122, 0.104846, 0.048088, 0.069333, 0.042903, 0.10044, 0.012277, 0.002249]
 
 
+@pytest.mark.slow
 def test_video_mix_is_pinned(tmp_path: Path) -> None:
     root = tmp_path / "p"
     scenes = [

@@ -140,6 +140,7 @@ def test_instruments_have_ranges_and_words() -> None:
 # ----- determinism and the melody ------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_same_settings_give_the_same_music() -> None:
     for name in MOODS:
         first, again = compose(name, seed=5), compose(name, seed=5)
@@ -246,6 +247,7 @@ def _project(tmp_path: Path, music_setting: Any) -> Project:
     return Project.load(root)
 
 
+@pytest.mark.slow
 def test_without_the_extra_the_moods_bed_plays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     monkeypatch.setattr(synth, "symusic_version", lambda: None)
     beds = {"lullaby": np.full((RATE, 2), 0.1, dtype=np.float32)}
@@ -263,6 +265,7 @@ def test_without_the_extra_the_moods_bed_plays(tmp_path: Path, monkeypatch: pyte
     }
 
 
+@pytest.mark.slow
 def test_validate_says_what_plays_without_the_extra_or_the_soundfont(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -311,7 +314,7 @@ def test_composed_start_wraps_and_plays_once_without_loop(tmp_path: Path, monkey
 
 
 def test_list_music_describes_moods_and_instruments(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setattr(music, "music_entries", lambda root, previews: [])  # the beds (tested in test_music.py) take ~10 s
+    monkeypatch.setattr(music, "music_entries", lambda root, previews, analyse=True: [])  # the beds (tested in test_music.py) take ~10 s
     assert main(["list-music", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert [m["name"] for m in doc["moods"]] == list(MOODS) and doc["symusic"]

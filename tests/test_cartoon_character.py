@@ -240,6 +240,7 @@ def cartoon_project(make_project, characters: list[dict], who: str = "pip") -> P
     return Project.load(root)
 
 
+@pytest.mark.slow
 def test_validate_checks_character_names_and_colors(make_project) -> None:
     project = cartoon_project(make_project, [{"name": "pip", "colors": {"clothes": "nope"}}], who="pop")
     problems = {p.location: p.message for p in project_problems(project)}

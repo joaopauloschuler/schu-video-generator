@@ -24,6 +24,7 @@ def _scene(project: Project, sid: str) -> dict:
     return next(s for s in data["scenes"] if s["id"] == sid)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("variant", [None, "short"])
 def test_the_example_validates_and_uses_the_particle_scenes(variant: str | None, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = shutil.copytree(EXAMPLE, tmp_path / "higgs", ignore=shutil.ignore_patterns("build", "output", "audio"))
@@ -43,6 +44,7 @@ def test_the_example_validates_and_uses_the_particle_scenes(variant: str | None,
         assert used in text, used
 
 
+@pytest.mark.slow
 def test_the_lint_is_clean() -> None:
     from vidgen.lint.calc_rule import calc_issues
     from vidgen.lint.particle_rule import particle_issues

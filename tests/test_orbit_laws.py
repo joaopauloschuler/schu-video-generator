@@ -26,6 +26,7 @@ def halley() -> orbits.Elements:
     return orbits.Elements.from_a(orbits.GM_SUN, p.a, p.e, i=p.i, raan=p.raan, argp=p.argp)
 
 
+@pytest.mark.slow
 def test_geometry_of_the_earths_and_halleys_orbits() -> None:
     g = orbits.ellipse_geometry(earth())
     assert g.a / AU == pytest.approx(1.00000261) and g.e == pytest.approx(0.01671123)

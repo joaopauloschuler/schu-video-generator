@@ -158,6 +158,7 @@ def project_with_actions(make_project, actions: list[Any], **beat: Any) -> Proje
     return Project.load(make_project(minimal_config(scenes=scenes)))
 
 
+@pytest.mark.slow
 def test_validate_particles_actions(make_project) -> None:
     good = [{"particles": "snow"}, {"action": "particles", "kind": "rain", "density": 2, "area": [0, 0, 1, 0.5], "color": ["primary", "#FFFFFF"], "keep": True}]
     assert check_project(project_with_actions(make_project, good)) == []

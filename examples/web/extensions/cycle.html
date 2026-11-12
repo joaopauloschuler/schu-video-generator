@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- The water cycle in three cards: HTML and CSS only (no JavaScript). Each card comes in on its
+     narration beat (`body[data-beat-index]`), its picture moves with CSS @keyframes, and every
+     colour, font and size is a theme variable, so a variant with another theme restyles it.
+     One page serves 16:9 (a row of cards) and 9:16 (a column), by `data-orientation`. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The water cycle</title>
+<link rel="stylesheet" href="cycle.css">
+</head>
+<body>
+<main class="cycle">
+  <article class="card" data-step="1" data-vidgen-id="evaporate">
+    <svg class="art" viewBox="0 0 120 120" aria-hidden="true">
+      <g class="sun"><circle cx="34" cy="34" r="13"/>
+        <g class="rays"><path d="M34 11v-7M34 64v-7M11 34h-7M64 34h-7M18 18l-5-5M55 55l-5-5M18 50l-5 5M55 13l-5 5"/></g>
+      </g>
+      <g class="vapour"><path class="wisp w1" d="M62 92c-6-8 6-12 0-20"/><path class="wisp w2" d="M78 92c-6-8 6-12 0-20"/><path class="wisp w3" d="M94 92c-6-8 6-12 0-20"/></g>
+      <path class="sea" d="M0 100c10-6 20-6 30 0s20 6 30 0 20-6 30 0 20 6 30 0V120H0z"/>
+    </svg>
+    <div class="words"><h2>Sun heats the sea</h2><p>Water rises as vapour</p></div>
+  </article>
+  <article class="card" data-step="2" data-vidgen-id="condense">
+    <svg class="art" viewBox="0 0 120 120" aria-hidden="true">
+      <g class="drift"><path class="cloud" d="M30 78a16 16 0 0 1 4-31 22 22 0 0 1 42-6 18 18 0 0 1 14 37z"/></g>
+      <g class="dots"><circle cx="34" cy="104" r="3"/><circle cx="60" cy="110" r="3"/><circle cx="86" cy="104" r="3"/></g>
+    </svg>
+    <div class="words"><h2>Vapour makes clouds</h2><p>Cold air turns it to droplets</p></div>
+  </article>
+  <article class="card" data-step="3" data-vidgen-id="rain">
+    <svg class="art" viewBox="0 0 120 120" aria-hidden="true">
+      <path class="cloud dark" d="M30 62a16 16 0 0 1 4-31 22 22 0 0 1 42-6 18 18 0 0 1 14 37z"/>
+      <g class="drops"><path class="drop d1" d="M38 72l-4 10"/><path class="drop d2" d="M54 72l-4 10"/><path class="drop d3" d="M70 72l-4 10"/><path class="drop d4" d="M86 72l-4 10"/></g>
+    </svg>
+    <div class="words"><h2>Clouds rain down</h2><p>Rivers carry it home</p></div>
+  </article>
+</main>
+</body>
+</html>

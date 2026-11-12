@@ -15,6 +15,7 @@ from vidgen.project import Project
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "custom_scene"
 
 
+@pytest.mark.slow
 def test_example_validates(capsys: pytest.CaptureFixture[str]) -> None:
     assert check_project(Project.load(EXAMPLE)) == []
     assert check_project(Project.load(EXAMPLE, variant="vertical")) == []

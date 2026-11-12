@@ -80,6 +80,7 @@ class Panel(NarratedScene):
         best: str | None = None
 
 
+@pytest.mark.slow
 def test_injection_and_params(make_project, manim_config: None) -> None:
     project = project_with(make_project, [{"id": "s", "type": "panel", "params": {"values": {"a": 1}}, "beats": [{"text": "x"}]}])
     theme = runtime.set_context(project)
@@ -157,6 +158,7 @@ def test_audio_duration_bad_file(tmp_path: Path) -> None:
 # ----- rendering ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_narrate_timing_with_audio_and_no_audio(make_project, manim_config: None) -> None:
     project = project_with(

@@ -67,6 +67,8 @@ def cap_height(obj: dict[str, Any]) -> float:
     glyph heights for the object's characters (in em) gives the correction. Math (LaTeX source,
     not the drawn glyphs) is taken as measured.
     """
+    if obj.get("cap_px") is not None:   # a web page's text: measured from its font (DESIGN.md §118.12)
+        return float(obj["cap_px"])
     font_px = float(obj.get("font_px") or 0.0)
     if obj["kind"] == "math":
         return font_px
@@ -82,12 +84,14 @@ def has_letters_or_digits(obj: dict[str, Any]) -> bool:
 
 
 def describe(obj: dict[str, Any]) -> str:
-    """A short human label: ``text 'Hello world'``, ``icon 'cpu'``, ``character 'pip'``, ``prop 'tree'``,
+    """A short human label: ``text 'Hello world'`` (a web page's: ``text 'Gears' (page: gear)``), ``icon 'cpu'``, ``character 'pip'``, ``prop 'tree'``,
     ``particles 'snow'`` or ``shape Rectangle 'Group[0]/Rectangle[1]'``."""
     if is_text(obj):
         text = " / ".join(line.strip() for line in str(obj.get("text", "")).splitlines() if line.strip())
         if len(text) > 40:
             text = text[:39] + "…"
+        if obj.get("source") == "web":   # a web page's element: its data-vidgen-id or a CSS-like path
+            return f"{obj['kind']} '{text}' (page: {obj.get('name')})"
         return f"{obj['kind']} '{text}'"
     if obj["kind"] == "icon":
         return f"icon '{obj.get('icon')}'"
@@ -142,6 +146,8 @@ def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
             continue  # off_stage's finding (it knows entrances and exits)
         if obj.get("scenery"):
             continue  # a piece of the set the camera crops (a platform level's tiles, DESIGN.md §86.10)
+        if obj.get("cut") or obj.get("clipped"):
+            continue  # a web page's text cut by a box on the page before the frame's edge: web_clipped's
         x0, y0, x1, y1 = object_box(obj)
         if x1 <= 0 or y1 <= 0 or x0 >= width or y0 >= height:
             continue  # wholly outside: not seen at all (e.g. waiting to slide in)
@@ -181,6 +187,8 @@ def safe_area(ctx: StillContext, settings: SafeAreaRule) -> Iterator[Issue]:
     for obj in ctx.objects:
         if not is_text(obj) or is_overlay(obj):
             continue
+        if obj.get("cut") or obj.get("clipped"):
+            continue  # a web page's text cut by a box on the page: web_clipped's finding
         x0, y0, x1, y1 = object_box(obj)
         if x0 < -0.5 or y0 < -0.5 or x1 > ctx.width + 0.5 or y1 > ctx.height + 0.5:
             continue  # off the frame: off_frame's finding
@@ -189,6 +197,19 @@ def safe_area(ctx: StillContext, settings: SafeAreaRule) -> Iterator[Issue]:
         if not sides:
             continue
         worst = max(outside[side] for side in sides)
+        band = next((r for r in reserved_boxes(ctx) if intersection(object_box(obj), r[2]) is not None), None)
+        if band is not None:   # under the captions (or another overlay that keeps its part of the frame)
+            hint = "; a web page with region: body is laid out clear of it" if obj.get("source") == "web" else ""
+            yield Issue(
+                f"{describe(obj)} is in the part of the frame overlay '{band[0]}' ({band[1]}) keeps for itself, "
+                f"outside the safe area at the {' and '.join(sides)} ({worst:.0f} px into the {', '.join(sides)} margin); "
+                f"move it out of that band{hint}",
+                object_box(obj),
+                (obj,),
+                value=round(worst, 1),
+                limit=round(tolerance, 1),
+            )
+            continue
         yield Issue(
             f"{describe(obj)} is outside the safe area at the {' and '.join(sides)} "
             f"({worst:.0f} px into the {', '.join(sides)} margin)",
@@ -197,6 +218,12 @@ def safe_area(ctx: StillContext, settings: SafeAreaRule) -> Iterator[Issue]:
             value=round(worst, 1),
             limit=round(tolerance, 1),
         )
+
+
+def reserved_boxes(ctx: StillContext) -> list[tuple[str, str, Bbox]]:
+    """``(overlay id, type, box)`` of the overlays that keep part of the frame for themselves
+    (``reserve``: bottom captions), from the layout dump's header (px)."""
+    return [(str(r["overlay"]), str(r["type"]), tuple(float(v) for v in r["box"])) for r in ctx.layout.get("reserved", [])]  # type: ignore[misc]
 
 
 @rule("text_overlap", default="error")
@@ -486,12 +513,16 @@ def overlay_overlap(ctx: StillContext, settings: OverlayOverlapRule) -> Iterator
         if is_overlay(obj):
             boxes.setdefault(str(obj["overlay"]), []).append(object_box(obj))
     content = [obj for obj in ctx.objects if not is_overlay(obj) and obj["kind"] in _CONTENT_KINDS]
+    reserved = reserved_boxes(ctx)
     for overlay, parts in boxes.items():
         union = (min(b[0] for b in parts), min(b[1] for b in parts), max(b[2] for b in parts), max(b[3] for b in parts))
+        bands = [r[2] for r in reserved if r[0] == overlay]
         for obj in content:
             box = intersection(union, object_box(obj))
             if box is None:
                 continue
+            if is_text(obj) and not ctx.camera_moved and any(intersection(object_box(obj), band) is not None for band in bands):
+                continue  # text in the part of the frame the overlay keeps for itself: safe_area's finding
             fraction = area(box) / max(area(object_box(obj)), 1e-9)
             if fraction < settings.min_overlap:
                 continue

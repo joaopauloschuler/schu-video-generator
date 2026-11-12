@@ -181,6 +181,7 @@ def test_a_term_coloured_otherwise_by_a_function_or_area_is_a_conflict() -> None
 # ----- rendering ----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_dots_trace_on_words_in_both_formats(make_project, media: Path) -> None:
     beats = [{"text": "the parabola and its tangent at one"},
@@ -205,6 +206,7 @@ def test_dots_trace_on_words_in_both_formats(make_project, media: Path) -> None:
             assert safe_area_of(size).contains(mob, tolerance=0.05), type(mob).__name__
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_per_beat_reveal_and_trace_back(make_project, media: Path) -> None:
     beats = [{"text": "one two three"}, {"text": "four five six"}, {"text": "seven eight nine", "actions": [{"trace": "dot1", "to": 2, "at": 0.3, "until": "p_b4"}]},

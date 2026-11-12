@@ -670,6 +670,14 @@ from vidgen.three_d.framing import framing_3d  # noqa: E402
 from vidgen.three_d.motion import ObjectChange  # noqa: E402
 from vidgen.three_d.passes import GUIDE_PASSES, guide_pass, make_guide_passes, mask_table  # noqa: E402
 from vidgen.three_d.spec import Camera3D, Floor3D, Light3D, Object3D, Scene3DParams  # noqa: E402
+from vidgen.browser.timing import clip_plan, planned_still_frames  # noqa: E402
+from vidgen.web.clip import make_web_clip, web_page_layouts  # noqa: E402
+from vidgen.web.entry import web_entry_problems  # noqa: E402
+from vidgen.web.inputs import json_problem as web_json_problem  # noqa: E402
+from vidgen.web.inputs import design_width_problem as web_design_width_problem  # noqa: E402
+from vidgen.web.inputs import page_shape as web_page_shape  # noqa: E402
+from vidgen.web.inputs import page_viewport as web_page_viewport  # noqa: E402
+from vidgen.web.inputs import scene_page_inputs as web_page_inputs  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
@@ -985,6 +993,16 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "ClipInfo",
     "ClipMobject",
     "make_3d_clip",
+    "make_web_clip",
+    "web_page_layouts",
+    "planned_still_frames",
+    "web_entry_problems",
+    "web_json_problem",
+    "web_page_inputs",
+    "web_page_shape",
+    "web_page_viewport",
+    "web_design_width_problem",
+    "clip_plan",
     "make_guide_passes",
     "GUIDE_PASSES",
     "guide_pass",

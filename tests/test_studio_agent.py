@@ -50,6 +50,7 @@ def outline_of(app: StudioApp) -> dict[str, Any]:
 # ----- notes --------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_locate_and_place_follow_the_sections(app: StudioApp) -> None:
     app.load(text=SCORE)
     outline = outline_of(app)
@@ -287,6 +288,7 @@ def call(srv: StudioServer, method: str, path: str, body: Any = None) -> tuple[i
     return out
 
 
+@pytest.mark.slow
 def test_routes(server: StudioServer, monkeypatch: pytest.MonkeyPatch) -> None:
     from vidgen import httpapi
 

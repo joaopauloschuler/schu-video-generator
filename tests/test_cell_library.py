@@ -33,6 +33,7 @@ def world(*objects: ObjectSpec, **cell: object) -> object:
 # ----- cells ----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_typical_plant_cell() -> None:
     w = built("plant")
     kinds = {e.kind for e in w.entries}
@@ -49,6 +50,7 @@ def test_a_typical_plant_cell() -> None:
         assert w.cell.distance(c.center) > -3.0
 
 
+@pytest.mark.slow
 def test_bacteria_gram_negative_and_positive() -> None:
     w = built("bacterium")
     assert w.size == 2.0 and w.gram == "negative" and [n for n, _ in w.membranes] == ["bacterial_inner_membrane", "bacterial_outer_membrane"]
@@ -95,6 +97,7 @@ def test_cell_options_and_sizes() -> None:
 # ----- fine structure as compartments ------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_er_is_one_lumen_with_the_nuclear_envelope() -> None:
     w = built()
     er, nucleus, smooth = w.thing("rough_er"), w.thing("nucleus"), w.thing("smooth_er")
@@ -137,6 +140,7 @@ def test_golgi_cis_to_trans_with_coats() -> None:
     assert copii and all(v.option("coat") == "copii" for v in copii)       # COPII at the ER's exit sites
 
 
+@pytest.mark.slow
 def test_chloroplast_and_late_endosome_inner_compartments() -> None:
     w = built("plant")
     chloroplast = w.thing("chloroplasts#1")
@@ -351,6 +355,7 @@ def test_nucleolus_and_heterochromatin_labels() -> None:
     assert nucleolus.contains(granular) and not any(r.contains(granular) for r in rims)
 
 
+@pytest.mark.slow
 def test_stroma_lamellae_join_grana_at_their_margins() -> None:
     """A stroma lamella enters a granal thylakoid only at its margin (the disc's end), never
     crossing the stack; and the thylakoids' lumen stays one space."""

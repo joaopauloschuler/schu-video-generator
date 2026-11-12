@@ -7,8 +7,16 @@
 generated from code, free to use.** [Listen](docs/music/README.md) ·
 [Studio](docs/CONFIG.md#music-studio-vidgen-studio)
 
+**Six kinds of scene, mixed freely in one video:**
+- **[Python-based presentation scenes](docs/gallery/README.md):** titles, diagrams, charts, equations and code, animated and timed to the narration.
+- **[3D scenes](docs/COOKBOOK-3D.md):** plain shapes, labels and stand-in figures under one light, with a camera that moves on the narration's words, all described in the project file.
+- **[2D cartoon](docs/gallery/README.md#2d-cartoons):** characters that walk, talk and act on a stage.
+- **[Isometric cartoon](docs/gallery/README.md#isometric-cartoons):** the same characters in a village or a room seen from above at an angle, with rain, snow and time of day.
+- **[Web scenes](docs/gallery/web.md):** a page you write in HTML, CSS and JavaScript, with three.js, D3 and Chart.js included.
+- **[Video-model scenes](docs/COOKBOOK-GENERATED-VIDEO.md):** shots made by a paid AI video model from a 3D guide video, a starting picture and reference pictures of the characters.
+
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
-an MCP client) uses to produce narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
+an MCP client) uses to produce narrated, animated videos (explainers, cartoon stories, Shorts) and slide decks. Its main users are AI agents, not people
 editing on a timeline: a human describes the video they want, and the agent writes the project,
 checks it and renders it.
 
@@ -138,7 +146,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration),
     `3d` (simple 3D drawn by three.js in headless Chromium: shapes, labels, groups and character
     stand-ins under one light that move, turn, appear, glow and walk on words, a camera that orbits,
-    pushes in or flies to an object and follows it);
+    pushes in or flies to an object and follows it), `web` (a scene you write yourself as a web page
+    in HTML, CSS and JavaScript, or a canvas or three.js script, screenshotted frame by frame in
+    headless Chromium on the video's clock: CSS animations, timers and `requestAnimationFrame` follow
+    the narration, the theme comes as CSS variables, lint reads its text; `vidgen guide web`);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -576,9 +587,12 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
     downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
     Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
     by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
-13. Optional, only for `3d` scenes (three.js in headless Chromium, Phase AI): the plain install
+13. Optional, only for `3d` and `web` scenes (headless Chromium, Phases AI and AK): the plain install
     brings Playwright; `py -m playwright install chromium` downloads the browser (~150 MB, once).
-    three.js itself ships with schu-video-generator; nothing is fetched while rendering.
+    three.js itself ships with schu-video-generator (the core and a chosen set of add-ons for `web`
+    scenes: glTF loading, environment lighting, bloom, HTML labels, thick lines, rounded boxes, SVG
+    shapes, orbit controls), and so do anime.js, Motion, D3, Chart.js and lottie-web for `web`
+    scenes; nothing is fetched while rendering.
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
@@ -617,7 +631,7 @@ sudo apt install espeak-ng                    # optional fallback: kokoro uses t
 # 7. Optional: composed music; the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
 vidgen soundfont fetch                        # or let the first composed render download it
 
-# 8. Optional: 3d scenes (three.js in headless Chromium through Playwright)
+# 8. Optional: 3d and web scenes (headless Chromium through Playwright)
 python -m playwright install chromium         # add --with-deps if Chromium's system libraries are missing
 ```
 
@@ -913,6 +927,10 @@ my_video/
   about 15 s in one `3d` scene: shapes, two stand-ins who walk and turn to each other, a ball that
   appears, rolls and glows, four camera moves on spoken words, karaoke captions, and its guide
   passes (depth, outline, mask) (no media committed).
+- [examples/web](examples/web/README.md) — "Where rain comes from", three short `web` scenes
+  written as web pages: an HTML and CSS page whose cards come in on narration beats, a canvas
+  drawing of a rain gauge with its text declared to lint, and a three.js planet written by hand; 16:9
+  and a 9:16 variant, about 50 s with Kokoro narration (no media committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -974,12 +992,12 @@ my_video/
 
 ## Working on schu-video-generator
 
-`pip install -e ".[dev]"`, then `python -m pytest -q` runs every test (about 17 minutes on two
-CPUs: many tests render tiny videos); `python -m pytest -q -n auto` runs them in parallel on
-every CPU (pytest-xdist, in the `dev` extra). Quicker: `python -m pytest -q -m "not slow"`
-(about two minutes) skips the render sweeps over every scene type, the end-to-end renders of
-sound, music and transitions, and every test that takes over ~1.5 s; `-m "not render"` skips
-all rendering. Run the full suite before committing. No test needs network or keys.
+`pip install -e ".[dev]"`, then `python -m pytest -q` runs the default set: every test except
+those marked `slow` (about 3–4 minutes on one CPU). `python -m pytest -q -m slow` runs only the
+slow ones (the render sweeps over every scene type, the end-to-end renders, and every test over
+about 0.4 s: hours on one CPU), and `-m "slow or not slow"` runs everything; `-n auto` runs them
+in parallel on every CPU (pytest-xdist, in the `dev` extra). `-m "not render"` also skips the
+remaining rendering tests. No test needs network or keys.
 
 ## Troubleshooting
 

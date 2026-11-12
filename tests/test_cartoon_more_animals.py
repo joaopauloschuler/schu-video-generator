@@ -40,6 +40,7 @@ def built(species: str, **look: Any) -> Any:
 # ----- each species builds, poses and talks ---------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("species", NEW_SPECIES)
 def test_each_new_species_builds_poses_and_talks(species: str) -> None:
     c = animal(species, height=2.0, outfit="shorts")
@@ -70,6 +71,7 @@ def test_each_new_species_builds_poses_and_talks(species: str) -> None:
         c.set_wind(0.0)
 
 
+@pytest.mark.slow
 def test_designs_differ_from_each_other_and_from_step_114() -> None:
     from test_cartoon_outfits import drawing_digest
 
@@ -88,6 +90,7 @@ def test_species_proportions() -> None:
     assert owl.eye_size > plain.eye_size and owl.eye_gap > plain.eye_gap
 
 
+@pytest.mark.slow
 def test_frog_eyes_sit_high_and_effects_go_above_them() -> None:
     frog, cat = animal("frog", height=2.0), animal("cat", height=2.0)
 
@@ -103,6 +106,7 @@ def test_frog_eyes_sit_high_and_effects_go_above_them() -> None:
         assert crown_top(c) == pytest.approx(c.parts["head"].get_top()[1], abs=0.01)
 
 
+@pytest.mark.slow
 def test_turtle_shell_behind_the_body() -> None:
     turtle, person = animal("turtle"), animal("human")
     body = turtle.parts["body"].family_members_with_points()
@@ -116,6 +120,7 @@ def test_turtle_shell_behind_the_body() -> None:
     assert width > person.face("front").part_box("body")[2] - person.part_box("body")[0]   # the rim shows round the body
 
 
+@pytest.mark.slow
 def test_wings_flippers_and_feet() -> None:
     owl, penguin, frog = animal("owl"), animal("penguin"), animal("frog", outfit="shorts")
     assert {m.get_fill_color().to_hex().upper() for m in owl.parts["arm_left"].family_members_with_points()} == {PIN_COLORS["skin"]}
@@ -142,6 +147,7 @@ def test_species_motion_gaits() -> None:
     assert walk_cycle(1.5, gait=penguin.gait).rock == pytest.approx(-penguin.gait.waddle)   # over the other foot
 
 
+@pytest.mark.slow
 def test_a_waddle_rocks_the_body_and_keeps_the_legs_upright() -> None:
     c = built("penguin")
     cycle = walk_cycle(0.5, gait=c.species_motion.gait)
@@ -154,6 +160,7 @@ def test_a_waddle_rocks_the_body_and_keeps_the_legs_upright() -> None:
     c.set_state(walking_state(c.posed_state(pose="stand"), cycle, "front"))   # draws
 
 
+@pytest.mark.slow
 def test_built_animals_walk_their_way() -> None:
     turtle, penguin, person = built("turtle"), built("penguin"), built("human")
     assert turtle.species_motion is species_motion("turtle") and person.species_motion is species_motion("human")
@@ -161,6 +168,7 @@ def test_built_animals_walk_their_way() -> None:
     assert Walk(turtle, 3.0).step_length < Walk(person, 3.0).step_length
 
 
+@pytest.mark.slow
 def test_default_speeds_and_jumps_follow_the_species() -> None:
     from vidgen import extensions, registry
 
@@ -206,6 +214,7 @@ def test_random_looks_of_new_species(species: str) -> None:
 # ----- a stage --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_new_animals_on_a_stage(make_project, tmp_path: Path) -> None:
     from test_cartoon_stage import render_with_layout

@@ -169,9 +169,22 @@ user their machine and their session.
 
 ## 8. Run the tests that cover the change, not the whole suite
 
-**Problem.** The full suite takes about 10 minutes on 2 cores (HANDOFF Step 65), and much longer
-on one. Running it for a two-line fix wastes the user's time, and running it in parallel crashes
-the machine (rule 7).
+**Problem.** Every test together takes about 3.7 hours on the owner's 1-CPU machine (HANDOFF
+Step 327). The default run (`python -m pytest -q`) leaves out the tests marked `slow` and takes
+about 3–5 minutes there (194 s, 6235 passed, in Step 327). Running even that for a
+two-line fix wastes the user's time, and running anything in parallel crashes the machine (rule 7).
+
+| Command | Runs | Time on the owner's machine (Step 327) |
+|---|---|---|
+| `python -m pytest -q` | everything except `slow` (the default) | 194 s |
+| `python -m pytest -q -m "not render"` | the default without rendering tests | less (not measured) |
+| `python -m pytest -q -m slow` | only the `slow` tests | about 3 hours |
+| `python -m pytest -q -m "slow or not slow"` | every test | about 3.7 hours |
+| `python -m pytest -q tests/test_x.py::test_y` | that test, even if `slow` | — |
+
+`tests/conftest.py` does the leaving out: a `slow` test is deselected unless the `-m` expression
+names `slow` or the test is named by its node id. A `-m` expression without `slow` (such as
+`-m "not render"`) still leaves the slow tests out.
 
 **Rule.**
 
@@ -203,12 +216,14 @@ half a gigabyte for a fact a path function could give in a millisecond.
 - Test the logic without rendering when you can: call the path function, the config model, the
   layout function, the CLI parser.
 - A test that must render uses the smallest project that shows the behaviour: one scene, one or
-  two short beats, 160x90 at 5 fps, `tmp_path`, `@pytest.mark.render`. Mark anything over a few
-  seconds `@pytest.mark.slow` as well.
+  two short beats, 160x90 at 5 fps, `tmp_path`, `@pytest.mark.render`. Mark a test that takes
+  over about 0.4 s `@pytest.mark.slow`: it is then left out of the default run (rule 8), so run
+  it yourself by node id or with `-m slow` when your change touches it.
 - Share one render between several assertions (a module-scoped fixture) instead of rendering
   again per test.
-- The target is a full suite under **5 minutes** end to end on this machine. A new test that
-  pushes it past that needs a reason in the commit message.
+- The target is a default run (`python -m pytest -q`) of about **4 minutes**, never over 5, on
+  the owner's machine. A new test that pushes it past that needs a reason in the commit message.
+  Making a `slow` test fast and removing its mark is welcome (`tasklist.md` backlog, Step 327).
 
 **Why.** Every test is paid for on every run, by every agent, for as long as the test exists.
 

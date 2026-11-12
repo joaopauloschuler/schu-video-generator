@@ -114,6 +114,7 @@ def test_readback_joins_a_transcripts_split_decimals_and_reads_its_minus() -> No
 # ----- renders -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_version_revealed_by_an_action_morphs_for_the_scenes_own_time(make_project, media: Path) -> None:
     versions = ["def f(x):\n    return x\n", {"code": "def f(x: int) -> int:\n    return x\n", "highlight": "changed"}]
@@ -124,6 +125,7 @@ def test_a_version_revealed_by_an_action_morphs_for_the_scenes_own_time(make_pro
     assert morph.end - morph.start == pytest.approx(MORPH_SECONDS, abs=0.25)   # was the action's 0.8 s
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_node_revealed_on_a_word_brings_its_edge(make_project, media: Path) -> None:
     p = {"nodes": ["app", "cache", "db"], "edges": ["app -> cache", "cache -> db"]}
@@ -134,6 +136,7 @@ def test_a_node_revealed_on_a_word_brings_its_edge(make_project, media: Path) ->
     assert plays(scene, "s_b2") == []   # the node's own step finds node and edge on screen already
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_dots_label_keeps_clear_of_a_points_label(make_project, media: Path) -> None:
     p = {"functions": ["(x - 3)^2/2 + 1"], "x_range": [0, 6.5], "dots": [{"x": 0, "label": "slope {slope}"}],

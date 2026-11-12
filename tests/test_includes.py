@@ -211,6 +211,7 @@ def test_unknown_set_is_a_config_error(tmp_path: Path) -> None:
         Project.load(config)
 
 
+@pytest.mark.slow
 def test_validate_problems_point_into_the_sets_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     sets = json.loads(json.dumps(SETS))
     sets["sets"]["meadow"]["props"][0]["prop"] = "rok"
@@ -226,6 +227,7 @@ def test_validate_problems_point_into_the_sets_file(tmp_path: Path, capsys: pyte
     assert [Path(p).name for p in doc["included"]] == ["cast.yaml", "sets.yaml"]
 
 
+@pytest.mark.slow
 def test_series_example_episodes_validate(capsys: pytest.CaptureFixture[str]) -> None:
     for episode in ("episode_1", "episode_2"):
         assert cli.main(["validate", str(SERIES / episode)]) == 0

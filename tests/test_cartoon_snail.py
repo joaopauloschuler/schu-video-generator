@@ -21,17 +21,20 @@ from vidgen.config import CharacterLook
 from vidgen.random_cast import SHELL_COLORS, SPECIES_COLORS, random_look
 
 
+@pytest.mark.slow
 def test_a_snail_builds_poses_and_talks() -> None:
     test_each_new_species_builds_poses_and_talks("snail")
     assert not animal("snail").has_part("tail")
 
 
+@pytest.mark.slow
 def test_its_drawing_is_its_own() -> None:
     looks = [CharacterLook(species=s) for s in ("human", "turtle", "frog", "snail")]
     assert len({drawing_digest(look) for look in looks}) == 4
     assert len({drawing_digest(look, front=True) for look in looks}) == 4
 
 
+@pytest.mark.slow
 def test_the_spiral_shell_is_behind_the_body_in_the_hair_colour() -> None:
     snail, person = animal("snail"), animal("human")
     body = snail.parts["body"].family_members_with_points()
@@ -42,6 +45,7 @@ def test_the_spiral_shell_is_behind_the_body_in_the_hair_colour() -> None:
     assert front.part_box("body")[2] - front.part_box("body")[0] > person.face("front").part_box("body")[2] - person.part_box("body")[0]
 
 
+@pytest.mark.slow
 def test_the_feelers_rise_over_the_head_and_sway() -> None:
     snail, cat = animal("snail", height=2.0), animal("cat", height=2.0)
     head = snail.parts["head"]
@@ -53,6 +57,7 @@ def test_the_feelers_rise_over_the_head_and_sway() -> None:
     assert not np.allclose(before, np.vstack([m.points for m in head.family_members_with_points()]))
 
 
+@pytest.mark.slow
 def test_the_slowest_walker() -> None:
     assert species_motion("snail").speed < species_motion("turtle").speed < 1.0
     assert Walk(built("snail"), 3.0).step_length < Walk(built("human"), 3.0).step_length

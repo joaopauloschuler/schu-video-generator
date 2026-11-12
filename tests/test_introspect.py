@@ -99,6 +99,7 @@ def expected_box(x0: float, y0: float, x1: float, y1: float) -> list[float]:
 # ----- objects -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_shape_box_colours_and_stroke(small_config: None) -> None:
     square = Square(side_length=2).set_fill(BLUE, opacity=0.5).set_stroke(WHITE, width=8, opacity=0.7).shift([1, 1, 0])
     [item] = objects(FakeScene(square))
@@ -151,6 +152,7 @@ def test_text_is_one_object_with_size_colour_and_backdrop(small_config: None) ->
     assert item["bbox"] == pytest.approx([left, top, right, bottom], abs=0.3)
 
 
+@pytest.mark.slow
 def test_text_kinds_and_contents(small_config: None) -> None:
     markup = MarkupText("<b>Bold</b> &amp; plain")
     para = Paragraph("first line", "second")

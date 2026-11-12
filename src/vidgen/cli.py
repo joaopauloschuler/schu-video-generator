@@ -517,19 +517,20 @@ def validate_warnings(project: Project) -> list[str]:
     (§69.44), a host speaking only in its own voice without one (§71), lines that overlap a
     line of their own voice (§69.34), dubbed voices that lose their kind or merge (§80) and
     composed music without the ``music`` extra or the SoundFont (§85), and a Short that is not
-    vertical or longer than its ``max_seconds`` (§101), and ``3d`` scenes without Playwright or
-    its Chromium (§114.4)."""
+    vertical or longer than its ``max_seconds`` (§101), ``3d`` scenes without Playwright or
+    its Chromium (§114.4), and ``.woff2`` files in the project's ``fonts/`` folder, which vidgen does not read (§119)."""
     from vidgen.carry import carry_warnings
     from vidgen.cuts import shorts_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
     from vidgen.cartoon.host import host_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.dubbing import dub_warnings
+    from vidgen.fonts import font_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.music import music_warnings
     from vidgen.music_pieces import piece_warnings
     from vidgen.overlap import overlap_warnings
-    from vidgen.three_d.browser import install_warnings
+    from vidgen.browser.chromium import install_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
     from vidgen.tts import tts_warnings
@@ -537,6 +538,7 @@ def validate_warnings(project: Project) -> list[str]:
 
     return (
         theme_warnings(project)
+        + font_warnings(project.root)
         + pronunciation_warnings(project)
         + voice_warnings(project.config, project.origins)
         + tts_warnings(project)
@@ -2580,9 +2582,15 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--preview", action="store_true", help="fast low-resolution render")
     quality.add_argument(
         "--draft", action="store_true",
-        help="fastest check of timing and staging: ~8 fps, 240p, no idle / wind / shadows / particles / light grade (build/draft, ..._draft.mp4)",
+        help="fastest look at the whole video, for timing and staging: 240p at ~8 fps at the video's shape (draft: in the config sets "
+             "another size); a web scene's page is drawn that small (2 to 3 times faster than --preview), a cartoon has no "
+             "idle / wind / shadows / particles / light grade (build/draft, ..._draft.mp4)",
     )
-    p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene (repeatable)")
+    p.add_argument(
+        "--scene", action="append", default=[], metavar="ID",
+        help="render only this scene (repeatable) and join the video again from it and the other scenes' existing renders, "
+             "as they are; a scene with no render at this quality and variant yet is rendered too (a line says which)",
+    )
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
     p.add_argument(
@@ -2595,7 +2603,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
-    p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
+    p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current (with --scene: only those scenes)")
     p.add_argument(
         "--guide-passes", nargs="?", const="all", metavar="LIST",
         help="also draw guide passes of every 3d scene, beside its 3D clip (build/.../three_d/<scene>.<pass>.mkv): depth (near white, "

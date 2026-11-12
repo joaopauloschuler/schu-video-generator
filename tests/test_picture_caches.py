@@ -109,6 +109,7 @@ def test_a_box_works_out_its_picture_once() -> None:
 MAP = "\n".join(["#" * 14] + ["#" + "." * 12 + "#"] * 3 + ["#..a.........#"] + ["#" + "." * 12 + "#"] * 9)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_lit_place_draws_the_same_with_and_without_the_caches(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -127,6 +128,7 @@ def test_a_lit_place_draws_the_same_with_and_without_the_caches(make_project, tm
     assert max(int(np.abs(a.astype(int) - b.astype(int)).max()) for a, b in zip(kept, plain)) == 0
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_zoom_frames_an_object_and_moving_parts_stay_in_front(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

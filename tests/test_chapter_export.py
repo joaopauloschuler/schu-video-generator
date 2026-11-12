@@ -38,6 +38,7 @@ def text(sid: str, seconds: float, **extra: Any) -> dict[str, Any]:
 # ----- config ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_config_defaults_and_errors() -> None:
     config = parse_config(minimal_config())
     assert (config.chapters.metadata, config.chapters.youtube, config.chapters.intro) == (True, True, "Intro")
@@ -56,6 +57,7 @@ def test_video_tags() -> None:
     assert tags == {"title": "Other", "artist": "Jane", "date": "2026"}
 
 
+@pytest.mark.slow
 def test_chapters_and_metadata_do_not_change_scene_fingerprints(make_project) -> None:
     base = Project.load(make_project(minimal_config(), folder="a"))
     changed = Project.load(
@@ -81,6 +83,7 @@ def test_published_chapters_start_at_zero() -> None:
     assert ce.published_chapters(config, []) == ()
 
 
+@pytest.mark.slow
 def test_video_chapters_with_intro_follows_the_plan(make_project) -> None:
     scenes = [text("intro", 3.0), card("setup", "Setup", 1, 2.0), text("more", 1.0), text("data", 2.0, chapter="Data")]
     project = Project.load(make_project(minimal_config(scenes=scenes)))
@@ -143,6 +146,7 @@ def test_youtube_list_and_rules() -> None:
     assert "'C' (0:40-0:45) lasts 5.5 s" in problem
 
 
+@pytest.mark.slow
 def test_validate_warns_about_the_youtube_list(make_project) -> None:
     scenes = [text("intro", 3.0), card("setup", "Setup", 1, 12.0), card("more", "More", 2, 12.0)]
     project = Project.load(make_project(minimal_config(scenes=scenes), folder="a"))

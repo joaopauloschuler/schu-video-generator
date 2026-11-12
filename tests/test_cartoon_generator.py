@@ -46,6 +46,7 @@ def test_every_parameter_value_builds(values: dict[str, Any]) -> None:
     c.set_part("head", angle=20).face("left")   # posing still works on every look
 
 
+@pytest.mark.slow
 def test_all_accessories_together() -> None:
     look = CharacterLook(body="tall", hair="long", ears="pointy", accessories=["glasses", "hat", "scarf", "bag"])
     c = Character(generate_parts(look, COLORS), name="t")
@@ -54,6 +55,7 @@ def test_all_accessories_together() -> None:
     assert not worn_on_body.has_part("accessory")   # scarf and bag are drawn with the body
 
 
+@pytest.mark.slow
 def test_same_parameters_give_the_same_shapes() -> None:
     look = {"body": "bean", "hair": "curly", "eyes": "round", "accessories": ["hat"], "seed": 7}
     first, second = shapes_of(CharacterLook(**look)), shapes_of(CharacterLook(**look))
@@ -62,6 +64,7 @@ def test_same_parameters_give_the_same_shapes() -> None:
     assert any(not np.array_equal(first[k], other[k]) for k in first)
 
 
+@pytest.mark.slow
 def test_parameters_change_the_shapes() -> None:
     base = shapes_of(CharacterLook())
     for values in ({"body": "square"}, {"head_size": 1.3}, {"eyes": "oval"}, {"hair": "short"}, {"nose": "dot"}):
@@ -93,6 +96,7 @@ def stroke_widths(c: Character) -> list[float]:
     return [m.get_stroke_width() for m in c.parts["body"].family_members_with_points() if m.get_stroke_width() > 0]
 
 
+@pytest.mark.slow
 def test_outline_scales_with_height_and_keeps_one_pixel() -> None:
     from manim import tempconfig
 
@@ -117,6 +121,7 @@ def cartoon_config(**look: Any) -> dict[str, Any]:
     return minimal_config(characters=[{"name": "pip", "look": look}])
 
 
+@pytest.mark.slow
 def test_character_command_prints_the_look(make_project, capsys) -> None:
     root = make_project(cartoon_config(body="tall", eyes="sleepy"))
     assert cli.main(["character", "pip", str(root)]) == 0
@@ -126,6 +131,7 @@ def test_character_command_prints_the_look(make_project, capsys) -> None:
     assert "unknown character 'pi'; did you mean 'pip'?" in capsys.readouterr().err
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_character_command_writes_a_png(make_project, capsys) -> None:
     root = make_project(cartoon_config(hair="short", accessories=["glasses"], seed=1))

@@ -87,6 +87,7 @@ def voice_project(make_project) -> Path:
     return root
 
 
+@pytest.mark.slow
 def test_a_new_cut_is_current_and_the_record_says_what_it_was_made_from(make_project) -> None:
     root = voice_project(make_project)
     cut(root)
@@ -96,6 +97,7 @@ def test_a_new_cut_is_current_and_the_record_says_what_it_was_made_from(make_pro
     assert doc["version"] == 1 and set(entry) == {"sha256", "source"} and set(entry["source"]) == {"narration_sha256", "offset", "length"}
 
 
+@pytest.mark.slow
 def test_edited_narration_blocks_and_a_recut_clears_it(make_project) -> None:
     root = voice_project(make_project)
     cut(root)
@@ -106,6 +108,7 @@ def test_edited_narration_blocks_and_a_recut_clears_it(make_project) -> None:
     assert changed(plan_of(root)) == ""
 
 
+@pytest.mark.slow
 def test_narration_text_edited_without_tts_asks_for_tts_first(make_project) -> None:
     from vidgen.tts import beat_providers
 
@@ -154,6 +157,7 @@ def test_a_file_changed_after_its_cut_blocks(make_project) -> None:
     assert "the file was changed after it was cut" in changed(plan_of(root))
 
 
+@pytest.mark.slow
 def test_guide_shot_edited_beat_or_scene_blocks_with_guide_and_a_recut_clears(make_project) -> None:
     root = make_project(config(shot_of("a", guide=True, first_frame="render"), shot_of("b", first_frame="render")))
     render = stub_render(root)
@@ -169,6 +173,7 @@ def test_guide_shot_edited_beat_or_scene_blocks_with_guide_and_a_recut_clears(ma
     assert changed(plan_of(root, "a")) == "" and changed(plan_of(root, "b")) == ""
 
 
+@pytest.mark.slow
 def test_voice_recut_without_guide_leaves_the_guide_record(make_project) -> None:
     root = make_project(config(shot_of("a", audio="beat", guide=True)))
     tone(root / "audio" / "a.mp3", 2.0)
@@ -185,6 +190,7 @@ def test_shot_prompt_edit_does_not_block(make_project) -> None:
     assert changed(plan_of(root)) == ""
 
 
+@pytest.mark.slow
 def test_draft_size_change_blocks_a_guide(make_project) -> None:
     root = make_project(config(shot_of("a", guide=True)))
     cut(root, guide=True, render=stub_render(root))
@@ -192,6 +198,7 @@ def test_draft_size_change_blocks_a_guide(make_project) -> None:
     assert "guide.mp4: the draft's size or frame rate changed" in changed(plan_of(root))
 
 
+@pytest.mark.slow
 def test_3d_params_edit_blocks_and_the_guide_choice_is_recorded(make_project) -> None:
     root = make_project(guide_config("depth"))
     render = stub_render(root, beats={"act": 1.0}, passes=("depth", "outline"))
@@ -208,6 +215,7 @@ def test_3d_params_edit_blocks_and_the_guide_choice_is_recorded(make_project) ->
     assert "guide.depth.mp4: the scene changed" in changed(plan_of(root))   # the depth file was cut before the camera moved
 
 
+@pytest.mark.slow
 def test_picking_a_take_does_not_block_other_shots(make_project, tmp_path: Path) -> None:
     root = make_project(config(shot_of("a", guide=True), shot_of("b", guide=True)))
     cut(root, guide=True, render=stub_render(root))
@@ -219,6 +227,7 @@ def test_picking_a_take_does_not_block_other_shots(make_project, tmp_path: Path)
     assert changed(plan_of(root, "a")) == "" and changed(plan_of(root, "b")) == ""
 
 
+@pytest.mark.slow
 def test_plan_text_and_json_show_the_block(make_project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     root = voice_project(make_project)
     cut(root)
@@ -250,6 +259,7 @@ def test_run_pay_refuses_before_submit_or_tunnel(make_project, fake_cloudflared:
     assert report.shots[0].status == "blocked" and "inputs changed" in report.shots[0].message and any("blocked" in line for line in lines)
 
 
+@pytest.mark.slow
 def test_a_paid_request_is_reused_free_with_a_note_and_a_recut_is_a_new_request(make_project) -> None:
     root = make_project(config(shot_of("a", first_frame="render")))
     render = stub_render(root)
@@ -268,6 +278,7 @@ def test_a_paid_request_is_reused_free_with_a_note_and_a_recut_is_a_new_request(
     assert not item.cached and changed(item) == "" and not any("reused free" in n for n in item.shot.notes)
 
 
+@pytest.mark.slow
 def test_an_earlier_job_is_not_blocked_either(make_project) -> None:
     root = make_project(config(shot_of("a", first_frame="render")))
     cut(root, guide=True, render=stub_render(root))
@@ -279,6 +290,7 @@ def test_an_earlier_job_is_not_blocked_either(make_project) -> None:
     assert item.previous_job and changed(item) == "" and any("reused free" in n for n in item.shot.notes)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_real_draft_render_is_current_until_the_scene_is_edited(make_project) -> None:
     """The worker's recorded fingerprint is the one the plan computes."""

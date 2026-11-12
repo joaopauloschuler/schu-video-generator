@@ -229,6 +229,7 @@ def test_cli_prints_the_choice(make_project, monkeypatch: pytest.MonkeyPatch, ca
     assert out == "jobs: 3 (auto: 4.5 GB available (/proc/meminfo MemAvailable) / 1.5 GB per job = 3, 4 CPU cores)\n"
 
 
+@pytest.mark.slow
 def test_json_document_has_the_choice(make_project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     choice = fixed_choice(monkeypatch, count=2)
     assert main(["render", str(make_project()), "--scene", "nope", "--jobs", "auto", "--json"]) == 1

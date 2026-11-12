@@ -120,6 +120,7 @@ def test_mouth_without_voice() -> None:
     assert check("mouth_without_voice", [fig("pip", [100, 100, 200, 400], speaking=True, viseme="rest")], narrating=False) == []
 
 
+@pytest.mark.slow
 def test_lint_ignore_and_mid_stills(make_project) -> None:
     """Each rule's finding reaches ``lint`` and ``lint_ignore`` (by rule, or by object name) drops it;
     a mid-action still with the same problems is not checked."""
@@ -148,6 +149,7 @@ def test_lint_ignore_and_mid_stills(make_project) -> None:
     assert result.findings == [] and result.ignored > 0
 
 
+@pytest.mark.slow
 def test_what_the_layout_dump_reads_from_a_character() -> None:
     pip, kit = figure("pip"), figure("kit").shift([4.0, 0.0, 0.0])
     scene = FakeScene(pip=pip, kit=kit)
@@ -168,6 +170,7 @@ def test_what_the_layout_dump_reads_from_a_character() -> None:
     assert pip.passage is None
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_layout_dump_character_keys(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder

@@ -151,6 +151,7 @@ def test_connector_lines_run_along_the_outside() -> None:
 # ----- the helpers ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_label_is_readable_on_its_plate(ctx: None) -> None:
     theme = Theme()
     for color in ("highlight", "accent", "primary", "#202020"):
@@ -311,6 +312,7 @@ def test_previous_callouts_fade_dim_or_stay(make_project, media: Path, previous:
     assert scene.is_shown("callout2")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_focus_moves_the_camera_in_and_back(make_project, media: Path) -> None:
     steps = [{"callouts": [{"arrow": [0.3, 0.3], "label": "Here"}], "focus": True}, {"box": [0.6, 0.6, 0.2, 0.2]}]
@@ -324,6 +326,7 @@ def test_focus_moves_the_camera_in_and_back(make_project, media: Path) -> None:
     assert not scene.is_shown("callout1")                               # built for another camera: it left
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_landscape_picture_focuses_by_itself_in_a_vertical_frame(make_project, media: Path) -> None:
     """Step 57: a 16:10 screenshot in 9:16 was a thin strip; its callout steps now zoom in (the
@@ -343,6 +346,7 @@ def test_landscape_picture_focuses_by_itself_in_a_vertical_frame(make_project, m
     assert kept._cameras == [None]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_early_reveal_and_actions(make_project, media: Path) -> None:
     project = load(make_project, [{**shot(STEPS), "beats": beats([{"reveal": "step2"}], [{"zoom": "callout:Search"}], [{"dim": "image"}])}])
@@ -352,6 +356,7 @@ def test_early_reveal_and_actions(make_project, media: Path) -> None:
     assert float(scene.renderer.time) == pytest.approx(beat_total(scene), abs=1.5 / FPS)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_silent_scene_and_no_steps(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "screenshot", "params": {"path": "assets/app.png", "steps": STEPS}, "duration": 2.0},
@@ -370,6 +375,7 @@ def test_missing_image_is_a_clear_error(make_project, media: Path) -> None:
         render(project, "s", media)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_extending_callouts_example_renders(make_project, media: Path) -> None:
     text = (Path(__file__).resolve().parents[1] / "docs" / "EXTENDING.md").read_text(encoding="utf-8")

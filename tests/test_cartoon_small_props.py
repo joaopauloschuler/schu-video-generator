@@ -43,6 +43,7 @@ OPENING = ("book", "letter", "gift")
 # ----- drawing (no render) ----------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_each_small_prop_builds() -> None:
     theme = Theme()
     assert set(SMALL_PROPS) <= set(PROP_KINDS) and all(kind in PROP_HEIGHTS for kind in SMALL_PROPS)
@@ -83,6 +84,7 @@ def test_grips_and_the_spout() -> None:
     assert mirrored.prop_point(*WATERING_SPOUT)[0] < mirrored.grip_point()[0]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(("params", "message"), [
     ({"props": [{"prop": "cake", "open": True}]}, "open is for props that open (door, umbrella, book, letter, gift), not cake"),
     ({"props": [{"prop": "vase", "on": True}]}, "on is for props that switch on (fireplace, kettle, lamp, phone, tv, portal, hologram_display, scanner, crystal), not vase"),
@@ -251,6 +253,7 @@ YARD: dict[str, Any] = {
 }
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_balloons_float_away_a_can_pours_and_the_phone_rings(make_project, tmp_path: Path, monkeypatch) -> None:
     """Pip lets go of the balloons: they end above the frame, out of its hand; kit pours: the

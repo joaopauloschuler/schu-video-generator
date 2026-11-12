@@ -127,6 +127,7 @@ def test_until_next_beat_needs_a_reversible_action() -> None:
         actions.check_action_class("bad", Bad)
 
 
+@pytest.mark.slow
 def test_schema_and_listing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -155,6 +156,7 @@ def test_schema_and_listing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cap
 # ----- rendering ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_callout_on_a_target_lasts_its_beat_and_keep_stays(make_project, media: Path) -> None:
     acts = beats(
@@ -180,6 +182,7 @@ def test_callout_on_a_target_lasts_its_beat_and_keep_stays(make_project, media: 
     assert arrow.mark.z_index > max(m.z_index for m in bar.mobject.get_family())
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_callout_by_coordinates_label_spotlight_and_named_target(make_project, media: Path) -> None:
     acts = beats(
@@ -206,6 +209,7 @@ def test_callout_by_coordinates_label_spotlight_and_named_target(make_project, m
     assert box.tag.plate.get_fill_opacity() < 0.6 and min(g.get_fill_opacity() for g in glyphs) > 0.6
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_labels_keep_clear_of_text_and_a_zoomed_camera_gets_smaller_callouts(make_project, media: Path) -> None:
     acts = beats(
@@ -224,6 +228,7 @@ def test_labels_keep_clear_of_text_and_a_zoomed_camera_gets_smaller_callouts(mak
     assert zoomed.tag.height < arrow.tag.height
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_callout_due_with_a_zoom_is_built_for_the_zoomed_view(make_project, media: Path) -> None:
     acts = beats(
@@ -236,6 +241,7 @@ def test_a_callout_due_with_a_zoom_is_built_for_the_zoomed_view(make_project, me
     assert zoomed.tag.height < 0.8 * plain.tag.height   # built after the camera moved in
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_magnifier_on_an_image_target_and_on_other_targets(make_project, media: Path) -> None:
     acts = beats([{"callout": "image", "kind": "magnifier", "area": [0.1, 0.1, 0.25, 0.25], "label": "Detail"}])
@@ -328,6 +334,7 @@ def test_screenshot_caption_param_and_target() -> None:
     assert clip.target_names(clip.validate_params({"path": "a.mp4", "caption": "c"}, Theme())) == ["clip", "caption"]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_screenshot_caption_sits_under_the_picture(make_project, media: Path) -> None:
     steps = [{"box": [0.1, 0.1, 0.3, 0.2], "label": "Search", "side": "bottom"}, {"callouts": [{"box": [0.5, 0.5, 0.2, 0.2]}], "focus": True}]

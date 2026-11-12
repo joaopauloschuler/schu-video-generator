@@ -90,6 +90,7 @@ def raw_exchange(srv: StudioServer, data: bytes, wait: float = 5.0) -> bytes:
 # ----- the server's guards ------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_only_this_servers_host_is_answered(server: StudioServer) -> None:
     port = server.port
     for host in ("evil.example", f"evil.example:{port}", f"127.0.0.1:{port + 1}", f"[::1]:{port}", f"127.0.0.1.nip.io:{port}", f"LOCALHOST:{port}", ""):
@@ -100,6 +101,7 @@ def test_only_this_servers_host_is_answered(server: StudioServer) -> None:
     assert reply.startswith(b"HTTP/1.1 403") or reply.startswith(b"HTTP/1.0 403")
 
 
+@pytest.mark.slow
 def test_cross_site_posts_are_refused(server: StudioServer) -> None:
     port = server.port
     for origin in ("http://evil.example", "null", f"http://127.0.0.1:{port + 1}", "file://", f"http://localhost.evil.example:{port}"):
@@ -108,6 +110,7 @@ def test_cross_site_posts_are_refused(server: StudioServer) -> None:
         assert request(server, "POST", "/api/load", raw=b'{"preset": "calm"}', headers={"Content-Type": kind})[0] == 415, kind
 
 
+@pytest.mark.slow
 def test_request_bodies_are_bounded_and_a_bad_length_never_hangs(server: StudioServer) -> None:
     port = server.port
     head = f"POST /api/validate HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\n"
@@ -122,6 +125,7 @@ def test_request_bodies_are_bounded_and_a_bad_length_never_hangs(server: StudioS
     assert request(server, "GET", "/api/info")[0] == 200  # still answering
 
 
+@pytest.mark.slow
 def test_numbers_must_be_finite_whole_where_whole(server: StudioServer) -> None:
     assert request(server, "POST", "/api/load", {"text": TINY})[0] == 200
     for raw in (b'{"seconds": NaN, "text": "x"}', b'{"seconds": Infinity, "text": "x"}', b'{"seconds": -Infinity, "text": "x"}'):
@@ -140,6 +144,7 @@ TRAVERSALS = ("../session.json", "..%2fsession.json", "..\\session.json", "%2e%2
               "\\\\server\\share\\x.wav", "//server/share/x.wav", "/etc/passwd", "versions/v0001.yaml", "a/../../x.wav", "x.wav%00.yaml")
 
 
+@pytest.mark.slow
 def test_no_route_reaches_outside_its_folder(server: StudioServer, app: StudioApp) -> None:
     request(server, "POST", "/api/load", {"text": TINY})
     key = json.loads(request(server, "POST", "/api/render", {})[2])["result"]["key"]
@@ -155,6 +160,7 @@ def test_no_route_reaches_outside_its_folder(server: StudioServer, app: StudioAp
         assert not EXPORT_NAME.match(name), name
 
 
+@pytest.mark.slow
 def test_ids_from_requests_are_checked_before_any_path(server: StudioServer, app: StudioApp) -> None:
     request(server, "POST", "/api/load", {"text": TINY})
     for session_id in ("../x", "20260101-000000-abcd\n", "٢٠٢٦٠١٠١-000000-abcd", "20260101-000000-ABCD", "..\\20260101-000000-abcd"):
@@ -200,6 +206,7 @@ def test_save_to_project_never_follows_a_link_out(tmp_path: Path) -> None:
 # ----- hostile score text ------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_alias_bombs_deep_nesting_and_python_tags_are_problems_not_hangs() -> None:
     laughs = "a: &a [x, x, x, x, x, x, x, x, x]\n"
     prev = "a"
@@ -259,6 +266,7 @@ def test_mcp_tools_do_not_follow_a_session_link_out(tmp_path: Path, monkeypatch:
             find_session(root, bad)
 
 
+@pytest.mark.slow
 def test_the_paid_provider_needs_the_persons_confirmation(server: StudioServer, monkeypatch: pytest.MonkeyPatch) -> None:
     from vidgen import httpapi
 
@@ -336,6 +344,7 @@ def _slow_length(at_least: int) -> int:
 QUICK_TOLERANCE = 1e-9
 
 
+@pytest.mark.slow
 def test_quick_lengths_filter_as_the_exact_ones() -> None:
     n = _slow_length(fx.FAST_FFT_MIN + 1000)
     rng = np.random.default_rng(7)
@@ -369,6 +378,7 @@ def _slow_score() -> str:
     raise AssertionError("no tempo gives a slow length")
 
 
+@pytest.mark.slow
 def test_the_studio_plays_the_same_16_bit_audio_as_a_video_on_slow_lengths(app: StudioApp) -> None:
     text = _slow_score()
     app.load(text=text)
@@ -405,6 +415,7 @@ def test_templates_of_slow_lengths_play_as_their_renders(name: str) -> None:
 # ----- long pieces: stems streamed; exports block by block -------------------------------------------------
 
 
+@pytest.mark.slow
 def test_stems_that_do_not_fit_are_streamed_with_the_same_audio(app: StudioApp, tmp_path: Path) -> None:
     text = TINY + '  arp: {instrument: pluck, steps: "1358 5313", lowpass: {from: 900, to: 3000}}\n  pad: {instrument: pad, play: chords}\n'
     app.load(text=text)
@@ -447,6 +458,7 @@ def _export_before(score: Any, length: str, count: float | None, level: str) -> 
     return np.clip(audio * gain, -1.0, 1.0).astype(np.float32)
 
 
+@pytest.mark.slow
 def test_exports_made_block_by_block_are_the_same_files_and_bounded() -> None:
     peaky = parse_music_score(yaml.safe_load(
         "key: A minor\ntempo: 97\nprogression: i\nsections: [{name: a, bars: 2}]\ntracks:\n  boom: {instrument: boom, steps: \"x... .... .... ....\"}\n"

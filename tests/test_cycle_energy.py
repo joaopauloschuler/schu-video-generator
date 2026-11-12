@@ -127,6 +127,7 @@ def test_division_spec_rules() -> None:
     assert spec.assortment is not None and set(spec.assortment) <= {"m", "p"}
 
 
+@pytest.mark.slow
 def test_keyframes_show_segregation_correctly() -> None:
     mit = dv.plan_division(dv.DivisionSpec("mitosis", 4))
     ids = set(mit.keyframes[0].items)
@@ -230,6 +231,7 @@ def problems_of(make_project: Any, scenes: list[dict[str, Any]]) -> list[str]:
     return [p.message for p in project_problems(project_with(make_project, scenes, narration=NARRATION))]
 
 
+@pytest.mark.slow
 def test_cell_cycle_scenes_are_validated(make_project) -> None:
     def found(actions: list[list[dict[str, Any]]], **params: Any) -> list[str]:
         return problems_of(make_project, [scene("cell_cycle", actions, **params)])
@@ -281,6 +283,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_cell_cycle_renders(size: tuple[int, int], make_project, media: Path) -> None:
@@ -298,6 +301,7 @@ def test_cell_cycle_renders(size: tuple[int, int], make_project, media: Path) ->
     assert meiosis.stage == "cytokinesis_ii" and meiosis.kf == len(meiosis.div.keyframes) - 1
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_metabolism_renders(size: tuple[int, int], make_project, media: Path) -> None:

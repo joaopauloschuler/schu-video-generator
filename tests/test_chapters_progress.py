@@ -99,6 +99,7 @@ def test_chapter_problems() -> None:
 # ----- planned chapters ------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_plan_chapters_start_end_and_lookups(make_project) -> None:
     project = load(make_project, VIDEO)
     plan = plan_of(project)
@@ -230,6 +231,7 @@ def test_chapter_indicator_text_and_shortening(make_project) -> None:
     assert label_texts(bare)[0].strip() == "Setup"
 
 
+@pytest.mark.slow
 def test_overlay_hidden_on_a_scene_reserves_nothing_there(make_project) -> None:
     """``shown_in``: an indicator hidden on the card is left out of its render (no reserve)."""
     project = load(make_project, VIDEO, [{"type": "chapter_indicator", "reserve": True}])

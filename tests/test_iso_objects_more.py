@@ -76,6 +76,7 @@ def test_home_objects_draw_light_up_and_move() -> None:
 ISO = {"place": "indoor", "map": "#########\n#.......#\n#.l.k...#\n#.......#\n####+####", "spots": {"l": "here", "k": "there"}}
 
 
+@pytest.mark.slow
 def test_home_keys_validate() -> None:
     good = stage_params(iso={**ISO, "objects": [{"object": "fireplace", "at": "here", "on": True}, {"object": "tv", "at": "there", "on": True}]})
     assert good.iso.objects[0].state().on and good.iso.objects[1].placing().kind == "tv"
@@ -86,6 +87,7 @@ def test_home_keys_validate() -> None:
             stage_params(iso={**ISO, "objects": [bad]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_home_objects_render_move_and_light(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -151,6 +153,7 @@ def test_shop_keys_validate() -> None:
             stage_params(iso={**ISO, "objects": [bad]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_shop_objects_render(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -222,6 +225,7 @@ def test_town_keys_validate() -> None:
             stage_params(iso={**ISO, "objects": [bad]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_town_objects_render_move_and_light(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -306,6 +310,7 @@ def test_pools_of_light_are_their_own_picture_and_faint_by_day() -> None:
     assert scenery.pools(scenery.base()) and not scenery.pools((False, scenery.base()[1]))   # a front picture: no pool
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_nature_objects_render_move_and_light(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -370,6 +375,7 @@ def test_school_keys_validate() -> None:
             stage_params(iso={**ISO, "objects": [bad]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_school_objects_render_and_move(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -454,6 +460,7 @@ def test_fantasy_keys_validate() -> None:
             stage_params(iso={**ISO, "objects": [bad]})
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_fantasy_objects_render_open_move_and_light(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
@@ -564,6 +571,7 @@ def test_light_thrown_on_things_follows_the_light() -> None:
     assert gadgets.pieces[0][1].get_fill_opacity() == pytest.approx(parts[1].opacity)   # a flame: not light on things
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_seasons_objects_render_and_move(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

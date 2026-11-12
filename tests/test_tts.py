@@ -237,6 +237,7 @@ def run(root: Path, *args: str) -> int:
     return main(["tts", str(root), *args])
 
 
+@pytest.mark.slow
 def test_tts_generates_all_then_skips(make_project, api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project()
     assert run(root) == 0

@@ -61,6 +61,7 @@ COSTUMES = (["crown"], ["wizard_hat"], ["party_hat"], ["cape"], ["crown", "cape"
             ["party_hat", "bow", "backpack"])
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", PINNED_123)
 def test_step_123_animals_keep_their_drawings(name: str) -> None:
     values, digests = PINNED_123[name]
@@ -84,6 +85,7 @@ def fills(c: Character, part: str) -> set[str]:
 # ----- robots build, pose, sit, walk and talk --------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("build", BUILDS, ids=lambda b: "-".join(str(v) for v in b.values()))
 def test_every_robot_build_draws_poses_and_talks(build: dict[str, Any]) -> None:
     c = robot(**build)
@@ -113,6 +115,7 @@ def test_every_robot_build_draws_poses_and_talks(build: dict[str, Any]) -> None:
         c.set_wind(0.0)
 
 
+@pytest.mark.slow
 def test_robot_builds_differ_and_keep_humans_apart() -> None:
     digests = {drawing_digest(CharacterLook(species="robot", robot=b)) for b in BUILDS}
     assert len(digests) == len(BUILDS)
@@ -120,6 +123,7 @@ def test_robot_builds_differ_and_keep_humans_apart() -> None:
     assert drawing_digest(CharacterLook(species="robot")) not in {drawing_digest(CharacterLook(species=s)) for s in ("human", "cat")}
 
 
+@pytest.mark.slow
 def test_a_screen_face_glows_and_an_eyes_face_does_not() -> None:
     screen, eyes = robot(face="screen"), robot(face="eyes")
     assert SCREEN_GLOW.upper() in fills(screen, "eyes") and SCREEN_GLOW.upper() not in fills(eyes, "eyes")
@@ -132,6 +136,7 @@ def test_a_screen_face_glows_and_an_eyes_face_does_not() -> None:
     assert {m.get_stroke_color().to_hex().upper() for m in screen.parts["eyes"].family_members_with_points()} == {SCREEN_GLOW.upper()}
 
 
+@pytest.mark.slow
 def test_joints_hands_feet_and_wheels() -> None:
     legs, wheels, person = robot(), robot(moves_on="wheels"), figure()
     assert len(legs.parts["arm_left_lower"].family_members_with_points()) > len(person.parts["arm_left_lower"].family_members_with_points())
@@ -143,6 +148,7 @@ def test_joints_hands_feet_and_wheels() -> None:
     assert PIN_COLORS["clothes"] in fills(coat, "arm_left")   # sleeves follow the outfit
 
 
+@pytest.mark.slow
 def test_robots_walk_stiffly_or_roll() -> None:
     legged = species_motion("robot")
     assert legged.gait.knee < 1.0 and not legged.gait.rolls
@@ -163,6 +169,7 @@ def test_robots_walk_stiffly_or_roll() -> None:
 # ----- the antenna -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_antenna_springs_blinks_and_trails() -> None:
     c = robot()
     assert c.shape_names("antenna") == ["default", ANTENNA_DIM_SHAPE] and c.draw_order.index("antenna") < c.draw_order.index("head")
@@ -186,6 +193,7 @@ def test_antenna_springs_blinks_and_trails() -> None:
     assert c.parts["antenna"].get_right()[0] > before + 0.05   # the light leans with the wind
 
 
+@pytest.mark.slow
 def test_idle_blinks_the_antenna_light() -> None:
     entry = CharacterEntry(name="beeper", look={"species": "robot"}, colors=PIN_COLORS)
     c = build_character(entry, theme=Theme(), height=2.0)
@@ -199,6 +207,7 @@ def test_idle_blinks_the_antenna_light() -> None:
 # ----- costumes ------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("worn", COSTUMES, ids=lambda w: "+".join(w))
 def test_costumes_build_side_and_front_on_people_animals_and_robots(worn: list[str]) -> None:
     for species in ("human", "cat", "robot"):
@@ -232,6 +241,7 @@ def test_one_piece_on_top_of_the_head() -> None:
     CharacterLook(accessories=["crown", "cape", "bow", "glasses", "scarf"])   # a crown goes with the rest
 
 
+@pytest.mark.slow
 def test_cape_hangs_behind_swings_on_the_spring_and_trails() -> None:
     c = figure(accessories=["cape"])
     assert c.draw_order[0] == "cape" and DEFAULT_DRAW_ORDER["cape"] < DEFAULT_DRAW_ORDER["tail"]
@@ -308,6 +318,7 @@ def test_a_robot_beeps() -> None:
 # ----- a stage ----------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_robots_and_a_cape_on_a_windy_stage(make_project, tmp_path: Path) -> None:
     from test_cartoon_stage import render_with_layout

@@ -201,6 +201,7 @@ def diagram_project(make_project: Any, beats: list[dict[str, Any]], **extra: Any
     return project
 
 
+@pytest.mark.slow
 def test_runner_reports_and_ignores(make_project: Any) -> None:
     beats = [{"text": "The database is asked only when the cache misses."}, {"text": "On the way back the answer is stored."}]
     project = diagram_project(make_project, beats)
@@ -219,6 +220,7 @@ def test_runner_reports_and_ignores(make_project: Any) -> None:
     assert result.findings == [] and result.ignored == 1   # the database is named, so no unsaid_reveal
 
 
+@pytest.mark.slow
 def test_runner_on_a_word_anchor(make_project: Any) -> None:
     beats = [{"text": "A request comes in."},
              {"text": "Then the database, yes the database, answers it.", "actions": [{"highlight": "text", "at": "@database#2"}]}]

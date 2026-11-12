@@ -255,6 +255,7 @@ def test_hierarchical_positions_add_up() -> None:
         o.System(sun, (o.Orbiter("Earth", earth, e_el), o.Orbiter("Earth", earth, e_el)))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("method", ["leapfrog", "rk45"])
 def test_nbody_two_bodies_agree_with_kepler(method: str) -> None:
     """A test particle around the Sun for 20 orbits of e = 0.5: the n-body path stays on the

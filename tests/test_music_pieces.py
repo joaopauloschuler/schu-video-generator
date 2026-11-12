@@ -99,6 +99,7 @@ def test_sources_that_name_a_piece(tmp_path: Path) -> None:
         music_pieces.piece_path("../b", tmp_path)
 
 
+@pytest.mark.slow
 def test_validate_reports_piece_problems(tmp_path: Path) -> None:
     bad = "key: H minor\ntempo: 500\nbars: 4\ntracks: {a: {instrument: pda}}\n"
     project = _project(tmp_path / "p1", [{"source": "smal", "to": "s0"}, {"source": "assets/music/bad.yaml", "from": "s1"}],
@@ -154,6 +155,7 @@ def test_list_music_lists_pieces(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 # ----- playing -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_piece_plays_in_the_mix_and_is_cached(tmp_path: Path) -> None:
     project = _project(tmp_path, {"source": "small", "volume": -2})
     report = mix.mix_audio(project, _timings(), _wavs(tmp_path), None, tmp_path / "mix.wav")
@@ -174,6 +176,7 @@ def test_a_piece_plays_in_the_mix_and_is_cached(tmp_path: Path) -> None:
     assert read_wav(tmp_path / "mix3.wav").shape == read_wav(tmp_path / "mix.wav").shape
 
 
+@pytest.mark.slow
 def test_loop_and_one_pass_sources(tmp_path: Path) -> None:
     _project(tmp_path, "small", {"small.yaml": SMALL, "end.yaml": ENDING})
     looped = music.Source(MusicCue(source="small", start=6), tmp_path)
@@ -191,6 +194,7 @@ def test_loop_and_one_pass_sources(tmp_path: Path) -> None:
 # ----- lint ----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_music_check_lint_rule(tmp_path: Path) -> None:
     assert "music_check" in LINT_RULES and RULES["music_check"].scope == "scene"
     project = _project(tmp_path, [{"source": "calm", "to": "s0"}, {"source": "loud", "from": "s1"}], {"loud.yaml": LOUD})

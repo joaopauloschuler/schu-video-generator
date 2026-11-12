@@ -84,6 +84,7 @@ def animal(species: str, height: float = 1.0, **look: Any) -> Character:
 # ----- each species builds and poses -----------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("species", SPECIES)
 def test_each_species_builds_and_poses(species: str) -> None:
     c = animal(species, height=2.0, outfit="shorts", shoes="none")
@@ -107,6 +108,7 @@ def test_each_species_builds_and_poses(species: str) -> None:
     assert "tail" in POSE_PARTS
 
 
+@pytest.mark.slow
 def test_species_differ_and_change_the_head() -> None:
     digests = {drawing_digest(CharacterLook(species=s)) for s in ("human", *SPECIES)}
     assert len(digests) == 7
@@ -119,6 +121,7 @@ def test_species_differ_and_change_the_head() -> None:
         assert any(getattr(m, OUTER_HAIR_ATTRIBUTE, False) for m in head)   # ears, a snout or a beak beyond the head
 
 
+@pytest.mark.slow
 def test_paws_and_wings() -> None:
     human, cat, bird = animal("human"), animal("cat"), animal("bird")
     assert len(cat.parts["arm_left_lower"].family_members_with_points()) == len(human.parts["arm_left_lower"].family_members_with_points()) + 2
@@ -147,6 +150,7 @@ def test_look_schema() -> None:
 # ----- lip sync on muzzles and beaks -----------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("species", ("cat", "dog", "bear", "rabbit", "mouse", "fox", "frog", "turtle"))
 def test_the_mouth_sits_on_the_muzzle_and_opens(species: str) -> None:
     for front in (False, True):
@@ -163,6 +167,7 @@ def test_the_mouth_sits_on_the_muzzle_and_opens(species: str) -> None:
         assert sizes["A"] > sizes["M"] and sizes["O"] > sizes["M"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("species", ("bird", "owl", "penguin"))
 def test_a_bird_talks_with_its_beak(species: str) -> None:
     for front in (False, True):
@@ -257,6 +262,7 @@ def test_an_svg_tail(tmp_path: Path) -> None:
 # ----- a stage --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_animals_walk_talk_and_sit_on_a_windy_stage(make_project, tmp_path: Path) -> None:
     from test_cartoon_stage import render_with_layout

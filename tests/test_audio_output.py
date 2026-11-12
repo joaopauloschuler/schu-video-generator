@@ -143,6 +143,7 @@ def test_a_video_mix_levels_only_when_asked(tmp_path: Path) -> None:
 # ----- rendering with presets ---------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_default_render_is_the_mix_as_before(tmp_path: Path) -> None:
     project = _project(tmp_path, "plain")
     result = render_audio(project)
@@ -152,6 +153,7 @@ def test_default_render_is_the_mix_as_before(tmp_path: Path) -> None:
     assert "levelled_db" not in result.timings["mix"] and "audio_output" not in result.timings
 
 
+@pytest.mark.slow
 def test_podcast_mp3_mono(tmp_path: Path) -> None:
     project = _project(tmp_path, "pod", audio_output={"format": "mp3", "channels": "mono", "loudness": "podcast", "transcripts": ["txt", "vtt"]})
     result = render_audio(project)
@@ -164,6 +166,7 @@ def test_podcast_mp3_mono(tmp_path: Path) -> None:
     assert result.timings["audio_output"]["check"]["preset"] == "podcast"
 
 
+@pytest.mark.slow
 def test_leveller_reduces_the_limiting(tmp_path: Path) -> None:
     levelled = render_audio(_project(tmp_path, "on", audio_output={"loudness": "podcast"}))
     plain = render_audio(_project(tmp_path, "off", audio_output={"loudness": "podcast"}, audio={"level_voice": False}))
@@ -171,6 +174,7 @@ def test_leveller_reduces_the_limiting(tmp_path: Path) -> None:
     assert levelled.timings["mix"]["limited_db"] < plain.timings["mix"]["limited_db"] - 1.0
 
 
+@pytest.mark.slow
 def test_audiobook_rms_peaks_room_tone(tmp_path: Path) -> None:
     project = _project(tmp_path, "book", music=False,
                        audio_output={"format": "wav", "sample_rate": 44100, "bit_depth": 16, "channels": "mono", "loudness": "audiobook", "room_tone": -70})
@@ -270,6 +274,7 @@ def test_check_presets() -> None:
         audio_check.preset_named("podcst")
 
 
+@pytest.mark.slow
 def test_cli_audio_check(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     project = _project(tmp_path, "cli", audio_output={"format": "m4a", "loudness": "podcast"})
     render_audio(project)
@@ -290,6 +295,7 @@ def test_cli_audio_check(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
 # ----- transcripts -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_transcripts(tmp_path: Path) -> None:
     project = _project(tmp_path, "tr", subtitles={"speakers": "name"})
     result = render_audio(project)

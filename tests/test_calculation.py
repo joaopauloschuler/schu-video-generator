@@ -33,6 +33,7 @@ def params(**p: Any) -> Any:
     return cls().validate_params(p)
 
 
+@pytest.mark.slow
 def test_params_work_the_calculation() -> None:
     p = params(**ORBIT)
     worked = p.worked()
@@ -142,6 +143,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_calculation_scenes_render(size: tuple[int, int], make_project, media: Path) -> None:

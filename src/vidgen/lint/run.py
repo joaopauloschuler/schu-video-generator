@@ -87,6 +87,14 @@ def _pattern(text: str) -> re.Pattern[str]:
     return re.compile(re.escape(text).replace(r"\*", ".*").replace(r"\?", "."), re.DOTALL)
 
 
+def rule_objects(objects: list[dict[str, Any]], rule_name: str, skips: dict[str, set[str]]) -> list[dict[str, Any]]:
+    """The objects rule ``rule_name`` checks: not those of an overlay type that exempts its
+    objects from it (``skips``: overlay id -> rules; a faint watermark: ``contrast``), nor a web
+    page's element opted out of it (``lint_off``: ``data-vidgen-lint="off"`` / ``"off:<rule>"``, §118.12)."""
+    return [o for o in objects
+            if rule_name not in skips.get(o.get("overlay"), ()) and not {rule_name, "all"} & set(o.get("lint_off", ()))]
+
+
 def _group(issue: Issue) -> tuple[Any, ...] | None:
     """What makes an issue \"like\" others (see :func:`_group_similar`): the rule's ``group``, or
     the parent of its one object; ``None`` (never grouped) for pairs and top-level objects."""
@@ -138,8 +146,7 @@ def _scene_findings(
             settings = entry.settings(lint.rules)
             if settings.severity == "off":
                 continue
-            # an overlay type may exempt its objects from a rule (a faint watermark: contrast)
-            kept = [o for o in objects if name not in skips.get(o.get("overlay"), ())]
+            kept = rule_objects(objects, name, skips)
             ctx = StillContext(layout, frame, kept, still=still)
             for issue in entry.check(ctx, settings):
                 finding = Finding(

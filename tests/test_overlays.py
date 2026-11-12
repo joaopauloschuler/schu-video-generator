@@ -120,6 +120,7 @@ def test_overlay_config_keys_and_options() -> None:
     assert config.overlays[0].options == {"text": "x"}
 
 
+@pytest.mark.slow
 def test_default_ids_and_duplicates(make_project) -> None:
     p = project(make_project, [bullets()], [
         {"type": "watermark", "text": "a"},
@@ -182,6 +183,7 @@ def test_render_refuses_invalid_overlays_before_any_worker(make_project) -> None
 # ----- the planned timeline ------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_plan_matches_the_rendered_scenes(make_project, media: Path) -> None:
     scenes = [
@@ -207,6 +209,7 @@ def test_plan_matches_the_rendered_scenes(make_project, media: Path) -> None:
     assert plan.resolve(7, end=True) == 7.0 and plan.resolve(None, end=False) is None
 
 
+@pytest.mark.slow
 def test_fingerprint_follows_other_scenes_only_with_overlays(make_project) -> None:
     def fingerprints(overlays: list[dict[str, Any]], text: str) -> str:
         p = project(make_project, [bullets("a"), {**bullets("b"), "beats": [{"text": text}]}], overlays)
@@ -230,6 +233,7 @@ def extending_example() -> str:
 BADGE = extending_example()
 
 
+@pytest.mark.slow
 def test_project_overlay_type_is_registered_listed_and_validated(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(minimal_config(overlays=[{"type": "badge", "label": "ON AIR"}], scenes=[bullets()]))
     write_files(root, {"extensions/badge.py": BADGE})
@@ -248,6 +252,7 @@ def test_project_overlay_type_is_registered_listed_and_validated(make_project, c
     assert check_project(Project.load(bad.root)) == ["overlays[0].label: Input should be a valid string"]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_extending_example_blinks_in_video_time(make_project, media: Path) -> None:
     root = make_project(minimal_config(overlays=[{"type": "badge", "label": "ON AIR"}], narration=NARRATION,
@@ -440,6 +445,7 @@ def test_frozen_waits_are_split_where_overlays_change(make_project, media: Path)
     assert changed[0] in (10, 11) and changed[-1] in (24, 25) and len(changed) >= 8   # in from 1.0 s, out by 2.5 s
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_reserve_shrinks_the_safe_area_and_the_layout_dump(make_project, media: Path) -> None:
     overlays = [{"type": "lower_third", "name": "A long name that needs room", "reserve": True, "duration": 30}]

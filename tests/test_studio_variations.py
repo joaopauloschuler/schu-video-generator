@@ -112,6 +112,7 @@ def test_four_variations_of_different_kinds_and_shuffles() -> None:
         var.make_variations(VARI.replace("pluck", "plunk"))
 
 
+@pytest.mark.slow
 def test_every_template_gets_four_valid_variations() -> None:
     for name in template_names():
         text = music_template_text(name)
@@ -147,6 +148,7 @@ def finished(app: StudioApp, batch: str) -> dict[str, Any]:
     return doc
 
 
+@pytest.mark.slow
 def test_a_batch_is_rendered_checked_and_one_kept(app: StudioApp) -> None:
     app.load(text=VARI)
     app.render()  # as the page does before anyone asks for variations: v1's stems are kept
@@ -197,6 +199,7 @@ def post(port: int, path: str, body: Any) -> tuple[int, dict[str, Any]]:
     return r.status, json.loads(r.read())
 
 
+@pytest.mark.slow
 def test_routes(app: StudioApp) -> None:
     app.load(text=VARI)
     server, thread = start_in_thread(app)

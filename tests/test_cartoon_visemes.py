@@ -223,6 +223,7 @@ def test_estimated_track_without_audio(make_project) -> None:
         vz.beat_visemes(project, "nope")
 
 
+@pytest.mark.slow
 def test_stored_track_is_tied_to_the_mp3_and_the_text(make_project) -> None:
     project = make_voiced(make_project)
     audio_dir, mp3 = project.audio_dir, project.audio_dir / "b.mp3"
@@ -321,6 +322,7 @@ def test_kokoro_provider_captures_token_and_chunk_phonemes(tmp_path: Path) -> No
     assert provider.last_phonemes == [("hˈI", 0.1, 0.3), ("ˈolɐ", 0.5, 1.0)]
 
 
+@pytest.mark.slow
 def test_fingerprint_follows_the_track_with_characters(make_project) -> None:
     from vidgen.render.fingerprint import scene_fingerprint
 
@@ -349,6 +351,7 @@ def two_mouths() -> Character:
     return Character(parts, name="duo")
 
 
+@pytest.mark.slow
 def test_viseme_shapes_fall_back_to_what_the_character_has() -> None:
     full = generated()
     assert [full.viseme_shape(v) for v in VISEMES] == [None, "A", "E", "O", "U", "M", "F", "L", "W"]
@@ -387,6 +390,7 @@ def test_lip_sync_without_a_mouth_does_nothing() -> None:
     assert body_only.show_viseme("A") is body_only
 
 
+@pytest.mark.slow
 def test_scene_helper_and_api() -> None:
     from vidgen import api
     from vidgen.scene import NarratedScene

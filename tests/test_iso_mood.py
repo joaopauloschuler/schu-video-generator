@@ -93,6 +93,7 @@ def test_rain_lands_anywhere_on_the_place_and_not_beside_it_or_on_a_face() -> No
     assert np.array_equal(flat.landing(shares, x), landing_lines(shares, flat))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("particles", [[{"kind": "rain", "puddles": True}], [{"kind": "snow", "settle": True}]])
 def test_an_iso_place_takes_puddles_and_settling_snow(particles: list[dict[str, Any]]) -> None:
     # refused in Steps 169-171; drawn since Step 172 (DESIGN.md §90)
@@ -217,6 +218,7 @@ def test_offscreen_action_names_what_the_camera_did_not_show() -> None:
 # ----- a tiny render -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_night_on_the_place_renders_with_glow_tags_rain_and_sounds(make_project, tmp_path: Path) -> None:
     from vidgen.cartoon.iso_pictures import GlowTile

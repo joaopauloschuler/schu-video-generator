@@ -31,6 +31,7 @@ from vidgen.project import Project
 from vidgen.world.iso import AUTO_LIGHT_KINDS, SWITCHED_KINDS
 
 
+@pytest.mark.slow
 def test_daylight_rules_do_not_import_manim() -> None:
     code = "import sys, vidgen.cartoon.lighting; assert 'manim' not in sys.modules"
     subprocess.run([sys.executable, "-c", code], check=True)
@@ -94,6 +95,7 @@ def village(make_project, beats: list[dict[str, Any]], **params: Any) -> Project
     return Project.load(make_project(minimal_config(characters=CAST, scenes=scenes)))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "action,message",
     [
@@ -153,6 +155,7 @@ def test_a_setting_sun_sinks_behind_the_ground() -> None:
     assert sun.fill_rgbas[:, 3].max() == 0.0 and sun.get_center()[1] < -0.1
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_lamps_come_on_when_a_rainy_day_turns_to_night(make_project, tmp_path: Path, monkeypatch) -> None:
     """Step 275: a rainy iso day starts overcast, past dusk already: the lights still come on
@@ -166,6 +169,7 @@ def test_lamps_come_on_when_a_rainy_day_turns_to_night(make_project, tmp_path: P
     assert scene._iso_planned_states["street_lamp"].on and scene._iso_planned_states["house"].on
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_day_passes_and_the_lights_come_on_by_themselves(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

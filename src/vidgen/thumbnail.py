@@ -373,19 +373,37 @@ def _strongest(background: str, *colors: str) -> str:
 
 
 def _font(family: str, px: int, bold: bool) -> Any:
-    """``family`` at ``px`` for Pillow: a bundled file, an installed font of that name, else
-    Inter / DejaVu (:func:`vidgen.sheets.load_font`)."""
-    from vidgen.fonts import bundled_font_file
+    """``family`` at ``px`` for Pillow: a file of the project's ``fonts/`` folder or a bundled
+    one (:func:`vidgen.fonts.font_file`), an installed font of that name, else Inter / DejaVu
+    (:func:`vidgen.sheets.load_font`)."""
+    from vidgen.fonts import font_file
     from vidgen.sheets import load_font
 
-    path = bundled_font_file(family, bold=bold)
+    path = font_file(family, bold=bold)
     candidates = [str(path)] if path is not None else [f"{family}{' Bold' if bold else ''}.ttf", f"{family.replace(' ', '')}{'-Bold' if bold else '-Regular'}.ttf"]
     for name in candidates:
         try:
-            return ImageFont.truetype(name, px)
+            return _at_weight(ImageFont.truetype(name, px), 700 if bold else 400)
         except OSError:
             continue
     return load_font(px, bold=bold)
+
+
+def _at_weight(font: Any, weight: int) -> Any:
+    """``font`` set to ``weight`` when it is a variable font with a weight axis (Pillow opens
+    one at its default weight); any other font as it is."""
+    try:
+        axes = font.get_variation_axes()
+    except (OSError, NotImplementedError):  # not a variable font, or FreeType without that support
+        return font
+    values = [min(max(weight, axis["minimum"]), axis["maximum"]) if _axis_name(axis) == "Weight" else axis["default"] for axis in axes]
+    font.set_variation_by_axes(values)
+    return font
+
+
+def _axis_name(axis: dict[str, Any]) -> str:
+    name = axis.get("name", "")
+    return name.decode("utf-8", "replace") if isinstance(name, bytes) else str(name)
 
 
 def _wrap(font: Any, text: str, width: float) -> list[str]:

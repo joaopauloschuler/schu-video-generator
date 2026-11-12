@@ -240,6 +240,7 @@ def test_pcr_primer_errors() -> None:
         lab.plan_pcr({"template": PCR_TEMPLATE, "primers": PRIMERS, "temperatures": {"denature": 99.5}})
 
 
+@pytest.mark.slow
 def test_pcr_trace_keeps_every_temperature_label() -> None:
     """Step 227: the PCR trace is on the chart core; its three named temperatures are never
     thinned away — labels too close (anneal 64, extend 72) are spread apart, inside the plot."""
@@ -383,6 +384,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_molecular_scenes_render(size: tuple[int, int], make_project, media: Path) -> None:

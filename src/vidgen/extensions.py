@@ -23,6 +23,7 @@ from types import ModuleType
 
 from vidgen import hooks, registry, runtime
 from vidgen.errors import VidgenError
+from vidgen.fonts import register_project_fonts
 from vidgen.project import Project
 from vidgen.theme import Theme
 
@@ -148,11 +149,13 @@ def load_extensions(project: Project) -> list[str]:
 def activate(project: Project, theme: Theme | None = None) -> Theme:
     """Make ``project`` the active one for the rest of the process and load its extensions.
 
-    Sets the runtime context (a fresh ``Theme`` unless given), clears scene types and hooks
-    registered by previously loaded extensions, imports built-ins, then the project's
+    Sets the runtime context (a fresh ``Theme`` unless given), registers the fonts in the
+    project's ``fonts/`` folder (:func:`vidgen.fonts.register_project_fonts`), clears scene types
+    and hooks registered by previously loaded extensions, imports built-ins, then the project's
     extensions. Returns the active theme (it includes defaults registered by extensions).
     """
     theme = runtime.set_context(project, theme)
+    register_project_fonts(project.root, project.build_dir)
     registry.reset()
     hooks.reset()
     load_builtins()

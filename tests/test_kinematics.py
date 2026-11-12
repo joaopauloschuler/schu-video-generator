@@ -188,6 +188,7 @@ def test_pdg_values_for_calculations() -> None:
         kin.pdg_value("pi+", "mass", "s")
 
 
+@pytest.mark.slow
 def test_calculation_symbols_from_the_particle_table() -> None:
     from vidgen.scenes.calculation import Calculation
 
@@ -265,6 +266,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(320, 180), (180, 320)], ids=["landscape", "portrait"])
 def test_two_frames_render(size: tuple[int, int], make_project, media: Path) -> None:
@@ -283,6 +285,7 @@ def test_two_frames_render(size: tuple[int, int], make_project, media: Path) -> 
     assert lab.region.x0 >= rest.region.x1 if size[0] > size[1] else lab.region.y1 <= rest.region.y0
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_boost_moves_the_frame(make_project, media: Path) -> None:
     scene = {"id": "b", "type": "kinematics", "params": {"decay": "pi0 -> gamma gamma", "frames": "rest", "momentum": "1 GeV/c", "angle": 90},

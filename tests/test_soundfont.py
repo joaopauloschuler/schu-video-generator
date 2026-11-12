@@ -1,4 +1,4 @@
-"""The ``music`` extra (symusic) and the SoundFont: download checks, the cache, ``soundfont:``
+"""symusic (a dependency; the ``music`` extra is empty) and the SoundFont: download checks, the cache, ``soundfont:``
 overrides and ``vidgen soundfont`` (DESIGN.md §81). Nothing here downloads: fetches read
 ``file://`` URLs of small fake files."""
 
@@ -59,9 +59,11 @@ def test_another_symusic_version_is_refused(monkeypatch: pytest.MonkeyPatch) -> 
     assert "0.6.0 installed, but schu-video-generator needs 0.5.9" in synth.symusic_status()
 
 
-def test_the_extra_pins_symusic_and_no_soundfont_ships() -> None:
+def test_the_dependencies_pin_symusic_and_no_soundfont_ships() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'music = ["symusic==0.5.9"]' in pyproject
+    dependencies = pyproject.split("\ndependencies = [", 1)[1].split("\n]", 1)[0]
+    assert '\n    "symusic==0.5.9",' in dependencies   # a plain install brings it (Step 322)
+    assert "\nmusic = []\n" in pyproject   # the old extra's name stays, empty
     package_data = next(line for line in pyproject.splitlines() if line.startswith("vidgen = ["))
     assert "sf2" not in package_data and "sf3" not in package_data and "soundfont" not in package_data
     assert not [p for p in (ROOT / "src").rglob("*") if p.suffix.lower() in soundfont.SUFFIXES]
@@ -149,6 +151,7 @@ def test_bad_override_paths(tmp_path: Path) -> None:
             soundfont.resolve(name, tmp_path)
 
 
+@pytest.mark.slow
 def test_config_key_validate_and_mcp_confinement(make_project: Callable[..., Path]) -> None:
     assert VideoConfig.model_validate(minimal_config(soundfont="bank.sf2")).soundfont == "bank.sf2"
     assert "soundfont" in PATH_KEYS

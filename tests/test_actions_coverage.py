@@ -33,6 +33,7 @@ NARRATION = {"pad": 0.2, "words_per_second": 4.0}
 #: Params for every built-in scene type that give it every kind of target.
 SAMPLES: dict[str, dict[str, Any]] = {
     "3d": {"title": "T", "objects": [{"id": "crate"}]},
+    "web": {"page": "extensions/page.html"},
     "title": {"kicker": "K", "title": "A title", "subtitle": "Sub", "authors": ["Me"], "icon": "rocket"},
     "text_card": {"text": "Hello"},
     "bullets": BULLETS,
@@ -152,6 +153,7 @@ def targets_table() -> dict[str, tuple[list[str], list[str]]]:
     return rows
 
 
+@pytest.mark.slow
 def test_every_builtin_type_has_targets_and_the_docs_table_matches() -> None:
     extensions.load_builtins()
     table = targets_table()
@@ -295,7 +297,12 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     on screen (the scene reveals all of them in its steps)."""
     if kind == "3d":
         pytest.importorskip("playwright.sync_api")   # drawn in Playwright's Chromium (tests/test_scene_3d.py)
+    if kind == "web":
+        pytest.importorskip("playwright.sync_api")   # drawn in Playwright's Chromium (tests/test_scene_web.py)
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats(None, None)}])
+    if kind == "web":   # the page the sample names
+        (project.root / "extensions").mkdir(exist_ok=True)
+        (project.root / SAMPLES["web"]["page"]).write_text("<p>A page</p>", encoding="utf-8")
     scene = render(project, "s", media)
     registered = sorted({n for t in scene.targets for n in t.names})   # a term: name per step that has the term
     assert registered == sorted(type(scene).target_names(scene.params))
@@ -330,6 +337,7 @@ def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list
 # ----- zoom -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_zoom_moves_the_camera_in_and_back_by_the_beat_end(make_project, media: Path) -> None:
     acts = beats(
@@ -442,6 +450,7 @@ def test_lint_skips_frame_edges_while_zoomed() -> None:
 # ----- transform --------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_transform_replaces_a_target_with_a_hidden_one(make_project, media: Path, caplog: pytest.LogCaptureFixture) -> None:
     acts = beats(None, [{"transform": "item1", "into": "item4", "at": 0.3}], [{"transform": "item2", "into": "item4"}], None)
@@ -467,6 +476,7 @@ def test_transform_styles(style: str, name: str, make_project, media: Path) -> N
     assert scene.is_shown("bar3") and not scene.is_shown("bar1")
 
 
+@pytest.mark.slow
 def test_transform_into_is_checked(make_project) -> None:
     scenes = [{"id": "s", "type": "bullets", "params": BULLETS, "beats": beats([{"transform": "item1", "into": "item9"}, {"transform": "item1"}])}]  # one beat, two actions
     problems = {p.location: p.message for p in project_problems(project_with(make_project, scenes))}
@@ -530,6 +540,7 @@ def test_images_are_dimmed_and_tinted(make_project, media: Path) -> None:
     assert tuple(pixels[0, 0, :3]) != (40, 120, 200) and int(pixels[0, 0, 0]) > 40   # tinted towards the highlight colour
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_bar_box_sits_on_the_axis(make_project, media: Path) -> None:
     acts = beats([{"highlight": "bar*", "style": "box"}])

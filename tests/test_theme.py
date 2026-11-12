@@ -68,6 +68,7 @@ def test_add_defaults_rejects_names_yaml_cannot_override() -> None:
         Theme().add_defaults(sizes={"big title": 80})
 
 
+@pytest.mark.slow
 def test_theme_does_not_import_manim() -> None:
     import subprocess
     import sys

@@ -112,6 +112,7 @@ def test_asimov_readout_grows_with_the_data() -> None:
     assert obs.shape == z.shape and obs[-1] > 2
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("channel, strict", [("z_to_mumu", True), ("h_to_4l", True), ("h_to_gammagamma", False)])
 def test_fitted_mass_is_the_true_mass_within_its_uncertainty(channel: str, strict: bool) -> None:
     c = sp.CHANNELS[channel]
@@ -130,6 +131,7 @@ def test_fitted_mass_is_the_true_mass_within_its_uncertainty(channel: str, stric
         assert pulls.max() < 3.5
 
 
+@pytest.mark.slow
 def test_likelihood_ratio_significance() -> None:
     c = sp.CHANNELS["h_to_gammagamma"]
     edges = _edges(c)
@@ -223,6 +225,7 @@ def test_decay_chain_model() -> None:
 # ----- scenes: params -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_mass_spectrum_params() -> None:
     from vidgen.scenes.mass_spectrum import MassSpectrum
 
@@ -311,6 +314,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(320, 180), (180, 320)], ids=["landscape", "portrait"])
 def test_mass_spectrum_renders(size: tuple[int, int], make_project, media: Path) -> None:
@@ -334,6 +338,7 @@ def test_mass_spectrum_renders(size: tuple[int, int], make_project, media: Path)
         assert s.params.fits[0].show != "none" and note.text.split("\n")[0].endswith("σ local") and "(background only)" in note.text
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_live_histogram_with_a_grow_action_and_a_note(make_project, media: Path) -> None:
     """Step 241 fix in ``plot``: a note (or fit) step on a live histogram held by a ``grow``
@@ -356,6 +361,7 @@ def test_live_histogram_with_a_grow_action_and_a_note(make_project, media: Path)
     assert 0 < len(m._readout_cache) <= READOUT_CACHE
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(320, 180), (180, 320)], ids=["landscape", "portrait"])
 def test_decay_chain_and_branching_render(size: tuple[int, int], make_project, media: Path) -> None:

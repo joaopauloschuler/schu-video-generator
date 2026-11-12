@@ -183,6 +183,7 @@ def test_a_good_evening_validates(make_project) -> None:
     assert any("objects to use: laptop" in text for _, text in problems(lounge_project(make_project, beats), "home"))
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_sitting_lying_and_using_render(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()
