@@ -20,10 +20,12 @@ class Web(NarratedScene):
     """A page written in HTML, CSS and JavaScript, shown full-bleed: ``page:`` names an HTML file
     of the project (any HTML, CSS and JavaScript; relative links work) or ``script:`` a
     JavaScript module that vidgen loads into a bare page with one canvas filling the frame.
-    Before each frame vidgen calls the page's ``frame(t, ctx)`` (``t``: seconds from the scene's
-    start; a page sets ``window.vidgen = {frame}``, a script exports ``frame``), then takes a
-    screenshot; without it the page is captured as it stands. Nothing is fetched from the
-    internet. The scene fades out at the end. Drawn in headless Chromium (once:
+    Time belongs to vidgen: the page's timers, ``requestAnimationFrame``, ``Date``, CSS, SVG and
+    video animations follow the video's time and ``Math.random`` is seeded from the scene id, so
+    ordinary web code renders the same every time. Optional hooks: ``load(ctx)`` once before
+    frame 0 and ``frame(t, ctx)`` before each screenshot (``t``: seconds from the scene's start; a
+    page sets ``window.vidgen = {load, frame}``, a script exports them). Nothing is fetched from
+    the internet. The scene fades out at the end. Drawn in headless Chromium (once:
     ``python -m playwright install chromium``).
 
     Action targets: ``view`` (the page).

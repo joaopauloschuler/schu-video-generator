@@ -337,7 +337,7 @@ src/vidgen/
                           # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
-  data/web/               # runtime.js (errors, frame hook; injected into a `web` page), canvas.html (§118)
+  data/web/               # clock.js, media.js, runtime.js (the virtual clock, animations, errors, hooks; joined and injected into a `web` page), canvas.html (§118)
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
@@ -23171,8 +23171,8 @@ true` does exactly what it did in Step 325: the owner wants a dissolve only on r
 The owner wants AI agents to write a scene as a web page. The owner's decisions: JavaScript in the
 project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
 first version; the page cannot reach the internet while rendering; screenshots of the whole page
-are accepted even when slow. Step 328 built the core described here; §118.7 lists what the later
-steps of the phase add.
+are accepted even when slow. Step 328 built the core described here, Step 329 the virtual clock
+(§118.8); §118.7 lists what the later steps of the phase add.
 
 ### 118.1 How a `web` scene renders (Step 328)
 
@@ -23201,12 +23201,16 @@ the scene's own `params:` is Step 330's to decide (`ctx.params`).
 `web/page.py`, `WebPage(root, entry, scene_id=, size=, fps=, frames=)` (a context manager, one per
 clip): starts `Chromium("a web scene", WEB_ARGS)` (§118.5; `WEB_ARGS` adds `--hide-scrollbars
 --force-color-profile=srgb`), a context with the frame's size as viewport and device scale 1,
-`add_init_script(data/web/runtime.js)` and a route for every request:
+the time zone `UTC` and locale `en-US`, the init script (`init_script(scene_id)`: `data/web/clock.js`,
+`media.js` and `runtime.js` joined in one function with the scene's random seed, §118.8) and a
+route for every request:
 
 - `http://vidgen-web.invalid/<path>` is answered from the project folder (`inside(root, path)`:
   resolved, must stay in the folder), with a content type from `CONTENT_TYPES` (fixed table:
   Windows' registry can map `.js` to `text/plain`, which Chromium refuses for a module), else
   `mimetypes`. A file that is not there: 404 and a warning naming it (`favicon.ico` silent).
+  `Accept-Ranges: bytes`; a `Range: bytes=a-b` request is answered 206 with that part
+  (`byte_range`; Step 329: without it Chromium cannot seek a `<video>`, `seekable` is empty).
 - `__vidgen__/canvas.html` (only for a `script:` scene) is vidgen's bare page
   (`data/web/canvas.html`: one `<canvas id="vidgen-canvas">` of the frame's size, black
   background, an inline module `import * as hooks from "/<script>"` that copies the exports onto
@@ -23220,9 +23224,9 @@ clip): starts `Chromium("a web scene", WEB_ARGS)` (§118.5; `WEB_ARGS` adds `--h
 `runtime.js` (run before any script of the page, top frame only) records every uncaught error
 (`window` `error` events: `ErrorEvent` with its file, line, column and the error's stack; a
 `<script>` that did not load) and every unhandled promise rejection into `window.__vidgen.errors`,
-and defines `window.__vidgen.start(info)` (awaits `document.fonts.ready`, builds `ctx`) and
-`window.__vidgen.frame(t)` (awaits `window.vidgen.frame(t, ctx)` if defined, catching what it
-throws; returns and clears the errors so far).
+and defines `window.__vidgen.start(info)` (builds `ctx`, waits for the page, runs `load`) and
+`window.__vidgen.frame(n)` (moves the clock to frame *n* and runs `window.vidgen.frame(t, ctx)`,
+§118.8; catches what the page throws; returns and clears the errors so far).
 
 Opening: `goto(…, wait_until="load")`, then `wait_for_function`: an error was recorded, or
 `document.readyState === "complete"` and (for a script) the module has run. Both wait at most
@@ -23236,26 +23240,28 @@ Error messages (`error_message`): `scene '<id>': JavaScript error in <file> line
 <Error name>: <message>` with *when* `at load` or `in frame(t=0.500)`. The file and line come
 from the error event, else from the first frame of the stack that is a project file (not
 `__vidgen__/`); without either, the entry's path and no line. A `VidgenError`, so the worker
-prints it without a traceback. Not caught: a page that loops forever inside `frame` (Playwright's
-`evaluate` has no timeout); Step 329's virtual clock is the place to bound it.
+prints it without a traceback. A hook that never returns is bounded since Step 329 (§118.8, time
+limits).
 
 ### 118.4 The page contract (Step 328) and the cache
 
-- A `page:` sets `window.vidgen = {frame(t, ctx) {…}}`; a `script:` module exports `frame` (its
-  exports are copied onto `window.vidgen`, so a script may also set `window.vidgen`). Without
-  `frame`, every frame is a screenshot of the page as it stands. `frame` may be async.
+- A `page:` sets `window.vidgen = {load(ctx) {…}, frame(t, ctx) {…}}`; a `script:` module exports
+  `load` and `frame` (its exports are copied onto `window.vidgen`, so a script may also set
+  `window.vidgen`). Both are optional and may be async. Without `frame`, every frame is a
+  screenshot of the page as it stands at the frame's time (§118.8).
 - `t`: seconds from the scene's start. `ctx = {scene, width, height, fps, frames, duration,
   canvas}` (`duration` = frames / fps, the length of the clip; `canvas` = the bare page's canvas,
   `null` on a page without `#vidgen-canvas`).
 - Room for later steps: `window.vidgen` is the page's object (hooks the page gives vidgen), and
-  `ctx` is vidgen's (what vidgen gives the page). Step 329 adds the hook `load(ctx)` beside
-  `frame` and the second argument of `frame` stays `ctx`; Step 330 adds fields to `ctx` (theme,
-  params, beats, aspect). Nothing written for Step 328 has to change.
+  `ctx` is vidgen's (what vidgen gives the page). Step 329 added the hook `load(ctx)` beside
+  `frame`; Step 330 adds fields to `ctx` (theme, params, beats, aspect). Nothing written for
+  Step 328 has to change.
 - **Cache** (`web/clip.py`, `make_web_clip(root, folder, scene_id, params, size=, fps=,
   frames=)`): `<render_dir>/web/<scene>.mkv` + `<scene>.json` = `{key, inputs}`, `inputs` =
   `{version: 1, engine, scene, kind, path, sha256 (of the page or script file), width, height,
-  fps, frames}`, `engine` = digest of `runtime.js` + `canvas.html`, the Chromium flags and the
-  Playwright version; `key` = SHA-256 of the canonical JSON of `inputs`. Reused when the clip
+  fps, frames}`, `engine` = digest of `clock.js`, `media.js`, `runtime.js` and `canvas.html`, the
+  Chromium flags, the time zone and locale, and the Playwright version (so a change to the clock
+  draws every web clip again; the random seed comes from `scene`, already in `inputs`); `key` = SHA-256 of the canonical JSON of `inputs`. Reused when the clip
   exists and the keys match; else the record is removed, the clip drawn
   (`write_ffv1_clip`, through a `.partial` file) and the record written last.
 - **Render fingerprint** (§63): a `web` scene adds `web: {kind, path, sha256}` of its page or
@@ -23298,10 +23304,118 @@ included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps
 
 ### 118.7 Later steps of the phase
 
-329: a virtual clock (`Date.now`, `performance.now`, `requestAnimationFrame`, timers), CSS,
-SVG and `<video>` animation set to the frame's time, `Math.random` seeded from the scene id,
-`load(ctx)` (may be async), fonts and images awaited before frame 0. 330: theme as CSS variables
+329 (done, §118.8): the virtual clock. 330: theme as CSS variables
 and `ctx.theme`, `ctx.params`, beats (`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js
 importable as `three`, the fingerprint over every file the page loaded. 331: `region: bleed |
 body`, a transparent background, 9:16 from one page. 332: lint reads the page's text boxes. 333:
 the guide topic, `examples/web/`, a gallery entry, speed at 1080p.
+
+### 118.8 Time belongs to vidgen (Step 329)
+
+Any ordinary page renders frame by frame and the same on every render: vidgen owns the page's
+time. The code is three fragments in `data/web/` that `web/page.py` `init_script(scene_id)` joins,
+in this order, into one function run by Chromium before any script of the page (top frame only):
+`clock.js` (time, timers, animation frames, random numbers, fetch), `media.js` (animations, SVG,
+video), `runtime.js` (errors, hooks, the order of a frame).
+
+**Choice of mechanism.** Hand-written replacements in the page, chosen over two alternatives
+checked on this machine (Playwright 1.63, its Chromium headless shell):
+
+- CDP virtual time (`Emulation.setVirtualTimePolicy` with a budget): `performance.now` advanced
+  exactly, but `requestAnimationFrame` ran 3–9 times per 500 ms of virtual time (it follows
+  Chromium's real drawing), a 500 ms timer fired at 632.5 ms, and a 2 s CSS animation was at
+  26.7 px of 400 after 1.5 s (expected 300). Not usable.
+- Playwright's `page.clock` (its driver's `coreBundle.js`, a fake-timers library): integer
+  milliseconds (`Math.ceil`, so 1/24 s cannot be hit), `requestAnimationFrame` on its own 16 ms
+  grid (2 or 3 callbacks per frame at 24 fps, unevenly), and nothing for CSS, SVG, video or
+  `Math.random`; its code changes with the Playwright version, outside vidgen's control.
+
+The hand-written clock runs callbacks at exact frame times (fractional milliseconds), one round
+of animation frames per video frame, and covers CSS, SVG, video and random numbers; its source is
+in the clip key (§118.4). **`3d` is untouched**: `three_d/browser.py` and `browser/chromium.py` did
+not change, so 3D cache keys are the same.
+
+**The clock.** `nowMs` starts at 0 and stands still while the page loads and during `load`; it
+moves only when vidgen runs a frame. Replaced: `Date` (`new Date()` and `Date()` give
+`2026-01-01T00:00:00Z` + `nowMs`; with arguments, the browser's `Date`; `Date.now()` is the integer
+millisecond), `performance.now()` (= `nowMs`), `document.timeline.currentTime`, `setTimeout`,
+`setInterval`, `clearTimeout`, `clearInterval` (one id space), `requestAnimationFrame`,
+`cancelAnimationFrame`, `requestIdleCallback` (a 0 ms timer; `timeRemaining()` = 50) and
+`cancelIdleCallback`. Chromium's context runs in time zone `UTC`, locale `en-US`.
+
+**One frame** (`window.__vidgen.frame(n)`, the clock's target `n * 1000 / fps` ms):
+
+1. Timers: repeatedly the due timer (due time ≤ target) with the smallest due time, ties broken
+   by the order in which they were set (an interval counts as set again when it is rescheduled);
+   the clock is set to its due time, the callback runs, then one task passes (a `MessageChannel`
+   message, so the promises it resolved run, as after a task in a browser) and vidgen looks for new
+   animations (step 3's discovery, so a transition a timer started begins at that timer's time).
+   A timer set by a callback is due at the callback's time plus its delay and runs in this frame
+   if that is ≤ the target. Delays: not a number or negative = 0; a timer set from a callback
+   nested more than 5 deep gets at least 4 ms (the HTML rule, which also ends a zero-delay
+   loop: at most target/4 ms + 5 runs per frame). A 10 001st callback before one frame clears all
+   timers and is a JavaScript error ("more than 10000 timer callbacks before one frame"). An error
+   thrown by a callback is recorded and stops the render after the frame. Then the clock is set
+   to the target.
+2. Loading: waits until every `fetch()` the page started (and every `Response` body it reads) has
+   settled, and for every `<img>` of the document that is not complete (`decode()`, a broken one
+   skipped).
+3. Media (`placeMedia`): every animation in `document.getAnimations()` (CSS animations, CSS
+   transitions, `element.animate`) is followed: vidgen pauses it in Chromium and keeps its own
+   time (`t` at clock time `at`, playing or not, finished or not); a running animation starts at
+   0 when vidgen first sees it. Each frame it is set to `t + (now − at) × playbackRate`; a playing
+   one past its end (or below 0 when reversed) is finished with the native `finish()`, so its
+   `finished` promise and `finish` event come (the event when Chromium next draws). The page's
+   `play`, `pause`, `reverse`, `finish`, `cancel`, `updatePlaybackRate`, `currentTime` and
+   `playbackRate` are wrapped to act on vidgen's time; `playState` reports the page's view. A CSS
+   animation that starts paused by `animation-play-state` and is set running by CSS is followed;
+   one paused by CSS after vidgen paused it is not (Chromium ignores CSS play state once the API
+   paused it). Every outermost `<svg>` is paused (`pauseAnimations`) and set to `now − (the
+   clock when vidgen first saw it)` with `setCurrentTime`. Every `<video>` (also one only drawn on
+   a canvas) is paused in Chromium; `autoplay` or the page's `play()` means "playing" (the
+   page's `play`, `pause`, `paused`, `currentTime` are wrapped); vidgen sets `currentTime` to its
+   time (looped or held at the end) and waits until it is not seeking and has the picture
+   (`readyState ≥ HAVE_CURRENT_DATA`), or has an error or no source.
+4. Animation frames: one round: the callbacks requested before it, in request order, each with
+   `nowMs`, each followed by one task; one cancelled during the round is skipped; one requested
+   during the round runs next frame.
+5. `frame(t, ctx)` (`t = n / fps` seconds), awaited.
+6. Steps 2 and 3 again (what the round and `frame` started is set to this time), then the
+   errors since the last frame are returned and Python takes the screenshot.
+
+**Start** (`window.__vidgen.start(info)`, after the page's load event, clock at 0): fonts
+(`document.fonts.ready`), pictures, fetches, media (videos ready), `load(ctx)` awaited, then fonts,
+pictures, fetches and media again.
+
+**Random numbers**: `Math.random` is sfc32 seeded with four 32-bit words of
+SHA-256(`vidgen-web-random:<scene id>`) (`random_seed`), so the same id gives the same sequence and
+a different id another. **Decision:** `crypto.getRandomValues` (after the native call, which keeps
+its checks) and `crypto.randomUUID` are seeded too, from the other four words: libraries use them
+for ids and noise, and a page cannot reach anything that needs secret numbers. Not seeded:
+`crypto.subtle` keys.
+
+**Time limits** (`_TimeLimit` in `web/page.py`): `start` (fonts, pictures, videos, `load`) may take
+`LOAD_TIMEOUT_S` = 30 s, each frame (steps 1–6) `FRAME_TIMEOUT_S` = 10 s. Playwright's `evaluate`
+has no timeout, and a promise that never settles is not bounded by CDP's `Runtime.evaluate`
+`timeout` (checked), so a timer thread ends the page's renderer processes (their ids from
+`SystemInfo.getProcessInfo` after the page opened; `os.kill`, `SIGTERM`, `TerminateProcess` on
+Windows); the blocked call then fails and vidgen raises `scene '<id>': frame(t=0.500) in <file>
+did not return within 10 s: a loop that never ends or a promise that never settles, in the hook or
+in a timer, requestAnimationFrame callback, fetch, picture, font or video it waits for; vidgen
+stopped the page` (for `load(ctx)` with "(time stands still at 0 before frame 0, so a timer it
+waits for never fires)"). Without process ids (an older Chromium) there is no limit.
+
+**Not controlled** (documented in CONFIG): `<audio>`; animated GIF / WebP pictures; web workers
+and their timers; iframes; SVG animation in an `<img>` or `<object>`; `event.timeStamp`;
+`Intl.DateTimeFormat().format()` without a date (real now); `XMLHttpRequest` and dynamic
+`import()` (not waited for); `ResizeObserver` / `IntersectionObserver` callbacks (Chromium's
+drawing times); CSS pausing an animation after it ran; a page's own `svg.setCurrentTime`;
+events Chromium fires when it draws (`finish`, `animationend`, `transitionend`) come at its next
+drawing, which is before the screenshot but not at a defined point among the page's callbacks.
+
+**Measured** (1 CPU, 480x270, 24 fps, 72 frames, Chromium start included, one run each): a page
+with a CSS animation and transition 67 ms per frame (Step 328's code: 76), a
+`requestAnimationFrame` page 80 (79), a canvas script drawing in `requestAnimationFrame` 103 (209:
+real-time animation frames ran many times per screenshot). Frames of a page using CSS, timers,
+`requestAnimationFrame`, `Math.random`, SVG `<animate>` and `<video>`, rendered twice with the
+build folder deleted in between: decoded frames identical (Step 329, HANDOFF).

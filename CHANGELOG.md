@@ -7,6 +7,14 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### `web` scenes: time belongs to vidgen (Step 329)
+
+- A `web` page written the ordinary way now renders frame by frame and the same on every render: CSS animations and transitions, `element.animate`, `requestAnimationFrame`, `setTimeout` / `setInterval`, `Date`, `performance.now()`, SVG `<animate>` and `<video>` follow the video's time instead of the real clock. `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` give the same numbers for the same scene id. `Date.now()` starts at 2026-01-01T00:00:00Z, time zone UTC.
+- New optional hook `load(ctx)` (may be async), run once before frame 0, after the page's fonts, pictures and videos are ready. `frame(t, ctx)` and pages written for Step 328 work unchanged.
+- A `load` that does not return within 30 s or a frame within 10 s stops the render with the scene, the hook and the time, instead of hanging.
+- Videos in a page can be seeked: the project folder is served with byte ranges.
+- Every web clip is drawn again once (the clock is part of its cache key). `3d` clips are reused.
+
 ### `web` scenes: a page written in HTML, CSS and JavaScript (Step 328)
 
 - New scene type `web`: `page: extensions/gears.html` (any HTML, CSS and JavaScript) or `script: extensions/gears.js` (a module drawn on one canvas that vidgen supplies). Before each frame vidgen calls the page's `frame(t, ctx)` (`window.vidgen.frame` on a page, an exported `frame` in a script), then takes a screenshot at the render's size and frame rate. The screenshots go into a cached clip, as for `3d`.

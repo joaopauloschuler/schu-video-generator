@@ -6402,25 +6402,57 @@ links to styles, pictures, fonts and modules work (`<link rel="stylesheet" href=
 logged as a warning naming the URL; a file the page asks for that is not there is answered "not
 found" with a warning. The render goes on in both cases.
 
-**Time.** Before each frame vidgen calls the page's `frame(t, ctx)` and then takes the
-screenshot; `t` is the frame's time in seconds from the scene's start (frame *n* at *n* / fps).
-A page sets `window.vidgen = {frame(t, ctx) {...}}`; a `script:` module exports `frame`.
-`frame` may return a promise (it is awaited). `ctx` has `scene` (the scene id), `width`, `height`
-(pixels), `fps`, `frames`, `duration` (seconds of frames drawn) and `canvas` (the bare page's
-canvas; `null` on a `page:`). A page without `frame` is captured as it stands at every frame.
-Draw from `t` only: until Step 329 the page's own clocks (`requestAnimationFrame`,
-`Date.now`, CSS animations) run on real time and do not follow the video.
+**Time belongs to vidgen** (DESIGN §118.8). Write the page the ordinary way: CSS animations and
+transitions, `requestAnimationFrame` loops, `setTimeout`, `Date.now()`, `performance.now()`, SVG
+`<animate>`, a `<video>` and `Math.random` all follow the video's time, and the same scene gives the
+same frames on every render. Before any script of the page runs, vidgen replaces the page's clock:
+time stands at 0 while the page loads and then moves only from frame to frame (frame *n* at *n* /
+fps). For each frame vidgen, in this order:
+
+1. runs every `setTimeout` / `setInterval` callback due by the frame's time, in order of due time
+   (ties: in the order they were set), each at its own time; a timer set by a timer runs in the
+   same frame when it is due by then (from the 6th nested level on, a delay under 4 ms counts as
+   4 ms, as in browsers; more than 10 000 callbacks before one frame is an error);
+2. waits for the `fetch()` requests the page started and its `<img>` pictures;
+3. sets every CSS animation and transition, Web Animation (`element.animate`), SVG animation and
+   `<video>` to the frame's time (and waits for each video's picture);
+4. runs one round of `requestAnimationFrame` callbacks (those requested before the round, with
+   the frame's time in milliseconds; one requested inside a callback waits for the next frame);
+5. calls the page's `frame(t, ctx)`, if it has one;
+6. sets what steps 4–5 started to the frame's time, then takes the screenshot.
+
+`Date.now()` is `2026-01-01T00:00:00Z` plus the scene time, in the UTC time zone and the `en-US`
+locale. `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` give the same numbers for
+the same scene id (another id, other numbers).
+
+**Hooks** (both optional): a page sets `window.vidgen = {load(ctx) {...}, frame(t, ctx) {...}}`; a
+`script:` module exports `load` and `frame`. `load(ctx)` runs once before frame 0, after the page's
+fonts, pictures and videos are ready; it may return a promise (awaited), so it is the place to load
+data (`await fetch("data.json")`). Time stands at 0 during `load`: a timer it waits for never fires.
+`frame(t, ctx)` runs at step 5 with `t` in seconds from the scene's start; it may return a promise.
+`ctx` has `scene` (the scene id), `width`, `height` (pixels), `fps`, `frames`, `duration` (seconds of
+frames drawn) and `canvas` (the bare page's canvas; `null` on a `page:`).
+
+**Not controlled:** `<audio>` (a `web` scene has no sound), animated GIF and WebP pictures, web
+workers and their timers, iframes, SVG animation in an `<img>` or `<object>`, `event.timeStamp`,
+`XMLHttpRequest` and dynamic `import()` (not waited for: use `load`), `ResizeObserver` and
+`IntersectionObserver` callbacks (they run when Chromium draws), an `animation-play-state` that CSS
+changes to `paused` after the animation started (pause it with `getAnimations()[i].pause()`, which
+vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets it every frame).
 
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
-error or rejected promise at load or in `frame`, and a page that is not ready within 30 s (its
-load event never came, or a module never finished loading).
+error or rejected promise at load, in a timer or callback, or in `frame`, and a page that is not
+ready within 30 s (its load event never came, or a module never finished loading). A `load` that
+does not return within 30 s, or a frame (its timers, callbacks and `frame`) that does not return
+within 10 s, stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
+10 s: a loop that never ends or a promise that never settles …`; vidgen ends the page's process.
 
 **Cache.** The screenshots are written to a lossless clip `build/<quality>/web/<scene>.mkv`
 (with `<scene>.json`, what it was drawn from) and reused while the page or script file, the size,
-frame rate and length are unchanged; an edit to that file renders the scene again. An edit to a
-file it loads (a stylesheet, an imported module) is not seen yet (Step 330): touch the page or
-script file, or delete the clip.
+frame rate and length are unchanged; an edit to that file renders the scene again. A change to
+vidgen's clock draws it again too. An edit to a file it loads (a stylesheet, an imported module) is
+not seen yet (Step 330): touch the page or script file, or delete the clip.
 
 ```yaml
 - id: gears

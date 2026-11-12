@@ -1809,14 +1809,14 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] Frames are screenshots of the whole page at the render's size and frame rate, into a cached clip as `3d` does — done: `build/<q>/web/<scene>.mkv`; an edit to the page or script file re-renders the scene
 - [x] A missing file, a JavaScript error or a page that never becomes ready stops the render with the scene id, file and line, without a traceback
 - [x] `vidgen validate` checks the files exist; the missing-Chromium message matches the `3d` one
-- [~] Left for later: the YAML `params` mapping (`ctx.params`, Step 330); files the page loads are not in the cache keys (Step 330); a `frame` that never returns is not bounded (Step 329)
+- [~] Left for later: the YAML `params` mapping (`ctx.params`, Step 330); files the page loads are not in the cache keys (Step 330); a `frame` that never returns is not bounded (done in Step 329)
 
 ### Step 329 — Time belongs to vidgen
-- [ ] A virtual clock replaces `Date.now`, `performance.now`, `requestAnimationFrame`, `setTimeout` and `setInterval`
-- [ ] CSS animations and transitions, SVG animation and `<video>` elements are paused and set to the frame's time
-- [ ] `Math.random` is seeded from the scene id
-- [ ] Optional hooks `load(ctx)` (may be async) and `frame(t, ctx)`; fonts and images are awaited before frame 0
-- [ ] Proof: the same scene rendered twice gives identical frames
+- [x] A virtual clock replaces `Date.now`, `performance.now`, `requestAnimationFrame`, `setTimeout` and `setInterval` — done: hand-written (`data/web/clock.js`), chosen over CDP virtual time and Playwright's `page.clock` (DESIGN §118.8 has the measurements); per frame: timers in due order, loading, media, one round of animation frames, `frame`; 4 ms nesting rule and a 10 000-callback cap
+- [x] CSS animations and transitions, SVG animation and `<video>` elements are paused and set to the frame's time — done: `data/web/media.js`; the page's Web Animations and media calls are followed; what is not controlled is listed in CONFIG and §118.8; the server answers byte ranges so videos seek
+- [x] `Math.random` is seeded from the scene id — done: sfc32 from SHA-256 of the id; `crypto.getRandomValues` / `randomUUID` seeded too
+- [x] Optional hooks `load(ctx)` (may be async) and `frame(t, ctx)`; fonts and images are awaited before frame 0 — done; plus time limits: `load` 30 s, a frame 10 s (vidgen ends the renderer process)
+- [x] Proof: the same scene rendered twice gives identical frames — done: five pages (CSS, rAF, random canvas, SVG, video), build deleted in between, decoded frames identical
 
 ### Step 330 — What the page is given
 - [ ] Theme colours and fonts as CSS variables (`var(--vidgen-primary)`) and as `ctx.theme`

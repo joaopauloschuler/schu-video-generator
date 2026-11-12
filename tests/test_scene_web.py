@@ -1,10 +1,15 @@
-"""The ``web`` scene type (Step 328, DESIGN.md §118): params, the page or script file's checks,
-the served paths, error messages and the clip cache without a browser; a few tiny pages in
-Playwright's Chromium (``slow``, skipped when it is missing)."""
+"""The ``web`` scene type (Steps 328-329, DESIGN.md §118): params, the page or script file's checks,
+the served paths, error messages, the clip cache, the random seed and the time limit without a
+browser; a few tiny pages in Playwright's Chromium (``slow``, skipped when it is missing), among
+them the virtual clock (§118.8)."""
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +24,8 @@ from vidgen.project import Project
 from vidgen.web import clip as web_clip
 from vidgen.web import page as web_page
 from vidgen.web.entry import WebEntry, entry_digest, entry_of, entry_problems
-from vidgen.web.page import WebPage, canvas_page, content_type, error_location, error_message, project_path
+from vidgen.web.page import (WebPage, byte_range, canvas_page, content_type, error_location, error_message, init_script,
+                             project_path, random_seed)
 
 
 def web_project(make_project: Any, params: dict[str, Any], files: dict[str, str]) -> Project:
@@ -124,6 +130,63 @@ def test_the_clip_is_reused_until_the_file_changes(tmp_path: Path, monkeypatch: 
         web_clip.make_web_clip(tmp_path, out, "g", {"script": "gone.js"}, size=(16, 16), fps=5, frames=3)
 
 
+def test_byte_ranges_for_seeking_a_video() -> None:
+    assert byte_range("bytes=0-", 10) == (0, 9) and byte_range("bytes=2-4", 10) == (2, 4)
+    assert byte_range("bytes=-3", 10) == (7, 9) and byte_range("bytes=5-99", 10) == (5, 9)
+    for header in (None, "", "items=0-1", "bytes=-", "bytes=9-2", "bytes=0-1,4-5"):
+        assert byte_range(header, 10) is None
+
+
+def sfc32_values(seed: list[int], count: int) -> list[float]:
+    """The page's Math.random (sfc32), in Python, for the seed's first four words."""
+    a, b, c, d = seed[:4]
+    out = []
+    for _ in range(count):
+        t = (a + b + d) & 0xFFFFFFFF
+        d = (d + 1) & 0xFFFFFFFF
+        a = b ^ (b >> 9)
+        b = (c + (c << 3)) & 0xFFFFFFFF
+        c = ((c << 21) | (c >> 11)) & 0xFFFFFFFF
+        c = (c + t) & 0xFFFFFFFF
+        out.append(t / 4294967296)
+    return out
+
+
+def test_the_random_seed_follows_the_scene_id() -> None:
+    assert random_seed("gears") == random_seed("gears") != random_seed("gears2")
+    assert len(random_seed("gears")) == 8 and all(0 <= w < 2**32 for w in random_seed("gears"))
+    script = init_script("gears")
+    assert f"const VIDGEN_SEED = {json.dumps(random_seed('gears'))};" in script
+    assert script.index("const native = {") < script.index("const animations = new Map()") < script.index("const run = {")
+
+
+def test_the_clip_key_changes_with_the_clock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    before = web_page.engine_id()
+    changed = tmp_path / "clock.js"
+    changed.write_text(web_page.CLOCK_FILE.read_text(encoding="utf-8") + "\n// changed\n", encoding="utf-8")
+    monkeypatch.setattr(web_page, "INIT_FILES", (changed, web_page.MEDIA_FILE, web_page.RUNTIME_FILE))
+    web_page.runtime_digest.cache_clear()
+    try:
+        assert web_page.engine_id() != before and "tz=UTC" in before
+    finally:
+        web_page.runtime_digest.cache_clear()
+
+
+def test_the_time_limit_stops_the_process() -> None:
+    sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    limit = web_page._TimeLimit([sleeper.pid])
+    try:
+        with limit.running(30):
+            pass
+        assert not limit.expired and sleeper.poll() is None
+        with limit.running(0.05):
+            sleeper.wait(timeout=10)
+        assert limit.expired
+    finally:
+        sleeper.kill()
+        sleeper.wait()
+
+
 # ----- pages in Chromium ------------------------------------------------------------------------
 
 
@@ -196,3 +259,84 @@ def test_render_shows_the_page(make_project: Any) -> None:
         first = next(video.decode(video=0)).to_ndarray(format="rgb24")
     assert first[45, 80, 0] > 180 and first[45, 80, 1] < 100
     assert (project.root / "build" / "final" / "web" / "w.json").is_file()
+
+
+CLOCK_PAGE = """<!doctype html><meta charset="utf-8">
+<style>html, body { margin: 0; background: #000; } #bar { height: 10px; background: #f00; animation: grow 1s linear forwards; }
+@keyframes grow { from { width: 0; } to { width: 50px; } }</style><div id="bar"></div><i id="fade"></i>
+<script>
+window.log = [];
+const log = (x) => window.log.push(x);
+log(['start', performance.now(), Date.now(), new Date().toISOString()]);
+window.randoms = [Math.random(), Math.random()];
+window.bytes = Array.from(crypto.getRandomValues(new Uint8Array(4)));
+setTimeout(() => { log(['t200', performance.now()]); setTimeout(() => log(['t200+0', performance.now()]), 0); }, 200);
+setTimeout(() => log(['t100', performance.now()]), 100);
+setTimeout(() => log(['t100b', performance.now()]), 100);
+let ticks = 0;
+const loop = setInterval(() => { ticks++; }, 0);
+setTimeout(() => { clearInterval(loop); log(['interval', ticks]); }, 400);
+requestAnimationFrame((t) => { log(['raf', t]); requestAnimationFrame((u) => log(['raf2', u])); });
+const moved = document.getElementById("fade").animate([{opacity: 1}, {opacity: 0}], {duration: 400});
+moved.finished.then(() => log(['finished', performance.now()]));
+window.vidgen = {
+  async load(ctx) { const data = await (await fetch('d.json')).json(); log(['load', data.n, performance.now()]); },
+  frame(t) { log(['frame', t, document.getAnimations().length, moved.currentTime]); },
+};
+</script>"""
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_page_runs_on_vidgens_clock(tmp_path: Path) -> None:
+    _chromium_or_skip()
+    (tmp_path / "c.html").write_text(CLOCK_PAGE, encoding="utf-8")
+    (tmp_path / "d.json").write_text('{"n": 7}', encoding="utf-8")
+    with WebPage(tmp_path, WebEntry("page", "c.html"), scene_id="clock", size=(64, 36), fps=10, frames=6) as page:
+        widths = [int((page.frame(n)[5, :, 0] > 128).sum()) for n in range(6)]
+        log = page._page.evaluate("window.log")
+        randoms, numbers = page._page.evaluate("[window.randoms, window.bytes]")
+    assert widths == [0, 5, 10, 15, 20, 25]   # 50 px in 1 s, at 10 fps
+    assert log[0] == ["start", 0, 1767225600000, "2026-01-01T00:00:00.000Z"]
+    assert randoms == pytest.approx(sfc32_values(random_seed("clock"), 2), abs=0)
+    assert len(numbers) == 4
+    events = [e for e in log[1:] if e[0] != "frame"]
+    # each frame: its due timers in time order (ties: as set; one set by a timer runs too), then requestAnimationFrame
+    assert events == [["load", 7, 0], ["raf", 0], ["t100", 100], ["t100b", 100], ["raf2", 100], ["t200", 200],
+                      ["t200+0", 200], ["interval", events[7][1]], ["finished", 400]]
+    assert 50 < events[7][1] < 120   # 0 ms then, from the 6th nested run, 4 ms: (400 - 5 * 0) / 4 + 5
+    frames = [e for e in log if e[0] == "frame"]
+    assert [f[1] for f in frames] == [0, 0.1, 0.2, 0.3, 0.4, 0.5] and frames[2][3] == 200
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_same_page_gives_the_same_frames(tmp_path: Path) -> None:
+    _chromium_or_skip()
+    (tmp_path / "r.js").write_text(
+        "let x = 0;\nfunction tick(now) { x = (now / 7 + Math.random() * 20) % 64; requestAnimationFrame(tick); }\n"
+        "requestAnimationFrame(tick);\nexport function frame(t, ctx) { const c = ctx.canvas.getContext('2d');"
+        " c.fillStyle = `hsl(${Math.random() * 360}, 90%, 50%)`; c.fillRect(x, Date.now() % 30, 9, 9); }", encoding="utf-8")
+    runs = []
+    for _ in range(2):
+        with _open(tmp_path, WebEntry("script", "r.js"), frames=4) as page:
+            runs.append([page.frame(n) for n in range(4)])
+    assert all(np.array_equal(a, b) for a, b in zip(*runs)) and not np.array_equal(runs[0][1], runs[0][2])
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_a_hook_that_never_returns_is_stopped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _chromium_or_skip()
+    monkeypatch.setattr(web_page, "FRAME_TIMEOUT_S", 1.0)
+    monkeypatch.setattr(web_page, "LOAD_TIMEOUT_S", 1.0)
+    (tmp_path / "loop.js").write_text("export async function frame(t) {\n  await null;\n  if (t > 0) while (true) {}\n}\n", encoding="utf-8")
+    (tmp_path / "wait.js").write_text("export async function load() { await new Promise((r) => setTimeout(r, 100)); }\n", encoding="utf-8")
+    started = time.monotonic()
+    with _open(tmp_path, WebEntry("script", "loop.js")) as page:
+        page.frame(0)
+        with pytest.raises(VidgenError, match=r"^scene 'w': frame\(t=0\.200\) in loop\.js did not return within 1 s: a loop"):
+            page.frame(1)
+    with pytest.raises(VidgenError, match=r"^scene 'w': load\(ctx\) in wait\.js did not return within 1 s \(time stands still"):
+        _open(tmp_path, WebEntry("script", "wait.js")).__enter__()
+    assert time.monotonic() - started < 20

@@ -3,9 +3,11 @@
 :class:`WebPage` serves the project folder on a made-up origin (``http://vidgen-web.invalid/``;
 nothing is fetched from the network: a request elsewhere is refused with a warning), opens the
 scene's page (or vidgen's bare canvas page that imports the scene's script), waits until it is
-ready and returns frame ``n``: the page's ``frame(t, ctx)`` hook called at ``t = n / fps``, then a
-screenshot of the whole viewport. An uncaught JavaScript error, at load or on a frame, is a
-:class:`VidgenError` naming the scene, the file and the line.
+ready and returns frame ``n``: vidgen's clock moved to ``t = n / fps`` (the page's timers,
+animation-frame callbacks, animations and videos follow it; §118.8), the page's ``frame(t, ctx)``
+hook, then a screenshot of the whole viewport. An uncaught JavaScript error, at load or on a frame,
+is a :class:`VidgenError` naming the scene, the file and the line; so is a ``load`` or a frame that
+does not return within its time limit (vidgen then stops the page's renderer process).
 """
 
 from __future__ import annotations
@@ -14,7 +16,12 @@ import hashlib
 import json
 import logging
 import mimetypes
+import os
 import re
+import signal
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 from types import TracebackType
@@ -30,9 +37,13 @@ from vidgen.web.entry import WebEntry, inside
 
 log = logging.getLogger("vidgen.web")
 
-#: vidgen's page files (the runtime injected into every page, the bare page of a ``script:``).
+#: vidgen's page files: the parts of the script run before any script of the page (joined in
+#: this order by :func:`init_script`) and the bare page of a ``script:``.
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "web"
+CLOCK_FILE = DATA_DIR / "clock.js"
+MEDIA_FILE = DATA_DIR / "media.js"
 RUNTIME_FILE = DATA_DIR / "runtime.js"
+INIT_FILES: tuple[Path, ...] = (CLOCK_FILE, MEDIA_FILE, RUNTIME_FILE)
 CANVAS_FILE = DATA_DIR / "canvas.html"
 #: The origin the project folder is served on (``.invalid`` never resolves).
 WEB_ORIGIN = "http://vidgen-web.invalid/"
@@ -42,6 +53,12 @@ CANVAS_PATH = "__vidgen__/canvas.html"
 WEB_ARGS: tuple[str, ...] = ("--hide-scrollbars", "--force-color-profile=srgb")
 #: How long the page may take to become ready (milliseconds).
 READY_TIMEOUT_MS = 30_000
+#: How long vidgen's start (fonts, pictures, videos, then the page's ``load(ctx)``) may take (seconds).
+LOAD_TIMEOUT_S = 30.0
+#: How long one frame (its timers, animation-frame callbacks and ``frame(t, ctx)``) may take (seconds).
+FRAME_TIMEOUT_S = 10.0
+#: The page's time zone and locale (``Date`` and ``Intl`` give the same text on every machine).
+TIMEZONE, LOCALE = "UTC", "en-US"
 #: Content types by suffix (not the system's table: Windows may map ``.js`` to ``text/plain``,
 #: and Chromium refuses a module served so).
 CONTENT_TYPES: dict[str, str] = {
@@ -58,17 +75,32 @@ _LOCATION = re.compile(re.escape(WEB_ORIGIN) + r"([^\s()]+?):(\d+):(\d+)")
 
 @lru_cache(maxsize=1)
 def runtime_digest() -> str:
-    """Digest of vidgen's page files (:data:`RUNTIME_FILE`, :data:`CANVAS_FILE`)."""
+    """Digest of vidgen's page files (:data:`INIT_FILES`, :data:`CANVAS_FILE`)."""
     digest = hashlib.sha256()
-    for path in (RUNTIME_FILE, CANVAS_FILE):
+    for path in (*INIT_FILES, CANVAS_FILE):
         digest.update(path.name.encode("utf-8") + b"\0" + hashlib.sha256(path.read_bytes()).digest())
     return digest.hexdigest()
 
 
 def engine_id() -> str:
-    """What draws the frames, for the cache key: vidgen's page files, the Chromium flags and the
-    Playwright version (which pins the Chromium build)."""
-    return f"web={runtime_digest()} args={' '.join(chromium.CHROMIUM_ARGS + WEB_ARGS)} playwright={playwright_version() or 'none'}"
+    """What draws the frames, for the cache key: vidgen's page files (the clock among them), the
+    Chromium flags, the time zone and locale, and the Playwright version (which pins the Chromium build)."""
+    return (f"web={runtime_digest()} args={' '.join(chromium.CHROMIUM_ARGS + WEB_ARGS)} tz={TIMEZONE} locale={LOCALE} "
+            f"playwright={playwright_version() or 'none'}")
+
+
+def random_seed(scene_id: str) -> list[int]:
+    """Eight 32-bit words from the scene id: the seeds of the page's ``Math.random`` (the first
+    four) and ``crypto.getRandomValues`` (the last four)."""
+    digest = hashlib.sha256(f"vidgen-web-random:{scene_id}".encode("utf-8")).digest()
+    return [int.from_bytes(digest[i:i + 4], "little") for i in range(0, 32, 4)]
+
+
+def init_script(scene_id: str) -> str:
+    """The script Chromium runs before any script of the page (top frame only): the files of
+    :data:`INIT_FILES` in one function, with the random seed of ``scene_id``."""
+    body = "\n".join(path.read_text(encoding="utf-8") for path in INIT_FILES)
+    return f"(() => {{\nif (window.top !== window) return;\nconst VIDGEN_SEED = {json.dumps(random_seed(scene_id))};\n{body}\n}})();\n"
 
 
 def content_type(path: Path) -> str:
@@ -82,6 +114,19 @@ def canvas_page(script: str, size: tuple[int, int]) -> str:
     a module importing ``script`` (a project path), its exports put on ``window.vidgen``."""
     html = CANVAS_FILE.read_text(encoding="utf-8")
     return html.replace("@WIDTH@", str(size[0])).replace("@HEIGHT@", str(size[1])).replace("@SCRIPT@", json.dumps("/" + script))
+
+
+def byte_range(header: str | None, size: int) -> tuple[int, int] | None:
+    """The first and last byte a ``Range: bytes=a-b`` header asks for (a video seeks with it),
+    within a file of ``size`` bytes; ``None`` for no header, another unit or a range out of the file."""
+    match = re.fullmatch(r"\s*bytes=(\d*)-(\d*)\s*", header or "")
+    if match is None or size == 0 or not (match[1] or match[2]):
+        return None
+    if not match[1]:   # the last N bytes
+        return max(0, size - int(match[2])), size - 1
+    start = int(match[1])
+    end = min(int(match[2]), size - 1) if match[2] else size - 1
+    return (start, end) if start <= end else None
 
 
 def project_path(url: str) -> str | None:
@@ -113,6 +158,43 @@ def error_message(scene_id: str, entry: WebEntry, error: dict[str, Any], when: s
     return f"scene '{scene_id}': JavaScript error in {where} {when}: {text}"
 
 
+def renderer_pids(browser: Any) -> list[int]:
+    """The process ids of a Chromium's renderer processes (``SystemInfo.getProcessInfo``), or
+    none when Chromium does not tell."""
+    try:
+        info = browser.new_browser_cdp_session().send("SystemInfo.getProcessInfo")
+    except Exception:  # noqa: BLE001 - an older Chromium: no time limit can be enforced
+        return []
+    return [int(p["id"]) for p in info.get("processInfo", []) if p.get("type") == "renderer"]
+
+
+class _TimeLimit:
+    """Stops a page that does not return in time: after ``seconds`` a timer thread ends the
+    renderer processes (the blocked Playwright call then fails); :attr:`expired` says so."""
+
+    def __init__(self, pids: list[int]) -> None:
+        self.pids = pids
+        self.expired = False
+
+    def _stop(self) -> None:
+        self.expired = True
+        for pid in self.pids:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+
+    @contextmanager
+    def running(self, seconds: float) -> Iterator[None]:
+        timer = threading.Timer(seconds, self._stop)
+        timer.daemon = True
+        timer.start()
+        try:
+            yield
+        finally:
+            timer.cancel()
+
+
 class WebPage:
     """``with WebPage(root, entry, scene_id=..., size=(w, h), fps=..., frames=...) as page:
     page.frame(n)`` -> RGB pixels (H x W x 3).
@@ -127,6 +209,7 @@ class WebPage:
         self.missing: list[str] = []
         self._chromium: Chromium | None = None
         self._page: Any = None
+        self._limit = _TimeLimit([])
 
     # ----- serving -------------------------------------------------------------------------------
 
@@ -150,7 +233,15 @@ class WebPage:
                 log.warning("scene '%s': the page asked for %s, which is not in the project folder", self.scene_id, rel)
             route.fulfill(status=404, body="", headers={"Content-Type": CONTENT_TYPES[".txt"]})
             return
-        route.fulfill(status=200, body=path.read_bytes(), headers={"Content-Type": content_type(path)})
+        body = path.read_bytes()
+        headers = {"Content-Type": content_type(path), "Accept-Ranges": "bytes"}
+        span = byte_range(route.request.headers.get("range"), len(body))
+        if span is None:
+            route.fulfill(status=200, body=body, headers=headers)
+            return
+        start, end = span
+        headers["Content-Range"] = f"bytes {start}-{end}/{len(body)}"
+        route.fulfill(status=206, body=body[start:end + 1], headers=headers)
 
     # ----- the page ------------------------------------------------------------------------------
 
@@ -182,8 +273,10 @@ class WebPage:
 
     def _open(self, api: Any) -> None:
         width, height = self.size
-        context = self._chromium.browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=1)  # type: ignore[union-attr]
-        context.add_init_script(path=str(RUNTIME_FILE))
+        browser = self._chromium.browser  # type: ignore[union-attr]
+        context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=1,
+                                      timezone_id=TIMEZONE, locale=LOCALE)
+        context.add_init_script(script=init_script(self.scene_id))
         context.route("**/*", self._serve)
         self._page = page = context.new_page()
         is_script = self.entry.kind == "script"
@@ -197,25 +290,41 @@ class WebPage:
             raise self._not_ready(exc) from None
         except api.Error as exc:
             raise VidgenError(f"scene '{self.scene_id}': {self.entry.posix} did not load: {first_line(exc)}") from None
+        self._limit = _TimeLimit(renderer_pids(browser))
         info = {"scene": self.scene_id, "width": width, "height": height, "fps": self.fps,
                 "frames": self.frames, "duration": self.frames / self.fps}
-        self._raise_first(self._evaluate("info => window.__vidgen.start(info)", info, "at load"), "at load")
+        errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
+        self._raise_first(errors, "at load")
 
-    def _evaluate(self, script: str, arg: Any, when: str) -> Any:
+    def _overrun(self, hook: str, seconds: float) -> VidgenError:
+        extra = " (time stands still at 0 before frame 0, so a timer it waits for never fires)" if hook == "load(ctx)" else ""
+        return VidgenError(
+            f"scene '{self.scene_id}': {hook} in {self.entry.posix} did not return within {seconds:g} s{extra}: "
+            "a loop that never ends or a promise that never settles, in the hook or in a timer, "
+            "requestAnimationFrame callback, fetch, picture, font or video it waits for; vidgen stopped the page"
+        )
+
+    def _evaluate(self, script: str, arg: Any, when: str, hook: str, seconds: float) -> Any:
+        """``page.evaluate(script, arg)``, stopped after ``seconds`` (:meth:`_overrun` names ``hook``)."""
         api = chromium.sync_api()
         try:
-            return self._page.evaluate(script, arg)
+            with self._limit.running(seconds):
+                return self._page.evaluate(script, arg)
         except api.Error as exc:
+            if self._limit.expired:
+                raise self._overrun(hook, seconds) from None
             raise VidgenError(f"scene '{self.scene_id}': the page {self.entry.posix} failed {when}: {first_line(exc)}") from None
 
     def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None) -> None:
         self.close()
 
     def frame(self, n: int) -> np.ndarray:
-        """Frame ``n``: the page's ``frame(n / fps, ctx)`` hook (if any), then a screenshot."""
+        """Frame ``n``: the clock and the page moved to ``t = n / fps``, the page's ``frame(t, ctx)``
+        hook (if any), then a screenshot."""
         t = n / self.fps
         when = f"in frame(t={t:.3f})"
-        self._raise_first(self._evaluate("t => window.__vidgen.frame(t)", t, when), when)
+        errors = self._evaluate("n => window.__vidgen.frame(n)", n, when, f"frame(t={t:.3f})", FRAME_TIMEOUT_S)
+        self._raise_first(errors, when)
         api = chromium.sync_api()
         try:
             png = self._page.screenshot(type="png", timeout=READY_TIMEOUT_MS)
@@ -230,5 +339,6 @@ class WebPage:
         self._chromium = self._page = None
 
 
-__all__ = ["CANVAS_PATH", "READY_TIMEOUT_MS", "WEB_ORIGIN", "WebPage", "canvas_page", "content_type", "engine_id",
-           "error_location", "error_message", "project_path", "runtime_digest"]
+__all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
+           "content_type", "engine_id", "error_location", "error_message", "init_script", "project_path", "random_seed",
+           "renderer_pids", "runtime_digest"]
