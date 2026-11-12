@@ -24,10 +24,11 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
-from pathlib import Path
+from html import escape
+from pathlib import Path, PurePosixPath
 from types import TracebackType
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 import numpy as np
 
@@ -130,12 +131,22 @@ def content_type(path: Path) -> str:
     return known or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
 
+def script_base(script: str) -> str:
+    """The URL path of the folder of ``script`` (a project path): ``/extensions/`` for
+    ``extensions/x.js``, ``/`` for a script in the project folder itself."""
+    folder = PurePosixPath(script).parent.as_posix()
+    return "/" if folder == "." else f"/{quote(folder)}/"
+
+
 def canvas_page(script: str, size: tuple[int, int]) -> str:
     """vidgen's bare page for a ``script:`` scene: one canvas of ``size`` filling the viewport on
     a transparent background (what the script does not draw shows the video's background) and a
-    module importing ``script`` (a project path), its exports put on ``window.vidgen``."""
+    module importing ``script`` (a project path), its exports put on ``window.vidgen``. Its
+    ``<base>`` is the script's folder, so a relative URL in the script (``fetch("data.json")``,
+    an image's ``src``) names a file beside the script, as its relative imports do."""
     html = CANVAS_FILE.read_text(encoding="utf-8")
-    return html.replace("@WIDTH@", str(size[0])).replace("@HEIGHT@", str(size[1])).replace("@SCRIPT@", json.dumps("/" + script))
+    return (html.replace("@WIDTH@", str(size[0])).replace("@HEIGHT@", str(size[1]))
+            .replace("@BASE@", escape(script_base(script), quote=True)).replace("@SCRIPT@", json.dumps("/" + script)))
 
 
 def byte_range(header: str | None, size: int) -> tuple[int, int] | None:
@@ -446,4 +457,4 @@ class WebPage:
 
 __all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
            "content_type", "engine_id", "error_location", "error_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
-           "renderer_pids", "runtime_digest", "unshipped_addon_message"]
+           "renderer_pids", "runtime_digest", "script_base", "unshipped_addon_message"]

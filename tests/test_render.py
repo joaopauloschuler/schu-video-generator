@@ -250,6 +250,82 @@ def test_scene_option_rerenders_only_that_scene(main_project: Path, capsys: pyte
     assert streams(main_project / "output" / "out.mp4")["video"] == pytest.approx(combined_timings(main_project)["duration"], abs=FRAME)
 
 
+# ----- which scenes --scene renders (Step 337), without rendering -----------------------------------
+
+
+def four_scenes(root: Path) -> Path:
+    scenes = [{"id": sid, "type": "text_card", "params": {"text": sid}, "duration": 0.4} for sid in ("one", "lines", "three", "four")]
+    return write_project(root, {"scenes": scenes, "variants": {"small": {"format": {"width": 128, "height": 72}}}})
+
+
+def fake_render(project: Project, preview: bool, scene_id: str, audio: bool = True, **render: Any) -> None:
+    """The files of a scene's render at the project's format, as :func:`pipeline._usable_render` reads them."""
+    fmt = project.render_format(preview)
+    video, timings = pipeline.scene_video_path(project, preview, scene_id), pipeline.scene_timings_path(project, preview, scene_id)
+    video.parent.mkdir(parents=True, exist_ok=True)
+    timings.parent.mkdir(parents=True, exist_ok=True)
+    video.write_bytes(b"")
+    meta = {"width": fmt.width, "height": fmt.height, "fps": fmt.fps, "audio": audio, "fingerprint": "made from other inputs", **render}
+    timings.write_text(json.dumps({"render": meta}), encoding="utf-8")
+
+
+def test_scene_option_renders_that_scene_and_the_scenes_never_rendered(tmp_path: Path) -> None:
+    root = four_scenes(tmp_path / "p")
+    final, small = Project.load(root), Project.load(root, variant="small")
+    every = ["one", "lines", "three", "four"]
+    plan = pipeline.scenes_to_render
+    # nothing rendered yet: the join needs every scene, so every scene is rendered, and a line says so
+    assert plan(final, False, ["lines"]) == every
+    note = pipeline.also_rendered_note(final, False, ["lines"], every)
+    assert note is not None and note.startswith("--scene lines: also rendering 3 other scene(s) (one, three, four): the video is joined from every scene")
+    assert str(root / "build" / "final") in note and "160x90 at 10 fps" in note
+    for sid in every:
+        fake_render(final, False, sid)
+    # every scene has a render (made from other inputs: not current): only the named ones, also with --force
+    assert plan(final, False, ["lines"]) == ["lines"] and plan(final, False, ["lines"], force=True) == ["lines"]
+    assert plan(final, False, ["four", "lines"]) == ["lines", "four"] and plan(final, False, ["lines"], no_audio=True) == ["lines"]
+    assert pipeline.also_rendered_note(final, False, ["lines"], ["lines"]) is None
+    assert plan(final, False, []) == every and plan(final, False, [], force=True) == every
+    assert pipeline.also_rendered_note(final, False, [], every) is None
+    # each quality and each variant has its own folder of renders: the first --scene there renders every scene
+    for project, preview in ((small, False), (final, True), (small, True), (Project.load(root, draft=True), True)):
+        assert plan(project, preview, ["lines"]) == every, project.render_dir(preview).name
+        for sid in ("one", "three"):
+            fake_render(project, preview, sid)
+        assert plan(project, preview, ["lines"]) == ["lines", "four"], project.render_dir(preview).name
+    assert str(root / "build" / "final_small") in pipeline.also_rendered_note(small, False, ["lines"], ["lines", "four"])
+    # a render at another size, without sound (unless --no-audio) or without the stills asked for is not reused
+    fake_render(final, False, "one", width=320)
+    fake_render(final, False, "three", audio=False)
+    assert plan(final, False, ["lines"]) == ["one", "lines", "three"] and plan(final, False, ["lines"], no_audio=True) == ["one", "lines"]
+    fake_render(final, False, "one")
+    fake_render(final, False, "three")
+    assert plan(final, False, ["lines"], frames=1) == every
+
+
+@pytest.mark.slow   # loads the scene types (no scene is rendered)
+def test_render_with_scene_plans_only_that_scene_and_says_what_else(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                    capsys: pytest.CaptureFixture[str]) -> None:
+    root = four_scenes(tmp_path / "p")
+    small = Project.load(root, variant="small")
+    planned: list[list[str]] = []
+
+    def no_render(project: Project, preview: bool, scene_ids: list[str], *args: Any, **kwargs: Any) -> pipeline.SceneRuns:
+        planned.append(list(scene_ids))
+        return pipeline.SceneRuns(failed=[{"scene": scene_ids[0]}])   # stops before the join
+
+    monkeypatch.setattr(pipeline, "_render_scenes", no_render)
+    for sid in ("one", "three", "four"):
+        fake_render(small, False, sid)
+    with pytest.raises(VidgenError, match="1 scene.s. failed: lines"):
+        render_project(small, scenes=["lines"])
+    assert planned == [["lines"]] and "also rendering" not in capsys.readouterr().out
+    with pytest.raises(VidgenError, match="failed"):   # the same project without the variant: nothing rendered there yet
+        render_project(Project.load(root), scenes=["lines"], force=True)
+    assert planned[1] == ["one", "lines", "three", "four"]
+    assert "--scene lines: also rendering 3 other scene(s) (one, three, four)" in capsys.readouterr().out
+
+
 # ----- single-scene projects ----------------------------------------------------------------------
 
 

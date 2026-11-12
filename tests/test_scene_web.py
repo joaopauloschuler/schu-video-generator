@@ -8,6 +8,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
+import shutil
 import subprocess
 import sys
 import time
@@ -25,8 +27,9 @@ from vidgen.project import Project
 from vidgen.web import clip as web_clip
 from vidgen.web import page as web_page
 from vidgen.web.entry import WebEntry, entry_digest, entry_of, entry_problems
+from vidgen.web.inputs import page_head, page_shape
 from vidgen.web.page import (WebPage, byte_range, canvas_page, content_type, error_location, error_message, init_script,
-                             project_path, random_seed)
+                             project_path, random_seed, script_base)
 
 
 def web_project(make_project: Any, params: dict[str, Any], files: dict[str, str]) -> Project:
@@ -92,6 +95,18 @@ def test_served_paths_and_content_types() -> None:
     assert content_type(Path("m.mjs")).startswith("text/javascript") and content_type(Path("f.woff2")) == "font/woff2"
     page = canvas_page("extensions/g.js", (160, 90))
     assert 'import * as hooks from "/extensions/g.js";' in page and 'width="160" height="90"' in page
+
+
+def test_a_scripts_page_has_the_scripts_folder_as_its_base() -> None:
+    assert [script_base(s) for s in ("extensions/g.js", "g.js", "a b/c&d/g.mjs")] == ["/extensions/", "/", "/a%20b/c%26d/"]
+    assert '<base href="/extensions/sub/">' in canvas_page("extensions/sub/g.js", (160, 90))
+    page = canvas_page("g.js", (160, 90))
+    assert '<base href="/">' in page and "@" not in page
+    # before anything in the page with a URL (vidgen's own head, put first, has absolute paths only)
+    assert page.index("<base ") < page.index("<style") < page.index("<script")
+    head = page_head(_theme("light_academic"), page_shape((160, 90)))
+    urls = re.findall(r'url\("([^"]+)"\)', head) + list(json.loads(re.search(r'<script type="importmap">(.*?)</script>', head)[1])["imports"].values())
+    assert len(urls) > 10 and all(u.startswith("/__vidgen__/") for u in urls)
 
 
 def test_error_location_and_message() -> None:
@@ -539,6 +554,94 @@ def test_the_page_is_given_theme_data_beats_and_three(tmp_path: Path) -> None:
         pixels = page.frame(0)
     # the bare page is transparent: what the script does not draw shows the video's background
     assert tuple(int(v) for v in pixels[2, 2]) == (0x1D, 0x4E, 0xD8, 255) and int(pixels[30, 50, 3]) == 0
+
+
+RELATIVE_SCRIPT = """import * as THREE from "three";
+import { dep } from "./dep.js";
+const loaded = (el, event) => new Promise((done) => { el.addEventListener(event, () => done(true)); el.addEventListener("error", () => done(false)); });
+export async function load(ctx) {
+  const out = {base: document.baseURI, location: location.pathname, dep, three: typeof THREE.Color};
+  out.url = new URL("data.json", document.baseURI).pathname;
+  out.fetch = (await (await fetch("data.json")).json()).v;
+  out.dotted = (await (await fetch("./sub/more.json")).json()).v;
+  out.up = (await (await fetch("../top.json")).json()).v;
+  out.absolute = (await (await fetch("/top.json")).json()).v;
+  out.meta = (await (await fetch(new URL("./data.json", import.meta.url))).json()).v;
+  out.dynamic = (await import("./dep.js")).dep;
+  const image = new Image();
+  image.src = "red.png";
+  out.image = (await loaded(image, "load")) && image.naturalWidth;
+  const video = document.createElement("video");
+  video.muted = true;
+  video.src = "v.webm";
+  document.body.append(video);
+  out.video = (await loaded(video, "loadedmetadata")) && video.videoWidth;
+  video.remove();
+  ctx.canvas.style.backgroundImage = 'url("red.png")';
+  out.css = getComputedStyle(ctx.canvas).backgroundImage;
+  const style = document.createElement("style");
+  style.textContent = '#mark { position: absolute; left: 0; top: 0; width: 8px; height: 8px; background: url("red.png"); }';
+  document.head.append(style);
+  document.body.insertAdjacentHTML("beforeend", '<div id="mark"></div><svg style="position: absolute; left: 16px; top: 0" width="8" height="8">'
+    + '<defs><linearGradient id="g"><stop offset="0" stop-color="#00f"/></linearGradient></defs><rect width="8" height="8" fill="url(#g)"/></svg>');
+  window.out = out;
+}
+"""
+
+
+def _relative_files(root: Path, folder: str) -> None:
+    """A script scene's files in ``root / folder``: the script ``x.js`` and what it names by relative URL."""
+    from PIL import Image
+
+    here = root / folder
+    (here / "sub").mkdir(parents=True)
+    (here / "x.js").write_text(RELATIVE_SCRIPT, encoding="utf-8")
+    (here / "dep.js").write_text("export const dep = 5;", encoding="utf-8")
+    (here / "data.json").write_text('{"v": 7}', encoding="utf-8")
+    (here / "sub" / "more.json").write_text('{"v": 8}', encoding="utf-8")
+    Image.new("RGB", (4, 4), (255, 0, 0)).save(here / "red.png")
+    subprocess.run([shutil.which("ffmpeg") or "ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=gray:s=32x18:r=5:d=1",
+                    "-c:v", "libvpx", str(here / "v.webm")], check=True, capture_output=True)
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_relative_urls_in_a_script_name_files_beside_the_script(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Step 337: ``fetch("data.json")`` in ``ext/x.js`` asked for ``__vidgen__/data.json``."""
+    _chromium_or_skip()
+    _relative_files(tmp_path, "ext")
+    (tmp_path / "top.json").write_text('{"v": 9}', encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="vidgen.web"), \
+            WebPage(tmp_path, WebEntry("script", "ext/x.js"), scene_id="w", size=(64, 36), fps=5, frames=2, theme=_theme("light_academic")) as page:
+        pixels = page.frame(0)
+        out = page._page.evaluate("window.out")
+        font = page._page.evaluate("document.fonts.check('16px \"Source Serif 4\"')")
+        loaded, missing = page.loaded, page.missing
+    assert out == {"base": "http://vidgen-web.invalid/ext/", "location": "/__vidgen__/canvas.html", "dep": 5, "three": "function",
+                   "url": "/ext/data.json", "fetch": 7, "dotted": 8, "up": 9, "absolute": 9, "meta": 7, "dynamic": 5, "image": 4,
+                   "video": 32, "css": 'url("http://vidgen-web.invalid/ext/red.png")'}
+    # a style sheet's url() draws the picture; an SVG paint named by fragment (url(#g)) is still found in the page
+    assert tuple(int(v) for v in pixels[4, 4]) == (255, 0, 0, 255) and tuple(int(v) for v in pixels[4, 20]) == (0, 0, 255, 255)
+    assert font is True and missing == [] and caplog.text == ""
+    assert {"ext/x.js", "ext/dep.js", "ext/data.json", "ext/sub/more.json", "ext/red.png", "ext/v.webm", "top.json",
+            "__vidgen__/three/three.module.js", "__vidgen__/fonts/SourceSerif4/SourceSerif4-Regular.ttf"} <= set(loaded)
+    assert all(digest is not None for digest in loaded.values())
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_a_script_in_the_project_folder_and_the_record_of_its_files(tmp_path: Path) -> None:
+    _chromium_or_skip()
+    _relative_files(tmp_path, ".")
+    script = tmp_path / "x.js"
+    script.write_text(script.read_text(encoding="utf-8").replace('fetch("../top.json")', 'fetch("data.json")').replace('fetch("/top.json")', 'fetch("/data.json")'),
+                      encoding="utf-8")
+    out = tmp_path / "build"
+    web_clip.make_web_clip(tmp_path, out, "w", {"script": "x.js"}, size=(64, 36), fps=5, frames=2)
+    record = json.loads((out / "w.json").read_text(encoding="utf-8"))["loaded"]
+    files = {"x.js", "dep.js", "data.json", "sub/more.json", "red.png", "v.webm"}
+    assert files <= set(record) and all(record[name] == hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() for name in files)
+    assert not [name for name in record if name.startswith("__vidgen__/") and not name.startswith("__vidgen__/three/")]
 
 
 # ----- Step 331: region, title, transparency, the video's shape ----------------------------------

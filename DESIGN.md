@@ -1260,7 +1260,9 @@ vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider 
 ```
 PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
 or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
-and re-joins using the existing renders of the others (missing ones are rendered). Exit code
+and re-joins using the existing renders of the others (missing ones are rendered: each quality
+and each variant has its own renders, so the first `--scene` run there renders every scene, and
+prints `--scene ID: also rendering N other scene(s) (...)`, Step 337). Exit code
 non-zero on error.
 `render` prints one line per scene, then the output paths and the total duration (Step 45: and
 the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first prints `jobs: N
@@ -23173,7 +23175,7 @@ true` does exactly what it did in Step 325: the owner wants a dissolve only on r
   dissolve does not touch still differ by 1.6 to 2.0 between the two MP4s). Both films have 488
   frames, 20.33 s, −19.3 LUFS and the same decoded sound, sample for sample.
 
-## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334, 336)
+## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334, 336–337)
 
 The owner wants AI agents to write a scene as a web page. The owner's decisions: JavaScript in the
 project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
@@ -23800,8 +23802,9 @@ variant, the Step 330 and 331 demos.
   the same before and after). `vidgen_source_digest()` hashes every `.js` under `data/three/`, so
   it changed once, as it does for any source change.
 - **Behaviour under vidgen's clock** (HANDOFF Step 334 has the measurements): a loader in a
-  `script:` resolves relative paths against vidgen's bare page (`/__vidgen__/canvas.html`), so a
-  file is named with `new URL("./x.glb", import.meta.url)`; `.gltf` (embedded or `.bin`) and `.glb`
+  `script:` resolved relative paths against vidgen's bare page (`/__vidgen__/canvas.html`) until
+  Step 337 (§118.16: now against the script's folder), so a
+  file was named with `new URL("./x.glb", import.meta.url)`, which still works; `.gltf` (embedded or `.bin`) and `.glb`
   load in `load(ctx)`. `EffectComposer`'s output is opaque: `RenderPass` without its own clear
   colour leaves alpha 1 everywhere; with `clearColor` / `clearAlpha` 0 the alpha survives but a
   bloom halo over transparency comes out wrong (colour above its alpha), so the rule is a scene
@@ -23908,3 +23911,45 @@ variant, the Step 330 and 331 demos.
   drag, `d3.json` and other fetch helpers; Chart.js chart types other than bar and line, its
   time scale, plugins; Lottie files with images, fonts,
   expressions or audio, the `html` renderer); the UMD `lottie.min.js`; Windows.
+
+### 118.16 Relative URLs in a `script:` scene; what `render --scene` renders (Step 337)
+
+- **The base of a `script:` scene's page.** `web/page.py` `canvas_page` writes `<base href="/<the
+  script's folder>/">` into vidgen's bare page (`data/web/canvas.html`, `@BASE@`; `script_base`:
+  `/extensions/` for `extensions/x.js`, `/` for a script in the project folder, each part
+  percent-encoded). Before, the page's base was its own URL, `/__vidgen__/canvas.html`, so
+  `fetch("data.json")` in `extensions/x.js` asked for `__vidgen__/data.json` (a 404 and a
+  warning). Now every URL the browser resolves against the document base names a file beside
+  the script: `fetch`, an image's or video's `src`, `url()` in a style set from JavaScript or in
+  a `<style>` the script adds, `new URL(x, document.baseURI)`, a three.js loader's path.
+  Unchanged: `location` is still `/__vidgen__/canvas.html` (so `new URL(x, location.href)` is
+  not relative to the script); imports resolve against the importing module (`./dep.js`,
+  `import.meta.url`); bare imports go through the import map; vidgen's own URLs in the page are
+  absolute paths (`/__vidgen__/...`: the import map's addresses, the font faces, the import of
+  the script), so the base does not move them; an SVG paint named by fragment (`fill="url(#g)"`)
+  is still found in the page. The served file is recorded with the page's loaded files
+  (§118.10) under its project path (`extensions/data.json`), so an edit to it draws the clip
+  again. A `page:` scene is served as before (its base is the page's own URL).
+- **Why `<base>`** and not serving the bare page from the script's folder: a page URL there could
+  collide with a project file, and error messages and the loaded-file record tell vidgen's
+  files from the project's by the `__vidgen__/` prefix.
+- **Cache keys.** `canvas.html` is part of `runtime_digest()`, so `engine_id()` changed and every
+  `web` clip is drawn again once. The frames of `examples/web`'s two `script:` scenes (`rain`,
+  `globe`; 6 frames each at 160x90) are identical with and without the `<base>`, and so are the
+  files they load.
+- **`vidgen render --scene ID`** (§14, §63; no change of behaviour): `pipeline.scenes_to_render`
+  (taken out of `render_project`, so tests can ask which scenes are planned without rendering)
+  returns the named scenes and every other scene without a usable render (`_usable_render`),
+  because the video is joined from every scene. `render_dir` is one folder per quality and
+  variant (`build/final`, `build/final_<variant>`, `build/preview...`, `build/draft...`), so the
+  first `--scene` run for a variant or quality renders every scene; that is what the owner saw
+  (`--scene lines --variant small`, 13 scenes). Measured on a 4-scene project: first run in
+  `final`, `final_small`, `preview` and `draft` 4 rendered each; second run 1 rendered, 3
+  reused; `--scene lines --force` 1 (with `--scene`, `--force` adds no scene; it draws a `web`
+  scene's frames again); two `--scene`s 2; `--no-audio` after a render with sound 1.
+  `vidgen storyboard --scene` and `vidgen lint --scene` on an empty folder render only that
+  scene (they join nothing). New: `pipeline.also_rendered_note` gives the line
+  `--scene lines: also rendering 3 other scene(s) (one, three, four): the video is joined from
+  every scene, and <render_dir> has no render of them to reuse (...)`, printed by
+  `render_project` before the scenes (stderr with `--json`, as the other progress lines);
+  `--scene` and `--force` say so in `vidgen render --help`.

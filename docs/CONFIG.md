@@ -6476,8 +6476,9 @@ the same scene id (another id, other numbers).
 **Hooks** (both optional): a page sets `window.vidgen = {load(ctx) {...}, frame(t, ctx) {...}}`; a
 `script:` module exports `load` and `frame`. `load(ctx)` runs once before frame 0, after the page's
 fonts, pictures and videos are ready; it may return a promise (awaited), so it is the place to load
-data (`await fetch("data.json")` in a `page:`; a `script:` runs in vidgen's page, so it names the
-file with `new URL("./data.json", import.meta.url)`). Time stands at 0 during `load`: a timer it waits for never fires.
+data (`await fetch("data.json")`: a relative path is relative to the page, or to the script of a
+`script:`, whose page vidgen gives a `<base>` of the script's folder; `new URL("./data.json", import.meta.url)`
+names a file beside any module). Time stands at 0 during `load`: a timer it waits for never fires.
 `frame(t, ctx)` runs at step 5 with `t` in seconds from the scene's start; it may return a promise.
 
 **Not controlled:** `<audio>` (a `web` scene has no sound), animated GIF and WebP pictures, web
@@ -6563,8 +6564,9 @@ ships too and is imported the usual way, `three/addons/<folder>/<Name>.js` (or t
 `controls/OrbitControls.js` (and `utils/SkeletonUtils.js`, which `GLTFLoader` imports). They are
 served from `/__vidgen__/three/addons/` and recorded with the page's loaded files. Rules:
 
-- a loader in a `script:` resolves a relative path against vidgen's page, not the script: pass
-  `new URL("./model.glb", import.meta.url).href`; `.gltf` (embedded or `.bin` buffer) and `.glb`
+- a loader resolves a relative path against the page, or against the script of a `script:`
+  (`loader.loadAsync("model.glb")`; `new URL("./model.glb", import.meta.url).href` works too, and
+  is the way in a module in another folder); `.gltf` (embedded or `.bin` buffer) and `.glb`
   load, compressed models (Draco, KTX2, Meshopt) do not;
 - `EffectComposer` gives an opaque picture (black where nothing is drawn): set
   `scene.background`; its colours equal `renderer.render`'s (`OutputPass` applies tone mapping and

@@ -1866,6 +1866,13 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] Tests: `tests/test_web_libs.py` (8 default, 6 `slow` in Chromium), `test_scene_web.py::test_an_animations_start_time_is_on_vidgens_clock` (`slow`)
 - [~] lottie-web ships as the package's ES build (589 kB, not minified, `lottie.version` reads `[[BM_VERSION]]`); the UMD `lottie.min.js` (306 kB) behind a wrapper would save 283 kB: the owner's choice
 
+### Step 337 — Relative URLs in a `script:` scene; what `render --scene` renders
+- [x] Bug A: in a `script:` scene a relative URL (`fetch`, image and video `src`, CSS `url()`, `new URL(x, document.baseURI)`, a three.js loader) names a file beside the script — done: `<base href>` of the script's folder in `data/web/canvas.html` (`web/page.py` `script_base`); imports, the import map, vidgen's fonts and `page:` scenes unchanged; `examples/web` script scenes give the same frames; the fetched file is in `build/<q>/web/<scene>.json`
+- [~] Bug B: `vidgen render --scene X --variant Y` rendered every scene — not a bug by DESIGN §14 / §63: a variant or quality never rendered has no renders to join, so every scene is rendered once (measured: 4 of 4 the first time, 1 of 4 after, for `final`, `final_small`, `preview`, `draft`; `--force`, two `--scene`s, `--no-audio`, `storyboard --scene`, `lint --scene` render only the named scenes). Behaviour kept; `render` now prints which scenes it adds and why, and `--help` says it
+- [x] Wheel check: a wheel built offline holds the 16 files of `data/web/libs/` and the 29 of `data/three/` (no file missing, none stale); wheel deleted
+- [x] Docs: guide `web` topic and troubleshooting, CONFIG `### web`, DESIGN §118.16 and §14, CHANGELOG
+- [x] Tests: `tests/test_scene_web.py` (1 default, 2 `slow` in Chromium), `tests/test_render.py` (1 default, 1 `slow`; no scene rendered)
+
 ### Step 326 — A dissolve of a few frames where a clip continues the one before, on request
 - [x] `match_previous: {dissolve: N}` (0–12 frames of the render being made, default 0): the first N frames are blended with the previous clip's last shown frame, weights `(N − k) / (N + 1)`, after the gain (`clip_join.JoinTreatment`, DESIGN §117)
 - [x] `level: false`: the dissolve without the gain; an error without a dissolve or with `seconds` / `hold`

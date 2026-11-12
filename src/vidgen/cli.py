@@ -2582,7 +2582,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--draft", action="store_true",
         help="fastest check of timing and staging: ~8 fps, 240p, no idle / wind / shadows / particles / light grade (build/draft, ..._draft.mp4)",
     )
-    p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene (repeatable)")
+    p.add_argument(
+        "--scene", action="append", default=[], metavar="ID",
+        help="render only this scene (repeatable) and join the video again from it and the other scenes' existing renders, "
+             "as they are; a scene with no render at this quality and variant yet is rendered too (a line says which)",
+    )
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
     p.add_argument(
@@ -2595,7 +2599,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
-    p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
+    p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current (with --scene: only those scenes)")
     p.add_argument(
         "--guide-passes", nargs="?", const="all", metavar="LIST",
         help="also draw guide passes of every 3d scene, beside its 3D clip (build/.../three_d/<scene>.<pass>.mkv): depth (near white, "

@@ -3311,8 +3311,8 @@ seeded from the scene id, so every render gives the same frames. A loop that add
 `requestAnimationFrame` works; a picture computed from `t` alone is simpler to get right. Not
 controlled (avoid them, or drive them from `frame`): `<audio>` (the scene has no sound of its
 own), animated GIF / WebP, web workers, iframes, `XMLHttpRequest` and dynamic `import()` (not
-waited for: load data with `await fetch(…)` in `load`; in a `script:`, name the file
-with `new URL("./data.json", import.meta.url)`), and `ResizeObserver` /
+waited for: load data with `await fetch("data.json")` in `load`; a relative path is relative to
+the page, or to the script of a `script:`), and `ResizeObserver` /
 `IntersectionObserver` callbacks. Ordinary timer, `requestAnimationFrame`, CSS and Web Animations
 code was measured frame-exact. anime.js, Motion, D3, Chart.js and lottie-web ship with vidgen and
 were run under the clock (the table "Animation and chart libraries" below says how to drive
@@ -3458,9 +3458,11 @@ export function frame(t) {
 
 Rules found by trying each add-on under vidgen's clock:
 
-- **Files a loader reads.** A `script:` runs in vidgen's own page, so a relative path is not
-  relative to your script: write `loader.loadAsync(new URL("./model.glb", import.meta.url).href)`
-  (in `load`, awaited). In a `page:` a path relative to the page works. `.gltf` (buffer embedded
+- **Files a loader reads.** A relative path is relative to the page (`page:`) or to your script
+  (`script:`): `loader.loadAsync("model.glb")` (in `load`, awaited) reads the file beside it, and
+  so do `fetch("data.json")`, an image's `src` and a CSS `url()`. In a module that is not the
+  scene's script (one in another folder that the script imports), name a file beside that module
+  with `new URL("./model.glb", import.meta.url).href`. `.gltf` (buffer embedded
   or in a `.bin` beside it) and `.glb` load; compressed models (Draco, KTX2, Meshopt) do not.
 - **Glow and transparency.** `EffectComposer` draws an opaque picture (black where nothing is), so
   give the scene a background (`scene.background = new THREE.Color(ctx.theme.background)`), as
@@ -4537,5 +4539,10 @@ install; `vidgen validate` warns when it is missing.
   acronyms take longer to say. Re-check pacing after the real audio.
 - *`vidgen render --scene ID` re-joins the other scenes as they are*: render the scene before a
   new transition or carry too.
+- *`vidgen render --scene ID` rendered every scene*: the video is joined from every scene, so a
+  scene with no render yet at that quality and variant (`--preview`, `--draft` and each
+  `--variant` keep their own renders) is rendered too; a line `--scene ID: also rendering ...`
+  names them. The next `--scene ID` renders only that scene. To look at one scene without the
+  others, use `vidgen storyboard --scene ID`.
 - *`ffmpeg not found`*: install it and open a new terminal.
 - *`ffmpeg X.Y is too old`*: install ffmpeg 4.4 or newer.

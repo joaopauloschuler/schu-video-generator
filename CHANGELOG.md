@@ -5,7 +5,12 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–336)
+## Unreleased (Steps 193–337)
+
+### Relative paths in a `script:` web scene; `render --scene` says what else it renders (Step 337)
+
+- **Fixed:** in a `web` scene with `script: extensions/x.js`, a relative URL is relative to the script's folder: `fetch("data.json")`, an image's or video's `src`, a CSS `url()`, `new URL(x, document.baseURI)` and a three.js loader's path name files beside the script. Before, they named files in vidgen's own page folder (`/__vidgen__/data.json`: not found). vidgen's page for a script now has a `<base>` of the script's folder. `new URL("./x.glb", import.meta.url)` and relative imports work as before; `page:` scenes are unchanged. Every `web` clip is drawn again once (the page file is part of the cache key).
+- `vidgen render --scene ID` on a quality or variant never rendered before (`--preview`, `--draft` and each `--variant` keep their own renders) renders every scene, as before, because the video is joined from every scene; it now prints which scenes it adds and why (`--scene lines: also rendering 3 other scene(s) (one, three, four): ...`). `vidgen render --help` says so for `--scene`, and that `--force` with `--scene` renders only those scenes.
 
 ### Animation and chart libraries for `web` scenes (Step 336)
 

@@ -802,6 +802,38 @@ def write_frames_index(project: Project, preview: bool, timings: dict[str, Any],
     return target
 
 
+def scenes_to_render(
+    project: Project, preview: bool, selected: list[str], no_audio: bool = False, frames: int = 0, force: bool = False,
+    guide_passes: tuple[str, ...] = (),
+) -> list[str]:
+    """The scenes :func:`render_project` renders, in config order (before the ``pre_render``
+    hooks, continuity and ``max_scenes``). With ``selected`` (``--scene``): those, and every
+    other scene without a usable render (:func:`_usable_render`), because the video is joined
+    from every scene; ``force`` then adds none. Else every scene with ``force``, or the scenes
+    whose render is not current (:func:`current_render`; a storyboard's or lint's renders are reused)."""
+    known = [s.id for s in project.config.scenes]
+    if selected:
+        return [sid for sid in known if sid in selected or not _usable_render(project, preview, sid, no_audio, frames, guide_passes)]
+    if force:
+        return known
+    return [sid for sid in known if not current_render(project, preview, sid, no_audio, frames, guide_passes)]
+
+
+def also_rendered_note(project: Project, preview: bool, selected: list[str], to_render: list[str]) -> str | None:
+    """The line ``vidgen render --scene`` prints when it renders scenes that were not asked
+    for (``to_render`` beyond ``selected``), saying which and why; ``None`` when there are none."""
+    extra = [sid for sid in to_render if sid not in selected]
+    if not selected or not extra:
+        return None
+    fmt = project.render_format(preview)
+    return (
+        f"--scene {', '.join(selected)}: also rendering {len(extra)} other scene(s) ({', '.join(extra)}): the video is joined from "
+        f"every scene, and {project.render_dir(preview)} has no render of them to reuse (none yet, or one made at "
+        f"another size or frame rate than {fmt.width}x{fmt.height} at {fmt.fps} fps, without sound, or without the stills "
+        "or guide passes asked for now)"
+    )
+
+
 def render_project(
     project: Project,
     preview: bool = False,
@@ -852,12 +884,10 @@ def render_project(
             raise VidgenError(f"unknown scene(s): {', '.join(unknown)}; scenes: {', '.join(known)}")
         warn_audio(project)
         warn_images(project)
-        if selected:  # those, and the scenes without a usable render
-            to_render = [sid for sid in known if sid in selected or not _usable_render(project, preview, sid, no_audio, frames, guide_passes)]
-        elif force:
-            to_render = known
-        else:  # what changed since its render (a storyboard's or lint's renders are reused)
-            to_render = [sid for sid in known if not current_render(project, preview, sid, no_audio, frames, guide_passes)]
+        to_render = scenes_to_render(project, preview, selected, no_audio, frames, force, guide_passes)
+        note = also_rendered_note(project, preview, selected, to_render)
+        if note is not None:
+            print(note, flush=True)
         ctx = hooks.dispatch(
             "pre_render",
             project,
