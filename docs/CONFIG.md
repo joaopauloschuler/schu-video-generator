@@ -6531,6 +6531,56 @@ scene's `data:`, the theme or the narration renders that scene again (and only i
 (all of its frames at preview size; the clip is then reused by `vidgen render --preview` and
 `vidgen animatic`).
 
+**Lint reads the page** (DESIGN §118.12). At each still lint looks at (the beat ends; more with
+`vidgen storyboard --per-beat N` or a Short), vidgen asks the page what text it shows: every
+element that holds visible text (with its inline children: `<p>Hello <b>you</b></p>` is one text)
+and every SVG `<text>`, with its box (mapped from the page to the frame), its size as drawn (CSS
+transforms included: `transform: scale(0.3)` on 24 px text is 7.2 px), its colour, what is behind
+it (the first background found under it, blended down to the video's background through
+transparent and half-transparent layers; over a picture, a canvas, a video or a gradient it is
+not known and contrast is not checked), its opacity through its ancestors, and what clips it.
+Text that is hidden (`display: none`, `visibility: hidden`, opacity under 0.01, a box of zero size,
+wholly clipped or off the page) is left out, so text a later beat reveals is checked once it shows.
+The page's text then goes through the same rules as vidgen's own: `off_frame`, `text_overlap`,
+`min_font`, `contrast`, `safe_area` (text under the captions is named so), `overlay_overlap`,
+`max_words`, `shorts_safe_area` in a Short, `covered_text` (a `title` plate over page text), plus
+`web_clipped` for text cut by its own box (`overflow: hidden`) or by the page's box with
+`region: body`. Each finding names the element:
+
+```
+error   web_clipped       clipped @ 0.9s: text 'A label too long for its card' (page: card) is cut by its box card (overflow: hidden) at the right (129 px of the text hidden); …
+warning safe_area         u1 @ 2.8s: text 'A note low in the frame' (page: low) is in the part of the frame overlay 'captions' (captions) keeps for itself, outside the safe area at the bottom (48 px into the bottom margin); …
+```
+
+- **Naming**: `data-vidgen-id="gear"` names an element (and the text it holds) in the layout dump
+  and in lint messages (`(page: gear)`), and `lint_ignore` can name it (`{rule: contrast, object:
+  gear}`); without it the name is a short CSS-like path (`div.card:nth-child(2) > h2`, `[gear] > h2`
+  under a named element, `p#note` for an `id`).
+- **Opting out**: `data-vidgen-lint="off"` on an element leaves it and everything inside out of
+  every rule (decorative text, a deliberate watermark); `data-vidgen-lint="off:text_overlap,contrast"`
+  only out of those rules (an unknown rule name is a warning). The texts stay in the layout dump.
+- **Text drawn on a canvas cannot be read** (nor text inside a picture or a WebGL scene). Declare it:
+  a page sets `window.vidgen.layout(t, ctx)`, a `script:` exports `layout(t, ctx)`, returning
+  `[{id, text, box: {x, y, width, height}, size, font, color, background, lint}]` in page pixels
+  (`text` and `box` needed; `size` is the font size in px, from which with `font` vidgen measures the
+  cap height, else 0.7 of the box's height; without `background` contrast is not checked). It is
+  called after a frame's screenshot only when lint reads that frame, so it must not change the page:
+
+```js
+export function layout(t, ctx) {
+  return [{id: "score", text: "3 : 1", box: {x: 70, y: 106, width: 170, height: 30}, size: 28,
+           color: "#E8EAED", background: "#101418"}];
+}
+```
+
+**Cost.** The reading is taken while the clip is drawn, after the screenshot of each frame a still
+will show (about 10–40 ms each), and kept beside the clip (`build/<quality>/web/<scene>.layout.json`,
+under the clip's own key), so a later `vidgen lint` reads no page at all. When lint wants a frame
+that was not read (another `--per-beat`, a clip drawn before Step 332), vidgen opens the page once
+more and steps it frame by frame without screenshots up to the last frame it needs (a page's state
+can depend on every frame before: `requestAnimationFrame` loops, a canvas drawn over itself):
+about 2–3 s to start Chromium plus 15–25 ms per frame stepped, against 70–100 ms per frame drawn.
+
 ```yaml
 - id: gears
   type: web
@@ -15189,9 +15239,12 @@ File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
            shot: {kind, subjects, near},      # a stage's shot on screen (shot:), absent outside
                                               # shots; near: over_shoulder only
            objects: [...],
-           overlays: [{id, type, settled, skip}]}]}   # overlays drawn in this still; settled:
+           web: {box, size, frame, texts, declared, hidden, canvases},   # web scenes only (below)
+           overlays: [{id, type, settled, skip, reserve}]}],   # overlays drawn in this still; settled:
                                      # false while one slides or fades; skip: lint rules not
-                                     # applied to its objects
+                                     # applied to its objects; reserve: true when it keeps its
+                                     # part of the frame (bottom captions)
+ reserved: [{overlay, type, box}]}   # only with such overlays: the part each keeps, px
 ```
 
 Coordinates are output-frame pixels: origin at the top-left corner, y downwards, the frame
@@ -15233,6 +15286,7 @@ Each object:
 | speech bubbles only: `bubble` | the name of the character speaking (on the bubble's shape and its text) |
 | `effect` only: `effect`, `effect_of` | an [effect symbol](#effect-symbols-effect) over a head (one object of kind `effect` named after the symbol): the symbol (`idea`) and the character it marks |
 | overlays only: `overlay` | the id of the [overlay](#overlays) it belongs to; overlay objects come after the scene's, their `path` starts with `overlay:<id>` and they are measured as drawn: fixed to the screen whatever the camera does |
+| a [`web`](#web) page's text only | `class: WebText`, `source: web`, `id` `web:<name>`, `path` `web/<name>`, `name` (the element's `data-vidgen-id`, else a short CSS-like path such as `div.card:nth-child(2) > h2`), `tag`, `cap_px` (the cap height as drawn, from the font's metrics and every CSS transform; `font_px` is the same), `font_size_px` (the CSS font size as drawn), `color` / `colors`, `backdrop` (what is behind it on the page, or `null` with `backdrop_unknown`: `picture`, `canvas`, `video`, `gradient`, `not declared`), `visible` (the part of `bbox` no box clips), `clipped` (`{by, overflow, sides}`), `cut` (`{side: px}` past the page's box), `lint_off` (rules it opted out of), `declared: true` (from `layout(t, ctx)`) |
 
 An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
 Parts with opacity 0 are not visible: they do not count in the box, and an object with no
@@ -15337,14 +15391,14 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | rule | default severity | finds |
 |---|---|---|
 | `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in or looks away from the frame's centre (`zoom`, `pan`, `follow`, a wide `stage`); never [particles](#particles), which cross the edges on purpose, nor a [level's tiles](#the-camera-on-a-level-follow) (the camera crops them), nor characters (`off_stage`'s) |
-| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in or moved (`pan`, `follow`), nor for [overlays](#overlays) (their place is deliberate) |
+| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in or moved (`pan`, `follow`), nor for [overlays](#overlays) (their place is deliberate). Text in the part of the frame an overlay with `reserve: true` keeps for itself (bottom captions; the layout dump's `reserved`) is reported naming it: `is in the part of the frame overlay 'captions' (captions) keeps for itself` |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
 | `label_spacing` | warning | a **label on its own plate** — a filled rounded shape without an outline, not in the background colour, drawn just behind one text and hugging it (a callout label, a tag) — closer than `min_gap` of the shorter side to another text (a bar's value, the title, a neighbour's label): it reads as part of that text. The text on the plate itself, texts inside the plate, lone symbols (a bullet) and the text framed by the callout's own mark (an outline in the plate's colour: a `box` tag sits on its edge by design) are not checked; cards, table rows, cells and code bands (several texts, or much larger than their text) are not labels |
 | `min_font` | warning; error below `error_size` | text whose cap height is below `min_size` of the shorter side. The cap height is the layout's `font_px` corrected for the text's letters (`font_px` of all-lowercase text is about its x-height); a lone symbol (`+`, `·`) is not checked |
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
-| `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
+| `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules. Text in the part of the frame a `reserve: true` overlay keeps (under the captions) is `safe_area`'s finding, not this rule's |
 | `host_overlap` | warning | the [host](#a-host-beside-any-scene-host) (its figure and floor line) sharing at least `min_overlap` of the smaller of two boxes with a scene object (text, shape, picture, character...) or an overlay's object (a caption, a lower third). Not reported: a scene object whose box holds the host's whole box (a backdrop: a full-frame picture, a band), particles, motion effects, the host's own pointer line and effect symbol. `covered_text` leaves the host over text to this rule. Scenes lay out beside the host, so a finding means something was drawn outside the scene's regions (a project scene type that ignores `self.safe_area`, a `zoom`): make the host smaller (`size`), move it (`side`, `place`) or `host: false` on that scene |
 | `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`), and not two 0.15 or more apart in depth (one behind the other); see [Moving](#moving) |
 | `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. In a [shot](#shots-shot) (other than `wide`) only the characters it frames are checked, wholly outside too: their face in a `medium`, `over_shoulder` or `closeup` shot, their whole box in a `two_shot`; the near character of an `over_shoulder` shot and characters the shot does not frame may be cut. Fix: put it on a mark inside the view, or pan to it (in a shot: keep it from walking out, or frame another shot) |
@@ -15421,6 +15475,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `generated_footage` | info | a scene shows generated video takes (`vidgen generate`): a reminder to disclose AI-generated footage when publishing (YouTube "Altered or synthetic content", TikTok's AI-generated label); the description file already says so |
 | `three_d_off_frame` | warning | in a `3d` scene, an object the beat is about (an object or camera action of the beat names it, or a stand-in whose `voice` says the line) is at least `max_off` (0.5) outside the frame, or behind the camera, at a beat-end or mid-beat still. Fix: `camera_fly_to` / `camera_look_at` it, or move it into view |
 | `three_d_hidden` | warning | in a `3d` scene, an object the beat is about is at least `max_hidden` (0.7) covered by nearer objects (estimated from the objects' spheres; floors, labels, arrows and its own group do not count). Fix: `camera_orbit` round, or move one of them |
+| `web_clipped` | error | in a [`web`](#web) scene, page text cut by more than `tolerance` (of the shorter side) by its own box or an ancestor's with `overflow` other than `visible` (named in the message: `cut by its box card (overflow: hidden) at the right`), or by the page's box where the page does not reach the frame's edge (`region: body`; at the frame's edge it is `off_frame`'s). `off_frame` and `safe_area` leave such text to this rule. Fix: shorter or smaller text, a box that grows; `data-vidgen-lint="off"` on text cut on purpose |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -15514,6 +15569,7 @@ lint:
     generated_footage: {}                   # default severity info; scenes showing generated takes
     three_d_off_frame: {max_off: 0.5}       # share of a 3d object (the beat is about) outside the frame
     three_d_hidden: {max_hidden: 0.7}       # share of it covered by nearer objects
+    web_clipped: {tolerance: 0.004}        # page text cut by its box (overflow) or the page's box
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any

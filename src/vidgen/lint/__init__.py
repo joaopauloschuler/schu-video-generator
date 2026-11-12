@@ -4,7 +4,7 @@ Layout rules read the layout dumps of the beat-end stills (:mod:`vidgen.introspe
 rules each scene's activity file (:mod:`vidgen.activity`); both report
 :class:`Finding` objects; thresholds and severities come from the config's ``lint:`` section,
 per-scene ``lint_ignore`` entries skip findings. Modules: :mod:`.rules` (framework),
-:mod:`.layout_rules`, :mod:`.cartoon_rules`, :mod:`.timing_rules`, :mod:`.readback_rule`, :mod:`.term_rule`, :mod:`.narration_rule`, :mod:`.iso_rule`, :mod:`.music_rule`, :mod:`.science_rule`, :mod:`.genetics_rule`, :mod:`.calc_rule`, :mod:`.plot_rule`, :mod:`.orbit_rule`, :mod:`.particle_rule`, :mod:`.shorts_rule` and :mod:`.generated_rule` (the rules), :mod:`.color` (WCAG contrast), :mod:`.run`
+:mod:`.layout_rules`, :mod:`.cartoon_rules`, :mod:`.timing_rules`, :mod:`.readback_rule`, :mod:`.term_rule`, :mod:`.narration_rule`, :mod:`.iso_rule`, :mod:`.music_rule`, :mod:`.science_rule`, :mod:`.genetics_rule`, :mod:`.calc_rule`, :mod:`.plot_rule`, :mod:`.orbit_rule`, :mod:`.particle_rule`, :mod:`.shorts_rule`, :mod:`.generated_rule`, :mod:`.three_d_rule` and :mod:`.web_rule` (the rules), :mod:`.color` (WCAG contrast), :mod:`.run`
 (:func:`lint_project`), :mod:`.findings`, :mod:`.report` (human output).
 """
 
@@ -26,7 +26,8 @@ from vidgen.lint import orbit_rule as _orbit_rule  # noqa: F401, I001 - register
 from vidgen.lint import particle_rule as _particle_rule  # noqa: F401, I001 - registers the particle-physics rules (as in LINT_RULES)
 from vidgen.lint import shorts_rule as _shorts_rule  # noqa: F401, I001 - registers the Shorts rules (as in LINT_RULES)
 from vidgen.lint import generated_rule as _generated_rule  # noqa: F401, I001 - registers generated_footage (as in LINT_RULES)
-from vidgen.lint import three_d_rule as _three_d_rule  # noqa: F401, I001 - registers the 3d rules (last, as in LINT_RULES)
+from vidgen.lint import three_d_rule as _three_d_rule  # noqa: F401, I001 - registers the 3d rules (as in LINT_RULES)
+from vidgen.lint import web_rule as _web_rule  # noqa: F401, I001 - registers web_clipped (last, as in LINT_RULES)
 from vidgen.lint.findings import Finding
 from vidgen.lint.report import report_lines
 from vidgen.lint.rules import RULES, SEVERITIES, Issue, Rule, SceneContext, StillContext, rule

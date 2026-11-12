@@ -135,17 +135,32 @@ class Web(NarratedScene):
 
     def _draw_view(self, box: Region) -> Path:
         """The clip of the page's frames at the size of ``box`` (drawn now, or reused while its
-        inputs are unchanged)."""
+        inputs are unchanged); drawing it also reads the page's text at the stills' frames."""
         spans, frames = clip_plan(self, SPARE_FRAMES)
         theme, beats = web_page_inputs(self, spans)
         frame = (int(config.pixel_width), int(config.pixel_height))
         per_unit = frame[0] / self.frame_width
         size = (max(1, round(box.width * per_unit)), max(1, round(box.height * per_unit)))
-        return make_web_clip(
-            self.project.root, self.project.render_dir(self.is_preview) / "web", self.spec.id, self.params,
-            size=size, fps=int(config.frame_rate), frames=frames, theme=theme, beats=beats,
-            shape=web_page_shape(frame, self.params.region),
-        )
+        self._clip_args: dict[str, Any] = {
+            "root": self.project.root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
+            "params": self.params, "size": size, "fps": int(config.frame_rate), "frames": frames, "theme": theme,
+            "beats": beats, "shape": web_page_shape(frame, self.params.region),
+        }
+        self._still_frames = planned_still_frames(self)
+        self._layouts: dict[int, dict[str, Any]] = {}
+        return make_web_clip(**self._clip_args, layout_frames=self._still_frames)
+
+    def page_layout(self, frame: int) -> tuple[dict[str, Any], Mobject] | None:
+        """What text the page shows at output frame ``frame`` (the clip's frame of that index) and
+        the mobject showing it, for the layout dump and lint (DESIGN.md §118.12): read when the
+        clip was drawn, else from the page now (frames still to come read in the same go)."""
+        args, view = getattr(self, "_clip_args", None), getattr(self, "_view", None)
+        if args is None or view is None:
+            return None
+        n = min(max(frame, 0), args["frames"] - 1)
+        if n not in self._layouts:
+            self._layouts.update(web_page_layouts(**args, at=[n, *(f for f in self._still_frames if f > n)]))
+        return self._layouts[n], view
 
 
 def pixel_box(area: Region) -> Region:

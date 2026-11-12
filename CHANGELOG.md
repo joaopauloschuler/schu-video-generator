@@ -7,6 +7,14 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### Lint reads a `web` page (Step 332)
+
+- `vidgen lint` now checks the text a `web` page shows: at each still it asks the page for every element that holds visible text (and SVG `<text>`): its box mapped to the frame, its size as drawn (CSS transforms included), colour, what is behind it, opacity, and what clips it. The existing rules run on it (`off_frame`, `text_overlap`, `min_font`, `contrast`, `safe_area`, `overlay_overlap`, `max_words`, `shorts_safe_area`, `covered_text`); a new rule `web_clipped` (error) reports text cut by its own box (`overflow: hidden`) or by the page's box with `region: body`. Text a later beat reveals is checked once it shows.
+- `data-vidgen-id="gear"` names an element in the layout dump and in messages (`text 'Gears' (page: gear)`), else a short CSS-like path does; `data-vidgen-lint="off"` (or `"off:contrast"`) opts an element and its children out. Text drawn on a canvas cannot be read: a page or script declares it with `layout(t, ctx)` returning `[{id, text, box: {x, y, width, height}, size, color, background}]`.
+- Text under the captions (in the part of the frame a `reserve: true` overlay keeps) is now one `safe_area` finding naming the overlay, for every scene type; `overlay_overlap` leaves it to `safe_area`.
+- The layout dump has a `web` entry per still and the page's texts as objects (`class: WebText`), and a `reserved` list in its header; overlays carry `reserve`.
+- The reading is taken while the clip is drawn and kept beside it (`<scene>.layout.json`), so lint reads no page again; a frame not read then costs one Chromium start and a step per frame without screenshots. Every web clip is drawn again once. `vidgen.api` adds `web_page_layouts` and `planned_still_frames`; `make_web_clip` takes `layout_frames=`.
+
 ### `web` scenes fit with the rest of a video (Step 331)
 
 - `region: bleed` (the default: the page fills the frame) or `region: body` (the page fills the safe area under a `title` that vidgen draws, clear of bottom captions and of a Short's covered parts). With `body` the page is laid out at the region's own size: its viewport and `ctx.width` / `ctx.height` are the region's pixels. `title` draws a heading as on `3d` (a plate over the page) or `video_clip` (above it); action target `title`.

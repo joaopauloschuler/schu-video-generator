@@ -1713,7 +1713,13 @@ does not return within 10 s. The page gets the theme as CSS variables (`var(--vi
 narration beats as `ctx.beats` (`{id, start, end, text, words}`) and as `<body data-beat="b2">`
 (so `body[data-beat="b2"] .step2 {opacity: 1}` reveals a part on its beat) with a `vidgen-beat`
 event; `import * as THREE from "three"` loads the bundled three.js. Editing any file the page
-loaded renders the scene again.
+loaded renders the scene again. `vidgen lint` reads the page's text at each still (box, size as
+drawn, colour, what is behind it) and checks it like vidgen's own (`off_frame`, `text_overlap`,
+`min_font`, `contrast`, text under the captions, `web_clipped` for text cut by `overflow: hidden`
+or the page's box): name an element with `data-vidgen-id="gear"` (else a CSS-like path names it),
+opt one out with `data-vidgen-lint="off"` (or `"off:contrast"`). Text drawn on a canvas cannot be
+read: declare it with `layout(t, ctx)` returning `[{id, text, box: {x, y, width, height}, size,
+color, background}]` (page pixels).
 
 ```yaml
 # maths and code
@@ -4090,7 +4096,7 @@ install; `vidgen validate` warns when it is missing.
 | `max_words` | too much text on one frame | split the scene, shorten items, `dim_previous`, fewer columns |
 | `min_font` | text too small for the output | less content per scene (it was shrunk to fit), shorter labels, split the table / diagram / timeline |
 | `off_frame` | text cut off at the frame edge | shorter text; in a custom scene, place it in a region |
-| `safe_area` | text in the margin | as above; check reserving overlays |
+| `safe_area` | text in the margin, or under the captions (the message names the overlay that keeps that part of the frame) | as above; check reserving overlays; a `web` page: `region: body` |
 | `text_overlap` | two texts on top of each other | fewer or shorter labels; a custom scene's layout |
 | `covered_text` | a shape drawn over text | move the shape or the callout (`side:`) |
 | `label_spacing` | a callout label touches other text (a value, the title) | another `side:`, an `arrow` instead of a `label`, a shorter label |
@@ -4163,6 +4169,7 @@ install; `vidgen validate` warns when it is missing.
 | `generated_footage` (info) | the scene shows AI-generated video takes | nothing to fix: when publishing, mark the video as altered or synthetic content where the platform asks |
 | `three_d_off_frame` | in a `3d` scene, an object the beat is about (its actions name it, or a stand-in says the line) is mostly outside the frame | `camera_fly_to` / `camera_look_at` it, or move it into view |
 | `three_d_hidden` | in a `3d` scene, an object the beat is about is mostly hidden behind a nearer one | `camera_orbit` round it, or move one of them |
+| `web_clipped` (error) | in a `web` scene, page text cut by its own box or an ancestor's (`overflow: hidden`), or by the page's box (`region: body`) | shorter or smaller text, a box that grows; `data-vidgen-lint="off"` on text cut on purpose |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

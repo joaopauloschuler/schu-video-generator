@@ -1831,9 +1831,10 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] 16:9 and 9:16 from one page (`ctx.aspect` and a `data-aspect` attribute for CSS) — done: `ctx.aspect`, `ctx.orientation`, `ctx.frame`, `ctx.region`; `data-aspect` and `data-orientation` on `<html>`
 
 ### Step 332 — Lint reads the page
-- [ ] vidgen reads the on-screen boxes of every text element from the page itself
-- [ ] The existing checks run on them: `off_frame`, `text_overlap`, text too small, low contrast
-- [ ] `data-vidgen-id="gear"` names an element for the layout dump; `data-vidgen-lint="off"` opts one out
+- [x] vidgen reads the on-screen boxes of every text element from the page itself — done: `data/web/layout.js` after the screenshot of each still's frame (box, size as drawn with transforms, colour, backdrop, opacity, clipping; SVG `<text>`); kept beside the clip (`<scene>.layout.json`, the clip's key); a frame not read is read by stepping the page without screenshots; canvas text through `layout(t, ctx)`
+- [x] The existing checks run on them: `off_frame`, `text_overlap`, text too small, low contrast — done: page text is layout objects (`class: WebText`), so `min_font`, `contrast`, `safe_area`, `overlay_overlap`, `shorts_safe_area`, `covered_text`, `max_words` too; new `web_clipped` (overflow / the page's box); text under the captions is one `safe_area` finding naming the overlay (every scene type)
+- [x] `data-vidgen-id="gear"` names an element for the layout dump; `data-vidgen-lint="off"` opts one out — done, also `"off:<rule>,<rule>"`; unnamed elements get a CSS-like path
+- [~] Not done: lint or a storyboard still renders the whole scene in Manim (no still-only path); text inside pictures, WebGL or an unannounced canvas is not read; contrast over a picture or gradient is not checked; the guide topic is Step 333
 
 ### Step 333 — Teach `web` scenes and prove them
 - [ ] Guide topic `vidgen guide web` in both `AGENTS.md` copies, with when to use `web` rather than a built-in or a Python extension

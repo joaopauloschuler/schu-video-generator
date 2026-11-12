@@ -81,6 +81,8 @@ let ctx = null;
 const run = {
   errors,
   ready: false,
+  // The page's ctx (for vidgen's layout reader, data/web/layout.js, which passes it to layout(t, ctx)).
+  get ctx() { return ctx; },
   // After the page loaded, before frame 0 (the clock at 0): data-beat of frame 0, fonts,
   // pictures and videos, then load(ctx). Returns the errors so far.
   async start(info) {

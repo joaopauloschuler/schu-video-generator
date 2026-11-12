@@ -670,8 +670,8 @@ from vidgen.three_d.framing import framing_3d  # noqa: E402
 from vidgen.three_d.motion import ObjectChange  # noqa: E402
 from vidgen.three_d.passes import GUIDE_PASSES, guide_pass, make_guide_passes, mask_table  # noqa: E402
 from vidgen.three_d.spec import Camera3D, Floor3D, Light3D, Object3D, Scene3DParams  # noqa: E402
-from vidgen.browser.timing import clip_plan  # noqa: E402
-from vidgen.web.clip import make_web_clip  # noqa: E402
+from vidgen.browser.timing import clip_plan, planned_still_frames  # noqa: E402
+from vidgen.web.clip import make_web_clip, web_page_layouts  # noqa: E402
 from vidgen.web.entry import web_entry_problems  # noqa: E402
 from vidgen.web.inputs import json_problem as web_json_problem  # noqa: E402
 from vidgen.web.inputs import page_shape as web_page_shape  # noqa: E402
@@ -992,6 +992,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "ClipMobject",
     "make_3d_clip",
     "make_web_clip",
+    "web_page_layouts",
+    "planned_still_frames",
     "web_entry_problems",
     "web_json_problem",
     "web_page_inputs",

@@ -48,6 +48,8 @@ MEDIA_FILE = DATA_DIR / "media.js"
 RUNTIME_FILE = DATA_DIR / "runtime.js"
 INIT_FILES: tuple[Path, ...] = (CLOCK_FILE, MEDIA_FILE, RUNTIME_FILE)
 CANVAS_FILE = DATA_DIR / "canvas.html"
+#: vidgen's layout reader (a function evaluated after a screenshot; not part of the frames).
+LAYOUT_FILE = DATA_DIR / "layout.js"
 #: The origin the project folder is served on (``.invalid`` never resolves).
 WEB_ORIGIN = "http://vidgen-web.invalid/"
 #: Where vidgen's bare page of a ``script:`` scene is served (not a project path).
@@ -85,6 +87,17 @@ def runtime_digest() -> str:
     for path in (*INIT_FILES, CANVAS_FILE):
         digest.update(path.name.encode("utf-8") + b"\0" + hashlib.sha256(path.read_bytes()).digest())
     return digest.hexdigest()
+
+
+@lru_cache(maxsize=1)
+def layout_reader() -> str:
+    """The source of :data:`LAYOUT_FILE` (an async function of ``t``)."""
+    return LAYOUT_FILE.read_text(encoding="utf-8")
+
+
+def layout_digest() -> str:
+    """Digest of the layout reader, for the layout record beside a clip (§118.12)."""
+    return hashlib.sha256(layout_reader().encode("utf-8")).hexdigest()
 
 
 def engine_id() -> str:
@@ -343,13 +356,34 @@ class WebPage:
     def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None) -> None:
         self.close()
 
-    def frame(self, n: int) -> np.ndarray:
-        """Frame ``n``: the clock and the page moved to ``t = n / fps``, the page's ``frame(t, ctx)``
-        hook (if any), then a screenshot."""
+    def advance(self, n: int) -> None:
+        """Move the clock and the page to frame ``n`` (``t = n / fps``) and run the page's
+        ``frame(t, ctx)`` hook (if any), without a screenshot."""
         t = n / self.fps
         when = f"in frame(t={t:.3f})"
         errors = self._evaluate("n => window.__vidgen.frame(n)", n, when, f"frame(t={t:.3f})", FRAME_TIMEOUT_S)
         self._raise_first(errors, when)
+
+    def layout(self, n: int) -> dict[str, Any]:
+        """What text the page shows now, the page at frame ``n`` (call after :meth:`advance` or
+        :meth:`frame` of ``n``): ``data/web/layout.js``'s reading, in page pixels (§118.12)."""
+        t = n / self.fps
+        when = f"in layout(t={t:.3f})"
+        api = chromium.sync_api()
+        try:
+            with self._limit.running(FRAME_TIMEOUT_S):
+                return dict(self._page.evaluate(layout_reader(), t))
+        except api.Error as exc:
+            if self._limit.expired:
+                raise self._overrun(f"layout(t={t:.3f})", FRAME_TIMEOUT_S) from None
+            message = first_line(exc).removeprefix("Error: ").removeprefix("page.evaluate: ")
+            raise VidgenError(f"scene '{self.scene_id}': reading the page's text {when} failed: {message}") from None
+
+    def frame(self, n: int) -> np.ndarray:
+        """Frame ``n``: the clock and the page moved to ``t = n / fps``, the page's ``frame(t, ctx)``
+        hook (if any), then a screenshot."""
+        self.advance(n)
+        t = n / self.fps
         api = chromium.sync_api()
         try:
             png = self._page.screenshot(type="png", timeout=READY_TIMEOUT_MS)
@@ -364,6 +398,6 @@ class WebPage:
         self._chromium = self._page = None
 
 
-__all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
-           "content_type", "engine_id", "error_location", "error_message", "init_script", "project_path", "random_seed",
+__all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
+           "content_type", "engine_id", "error_location", "error_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
            "renderer_pids", "runtime_digest"]

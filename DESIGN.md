@@ -198,7 +198,7 @@ src/vidgen/
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
                           # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
-                          # music_rule.py (project pieces, §93.10),
+                          # music_rule.py (project pieces, §93.10), three_d_rule.py (§114.12), web_rule.py (§118.12),
                           # color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
@@ -263,10 +263,12 @@ src/vidgen/
                           # shared through a Cloudflare quick tunnel, `generate host-test`; §115)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
   browser/                # Chromium shared by `3d` and `web` (§118.5): chromium.py (start / stop, missing-browser
-                          # check and validate warning, FFV1 clip writer), timing.py (clip_plan: frames to draw)
+                          # check and validate warning, FFV1 clip writer), timing.py (clip_plan: frames to draw;
+                          # planned_still_frames: the frames a capture takes stills of, §118.12)
   web/                    # `web` scenes (§118): entry.py (page / script checks, fingerprint), page.py (serving
                           # the project folder, errors, screenshots), clip.py (the cached clip), inputs.py (theme
-                          # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10)
+                          # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10),
+                          # layout.py (the page's text as layout objects, for lint; §118.12)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -338,7 +340,8 @@ src/vidgen/
                           # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
-  data/web/               # clock.js, media.js, runtime.js (the virtual clock, animations, errors, hooks; joined and injected into a `web` page), canvas.html (§118)
+  data/web/               # clock.js, media.js, runtime.js (the virtual clock, animations, errors, hooks; joined and injected into a `web` page), canvas.html (§118),
+                          # layout.js (reads the page's text after a screenshot, for lint; §118.12)
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
@@ -23174,8 +23177,8 @@ project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are
 first version; the page cannot reach the internet while rendering; screenshots of the whole page
 are accepted even when slow. Step 328 built the core described here, Step 329 the virtual clock
 (§118.8), Step 330 what the page is given (§118.9, §118.10), Step 331 the region, the
-transparent background and the video's shape (§118.11); §118.7 lists what the later steps of the
-phase add.
+transparent background and the video's shape (§118.11), Step 332 lint of the page's text
+(§118.12); §118.7 lists what the later steps of the phase add.
 
 ### 118.1 How a `web` scene renders (Step 328)
 
@@ -23316,7 +23319,8 @@ included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps
 329 (done, §118.8): the virtual clock. 330 (done, §118.9, §118.10): theme as CSS variables
 and `ctx.theme`, `ctx.data`, beats (`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js
 importable as `three`, the fingerprint over every file the page loaded. 331 (done, §118.11):
-`region: bleed | body` and `title`, a transparent background, 9:16 from one page. 332: lint reads the page's text boxes. 333:
+`region: bleed | body` and `title`, a transparent background, 9:16 from one page. 332 (done,
+§118.12): lint reads the page's text boxes. 333:
 the guide topic, `examples/web/`, a gallery entry, speed at 1080p.
 
 ### 118.8 Time belongs to vidgen (Step 329)
@@ -23588,3 +23592,119 @@ same project as a 9:16 variant (270x480) and a Short (`shorts: true`), `--draft`
 storyboard`, `vidgen animatic`, `vidgen lint`, `vidgen validate`. A storyboard renders the `web`
 scene as every scene type is rendered for it (all its frames at preview size, then the stills);
 the clip is shared with `vidgen render --preview`.
+
+### 118.12 Lint reads the page (Step 332)
+
+`vidgen lint` checks the text a `web` page shows with the rules it uses for vidgen's own text. The
+page's text becomes layout objects (§15) of kind `text`, so no rule is written twice.
+
+**Reading** (`data/web/layout.js`, an async function of `t` evaluated by `WebPage.layout(n)`). An
+*item* is an element that holds visible text: the nearest ancestor of a text node whose computed
+`display` is not `inline` / `contents` (so `<p>Hello <b>you</b></p>` is one item; a flex or grid
+child is blockified, hence its own item), or an SVG `<text>` with its `<tspan>`s. Per item:
+`text` (its runs joined, white space collapsed), `box` (the union of `Range.getClientRects()` of
+its text nodes: the line boxes as drawn, every CSS transform applied; an SVG text's
+`getBoundingClientRect`), `font_px` (computed `font-size` times the scale on screen: the product,
+up the ancestors, of `sqrt|det|` of each computed `transform` matrix, the `scale` property and
+`zoom`; for SVG `sqrt|det|` of `getScreenCTM()`, which includes the viewBox and the page's CSS
+transforms, checked: a 10-unit SVG text in a 2x viewBox is 20 px), `cap_px` (`font_px` times the
+font's cap height in em, from canvas `measureText("H").actualBoundingBoxAscent` of the computed
+font; 0.7 when the font gives none), `color` / `colors` (`-webkit-text-fill-color`, else `color`;
+SVG `fill`; a `background-clip: text` or paint-server fill is `null`), `opacity` (the product of
+the ancestors' `opacity`, times the colour's alpha), `background` (the elements under the centre of
+its visible part, `document.elementsFromPoint`, from the item down: each solid background (SVG
+shapes: `fill` × `fill-opacity`) times its opacity is a layer, blended until opaque, then over the
+theme's background, which is what a transparent page shows; an `<img>`, `<canvas>`, `<video>`,
+`<iframe>`, SVG `<image>`, a `background-image` or a gradient fill gives `null` and
+`background_unknown`; when the item is not hit at its centre (`pointer-events: none`), its
+ancestors are the stack), `clipped` (the first box that cuts it: its own or an ancestor's with
+`overflow` other than `visible`, as far up as they contain it: an absolutely placed box skips
+ancestors until a positioned or transformed one, a fixed box until a transformed one; `<body>`
+and `<html>` are the viewport's), `cut` (the viewport cuts it), `visible` (the box minus every
+clip and the viewport). An item none of whose runs is visible (`visibility`, opacity under 0.01,
+no client rects: `display: none`, zero size) or whose visible part is empty is counted in `hidden`
+and left out. `name`: `data-vidgen-id`, else up to three segments of `tag.firstclass:nth-child(k)`
+(`nth-child` only with siblings of the same tag; `tag#id` ends the path; a named ancestor is
+`[id]`), deduplicated with ` (2)`. `lint`: the nearest `data-vidgen-lint`. Then
+`window.vidgen.layout(t, ctx)` (a page's, or a script's export), if any: its items' colours are
+normalised by a canvas `fillStyle`, `size` gives `cap` from `font`. `ctx` is the page's own (the
+runtime exposes it as `window.__vidgen.ctx`, so `runtime.js` changed: every web clip is drawn
+again once).
+
+**Order and side effects.** The reader runs after a frame's screenshot, never before one, so a
+reading never changes a frame (a `layout` hook that changes the page would change later frames:
+documented as not allowed). It touches no timer or random number of the page's.
+
+**When it is read, and the cache.** The scene (`Web._draw_view`) passes `make_web_clip(...,
+layout_frames=planned_still_frames(self))`: the frames its capture will take stills of
+(`browser/timing.py`: `capture.plan_targets` per beat over `round(window × fps)` frames, plus each
+beat's last frame; a silent scene's targets; `per_beat` of the scene's capture, 1 without one,
+so a plain render reads the beat ends too). Drawing reads those frames after their screenshots
+and writes `<scene>.layout.json` = `{key, reader, frames: {n: reading}}` beside the clip, with the
+clip's own key and the digest of `layout.js` (`reader`; not part of the clip key: a change to the
+reader does not draw frames again). At each still, `LayoutRecorder` calls `scene.page_layout(frame)`
+(`(reading, view mobject)` or `None`); the scene answers from memory or `web_page_layouts(...,
+at=[frame, *later planned frames])`, which returns what the record holds for that key and reader
+and reads the rest in **one** Chromium that steps the page frame by frame with `WebPage.advance`
+(the frame's clock, timers, animation frames and `frame(t, ctx)`, no screenshot) to the last
+missing frame, then adds them to the record. **Decision:** stepping, not jumping to frame *n*: a
+page's state can depend on every frame before it (`requestAnimationFrame` loops that accumulate,
+a canvas drawn over itself), and only stepping gives what the clip shows (checked: a page read by
+stepping equals the reading taken while drawing). Mid-action stills (`stage` only) are not
+predicted; a frame missed is read by stepping.
+
+**Measured** (1 CPU; `cards` page of Step 331, 440x129, 93 frames at 12 fps, two stills; two runs
+each): drawing 9.2 / 10.2 s without readings, 10.4 / 8.4 s with them (the two readings cost less
+than the noise; one reading is 10–40 ms on the fault pages); readings from the record 0.00 s;
+stepping without a record: 3.5 / 4.7 s for two stills up to frame 84, 2.6 / 3.4 s for one at
+frame 10 (Chromium start about 1.2–2.5 s, then 15–25 ms per frame stepped, against 90–100 ms per
+frame drawn). `vidgen lint --force` of the Step 331 demo's two web scenes (clips reused, stills
+rendered again): 40–44 s before Step 332, 38–45 s after (no difference beyond the noise).
+**Not done:** a storyboard or lint still renders the whole scene in Manim (every scene type does);
+a still-only path would need Manim to skip frames.
+
+**Into the layout dump** (`introspect.LayoutRecorder._page_texts`): the reading's items, mapped
+from the page's pixels to the frame through the box the view mobject occupies on screen (its image
+object's `bbox`: so a `zoom` or `dim` of target `view` is followed; opacity times the view's), are
+inserted right after that image object with `order` between it and the next object (so a `title`
+plate drawn over page text is `covered_text`'s), as `{id: "web:<name>", kind: "text", class:
+"WebText", source: "web", path: "web/<name>", name, tag, bbox, visible, opacity, order, text,
+font_px = cap_px, font_size_px, color, colors, backdrop, [backdrop_unknown], [clipped], [cut],
+[lint_off], [declared]}` (`web/layout.py` `page_text_objects`). `cut` keeps only the sides where
+the page's box is inside the frame (`region: body`); at the frame's edge `off_frame` sees the
+unclipped box. Declared items: `box {x, y, width, height}` (checked: `declared_problem`, a bad
+item is a warning and skipped), `cap` from `size` and `font` or 0.7 of the box's height, no
+`background` → `backdrop_unknown: "not declared"`. The frame gets `web: {box, size, frame, texts,
+declared, hidden, canvases}`. The dump's header gains `reserved: [{overlay, type, box}]` (the
+overlays with `reserve`, the part of the frame they keep; every scene type) and each frame's
+`overlays` entries `reserve: true`.
+
+**Rules.** Unchanged rules see the page's texts: `off_frame`, `safe_area`, `text_overlap`,
+`covered_text`, `min_font` (`cap_height` returns `cap_px` when an object has it), `contrast`
+(the DOM backdrop), `max_words`, `overlay_overlap`, `shorts_safe_area`, `said_before_shown` /
+`unsaid_reveal`. `describe` names a page text `text '…' (page: <name>)`. New rule `web_clipped`
+(`lint/web_rule.py`, error, `tolerance` 0.004 of the shorter side like `off_frame`): `clipped`
+sides over the tolerance → `is cut by its box <by> (overflow: hidden) at the right (129 px of the
+text hidden)`, else `cut` → `runs past the page's box at the bottom`. To report a fault once:
+`off_frame` and `safe_area` skip objects with `clipped` or `cut` (web_clipped's); `safe_area`
+names the overlay when the text lies in a `reserved` box (`is in the part of the frame overlay
+'captions' (captions) keeps for itself, outside the safe area …`; a page's text gets the hint
+`region: body`), and `overlay_overlap` skips scene text inside the part of the frame the overlay
+reserves (safe_area's finding) unless the camera moved (safe_area is then off). This changes
+findings for every scene type with text under bottom captions: one `safe_area` finding instead of
+`safe_area` plus `overlay_overlap`.
+
+**Opting out.** `data-vidgen-lint="off"` → `lint_off: ["all"]`; `"off:text_overlap,contrast"`
+(commas or spaces) → those names (`lint_opt_out`; an unknown name is logged once as a warning).
+`lint.run.rule_objects` drops an object from every rule its `lint_off` names (as an overlay
+type's `lint_skip`); `narration_rule._label_texts` drops `all`. The texts stay in the dump.
+`lint_ignore` also matches them by `name`, `path` or `text`.
+
+**Public interface.** `vidgen.api` adds `web_page_layouts(root, folder, scene_id, params, *, size,
+fps, frames, theme=None, beats=(), shape=None, at=())` and `planned_still_frames(scene)`;
+`make_web_clip(..., layout_frames=())` (default: no reading, earlier calls unchanged). The page
+contract gains the optional hook `layout(t, ctx)`. `WebPage` adds `advance(n)` and `layout(n)`;
+`web.page` `LAYOUT_FILE`, `layout_reader`, `layout_digest`; `web.clip` `layout_record_path`.
+
+**Verified** (Step 332, HANDOFF): a project of 12 one-fault `web` scenes at 480x270 and its 270x480
+variant, the Step 330 and 331 demos.
