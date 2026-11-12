@@ -17,6 +17,7 @@ from vidgen.config import FormatConfig, ThemeConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.theme import Theme
+from vidgen.browser import chromium
 from vidgen.three_d import browser
 from vidgen.three_d.description import BeatSpan, description_key, hex6, scene_description
 from vidgen.three_d.spec import Scene3DParams
@@ -181,9 +182,9 @@ def test_missing_playwright_names_the_install_commands(monkeypatch: pytest.Monke
 
 
 def test_missing_chromium_names_the_install_command() -> None:
-    error = browser._browser_error(Exception("BrowserType.launch: Executable doesn't exist at /x/chrome\nLooks like Playwright was just installed"))
-    assert str(error) == browser.BROWSER_HINT and "playwright install chromium" in str(error)
-    assert "cannot start Chromium" in str(browser._browser_error(Exception("boom")))
+    error = chromium.browser_error(Exception("BrowserType.launch: Executable doesn't exist at /x/chrome\nLooks like Playwright was just installed"), "a 3D scene")
+    assert str(error) == chromium.BROWSER_HINT and "playwright install chromium" in str(error)
+    assert "cannot start Chromium" in str(chromium.browser_error(Exception("boom"), "a 3D scene"))
 
 
 def test_page_that_does_not_load_is_a_message_and_closes_chromium(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -216,7 +217,7 @@ def test_page_that_does_not_load_is_a_message_and_closes_chromium(monkeypatch: p
             closed.append("playwright")
 
     fake = type("SyncApi", (), {"Error": Error, "sync_playwright": staticmethod(lambda: Playwright())})
-    monkeypatch.setattr(browser, "_sync_api", lambda: fake)
+    monkeypatch.setattr(chromium, "sync_api", lambda: fake)
     with pytest.raises(VidgenError, match=r"^3D page did not load: Timeout 60000ms exceeded\.$"):
         browser.PageRenderer(describe(params())).__enter__()
     assert closed == ["browser", "playwright"]
@@ -236,7 +237,7 @@ def test_a_clip_open_elsewhere_is_a_message(tmp_path: Path, monkeypatch: pytest.
         raise PermissionError("in use")
 
     monkeypatch.setattr(browser, "PageRenderer", Page)
-    monkeypatch.setattr(browser.os, "replace", refuse)
+    monkeypatch.setattr(chromium.os, "replace", refuse)
     with pytest.raises(VidgenError, match="cannot replace .*close the program"):
         browser.write_clip(describe(params(), width=16, height=16, frames=2), tmp_path / "s.mkv")
     assert list(tmp_path.iterdir()) == []   # no partial file left

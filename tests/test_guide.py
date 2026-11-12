@@ -375,6 +375,11 @@ def test_yaml_snippet_validates(name: str, body: str, tmp_path: Path) -> None:
         target = tmp_path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(asset_file(rel), target)
+    for scene in data.get("scenes", []):
+        if scene.get("type") == "web":   # the page or script a web scene names: any file passes validate
+            rel = scene["params"].get("page") or scene["params"]["script"]
+            (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / rel).write_text("", encoding="utf-8")
     (tmp_path / "video.yaml").write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
     try:
         project = Project.load(tmp_path)

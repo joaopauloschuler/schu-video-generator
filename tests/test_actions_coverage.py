@@ -33,6 +33,7 @@ NARRATION = {"pad": 0.2, "words_per_second": 4.0}
 #: Params for every built-in scene type that give it every kind of target.
 SAMPLES: dict[str, dict[str, Any]] = {
     "3d": {"title": "T", "objects": [{"id": "crate"}]},
+    "web": {"page": "extensions/page.html"},
     "title": {"kicker": "K", "title": "A title", "subtitle": "Sub", "authors": ["Me"], "icon": "rocket"},
     "text_card": {"text": "Hello"},
     "bullets": BULLETS,
@@ -296,6 +297,8 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     on screen (the scene reveals all of them in its steps)."""
     if kind == "3d":
         pytest.importorskip("playwright.sync_api")   # drawn in Playwright's Chromium (tests/test_scene_3d.py)
+    if kind == "web":
+        pytest.skip("needs a page file; rendered in tests/test_scene_web.py")
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats(None, None)}])
     scene = render(project, "s", media)
     registered = sorted({n for t in scene.targets for n in t.names})   # a term: name per step that has the term

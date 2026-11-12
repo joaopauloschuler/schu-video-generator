@@ -16,6 +16,7 @@ With overlays, also what the planned timeline reads from every scene (``vidgen.v
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
+With a ``web`` scene (DESIGN.md §118): its page or script file (contents).
 With ``match_previous`` (a ``video_clip`` continuing the clip before it, DESIGN.md §117): the
 fingerprint of the scene before and its clip file.
 Not the music and the final mix (``music``, ``audio``, a scene's ``music``, a beat's
@@ -87,11 +88,13 @@ def _render_input(path: Path) -> bool:
 def vidgen_source_digest() -> str:
     """Digest of vidgen's own Python source that renders depend on (built-in scenes, helpers,
     the scene base, the worker...; not :data:`NOT_RENDER_INPUTS`), of its bundled fonts and of
-    its vendored icons (SVGs and manifest) and of the 3D page with its vendored three.js."""
+    its vendored icons (SVGs and manifest), of the 3D page with its vendored three.js and of the
+    ``web`` scene's page files."""
     paths = [p for p in _files(_PACKAGE_DIR, ".py") if _render_input(p)]
     paths += [p for p in _files(_PACKAGE_DIR / "data" / "fonts") if p.suffix in (".ttf", ".otf")]
     paths += [p for p in _files(_PACKAGE_DIR / "data" / "icons") if p.suffix in (".svg", ".json")]
     paths += [p for p in _files(_PACKAGE_DIR / "data" / "three") if p.suffix in (".html", ".js")]
+    paths += [p for p in _files(_PACKAGE_DIR / "data" / "web") if p.suffix in (".html", ".js")]
     return _contents_digest(paths, _PACKAGE_DIR)
 
 
@@ -299,6 +302,11 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         previous = project.config.scenes[index - 1]
         clip = previous.params.get("path")
         data["match_previous"] = [scene_fingerprint(project, previous.id), _stat(project.root / clip) if isinstance(clip, str) else None]
+    if spec.type == "web":
+        # the page or script file a web scene names (DESIGN.md §118.4); the files it loads: Step 330
+        from vidgen.web.entry import entry_digest
+
+        data["web"] = entry_digest(project.root, spec.params)
     from vidgen.videogen.compose import scene_placements
 
     placed = scene_placements(project, scene_id)

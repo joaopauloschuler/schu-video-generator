@@ -262,12 +262,16 @@ src/vidgen/
                           # workflow.py (`generate run | status`; §113.4), host.py (audio / video inputs
                           # shared through a Cloudflare quick tunnel, `generate host-test`; §115)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
+  browser/                # Chromium shared by `3d` and `web` (§118.5): chromium.py (start / stop, missing-browser
+                          # check and validate warning, FFV1 clip writer), timing.py (clip_plan: frames to draw)
+  web/                    # `web` scenes (§118): entry.py (page / script checks, fingerprint), page.py (serving
+                          # the project folder, errors, screenshots), clip.py (the cached clip)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
                           # moves -> tracks, following objects),
-                          # description.py (the scene description JSON, its cache key), browser.py (Playwright +
-                          # Chromium: the page, frames, the lossless clip; the validate warning), clip.py
+                          # description.py (the scene description JSON, its cache key), browser.py (the 3D page in
+                          # Chromium, its frames; the lossless clip), clip.py
                           # (`make_3d_clip`: drawn or reused), passes.py (guide passes: depth, outline,
                           # mask; §114.14)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
@@ -333,6 +337,7 @@ src/vidgen/
                           # showcases/<name>.yaml, the gallery's showcase scenes (§60.1)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
+  data/web/               # runtime.js (errors, frame hook; injected into a `web` page), canvas.html (§118)
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
@@ -22390,7 +22395,9 @@ schu-video-generator, then `python -m playwright install chromium` (Windows: `py
 chromium`). Chromium
 missing (Playwright's "Executable doesn't exist"): `VidgenError(BROWSER_HINT)`. Other launch
 failures: "cannot start Chromium for a 3D scene: <first line>". `vidgen validate` and every other
-scene type never need Playwright.
+scene type never need Playwright (except `web`, §118). Since Step 328 the launch, the hints, the
+missing-browser check and the clip writer live in `browser/chromium.py`, shared with `web`
+(§118.5); the 3D cache keys did not change.
 
 ### 114.5 The cache
 
@@ -23158,3 +23165,143 @@ true` does exactly what it did in Step 325: the owner wants a dissolve only on r
   is the encoder, which codes each scene on its own (the frames of shots 2 to 4 that the
   dissolve does not touch still differ by 1.6 to 2.0 between the two MP4s). Both films have 488
   frames, 20.33 s, −19.3 LUFS and the same decoded sound, sample for sample.
+
+## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–333)
+
+The owner wants AI agents to write a scene as a web page. The owner's decisions: JavaScript in the
+project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
+first version; the page cannot reach the internet while rendering; screenshots of the whole page
+are accepted even when slow. Step 328 built the core described here; §118.7 lists what the later
+steps of the phase add.
+
+### 118.1 How a `web` scene renders (Step 328)
+
+A `web` scene is a `NarratedScene` (`scenes/web.py`, `Web`) built like the `3d` scene (§114.1):
+`clip_plan(scene, SPARE_FRAMES)` (`browser/timing.py`, shared with `3d`, which used to have it
+as `Scene3D._plan`) gives the number of frames (the beats' windows or a silent scene's duration,
+the 0.5 s outro, 2 spare frames); `make_web_clip` returns a lossless clip of that many
+screenshots at `config.pixel_width × pixel_height` and `config.frame_rate`; the clip is a
+`ClipMobject` covering the frame (target `view`: `dim`, `highlight`, `zoom` work as on `3d`),
+then `timeline()` holds each beat and `finish()` fades out. Frame *n* of the clip is the page at
+*t = n / fps*, shown as output frame *n*.
+
+### 118.2 Params and checks
+
+`page: <path>` (`.html`, `.htm`) or `script: <path>` (`.js`, `.mjs`), relative to the project
+folder; exactly one (a `model_validator` of `Web.Params`). `web/entry.py`: `entry_of(params)` ->
+`WebEntry(kind, path)`; `entry_problems(root, entry)` -> `"page: file not found: …"`, `"script:
+must be a path inside the project folder, got …"` (absolute or `..` out of the folder), `"script:
+expected a .js or .mjs file, got …"`; `vidgen validate` reports them at `scenes[i].params.page` /
+`.script` (the `validate_project` convention). The render checks again (`entry_path`) and stops
+with `scene '<id>': page: file not found: …`. No free-form `params` mapping yet: its name next to
+the scene's own `params:` is Step 330's to decide (`ctx.params`).
+
+### 118.3 The page, serving and errors
+
+`web/page.py`, `WebPage(root, entry, scene_id=, size=, fps=, frames=)` (a context manager, one per
+clip): starts `Chromium("a web scene", WEB_ARGS)` (§118.5; `WEB_ARGS` adds `--hide-scrollbars
+--force-color-profile=srgb`), a context with the frame's size as viewport and device scale 1,
+`add_init_script(data/web/runtime.js)` and a route for every request:
+
+- `http://vidgen-web.invalid/<path>` is answered from the project folder (`inside(root, path)`:
+  resolved, must stay in the folder), with a content type from `CONTENT_TYPES` (fixed table:
+  Windows' registry can map `.js` to `text/plain`, which Chromium refuses for a module), else
+  `mimetypes`. A file that is not there: 404 and a warning naming it (`favicon.ico` silent).
+- `__vidgen__/canvas.html` (only for a `script:` scene) is vidgen's bare page
+  (`data/web/canvas.html`: one `<canvas id="vidgen-canvas">` of the frame's size, black
+  background, an inline module `import * as hooks from "/<script>"` that copies the exports onto
+  `window.vidgen` and sets `window.__vidgen.ready`). A static import, so a syntax error in the
+  script is reported with its file and line (a dynamic `import()` rejects without them).
+- Any other URL is aborted and logged once as a warning: `scene '<id>': refused <url> (a web scene
+  cannot reach the internet; …)`. **Decision:** a warning, not an error — a page that links a web
+  font or a CDN script still renders (without it), and the warning says what was missing.
+  `data:` and `blob:` URLs never reach the route.
+
+`runtime.js` (run before any script of the page, top frame only) records every uncaught error
+(`window` `error` events: `ErrorEvent` with its file, line, column and the error's stack; a
+`<script>` that did not load) and every unhandled promise rejection into `window.__vidgen.errors`,
+and defines `window.__vidgen.start(info)` (awaits `document.fonts.ready`, builds `ctx`) and
+`window.__vidgen.frame(t)` (awaits `window.vidgen.frame(t, ctx)` if defined, catching what it
+throws; returns and clears the errors so far).
+
+Opening: `goto(…, wait_until="load")`, then `wait_for_function`: an error was recorded, or
+`document.readyState === "complete"` and (for a script) the module has run. Both wait at most
+`READY_TIMEOUT_MS` = 30 s; a timeout is `scene '<id>': <file> did not become ready within 30 s
+(its load event never came or a module never finished loading; not answered: <404s and refused
+URLs>)`. Then `start(info)`; any error so far stops the render. Frame *n*: `frame(n / fps)`; an
+error stops the render; then `page.screenshot(type="png")` of the viewport, decoded and checked
+for size (`png_pixels`).
+
+Error messages (`error_message`): `scene '<id>': JavaScript error in <file> line <n> <when>:
+<Error name>: <message>` with *when* `at load` or `in frame(t=0.500)`. The file and line come
+from the error event, else from the first frame of the stack that is a project file (not
+`__vidgen__/`); without either, the entry's path and no line. A `VidgenError`, so the worker
+prints it without a traceback. Not caught: a page that loops forever inside `frame` (Playwright's
+`evaluate` has no timeout); Step 329's virtual clock is the place to bound it.
+
+### 118.4 The page contract (Step 328) and the cache
+
+- A `page:` sets `window.vidgen = {frame(t, ctx) {…}}`; a `script:` module exports `frame` (its
+  exports are copied onto `window.vidgen`, so a script may also set `window.vidgen`). Without
+  `frame`, every frame is a screenshot of the page as it stands. `frame` may be async.
+- `t`: seconds from the scene's start. `ctx = {scene, width, height, fps, frames, duration,
+  canvas}` (`duration` = frames / fps, the length of the clip; `canvas` = the bare page's canvas,
+  `null` on a page without `#vidgen-canvas`).
+- Room for later steps: `window.vidgen` is the page's object (hooks the page gives vidgen), and
+  `ctx` is vidgen's (what vidgen gives the page). Step 329 adds the hook `load(ctx)` beside
+  `frame` and the second argument of `frame` stays `ctx`; Step 330 adds fields to `ctx` (theme,
+  params, beats, aspect). Nothing written for Step 328 has to change.
+- **Cache** (`web/clip.py`, `make_web_clip(root, folder, scene_id, params, size=, fps=,
+  frames=)`): `<render_dir>/web/<scene>.mkv` + `<scene>.json` = `{key, inputs}`, `inputs` =
+  `{version: 1, engine, scene, kind, path, sha256 (of the page or script file), width, height,
+  fps, frames}`, `engine` = digest of `runtime.js` + `canvas.html`, the Chromium flags and the
+  Playwright version; `key` = SHA-256 of the canonical JSON of `inputs`. Reused when the clip
+  exists and the keys match; else the record is removed, the clip drawn
+  (`write_ffv1_clip`, through a `.partial` file) and the record written last.
+- **Render fingerprint** (§63): a `web` scene adds `web: {kind, path, sha256}` of its page or
+  script file (`entry_digest`), so an edit to that file renders the scene again; other scenes'
+  fingerprints are unchanged by this key. `data/web/*.html|js` are part of `vidgen_source_digest`.
+  **Gap until Step 330:** a file the page loads (a stylesheet, an imported module) is in neither
+  key: touch the page or script, or delete the clip.
+
+### 118.5 One Chromium for `3d` and `web` (Step 328)
+
+`browser/chromium.py` holds what both scene types use, moved out of `three_d/browser.py`:
+`CHROMIUM_ARGS`, `INSTALL_HINT` (now "3d and web scenes need Playwright and its Chromium: …"),
+`BROWSER_HINT` (unchanged), `sync_api()`, `playwright_version()`, `missing_dependency()`,
+`install_warnings(project)` (one warning per type in `BROWSER_SCENE_TYPES` the project uses:
+`3d scenes (a) cannot render here: …`, `web scenes (b, c) cannot render here: …`),
+`browser_error(exc, what)` ("cannot start Chromium for a web scene: …"), the context manager
+`Chromium(what, extra_args)` (Playwright + one headless Chromium, closed on exit),
+`write_ffv1_clip(path, fps, size, frames)` (the FFV1 writer `write_clip` had) and `png_pixels`.
+`three_d/browser.py` keeps the 3D page (`PAGE_FILES`, `page_digest`, `engine_id`, `_serve`,
+`PageRenderer`, `write_clip`) on top of them. **The `3d` cache keys did not change**: `engine_id()`
+is computed from the same files and Playwright version (checked: equal to the previous code's
+value), and the description is unchanged, so existing 3D clips are reused. One browser per clip,
+not per video, as for `3d` (§114.6).
+
+**Measured** (Step 328, this machine: 1 CPU, SwiftShader; drawing the clip only, Chromium start
+included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps: 88 ms per frame,
+2.1 s per second of video; a canvas script: 58 ms per frame, 1.4 s per second; the same page at
+1920x1080 at 30 fps: 432 ms per frame, 13 s per second of video.
+
+### 118.6 Public interface and decisions (Step 328)
+
+- `vidgen.api` gains `make_web_clip`, `web_entry_problems(root, params)` and `clip_plan(scene,
+  spare_frames)` (built-ins import only `vidgen.api`).
+- `three_d.browser` no longer exports `BROWSER_HINT`, `INSTALL_HINT`, `missing_dependency`,
+  `install_warnings`, `playwright_version` (they are in `browser.chromium`); not part of
+  `vidgen.api`.
+- Screenshots (`page.screenshot`) rather than a canvas read-back: a page may be any HTML.
+- The scene has no title of its own: whether the page fills the frame or sits under a vidgen
+  title is Step 331's `region`.
+
+### 118.7 Later steps of the phase
+
+329: a virtual clock (`Date.now`, `performance.now`, `requestAnimationFrame`, timers), CSS,
+SVG and `<video>` animation set to the frame's time, `Math.random` seeded from the scene id,
+`load(ctx)` (may be async), fonts and images awaited before frame 0. 330: theme as CSS variables
+and `ctx.theme`, `ctx.params`, beats (`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js
+importable as `three`, the fingerprint over every file the page loaded. 331: `region: bleed |
+body`, a transparent background, 9:16 from one page. 332: lint reads the page's text boxes. 333:
+the guide topic, `examples/web/`, a gallery entry, speed at 1080p.

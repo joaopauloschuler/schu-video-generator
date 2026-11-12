@@ -17,6 +17,7 @@ from vidgen.lint.rules import StillContext
 from vidgen.lint.three_d_rule import three_d_hidden, three_d_off_frame
 from vidgen.project import Project
 from vidgen.theme import Theme
+from vidgen.browser import chromium
 from vidgen.three_d import browser
 from vidgen.three_d.camera import CameraMove, camera_tracks
 from vidgen.three_d.description import nose_color, plan_world, scene_description
@@ -285,7 +286,7 @@ def test_lint_rules_judge_only_what_the_beat_is_about() -> None:
 @pytest.mark.render
 def test_page_draws_stand_ins_hidden_objects_glow_and_arrow_length() -> None:
     pytest.importorskip("playwright.sync_api")
-    if browser.missing_dependency() is not None:
+    if chromium.missing_dependency() is not None:
         pytest.skip("Chromium for Playwright is not available")
     p = params(background="#000000", camera={"position": [0, 0.8, 5], "look_at": [0, 0.8, 0]}, objects=[
         {"id": "ana", "shape": "standin", "name": "Ana", "color": "#4060e0", "position": [-1, 0.8, 0]},
@@ -310,7 +311,7 @@ def test_page_draws_stand_ins_hidden_objects_glow_and_arrow_length() -> None:
 @pytest.mark.slow
 def test_lint_finds_a_speaking_stand_in_behind_a_box(make_project) -> None:
     pytest.importorskip("playwright.sync_api")
-    if browser.missing_dependency() is not None:
+    if chromium.missing_dependency() is not None:
         pytest.skip("Chromium for Playwright is not available")
     from vidgen.lint import lint_project
 

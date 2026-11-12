@@ -6381,6 +6381,78 @@ ending on an object) it keeps looking at it — until the next camera action.
         - {action: camera_move, at: "@pulls", to: [-5, 6, 9], look_at: [0, 1.2, 0]}
 ```
 
+### `web`
+
+**A page you write** in HTML, CSS and JavaScript (Phase AK, DESIGN §118), screenshotted in
+headless Chromium at the render's size and frame rate and shown full-frame; overlays and
+captions are drawn over it; the scene fades out at the end. JavaScript in the project is trusted
+like the Python in `extensions/`. Needs Chromium as the [`3d`](#3d) scene does (same install
+command, same `vidgen validate` warning).
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `page` | path | — | an HTML file in the project folder (`extensions/gears.html`): any HTML, CSS and JavaScript |
+| `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the frame |
+
+Give exactly one of `page` and `script`.
+
+**Files.** The project folder is served to the page on `http://vidgen-web.invalid/`, so relative
+links to styles, pictures, fonts and modules work (`<link rel="stylesheet" href="gears.css">`,
+`import {cog} from "./cog.js"`). A request for anything outside it (the internet) is refused and
+logged as a warning naming the URL; a file the page asks for that is not there is answered "not
+found" with a warning. The render goes on in both cases.
+
+**Time.** Before each frame vidgen calls the page's `frame(t, ctx)` and then takes the
+screenshot; `t` is the frame's time in seconds from the scene's start (frame *n* at *n* / fps).
+A page sets `window.vidgen = {frame(t, ctx) {...}}`; a `script:` module exports `frame`.
+`frame` may return a promise (it is awaited). `ctx` has `scene` (the scene id), `width`, `height`
+(pixels), `fps`, `frames`, `duration` (seconds of frames drawn) and `canvas` (the bare page's
+canvas; `null` on a `page:`). A page without `frame` is captured as it stands at every frame.
+Draw from `t` only: until Step 329 the page's own clocks (`requestAnimationFrame`,
+`Date.now`, CSS animations) run on real time and do not follow the video.
+
+**Errors** stop the render with the scene, file and line: a missing or misnamed file (also
+reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
+error or rejected promise at load or in `frame`, and a page that is not ready within 30 s (its
+load event never came, or a module never finished loading).
+
+**Cache.** The screenshots are written to a lossless clip `build/<quality>/web/<scene>.mkv`
+(with `<scene>.json`, what it was drawn from) and reused while the page or script file, the size,
+frame rate and length are unchanged; an edit to that file renders the scene again. An edit to a
+file it loads (a stylesheet, an imported module) is not seen yet (Step 330): touch the page or
+script file, or delete the clip.
+
+```yaml
+- id: gears
+  type: web
+  params: {page: extensions/gears.html}
+  duration: 4
+  beats: []
+```
+
+```html
+<!-- extensions/gears.html -->
+<link rel="stylesheet" href="gears.css">
+<img id="gear" src="gear.svg" alt="">
+<script>
+  const gear = document.getElementById("gear");
+  window.vidgen = { frame(t, ctx) { gear.style.transform = `rotate(${t * 90}deg)`; } };
+</script>
+```
+
+```js
+// extensions/ball.js, for params: {script: extensions/ball.js}
+export function frame(t, ctx) {
+  const c = ctx.canvas.getContext("2d");
+  c.fillStyle = "#10141f";
+  c.fillRect(0, 0, ctx.width, ctx.height);
+  c.fillStyle = "#81b29a";
+  c.beginPath();
+  c.arc(40 + (ctx.width - 80) * (t / ctx.duration), ctx.height / 2, 30, 0, 2 * Math.PI);
+  c.fill();
+}
+```
+
 ### `quote`
 
 Steps: (1) quote mark and text, (2) attribution. Quote characters around `text` are removed;
@@ -14310,6 +14382,7 @@ a title card, a `transform` of a bar).
 | `screenshot` | `title`, `image`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
 | `3d` | `view`, `title` | dim, highlight, zoom, camera_orbit, camera_fly_to, object_walk, object_highlight | `view` is the whole 3D picture (as a `video_clip`'s `clip`); the objects are not Manim targets: the [camera actions](#3d-camera-actions) and [object actions](#3d-object-actions) name them by id |
+| `web` | `view` | dim, highlight, zoom | `view` is the whole page (as a `video_clip`'s `clip`) |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |

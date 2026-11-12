@@ -377,6 +377,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
         }
     ],
     "title": [{"title": "T:title T:hl", "subtitle": "T:sub", "kicker": "T:kicker", "authors": ["T:a"], "highlight": "T:hl"}],
+    "web": [{"page": "extensions/page.html"}],
     "video_clip": [{"path": "x.mp4", "title": "T:title", "caption": "T:caption", "steps": [[{"box": BOX, "label": "T:c"}]]}],
 }
 SAMPLES["flowchart"] = SAMPLES["diagram"]

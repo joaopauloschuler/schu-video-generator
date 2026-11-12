@@ -529,7 +529,7 @@ def validate_warnings(project: Project) -> list[str]:
     from vidgen.music import music_warnings
     from vidgen.music_pieces import piece_warnings
     from vidgen.overlap import overlap_warnings
-    from vidgen.three_d.browser import install_warnings
+    from vidgen.browser.chromium import install_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
     from vidgen.tts import tts_warnings

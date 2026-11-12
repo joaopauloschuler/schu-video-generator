@@ -411,6 +411,7 @@ project's own scene types, in its theme).
 | a user interface, a web page | `screenshot` | `path`, `steps`, `frame`, `url`, `caption` |
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut), `match_previous` (no flash where a take continues the one before) |
 | simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
+| a picture or animation you write yourself in HTML, CSS and JavaScript (a canvas drawing, SVG, a styled page) | `web` | `page` (an HTML file of the project: any HTML, CSS, JavaScript) or `script` (a JavaScript module drawn on one canvas); the page's `frame(t, ctx)` sets the picture at each frame; no internet while rendering |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -1683,11 +1684,23 @@ Pictures, screenshots, clips and simple 3D (the 3D craft: `vidgen guide 3d`):
         - {object_show: gift, at: "@appears", style: grow}
         - {object_highlight: gift, at: "@glows"}
         - {object_face: ben, at: "@gift", to: gift}
+- id: gears
+  type: web
+  params: {page: extensions/gears.html}   # or script: extensions/gears.js (a module drawn on one canvas)
+  beats: [{text: "Two gears turn together."}]
 - id: saying
   type: quote
   params: {text: "Simplicity is prerequisite for reliability.", author: "Edsger W. Dijkstra"}
   beats: [{text: "As Dijkstra put it, simple systems are the reliable ones."}]
 ```
+
+A `web` scene is a page you write: vidgen serves the project folder to it (relative links to CSS,
+pictures, fonts and modules work; anything on the internet is refused with a warning), calls its
+`frame(t, ctx)` before each screenshot (`t` in seconds from the scene's start; `ctx.width`,
+`ctx.height`, `ctx.fps`, `ctx.duration`, `ctx.canvas`) and shows the screenshots full-frame. A page
+sets `window.vidgen = {frame(t, ctx) {...}}`; a `script:` module exports `frame`. Draw from `t`
+only, not from a clock or `requestAnimationFrame`. A JavaScript error stops the render with the
+file and line.
 
 ```yaml
 # maths and code

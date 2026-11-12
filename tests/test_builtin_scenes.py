@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["3d", "bar_chart", "branching", "branching_pie", "bullets", "calculation", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "decay_chain", "detector", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "feynman", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "kinematics", "line_chart", "linkage_map", "map", "mass_spectrum", "metabolism", "molecule", "mutation", "network", "number_line", "orbit", "pathway", "pedigree", "pie", "plot", "population", "process", "quote", "scatter", "screenshot", "stage", "standard_model", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["3d", "bar_chart", "branching", "branching_pie", "bullets", "calculation", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "decay_chain", "detector", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "feynman", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "kinematics", "line_chart", "linkage_map", "map", "mass_spectrum", "metabolism", "molecule", "mutation", "network", "number_line", "orbit", "pathway", "pedigree", "pie", "plot", "population", "process", "quote", "scatter", "screenshot", "stage", "standard_model", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip", "web"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -38,6 +38,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "video_clip": {"path": "assets/clip.mp4", "title": "Clip", "caption": "Moving", "frame": "window", "trim": [0.5, 2.5], "loop": True,
                    "steps": [{"box": [0.1, 0.1, 0.4, 0.3], "label": "Box"}, {"callouts": [{"arrow": [0.7, 0.6], "label": "Arrow"}], "focus": True}]},
     "3d": {"title": "Box", "objects": [{"id": "crate", "size": [1.5, 1.5, 1.5], "spin": [0, 30, 0]}]},
+    "web": {"page": "extensions/page.html"},
     "quote": {"text": "“To be or not to be.”", "author": "Someone", "source": "Somewhere"},
     "equation": {"latex": ["x^2", "x \\cdot x"], "caption": "Square"},
     "equation_derivation": {"title": "Solve", "colors": {"x": "accent"}, "terms": ["3"],
@@ -311,7 +312,8 @@ def test_examples_use_every_builtin_scene_type() -> None:
     core = [s.type for s in Project.load(EXAMPLE).config.scenes]
     gallery = [s.type for s in Project.load(GALLERY).config.scenes]
     cartoon = {s.type for s in Project.load(EXAMPLE.parent / "svg_character").config.scenes}
-    assert set(core) | set(gallery) | {"stage", "card"} == set(BUILTINS) - {"flowchart"}   # = diagram; card: the cartoon examples
+    # flowchart = diagram; card: the cartoon examples; web: examples/web (Step 333)
+    assert set(core) | set(gallery) | {"stage", "card"} == set(BUILTINS) - {"flowchart", "web"}
     assert "stage" in cartoon and "stage" not in set(core) | set(gallery)
     assert not set(core) & set(gallery) - {"chapter"}
     assert len(core) == len(set(core)) and gallery.count("chapter") == 3 and len(gallery) - 2 == len(set(gallery))
@@ -358,7 +360,7 @@ def expected_duration(scene: Any) -> float:
 
 #: The built-ins the shared render covers: ``3d`` needs Playwright's Chromium and has its own
 #: render tests (tests/test_scene_3d.py).
-RENDERED_BUILTINS = [name for name in BUILTINS if name != "3d"]
+RENDERED_BUILTINS = [name for name in BUILTINS if name not in ("3d", "web")]   # Chromium: test_scene_3d.py, test_scene_web.py
 
 
 @pytest.fixture(scope="module")

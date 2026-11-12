@@ -18,6 +18,7 @@ from vidgen.config import FormatConfig, ThemeConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.theme import Theme
+from vidgen.browser import chromium
 from vidgen.three_d import browser
 from vidgen.three_d.camera import CameraMove, Pose, camera_problems, camera_tracks, ease, move_path, start_pose
 from vidgen.three_d.description import scene_description
@@ -241,7 +242,7 @@ def test_a_camera_move_that_cannot_be_made_is_a_validate_problem(make_project) -
 
 
 def test_validate_warns_about_a_missing_chromium_only_with_a_3d_scene(make_project, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(browser, "missing_dependency", lambda: browser.BROWSER_HINT)
+    monkeypatch.setattr(chromium, "missing_dependency", lambda: chromium.BROWSER_HINT)
     three_d = project(make_project, [])
     assert any("3d scenes (s) cannot render here" in w and "playwright install chromium" in w for w in validate_warnings(three_d))
     flat = Project.load(make_project({"title": "T", "scenes": [{"id": "t", "type": "text_card", "params": {"text": "x"}, "beats": [{"text": "Hi."}]}]}, folder="flat"))
@@ -253,15 +254,15 @@ def test_missing_dependency_is_a_cheap_check(monkeypatch: pytest.MonkeyPatch, tm
 
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", str(tmp_path))
     if importlib.util.find_spec("playwright") is not None:
-        assert browser.missing_dependency() == browser.BROWSER_HINT   # no chromium folder in tmp_path
+        assert chromium.missing_dependency() == chromium.BROWSER_HINT   # no chromium folder in tmp_path
         (tmp_path / "chromium_headless_shell-1").mkdir()
         listed = json.loads((Path(importlib.util.find_spec("playwright").origin).parent / "driver/package/browsers.json").read_text(encoding="utf-8"))
         revision = next(b["revision"] for b in listed["browsers"] if b["name"] == "chromium-headless-shell")
         (tmp_path / f"chromium_headless_shell-{revision}").mkdir()
-        assert browser.missing_dependency() is None
+        assert chromium.missing_dependency() is None
     real = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "playwright" else real(name, *a))
-    assert browser.missing_dependency() == browser.INSTALL_HINT
+    assert chromium.missing_dependency() == chromium.INSTALL_HINT
 
 
 # ----- renders (Chromium) -----------------------------------------------------------------------
@@ -269,7 +270,7 @@ def test_missing_dependency_is_a_cheap_check(monkeypatch: pytest.MonkeyPatch, tm
 
 def _chromium_or_skip() -> None:
     pytest.importorskip("playwright.sync_api")
-    if browser.missing_dependency() is not None:
+    if chromium.missing_dependency() is not None:
         pytest.skip("Chromium for Playwright is not available")
 
 

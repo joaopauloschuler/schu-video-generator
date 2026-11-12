@@ -7,6 +7,14 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### `web` scenes: a page written in HTML, CSS and JavaScript (Step 328)
+
+- New scene type `web`: `page: extensions/gears.html` (any HTML, CSS and JavaScript) or `script: extensions/gears.js` (a module drawn on one canvas that vidgen supplies). Before each frame vidgen calls the page's `frame(t, ctx)` (`window.vidgen.frame` on a page, an exported `frame` in a script), then takes a screenshot at the render's size and frame rate. The screenshots go into a cached clip, as for `3d`.
+- The project folder is served to the page, so relative links to styles, pictures, fonts and modules work. A request to the internet is refused with a warning naming the URL.
+- A missing file (also in `vidgen validate`), a JavaScript error at load or in `frame`, or a page not ready within 30 s stops the render with the scene, file and line.
+- `3d` and `web` share one Chromium module (`vidgen/browser/`); existing 3D clips stay valid. The install hint now reads "3d and web scenes need Playwright and its Chromium".
+- Measured on a 1-CPU machine: 1.4–2.1 s of drawing per second of video at 480x270 and 24 fps, 13 s at 1920x1080 and 30 fps.
+
 ### The default test run leaves the slow tests out (Step 327)
 
 - `python -m pytest -q` now runs every test except those marked `slow`: 6258 of 8184 tests, 194 s on a 1-CPU machine (all tests: about 3.7 hours there). `-m slow` runs only the slow ones, `-m "slow or not slow"` everything; a test named by node id always runs. 1002 more test functions are marked `slow` (every one over about 0.4 s). No test was removed.

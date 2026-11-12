@@ -8,7 +8,6 @@ reused while the description and the page are unchanged (so are the guide passes
 filling the frame, so stills, fades and the layout dump see it like any picture.
 """
 
-import math
 from pathlib import Path
 from typing import Any
 
@@ -110,18 +109,7 @@ class Scene3D(NarratedScene):
     def _plan(self) -> tuple[list[BeatSpan], int]:
         """The beats on the scene's clock and how many frames to draw (as long as the scene
         plays: its beats or a silent scene's duration, then the fade-out)."""
-        fps = int(config.frame_rate)
-        spans: list[BeatSpan] = []
-        frames = 0
-        if self.beats:
-            for beat in self.beats:
-                window = self.beat_window(beat)
-                start = frames / fps
-                spans.append(BeatSpan(beat.id, start, start + window.heard))
-                frames += round(window.window * fps)
-        else:
-            frames = round(max((self.spec.duration or 0.0) - self.outro, 1 / fps) * fps)
-        return spans, frames + math.ceil(self.outro * fps) + SPARE_FRAMES
+        return clip_plan(self, SPARE_FRAMES)
 
     def camera_moves(self) -> list[CameraMove]:
         """The camera actions as moves on the scene's clock: from when each falls due, for its

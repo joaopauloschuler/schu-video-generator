@@ -1803,12 +1803,13 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] Proof: one full default run, with its time, in HANDOFF.md — done: 194 s wall, 6235 passed, 16 failed (all failing before this step), 7 skipped, 1926 deselected
 
 ### Step 328 — `web` scene, the core
-- [ ] New scene type `web`: `page: extensions/gears.html` (any HTML, CSS and JavaScript) or `script: extensions/gears.js` (vidgen supplies a bare page with one canvas)
-- [ ] The project folder is served to the page, so relative links to CSS, images, fonts and modules work; nothing is fetched from the internet
-- [ ] One Chromium renderer shared with the `3d` scene (`three_d/browser.py` moved to a shared place)
-- [ ] Frames are screenshots of the whole page at the render's size and frame rate, into a cached clip as `3d` does
-- [ ] A missing file, a JavaScript error or a page that never becomes ready stops the render with the scene id, file and line, without a traceback
-- [ ] `vidgen validate` checks the files exist; the missing-Chromium message matches the `3d` one
+- [x] New scene type `web`: `page: extensions/gears.html` (any HTML, CSS and JavaScript) or `script: extensions/gears.js` (vidgen supplies a bare page with one canvas) — done: exactly one; `frame(t, ctx)` (`window.vidgen.frame` / an exported `frame`) before each screenshot (DESIGN §118)
+- [x] The project folder is served to the page, so relative links to CSS, images, fonts and modules work; nothing is fetched from the internet — done: a refused request is a warning naming the URL, a missing file a 404 with a warning
+- [x] One Chromium renderer shared with the `3d` scene (`three_d/browser.py` moved to a shared place) — done: `vidgen/browser/chromium.py`; 3D cache keys unchanged
+- [x] Frames are screenshots of the whole page at the render's size and frame rate, into a cached clip as `3d` does — done: `build/<q>/web/<scene>.mkv`; an edit to the page or script file re-renders the scene
+- [x] A missing file, a JavaScript error or a page that never becomes ready stops the render with the scene id, file and line, without a traceback
+- [x] `vidgen validate` checks the files exist; the missing-Chromium message matches the `3d` one
+- [~] Left for later: the YAML `params` mapping (`ctx.params`, Step 330); files the page loads are not in the cache keys (Step 330); a `frame` that never returns is not bounded (Step 329)
 
 ### Step 329 — Time belongs to vidgen
 - [ ] A virtual clock replaces `Date.now`, `performance.now`, `requestAnimationFrame`, `setTimeout` and `setInterval`
