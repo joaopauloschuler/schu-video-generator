@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–339)
+## Unreleased (Steps 193–340)
+
+### A fast draft of a video with `web` scenes; the README names the six kinds of scene (Step 340)
+
+- No new option: `vidgen render --draft` (240 px on the shorter side at the video's shape, 8 fps, its own `build/draft`; `draft: {width, height, fps}` sets another size) already draws a `web` page at that size. It is now documented and measured for `web` scenes: about 2.5 times faster than `--preview` on two 20 s trial pages (an HTML + SVG page 36 s against 99 s, a three.js dashboard 54 s against 127 s, on a slow 1-CPU machine).
+- **Corrected:** the guide and `docs/CONFIG.md` said "a whole preview render at 480x270, 12 fps, about 2 s per second". That was a project whose `preview:` had been set to that size; the default preview is 854x480 at 15 fps and cost 4.9 and 6.3 s per second on those pages. Both now have one measured table (draft, preview, final).
+- Guide (`vidgen guide web`, "Render cost"): a page must scale (`vw` / `vh` / `%`, the theme's size variables, or `design_width`) to look right in a draft; lint and the storyboard never use a draft, so its small text causes no `min_font` finding. The workflow step and `vidgen render --help` name the draft for any video, not only cartoons.
+- README: a third block lists the six kinds of scene (Python-based presentation scenes, 3D, 2D cartoon, isometric cartoon, web, video-model shots), each linked.
+
 
 ### `design_width`: a `web` page built in fixed pixels needs no rewrite (Step 339)
 

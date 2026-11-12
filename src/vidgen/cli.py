@@ -2582,7 +2582,9 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--preview", action="store_true", help="fast low-resolution render")
     quality.add_argument(
         "--draft", action="store_true",
-        help="fastest check of timing and staging: ~8 fps, 240p, no idle / wind / shadows / particles / light grade (build/draft, ..._draft.mp4)",
+        help="fastest look at the whole video, for timing and staging: 240p at ~8 fps at the video's shape (draft: in the config sets "
+             "another size); a web scene's page is drawn that small (2 to 3 times faster than --preview), a cartoon has no "
+             "idle / wind / shadows / particles / light grade (build/draft, ..._draft.mp4)",
     )
     p.add_argument(
         "--scene", action="append", default=[], metavar="ID",

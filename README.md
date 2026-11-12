@@ -7,8 +7,16 @@
 generated from code, free to use.** [Listen](docs/music/README.md) ·
 [Studio](docs/CONFIG.md#music-studio-vidgen-studio)
 
+**Six kinds of scene, mixed freely in one video:**
+- **[Python-based presentation scenes](docs/gallery/README.md):** titles, diagrams, charts, equations and code, animated and timed to the narration.
+- **[3D scenes](docs/COOKBOOK-3D.md):** plain shapes, labels and stand-in figures under one light, with a camera that moves on the narration's words, all described in the project file.
+- **[2D cartoon](docs/gallery/README.md#2d-cartoons):** characters that walk, talk and act on a stage.
+- **[Isometric cartoon](docs/gallery/README.md#isometric-cartoons):** the same characters in a village or a room seen from above at an angle, with rain, snow and time of day.
+- **[Web scenes](docs/gallery/web.md):** a page you write in HTML, CSS and JavaScript, with three.js, D3 and Chart.js included.
+- **[Video-model scenes](docs/COOKBOOK-GENERATED-VIDEO.md):** shots made by a paid AI video model from a 3D guide video, a starting picture and reference pictures of the characters.
+
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
-an MCP client) uses to produce narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
+an MCP client) uses to produce narrated, animated videos (explainers, cartoon stories, Shorts) and slide decks. Its main users are AI agents, not people
 editing on a timeline: a human describes the video they want, and the agent writes the project,
 checks it and renders it.
 

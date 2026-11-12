@@ -526,8 +526,12 @@ aspect ratio works: the shorter side of the frame is always 8 Manim units, so 9:
 
 ### Drafts (`vidgen render --draft`)
 
-`vidgen render --draft` (MCP `render` with `draft: true`) is the fastest way to check a cartoon's
-timing and staging: everything is where and when it will be, without what only decorates.
+`vidgen render --draft` (MCP `render` with `draft: true`) is the fastest look at a whole video,
+for its timing and staging: everything is where and when it will be, small and at few frames a
+second, and a cartoon is drawn without what only decorates. Every scene type renders as a draft.
+A video with [`web`](#web) scenes gains much, because a page costs one screenshot per frame: a
+draft takes about half a preview's frames, each a quarter of its pixels (measured: about
+2.5 times faster than a preview; the figures are under [`web`](#web), "Render cost").
 
 - **Size and frame rate**: 240 pixels on the shorter side at the format's shape (426x240 for
   16:9, 240x426 for 9:16, 240x240 for 1:1; never larger than `format`), 8 fps (never more than
@@ -6721,10 +6725,25 @@ export function layout(t, ctx) {
 ```
 
 **Render cost.** Every frame is a screenshot of the whole page, so a `web` scene renders far slower
-than a built-in one. Measured for `examples/web` on one CPU (drawing the frames only, Chromium start
-included) at 1920x1080, 30 fps: an HTML + CSS page 453 ms per frame (13.6 s per second of video), a
-canvas script 325 ms (9.7 s), a three.js scene 550 ms (16.5 s); a whole `--preview` render at
-480x270, 12 fps, about 2 s per second. Keep `web` scenes short and work at the preview size.
+than a built-in one, and the time grows with the number of frames and their size. Measured on a
+slow 1-CPU machine on two scenes of 20 s (a whole `vidgen render` of the scene, Chromium's start
+included, two runs each; Step 340):
+
+| render | size at 16:9 | an HTML + SVG page | a three.js dashboard |
+|---|---|---|---|
+| `--draft` | 426x240, 8 fps | 36 s (1.8 s per second of video) | 54 s (2.7 s per second) |
+| `--preview` | 854x480, 15 fps | 99 s (4.9 s per second) | 127 s (6.3 s per second) |
+| final | 1920x1080, 30 fps | about 28 s per second | about 58 s per second |
+
+A draft is about 2.5 times faster than a preview, a final render about 3.5 to 4 times slower than
+a preview (final: 3 s cuts beside a preview of the same cut). The machine's speed changed up to 4
+times within an hour that day: trust the ratios more than the seconds. Work with
+[`vidgen render --draft`](#drafts-vidgen-render---draft) first; a page must scale to look right
+in one (sizes in `vw` / `vh` / `%` and the theme's size variables, or `design_width`). Lint and
+the storyboard never use a draft, so a draft causes no finding.
+Drawing the frames alone at 1920x1080, 30 fps, measured for `examples/web` in Step 333 on the same
+machine on a faster day: an HTML + CSS page 453 ms per frame, a canvas script 325 ms, a three.js
+scene 550 ms. Keep `web` scenes short.
 
 **Cost of lint.** The reading is taken while the clip is drawn, after the screenshot of each frame a still
 will show (about 10–40 ms each), and kept beside the clip (`build/<quality>/web/<scene>.layout.json`,

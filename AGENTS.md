@@ -141,9 +141,11 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
 8. **`vidgen tts`**: voices only new or changed beats (needs `ELEVENLABS_API_KEY`; costs money).
 9. **`vidgen render`** (`--preview` first): now timed by the real audio. Beats change length,
    so run `vidgen storyboard` and `vidgen lint` again: `narration_speed` and `dead_air` now
-   measure the real speech. For a cartoon, `vidgen render --draft` is faster still (about 8 fps,
-   240p, no idle motion, wind, shadows, particles or light grade; every timing, position, action
-   and the lip sync kept): `<output>_draft.mp4`, to watch the timing and staging before a preview.
+   measure the real speech. `vidgen render --draft` is faster still (240p at about 8 fps, at the
+   video's shape, in its own `build/draft`): `<output>_draft.mp4`, to watch the timing and staging
+   before a preview. It pays most for a cartoon (no idle motion, wind, shadows, particles or light
+   grade; every timing, position, action and the lip sync kept) and for a video with `web` scenes
+   (the page is drawn that small: 2 to 3 times faster than a preview, `vidgen guide web`).
    `vidgen animatic` is quicker still once the storyboard's stills are current (seconds, no
    rendering): `<output>_animatic.mp4`, those stills held in time with the narration, with the
    audio and the subtitles, to check the pacing.
@@ -3660,19 +3662,44 @@ the text (here the video's background, since the canvas is transparent).
 | `scenes[0].params.data: … data.when: 2026-01-01 is a date, not a JSON value` | quote dates in `data:` |
 | a white page | a `page:` with `background: white` of its own (or an old habit): leave the background out or use `var(--vidgen-background)` |
 | text too small for `min_font`, or a layout that only fits one shape | sizes in fixed px: use `var(--vidgen-size-…)` for text, `vw` / `vh` for the rest; for a page that already exists in fixed px, `design_width` ("Porting a page built in fixed pixels" above) |
-| a page that fills only a corner of the frame at 1080p, or runs off the preview | a page built in fixed px for one window: `design_width: <that window's width>` |
+| a page that fills only a corner of the frame at 1080p, or runs off the preview or the draft | a page built in fixed px for one window: `design_width: <that window's width>` |
 | a canvas or three.js picture that is soft at 1080p in a scene with `design_width` | the canvas is drawn at the design size: multiply its size by `devicePixelRatio` (above) |
 | `scenes[0].params.design_width: 3 is not a window width a page is designed for …` | give the window's width in CSS pixels, 200 to 8192 |
 | lint finds nothing on a canvas scene | canvas text is not read: declare it with `layout(t, ctx)` |
 
 **Render cost.** Every frame is a screenshot of the whole page: a `web` scene renders far slower
-than a built-in one and the time grows with the frame size. Measured on a 1-CPU machine at 1920x1080,
-30 fps, for `examples/web` (drawing the page's frames only): the CSS page 13.6 s, the canvas
-script 9.7 s and the three.js planet 16.5 s per second of video (a minute of 1080p `web` video is
-about 10–17 minutes); a whole preview render at 480x270, 12 fps, about 2 s per second. So keep `web` scenes short (a few beats each), work at `--preview` or `--draft`, and
-remember that `vidgen storyboard` and `vidgen lint` render the whole scene at the preview size
-too. An unchanged scene is not drawn again: the frames are kept with every file the page loaded,
-and editing any of them (or its `data:`, the theme or the narration) draws that scene again.
+than a built-in one, and the time grows with the number of frames and with their size. Measured
+on a slow 1-CPU machine on two scenes of 20 s (a whole `vidgen render` of the scene, Chromium's
+start included, two runs each):
+
+| render | size at 16:9 | an HTML + SVG page | a three.js dashboard |
+|---|---|---|---|
+| `--draft` | 426x240, 8 fps | 36 s (1.8 s per second of video) | 54 s (2.7 s per second) |
+| `--preview` | 854x480, 15 fps | 99 s (4.9 s per second) | 127 s (6.3 s per second) |
+| final | 1920x1080, 30 fps | about 28 s per second | about 58 s per second |
+
+So a draft is about 2.5 times faster than a preview (2.7 and 2.3 times here), and a final render
+about 3.5 to 4 times slower than a preview (final: measured on 3 s cuts beside a preview of the
+same cut; a minute of 1080p `web` video is half an hour to an hour of rendering). The machine's
+own speed changed up to 4 times within an hour on the day of these measurements, so trust the
+ratios more than the seconds. Work in this order: `vidgen render --draft` to see the whole video
+move (240 px on the shorter side at the video's shape: 240x426 at 9:16, 240x240 at 1:1;
+`draft: {width: 480, height: 270, fps: 12}` in the config for a larger one), `--preview` and
+`vidgen lint` when the timing is right, the final render once. Keep `web` scenes short (a few
+beats each).
+
+- **A draft needs a page that scales.** Its window is 426 CSS pixels wide: a page sized in `vw`,
+  `vh`, `%` and `var(--vidgen-size-…)` looks the same as at 1080p, only smaller, and so does a
+  page with `design_width` (its window stays as wide as designed). A page in fixed pixels without
+  `design_width` runs off a draft.
+- **Lint and the storyboard never use a draft.** `vidgen storyboard` and `vidgen lint` render
+  the whole scene at the preview size (`--final`: the final size), into `build/preview`, so a
+  draft never causes a `min_font` finding. Lint's sizes are fractions of the frame, so the
+  preview's verdict holds for the final video; text that is hard to read at 240p is expected.
+- **Each size keeps its own frames** (`build/draft`, `build/preview`, `build/final`): a draft
+  never replaces a preview. An unchanged scene is not drawn again: the frames are kept with every
+  file the page loaded, and editing any of them (or its `data:`, the theme or the narration) draws
+  that scene again.
 
 <!-- topic: particle-physics (also: particle, particle_physics, hep, higgs, standard-model, collider, feynman-diagrams) -->
 ## Particle physics: particles, collisions and discoveries

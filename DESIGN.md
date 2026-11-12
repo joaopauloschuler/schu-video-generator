@@ -10044,6 +10044,7 @@ Reference: docs/CONFIG.md "`emotion` with ElevenLabs and OpenRouter". The same `
 
 Reference: docs/CONFIG.md "Drafts". A draft is a render for checking timing and staging: small,
 slow-framed and without decoration, with every timing, position, action and the lip sync kept.
+Every scene type renders as a draft; what one gains for `web` scenes is measured in §118.18.
 
 - **Settings** (`config.py`): `draft: DraftConfig | None` (`width`, `height` together, `fps`, each
   optional, sizes even). `draft_format(format, draft)`: the set values, else
@@ -23185,7 +23186,7 @@ are accepted even when slow. Step 328 built the core described here, Step 329 th
 transparent background and the video's shape (§118.11), Step 332 lint of the page's text
 (§118.12), Step 333 the guide topic, `examples/web`, the gallery entry and the measured cost
 (§118.13), Step 334 a chosen set of three.js add-ons (§118.14), Step 336 five animation and
-chart libraries (§118.15), Step 339 `design_width` for a page built in fixed pixels (§118.17); §118.7 says where each part is
+chart libraries (§118.15), Step 339 `design_width` for a page built in fixed pixels (§118.17), Step 340 drafts of `web` scenes measured (§118.18); §118.7 says where each part is
 and what is left for after the phase.
 
 ### 118.1 How a `web` scene renders (Step 328)
@@ -24057,6 +24058,92 @@ The strip under one CSS pixel at the bottom is lost when the height is not whole
 macOS not tried. Found, not fixed: `examples/web/extensions/cycle.html` at 160x90 gives one of
 two different pictures for frames 0 and 3 from run to run, with the code before this step as
 well (four runs: two of each).
+
+### 118.18 A draft of a video with `web` scenes (Step 340)
+
+The owner approved "a fast draft size for web scenes, around 480x270 at 12 fps". It exists: §74's
+`vidgen render --draft`. **No option was added.**
+
+**What there was.** Three qualities, each with its own build folder and output name:
+
+| quality | default size and rate | set by | folder |
+|---|---|---|---|
+| final | `format` (1920x1080, 30 fps) | `format:`, a variant's `format` | `build/final[_<variant>]` |
+| `--preview` | 854x480, 15 fps | `preview: {width, height, fps}` (not reshaped for a vertical variant: the variant sets its own) | `build/preview[_<variant>]` |
+| `--draft` | 240 px on the shorter side at the format's shape (426x240, 240x426, 240x240), 8 fps | `draft: {width, height, fps}` | `build/draft[_<variant>]` |
+
+No `--quality` option and no size option on the command line. A `web` scene draws its clip into
+`render_dir / "web"` at `config.pixel_width` x `pixel_height` and `frame_rate`, so a draft's page
+is drawn at the draft's size into `build/draft/web/` with a key of its own (size and rate are
+among `clip_inputs`); `--draft` with `web` was first run in Step 331. A draft is smaller and
+slower-framed than the approved "about 480x270 at 12 fps" (0.8 against 1.6 million pixels a
+second), and faster for it, so it was kept as it is; `draft: {width: 480, height: 270, fps: 12}` gives that size.
+
+**Where the guide's wrong figure came from.** Step 333 verified `examples/web` in a copy whose
+`preview:` was set to 480x270 at 12 fps (to save time) and wrote its speed as "a whole preview
+render". The default preview draws 4 times the pixels a second.
+
+**`design_width`** (§118.17) needs nothing: the window stays `design_width` wide and the device
+scale becomes draft width / design width (0.333 for 1280 at 426). Without it the window is the
+draft's pixels, so the page must be fluid; said in the guide.
+
+**Lint.** `vidgen lint` and `vidgen storyboard` have no `--draft` (§74: they never use drafts)
+and it stays so: lint has two sizes to judge, the preview and the final, and a third would only
+repeat them. Its size rules are relative to the frame (`min_font`: cap height over the shorter
+side), so text of a page that scales is judged the same at every size, and a fixed-pixel page
+without `design_width`, which would be judged differently at 240p, is never read there. A draft
+therefore produces no finding at all, and no `min_font` noise. Tested
+(`test_lint_and_the_storyboard_never_use_a_draft`).
+
+**Measured** (1 CPU, one render at a time, `vidgen render --jobs 1`, the build folder deleted
+before each, the scene's own "done in" time: Chromium's start and the composing included) on
+copies of two trial projects: a narrated HTML + SVG page (bicycle gears, 20.3 s) and a silent
+three.js dashboard (20 s, with 120 s of simulation at load). Draft and preview in turn, twice:
+
+| | draft 426x240 @ 8 | preview 854x480 @ 15 | preview / draft |
+|---|---|---|---|
+| HTML + SVG, 20 s | 37.8 s, 33.8 s | 102.4 s, 95.2 s | 2.7, 2.8 |
+| three.js, 20 s | 54.2 s, 53.6 s | 126.1 s, 127.1 s | 2.3, 2.4 |
+
+A 3 s cut of each (the first beat; `duration: 3`), preview, final, draft in turn:
+
+| | draft | preview | final 1920x1080 @ 30 | final / preview |
+|---|---|---|---|---|
+| HTML + SVG, 3.7 s | 14.1 s | 29.6 s | 101.9 s (27.8 s per second) | 3.4 |
+| three.js, 3.0 s | 32.3 s | 41.3 s | 175.5 s (58.5 s per second) | 4.2 |
+
+From the cut and the whole render, per frame and per start: HTML + SVG 0.16 s a draft frame
+(start 9 s), 0.28 s a preview frame (14 s); three.js 0.16 s and 0.34 s (26–28 s: its simulation
+at load). A draft's frame costs about half a preview's with a quarter of its pixels, and a draft
+has about half the frames: hence 2.3 to 2.8 times, not 7.
+
+**The machine's speed was not steady.** An hour earlier the same commands took 105.8 s (draft)
+and 303.8 s (preview) for the first page and 187.7 s and 392.1 s for the second, and the final
+cuts 269.0 s and 120.8 s; 20 minutes later the second page's draft took 47.7 s. Nothing else was
+running (`top`); `/proc/stat` showed about 30% of the CPU's time in software interrupts and
+`/proc/pressure/cpu` 33–47% waiting, so the virtual machine itself was short of CPU. The
+two trial authors' whole final renders that morning took 1119 s and 1285 s (56 and 64 s per
+second) and their previews 90–99 s and 285–380 s. The tables above are the runs taken in turn
+within 20 minutes, with equal repeats; ratios are the result, seconds only an indication.
+
+**Where a frame's time goes** (first page, 24 frames, in a slow phase, so read the proportions):
+moving the clock and the page 31–38 ms at every size; the screenshot 409 ms at 426x240, 743 ms
+at 854x480, 1369 ms at 1920x1080; decoding the PNG 14 / 53 / 183 ms. A second screenshot of the
+same frame took a fifth of the first, by Playwright or by a bare `Page.captureScreenshot` alike,
+with equal pixels: the cost is Chromium drawing the changed page in software, not Playwright's
+call. Of a 3 s draft cut's worker (28 s under the profiler), 14 s were Python imports and 14 s
+the page's frames.
+
+**Tests** (`tests/test_web_draft.py`): the draft's window with `design_width` at 16:9, 9:16 and
+1:1; a draft's `web` folder and clip key differ from the preview's and the final's; `lint` and
+`storyboard` refuse `--draft`; `render --help` names the draft's size, rate and folder; one
+`slow` render of a `design_width` page as a draft (96x54 at 4 fps, the page saw its 400 px
+window, nothing in `build/preview`).
+
+**Not done.** A draft is 2.3 to 2.8 times faster than a preview, not more (above); fewer frames
+(`draft: {fps: 4}`) is the only quicker setting. A render prints no progress while a `web`
+scene's frames are drawn (a trial author could not tell a hang from slow work for 18 minutes).
+The final figures are from 3 s cuts, not whole renders.
 
 ## 119. The project's own fonts: the `fonts/` folder (Step 338)
 
