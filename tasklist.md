@@ -1873,6 +1873,17 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] Docs: guide `web` topic and troubleshooting, CONFIG `### web`, DESIGN §118.16 and §14, CHANGELOG
 - [x] Tests: `tests/test_scene_web.py` (1 default, 2 `slow` in Chromium), `tests/test_render.py` (1 default, 1 `slow`; no scene rendered)
 
+### Step 338 — Another font with no internet: the project's `fonts/` folder; the Google Fonts warning
+- [x] Found: nothing read a project's `fonts/` folder before (theme, Manim scenes, captions, web pages); a page could only name a font file in its own `@font-face`
+- [x] `.ttf`, `.otf` and `.woff` files in `<project>/fonts/` are used by the whole video: read with fontTools (family, weight, style), registered for Pango (`extensions.activate`; a `.woff` through a `.ttf` copy in `build/fonts/`), declared to `web` pages (`@font-face` per file, `ctx.theme.font_files`, `--vidgen-font-<role>`), used by the designed thumbnail; in the render fingerprint (DESIGN §119)
+- [~] `.woff2`: not read (fontTools needs `brotli`, which a plain install does not bring; no dependency added); `vidgen validate` warns; a page's own `@font-face` still uses such a file
+- [x] Fixed on the way: Manim's text cache is named by the family, so a text kept its fallback font after the file was added; with files in `fonts/` the cache folder follows them
+- [x] A refused Google Fonts request names the family and the recipe, once per family; says only "remove the link" when vidgen already declares the family
+- [x] Both download routes tried once with Space Grotesk: the font's release zip (worked; Google Fonts' download address gave a web page, not a zip) and the `@fontsource/space-grotesk` 5.3.0 tarball (worked, integrity checked); nothing downloaded is committed
+- [x] Guide: "Using another font" in the `web` topic, one paragraph in the `design` topic, troubleshooting rows; CONFIG "Fonts" and `### web`; DESIGN §119; CHANGELOG
+- [x] Tests: `tests/test_project_fonts.py` (10 default, 1 `slow` in Chromium), fonts built with fontTools at test time
+- [ ] Not tried: Windows and macOS; `.ttc`; the `imagegen` placeholders, PDF slides and contact sheets keep their bundled fonts; no check that a theme family exists anywhere
+
 ### Step 326 — A dissolve of a few frames where a clip continues the one before, on request
 - [x] `match_previous: {dissolve: N}` (0–12 frames of the render being made, default 0): the first N frames are blended with the previous clip's last shown frame, weights `(N − k) / (N + 1)`, after the gain (`clip_join.JoinTreatment`, DESIGN §117)
 - [x] `level: false`: the dissolve without the gain; an error without a dissolve or with `seconds` / `hold`

@@ -16,6 +16,9 @@ dependencies = [
     "av",
     # PDF slide decks (vidgen slides --format pdf).
     "fpdf2>=2.7.9",
+    # Reads the family, weight and style of the font files in a project's fonts/ folder. Every
+    # install already has it (fpdf2 requires it); named here because vidgen imports it itself.
+    "fonttools>=4.34",
     # Local speech to text (vidgen readback).
     "faster-whisper>=1.0",
     # The MCP server for AI agents (vidgen mcp).

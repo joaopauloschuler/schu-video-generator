@@ -79,7 +79,7 @@ src/vidgen/
   config.py               # pydantic v2 models for video.yaml (see §4)
   project.py              # Project: locate/load config, resolve paths, variants
   theme.py                # Theme object (colors, fonts, sizes, background, code style; precedence §19)
-  fonts.py                # bundled fonts (data/fonts/, OFL), Pango registration, font roles (§21)
+  fonts.py                # bundled fonts (data/fonts/, OFL), Pango registration, font roles (§21); the project's fonts/ folder (§119)
   presets.py              # theme presets: seven built-in presets (§19, §20)
   scales.py               # type scales compact / standard / large / auto, frame orientation (§20)
   themelist.py            # `vidgen list-themes`: preset listing, JSON entries, swatch PNG (§20)
@@ -23953,3 +23953,65 @@ variant, the Step 330 and 331 demos.
   every scene, and <render_dir> has no render of them to reuse (...)`, printed by
   `render_project` before the scenes (stderr with `--json`, as the other progress lines);
   `--scene` and `--force` say so in `vidgen render --help`.
+
+## 119. The project's own fonts: the `fonts/` folder (Step 338)
+
+Before this step a project's `fonts/` folder was read by nothing: a theme family that was not
+bundled had to be installed on the machine, and a `web` page could only use a font file through
+its own `@font-face`. Now the `.ttf`, `.otf` and `.woff` files under `<project>/fonts/` are used
+by the whole video.
+
+- **Reading** (`vidgen/fonts.py`): `project_font_files(root)` lists the files; `project_fonts(root)`
+  returns a `ProjectFont(path, rel, family, weight, italic)` per file, read with fontTools
+  (`_read_names`, cached by path, size and mtime): family = name 16 (typographic family), else
+  name 1; weight = `OS/2.usWeightClass`, or the `wght` range of `fvar`; italic = `fsSelection`
+  bit 0 or 9. A file fontTools cannot read is a `VidgenError` naming it. fontTools is named in
+  `pyproject.toml` (`fonttools>=4.34`); every install already had it through fpdf2.
+- **`.woff2` is not read.** fontTools needs the `brotli` package for it, which a plain install
+  does not bring, and no dependency was added. `font_warnings(root)` (in `validate_warnings`)
+  names each `.woff2` in `fonts/` that has no `.ttf` / `.otf` / `.woff` of the same file name
+  beside it. A page's own `@font-face` can still name a `.woff2` (Chromium reads it). The
+  `.woff2` files of `@fontsource/space-grotesk` 5.3.0 also carry a wrong family name
+  ("Space Grotesk Light" at weight 400); its `.woff` files are right.
+- **Pango** (ordinary scenes, captions, overlays): `register_project_fonts(root, build_dir)`
+  registers each file with `manimpango.register_font`, as `register_bundled_fonts` does (so the
+  same platform calls on Windows, macOS and Linux). A `.woff` is first written as a plain
+  `.ttf` / `.otf` to `build/fonts/<stem>-<sha12>.<suffix>` (`_sfnt_copy`: zlib only, written once,
+  renamed into place). `extensions.activate(project)` calls it, so the worker and every command
+  that activates a project have the fonts before any text is laid out.
+- **Manim's text cache.** Manim names a cached text SVG by the family name, not by the font file,
+  so a text first drawn in a fallback font was reused after the font file was added. With font
+  files in the project `render/worker.py` `_text_cache_dir` names the scene's cache folder
+  `media/texts/<scene>.<digest of the font files' paths, sizes and mtimes>` and removes the
+  scene's folders for other sets of files; without font files the folder is `media/texts/<scene>`
+  as before. (A font installed on the machine after a fallback render is still not noticed:
+  remove `build/`.)
+- **Fingerprint.** `fingerprint_inputs` adds `fonts` (path -> size and mtime, as for `assets`) when
+  the project has font files, so every scene is rendered again when one changes; absent without
+  font files, so other projects' renders stay current.
+- **`web` pages** (§118.9): `page_theme(theme, px_per_point, project_fonts)` adds
+  `font_files: [{family, weight, style, url}]` to `ctx.theme` (always present, `[]` without
+  files; `weight` is `"400"` or a variable font's `"300 700"`; `url` is `/fonts/...`, quoted), and
+  `theme_css` adds one `@font-face` per entry after the bundled ones (`project_font_faces`). The
+  files are served as project files, so they are in the clip's `loaded` record; `font_files` is
+  in the clip key with the rest of the theme.
+- **Pillow** (the designed thumbnail): `fonts.font_file(family, bold=, italic=)` returns the
+  registered project file nearest in style and weight (a `.woff`'s copy), else the bundled file;
+  `thumbnail._font` uses it and sets a variable font's weight axis (`_at_weight`).
+- **Google Fonts warning** (`web/page.py`): a refused request to `fonts.googleapis.com`
+  (`family=` of `css` / `css2`, split at `|`, the part before `:`) or `fonts.gstatic.com`
+  (`/s/<family folder>/`) gives `google_font_message`, once per family per scene (families
+  compared without spaces and case, so the style sheet's and a font file's request are one):
+  that the internet is off during a render, to put the file in `fonts/` and remove the link, and
+  `FONT_RECIPE` (the guide section). When `declared_families(theme)` has the family, it says only
+  to remove the link. The URL is still in `WebPage.refused`.
+- **Not done:** `.woff2` (above); `.ttc` collections; the placeholder pictures of `imagegen`, the
+  PDF slides and the contact sheets keep their bundled fonts; no check that a theme family exists
+  anywhere; a project font is not removed from Pango when another project is activated in the
+  same process (it stays known by its family name).
+- **Verified** (Linux, 640x360 at 10 fps, Space Grotesk from the font's release zip and from the
+  `@fontsource` tarball): a `title` scene, the captions, a page's `font-family` and
+  `var(--vidgen-font-body)` and the designed thumbnail are drawn in Space Grotesk with static
+  `.ttf`, with `.woff` and with the variable `.ttf`, and in a fallback font without the folder;
+  both scenes are rendered again after each change of `fonts/` and reused after none. Not tried
+  on Windows or macOS.

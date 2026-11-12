@@ -1872,6 +1872,11 @@ theme:
   colors: {primary: "#0B5FFF"}
 ```
 
+**Another font.** Put the font's `.ttf`, `.otf` or `.woff` file (and its licence) in the project's
+`fonts/` folder and name its family: `theme: {font: "Space Grotesk"}` (or one role: `fonts:
+{heading: "Space Grotesk"}`). Every scene, the captions and `web` pages then use it; the steps
+are under "Using another font" in `vidgen guide web`.
+
 **Colour roles.** Use the theme's tokens, not hex values, in params: `text` / `dim` for text,
 `primary` for the main element, `highlight` for "look here" (one thing per frame), `accent`
 for warnings and bad news, `tertiary` for good news, `surface` for panels, `palette` for
@@ -3326,14 +3331,14 @@ each); any other library must be a file in the project (below: no internet).
 | `aspect`, `orientation` | the video's shape: `"16:9"`, `"9:16"`, `"1:1"`…; `landscape`, `portrait`, `square` |
 | `fps`, `frames`, `duration` | frame rate, frames drawn, their length in seconds (the beats, the 0.5 s fade-out) |
 | `canvas` | the bare page's canvas (`script:`), else `null` |
-| `theme` | `colors` (name → hex: `text`, `dim`, `primary`, `secondary`, `tertiary`, `accent`, `highlight`, `surface`…), `background`, `palette` (list), `fonts` (`heading`, `body`, `mono`… → family), `sizes` (`title`, `heading`, `body`, `caption`, `small` → CSS px for this frame) |
+| `theme` | `colors` (name → hex: `text`, `dim`, `primary`, `secondary`, `tertiary`, `accent`, `highlight`, `surface`…), `background`, `palette` (list), `fonts` (`heading`, `body`, `mono`… → family), `font_files` (the files in the project's `fonts/` folder: `[{family, weight, style, url}]`), `sizes` (`title`, `heading`, `body`, `caption`, `small` → CSS px for this frame) |
 | `data` | the scene's `data:` (`{}` without one) |
 | `beats` | `[{id, index, start, end, text, words: [{text, start, end}]}]`, seconds from the scene's start (`[]` without narration) |
 | `scene`, `frame`, `region` | the scene id, the video frame's `{width, height}`, `bleed` or `body` |
 
 **The theme.** vidgen puts CSS variables on `:root` before your own styles: `var(--vidgen-text)`,
 `--vidgen-primary` (one per colour), `--vidgen-background`, `--vidgen-palette-0`…,
-`--vidgen-font-heading` / `-body` / `-mono` (vidgen's own fonts, served with no download), and
+`--vidgen-font-heading` / `-body` / `-mono` (vidgen's own fonts and the ones in the project's `fonts/` folder, served with no download), and
 `--vidgen-size-title` / `-heading` / `-body` / `-caption` / `-small` (px: text that size is as tall
 as vidgen's own text of that size). Use them for every colour, font and text size: the page then
 matches the other scenes, follows a variant with another theme, and its text is big enough. Size
@@ -3530,9 +3535,47 @@ Look at both: `vidgen storyboard --variant vertical` (with a vertical variant, `
 **No internet.** The page cannot load anything from the internet while rendering (a CDN script, a
 web font, an API): the request is refused with the warning `scene 'x': refused https://… (a web
 scene cannot reach the internet; put the file in the project folder)` and the page renders
-without it. Put every library, picture, font and data file in the project folder and link it
-relatively (`<script src="lib/x.js">`, `import {x} from "./lib/x.js"`). vidgen's own fonts,
-three.js and its shipped add-ons, and the libraries in the table above need nothing.
+without it. Put every library, picture and data file in the project folder and link it
+relatively (`<script src="lib/x.js">`, `import {x} from "./lib/x.js"`); a font goes in `fonts/`
+(next paragraph). vidgen's own fonts, three.js and its shipped add-ons, and the libraries in the
+table above need nothing.
+
+**Using another font.** A page that links Google Fonts draws its text in a fallback font, with one
+warning per family: `scene 'x': the page asks Google Fonts for "Space Grotesk", but the internet is
+off during a render, so that text is drawn in a fallback font. Put the font's .ttf, .otf or .woff
+file in the project's fonts/ folder and remove the link to Google Fonts (…)`. The font has to be a
+file in the project before the render:
+
+1. **Get the font's files and its licence**, once, with a browser or a download tool. Two ways,
+   both tried with Space Grotesk (SIL Open Font License) on 2026-11-12:
+   - the font's own release: `SpaceGrotesk-2.0.0.zip` from the releases of
+     `github.com/floriankarsten/space-grotesk` holds `ttf/static/SpaceGrotesk-Regular.ttf`,
+     `-Bold.ttf`…, a variable `ttf/SpaceGrotesk[wght].ttf` and `OFL.txt`. (Google Fonts gives a
+     zip from its page in a browser; its address `fonts.google.com/download?family=…` answered a
+     download tool with a web page, not the zip.)
+   - the npm package `@fontsource/<name>`: the file
+     `registry.npmjs.org/@fontsource/space-grotesk/-/space-grotesk-5.3.0.tgz` (check it against the
+     `dist.integrity` the registry gives for that version) holds
+     `package/files/space-grotesk-latin-400-normal.woff`, `…-700-normal.woff`… and
+     `package/LICENSE`. Take the `.woff` files, not the `.woff2` ones.
+2. **Copy them into the project's `fonts/` folder** (sub-folders are fine): the regular and the
+   bold file, the italic one if you use it, and the licence file beside them. A variable font is
+   one file for every weight.
+3. **Name the family**, as the font names itself (`Space Grotesk`): for the whole video
+   `theme: {font: "Space Grotesk"}` or one role `theme: {fonts: {heading: "Space Grotesk"}}`
+   (titles, captions and every built-in scene; in a page `var(--vidgen-font-body)` /
+   `-heading`); or only in a page, `font-family: "Space Grotesk", sans-serif`. vidgen has already
+   declared an `@font-face` per file, with the family, weight and style it read from the file:
+   write none yourself.
+4. **Remove the link** to Google Fonts (`<link href="https://fonts.googleapis.com/…">` or an
+   `@import` of it).
+
+Formats: `.ttf` and `.otf`; `.woff` too (for its own text vidgen writes a `.ttf` copy in
+`build/fonts/`). vidgen does not read `.woff2` (`vidgen validate` says so): such a file is used
+only by a page whose own `@font-face` names it (`src: url("../fonts/x.woff2")`). Changing a file in
+`fonts/` renders every scene again. Checked on Linux by looking at frames (a `title` scene, the
+captions, a page's CSS and theme variable, the designed thumbnail; static `.ttf`, `.woff` and a
+variable `.ttf`); not tried on Windows or macOS.
 
 **The lint loop.** `vidgen lint` reads the page's text at each still (its box, its size as drawn,
 its colour and what is behind it) and checks it with the usual rules: `off_frame`, `text_overlap`,
@@ -3572,7 +3615,9 @@ the text (here the video's background, since the canvas is transparent).
 | `scene 'x': JavaScript error in extensions/x.js …: a module script did not load (a file it imports is missing or refused)` | an `import` names a missing file or a URL on the internet |
 | `scene 'x': the page imports the three.js add-on '…', which is not shipped with vidgen …` | an add-on vidgen does not ship (list above): copy the file into the project |
 | `scene 'x': the page imports 'gsap', which is not shipped with vidgen. GSAP's licence …` | `import … from "gsap"`: copy GSAP into the project and load it from there (table above) |
-| `warning: scene 'x': refused https://… (a web scene cannot reach the internet; …)` | a CDN script, web font or API: copy the file into the project |
+| `warning: scene 'x': refused https://… (a web scene cannot reach the internet; …)` | a CDN script or API: copy the file into the project |
+| `warning: scene 'x': the page asks Google Fonts for "…", but the internet is off during a render …` | a `<link>` to Google Fonts: put the font's file in `fonts/` and remove the link ("Using another font" above) |
+| `fonts/x.ttf: not a font file …` | a damaged or mislabelled file in `fonts/`: replace or remove it |
 | `scene 'x': frame(t=0.500) in extensions/x.js did not return within 10 s: a loop that never ends or a promise that never settles …` | an endless loop, or waiting for something that never comes (a timer in `load`: time stands still there) |
 | `scene 'x': extensions/x.html did not become ready within 30 s …` | the page's load event never came (a module that never finishes) |
 | `scenes[0].params.data: … data.when: 2026-01-01 is a date, not a JSON value` | quote dates in `data:` |

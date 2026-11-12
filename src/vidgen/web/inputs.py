@@ -14,8 +14,9 @@ import re
 from math import gcd
 from collections.abc import Mapping, Sequence
 from typing import Any
+from urllib.parse import quote
 
-from vidgen.fonts import BUILTIN_ROLES, BUNDLED_FAMILIES
+from vidgen.fonts import BUILTIN_ROLES, BUNDLED_FAMILIES, ProjectFont
 from vidgen.scales import frame_orientation
 from vidgen.web.libs import LIB_FOLDER, NOT_SHIPPED, WEB_LIBS
 from vidgen.web.loaded import ADDONS_FOLDER, VIDGEN_PREFIX
@@ -41,11 +42,14 @@ NAMED_ASPECTS: tuple[str, ...] = ("16:9", "9:16", "1:1", "4:5", "5:4", "4:3", "3
 ASPECT_TOLERANCE = 0.01
 
 
-def page_theme(theme: Any, px_per_point: float) -> dict[str, Any]:
+def page_theme(theme: Any, px_per_point: float, project_fonts: Sequence[ProjectFont] = ()) -> dict[str, Any]:
     """``ctx.theme`` of a :class:`vidgen.theme.Theme`: ``preset``, ``background``, ``colors``
     (name -> hex), ``palette`` (hex list), ``fonts`` (``sans`` / ``serif`` / ``mono`` and every
-    role -> family name) and ``sizes`` (name -> CSS pixels; ``px_per_point`` = the frame's pixel
-    height over 72 times its height in Manim units, so a size draws text as tall as vidgen's)."""
+    role -> family name), ``sizes`` (name -> CSS pixels; ``px_per_point`` = the frame's pixel
+    height over 72 times its height in Manim units, so a size draws text as tall as vidgen's)
+    and ``font_files`` (the project's own fonts, :func:`vidgen.fonts.project_fonts`: per file
+    its ``family``, ``weight`` (``"400"``; a variable font's range ``"300 700"``), ``style`` and
+    ``url``, as declared to the page in an ``@font-face``)."""
     roles = sorted({*BUILTIN_ROLES, *theme.fonts})
     fonts = {role: theme.font_for(role) for role in roles}
     fonts.update({"sans": theme.font, "serif": theme.font_serif, "mono": theme.font_mono})
@@ -56,6 +60,11 @@ def page_theme(theme: Any, px_per_point: float) -> dict[str, Any]:
         "palette": list(theme.palette),
         "fonts": fonts,
         "sizes": {name: round(float(value) * px_per_point, 3) for name, value in theme.sizes.items()},
+        "font_files": [
+            {"family": font.family, "weight": " ".join(str(w) for w in dict.fromkeys(font.weight)),
+             "style": "italic" if font.italic else "normal", "url": "/" + quote(font.rel)}
+            for font in project_fonts
+        ],
     }
 
 
@@ -127,10 +136,25 @@ def theme_properties(theme: Mapping[str, Any]) -> dict[str, str]:
     return props
 
 
+def project_font_faces(font_files: Sequence[Mapping[str, str]]) -> list[str]:
+    """One ``@font-face`` rule per font file of the project (``ctx.theme.font_files``), so a
+    page's ``font-family: "<family>"`` finds it with no rule of its own."""
+    return [f'@font-face {{ font-family: {json.dumps(font["family"])}; src: url("{font["url"]}"); '
+            f'font-weight: {font["weight"]}; font-style: {font["style"]}; }}' for font in font_files]
+
+
+def declared_families(theme: Mapping[str, Any]) -> set[str]:
+    """The font families vidgen's style sheet declares to the page: the bundled ones the theme
+    names and those of the project's font files."""
+    bundled = {family.family for family in BUNDLED_FAMILIES} & set(theme["fonts"].values())
+    return bundled | {font["family"] for font in theme.get("font_files", ())}
+
+
 def theme_css(theme: Mapping[str, Any]) -> str:
-    """The style sheet vidgen puts first in a page: the bundled fonts the theme names and its
+    """The style sheet vidgen puts first in a page: the bundled fonts the theme names, the
+    project's own fonts (after them, so a project file of the same family wins) and the theme's
     custom properties on ``:root``."""
-    faces = font_faces(sorted(set(theme["fonts"].values())))
+    faces = font_faces(sorted(set(theme["fonts"].values()))) + project_font_faces(theme.get("font_files", ()))
     props = "".join(f"\n  {name}: {value};" for name, value in theme_properties(theme).items())
     return "\n".join([*faces, f":root {{{props}\n}}"])
 
@@ -196,6 +220,7 @@ def scene_page_inputs(scene: Any, spans: Sequence[Any]) -> tuple[dict[str, Any],
     times are the captions' (the stored alignment, else estimated, :func:`vidgen.speech.beat_word_times`)."""
     from manim import config
 
+    from vidgen.fonts import project_fonts
     from vidgen.speech import beat_word_times
 
     project = scene.project
@@ -203,10 +228,10 @@ def scene_page_inputs(scene: Any, spans: Sequence[Any]) -> tuple[dict[str, Any],
         beat_word_times(project.audio_dir, beat.id, beat.text, span.start, span.end, project.spoken(beat), project.config.language)
         for beat, span in zip(scene.beats, spans)
     ]
-    theme = page_theme(scene.theme, float(config.pixel_height) / (72 * float(config.frame_height)))
+    theme = page_theme(scene.theme, float(config.pixel_height) / (72 * float(config.frame_height)), project_fonts(project.root))
     return theme, page_beats(spans, scene.beats, words)
 
 
-__all__ = ["ASPECT_TOLERANCE", "IMPORT_MAP", "NAMED_ASPECTS", "THEME_STYLE_ID", "aspect_name", "font_faces", "json_problem",
-           "page_beats", "page_head", "page_shape", "page_theme", "scene_page_inputs", "shape_script", "theme_css",
-           "theme_properties", "with_head"]
+__all__ = ["ASPECT_TOLERANCE", "IMPORT_MAP", "NAMED_ASPECTS", "THEME_STYLE_ID", "aspect_name", "declared_families", "font_faces",
+           "json_problem", "page_beats", "page_head", "page_shape", "page_theme", "project_font_faces", "scene_page_inputs",
+           "shape_script", "theme_css", "theme_properties", "with_head"]

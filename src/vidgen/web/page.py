@@ -28,7 +28,7 @@ from html import escape
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 from typing import Any
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import numpy as np
 
@@ -36,11 +36,17 @@ from vidgen.browser import chromium
 from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels
 from vidgen.errors import VidgenError
 from vidgen.web.entry import WebEntry
-from vidgen.web.inputs import page_head, page_shape, with_head
+from vidgen.web.inputs import declared_families, page_head, page_shape, with_head
 from vidgen.web.libs import unshipped_lib_message
 from vidgen.web.loaded import THREE_VERSION, VIDGEN_PREFIX, served_file, unshipped_addon, unshipped_lib
 
 log = logging.getLogger("vidgen.web")
+
+#: Google Fonts: the host of its style sheets and the host of its font files.
+GOOGLE_FONTS_CSS_HOST = "fonts.googleapis.com"
+GOOGLE_FONTS_FILE_HOST = "fonts.gstatic.com"
+#: Where the guide says how to use another font (named in the Google Fonts warning).
+FONT_RECIPE = 'see "Using another font" in `vidgen guide web`'
 
 #: vidgen's page files: the parts of the script run before any script of the page (joined in
 #: this order by :func:`init_script`) and the bare page of a ``script:``.
@@ -170,6 +176,38 @@ def project_path(url: str) -> str | None:
     return unquote(urlsplit(url).path).lstrip("/")
 
 
+def google_font_families(url: str) -> list[str] | None:
+    """The font families a request to Google Fonts asks for: from ``family=`` of a style sheet
+    on :data:`GOOGLE_FONTS_CSS_HOST` (``css2?family=Space+Grotesk:wght@400;700&family=Lora``, or
+    the older ``css?family=Lora:400,700|Inter``), the family's folder name of a font file on
+    :data:`GOOGLE_FONTS_FILE_HOST` (``/s/spacegrotesk/v16/x.woff2``); ``[]`` when the URL names
+    none, ``None`` for any other host."""
+    parts = urlsplit(url)
+    if parts.hostname == GOOGLE_FONTS_CSS_HOST:
+        values = [name for value in parse_qs(parts.query).get("family", []) for name in value.split("|")]
+        return [family for value in values if (family := value.partition(":")[0].strip())]
+    if parts.hostname == GOOGLE_FONTS_FILE_HOST:
+        folder = re.match(r"/s/([^/]+)/", parts.path)
+        return [folder[1]] if folder else []
+    return None
+
+
+def google_font_message(scene_id: str, family: str | None, declared: bool) -> str:
+    """The warning for a refused Google Fonts request for ``family`` (``None``: not known);
+    ``declared``: vidgen's style sheet already gives the page that family."""
+    asked = f"the page asks Google Fonts for {json.dumps(family, ensure_ascii=False) if family else 'a font'}"
+    if declared:
+        return (f"scene '{scene_id}': {asked}, but the internet is off during a render. vidgen already gives the page this "
+                "family: remove the link to Google Fonts.")
+    return (f"scene '{scene_id}': {asked}, but the internet is off during a render, so that text is drawn in a fallback font. "
+            "Put the font's .ttf, .otf or .woff file in the project's fonts/ folder and remove the link to Google Fonts "
+            f"({FONT_RECIPE}).")
+
+
+def _family_key(family: str) -> str:
+    return re.sub(r"[\s+_-]", "", family).lower()
+
+
 def error_location(error: dict[str, Any]) -> str | None:
     """``extensions/gears.js line 12`` for a page error (from its file and line, else from the
     first project file in its stack), or ``None`` when neither names one."""
@@ -261,6 +299,7 @@ class WebPage:
         self.theme, self.data, self.beats = theme, dict(data or {}), list(beats or [])
         self.shape = dict(shape) if shape is not None else page_shape(size)
         self.refused: list[str] = []
+        self._google_fonts: set[str] = set()
         self.missing: list[str] = []
         self.unshipped: list[str] = []
         self.unshipped_libs: list[str] = []
@@ -279,7 +318,11 @@ class WebPage:
         if rel is None:
             if url not in self.refused:
                 self.refused.append(url)
-                log.warning("scene '%s': refused %s (a web scene cannot reach the internet; put the file in the project folder)", self.scene_id, url)
+                families = google_font_families(url)
+                if families is None:
+                    log.warning("scene '%s': refused %s (a web scene cannot reach the internet; put the file in the project folder)", self.scene_id, url)
+                else:
+                    self._warn_google_fonts(families)
             route.abort("blockedbyclient")
             return
         if rel == CANVAS_PATH and self.entry.kind == "script":
@@ -321,6 +364,16 @@ class WebPage:
         start, end = span
         headers["Content-Range"] = f"bytes {start}-{end}/{len(body)}"
         route.fulfill(status=206, body=body[start:end + 1], headers=headers)
+
+    def _warn_google_fonts(self, families: list[str]) -> None:
+        """One warning per family asked of Google Fonts (a style sheet's ``Space Grotesk`` and a
+        font file's ``spacegrotesk`` are one family)."""
+        declared = {_family_key(family) for family in declared_families(self.theme)} if self.theme is not None else set()
+        for family in families or [None]:
+            key = _family_key(family or "")
+            if key not in self._google_fonts:
+                self._google_fonts.add(key)
+                log.warning("%s", google_font_message(self.scene_id, family, key in declared))
 
     # ----- the page ------------------------------------------------------------------------------
 
@@ -456,5 +509,5 @@ class WebPage:
 
 
 __all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
-           "content_type", "engine_id", "error_location", "error_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
+           "content_type", "engine_id", "error_location", "error_message", "google_font_families", "google_font_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
            "renderer_pids", "runtime_digest", "script_base", "unshipped_addon_message"]

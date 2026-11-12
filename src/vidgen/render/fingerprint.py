@@ -39,6 +39,7 @@ from typing import Any
 
 from vidgen import __version__, carry
 from vidgen.config import SceneConfig
+from vidgen.fonts import project_font_files
 from vidgen.includes import project_relative
 from vidgen.project import Project
 from vidgen.references import has_citations
@@ -331,6 +332,9 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
     if sounds:
         # [laugh] marks are taken out of the text but make sounds, faces and mouths (§69.33)
         data["voice_sounds"] = sounds
+    fonts = {path.relative_to(project.root).as_posix(): _stat(path) for path in project_font_files(project.root)}
+    if fonts:
+        data["fonts"] = fonts  # the project's own fonts: any scene's text may be drawn in one
     if project.config.characters:
         # a character's mouth follows the beat's viseme track, stored or built from its alignment (§69.4)
         data["visemes"] = {

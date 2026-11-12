@@ -911,6 +911,21 @@ Bold, Italic), **Source Serif 4** (serif; Regular, Bold, Italic) and **JetBrains
 Any installed font works too: write its family name (`font: Segoe UI`). A bundled family that is
 also installed system-wide is fine (either copy is used; they are the same font).
 
+**The project's own fonts (`fonts/`, Step 338).** vidgen uses every `.ttf`, `.otf` and `.woff`
+file under the project's `fonts/` folder (sub-folders too) for the whole video, with no
+installation: write the family name the font gives itself (`font: "Space Grotesk"`, or a role:
+`fonts: {heading: "Space Grotesk"}`). vidgen reads each file's family, weight and style with
+fontTools, registers the files for its own text (titles, captions, every built-in scene; a
+`.woff` through a `.ttf` copy it writes to `build/fonts/`), draws the designed thumbnail with them
+and declares them to [`web`](#web) pages with one `@font-face` per file. Keep the font's licence
+file beside it. A changed, added or removed font file renders every scene again. vidgen does not
+read `.woff2` files (that needs a package a plain install does not bring): `vidgen validate`
+warns `fonts/x.woff2: vidgen does not read .woff2 font files; …`, and such a file is used only by
+a `web` page whose own `@font-face` names it. A file in `fonts/` that is not a font stops the
+command: `fonts/x.ttf: not a font file vidgen can read (…)`. How to get a font's files:
+`vidgen guide web`, "Using another font". Checked on Linux; not tried on Windows or macOS (the
+files are registered the same way as the bundled ones).
+
 The theme has three family tokens: `font` (sans; default Inter), `font_serif` (default Source
 Serif 4) and `font_mono` (default JetBrains Mono NL). Built-in scenes ask for a font by
 **role**, and `fonts` maps a role to a token — `sans`, `serif`, `mono` — or directly to a family
@@ -6445,7 +6460,13 @@ mistakes: `vidgen guide web`.
 links to styles, pictures, fonts and modules work (`<link rel="stylesheet" href="gears.css">`,
 `import {cog} from "./cog.js"`). A request for anything outside it (the internet) is refused and
 logged as a warning naming the URL; a file the page asks for that is not there is answered "not
-found" with a warning. The render goes on in both cases.
+found" with a warning. The render goes on in both cases. A request to Google Fonts
+(`fonts.googleapis.com`, `fonts.gstatic.com`) gets its own warning, once per family: `scene 'x':
+the page asks Google Fonts for "Space Grotesk", but the internet is off during a render, so that
+text is drawn in a fallback font. Put the font's .ttf, .otf or .woff file in the project's fonts/
+folder and remove the link to Google Fonts (see "Using another font" in `vidgen guide web`).`
+When vidgen already declares that family to the page (a bundled font of the theme, or a file in
+`fonts/`), the warning only says to remove the link.
 
 **Time belongs to vidgen** (DESIGN §118.8). Write the page the ordinary way: CSS animations and
 transitions, `requestAnimationFrame` loops, `setTimeout`, `Date.now()`, `performance.now()`, SVG
@@ -6512,8 +6533,12 @@ vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets
 `px`). Names are the theme's as written, underscores kept (`--vidgen-font-quote_mark`). The same
 style sheet declares the bundled fonts (Inter, Source Serif 4, JetBrains Mono NL; regular, bold
 and italic) with `@font-face`, served by vidgen with no download, so `font-family:
-var(--vidgen-font-heading)` draws the same letters as a `title` scene. A theme family that is not
-bundled is looked up among the fonts installed on the machine.
+var(--vidgen-font-heading)` draws the same letters as a `title` scene. It also declares every
+font file in the project's `fonts/` folder (`.ttf`, `.otf`, `.woff`; [Fonts](#fonts)) with one
+`@font-face` per file (the family, weight and style read from the file; a variable font's weight
+range), so `font-family: "Space Grotesk"` works in a page with no rule of its own;
+`ctx.theme.font_files` lists them (`[{family, weight, style, url}]`). Any other theme family is
+looked up among the fonts installed on the machine.
 
 **Transparent background.** What the page leaves transparent shows the video's background (the
 theme's `background`): a `page:` without a background of its own, and the bare page of a
