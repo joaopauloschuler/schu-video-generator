@@ -155,10 +155,10 @@ class Chromium:
         self.browser = self.playwright = None
 
 
-def write_ffv1_clip(path: Path, fps: int, size: tuple[int, int], frames: Iterable[np.ndarray]) -> None:
-    """Write ``frames`` (RGB arrays, H x W x 3, ``size`` = (W, H)) in order to ``path`` (FFV1 in
-    Matroska, lossless); to a ``.partial`` file first, so a failure (also one raised while
-    ``frames`` is iterated) leaves none."""
+def write_ffv1_clip(path: Path, fps: int, size: tuple[int, int], frames: Iterable[np.ndarray], *, alpha: bool = False) -> None:
+    """Write ``frames`` (RGB arrays, H x W x 3, ``size`` = (W, H); with ``alpha`` RGBA, H x W x 4,
+    straight alpha, kept as ``bgra``) in order to ``path`` (FFV1 in Matroska, lossless); to a
+    ``.partial`` file first, so a failure (also one raised while ``frames`` is iterated) leaves none."""
     import av
 
     width, height = size
@@ -167,9 +167,10 @@ def write_ffv1_clip(path: Path, fps: int, size: tuple[int, int], frames: Iterabl
     try:
         with av.open(str(partial), mode="w", format="matroska") as container:
             stream = container.add_stream("ffv1", rate=fps)
-            stream.width, stream.height, stream.pix_fmt = width, height, "bgr0"
+            stored, given = ("bgra", "rgba") if alpha else ("bgr0", "rgb24")
+            stream.width, stream.height, stream.pix_fmt = width, height, stored
             for n, pixels in enumerate(frames):
-                frame = av.VideoFrame.from_ndarray(pixels, format="rgb24").reformat(format="bgr0")
+                frame = av.VideoFrame.from_ndarray(pixels, format=given).reformat(format=stored)
                 frame.pts = n
                 container.mux(stream.encode(frame))
             container.mux(stream.encode())
@@ -181,14 +182,15 @@ def write_ffv1_clip(path: Path, fps: int, size: tuple[int, int], frames: Iterabl
         partial.unlink(missing_ok=True)
 
 
-def png_pixels(png: bytes, size: tuple[int, int], what: str) -> np.ndarray:
-    """A PNG's RGB pixels, checked to be ``size`` (W, H); ``what`` names the page in the error."""
+def png_pixels(png: bytes, size: tuple[int, int], what: str, *, alpha: bool = False) -> np.ndarray:
+    """A PNG's RGB pixels (RGBA with ``alpha``), checked to be ``size`` (W, H); ``what`` names
+    the page in the error."""
     import io
 
     from PIL import Image
 
     with Image.open(io.BytesIO(png)) as im:
-        pixels = np.asarray(im.convert("RGB"))
+        pixels = np.asarray(im.convert("RGBA" if alpha else "RGB"))
     if pixels.shape[1::-1] != size:
         raise VidgenError(f"{what} drew {pixels.shape[1]}x{pixels.shape[0]} px, expected {size[0]}x{size[1]}")
     return pixels

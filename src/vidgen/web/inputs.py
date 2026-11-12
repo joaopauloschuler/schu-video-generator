@@ -1,7 +1,9 @@
 """What a ``web`` scene's page is given besides time (DESIGN.md §118.9): the theme (``ctx.theme``
 and CSS custom properties on ``:root``, with ``@font-face`` rules for vidgen's bundled fonts),
-the author's ``data:`` values (``ctx.data``), the beats (``ctx.beats``) and the import map that
-makes ``import * as THREE from "three"`` load the bundled three.js. No browser here.
+the author's ``data:`` values (``ctx.data``), the beats (``ctx.beats``), the video's shape
+(``ctx.aspect``, ``ctx.orientation`` and ``data-aspect`` / ``data-orientation`` on ``<html>``,
+§118.11) and the import map that makes ``import * as THREE from "three"`` load the bundled
+three.js. No browser here.
 """
 
 from __future__ import annotations
@@ -9,16 +11,22 @@ from __future__ import annotations
 import json
 import math
 import re
+from math import gcd
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from vidgen.fonts import BUILTIN_ROLES, BUNDLED_FAMILIES
+from vidgen.scales import frame_orientation
 from vidgen.web.loaded import VIDGEN_PREFIX
 
 #: The import map vidgen puts in a page: the bare specifier ``three`` is the bundled three.js.
 IMPORT_MAP: dict[str, dict[str, str]] = {"imports": {"three": f"/{VIDGEN_PREFIX}three/three.module.js"}}
 #: The id of the ``<style>`` element holding the theme's custom properties and font faces.
 THEME_STYLE_ID = "vidgen-theme"
+#: Aspect names a frame is given when its width / height is within :data:`ASPECT_TOLERANCE` of
+#: one (``--format`` and the gallery use ``16:9`` and ``9:16``); else the reduced ``W:H``.
+NAMED_ASPECTS: tuple[str, ...] = ("16:9", "9:16", "1:1", "4:5", "5:4", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21")
+ASPECT_TOLERANCE = 0.01
 
 
 def page_theme(theme: Any, px_per_point: float) -> dict[str, Any]:
@@ -37,6 +45,36 @@ def page_theme(theme: Any, px_per_point: float) -> dict[str, Any]:
         "fonts": fonts,
         "sizes": {name: round(float(value) * px_per_point, 3) for name, value in theme.sizes.items()},
     }
+
+
+def aspect_name(width: int, height: int) -> str:
+    """The aspect of a ``width`` x ``height`` frame (px) as a name: ``16:9`` (also 854x480),
+    ``9:16``, ``1:1``... (:data:`NAMED_ASPECTS`), else the reduced ``W:H``."""
+    ratio = width / height
+    for name in NAMED_ASPECTS:
+        w, h = (int(part) for part in name.split(":"))
+        if abs(ratio / (w / h) - 1) <= ASPECT_TOLERANCE:
+            return name
+    k = gcd(width, height)
+    return f"{width // k}:{height // k}"
+
+
+def page_shape(frame: tuple[int, int], region: str = "bleed") -> dict[str, Any]:
+    """The video's shape as the page is given it (§118.11): ``aspect`` (:func:`aspect_name`),
+    ``orientation`` (``landscape`` / ``portrait`` / ``square``, the rule vidgen's own layouts
+    use), ``frame`` (the video frame's ``{width, height}`` in px) and ``region`` (``bleed`` or
+    ``body``: where the page is drawn)."""
+    width, height = frame
+    return {"aspect": aspect_name(width, height), "orientation": frame_orientation(width, height),
+            "frame": {"width": width, "height": height}, "region": region}
+
+
+def shape_script(shape: Mapping[str, Any]) -> str:
+    """A script setting ``data-aspect`` and ``data-orientation`` on ``<html>`` while the page is
+    parsed (before its styles and scripts), so CSS can switch layout by the video's shape."""
+    attributes = {"aspect": shape["aspect"], "orientation": shape["orientation"]}
+    sets = "".join(f"e.dataset.{name}={json.dumps(value)};" for name, value in attributes.items())
+    return f"<script>((e)=>{{{sets}}})(document.documentElement)</script>"
 
 
 def _generic(family: str, fonts: Mapping[str, str]) -> str:
@@ -85,11 +123,13 @@ def theme_css(theme: Mapping[str, Any]) -> str:
     return "\n".join([*faces, f":root {{{props}\n}}"])
 
 
-def page_head(theme: Mapping[str, Any] | None) -> str:
+def page_head(theme: Mapping[str, Any] | None, shape: Mapping[str, Any] | None = None) -> str:
     """What vidgen inserts at the start of the page's ``<head>``: the theme's style sheet (when
-    there is a theme) and the import map."""
+    there is a theme), the script setting the shape attributes (when there is a ``shape``,
+    :func:`shape_script`) and the import map."""
     style = f'<style id="{THEME_STYLE_ID}">\n{theme_css(theme)}\n</style>' if theme is not None else ""
-    return f'{style}<script type="importmap">{json.dumps(IMPORT_MAP)}</script>'
+    script = shape_script(shape) if shape is not None else ""
+    return f'{style}{script}<script type="importmap">{json.dumps(IMPORT_MAP)}</script>'
 
 
 _HEAD = re.compile(rb"<head(\s[^>]*)?>", re.IGNORECASE)
@@ -155,5 +195,6 @@ def scene_page_inputs(scene: Any, spans: Sequence[Any]) -> tuple[dict[str, Any],
     return theme, page_beats(spans, scene.beats, words)
 
 
-__all__ = ["IMPORT_MAP", "THEME_STYLE_ID", "font_faces", "json_problem", "page_beats", "page_head", "page_theme", "scene_page_inputs", "theme_css",
+__all__ = ["ASPECT_TOLERANCE", "IMPORT_MAP", "NAMED_ASPECTS", "THEME_STYLE_ID", "aspect_name", "font_faces", "json_problem",
+           "page_beats", "page_head", "page_shape", "page_theme", "scene_page_inputs", "shape_script", "theme_css",
            "theme_properties", "with_head"]

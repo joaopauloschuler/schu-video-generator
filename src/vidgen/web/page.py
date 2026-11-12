@@ -5,7 +5,8 @@ nothing is fetched from the network: a request elsewhere is refused with a warni
 scene's page (or vidgen's bare canvas page that imports the scene's script), waits until it is
 ready and returns frame ``n``: vidgen's clock moved to ``t = n / fps`` (the page's timers,
 animation-frame callbacks, animations and videos follow it; §118.8), the page's ``frame(t, ctx)``
-hook, then a screenshot of the whole viewport. An uncaught JavaScript error, at load or on a frame,
+hook, then a screenshot of the whole viewport with its alpha (Chromium's default background is
+transparent, so what the page leaves transparent shows what vidgen draws behind it). An uncaught JavaScript error, at load or on a frame,
 is a :class:`VidgenError` naming the scene, the file and the line; so is a ``load`` or a frame that
 does not return within its time limit (vidgen then stops the page's renderer process).
 """
@@ -33,8 +34,8 @@ import numpy as np
 from vidgen.browser import chromium
 from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels
 from vidgen.errors import VidgenError
-from vidgen.web.entry import WebEntry, inside
-from vidgen.web.inputs import page_head, with_head
+from vidgen.web.entry import WebEntry
+from vidgen.web.inputs import page_head, page_shape, with_head
 from vidgen.web.loaded import VIDGEN_PREFIX, served_file
 
 log = logging.getLogger("vidgen.web")
@@ -59,6 +60,8 @@ READY_TIMEOUT_MS = 30_000
 LOAD_TIMEOUT_S = 30.0
 #: How long one frame (its timers, animation-frame callbacks and ``frame(t, ctx)``) may take (seconds).
 FRAME_TIMEOUT_S = 10.0
+#: Chromium's default background behind the page: transparent (the screenshot keeps the alpha).
+TRANSPARENT = {"r": 0, "g": 0, "b": 0, "a": 0}
 #: The page's time zone and locale (``Date`` and ``Intl`` give the same text on every machine).
 TIMEZONE, LOCALE = "UTC", "en-US"
 #: Content types by suffix (not the system's table: Windows may map ``.js`` to ``text/plain``,
@@ -112,9 +115,9 @@ def content_type(path: Path) -> str:
 
 
 def canvas_page(script: str, size: tuple[int, int]) -> str:
-    """vidgen's bare page for a ``script:`` scene: one canvas of ``size`` filling the frame (on
-    the theme's background once :func:`~vidgen.web.inputs.page_head` is in) and a module
-    importing ``script`` (a project path), its exports put on ``window.vidgen``."""
+    """vidgen's bare page for a ``script:`` scene: one canvas of ``size`` filling the viewport on
+    a transparent background (what the script does not draw shows the video's background) and a
+    module importing ``script`` (a project path), its exports put on ``window.vidgen``."""
     html = CANVAS_FILE.read_text(encoding="utf-8")
     return html.replace("@WIDTH@", str(size[0])).replace("@HEIGHT@", str(size[1])).replace("@SCRIPT@", json.dumps("/" + script))
 
@@ -200,20 +203,23 @@ class _TimeLimit:
 
 class WebPage:
     """``with WebPage(root, entry, scene_id=..., size=(w, h), fps=..., frames=...) as page:
-    page.frame(n)`` -> RGB pixels (H x W x 3).
+    page.frame(n)`` -> RGBA pixels (H x W x 4, straight alpha).
 
     Starts Chromium on enter, closes it on exit; requests outside ``root`` are refused (one
     warning per URL, also in :attr:`refused`). ``theme`` (``ctx.theme``, also the CSS custom
     properties), ``data`` (``ctx.data``) and ``beats`` (``ctx.beats``) are what the page is given
-    (§118.9). :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
+    (§118.9); ``shape`` is the video's shape (:func:`~vidgen.web.inputs.page_shape`; default:
+    a page filling a frame of ``size``), in ``ctx`` and as attributes of ``<html>`` (§118.11).
+    :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
     to its SHA-256, a missing project file to ``None`` (§118.10)."""
 
     def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
                  theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
-                 beats: list[dict[str, Any]] | None = None) -> None:
+                 beats: list[dict[str, Any]] | None = None, shape: dict[str, Any] | None = None) -> None:
         self.root, self.entry, self.scene_id = root, entry, scene_id
         self.size, self.fps, self.frames = size, fps, frames
         self.theme, self.data, self.beats = theme, dict(data or {}), list(beats or [])
+        self.shape = dict(shape) if shape is not None else page_shape(size)
         self.refused: list[str] = []
         self.missing: list[str] = []
         self.loaded: dict[str, str | None] = {}
@@ -235,7 +241,7 @@ class WebPage:
             route.abort("blockedbyclient")
             return
         if rel == CANVAS_PATH and self.entry.kind == "script":
-            body = with_head(canvas_page(self.entry.posix, self.size).encode("utf-8"), page_head(self.theme))
+            body = with_head(canvas_page(self.entry.posix, self.size).encode("utf-8"), page_head(self.theme, self.shape))
             route.fulfill(status=200, body=body, headers={"Content-Type": CONTENT_TYPES[".html"]})
             return
         path = served_file(self.root, rel)
@@ -250,7 +256,7 @@ class WebPage:
         body = path.read_bytes()
         self.loaded[rel] = hashlib.sha256(body).hexdigest()
         if self.entry.kind == "page" and rel == self.entry.posix:
-            body = with_head(body, page_head(self.theme))
+            body = with_head(body, page_head(self.theme, self.shape))
         headers = {"Content-Type": content_type(path), "Accept-Ranges": "bytes"}
         span = byte_range(route.request.headers.get("range"), len(body))
         if span is None:
@@ -296,6 +302,7 @@ class WebPage:
         context.add_init_script(script=init_script(self.scene_id))
         context.route("**/*", self._serve)
         self._page = page = context.new_page()
+        context.new_cdp_session(page).send("Emulation.setDefaultBackgroundColorOverride", {"color": TRANSPARENT})
         is_script = self.entry.kind == "script"
         try:
             page.goto(self._url(), wait_until="load", timeout=READY_TIMEOUT_MS)
@@ -310,7 +317,7 @@ class WebPage:
         self._limit = _TimeLimit(renderer_pids(browser))
         info = {"scene": self.scene_id, "width": width, "height": height, "fps": self.fps,
                 "frames": self.frames, "duration": self.frames / self.fps, "theme": self.theme, "data": self.data,
-                "beats": self.beats}
+                "beats": self.beats, **self.shape}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
 
@@ -348,7 +355,7 @@ class WebPage:
             png = self._page.screenshot(type="png", timeout=READY_TIMEOUT_MS)
         except api.Error as exc:
             raise VidgenError(f"scene '{self.scene_id}': no screenshot of {self.entry.posix} at t={t:.3f}: {first_line(exc)}") from None
-        return png_pixels(png, self.size, f"scene '{self.scene_id}': the page")
+        return png_pixels(png, self.size, f"scene '{self.scene_id}': the page", alpha=True)
 
     def close(self) -> None:
         """Close Chromium and Playwright (safe to call twice)."""
@@ -357,6 +364,6 @@ class WebPage:
         self._chromium = self._page = None
 
 
-__all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
+__all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
            "content_type", "engine_id", "error_location", "error_message", "init_script", "project_path", "random_seed",
            "renderer_pids", "runtime_digest"]

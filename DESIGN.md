@@ -23173,7 +23173,9 @@ The owner wants AI agents to write a scene as a web page. The owner's decisions:
 project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
 first version; the page cannot reach the internet while rendering; screenshots of the whole page
 are accepted even when slow. Step 328 built the core described here, Step 329 the virtual clock
-(§118.8); §118.7 lists what the later steps of the phase add.
+(§118.8), Step 330 what the page is given (§118.9, §118.10), Step 331 the region, the
+transparent background and the video's shape (§118.11); §118.7 lists what the later steps of the
+phase add.
 
 ### 118.1 How a `web` scene renders (Step 328)
 
@@ -23181,9 +23183,10 @@ A `web` scene is a `NarratedScene` (`scenes/web.py`, `Web`) built like the `3d` 
 `clip_plan(scene, SPARE_FRAMES)` (`browser/timing.py`, shared with `3d`, which used to have it
 as `Scene3D._plan`) gives the number of frames (the beats' windows or a silent scene's duration,
 the 0.5 s outro, 2 spare frames); `make_web_clip` returns a lossless clip of that many
-screenshots at `config.pixel_width × pixel_height` and `config.frame_rate`; the clip is a
-`ClipMobject` covering the frame (target `view`: `dim`, `highlight`, `zoom` work as on `3d`),
-then `timeline()` holds each beat and `finish()` fades out. Frame *n* of the clip is the page at
+screenshots at `config.pixel_width × pixel_height` (since Step 331: the size of the page's box,
+§118.11) and `config.frame_rate`; the clip is a `ClipMobject` covering the frame or the box
+(target `view`: `dim`, `highlight`, `zoom` work as on `3d`), then `timeline()` holds each beat
+(beat 1 fades in the `title`, Step 331) and `finish()` fades out. Frame *n* of the clip is the page at
 *t = n / fps*, shown as output frame *n*.
 
 ### 118.2 Params and checks
@@ -23304,14 +23307,16 @@ included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps
   `vidgen.api`.
 - Screenshots (`page.screenshot`) rather than a canvas read-back: a page may be any HTML.
 - The scene has no title of its own: whether the page fills the frame or sits under a vidgen
-  title is Step 331's `region`.
+  title is Step 331's `region` (§118.11). Step 331: `vidgen.api` adds `web_page_shape(frame,
+  region="bleed")` (§118.11); `make_web_clip(..., shape=None)` (default: a page filling a frame of
+  its `size`, so earlier calls work unchanged).
 
 ### 118.7 Later steps of the phase
 
 329 (done, §118.8): the virtual clock. 330 (done, §118.9, §118.10): theme as CSS variables
 and `ctx.theme`, `ctx.data`, beats (`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js
-importable as `three`, the fingerprint over every file the page loaded. 331: `region: bleed |
-body`, a transparent background, 9:16 from one page. 332: lint reads the page's text boxes. 333:
+importable as `three`, the fingerprint over every file the page loaded. 331 (done, §118.11):
+`region: bleed | body` and `title`, a transparent background, 9:16 from one page. 332: lint reads the page's text boxes. 333:
 the guide topic, `examples/web/`, a gallery entry, speed at 1080p.
 
 ### 118.8 Time belongs to vidgen (Step 329)
@@ -23455,8 +23460,8 @@ the page stays in standards mode). The Python scene computes `theme` and `beats`
   `palette-…`. The one overlap, a colour token named `background`, loses to the background (it
   is written after the colours).
 - **Background decision:** a `page:` gets nothing forced (it uses the variables); the bare page of
-  a `script:` sets `background: var(--vidgen-background, #000)`. Step 331's transparent pages
-  over the theme can change this without touching the variables.
+  a `script:` set `background: var(--vidgen-background, #000)` until Step 331, which made it
+  transparent (§118.11).
 - **Fonts:** at start every declared, unloaded `FontFace` is loaded (`settleFonts`), so text first
   shown on a later frame is never drawn in a fallback; the files then count as loaded (§118.10).
   A theme family that is not bundled gets no `@font-face` and comes from the machine's fonts.
@@ -23507,3 +23512,79 @@ the page stays in standards mode). The Python scene computes `theme` and `beats`
 - **`--force`**: `render_project` removes the records (`forget_web_clips`) of the `web` scenes it
   renders, so their frames are drawn again; without `--force` a re-render reuses an unchanged clip.
 - `3d` clips and keys are unchanged.
+
+### 118.11 A `web` scene fits with the rest of a video (Step 331)
+
+**Region and title** (`Web.Params`): `region: bleed | body` (default `bleed`) and `title` (the
+names `video_clip` uses for the same choice; `3d` has `title` too). `bleed`: the page fills the
+frame as before; a title is a `text_plate` in the header band over the page (as on `3d`).
+`body`: the title is `chart_title(title, area=safe_area)` (as on `video_clip`'s `region: body`) and
+the page's box is `safe_area.below(title, gap=0.45)`, or the whole safe area without a title (as
+`video_clip` does). The safe area already leaves out overlays with `reserve: true` (bottom
+captions) and, in a Short, the parts the app covers (§101), so the page box does too. The box's
+edges are moved to whole pixels (`scenes/web.py` `pixel_box`) and the page is drawn at the box's
+pixel size (the viewport, `ctx.width` / `ctx.height`, `100vw`), not the frame scaled down, so the
+`ClipMobject` (fit `cover` of that box) is copied pixel for pixel. Beat 1 fades the title in
+(`play_steps(d, [entrance("title")], fraction=0.6, cap=0.8)`, `3d`'s code); target `title`. The
+page itself is on screen from the first frame and the scene fades out over `outro` = 0.5 s, as
+on `3d` (`video_clip`, by contrast, fades its clip in on beat 1).
+
+**Transparency.** **Decision:** the frames keep their alpha. `WebPage` sets Chromium's default
+background to transparent once per page (CDP `Emulation.setDefaultBackgroundColorOverride`
+`{r: 0, g: 0, b: 0, a: 0}`, `TRANSPARENT`), so each `page.screenshot(type="png")` is RGBA with
+straight alpha; `png_pixels(..., alpha=True)` keeps it and `write_ffv1_clip(..., alpha=True)`
+stores FFV1 `bgra` (the `3d` clips stay `bgr0`: its keys are unchanged). `ClipMobject` already
+decodes `rgba`, and Manim's camera blends an `ImageMobject` with `Image.alpha_composite`
+(straight alpha), so what the page leaves transparent shows whatever vidgen draws behind it:
+today the theme background (the camera's background colour); transitions are joined from the
+finished scene videos, so they need nothing more. Alternatives measured (one CPU, a page with
+text, a semi-transparent box and a moving disc, 2 s, drawing + encoding the clip only):
+
+| | 480x270 @ 24 fps | 1920x1080 @ 30 fps |
+|---|---|---|
+| opaque: background override = theme colour, `bgr0` | 88 ms/frame, 0.35 MB | 427 ms/frame, 1.31 MB |
+| alpha: Playwright `omit_background=True` per screenshot | 90 ms/frame | 624 ms/frame, 1.79 MB |
+| alpha: override set once, `bgra` (chosen) | 72 ms/frame, 0.34 MB | 431 ms/frame, 1.79 MB |
+
+`omit_background` sends two extra CDP calls per screenshot (set and reset the override) and costs
++46 % at 1080p; setting the override once costs nothing measurable. Through `make_web_clip`
+(Chromium start included), Step 330's code against this one at 1080p: 306–348 vs 338–362 ms per
+frame (noise of the same size), clips 1.15 vs 1.79 MB per 2 s (+56 %, about 0.9 MB per second of
+1080p video in `build/`; equal at 480x270). Compositing at capture over the theme colour would save
+that disk but shows nothing vidgen draws behind a page and gives coloured (LCD) text edges at small
+sizes: Chromium uses sub-pixel text on an opaque background and greyscale text on a transparent
+one (seen in a zoomed crop at 480x270; at 1080p the large text was greyscale in both and the
+alpha frame blended over the theme colour matched the opaque one within 1 level on 127 175
+semi-transparent pixels). In a real render the Manim still of the `script:` page matched the clip's
+RGBA frame blended over the theme background exactly (max difference 0 on 5 234 and 1 074
+semi-transparent pixels of discs and text); reading the same frames as premultiplied would be off
+by up to 241 levels, a dark fringe. The bare page of a `script:` is now `background: transparent`
+(**decision**: it looked the same over the theme background, and a script's `clearRect` now shows
+what is behind). A `page:` without a background now shows the theme background instead of
+Chromium's white (documented as a change in CONFIG and CHANGELOG).
+
+**The video's shape** (`web/inputs.py` `page_shape(frame, region)`, exported as
+`vidgen.api.web_page_shape`): `{aspect, orientation, frame: {width, height}, region}`, spread into
+`ctx` (`ctx.aspect`, `ctx.orientation`, `ctx.frame`, `ctx.region`). `aspect_name(w, h)`: the
+nearest of `NAMED_ASPECTS` (`16:9`, `9:16`, `1:1`, `4:5`, `5:4`, `4:3`, `3:4`, `3:2`, `2:3`, `21:9`,
+`9:21`; the names of `--format`, the gallery and image generation) within 1 % (`854x480` and the
+`426x240` draft are `16:9`), else the reduced `W:H`. `orientation`: `scales.frame_orientation`
+(the 1.2 rule of vidgen's layouts). Both describe the video's frame, not the page's box (in
+`body` a 9:16 page box is nearly square; CSS media queries see the box). **Decision:** the
+attributes go on `<html>` (`data-aspect`, `data-orientation`), set by a classic inline script that
+`page_head` puts after the theme style and before the import map: it runs while the page is parsed,
+before any style or script of the page, when `<body>` may not exist yet; `:root[data-aspect]` and
+descendant selectors both work. `data-orientation` is given beside `data-aspect` because a rule for
+every portrait shape reads better as `[data-orientation="portrait"]`.
+
+**Cache.** Clip inputs version 3: `shape` and `alpha: true` added (and the viewport size was
+already there), `canvas.html` changed: every web clip is drawn once more. The render fingerprint
+already holds the scene params (`region`, `title`) and the format (so the frame size and aspect).
+
+**Verified** (Step 331, HANDOFF): a 4-scene video at 480x270, 12 fps (title, `web` page with
+`region: body` and a title, `web` script full-bleed with a title, title) with Kokoro narration,
+karaoke captions, `progress_bar`, `watermark`, `lower_third`, a crossfade, a push and a wipe; the
+same project as a 9:16 variant (270x480) and a Short (`shorts: true`), `--draft`, `vidgen
+storyboard`, `vidgen animatic`, `vidgen lint`, `vidgen validate`. A storyboard renders the `web`
+scene as every scene type is rendered for it (all its frames at preview size, then the stills);
+the clip is shared with `vidgen render --preview`.

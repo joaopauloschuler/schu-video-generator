@@ -1826,9 +1826,9 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] The fingerprint covers the page, every file it loaded and the params — done: the served files recorded beside the clip (§118.10); no second render after the first; `--force` draws the frames again
 
 ### Step 331 — A `web` scene fits with the rest of a video
-- [ ] `region: bleed` (whole frame) or `body` (under a vidgen title); a transparent page background shows the theme background
-- [ ] Captions, overlays, transitions, `--draft`, `vidgen storyboard` and `vidgen animatic` work unchanged
-- [ ] 16:9 and 9:16 from one page (`ctx.aspect` and a `data-aspect` attribute for CSS)
+- [x] `region: bleed` (whole frame) or `body` (under a vidgen title); a transparent page background shows the theme background — done: `region` + `title` as on `video_clip` / `3d`; in `body` the page is drawn at the region's pixel size; frames kept with alpha (Chromium background override set once, FFV1 `bgra`): same speed, clips +56 % at 1080p; the bare `script:` page is transparent; exact blending checked (DESIGN §118.11)
+- [x] Captions, overlays, transitions, `--draft`, `vidgen storyboard` and `vidgen animatic` work unchanged — done: real renders at 480x270 / 270x480 (karaoke captions, `progress_bar`, `watermark`, `lower_third`, crossfade, push, wipe, draft, Short, storyboard, animatic, lint, validate); a storyboard renders the whole scene at preview size, as for every scene type
+- [x] 16:9 and 9:16 from one page (`ctx.aspect` and a `data-aspect` attribute for CSS) — done: `ctx.aspect`, `ctx.orientation`, `ctx.frame`, `ctx.region`; `data-aspect` and `data-orientation` on `<html>`
 
 ### Step 332 — Lint reads the page
 - [ ] vidgen reads the on-screen boxes of every text element from the page itself

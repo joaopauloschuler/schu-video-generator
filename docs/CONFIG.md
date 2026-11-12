@@ -6384,15 +6384,19 @@ ending on an object) it keeps looking at it — until the next camera action.
 ### `web`
 
 **A page you write** in HTML, CSS and JavaScript (Phase AK, DESIGN §118), screenshotted in
-headless Chromium at the render's size and frame rate and shown full-frame; overlays and
-captions are drawn over it; the scene fades out at the end. JavaScript in the project is trusted
+headless Chromium at the render's frame rate and shown full-frame (`region: bleed`) or in the
+body region under a title vidgen draws (`region: body`); overlays and captions are drawn over it.
+The page is on screen from the first frame (no fade in, as on `3d`), beat 1 fades the title in,
+and the scene fades out over its last 0.5 s. JavaScript in the project is trusted
 like the Python in `extensions/`. Needs Chromium as the [`3d`](#3d) scene does (same install
 command, same `vidgen validate` warning).
 
 | param | type | default | meaning |
 |---|---|---|---|
 | `page` | path | — | an HTML file in the project folder (`extensions/gears.html`): any HTML, CSS and JavaScript |
-| `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the frame, on the theme's background |
+| `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the page, on a transparent background (what the script does not draw shows the video's background) |
+| `title` | str | `""` | a heading drawn by vidgen (in the theme's heading font): on a plate over the top of the page with `region: bleed` (as on `3d`), above the page with `region: body` (as on `video_clip`); action target `title` |
+| `region` | `bleed` \| `body` | `bleed` | `bleed`: the page fills the whole frame, edge to edge; `body`: the page fills the safe area below the title (the whole safe area without a title), clear of overlays that reserve room (bottom captions) and, in a Short, of the parts the app covers. The page is laid out at that size: its viewport, `ctx.width` / `ctx.height` and `100vw` / `100vh` are the region's pixels, not the frame squeezed |
 | `data` | mapping | `{}` | values for the page, read as `ctx.data` (`{teeth: 24, color: primary}`): text, numbers, `true` / `false`, `null`, lists and mappings (a YAML date or a number key is an error naming its place, e.g. `data.when`); theme colour names are not looked up for you (`ctx.theme.colors[ctx.data.color]`) |
 
 Give exactly one of `page` and `script`.
@@ -6440,7 +6444,11 @@ data (`await fetch("data.json")`). Time stands at 0 during `load`: a timer it wa
 | field | value |
 |---|---|
 | `scene` | the scene id |
-| `width`, `height` | the frame in pixels (the page's viewport) |
+| `width`, `height` | the page's viewport in pixels: the frame (`region: bleed`) or the body region (`region: body`) |
+| `aspect` | the video's shape: `"16:9"`, `"9:16"`, `"1:1"`, `"4:5"`, … (the nearest of `16:9`, `9:16`, `1:1`, `4:5`, `5:4`, `4:3`, `3:4`, `3:2`, `2:3`, `21:9`, `9:21` within 1 %, so a 854x480 preview is `16:9`; else the reduced `W:H`) |
+| `orientation` | `landscape`, `portrait` or `square` (wider than 1.2 : 1, taller than 1 : 1.2, else square: the rule vidgen's own layouts use) |
+| `frame` | the video frame `{width, height}` in pixels (equal to `width`, `height` with `region: bleed`) |
+| `region` | `bleed` or `body` |
 | `fps`, `frames`, `duration` | the frame rate, the frames drawn and their length in seconds (the scene, its 0.5 s fade-out and 2 spare frames) |
 | `canvas` | the bare page's `<canvas>` (`script:`); `null` on a `page:` without `id="vidgen-canvas"` |
 | `theme` | `{preset, background, colors, palette, fonts, sizes}`: `colors` name → hex (`text`, `dim`, `accent`, `highlight`, `primary`, `secondary`, `tertiary`, `surface` and the project's own), `palette` a list of hex, `fonts` → family name for `sans`, `serif`, `mono` and every font role (`body`, `heading`, `quote`, `quote_mark`, `code` and the project's), `sizes` name → CSS pixels (`title` … `small` and the project's: text that size is as tall as vidgen's text of that size in this frame) |
@@ -6456,8 +6464,29 @@ data (`await fetch("data.json")`). Time stands at 0 during `load`: a timer it wa
 style sheet declares the bundled fonts (Inter, Source Serif 4, JetBrains Mono NL; regular, bold
 and italic) with `@font-face`, served by vidgen with no download, so `font-family:
 var(--vidgen-font-heading)` draws the same letters as a `title` scene. A theme family that is not
-bundled is looked up among the fonts installed on the machine. A `page:` gets nothing else
-forced: set `background: var(--vidgen-background)` yourself; a `script:`'s bare page uses it.
+bundled is looked up among the fonts installed on the machine.
+
+**Transparent background.** What the page leaves transparent shows the video's background (the
+theme's `background`): a `page:` without a background of its own, and the bare page of a
+`script:` (transparent since Step 331; a canvas the script clears with `clearRect` shows it too).
+Semi-transparent colours (`rgba(…)`, `opacity`, anti-aliased text edges) are blended with it
+exactly, without a dark or light edge. Before Step 331 a page without a background showed
+Chromium's white; give it `background: #fff` to keep that. Set `background:
+var(--vidgen-background)` (or any colour) to make the page opaque.
+
+**One page for every shape.** `<html>` carries `data-aspect` (`ctx.aspect`) and `data-orientation`
+(`ctx.orientation`), set before the page's own styles and scripts, so CSS can switch layout by the
+video's shape, and the same page serves the 16:9 video, its 9:16 variant and a Short:
+
+```css
+.row { display: flex; flex-direction: row; }
+[data-aspect="9:16"] .row { flex-direction: column; }   /* or [data-orientation="portrait"] */
+```
+
+Both describe the video's frame, also with `region: body`; CSS media queries (`@media
+(orientation: portrait)`, `aspect-ratio`) see the page's own viewport. In a Short (`shorts: true`)
+`region: body` keeps the page out of the parts the app covers; with `region: bleed` the page
+covers the whole frame and keeping its text there is the page's job.
 
 **Reacting to narration in CSS.** From before `load` on, `<body>` carries `data-beat` (the id of
 the beat being narrated: the last one that started) and `data-beat-index` (from 0); each frame
@@ -6491,19 +6520,21 @@ does not return within 30 s, or a frame (its timers, callbacks and `frame`) that
 within 10 s, stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
 10 s: a loop that never ends or a promise that never settles …`; vidgen ends the page's process.
 
-**Cache** (DESIGN §118.10). The screenshots are written to a lossless clip
+**Cache** (DESIGN §118.10). The screenshots, with their transparency, are written to a lossless clip
 `build/<quality>/web/<scene>.mkv` with `<scene>.json` beside it: what it was drawn from (the size,
-frame rate, length, theme, `data`, beats, vidgen's clock) and every file the page loaded while it
+frame rate, length, theme, `data`, beats, the video's shape and the region, vidgen's clock) and every file the page loaded while it
 was drawn (the page or script, styles, pictures, fonts, modules, fetched data, videos; also one
 first asked for on a later frame, and one asked for but missing). The clip is reused, and the
 scene not rendered again, while all of that is unchanged; an edit to any of those files, to the
 scene's `data:`, the theme or the narration renders that scene again (and only it). `vidgen render
---force` draws the frames again too.
+--force` draws the frames again too. `vidgen storyboard` renders a `web` scene like every scene
+(all of its frames at preview size; the clip is then reused by `vidgen render --preview` and
+`vidgen animatic`).
 
 ```yaml
 - id: gears
   type: web
-  params: {page: extensions/gears.html, data: {speed: 90}}
+  params: {page: extensions/gears.html, region: body, title: "How gears turn", data: {speed: 90}}
   beats:
     - {id: g1, text: "One gear turns on its own."}
     - {id: g2, text: "Then its label appears."}
@@ -6513,7 +6544,7 @@ scene's `data:`, the theme or the narration renders that scene again (and only i
 <!-- extensions/gears.html -->
 <link rel="stylesheet" href="gears.css">
 <style>
-  body { margin: 0; background: var(--vidgen-background); font-family: var(--vidgen-font-heading); }
+  body { margin: 0; font-family: var(--vidgen-font-heading); }   /* no background: the video's shows */
   #label { color: var(--vidgen-primary); opacity: 0; transition: opacity 0.5s; }
   body[data-beat="g2"] #label { opacity: 1; }
 </style>
@@ -6528,8 +6559,7 @@ scene's `data:`, the theme or the narration renders that scene again (and only i
 // extensions/ball.js, for params: {script: extensions/ball.js}
 export function frame(t, ctx) {
   const c = ctx.canvas.getContext("2d");
-  c.fillStyle = ctx.theme.background;
-  c.fillRect(0, 0, ctx.width, ctx.height);
+  c.clearRect(0, 0, ctx.width, ctx.height);   // transparent: the video's background shows
   c.fillStyle = ctx.theme.colors.primary;
   c.beginPath();
   c.arc(40 + (ctx.width - 80) * (t / ctx.duration), ctx.height / 2, 30, 0, 2 * Math.PI);

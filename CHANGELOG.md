@@ -7,6 +7,14 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### `web` scenes fit with the rest of a video (Step 331)
+
+- `region: bleed` (the default: the page fills the frame) or `region: body` (the page fills the safe area under a `title` that vidgen draws, clear of bottom captions and of a Short's covered parts). With `body` the page is laid out at the region's own size: its viewport and `ctx.width` / `ctx.height` are the region's pixels. `title` draws a heading as on `3d` (a plate over the page) or `video_clip` (above it); action target `title`.
+- Transparent pages: what a page leaves transparent shows the video's background, with exact blending of semi-transparent pixels. **Changed:** a page with no background used to show Chromium's white and now shows the theme's background; a `script:`'s bare page is now transparent (it was the theme background, so it looks the same). The frames are kept with their alpha (clips about 1.5× larger at 1080p, same speed).
+- One page for every shape: `ctx.aspect` (`"16:9"`, `"9:16"`, `"1:1"` …), `ctx.orientation`, `ctx.frame`, `ctx.region`, and `<html data-aspect="9:16" data-orientation="portrait">` so CSS can switch layout (`[data-aspect="9:16"] .row { flex-direction: column }`).
+- Checked with real renders: captions (karaoke too), `progress_bar`, `watermark`, `lower_third`, crossfade, push and wipe into and out of a `web` scene, `--draft`, a 9:16 variant and a Short, `vidgen storyboard`, `vidgen animatic`, `vidgen lint`, `vidgen validate`.
+- Every web clip is drawn again once. `vidgen.api` adds `web_page_shape`; `make_web_clip` takes `shape=`.
+
 ### `web` scenes: what the page is given (Step 330)
 
 - The theme reaches the page: CSS variables on `:root` (`var(--vidgen-primary)`, `--vidgen-background`, `--vidgen-palette-0`, `--vidgen-font-heading`, `--vidgen-size-body` …) and `ctx.theme`. vidgen's bundled fonts are declared with `@font-face` and served with no download, so a page's text matches a `title` scene's. A `script:`'s bare page uses the theme background (it was black).

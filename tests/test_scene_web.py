@@ -116,7 +116,7 @@ def test_the_clip_is_reused_until_the_file_changes(tmp_path: Path, monkeypatch: 
         def __exit__(self, *_: Any) -> None: ...
         def frame(self, n: int) -> np.ndarray:
             drawn.append(n)
-            return np.zeros((16, 16, 3), dtype=np.uint8)
+            return np.zeros((16, 16, 4), dtype=np.uint8)
 
     monkeypatch.setattr(web_clip, "WebPage", Page)
     (tmp_path / "g.js").write_text("export function frame() {}", encoding="utf-8")
@@ -225,7 +225,7 @@ def test_vidgens_head_goes_first_in_the_page() -> None:
     assert with_head(b"<!doctype html><header>", "<X>") == b"<!doctype html><X><header>"
     assert with_head(b"<p>hi", "<X>") == b"<X><p>hi"
     assert page_head(_theme()).startswith('<style id="vidgen-theme">')
-    assert "var(--vidgen-background, #000)" in canvas_page("g.js", (16, 9))
+    assert "background: transparent;" in canvas_page("g.js", (16, 9))
 
 
 def test_data_must_be_json_values() -> None:
@@ -265,7 +265,7 @@ def _fake_page(drawn: list[str], loads: dict[str, str]) -> type:
             return self
         def __exit__(self, *_: Any) -> None: ...
         def frame(self, n: int) -> np.ndarray:
-            return np.zeros((16, 16, 3), dtype=np.uint8)
+            return np.zeros((16, 16, 4), dtype=np.uint8)
 
     return Page
 
@@ -506,4 +506,134 @@ def test_the_page_is_given_theme_data_beats_and_three(tmp_path: Path) -> None:
             "__vidgen__/fonts/SourceSerif4/SourceSerif4-Regular.ttf"} <= set(loaded)
     with WebPage(tmp_path, WebEntry("script", "t.js"), scene_id="w", size=(64, 36), fps=10, frames=2, theme=theme) as page:
         pixels = page.frame(0)
-    assert tuple(int(v) for v in pixels[2, 2]) == (0x1D, 0x4E, 0xD8) and tuple(int(v) for v in pixels[30, 50]) == (0xF8, 0xF7, 0xF3)
+    # the bare page is transparent: what the script does not draw shows the video's background
+    assert tuple(int(v) for v in pixels[2, 2]) == (0x1D, 0x4E, 0xD8, 255) and int(pixels[30, 50, 3]) == 0
+
+
+# ----- Step 331: region, title, transparency, the video's shape ----------------------------------
+
+
+def test_the_aspect_and_orientation_of_a_frame() -> None:
+    from vidgen.web.inputs import aspect_name, page_shape
+
+    assert {aspect_name(w, h) for w, h in [(1920, 1080), (854, 480), (426, 240), (480, 270)]} == {"16:9"}
+    assert {aspect_name(w, h) for w, h in [(1080, 1920), (480, 854), (270, 480)]} == {"9:16"}
+    assert [aspect_name(1080, 1080), aspect_name(1080, 1350), aspect_name(1000, 700)] == ["1:1", "4:5", "10:7"]
+    assert page_shape((270, 480), "body") == {"aspect": "9:16", "orientation": "portrait", "frame": {"width": 270, "height": 480},
+                                              "region": "body"}
+    assert page_shape((1000, 900))["orientation"] == "square" and page_shape((16, 9))["region"] == "bleed"
+
+
+def test_the_shape_is_on_html_before_the_pages_own_scripts() -> None:
+    from vidgen.web.inputs import page_head, page_shape
+
+    head = page_head(None, page_shape((90, 160)))
+    script = '<script>((e)=>{e.dataset.aspect="9:16";e.dataset.orientation="portrait";})(document.documentElement)</script>'
+    assert head.startswith(script) and head.index(script) < head.index("importmap")
+    assert page_head(_theme(), page_shape((16, 9))).index("</style>") < page_head(_theme(), page_shape((16, 9))).index("dataset.aspect")
+
+
+def test_the_clip_keeps_alpha_and_follows_the_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from vidgen.web.inputs import page_shape
+
+    drawn: list[str] = []
+    monkeypatch.setattr(web_clip, "WebPage", _fake_page(drawn, {"p.html": ""}))
+    (tmp_path / "p.html").write_text("<p>", encoding="utf-8")
+    out = tmp_path / "build"
+    make = lambda shape=None: web_clip.make_web_clip(tmp_path, out, "p", {"page": "p.html"}, size=(16, 16), fps=5, frames=2,  # noqa: E731
+                                                      shape=shape)
+    make()
+    inputs = json.loads((out / "p.json").read_text(encoding="utf-8"))["inputs"]
+    assert inputs["alpha"] is True and inputs["shape"] == page_shape((16, 16)) and inputs["version"] == 3
+    make(page_shape((16, 16)))
+    assert len(drawn) == 1   # the default is a page filling a frame of its size
+    make(page_shape((32, 18), "body"))
+    make(page_shape((18, 32), "body"))
+    assert len(drawn) == 3
+
+
+def test_frames_with_alpha_are_stored_with_alpha(tmp_path: Path) -> None:
+    import av
+
+    from vidgen.browser.chromium import write_ffv1_clip
+
+    frame = np.zeros((6, 8, 4), dtype=np.uint8)
+    frame[:, :4] = (255, 40, 0, 128)   # half transparent, straight alpha
+    write_ffv1_clip(tmp_path / "a.mkv", 5, (8, 6), [frame, frame], alpha=True)
+    write_ffv1_clip(tmp_path / "o.mkv", 5, (8, 6), [frame[..., :3]])
+    with av.open(str(tmp_path / "a.mkv")) as clip:
+        assert clip.streams.video[0].codec_context.pix_fmt == "bgra"
+        assert np.array_equal(next(clip.decode(video=0)).to_ndarray(format="rgba"), frame)
+    with av.open(str(tmp_path / "o.mkv")) as clip:
+        assert clip.streams.video[0].codec_context.pix_fmt == "bgr0"   # 3d clips: unchanged
+
+
+def test_region_and_title_params() -> None:
+    from vidgen.scenes.web import Web
+
+    params = Web.Params(page="p.html")
+    assert (params.region, params.title) == ("bleed", "") and Web.target_names(params) == ["view"]
+    titled = Web.Params(page="p.html", region="body", title="Gears")
+    assert Web.target_names(titled) == ["view", "title"]
+    with pytest.raises(ValidationError, match="'bleed' or 'body'"):
+        Web.Params(page="p.html", region="left")
+
+
+def test_the_page_box_is_on_whole_pixels() -> None:
+    from manim import tempconfig
+
+    from vidgen.regions import Region
+    from vidgen.scenes.web import pixel_box
+
+    with tempconfig({"pixel_width": 480, "pixel_height": 270, "frame_width": 8 * 16 / 9, "frame_height": 8.0}):
+        box = pixel_box(Region(-5.123, -2.871, 5.007, 2.333))
+        per_unit = 270 / 8
+        for edge, half in [(box.x0, 8 * 8 / 9), (box.x1, 8 * 8 / 9), (box.y0, 4.0), (box.y1, 4.0)]:
+            assert abs((edge + half) * per_unit - round((edge + half) * per_unit)) < 1e-9
+        assert abs(box.x0 + 5.123) <= 0.5 / per_unit and abs(box.y1 - 2.333) <= 0.5 / per_unit
+
+
+TRANSPARENT_PAGE = """<!doctype html><meta charset="utf-8">
+<style>html, body { margin: 0; height: 100%; } #half { width: 50%; height: 100%; background: rgba(255, 0, 0, 0.5); }
+[data-aspect="9:16"] #half { width: 25%; }</style><div id="half"></div>
+<script>window.vidgen = {load(ctx) { window.seen = [ctx.width, ctx.height, ctx.aspect, ctx.orientation, ctx.region, ctx.frame.width,
+  document.documentElement.dataset.aspect, document.documentElement.dataset.orientation]; }};</script>"""
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_a_transparent_page_keeps_its_alpha_and_knows_the_videos_shape(tmp_path: Path) -> None:
+    _chromium_or_skip()
+    from vidgen.web.inputs import page_shape
+
+    (tmp_path / "t.html").write_text(TRANSPARENT_PAGE, encoding="utf-8")
+    with WebPage(tmp_path, WebEntry("page", "t.html"), scene_id="w", size=(40, 30), fps=5, frames=1,
+                 shape=page_shape((90, 160), "body")) as page:
+        pixels = page.frame(0)
+        seen = page._page.evaluate("window.seen")
+    assert seen == [40, 30, "9:16", "portrait", "body", 90, "9:16", "portrait"]
+    assert pixels.shape == (30, 40, 4) and int(pixels[15, 30, 3]) == 0   # nothing drawn: transparent
+    assert tuple(int(v) for v in pixels[15, 5]) == (255, 0, 0, 128)       # straight alpha, not premultiplied
+    assert int(pixels[15, 15, 3]) == 0                                      # 25 % wide in 9:16
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_a_body_region_page_sits_under_the_title_on_the_theme_background(make_project: Any) -> None:
+    _chromium_or_skip()
+    import av
+
+    from vidgen.render.pipeline import render_project
+
+    page = "<!doctype html><style>html { height: 100%; box-sizing: border-box; border: 3px solid #ff0000; }</style>"
+    project = web_project(make_project, {"page": "p.html", "region": "body", "title": "Gears"}, {"p.html": page})
+    render_project(project, preview=False)
+    inputs = json.loads((project.root / "build" / "final" / "web" / "w.json").read_text(encoding="utf-8"))["inputs"]
+    assert inputs["width"] < 160 and inputs["height"] < 70 and inputs["shape"]["region"] == "body" and inputs["shape"]["aspect"] == "16:9"
+    with av.open(str(project.root / "build" / "final" / "scenes" / "w.mp4")) as video:
+        first = next(video.decode(video=0)).to_ndarray(format="rgb24").astype(int)
+    background = first[2, 2]
+    assert np.abs(first[60, 80] - background).max() < 12   # the page's transparent middle shows the theme background
+    red = (first[..., 0] > 150) & (first[..., 1] < 90)
+    rows = np.flatnonzero(red.any(axis=1))
+    assert rows.size and rows.min() > 15                   # the page's border starts below the title band, not at the frame's top

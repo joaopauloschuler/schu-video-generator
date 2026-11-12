@@ -1686,7 +1686,7 @@ Pictures, screenshots, clips and simple 3D (the 3D craft: `vidgen guide 3d`):
         - {object_face: ben, at: "@gift", to: gift}
 - id: gears
   type: web
-  params: {page: extensions/gears.html}   # or script: extensions/gears.js (a module drawn on one canvas)
+  params: {page: extensions/gears.html, region: body, title: "Two gears"}   # or script: extensions/gears.js (one canvas)
   beats: [{text: "Two gears turn together."}]
 - id: saying
   type: quote
@@ -1696,12 +1696,16 @@ Pictures, screenshots, clips and simple 3D (the 3D craft: `vidgen guide 3d`):
 
 A `web` scene is a page you write: vidgen serves the project folder to it (relative links to CSS,
 pictures, fonts and modules work; anything on the internet is refused with a warning) and shows
-its screenshots full-frame. Time belongs to vidgen: CSS animations and transitions,
+its screenshots full-frame (`region: bleed`, the default) or in the body region under a `title`
+vidgen draws (`region: body`; the page is laid out at that region's size). What the page leaves
+transparent (no background, the bare page of a `script:`) shows the video's background. Time belongs to vidgen: CSS animations and transitions,
 `requestAnimationFrame`, timers, `Date.now()`, SVG `<animate>`, `<video>` and `Math.random` follow
 the video's time, so ordinary web code renders the same on every run. Optional hooks: `load(ctx)`
 once before frame 0 (may be async; time stands at 0 there) and `frame(t, ctx)` before each
-screenshot (`t` in seconds from the scene's start; `ctx.width`, `ctx.height`, `ctx.fps`,
-`ctx.duration`, `ctx.canvas`). A page sets `window.vidgen = {load, frame}`; a `script:` module
+screenshot (`t` in seconds from the scene's start; `ctx.width`, `ctx.height` (the page's size),
+`ctx.fps`, `ctx.duration`, `ctx.canvas`, `ctx.aspect` such as `"16:9"` / `"9:16"`). One page serves
+every shape: `<html data-aspect="9:16" data-orientation="portrait">`, so
+`[data-aspect="9:16"] .row {flex-direction: column}` stacks a row in a vertical video. A page sets `window.vidgen = {load, frame}`; a `script:` module
 exports them. A JavaScript error stops the render with the file and line; so does a frame that
 does not return within 10 s. The page gets the theme as CSS variables (`var(--vidgen-primary)`,
 `var(--vidgen-background)`, `var(--vidgen-font-heading)` with vidgen's own fonts,
