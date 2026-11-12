@@ -200,7 +200,9 @@ html, body { margin: 0; font: 20px sans-serif; color: #fff; }
 <div data-vidgen-lint="off:contrast"><div class="abs" data-vidgen-id="deco" style="left: 10px; top: 170px">Decor</div></div>
 <svg class="abs" style="left: 300px; top: 100px" width="100" height="60" viewBox="0 0 50 30"><rect width="50" height="30" fill="#204060"/>
 <text data-vidgen-id="svg" x="2" y="20" font-size="10" fill="#ffcc00">SVG <tspan>text</tspan></text></svg>
-<script>window.vidgen = {layout: (t, ctx) => [{id: 'drawn', text: `t=${t}`, box: {x: 1, y: 2, width: 30, height: 10}, size: 10, color: 'red'}]};</script>
+<script>window.vidgen = {layout: (t, ctx) => [{id: 'drawn', text: `t=${t}`, box: {x: 1, y: 2, width: 30, height: 10}, size: 10, color: 'red'},
+  {id: 'canvas_font', text: 'A', box: {x: 1, y: 20, width: 20, height: 24}, size: 20, font: '700 20px sans-serif'},
+  {id: 'family', text: 'A', box: {x: 1, y: 50, width: 20, height: 24}, size: 20, font: 'sans-serif'}]};</script>
 </body></html>"""
 
 
@@ -231,6 +233,9 @@ def test_layout_reader_in_chromium(tmp_path: Path) -> None:
     assert texts["svg"]["text"] == "SVG text" and texts["svg"]["font_px"] == pytest.approx(20, abs=0.1)
     assert texts["svg"]["color"] == "#FFCC00" and texts["svg"]["background"] == "#204060"
     assert drawn["declared"][0]["text"] == "t=0.2" and drawn["declared"][0]["color"] == "#FF0000"
+    # Step 333: a declared font may be the canvas font ("700 20px …") or a family; both give the cap height
+    canvas_font, family = drawn["declared"][1]["cap"], drawn["declared"][2]["cap"]
+    assert 10 < family < 18 and canvas_font == pytest.approx(family, rel=0.08)
     layout_record_path(folder, "s").unlink()
     stepped = web_page_layouts(tmp_path, folder, "s", {"page": "p.html"}, **args, at=[2])[2]
     assert stepped == drawn   # stepping the page without screenshots reads the same

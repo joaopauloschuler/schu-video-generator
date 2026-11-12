@@ -6401,6 +6401,46 @@ command, same `vidgen validate` warning).
 
 Give exactly one of `page` and `script`.
 
+```yaml
+- id: gears
+  type: web
+  params: {page: extensions/gears.html, region: body, title: "How gears turn", data: {speed: 90}}
+  beats:
+    - {id: g1, text: "One gear turns on its own."}
+    - {id: g2, text: "Then its label appears."}
+```
+
+```html
+<!-- extensions/gears.html -->
+<link rel="stylesheet" href="gears.css">
+<style>
+  body { margin: 0; font-family: var(--vidgen-font-heading); }   /* no background: the video's shows */
+  #label { color: var(--vidgen-primary); opacity: 0; transition: opacity 0.5s; }
+  body[data-beat="g2"] #label { opacity: 1; }
+</style>
+<img id="gear" src="gear.svg" alt=""><h1 id="label">Gear</h1>
+<script>
+  const gear = document.getElementById("gear");
+  window.vidgen = { frame(t, ctx) { gear.style.transform = `rotate(${t * ctx.data.speed}deg)`; } };
+</script>
+```
+
+```js
+// extensions/ball.js, for params: {script: extensions/ball.js}
+export function frame(t, ctx) {
+  const c = ctx.canvas.getContext("2d");
+  c.clearRect(0, 0, ctx.width, ctx.height);   // transparent: the video's background shows
+  c.fillStyle = ctx.theme.colors.primary;
+  c.beginPath();
+  c.arc(40 + (ctx.width - 80) * (t / ctx.duration), ctx.height / 2, 30, 0, 2 * Math.PI);
+  c.fill();
+}
+```
+
+A whole example with a CSS page revealed on beats, a canvas drawing with declared text and a
+three.js planet, at 16:9 and 9:16: `examples/web`. How to write a good one, and the usual
+mistakes: `vidgen guide web`.
+
 **Files.** The project folder is served to the page on `http://vidgen-web.invalid/`, so relative
 links to styles, pictures, fonts and modules work (`<link rel="stylesheet" href="gears.css">`,
 `import {cog} from "./cog.js"`). A request for anything outside it (the internet) is refused and
@@ -6439,6 +6479,13 @@ fonts, pictures and videos are ready; it may return a promise (awaited), so it i
 data (`await fetch("data.json")`). Time stands at 0 during `load`: a timer it waits for never fires.
 `frame(t, ctx)` runs at step 5 with `t` in seconds from the scene's start; it may return a promise.
 
+**Not controlled:** `<audio>` (a `web` scene has no sound), animated GIF and WebP pictures, web
+workers and their timers, iframes, SVG animation in an `<img>` or `<object>`, `event.timeStamp`,
+`XMLHttpRequest` and dynamic `import()` (not waited for: use `load`), `ResizeObserver` and
+`IntersectionObserver` callbacks (they run when Chromium draws), an `animation-play-state` that CSS
+changes to `paused` after the animation started (pause it with `getAnimations()[i].pause()`, which
+vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets it every frame).
+
 **What the page is given** (DESIGN §118.9), `ctx`:
 
 | field | value |
@@ -6470,9 +6517,8 @@ bundled is looked up among the fonts installed on the machine.
 theme's `background`): a `page:` without a background of its own, and the bare page of a
 `script:` (transparent since Step 331; a canvas the script clears with `clearRect` shows it too).
 Semi-transparent colours (`rgba(…)`, `opacity`, anti-aliased text edges) are blended with it
-exactly, without a dark or light edge. Before Step 331 a page without a background showed
-Chromium's white; give it `background: #fff` to keep that. Set `background:
-var(--vidgen-background)` (or any colour) to make the page opaque.
+exactly, without a dark or light edge. Set `background: var(--vidgen-background)` (or any colour)
+to make the page opaque (until Step 331 a page without a background showed Chromium's white).
 
 **One page for every shape.** `<html>` carries `data-aspect` (`ctx.aspect`) and `data-orientation`
 (`ctx.orientation`), set before the page's own styles and scripts, so CSS can switch layout by the
@@ -6504,13 +6550,6 @@ body[data-beat="b2"] .step2, body[data-beat="b3"] .step2 { opacity: 1; }
 is also served at `/__vidgen__/three/three.module.js`. Draw into `ctx.canvas` with
 `new THREE.WebGLRenderer({canvas: ctx.canvas})` and call `renderer.render` in `frame`. Only the
 core module is shipped (no `three/addons/`).
-
-**Not controlled:** `<audio>` (a `web` scene has no sound), animated GIF and WebP pictures, web
-workers and their timers, iframes, SVG animation in an `<img>` or `<object>`, `event.timeStamp`,
-`XMLHttpRequest` and dynamic `import()` (not waited for: use `load`), `ResizeObserver` and
-`IntersectionObserver` callbacks (they run when Chromium draws), an `animation-play-state` that CSS
-changes to `paused` after the animation started (pause it with `getAnimations()[i].pause()`, which
-vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets it every frame).
 
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
@@ -6562,8 +6601,9 @@ warning safe_area         u1 @ 2.8s: text 'A note low in the frame' (page: low) 
 - **Text drawn on a canvas cannot be read** (nor text inside a picture or a WebGL scene). Declare it:
   a page sets `window.vidgen.layout(t, ctx)`, a `script:` exports `layout(t, ctx)`, returning
   `[{id, text, box: {x, y, width, height}, size, font, color, background, lint}]` in page pixels
-  (`text` and `box` needed; `size` is the font size in px, from which with `font` vidgen measures the
-  cap height, else 0.7 of the box's height; without `background` contrast is not checked). It is
+  (`text` and `box` needed; `size` is the font size in px and `font` the canvas font you drew with,
+  `"700 28px Inter"`, or only its family, `"Inter"`: vidgen measures the cap height from them, else
+  takes 0.7 of the box's height; without `background` contrast is not checked). It is
   called after a frame's screenshot only when lint reads that frame, so it must not change the page:
 
 ```js
@@ -6573,49 +6613,19 @@ export function layout(t, ctx) {
 }
 ```
 
-**Cost.** The reading is taken while the clip is drawn, after the screenshot of each frame a still
+**Render cost.** Every frame is a screenshot of the whole page, so a `web` scene renders far slower
+than a built-in one. Measured for `examples/web` on one CPU (drawing the frames only, Chromium start
+included) at 1920x1080, 30 fps: an HTML + CSS page 453 ms per frame (13.6 s per second of video), a
+canvas script 325 ms (9.7 s), a three.js scene 550 ms (16.5 s); a whole `--preview` render at
+480x270, 12 fps, about 2 s per second. Keep `web` scenes short and work at the preview size.
+
+**Cost of lint.** The reading is taken while the clip is drawn, after the screenshot of each frame a still
 will show (about 10–40 ms each), and kept beside the clip (`build/<quality>/web/<scene>.layout.json`,
 under the clip's own key), so a later `vidgen lint` reads no page at all. When lint wants a frame
 that was not read (another `--per-beat`, a clip drawn before Step 332), vidgen opens the page once
 more and steps it frame by frame without screenshots up to the last frame it needs (a page's state
 can depend on every frame before: `requestAnimationFrame` loops, a canvas drawn over itself):
 about 2–3 s to start Chromium plus 15–25 ms per frame stepped, against 70–100 ms per frame drawn.
-
-```yaml
-- id: gears
-  type: web
-  params: {page: extensions/gears.html, region: body, title: "How gears turn", data: {speed: 90}}
-  beats:
-    - {id: g1, text: "One gear turns on its own."}
-    - {id: g2, text: "Then its label appears."}
-```
-
-```html
-<!-- extensions/gears.html -->
-<link rel="stylesheet" href="gears.css">
-<style>
-  body { margin: 0; font-family: var(--vidgen-font-heading); }   /* no background: the video's shows */
-  #label { color: var(--vidgen-primary); opacity: 0; transition: opacity 0.5s; }
-  body[data-beat="g2"] #label { opacity: 1; }
-</style>
-<img id="gear" src="gear.svg" alt=""><h1 id="label">Gear</h1>
-<script>
-  const gear = document.getElementById("gear");
-  window.vidgen = { frame(t, ctx) { gear.style.transform = `rotate(${t * ctx.data.speed}deg)`; } };
-</script>
-```
-
-```js
-// extensions/ball.js, for params: {script: extensions/ball.js}
-export function frame(t, ctx) {
-  const c = ctx.canvas.getContext("2d");
-  c.clearRect(0, 0, ctx.width, ctx.height);   // transparent: the video's background shows
-  c.fillStyle = ctx.theme.colors.primary;
-  c.beginPath();
-  c.arc(40 + (ctx.width - 80) * (t / ctx.duration), ctx.height / 2, 30, 0, 2 * Math.PI);
-  c.fill();
-}
-```
 
 ### `quote`
 

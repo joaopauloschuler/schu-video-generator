@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–311)
+## Unreleased (Steps 193–333)
+
+### `web` scenes taught and shown (Step 333)
+
+- `vidgen guide web` (also `html`, `css`, `javascript`, `canvas`): when to write a `web` scene rather than use a built-in, `3d`, `video_clip` or a Python extension; the two forms with minimal working examples; what follows the video's time and what does not; the `ctx` table; theme variables and fonts; revealing on beats and on spoken words; `data:`; three.js; `region` and transparency; one page for 16:9 and 9:16; no internet; the lint loop; the usual mistakes with their messages; the render cost.
+- `examples/web` ("Where rain comes from"): an HTML and CSS page whose cards come in on narration beats, a canvas rain gauge whose text is declared to lint with `layout()`, and a hand-written three.js planet whose camera moves on beats; validate and lint clean at 16:9 and 9:16.
+- The scene gallery has a `web` entry (`docs/gallery/web.md`); `vidgen gallery` ships the page the guide's snippet names.
+- **Fixed:** in a `layout(t, ctx)` declaration, `font` may now be the canvas font the text was drawn with (`"700 28px Inter"`) as well as a family (`"Inter"`); the canvas font form used to be measured as a tiny cap height, so `min_font` reported the text as about a tenth of its size.
+- `docs/EXTENDING.md` has a section on `web` scenes beside Python extensions (project JavaScript is trusted as `extensions/` Python is); `docs/CONFIG.md` `web` reordered into one reference.
 
 ### Lint reads a `web` page (Step 332)
 

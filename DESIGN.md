@@ -23178,7 +23178,8 @@ first version; the page cannot reach the internet while rendering; screenshots o
 are accepted even when slow. Step 328 built the core described here, Step 329 the virtual clock
 (§118.8), Step 330 what the page is given (§118.9, §118.10), Step 331 the region, the
 transparent background and the video's shape (§118.11), Step 332 lint of the page's text
-(§118.12); §118.7 lists what the later steps of the phase add.
+(§118.12), Step 333 the guide topic, `examples/web`, the gallery entry and the measured cost
+(§118.13); §118.7 says where each part is and what is left for after the phase.
 
 ### 118.1 How a `web` scene renders (Step 328)
 
@@ -23259,10 +23260,9 @@ limits).
 - `t`: seconds from the scene's start. `ctx = {scene, width, height, fps, frames, duration,
   canvas}` (`duration` = frames / fps, the length of the clip; `canvas` = the bare page's canvas,
   `null` on a page without `#vidgen-canvas`); Step 330 added `theme`, `data`, `beats` (§118.9).
-- Room for later steps: `window.vidgen` is the page's object (hooks the page gives vidgen), and
-  `ctx` is vidgen's (what vidgen gives the page). Step 329 added the hook `load(ctx)` beside
-  `frame`; Step 330 added fields to `ctx` (`theme`, `data`, `beats`; `aspect` is Step 331's).
-  Nothing written for Step 328 has to change.
+- `window.vidgen` is the page's object (the hooks it gives vidgen: `frame`; `load`, Step 329;
+  `layout`, Step 332) and `ctx` is vidgen's (what it gives the page; Steps 330 and 331 added
+  fields). Each step only added names, so a page written for Step 328 still works.
 - **Cache** (`web/clip.py`, `make_web_clip(root, folder, scene_id, params, size=, fps=,
   frames=)`): `<render_dir>/web/<scene>.mkv` + `<scene>.json` = `{key, inputs}`, `inputs` =
   `{version: 1, engine, scene, kind, path, sha256 (of the page or script file), width, height,
@@ -23314,14 +23314,20 @@ included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps
   region="bleed")` (§118.11); `make_web_clip(..., shape=None)` (default: a page filling a frame of
   its `size`, so earlier calls work unchanged).
 
-### 118.7 Later steps of the phase
+### 118.7 The phase step by step, and what is left
 
-329 (done, §118.8): the virtual clock. 330 (done, §118.9, §118.10): theme as CSS variables
-and `ctx.theme`, `ctx.data`, beats (`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js
-importable as `three`, the fingerprint over every file the page loaded. 331 (done, §118.11):
-`region: bleed | body` and `title`, a transparent background, 9:16 from one page. 332 (done,
-§118.12): lint reads the page's text boxes. 333:
-the guide topic, `examples/web/`, a gallery entry, speed at 1080p.
+328 (§118.1–118.6): the scene type, serving, errors, the shared Chromium. 329 (§118.8): the
+virtual clock. 330 (§118.9, §118.10): theme as CSS variables and `ctx.theme`, `ctx.data`, beats
+(`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js importable as `three`, every loaded
+file in the cache keys. 331 (§118.11): `region: bleed | body` and `title`, a transparent
+background, 9:16 from one page. 332 (§118.12): lint reads the page's text. 333 (§118.13): the
+guide topic `web`, `examples/web`, the gallery entry, the measured cost.
+
+Left for after the phase (also in the tasklist's backlog): no hard cut (`fade: false`) on `web`;
+a storyboard or lint still renders the whole scene (no still-only path); text in pictures, WebGL
+or an undeclared canvas is not read, nor contrast over a gradient or picture; only the core
+three.js module is served (no `three/addons/`); a page with its own import map (two maps) not
+tried; no animation library tried under the clock; nothing tried on Windows.
 
 ### 118.8 Time belongs to vidgen (Step 329)
 
@@ -23708,3 +23714,41 @@ contract gains the optional hook `layout(t, ctx)`. `WebPage` adds `advance(n)` a
 
 **Verified** (Step 332, HANDOFF): a project of 12 one-fault `web` scenes at 480x270 and its 270x480
 variant, the Step 330 and 331 demos.
+
+### 118.13 Teaching it and proving it (Step 333)
+
+- **Guide topic** `web` (aliases `html`, `css`, `javascript`, `js`, `canvas`, `web-scenes`,
+  `web-scene`, `web-page`, `page`, `script`) in `data/guide/AGENTS.md`: when to use `web` rather
+  than a built-in, `3d`, `video_clip` or a Python extension; the two forms with a minimal page and a
+  minimal script; what follows the clock and what does not; the `ctx` table; theme variables;
+  revealing on `data-beat` and on word times; `data:`; three.js; `region` and transparency; one page
+  for both shapes; no internet; the lint loop (`data-vidgen-id`, `data-vidgen-lint`, `layout()`); the
+  usual mistakes with vidgen's messages; the render cost. Its pages and scripts are written so they
+  run as they stand: `tests/test_guide.py::test_the_web_topics_code_runs_in_chromium` writes each
+  (a fragment inside a `frame` hook) and draws it in Chromium with the YAML snippet's data and
+  beats; they were also rendered, validated and linted as a project at 16:9 and 9:16 (HANDOFF).
+- **Fix found by the example:** a declared item's `font` (`layout(t, ctx)`) was put after
+  `normal 400 100px`, so a canvas font (`"700 28px Inter"`, what a script draws with) made an
+  invalid font, the canvas kept its previous one, and the cap height came out about a tenth of the
+  size (`min_font` errors on correct text). `capRatio(font)` in `layout.js` now takes a canvas font
+  as it is (cap = ascent of "H" / its px size) and a family list at 100px; one the canvas refuses
+  gives 0.7. The reader's digest changed, so layout records are read again (clips are kept).
+- **`examples/web`** ("Where rain comes from", three scenes): `cycle` (`page:`, HTML + CSS only,
+  cards on `data-beat-index`, CSS `@keyframes` SVG, `region: body`), `rain` (`script:` canvas, rain
+  from the word "shower", `data:`, declared text measured with `measureText`), `globe` (`script:`
+  three.js by hand, low-poly planet, camera on beats, `region: bleed` with a title). Kokoro
+  narration (not committed).
+- **Gallery:** the guide's `scenes` snippet names `extensions/gears.html`; `gallery.sample_asset`
+  maps a `web` snippet's page or script (`WEB_SUFFIXES`) to `data/gallery/web/<name>` and
+  `_copy_files` copies it into the work project (`_is_web_entry`), so `vidgen gallery --types web`
+  renders the entry (`docs/gallery/web.md`).
+- **Measured** (1 CPU, drawing the frames only through `make_web_clip`, Chromium start included,
+  1920x1080 at 30 fps; HANDOFF Step 333): `cycle` (HTML + CSS page, 1760x668, 582 frames) 453 ms per
+  frame = 13.6 s per second of video; `rain` (canvas, 1760x660, 460 frames) 325 ms = 9.7 s; `globe`
+  (three.js on SwiftShader, 1920x1080, 518 frames) 550 ms = 16.5 s. Clips 46.5, 22.5 and 53.3 MB
+  (deleted after measuring).
+- **Animation library** (no download): the only one on the machine was Plotly.js 3.3.1 inside
+  gradio's front-end bundle (extracted with acorn into a scratch module). A linear 2 s
+  `Plotly.animate` transition started by a 500 ms timer: the bar's height read from the DOM equals
+  the expected value at every frame from 0 to 2.9 s at 10 fps (0.2 → 1.0, exact; pixels within one
+  row). GSAP, anime.js, Motion, Lottie and d3 are not on the machine; not tried.

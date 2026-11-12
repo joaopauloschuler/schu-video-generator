@@ -43,13 +43,9 @@ def builtin_gallery() -> list[gallery.GalleryType]:
         return gallery.gallery_types(None)
 
 
-#: Types whose committed gallery entry comes later: web (Step 333 brings its page and entry).
-NOT_IN_GALLERY_YET = {"web"}
-
-
 def committed_gallery() -> list[gallery.GalleryType]:
-    """The types the committed docs/gallery shows."""
-    return [t for t in builtin_gallery() if t.name not in NOT_IN_GALLERY_YET]
+    """The types the committed docs/gallery shows (every built-in)."""
+    return builtin_gallery()
 
 
 @pytest.mark.slow

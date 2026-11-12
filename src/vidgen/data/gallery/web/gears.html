@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- The page the guide's `web` snippet names (extensions/gears.html), as `vidgen gallery` renders
+     it: two meshing gears drawn as SVG by a few lines of JavaScript and turned by frame(t), in the
+     theme's colours; side by side in a wide video, one above the other in a tall one. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vh;
+         font-family: var(--vidgen-font-body); color: var(--vidgen-dim); }   /* no background: the video's shows */
+  svg { height: 70vh; max-width: 92vw; overflow: visible; }
+  [data-orientation="portrait"] svg { height: auto; width: 60vw; max-height: 72vh; }
+  p { margin: 0; font-size: var(--vidgen-size-caption); }
+  p b { color: var(--vidgen-text); }
+  #big { fill: var(--vidgen-primary); }
+  #small { fill: var(--vidgen-secondary); }
+  .hub { fill: var(--vidgen-background); }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 10 10"><g id="big"><path/><circle class="hub" r="8"/></g><g id="small"><path/><circle class="hub" r="5"/></g></svg>
+<p data-vidgen-id="teeth"><b>24</b> teeth turn <b>12</b> teeth twice as fast</p>
+<script>
+  // A gear of `teeth` teeth on pitch radius `r` (tooth depth 7): trapezoid teeth on a ring.
+  function gear(teeth, r) {
+    const step = (2 * Math.PI) / teeth, points = [];
+    for (let i = 0; i < teeth; i++) {
+      for (const [radius, da] of [[r - 3.5, -0.3], [r + 3.5, -0.15], [r + 3.5, 0.15], [r - 3.5, 0.3]]) {
+        const a = (i + da) * step;
+        points.push(`${(radius * Math.cos(a)).toFixed(2)},${(radius * Math.sin(a)).toFixed(2)}`);
+      }
+    }
+    return `M${points.join("L")}Z`;
+  }
+  const tall = document.documentElement.dataset.orientation === "portrait";
+  const big = document.getElementById("big"), small = document.getElementById("small");
+  big.querySelector("path").setAttribute("d", gear(24, 50));
+  small.querySelector("path").setAttribute("d", gear(12, 25));
+  const [dx, dy] = tall ? [0, 75] : [75, 0];   // centres one pitch radius apart: the teeth mesh
+  document.querySelector("svg").setAttribute("viewBox", tall ? "-58 -58 116 166" : "-58 -58 166 116");
+  window.vidgen = {
+    frame(t) {   // the small gear turns twice as fast, the other way, half a tooth out of step
+      big.setAttribute("transform", `rotate(${t * 24})`);
+      small.setAttribute("transform", `translate(${dx} ${dy}) rotate(${-t * 48 + 15})`);
+    },
+  };
+</script>
+</body>
+</html>

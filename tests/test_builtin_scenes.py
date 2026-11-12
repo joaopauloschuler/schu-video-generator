@@ -312,8 +312,10 @@ def test_examples_use_every_builtin_scene_type() -> None:
     core = [s.type for s in Project.load(EXAMPLE).config.scenes]
     gallery = [s.type for s in Project.load(GALLERY).config.scenes]
     cartoon = {s.type for s in Project.load(EXAMPLE.parent / "svg_character").config.scenes}
+    web = {s.type for s in Project.load(EXAMPLE.parent / "web").config.scenes}
     # flowchart = diagram; card: the cartoon examples; web: examples/web (Step 333)
-    assert set(core) | set(gallery) | {"stage", "card"} == set(BUILTINS) - {"flowchart", "web"}
+    assert set(core) | set(gallery) | {"stage", "card"} | web == set(BUILTINS) - {"flowchart"}
+    assert web == {"web"}
     assert "stage" in cartoon and "stage" not in set(core) | set(gallery)
     assert not set(core) & set(gallery) - {"chapter"}
     assert len(core) == len(set(core)) and gallery.count("chapter") == 3 and len(gallery) - 2 == len(set(gallery))
@@ -358,9 +360,9 @@ def expected_duration(scene: Any) -> float:
     return sum(scene.beat_duration(i) + scene.pad for i in range(len(scene.beats))) + scene.outro
 
 
-#: The built-ins the shared render covers: ``3d`` needs Playwright's Chromium and has its own
-#: render tests (tests/test_scene_3d.py).
-RENDERED_BUILTINS = [name for name in BUILTINS if name not in ("3d", "web")]   # Chromium: test_scene_3d.py, test_scene_web.py
+#: The built-ins the shared render covers: ``3d`` has its own render tests (tests/test_scene_3d.py);
+#: ``web`` renders here (Chromium) from the small page the fixture writes.
+RENDERED_BUILTINS = [name for name in BUILTINS if name != "3d"]
 
 
 @pytest.fixture(scope="module")
@@ -382,6 +384,9 @@ def render_project(tmp_path_factory: pytest.TempPathFactory) -> Project:
     (root / "video.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     write_png(root / "assets" / "pic.png")
     write_clip(root / "assets" / "clip.mp4")
+    page = root / SAMPLES["web"]["page"]
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text('<p style="color: var(--vidgen-text); font-size: var(--vidgen-size-body)">A page</p>', encoding="utf-8")
     return Project.load(root)
 
 

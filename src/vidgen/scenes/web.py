@@ -58,8 +58,8 @@ class Web(NarratedScene):
         project folder."""
         script: str | None = None
         """A JavaScript module in the project folder (``extensions/gears.js``), loaded into a bare
-        page with one canvas (``id="vidgen-canvas"``, the frame's size; also ``ctx.canvas``) on
-        the theme's background."""
+        page with one canvas (``id="vidgen-canvas"``, the page's size; also ``ctx.canvas``) on a
+        transparent background (what it does not draw shows the video's background)."""
         title: TranslatableStr = ""
         """Heading drawn by vidgen: on a plate over the top of the page with region: bleed, above it with region: body."""
         region: Literal["bleed", "body"] = "bleed"

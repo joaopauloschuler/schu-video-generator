@@ -165,6 +165,85 @@ def test_the_three_d_topic_covers_the_3d_scene() -> None:
     assert "vidgen guide 3d" in topic_text("scenes")
 
 
+def test_the_web_topic_covers_web_scenes() -> None:
+    """Step 333: a topic for `web` scenes (when, the two forms, time, ctx, theme, beats, data,
+    three.js, region, shapes, no internet, lint, mistakes, cost), found as html, css, javascript."""
+    text = topic_text("web")
+    for alias in ("html", "css", "javascript", "js", "canvas", "web-scenes"):
+        assert find_topic(alias).name == "web", alias
+    assert text.startswith("## Web scenes")
+    for part in ("**When to use it.**", "**Two forms.**", "**Time belongs to vidgen.**", "**What the page is given**",
+                 "**The theme.**", "**Revealing on the narration.**", "**Values from the YAML.**", "**three.js**",
+                 "**Where the page goes.**", "**Both shapes from one page.**", "**No internet.**", "**The lint loop.**",
+                 "**Usual mistakes**", "**Render cost.**", "examples/web", "data-vidgen-id", "`web_clipped`", "layout(t, ctx)",
+                 "data-beat", "data-orientation", 'import * as THREE from "three"', "were not tried"):
+        assert part in text, part
+    assert "@" not in re.sub(r"```.*?```|`[^`]*`", "", text, flags=re.S), "a measurement placeholder is left"
+    assert "vidgen guide web" in topic_text("scenes")
+
+
+def web_topic_files() -> dict[str, str]:
+    """The files the web topic's code blocks write (a block starting with a comment naming
+    ``extensions/<file>``; ``in extensions/<file>`` adds to that file; ``in frame(t, ctx)`` is the
+    body of a ``frame`` hook, written as ``extensions/fragment.js``)."""
+    files: dict[str, str] = {}
+    for lang, body in FENCE.findall(topic_text("web")):
+        if lang not in ("html", "js"):
+            continue
+        first = body.splitlines()[0]
+        name = re.search(r"extensions/[\w.-]+", first)
+        if first.startswith("// in frame(t, ctx)"):
+            files["extensions/fragment.js"] = f"export function frame(t, ctx) {{\n{body}}}\n"
+        elif first.startswith("// in extensions/") and name:
+            files[name[0]] += "\n" + body
+        else:
+            assert name, first
+            files[name[0]] = body
+    return files
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
+    """Every page and script of the web topic loads and draws without a JavaScript error, with
+    the YAML snippet's data and beats; the declared canvas text is read."""
+    pytest.importorskip("playwright")
+    from vidgen.browser.chromium import missing_dependency
+    from vidgen.theme import Theme
+    from vidgen.web.clip import make_web_clip, web_page_layouts
+    from vidgen.web.inputs import page_theme
+
+    if missing_dependency() is not None:
+        pytest.skip("no Chromium")
+    files = web_topic_files()
+    assert set(files) == {"extensions/hello.html", "extensions/orbit.js", "extensions/cube.js", "extensions/fragment.js"}
+    for rel, body in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(body, encoding="utf-8")
+    scenes = {s["params"].get("page") or s["params"]["script"]: s
+              for lang, body in FENCE.findall(topic_text("web")) if lang == "yaml" for s in yaml.safe_load(body)}
+    theme = page_theme(Theme(), 270 / (72 * 8))
+
+    def beats(scene: dict[str, Any]) -> list[dict[str, Any]]:
+        words = lambda text, start: [{"text": w, "start": start + 0.2 * i, "end": start + 0.2 * i + 0.15} for i, w in enumerate(text.split())]  # noqa: E731
+        return [{"id": b.get("id", f"b{i}"), "index": i, "start": i * 0.3, "end": i * 0.3 + 0.25, "text": b["text"],
+                 "words": words(b["text"], i * 0.3)} for i, b in enumerate(scene.get("beats", []))]
+
+    for rel in files:
+        scene = scenes.get(rel, {"params": {}, "beats": [{"text": "a"}, {"text": "the shower starts"}]})
+        params = {"script" if rel.endswith(".js") else "page": rel, "data": scene["params"].get("data", {})}
+        args = {"size": (160, 90), "fps": 10, "frames": 10, "theme": theme, "beats": beats(scene)}
+        clip = make_web_clip(tmp_path, tmp_path / "web", Path(rel).stem, params, **args, layout_frames=[9])
+        assert clip.stat().st_size > 0, rel
+        reading = web_page_layouts(tmp_path, tmp_path / "web", Path(rel).stem, params, **args, at=[9])[9]
+        if rel == "extensions/hello.html":   # every step shown by the last beat, read by lint
+            assert {t["name"] for t in reading["texts"]} == {"read", "clean", "draw"}
+        if rel == "extensions/orbit.js":
+            declared = reading["declared"]
+            assert [d["id"] for d in declared] == ["label"] and declared[0]["text"] == "3 moons"
+            assert 0.6 < declared[0]["cap"] / declared[0]["size"] < 0.8   # measured from the canvas font
+
+
 def test_the_particle_physics_topic_covers_the_particle_scenes() -> None:
     """Step 243: a topic for particle-physics videos (planning, choosing, units, honesty, pacing,
     lint), not called `particles` (the cartoon effect)."""

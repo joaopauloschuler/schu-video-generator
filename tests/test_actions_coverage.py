@@ -298,8 +298,11 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     if kind == "3d":
         pytest.importorskip("playwright.sync_api")   # drawn in Playwright's Chromium (tests/test_scene_3d.py)
     if kind == "web":
-        pytest.skip("needs a page file; rendered in tests/test_scene_web.py")
+        pytest.importorskip("playwright.sync_api")   # drawn in Playwright's Chromium (tests/test_scene_web.py)
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats(None, None)}])
+    if kind == "web":   # the page the sample names
+        (project.root / "extensions").mkdir(exist_ok=True)
+        (project.root / SAMPLES["web"]["page"]).write_text("<p>A page</p>", encoding="utf-8")
     scene = render(project, "s", media)
     registered = sorted({n for t in scene.targets for n in t.names})   # a term: name per step that has the term
     assert registered == sorted(type(scene).target_names(scene.params))

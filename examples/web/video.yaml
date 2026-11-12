@@ -1,0 +1,65 @@
+# Scenes written as web pages: three short `web` scenes about the water cycle, each a different
+# way to write one (README.md says what each file shows; `vidgen guide web` is the how-to).
+#   cycle  page:   HTML + CSS only: cards revealed on narration beats (data-beat-index), CSS
+#                  @keyframes pictures, theme variables, region: body under a vidgen title
+#   rain   script: a canvas drawing; the rain starts on a spoken word (ctx.beats' word times),
+#                  values from data:, its canvas text declared to lint with layout()
+#   globe  script: three.js written by hand (import * as THREE from "three"), lit and turning in
+#                  theme colours, the camera moving on beats; full frame (region: bleed)
+# Needs Chromium, once: python -m playwright install chromium (Windows: py -m playwright install chromium)
+#
+#   vidgen validate examples/web
+#   vidgen lint examples/web [--variant vertical]
+#   vidgen storyboard examples/web [--variant vertical]
+#   vidgen tts examples/web                          # Kokoro: local and free
+#   vidgen render examples/web --preview [--variant vertical]
+#
+# No audio is committed: before `vidgen tts` beats are timed from their word count.
+title: "Where rain comes from"
+output: web_scenes
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+theme: {preset: dark_tech}
+voice: {provider: kokoro, voice: af_heart, speed: 0.85}   # local and free; 0.85: under 3.5 words per second
+transition: {type: crossfade, duration: 0.4}
+
+overlays:
+  - type: captions
+    max_lines: 1
+
+variants:
+  vertical:
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+
+scenes:
+  - id: cycle
+    type: web
+    params: {page: extensions/cycle.html, region: body, title: "How rain is made"}
+    beats:
+      - {id: sun, text: "Sunlight warms the sea, and water rises as invisible vapour."}
+      - {id: cloud, text: "High up the air is cold, so the vapour condenses into clouds."}
+      - {id: fall, text: "When the droplets grow heavy, they fall as rain."}
+      - {id: again, text: "Rivers take it back to the sea, again and again."}
+
+  - id: rain
+    type: web
+    params:
+      script: extensions/rain.js
+      region: body
+      title: "Measuring rain"
+      data: {total_mm: 25, scale_mm: 30}
+    beats:
+      - {id: gauge, text: "A rain gauge measures rain as the depth of water it catches."}
+      - {id: shower, text: "In a steady shower, the level climbs by millimetres."}
+      - {id: inch, text: "Twenty-five millimetres is about an inch: a very wet afternoon."}
+
+  - id: globe
+    type: web
+    params: {script: extensions/globe.js, title: "One planet's water"}
+    beats:
+      - {id: oceans, text: "About ninety-seven percent of Earth's water is salt water in the oceans."}
+      - {id: ice, text: "Most of the fresh water is frozen in ice caps and glaciers."}
+      - {id: share, text: "Only a tiny share is in rivers, lakes and the air, going round and round."}

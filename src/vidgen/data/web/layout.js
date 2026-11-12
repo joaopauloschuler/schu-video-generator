@@ -69,13 +69,19 @@ async (t) => {
   }
 
   // The cap height of a font in em (canvas text metrics of "H"); 0.7 when the font gives none.
+  // `font` is a canvas font (`700 28px Inter`) or a family list (`Inter, sans-serif`, measured
+  // at 100px); one the canvas does not take gives 0.7.
   const caps = new Map();
   function capRatio(font) {
     let r = caps.get(font);
     if (r === undefined) {
+      const sentinel = '1px vidgen-no-font';
+      probe.font = sentinel;
       probe.font = font;
+      if (probe.font === sentinel) probe.font = `normal 400 100px ${font}`;
+      const px = probe.font === sentinel ? 0 : parseFloat((/([\d.]+)px/.exec(probe.font) || [])[1]);
       const m = probe.measureText('H');
-      r = m.actualBoundingBoxAscent > 0 ? m.actualBoundingBoxAscent / 100 : 0.7;
+      r = px > 0 && m.actualBoundingBoxAscent > 0 ? m.actualBoundingBoxAscent / px : 0.7;
       caps.set(font, r);
     }
     return r;
@@ -276,7 +282,7 @@ async (t) => {
         for (const key of ['color', 'background']) {
           if (typeof item[key] === 'string') { const c = rgba(item[key]); out[key] = c === null ? item[key] : hex(c); out[key + '_alpha'] = c === null ? null : c[3]; }
         }
-        if (typeof item.size === 'number') out.cap = item.size * capRatio(`normal 400 100px ${item.font || 'sans-serif'}`);
+        if (typeof item.size === 'number') out.cap = item.size * capRatio(item.font || 'sans-serif');
       }
       return out;
     });

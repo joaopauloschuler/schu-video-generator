@@ -4,7 +4,8 @@
 **Samples.** A built-in type's sample is its snippet in the author guide's ``scenes`` topic
 (``AGENTS.md``; the first one of the type, preferring one without a generated picture), so the
 guide and the gallery show the same YAML. Files the snippets name under ``assets/`` are the
-small pictures and clip shipped in ``data/gallery/`` (:func:`sample_asset`). A project's own
+small pictures and clip shipped in ``data/gallery/``, and the page the ``web`` snippet names is
+``data/gallery/web/<name>`` (:func:`sample_asset`). A project's own
 types (run in a project) take the first scene of that type in its ``video.yaml``. Names that
 are another name of the same class (``flowchart`` / ``diagram``) are rendered once.
 
@@ -40,6 +41,8 @@ from vidgen.project import Project
 
 #: Pictures and the clip the guide's snippets use (package data).
 SAMPLE_ASSETS_DIR = Path(__file__).resolve().parent / "data" / "gallery"
+#: Files of a ``web`` snippet (its ``page`` or ``script``) shipped in ``data/gallery/web``.
+WEB_SUFFIXES = (".html", ".htm", ".js", ".mjs")
 #: The two formats: name -> (width, height) of the render, and the file-name tag.
 FORMATS: dict[str, tuple[int, int]] = {"16:9": (640, 360), "9:16": (360, 640)}
 FORMAT_TAGS: dict[str, str] = {"16:9": "16x9", "9:16": "9x16"}
@@ -325,8 +328,13 @@ def chooser_uses() -> dict[str, str]:
 
 def sample_asset(scene_type: str, rel: str) -> Path:
     """The shipped file standing in for a snippet's ``assets/...`` path: the landscape picture
-    for ``image``, the app screenshot for other pictures, the screen recording for videos."""
+    for ``image``, the app screenshot for other pictures, the screen recording for videos; for a
+    ``web`` snippet's page or script, the file of that name in ``data/gallery/web``."""
     suffix = Path(rel).suffix.lower()
+    if suffix in WEB_SUFFIXES:
+        page = SAMPLE_ASSETS_DIR / "web" / Path(rel).name
+        if page.is_file():
+            return page
     if suffix in (".mp4", ".webm", ".mov", ".mkv"):
         return SAMPLE_ASSETS_DIR / "clip.webm"
     if suffix in (".png", ".jpg", ".jpeg", ".webp"):
@@ -482,15 +490,22 @@ def _copy(source: Path, target: Path) -> None:
     shutil.copy2(source, target)
 
 
+def _is_web_entry(sample: Sample, value: str) -> bool:
+    """``value`` is the page or script a ``web`` sample names."""
+    params = sample.config.get("params") or {}
+    return sample.type == "web" and value in (params.get("page"), params.get("script"))
+
+
 def _copy_files(types: list[GalleryType], project: Project | None, work: Path) -> None:
     """Put the files the samples name into the work project: shipped stand-ins for the guide's
-    ``assets/...`` paths, the project's own files (and its ``assets/icons``) for its samples."""
+    ``assets/...`` paths and its ``web`` page, the project's own files (and its
+    ``assets/icons``) for its samples."""
     for t in types:
         if t.sample is None or t.alias_of is not None:
             continue
         for value in _strings(t.sample.config.get("params", {})):
             source: Path | None = None
-            if t.sample.origin == "guide" and value.startswith("assets/"):
+            if t.sample.origin == "guide" and (value.startswith("assets/") or _is_web_entry(t.sample, value)):
                 source = sample_asset(t.sample.type, value)
             elif project is not None and t.sample.origin != "guide" and not Path(value).is_absolute() and "/" in value:
                 candidate = project.root / value
