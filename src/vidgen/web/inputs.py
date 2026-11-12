@@ -17,15 +17,21 @@ from typing import Any
 
 from vidgen.fonts import BUILTIN_ROLES, BUNDLED_FAMILIES
 from vidgen.scales import frame_orientation
+from vidgen.web.libs import LIB_FOLDER, NOT_SHIPPED, WEB_LIBS
 from vidgen.web.loaded import ADDONS_FOLDER, VIDGEN_PREFIX
 
 #: The import map vidgen puts in a page: the bare specifier ``three`` is the bundled three.js,
 #: ``three/addons/...`` (and the older ``three/examples/jsm/...``) its shipped add-ons, whose own
-#: ``import ... from "three"`` resolves through the same map to the same module.
+#: ``import ... from "three"`` resolves through the same map to the same module; the name of each
+#: shipped library (``animejs``, ``d3``..., :data:`vidgen.web.libs.WEB_LIBS`) is its file; a name of
+#: :data:`vidgen.web.libs.NOT_SHIPPED` points at a file vidgen does not have, so that the render's
+#: error can say why and what to do.
 IMPORT_MAP: dict[str, dict[str, str]] = {"imports": {
     "three": f"/{VIDGEN_PREFIX}three/three.module.js",
     "three/addons/": f"/{VIDGEN_PREFIX}three/{ADDONS_FOLDER}/",
     "three/examples/jsm/": f"/{VIDGEN_PREFIX}three/{ADDONS_FOLDER}/",
+    **{specifier: f"/{VIDGEN_PREFIX}{LIB_FOLDER}/{lib.package}/{lib.entry}" for lib in WEB_LIBS for specifier in lib.specifiers},
+    **{package: f"/{VIDGEN_PREFIX}{LIB_FOLDER}/{package}/index.js" for package in NOT_SHIPPED},
 }}
 #: The id of the ``<style>`` element holding the theme's custom properties and font faces.
 THEME_STYLE_ID = "vidgen-theme"

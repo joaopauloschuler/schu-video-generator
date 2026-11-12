@@ -3314,9 +3314,9 @@ own), animated GIF / WebP, web workers, iframes, `XMLHttpRequest` and dynamic `i
 waited for: load data with `await fetch(…)` in `load`; in a `script:`, name the file
 with `new URL("./data.json", import.meta.url)`), and `ResizeObserver` /
 `IntersectionObserver` callbacks. Ordinary timer, `requestAnimationFrame`, CSS and Web Animations
-code was measured frame-exact, and so was a Plotly.js `Plotly.animate` transition (d3 timers);
-other animation libraries (GSAP, anime.js, Motion, Lottie) use the same calls but were not tried.
-A library must be a file in the project (below: no internet).
+code was measured frame-exact. anime.js, Motion, D3, Chart.js and lottie-web ship with vidgen and
+were run under the clock (the table "Animation and chart libraries" below says how to drive
+each); any other library must be a file in the project (below: no internet).
 
 **What the page is given**, `ctx`:
 
@@ -3487,6 +3487,31 @@ shipped with vidgen …`. To use one anyway, copy that file from three.js 0.186.
 `three`, `examples/jsm/…`) into the project and import it by a relative path
 (`import {X} from "./lib/X.js"`); its `import … from "three"` keeps working.
 
+**Animation and chart libraries.** These ship with vidgen: import them by name, in a
+`<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's
+clock. "Plays by itself" means the library's own loop follows the video's time from the scene's
+first frame, and two renders give the same frames.
+
+| library | import | how to drive it |
+|---|---|---|
+| anime.js 4.5.0 | `import {animate, createTimeline} from "animejs"` | plays by itself, about 12 ms ahead of the video. Frame-exact: `autoplay: false`, then `anim.seek(t * 1000)` in `frame(t)` (a timeline too) |
+| Motion 14.12.0 | `import {animate} from "motion"` | plays by itself, frame-exact (springs, sequences and `animate(0, 100, {onUpdate})` too). Do not seek it from `frame`: `controls.time = t` there shows one frame late |
+| D3 7.9.2 | `import * as d3 from "d3"` | `transition()` (with `delay` too) and `d3.timer` play by themselves, frame-exact; or set attributes from `t` in `frame(t)` with scales. A force layout by itself does one tick per video frame, so the picture changes with the fps: `simulation.stop()`, then `simulation.tick(n)` |
+| Chart.js 4.6.1 | `import Chart from "chart.js/auto"` | its animations play by themselves, frame-exact (a `chart.update()` from a timer too); or `animation: false` and `chart.update("none")` in `frame(t)` |
+| lottie-web 5.13.0 | `import lottie from "lottie-web"` | plays by itself (`autoplay: true`), frame-exact; or `autoplay: false` and `anim.goToAndStop(t * 1000, false)` in `frame(t)`. Give it `animationData` (the JSON, from `await fetch(…)`), not `path:` |
+| GSAP | not shipped (its licence): copy `dist/gsap.min.js` into the project, `<script src="lib/gsap.min.js"></script>` | call `gsap.ticker.lagSmoothing(0)`, then it plays by itself, frame-exact; or a paused timeline and `tl.time(t)` in `frame(t)` |
+
+D3, Chart.js and Motion are the packages' one-file builds, which also set `window.d3`,
+`window.Chart` and `window.Motion`. Chart.js comes with everything registered
+(`import {Chart} from "chart.js"` gives the same class; there is no `registerables`). lottie-web
+drew with its `svg` and `canvas` renderers. GSAP is not open source ("All rights reserved.
+Subject to the terms at https://gsap.com/standard-license"), so vidgen cannot ship it:
+`import gsap from "gsap"` stops the render with a message saying so. Tried with GSAP 3.15.1:
+`gsap.min.js` works from a `<script src>` (not as a module import); `index.js`, `gsap-core.js` and
+`CSSPlugin.js` copied into one folder work as `import gsap from "./lib/gsap/index.js"`. Without
+`lagSmoothing(0)` GSAP counts a step longer than 0.5 s as 33 ms. Any other library: put its file
+in the project (below: no internet).
+
 **Where the page goes.** `region: bleed` (the default): the page fills the frame edge to edge, a
 `title` sits on a plate over its top, and the captions are drawn over its bottom; keep text away
 from the edges and out of the bottom fifth. `region: body`: the page is laid out in the space
@@ -3504,8 +3529,8 @@ Look at both: `vidgen storyboard --variant vertical` (with a vertical variant, `
 web font, an API): the request is refused with the warning `scene 'x': refused https://… (a web
 scene cannot reach the internet; put the file in the project folder)` and the page renders
 without it. Put every library, picture, font and data file in the project folder and link it
-relatively (`<script src="lib/chart.js">`, `import {x} from "./lib/x.js"`). vidgen's own fonts and
-three.js and its shipped add-ons need nothing.
+relatively (`<script src="lib/x.js">`, `import {x} from "./lib/x.js"`). vidgen's own fonts,
+three.js and its shipped add-ons, and the libraries in the table above need nothing.
 
 **The lint loop.** `vidgen lint` reads the page's text at each still (its box, its size as drawn,
 its colour and what is behind it) and checks it with the usual rules: `off_frame`, `text_overlap`,
@@ -3544,6 +3569,7 @@ the text (here the video's background, since the canvas is transparent).
 | `scene 'x': JavaScript error in extensions/orbit.js line 7 in frame(t=0.500): TypeError: …` | your code threw; the file, line and time are given. At load: `… line 3 at load: …` |
 | `scene 'x': JavaScript error in extensions/x.js …: a module script did not load (a file it imports is missing or refused)` | an `import` names a missing file or a URL on the internet |
 | `scene 'x': the page imports the three.js add-on '…', which is not shipped with vidgen …` | an add-on vidgen does not ship (list above): copy the file into the project |
+| `scene 'x': the page imports 'gsap', which is not shipped with vidgen. GSAP's licence …` | `import … from "gsap"`: copy GSAP into the project and load it from there (table above) |
 | `warning: scene 'x': refused https://… (a web scene cannot reach the internet; …)` | a CDN script, web font or API: copy the file into the project |
 | `scene 'x': frame(t=0.500) in extensions/x.js did not return within 10 s: a loop that never ends or a promise that never settles …` | an endless loop, or waiting for something that never comes (a timer in `load`: time stands still there) |
 | `scene 'x': extensions/x.html did not become ready within 30 s …` | the page's load event never came (a module that never finishes) |

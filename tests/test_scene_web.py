@@ -434,6 +434,36 @@ def test_the_page_runs_on_vidgens_clock(tmp_path: Path) -> None:
     assert [f[1] for f in frames] == [0, 0.1, 0.2, 0.3, 0.4, 0.5] and frames[2][3] == 200
 
 
+START_TIME_PAGE = """<!doctype html><meta charset="utf-8">
+<style>html, body { margin: 0; background: #000; } #box { position: absolute; left: 0; top: 0; width: 10px; height: 10px; background: #f00; }</style>
+<div id="box"></div>
+<script>
+requestAnimationFrame((now) => {
+  const moved = document.getElementById("box").animate([{transform: "translateX(0)"}, {transform: "translateX(50px)"}], {duration: 1000, fill: "both"});
+  moved.startTime = now;   // what Motion does to line its animations up
+  window.moved = moved;
+  setTimeout(() => { moved.startTime = 100; }, 400);
+  setTimeout(() => { moved.startTime = null; }, 600);
+});
+window.seen = [];
+window.vidgen = { frame() { window.seen.push([window.moved.startTime, window.moved.currentTime, window.moved.playState]); } };
+</script>"""
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_an_animations_start_time_is_on_vidgens_clock(tmp_path: Path) -> None:
+    _chromium_or_skip()
+    (tmp_path / "s.html").write_text(START_TIME_PAGE, encoding="utf-8")
+    with WebPage(tmp_path, WebEntry("page", "s.html"), scene_id="start", size=(64, 36), fps=10, frames=8) as page:
+        lefts = [int(np.argmax(page.frame(n)[5, :, 0] > 128)) for n in range(8)]
+        seen = page._page.evaluate("window.seen")
+    # 50 px in 1 s from t = 0; at 0.4 s the start moves to 0.1 s (one frame back); at 0.6 s it is held
+    assert lefts == [0, 5, 10, 15, 15, 20, 25, 25]
+    assert seen[:4] == [[0, 0, "running"], [0, 100, "running"], [0, 200, "running"], [0, 300, "running"]]
+    assert seen[4:] == [[100, 300, "running"], [100, 400, "running"], [None, 500, "paused"], [None, 500, "paused"]]
+
+
 @pytest.mark.slow
 @pytest.mark.render
 def test_the_same_page_gives_the_same_frames(tmp_path: Path) -> None:

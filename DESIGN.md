@@ -344,6 +344,7 @@ src/vidgen/
                           # layout.js (reads the page's text after a screenshot, for lint; §118.12)
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
                           # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
+  data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -23172,7 +23173,7 @@ true` does exactly what it did in Step 325: the owner wants a dissolve only on r
   dissolve does not touch still differ by 1.6 to 2.0 between the two MP4s). Both films have 488
   frames, 20.33 s, −19.3 LUFS and the same decoded sound, sample for sample.
 
-## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334)
+## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334, 336)
 
 The owner wants AI agents to write a scene as a web page. The owner's decisions: JavaScript in the
 project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
@@ -23181,7 +23182,8 @@ are accepted even when slow. Step 328 built the core described here, Step 329 th
 (§118.8), Step 330 what the page is given (§118.9, §118.10), Step 331 the region, the
 transparent background and the video's shape (§118.11), Step 332 lint of the page's text
 (§118.12), Step 333 the guide topic, `examples/web`, the gallery entry and the measured cost
-(§118.13), Step 334 a chosen set of three.js add-ons (§118.14); §118.7 says where each part is
+(§118.13), Step 334 a chosen set of three.js add-ons (§118.14), Step 336 five animation and
+chart libraries (§118.15); §118.7 says where each part is
 and what is left for after the phase.
 
 ### 118.1 How a `web` scene renders (Step 328)
@@ -23211,7 +23213,7 @@ with `scene '<id>': page: file not found: …`. Since Step 330 the author's own 
 
 `web/page.py`, `WebPage(root, entry, scene_id=, size=, fps=, frames=)` (a context manager, one per
 clip): starts `Chromium("a web scene", WEB_ARGS)` (§118.5; `WEB_ARGS` adds `--hide-scrollbars
---force-color-profile=srgb`), a context with the frame's size as viewport and device scale 1,
+--force-color-profile=srgb` and, since Step 336, `--disable-partial-raster`, §118.15), a context with the frame's size as viewport and device scale 1,
 the time zone `UTC` and locale `en-US`, the init script (`init_script(scene_id)`: `data/web/clock.js`,
 `media.js` and `runtime.js` joined in one function with the scene's random seed, §118.8) and a
 route for every request:
@@ -23325,13 +23327,14 @@ virtual clock. 330 (§118.9, §118.10): theme as CSS variables and `ctx.theme`, 
 file in the cache keys. 331 (§118.11): `region: bleed | body` and `title`, a transparent
 background, 9:16 from one page. 332 (§118.12): lint reads the page's text. 333 (§118.13): the
 guide topic `web`, `examples/web`, the gallery entry, the measured cost. 334 (§118.14): the
-three.js add-ons a page may import.
+three.js add-ons a page may import. 336 (§118.15): anime.js, Motion, D3, Chart.js and lottie-web
+shipped and measured under the clock; GSAP measured, not shipped.
 
 Left for after the phase (also in the tasklist's backlog): no hard cut (`fade: false`) on `web`;
 a storyboard or lint still renders the whole scene (no still-only path); text in pictures, WebGL
 or an undeclared canvas is not read, nor contrast over a gradient or picture; only a chosen
 set of three.js add-ons is served (§118.14); a page with its own import map (two maps) not
-tried; no animation library tried under the clock; nothing tried on Windows.
+tried; the shipped libraries' other features (§118.15 lists what was run); nothing tried on Windows.
 
 ### 118.8 Time belongs to vidgen (Step 329)
 
@@ -23389,7 +23392,9 @@ millisecond), `performance.now()` (= `nowMs`), `document.timeline.currentTime`, 
    0 when vidgen first sees it. Each frame it is set to `t + (now − at) × playbackRate`; a playing
    one past its end (or below 0 when reversed) is finished with the native `finish()`, so its
    `finished` promise and `finish` event come (the event when Chromium next draws). The page's
-   `play`, `pause`, `reverse`, `finish`, `cancel`, `updatePlaybackRate`, `currentTime` and
+   `play`, `pause`, `reverse`, `finish`, `cancel`, `updatePlaybackRate`, `currentTime`, `startTime`
+   (Step 336: read and set on vidgen's clock, `null` while paused; setting the browser's own
+   would let the animation run in real time, which Motion's start times did) and
    `playbackRate` are wrapped to act on vidgen's time; `playState` reports the page's view. A CSS
    animation that starts paused by `animation-play-state` and is set running by CSS is followed;
    one paused by CSS after vidgen paused it is not (Chromium ignores CSS play state once the API
@@ -23755,7 +23760,8 @@ variant, the Step 330 and 331 demos.
   gradio's front-end bundle (extracted with acorn into a scratch module). A linear 2 s
   `Plotly.animate` transition started by a 500 ms timer: the bar's height read from the DOM equals
   the expected value at every frame from 0 to 2.9 s at 10 fps (0.2 → 1.0, exact; pixels within one
-  row). GSAP, anime.js, Motion, Lottie and d3 are not on the machine; not tried.
+  row). GSAP, anime.js, Motion, Lottie and d3 are not on the machine; not tried (Step 336 tried
+  them: §118.15).
 
 ### 118.14 three.js add-ons (Step 334)
 
@@ -23802,3 +23808,103 @@ variant, the Step 330 and 331 demos.
   background. Composer colours equal `renderer.render`'s exactly (no bloom). `LineMaterial`
   needs `resolution` = the page size. `OrbitControls.update()` turns 1/60 s per call (speed
   follows fps); `update(t - last)` gives `autoRotateSpeed × 2π/60 × t` at any fps.
+
+### 118.15 Animation and chart libraries (Step 336)
+
+- **What ships**: five libraries, each one build file of its npm package, unmodified, under
+  `data/web/libs/<package>/` with the package's licence file as `LICENSE` (1 426 979 bytes in all;
+  the owner's limit was 1.5 MB). Each tarball came from `registry.npmjs.org` and its sha512
+  equals the registry's `dist.integrity`; the manifest (`web/libs.py` `WEB_LIBS`) holds each
+  file's SHA-256 and size, which `tests/test_web_libs.py` compares.
+
+  | package | version | licence | file (path in the package) | bytes | import |
+  |---|---|---|---|---|---|
+  | `animejs` | 4.5.0 | MIT | `anime.esm.min.js` (`dist/bundles/`, ESM) | 118 678 | `animejs` |
+  | `motion` | 14.12.0 | MIT | `motion.js` (`dist/`, UMD, global `Motion`) | 188 678 | `motion` |
+  | `d3` | 7.9.2 | ISC | `d3.min.js` (`dist/`, UMD, global `d3`) | 280 622 | `d3` |
+  | `chart.js` | 4.6.1 | MIT | `chart.umd.min.js` (`dist/`, UMD, global `Chart`) | 210 082 | `chart.js/auto`, `chart.js` |
+  | `lottie-web` | 5.13.0 | MIT | `lottie.min.js` (`build/player/esm/`, ESM) | 589 019 | `lottie-web` |
+
+- **UMD builds as modules**: `d3`, `chart.js` and `motion` have no one-file ES build (d3's
+  `d3.mjs` re-exports 30 packages, Chart.js's `chart.js` imports a chunk and `@kurkle/color`,
+  Motion's `dist/es` imports `framer-motion`). vidgen ships the UMD file unmodified and, beside
+  it, `index.js` (written by vidgen): `import './<file>'` runs the UMD file as a module (its
+  `this` is undefined, so it sets `globalThis.<Name>`), then `export default` that object and
+  `export const {…}` each of its names (578, 50 and 352 names, read from the global in Chromium;
+  a `slow` test compares them). So the globals `d3`, `Chart` and `Motion` exist too. Chart.js's
+  UMD build has everything registered and no `registerables` export. lottie-web's ES build is
+  not minified and its `lottie.version` reads `[[BM_VERSION]]` (the package's own state); its
+  UMD `lottie.min.js` is 305 704 bytes and could replace it behind a wrapper to save 283 kB.
+- **Licences of what a bundle contains**: `LICENSES-bundled.txt` beside the d3, Chart.js and
+  Motion files joins the licence files of the packages inside them (d3: 30 `d3-*`, `delaunator`,
+  `robust-predicates`, `internmap`; Chart.js: `@kurkle/color`; Motion: `framer-motion`,
+  `motion-dom`, `motion-utils`, `tslib`), read from each package's latest version on the registry
+  (ISC, MIT, BSD-3-Clause, 0BSD, Unlicense, and ColorBrewer's Apache-style licence in
+  `d3-scale-chromatic`). THIRD_PARTY_NOTICES lists them.
+- **GSAP is not shipped**: the npm package `gsap` 3.15.1 has no licence file; its `package.json`
+  says `"license": "Standard 'no charge' license: https://gsap.com/standard-license."` and every
+  file's header says "Copyright 2026, GreenSock. All rights reserved. Subject to the terms at
+  https://gsap.com/standard-license." That is not a licence an MIT project can redistribute
+  under (the terms themselves were not fetched: only the npm registry was allowed). The import
+  map names `gsap` as `/__vidgen__/libs/gsap/index.js`, a file vidgen does not have
+  (`web/libs.py` `NOT_SHIPPED`), so the render stops with `unshipped_lib_message` instead of
+  Chromium's `Failed to resolve module specifier`.
+- **Serving and the import map**: `web/libs.py` (`WebLib`, `WEB_LIBS`, `NOT_SHIPPED`, `lib_file`,
+  `unshipped_lib_message`); `web/loaded.py` `vidgen_file("libs/<package>/<file>")` answers only a
+  manifest file (not the licences), `unshipped_lib`; `web/inputs.py` `IMPORT_MAP` gains one
+  entry per specifier. Package data glob `data/web/libs/**/*`. The files a page loads are in its
+  loaded-files record (§118.10).
+- **Measured under the clock** (`WebPage`, 160x90 at 5 fps, one 2 s linear move of 100 px or its
+  like; "twice" = two fresh pages give identical pixels for frames 0–10; "alone" = frames 3 and
+  7 each drawn alone in a fresh page equal the same frames of the full run):
+
+  | case | value per frame | twice | alone |
+  |---|---|---|---|
+  | anime.js `animate` / `createTimeline`, own loop | 12 ms ahead (20.6 px for 20; also at 10, 24, 30 fps) | yes | yes |
+  | anime.js `autoplay: false` + `seek(t * 1000)` in `frame` (also a timeline) | exact | yes | yes |
+  | anime.js `waapi.animate` | exact | yes | yes |
+  | Motion `animate(el, {x})`, `{opacity}`, a spring, `animate(0, 100, {onUpdate})` | exact | yes | no: starts at its first animation frame |
+  | Motion sequence `animate([[…], […]])` | exact | yes | yes |
+  | Motion `controls.time = t` in `frame` (after `pause()` or with `autoplay: false`) | one frame late | yes | no |
+  | D3 `transition()` (also with `delay`), `d3.timer` | exact | yes | yes |
+  | D3 scales in `frame(t)` | exact | yes | yes |
+  | D3 `forceSimulation`, own timer | one tick per video frame | yes | no |
+  | D3 `forceSimulation` `stop()` + `tick(n)` in `frame` | set by `n` | yes | yes |
+  | Chart.js animation on creation (`responsive` on or off; a `script:` on `ctx.canvas`) | exact | yes | yes |
+  | Chart.js `chart.update()` from a timer at 1 s | exact from where the bars were | yes | no: starts from the undrawn first animation |
+  | Chart.js `animation: false` + `update("none")` in `frame` | exact | yes | yes |
+  | lottie-web `autoplay: true` (`svg`, `canvas`, `path:`) | exact (`currentFrame` 2 per frame at 10 fr/s) | yes | no: starts at its first animation frame |
+  | lottie-web `goToAndStop(t * 1000, false)` in `frame` (`svg`, `canvas`) | exact | yes | yes |
+  | GSAP 3.15.1 `gsap.to`, own ticker (ES files) | exact | yes | no: a step over 0.5 s counts as 33 ms (1.65 px for 30) |
+  | GSAP with `gsap.ticker.lagSmoothing(0)` (ES files; `gsap.min.js` from `<script src>`) | exact | yes | yes |
+  | GSAP paused timeline + `tl.time(t)` in `frame` | exact | yes | yes |
+
+  vidgen draws a `web` scene's frames in order from frame 0 (`web/clip.py`), so "alone: no" does
+  not change a render; it says the picture depends on the frames before it. `gsap.min.js` cannot
+  be imported as a module (`TypeError: Cannot set property window of #<Window>`); GSAP's
+  `index.js` + `gsap-core.js` + `CSSPlugin.js` in one folder import as a module. lottie-web's
+  `path:` loaded a 1 kB file in time, but it uses `XMLHttpRequest`, which vidgen does not wait
+  for (§118.8), so the guide says `animationData`.
+- **The clock fix** (`data/web/media.js`): `Animation.prototype.startTime` is wrapped like
+  `currentTime`. Motion sets `animation.startTime` to line an animation up with its own clock;
+  the browser's setter un-paused the animation on Chromium's real timeline until vidgen's next
+  placement, so Motion's frame 0 differed between renders (the box 10 to 17 px off in five
+  runs; identical after the fix). `tests/test_scene_web.py::test_an_animations_start_time_is_on_vidgens_clock`
+  fails on the old file (frame 0 at 10 px) and passes on the new.
+- **Whole tiles** (`web/page.py` `WEB_ARGS` + `--disable-partial-raster`): with Chromium's partial
+  raster, content at a fractional position that a script changed in an animation-frame callback
+  (some real time before the screenshot) could come out with one edge pixel different from one
+  render to the next, the DOM being identical. Seen with lottie-web's `svg` renderer in a
+  160x45 box (a 160x90 animation at half size): frame 2 had 2 variants in 10 fresh pages (one
+  pixel, 10 levels of 255), 3 variants with the SVG's own `translate3d` removed; and without any
+  library (a `<g>` moved by `setAttribute` in `requestAnimationFrame`): 1 run of 12 differed.
+  With the flag: 16 of 16 identical for each of the three pages, and equal to the picture of the
+  same DOM drawn once (a static page). Not slower (lottie page at 1280x720: 221 and 209 ms per
+  frame without, 153 and 116 ms with). The flag is in `engine_id()`, so every `web` clip is
+  drawn again once; `3d` scenes do not use `WEB_ARGS`. lottie-web's `canvas` renderer and a
+  change made in `frame(t)` did not vary without the flag (10 and 12 runs).
+- **Not verified**: each library beyond the calls in the table (anime.js scroll, draggable, text
+  and SVG helpers; Motion's `scroll`, `inView`, layout and view transitions; D3 zoom, brush,
+  drag, `d3.json` and other fetch helpers; Chart.js chart types other than bar and line, its
+  time scale, plugins; Lottie files with images, fonts,
+  expressions or audio, the `html` renderer); the UMD `lottie.min.js`; Windows.

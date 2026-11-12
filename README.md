@@ -583,7 +583,8 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
     brings Playwright; `py -m playwright install chromium` downloads the browser (~150 MB, once).
     three.js itself ships with schu-video-generator (the core and a chosen set of add-ons for `web`
     scenes: glTF loading, environment lighting, bloom, HTML labels, thick lines, rounded boxes, SVG
-    shapes, orbit controls); nothing is fetched while rendering.
+    shapes, orbit controls), and so do anime.js, Motion, D3, Chart.js and lottie-web for `web`
+    scenes; nothing is fetched while rendering.
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows

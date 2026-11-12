@@ -176,7 +176,7 @@ def test_the_web_topic_covers_web_scenes() -> None:
                  "**The theme.**", "**Revealing on the narration.**", "**Values from the YAML.**", "**three.js**",
                  "**Where the page goes.**", "**Both shapes from one page.**", "**No internet.**", "**The lint loop.**",
                  "**Usual mistakes**", "**Render cost.**", "examples/web", "data-vidgen-id", "`web_clipped`", "layout(t, ctx)",
-                 "data-beat", "data-orientation", 'import * as THREE from "three"', "were not tried",
+                 "data-beat", "data-orientation", 'import * as THREE from "three"', "**Animation and chart libraries.**",
                  "**three.js add-ons.**", "**Not shipped:**", "material.resolution.set", "controls.update(t - last)",
                  "import.meta.url", "scene.background"):
         assert part in text, part

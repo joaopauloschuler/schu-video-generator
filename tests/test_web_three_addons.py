@@ -54,8 +54,9 @@ def test_every_static_import_of_an_add_on_is_shipped() -> None:
 
 def test_the_import_map_has_both_prefixes_and_one_core() -> None:
     imports = IMPORT_MAP["imports"]
-    assert imports == {"three": "/__vidgen__/three/three.module.js", "three/addons/": "/__vidgen__/three/addons/",
-                       "three/examples/jsm/": "/__vidgen__/three/addons/"}
+    assert {name: url for name, url in imports.items() if name.startswith("three")} == {
+        "three": "/__vidgen__/three/three.module.js", "three/addons/": "/__vidgen__/three/addons/",
+        "three/examples/jsm/": "/__vidgen__/three/addons/"}
     assert json.loads(json.dumps(IMPORT_MAP)) == IMPORT_MAP
 
 

@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–335)
+## Unreleased (Steps 193–336)
+
+### Animation and chart libraries for `web` scenes (Step 336)
+
+- A `web` scene can import five libraries by name, shipped with vidgen (about 1.43 MB with their licences; each one build file of its npm package, unmodified): `import {animate} from "animejs"` (anime.js 4.5.0, MIT), `import {animate} from "motion"` (Motion 14.12.0, MIT), `import * as d3 from "d3"` (D3 7.9.2, ISC), `import Chart from "chart.js/auto"` (Chart.js 4.6.1, MIT) and `import lottie from "lottie-web"` (lottie-web 5.13.0, MIT). Each was run under vidgen's clock; `vidgen guide web` has a table saying how to drive each (which play by themselves frame-exactly, which need a seek from `frame(t)`).
+- GSAP is not shipped: its files say "All rights reserved. Subject to the terms at https://gsap.com/standard-license". `import gsap from "gsap"` stops the render with a message saying so and how to use a copy in the project; a copy works under the clock (`gsap.ticker.lagSmoothing(0)`, or a paused timeline and `tl.time(t)`).
+- **Fixed:** an animation's `startTime` (Web Animations API) is on vidgen's clock. Before, a page (or a library: Motion does it) that set `animation.startTime` let that animation run in real time until the next frame, so a frame could differ from one render to the next (seen: in five renders Motion's first frame drew a box 10, 10, 10, 11 and 17 px from its place).
+- **Fixed:** two renders of a `web` scene could differ in one edge pixel when a script moved content at a fractional position in a `requestAnimationFrame` callback (seen with a Lottie SVG at half size, and with plain `setAttribute`). `web` scenes now start Chromium with `--disable-partial-raster`; every `web` clip is drawn again once.
 
 ### Every test passes (Step 335)
 

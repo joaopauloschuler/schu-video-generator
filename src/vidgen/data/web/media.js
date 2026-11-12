@@ -7,7 +7,7 @@
 
 const animationApi = {};
 for (const name of ['play', 'pause', 'reverse', 'finish', 'cancel', 'updatePlaybackRate']) animationApi[name] = Animation.prototype[name];
-for (const name of ['currentTime', 'playbackRate', 'playState']) animationApi[name] = Object.getOwnPropertyDescriptor(Animation.prototype, name);
+for (const name of ['currentTime', 'startTime', 'playbackRate', 'playState']) animationApi[name] = Object.getOwnPropertyDescriptor(Animation.prototype, name);
 const nativeState = (a) => animationApi.playState.get.call(a);
 const nativeTime = (a) => animationApi.currentTime.get.call(a);
 const setNativeTime = (a, ms) => animationApi.currentTime.set.call(a, ms);
@@ -116,6 +116,32 @@ Object.defineProperty(Animation.prototype, 'currentTime', {
     record.t = nativeTime(this) ?? 0;
     record.at = clock.now();
     record.finished = false;
+  },
+  configurable: true,
+});
+// The start time is on vidgen's clock (the browser's is real time): null while paused. A page
+// that sets it (a library lining animations up) plays the animation from then; in Chromium it
+// stays paused, where setting the browser's own start time would let it run in real time.
+Object.defineProperty(Animation.prototype, 'startTime', {
+  get() {
+    const record = animations.get(this);
+    if (record === undefined) return animationApi.startTime.get.call(this);
+    const rate = animationApi.playbackRate.get.call(this);
+    return record.playing && rate !== 0 ? record.at - record.t / rate : null;
+  },
+  set(ms) {
+    const record = trackAnimation(this);
+    if (ms === null) {
+      placeAnimation(this, record);
+      record.playing = false;
+      return;
+    }
+    record.t = (clock.now() - Number(ms)) * animationApi.playbackRate.get.call(this);
+    record.at = clock.now();
+    record.playing = true;
+    record.finished = false;
+    if (nativeState(this) === 'running') animationApi.pause.call(this);
+    setNativeTime(this, record.t);
   },
   configurable: true,
 });

@@ -6580,6 +6580,30 @@ node materials. Importing one stops the render with `scene '<id>': the page impo
 add-on '<path>' (three/addons/<path>), which is not shipped with vidgen …` and says how to copy
 the file from three.js 0.186.1 into the project and import it by a relative path.
 
+**Animation and chart libraries** (DESIGN §118.15). Five libraries ship with vidgen and are
+imported by name through the same import map; each is one build file of its npm package,
+unmodified, served from `/__vidgen__/libs/<package>/` and recorded with the page's loaded files:
+
+| library | import | under vidgen's clock |
+|---|---|---|
+| anime.js 4.5.0 (MIT) | `import {animate} from "animejs"` | plays by itself about 12 ms ahead; exact with `autoplay: false` and `anim.seek(t * 1000)` in `frame(t)` |
+| Motion 14.12.0 (MIT) | `import {animate} from "motion"` | plays by itself, exact; `controls.time = t` in `frame` shows one frame late |
+| D3 7.9.2 (ISC) | `import * as d3 from "d3"` | transitions and `d3.timer` play by themselves, exact; a force layout by itself ticks once per video frame (use `simulation.stop()` and `simulation.tick(n)`) |
+| Chart.js 4.6.1 (MIT) | `import Chart from "chart.js/auto"` (or `{Chart}` from `"chart.js"`) | animations play by themselves, exact; or `animation: false` and `chart.update("none")` in `frame(t)` |
+| lottie-web 5.13.0 (MIT) | `import lottie from "lottie-web"` | plays by itself, exact; or `autoplay: false` and `anim.goToAndStop(t * 1000, false)` in `frame(t)`; pass `animationData`, not `path:` |
+
+"Plays by itself" was measured with frames drawn in order from the scene's first frame, which is
+how vidgen always draws a `web` scene; a library that starts on its first animation frame
+(Motion, lottie-web) or keeps state between frames would not give the same picture for a frame
+drawn alone. D3, Chart.js and Motion are UMD builds behind a small ES module written by vidgen
+(`index.js`), so they also set `window.d3`, `window.Chart` and `window.Motion`. **GSAP is not
+shipped**: its files say "All rights reserved. Subject to the terms at
+https://gsap.com/standard-license", which is not a licence an MIT project can redistribute
+under; `import gsap from "gsap"` stops the render with `scene '<id>': the page imports 'gsap',
+which is not shipped with vidgen. …`. A copy in the project works (GSAP 3.15.1 tried):
+`dist/gsap.min.js` from a `<script src>`, with `gsap.ticker.lagSmoothing(0)` (without it a step
+over 0.5 s counts as 33 ms), or a paused timeline and `tl.time(t)` in `frame(t)`.
+
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
 error or rejected promise at load, in a timer or callback, or in `frame`, and a page that is not

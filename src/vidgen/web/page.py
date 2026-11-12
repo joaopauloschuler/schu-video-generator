@@ -36,7 +36,8 @@ from vidgen.browser.chromium import Chromium, first_line, playwright_version, pn
 from vidgen.errors import VidgenError
 from vidgen.web.entry import WebEntry
 from vidgen.web.inputs import page_head, page_shape, with_head
-from vidgen.web.loaded import THREE_VERSION, VIDGEN_PREFIX, served_file, unshipped_addon
+from vidgen.web.libs import unshipped_lib_message
+from vidgen.web.loaded import THREE_VERSION, VIDGEN_PREFIX, served_file, unshipped_addon, unshipped_lib
 
 log = logging.getLogger("vidgen.web")
 
@@ -54,8 +55,10 @@ LAYOUT_FILE = DATA_DIR / "layout.js"
 WEB_ORIGIN = "http://vidgen-web.invalid/"
 #: Where vidgen's bare page of a ``script:`` scene is served (not a project path).
 CANVAS_PATH = "__vidgen__/canvas.html"
-#: Chromium flags added for screenshots: no scroll bars, colours as sRGB.
-WEB_ARGS: tuple[str, ...] = ("--hide-scrollbars", "--force-color-profile=srgb")
+#: Chromium flags added for screenshots: no scroll bars, colours as sRGB, and every changed tile
+#: drawn whole (with partial raster an edge pixel of content at a fractional position, changed in
+#: an animation-frame callback, came out differently from one render to the next).
+WEB_ARGS: tuple[str, ...] = ("--hide-scrollbars", "--force-color-profile=srgb", "--disable-partial-raster")
 #: How long the page may take to become ready (milliseconds).
 READY_TIMEOUT_MS = 30_000
 #: How long vidgen's start (fonts, pictures, videos, then the page's ``load(ctx)``) may take (seconds).
@@ -249,6 +252,7 @@ class WebPage:
         self.refused: list[str] = []
         self.missing: list[str] = []
         self.unshipped: list[str] = []
+        self.unshipped_libs: list[str] = []
         self.loaded: dict[str, str | None] = {}
         self._chromium: Chromium | None = None
         self._page: Any = None
@@ -278,6 +282,13 @@ class WebPage:
                 log.warning("scene '%s': the three.js add-on %s is not shipped with vidgen", self.scene_id, addon)
             route.fulfill(status=404, body="", headers={"Content-Type": CONTENT_TYPES[".txt"]})
             return
+        lib = unshipped_lib(rel)
+        if lib is not None:
+            if lib not in self.unshipped_libs:
+                self.unshipped_libs.append(lib)
+                log.warning("scene '%s': %s is not shipped with vidgen", self.scene_id, lib)
+            route.fulfill(status=404, body="", headers={"Content-Type": CONTENT_TYPES[".txt"]})
+            return
         path = served_file(self.root, rel)
         if path is None or not path.is_file():
             if path is not None and not rel.startswith(VIDGEN_PREFIX) and rel != "favicon.ico":
@@ -305,15 +316,25 @@ class WebPage:
     def _url(self) -> str:
         return WEB_ORIGIN + (CANVAS_PATH if self.entry.kind == "script" else self.entry.posix)
 
+    def _unshipped_message(self) -> str | None:
+        """The message for the first three.js add-on or library the page asked for that vidgen does not ship."""
+        if self.unshipped:
+            return unshipped_addon_message(self.scene_id, self.unshipped[0])
+        if self.unshipped_libs:
+            return unshipped_lib_message(self.scene_id, self.unshipped_libs[0])
+        return None
+
     def _raise_first(self, errors: list[dict[str, Any]], when: str) -> None:
-        if errors and self.unshipped:
-            raise VidgenError(unshipped_addon_message(self.scene_id, self.unshipped[0]))
+        unshipped = self._unshipped_message()
+        if errors and unshipped is not None:
+            raise VidgenError(unshipped)
         if errors:
             raise VidgenError(error_message(self.scene_id, self.entry, errors[0], when))
 
     def _not_ready(self, exc: Exception) -> VidgenError:
-        if self.unshipped:
-            return VidgenError(unshipped_addon_message(self.scene_id, self.unshipped[0]))
+        unshipped = self._unshipped_message()
+        if unshipped is not None:
+            return VidgenError(unshipped)
         seconds = READY_TIMEOUT_MS / 1000
         unanswered = self.missing + self.refused
         detail = f"; not answered: {', '.join(unanswered)}" if unanswered else ""

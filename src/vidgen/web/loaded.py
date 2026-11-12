@@ -15,13 +15,14 @@ from pathlib import Path
 from typing import Any
 
 from vidgen.web.entry import inside
+from vidgen.web.libs import LIB_FOLDER, NOT_SHIPPED, lib_file
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 #: The URL path prefix of vidgen's own files (not project paths).
 VIDGEN_PREFIX = "__vidgen__/"
 #: vidgen's files a page may load, by their path after :data:`VIDGEN_PREFIX`: the bundled
-#: three.js (``three/``), its shipped add-ons (``three/addons/``) and the bundled fonts
-#: (``fonts/<family folder>/<file>``).
+#: three.js (``three/``), its shipped add-ons (``three/addons/``), the shipped libraries
+#: (``libs/<package>/<file>``, :mod:`vidgen.web.libs`) and the bundled fonts (``fonts/<family folder>/<file>``).
 THREE_FILES: tuple[str, ...] = ("three.module.js", "three.core.js")
 #: The folder of the shipped three.js add-ons after ``three/`` (``examples/jsm/`` of the npm
 #: package ``three`` of :data:`THREE_VERSION`, copied unmodified; DESIGN.md §118.14).
@@ -54,6 +55,8 @@ def vidgen_file(rel: str) -> Path | None:
     addon_folder, _, addon = name.partition("/")
     if folder == "three" and addon_folder == ADDONS_FOLDER and addon in THREE_ADDONS:
         return _DATA_DIR / "three" / ADDONS_FOLDER / addon
+    if folder == LIB_FOLDER:
+        return lib_file(name)
     if folder == "fonts" and Path(name).suffix.lower() in FONT_SUFFIXES:
         path = inside(_DATA_DIR / "fonts", name)
         return path if path is not None and path.is_file() else None
@@ -68,6 +71,14 @@ def unshipped_addon(rel: str) -> str | None:
         return None
     name = rel.removeprefix(prefix)
     return None if name in THREE_ADDONS else name
+
+
+def unshipped_lib(rel: str) -> str | None:
+    """The package a request for ``rel`` asks for when it is under ``__vidgen__/libs/`` and one of
+    :data:`vidgen.web.libs.NOT_SHIPPED` (``gsap``); ``None`` otherwise."""
+    prefix = f"{VIDGEN_PREFIX}{LIB_FOLDER}/"
+    package = rel.removeprefix(prefix).partition("/")[0]
+    return package if rel.startswith(prefix) and package in NOT_SHIPPED else None
 
 
 def served_file(root: Path, rel: str) -> Path | None:
@@ -115,4 +126,4 @@ def recorded_loaded(path: Path) -> dict[str, str | None]:
 
 
 __all__ = ["ADDONS_FOLDER", "FONT_SUFFIXES", "THREE_ADDONS", "THREE_FILES", "THREE_VERSION", "VIDGEN_PREFIX", "current_loaded",
-           "file_sha", "read_record", "record_path", "recorded_loaded", "served_file", "unshipped_addon", "vidgen_file"]
+           "file_sha", "read_record", "record_path", "recorded_loaded", "served_file", "unshipped_addon", "unshipped_lib", "vidgen_file"]
