@@ -32,6 +32,7 @@ def test_scene_decorator_registers_extension() -> None:
     assert "my_scene" in registry.names()
 
 
+@pytest.mark.slow
 def test_builtin_text_card_is_registered(builtins_loaded: None) -> None:
     entry = registry.get("text_card")
     assert entry.builtin and entry.origin == "builtin"

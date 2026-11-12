@@ -70,6 +70,7 @@ def test_first_frame_in_precedence_like_sound(shot_value: str | None, model_valu
     assert VideogenConfig().first_frame_in_for(FAST) == "frame"
 
 
+@pytest.mark.slow
 def test_guide_mode_sends_the_combined_guide_and_no_frame_image(make_project) -> None:
     shot = the_shot(in_guide_project(make_project))
     assert shot.first_frame_in == "guide" and shot.opening_picture is not None and shot.opening_picture.name == "start.png"
@@ -120,6 +121,7 @@ def test_first_frame_in_can_come_from_the_model_entry(make_project) -> None:
 # ----- the combined guide --------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_combined_guide_is_as_long_as_the_guide_and_starts_on_the_picture(tmp_path: Path) -> None:
     guide = write_clip(tmp_path / "guide.mp4", seconds=2.0, size="54x96", fps=5, audio=False)
     picture = tmp_path / "white.png"
@@ -134,6 +136,7 @@ def test_the_combined_guide_is_as_long_as_the_guide_and_starts_on_the_picture(tm
     assert frames[-1].mean() < frames[0].mean() - 30   # the guide takes over
 
 
+@pytest.mark.slow
 def test_a_dissolve_longer_than_the_guide_never_lengthens_it(tmp_path: Path) -> None:
     guide = write_clip(tmp_path / "g.mp4", seconds=0.6, size="32x18", fps=5, audio=False)
     picture = tmp_path / "p.png"
@@ -154,6 +157,7 @@ def in_guide_inputs(make_project) -> tuple[Path, Any]:
     return root, render
 
 
+@pytest.mark.slow
 def test_make_inputs_makes_the_combined_guide_and_records_the_picture(make_project) -> None:
     root, _ = in_guide_inputs(make_project)
     folder = root / "build" / "videogen" / "act"
@@ -164,6 +168,7 @@ def test_make_inputs_makes_the_combined_guide_and_records_the_picture(make_proje
     assert guide.ready and any("starting picture: assets/start.png" in line and "dissolve" in line for line in item.lines(root))
 
 
+@pytest.mark.slow
 def test_changing_the_picture_makes_the_guide_stale_and_a_recut_clears_it(make_project) -> None:
     root, render = in_guide_inputs(make_project)
     (root / "assets" / "start.png").write_bytes(png_bytes("another start"))
@@ -175,6 +180,7 @@ def test_changing_the_picture_makes_the_guide_stale_and_a_recut_clears_it(make_p
     assert changed(plan_of(root)) == ""
 
 
+@pytest.mark.slow
 def test_changing_the_dissolve_makes_the_guide_stale(make_project) -> None:
     root, _ = in_guide_inputs(make_project)
     edit(root, lambda data: data["videogen"].update(first_frame_dissolve=0.8))
@@ -190,6 +196,7 @@ def test_a_missing_starting_picture_is_named(make_project) -> None:
         make_inputs(project, project_shots(project, CATALOG), guide=True, out=lambda line: None, render=render)
 
 
+@pytest.mark.slow
 def test_a_first_frame_render_works_in_guide_mode(make_project) -> None:
     root = in_guide_project(make_project)
     edit(root, lambda data: data["scenes"][0]["beats"][0]["generated_shot"].update(first_frame="render"))
@@ -281,6 +288,7 @@ def test_a_paid_run_is_refused_by_the_block(make_project) -> None:
         run_shots(Project.load(root), pay=True, provider=MockVideoProvider(), catalog=CATALOG, out=lambda line: None)
 
 
+@pytest.mark.slow
 def test_a_shot_already_paid_for_only_gets_a_note(make_project) -> None:
     root = frame_with_references_project(make_project, folder="paid")
     edit(root, lambda data: data["scenes"][0]["beats"][0]["generated_shot"].update(characters=[], refs=[]))
@@ -298,6 +306,7 @@ def test_a_shot_already_paid_for_only_gets_a_note(make_project) -> None:
     assert any("first_frame_in: guide" in n and "already paid" in n for n in item.shot.notes)
 
 
+@pytest.mark.slow
 def test_a_shot_paid_under_earlier_wording_only_gets_a_note(make_project) -> None:
     from dataclasses import replace
 
@@ -336,6 +345,7 @@ def _hosted_request(audio: Path, guide: Path) -> Any:
     return request(model=FAST, resolution="720p", references=(MediaInput("audio", audio), MediaInput("video", guide)))
 
 
+@pytest.mark.slow
 def test_a_job_whose_files_were_never_downloaded_warns(tmp_path: Path, fake_cloudflared: list[str]) -> None:
     project, audio, guide = sources(tmp_path)
     share = ShareOptions(SETTINGS, executable=fake_cloudflared, fetch=local_fetch(tmp_path))
@@ -345,6 +355,7 @@ def test_a_job_whose_files_were_never_downloaded_warns(tmp_path: Path, fake_clou
     assert not any("trycloudflare" in warning for warning in result.warnings)
 
 
+@pytest.mark.slow
 def test_a_job_whose_files_were_downloaded_does_not_warn(tmp_path: Path, fake_cloudflared: list[str]) -> None:
     project, audio, guide = sources(tmp_path)
     fetch = local_fetch(tmp_path)
@@ -366,6 +377,7 @@ def test_a_job_whose_files_were_downloaded_does_not_warn(tmp_path: Path, fake_cl
     assert result.paid and result.warnings == []
 
 
+@pytest.mark.slow
 def test_the_mock_provider_never_warns(make_project) -> None:
     root = in_guide_project(make_project, characters=[], refs=[])
     project = Project.load(root)
@@ -375,6 +387,7 @@ def test_the_mock_provider_never_warns(make_project) -> None:
     assert result.shots[0].status == "paid" and result.shots[0].message == ""
 
 
+@pytest.mark.slow
 def test_a_warning_reaches_the_run_output_and_the_take(make_project, monkeypatch: pytest.MonkeyPatch) -> None:
     import vidgen.videogen.run as run_module
 

@@ -110,6 +110,7 @@ def test_new_builtin_sounds() -> None:
 # ----- config ----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_sting_and_foley_config() -> None:
     assert BeatConfig(id="b", text="Hi.", sting="comic").sting == StingCue(kind="comic")
     assert StingCue(kind="reveal").placed_at == "start" and StingCue(kind="sad").placed_at == "end"
@@ -153,6 +154,7 @@ def test_ducked_events_follow_the_narration(make_project, tmp_path: Path) -> Non
 # ----- a stage records its foley and stings (tiny render) --------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_stage_records_foley_and_a_sting(make_project, tmp_path: Path) -> None:
     beats: list[dict[str, Any]] = [

@@ -209,6 +209,7 @@ def story_project(make_project, beats: list[dict[str, Any]], **level: Any) -> Pr
     return Project.load(make_project(minimal_config(characters=CAST, scenes=scenes)))
 
 
+@pytest.mark.slow
 def test_validate_refuses_a_locked_door_and_a_blocker_naming_the_beat(make_project) -> None:
     project = story_project(make_project, [
         {"text": "Pip runs to the gate.", "actions": [{"run_to": "pip", "to": "home"}]},
@@ -297,6 +298,7 @@ STORY = [
 ]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_story_renders(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from vidgen.scenes.stage import Stage

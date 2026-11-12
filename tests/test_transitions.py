@@ -88,6 +88,7 @@ def test_first_scene_cannot_crossfade_but_can_fade_in() -> None:
     assert effective(parse_config(_config(transition="crossfade")), 0).type == "cut"
 
 
+@pytest.mark.slow
 def test_validate_checks_colours_and_warns_about_holds(make_project: Any) -> None:
     scenes = _config()["scenes"]
     scenes[2]["transition"] = {"type": "fade_color", "color": "nope"}

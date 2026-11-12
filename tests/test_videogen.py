@@ -116,6 +116,7 @@ def test_mix_request_keeps_its_cache_key() -> None:
     assert request_hash(request()) == "afd6de4ea24498a946d67724"  # computed on the commit before generate_audio became a field
 
 
+@pytest.mark.slow
 def test_a_clip_with_sound_is_not_served_from_one_without(tmp_path: Path) -> None:
     api = MockOpenRouter()
     silent = run(tmp_path, request(), api)
@@ -203,6 +204,7 @@ def test_catalog_cache_and_offline(tmp_path: Path) -> None:
 # ----- the mock flow: submit, poll, download, cache, ledger -----------------------------------------
 
 
+@pytest.mark.slow
 def test_paid_flow_with_the_mock(tmp_path: Path) -> None:
     api = MockOpenRouter()
     result = run(tmp_path, request(), api)
@@ -221,6 +223,7 @@ def test_paid_flow_with_the_mock(tmp_path: Path) -> None:
     assert not (tmp_path / "videogen-ledger.jsonl").exists()            # the mock keeps its own ledger
 
 
+@pytest.mark.slow
 def test_cache_hit_submits_nothing(tmp_path: Path) -> None:
     api = MockOpenRouter()
     run(tmp_path, request(), api)
@@ -236,6 +239,7 @@ def test_dry_run_sends_nothing(tmp_path: Path) -> None:
     assert "would generate assets/generated_video/" in text and "estimate: $0.120" in text and "left $2.000" in text
 
 
+@pytest.mark.slow
 def test_budget_cap_and_estimate_refusals(tmp_path: Path) -> None:
     api = MockOpenRouter(cost=0.25)
     with pytest.raises(VidgenError, match="paying needs a budget"):
@@ -264,6 +268,7 @@ def test_ledger_counts_estimates_of_unreported_jobs(tmp_path: Path) -> None:
         ledger.spent()
 
 
+@pytest.mark.slow
 def test_timeout_then_resume_without_paying_twice(tmp_path: Path) -> None:
     api = MockOpenRouter()
     ticks = iter(range(0, 100000, 1000))
@@ -308,6 +313,7 @@ def test_failed_and_expired_jobs(tmp_path: Path) -> None:
         run(tmp_path, request(seed=2), api)
 
 
+@pytest.mark.slow
 def test_polls_are_retried_on_429(tmp_path: Path) -> None:
     api = MockOpenRouter(poll_error=(429, "slow down"), poll_errors=2)
     result = run(tmp_path, request(), api)
@@ -372,6 +378,7 @@ def test_pictures_are_sent_as_smaller_cached_copies(tmp_path: Path) -> None:
     assert sendable_picture(small, tmp_path) == small  # a JPEG within the limit is sent as it is
 
 
+@pytest.mark.slow
 def test_inline_pictures_shrink_the_request(tmp_path: Path) -> None:
     from vidgen.videogen.openrouter import MAX_INLINE_BYTES, request_bytes
 
@@ -392,6 +399,7 @@ def test_inline_pictures_shrink_the_request(tmp_path: Path) -> None:
 # ----- the key -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_proxy_mode_sends_no_authorization(tmp_path: Path) -> None:
     for provider in (
         OpenRouterVideoProvider(key_via_proxy=True, transport=MockOpenRouter(), environ={}, sleep=lambda s: None),
@@ -404,6 +412,7 @@ def test_proxy_mode_sends_no_authorization(tmp_path: Path) -> None:
         assert all("authorization" not in {k.lower() for k in r.headers} for r in api.requests)
 
 
+@pytest.mark.slow
 def test_env_key_is_sent_but_never_logged(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG)
     api = MockOpenRouter()
@@ -433,6 +442,7 @@ def test_config_section() -> None:
         config.VideoConfig.model_validate(minimal_config(videogen={"budget_usd": -1}))
 
 
+@pytest.mark.slow
 def test_videogen_settings_do_not_change_renders(make_project) -> None:
     from vidgen.project import Project
     from vidgen.render.fingerprint import NOT_RENDER_INPUTS, scene_fingerprint
@@ -443,6 +453,7 @@ def test_videogen_settings_do_not_change_renders(make_project) -> None:
     assert "videogen" in NOT_RENDER_INPUTS
 
 
+@pytest.mark.slow
 def test_cli_models_from_cache_and_ledger(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setenv("VIDGEN_CACHE_DIR", str(tmp_path / "cache"))
     cache = tmp_path / "cache" / "openrouter" / "video_models.json"

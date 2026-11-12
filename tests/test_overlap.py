@@ -145,6 +145,7 @@ def test_validation() -> None:
         VideoConfig.model_validate(_video({"text": "one"}, {"text": "two", "overlap": 0, "interrupt": True}))
 
 
+@pytest.mark.slow
 def test_same_voice_overlap_warns(make_project) -> None:
     project = Project.load(make_project(_video({"text": "one two", "voice": "pip_voice"}, {"text": "three", "voice": "pip_voice", "overlap": 0.3})))
     assert [w for w in validate_warnings(project) if "same voice" in w] == [
@@ -205,6 +206,7 @@ def test_srt_shows_both_lines(tmp_path: Path) -> None:
     assert any("\n" in c.text for c in plain)   # alone it keeps two lines
 
 
+@pytest.mark.slow
 def test_captions_overlay_stacks_both_lines(make_project) -> None:
     beats = [{"text": "You never listen to what I say about the garden", "voice": "pip_voice"},
              {"text": "I do listen!", "voice": "kit_voice", "overlap": 0.8}]
@@ -294,6 +296,7 @@ def test_no_reaction_in_a_pause_that_an_overlap_removes(make_project, tmp_path: 
 # ----- render ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_both_mouths_move_while_lines_overlap(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     beats = [

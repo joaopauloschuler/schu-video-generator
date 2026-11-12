@@ -191,6 +191,7 @@ def test_the_same_seed_gives_the_same_cast_and_a_bigger_cast_starts_alike() -> N
     assert not {c["name"] for c in taken.characters} & set(names[:3])
 
 
+@pytest.mark.slow
 def test_greedy_choice_keeps_the_cast_apart(monkeypatch: pytest.MonkeyPatch) -> None:
     for seed in range(4):
         cast = random_cast.random_cast(8, seed, species=["human", "cat", "rabbit"])
@@ -223,6 +224,7 @@ def test_curated_looks_come_first_while_they_stay_distinct() -> None:
 # ----- vidgen cast -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_cast_command_writes_an_include_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     out = tmp_path / "shared" / "cast.yaml"
     assert cli.main(["cast", "--random", "3", "--seed", "2", "--species", "human", "cat", "--out", str(out), "--json"]) == 0

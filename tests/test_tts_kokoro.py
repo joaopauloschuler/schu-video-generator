@@ -214,6 +214,7 @@ def test_cache_key_covers_model_voice_lang_speed_not_device() -> None:
 # ----- nothing heavy without the extra ------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_validate_and_render_paths_never_import_kokoro(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     before = {name for name in ("kokoro", "torch", "misaki") if name in sys.modules}
     root = make_project(kokoro_config())
@@ -289,6 +290,7 @@ def run(root: Path, *args: str) -> int:
     return main(["tts", str(root), *args])
 
 
+@pytest.mark.slow
 def test_tts_writes_mp3_hash_and_timings_loading_once(make_project, fake: Factory, capsys: pytest.CaptureFixture[str]) -> None:
     data = kokoro_config({"voice": "af_bella", "speed": 1.25}, voices={"guest": {"voice": "am_michael"}})
     data["scenes"][1]["voice"] = "guest"
@@ -430,6 +432,7 @@ def test_bundled_voice_list() -> None:
     assert kokoro_voices.lang_of_voice("zed") is None and kokoro_voices.lang_of_voice("my_voice.pt") is None
 
 
+@pytest.mark.slow
 def test_readback_and_narration_speed_work_with_its_audio(make_project, fake: Factory) -> None:
     from test_readback import FakeSTT
     from test_timing_lint import activity, beat

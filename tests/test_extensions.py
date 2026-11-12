@@ -75,6 +75,7 @@ def test_discover_files_packages_sorted_skips_private(tmp_path: Path) -> None:
     assert extensions.discover(tmp_path) == ["alpha", "pkg", "zeta"]
 
 
+@pytest.mark.slow
 def test_load_extensions_relative_imports_and_order(ext_project) -> None:
     order_src = "from .common import LOADED\nLOADED.append(__name__.rsplit('.', 1)[-1])\n"
     project = ext_project(

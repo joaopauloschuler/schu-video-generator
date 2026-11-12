@@ -181,6 +181,7 @@ def test_validate_reports_bad_steps(make_project) -> None:
 # ----- rendering ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @LATEX
 def test_morph_pairs_marked_parts_then_shapes() -> None:
     with tempconfig({"verbosity": "ERROR"}):
@@ -256,6 +257,7 @@ def test_keep_scrolls_the_oldest_steps_away(make_project, media: Path) -> None:
     assert scene._box is None and "result" in [n for t in scene.targets for n in t.names]
 
 
+@pytest.mark.slow
 @LATEX
 @pytest.mark.render
 def test_term_target_means_the_current_step(make_project, media: Path) -> None:
@@ -305,6 +307,7 @@ def test_too_long_to_read_warns(make_project, media: Path, caplog: pytest.LogCap
     assert "below the readable size" in caplog.text
 
 
+@pytest.mark.slow
 @LATEX
 @pytest.mark.render
 def test_latex_errors_name_the_step_and_show_tex_s_message(make_project, media: Path) -> None:

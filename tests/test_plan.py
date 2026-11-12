@@ -491,6 +491,7 @@ Try it today at https://example.org.
 """
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("fmt", ["16:9", "9:16"])
 def test_rich_outline_validates(tmp_path: Path, fmt: str) -> None:
     plan = plan_of(RICH)

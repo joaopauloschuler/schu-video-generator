@@ -1260,7 +1260,10 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
 - `pytest -q` must pass at every step. No network, no API keys.
 - Tests that invoke Manim rendering are marked `@pytest.mark.render` and use tiny resolutions
   (e.g. 160x90 @ 5 fps); they run by default but can be skipped with `-m "not render"`. The
-  slowest of them are also marked `slow` (Step 22): `-m "not slow"` is a quick full-coverage-ish run.
+  slowest of them are also marked `slow` (Step 22). Since Step 327 a test marked `slow` is left
+  out of the default run (`tests/conftest.py`), and every test over about 0.4 s is marked: the
+  default run takes about 3–4 minutes on one CPU; `-m slow` runs only those, `-m "slow or not slow"`
+  everything, and a test named by node id always runs.
 - ffmpeg is required on PATH for render tests; skip with a clear reason if missing.
 
 ## 10. Refinements (Step 7, independent review)

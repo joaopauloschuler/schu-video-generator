@@ -118,6 +118,7 @@ def test_a_jump_over_a_gap_takes_off_at_the_edge() -> None:
     assert again == plan   # deterministic
 
 
+@pytest.mark.slow
 def test_clouds_are_one_way() -> None:
     level = parse_level(MAP)
     up = plan_jump(level, (16.5, 3.0), TALL, 17.5)   # from the platform, up through the cloud onto its top
@@ -214,6 +215,7 @@ def action_problems(project: Project) -> list[tuple[str, str]]:
         return actions.scene_actions("stage", cls, spec, cls.validate_params(spec.params, theme), theme)[1]
 
 
+@pytest.mark.slow
 def test_validate_names_the_beat_and_why(make_project) -> None:
     project = level_project(make_project, [
         {"text": "Pip climbs up to the plank.", "actions": [{"walk_to": "pip", "to": "b"}]},
@@ -294,6 +296,7 @@ def test_lint_reports_level_moves_squeezed_into_their_beat() -> None:
 # ----- render --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_walks_and_jumps_render_in_their_beats(make_project, tmp_path: Path) -> None:
     project = level_project(make_project, [

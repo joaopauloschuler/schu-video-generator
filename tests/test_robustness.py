@@ -38,6 +38,7 @@ def one_scene(type_: str, beats: int = 1, **params: Any) -> list[dict]:
 # ----- misbehaving extensions ---------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("spec", ["'two'", "(2, 1)", "-1", "True", "(1, 2, 3)", "[1, 2]", "(None, 2)"])
 def test_invalid_beat_count_is_a_clear_error(make_project, spec: str) -> None:
     src = f"from vidgen.api import *\n@scene('x')\nclass X(NarratedScene):\n    beat_count = {spec}\n"

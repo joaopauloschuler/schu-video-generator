@@ -131,6 +131,7 @@ def test_the_wrapper_is_its_provider_otherwise() -> None:
 # ----- a real run (ffmpeg) over the fake Kokoro ---------------------------------------------------
 
 
+@pytest.mark.slow
 def test_tts_run_with_an_effect(make_project, fake: Factory, capsys: pytest.CaptureFixture[str]) -> None:
     data = kokoro_config(voices={"guard": {"voice": "am_onyx", "effect": "hall", "label": "Guard"}})
     data["scenes"][1]["voice"] = "guard"
@@ -170,6 +171,7 @@ def _speech_like(seconds: float = 3.0, rate: int = 24000) -> bytes:
     return out.getvalue()
 
 
+@pytest.mark.slow
 def test_every_effect_is_level_matched_to_the_dry_voice(tmp_path) -> None:
     from vidgen.loudness import integrated_loudness
     from vidgen.render.ffmpeg import decode_mono

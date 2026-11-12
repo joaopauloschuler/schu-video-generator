@@ -32,6 +32,7 @@ SEAT_LINE = 0.14
 # ----- the props (no render) ----------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_furniture_seats_are_at_the_seat_line() -> None:
     assert {"sofa", "armchair", "bed", "desk"} <= set(PROP_SEATS) and set(SEAT_PLACES) <= set(PROP_SEATS)
     for kind, (_, y) in PROP_SEATS.items():   # the older seats too (Step 102)
@@ -88,6 +89,7 @@ def test_hanging_props_hang_above_their_floor() -> None:
     assert clock.height == pytest.approx(0.2 * 0.45 * FH * depth_scale(0.4))
 
 
+@pytest.mark.slow
 def test_props_against_the_wall_take_its_depth() -> None:
     params = stage_params(
         room=True, characters=[{"name": "pip", "depth": 0.3}],
@@ -170,6 +172,7 @@ def test_screenplay_sets_name_a_room_and_its_furniture() -> None:
 # ----- render ---------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_furnished_room(make_project, tmp_path: Path) -> None:
     """Pip and kit sit on the sofa side by side; the picture hangs on the wall; the picture and the
@@ -189,6 +192,7 @@ def test_a_furnished_room(make_project, tmp_path: Path) -> None:
     assert first["pip"]["sitting_on"] == "sofa" and first["kit"]["sitting_on"] == "sofa"
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_furniture_gallery_still(tmp_path: Path) -> None:
     from PIL import Image

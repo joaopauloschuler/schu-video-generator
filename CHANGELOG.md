@@ -7,6 +7,10 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### The default test run leaves the slow tests out (Step 327)
+
+- `python -m pytest -q` now runs every test except those marked `slow`: 6258 of 8184 tests, 194 s on a 1-CPU machine (all tests: about 3.7 hours there). `-m slow` runs only the slow ones, `-m "slow or not slow"` everything; a test named by node id always runs. 1002 more test functions are marked `slow` (every one over about 0.4 s). No test was removed.
+
 ### A dissolve of a few frames where one generated take continues another, on request (Step 326)
 
 - `video_clip`'s `match_previous` takes two more settings. `dissolve: N` (0 to 12, default 0) blends the clip's first N frames with the previous clip's last frame, held still, the previous frame's share falling in equal steps (N = 3: 75 %, 50 %, 25 %). N counts frames of the render being made (preview or final). `level: false` blends without the correction of brightness and colour. No frame is added or removed; durations and sound do not change.

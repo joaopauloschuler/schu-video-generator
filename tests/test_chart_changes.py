@@ -148,6 +148,7 @@ def plays(scene: Any, beat: str, name: str) -> list[Any]:
     return [p for p in scene.play_log if p.beat == beat and any(name in a for a in p.animations)]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_bars_change_and_resort_beat_by_beat(make_project, media: Path) -> None:
     beats = [{"text": "first the old numbers"}, {"text": "then they change"}, {"text": "and change again"}]
@@ -165,6 +166,7 @@ def test_bars_change_and_resort_beat_by_beat(make_project, media: Path) -> None:
             assert safe_area_of(size).contains(mob, tolerance=0.02), type(mob).__name__
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_change_on_a_word_resorts_and_moves_the_highlight_box(make_project, media: Path) -> None:
     beats = [{"text": "the start and then the change comes now and we watch the bars settle in their new places", "actions": [{"reveal": "change1", "at": "@now"}]},
@@ -182,6 +184,7 @@ def test_a_change_on_a_word_resorts_and_moves_the_highlight_box(make_project, me
     assert box.get_center()[0] == pytest.approx(a.get_center()[0], abs=0.05)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_lines_morph_rescale_and_a_cursor_rides_along(make_project, media: Path) -> None:
     beats = [{"text": "loss and accuracy over four epochs", "actions": [{"trace": "series:loss", "to": 3, "at": "@over"}]},
@@ -207,6 +210,7 @@ def test_lines_morph_rescale_and_a_cursor_rides_along(make_project, media: Path)
             assert safe_area_of(size).contains(mob, tolerance=0.02), type(mob).__name__
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_concept_colours_hold_through_a_change(make_project, media: Path) -> None:
     theme = Theme()

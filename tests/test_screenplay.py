@@ -100,6 +100,7 @@ def test_manner_words_become_expressions_and_poses() -> None:
 # ----- the set ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_parse_set_line() -> None:
     design = parse_set("background: night; props: lamp (light) at 0.4, piano, tree, house at far_left; marks: steps 0.85; "
                        "characters: wren at steps", {"wren": "wren"})
@@ -209,6 +210,7 @@ def _cast(text: str) -> tuple[dict[str, Any], dict[str, str]]:
     return {c["name"]: c for c in config["characters"]}, {name: v["voice"] for name, v in config["voices"].items()}
 
 
+@pytest.mark.slow
 def test_generated_looks_and_voices_suit_each_other() -> None:
     by_name, voices = _cast("# Scene: a\nFEN: Hi.\nBRAM: Yo.\nGUS: Hm.")
     assert by_name["fen"]["look"]["hair"] == "bun" and voices["fen_voice"][1] == "f"            # a feminine look, a feminine voice
@@ -281,6 +283,7 @@ def test_a_scene_without_lines_is_an_error() -> None:
 # ----- round trip on the sample ------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_sample_screenplay_round_trip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     out = tmp_path / "box"
     assert cli.main(["screenplay", str(SAMPLE), "--out", str(out), "--json"]) == 0

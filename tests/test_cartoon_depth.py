@@ -103,6 +103,7 @@ def test_depth_slot() -> None:
     assert depth_slot(0.3, [(0.1, True), (0.6, False)], 0) == 2   # others out of order: after the deeper one
 
 
+@pytest.mark.slow
 def test_stage_moves_the_walker_with_what_it_holds() -> None:
     from vidgen.scenes.stage import Stage
 
@@ -134,6 +135,7 @@ def _middle_x(parts: list[Any], name: str, shape: str | None = None) -> float:
     return float(drawing.get_center()[0])
 
 
+@pytest.mark.slow
 def test_front_view_part_layout() -> None:
     side, front = generate_parts(LOOK, COLORS), generate_parts(LOOK, COLORS, front=True)
     assert [p.name for p in front] == [p.name for p in side]
@@ -150,6 +152,7 @@ def test_front_view_part_layout() -> None:
     assert FRONT_DRAW_ORDER["arm_right"] > FRONT_DRAW_ORDER["body"]
 
 
+@pytest.mark.slow
 def test_facing_front_shows_the_front_view() -> None:
     c = both_views()
     side_order = c.draw_order
@@ -360,6 +363,7 @@ def test_validate_warns_about_front_views_of_svg_characters() -> None:
 # ----- render ------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_walking_behind_a_tree_and_a_front_view_on_a_stage(make_project, tmp_path: Path) -> None:
     """pip walks behind the tree to the back of the stage (drawn behind it, smaller, its shadow
@@ -387,6 +391,7 @@ def test_walking_behind_a_tree_and_a_front_view_on_a_stage(make_project, tmp_pat
     assert kit.facing == "left" and kit.side_facing == "left" and kit.draw_order.index("arm_right") < kit.draw_order.index("body")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_props_at_the_depth_a_walker_leaves_stay_drawn(make_project, tmp_path: Path, monkeypatch) -> None:
     """pip walks from the wall's depth to the front past the armchair: every frame still draws the

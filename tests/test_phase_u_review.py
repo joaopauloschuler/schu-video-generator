@@ -19,6 +19,7 @@ from vidgen.cellworld.traffic import EXO_STEPS, exocytosis_steps
 # ----- captions -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_short_note_keeps_the_statement() -> None:
     full = ("TFIIH unwinds the DNA at the start site (+1): a transcription bubble of ~13 bp; TFIIH's kinase "
             "phosphorylates Ser5 of the polymerase's C-terminal domain (CTD)")
@@ -54,6 +55,7 @@ def test_exocytosis_names_the_snares_of_its_context() -> None:
     assert "synaptobrevin" in neuronal and "syntaxin-1" in neuronal and "synaptotagmin" in neuronal and "Ca²⁺" in neuronal
 
 
+@pytest.mark.slow
 def test_exocytosis_snares_option_is_checked() -> None:
     from vidgen.scenes.cell_actions import Exocytosis
 
@@ -75,6 +77,7 @@ def test_gene_spans_italic_genes_not_proteins() -> None:
     assert gene_spans("nothing here", set()) == []
 
 
+@pytest.mark.slow
 def test_scene_types_declare_their_genes() -> None:
     from vidgen.scenes.cell import Cell
     from vidgen.scenes.molecule import Molecule
@@ -112,6 +115,7 @@ def test_inhibitory_phosphorylations_are_drawn_and_played_as_inhibition() -> Non
 # ----- framing and paths ----------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_vesicle_by_the_membrane_is_framed_with_it() -> None:
     from vidgen.cellworld.model import ObjectSpec as Obj
 

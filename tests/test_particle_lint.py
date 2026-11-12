@@ -60,6 +60,7 @@ def test_rules_are_registered_last_with_their_defaults() -> None:
     assert rules.particle_mass.tolerance == 0.05 and rules.branching_ratio.tolerance == 0.1 and rules.significance_claim.sigmas == 0.5
 
 
+@pytest.mark.slow
 def test_the_knowledge_does_not_import_manim() -> None:
     import subprocess
     import sys
@@ -246,6 +247,7 @@ def test_kinematics_values() -> None:
 # ----- the scenes and the project ------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_charge_and_spin_read_every_project_the_rest_only_particle_ones(make_project) -> None:
     plain = _project(make_project, [_card("c", "The down quark has charge +2/3.", "The W weighs 91 GeV.", "Photons leave tracks.")])
     assert [r for r, _ in _found(plain, "c")] == ["particle_charge"]
@@ -260,6 +262,7 @@ def test_screen_text_and_rules_off(make_project) -> None:
     assert [r for r, _ in found] == ["particle_lifetime"] and found[0][1].startswith("text 'The muon lives 2.2 ms.'")
 
 
+@pytest.mark.slow
 def test_scene_facts(make_project) -> None:
     scenes = [
         {"id": "kin", "type": "kinematics", "params": {"decay": "pi+ -> mu+ nu_mu", "frames": "rest"},
@@ -291,6 +294,7 @@ def test_units_convention_is_info(make_project) -> None:
     assert _found(p, "a") == [] and [r for r, _ in _found(p, "b")] == ["particle_units"]
 
 
+@pytest.mark.slow
 def test_gallery_particle_samples_are_clean() -> None:
     project = Project.load(REPO / "examples" / "gallery")
     for spec in project.config.scenes:

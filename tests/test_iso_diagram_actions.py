@@ -83,6 +83,7 @@ def params(**values: Any) -> Any:
     return registry.get("iso_diagram").cls.validate_params(values)
 
 
+@pytest.mark.slow
 def test_a_grid_with_at_is_slanted_down_a_tall_frame() -> None:
     blocks = [{"id": n, "at": [2 * k, 0]} for k, n in enumerate("abcd")]
     p = params(blocks=blocks)
@@ -207,6 +208,7 @@ GROUPS = {
 }
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("size", [(854, 480), (480, 854)])
 def test_labels_keep_off_other_blocks_and_each_other(make_project, size: tuple[int, int]) -> None:
     scene, made = plan(make_project, GROUPS, size)
@@ -227,6 +229,7 @@ def test_labels_keep_off_other_blocks_and_each_other(make_project, size: tuple[i
             assert min(r[2], s[2]) - max(r[0], s[0]) <= 0 or min(r[3], s[3]) - max(r[1], s[1]) <= 0, (a, b)
 
 
+@pytest.mark.slow
 def test_a_stack_in_9x16_lists_its_layers_under_it_and_fills_the_frame(make_project) -> None:
     stack = {"heading": "A layered web app", "blocks": [{"id": "app", "label": "One server", "layers": ["Database", "Services", "API", "Web UI"]}]}
     tall, made = plan(make_project, stack, (480, 854))
@@ -254,6 +257,7 @@ def bottom(mob: Any) -> float:
     return float(mob.get_bottom()[1])
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_raise_lower_explode_and_collapse_move_blocks_and_their_labels(make_project, media: Path) -> None:
     scene = render(scene_with(make_project, [None, [{"raise": "block:web", "by": 1.0}, {"explode": "stack:app", "gap": 0.8}],
@@ -272,6 +276,7 @@ def test_raise_lower_explode_and_collapse_move_blocks_and_their_labels(make_proj
 ISO_UP = math.sqrt(1.5) / 2
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_build_waits_for_its_action_and_grows(make_project, media: Path) -> None:
     scene = render(scene_with(make_project, [None, [{"build": "stack:app", "style": "grow"}]], entrance="grow"), "s", media, size=(160, 90))
@@ -280,6 +285,7 @@ def test_build_waits_for_its_action_and_grows(make_project, media: Path) -> None
     assert all(first.is_shown(t) for t in first.targets)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_flow_relabel_focus_and_solid_recolouring(make_project, media: Path) -> None:
     acts = [{"flow": "edge:*", "chain": True}, {"flow": "edge:db->app", "style": "packets"}, {"relabel": "block:db", "text": "Data 2"},

@@ -61,6 +61,7 @@ def test_init_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert code == 1 and "not an empty directory" in doc["error"]["message"]
 
 
+@pytest.mark.slow
 def test_tts_json_dry_run_and_run(make_project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(minimal_config(pronunciation={"Hello": "Heh-low"}))
     calls: list[Any] = []
@@ -175,6 +176,7 @@ def test_cost_refusal_explains_the_way() -> None:
     assert "dry_run=true" in message and "confirm_cost=true" in message
 
 
+@pytest.mark.slow
 def test_prepare_picture(tmp_path: Path) -> None:
     small = tmp_path / "small.png"
     Image.new("RGB", (320, 180), (200, 10, 10)).save(small)
@@ -275,6 +277,7 @@ def error_text(result: Any) -> str:
     return "\n".join(texts(result))
 
 
+@pytest.mark.slow
 def test_server_tools_guide_and_resources(tmp_path: Path) -> None:
     async def body(client: Any) -> None:
         tools = (await client.list_tools()).tools
@@ -306,6 +309,7 @@ def test_server_tools_guide_and_resources(tmp_path: Path) -> None:
     run_session(tmp_path, body)
 
 
+@pytest.mark.slow
 def test_server_validate_paths_and_cost_guards(tmp_path: Path) -> None:
     root = tmp_path / "root"
     tiny_project(root / "proj")
@@ -355,6 +359,7 @@ tracks:
 """
 
 
+@pytest.mark.slow
 def test_server_music_tools(tmp_path: Path) -> None:
     """Step 188: music_template / music_patches / music_render / music_check."""
     (tmp_path / "assets" / "music").mkdir(parents=True)
@@ -399,6 +404,7 @@ def test_server_music_tools(tmp_path: Path) -> None:
     run_session(tmp_path, body)
 
 
+@pytest.mark.slow
 def test_server_studio_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Step 198: an agent answers a studio hand-off through the disk (studio_sessions / studio_read /
     studio_check / studio_propose); the studio picks the proposal up from the session's inbox."""
@@ -486,6 +492,7 @@ def test_server_storyboard_and_lint_return_pictures(tmp_path: Path) -> None:
     run_session(tmp_path, body)
 
 
+@pytest.mark.slow
 def test_server_direct_returns_the_automatic_actions(tmp_path: Path) -> None:
     example = Path(__file__).resolve().parents[1] / "examples" / "cartoon"
     data = yaml.safe_load((example / "video.yaml").read_text(encoding="utf-8"))
@@ -502,6 +509,7 @@ def test_server_direct_returns_the_automatic_actions(tmp_path: Path) -> None:
     run_session(tmp_path, body)
 
 
+@pytest.mark.slow
 def test_server_screenplay_writes_a_project(tmp_path: Path) -> None:
     text = "# Scene: yard\nPIP: Is that a kite?\n[Kit jumps.]\nKIT (doubtful): It is a box.\n"
 
@@ -520,6 +528,7 @@ def test_server_screenplay_writes_a_project(tmp_path: Path) -> None:
     run_session(tmp_path, body)
 
 
+@pytest.mark.slow
 def test_server_story_draft_writes_a_project_and_report(tmp_path: Path) -> None:
     text = 'In the lab, Mara checked the console.\n\n"It is late," said Mara.\n\n"Go home," Theo replied.\n'
 
@@ -536,6 +545,7 @@ def test_server_story_draft_writes_a_project_and_report(tmp_path: Path) -> None:
     run_session(tmp_path, body)
 
 
+@pytest.mark.slow
 def test_server_shorts_suggest_reports_and_writes_variants(tmp_path: Path) -> None:
     lines = ["Who opened the gate?", "Not me! It was open at dawn!", "Then where did the goats go?", "They ran up the hill in the rain."]
     beats = [{"text": f"{line} The farm was quiet and the fields were wet after a long night of storms."} for line in lines * 2]
@@ -554,6 +564,7 @@ def test_server_shorts_suggest_reports_and_writes_variants(tmp_path: Path) -> No
     run_session(tmp_path, body)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_server_character_sheet_returns_the_sheets(tmp_path: Path) -> None:
     example = Path(__file__).resolve().parents[1] / "examples" / "svg_character"

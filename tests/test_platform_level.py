@@ -94,6 +94,7 @@ def test_bodies_stand_on_spots_and_tiles() -> None:
         place_bodies(level, [Placing("pip", "character", x=17.0)])
 
 
+@pytest.mark.slow
 def test_world_and_rules_modules_do_not_import_manim() -> None:
     code = ("import sys, vidgen.world, vidgen.world.moves, vidgen.world.story_props, vidgen.cartoon.level_stage, "
             "vidgen.cartoon.level_drawing, vidgen.camera, vidgen.cartoon.foley; print('manim' in sys.modules)")   # the camera and foley too (Step 155)
@@ -154,6 +155,7 @@ def test_chunks_join_without_a_seam() -> None:
 LEVEL = {"map": "....................\n..a.......b.........\n######..############", "spots": {"a": "start"}}
 
 
+@pytest.mark.slow
 def test_stage_params_with_a_level() -> None:
     p = stage_params(level=LEVEL, characters=[{"name": "pip", "at": "start"}, {"name": "kit", "at": "b"}])
     assert p.size == LEVEL_SIZE and p.level.parsed().spot_names() == ["start", "b"]
@@ -202,6 +204,7 @@ def test_validate_checks_the_level_fits_the_frame(make_project) -> None:
 # ----- render -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_level_renders_on_a_stage(make_project, tmp_path: Path) -> None:
     from PIL import Image

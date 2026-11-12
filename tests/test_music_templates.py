@@ -67,6 +67,7 @@ def test_voicing_notes_follow_the_written_or_played_voicing() -> None:
         _score({"k": {"instrument": "kick", "steps": "x' . . ."}})
 
 
+@pytest.mark.slow
 def test_pad_swell_moves_the_airy_layer_and_the_sub_is_centred() -> None:
     def airy_level(swell: float) -> np.ndarray:
         score = _score({"pad": {"instrument": "pad", "play": "chords", "settings": {"tone": 5000, "air": 1.0, "swell": swell, "sub": 0.5}}})
@@ -83,6 +84,7 @@ def test_pad_swell_moves_the_airy_layer_and_the_sub_is_centred() -> None:
     assert swelling[1] > 3 * swelling[0] and swelling[2] > 3 * swelling[3]  # silent at the start and end, full in the middle
 
 
+@pytest.mark.slow
 def test_pad_sub_width_gives_each_side_its_own_sub() -> None:
     """Step 190: ``sub_width: 1`` brings back the Step 185 sub (its own phases on each side; the
     built-in ``skyline`` keeps it); 0, the default, is the centred sub; between, a cross-fade."""
@@ -98,6 +100,7 @@ def test_pad_sub_width_gives_each_side_its_own_sub() -> None:
     assert centred > 0.999 and wide < 0.9 and wide < half < centred
 
 
+@pytest.mark.slow
 def test_pad_sub_plays_the_written_bass() -> None:
     def sub_peak(bass: str) -> float:
         data = {"key": "A minor", "tempo": 120, "bars": 2, "progression": [{"chord": "Am", "notes": ["A3", "C4", "E4"], "bass": bass}],
@@ -114,6 +117,7 @@ def test_pad_sub_plays_the_written_bass() -> None:
 # ----- the templates and the command ---------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_every_bed_has_a_template_that_reads() -> None:
     catalog = music_template_catalog()
     assert [t["name"] for t in catalog] == list(music.BUILTIN_BEDS)
@@ -128,6 +132,7 @@ def test_every_bed_has_a_template_that_reads() -> None:
         template_path("noen")
 
 
+@pytest.mark.slow
 def test_music_template_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["music", "template"]) == 0
     listing = capsys.readouterr().out
@@ -198,6 +203,7 @@ def profile(x: np.ndarray, bars: int, per_chord: int) -> dict[str, Any]:
 PYTHON_BEDS = [name for name, bed in music.BUILTIN_BEDS.items() if not bed.score]
 
 
+@pytest.mark.slow
 def test_bed_measures_are_current() -> None:
     """The kept measurements still describe the beds (one measured again; all are fingerprinted)."""
     kept = json.loads(BED_MEASURES.read_text(encoding="utf-8"))

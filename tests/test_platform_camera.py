@@ -45,6 +45,7 @@ TALL_MAP = """
 # ----- character_size (no manim) -----------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_character_size_sets_the_default_size() -> None:
     assert stage_params().size == pytest.approx(0.45) and stage_params(character_size="medium").size == pytest.approx(0.45)
     assert stage_params(character_size="small").size == pytest.approx(0.315)
@@ -277,6 +278,7 @@ def recording(monkeypatch) -> list[tuple[tuple[float, float], float, float, floa
     return seen
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_followed_hero_stays_in_frame_across_and_up_the_level(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen.introspect import LayoutRecorder
@@ -303,6 +305,7 @@ def test_a_followed_hero_stays_in_frame_across_and_up_the_level(make_project, tm
     assert chunks and all(o.get("scenery") for o in chunks)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_large_hero_in_a_portrait_frame(make_project, tmp_path: Path, monkeypatch) -> None:
     """9:16 with large characters: the level raised on more ground, the hero followed, the moves

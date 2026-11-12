@@ -476,6 +476,7 @@ def test_cli_human_and_json(rb_project: Path, monkeypatch: pytest.MonkeyPatch, c
 # ----- the lint rule ------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_readback_rule_reads_only_cached_transcripts(make_project) -> None:
     root = make_project(readback_config(preview={"width": 854, "height": 480, "fps": 15}))
     project = Project.load(root)

@@ -41,6 +41,7 @@ def requests(project: Project) -> dict[str, Any]:
     return {i.scene_id: i.request for i in scene_images(project)}
 
 
+@pytest.mark.slow
 def test_without_cartoon_style_every_key_is_unchanged(styled) -> None:
     found = requests(styled())
     assert found["set"].key == found["pic"].key == CAT_KEY

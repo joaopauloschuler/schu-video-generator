@@ -45,6 +45,7 @@ def plan_with(make_project, scene: dict[str, Any], actions: list[dict[str, Any]]
 # ----- a raised block's label --------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_raised_blocks_label_keeps_off_its_tilted_connectors(make_project) -> None:
     scene, made = plan_with(make_project, ONE_REQUEST, [{"raise": "block:app2", "by": 0.4}], (854, 480))
     assert "app2->cache" in scene._raised_lines and "browser->lb" not in scene._raised_lines

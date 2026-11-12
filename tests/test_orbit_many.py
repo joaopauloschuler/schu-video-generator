@@ -68,6 +68,7 @@ def test_routh_criterion() -> None:
     assert orbits.routh_stable(0.0121) and orbits.routh_stable(0.0385) and not orbits.routh_stable(0.0386)
 
 
+@pytest.mark.slow
 def test_jacobi_conserved_tadpole_horseshoe_and_instability() -> None:
     mu = orbits.RESTRICTED["sun_jupiter"].mu
     l4 = orbits.lagrange_points(mu)["L4"]
@@ -111,6 +112,7 @@ def test_figure_eight_returns_after_one_period() -> None:
     assert abs(float(run.angular[0])) < 1e-6 * run.angular_scale
 
 
+@pytest.mark.slow
 def test_laplace_resonance_periods_and_conjunctions() -> None:
     p = orbits.GALILEAN_PERIODS
     assert p["europa"] / p["io"] == pytest.approx(2.0073, abs=1e-4) and p["ganymede"] / p["europa"] == pytest.approx(2.0147, abs=1e-4)
@@ -178,6 +180,7 @@ def test_tides_numbers() -> None:
     assert orbits.equilibrium_tide(moon.gm, earth.gm, earth.radius, d) == pytest.approx(0.36, abs=0.01)
 
 
+@pytest.mark.slow
 def test_solar_masses_and_angular_momentum() -> None:
     assert orbits.value_si("2 Msun", "mass", "m") * orbits.G == pytest.approx(2 * orbits.GM_SUN)
     assert orbits.value_si("3 Mearth", "mass", "m") * orbits.G == pytest.approx(3 * orbits.GM_EARTH)
@@ -190,6 +193,7 @@ def test_solar_masses_and_angular_momentum() -> None:
 # ----- the scene ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_restricted_scene_model_and_targets() -> None:
     p = cls().validate_params(TROJAN)
     m = p.model()
@@ -256,6 +260,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_many_body_scenes_render(size: tuple[int, int], make_project, media: Path) -> None:

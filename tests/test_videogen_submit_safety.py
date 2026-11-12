@@ -51,6 +51,7 @@ def url_in(body: bytes | None) -> str:
 # ----- the tunnel stays open for the job's whole wait ----------------------------------------------
 
 
+@pytest.mark.slow
 def test_an_in_flight_fetch_and_a_repeat_keep_the_host_open(tmp_path: Path, fake_cloudflared: list[str]) -> None:
     project, audio, _ = sources(tmp_path)
     audio.write_bytes(b"x" * (30 * 1024 * 1024))
@@ -70,6 +71,7 @@ def test_an_in_flight_fetch_and_a_repeat_keep_the_host_open(tmp_path: Path, fake
     assert host.close_reason == "done"
 
 
+@pytest.mark.slow
 def test_a_paid_run_does_not_close_the_tunnel_after_a_fetch(tmp_path: Path, fake_cloudflared: list[str]) -> None:
     project, audio, _ = sources(tmp_path)
     fetch = local_fetch(tmp_path)
@@ -95,6 +97,7 @@ def test_a_paid_run_does_not_close_the_tunnel_after_a_fetch(tmp_path: Path, fake
 # ----- no paid submit without a live tunnel ------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_host_nearly_out_of_time_refuses_the_submit_without_a_post(tmp_path: Path, fake_cloudflared: list[str]) -> None:
     project, audio, _ = sources(tmp_path)
     local = local_fetch(tmp_path)
@@ -228,6 +231,7 @@ def test_a_crash_after_the_answer_is_covered_too(tmp_path: Path, monkeypatch: py
     assert len(api.submits) == 1 and len(Ledger(ledger_path(tmp_path, "mock")).unresolved_intents()) == 1
 
 
+@pytest.mark.slow
 def test_resolve_lets_the_owner_proceed(tmp_path: Path) -> None:
     # --not-charged: the budget gets it back and the next run pays
     _, ledger = interrupted(tmp_path / "free")
@@ -274,6 +278,7 @@ def test_old_ledger_lines_still_read(tmp_path: Path) -> None:
 # ----- every reader of the ledger shows it: plan, run, status, generate ledger, resolve ------------
 
 
+@pytest.mark.slow
 def test_plan_run_status_ledger_and_cli_show_it(make_project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(shot_config(WIDE, style_sheet=None))
     project = Project.load(root)

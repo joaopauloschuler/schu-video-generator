@@ -317,6 +317,7 @@ def problems_of(make_project: Any, scenes: list[dict[str, Any]]) -> list[str]:
     return [p.message for p in project_problems(project_with(make_project, scenes, narration=NARRATION))]
 
 
+@pytest.mark.slow
 def test_params_are_validated(make_project) -> None:
     assert problems_of(make_project, [scene([[{"signal": "glucagon"}]])]) == []
     assert any("unknown node 'pck2'; did you mean 'pck1'" in m for m in problems_of(make_project, [scene([[]], edges=["creb -> pck2"])]))
@@ -367,6 +368,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_pathway_renders(size: tuple[int, int], make_project, media: Path) -> None:

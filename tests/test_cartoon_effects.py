@@ -130,6 +130,7 @@ def test_thick_path_is_a_band_round_the_path() -> None:
 # ----- sounds (no manim) -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_symbols_sound_as_they_pop_up() -> None:
     (ding,) = foley_cues(PlayedAction("effect", 2.0, 0.4, effect="idea"))
     assert (ding.sound, ding.time, ding.gain) == ("chime", 2.0, EFFECT_SOUNDS["idea"][1]) and ding.params["duration"] == 0.5
@@ -231,6 +232,7 @@ def test_a_symbol_does_not_hide_its_speaker() -> None:
 # ----- the symbol follows the character (manim, no render) ----------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_symbol_follows_the_head_and_leaves_the_character_alone() -> None:
     from vidgen.cartoon.effect_symbols import EffectSymbol, head_box
 
@@ -277,6 +279,7 @@ def test_validate_effect_actions(make_project) -> None:
 # ----- one render --------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_stage_shows_and_sounds_a_symbol(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder

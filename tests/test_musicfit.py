@@ -221,6 +221,7 @@ def _load(tmp_path: Path, video: dict[str, Any]) -> Project:
     return Project.load(root)
 
 
+@pytest.mark.slow
 def test_cue_inputs_from_the_config_and_timings(tmp_path: Path) -> None:
     project = _load(tmp_path, _video())
     cue = project.config.music_cues[0]
@@ -266,6 +267,7 @@ def test_scene_compose_keys_need_a_fitted_cue() -> None:
     assert settings == Settings("tense", seed=3)  # another mood: its defaults, the cue's seed
 
 
+@pytest.mark.slow
 def test_music_settings_do_not_make_scene_renders_stale(tmp_path: Path) -> None:
     from vidgen.render.fingerprint import scene_fingerprint
 
@@ -288,6 +290,7 @@ def _fake_render(calls: list[Score]) -> Any:
     return render
 
 
+@pytest.mark.slow
 def test_the_mix_plays_the_fitted_piece_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[Score] = []
     monkeypatch.setattr(synth, "symusic_version", lambda: synth.SYMUSIC_VERSION)
@@ -307,6 +310,7 @@ def test_the_mix_plays_the_fitted_piece_once(tmp_path: Path, monkeypatch: pytest
     assert gain.min() > 0.9  # the fade-out starts at the closing chord, not 3 s before the end
 
 
+@pytest.mark.slow
 def test_stings_are_played_by_the_composed_musics_instruments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[Score] = []
     monkeypatch.setattr(synth, "symusic_version", lambda: synth.SYMUSIC_VERSION)

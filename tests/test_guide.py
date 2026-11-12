@@ -74,6 +74,7 @@ def test_both_agent_files_say_who_they_are_for() -> None:
     assert "vidgen guide" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
+@pytest.mark.slow
 def test_topics_are_unique_and_resolve_by_name_and_alias() -> None:
     topics = guide_topics()
     names = [t.name for t in topics] + [a for t in topics for a in t.aliases]
@@ -278,6 +279,7 @@ def field_names(model: Any) -> set[str]:
     return names
 
 
+@pytest.mark.slow
 def test_scene_chooser_names_every_type_and_real_params() -> None:
     types = builtin_types()
     rows = table_rows(topic_text("scenes"))

@@ -85,6 +85,7 @@ def test_shape_stays_in_its_box_and_crackles() -> None:
 # ----- the prop -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_portal_is_a_switched_prop() -> None:
     assert SCIFI_PROPS == ("portal", "hologram_display") and "portal" in PROP_KINDS and "portal" in SWITCHED_PROPS and "portal" in LIVING_KINDS
     assert "portal" in GLOWS and "portal" in FLOATING_IN_PLACE
@@ -138,6 +139,7 @@ def test_a_portal_stands_at_a_spot_of_an_iso_place(make_project) -> None:
     assert check_project(stage(make_project, params, beats)) == []
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_portal_opens_with_its_sounds(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen import extensions, registry
@@ -193,6 +195,7 @@ def test_a_hologram_character_is_drawn_in_its_colour() -> None:
     assert apply_hologram(plain, HOLOGRAM_COLOR) is plain and is_hologram(plain)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_hologram_is_not_graded_by_the_light(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen import extensions

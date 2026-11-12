@@ -121,6 +121,7 @@ def test_delete_insert_rename() -> None:
 # ----- chords ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_roman_numerals_read_back_as_the_same_chords_in_every_template() -> None:
     count = 0
     for name in template_names():
@@ -244,6 +245,7 @@ def wav_rms(path: Path) -> tuple[int, float]:
         return w.getnframes(), float(np.sqrt(np.mean(frames**2)))
 
 
+@pytest.mark.slow
 def test_render_has_energy_per_bar_and_mutes_make_a_mix(app: StudioApp) -> None:
     app.load(text=TEXT)
     full = app.render()
@@ -268,6 +270,7 @@ def test_render_has_energy_per_bar_and_mutes_make_a_mix(app: StudioApp) -> None:
     assert json.loads((app.session.renders / f"{full['key']}.json").read_text(encoding="utf-8"))["energy"] == full["energy"]
 
 
+@pytest.mark.slow
 def test_server_edit_route(app: StudioApp) -> None:
     import http.client
 

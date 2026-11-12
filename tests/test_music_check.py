@@ -60,6 +60,7 @@ def _fixes(report: chk.MusicCheck, topic: str) -> str:
 # ----- pieces that pass, pieces that fail ------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_good_small_score_passes() -> None:
     report = _check(_score())
     assert report.verdict.startswith("fine under narration"), music_check_text(report)
@@ -73,6 +74,7 @@ def test_a_good_small_score_passes() -> None:
     assert "the lift lifts" in text and "the build builds" in text and "advice" not in text
 
 
+@pytest.mark.slow
 def test_a_flat_lift_and_build_are_flagged_with_fixes() -> None:
     tracks = {
         "pad": {"instrument": "pad", "play": "chords", "sections": {"lift": {"volume": -3}}},
@@ -87,6 +89,7 @@ def test_a_flat_lift_and_build_are_flagged_with_fixes() -> None:
     assert "riser" in fixes and "volume: {from: -6, to: 0}" in fixes
 
 
+@pytest.mark.slow
 def test_a_loud_mid_range_part_competes_with_the_voice() -> None:
     tracks = {
         "pad": {"instrument": "pad", "play": "chords", "volume": -6},
@@ -100,6 +103,7 @@ def test_a_loud_mid_range_part_competes_with_the_voice() -> None:
     assert "`piano` (piano) holds" in fix and "`piano.volume: " in fix and "(now 4)" in fix and "`octave: 5`" in fix
 
 
+@pytest.mark.slow
 def test_boomy_harsh_and_out_of_key_scores_are_flagged() -> None:
     boomy = _check(_score(tracks={
         "pad": {"instrument": "pad", "play": "chords", "volume": -10},
@@ -117,6 +121,7 @@ def test_boomy_harsh_and_out_of_key_scores_are_flagged() -> None:
     assert _levels(off)["key"] == ["fix"] and "C major" in next(f.text for f in off.findings if f.topic == "key")
 
 
+@pytest.mark.slow
 def test_a_quiet_intro_under_a_loud_lift_is_unsteady() -> None:
     tracks = {
         "pad": {"instrument": "pad", "play": "chords", "sections": {"intro": {"volume": -24}, "build": {"volume": -24}}},
@@ -130,6 +135,7 @@ def test_a_quiet_intro_under_a_loud_lift_is_unsteady() -> None:
     assert "`pad: sections: {intro: {volume: -7}, build: {volume: -7}}` (+17 dB)" in fixes and "`saw`, `kick`" in fixes
 
 
+@pytest.mark.slow
 def test_audio_files_clipping_and_a_seam_click() -> None:
     t = np.arange(4 * RATE) / RATE
     clean = 0.3 * np.sin(2 * np.pi * 220 * t)  # whole periods: a seamless loop
@@ -155,6 +161,7 @@ def test_tempo_words_accept_the_same_beat_heard_another_way() -> None:
 # ----- the pieces ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_track_by_track_render_matches_the_render() -> None:
     score = parse_music_score(_score(), "t.yaml")
     seen: dict[str, float] = {}
@@ -174,6 +181,7 @@ def test_ducking_is_vidgens_default() -> None:
     assert np.allclose(chk.duck_gain_db(spans, 1000), duck_curve(spans, 1000, duck))
 
 
+@pytest.mark.slow
 def test_narration_demo() -> None:
     voice, name = chk.load_narration(None)
     assert name == "narration_sample.mp3" and len(voice) == pytest.approx(20 * RATE, abs=RATE // 10)
@@ -187,6 +195,7 @@ def test_narration_demo() -> None:
     assert 20 * np.log10(np.abs(mix).max()) <= chk.DEMO_TRUE_PEAK + 0.01
 
 
+@pytest.mark.slow
 def test_pictures_and_comparison() -> None:
     a = _check(_score())
     t = np.arange(8 * RATE) / RATE
@@ -202,6 +211,7 @@ def test_pictures_and_comparison() -> None:
 # ----- the command -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_music_check_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     score = tmp_path / "theme.yaml"
     score.write_text(yaml.safe_dump(_score(title="Theme")), encoding="utf-8")

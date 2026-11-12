@@ -80,6 +80,7 @@ def test_seated_feet_and_the_crouch() -> None:
     assert crouch_stoop(0.0, 0.2) == 0.0 < crouch_stoop(0.05, 0.2) < crouch_stoop(1.0, 0.2) == pytest.approx(15.0)
 
 
+@pytest.mark.slow
 def test_props_have_seats_and_lean_edges() -> None:
     assert set(PROP_SEATS) == {"chair", "rock", "box", "sofa", "armchair", "bed", "desk", "bench", "log", "school_desk"} and {"tree", "door", "sign"} <= set(PROP_LEANS)
     for kind, (x, y) in PROP_SEATS.items():
@@ -114,6 +115,7 @@ def test_svg_props_give_seats_in_view_box_coordinates(tmp_path: Path) -> None:
 # ----- the character's states (no render) -------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("look", ["generated", "svg"])
 def test_seated_crouched_and_leaning_states(look: str) -> None:
     c = figure("pip") if look == "generated" else built("svg")
@@ -160,6 +162,7 @@ def stage(*kinds: str) -> tuple[StageFake, Any, dict[str, Any]]:
     return scene, pip, props
 
 
+@pytest.mark.slow
 def test_sit_on_a_chair_and_stand_up() -> None:
     scene, pip, props = stage("chair")
     chair = props["chair"]
@@ -188,6 +191,7 @@ def test_sit_on_a_chair_and_stand_up() -> None:
     assert use("stand_up").apply(scene, [target("pip", pip)]) == []   # nothing to stand up from
 
 
+@pytest.mark.slow
 def test_lean_on_a_tree() -> None:
     scene, pip, props = stage("tree")
     tree = props["tree"]
@@ -292,6 +296,7 @@ def test_a_seated_listener_does_not_turn_to_look_behind() -> None:
 # ----- render -------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_sitting_on_a_stage(make_project, tmp_path: Path) -> None:
     """pip sits on the chair (the dump says so), kit leans on the tree; then both stand up."""

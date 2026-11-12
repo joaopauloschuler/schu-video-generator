@@ -9,6 +9,7 @@ from vidgen.config import BeatConfig, format_location, parse_config
 from vidgen.errors import VidgenError
 
 
+@pytest.mark.slow
 def test_defaults() -> None:
     data = minimal_config()
     del data["scenes"][0]["params"]

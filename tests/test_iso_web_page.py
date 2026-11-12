@@ -26,6 +26,7 @@ EXAMPLE = REPO / "examples" / "iso-web-page"
 # ----- the example -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("variant", [None, "short"])
 def test_the_example_validates_and_uses_phase_r(variant: str | None, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = shutil.copytree(EXAMPLE, tmp_path / "web", ignore=shutil.ignore_patterns("build", "output", "exports", "audio"))
@@ -69,6 +70,7 @@ def on_screen(scene, point: np.ndarray) -> np.ndarray:
     return (np.asarray(point[:2]) - frame.get_center()[:2]) * factor
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_focus_keeps_its_targets_clear_of_the_captions_and_diagram_goes_back(make_project, tmp_path: Path) -> None:
     captions = [{"type": "captions", "style": "karaoke"}]

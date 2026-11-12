@@ -117,6 +117,7 @@ def test_config_terms_errors(terms: dict[str, Any], message: str) -> None:
         config(terms)
 
 
+@pytest.mark.slow
 def test_validate_names_an_unknown_theme_colour(make_project) -> None:
     root = make_project(minimal_config(terms={"loss": "acent", "gradient": "#E07A5F"}))
     problems = [str(p) for p in project_problems(Project.load(root))]
@@ -131,6 +132,7 @@ def glyph_colors(mob: Any) -> list[str]:
     return [g.get_color().to_hex().upper() for g in mob.family_members_with_points()]
 
 
+@pytest.mark.slow
 def test_fit_text_and_t_draw_terms(text_media: None) -> None:
     from vidgen.helpers import styled
     from vidgen.layout import fit_text
@@ -177,6 +179,7 @@ def test_tex_parts_of_terms() -> None:
     assert term_tex_colors("\\theta", (Term("t", "#111111", ("t",)),)) == {}
 
 
+@pytest.mark.slow
 def test_equation_colours_term_tex_and_keeps_targets(text_media: None) -> None:
     from types import SimpleNamespace
 
@@ -234,6 +237,7 @@ def test_rule_counts_colours_and_checks_contrast() -> None:
 # ----- one tiny render -----------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_terms_drawn_and_opted_out(make_project, tmp_path: Path) -> None:
     from vidgen import extensions, registry

@@ -188,6 +188,7 @@ def test_indoor_walls_stand_at_the_back_and_are_cut_in_front() -> None:
     assert outdoor.wall_height(0, 0) == GARDEN_WALL_HEIGHT and outdoor.wall_height(3, 0) == 0.0 and not outdoor.is_cut(0, 0)
 
 
+@pytest.mark.slow
 def test_world_and_drawing_modules_do_not_import_manim() -> None:
     code = ("import sys, vidgen.world.iso, vidgen.world.iso_view, vidgen.cartoon.iso_drawing, vidgen.cartoon.iso_objects, "
             "vidgen.cartoon.iso_scenery, vidgen.cartoon.iso_stage; print('manim' in sys.modules)")
@@ -350,6 +351,7 @@ def test_scenery_draws_front_pictures_of_the_pieces_over_a_character() -> None:
 ISO = {"map": VILLAGE, "spots": {"a": "start", "h": "home", "w": "well", "b": "top"}, "objects": [{"object": "house", "at": "home"}]}
 
 
+@pytest.mark.slow
 def test_stage_takes_an_iso_place() -> None:
     params = stage_params(iso={**ISO, "objects": [{"object": "house", "at": "home"}, {"object": "lamp", "at": {"column": 10, "row": 1},
                                                                                      "color": "accent", "facing": "right"}]},
@@ -400,6 +402,7 @@ def test_a_set_and_the_videos_character_size_leave_an_iso_place_alone(make_proje
 # ----- render -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_iso_place_renders_on_a_stage(make_project, tmp_path: Path) -> None:
     params = {"idle": False, "background": "#BFE3F5", "iso": ISO,

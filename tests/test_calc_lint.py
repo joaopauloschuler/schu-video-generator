@@ -179,6 +179,7 @@ def test_rules_are_registered_in_config_order() -> None:
     assert LintRules().plot_conserved.tolerance == 0.01 and LintRules().plot_fit_claims.sigmas == 2.0
 
 
+@pytest.mark.slow
 def test_calculation_numbers(make_project) -> None:
     right = ["The Earth moves at about thirty kilometres per second.", "That is 29.8 km/s.", "Roughly 30,000 metres per second.",
              "One astronomical unit is the distance.", "Light spans 400 to 700 nanometres."]

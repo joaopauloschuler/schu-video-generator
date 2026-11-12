@@ -199,6 +199,7 @@ def test_no_drift_beats_start_where_timings_say(main_project: Path) -> None:
     assert np.abs(segment).max() < 0.002   # silent but for AAC spill of the beats around it (< -54 dBFS)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_srt_from_render(main_project: Path) -> None:
     text = (main_project / "output" / "out.srt").read_text(encoding="utf-8")
@@ -431,6 +432,7 @@ def test_concat_quote_and_tail() -> None:
     assert pipeline._tail("x 10%\rx 100%\ndone\n") == "x 100%\ndone"
 
 
+@pytest.mark.slow
 def test_worker_usage_error() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "vidgen.render.worker", "nowhere", "s"], capture_output=True, text=True, encoding="utf-8"

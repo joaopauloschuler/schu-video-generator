@@ -96,6 +96,7 @@ def _fake_render(project: Project, preview: bool, scene_id: str) -> None:
     timings.write_text(json.dumps({"render": render}), encoding="utf-8")
 
 
+@pytest.mark.slow
 def test_a_draft_never_reuses_a_preview_render_nor_a_preview_a_draft(make_project) -> None:
     """Even when a preview is made at the draft's size and rate (same width, height, fps), the
     renders sit in different folders, so neither is taken for the other."""
@@ -125,6 +126,7 @@ def test_render_takes_draft_or_preview_not_both() -> None:
     assert worker_parser().parse_args([".", "intro", "--quality", "draft"]).quality == "draft"
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_mcp_render_tool_makes_a_draft(tmp_path: Path) -> None:
     """MCP ``render`` with ``draft: true`` (its ``preview`` left at its default, true) renders a
@@ -215,6 +217,7 @@ def _rounded(value: Any) -> Any:
     return value
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_draft_leaves_out_the_decoration_and_keeps_every_timing(make_project, tmp_path: Path, monkeypatch) -> None:
     """The same stage rendered normally and as a draft (both 160x90 at 5 fps here): the draft has
@@ -253,6 +256,7 @@ def test_a_draft_leaves_out_the_decoration_and_keeps_every_timing(make_project, 
         assert draft.cast[name].feet()[0] == pytest.approx(full.cast[name].feet()[0])
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_render_draft_writes_its_own_video(make_project, tmp_path: Path) -> None:
     """``vidgen render --draft`` end to end on a tiny project: the video and timings come from

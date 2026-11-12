@@ -297,6 +297,7 @@ def test_validate_warns_when_latex_missing(asset_project, monkeypatch: pytest.Mo
     assert "need LaTeX" in caplog.text
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("example", [EXAMPLE, GALLERY], ids=lambda p: p.name)
 def test_examples_validate(example: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["validate", str(example)]) == 0

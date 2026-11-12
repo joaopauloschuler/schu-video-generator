@@ -44,6 +44,7 @@ def test_cache_key_changes_with_the_look_not_the_pose() -> None:
     assert look_key(LOOK, {**COLORS, "clothes": "#000000"}) != key
 
 
+@pytest.mark.slow
 def test_part_drawings_are_made_once_per_look(counted: list[CharacterLook]) -> None:
     theme = Theme()
     pip = CharacterEntry(name="pip", look=LOOK)
@@ -62,6 +63,7 @@ def test_part_drawings_are_made_once_per_look(counted: list[CharacterLook]) -> N
     assert look_parts(LOOK, colors, front=True) is not look_parts(LOOK, colors) and len(counted) == 4
 
 
+@pytest.mark.slow
 def test_look_cache_keeps_the_newest_looks(counted: list[CharacterLook], monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(character_module, "LOOK_CACHE_SIZE", 2)
     looks = [CharacterLook(seed=k) for k in range(3)]
@@ -73,6 +75,7 @@ def test_look_cache_keeps_the_newest_looks(counted: list[CharacterLook], monkeyp
     assert len(counted) == 4
 
 
+@pytest.mark.slow
 def test_redraws_transform_the_cached_drawings_only() -> None:
     rest = figure()
     c = rest.copy()

@@ -219,6 +219,7 @@ def test_the_scenery_draws_a_picture_of_its_snow() -> None:
 # ----- speed lines along the diagonal (manim, no render) -----------------------------------------
 
 
+@pytest.mark.slow
 def test_speed_lines_on_an_iso_place_go_along_the_walk() -> None:
     from vidgen.cartoon.motion_effect_shapes import MotionEffect
     from vidgen.cartoon.motion_effects import MotionEffectCue
@@ -246,6 +247,7 @@ def test_speed_lines_on_an_iso_place_go_along_the_walk() -> None:
 # ----- a tiny render ------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_rain_with_puddles_and_settling_snow_render_on_the_place(make_project, tmp_path: Path) -> None:
     from test_cartoon_stage import render_with_layout

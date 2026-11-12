@@ -136,6 +136,7 @@ def test_look_svg_config() -> None:
 # ----- parts and the character (manim) -------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_parts_in_character_units() -> None:
     parts = {p.name: p for p in svg_character_parts(EXAMPLE, where="sprout.svg")}
     assert list(parts) == list(EXAMPLE_PARTS)
@@ -185,6 +186,7 @@ def svg_project(make_project, look: dict | None = None, **entry) -> Project:
     return Project.load(root)
 
 
+@pytest.mark.slow
 def test_build_and_character_helper(make_project) -> None:
     project = svg_project(make_project)
     entry = project.config.characters[0]
@@ -194,6 +196,7 @@ def test_build_and_character_helper(make_project) -> None:
         assert set(character("sprout").parts) == set(EXAMPLE_PARTS)
 
 
+@pytest.mark.slow
 def test_validate_reports_svg_problems_and_warnings(make_project) -> None:
     project = svg_project(make_project)
     assert project_problems(project) == [] and validate_warnings(project) == []

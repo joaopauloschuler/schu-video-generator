@@ -43,6 +43,7 @@ def _rms(x: np.ndarray) -> float:
 # ----- loudness ----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_loudness_of_reference_sines() -> None:
     t = np.arange(RATE * 12) / RATE
     tone = 0.1 * np.sin(2 * np.pi * 997 * t)  # -20 dBFS
@@ -259,6 +260,7 @@ def test_score_beds_facts() -> None:
         assert shipped == yaml.safe_load((Path(__file__).parent / "data" / "studio" / f"{demo}.yaml").read_text(encoding="utf-8"))
 
 
+@pytest.mark.slow
 def test_bed_sources_differ_and_describe_themselves() -> None:
     a, b = music.bed_loop("calm"), music.bed_loop("pulse")
     assert a.shape != b.shape or not np.allclose(a, b)
@@ -305,6 +307,7 @@ def _tone_file(path: Path, seconds: float, freq: float = 220.0, level: float = 0
     return data
 
 
+@pytest.mark.slow
 def test_file_source_is_matched_trimmed_and_looped(tmp_path: Path) -> None:
     _tone_file(tmp_path / "assets" / "song.wav", 6.0)
     cue = MusicCue(source="assets/song.wav", start=1.0, crossfade=1.0)
@@ -371,6 +374,7 @@ def test_limiter_keeps_true_peaks_under_the_ceiling() -> None:
     assert low == 1.0 and np.array_equal(quiet, x * 0.1)
 
 
+@pytest.mark.slow
 def test_clip_spans(tmp_path: Path) -> None:
     write_clip(tmp_path / "assets" / "loud.mp4", seconds=1.0)
     write_clip(tmp_path / "assets" / "silent.mp4", seconds=1.0, audio=False)
@@ -410,6 +414,7 @@ def _silent_scenes(root: Path, seconds: list[float], **extra: Any) -> tuple[Proj
     return Project.load(root), timings, wavs
 
 
+@pytest.mark.slow
 def test_music_only_video_is_normalised(tmp_path: Path) -> None:
     project, timings, wavs = _silent_scenes(tmp_path, [4.0, 5.0], music={"source": "pulse", "fade_in": 0.5}, audio={"target_lufs": -14})
     out = tmp_path / "mix.wav"
@@ -422,6 +427,7 @@ def test_music_only_video_is_normalised(tmp_path: Path) -> None:
     assert loudness.integrated_loudness(written) == pytest.approx(report.integrated_lufs, abs=0.01)
 
 
+@pytest.mark.slow
 def test_unvoiced_narration_is_not_normalised(tmp_path: Path) -> None:
     project, timings, wavs = _silent_scenes(tmp_path, [4.0, 4.0], beats=True, music="calm")
     report = mix.mix_audio(project, timings, wavs, None, tmp_path / "mix.wav")
@@ -475,6 +481,7 @@ def test_music_config_errors(value: Any, message: str) -> None:
         parse_config(_video(music=value))
 
 
+@pytest.mark.slow
 def test_validate_reports_missing_music_file(make_project: Any) -> None:
     root = make_project(_video(music={"source": "assets/music/theme.mp3"}))
     problems = {p.location: p.message for p in project_problems(Project.load(root))}

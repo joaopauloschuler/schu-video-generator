@@ -157,6 +157,7 @@ def test_a_follower_walks_behind_the_leader() -> None:
     assert follow_route(place, (0, 1), (6, 1), gap=2).end_cell == (4, 1)   # the leader stands: stop two short of it
 
 
+@pytest.mark.slow
 def test_wander_is_the_same_for_a_seed_and_stays_near() -> None:
     place = parse_iso_map("\n".join(["..........."] * 9))
     one = wander_route(place, (5, 4), radius=2, stops=4, seed=7)
@@ -317,6 +318,7 @@ def test_good_moves_validate_with_word_anchors(make_project) -> None:
 # ----- render --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_walk_behind_the_house_renders(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder

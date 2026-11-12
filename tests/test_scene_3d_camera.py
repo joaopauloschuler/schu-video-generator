@@ -273,6 +273,7 @@ def _chromium_or_skip() -> None:
         pytest.skip("Chromium for Playwright is not available")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_page_draws_every_shape() -> None:
     _chromium_or_skip()

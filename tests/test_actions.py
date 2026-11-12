@@ -117,6 +117,7 @@ def test_until_must_be_a_later_beat_of_the_scene() -> None:
 # ----- registry ---------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_builtin_actions_are_registered() -> None:
     extensions.load_builtins()
     assert registry.action_names() == BUILTIN_ACTIONS
@@ -260,6 +261,7 @@ def test_render_checks_actions_before_starting_workers(make_project) -> None:
 # ----- schema and listing -----------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_schema_describes_both_forms_and_options() -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -355,6 +357,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_bullets_actions_render_within_their_beats(make_project, media: Path) -> None:
     acts = beats(
@@ -388,6 +391,7 @@ def test_bullets_actions_render_within_their_beats(make_project, media: Path) ->
     assert all(scene.is_shown(name) for name in rows)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_bar_chart_actions_and_mid_beat_state(make_project, media: Path) -> None:
     acts = beats([{"action": "highlight", "target": "bar:4K", "style": "underline", "color": "accent"}], [{"dim": "bar?", "opacity": 0.5}, {"highlight": "bar1"}])
@@ -415,6 +419,7 @@ def test_actions_are_shortened_to_fit_the_beat(make_project, media: Path) -> Non
     assert record.requested == 5 and record.end <= float(scene.renderer.time) + 1e-6
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_actions_leave_time_for_the_beats_remaining_steps(make_project, media: Path) -> None:
     """Several reveal steps in one beat plus an action: the action runs in the wait after the
@@ -513,6 +518,7 @@ def extending_example() -> tuple[str, list[dict[str, Any]]]:
     return code, scenes
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_extending_example_validates_and_renders(make_project, media: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, scenes = extending_example()

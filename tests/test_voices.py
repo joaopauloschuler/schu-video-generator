@@ -96,6 +96,7 @@ def test_unknown_names_and_the_reserved_default() -> None:
         parse_config(minimal_config(voices={"ana": {"voiceid": "x"}}))
 
 
+@pytest.mark.slow
 def test_validate_checks_colours_and_warns_about_unused_voices(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     data = dialogue()
     data["voices"]["eve"] = {"voice_id": "eve_id", "color": "no_such_colour"}

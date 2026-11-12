@@ -47,6 +47,7 @@ def names(report: Any) -> dict[str, str]:
 # ----- QA ------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_qa_passes_a_good_clip_and_notes_its_sound(tmp_path: Path) -> None:
     report = check_clip(clip(tmp_path, "good", audio=True), length=2.0, width=W, height=H)
     assert names(report) == {"sound": "info"} and report.summary() == "QA ok"
@@ -172,6 +173,7 @@ def logo(root: Path) -> None:
     Image.new("RGBA", (40, 40), (255, 255, 255, 255)).save(root / "assets" / "logo.png")
 
 
+@pytest.mark.slow
 def test_placements_windows_fades_and_fingerprints(make_project, tmp_path: Path) -> None:
     from vidgen.render.fingerprint import scene_fingerprint
 
@@ -207,6 +209,7 @@ def frames_of(path: Path) -> list[tuple[float, np.ndarray]]:
         return [(float(f.time), f.to_ndarray(format="rgb24").astype(int)) for f in container.decode(video=0)]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_render_lays_takes_under_the_overlays(make_project, tmp_path: Path) -> None:
     from vidgen.render.pipeline import current_render, render_project
@@ -270,6 +273,7 @@ def quiet(line: str) -> None:
     return None
 
 
+@pytest.mark.slow
 def test_qa_says_where_the_clips_sound_is_heard(tmp_path: Path) -> None:
     sounding, silent = clip(tmp_path, "sounding", audio=True), clip(tmp_path, "silent")
     mix = check_clip(sounding, length=2.0, width=W, height=H)
@@ -281,6 +285,7 @@ def test_qa_says_where_the_clips_sound_is_heard(tmp_path: Path) -> None:
     assert next(c.severity for c in empty.checks if c.name == "sound") == "warning"
 
 
+@pytest.mark.slow
 def test_a_sound_model_take_keeps_its_sound_and_mock_jobs_follow_the_flag(make_project) -> None:
     data = wide_config()
     data["videogen"]["sound"] = "model"
@@ -292,6 +297,7 @@ def test_a_sound_model_take_keeps_its_sound_and_mock_jobs_follow_the_flag(make_p
     assert take.qa["audio"] is True and "video_clip" in next(c["message"] for c in take.qa["checks"] if c["check"] == "sound")
 
 
+@pytest.mark.slow
 def test_run_dry_then_pay_then_cached(make_project) -> None:
     project = Project.load(make_project(wide_config()))
     api = MockOpenRouter(cost=0.12)
@@ -330,6 +336,7 @@ def test_run_stops_at_the_first_failure_without_retrying(make_project) -> None:
     assert [j.status for j in jobs] == ["failed"]
 
 
+@pytest.mark.slow
 def test_cli_run_status_takes_pick(make_project, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
     root = make_project(wide_config())
     monkeypatch.setattr("vidgen.videogen.workflow.load_catalog", lambda: CATALOG)

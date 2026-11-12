@@ -169,6 +169,7 @@ def test_svg_model_config_errors(make_project, imagegen: dict[str, Any], message
         Project.load(make_project(minimal_config(imagegen=imagegen)))
 
 
+@pytest.mark.slow
 def test_vector_params_need_a_vector_picture(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     from vidgen.scenes.image import Image
 
@@ -386,6 +387,7 @@ def test_layout_dump_reports_one_vector_object(small_config: None) -> None:  # n
 # ----- the image scene -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_image_scene_draws_svg_files_and_generated_svgs(svg_project, tmp_path: Path) -> None:
     from test_builtin_scenes import render_scene

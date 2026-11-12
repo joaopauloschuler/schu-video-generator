@@ -56,6 +56,7 @@ def test_host_problems() -> None:
         parse_config(config(host="dott"))
 
 
+@pytest.mark.slow
 def test_validate_rejects_a_host_on_a_stage_and_warns_about_a_silent_host(make_project) -> None:
     stage = {"id": "park", "type": "stage", "host": "dot", "params": {"characters": ["kit"]}, "beats": [{"text": "Hi."}]}
     root = make_project(config([bullets(), stage], host={"character": "dot", "floor_color": "nope"}))
@@ -145,6 +146,7 @@ def built_scene(root: Path, pixels: tuple[int, int], scene_id: str = "steps") ->
         return scene, scene.safe_area
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("pixels", [(160, 90), (90, 160), (90, 90)], ids=["16:9", "9:16", "1:1"])
 def test_the_scene_region_shrinks_clear_of_the_host(make_project, pixels: tuple[int, int]) -> None:
     from vidgen.overlays import mobject_region
@@ -193,6 +195,7 @@ def test_host_overlap() -> None:
 # ----- one tiny render -----------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_bullets_scene_with_a_host_renders(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder

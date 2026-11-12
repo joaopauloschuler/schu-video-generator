@@ -141,6 +141,7 @@ def test_output_dir_flag_wins(make_project, tmp_path: Path, monkeypatch: pytest.
     assert p.build_dir == root.resolve() / "build" and p.exports_dir == root.resolve() / "exports"
 
 
+@pytest.mark.slow
 def test_cli_output_dir_flag(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     from vidgen.cli import build_parser, main
 

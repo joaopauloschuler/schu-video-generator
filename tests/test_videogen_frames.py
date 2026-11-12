@@ -60,6 +60,7 @@ def _png() -> bytes:
     return buffer.getvalue()
 
 
+@pytest.mark.slow
 def test_prompt_numbers_pictures_after_the_layout(make_project) -> None:
     root = paint_project(make_project)
     project = Project.load(root)

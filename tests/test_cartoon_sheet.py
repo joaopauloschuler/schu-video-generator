@@ -89,6 +89,7 @@ def test_sheet_grid_size_per_character(counts: tuple[int, ...], columns: int, ro
 # ----- mid-action stills: what a stage asks for, how the sheet labels them -----------------------------
 
 
+@pytest.mark.slow
 def test_stage_asks_for_mid_action_stills_of_its_moving_actions() -> None:
     extensions.load_builtins()
     stage = registry.get("stage").cls
@@ -106,6 +107,7 @@ def test_sheet_label_of_a_mid_action_still() -> None:
 # ----- drawing --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_character_sheet_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """`--all PROJECT --json`: a sheet per character, as large as its layout, small; then one by name."""
@@ -135,6 +137,7 @@ def test_character_sheet_command(tmp_path: Path, capsys: pytest.CaptureFixture[s
     assert main(["character-sheet", "nobody", str(root)]) == 1
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_stage_storyboard_stills_include_mid_action_frames(make_project, tmp_path: Path) -> None:
     """A walk and a gesture get a still half-way through them, besides the beat's end."""

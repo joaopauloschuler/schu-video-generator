@@ -92,6 +92,7 @@ def test_registered_sizes_vs_scales() -> None:
     assert chosen.size("body") == TYPE_SCALES["compact"]["body"] and chosen.size("huge") == 80
 
 
+@pytest.mark.slow
 def test_config_scale_is_validated_and_in_the_schema(make_project: Callable[..., Path], capsys: pytest.CaptureFixture[str]) -> None:
     assert parse_config(minimal_config(theme={"scale": "large"})).theme.scale == "large"
     with pytest.raises(VidgenError, match="theme.scale"):

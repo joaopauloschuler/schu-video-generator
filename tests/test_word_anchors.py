@@ -184,6 +184,7 @@ def test_scene_sfx_list_points_to_the_sfx_action() -> None:
         parse_config(minimal_config(scenes=[scene]))
 
 
+@pytest.mark.slow
 def test_every_kind_of_action_validates_with_a_word(make_project) -> None:
     """Scene actions, a callout, a sound, and stage actions (moves, acting) all take a word."""
     stage = {
@@ -289,6 +290,7 @@ def test_lower_third_starts_at_a_word(make_project) -> None:
 # ----- one tiny render --------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_action_plays_on_its_word(make_project, tmp_path: Path) -> None:
     from manim import tempconfig

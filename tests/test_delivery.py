@@ -213,6 +213,7 @@ def test_drama_preset_checks() -> None:
     assert [i.name for i in across.failures] == ["loudness spread"] and [i.name for i in across.items] == ["loudness spread", "dialogue spread"]
 
 
+@pytest.mark.slow
 def test_drama_render_checks_dialogue_and_music(tmp_path: Path) -> None:
     project = _project(tmp_path, "drama", levels={"shore_b2": 0.02}, music={"source": "calm", "volume": -6},
                        audio_output={"loudness": "drama", "transcripts": False})
@@ -227,6 +228,7 @@ def test_drama_render_checks_dialogue_and_music(tmp_path: Path) -> None:
 # ----- one file per chapter -------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_split_into_chapter_files(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     project = _project(tmp_path, "split", levels={"river_b1": 0.03}, cold_open=["river_b3"],
                        audio_output={"loudness": "drama", "split": "chapters", "format": "mp3"})
@@ -275,6 +277,7 @@ def test_playlist_removes_files_it_no_longer_lists(tmp_path: Path) -> None:
     assert sorted(p.name for p in tmp_path.iterdir()) == ["a.m3u", "a_01.mp3", "a_02.mp3", "mine.mp3"]
 
 
+@pytest.mark.slow
 def test_split_without_chapters_is_one_file(tmp_path: Path) -> None:
     data = {**DRAMA, "sections": [{k: v for k, v in s.items() if k != "title"} for s in DRAMA["sections"]]}
     project = Project.load(_write(tmp_path / "one", {**data, "audio_output": {"split": "chapters", "transcripts": ["txt"]}}))

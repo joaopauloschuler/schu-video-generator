@@ -148,6 +148,7 @@ def test_a_run_has_longer_strides_bigger_swings_and_its_own_footfalls() -> None:
 # ----- manim, no render ------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_run_leans_forward() -> None:
     pip = figure()
     pip.motion = "none"
@@ -162,6 +163,7 @@ def test_a_run_leans_forward() -> None:
     assert pip.pose_of("body").angle == pytest.approx(body)
 
 
+@pytest.mark.slow
 def test_effects_follow_their_mover_and_leave_it_alone() -> None:
     from manim import Circle
 
@@ -221,6 +223,7 @@ def test_lint_leaves_motion_effects_alone() -> None:
     assert describe(motion([0, 0, 1, 1], "dust", "moss")) == "motion effect 'dust' of 'moss'"
 
 
+@pytest.mark.slow
 def test_validate_run_to_and_big_gestures(make_project) -> None:
     good = acting_project(make_project, [
         {"text": "Pip runs over and waves.", "actions": [{"run_to": "pip", "to": "centre"}, {"gesture": "pip", "to": "wave", "big": True, "at": 0.6}]},
@@ -265,6 +268,7 @@ def frame_hashes(project: Any, media: Path, monkeypatch) -> tuple[Any, list[str]
     return scene, hashes, [o for f in recorder.frames for o in f["objects"]]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_motion_effects_on_a_stage(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen import extensions, registry
@@ -285,6 +289,7 @@ def test_motion_effects_on_a_stage(make_project, tmp_path: Path, monkeypatch) ->
     assert added == []   # cartoon_motion: none, no effects
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_motion_effects_off_render_as_without_them(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen import extensions, registry

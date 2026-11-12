@@ -207,6 +207,7 @@ def test_typed_text_becomes_a_version_and_a_bad_one_does_not(app: StudioApp) -> 
     assert not syntax["ok"] and syntax["problems"][0]["line"]
 
 
+@pytest.mark.slow
 def test_routes_for_text_and_patches(app: StudioApp) -> None:
     import urllib.request
 

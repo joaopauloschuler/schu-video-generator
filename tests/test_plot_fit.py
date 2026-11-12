@@ -50,6 +50,7 @@ needs_scipy = pytest.mark.skipif(sp_optimize is None, reason="scipy not installe
 # ----- distribution functions --------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_quantiles_match_tables() -> None:
     assert normal_ppf(0.975) == pytest.approx(1.959963984540054, abs=1e-12)
     assert t_ppf(0.975, 1) == pytest.approx(12.706204736174707, rel=1e-10)

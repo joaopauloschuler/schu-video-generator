@@ -225,6 +225,7 @@ def cls() -> Any:
     return registry.get("plot").cls
 
 
+@pytest.mark.slow
 def test_model_series_resolve_with_units_and_progress() -> None:
     p = cls().validate_params({"models": {"osc": OSC}, "arrange": "columns", "share": False,
                                "panels": [{"series": [{"name": "x", "x": "t", "y": "x", "readout": True}]},
@@ -281,6 +282,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_live_plots_render(size: tuple[int, int], make_project, media: Path) -> None:

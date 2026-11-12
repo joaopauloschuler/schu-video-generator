@@ -82,6 +82,7 @@ def test_poisson_fit_matches_a_direct_likelihood_minimum() -> None:
     assert np.allclose(fit.params, ref, rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_root_n_weights_bias_a_decay_low_and_the_likelihood_does_not() -> None:
     model = _decay_model()
     neyman, ml = [], []
@@ -108,6 +109,7 @@ def _plot(**p: Any) -> Any:
     return registry.get("plot").cls.validate_params(p)
 
 
+@pytest.mark.slow
 def test_a_count_of_zero_is_fitted_and_residuals_use_the_fit() -> None:
     x = [0, 1, 2, 3, 4, 5, 6, 7]
     y = [40, 24, 15, 9, 5, 3, 0, 1]

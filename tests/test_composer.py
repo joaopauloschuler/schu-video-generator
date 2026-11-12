@@ -140,6 +140,7 @@ def test_instruments_have_ranges_and_words() -> None:
 # ----- determinism and the melody ------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_same_settings_give_the_same_music() -> None:
     for name in MOODS:
         first, again = compose(name, seed=5), compose(name, seed=5)
@@ -246,6 +247,7 @@ def _project(tmp_path: Path, music_setting: Any) -> Project:
     return Project.load(root)
 
 
+@pytest.mark.slow
 def test_without_the_extra_the_moods_bed_plays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     monkeypatch.setattr(synth, "symusic_version", lambda: None)
     beds = {"lullaby": np.full((RATE, 2), 0.1, dtype=np.float32)}
@@ -263,6 +265,7 @@ def test_without_the_extra_the_moods_bed_plays(tmp_path: Path, monkeypatch: pyte
     }
 
 
+@pytest.mark.slow
 def test_validate_says_what_plays_without_the_extra_or_the_soundfont(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

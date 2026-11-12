@@ -125,6 +125,7 @@ def test_earth_at_the_equinoxes() -> None:
         assert abs((got - expected + 180) % 360 - 180) < 0.03, when
 
 
+@pytest.mark.slow
 def test_distances_stay_between_perihelion_and_aphelion() -> None:
     jds = orbits.julian_date("1800-01-01") + np.linspace(0.0, 250 * 365.25, 2500)
     for k in orbits.PLANETS:
@@ -202,6 +203,7 @@ WHOLE = {"date": "2024-01-01", "bodies": [{"preset": k} for k in EIGHT], "inset"
 LOG = {"date": "2024-01-01", "bodies": [{"preset": k} for k in (*EIGHT, "pluto")], "radial": "log", "span": "1 yr"}
 
 
+@pytest.mark.slow
 def test_scene_on_a_date() -> None:
     p = cls().validate_params(OPPOSITION)
     m = p.model()
@@ -273,6 +275,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_sky_renders(size: tuple[int, int], make_project, media: Path) -> None:

@@ -49,6 +49,7 @@ def test_texts_go_where_they_cover_no_face() -> None:
     assert hud.pick_place(places, crowded) == min(range(3), key=lambda k: hud.face_cover(places[k], crowded))
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_hud_moves_its_texts_off_a_face_and_draws_in_pieces(make_project, tmp_path: Path) -> None:
     hud_entry = {"type": "hud", "at": 0.0, "duration": 3.0, "alert": "ALERT", "lines": ["ONE", "TWO"], "heart": {"bpm": 80}}
@@ -68,6 +69,7 @@ def test_the_hud_moves_its_texts_off_a_face_and_draws_in_pieces(make_project, tm
     assert len(layer.posed(14)[0][1].submobjects) == 3   # the frame, the texts, the heart
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_compact_hud_stands_closer_to_every_edge(make_project, tmp_path: Path) -> None:
     tops = {}
@@ -156,6 +158,7 @@ def test_a_scanner_spikes_off_its_scale() -> None:
         stage_params(props=[{"prop": "phone", "scan": {"to": 1.5}}])
 
 
+@pytest.mark.slow
 def test_a_medal_and_a_glowing_pendant() -> None:
     entry = CharacterEntry.model_validate({"name": "ana", "look": {"outfit": "coat", "accessories": ["pendant"]}})
     figure = build_character(entry, theme=Theme())
@@ -255,6 +258,7 @@ def test_kiss_options(make_project) -> None:
 # ----- one render of it all ------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_kiss_in_a_lab_renders(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

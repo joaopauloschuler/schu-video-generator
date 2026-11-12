@@ -132,6 +132,7 @@ def morph_scene(beats: list[dict[str, Any]], **params_: Any) -> dict[str, Any]:
     return {"id": "m", "type": "code_morph", "params": {"versions": [SLOW, {"code": CACHED, "highlight": "changed"}], **params_}, "beats": beats}
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_morph_at_the_beat_ends_with_the_new_listing(make_project, media: Path) -> None:
     spec = morph_scene([{"text": "the slow one"}, {"text": "now with a cache"}], title="Fib")
@@ -149,6 +150,7 @@ def test_morph_at_the_beat_ends_with_the_new_listing(make_project, media: Path) 
             assert safe_area_of(size).contains(mob, tolerance=0.02), type(mob).__name__
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_reveal_action_morphs_on_its_word(make_project, media: Path) -> None:
     beats = [{"text": "the slow one"}, {"text": "now we add a cache to it", "actions": [{"reveal": "version2", "at": "@cache"}]}]

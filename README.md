@@ -974,12 +974,12 @@ my_video/
 
 ## Working on schu-video-generator
 
-`pip install -e ".[dev]"`, then `python -m pytest -q` runs every test (about 17 minutes on two
-CPUs: many tests render tiny videos); `python -m pytest -q -n auto` runs them in parallel on
-every CPU (pytest-xdist, in the `dev` extra). Quicker: `python -m pytest -q -m "not slow"`
-(about two minutes) skips the render sweeps over every scene type, the end-to-end renders of
-sound, music and transitions, and every test that takes over ~1.5 s; `-m "not render"` skips
-all rendering. Run the full suite before committing. No test needs network or keys.
+`pip install -e ".[dev]"`, then `python -m pytest -q` runs the default set: every test except
+those marked `slow` (about 3–4 minutes on one CPU). `python -m pytest -q -m slow` runs only the
+slow ones (the render sweeps over every scene type, the end-to-end renders, and every test over
+about 0.4 s: hours on one CPU), and `-m "slow or not slow"` runs everything; `-n auto` runs them
+in parallel on every CPU (pytest-xdist, in the `dev` extra). `-m "not render"` also skips the
+remaining rendering tests. No test needs network or keys.
 
 ## Troubleshooting
 

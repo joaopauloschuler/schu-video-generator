@@ -197,6 +197,7 @@ def test_reveal_action_scrolls_a_line_into_view(make_project, media: Path) -> No
     assert float(scene.renderer.time) == pytest.approx(beat_total(scene), abs=1.5 / FPS)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_notes_beside_in_landscape_and_below_in_portrait(make_project, media: Path) -> None:
     code = "a = 1\nb = 2\nc = a + b\nprint(c)\n"
@@ -272,6 +273,7 @@ PASCAL = (
 )
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_wrapped_lines_keep_colours_targets_and_notes_do_not_overlap(make_project, media: Path) -> None:
     steps = [{"lines": 3, "note": "Int8 weights"}, {"lines": "/ModelDir/-/CtxLen/", "note": "One reply"}]

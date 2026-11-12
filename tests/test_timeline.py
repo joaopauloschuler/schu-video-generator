@@ -110,6 +110,7 @@ def test_target_names() -> None:
     assert cls.target_names(params())[:2] == ["axis", "event1"]
 
 
+@pytest.mark.slow
 def test_schema_accepts_numbers_and_text_as_dates() -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -175,6 +176,7 @@ def test_timeline_renders_within_its_beats_and_the_safe_area(p: dict[str, Any], 
         assert safe.contains(t.mobject, tolerance=0.05), t.name
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_events_alternate_sides_without_overlap_and_the_progress_line_grows(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "timeline", "params": {"events": SPACE}, "beats": three_beats()}])
@@ -224,6 +226,7 @@ def test_proportional_spacing_and_now(make_project, media: Path) -> None:
     assert len(d.markers[2]) == 2   # ring around the now marker (disc + ring, no icons)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_early_reveal_grows_the_line_but_not_the_skipped_event(make_project, media: Path) -> None:
     acts = beats([{"reveal": "event3"}], None, None)
@@ -236,6 +239,7 @@ def test_early_reveal_grows_the_line_but_not_the_skipped_event(make_project, med
     assert all(i in {id(m) for m in scene.mobjects} for i in seg_ids)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_highlight_step_dims_the_others(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "timeline", "params": {"events": PLAN, "highlight": 1}, "beats": three_beats() + [{"text": "the end"}]}])

@@ -128,6 +128,7 @@ def test_what_is_redrawn_over_a_moving_part() -> None:
 # ----- drawing and living props (no render) ---------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_living_props_draw_their_moving_parts_inside_their_box() -> None:
     theme = Theme()
     for kind in ("clock", "tv", "lamp"):
@@ -197,6 +198,7 @@ def test_a_tv_and_a_lamp_switch_on_and_off() -> None:
 # ----- params and actions (no render) ---------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("prop", "message"),
     [
@@ -272,6 +274,7 @@ ROOM: dict[str, Any] = {
 BEATS = [{"text": "Pip waits in the room for a little while."}, {"text": "Then the lamp and the television come on."}]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_props_switched_on_later_are_drawn_as_before_until_then(make_project, tmp_path: Path, monkeypatch) -> None:
     """The lamp and the tv are drawn living (their picture, lantern and glow hidden) and redrawn
@@ -294,6 +297,7 @@ def test_props_switched_on_later_are_drawn_as_before_until_then(make_project, tm
     assert [s for s in scene.sfx_log if s.sound == "click"]   # foley
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_running_clock_changes_nothing_outside_its_box(make_project, tmp_path: Path, monkeypatch) -> None:
     """Only the clock's hands leave the static image (with what is drawn over them): every frame

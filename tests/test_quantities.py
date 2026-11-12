@@ -51,6 +51,7 @@ def result(symbols, calcs, name=None):
     return worked.results[-1] if name is None else next(r for r in worked.results if r.name == name)
 
 
+@pytest.mark.slow
 def test_core_imports_without_manim() -> None:
     code = "import sys, vidgen.quantities; sys.exit(1 if 'manim' in sys.modules else 0)"
     assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0

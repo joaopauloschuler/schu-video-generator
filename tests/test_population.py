@@ -281,6 +281,7 @@ DRIFT = {"model": "drift", "N": 20, "p0": 0.5, "generations": 50, "replicates": 
 PEAKS = [{"chromosome": 16, "position": "53.8 Mb", "p": 1e-40, "gene": "FTO"}]
 
 
+@pytest.mark.slow
 def test_scenes_are_validated(make_project) -> None:
     assert problems(make_project, one("population", DRIFT, [{"simulate": "generation:20"}, {"simulate": "lines"},
                                                             {"resample": "population"}])) == []
@@ -315,6 +316,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_population_scenes_render(size: tuple[int, int], make_project, media: Path) -> None:

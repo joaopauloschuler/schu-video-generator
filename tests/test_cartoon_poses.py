@@ -51,6 +51,7 @@ def test_the_tables_name_the_step_70_entries() -> None:
     assert all(set(parts) <= set(EXPRESSION_PARTS) for parts in EXPRESSIONS.values())
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("look", list(LOOKS))
 def test_every_pose_and_expression_builds(look: str) -> None:
     c = built(look)
@@ -102,6 +103,7 @@ def test_unknown_names_list_the_known_ones() -> None:
         find_entry("expression", "glad")
 
 
+@pytest.mark.slow
 def test_generated_shape_table_matches_the_generator() -> None:
     for look, entry_look in (("default", {}), ("dressed", LOOKS["dressed"])):
         c = built(look)
@@ -152,6 +154,7 @@ def svg_project(make_project, **entry) -> Project:
     return Project.load(root)
 
 
+@pytest.mark.slow
 def test_validate_checks_own_pose_shapes_and_parts(make_project) -> None:
     project = svg_project(
         make_project,

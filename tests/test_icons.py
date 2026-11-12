@@ -204,6 +204,7 @@ def test_project_icons_extend_and_override(make_project: Any) -> None:
     assert [i.name for i in search_icons(icons, "acme")] == ["logo"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("files", "message"),
     [
@@ -442,6 +443,7 @@ def test_list_icons_json_with_project(make_project: Any, capsys: pytest.CaptureF
     assert json.loads(capsys.readouterr().out)["error"]["message"].startswith("unknown icon category")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_list_icons_sheet(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
     from vidgen import iconlist

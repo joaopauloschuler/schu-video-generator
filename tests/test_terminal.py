@@ -113,6 +113,7 @@ def show_plays(scene: Any, beat: str) -> list[Any]:
     return [p for p in scene.play_log if p.beat == beat and "_Show" in p.animations]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_commands_are_typed_and_outputs_shown_beat_by_beat(make_project, media: Path) -> None:
     beats = [{"text": "first we install the package"}, {"text": "then we run the tests"}]
@@ -133,6 +134,7 @@ def test_commands_are_typed_and_outputs_shown_beat_by_beat(make_project, media: 
             assert safe_area_of(size).contains(mob, tolerance=0.02), type(mob).__name__
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_actions_type_a_command_and_show_an_output_on_their_words(make_project, media: Path) -> None:
     beats = [{"text": "we start with an install and wait until now", "actions": [{"reveal": "command1", "at": "@now"}]},
@@ -151,6 +153,7 @@ def test_actions_type_a_command_and_show_an_output_on_their_words(make_project, 
     assert window_texts(scene)[-2:] == ["test 9 ok", "$"]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_clear_starts_a_new_page_in_the_same_window(make_project, media: Path) -> None:
     steps = [*STEPS, {"command": "ls", "output": "a.py", "clear": True}]

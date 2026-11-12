@@ -91,6 +91,7 @@ def test_setting_errors(data: dict[str, Any], message: str) -> None:
         config.parse_config({**base, **data})
 
 
+@pytest.mark.slow
 def test_schema_takes_a_theme_name() -> None:
     music = schema.config_schema([], [])["properties"]["sections"]["items"]["anyOf"][0]["properties"]["music"]
     assert {"type": "string", "minLength": 1} in music["anyOf"]
@@ -169,6 +170,7 @@ def test_variation_of_a_score(tmp_path: Path) -> None:
 # ----- in the mix ---------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_render_with_themes_motif_and_sting(tmp_path: Path) -> None:
     project = Project.load(_write(tmp_path / "p", DRAMA, piece=True))
     _voice_all(project)
@@ -204,6 +206,7 @@ def test_render_with_themes_motif_and_sting(tmp_path: Path) -> None:
     assert 20 * np.log10(plain / 10 ** (-2 / 20)) < -5.5                                                # the scene's theme dips 6 dB under the motif
 
 
+@pytest.mark.slow
 def test_dense_dialogue_check() -> None:
     total = 20 * RATE
     rng = np.random.default_rng(1)
@@ -243,6 +246,7 @@ def test_a_video_scene_plays_a_sting_on_a_word(tmp_path: Path) -> None:
 # ----- compatibility --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_unset_options_change_nothing(tmp_path: Path) -> None:
     pin = {"title": "Pin", "narration": {"pad": 0.3, "words_per_second": 2}, "music": {"source": "calm"},
            "sections": [{"id": "one", "title": "One", "beats": ["one two three four", {"text": "a b c d", "sting": "reveal"}]}]}
@@ -255,6 +259,7 @@ def test_unset_options_change_nothing(tmp_path: Path) -> None:
     assert a.output.read_bytes() == b.output.read_bytes() and "music_check" not in b.timings["mix"]
 
 
+@pytest.mark.slow
 def test_fingerprint_ignores_the_score(tmp_path: Path) -> None:
     base = {"title": "t", "scenes": [{"id": "s", "type": "text_card", "params": {"text": "x"}, "beats": [{"text": "the rain"}]}]}
     plain = scene_fingerprint(Project.load(_write(tmp_path / "a", base)), "s")

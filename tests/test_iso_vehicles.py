@@ -250,6 +250,7 @@ def test_good_vehicle_moves_validate_and_walks_see_where_the_car_went(make_proje
     assert any("has lifted off already" in text for _, text in found), found
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_vehicles_drive_sail_roll_and_lift_off(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

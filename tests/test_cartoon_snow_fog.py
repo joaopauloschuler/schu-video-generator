@@ -232,6 +232,7 @@ def test_the_fog_moves_only_when_it_drifts_or_blows() -> None:
     assert drifting.region(0.0, 1.0)[3] == pytest.approx(FRAME_HEIGHT / 2)
 
 
+@pytest.mark.slow
 def test_settling_snow_field_lies_on_its_floors() -> None:
     scene = fake_scene(time=0.0)
     house = TopLine(np.array([-4.0, 0.0, 4.0]), np.array([0.0, 1.0, 0.0]), feet=-2.7)
@@ -256,6 +257,7 @@ def test_settling_snow_field_lies_on_its_floors() -> None:
 # ----- validation -------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("params", "message"),
     [
@@ -292,6 +294,7 @@ SNOWY: dict[str, Any] = {
 BEATS = [{"text": "Pip waits outside for a little while."}, {"text": "Then the snow begins to fall and to settle."}]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_settling_snow_started_later_changes_nothing_before_it_and_grows_after(make_project, tmp_path: Path, monkeypatch) -> None:
     """Every frame before the snow starts is the same, pixel for pixel, as without it; then the
@@ -320,6 +323,7 @@ def test_settling_snow_started_later_changes_nothing_before_it_and_grows_after(m
     assert not any(obj["class"] in ("SnowBlanket", "SnowCap") for obj in objects)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_fog_bands_lie_between_the_things_by_depth(make_project, tmp_path: Path) -> None:
     """Each band is drawn right before the first thing standing at its depth or nearer; a character

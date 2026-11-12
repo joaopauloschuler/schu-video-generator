@@ -125,6 +125,7 @@ def test_puddles_are_seeded_never_under_a_shelter_and_grow() -> None:
 # ----- the field (manim objects, no render) -----------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_rain_field_hides_landed_drops_and_draws_their_splashes() -> None:
     scene = fake_scene(time=0.0)
     shelter = ShelterBox(left=-2.0, right=2.0, top=1.0, feet=GROUND.ground)
@@ -166,6 +167,7 @@ def test_puddles_grow_with_the_rain_and_stay() -> None:
 # ----- validation -------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_puddles_are_for_rain(make_project) -> None:
     assert stage_params(particles=[{"kind": "rain", "puddles": True}]).particles[0].puddles
     with pytest.raises(Exception, match="puddles grow under rain only"):
@@ -185,6 +187,7 @@ def test_spans_join_across_scenes() -> None:
     assert ambience_spans(timings, "rain") == [(1.0, 6.0)]
 
 
+@pytest.mark.slow
 def test_rain_loop_is_seamless_wide_and_at_its_level() -> None:
     loop = rain_loop()
     assert loop.shape == (int(8 * RATE), 2) and loop.dtype == np.float32 and not loop.flags.writeable
@@ -199,6 +202,7 @@ def rain_timings() -> dict[str, Any]:
     return {"scenes": [{"beats": [{"id": "nothing_here", "start": 3.0, "end": 4.0}], "ambience": [{"bed": "rain", "start": 1.0, "end": 9.0}]}]}
 
 
+@pytest.mark.slow
 def test_the_bed_fades_with_the_rain_and_ducks_less_than_music(make_project) -> None:
     project = Project.load(make_project(minimal_config()))
     [bed] = mix.plan_ambience(project, rain_timings(), 10 * RATE)
@@ -215,6 +219,7 @@ def test_the_bed_fades_with_the_rain_and_ducks_less_than_music(make_project) -> 
     assert mix.plan_ambience(project, {"scenes": [{"beats": []}]}, 10 * RATE) == []
 
 
+@pytest.mark.slow
 def test_the_mix_carries_the_bed(make_project, tmp_path: Path) -> None:
     project = Project.load(make_project(minimal_config()))
     voice = tmp_path / "voice.wav"
@@ -253,6 +258,7 @@ def rain_stage(make_project, params: dict[str, Any], beats: list[dict[str, Any]]
     return Project.load(make_project(minimal_config(characters=CAST, scenes=scenes)))
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_rainy_stage_shelters_grows_puddles_and_plays_the_bed(make_project, tmp_path: Path) -> None:
     project = rain_stage(make_project, {"particles": [{"kind": "rain", "puddles": True}]})
@@ -272,6 +278,7 @@ def test_a_rainy_stage_shelters_grows_puddles_and_plays_the_bed(make_project, tm
     assert "ambience" not in scene.timings() and scene.puddles == []
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_rain_action_plays_the_bed_while_it_lasts(make_project, tmp_path: Path) -> None:
     beats = [{"text": "Then it starts to rain.", "actions": [{"particles": "rain", "at": 0.3, "puddles": True}]}, {"text": "And it stops."}]

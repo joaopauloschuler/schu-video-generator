@@ -73,6 +73,7 @@ def test_grid_shape_defaults_to_the_frame() -> None:
         assert grid_shape(2) == (1, 2)
 
 
+@pytest.mark.slow
 def test_grid_shape_is_public() -> None:
     ns: dict[str, Any] = {}
     exec("from vidgen.api import *", ns)
@@ -103,6 +104,7 @@ def test_layout_helpers_scale_icon_strokes_with_the_group() -> None:
 # ----- params --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_bullet_items_are_strings_or_text_with_icon() -> None:
     cls = cls_of("bullets")
     p = cls.validate_params({"items": ["plain", {"text": "with icon", "icon": "home"}, {"text": "no icon"}]}, Theme())
@@ -350,6 +352,7 @@ def test_numbered_bullets_put_the_icon_between_number_and_text(icon_project: Pro
         assert number.get_right()[0] < ic.get_left()[0] and ic.get_right()[0] < text.get_left()[0]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("orient", ["landscape", "portrait"])
 def test_title_and_end_card_icons(icon_project: Project, tmp_path: Path, orient: str) -> None:

@@ -149,6 +149,7 @@ def test_bad_override_paths(tmp_path: Path) -> None:
             soundfont.resolve(name, tmp_path)
 
 
+@pytest.mark.slow
 def test_config_key_validate_and_mcp_confinement(make_project: Callable[..., Path]) -> None:
     assert VideoConfig.model_validate(minimal_config(soundfont="bank.sf2")).soundfont == "bank.sf2"
     assert "soundfont" in PATH_KEYS

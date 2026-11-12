@@ -164,6 +164,7 @@ def test_render_key_ignores_comments_and_layout() -> None:
 # ----- rendering ---------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_render_writes_a_cached_audition_wav_and_cuts_sections(app: StudioApp) -> None:
     app.load(text=TINY)
     first = app.render()
@@ -222,6 +223,7 @@ def request(srv: StudioServer, method: str, path: str, body: Any = None, headers
     return out
 
 
+@pytest.mark.slow
 def test_server_serves_the_page_and_the_api(server: StudioServer) -> None:
     status, headers, body = request(server, "GET", "/")
     assert status == 200 and headers["content-type"].startswith("text/html") and b"<title>schu-video-generator studio</title>" in body
@@ -238,6 +240,7 @@ def test_server_serves_the_page_and_the_api(server: StudioServer) -> None:
     assert json.loads(request(server, "GET", "/api/session")[2])["result"] == {"session": None, "score": None, "notes": [], "proposals": [], "revision": 0}
 
 
+@pytest.mark.slow
 def test_server_refuses_what_it_must(server: StudioServer) -> None:
     assert request(server, "GET", "/", headers={"Host": "evil.example:80"})[0] == 403
     assert request(server, "GET", "/static/../app.py")[0] == 404
@@ -251,6 +254,7 @@ def test_server_refuses_what_it_must(server: StudioServer) -> None:
     assert status == 400 and "expected text" in json.loads(body)["error"]
 
 
+@pytest.mark.slow
 def test_server_loads_renders_and_streams_ranges(server: StudioServer) -> None:
     status, _, body = request(server, "POST", "/api/load", {"text": TINY}, headers={"Origin": f"http://localhost:{server.port}"})
     assert status == 200 and json.loads(body)["result"]["session"]["current"] == 1
@@ -268,6 +272,7 @@ def test_server_loads_renders_and_streams_ranges(server: StudioServer) -> None:
     assert request(server, "GET", "/api/score?version=x")[0] == 400
 
 
+@pytest.mark.slow
 def test_a_port_in_use_is_a_clear_error(server: StudioServer, app: StudioApp) -> None:
     with pytest.raises(VidgenError, match=f"cannot listen on 127.0.0.1:{server.port}.*another --port"):
         StudioServer(app, server.port)

@@ -142,6 +142,7 @@ def test_svg_prop_is_sanitised_and_stands_on_its_box(tmp_path: Path) -> None:
 # ----- stage params and layout (no render) --------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_params_names_lift_and_targets() -> None:
     params = stage_params(
         characters=["pip"],
@@ -205,6 +206,7 @@ def test_lint_names_props() -> None:
 # ----- render ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_stage_renders_props(make_project, tmp_path: Path) -> None:
     params = {
@@ -228,6 +230,7 @@ def test_stage_renders_props(make_project, tmp_path: Path) -> None:
     assert named["ground"]["bbox"][1] <= named["tree"]["bbox"][3] + 0.5   # the band reaches up to the tree at depth 0.6
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_prop_gallery_still(tmp_path: Path) -> None:
     from PIL import Image

@@ -48,6 +48,7 @@ def test_a_draft_keeps_the_outline_and_drops_shading_and_texture() -> None:
     assert style == DrawingStyle("bold", "flat", "none", 5)
 
 
+@pytest.mark.slow
 def test_the_setting_is_checked_at_the_top_level_and_on_a_stage() -> None:
     config = VideoConfig.model_validate(minimal_config(drawing={"outline": "thin", "shading": "soft", "texture": "storybook"}))
     assert config.drawing == DrawingConfig(outline="thin", shading="soft", texture="storybook")
@@ -175,6 +176,7 @@ def test_soft_shading_reaches_marked_fills_and_keeps_their_silhouette() -> None:
     assert column[0] > flat[inside.any(axis=1), 80].sum(axis=1)[0] > column[-1]   # lighter top, darker bottom
 
 
+@pytest.mark.slow
 def test_a_host_gets_the_outline_and_shading_but_no_texture(make_project) -> None:
     from test_host import built_scene, config
 
@@ -208,6 +210,7 @@ def _render(make_project, tmp_path: Path, monkeypatch, folder: str, **config: An
     return frames_of(project, tmp_path / f"media_{folder}", monkeypatch)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_plain_style_draws_as_before_and_a_style_reaches_the_stage(make_project, tmp_path: Path, monkeypatch) -> None:
     scene, before = _render(make_project, tmp_path, monkeypatch, "unset")

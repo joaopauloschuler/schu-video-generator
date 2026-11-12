@@ -97,6 +97,7 @@ def test_towers_may_reach_out_of_the_wide_view() -> None:
     assert wide_view(place, view, 16.0, 9.0, placed=["spire"]) == wide_view(place, view, 16.0, 9.0, placed=[])
 
 
+@pytest.mark.slow
 def test_tower_and_traffic_params() -> None:
     iso = {"map": CITY, "spots": {"a": "west", "b": "east"},
            "objects": [{"object": "tower", "at": {"column": 1, "row": 1}, "height": 8, "screen": True}],
@@ -142,6 +143,7 @@ def test_glowing_particles_have_a_core_and_a_halo() -> None:
 # ----- echo characters ------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_an_echo_keeps_its_colours_translucent() -> None:
     entry = CharacterEntry.model_validate({"name": "ana", "echo": {"opacity": 0.4}, "look": {"body": "tall"}, "colors": {"clothes": "#2B3350"}})
     look = entry.echo_look()
@@ -188,6 +190,7 @@ def test_hud_options_validate(make_project) -> None:
     assert any("no beat 's_b9'" in p for p in problems), problems
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_hud_moves_on_every_frame(make_project, tmp_path: Path) -> None:
     hud_entry = {"type": "hud", "at": 0.2, "duration": 2.0, "alert": "INCOMING", "lines": ["ONE", "TWO"],
@@ -203,6 +206,7 @@ def test_the_hud_moves_on_every_frame(make_project, tmp_path: Path) -> None:
     assert np.any(scene.frames_seen[15] != plain.frames_seen[15])
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_city_at_night_renders(make_project, tmp_path: Path, monkeypatch) -> None:
     extensions.load_builtins()

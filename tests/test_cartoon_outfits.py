@@ -89,6 +89,7 @@ def drawing_digest(look: CharacterLook, *, front: bool = False, arms: str = "cla
     return digest.hexdigest()[:16]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", PINNED_LOOKS)
 def test_looks_made_before_keep_their_drawings(name: str) -> None:
     look = CharacterLook(**PINNED_LOOKS[name])
@@ -127,6 +128,7 @@ def built(values: dict[str, Any], height: float = 1.0) -> Character:
     return Character(generate_parts(look, PIN_COLORS), name="t", height=height, front=generate_parts(look, PIN_COLORS, front=True))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("values", sampled_looks(24), ids=lambda v: f"{v['body']}-{v['outfit']}-{v['hair']}")
 def test_sampled_combinations_build_pose_and_face_front(values: dict[str, Any]) -> None:
     c = built(values, height=2.0)
@@ -146,6 +148,7 @@ def test_sampled_combinations_build_pose_and_face_front(values: dict[str, Any]) 
     c.face("left").set_state(walking_state(c.state(), walk_cycle(1.5), "left"))
 
 
+@pytest.mark.slow
 def test_the_same_parameters_give_the_same_shapes() -> None:
     for values in sampled_looks(4, seed=7):
         assert drawing_digest(CharacterLook(**values)) == drawing_digest(CharacterLook(**values))
@@ -162,6 +165,7 @@ def test_the_same_parameters_give_the_same_shapes() -> None:
 # ----- bodies, kids and seats ---------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_kid_proportions() -> None:
     adult, kid, tall = (resolve_proportions(CharacterLook(proportions=p)) for p in ("adult", "kid", "tall_kid"))
     assert kid.head_radius > tall.head_radius > adult.head_radius
@@ -175,6 +179,7 @@ def test_kid_proportions() -> None:
     assert shares["kid"][1] < shares["adult"][1]                            # and the hips lower
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("values", [
     {"proportions": "kid", "outfit": "dress"}, {"proportions": "tall_kid", "body": "tall", "outfit": "coat"},
     {"body": "pear", "outfit": "shorts"}, {"body": "triangle", "outfit": "overalls", "shoes": "boots"},
@@ -191,6 +196,7 @@ def test_hips_stay_on_the_seat(values: dict[str, Any]) -> None:
         assert c.shown_shape("body") == (SEATED_BODY_SHAPE if values["outfit"] in SKIRTED_OUTFITS else "default")
 
 
+@pytest.mark.slow
 def test_shoulders_of_a_pear_sit_on_its_narrow_top() -> None:
     pear, round_ = built({"body": "pear"}), built({"body": "round"})
     assert pear.limb_rest("arm_left")[0][0] < round_.limb_rest("arm_left")[0][0]
@@ -205,6 +211,7 @@ def fills(c: Character, part: str) -> set[str]:
     return {m.get_fill_color().to_hex().upper() for m in c.parts[part].family_members_with_points() if m.get_fill_opacity() > 0}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(("outfit", "upper_arm", "forearm", "thigh", "shin"), [
     ("plain", "clothes", "clothes", "clothes", "clothes"),
     ("dress", "clothes", "skin", "skin", "skin"),
@@ -219,6 +226,7 @@ def test_sleeves_and_trouser_legs_follow_the_segments(outfit: str, upper_arm: st
     assert fills(c, "leg_left") == {PIN_COLORS[thigh]} and PIN_COLORS[shin] in fills(c, "leg_left_lower")
 
 
+@pytest.mark.slow
 def test_shoes_are_on_the_shins_with_the_sole_on_the_ground() -> None:
     for shoes in ("shoes", "boots"):
         for front in (False, True):
@@ -234,6 +242,7 @@ def test_shoes_are_on_the_shins_with_the_sole_on_the_ground() -> None:
     assert shoes.part_box("leg_left_lower")[1] > lifted[1] + 0.02
 
 
+@pytest.mark.slow
 def test_a_skirt_hangs_from_the_body_and_lies_on_the_lap_when_seated() -> None:
     def lowest(c: Character) -> np.ndarray:
         points = np.vstack([m.points for m in c.parts["body"].family_members_with_points()])
@@ -251,6 +260,7 @@ def test_a_skirt_hangs_from_the_body_and_lies_on_the_lap_when_seated() -> None:
     assert plain.shown_shape("body") == "default"
 
 
+@pytest.mark.slow
 def test_pattern_tone_and_patterns() -> None:
     light, dark = pattern_tone("#FFD166"), pattern_tone("#2B2B2B")
     assert relative_luminance(hex_rgb(light)) < relative_luminance(hex_rgb("#FFD166"))
@@ -281,6 +291,7 @@ def trail_weights(c: Character) -> set[float]:
     return {round(getattr(m, TRAIL_ATTRIBUTE)[2], 2) for part in c.parts.values() for m in part.get_family() if getattr(m, TRAIL_ATTRIBUTE, None)}
 
 
+@pytest.mark.slow
 def test_hanging_hair_and_accessories_trail_in_the_wind() -> None:
     for hair in ("ponytail", "braids"):
         c = built({"hair": hair, "accessories": ["cap", "necklace"]})
@@ -292,6 +303,7 @@ def test_hanging_hair_and_accessories_trail_in_the_wind() -> None:
     assert trail_weights(built({"hair": "afro", "accessories": ["bow", "backpack"], "facial_hair": "beard"})) == set()
 
 
+@pytest.mark.slow
 def test_effect_symbols_go_by_the_head_and_above_hair_beyond_it() -> None:
     for hair in ("afro", "braids", "ponytail"):
         c = built({"hair": hair, "facial_hair": "beard"}, height=3.0)
@@ -310,6 +322,7 @@ def test_effect_symbols_go_by_the_head_and_above_hair_beyond_it() -> None:
     assert crown_top(built({"hair": "short"})) is None
 
 
+@pytest.mark.slow
 def test_beard_and_moustache_leave_the_mouth_seen() -> None:
     bald = built({"hair": "none", "facial_hair": "beard"})
     head_fills = [m.get_fill_color().to_hex().upper() for m in bald.parts["head"].family_members_with_points()]
@@ -334,6 +347,7 @@ def test_look_schema() -> None:
 # ----- screenplay looks and voice kinds -----------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_screenplay_looks_keep_a_voice_kind_and_use_the_new_clothes() -> None:
     from vidgen.screenplay import LOOKS, VOICE_KINDS
 
@@ -351,6 +365,7 @@ def test_screenplay_looks_keep_a_voice_kind_and_use_the_new_clothes() -> None:
 # ----- renders --------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_dressed_cast_sits_walks_and_shows_a_symbol_on_a_stage(make_project, tmp_path: Path) -> None:
     """A kid in a dress sits on the chair (its skirt over the lap); a character with an afro
@@ -379,6 +394,7 @@ def test_a_dressed_cast_sits_walks_and_shows_a_symbol_on_a_stage(make_project, t
     assert scene.cast["pip"].shown_shape("body") == SEATED_BODY_SHAPE
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_look_gallery_still(tmp_path: Path) -> None:
     from vidgen.cartoon.still import write_looks_png
@@ -392,6 +408,7 @@ def test_the_look_gallery_still(tmp_path: Path) -> None:
     assert [drawn[:, k * 40:(k + 1) * 40].any() for k in range(4)] == [True] * 4   # each look from the side and the front
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_the_sheet_shows_the_front_view(make_project) -> None:
     from vidgen import extensions

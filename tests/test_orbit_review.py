@@ -39,6 +39,7 @@ def _coe2rv(mu: float, p: float, e: float, i: float, raan: float, argp: float, n
     return rot @ r_pqw, rot @ v_pqw
 
 
+@pytest.mark.slow
 def test_kepler_and_conversions_against_independent_solutions() -> None:
     brentq = pytest.importorskip("scipy.optimize").brentq
     for e in (0.0, 0.5, 0.99, 0.999999):
@@ -115,6 +116,7 @@ def test_ephemeris_against_published_dates() -> None:
 # ----- fast live text ------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_live_text_matches_text() -> None:
     theme = Theme()
     live = LiveText(theme, 24, "text")
@@ -164,6 +166,7 @@ HOHMANN = {"title": "The Hohmann transfer", "bodies": [{"preset": "earth", "e": 
            "transfer": {"ship": "Ship", "to": "Mars"}, "caption": "Circular, coplanar orbits (an approximation)"}
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_layout_column_caption_and_portrait_panel(size: tuple[int, int], make_project, media: Path) -> None:

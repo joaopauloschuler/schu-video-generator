@@ -45,6 +45,7 @@ def stage_config(**params: Any) -> dict[str, Any]:
     }
 
 
+@pytest.mark.slow
 def test_stage_schema_accepts_bare_names(builtin_schema: dict[str, Any]) -> None:  # noqa: F811
     bare = stage_config(characters=["pip"], props=["cloud", {"prop": "tree", "at": 0.8}], particles=["snow"])
     assert errors(builtin_schema, bare) == []
@@ -61,6 +62,7 @@ def test_example_uses_a_bare_prop_name() -> None:
 # ----- the example end to end ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_example_voices_and_lip_sync_tracks(tmp_path: Path, fake: Factory, capsys: pytest.CaptureFixture[str]) -> None:  # noqa: F811
     root = example_copy(tmp_path / "cartoon")
     assert main(["validate", str(root), "--json"]) == 0

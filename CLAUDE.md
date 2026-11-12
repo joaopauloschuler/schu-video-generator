@@ -34,6 +34,12 @@ to the user.
 - Add tests for everything you build, and keep them cheap (guide rule 9): test logic without
   rendering when you can; rendering tests use `@pytest.mark.render`, tiny resolution (e.g. 160x90,
   5 fps) and `tmp_path`.
+- The default run (`python -m pytest -q`) leaves out every test marked `@pytest.mark.slow`
+  (`tests/conftest.py` deselects them) and takes about 3–5 minutes on the owner's 1-CPU machine
+  (Step 327: 194 s, 6235 passed). `-m slow` runs only the slow ones (about 3 hours there);
+  `-m "slow or not slow"` runs everything; a test named by node id (`file.py::test`) always
+  runs. Mark a new test `slow` when it takes over about 0.4 s, and keep the default run under
+  5 minutes (guide rule 9).
 - Before you commit, run the tests that cover your change, not the whole suite (guide rule 8),
   each command under a memory cap and a timeout (guide rule 7). Never run tests in parallel
   (`-n`) or two suites at once. The full suite is run only when the user asks.

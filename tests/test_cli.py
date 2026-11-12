@@ -13,6 +13,7 @@ from vidgen.cli import main
 from vidgen.config import parse_config
 
 
+@pytest.mark.slow
 def test_validate_ok(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(minimal_config(variants={"vertical": {"format": {"width": 1080, "height": 1920}}}))
     assert main(["validate", str(root)]) == 0

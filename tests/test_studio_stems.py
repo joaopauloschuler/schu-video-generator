@@ -61,6 +61,7 @@ def assert_remix_matches(score) -> None:
     assert wav_bytes(np.clip(remix * level, -1, 1)) == wav_bytes(np.clip(expected * level, -1, 1))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("loop", [True, False])
 def test_remixed_stems_are_the_render(loop: bool) -> None:
     _, score = score_of(EFFECTS if loop else EFFECTS.replace("tempo: 120", "tempo: 120\nloop: false"))
@@ -70,6 +71,7 @@ def test_remixed_stems_are_the_render(loop: bool) -> None:
     assert len(warnings) == 2 and all(w.startswith("tracks.high: 2 notes in section") for w in warnings)  # still reported
 
 
+@pytest.mark.slow
 def test_threads_give_the_same_samples() -> None:
     from vidgen.music import _level_gain
 
@@ -84,6 +86,7 @@ def test_threads_give_the_same_samples() -> None:
     assert integrated_loudness(x) == integrated_loudness(x, threads=2) and _level_gain(x) == _level_gain(x, 2)
 
 
+@pytest.mark.slow
 def test_render_music_stems_still_hands_out_each_track() -> None:
     _, score = score_of(EFFECTS)
     seen: dict[str, np.ndarray] = {}
@@ -147,6 +150,7 @@ def test_plain_volume() -> None:
     assert plain_volume({"volume": True}) is None and plain_volume("kick") is None
 
 
+@pytest.mark.slow
 def test_a_volume_change_scales_the_kept_stem() -> None:
     cache = StemCache()
     data, score = score_of(EFFECTS)
@@ -167,6 +171,7 @@ def test_a_volume_change_scales_the_kept_stem() -> None:
     assert set(third.rendered) == {"pad"} and third.scaled == {}
 
 
+@pytest.mark.slow
 def test_the_stem_cache_keeps_to_its_budget() -> None:
     data, score = score_of(EFFECTS)
     one = stem_bytes(score)
@@ -202,6 +207,7 @@ def test_meters_are_the_stems_level_per_frame() -> None:
 # ----- the studio ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_an_edit_renders_only_its_track_and_mutes_remix(tmp_path: Path) -> None:
     app = StudioApp(None, studio=tmp_path)
     try:
@@ -233,6 +239,7 @@ def test_an_edit_renders_only_its_track_and_mutes_remix(tmp_path: Path) -> None:
         app.close()
 
 
+@pytest.mark.slow
 def test_a_one_shot_mute_mix_keeps_the_tails(tmp_path: Path) -> None:
     app = StudioApp(None, studio=tmp_path)
     try:
@@ -255,6 +262,7 @@ def test_a_one_shot_mute_mix_keeps_the_tails(tmp_path: Path) -> None:
         app.close()
 
 
+@pytest.mark.slow
 def test_under_narration(tmp_path: Path) -> None:
     from vidgen.studio_app.narration import _voice, under_narration
 

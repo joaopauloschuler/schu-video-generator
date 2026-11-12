@@ -112,6 +112,7 @@ def test_breathing_and_sway_start_at_rest_and_stay_small() -> None:
 # ----- the character (manim objects, nothing rendered) ----------------------------------------
 
 
+@pytest.mark.slow
 def test_config_characters_idle_unless_idle_false() -> None:
     assert pip().is_idle
     assert not pip(idle=False).is_idle
@@ -146,6 +147,7 @@ def test_blinks_show_closed_eyes_without_changing_the_eyes_pose() -> None:
     assert c.shown_shape("eyes") == "open" and c.pose_of("eyes").scale == (1.2, 1.2)
 
 
+@pytest.mark.slow
 def test_a_character_without_closed_eyes_breathes_but_never_blinks() -> None:
     parts = generate_parts(CharacterLook(), {k: "#888888" for k in ("skin", "clothes", "outline", "features", "hair", "accessory")})
     parts = [replace(p, shapes={"open": p.shapes["open"]}) if p.name == "eyes" else p for p in parts]
@@ -155,6 +157,7 @@ def test_a_character_without_closed_eyes_breathes_but_never_blinks() -> None:
         assert c.shown_shape("eyes") == "open"
 
 
+@pytest.mark.slow
 def test_pose_changes_stop_the_clock_and_never_show_a_blink() -> None:
     c = pip(idle=False).start_idle(seed=4)
     changes = [(1.0, 1.8), (2.5, 4.5), (6.0, 6.9)]
@@ -181,6 +184,7 @@ def test_pose_changes_stop_the_clock_and_never_show_a_blink() -> None:
     assert all(any(s - FRAME <= t <= e + FRAME for s, e in expected) for t in seen_closed)
 
 
+@pytest.mark.slow
 def test_a_pose_change_ends_a_running_blink() -> None:
     c = pip(idle=False).start_idle(seed=2)
     start, _ = blink_times(2, 10.0)[0]
@@ -191,6 +195,7 @@ def test_a_pose_change_ends_a_running_blink() -> None:
     assert c.shown_shape("eyes") == "open"
 
 
+@pytest.mark.slow
 def test_idle_and_lip_sync_drive_different_parts_together() -> None:
     track = VisemeTrack((VisemeCue(0.0, 3.0, "rest"), VisemeCue(3.0, 3.5, "O"), VisemeCue(3.5, 8.0, "A")))
     c = pip(idle=False).start_idle(seed=2)

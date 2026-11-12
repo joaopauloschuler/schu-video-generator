@@ -179,6 +179,7 @@ def test_places_light_weather_music_objects() -> None:
 # ----- the draft ------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_draft_scenes_staging_and_report() -> None:
     draft = draft_story(read_story(BREAKS), DraftOptions())
     config = draft.config
@@ -273,6 +274,7 @@ def run_cli(args: list[str], capsys: pytest.CaptureFixture[str]) -> tuple[int, d
     return code, json.loads(capsys.readouterr().out)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name, text, style", [("kite", THIRD, "iso"), ("night", FIRST, "iso"), ("signal", BREAKS, "iso"), ("flat", BREAKS, "flat")])
 def test_cli_projects_validate(tmp_path: Path, capsys: pytest.CaptureFixture[str], name: str, text: str, style: str) -> None:
     source = tmp_path / f"{name}.md"

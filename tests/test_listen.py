@@ -153,6 +153,7 @@ def test_readme_names_the_real_counts_and_links_the_page() -> None:
 # ----- the command -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_music_page_command_is_deterministic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setattr(music, "BUILTIN_BEDS", {"calm": music.BUILTIN_BEDS["calm"]})
     monkeypatch.setattr(listen, "SOUND_ROWS", (listen.SoundRow("sfx-two", "Two", 1.0, ((0.1, "pop", 0.0, None), (0.5, "click", 0.0, None))),))

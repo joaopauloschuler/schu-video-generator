@@ -102,6 +102,7 @@ def test_on_spans() -> None:
     assert on_spans(True, [(0.0, False)], 4.0) == [] and on_spans(False, [], 4.0) == []
 
 
+@pytest.mark.slow
 def test_fire_and_kettle_draw_inside_their_box_and_switch() -> None:
     theme = Theme()
     for kind in ("fireplace", "kettle"):
@@ -140,6 +141,7 @@ def test_closed_curve_passes_through_its_corners() -> None:
     assert curve.shape == (16, 3) and np.allclose(curve[0::4, :2], corners) and np.allclose(curve[3::4, :2], np.roll(corners, -1, axis=0))
 
 
+@pytest.mark.slow
 def test_the_fire_crackle_loop() -> None:
     loop = fire_loop()
     assert loop.shape == (8 * RATE, 2) and loop is fire_loop()
@@ -219,6 +221,7 @@ def test_wings_flap_and_glide() -> None:
 # ----- params and actions (no render) ------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("params", "message"),
     [
@@ -269,6 +272,7 @@ ROOM: dict[str, Any] = {
 BEATS = [{"text": "Pip waits in the cold room for a little while."}, {"text": "Then the fire is lit, and it crackles."}]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_fire_lit_later_is_drawn_as_before_until_then(make_project, tmp_path: Path, monkeypatch) -> None:
     """Every frame before the fire is lit is the same, pixel for pixel, as without lighting it;
@@ -297,6 +301,7 @@ YARD: dict[str, Any] = {
 }
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_birds_and_a_fruit_on_a_head(make_project, tmp_path: Path, monkeypatch) -> None:
     """A flock that sets off at 2 s changes no pixel before then; a fruit aimed at pip falls on its

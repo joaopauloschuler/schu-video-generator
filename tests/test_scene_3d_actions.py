@@ -53,6 +53,7 @@ PLAZA = {
 # ----- params -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("raw", "message"),
     [
@@ -280,6 +281,7 @@ def test_lint_rules_judge_only_what_the_beat_is_about() -> None:
 # ----- render (Chromium) --------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_page_draws_stand_ins_hidden_objects_glow_and_arrow_length() -> None:
     pytest.importorskip("playwright.sync_api")

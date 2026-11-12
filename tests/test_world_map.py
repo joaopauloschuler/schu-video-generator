@@ -314,6 +314,7 @@ def test_world_map_steps_highlights_pins_and_arcs(make_project, media: Path) -> 
             assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_choropleth_legend_outline_and_regional_panel(make_project, media: Path) -> None:
     p = {"view": "europe", "values": {"Germany": 83, "France": 68, "Spain": 48, "Poland": 37}, "legend_label": "millions",
@@ -342,6 +343,7 @@ def test_auto_view_fits_the_items(make_project, media: Path) -> None:
     assert not view.contains(30.0, 50.0) and view.cropped
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_focus_moves_the_camera_and_back_and_fades_other_labels(make_project, media: Path) -> None:
     p = {"view": "europe", "steps": [["France"], {"countries": ["Belgium"], "focus": True}, {"pins": [{"country": "Italy", "label": "Rome"}]}]}
@@ -357,6 +359,7 @@ def test_focus_moves_the_camera_and_back_and_fades_other_labels(make_project, me
     assert belgium_label[1].font_size == pytest.approx(france_label[1].font_size * s, rel=0.02)   # reads the same zoomed in
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_portrait_map_and_dateline_view(make_project, media: Path) -> None:
     p = {"view": [150, -50, -170, 5], "countries": ["New Zealand", "Fiji"], "pins": [{"lon": -171.8, "lat": -13.8, "label": "Apia"}]}
@@ -367,6 +370,7 @@ def test_portrait_map_and_dateline_view(make_project, media: Path) -> None:
     assert all(scene.is_shown(t) for t in scene.targets)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_portrait_regional_view_is_narrowed_not_grown(make_project, media: Path) -> None:
     """Step 57: a regional view in 9:16 keeps its latitudes and loses longitudes around its items
@@ -382,6 +386,7 @@ def test_portrait_regional_view_is_narrowed_not_grown(make_project, media: Path)
     assert landscape._view.box == tuple(float(v) for v in europe)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_country_labels_stand_by_their_own_country(make_project, media: Path) -> None:
     """Step 57 (from Step 37): small countries far apart in a 9:16 world view got labels beside

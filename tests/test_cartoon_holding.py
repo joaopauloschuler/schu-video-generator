@@ -130,6 +130,7 @@ def stage() -> tuple[StageFake, Any, Any, Any]:
     return scene, pip, kit, cup
 
 
+@pytest.mark.slow
 def test_pick_up_follow_and_put_down() -> None:
     scene, pip, kit, cup = stage()
     rest = pip.state()
@@ -187,6 +188,7 @@ def test_give_and_throw() -> None:
     assert kit.holding == {} and cup.held_by is None
 
 
+@pytest.mark.slow
 def test_a_big_prop_is_smaller_in_the_hand() -> None:
     scene, pip, kit, _ = stage()
     box = draw_prop("box", height=3.0, theme=Theme(), name="box").shift([-3.5, -2.0, 0.0])
@@ -226,6 +228,7 @@ def assert_overhead(umbrella: Any, holder: Any) -> None:
     assert umbrella.get_left()[0] < holder.parts["head"].get_left()[0] and umbrella.get_right()[0] > holder.parts["head"].get_right()[0]
 
 
+@pytest.mark.slow
 def test_an_umbrella_opens_overhead_and_closes_in_the_hand() -> None:
     scene, pip, kit, umbrella = umbrella_stage()
     run(use("hold", to="umbrella").apply(scene, [target("pip", pip)]))
@@ -271,6 +274,7 @@ def test_an_open_umbrella_is_picked_up_and_put_down_open() -> None:
     assert umbrella.shape == "closed" and umbrella.feet()[1] == pytest.approx(feet[1], abs=1e-6)   # closes where it stands
 
 
+@pytest.mark.slow
 def test_a_basket_hangs_from_its_handle() -> None:
     scene, pip, _, _ = stage()
     basket = draw_prop("basket", height=0.2 * pip.character_height, theme=Theme(), name="basket").shift([-3.6, -2.0, 0.0])
@@ -363,6 +367,7 @@ def test_a_thrown_prop_lands_with_a_thud() -> None:
 # ----- render ----------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_props_change_hands_on_a_stage(make_project, tmp_path: Path) -> None:
     """pip picks up the ball and walks over with it (the dump says who holds it); kit throws it."""
@@ -394,6 +399,7 @@ def test_props_change_hands_on_a_stage(make_project, tmp_path: Path) -> None:
     assert thud.time == pytest.approx(flight.end, abs=0.25)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_an_umbrella_opens_on_a_stage(make_project, tmp_path: Path) -> None:
     """Step 103: pip opens the umbrella it holds (overhead, the dump says its shape); the spare one,

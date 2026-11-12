@@ -345,6 +345,7 @@ def faked(make_project) -> Path:
     return root
 
 
+@pytest.mark.slow
 def test_findings_merge_group_and_sort(faked: Path) -> None:
     result = lint_project(Project.load(faked))
     assert result.rendered == [] and result.reused == ["intro", "main"] and result.stills == 3
@@ -420,6 +421,7 @@ def test_cli_human_and_json(faked: Path, capsys: pytest.CaptureFixture[str], mon
     assert code == 2 and doc["error"]["kind"] == "usage"
 
 
+@pytest.mark.slow
 def test_lint_warns_about_the_theme_contrast(faked: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
     """Like validate, lint reports theme pairs below WCAG AA as warnings (not findings) (Step 22)."""
     data = yaml.safe_load((faked / "video.yaml").read_text(encoding="utf-8"))

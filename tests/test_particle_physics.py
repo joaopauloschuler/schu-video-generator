@@ -23,6 +23,7 @@ F = Fraction
 # ----- data ------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_table_is_consistent() -> None:
     assert pp.particle_problems() == []
     assert pp.EDITION == "PDG 2024" and "Phys. Rev. D 110, 030001 (2024)" in pp.SOURCE
@@ -259,6 +260,7 @@ def test_the_chart_data() -> None:
             assert c.charge_text() == pp.fraction_text(pp.PARTICLES[c.key].charge)
 
 
+@pytest.mark.slow
 def test_the_model_does_not_import_manim() -> None:
     code = "import sys, vidgen.particle_physics; print('manim' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)

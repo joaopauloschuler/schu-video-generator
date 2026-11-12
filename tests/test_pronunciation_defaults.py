@@ -131,6 +131,7 @@ def test_each_beat_uses_its_own_voices_list(make_project) -> None:
 # ----- validate ------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_validate_is_quiet_about_builtin_entries_and_names_the_changes(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(project_config(*TEXTS, "One more epoch.", pronunciation={"Nowhere": "x"}))
     project = Project.load(root)
@@ -154,6 +155,7 @@ def test_a_project_entry_a_builtin_one_hides_is_still_reported() -> None:
 # ----- audio hash and vidgen tts ---------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_only_beats_the_defaults_change_go_stale(make_project, fake: Factory, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(project_config(*TEXTS, pronunciation_defaults=False))
     run_tts(Project.load(root), out=lambda s: None)

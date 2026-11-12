@@ -252,6 +252,7 @@ ISO = {"map": POND, "spots": SPOTS, "objects": [{"object": "table", "at": "table
                                                   {"object": "lamp", "at": {"column": 7, "row": 4}, "on": True}]}
 
 
+@pytest.mark.slow
 def test_iso_props_and_object_states() -> None:
     params = stage_params(iso=ISO, characters=[{"name": "pip", "at": "start"}], props=[{"prop": "gift", "at": "table"}, {"prop": "flower", "at": "well"}])
     assert params.iso.states() == {"bridge": ObjectState(shown=False), "lamp": ObjectState(on=True)}
@@ -327,6 +328,7 @@ def test_a_revealed_bridge_is_walked_over(make_project) -> None:
 # ----- a tiny render -------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_staging_renders(make_project, tmp_path: Path) -> None:
     from vidgen.introspect import LayoutRecorder

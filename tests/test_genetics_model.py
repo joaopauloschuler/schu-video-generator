@@ -32,6 +32,7 @@ def two_loci(**extra):
     return build_system(spec)
 
 
+@pytest.mark.slow
 def test_model_imports_without_manim() -> None:
     code = "import sys, vidgen.genetics; print('manim' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)

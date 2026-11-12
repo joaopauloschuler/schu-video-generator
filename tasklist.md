@@ -1789,6 +1789,57 @@ with a fake cloudflared; the owner tests the real tunnel on Windows with `host-t
 
 ### Step 308 — Cut inputs that no longer match are not paid for
 - [x] `generate inputs` records what each cut file was made from (`build/videogen/<shot>/inputs.json`; draft fingerprint, draft format, guide kind, narration hash, offset, length); `generate plan` (text, JSON) blocks a shot whose inputs changed or have no record, with the exact free command; `run --pay` refuses before any submit or tunnel; a cached clip or earlier job is reused free with a note (DESIGN §113.9)
+## Phase AK — A fast test suite, then `web` scenes: HTML, CSS and JavaScript written by the author (owner's request, 2026-11-11)
+
+Each step is done by one agent, in order. The owner decided: JavaScript from the project is trusted
+as `extensions/` Python is; HTML and CSS are allowed from the first version; the page cannot reach
+the internet while rendering; whole-page screenshots are accepted even if slow.
+
+### Step 327 — The full test suite runs in under 5 minutes
+- [x] Time every test file once, one file at a time under the memory cap; record the times in HANDOFF.md — done: 290 files, 13 289 s (3.7 h) one after another; `test_music.py` timed out at 900 s as one file and was timed in four parts
+- [x] Mark the slowest tests `@pytest.mark.slow` and leave them out of the default run, until a plain `pytest` of the whole suite takes about 4 minutes on the owner's machine (limit: 5); `pytest -m slow` still runs them — done: 1002 more test functions marked (1926 of 8184 tests now `slow`), left out by a `pytest_collection_modifyitems` hook in `tests/conftest.py` (not `addopts`, so `-m "not render"` still leaves them out); a test named by node id always runs
+- [x] List what was left out in the backlog below, so each can be made faster and brought back
+- [x] CLAUDE.md and `docs/CODING-AND-COMMUNICATION-GUIDE.md` say what the default run is and how long it takes
+- [x] Proof: one full default run, with its time, in HANDOFF.md — done: 194 s wall, 6235 passed, 16 failed (all failing before this step), 7 skipped, 1926 deselected
+
+### Step 328 — `web` scene, the core
+- [ ] New scene type `web`: `page: extensions/gears.html` (any HTML, CSS and JavaScript) or `script: extensions/gears.js` (vidgen supplies a bare page with one canvas)
+- [ ] The project folder is served to the page, so relative links to CSS, images, fonts and modules work; nothing is fetched from the internet
+- [ ] One Chromium renderer shared with the `3d` scene (`three_d/browser.py` moved to a shared place)
+- [ ] Frames are screenshots of the whole page at the render's size and frame rate, into a cached clip as `3d` does
+- [ ] A missing file, a JavaScript error or a page that never becomes ready stops the render with the scene id, file and line, without a traceback
+- [ ] `vidgen validate` checks the files exist; the missing-Chromium message matches the `3d` one
+
+### Step 329 — Time belongs to vidgen
+- [ ] A virtual clock replaces `Date.now`, `performance.now`, `requestAnimationFrame`, `setTimeout` and `setInterval`
+- [ ] CSS animations and transitions, SVG animation and `<video>` elements are paused and set to the frame's time
+- [ ] `Math.random` is seeded from the scene id
+- [ ] Optional hooks `load(ctx)` (may be async) and `frame(t, ctx)`; fonts and images are awaited before frame 0
+- [ ] Proof: the same scene rendered twice gives identical frames
+
+### Step 330 — What the page is given
+- [ ] Theme colours and fonts as CSS variables (`var(--vidgen-primary)`) and as `ctx.theme`
+- [ ] `ctx.params` from the YAML, `ctx.width`, `ctx.height`, `ctx.fps`, `ctx.beats` (each beat's start, end and words)
+- [ ] A `vidgen-beat` event and a `data-beat` attribute on `<body>`, so plain CSS can react to narration
+- [ ] The bundled three.js importable as `three`, with no download
+- [ ] The fingerprint covers the page, every file it loaded and the params
+
+### Step 331 — A `web` scene fits with the rest of a video
+- [ ] `region: bleed` (whole frame) or `body` (under a vidgen title); a transparent page background shows the theme background
+- [ ] Captions, overlays, transitions, `--draft`, `vidgen storyboard` and `vidgen animatic` work unchanged
+- [ ] 16:9 and 9:16 from one page (`ctx.aspect` and a `data-aspect` attribute for CSS)
+
+### Step 332 — Lint reads the page
+- [ ] vidgen reads the on-screen boxes of every text element from the page itself
+- [ ] The existing checks run on them: `off_frame`, `text_overlap`, text too small, low contrast
+- [ ] `data-vidgen-id="gear"` names an element for the layout dump; `data-vidgen-lint="off"` opts one out
+
+### Step 333 — Teach `web` scenes and prove them
+- [ ] Guide topic `vidgen guide web` in both `AGENTS.md` copies, with when to use `web` rather than a built-in or a Python extension
+- [ ] `docs/CONFIG.md`, `docs/EXTENDING.md`, a DESIGN.md section, CHANGELOG
+- [ ] `examples/web/` with three small scenes: canvas, HTML with CSS animation, three.js
+- [ ] A gallery entry; measured render speed at 1080p in HANDOFF.md
+
 ### Step 326 — A dissolve of a few frames where a clip continues the one before, on request
 - [x] `match_previous: {dissolve: N}` (0–12 frames of the render being made, default 0): the first N frames are blended with the previous clip's last shown frame, weights `(N − k) / (N + 1)`, after the gain (`clip_join.JoinTreatment`, DESIGN §117)
 - [x] `level: false`: the dissolve without the gain; an error without a dissolve or with `seconds` / `hold`
@@ -2080,7 +2131,7 @@ Quality (what an agent's video looks like)
 - [ ] `vidgen screenplay` on a level: the directions' `at` times are estimated as on a plain stage (a wide level's walks take longer), no `climbs` verb, a level only through a front-matter or `--cast` set (Step 155)
 
 Nice-to-have / performance
-- [ ] Automated testing should be limited to 5 minutes, not more (owner's request, 2026-11-08). Today `tests/test_schema.py` alone hits the 280 s limit of a single test command.
+- [ ] Tests left out of the default run (`@pytest.mark.slow`, Step 327): make each faster and remove its mark, keeping the default run (`python -m pytest -q`) under 5 minutes (owner's request, 2026-11-08). 1926 of 8184 tests are left out, about 10719 s of test time measured file by file on the owner's 1-CPU machine (per-file table in HANDOFF Step 327; `python -m pytest -q -m slow --collect-only` lists them). Seconds saved (tests left out) by file: `test_schema.py` 634 s (74), `test_music.py` 615 s (65), `test_builtin_scenes.py` 531 s (132), `test_studio_stems.py` 477 s (26), `test_molecular.py` 359 s (3), `test_cycle_energy.py` 355 s (6), `test_music_templates.py` 336 s (23), `test_presets.py` 291 s (9), `test_phase_l_review.py` 231 s (4), `test_chapter_export.py` 175 s (5), `test_pedigree.py` 168 s (3), `test_actions_coverage.py` 165 s (99), `test_mcp.py` 159 s (13), `test_expression.py` 137 s (6), `test_icon_scenes.py` 136 s (20), `test_cartoon_outfits.py` 134 s (55), `test_frames.py` 133 s (4), `test_music_check.py` 124 s (12), `test_population.py` 113 s (3), `test_cell_scene.py` 107 s (9), `test_cartoon_robots.py` 107 s (36), `test_cartoon_wind.py` 105 s (9), `test_comparison_table.py` 104 s (24), `test_overlays.py` 100 s (13), `test_cross.py` 96 s (4), `test_chromosomes.py` 91 s (3), `test_transport.py` 89 s (6), `test_studio_ui.py` 86 s (18), `test_phase_i_review.py` 86 s (15), `test_cell_world.py` 86 s (29), `test_phase_t_review.py` 85 s (14), `test_orbit.py` 83 s (9), `test_render.py` 81 s (10), `test_push_wipe_carry.py` 74 s (17), `test_charts.py` 71 s (25), `test_storyboard.py` 69 s (5), `test_orbit_many.py` 67 s (6), `test_custom_scene_example.py` 67 s (3), `test_phase_h_review.py` 66 s (3), `test_spectrum.py` 65 s (10), `test_cartoon_directing.py` 60 s (5), `test_callout_action.py` 59 s (9), `test_tts_kokoro.py` 53 s (4), `test_studio.py` 50 s (12), `test_cartoon_moving.py` 50 s (3), `test_json_output.py` 49 s (4), `test_sfx.py` 48 s (11), `test_stat_chapter.py` 46 s (36), `test_review4.py` 45 s (3), `test_music_pieces.py` 45 s (5), `test_cuts_shorts.py` 45 s (5), `test_cartoon_more_animals.py` 45 s (13), `test_molecules.py` 44 s (17), `test_cartoon_snail.py` 44 s (10), `test_arms_front.py` 41 s (19), `test_emotions.py` 40 s (3), `test_standard_model.py` 39 s (3), `test_plot_live.py` 39 s (3), `test_timeline.py` 38 s (16), `test_thumbnail_export.py` 38 s (7), `test_process_network.py` 38 s (23), `test_phase_f_review.py` 38 s (4), `test_world_map.py` 35 s (7), `test_staging.py` 35 s (8), `test_kphi3_example.py` 33 s (3), `test_draft.py` 33 s (4), `test_cartoon_lighting.py` 33 s (2), `test_scales.py` 32 s (2), `test_phase_s_review.py` 32 s (9), `test_orbit_sky.py` 32 s (4), `test_cartoon_animals.py` 32 s (20), `test_regions.py` 31 s (19), `test_pie_heatmap.py` 30 s (16), `test_cartoon_holding.py` 30 s (6), `test_calculation.py` 30 s (3), `test_transitions.py` 29 s (5), `test_host.py` 29 s (5), `test_studio_check.py` 28 s (9), `test_phase_k_review.py` 28 s (2), `test_introspect.py` 28 s (4), `test_host_acting.py` 27 s (2), `test_chapters_progress.py` 27 s (6), `test_equation_derivation.py` 26 s (11), `test_cartoon_shots.py` 26 s (3), `test_sound_design.py` 25 s (7), `test_cartoon_lint.py` 25 s (3), `test_cartoon_foley.py` 25 s (2), `test_cartoon_acting.py` 25 s (4), `test_slides.py` 24 s (2), `test_scene_3d.py` 24 s (4), `test_gallery.py` 24 s (11), `test_delivery.py` 24 s (3), `test_videogen_input_freshness.py` 23 s (12), `test_scene_3d_passes.py` 23 s (3), `test_cartoon_sounds.py` 23 s (10), `test_cartoon_expressions.py` 23 s (8), `test_join_batches.py` 22 s (2), `test_detector.py` 22 s (6), `test_cartoon_cards.py` 22 s (3), `test_videogen_first_frame_in.py` 21 s (13), `test_video_clip.py` 21 s (12), `test_scene_3d_actions.py` 21 s (9), `test_plot.py` 21 s (5), `test_overlap.py` 21 s (3), `test_composer.py` 21 s (3), `test_icons.py` 20 s (9); and 174 more files under 20 s each (1501 s, 597 tests). Seen while timing (not profiled): most `test_schema.py` tests run `vidgen schema` and validate against the result, 15–25 s each; `test_music.py` timed out at 900 s as one file (timed in four parts).
 - [ ] Platform levels that the camera rises over render at about 2.4x real time at 854x480 (sky of the platform example: 47.9 s in 113 s): most of it is Manim's PIL transform of each tile chunk in view on every frame; draw the chunks in view into one picture per frame, or cut chunks by rows (Step 155)
 - [ ] Drafts: beat starts are rounded to whole frames per beat (a draft drifts up to ~0.2 s from the final over a scene); a light change still redraws the whole draft frame; animatics have no crossfade and no `--final` (Steps 137, 138)
 - [ ] `--jobs auto`: a cgroup CPU quota (`cpu.max`) is not read; one per-job figure (1.5 GB) whatever the format (a 4K render needs about 2.5 GB); the Windows and macOS memory readings are tested with mocks only (Step 117)

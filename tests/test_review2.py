@@ -52,6 +52,7 @@ def cls_of(name: str) -> Any:
 # ----- text on filled shapes ------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_dim_recolours_text_on_a_slice_and_until_restores_it(make_project, media: Path) -> None:
     pie = {"labels": ["Alpha", "Beta"], "values": [70, 30]}
@@ -82,6 +83,7 @@ def test_highlight_colour_keeps_a_callout_label_readable(make_project, media: Pa
     assert contrast_ratio(hex_rgb(ink), hex_rgb(plate)) >= 4.5
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_heatmap_values_stay_readable_under_dim_and_fill(make_project, media: Path) -> None:
     params = {"rows": ["a", "b"], "columns": ["x", "y"], "values": [[1, 2], [3, 9]]}
@@ -117,6 +119,7 @@ def test_highlight_box_follows_a_scrolling_line_and_fades_with_it(make_project, 
     assert boxes[0].get_stroke_opacity() < 0.05   # and faded with the row, out of the window
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_undoing_a_dim_keeps_the_scenes_own_dimming(make_project, media: Path) -> None:
     params = {"items": ["one", "two", "three"], "dim_previous": True}
@@ -140,6 +143,7 @@ def test_header_band_answers_to_title_and_heading() -> None:
         chapter.validate_params({"title": "A", "heading": "B"}, Theme())
 
 
+@pytest.mark.slow
 def test_synonyms_in_messages_targets_schema_and_list_scenes(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     both = {"id": "a", "type": "bullets", "params": {"title": "x", "heading": "y", "items": ["a"]}, "beats": beats(None)}
     target = {"id": "b", "type": "bullets", "params": {"heading": "H", "items": ["a"]}, "beats": beats([{"highlight": "title"}])}
@@ -156,6 +160,7 @@ def test_synonyms_in_messages_targets_schema_and_list_scenes(make_project, capsy
     assert fields["title"]["aliases"] == ["heading"] and fields["labels"]["aliases"] == []
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_title_target_selects_a_heading(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "b", "type": "bullets", "params": {"heading": "H", "items": ["a"]},
@@ -193,6 +198,7 @@ def test_fade_animates_colours_without_copying(monkeypatch: pytest.MonkeyPatch) 
 # ----- portrait layouts -----------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_portrait_lists_grow_into_the_tall_frame(make_project, media: Path) -> None:
     process = {"stages": ["Plan", "Build", "Ship"]}
@@ -206,6 +212,7 @@ def test_portrait_lists_grow_into_the_tall_frame(make_project, media: Path) -> N
     assert point(narrow) > point(wide) * 1.2
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_portrait_world_map_keeps_the_longitudes_of_its_items(make_project, media: Path) -> None:
     params = {"view": "world", "countries": ["Brazil", "Mexico", "Spain"]}
@@ -216,6 +223,7 @@ def test_portrait_world_map_keeps_the_longitudes_of_its_items(make_project, medi
     assert tall._view.region.width == pytest.approx(8 - 2 * tall.margin_x)   # as wide as the 9:16 safe area
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_box_round_a_guide_outline_stays(make_project, media: Path) -> None:
     columns = [{"heading": "A", "points": ["fast"]}, {"heading": "B", "points": ["slow"]}]

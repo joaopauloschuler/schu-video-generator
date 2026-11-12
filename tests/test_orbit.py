@@ -28,6 +28,7 @@ def cls() -> Any:
     return registry.get("orbit").cls
 
 
+@pytest.mark.slow
 def test_presets_elements_and_states_resolve() -> None:
     p = cls().validate_params({"central": "sun", "bodies": [{"preset": "earth"}, {"preset": "moon"}, {"name": "Probe", "r": ["1.2 AU", 0], "v": [0, "30 km/s"]},
                                                            {"name": "Rock", "periapsis": "0.5 AU", "apoapsis": "4 AU", "i": "10 deg"}], "span": "1 yr"})
@@ -96,6 +97,7 @@ def test_nbody_params() -> None:
     assert p.model() is model   # cached
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_kepler_second_law_from_the_scene_timing(make_project, media: Path) -> None:
     """The comet's dots, as the scene's clock places them in equal stretches of video, sweep
@@ -128,6 +130,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_orbits_render(size: tuple[int, int], make_project, media: Path) -> None:
@@ -233,6 +236,7 @@ def test_orbit_actions_are_checked(make_project) -> None:
     assert problems(good) == []
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_sectors_vectors_and_geometry_render(make_project, media: Path) -> None:
     beats = [{"text": "far out it crawls"}, {"text": "now we sweep the equal times", "actions": [{"sweep": "sectors:Comet", "at": "@sweep"}]},
@@ -259,6 +263,7 @@ def test_sectors_vectors_and_geometry_render(make_project, media: Path) -> None:
     assert s.is_shown("foci:Comet") and s.is_shown("axes:Comet") and s.is_shown("periapsis:Comet")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_cannonball_launches_on_words(make_project, media: Path) -> None:
     beats = [{"text": "slowly it falls", "actions": [{"launch": "shot:1", "at": "@falls"}]},
@@ -391,6 +396,7 @@ def test_manoeuvre_actions_and_calculations_are_checked(make_project) -> None:
     assert worked.results[0].value.value_text() == "3.89 km/s"
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_burns_on_their_words_and_pauses(make_project, media: Path) -> None:
     """The clock runs in stretches so that each burn happens on its word and holds still from
@@ -413,6 +419,7 @@ def test_burns_on_their_words_and_pauses(make_project, media: Path) -> None:
     assert np.linalg.norm(tip[:2] - start[:2]) == pytest.approx(max(np.linalg.norm(b2.dv[:2]) * s._dv_scale, 0.12), rel=1e-6)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_flyby_renders_with_its_vector_diagram(size: tuple[int, int], make_project, media: Path) -> None:

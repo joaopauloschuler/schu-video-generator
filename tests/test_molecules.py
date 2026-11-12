@@ -210,6 +210,7 @@ def world(*objects: ObjectSpec, **cell: Any) -> Any:
     return build_cell_world(CellSpec(objects=tuple(objects), **cell))
 
 
+@pytest.mark.slow
 def test_membrane_proteins_in_a_cell_face_the_right_way() -> None:
     w = world(ObjectSpec("gpcr", id="r", on="cell", count=3), ObjectSpec("atp_synthase", id="s", on="mitochondria", count=4))
     for r in w.members("r"):
@@ -229,6 +230,7 @@ def test_membrane_proteins_in_a_cell_face_the_right_way() -> None:
     assert all(dna.compartment_at(t.center)[0] == "nucleoplasm" for t in dna.members("d"))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("spec, cell, message", [
     (ObjectSpec("atp_synthase", on="mitochondria", faces="intermembrane_space"), "animal", "ATP synthase F₁ must face the mitochondrial matrix"),
     (ObjectSpec("atp_synthase"), "animal", "ATP synthase is not in the plasma membrane"),
@@ -248,6 +250,7 @@ def test_molecule_rules_in_a_cell(spec: ObjectSpec, cell: str, message: str) -> 
         world(spec, kind=cell)
 
 
+@pytest.mark.slow
 def test_a_molecule_view_names_its_parts() -> None:
     w = world(ObjectSpec("atp_synthase", id="s", on="mitochondria"))
     view = level_view(w, "complex", 16 / 9 * 0.8, "s")
@@ -268,6 +271,7 @@ def molecule_cls() -> Any:
     return registry.get("molecule").cls
 
 
+@pytest.mark.slow
 def test_molecule_params_and_targets() -> None:
     cls = molecule_cls()
     p = cls.validate_params({"title": "T", "membrane": "inner_mitochondrial", "molecules": ["atp_synthase", {"kind": "atp", "in": "matrix"},
@@ -304,6 +308,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_molecule_scene_renders(size: tuple[int, int], make_project, media: Path) -> None:

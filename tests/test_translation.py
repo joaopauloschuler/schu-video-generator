@@ -183,6 +183,7 @@ def test_pronunciation_entries_by_language(make_project) -> None:
     assert Project.load(root, variant="pt").spoken_texts()["intro_b1"] == "LaTeX and djêisson."
 
 
+@pytest.mark.slow
 def test_variant_keeping_base_pronunciation_warns(make_project) -> None:
     data = minimal_config(pronunciation={"Hello": "heh-low"}, variants={"pt": {"language": "pt-BR"}, "ok": {"language": "pt-BR", "pronunciation": {"Hello": "olá"}}})
     root = make_project(data)
@@ -729,6 +730,7 @@ def test_project_texts_of_the_example() -> None:
 # ----- outputs -----------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_rendered_variant_outputs_are_translated(make_project) -> None:
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:

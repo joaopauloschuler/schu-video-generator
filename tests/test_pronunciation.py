@@ -128,6 +128,7 @@ def test_srt_keeps_the_written_text_timed_by_the_spoken(tmp_path: Path) -> None:
     assert second.start == pytest.approx(spoken.index("It") * 0.1)
 
 
+@pytest.mark.slow
 def test_karaoke_captions_highlight_the_written_word_while_it_is_said(make_project) -> None:
     project = load(make_project, [narrated("a", "K-Phi-3 is small.")], [{"type": "captions", "style": "karaoke"}], pronunciation=KPHI)
     spoken = project.pronunciation.say("K-Phi-3 is small.")

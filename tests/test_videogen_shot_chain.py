@@ -41,6 +41,7 @@ def shots_of(root: Path) -> dict[str, Any]:
 # ----- last_of: finding the source -----------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_an_unknown_shot_is_a_problem_with_a_hint(make_project) -> None:
     root = make_project(config(shot_of("alpha"), shot_of("b", first_frame="last_of:alhpa")), folder="u")
     assert any("no shot 'alhpa'" in p and "alpha" in p for p in shots_of(root)["b"].problems)
@@ -109,6 +110,7 @@ def test_generate_inputs_cuts_the_picture_without_a_render(make_project) -> None
     assert not plan_of(root, "b").shot.blocked
 
 
+@pytest.mark.slow
 def test_another_pick_makes_the_next_shot_stale(make_project) -> None:
     root = chain_project(make_project)
     keep_take(root, "a", "k1", seconds=1.0)
@@ -154,6 +156,7 @@ def test_a_clip_opening_on_something_else_warns(tmp_path: Path) -> None:
     assert "opening match" in report.lines()[0]
 
 
+@pytest.mark.slow
 def test_a_clip_opening_on_its_picture_does_not_warn(tmp_path: Path) -> None:
     clip = write_clip(tmp_path / "c.mp4", seconds=1.0, size="64x36", fps=5, audio=False)
     picture = tmp_path / "first.png"
@@ -186,6 +189,7 @@ def test_add_take_records_the_score(make_project) -> None:
 # ----- the overlay ---------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_overlay_is_half_the_picture_half_the_guide(tmp_path: Path) -> None:
     guide = write_clip(tmp_path / "g.mp4", seconds=0.6, size="32x18", fps=5, audio=False)   # frame 0: grey 26
     picture = tmp_path / "white.png"
@@ -196,6 +200,7 @@ def test_the_overlay_is_half_the_picture_half_the_guide(tmp_path: Path) -> None:
     assert 125 < mean < 150   # (26 + 255) / 2
 
 
+@pytest.mark.slow
 def test_inputs_write_the_overlay_from_the_plain_guide(make_project) -> None:
     root = make_project(config(shot_of("act", guide=True, first_frame="assets/start.png", first_frame_in="guide")), folder="ov")
     picture_file(root)
@@ -206,6 +211,7 @@ def test_inputs_write_the_overlay_from_the_plain_guide(make_project) -> None:
     assert (root / "build" / "videogen" / "act" / "overlay.png").is_file() and any("overlay.png" in line for line in lines)
 
 
+@pytest.mark.slow
 def test_the_last_frame_overlay_uses_the_guides_last_frame(tmp_path: Path) -> None:
     from PIL import Image
 

@@ -122,6 +122,7 @@ def test_every_builtin_preset_is_documented_with_its_values() -> None:
             assert value in section, f"{preset.name}: {value} missing from the presets table"
 
 
+@pytest.mark.slow
 def test_every_builtin_scene_and_param_is_documented() -> None:
     with registry.isolated():
         extensions.load_builtins()
@@ -331,6 +332,7 @@ def test_orbits_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
         assert "COOKBOOK-ORBITS.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
+@pytest.mark.slow
 def test_particles_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
     """Step 243: the particle-physics cookbook's pattern validates and is lint-clean for the
     particle_* and calc_* rules, it links every particle scene type and names the rules, and the
@@ -365,6 +367,7 @@ def test_particles_cookbook_is_valid_and_linked(tmp_path: Path) -> None:
         assert "COOKBOOK-PARTICLES.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
 
 
+@pytest.mark.slow
 def test_docs_yaml_snippets_parse() -> None:
     for doc in ("docs/CONFIG.md", "docs/EXTENDING.md", "README.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")

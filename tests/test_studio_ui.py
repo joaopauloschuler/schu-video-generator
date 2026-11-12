@@ -75,6 +75,7 @@ def wait_idle(page: Any, version: int | None = None) -> None:
     page.wait_for_function(test, timeout=60_000)
 
 
+@pytest.mark.slow
 def test_page_loads_the_open_session(studio: tuple[StudioApp, StudioServer], page: Any, tmp_path: Path) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -92,6 +93,7 @@ def test_page_loads_the_open_session(studio: tuple[StudioApp, StudioServer], pag
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_choosing_a_preset_loads_and_renders_it(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     page.goto(server.url)
@@ -108,6 +110,7 @@ def test_choosing_a_preset_loads_and_renders_it(studio: tuple[StudioApp, StudioS
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_play_streams_the_render(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -135,6 +138,7 @@ def current_text(app: StudioApp) -> str:
     return app.session.text(app.session.current)
 
 
+@pytest.mark.slow
 def test_song_strip_edits_tempo_and_chords(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -160,6 +164,7 @@ def test_song_strip_edits_tempo_and_chords(studio: tuple[StudioApp, StudioServer
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_timeline_loops_a_section_drags_an_edge_and_draws_energy(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -190,6 +195,7 @@ def test_timeline_loops_a_section_drags_an_edge_and_draws_energy(studio: tuple[S
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_track_list_mute_volume_pattern_add_and_delete(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -232,6 +238,7 @@ def test_track_list_mute_volume_pattern_add_and_delete(studio: tuple[StudioApp, 
 # ----- Step 195: inspector, step grid, the score file typed -----------------------------------------
 
 
+@pytest.mark.slow
 def test_inspector_sliders_instrument_and_effects(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -282,6 +289,7 @@ def test_inspector_sliders_instrument_and_effects(studio: tuple[StudioApp, Studi
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_step_grid_and_text_stay_in_step(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -325,6 +333,7 @@ def test_step_grid_and_text_stay_in_step(studio: tuple[StudioApp, StudioServer],
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_score_file_typed_both_ways(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -364,6 +373,7 @@ def wait_swapped(page: Any, swaps: int) -> None:
     page.wait_for_function(f"!document.body.dataset.switching && document.body.dataset.swaps === '{swaps}'", timeout=30_000)
 
 
+@pytest.mark.slow
 def test_edits_mutes_and_narration_play_on_at_the_same_moment(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=LONGER)
@@ -432,6 +442,7 @@ def wait_checked(page: Any, version: int) -> None:
     page.wait_for_function(f"!document.body.dataset.checking && document.getElementById('check-for').textContent === 'v{version}'", timeout=90_000)
 
 
+@pytest.mark.slow
 def test_check_panel_advice_applies_as_a_version(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=LOUD)
@@ -453,6 +464,7 @@ def test_check_panel_advice_applies_as_a_version(studio: tuple[StudioApp, Studio
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_versions_undo_redo_rename_star_and_ab(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio
     app.load(text=TINY)
@@ -512,6 +524,7 @@ def test_export_yaml_audio_and_no_project(studio: tuple[StudioApp, StudioServer]
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_listening_notes_while_playing(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     """Step 198: N while playing pins a note at the moment; the lane pins one where clicked; the
     Notes tab lists them (resolve, delete; play from a little before)."""
@@ -550,6 +563,7 @@ def test_listening_notes_while_playing(studio: tuple[StudioApp, StudioServer], p
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_ask_an_agent_proposal_ab_and_keep(page: Any, tmp_path: Path) -> None:
     """Step 198: Ask an agent → an MCP agent's proposal (written as the studio_propose tool writes
     it) appears while the page polls → A/B against the current version → keep."""
@@ -592,6 +606,7 @@ VARI = TINY.replace('progression: "i VI"', 'progression: "i VI III VII"').replac
     "{name: a, bars: 1}, {name: b, bars: 1}", "{name: a, bars: 1}, {name: b, bars: 2}") + '  arp: {instrument: pluck, steps: "1358 5315 1358 5318", accent: "3+3+2"}\n'
 
 
+@pytest.mark.slow
 def test_variations_play_one_and_keep_it(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     """Step 199: Variations → four cards rendered and checked → play one at the same moment (A/B
     against the current version) → back → keep it as the next version."""
@@ -627,6 +642,7 @@ def playing(page: Any) -> bool:
     return page.get_attribute("#play", "aria-pressed") == "true"
 
 
+@pytest.mark.slow
 def test_keyboard_shortcuts_and_the_first_run_hint(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     """Space plays / pauses outside text fields; ? opens the list; L loops the section playing;
     M / S mute / solo the selected track; V makes variations, shown again after a reload; the
@@ -678,6 +694,7 @@ def test_keyboard_shortcuts_and_the_first_run_hint(studio: tuple[StudioApp, Stud
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_layout_at_window_widths_and_both_themes(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     """No sideways scrolling from 420 to 1920 px; below 1320 px the inspector, score file and
     notes are tabs; the theme switch flips every colour token."""
@@ -705,6 +722,7 @@ def test_layout_at_window_widths_and_both_themes(studio: tuple[StudioApp, Studio
     assert page.errors == []
 
 
+@pytest.mark.slow
 def test_server_not_answering_shows_how_to_restart(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     """Every API call failing (the server stopped) → a banner saying how to start it again; when
     it answers again the banner goes by itself (Retry polls at once)."""

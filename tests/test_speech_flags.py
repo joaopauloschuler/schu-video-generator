@@ -289,6 +289,7 @@ def test_readback_json(project_root: Path, monkeypatch: pytest.MonkeyPatch, caps
 # ----- vidgen lint --readback -----------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_lint_runs_unclear_speech_only_when_asked(project_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     stt = WordSTT()
     monkeypatch.setattr("vidgen.stt.get_stt_provider", lambda project: stt)
@@ -329,6 +330,7 @@ def test_lint_readback_cli(project_root: Path, monkeypatch: pytest.MonkeyPatch, 
     assert main(["lint", str(project_root), "--readback", "--rule", "dead_air", "--fail-on", "never"]) == 0
 
 
+@pytest.mark.slow
 def test_mcp_lint_readback_asks_before_a_paid_provider(tmp_path: Path) -> None:
     from test_mcp import attr, error_text, run_session
 

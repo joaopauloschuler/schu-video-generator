@@ -36,6 +36,7 @@ def json_out(capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
 # ----- the example end to end (no render) -------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_example_validates_directs_and_uses_phase_l(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = shutil.copytree(EXAMPLE, tmp_path / "rainbow")
     assert main(["validate", str(root), "--json"]) == 0
@@ -69,6 +70,7 @@ def test_the_screenplay_of_the_example_validates(tmp_path: Path, capsys: pytest.
     assert json_out(capsys)["ok"]
 
 
+@pytest.mark.slow
 def test_a_random_cast_of_robots_and_animals_and_the_music_beds(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     cast = tmp_path / "shared" / "cast.yaml"
     assert main(["cast", "--random", "3", "--species", "robot", "fox", "owl", "--seed", "4", "--out", str(cast), "--json"]) == 0
@@ -128,6 +130,7 @@ def test_a_watering_can_pours_the_way_its_holder_faces(facing: str) -> None:
     assert can.grip_point()[:2] == pytest.approx(kit.hand_point(hand)[:2], abs=1e-6)   # still in the hand after the pour
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_prop_held_off_stage_before_an_entrance_stays_out_of_view(make_project, tmp_path: Path) -> None:
     """kit waits beyond the right edge holding the gift: the gift in its hand (in front of it,

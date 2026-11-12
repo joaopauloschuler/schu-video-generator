@@ -43,6 +43,7 @@ def errors_of(**raw: Any) -> str:
 # ----- params ---------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_registered_with_its_params() -> None:
     import vidgen.scenes  # noqa: F401 - registers the built-ins
     from vidgen import registry
@@ -253,6 +254,7 @@ def _chromium_or_skip() -> None:
         pytest.skip(f"Chromium for Playwright is not available: {exc}")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_page_frames_are_deterministic_and_follow_time() -> None:
     _chromium_or_skip()
@@ -268,6 +270,7 @@ def test_page_frames_are_deterministic_and_follow_time() -> None:
     assert centre[0] > 100 and centre[0] > centre[2] and first[0][2, 2].tolist() == [0, 0, 0]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_page_reports_a_bad_description() -> None:
     _chromium_or_skip()

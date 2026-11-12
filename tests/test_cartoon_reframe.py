@@ -162,6 +162,7 @@ def labels(project: Project) -> dict[str, list[tuple[str, list[str]]]]:
     return {sid: [(d.beat, [auto_label(a) for a in d.actions]) for d in beats] for sid, beats in found.items()}
 
 
+@pytest.mark.slow
 def test_the_example_reframes_in_9_16_only(tmp_path: Path) -> None:
     root = example_project(tmp_path)
     assert labels(Project.load(root)) == {}                       # 16:9: everyone fits, nothing changes

@@ -258,6 +258,7 @@ BRAND = """
 """
 
 
+@pytest.mark.slow
 def test_extension_registers_a_preset(make_project: Callable[..., Path]) -> None:
     root = make_project(minimal_config(theme={"preset": "acme"}, variants={"plain": {"theme": {"preset": "dark_tech"}}}))
     write_files(root, {"extensions/brand.py": BRAND})
@@ -282,6 +283,7 @@ def test_validate_reports_unknown_preset(make_project: Callable[..., Path], caps
     assert {(p["location"], p["variant"]) for p in doc["problems"]} == {("theme.preset", None), ("theme.preset", "v")}
 
 
+@pytest.mark.slow
 def test_schema_lists_presets_and_code_styles(make_project: Callable[..., Path], capsys: pytest.CaptureFixture[str]) -> None:
     jsonschema = pytest.importorskip("jsonschema")
     root = make_project(minimal_config(theme={"preset": "acme"}))

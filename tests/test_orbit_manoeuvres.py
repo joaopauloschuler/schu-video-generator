@@ -19,6 +19,7 @@ R_E = orbits.R_EARTH
 DAY = 86400.0
 
 
+@pytest.mark.slow
 def test_local_frame_and_burn_vectors() -> None:
     r, v = np.array([7e6, 0, 0]), np.array([0, 7.5e3, 0])
     frame = orbits.local_frame(r, v)

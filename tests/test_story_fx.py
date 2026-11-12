@@ -211,6 +211,7 @@ def test_flashback_fades_and_warms_the_colours() -> None:
 # ----- sounds --------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_story_sounds_and_beds() -> None:
     for name in ("alarm", "crackle", "hum", "drone", "slam"):
         samples = sfx.synthesize(name)
@@ -236,6 +237,7 @@ ISO_LAB = {"place": "indoor", "map": "##%###%#\n#......#\n#.c.p..#\n#..a.r.#\n#.
            "objects": [{"object": "console", "at": "desk"}, {"object": "projector_pad", "at": "pad"}]}
 
 
+@pytest.mark.slow
 def test_story_actions_validate(make_project) -> None:
     cast = [*CAST, {"name": "ai", "hologram": True, "look": {"body": "tall"}}]
     params = {"light": "night", "iso": {**ISO_LAB, "wide": "fill"},
@@ -281,6 +283,7 @@ def test_lint_lets_hands_held_stand_close() -> None:
 # ----- rendering -----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_lab_under_an_alarm(make_project, tmp_path: Path, monkeypatch) -> None:
     from vidgen import extensions, registry

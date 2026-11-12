@@ -77,6 +77,7 @@ def params(**changes: Any) -> Any:
 # ----- clip helpers --------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_probe_clip(clip: Path, tmp_path: Path) -> None:
     info = probe_clip(clip)
     assert (info.width, info.height, info.fps, info.audio) == (64, 36, 5.0, True)
@@ -133,6 +134,7 @@ def test_reader_decodes_in_order_seeks_back_and_crops(clip: Path) -> None:
     cropped.close()
 
 
+@pytest.mark.slow
 def test_clip_audio_hold_loop_speed_and_volume(clip: Path, tmp_path: Path) -> None:
     def levels(path: Path) -> list[float]:
         with wave.open(str(path)) as w:
@@ -350,6 +352,7 @@ def test_fit_auto_shows_a_landscape_clip_nearly_square_in_9_16(make_project, cli
     assert params().fit == "auto" and params(fit="contain").fit == "contain"
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_clip_sound_is_mixed_under_the_narration(make_project, clip: Path, media: Path) -> None:
     def sound(**changes: Any) -> Any:
@@ -364,6 +367,7 @@ def test_clip_sound_is_mixed_under_the_narration(make_project, clip: Path, media
     assert sound(mute=True) is None and sound(volume=0) is None
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_take_with_its_own_sound_plays_at_full_volume_in_a_silent_clip_scene(make_project, clip: Path, media: Path) -> None:
     """The route for ``generated_shot.sound: model`` (DESIGN.md §113.11): the take, as a file, in a
@@ -409,6 +413,7 @@ def test_dead_air_sees_clip_motion_and_a_held_frame(make_project, clip: Path) ->
     assert [(f.scene, f.rule) for f in result.findings] == [("held", "dead_air")]
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_extending_clip_example_renders(make_project, clip: Path, media: Path) -> None:
     text = (Path(__file__).resolve().parents[1] / "docs" / "EXTENDING.md").read_text(encoding="utf-8")

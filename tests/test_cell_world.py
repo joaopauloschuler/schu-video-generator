@@ -23,6 +23,7 @@ def world(*objects: ObjectSpec, **cell: object) -> object:
     return build_cell_world(CellSpec(objects=tuple(objects), **cell))  # type: ignore[arg-type]
 
 
+@pytest.mark.slow
 def test_the_model_never_imports_manim() -> None:
     code = "import sys, vidgen.cellworld, vidgen.cellworld.view, vidgen.cellworld.model; print('manim' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True).stdout
@@ -54,6 +55,7 @@ def test_coordinates_formatting_and_nice_lengths() -> None:
 # ----- the typical cell ----------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_typical_animal_cell_is_at_textbook_scale() -> None:
     w = world()
     sizes = {e.id: w.thing(e.keys[0]) for e in w.entries}
@@ -71,6 +73,7 @@ def test_the_typical_animal_cell_is_at_textbook_scale() -> None:
     assert len(w.members("rough_er.ribosomes")) > 400
 
 
+@pytest.mark.slow
 def test_every_thing_is_where_it_may_be() -> None:
     w = world()
     for thing in w.placed:
@@ -91,6 +94,7 @@ def test_every_thing_is_where_it_may_be() -> None:
                 assert not any(overlap(s, o) for s in a.footprint for o in b.footprint), (a.key, b.key)
 
 
+@pytest.mark.slow
 def test_compartments_by_point_and_topology() -> None:
     w = world()
     nucleus = w.thing("nucleus")
@@ -111,6 +115,7 @@ def test_compartments_by_point_and_topology() -> None:
     assert isinstance(cis, ArcBand) and math.dist(cis.center(), nucleus.center) < math.dist(trans.center(), nucleus.center)
 
 
+@pytest.mark.slow
 def test_building_is_deterministic_and_the_seed_moves_things() -> None:
     a, b, c = world(), world(), world(seed=2)
     assert [p.center for p in a.placed] == [p.center for p in b.placed]
@@ -120,6 +125,7 @@ def test_building_is_deterministic_and_the_seed_moves_things() -> None:
 # ----- the location rules --------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("spec, message", [
     (ObjectSpec("ribosome", at=(-1.2, 0.6), where="objects[0]"), r"objects\[0\] \(ribosome 'ribosome'\): at \[-1.2, 0.6\] µm: that point is in the nucleoplasm of 'nucleus'; ribosomes .*never in the nucleoplasm"),
     (ObjectSpec("ribosome", inside="nucleus", count=3), "a ribosome cannot be in the nucleoplasm: ribosomes translate in the cytosol"),
@@ -148,6 +154,7 @@ def test_location_rules_refuse_with_the_reason(spec: ObjectSpec, message: str) -
         world(spec)
 
 
+@pytest.mark.slow
 def test_rules_allow_what_cells_do() -> None:
     w = world(ObjectSpec("ribosome", id="mitoribosomes", inside="mitochondria", count=10),
               ObjectSpec("proteasome", id="nuclear_proteasomes", inside="nucleus", count=5),
@@ -159,6 +166,7 @@ def test_rules_allow_what_cells_do() -> None:
     assert w.thing("mito").center == (6.0, 3.0) and w.thing("mito").angle == pytest.approx(math.radians(30))
 
 
+@pytest.mark.slow
 def test_an_object_with_a_typical_id_replaces_it_and_contents_none() -> None:
     w = world(ObjectSpec("nucleus", id="nucleus", size=9.0, width=8.0))
     assert w.thing("nucleus").size == 9.0 and len([e for e in w.entries if e.kind == "nucleus"]) == 1
@@ -175,6 +183,7 @@ def test_an_object_with_a_typical_id_replaces_it_and_contents_none() -> None:
 # ----- camera, level of detail, zoom ---------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_levels_frame_their_subject() -> None:
     w = world()
     cell = level_view(w, "cell", ASPECT)

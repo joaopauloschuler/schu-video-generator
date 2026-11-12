@@ -217,6 +217,7 @@ def small_loop() -> tuple[Any, np.ndarray]:
     return score, render_music_score(score)
 
 
+@pytest.mark.slow
 def test_loop_is_exact_level_deterministic_and_seamless(small_loop: tuple[Any, np.ndarray]) -> None:
     score, audio = small_loop
     assert audio.dtype == np.float32 and audio.shape == (score.samples, 2) and not audio.flags.writeable
@@ -229,6 +230,7 @@ def test_loop_is_exact_level_deterministic_and_seamless(small_loop: tuple[Any, n
     assert 20 * math.log10(float(np.abs(x).max())) < -9
 
 
+@pytest.mark.slow
 def test_sections_rest_and_seed_changes_the_pad(small_loop: tuple[Any, np.ndarray]) -> None:
     score, audio = small_loop
     half = score.samples // 2
@@ -238,6 +240,7 @@ def test_sections_rest_and_seed_changes_the_pad(small_loop: tuple[Any, np.ndarra
     assert not np.array_equal(audio, other)
 
 
+@pytest.mark.slow
 def test_one_shot_keeps_its_tail_and_ends_silent() -> None:
     data = _score(loop=False)
     data["tracks"]["bell"] = {"instrument": "bell", "steps": "x . . . | . . . . | . . . . | . . . 8"}
@@ -259,6 +262,7 @@ def test_demo_renders_with_its_lift() -> None:
     assert (np.abs(audio[0] - audio[-1]) <= np.quantile(steps, 0.999, axis=0)).all()
 
 
+@pytest.mark.slow
 def test_every_instrument_plays() -> None:
     tracks = {}
     for name, inst in INSTRUMENTS.items():
@@ -268,6 +272,7 @@ def test_every_instrument_plays() -> None:
     assert np.isfinite(audio).all() and np.abs(audio).max() > 0
 
 
+@pytest.mark.slow
 def test_studio_imports_no_video_code() -> None:
     import subprocess
     import sys
@@ -290,6 +295,7 @@ def test_studio_imports_no_video_code() -> None:
 # ----- the command ---------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_music_render_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "theme.yaml"
     path.write_text(yaml.safe_dump(_score(title="Theme")), encoding="utf-8")
@@ -377,6 +383,7 @@ def test_effect_problems(track: str, change: dict[str, Any], message: str) -> No
     assert message in _problems(data)
 
 
+@pytest.mark.slow
 def test_ducking_pumps_on_the_kick_or_the_beat() -> None:
     beat = 24000
     for tracks in (
@@ -390,6 +397,7 @@ def test_ducking_pumps_on_the_kick_or_the_beat() -> None:
         assert loudness.integrated_loudness(x) == pytest.approx(-28.0, abs=0.05)
 
 
+@pytest.mark.slow
 def test_gate_sweep_volume_and_width_move_the_sound() -> None:
     beat = 24000
     _, x = _fx({"pad": {**_PAD, "gate": {"steps": "x...x...x...x...", "duty": 0.5, "floor": 0}}})
@@ -404,6 +412,7 @@ def test_gate_sweep_volume_and_width_move_the_sound() -> None:
     assert np.allclose(x[:, 0], x[:, 1], atol=1e-6)
 
 
+@pytest.mark.slow
 def test_echo_ping_pongs_and_reverb_leaves_a_tail() -> None:
     beat = 24000
     pluck = {"instrument": "pluck", "steps": "1... | .... | .... | ....", "settings": {"decay": 0.05, "ring": 0.1}, "pan": -0.8}
@@ -418,6 +427,7 @@ def test_echo_ping_pongs_and_reverb_leaves_a_tail() -> None:
     assert abs(np.corrcoef(wet[RATE : 2 * RATE, 0], wet[RATE : 2 * RATE, 1])[0, 1]) < 0.5  # a different tail per side
 
 
+@pytest.mark.slow
 def test_the_beds_sounds_can_be_written() -> None:
     """Everything momentum, ascent, horizon, beacon and neon do (DESIGN.md §93.7), in one score."""
     tracks = {

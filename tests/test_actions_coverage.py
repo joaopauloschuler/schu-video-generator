@@ -152,6 +152,7 @@ def targets_table() -> dict[str, tuple[list[str], list[str]]]:
     return rows
 
 
+@pytest.mark.slow
 def test_every_builtin_type_has_targets_and_the_docs_table_matches() -> None:
     extensions.load_builtins()
     table = targets_table()
@@ -330,6 +331,7 @@ def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list
 # ----- zoom -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_zoom_moves_the_camera_in_and_back_by_the_beat_end(make_project, media: Path) -> None:
     acts = beats(
@@ -442,6 +444,7 @@ def test_lint_skips_frame_edges_while_zoomed() -> None:
 # ----- transform --------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_transform_replaces_a_target_with_a_hidden_one(make_project, media: Path, caplog: pytest.LogCaptureFixture) -> None:
     acts = beats(None, [{"transform": "item1", "into": "item4", "at": 0.3}], [{"transform": "item2", "into": "item4"}], None)
@@ -467,6 +470,7 @@ def test_transform_styles(style: str, name: str, make_project, media: Path) -> N
     assert scene.is_shown("bar3") and not scene.is_shown("bar1")
 
 
+@pytest.mark.slow
 def test_transform_into_is_checked(make_project) -> None:
     scenes = [{"id": "s", "type": "bullets", "params": BULLETS, "beats": beats([{"transform": "item1", "into": "item9"}, {"transform": "item1"}])}]  # one beat, two actions
     problems = {p.location: p.message for p in project_problems(project_with(make_project, scenes))}
@@ -530,6 +534,7 @@ def test_images_are_dimmed_and_tinted(make_project, media: Path) -> None:
     assert tuple(pixels[0, 0, :3]) != (40, 120, 200) and int(pixels[0, 0, 0]) > 40   # tinted towards the highlight colour
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_bar_box_sits_on_the_axis(make_project, media: Path) -> None:
     acts = beats([{"highlight": "bar*", "style": "box"}])

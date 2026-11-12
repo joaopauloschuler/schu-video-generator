@@ -34,6 +34,7 @@ def _decoded(path: Path) -> np.ndarray:
     return np.frombuffer(raw, dtype=np.uint8).reshape(-1, H, W, 3)
 
 
+@pytest.mark.slow
 def test_batched_blends_give_the_frames_of_one_graph(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     videos, audios, frames = _clips(tmp_path)
     crossfades = [3, 0, 4, 2]   # a cut between the second and third
@@ -51,6 +52,7 @@ def test_batched_blends_give_the_frames_of_one_graph(tmp_path: Path, monkeypatch
     assert int(np.abs(one.astype(int) - batched.astype(int)).max()) <= 2
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_a_crossfade_between_stage_scenes_does_not_dip_to_the_background(tmp_path: Path) -> None:
     """The set no longer fades in from its background colour after a crossfade: the frames

@@ -22,6 +22,36 @@ LIVE_ZDR_404 = (
 )
 
 
+def _named_on_command_line(nodeid: str, named: list[str]) -> bool:
+    """True when ``nodeid`` is one of the tests named as ``file::test`` on the command line."""
+    nodeid = nodeid.replace("\\", "/")
+    for arg in named:
+        file, _, rest = arg.replace("\\", "/").partition("::")
+        tail = f"{Path(file).name}::{rest}"
+        start = nodeid.rfind(tail)
+        if start != -1 and (start == 0 or nodeid[start - 1] == "/") and nodeid[start + len(tail):][:1] in ("", "[", ":"):
+            return True
+    return False
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Leave ``slow`` tests out of the default run.
+
+    They run when the ``-m`` expression names ``slow`` (``-m slow``; everything:
+    ``-m "slow or not slow"``) or when a test is named by its node id (``file.py::test``).
+    """
+    if "slow" in (config.getoption("markexpr") or ""):
+        return
+    named = [arg for arg in config.args if "::" in arg]
+    kept, left_out = [], []
+    for item in items:
+        slow = item.get_closest_marker("slow") is not None
+        (left_out if slow and not _named_on_command_line(item.nodeid, named) else kept).append(item)
+    if left_out:
+        config.hook.pytest_deselected(items=left_out)
+        items[:] = kept
+
+
 def minimal_config(**overrides: Any) -> dict[str, Any]:
     """A small valid raw config mapping."""
     data: dict[str, Any] = {

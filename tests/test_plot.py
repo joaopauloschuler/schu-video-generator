@@ -31,6 +31,7 @@ def params(**p: Any) -> Any:
 INLINE = [{"name": "a", "x": [0, 1, 2], "y": [1, 10, 100]}]
 
 
+@pytest.mark.slow
 def test_inline_series_forms() -> None:
     p = params(series=[{"name": "a", "x": [0, 1, 2], "y": [1, None, 3]}, {"name": "b", "points": [[0, 1], [2, 2]], "style": "both", "dashed": True}])
     (panel,) = p.resolve()
@@ -197,6 +198,7 @@ def media(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("media")
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_fits_histograms_and_annotations_render(size: tuple[int, int], make_project, media: Path) -> None:
@@ -227,6 +229,7 @@ def test_fits_histograms_and_annotations_render(size: tuple[int, int], make_proj
     assert all(h.is_shown(t) for t in h.targets) and h.layouts[0].y.lo == 0
 
 
+@pytest.mark.slow
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 def test_plot_scenes_render(size: tuple[int, int], make_project, media: Path) -> None:

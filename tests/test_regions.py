@@ -219,6 +219,7 @@ def test_readable_size_follows_the_project_lint_setting(make_project, landscape:
     assert readable_size("Inter") == pytest.approx(readable_size("Inter", fraction=0.025))
 
 
+@pytest.mark.slow
 def test_readable_text_wraps_instead_of_shrinking(landscape: None, active: Project) -> None:
     text = "A rather long sentence that cannot fit on one line of a narrow region at a readable size"
     narrow = Region(0, 0, 3, 6)
@@ -230,6 +231,7 @@ def test_readable_text_wraps_instead_of_shrinking(landscape: None, active: Proje
     assert len(block) > 3 and block.width <= narrow.width + 1e-6 and block.height <= narrow.height + 1e-6
 
 
+@pytest.mark.slow
 def test_font_roles_in_text_helpers(landscape: None, make_project) -> None:
     """``role=`` picks the theme's family for a font role; ``font=`` still wins (Step 22)."""
     from vidgen.helpers import MT, T
@@ -245,6 +247,7 @@ def test_font_roles_in_text_helpers(landscape: None, make_project) -> None:
         assert readable_text("Hello world", Region(0, 0, 4, 2), role="code") is not None
 
 
+@pytest.mark.slow
 def test_readable_text_too_long_is_shrunk_with_a_warning(landscape: None, active: Project, caplog: pytest.LogCaptureFixture) -> None:
     tiny = Region(0, 0, 2, 0.5)
     with caplog.at_level(logging.WARNING, logger="vidgen.regions"):
@@ -338,6 +341,7 @@ def test_wrapped_string_with_spaces_stays_a_string() -> None:
     assert next(t for ch, t in pieces[1] if ch != " ") in String   # the continuation starts as a string
 
 
+@pytest.mark.slow
 def test_paint_code_colours_continuations_like_their_token() -> None:
     from manim import Code
     from pygments.token import Comment, String
@@ -482,6 +486,7 @@ def test_cover_image_caption_stays_in_the_safe_area(layout_project: Project, tmp
     assert caption.get_bottom()[1] == pytest.approx(scene.layout_safe.y0, abs=0.01)
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_quote_grows_in_a_vertical_frame(layout_project: Project, tmp_path: Path) -> None:
     wide = render_unfaded(layout_project, "saying", tmp_path, SIZES["landscape"])
@@ -521,6 +526,7 @@ def test_code_wraps_only_where_it_would_be_too_small(layout_project: Project, tm
     assert len(covered) > 2  # lines 3 and 4 plus at least one continuation
 
 
+@pytest.mark.slow
 @pytest.mark.render
 def test_bullets_use_the_taller_frame(layout_project: Project, tmp_path: Path) -> None:
     wide = render_unfaded(layout_project, "list", tmp_path, SIZES["landscape"])

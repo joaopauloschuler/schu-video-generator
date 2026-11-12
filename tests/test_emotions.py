@@ -151,6 +151,7 @@ def test_beat_providers_per_voice_and_emotion(make_project) -> None:
     assert tts.beat_providers(Project.load(plain))["intro_b1"].cache_key("Hello there.") == "05cb88daec48cc27a4841b20f737de3c7cb847c4"
 
 
+@pytest.mark.slow
 def test_kokoro_emotions_need_no_warning(make_project) -> None:
     project = Project.load(make_project(emotion_config(), folder="k"))
     assert not tts.emotion_warnings(project) and not [w for w in validate_warnings(project) if w.startswith("emotion")]
@@ -289,6 +290,7 @@ def test_weighted_blend_mixes_the_style_packs() -> None:
     assert kk.KokoroProvider(VoiceConfig(**KOKORO, voice="af_bella,af_heart"), engine=engine).voice_for(made[0]) == "af_bella,af_heart"
 
 
+@pytest.mark.slow
 def test_tts_run_with_emotions(make_project, fake: Factory, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(emotion_config())
     assert main(["tts", str(root), "--dry-run"]) == 0
@@ -308,6 +310,7 @@ def test_tts_run_with_emotions(make_project, fake: Factory, capsys: pytest.Captu
     assert [b.id for b in plan_tts(Project.load(root)).todo] == ["intro_b2"]   # only the changed beat
 
 
+@pytest.mark.slow
 def test_lip_sync_follows_the_edited_audio(make_project, fake: Factory) -> None:
     from vidgen.cartoon.visemes import read_visemes
 

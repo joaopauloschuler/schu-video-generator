@@ -176,6 +176,7 @@ def test_one_provider_per_video_errors(make_project, capsys: pytest.CaptureFixtu
 # ----- dry-run JSON over MCP (the server runs in its own process: offline there) ---------------------
 
 
+@pytest.mark.slow
 def test_mcp_dry_runs_for_openrouter_projects(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from test_mcp import doc_of, error_text, run_session
 
