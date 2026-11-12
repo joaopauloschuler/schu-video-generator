@@ -34,6 +34,8 @@ from vidgen.browser import chromium
 from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels
 from vidgen.errors import VidgenError
 from vidgen.web.entry import WebEntry, inside
+from vidgen.web.inputs import page_head, with_head
+from vidgen.web.loaded import VIDGEN_PREFIX, served_file
 
 log = logging.getLogger("vidgen.web")
 
@@ -110,8 +112,9 @@ def content_type(path: Path) -> str:
 
 
 def canvas_page(script: str, size: tuple[int, int]) -> str:
-    """vidgen's bare page for a ``script:`` scene: one canvas of ``size`` filling the frame and
-    a module importing ``script`` (a project path), its exports put on ``window.vidgen``."""
+    """vidgen's bare page for a ``script:`` scene: one canvas of ``size`` filling the frame (on
+    the theme's background once :func:`~vidgen.web.inputs.page_head` is in) and a module
+    importing ``script`` (a project path), its exports put on ``window.vidgen``."""
     html = CANVAS_FILE.read_text(encoding="utf-8")
     return html.replace("@WIDTH@", str(size[0])).replace("@HEIGHT@", str(size[1])).replace("@SCRIPT@", json.dumps("/" + script))
 
@@ -200,13 +203,20 @@ class WebPage:
     page.frame(n)`` -> RGB pixels (H x W x 3).
 
     Starts Chromium on enter, closes it on exit; requests outside ``root`` are refused (one
-    warning per URL, also in :attr:`refused`)."""
+    warning per URL, also in :attr:`refused`). ``theme`` (``ctx.theme``, also the CSS custom
+    properties), ``data`` (``ctx.data``) and ``beats`` (``ctx.beats``) are what the page is given
+    (§118.9). :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
+    to its SHA-256, a missing project file to ``None`` (§118.10)."""
 
-    def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int) -> None:
+    def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
+                 theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
+                 beats: list[dict[str, Any]] | None = None) -> None:
         self.root, self.entry, self.scene_id = root, entry, scene_id
         self.size, self.fps, self.frames = size, fps, frames
+        self.theme, self.data, self.beats = theme, dict(data or {}), list(beats or [])
         self.refused: list[str] = []
         self.missing: list[str] = []
+        self.loaded: dict[str, str | None] = {}
         self._chromium: Chromium | None = None
         self._page: Any = None
         self._limit = _TimeLimit([])
@@ -214,7 +224,8 @@ class WebPage:
     # ----- serving -------------------------------------------------------------------------------
 
     def _serve(self, route: Any) -> None:
-        """Answer from the project folder; refuse every other origin; 404 a missing file."""
+        """Answer from the project folder (or vidgen's files under ``__vidgen__/``); refuse every
+        other origin; 404 a missing file. Notes what it served in :attr:`loaded`."""
         url = route.request.url
         rel = project_path(url)
         if rel is None:
@@ -224,16 +235,22 @@ class WebPage:
             route.abort("blockedbyclient")
             return
         if rel == CANVAS_PATH and self.entry.kind == "script":
-            route.fulfill(status=200, body=canvas_page(self.entry.posix, self.size), headers={"Content-Type": CONTENT_TYPES[".html"]})
+            body = with_head(canvas_page(self.entry.posix, self.size).encode("utf-8"), page_head(self.theme))
+            route.fulfill(status=200, body=body, headers={"Content-Type": CONTENT_TYPES[".html"]})
             return
-        path = inside(self.root, rel)
+        path = served_file(self.root, rel)
         if path is None or not path.is_file():
+            if path is not None and not rel.startswith(VIDGEN_PREFIX) and rel != "favicon.ico":
+                self.loaded[rel] = None   # created later, it draws the clip again
             if rel not in self.missing and rel != "favicon.ico":
                 self.missing.append(rel)
                 log.warning("scene '%s': the page asked for %s, which is not in the project folder", self.scene_id, rel)
             route.fulfill(status=404, body="", headers={"Content-Type": CONTENT_TYPES[".txt"]})
             return
         body = path.read_bytes()
+        self.loaded[rel] = hashlib.sha256(body).hexdigest()
+        if self.entry.kind == "page" and rel == self.entry.posix:
+            body = with_head(body, page_head(self.theme))
         headers = {"Content-Type": content_type(path), "Accept-Ranges": "bytes"}
         span = byte_range(route.request.headers.get("range"), len(body))
         if span is None:
@@ -292,7 +309,8 @@ class WebPage:
             raise VidgenError(f"scene '{self.scene_id}': {self.entry.posix} did not load: {first_line(exc)}") from None
         self._limit = _TimeLimit(renderer_pids(browser))
         info = {"scene": self.scene_id, "width": width, "height": height, "fps": self.fps,
-                "frames": self.frames, "duration": self.frames / self.fps}
+                "frames": self.frames, "duration": self.frames / self.fps, "theme": self.theme, "data": self.data,
+                "beats": self.beats}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
 

@@ -1,10 +1,11 @@
-"""The ``web`` scene type (Steps 328-329, DESIGN.md §118): params, the page or script file's checks,
+"""The ``web`` scene type (Steps 328-330, DESIGN.md §118): params, the page or script file's checks,
 the served paths, error messages, the clip cache, the random seed and the time limit without a
 browser; a few tiny pages in Playwright's Chromium (``slow``, skipped when it is missing), among
-them the virtual clock (§118.8)."""
+them the virtual clock (§118.8) and what the page is given (§118.9, §118.10)."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import subprocess
@@ -108,6 +109,7 @@ def test_the_clip_is_reused_until_the_file_changes(tmp_path: Path, monkeypatch: 
     drawn: list[int] = []
 
     class Page:
+        loaded: dict[str, str | None] = {}
         def __init__(self, *_: Any, **__: Any) -> None: ...
         def __enter__(self) -> Page:
             return self
@@ -185,6 +187,128 @@ def test_the_time_limit_stops_the_process() -> None:
     finally:
         sleeper.kill()
         sleeper.wait()
+
+
+# ----- what the page is given (Step 330) ---------------------------------------------------------
+
+
+def _theme(preset: str | None = None) -> dict[str, Any]:
+    from vidgen.config import ThemeConfig
+    from vidgen.theme import Theme
+    from vidgen.web.inputs import page_theme
+
+    return page_theme(Theme(ThemeConfig(preset=preset)), 1080 / (72 * 8))
+
+
+def test_the_theme_as_css_custom_properties() -> None:
+    from vidgen.web.inputs import theme_css, theme_properties
+
+    dark, light = _theme(), _theme("light_academic")
+    props = theme_properties(light)
+    assert props["--vidgen-primary"] == "#1D4ED8" and props["--vidgen-background"] == "#F8F7F3"
+    assert props["--vidgen-palette-0"] == "#1D4ED8"
+    assert props["--vidgen-font-heading"] == '"Source Serif 4", serif' and props["--vidgen-font-body"] == '"Inter", sans-serif'
+    assert props["--vidgen-font-quote_mark"] == '"Source Serif 4", serif' and props["--vidgen-font-mono"] == '"JetBrains Mono NL", monospace'
+    assert props["--vidgen-size-body"] == "60px"   # font size 32 at 1080 px: 32 / 72 in * 1080 / 8 px per unit
+    assert theme_properties(dark)["--vidgen-font-heading"] == '"Inter", sans-serif'
+    css = theme_css(light)
+    assert 'src: url("/__vidgen__/fonts/SourceSerif4/SourceSerif4-Bold.ttf") format("truetype"); font-weight: 700' in css
+    assert css.count("@font-face") == 8 and ":root {" in css
+
+
+def test_vidgens_head_goes_first_in_the_page() -> None:
+    from vidgen.web.inputs import page_head, with_head
+
+    head = page_head(None)
+    assert head == '<script type="importmap">{"imports": {"three": "/__vidgen__/three/three.module.js"}}</script>'
+    assert with_head(b"<!DOCTYPE html><html lang=en><HEAD><script>", "<X>") == b"<!DOCTYPE html><html lang=en><HEAD><X><script>"
+    assert with_head(b"<!doctype html><header>", "<X>") == b"<!doctype html><X><header>"
+    assert with_head(b"<p>hi", "<X>") == b"<X><p>hi"
+    assert page_head(_theme()).startswith('<style id="vidgen-theme">')
+    assert "var(--vidgen-background, #000)" in canvas_page("g.js", (16, 9))
+
+
+def test_data_must_be_json_values() -> None:
+    import datetime
+
+    from vidgen.scenes.web import Web
+
+    assert Web.Params.model_validate({"page": "a.html", "data": {"teeth": [1, 2.5], "on": True, "c": None}}).data["teeth"] == [1, 2.5]
+    assert Web.Params.model_validate({"page": "a.html"}).data == {}
+    for data, problem in (({"a": [1, {"when": datetime.date(2026, 1, 1)}]}, "data.a[1].when: 2026-01-01 is a date"),
+                          ({1: "x"}, "data: the key 1 is not text"), ({"x": float("inf")}, "data.x: inf is not a finite number")):
+        with pytest.raises(ValidationError, match=problem.replace("[", r"\[").replace("]", r"\]")):
+            Web.Params.model_validate({"page": "a.html", "data": data})
+
+
+def test_served_vidgen_files() -> None:
+    from vidgen.web.loaded import served_file, vidgen_file
+
+    assert vidgen_file("three/three.module.js").name == "three.module.js"
+    assert vidgen_file("fonts/Inter/Inter-Bold.ttf").is_file()
+    for rel in ("three/vidgen3d.js", "fonts/../three/three.core.js", "fonts/Inter/OFL.txt", "web/clock.js"):
+        assert vidgen_file(rel) is None
+    assert served_file(Path("/p"), "__vidgen__/three/three.core.js").name == "three.core.js"
+    assert served_file(Path("/p"), "../x.css") is None
+
+
+def _fake_page(drawn: list[str], loads: dict[str, str]) -> type:
+    """A WebPage stand-in that 'loads' the files of ``loads`` (path -> file under the root)."""
+
+    class Page:
+        def __init__(self, root: Path, *_: Any, **kw: Any) -> None:
+            from vidgen.web.loaded import current_loaded
+
+            self.loaded = current_loaded(root, loads)
+            drawn.append(json.dumps(kw.get("data")))
+        def __enter__(self) -> Any:
+            return self
+        def __exit__(self, *_: Any) -> None: ...
+        def frame(self, n: int) -> np.ndarray:
+            return np.zeros((16, 16, 3), dtype=np.uint8)
+
+    return Page
+
+
+def test_the_clip_follows_every_file_the_page_loaded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    drawn: list[str] = []
+    monkeypatch.setattr(web_clip, "WebPage", _fake_page(drawn, {"p.html": "", "s.css": "", "late.json": ""}))
+    (tmp_path / "p.html").write_text("<p>", encoding="utf-8")
+    (tmp_path / "s.css").write_text("p {}", encoding="utf-8")
+    out = tmp_path / "build"
+    make = lambda data=None: web_clip.make_web_clip(tmp_path, out, "p", {"page": "p.html", "data": data or {}},  # noqa: E731
+                                                    size=(16, 16), fps=5, frames=2, theme={"background": "#000"})
+    make()
+    record = json.loads((out / "p.json").read_text(encoding="utf-8"))
+    assert record["loaded"]["late.json"] is None and record["inputs"]["data"] == {} and record["inputs"]["theme"] == {"background": "#000"}
+    make()
+    assert len(drawn) == 1
+    (tmp_path / "s.css").write_text("p { color: red }", encoding="utf-8")
+    make()
+    (tmp_path / "late.json").write_text("{}", encoding="utf-8")   # was missing: now there
+    make()
+    make({"n": 2})
+    assert len(drawn) == 4 and drawn[-1] == '{"n": 2}'
+    web_clip.forget_web_clips(out, ["p"])
+    make({"n": 2})
+    assert len(drawn) == 5
+
+
+def test_the_fingerprint_follows_the_files_the_page_loaded(make_project: Any) -> None:
+    from vidgen.render.fingerprint import drawn_fingerprint, fingerprint_inputs, scene_fingerprint
+
+    project = web_project(make_project, {"page": "p.html"}, {"p.html": "<p>", "s.css": "p {}"})
+    root = project.root
+    before = fingerprint_inputs(project, "w")
+    assert before["web"]["loaded"] == {}
+    record = root / "build" / "final" / "web" / "w.json"
+    record.parent.mkdir(parents=True)
+    loaded = {"p.html": hashlib.sha256(b"<p>").hexdigest(), "s.css": hashlib.sha256(b"p {}").hexdigest()}
+    record.write_text(json.dumps({"key": "k", "loaded": loaded}), encoding="utf-8")
+    stored = drawn_fingerprint(before, project, False, "w")   # what the worker records after the first render
+    assert stored == scene_fingerprint(project, "w")   # the next run: unchanged
+    (root / "s.css").write_text("p { color: red }", encoding="utf-8")
+    assert scene_fingerprint(project, "w") != stored
 
 
 # ----- pages in Chromium ------------------------------------------------------------------------
@@ -340,3 +464,46 @@ def test_a_hook_that_never_returns_is_stopped(tmp_path: Path, monkeypatch: pytes
     with pytest.raises(VidgenError, match=r"^scene 'w': load\(ctx\) in wait\.js did not return within 1 s \(time stands still"):
         _open(tmp_path, WebEntry("script", "wait.js")).__enter__()
     assert time.monotonic() - started < 20
+
+
+GIVEN_PAGE = """<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="g.css">
+<script type="module">import * as THREE from "three"; window.revision = THREE.REVISION;</script></head>
+<body><div id="box"></div><script>
+window.events = [];
+window.addEventListener('vidgen-beat', (e) => window.events.push([e.detail.beat.id, e.detail.index, e.detail.t, e.detail.previous && e.detail.previous.id]));
+window.vidgen = { load(ctx) { window.seen = [document.body.dataset.beat, ctx.data.n, ctx.theme.colors.primary, ctx.beats.length]; },
+                  frame(t) { if (t > 0.3) fetch('late.json'); } };
+</script></body></html>"""
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_page_is_given_theme_data_beats_and_three(tmp_path: Path) -> None:
+    _chromium_or_skip()
+    (tmp_path / "g.html").write_text(GIVEN_PAGE, encoding="utf-8")
+    (tmp_path / "g.css").write_text("html, body { margin: 0; height: 100%; background: var(--vidgen-background); font-family: var(--vidgen-font-heading); }\n"
+                                    "#box { width: 20px; height: 20px; background: var(--vidgen-primary); opacity: 0; transition: opacity 0.4s linear; }\n"
+                                    "body[data-beat=\"b2\"] #box { opacity: 1; }", encoding="utf-8")
+    (tmp_path / "late.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "t.js").write_text("import * as THREE from 'three';\nexport function frame(t, ctx) { const c = ctx.canvas.getContext('2d');"
+                                   " c.fillStyle = new THREE.Color(ctx.theme.colors.primary).getStyle(); c.fillRect(0, 0, 8, 8); }", encoding="utf-8")
+    theme = _theme("light_academic")
+    beats = [{"id": "b1", "index": 0, "start": 0.0, "end": 0.3, "text": "a", "words": []},
+             {"id": "b2", "index": 1, "start": 0.4, "end": 0.9, "text": "b", "words": []}]
+    with WebPage(tmp_path, WebEntry("page", "g.html"), scene_id="w", size=(64, 36), fps=10, frames=9,
+                 theme=theme, data={"n": 3}, beats=beats) as page:
+        reds = [int(page.frame(n)[5, 5, 0]) for n in range(9)]
+        state = page._page.evaluate("[window.seen, window.events, window.revision, document.body.dataset.beat, document.body.dataset.beatIndex,"
+                                    " getComputedStyle(document.body).fontFamily, document.fonts.check('16px \"Source Serif 4\"')]")
+        loaded = page.loaded
+    assert state[0] == ["b1", 3, "#1D4ED8", 2]
+    assert state[1] == [["b1", 0, 0, None], ["b2", 1, 0.4, "b1"]]
+    assert isinstance(state[2], str) and state[2].isdigit()
+    assert state[3:6] == ["b2", "1", '"Source Serif 4", serif'] and state[6] is True
+    # the background is #F8F7F3 (red 248) until b2 starts at 0.4 s; the box fades to #1D4ED8 (red 29) in 0.4 s
+    assert reds[:5] == [248] * 5 and reds[8] == 29 and 29 < reds[6] < 248
+    assert {"g.html", "g.css", "late.json", "__vidgen__/three/three.module.js", "__vidgen__/three/three.core.js",
+            "__vidgen__/fonts/SourceSerif4/SourceSerif4-Regular.ttf"} <= set(loaded)
+    with WebPage(tmp_path, WebEntry("script", "t.js"), scene_id="w", size=(64, 36), fps=10, frames=2, theme=theme) as page:
+        pixels = page.frame(0)
+    assert tuple(int(v) for v in pixels[2, 2]) == (0x1D, 0x4E, 0xD8) and tuple(int(v) for v in pixels[30, 50]) == (0xF8, 0xF7, 0xF3)

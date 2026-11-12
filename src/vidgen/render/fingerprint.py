@@ -16,7 +16,10 @@ With overlays, also what the planned timeline reads from every scene (``vidgen.v
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
-With a ``web`` scene (DESIGN.md §118): its page or script file (contents).
+With a ``web`` scene (DESIGN.md §118.10): its page or script file and every file its page loaded
+in the last render that drew its clip (contents; the record beside the clip lists them; the
+worker records the files as the page loaded them, :func:`drawn_fingerprint`), and the beats'
+stored alignments (``ctx.beats`` has word times).
 With ``match_previous`` (a ``video_clip`` continuing the clip before it, DESIGN.md §117): the
 fingerprint of the scene before and its clip file.
 Not the music and the final mix (``music``, ``audio``, a scene's ``music``, a beat's
@@ -192,6 +195,54 @@ def _next_transition(project: Project, scene_id: str) -> Any:
 
 def scene_fingerprint(project: Project, scene_id: str) -> str:
     """A hex digest of everything (that schu-video-generator knows of) the render of ``scene_id`` depends on."""
+    return fingerprint_digest(fingerprint_inputs(project, scene_id))
+
+
+def fingerprint_digest(inputs: dict[str, Any]) -> str:
+    """The hex digest of :func:`fingerprint_inputs`."""
+    text = json.dumps(inputs, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _web_records(project: Project, scene_id: str) -> list[Path]:
+    """The records of a ``web`` scene's clips (final and preview renders of this project)."""
+    from vidgen.web.loaded import record_path
+
+    return [record_path(project.render_dir(preview) / "web", scene_id) for preview in (False, True)]
+
+
+def _web_inputs(project: Project, spec: SceneConfig) -> dict[str, Any]:
+    """A ``web`` scene's part: its page or script file, the files its clips' pages loaded (their
+    contents now) and its beats' stored alignments."""
+    from vidgen.web.entry import entry_digest
+    from vidgen.web.loaded import current_loaded, recorded_loaded
+
+    paths = [rel for record in _web_records(project, spec.id) for rel in recorded_loaded(record)]
+    return {
+        **entry_digest(project.root, spec.params),
+        "loaded": current_loaded(project.root, paths),
+        "align": {beat.id: _stat(project.audio_dir / f"{beat.id}.align.json") for beat in spec.beats},
+    }
+
+
+def drawn_fingerprint(inputs: dict[str, Any], project: Project, preview: bool, scene_id: str) -> str:
+    """The fingerprint a finished render records: :func:`fingerprint_inputs` taken when it
+    started, with a ``web`` scene's loaded files as its page loaded them in this render (from
+    its clip's record), so the next run compares them with the files as they are then."""
+    if "web" not in inputs:
+        return fingerprint_digest(inputs)
+    from vidgen.web.loaded import current_loaded, record_path, recorded_loaded
+
+    drawn = recorded_loaded(record_path(project.render_dir(preview) / "web", scene_id))
+    before = inputs["web"]["loaded"]
+    paths = sorted({rel for record in _web_records(project, scene_id) for rel in recorded_loaded(record)})
+    now = current_loaded(project.root, [rel for rel in paths if rel not in drawn and rel not in before])
+    loaded = {rel: drawn[rel] if rel in drawn else before[rel] if rel in before else now[rel] for rel in paths}
+    return fingerprint_digest({**inputs, "web": {**inputs["web"], "loaded": loaded}})
+
+
+def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
+    """What :func:`scene_fingerprint` digests (a JSON-able mapping)."""
     spec = project.scene(scene_id)
     # Lint settings cannot change pixels or timing (except the readable text size scenes use):
     # editing them must not make renders stale.
@@ -303,15 +354,12 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         clip = previous.params.get("path")
         data["match_previous"] = [scene_fingerprint(project, previous.id), _stat(project.root / clip) if isinstance(clip, str) else None]
     if spec.type == "web":
-        # the page or script file a web scene names (DESIGN.md §118.4); the files it loads: Step 330
-        from vidgen.web.entry import entry_digest
-
-        data["web"] = entry_digest(project.root, spec.params)
+        # the page or script file a web scene names and the files its page loaded (DESIGN.md §118.10)
+        data["web"] = _web_inputs(project, spec)
     from vidgen.videogen.compose import scene_placements
 
     placed = scene_placements(project, scene_id)
     if placed:
         # generated takes laid over beats (§113.4): the take files, where and how they go
         data["generated"] = [p.fingerprint(project.root) for p in placed]
-    text = json.dumps(data, sort_keys=True, ensure_ascii=True)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return data

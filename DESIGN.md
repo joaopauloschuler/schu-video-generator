@@ -265,7 +265,8 @@ src/vidgen/
   browser/                # Chromium shared by `3d` and `web` (§118.5): chromium.py (start / stop, missing-browser
                           # check and validate warning, FFV1 clip writer), timing.py (clip_plan: frames to draw)
   web/                    # `web` scenes (§118): entry.py (page / script checks, fingerprint), page.py (serving
-                          # the project folder, errors, screenshots), clip.py (the cached clip)
+                          # the project folder, errors, screenshots), clip.py (the cached clip), inputs.py (theme
+                          # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -23193,8 +23194,8 @@ folder; exactly one (a `model_validator` of `Web.Params`). `web/entry.py`: `entr
 must be a path inside the project folder, got …"` (absolute or `..` out of the folder), `"script:
 expected a .js or .mjs file, got …"`; `vidgen validate` reports them at `scenes[i].params.page` /
 `.script` (the `validate_project` convention). The render checks again (`entry_path`) and stops
-with `scene '<id>': page: file not found: …`. No free-form `params` mapping yet: its name next to
-the scene's own `params:` is Step 330's to decide (`ctx.params`).
+with `scene '<id>': page: file not found: …`. Since Step 330 the author's own values go in `data:`
+(§118.9).
 
 ### 118.3 The page, serving and errors
 
@@ -23251,11 +23252,11 @@ limits).
   screenshot of the page as it stands at the frame's time (§118.8).
 - `t`: seconds from the scene's start. `ctx = {scene, width, height, fps, frames, duration,
   canvas}` (`duration` = frames / fps, the length of the clip; `canvas` = the bare page's canvas,
-  `null` on a page without `#vidgen-canvas`).
+  `null` on a page without `#vidgen-canvas`); Step 330 added `theme`, `data`, `beats` (§118.9).
 - Room for later steps: `window.vidgen` is the page's object (hooks the page gives vidgen), and
   `ctx` is vidgen's (what vidgen gives the page). Step 329 added the hook `load(ctx)` beside
-  `frame`; Step 330 adds fields to `ctx` (theme, params, beats, aspect). Nothing written for
-  Step 328 has to change.
+  `frame`; Step 330 added fields to `ctx` (`theme`, `data`, `beats`; `aspect` is Step 331's).
+  Nothing written for Step 328 has to change.
 - **Cache** (`web/clip.py`, `make_web_clip(root, folder, scene_id, params, size=, fps=,
   frames=)`): `<render_dir>/web/<scene>.mkv` + `<scene>.json` = `{key, inputs}`, `inputs` =
   `{version: 1, engine, scene, kind, path, sha256 (of the page or script file), width, height,
@@ -23263,12 +23264,12 @@ limits).
   Chromium flags, the time zone and locale, and the Playwright version (so a change to the clock
   draws every web clip again; the random seed comes from `scene`, already in `inputs`); `key` = SHA-256 of the canonical JSON of `inputs`. Reused when the clip
   exists and the keys match; else the record is removed, the clip drawn
-  (`write_ffv1_clip`, through a `.partial` file) and the record written last.
+  (`write_ffv1_clip`, through a `.partial` file) and the record written last. Step 330 (version
+  2) adds `theme`, `data` and `beats` to `inputs` and the record's `loaded` map (§118.10).
 - **Render fingerprint** (§63): a `web` scene adds `web: {kind, path, sha256}` of its page or
   script file (`entry_digest`), so an edit to that file renders the scene again; other scenes'
   fingerprints are unchanged by this key. `data/web/*.html|js` are part of `vidgen_source_digest`.
-  **Gap until Step 330:** a file the page loads (a stylesheet, an imported module) is in neither
-  key: touch the page or script, or delete the clip.
+  Since Step 330 the key also holds every file the page loaded (§118.10).
 
 ### 118.5 One Chromium for `3d` and `web` (Step 328)
 
@@ -23294,7 +23295,10 @@ included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps
 ### 118.6 Public interface and decisions (Step 328)
 
 - `vidgen.api` gains `make_web_clip`, `web_entry_problems(root, params)` and `clip_plan(scene,
-  spare_frames)` (built-ins import only `vidgen.api`).
+  spare_frames)` (built-ins import only `vidgen.api`). Step 330: `make_web_clip(..., theme=None,
+  beats=())` (keyword arguments with defaults: earlier calls work unchanged), and two new names,
+  `web_page_inputs(scene, spans)` -> `(ctx.theme, ctx.beats)` of a scene being rendered and
+  `web_json_problem(value, path="data")` (the first part that is not a JSON value, or `None`).
 - `three_d.browser` no longer exports `BROWSER_HINT`, `INSTALL_HINT`, `missing_dependency`,
   `install_warnings`, `playwright_version` (they are in `browser.chromium`); not part of
   `vidgen.api`.
@@ -23304,8 +23308,8 @@ included): an HTML page with CSS and an SVG turned by `frame`, 480x270 at 24 fps
 
 ### 118.7 Later steps of the phase
 
-329 (done, §118.8): the virtual clock. 330: theme as CSS variables
-and `ctx.theme`, `ctx.params`, beats (`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js
+329 (done, §118.8): the virtual clock. 330 (done, §118.9, §118.10): theme as CSS variables
+and `ctx.theme`, `ctx.data`, beats (`ctx.beats`, a `vidgen-beat` event, `data-beat`), three.js
 importable as `three`, the fingerprint over every file the page loaded. 331: `region: bleed |
 body`, a transparent background, 9:16 from one page. 332: lint reads the page's text boxes. 333:
 the guide topic, `examples/web/`, a gallery entry, speed at 1080p.
@@ -23376,6 +23380,10 @@ millisecond), `performance.now()` (= `nowMs`), `document.timeline.currentTime`, 
    page's `play`, `pause`, `paused`, `currentTime` are wrapped); vidgen sets `currentTime` to its
    time (looped or held at the end) and waits until it is not seeking and has the picture
    (`readyState ≥ HAVE_CURRENT_DATA`), or has an error or no source.
+   Then (Step 330, §118.9) the narration beat: `data-beat` / `data-beat-index` on `<body>` follow
+   the frame's beat and a `vidgen-beat` event is dispatched when it changed, followed by one
+   task; the clock is at the target, and beats start on frame times (`clip_plan`), so a CSS
+   transition the attribute starts is first seen in step 3 and begins at the beat's start.
 4. Animation frames: one round: the callbacks requested before it, in request order, each with
    `nowMs`, each followed by one task; one cancelled during the round is skipped; one requested
    during the round runs next frame.
@@ -23383,9 +23391,11 @@ millisecond), `performance.now()` (= `nowMs`), `document.timeline.currentTime`, 
 6. Steps 2 and 3 again (what the round and `frame` started is set to this time), then the
    errors since the last frame are returned and Python takes the screenshot.
 
-**Start** (`window.__vidgen.start(info)`, after the page's load event, clock at 0): fonts
-(`document.fonts.ready`), pictures, fetches, media (videos ready), `load(ctx)` awaited, then fonts,
-pictures, fetches and media again.
+**Start** (`window.__vidgen.start(info)`, after the page's load event, clock at 0): `data-beat`
+of frame 0 (no event), fonts (since Step 330 every declared font face not loaded yet is loaded,
+then `document.fonts.ready`), pictures, fetches, media (videos ready), `load(ctx)` awaited, then
+fonts, pictures, fetches and media again. Step 2 of each frame also waits for
+`document.fonts.ready` (Step 330).
 
 **Random numbers**: `Math.random` is sfc32 seeded with four 32-bit words of
 SHA-256(`vidgen-web-random:<scene id>`) (`random_seed`), so the same id gives the same sequence and
@@ -23419,3 +23429,81 @@ with a CSS animation and transition 67 ms per frame (Step 328's code: 76), a
 real-time animation frames ran many times per screenshot). Frames of a page using CSS, timers,
 `requestAnimationFrame`, `Math.random`, SVG `<animate>` and `<video>`, rendered twice with the
 build folder deleted in between: decoded frames identical (Step 329, HANDOFF).
+
+### 118.9 What the page is given (Step 330)
+
+`web/inputs.py` builds it, `WebPage(..., theme=, data=, beats=)` passes it to `start(info)` (it
+becomes `ctx`), and `_serve` puts `page_head(theme)` right after the `<head>` tag of the entry page
+and of the bare page (`with_head`: else after `<html>`, else after the doctype, never before it, so
+the page stays in standards mode). The Python scene computes `theme` and `beats`
+(`web_page_inputs`, from `clip_plan`'s spans).
+
+- **`ctx.theme`** (`page_theme(theme, px_per_point)`): `preset`, `background`, `colors` (every
+  colour token), `palette`, `fonts` (family name for every role, `BUILTIN_ROLES` plus the theme's
+  own, and for the tokens `sans`, `serif`, `mono`, which win over a role of that name), `sizes`
+  (every size token in CSS pixels: `px_per_point = pixel_height / (72 × frame_height)`, since a
+  Manim font size is in points with one scene unit = one inch; measured: Inter cap height at size
+  48 is 0.4852 units = 0.7275 em of 48/72 units).
+- **CSS** (`theme_css`, in `<style id="vidgen-theme">` first in `<head>`, so the page's own rules
+  win): `@font-face` for each bundled family the theme names (regular 400, bold 700, italic 400;
+  `url("/__vidgen__/fonts/<folder>/<file>")`), then on `:root`: `--vidgen-<colour>`,
+  `--vidgen-background`, `--vidgen-palette-<i>`, `--vidgen-font-<role|sans|serif|mono>` (`"Family",
+  generic`: `serif` for the theme's serif family, `monospace` for its mono one, else `sans-serif`),
+  `--vidgen-size-<name>` (`px`). **Naming rule:** `--vidgen-` + a kind prefix with `-` (none for
+  colours) + the theme's name as written; theme names are identifiers (letters, digits, `_`), so
+  keeping their `_` means no name of one kind can equal another kind's `font-…` / `size-…` /
+  `palette-…`. The one overlap, a colour token named `background`, loses to the background (it
+  is written after the colours).
+- **Background decision:** a `page:` gets nothing forced (it uses the variables); the bare page of
+  a `script:` sets `background: var(--vidgen-background, #000)`. Step 331's transparent pages
+  over the theme can change this without touching the variables.
+- **Fonts:** at start every declared, unloaded `FontFace` is loaded (`settleFonts`), so text first
+  shown on a later frame is never drawn in a fallback; the files then count as loaded (§118.10).
+  A theme family that is not bundled gets no `@font-face` and comes from the machine's fonts.
+- **`ctx.data`** = the scene's `data:` (`Web.Params.data`, a mapping, default `{}`), checked by
+  `json_problem` in a `mode="before"` validator: text, finite numbers, booleans, null, lists and
+  mappings with text keys; else `scenes[i].params.data: … data.when: 2026-01-01 is a date, not a
+  JSON value …`. **Decisions:** the YAML name is `data` and the JS name `ctx.data` (one name both
+  sides; the tasklist wrote `ctx.params`, which would read as the scene's whole `params:`); theme
+  colour names in it are not resolved (a string meant literally would change), the page looks
+  them up in `ctx.theme.colors`.
+- **`ctx.beats`** (`page_beats`): `{id, index, start, end, text, words: [{text, start, end}]}` with
+  `start` / `end` from `clip_plan` (`end` = start + heard voice), the words by
+  `beat_word_times` (the stored alignment of the MP3, else estimated within its speech; the
+  captions' timing). A scene without beats: `[]`, no `data-beat`, no event.
+- **The beat in the DOM** (`runtime.js` `showBeat`): the beat of frame *n* is the last whose
+  `round(start × fps) ≤ n`. `<body>` `data-beat` (id) and `data-beat-index` (from 0) are set in
+  `start` (before `load`, no event) and each frame after the timers; a `CustomEvent('vidgen-beat',
+  {bubbles: true, detail: {beat, index, previous, t}})` is dispatched from `<body>` when the
+  frame's beat is not the one announced last (so also at frame 0). Both: id and index, so CSS can
+  match either.
+- **three.js**: an import map `{"imports": {"three": "/__vidgen__/three/three.module.js"}}` in
+  `page_head` (in both pages, before any module script; a page with its own import map then has
+  two, which recent Chromium merges: not tried); `/__vidgen__/three/three.module.js` and `three.core.js` are served
+  from `data/three` (`loaded.vidgen_file`), so a page can also import the URL. Checked in
+  Chromium: `import * as THREE from "three"` from an inline module of a `page:` and from a
+  `script:` (`THREE.REVISION` = 186).
+
+### 118.10 Every file the page loaded is in the cache keys (Step 330)
+
+- **Recording:** `WebPage._serve` notes each file it answers in `loaded` (`path -> SHA-256` of the
+  file, before vidgen's head is inserted): project files, vidgen's `__vidgen__/three/…` and
+  `__vidgen__/fonts/…`; a project file asked for but missing is `None` (creating it draws again;
+  `favicon.ico` is left out). It covers every frame, so a file first asked for on a later frame is
+  in. `make_web_clip` writes it to the record (`{key, inputs, loaded}`).
+- **Clip reuse:** the stored key equals the key of `inputs` *and* `loaded_changed(root,
+  loaded)` is empty (each recorded path hashed now, `served_file`); else the clip is drawn again
+  (logged: `<scene>: <files> changed since the web frames were drawn`).
+- **Render fingerprint:** `web` = `entry_digest` + `loaded` (the paths in the records of the
+  scene's final and preview clips of this project, hashed now) + `align` (stat of each beat's
+  `.align.json`, since `ctx.beats` holds word times). Theme, `data:`, beat texts and MP3s were
+  already in it. **First render** (no record yet): the worker takes `fingerprint_inputs` when it
+  starts and, after the scene rendered, `drawn_fingerprint` puts in the files as this render's
+  page loaded them (from the new record) for every path the records list then; so the next run's
+  fingerprint is equal when nothing changed (no second render), and differs as soon as one of
+  those files is edited, created or removed. A file edited during the render is caught too (its
+  recorded hash is the served one). A file the page stopped loading stays listed while the other
+  quality's record lists it.
+- **`--force`**: `render_project` removes the records (`forget_web_clips`) of the `web` scenes it
+  renders, so their frames are drawn again; without `--force` a re-render reuses an unchanged clip.
+- `3d` clips and keys are unchanged.

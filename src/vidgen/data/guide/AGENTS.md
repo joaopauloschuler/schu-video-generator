@@ -1703,7 +1703,13 @@ once before frame 0 (may be async; time stands at 0 there) and `frame(t, ctx)` b
 screenshot (`t` in seconds from the scene's start; `ctx.width`, `ctx.height`, `ctx.fps`,
 `ctx.duration`, `ctx.canvas`). A page sets `window.vidgen = {load, frame}`; a `script:` module
 exports them. A JavaScript error stops the render with the file and line; so does a frame that
-does not return within 10 s.
+does not return within 10 s. The page gets the theme as CSS variables (`var(--vidgen-primary)`,
+`var(--vidgen-background)`, `var(--vidgen-font-heading)` with vidgen's own fonts,
+`var(--vidgen-size-body)`) and as `ctx.theme`; `params: {data: {teeth: 24}}` as `ctx.data`; the
+narration beats as `ctx.beats` (`{id, start, end, text, words}`) and as `<body data-beat="b2">`
+(so `body[data-beat="b2"] .step2 {opacity: 1}` reveals a part on its beat) with a `vidgen-beat`
+event; `import * as THREE from "three"` loads the bundled three.js. Editing any file the page
+loaded renders the scene again.
 
 ```yaml
 # maths and code

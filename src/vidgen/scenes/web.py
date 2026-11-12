@@ -24,7 +24,11 @@ class Web(NarratedScene):
     video animations follow the video's time and ``Math.random`` is seeded from the scene id, so
     ordinary web code renders the same every time. Optional hooks: ``load(ctx)`` once before
     frame 0 and ``frame(t, ctx)`` before each screenshot (``t``: seconds from the scene's start; a
-    page sets ``window.vidgen = {load, frame}``, a script exports them). Nothing is fetched from
+    page sets ``window.vidgen = {load, frame}``, a script exports them). The page is given the
+    theme (``ctx.theme`` and CSS variables such as ``var(--vidgen-primary)``, with the bundled
+    fonts), ``data:`` (``ctx.data``) and the narration beats (``ctx.beats``; ``<body
+    data-beat="b2">`` and a ``vidgen-beat`` event); ``import * as THREE from "three"`` loads the
+    bundled three.js. Nothing is fetched from
     the internet. The scene fades out at the end. Drawn in headless Chromium (once:
     ``python -m playwright install chromium``).
 
@@ -46,7 +50,20 @@ class Web(NarratedScene):
         project folder."""
         script: str | None = None
         """A JavaScript module in the project folder (``extensions/gears.js``), loaded into a bare
-        page with one canvas (``id="vidgen-canvas"``, the frame's size; also ``ctx.canvas``)."""
+        page with one canvas (``id="vidgen-canvas"``, the frame's size; also ``ctx.canvas``) on
+        the theme's background."""
+        data: dict[str, Any] = {}
+        """Values for the page, as the page reads them in ``ctx.data`` (``{teeth: 24, color:
+        primary}``): text, numbers, true/false, null, lists and mappings; theme colour names are
+        not resolved (the page looks them up in ``ctx.theme.colors``)."""
+
+        @field_validator("data", mode="before")
+        @classmethod
+        def _json_data(cls, value: Any) -> Any:
+            problem = web_json_problem(value)
+            if problem is not None:
+                raise ValueError(problem)
+            return value
 
         @model_validator(mode="after")
         def _one_entry(self) -> "Web.Params":
@@ -79,8 +96,10 @@ class Web(NarratedScene):
 
     def _draw_view(self) -> Path:
         """The clip of the page's frames (drawn now, or reused while its inputs are unchanged)."""
-        _, frames = clip_plan(self, SPARE_FRAMES)
+        spans, frames = clip_plan(self, SPARE_FRAMES)
+        theme, beats = web_page_inputs(self, spans)
         return make_web_clip(
             self.project.root, self.project.render_dir(self.is_preview) / "web", self.spec.id, self.params,
             size=(int(config.pixel_width), int(config.pixel_height)), fps=int(config.frame_rate), frames=frames,
+            theme=theme, beats=beats,
         )

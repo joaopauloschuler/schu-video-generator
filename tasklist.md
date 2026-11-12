@@ -1819,11 +1819,11 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] Proof: the same scene rendered twice gives identical frames — done: five pages (CSS, rAF, random canvas, SVG, video), build deleted in between, decoded frames identical
 
 ### Step 330 — What the page is given
-- [ ] Theme colours and fonts as CSS variables (`var(--vidgen-primary)`) and as `ctx.theme`
-- [ ] `ctx.params` from the YAML, `ctx.width`, `ctx.height`, `ctx.fps`, `ctx.beats` (each beat's start, end and words)
-- [ ] A `vidgen-beat` event and a `data-beat` attribute on `<body>`, so plain CSS can react to narration
-- [ ] The bundled three.js importable as `three`, with no download
-- [ ] The fingerprint covers the page, every file it loaded and the params
+- [x] Theme colours and fonts as CSS variables (`var(--vidgen-primary)`) and as `ctx.theme` — done: `--vidgen-<colour>`, `-background`, `-palette-<i>`, `-font-<role|sans|serif|mono>`, `-size-<name>` (px); bundled fonts by `@font-face`, served by vidgen (DESIGN §118.9)
+- [x] `ctx.params` from the YAML, `ctx.width`, `ctx.height`, `ctx.fps`, `ctx.beats` (each beat's start, end and words) — done as `params: {data: …}` → `ctx.data` (one name both sides), JSON values checked with their place; `ctx.beats` = `{id, index, start, end, text, words}`, `[]` without narration
+- [x] A `vidgen-beat` event and a `data-beat` attribute on `<body>`, so plain CSS can react to narration — done: `data-beat` + `data-beat-index`, set after each frame's timers (clock at the frame's time)
+- [x] The bundled three.js importable as `three`, with no download — done: an import map vidgen puts first in `<head>`; also `/__vidgen__/three/three.module.js`
+- [x] The fingerprint covers the page, every file it loaded and the params — done: the served files recorded beside the clip (§118.10); no second render after the first; `--force` draws the frames again
 
 ### Step 331 — A `web` scene fits with the rest of a video
 - [ ] `region: bleed` (whole frame) or `body` (under a vidgen title); a transparent page background shows the theme background

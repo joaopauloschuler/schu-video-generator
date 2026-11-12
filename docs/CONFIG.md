@@ -6392,7 +6392,8 @@ command, same `vidgen validate` warning).
 | param | type | default | meaning |
 |---|---|---|---|
 | `page` | path | — | an HTML file in the project folder (`extensions/gears.html`): any HTML, CSS and JavaScript |
-| `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the frame |
+| `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the frame, on the theme's background |
+| `data` | mapping | `{}` | values for the page, read as `ctx.data` (`{teeth: 24, color: primary}`): text, numbers, `true` / `false`, `null`, lists and mappings (a YAML date or a number key is an error naming its place, e.g. `data.when`); theme colour names are not looked up for you (`ctx.theme.colors[ctx.data.color]`) |
 
 Give exactly one of `page` and `script`.
 
@@ -6421,6 +6422,9 @@ fps). For each frame vidgen, in this order:
 5. calls the page's `frame(t, ctx)`, if it has one;
 6. sets what steps 4–5 started to the frame's time, then takes the screenshot.
 
+Between steps 1 and 2 (the clock already at the frame's time) vidgen updates the narration beat
+(below), so a CSS transition the beat starts begins exactly when the beat does.
+
 `Date.now()` is `2026-01-01T00:00:00Z` plus the scene time, in the UTC time zone and the `en-US`
 locale. `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` give the same numbers for
 the same scene id (another id, other numbers).
@@ -6430,8 +6434,47 @@ the same scene id (another id, other numbers).
 fonts, pictures and videos are ready; it may return a promise (awaited), so it is the place to load
 data (`await fetch("data.json")`). Time stands at 0 during `load`: a timer it waits for never fires.
 `frame(t, ctx)` runs at step 5 with `t` in seconds from the scene's start; it may return a promise.
-`ctx` has `scene` (the scene id), `width`, `height` (pixels), `fps`, `frames`, `duration` (seconds of
-frames drawn) and `canvas` (the bare page's canvas; `null` on a `page:`).
+
+**What the page is given** (DESIGN §118.9), `ctx`:
+
+| field | value |
+|---|---|
+| `scene` | the scene id |
+| `width`, `height` | the frame in pixels (the page's viewport) |
+| `fps`, `frames`, `duration` | the frame rate, the frames drawn and their length in seconds (the scene, its 0.5 s fade-out and 2 spare frames) |
+| `canvas` | the bare page's `<canvas>` (`script:`); `null` on a `page:` without `id="vidgen-canvas"` |
+| `theme` | `{preset, background, colors, palette, fonts, sizes}`: `colors` name → hex (`text`, `dim`, `accent`, `highlight`, `primary`, `secondary`, `tertiary`, `surface` and the project's own), `palette` a list of hex, `fonts` → family name for `sans`, `serif`, `mono` and every font role (`body`, `heading`, `quote`, `quote_mark`, `code` and the project's), `sizes` name → CSS pixels (`title` … `small` and the project's: text that size is as tall as vidgen's text of that size in this frame) |
+| `data` | the scene's `data:` (`{}` without one) |
+| `beats` | the scene's narration beats in order: `{id, index, start, end, text, words}`; `start` / `end` in seconds from the scene's start (when the beat's voice starts and ends; the next beat starts after the pause), `words` = `[{text, start, end}]` timed like the captions (the voice's stored timings, else estimated). A scene without narration: `[]` |
+
+**Theme as CSS variables.** vidgen puts a `<style id="vidgen-theme">` first in the page's
+`<head>` (before the page's own styles, which therefore win) with these custom properties on
+`:root`: `--vidgen-<colour>` per colour (`var(--vidgen-primary)`), `--vidgen-background`,
+`--vidgen-palette-<i>` (from 0), `--vidgen-font-<name>` per font role and for `sans`, `serif`,
+`mono` (a family list such as `"Source Serif 4", serif`) and `--vidgen-size-<name>` per size (in
+`px`). Names are the theme's as written, underscores kept (`--vidgen-font-quote_mark`). The same
+style sheet declares the bundled fonts (Inter, Source Serif 4, JetBrains Mono NL; regular, bold
+and italic) with `@font-face`, served by vidgen with no download, so `font-family:
+var(--vidgen-font-heading)` draws the same letters as a `title` scene. A theme family that is not
+bundled is looked up among the fonts installed on the machine. A `page:` gets nothing else
+forced: set `background: var(--vidgen-background)` yourself; a `script:`'s bare page uses it.
+
+**Reacting to narration in CSS.** From before `load` on, `<body>` carries `data-beat` (the id of
+the beat being narrated: the last one that started) and `data-beat-index` (from 0); each frame
+whose beat differs from the last one announced dispatches a `vidgen-beat` event (bubbling from
+`<body>`, so `window.addEventListener("vidgen-beat", …)` works) with `detail = {beat, index,
+previous, t}`, also at frame 0 for the first beat. A scene without narration has neither.
+
+```css
+.step2 { opacity: 0; transition: opacity 0.5s; }
+body[data-beat="b2"] .step2, body[data-beat="b3"] .step2 { opacity: 1; }
+```
+
+**three.js with no download.** `import * as THREE from "three"` loads the three.js vidgen ships
+(an import map vidgen puts at the start of the `<head>` of a `page:` and of the bare page); it
+is also served at `/__vidgen__/three/three.module.js`. Draw into `ctx.canvas` with
+`new THREE.WebGLRenderer({canvas: ctx.canvas})` and call `renderer.render` in `frame`. Only the
+core module is shipped (no `three/addons/`).
 
 **Not controlled:** `<audio>` (a `web` scene has no sound), animated GIF and WebP pictures, web
 workers and their timers, iframes, SVG animation in an `<img>` or `<object>`, `event.timeStamp`,
@@ -6448,27 +6491,36 @@ does not return within 30 s, or a frame (its timers, callbacks and `frame`) that
 within 10 s, stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
 10 s: a loop that never ends or a promise that never settles …`; vidgen ends the page's process.
 
-**Cache.** The screenshots are written to a lossless clip `build/<quality>/web/<scene>.mkv`
-(with `<scene>.json`, what it was drawn from) and reused while the page or script file, the size,
-frame rate and length are unchanged; an edit to that file renders the scene again. A change to
-vidgen's clock draws it again too. An edit to a file it loads (a stylesheet, an imported module) is
-not seen yet (Step 330): touch the page or script file, or delete the clip.
+**Cache** (DESIGN §118.10). The screenshots are written to a lossless clip
+`build/<quality>/web/<scene>.mkv` with `<scene>.json` beside it: what it was drawn from (the size,
+frame rate, length, theme, `data`, beats, vidgen's clock) and every file the page loaded while it
+was drawn (the page or script, styles, pictures, fonts, modules, fetched data, videos; also one
+first asked for on a later frame, and one asked for but missing). The clip is reused, and the
+scene not rendered again, while all of that is unchanged; an edit to any of those files, to the
+scene's `data:`, the theme or the narration renders that scene again (and only it). `vidgen render
+--force` draws the frames again too.
 
 ```yaml
 - id: gears
   type: web
-  params: {page: extensions/gears.html}
-  duration: 4
-  beats: []
+  params: {page: extensions/gears.html, data: {speed: 90}}
+  beats:
+    - {id: g1, text: "One gear turns on its own."}
+    - {id: g2, text: "Then its label appears."}
 ```
 
 ```html
 <!-- extensions/gears.html -->
 <link rel="stylesheet" href="gears.css">
-<img id="gear" src="gear.svg" alt="">
+<style>
+  body { margin: 0; background: var(--vidgen-background); font-family: var(--vidgen-font-heading); }
+  #label { color: var(--vidgen-primary); opacity: 0; transition: opacity 0.5s; }
+  body[data-beat="g2"] #label { opacity: 1; }
+</style>
+<img id="gear" src="gear.svg" alt=""><h1 id="label">Gear</h1>
 <script>
   const gear = document.getElementById("gear");
-  window.vidgen = { frame(t, ctx) { gear.style.transform = `rotate(${t * 90}deg)`; } };
+  window.vidgen = { frame(t, ctx) { gear.style.transform = `rotate(${t * ctx.data.speed}deg)`; } };
 </script>
 ```
 
@@ -6476,9 +6528,9 @@ not seen yet (Step 330): touch the page or script file, or delete the clip.
 // extensions/ball.js, for params: {script: extensions/ball.js}
 export function frame(t, ctx) {
   const c = ctx.canvas.getContext("2d");
-  c.fillStyle = "#10141f";
+  c.fillStyle = ctx.theme.background;
   c.fillRect(0, 0, ctx.width, ctx.height);
-  c.fillStyle = "#81b29a";
+  c.fillStyle = ctx.theme.colors.primary;
   c.beginPath();
   c.arc(40 + (ctx.width - 80) * (t / ctx.duration), ctx.height / 2, 30, 0, 2 * Math.PI);
   c.fill();

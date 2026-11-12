@@ -7,6 +7,15 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
 ## Unreleased (Steps 193–311)
 
+### `web` scenes: what the page is given (Step 330)
+
+- The theme reaches the page: CSS variables on `:root` (`var(--vidgen-primary)`, `--vidgen-background`, `--vidgen-palette-0`, `--vidgen-font-heading`, `--vidgen-size-body` …) and `ctx.theme`. vidgen's bundled fonts are declared with `@font-face` and served with no download, so a page's text matches a `title` scene's. A `script:`'s bare page uses the theme background (it was black).
+- `params: {data: {...}}` (JSON values only, checked with the place of a bad value) arrives as `ctx.data`.
+- `ctx.beats`: each narration beat's id, start, end, text and word times. `<body data-beat="b2" data-beat-index="1">` follows the beat and a `vidgen-beat` event fires when it changes, so plain CSS can reveal a part on its beat.
+- `import * as THREE from "three"` loads the bundled three.js in a `page:` and a `script:`.
+- Editing any file the page loaded (styles, modules, pictures, fonts, fetched data, also one first asked for on a later frame) renders that scene again, and only it; `vidgen render --force` draws the frames again. Every web clip is drawn again once.
+- `vidgen.api` adds `web_page_inputs` and `web_json_problem`; `make_web_clip` takes `theme=` and `beats=`.
+
 ### `web` scenes: time belongs to vidgen (Step 329)
 
 - A `web` page written the ordinary way now renders frame by frame and the same on every render: CSS animations and transitions, `element.animate`, `requestAnimationFrame`, `setTimeout` / `setInterval`, `Date`, `performance.now()`, SVG `<animate>` and `<video>` follow the video's time instead of the real clock. `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` give the same numbers for the same scene id. `Date.now()` starts at 2026-01-01T00:00:00Z, time zone UTC.

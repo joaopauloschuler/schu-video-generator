@@ -218,7 +218,7 @@ def render_scene(
     from vidgen.capture import FrameCapture, StillWriter
     from vidgen.fonts import register_bundled_fonts
     from vidgen.introspect import LayoutRecorder
-    from vidgen.render.fingerprint import scene_fingerprint
+    from vidgen.render.fingerprint import drawn_fingerprint, fingerprint_digest, fingerprint_inputs
 
     if frames < 0:
         raise VidgenError("frames per beat must not be negative")
@@ -231,7 +231,8 @@ def render_scene(
     theme = extensions.activate(project)
     spec = project.scene(scene_id)
     cls = registry.get(spec.type).cls
-    fingerprint = scene_fingerprint(project, scene_id)  # the inputs as they are when rendering starts
+    inputs = fingerprint_inputs(project, scene_id)  # the inputs as they are when rendering starts
+    fingerprint = fingerprint_digest(inputs)
     render_dir = project.render_dir(preview)
     # A failed render must not leave the previous render behind to be reused by `--scene`.
     for stale in (scene_video_path, scene_audio_path, scene_timings_path, scene_overlay_path, scene_carry_path):
@@ -275,6 +276,7 @@ def render_scene(
     finally:
         if temporary:
             shutil.rmtree(media_dir, ignore_errors=True)
+    fingerprint = drawn_fingerprint(inputs, project, preview, scene_id)  # a web page's files as it loaded them
     fmt = project.render_format(preview)
     timings = _round(scene.timings())
     timings["render"] = {

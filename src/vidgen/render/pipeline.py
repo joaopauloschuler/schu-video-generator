@@ -818,7 +818,7 @@ def render_project(
 
     Scenes whose render is current (:func:`current_render`: same format and audio mode, nothing
     it depends on changed — the render fingerprint, DESIGN.md §63) are reused; ``force`` renders
-    every scene. ``scenes``: render these ids and reuse existing renders of the others, current
+    every scene (and draws a ``web`` scene's frames again). ``scenes``: render these ids and reuse existing renders of the others, current
     or not (scenes without a usable render, e.g. never rendered or rendered at another format,
     are rendered too).
     ``keep_going``: render the remaining scenes after a failure; the video is then not joined and
@@ -873,6 +873,10 @@ def render_project(
             to_render, later = to_render[:max_scenes], to_render[max_scenes:]
         frames_index = project.render_dir(preview) / "frames" / "index.json"
         remove_file(frames_index)  # rewritten below when stills are requested; never stale
+        if force:  # a web scene's frames are drawn again too (its clip is otherwise reused, §118.10)
+            from vidgen.web.clip import forget_web_clips
+
+            forget_web_clips(project.render_dir(preview) / "web", [sid for sid in to_render if project.scene(sid).type == "web"])
         runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames, guide_passes)
         if runs.failed:
             raise VidgenError(

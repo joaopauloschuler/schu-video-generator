@@ -42,26 +42,63 @@ async function callHook(name, ...args) {
   }
 }
 
+// The page's fonts: every font face declared and not loaded yet (the theme's among them) is
+// loaded before frame 0, so text shown later is not first drawn in a fallback font.
+async function settleFonts() {
+  await Promise.allSettled([...document.fonts].filter((face) => face.status === 'unloaded').map((face) => face.load()));
+  await document.fonts.ready;
+}
+
+// The narration beat of frame n: the last beat starting at or before it (-1 before the first).
+function beatOf(n) {
+  let index = -1;
+  ctx.beats.forEach((beat, i) => { if (Math.round(beat.start * ctx.fps) <= n) index = i; });
+  return index;
+}
+
+// data-beat and data-beat-index on <body> follow the beat of frame n; a `vidgen-beat` event
+// (bubbling from <body>) is dispatched when frame n's beat is not the one announced last.
+let shownBeat = -1;
+let announcedBeat = -1;
+function showBeat(n, announce) {
+  const index = beatOf(n);
+  const body = document.body;
+  if (index < 0 || body === null) return;
+  const beat = ctx.beats[index];
+  if (index !== shownBeat) {
+    body.dataset.beat = beat.id;
+    body.dataset.beatIndex = String(index);
+    shownBeat = index;
+  }
+  if (announce && index !== announcedBeat) {
+    const previous = announcedBeat >= 0 ? ctx.beats[announcedBeat] : null;
+    announcedBeat = index;
+    body.dispatchEvent(new CustomEvent('vidgen-beat', { bubbles: true, detail: { beat, index, previous, t: n / ctx.fps } }));
+  }
+}
+
 let ctx = null;
 const run = {
   errors,
   ready: false,
-  // After the page loaded, before frame 0 (the clock at 0): fonts, pictures and videos, then
-  // load(ctx). Returns the errors so far.
+  // After the page loaded, before frame 0 (the clock at 0): data-beat of frame 0, fonts,
+  // pictures and videos, then load(ctx). Returns the errors so far.
   async start(info) {
     ctx = { ...info, canvas: document.getElementById('vidgen-canvas') };
-    await document.fonts.ready;
+    showBeat(0, false);
+    await settleFonts();
     await media.decodeImages();
     await clock.settleLoading();
     await media.placeMedia();
     await callHook('load', ctx);
     await clock.settleLoading();
-    await document.fonts.ready;
+    await settleFonts();
     await media.decodeImages();
     await media.placeMedia();
     return errors.splice(0);
   },
-  // Frame n, before its screenshot: the clock moves to n / fps; the timers due by then run, the
+  // Frame n, before its screenshot: the clock moves to n / fps; the timers due by then run;
+  // data-beat follows the frame's beat (and `vidgen-beat` is dispatched when it changed); the
   // page's loading settles, animations, SVGs and videos are set to the time, one round of
   // animation-frame callbacks runs, then frame(t, ctx); what that started is set to the time too.
   // Returns the errors since the last call.
@@ -72,12 +109,16 @@ const run = {
     } catch (error) {
       report(error);
     }
+    showBeat(n, true);
+    await clock.hop();
     await clock.settleLoading();
+    await document.fonts.ready;
     await media.decodeImages();
     await media.placeMedia();
     await clock.runAnimationFrames(report);
     await callHook('frame', n / ctx.fps, ctx);
     await clock.settleLoading();
+    await document.fonts.ready;
     await media.decodeImages();
     await media.placeMedia();
     return errors.splice(0);
