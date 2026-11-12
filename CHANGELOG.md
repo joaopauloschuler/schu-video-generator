@@ -5,7 +5,16 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–338)
+## Unreleased (Steps 193–339)
+
+### `design_width`: a `web` page built in fixed pixels needs no rewrite (Step 339)
+
+- New param on `web` scenes: `design_width: 1280` (200 to 8192), the window width in CSS pixels the page was designed for. The page is laid out in a window that wide and as high as its region's shape gives, and drawn at the video's size at every quality: `innerWidth`, `100vw`, media queries, `getBoundingClientRect()` and `clientWidth` are the design's pixels, `window.devicePixelRatio` is output pixels per CSS pixel (1.5 for 1280 at 1920x1080). HTML text, SVG and CSS shapes are drawn at the output's resolution (Chromium's device scale factor; no enlarging).
+- A canvas is sharp only when its code multiplies its size by `devicePixelRatio` (three.js: `renderer.setPixelRatio(window.devicePixelRatio)`); otherwise it is drawn at the design size and enlarged. `ctx.width` / `ctx.height` and the canvas of a `script:` are the design window in CSS pixels; `ctx.frame` stays output pixels; the theme's sizes still draw text as tall as vidgen's.
+- The frames are always exactly the output's size: the window's height is rounded up to a whole CSS pixel and the rows over are cut off the bottom (under one CSS pixel of the page).
+- Lint judges the output size: 12 px text of a 1280 design is 18 px in a 1920 px frame. **Fixed:** the `cut` of a text declared with `layout(t, ctx)` was not scaled to frame pixels when the page was not drawn 1:1.
+- Without the param nothing changes and stored `web` clips are reused (their keys are the same).
+- Guide: "Porting a page built in fixed pixels" in `vidgen guide web`; `docs/CONFIG.md` `web`; DESIGN §118.17. Not tried on Windows or macOS.
 
 ### A project's own fonts: the `fonts/` folder (Step 338)
 

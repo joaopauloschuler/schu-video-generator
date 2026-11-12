@@ -182,16 +182,16 @@ def write_ffv1_clip(path: Path, fps: int, size: tuple[int, int], frames: Iterabl
         partial.unlink(missing_ok=True)
 
 
-def png_pixels(png: bytes, size: tuple[int, int], what: str, *, alpha: bool = False) -> np.ndarray:
-    """A PNG's RGB pixels (RGBA with ``alpha``), checked to be ``size`` (W, H); ``what`` names
-    the page in the error."""
+def png_pixels(png: bytes, size: tuple[int, int] | None, what: str, *, alpha: bool = False) -> np.ndarray:
+    """A PNG's RGB pixels (RGBA with ``alpha``), checked to be ``size`` (W, H; ``None``: not
+    checked); ``what`` names the page in the error."""
     import io
 
     from PIL import Image
 
     with Image.open(io.BytesIO(png)) as im:
         pixels = np.asarray(im.convert("RGBA" if alpha else "RGB"))
-    if pixels.shape[1::-1] != size:
+    if size is not None and pixels.shape[1::-1] != size:
         raise VidgenError(f"{what} drew {pixels.shape[1]}x{pixels.shape[0]} px, expected {size[0]}x{size[1]}")
     return pixels
 

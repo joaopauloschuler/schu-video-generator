@@ -139,7 +139,8 @@ def page_text_objects(reading: Mapping[str, Any], page_box: Sequence[float], fra
         off = lint_opt_out(item.get("lint")) if item.get("lint") is not None else []
         if off:
             extra["lint_off"] = off
-        cut = {s: round(px, 1) for s, px in _beyond(page, (0.0, 0.0, width, height)).items() if inner[s]}
+        cut = {s: round(px * (scale[0] if s in ("left", "right") else scale[1]), 1)
+               for s, px in _beyond(page, (0.0, 0.0, width, height)).items() if inner[s]}
         if cut:
             extra["cut"] = cut
         out.append(_object(name, " ".join(item["text"].split()), _scaled(page, origin, scale), cap * scale[1],

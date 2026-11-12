@@ -3327,7 +3327,7 @@ each); any other library must be a file in the project (below: no internet).
 
 | field | value |
 |---|---|
-| `width`, `height` | the page's size in pixels (the whole frame, or the body region with `region: body`) |
+| `width`, `height` | the page's size in CSS pixels (the whole frame, or the body region with `region: body`): the frame's own pixels, or with `design_width` the design window's ("Porting a page built in fixed pixels" below) |
 | `aspect`, `orientation` | the video's shape: `"16:9"`, `"9:16"`, `"1:1"`…; `landscape`, `portrait`, `square` |
 | `fps`, `frames`, `duration` | frame rate, frames drawn, their length in seconds (the beats, the 0.5 s fade-out) |
 | `canvas` | the bare page's canvas (`script:`), else `null` |
@@ -3342,8 +3342,10 @@ each); any other library must be a file in the project (below: no internet).
 `--vidgen-size-title` / `-heading` / `-body` / `-caption` / `-small` (px: text that size is as tall
 as vidgen's own text of that size). Use them for every colour, font and text size: the page then
 matches the other scenes, follows a variant with another theme, and its text is big enough. Size
-the rest in `vw` / `vh` (of the page) or `%`, never fixed pixels: the same page is drawn at the
-preview size, at 1080p and at 9:16.
+the rest in `vw` / `vh` (of the page) or `%`, never fixed pixels, in a page you write for the
+video: the same page is drawn at the preview size, at 1080p and at 9:16. A page that already
+exists and is sized in fixed pixels needs no rewrite: give its window width as `design_width`
+("Porting a page built in fixed pixels" below).
 
 **Revealing on the narration.** `<body>` carries `data-beat` (the id of the beat being spoken: give
 your beats ids) and `data-beat-index` (from 0), changed exactly when the beat starts, so a CSS
@@ -3532,6 +3534,41 @@ easiest way to keep text readable. What the page leaves transparent (no `backgro
 `[data-orientation="portrait"] .row {flex-direction: column}`; a script reads `ctx.orientation`.
 Look at both: `vidgen storyboard --variant vertical` (with a vertical variant, `vidgen guide social`).
 
+**Porting a page built in fixed pixels.** A page that already exists (a dashboard, a mock-up of
+an app) is usually sized in `px` for one browser window. Do not rewrite its sizes: give the scene
+the window width the page was designed for, `params: {page: extensions/dashboard.html,
+design_width: 1280}`. The page is then laid out in a window 1280 CSS pixels wide and as high as
+the scene's region gives (720 for a 16:9 page with `region: bleed`), and that picture is drawn at
+the video's size. The preview, the draft and the 1080p render show the same layout, and HTML
+text, SVG and CSS shapes are drawn at the output's pixels, not enlarged from a smaller picture.
+
+- **What the page sees** is its design window: `window.innerWidth`, `100vw`, media queries,
+  `getBoundingClientRect()` and `clientWidth` are in the design's pixels. `window.devicePixelRatio`
+  is the number of output pixels per CSS pixel: 1.5 for a 1280 design at 1920 px, about 0.67 at the
+  854 px preview.
+- **A canvas is sharp only when its code uses `devicePixelRatio`.** A canvas has the pixels its
+  code gives it: sized from `clientWidth` alone it is drawn at the design size and enlarged, so
+  its edges are soft at 1080p. Size it as on a high-density screen: `canvas.width =
+  Math.round(canvas.clientWidth * devicePixelRatio)` (the same for the height), then
+  `context.scale(devicePixelRatio, devicePixelRatio)` and draw in CSS pixels as before. With
+  three.js: `renderer.setPixelRatio(window.devicePixelRatio)` before `renderer.setSize(w, h)`.
+- **`ctx`.** `ctx.width` and `ctx.height` are the window in CSS pixels (1280 and 720 here), the
+  same numbers as `innerWidth` and `innerHeight`; the canvas of a `script:` has that many pixels
+  (multiply as above for a sharp one). `ctx.frame` stays the video frame in output pixels.
+  `ctx.theme.sizes` and `--vidgen-size-…` are CSS pixels that still draw text as tall as vidgen's.
+- **The height follows the region's shape**; there is no `design_height`, since a height that
+  disagrees with the region would squeeze or crop the page. A page designed for a phone, in a
+  9:16 video: `design_width: 390`. When the height is not a whole number of CSS pixels (a 1280
+  design at 854x480 is 719.4 high), the window is the next whole pixel (720) and the strip under
+  the frame's bottom edge, less than one CSS pixel, is not shown.
+- **Lint measures the text as it is drawn in the frame**: 12 px text in a 1280 design is 18 px in
+  a 1920 px frame, and `min_font`, `off_frame`, `safe_area`, `text_overlap` and `web_clipped`
+  judge that. Text that was fine on a desk monitor is often too small for a video: enlarge it in
+  the page.
+
+`design_width` is a whole number from 200 to 8192. Without it nothing changes: the window is the
+frame's (or the region's) own pixels.
+
 **No internet.** The page cannot load anything from the internet while rendering (a CDN script, a
 web font, an API): the request is refused with the warning `scene 'x': refused https://… (a web
 scene cannot reach the internet; put the file in the project folder)` and the page renders
@@ -3622,7 +3659,10 @@ the text (here the video's background, since the canvas is transparent).
 | `scene 'x': extensions/x.html did not become ready within 30 s …` | the page's load event never came (a module that never finishes) |
 | `scenes[0].params.data: … data.when: 2026-01-01 is a date, not a JSON value` | quote dates in `data:` |
 | a white page | a `page:` with `background: white` of its own (or an old habit): leave the background out or use `var(--vidgen-background)` |
-| text too small for `min_font`, or a layout that only fits one shape | sizes in fixed px: use `var(--vidgen-size-…)` for text, `vw` / `vh` for the rest |
+| text too small for `min_font`, or a layout that only fits one shape | sizes in fixed px: use `var(--vidgen-size-…)` for text, `vw` / `vh` for the rest; for a page that already exists in fixed px, `design_width` ("Porting a page built in fixed pixels" above) |
+| a page that fills only a corner of the frame at 1080p, or runs off the preview | a page built in fixed px for one window: `design_width: <that window's width>` |
+| a canvas or three.js picture that is soft at 1080p in a scene with `design_width` | the canvas is drawn at the design size: multiply its size by `devicePixelRatio` (above) |
+| `scenes[0].params.design_width: 3 is not a window width a page is designed for …` | give the window's width in CSS pixels, 200 to 8192 |
 | lint finds nothing on a canvas scene | canvas text is not read: declare it with `layout(t, ctx)` |
 
 **Render cost.** Every frame is a screenshot of the whole page: a `web` scene renders far slower

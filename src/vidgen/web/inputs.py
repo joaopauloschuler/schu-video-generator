@@ -40,6 +40,45 @@ THEME_STYLE_ID = "vidgen-theme"
 #: one (``--format`` and the gallery use ``16:9`` and ``9:16``); else the reduced ``W:H``.
 NAMED_ASPECTS: tuple[str, ...] = ("16:9", "9:16", "1:1", "4:5", "5:4", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21")
 ASPECT_TOLERANCE = 0.01
+#: The window widths ``design_width:`` takes (CSS pixels): from a narrow phone to an 8K screen.
+DESIGN_WIDTH_MIN, DESIGN_WIDTH_MAX = 200, 8192
+
+
+def design_width_problem(value: Any) -> str | None:
+    """Why ``value`` is not a usable ``design_width:`` (a whole number of CSS pixels within
+    :data:`DESIGN_WIDTH_MIN` .. :data:`DESIGN_WIDTH_MAX`), or ``None``."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or (isinstance(value, float) and not value.is_integer()):
+        return f"{value!r} is not a whole number of CSS pixels (the window width the page was designed for, e.g. 1280)"
+    if not DESIGN_WIDTH_MIN <= value <= DESIGN_WIDTH_MAX:
+        return (f"{int(value)} is not a window width a page is designed for (give the width in CSS pixels, "
+                f"{DESIGN_WIDTH_MIN} to {DESIGN_WIDTH_MAX}, e.g. 1280 for a desktop page or 390 for a phone page)")
+    return None
+
+
+def design_width_of(params: Any) -> int | None:
+    """The ``design_width:`` of a ``web`` scene's params (a model or a mapping), ``None`` when unset."""
+    value = params.get("design_width") if isinstance(params, Mapping) else getattr(params, "design_width", None)
+    return int(value) if value is not None else None
+
+
+def page_viewport(size: tuple[int, int], design_width: int | None = None) -> tuple[tuple[int, int], float]:
+    """The page's window (CSS px) and its device scale factor for screenshots of ``size`` (output
+    px; §118.17). Without ``design_width``: ``size`` and 1. With it: a window ``design_width``
+    wide at the scale ``size[0] / design_width`` (the page's ``devicePixelRatio``), as high as
+    ``size``'s aspect gives, rounded up to a whole CSS pixel so that the screenshot is never
+    shorter than ``size`` (:func:`vidgen.web.page.fit_pixels` cuts off what is over)."""
+    if design_width is None:
+        return size, 1.0
+    scale = size[0] / design_width
+    return (design_width, max(1, math.ceil(size[1] / scale - 1e-6))), scale
+
+
+def css_height(size: tuple[int, int], design_width: int | None = None) -> float:
+    """The height of the picture of ``size`` in the page's CSS pixels (:func:`page_viewport`'s
+    window height before it is rounded up)."""
+    return float(size[1]) if design_width is None else size[1] * design_width / size[0]
 
 
 def page_theme(theme: Any, px_per_point: float, project_fonts: Sequence[ProjectFont] = ()) -> dict[str, Any]:
@@ -214,10 +253,12 @@ def page_beats(spans: Sequence[Any], beats: Sequence[Any], words: Sequence[Seque
     ]
 
 
-def scene_page_inputs(scene: Any, spans: Sequence[Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def scene_page_inputs(scene: Any, spans: Sequence[Any], css_scale: float = 1.0) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """``ctx.theme`` and ``ctx.beats`` of a ``web`` scene (a ``NarratedScene`` being rendered)
     whose beats are ``spans`` on its clock (:func:`vidgen.browser.timing.clip_plan`); the word
-    times are the captions' (the stored alignment, else estimated, :func:`vidgen.speech.beat_word_times`)."""
+    times are the captions' (the stored alignment, else estimated, :func:`vidgen.speech.beat_word_times`).
+    ``css_scale``: output pixels per CSS pixel of the page (:func:`page_viewport`; the theme's
+    sizes are given in CSS pixels that draw text as tall as vidgen's)."""
     from manim import config
 
     from vidgen.fonts import project_fonts
@@ -228,10 +269,11 @@ def scene_page_inputs(scene: Any, spans: Sequence[Any]) -> tuple[dict[str, Any],
         beat_word_times(project.audio_dir, beat.id, beat.text, span.start, span.end, project.spoken(beat), project.config.language)
         for beat, span in zip(scene.beats, spans)
     ]
-    theme = page_theme(scene.theme, float(config.pixel_height) / (72 * float(config.frame_height)), project_fonts(project.root))
+    theme = page_theme(scene.theme, float(config.pixel_height) / (72 * float(config.frame_height) * css_scale), project_fonts(project.root))
     return theme, page_beats(spans, scene.beats, words)
 
 
-__all__ = ["ASPECT_TOLERANCE", "IMPORT_MAP", "NAMED_ASPECTS", "THEME_STYLE_ID", "aspect_name", "declared_families", "font_faces",
-           "json_problem", "page_beats", "page_head", "page_shape", "page_theme", "project_font_faces", "scene_page_inputs",
+__all__ = ["ASPECT_TOLERANCE", "DESIGN_WIDTH_MAX", "DESIGN_WIDTH_MIN", "IMPORT_MAP", "NAMED_ASPECTS", "THEME_STYLE_ID", "aspect_name",
+           "css_height", "declared_families", "design_width_of", "design_width_problem", "font_faces",
+           "json_problem", "page_beats", "page_head", "page_shape", "page_theme", "page_viewport", "project_font_faces", "scene_page_inputs",
            "shape_script", "theme_css", "theme_properties", "with_head"]

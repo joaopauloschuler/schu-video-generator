@@ -1884,6 +1884,18 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] Tests: `tests/test_project_fonts.py` (10 default, 1 `slow` in Chromium), fonts built with fontTools at test time
 - [ ] Not tried: Windows and macOS; `.ttc`; the `imagegen` placeholders, PDF slides and contact sheets keep their bundled fonts; no check that a theme family exists anywhere
 
+### Step 339 — `design_width`: a `web` page built in fixed pixels needs no rewrite
+- [x] `design_width: <int>` (200–8192) on `web`: the page is laid out in a window that many CSS pixels wide, as high as its region's shape gives, and drawn at the output size at every quality, for `bleed` and `body` (Chromium's device scale factor = output width / design width; DESIGN §118.17). No `design_height`: the height follows the region
+- [x] The frames are exactly the output size: window height rounded up to a whole CSS pixel, the rows over cut off the bottom (`fit_pixels`); never stretched
+- [x] `ctx.width` / `ctx.height` and the `script:` canvas are the design window (CSS px); `devicePixelRatio` is the scale; `ctx.frame` stays output px; the theme's sizes are divided by the scale
+- [x] Canvas and WebGL: sharp with `devicePixelRatio` (2D and three.js `setPixelRatio`), soft without; both tested and said in the guide
+- [x] Without the param: same window, same cache keys (stored clips reused); with it, in the key
+- [x] Lint in output pixels (the existing mapping; the reading's height is the part the frame shows); fixed: a declared text's `cut` was not scaled
+- [x] Guide "Porting a page built in fixed pixels" and the adjusted "never fixed pixels" advice (both `AGENTS.md` copies), CONFIG `### web`, DESIGN §118.17, CHANGELOG
+- [x] Tests: `tests/test_web_design_width.py` (15 default, 6 `slow` in Chromium)
+- [x] Proof: a scratch page (HTML text, a 2D canvas with and without `devicePixelRatio`, three.js) at 854x480 and 1920x1080, frames looked at; deleted
+- [ ] Not verified: `web_clipped` / `text_overlap` on a real `design_width` page; scales outside 0.125–2.77; Windows and macOS. Found, not fixed: `examples/web`'s `cycle.html` at 160x90 gives one of two pictures for some frames from run to run (also before this step)
+
 ### Step 326 — A dissolve of a few frames where a clip continues the one before, on request
 - [x] `match_previous: {dissolve: N}` (0–12 frames of the render being made, default 0): the first N frames are blended with the previous clip's last shown frame, weights `(N − k) / (N + 1)`, after the gain (`clip_join.JoinTreatment`, DESIGN §117)
 - [x] `level: false`: the dissolve without the gain; an error without a dissolve or with `seconds` / `hold`

@@ -36,7 +36,8 @@ class Web(NarratedScene):
     bundled three.js; ``ctx.aspect`` (``16:9``, ``9:16``...) and ``<html data-aspect="9:16"
     data-orientation="portrait">`` let one page lay itself out for each shape of the video. What
     the page leaves transparent (a page without a background, the bare page of a script) shows
-    the video's background. Nothing is fetched from the internet. The page is on screen from the
+    the video's background. A page built in fixed pixels needs no rewrite: ``design_width: 1280``
+    lays it out in a window that wide and draws it at the video's size. Nothing is fetched from the internet. The page is on screen from the
     first frame, beat 1 fades the title in, the scene fades out at the end. Drawn in headless
     Chromium (once: ``python -m playwright install chromium``).
 
@@ -68,6 +69,17 @@ class Web(NarratedScene):
         """Values for the page, as the page reads them in ``ctx.data`` (``{teeth: 24, color:
         primary}``): text, numbers, true/false, null, lists and mappings; theme colour names are
         not resolved (the page looks them up in ``ctx.theme.colors``)."""
+
+        design_width: int | None = None
+        """For a page built in fixed pixels: the window width it was designed for, in CSS pixels (1280). The page is laid out in a window that wide (as high as its region's shape gives) and drawn at the video's size at every quality, so nothing in it needs rewriting; ``window.devicePixelRatio`` is output pixels per CSS pixel."""
+
+        @field_validator("design_width", mode="before")
+        @classmethod
+        def _window_width(cls, value: Any) -> Any:
+            problem = web_design_width_problem(value)
+            if problem is not None:
+                raise ValueError(problem)
+            return value
 
         @field_validator("data", mode="before")
         @classmethod
@@ -137,10 +149,10 @@ class Web(NarratedScene):
         """The clip of the page's frames at the size of ``box`` (drawn now, or reused while its
         inputs are unchanged); drawing it also reads the page's text at the stills' frames."""
         spans, frames = clip_plan(self, SPARE_FRAMES)
-        theme, beats = web_page_inputs(self, spans)
         frame = (int(config.pixel_width), int(config.pixel_height))
         per_unit = frame[0] / self.frame_width
         size = (max(1, round(box.width * per_unit)), max(1, round(box.height * per_unit)))
+        theme, beats = web_page_inputs(self, spans, web_page_viewport(size, self.params.design_width)[1])
         self._clip_args: dict[str, Any] = {
             "root": self.project.root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
             "params": self.params, "size": size, "fps": int(config.frame_rate), "frames": frames, "theme": theme,

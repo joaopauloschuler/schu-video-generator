@@ -674,7 +674,9 @@ from vidgen.browser.timing import clip_plan, planned_still_frames  # noqa: E402
 from vidgen.web.clip import make_web_clip, web_page_layouts  # noqa: E402
 from vidgen.web.entry import web_entry_problems  # noqa: E402
 from vidgen.web.inputs import json_problem as web_json_problem  # noqa: E402
+from vidgen.web.inputs import design_width_problem as web_design_width_problem  # noqa: E402
 from vidgen.web.inputs import page_shape as web_page_shape  # noqa: E402
+from vidgen.web.inputs import page_viewport as web_page_viewport  # noqa: E402
 from vidgen.web.inputs import scene_page_inputs as web_page_inputs  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
@@ -998,6 +1000,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "web_json_problem",
     "web_page_inputs",
     "web_page_shape",
+    "web_page_viewport",
+    "web_design_width_problem",
     "clip_plan",
     "make_guide_passes",
     "GUIDE_PASSES",

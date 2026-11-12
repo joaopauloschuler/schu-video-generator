@@ -23175,7 +23175,7 @@ true` does exactly what it did in Step 325: the owner wants a dissolve only on r
   dissolve does not touch still differ by 1.6 to 2.0 between the two MP4s). Both films have 488
   frames, 20.33 s, −19.3 LUFS and the same decoded sound, sample for sample.
 
-## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334, 336–337)
+## 118. `web` scenes: a page written in HTML, CSS and JavaScript (Phase AK, Steps 328–334, 336–337, 339)
 
 The owner wants AI agents to write a scene as a web page. The owner's decisions: JavaScript in the
 project is trusted as the Python in `extensions/` is (no flag); HTML and CSS are allowed from the
@@ -23185,7 +23185,7 @@ are accepted even when slow. Step 328 built the core described here, Step 329 th
 transparent background and the video's shape (§118.11), Step 332 lint of the page's text
 (§118.12), Step 333 the guide topic, `examples/web`, the gallery entry and the measured cost
 (§118.13), Step 334 a chosen set of three.js add-ons (§118.14), Step 336 five animation and
-chart libraries (§118.15); §118.7 says where each part is
+chart libraries (§118.15), Step 339 `design_width` for a page built in fixed pixels (§118.17); §118.7 says where each part is
 and what is left for after the phase.
 
 ### 118.1 How a `web` scene renders (Step 328)
@@ -23215,7 +23215,7 @@ with `scene '<id>': page: file not found: …`. Since Step 330 the author's own 
 
 `web/page.py`, `WebPage(root, entry, scene_id=, size=, fps=, frames=)` (a context manager, one per
 clip): starts `Chromium("a web scene", WEB_ARGS)` (§118.5; `WEB_ARGS` adds `--hide-scrollbars
---force-color-profile=srgb` and, since Step 336, `--disable-partial-raster`, §118.15), a context with the frame's size as viewport and device scale 1,
+--force-color-profile=srgb` and, since Step 336, `--disable-partial-raster`, §118.15), a context with the frame's size as viewport and device scale 1 (with `design_width`: the design window and its scale, §118.17),
 the time zone `UTC` and locale `en-US`, the init script (`init_script(scene_id)`: `data/web/clock.js`,
 `media.js` and `runtime.js` joined in one function with the scene's random seed, §118.8) and a
 route for every request:
@@ -23953,6 +23953,110 @@ variant, the Step 330 and 331 demos.
   every scene, and <render_dir> has no render of them to reuse (...)`, printed by
   `render_project` before the scenes (stderr with `--json`, as the other progress lines);
   `--scene` and `--force` say so in `vidgen render --help`.
+
+### 118.17 `design_width`: a page built in fixed pixels (Step 339)
+
+**Why.** A fresh agent ported a dashboard built in CSS pixels for a window about 1280 px wide.
+The largest edit was rewriting about 100 `px` values into `calc(N * var(--u))` and scaling canvas
+line widths, so that the page fits the 854x480 preview and the 1920x1080 render. The owner
+approved a param that makes the rewrite unnecessary.
+
+**The param.** `design_width: <int>` on `web` (`Web.Params`, default none): the width, in CSS
+pixels, of the window the page was designed for. 200 to 8192 (`DESIGN_WIDTH_MIN` / `_MAX`); a
+value outside, a fraction, `true` or text is a validation error at `scenes[i].params.design_width`
+(`web/inputs.py` `design_width_problem`: `3 is not a window width a page is designed for (give the
+width in CSS pixels, 200 to 8192, e.g. 1280 for a desktop page or 390 for a phone page)`).
+
+**No `design_height`.** The page fills a box whose shape vidgen decides (the frame, or the body
+region). A design height that disagrees with that shape would have to squeeze the page, crop it or
+leave bars; a height that agrees adds nothing. So the height always follows the box: a 1280 design
+is 720 high in a 16:9 `bleed` page, and a phone page in a 9:16 video is `design_width: 390`.
+
+**Mechanism: the browser's device scale factor.** `web/inputs.py` `page_viewport(size,
+design_width)` -> `((design_width, ceil(size[1] / scale)), scale)` with `scale = size[0] /
+design_width` (`(size, 1.0)` without the param). `WebPage` opens its context with that viewport
+and `device_scale_factor=scale`. Chromium then lays the page out in the design window and
+rasterises it at `scale` device pixels per CSS pixel, so text, SVG and CSS shapes are drawn at the
+output's resolution; nothing is resampled by vidgen. It is the same at every quality (preview,
+draft, final) and for `bleed` and `body`, because only `size` differs. No file of
+`data/web/` changed.
+
+**Rounding.** The viewport is a whole number of CSS pixels, and the exact height (`size[1] /
+scale`) often is not (1280 at 854x480: 719.44). Measured in Chromium (Playwright's build here,
+13 size / width pairs): the screenshot is `round(viewport x scale)` pixels each way; the width
+came out exact in all 13 (the scale is a 32-bit float in Chromium: 1.92 reads back as
+1.9199999570846558). vidgen rounds the height **up**, so the screenshot is never shorter than
+`size`, and `web/page.py` `fit_pixels` cuts the rows over (at most `ceil(scale) + 1`; seen: 0, 1
+or 2) off the bottom. So the frames are exactly `size`, pixels are never stretched, and the strip
+of the window under the frame's bottom edge, less than one CSS pixel, is not shown (a `bottom: 0`
+element may lose that much). Rounding to the nearest pixel instead gave screenshots one row
+short in three of the 13 pairs, which would need padding or a resample. A screenshot of any
+other size is still the error `the page drew WxH px, expected WxH`.
+
+**What the page is told.**
+
+| | without the param | with `design_width` |
+|---|---|---|
+| `innerWidth` / `innerHeight`, `100vw` / `100vh`, media queries, `getBoundingClientRect` | the box's output pixels | the design window |
+| `devicePixelRatio` | 1 | `scale` (1.5 for 1280 at 1920; 0.667 at 854) |
+| `ctx.width`, `ctx.height` | the box's output pixels | the design window (CSS pixels; the height rounded up) |
+| the canvas of a `script:` (`canvas.html`) | the box's output pixels | the design window's pixels |
+| `ctx.frame`, `ctx.aspect`, `ctx.region` | the video frame (output px), its shape | the same |
+| `ctx.theme.sizes`, `--vidgen-size-…` | CSS px = output px | divided by `scale` (`scene_page_inputs(scene, spans, css_scale)`), so text is still as tall as vidgen's |
+
+Decision: `ctx.width` / `ctx.height` are always CSS pixels, the numbers `innerWidth` /
+`innerHeight` give, so a page never has two coordinate systems for layout. The price is that a
+canvas is not sharp by itself: the canvas of a `script:` has the design window's pixels, and any
+canvas drawn without `devicePixelRatio` is drawn at the design size and enlarged by Chromium
+(soft when `scale > 1`). A page that sizes its canvas by `devicePixelRatio` (the usual code for
+high-density screens; three.js `renderer.setPixelRatio(window.devicePixelRatio)`) has the
+output's pixels. Giving the `script:` canvas the output's pixels was rejected: a 2D script
+drawing in `ctx.width` coordinates would then fill only a corner.
+
+**Cache.** `clip_inputs(..., design_width=)` puts `design_width` among the inputs only when it
+is set, and `CLIP_VERSION` stays 3, so the key of every clip without the param is what it was
+(checked: `engine_id()` and the keys of the three `examples/web` entries are equal before and
+after this step). Stored clips are reused. The scene fingerprint changes once, as with any
+change of the source, so the scene's video is composed again from the stored clip. With the
+param, setting, changing or removing it changes the key; the theme's sizes in the key change
+with it. `make_web_clip` and `web_page_layouts` read the param from `params`
+(`design_width_of`).
+
+**Lint.** `data/web/layout.js` reports boxes and font sizes in CSS pixels with the window's
+`innerWidth` / `innerHeight`, and `web/layout.py` already maps a reading to the frame by `box
+width / reading width`, so with the param the same code gives output pixels: 12 px text of a
+1280 design is 18 px in a 1920 frame. `WebPage.layout` sets the reading's `height` to the part
+of the window the frame shows (`css_height`: 719.44, not 720), so both axes have the same
+scale. Fixed on the way: the `cut` of a text declared with `layout(t, ctx)` was left in page
+pixels (the other texts' was scaled); it is scaled now. No difference at scale 1.
+
+**Public interface.** `vidgen.api`: `web_page_viewport` (`page_viewport`),
+`web_design_width_problem` (`design_width_problem`); `web_page_inputs` takes an optional third
+argument `css_scale` (default 1). `WebPage(..., design_width=None)` with `.viewport`, `.scale`;
+`clip_inputs(..., design_width=None)`; `fit_pixels`; `css_height`; `design_width_of`.
+`browser.chromium.png_pixels(png, None, ...)` skips the size check.
+
+**Tested** (`tests/test_web_design_width.py`): 15 default (the param's checks and the validate
+message; the window and scale for six size / width pairs; `fit_pixels`; the inputs' keys
+without the param; a redraw when the param changes; lint objects and `min_font`, `off_frame`,
+`safe_area` on a 1280 reading at 1920x1080 and 854x480; a declared text's cut) and 6 `slow` in
+Chromium: a fixed-pixel page at 640x360 and 160x90 with `design_width: 320` (`innerWidth`,
+`clientWidth`, `devicePixelRatio`, a media query, `getBoundingClientRect`, `50vw`, `ctx`; a 160
+x 90 px box covers half the frame each way at both sizes; `bottom: 0` reaches the last row;
+lint's font size in output pixels); a 2D canvas with and without `devicePixelRatio` (hard edge
+against a blurred one); sizes whose window height is not whole (213x121 at 320, 500x281 at 260:
+exact frames); the page without the param; a `script:` and a three.js renderer
+(`setPixelRatio(devicePixelRatio)` gives a 150x75 buffer for a 100x50 canvas at scale 1.5); a
+render through the pipeline with `region: body`, a title and `design_width: 400` (the page
+under the title on the theme background, the theme's sizes divided by the scale).
+
+**Not done / not verified.** `web_clipped` and `text_overlap` were not run on a real
+`design_width` page (they use the same scaled boxes as the rules that were). A scale above 2.77
+or below 0.125 was not rendered. `ctx` has no field for the scale (`devicePixelRatio` is it).
+The strip under one CSS pixel at the bottom is lost when the height is not whole. Windows and
+macOS not tried. Found, not fixed: `examples/web/extensions/cycle.html` at 160x90 gives one of
+two different pictures for frames 0 and 3 from run to run, with the code before this step as
+well (four runs: two of each).
 
 ## 119. The project's own fonts: the `fonts/` folder (Step 338)
 

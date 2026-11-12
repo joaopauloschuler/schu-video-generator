@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import mimetypes
 import os
 import re
@@ -36,7 +37,7 @@ from vidgen.browser import chromium
 from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels
 from vidgen.errors import VidgenError
 from vidgen.web.entry import WebEntry
-from vidgen.web.inputs import declared_families, page_head, page_shape, with_head
+from vidgen.web.inputs import css_height, declared_families, page_head, page_shape, page_viewport, with_head
 from vidgen.web.libs import unshipped_lib_message
 from vidgen.web.loaded import THREE_VERSION, VIDGEN_PREFIX, served_file, unshipped_addon, unshipped_lib
 
@@ -242,6 +243,18 @@ def unshipped_addon_message(scene_id: str, addon: str) -> str:
     )
 
 
+def fit_pixels(pixels: np.ndarray, size: tuple[int, int], scale: float, what: str) -> np.ndarray:
+    """A screenshot of a window at device scale ``scale`` cut to ``size`` (W, H): the window is
+    a whole number of CSS pixels, so its picture may be up to ``ceil(scale) + 1`` output pixels
+    larger than ``size`` (:func:`~vidgen.web.inputs.page_viewport`); those rows at the bottom
+    (columns at the right) are cut off. Any other size is an error naming ``what``."""
+    height, width = pixels.shape[:2]
+    spare = math.ceil(scale) + 1
+    if not (size[0] <= width <= size[0] + spare and size[1] <= height <= size[1] + spare):
+        raise VidgenError(f"{what} drew {width}x{height} px, expected {size[0]}x{size[1]}")
+    return pixels[:size[1], :size[0]]
+
+
 def renderer_pids(browser: Any) -> list[int]:
     """The process ids of a Chromium's renderer processes (``SystemInfo.getProcessInfo``), or
     none when Chromium does not tell."""
@@ -288,14 +301,20 @@ class WebPage:
     properties), ``data`` (``ctx.data``) and ``beats`` (``ctx.beats``) are what the page is given
     (§118.9); ``shape`` is the video's shape (:func:`~vidgen.web.inputs.page_shape`; default:
     a page filling a frame of ``size``), in ``ctx`` and as attributes of ``<html>`` (§118.11).
+    ``design_width`` (§118.17): the page's window is that many CSS pixels wide (:attr:`viewport`)
+    and drawn at the device scale :attr:`scale`, so the frames are still ``size``; without it the
+    window is ``size`` at scale 1.
     :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
     to its SHA-256, a missing project file to ``None`` (§118.10)."""
 
     def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
                  theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
-                 beats: list[dict[str, Any]] | None = None, shape: dict[str, Any] | None = None) -> None:
+                 beats: list[dict[str, Any]] | None = None, shape: dict[str, Any] | None = None,
+                 design_width: int | None = None) -> None:
         self.root, self.entry, self.scene_id = root, entry, scene_id
         self.size, self.fps, self.frames = size, fps, frames
+        self.design_width = design_width
+        self.viewport, self.scale = page_viewport(size, design_width)
         self.theme, self.data, self.beats = theme, dict(data or {}), list(beats or [])
         self.shape = dict(shape) if shape is not None else page_shape(size)
         self.refused: list[str] = []
@@ -326,7 +345,7 @@ class WebPage:
             route.abort("blockedbyclient")
             return
         if rel == CANVAS_PATH and self.entry.kind == "script":
-            body = with_head(canvas_page(self.entry.posix, self.size).encode("utf-8"), page_head(self.theme, self.shape))
+            body = with_head(canvas_page(self.entry.posix, self.viewport).encode("utf-8"), page_head(self.theme, self.shape))
             route.fulfill(status=200, body=body, headers={"Content-Type": CONTENT_TYPES[".html"]})
             return
         addon = unshipped_addon(rel)
@@ -418,9 +437,10 @@ class WebPage:
         return self
 
     def _open(self, api: Any) -> None:
-        width, height = self.size
+        width, height = self.viewport
         browser = self._chromium.browser  # type: ignore[union-attr]
-        context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=1,
+        context = browser.new_context(viewport={"width": width, "height": height},
+                                      device_scale_factor=1 if self.design_width is None else self.scale,
                                       timezone_id=TIMEZONE, locale=LOCALE)
         context.add_init_script(script=init_script(self.scene_id))
         context.route("**/*", self._serve)
@@ -482,12 +502,15 @@ class WebPage:
         api = chromium.sync_api()
         try:
             with self._limit.running(FRAME_TIMEOUT_S):
-                return dict(self._page.evaluate(layout_reader(), t))
+                reading = dict(self._page.evaluate(layout_reader(), t))
         except api.Error as exc:
             if self._limit.expired:
                 raise self._overrun(f"layout(t={t:.3f})", FRAME_TIMEOUT_S) from None
             message = first_line(exc).removeprefix("Error: ").removeprefix("page.evaluate: ")
             raise VidgenError(f"scene '{self.scene_id}': reading the page's text {when} failed: {message}") from None
+        if self.design_width is not None:   # the part of the window the frame shows (its height is rounded up)
+            reading["height"] = round(css_height(self.size, self.design_width), 3)
+        return reading
 
     def frame(self, n: int) -> np.ndarray:
         """Frame ``n``: the clock and the page moved to ``t = n / fps``, the page's ``frame(t, ctx)``
@@ -499,7 +522,10 @@ class WebPage:
             png = self._page.screenshot(type="png", timeout=READY_TIMEOUT_MS)
         except api.Error as exc:
             raise VidgenError(f"scene '{self.scene_id}': no screenshot of {self.entry.posix} at t={t:.3f}: {first_line(exc)}") from None
-        return png_pixels(png, self.size, f"scene '{self.scene_id}': the page", alpha=True)
+        what = f"scene '{self.scene_id}': the page"
+        if self.design_width is None:
+            return png_pixels(png, self.size, what, alpha=True)
+        return fit_pixels(png_pixels(png, None, what, alpha=True), self.size, self.scale, what)
 
     def close(self) -> None:
         """Close Chromium and Playwright (safe to call twice)."""
@@ -509,5 +535,5 @@ class WebPage:
 
 
 __all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
-           "content_type", "engine_id", "error_location", "error_message", "google_font_families", "google_font_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
+           "content_type", "engine_id", "error_location", "error_message", "fit_pixels", "google_font_families", "google_font_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
            "renderer_pids", "runtime_digest", "script_base", "unshipped_addon_message"]

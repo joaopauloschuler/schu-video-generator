@@ -6412,9 +6412,36 @@ command, same `vidgen validate` warning).
 | `script` | path | — | a JavaScript module in the project folder (`extensions/gears.js`), loaded into a bare page with one canvas (`id="vidgen-canvas"`) the size of the page, on a transparent background (what the script does not draw shows the video's background) |
 | `title` | str | `""` | a heading drawn by vidgen (in the theme's heading font): on a plate over the top of the page with `region: bleed` (as on `3d`), above the page with `region: body` (as on `video_clip`); action target `title` |
 | `region` | `bleed` \| `body` | `bleed` | `bleed`: the page fills the whole frame, edge to edge; `body`: the page fills the safe area below the title (the whole safe area without a title), clear of overlays that reserve room (bottom captions) and, in a Short, of the parts the app covers. The page is laid out at that size: its viewport, `ctx.width` / `ctx.height` and `100vw` / `100vh` are the region's pixels, not the frame squeezed |
+| `design_width` | int (200–8192) | — | for a page built in fixed pixels: the window width it was designed for, in CSS pixels (`1280`). The page is laid out in a window that wide and as high as its region's shape gives, and drawn at the video's size at every quality (see below) |
 | `data` | mapping | `{}` | values for the page, read as `ctx.data` (`{teeth: 24, color: primary}`): text, numbers, `true` / `false`, `null`, lists and mappings (a YAML date or a number key is an error naming its place, e.g. `data.when`); theme colour names are not looked up for you (`ctx.theme.colors[ctx.data.color]`) |
 
 Give exactly one of `page` and `script`.
+
+**`design_width`: a page built in fixed pixels** (Step 339, DESIGN §118.17). With `design_width:
+1280` the page's window is 1280 CSS pixels wide whatever the render's size, and Chromium draws it
+at the scale `output width / design_width` (its device scale factor), so the frames have the
+output's pixels and HTML text, SVG and CSS shapes are drawn at that resolution.
+
+| the page reads | value with `design_width: 1280` in a 16:9 `bleed` page |
+|---|---|
+| `window.innerWidth`, `100vw`, media queries, `getBoundingClientRect()`, `clientWidth` | 1280 wide, 720 high, at every quality |
+| `window.devicePixelRatio` | output pixels per CSS pixel: 1.5 at 1920x1080, 0.667 at 854x480 |
+| `ctx.width`, `ctx.height`, the canvas of a `script:` | 1280, 720 (CSS pixels) |
+| `ctx.frame` | the video frame in output pixels, as without the param |
+| `ctx.theme.sizes`, `--vidgen-size-…` | CSS pixels, divided by the scale so that text is still as tall as vidgen's |
+
+- The height is the region's: `design_width x region height / region width`, rounded up to a whole
+  CSS pixel. When that is not exact (719.4 for 1280 at 854x480) the window is 720 high and the
+  strip below the frame's bottom edge (under one CSS pixel) is cut off; the frames always have
+  exactly the output's size. There is no `design_height`: a height that disagrees with the
+  region's shape would squeeze or crop the page.
+- A canvas (2D or WebGL) is drawn at the pixels its code gives it. One sized from `clientWidth`
+  alone is drawn at the design size and enlarged (soft); one sized by `devicePixelRatio`
+  (`renderer.setPixelRatio(window.devicePixelRatio)` in three.js) has the output's pixels.
+- Lint maps the page's text to frame pixels as before: 12 px text of a 1280 design is 18 px in a
+  1920 px frame.
+- Without the param nothing changes, and the stored frames of such scenes are reused. Setting,
+  changing or removing it draws the scene's frames again.
 
 ```yaml
 - id: gears
