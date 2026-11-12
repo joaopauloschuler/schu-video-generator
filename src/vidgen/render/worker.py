@@ -32,7 +32,6 @@ from vidgen import __version__
 from vidgen.errors import VidgenError
 from vidgen.fileio import locked_message, remove_file, write_text_atomic
 from vidgen.project import Project
-from vidgen.three_d.passes import parse_passes
 
 #: Manim's units on the shorter side of the frame (Manim's default frame height).
 FRAME_SHORT_SIDE = 8.0
@@ -338,6 +337,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Worker entry point; returns the exit code."""
+    # imported here: it loads Manim, and vidgen.lint imports this module for its path functions
+    from vidgen.three_d.passes import parse_passes
+
     args = build_parser().parse_args(argv)
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(_LevelFormatter())

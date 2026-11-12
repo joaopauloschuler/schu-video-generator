@@ -376,7 +376,8 @@ def test_scene_chooser_names_every_type_and_real_params() -> None:
             covered.add(name)
             fields = field_names(types[name].params_model)
             for param in ticked(row[2]):
-                assert param.split(".")[0] in fields, f"{name} has no param {param!r}"
+                field = param.split(":")[0].split(".")[0]   # `fade: false` names the param `fade`
+                assert field in fields, f"{name} has no param {param!r}"
     assert covered == set(types), f"chooser misses {sorted(set(types) - covered)}"
 
 

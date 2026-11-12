@@ -156,11 +156,12 @@ def test_front_view_part_layout() -> None:
 def test_facing_front_shows_the_front_view() -> None:
     c = both_views()
     side_order = c.draw_order
-    assert c.has_front_view and c.facing == "right" and side_order.index("arm_right") < side_order.index("body")
+    # from the side the far arm is drawn over the body and under the near arm (arms: front, the default since Step 282)
+    assert c.has_front_view and c.facing == "right" and side_order.index("body") < side_order.index("arm_right") < side_order.index("arm_left")
     shown = {id(m) for m in c.get_family()[2:] if len(m.points)}   # not the character and its anchor
     c.face("front")
     assert c.facing == "front" and c.side_facing == "right" and c.order_changes == 1
-    assert c.draw_order.index("arm_right") > c.draw_order.index("body")   # both arms in front of the body
+    assert c.draw_order.index("arm_right") > c.draw_order.index("arm_left") > c.draw_order.index("body")   # both arms in front of the body
     assert c.submobjects[1:] == [c.parts[n] for n in c.draw_order]
     front_shown = {id(m) for m in c.get_family()[2:] if len(m.points)}
     assert not shown & front_shown   # nothing of the side view is drawn
@@ -183,13 +184,13 @@ def test_facing_front_shows_the_front_view() -> None:
 def test_turning_to_the_front_swaps_halfway_and_narrows() -> None:
     assert turn_squash(0.0) == turn_squash(1.0) == 1.0 and turn_squash(0.5) == pytest.approx(1.0 - TURN_SQUASH)
     c = both_views()
-    width = c.width
+    width, front_width = c.width, both_views().face("front").width   # each view has its own width
     turn = PoseChange(c, facing="front", run_time=0.4)
     turn.begin()
     turn.interpolate(0.45)
     assert c.facing == "right" and c.width < width
     turn.interpolate(0.55)
-    assert c.facing == "front" and c.width < width
+    assert c.facing == "front" and c.width < front_width
     turn.interpolate(1.0)
     turn.finish()
     assert c.facing == "front" and c._squash == (1.0, 1.0)
@@ -388,7 +389,8 @@ def test_walking_behind_a_tree_and_a_front_view_on_a_stage(make_project, tmp_pat
     assert pip.standing_height == pytest.approx(scene.params.size * min(scene.frame_width, scene.frame_height) * depth_scale(0.9))
     caster = next(c for group in scene.shadows for c in group.casters if c.mobject is pip)
     assert caster.ellipse(1.0).y == pytest.approx(scene.feet_y_at(0.9))   # its shadow on the ground there
-    assert kit.facing == "left" and kit.side_facing == "left" and kit.draw_order.index("arm_right") < kit.draw_order.index("body")
+    order = kit.draw_order   # the side view's again: its far arm under the near one
+    assert kit.facing == "left" and kit.side_facing == "left" and order.index("body") < order.index("arm_right") < order.index("arm_left")
 
 
 @pytest.mark.slow
@@ -437,9 +439,10 @@ def test_a_character_behind_a_house_does_not_show_through_it_as_the_scene_fades_
     frames: list[np.ndarray] = []
     write = SceneFileWriter.write_frame
 
-    def keeping(self: Any, frame: Any, num_frames: int = 1) -> None:
-        frames.extend([np.asarray(frame).astype(int)] * num_frames)
-        write(self, frame, num_frames)
+    def keeping(self: Any, frame: Any, *args: Any, **kwargs: Any) -> None:
+        count = kwargs.get("repeat", kwargs.get("num_frames", args[0] if args else 1))   # Manim 0.22 says repeat=, earlier num_frames
+        frames.extend([np.asarray(frame).astype(int)] * count)
+        write(self, frame, *args, **kwargs)
 
     monkeypatch.setattr(SceneFileWriter, "write_frame", keeping)
     outros = []

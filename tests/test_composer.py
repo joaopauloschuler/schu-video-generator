@@ -314,7 +314,7 @@ def test_composed_start_wraps_and_plays_once_without_loop(tmp_path: Path, monkey
 
 
 def test_list_music_describes_moods_and_instruments(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setattr(music, "music_entries", lambda root, previews: [])  # the beds (tested in test_music.py) take ~10 s
+    monkeypatch.setattr(music, "music_entries", lambda root, previews, analyse=True: [])  # the beds (tested in test_music.py) take ~10 s
     assert main(["list-music", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert [m["name"] for m in doc["moods"]] == list(MOODS) and doc["symusic"]

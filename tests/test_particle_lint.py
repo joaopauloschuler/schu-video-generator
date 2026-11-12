@@ -49,9 +49,10 @@ def _found(project: Project, scene_id: str) -> list[tuple[str, str]]:
 
 
 def test_rules_are_registered_last_with_their_defaults() -> None:
-    shorts = ("shorts_safe_area", "overlay_face", "shorts_length", "generated_footage")   # Step 249's (252's, 294's) rules come after them
-    assert list(LINT_RULES[-len(PARTICLE_RULES) - len(shorts):-len(shorts)]) == list(PARTICLE_RULES)
-    assert list(LINT_RULES[-len(shorts):]) == list(shorts)
+    # the rules of Steps 249, 252, 294 (Shorts, generated footage), 300 (3d) and 332 (web) come after them
+    later = ("shorts_safe_area", "overlay_face", "shorts_length", "generated_footage", "three_d_off_frame", "three_d_hidden", "web_clipped")
+    assert list(LINT_RULES[-len(PARTICLE_RULES) - len(later):-len(later)]) == list(PARTICLE_RULES)
+    assert list(LINT_RULES[-len(later):]) == list(later)
     assert all(RULES[n].scope == "scene" for n in PARTICLE_RULES)
     defaults = {n: RULES[n].default for n in PARTICLE_RULES}
     assert defaults["particle_charge"] == defaults["particle_spin"] == "error" and defaults["particle_units"] == "info"

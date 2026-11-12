@@ -454,5 +454,8 @@ def test_a_hard_cut_shows_the_clip_from_the_first_frame_and_adds_nothing(make_pr
     scene = render(project, "v", media)
     movie = movie_frames(scene)
     assert len(movie) == 16   # 3.2 s at 5 fps: no 0.5 s fade-out
-    assert grey(movie[0]) == 0 and movie[0].mean() > 15  # the first frame is the clip's, not a fade in from black
+    # the first frame is the clip's frame 0 (a neutral grey of about 11.6), not the bluish theme background (#0E1116) a fade in starts from
+    first = movie[0].reshape(-1, 3).mean(axis=0)
+    assert grey(movie[0]) == 0 and abs(float(first.mean()) - 11.64) <= 2.5 and float(first.max() - first.min()) <= 2
+    assert grey(movie[1]) == 1   # and the clip is playing
     assert movie[-1].mean() > 15   # no fade to black at the end

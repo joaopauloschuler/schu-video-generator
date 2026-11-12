@@ -5,7 +5,12 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–334)
+## Unreleased (Steps 193–335)
+
+### Every test passes (Step 335)
+
+- **Fixed:** importing `vidgen.render.worker` no longer loads Manim (it imported `vidgen.three_d.passes` at the top since Step 301). `vidgen.lint` imports the worker for two path functions, so `import vidgen.lint`, and with it `vidgen.cartoon.lighting`, `vidgen.cartoon.wind`, `vidgen.cartoon.iso_weather` and `vidgen.cartoon.iso_stage`, loaded Manim too. The worker now imports the passes when it runs. No command's output changes.
+- Tests only: the 53 tests that were failing (HANDOFF.md, Steps 327 and 335) pass, except one marked as an expected failure for a known bug (`scenes/video_clip.py` imports modules outside `vidgen.api`; `tasklist.md` backlog). `tests/conftest.py` makes a relative `PYTHONPATH` absolute, so `PYTHONPATH=src python -m pytest` tests the working tree in render workers too.
 
 ### three.js add-ons for `web` scenes (Step 334)
 

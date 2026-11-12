@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import textwrap
 from collections.abc import Callable, Iterator
@@ -20,6 +21,18 @@ LIVE_ZDR_404 = (
     'https://openrouter.ai/settings/privacy","code":404,"metadata":{"input_endpoint_count":1,"ineligibility_reasons":'
     '[{"reason":"zdr-violation-by-account","endpoint_count":1,"configure_url":"https://openrouter.ai/settings/privacy"}]}}}'
 )
+
+
+def _absolute_pythonpath() -> None:
+    """Make relative ``PYTHONPATH`` entries absolute, so that child processes import the vidgen
+    under test: a render worker runs in the project folder, where ``PYTHONPATH=src`` names nothing
+    (the worker then fails, or imports another installed vidgen)."""
+    entries = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+    if entries:
+        os.environ["PYTHONPATH"] = os.pathsep.join(str(Path(p).resolve()) for p in entries)
+
+
+_absolute_pythonpath()
 
 
 def _named_on_command_line(nodeid: str, named: list[str]) -> bool:

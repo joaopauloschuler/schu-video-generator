@@ -1849,6 +1849,12 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 - [x] Checks, each a real free render at 480x270 / 12 fps under the clock — done: GLTFLoader (`.gltf` embedded / `.bin`, `.glb`), RoomEnvironment, bloom (alpha and colours), CSS2DRenderer (labels on their objects, linted), Line2 (8 px at two sizes), RoundedBoxGeometry + SVGLoader, OrbitControls (`update(t - last)`); same frames twice
 - [x] Docs — done: guide `web` topic (table, example, rules, not shipped), CONFIG `### web`, DESIGN §118.14 (§114.4, §118.7), EXTENDING, README, THIRD_PARTY_NOTICES, CHANGELOG
 
+### Step 335 — Every test passes
+- [x] The 16 tests failing in the default run: 14 updated to the behaviour later steps intended, 1 made robust (Manim 0.22's `repeat=` keyword), 1 marked `xfail(strict=True)` (the `video_clip.py` case of `test_builtins_use_only_the_public_api`, a real bug, in the backlog)
+- [x] The 37 failing `slow` tests, run by node id: 4 updated, 3 fixed in the code (`vidgen.render.worker` no longer imports Manim when imported, so `import vidgen.lint` and the cartoon modules that use it do not either), 30 made robust (`tests/conftest.py` makes relative `PYTHONPATH` entries absolute, so render workers and the MCP server import the vidgen under test)
+- [x] No test removed, none marked `slow` to hide it
+- [x] A full default run with 0 failed; HANDOFF.md has a table of all 53
+
 ### Step 326 — A dissolve of a few frames where a clip continues the one before, on request
 - [x] `match_previous: {dissolve: N}` (0–12 frames of the render being made, default 0): the first N frames are blended with the previous clip's last shown frame, weights `(N − k) / (N + 1)`, after the gain (`clip_join.JoinTreatment`, DESIGN §117)
 - [x] `level: false`: the dissolve without the gain; an error without a dissolve or with `seconds` / `hold`
@@ -2048,6 +2054,7 @@ Not done in the roadmap; each is one line, with where it came from. Bugs first, 
 then nice-to-have.
 
 Bugs / correctness
+- [ ] `scenes/video_clip.py` imports `vidgen.clip_join` (`MatchPrevious`, `match_previous_problem`, `opening_treatment`), `vidgen.clips` (`FrameTreatment`, `clip_timing`) and `vidgen.videoplan` (`VideoPlan`) directly (Steps 325–326), so a built-in uses what an extension cannot import from `vidgen.api`. Fix: export those names from `vidgen.api` (as Step 157 did for the level layers) and document them in DESIGN.md, or move the join into a helper `vidgen.api` already exports; then remove `PRIVATE_IMPORTS` in `tests/test_builtin_scenes.py` (`test_builtins_use_only_the_public_api[video_clip.py]` is `xfail(strict=True)` until then; found in Step 327, left to the owner in Step 335 because it changes the public interface)
 - [x] (Fixed in Step 157: `vidgen.api` exports the level layers, DESIGN §86.11) `tests/test_builtin_scenes.py::test_builtins_use_only_the_public_api` fails: `scenes/stage.py` imports `vidgen.cartoon.level_*`, `vidgen.camera`, `vidgen.world`, `vidgen.config` directly (Phase O, Steps 150–154; found in Step 156) — export what a stage needs through `vidgen.api` or exempt the stage in the test with a reason
 - [ ] Word anchors (Step 156): with `overlap` / `interrupt` the runner scales `at` by the beat's shorter body, so a word-timed action lands a little early; an offset like `@mid-20s` reads as the word `mid` minus 20 s (write `"@mid-20s+0s"`)
 - [ ] MCP: large documents (a long video's `lint` / `storyboard` JSON, `schema full=true`) are not trimmed and can exceed a client's tool-output limit (Step 59) — page or summarise them

@@ -286,9 +286,10 @@ def test_studio_imports_no_video_code() -> None:
     loaded = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True).stdout.split()
     assert "manim" not in loaded and "vidgen.studio.check" in loaded and "vidgen.studio.templates" in loaded
     # an allow-list (Step 191): the building blocks it imports (music, sfx, loudness, errors) and
-    # what those import (music reads cue settings from config; config its language rules)
+    # what those import (music reads cue settings from config; config its language rules and, since
+    # Step 209, the DOI / ISBN / URL checks of vidgen.references, which imports only the standard library)
     allowed = {"vidgen", "vidgen.music", "vidgen.sfx", "vidgen.loudness", "vidgen.errors", "vidgen.config", "vidgen.languages",
-               "vidgen.textnorm", "vidgen.voicesounds", "vidgen.word_anchors"}
+               "vidgen.references", "vidgen.textnorm", "vidgen.voicesounds", "vidgen.word_anchors"}
     assert sorted(m for m in loaded if m.startswith("vidgen") and not m.startswith("vidgen.studio") and m not in allowed) == []
 
 
