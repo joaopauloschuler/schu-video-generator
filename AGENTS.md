@@ -3323,7 +3323,9 @@ the page, or to the script of a `script:`), and `ResizeObserver` /
 `IntersectionObserver` callbacks. Ordinary timer, `requestAnimationFrame`, CSS and Web Animations
 code was measured frame-exact. anime.js, Motion, D3, Chart.js and lottie-web ship with vidgen and
 were run under the clock (the table "Animation and chart libraries" below says how to drive
-each); any other library must be a file in the project (below: no internet).
+each); any other library must be a file in the project (below: no internet). Because
+`performance.now()` is the video's clock, it stands still inside a frame: you cannot time your
+own code with it. `vidgen render` tells you instead (below, "Render cost").
 
 **What the page is given**, `ctx`:
 
@@ -3743,7 +3745,7 @@ the text (here the video's background, since the canvas is transparent).
 | `warning: scene 'x': refused https://… (a web scene cannot reach the internet; …)` | a CDN script or API: copy the file into the project |
 | `warning: scene 'x': the page asks Google Fonts for "…", but the internet is off during a render …` | a `<link>` to Google Fonts: put the font's file in `fonts/` and remove the link ("Using another font" above) |
 | `fonts/x.ttf: not a font file …` | a damaged or mislabelled file in `fonts/`: replace or remove it |
-| `scene 'x': frame(t=0.500) in extensions/x.js did not return within 10 s: a loop that never ends or a promise that never settles …` | an endless loop, or waiting for something that never comes (a timer in `load`: time stands still there) |
+| `scene 'x': frame(t=0.500) in extensions/x.js did not return within 10 s: a loop that never ends or a promise that never settles …` | an endless loop, or waiting for something that never comes (a timer in `load`: time stands still there). The first frame may take 30 s (shaders are compiled then) |
 | `scene 'x': extensions/x.html did not become ready within 30 s …` | the page's load event never came (a module that never finishes) |
 | `scenes[0].params.data: … data.when: 2026-01-01 is a date, not a JSON value` | quote dates in `data:` |
 | a white page | a `page:` with `background: white` of its own (or an old habit): leave the background out or use `var(--vidgen-background)` |
@@ -3774,6 +3776,26 @@ move (240 px on the shorter side at the video's shape: 240x426 at 9:16, 240x240 
 `vidgen lint` when the timing is right, the final render once. To look at one moment, `vidgen still` (above)
 draws single frames without rendering the scene. Keep `web` scenes short (a few
 beats each).
+
+- **Progress and where the time goes.** While a scene's frames are drawn, `vidgen render` prints
+  a line about every 10 s, and a summary after the last frame:
+
+  ```
+  [4/12] 04_escapement: web frames 120/482, 1.24 s a frame, about 7 min 29 s left
+  [4/12] 04_escapement: web frames 482/482 drawn in 9 min 58 s (the page ready in 8.0 s before), 1.24 s a frame (the page's frame(t, ctx) 0.02 s, drawing and the screenshot 1.22 s)
+  ```
+
+  "The page's frame(t, ctx)" is your JavaScript; "drawing and the screenshot" is the browser
+  painting the page — for WebGL the GL work your code asked for, done in software here (a
+  detailed three.js film page: about 1.1 s of its 1.24 s at 720p). To make a WebGL page faster,
+  draw less: fewer passes, a smaller bloom target, fewer motion-blur copies. With `--json` the
+  lines go to stderr, so the MCP `render` tool shows them as progress.
+- **No shader warm-up needed.** three.js compiles its shaders in the first frame it draws; that
+  frame may take 30 s (the others 10 s). Rendering a frame in `load` and reading a pixel back
+  only moves that time into `load`.
+- **Two scenes at once.** `--jobs 2` drew a two-scene WebGL test about 10 % faster than one job
+  on 2 cores (one scene's software GL already uses about 1.4 cores); `--jobs auto` decides by
+  memory.
 
 **Disk.** A `web` scene's frames are kept in a lossless clip until the scene plays them
 (`build/<quality>/web/<scene>.mkv`): a detailed WebGL page takes about 26 MB per second of video

@@ -5,11 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+import time
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vidgen.browser.frames_clip import clip_serves, write_frames_clip
+from vidgen.browser.frames_clip import FramesClipWriter, clip_serves
 from vidgen.fileio import write_text_atomic
 from vidgen.web.entry import WebEntry, entry_of, entry_path
 from vidgen.web.inputs import design_width_of, page_shape
@@ -18,10 +19,84 @@ from vidgen.web.music import helper_digest, payload_digest
 from vidgen.web.page import WebPage, engine_id, layout_digest
 
 log = logging.getLogger("vidgen.web")
+#: Progress while a clip's frames are drawn (DESIGN.md §120.10); the render worker prints it as
+#: ``progress: ...`` lines, which ``vidgen render`` shows under the scene's name.
+progress_log = logging.getLogger("vidgen.progress")
+#: Seconds between two progress lines (at most one line in this time; the last frame always has one).
+PROGRESS_SECONDS = 10.0
 
 #: Version of a clip's inputs (2: the theme, ``data``, beats and the files the page loaded; 3:
 #: the video's shape and frames with alpha).
 CLIP_VERSION = 3
+
+
+def seconds_text(seconds: float) -> str:
+    """``"1.21"`` or, under a tenth, ``"0.034"``: seconds a frame for a progress line."""
+    return f"{seconds:.2f}" if seconds >= 0.1 else f"{seconds:.3f}"
+
+
+def duration_text(seconds: float) -> str:
+    """``"45 s"``, ``"3 min 05 s"``, ``"1 h 07 min"``: a time span for a progress line."""
+    whole = max(0, round(seconds))
+    if whole < 60:
+        return f"{whole} s"
+    if whole < 3600:
+        return f"{whole // 60} min {whole % 60:02d} s"
+    return f"{whole // 3600} h {whole // 60 % 60:02d} min"
+
+
+class FrameProgress:
+    """Progress lines for ``total`` frames being drawn: ``web frames 30/90, 1.21 s a frame, about
+    1 min 13 s left`` at most every :data:`PROGRESS_SECONDS`, then a summary that splits a frame's
+    time into the page's ``frame(t, ctx)`` hook and the drawing with the screenshot (and says how
+    long the page took to become ready, ``ready_seconds``). The rate and what is left are from the
+    frames after the first (the first compiles a WebGL page's shaders)."""
+
+    def __init__(self, total: int, *, ready_seconds: float = 0.0, clock: Callable[[], float] = time.monotonic) -> None:
+        self.total, self._clock = total, clock
+        self.ready_seconds = ready_seconds
+        self.done = 0
+        self._started = self._last_line = clock()
+        self._after_first = clock()
+        self.hook_seconds = self.draw_seconds = 0.0
+
+    def seconds_per_frame(self) -> float | None:
+        """Mean seconds a frame since the first frame (``None`` before the second)."""
+        if self.done < 2:
+            return None
+        return (self._clock() - self._after_first) / (self.done - 1)
+
+    def line(self) -> str:
+        """The progress line for now."""
+        rate = self.seconds_per_frame()
+        if rate is None:
+            return f"web frames {self.done}/{self.total}"
+        return (f"web frames {self.done}/{self.total}, {seconds_text(rate)} s a frame, "
+                f"about {duration_text(rate * (self.total - self.done))} left")
+
+    def drawn(self, hook_seconds: float, draw_seconds: float) -> None:
+        """One more frame drawn: ``hook_seconds`` in the page's hooks, ``draw_seconds`` drawing it and taking the screenshot."""
+        self.done += 1
+        self.hook_seconds += hook_seconds
+        self.draw_seconds += draw_seconds
+        now = self._clock()
+        if self.done == 1:
+            self._after_first = now
+        if self.done < self.total and now - self._last_line >= PROGRESS_SECONDS:
+            self._last_line = now
+            progress_log.info("%s", self.line())
+
+    def summary(self) -> str:
+        """The line after the last frame."""
+        count = max(1, self.done)
+        return (f"web frames {self.done}/{self.total} drawn in {duration_text(self._clock() - self._started)} "
+                f"(the page ready in {self.ready_seconds:.1f} s before), "
+                f"{seconds_text((self._clock() - self._started) / count)} s a frame (the page's frame(t, ctx) "
+                f"{seconds_text(self.hook_seconds / count)} s, drawing and the screenshot {seconds_text(self.draw_seconds / count)} s)")
+
+    def finish(self) -> None:
+        """Log :meth:`summary`."""
+        progress_log.info("%s", self.summary())
 
 
 def scene_data(params: Any) -> dict[str, Any]:
@@ -112,7 +187,8 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
     the scene's music data, ``ctx.music`` (§120.8). ``intermediate``: how the frames are kept
     (§120.9; ``compact``: H.264 4:4:4 with a lossless alpha stream, the record then says
     ``"intermediate": "compact"``); it is not in the key: a lossless clip is reused for either,
-    a compact one only while ``compact`` is asked for."""
+    a compact one only while ``compact`` is asked for. While it draws, :class:`FrameProgress`
+    logs progress lines on ``vidgen.progress`` (§120.10)."""
     entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape,
                                          music=music)
     shape = inputs["shape"]
@@ -131,18 +207,24 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
     wanted = {n for n in layout_frames if 0 <= n < frames}
     layouts: dict[int, dict[str, Any]] = {}
 
-    def drawn(page: WebPage) -> Iterator[Any]:
-        for n in range(frames):
-            pixels = page.frame(n)
-            if n in wanted:
-                layouts[n] = page.layout(n)
-            yield pixels
-
+    opened = time.monotonic()
     with WebPage(root, entry, scene_id=scene_id, size=size, fps=fps, frames=frames,
                  theme=dict(theme) if theme is not None else None, data=data, beats=[dict(b) for b in beats], shape=shape,
                  design_width=inputs.get("design_width"), music=dict(music) if music is not None else None) as page:
-        write_frames_clip(clip, fps, size, drawn(page), alpha=True, intermediate=intermediate)
+        progress = FrameProgress(frames, ready_seconds=time.monotonic() - opened)
+        with FramesClipWriter(clip, fps, size, page.pixels, alpha=True, intermediate=intermediate) as writer:
+            for n in range(frames):
+                started = time.monotonic()
+                page.advance(n)
+                hooked = time.monotonic()
+                png = page.screenshot(n)
+                shot = time.monotonic()
+                writer.put(png)   # decoded and encoded while the next frame is drawn (DESIGN.md §120.10)
+                if n in wanted:
+                    layouts[n] = page.layout(n)
+                progress.drawn(hooked - started, shot - hooked)
         served = dict(sorted(page.loaded.items()))
+    progress.finish()
     kept = {} if intermediate == "lossless" else {"intermediate": intermediate}
     write_text_atomic(record, json.dumps({"key": key, "inputs": inputs, "loaded": served, **kept}, indent=1) + "\n")
     _store_layouts(folder, scene_id, key, layouts)
@@ -183,5 +265,5 @@ def forget_web_clips(folder: Path, scene_ids: Iterable[str]) -> None:
         record_path(folder, scene_id).unlink(missing_ok=True)
 
 
-__all__ = ["CLIP_VERSION", "clip_inputs", "forget_web_clips", "layout_record_path", "loaded_changed", "make_web_clip", "scene_data",
-           "web_page_layouts"]
+__all__ = ["CLIP_VERSION", "PROGRESS_SECONDS", "FrameProgress", "clip_inputs", "duration_text", "seconds_text", "forget_web_clips",
+           "layout_record_path", "loaded_changed", "make_web_clip", "scene_data", "web_page_layouts"]

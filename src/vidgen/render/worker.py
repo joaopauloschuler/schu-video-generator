@@ -38,6 +38,9 @@ from vidgen.project import Project
 #: Manim's units on the shorter side of the frame (Manim's default frame height).
 FRAME_SHORT_SIDE = 8.0
 
+#: How a worker's progress lines start (``vidgen render`` shows them under the scene's name).
+PROGRESS_PREFIX = "progress: "
+
 #: Characters that break Manim's own file handling (str.format templates, unescaped concat lists).
 _UNSAFE_FOR_MANIM = ("'", "{", "}")
 
@@ -372,6 +375,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.addHandler(handler)
     logger.setLevel(logging.WARNING)
     logger.propagate = False
+    progress = logging.StreamHandler(sys.stderr)
+    progress.setFormatter(logging.Formatter(f"{PROGRESS_PREFIX}%(message)s"))
+    progress_logger = logging.getLogger("vidgen.progress")   # frames drawn (DESIGN.md §120.10)
+    progress_logger.addHandler(progress)
+    progress_logger.setLevel(logging.INFO)
+    progress_logger.propagate = False
     try:
         render_scene(
             args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames,

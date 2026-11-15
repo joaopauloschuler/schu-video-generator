@@ -15,6 +15,7 @@ Steps of :func:`render_project`:
 
 from __future__ import annotations
 
+import codecs
 import json
 import logging
 import os
@@ -37,6 +38,7 @@ from vidgen.render import ffmpeg as ff
 from vidgen.render.disk import BuildUsage, build_usage, expected_bytes, free_bytes, remove_frames_clips, room_warning
 from vidgen.fileio import remove_file, write_text_atomic
 from vidgen.render.worker import (
+    PROGRESS_PREFIX,
     scene_activity_path,
     scene_audio_path,
     scene_frames_dir,
@@ -261,16 +263,26 @@ def _has_stills(project: Project, preview: bool, scene_id: str) -> bool:
 
 
 def _tail(text: str, lines: int = TAIL_LINES) -> str:
-    """The last ``lines`` lines of worker output, progress-bar carriage returns resolved."""
+    """The last ``lines`` lines of worker output, progress-bar carriage returns resolved, without
+    its progress lines."""
     cleaned = [line.rsplit("\r", 1)[-1] for line in text.replace("\r\n", "\n").split("\n")]
-    cleaned = [line for line in cleaned if line.strip()]
+    cleaned = [line for line in cleaned if line.strip() and not line.startswith(PROGRESS_PREFIX)]
     return "\n".join(cleaned[-lines:])
 
 
+def progress_lines(pending: str, chunk: str) -> tuple[list[str], str]:
+    """The worker's progress lines (:data:`PROGRESS_PREFIX` removed) completed by ``chunk`` of its
+    output, and the unfinished rest to pass with the next chunk."""
+    *lines, rest = (pending + chunk).replace("\r\n", "\n").split("\n")
+    return [line.removeprefix(PROGRESS_PREFIX).strip() for line in lines if line.startswith(PROGRESS_PREFIX)], rest
+
+
 def _run_worker(
-    project: Project, preview: bool, scene_id: str, no_audio: bool, live: bool, frames: int = 0, guide_passes: tuple[str, ...] = ()
+    project: Project, preview: bool, scene_id: str, no_audio: bool, live: bool, frames: int = 0, guide_passes: tuple[str, ...] = (),
+    on_progress: Callable[[str], None] | None = None,
 ) -> _WorkerRun:
-    """Run the worker for one scene; its output is captured (and echoed to stderr if ``live``)."""
+    """Run the worker for one scene; its output is captured (and echoed to stderr if ``live``);
+    each progress line it prints (frames drawn, DESIGN.md §120.10) is passed to ``on_progress``."""
     cmd = [
         sys.executable, "-m", "vidgen.render.worker", str(project.config_file), scene_id,
         "--quality", "draft" if project.draft else "preview" if preview else "final",
@@ -299,11 +311,17 @@ def _run_worker(
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=project.root)
     assert proc.stdout is not None
     chunks: list[bytes] = []
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    pending = ""
     while chunk := proc.stdout.read1(4096):
         chunks.append(chunk)
         if live:
             sys.stderr.buffer.write(chunk)
             sys.stderr.flush()
+        if on_progress is not None:
+            lines, pending = progress_lines(pending, decoder.decode(chunk))
+            for line in lines:
+                on_progress(line)
     returncode = proc.wait()
     output = b"".join(chunks).decode("utf-8", errors="replace")
     return _WorkerRun(scene_id, returncode, output, time.monotonic() - started)
@@ -412,7 +430,8 @@ def _render_scenes(
 
     def task(index: int, scene_id: str) -> _WorkerRun:
         say(f"[{index}/{total}] {scene_id}: rendering")
-        return _run_worker(project, preview, scene_id, no_audio, live, frames, guide_passes)
+        shown = None if live else (lambda line: say(f"[{index}/{total}] {scene_id}: {line}"))   # live: the worker's own lines show
+        return _run_worker(project, preview, scene_id, no_audio, live, frames, guide_passes, shown)
 
     for run in _runs(task, scene_ids, jobs, carry.carried_from(project.config)):
         if run.returncode != 0:

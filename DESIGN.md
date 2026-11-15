@@ -23255,7 +23255,8 @@ Opening: `goto(…, wait_until="load")`, then `wait_for_function`: an error was 
 (its load event never came or a module never finished loading; not answered: <404s and refused
 URLs>)`. Then `start(info)`; any error so far stops the render. Frame *n*: `frame(n / fps)`; an
 error stops the render; then `page.screenshot(type="png")` of the viewport, decoded and checked
-for size (`png_pixels`).
+for size (`png_pixels`). (Since Step 349 the same picture through `Page.captureScreenshot` with
+`optimizeForSpeed`, §120.10.)
 
 Error messages (`error_message`): `scene '<id>': JavaScript error in <file> line <n> <when>:
 <Error name>: <message>` with *when* `at load` or `in frame(t=0.500)`. The file and line come
@@ -23437,7 +23438,8 @@ for ids and noise, and a page cannot reach anything that needs secret numbers. N
 `crypto.subtle` keys.
 
 **Time limits** (`_TimeLimit` in `web/page.py`): `start` (fonts, pictures, videos, `load`) may take
-`LOAD_TIMEOUT_S` = 30 s, each frame (steps 1–6) `FRAME_TIMEOUT_S` = 10 s. Playwright's `evaluate`
+`LOAD_TIMEOUT_S` = 30 s, each frame (steps 1–6) `FRAME_TIMEOUT_S` = 10 s (the first frame a page
+draws `FIRST_FRAME_TIMEOUT_S` = 30 s since Step 349, §120.10). Playwright's `evaluate`
 has no timeout, and a promise that never settles is not bounded by CDP's `Runtime.evaluate`
 `timeout` (checked), so a timer thread ends the page's renderer processes (their ids from
 `SystemInfo.getProcessInfo` after the page opened; `os.kill`, `SIGTERM`, `TerminateProcess` on
@@ -24232,7 +24234,7 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | 346 | Expressive notes in the score format: dynamic marks, hairpins, slurs with a glide, vibrato speed and delay, settings per note, an instrument per section, a range warning | §120.7 |
 | 347 | Built-in music data for `web` scenes: `music_data:` gives a page `ctx.music` | §120.8 |
 | 348 | Smaller intermediate files: `render.intermediate: compact`, `render.keep_intermediates: false`, the disk estimate and report of `vidgen render` | §120.9 |
-| 349 | Faster `web` rendering, measured first | later |
+| 349 | Faster `web` rendering, measured first: a quicker PNG, the frames clip written beside the drawing, a progress line, the first frame's time limit | §120.10 |
 | 350 | Ready-made finishing for three.js `web` scenes | later |
 | 351 | Critical review, documents, an example | later |
 | 352 | "Escapement" as an example under `examples/` (owner's request, 2026-11-16) | later |
@@ -25039,3 +25041,130 @@ its top level failed in about one run in three with `did not become ready within
   render and change every existing video. Lossless intermediates in fewer bytes would need a
   codec PyAV does not ship or a slower FFV1 setting. The estimate does not know a page's
   content, so flat pages are overestimated (by up to 40 times); the warning says "up to".
+
+### 120.10 Faster `web` rendering, measured first (Step 349)
+
+The films' authors reported: about 1.35 s a frame at 720p for "Escapement" (2 h 10 min for 5,730
+frames), "about 0.36 s per frame is fixed screenshot overhead", `--jobs 2` no faster than one job
+on two cores, about 14 s of Python import per scene worker, no progress line while the frames are
+drawn, shaders compiled on the first screenshot rather than in `load` (the film draws one frame
+in `load` and reads a pixel back), and `performance.now()` frozen during a frame.
+
+**Where a frame's time goes.** Measured with `/home/claude/work/scratch/al349/tools/bench.py`
+(outside the repository): it opens a scene's page as `vidgen still` does and draws frames 0 to
+N−1 once per way of taking the picture, timing each stage, with the CPU seconds of every process
+from `/proc`. Pages: (a) a copy of Escapement with two 3 s `web_cut` scenes from inside the film
+(`cathedral` at song time 72 s, `climax1` at 140 s); (b) `examples/web`'s `cycle` page (HTML,
+CSS, SVG, CSS animations, `region: body`, 1172x522 at 1280x720) and a page of SVG moved by
+`frame(t)` with text (`flat2`: `region: body` with alpha, and full frame with `design_width: 800`
+and an opaque background). 2 cores, one command at a time; the machine's speed varies by up to
+20 % within minutes (§118.18), so A/B runs were taken in turn.
+
+| per frame (mean of frames 1–9; frame 0 apart) | Escapement 1280x720 | Escapement 640x360 | `cycle` 1172x522 | `cycle` 586x261 |
+|---|---|---|---|---|
+| the page's `frame(t, ctx)` (timers, animation frames, the hook; GL commands queued) | 10–13 ms | 9 ms | 3–4 ms | 3 ms |
+| GL work done (SwiftShader), timed by a 1-pixel `gl.readPixels` before the screenshot | 1,093 ms | — | — | — |
+| the screenshot after that: compositing, PNG encode, transfer | 348 ms | — | — | — |
+| the screenshot as vidgen took it (GL work + the above) | 1,454–1,498 ms | 455 ms | 34–36 ms | 19–24 ms |
+| the same with `optimizeForSpeed` (the PNG compressed quickly) | 1,152 ms | 387 ms | 20 ms | 12–13 ms |
+| PNG size (default / quick) | 1,283 / 1,624 kB | 347 / 436 kB | 31 / 46 kB | 14 / 18 kB |
+| Python: PNG decode (Pillow) | 23–31 ms | 7 ms | 5–6 ms | 2 ms |
+| Python: FFV1 encode into the frames clip | 30–36 ms | 9 ms | 8–9 ms | 3–4 ms |
+| a frame in all (default / quick PNG) | 1,553–1,629 / 1,243 ms | 503 / 447 ms | 51–58 / 34–38 ms | 33 / 20–21 ms |
+
+CPU while Escapement's frames are drawn (8 frames, 12.4 s): the GPU process (SwiftShader) 17.1 s
+(1.37 cores), the browser process 2.4 s (the PNG encoding: 0.30 s a frame, the "fixed overhead"
+the film saw), Python 0.8 s, Playwright's driver 0.5 s, the renderer 0.2 s. With the quick PNG the
+browser process drops to about 0.3 s. Fixed costs per scene: `import vidgen.render.worker` 0.4 s,
+`vidgen.scenes` (every scene type) 2.6 s; under the profiler a draft worker spent 4.3 s importing
+in all (the 14 s of §118.18 were measured in a slow phase under the profiler). Chromium's start,
+the page's load and Escapement's `load(ctx)` (textures baked, shaders warmed up) 7.7–9.2 s.
+
+**Tried, and the result.**
+
+| idea | result | taken |
+|---|---|---|
+| `Page.captureScreenshot` PNG with `optimizeForSpeed` | same pixels (PNG is lossless; checked frame by frame), 0.30 s less per 720p film frame, 40 % less per frame on the flat page | **yes** (default) |
+| the same call without Playwright (`page.screenshot` → CDP directly) | Playwright's own work around it is 1–2 ms | as part of the above |
+| no `clip` | same speed | no (Playwright's clip kept, see below) |
+| WebP at quality 100 | lossless here (same pixels, alpha kept), 975 kB, slower: 1,616 ms | no |
+| JPEG at quality 100 | no alpha (PSNR 17 dB with it), 1,180 ms | no |
+| the WebGL canvas read back (`gl.readPixels` of the whole canvas through `page.evaluate`, base64) | 1,270 ms, and wrong: the drawing buffer is cleared once composited (`preserveDrawingBuffer: false`, PSNR 8.5 dB), and HTML over the canvas (the film's title and end cards) is not in it | no |
+| `Page.startScreencast` | frames come when the compositor draws (6 for 10 frames advanced on the flat page, 11 on the film's), not tied to vidgen's frames, and still PNG or JPEG encoded | no |
+| `HeadlessExperimental.beginFrame` | refused: "only supported if BeginFrameControl is enabled", which needs a target Playwright does not create | no |
+| `--disable-gpu-compositing`; `--use-angle=swiftshader-webgl` | 1,130 / 1,157 ms (no change); flags are in the clip key, so a change would have drawn every clip again | no |
+| decoding and encoding in a thread while the next frame is drawn | same pixels in the same order; flat pages 302 frames 11 → 10 s and 21 → 17 s; the film's page 1.26 → 1.24 s a frame (noise) | **yes** |
+| `--jobs 2` (two scenes of the film copy, whole render) | before this step 291 s → 241 s; after it 241 s → 216 s: 10–17 % here, not "no faster" (each worker is slower, 1.7–2.1 s a frame, both together faster); the GPU process of one worker already uses 1.4 of the 2 cores | unchanged (`--jobs auto` decides by memory) |
+| two pages in one browser, or a scene's frames split over two workers | the second half would have to step from frame 0 for pages that keep state, and stepping still runs the GL work (0.39 s a frame at 640x360, §120.3): no gain on 2 cores | no |
+| lazy imports in the worker | at most the 2.6 s of `vidgen.scenes` a scene (about 30 s of a 12-scene film); the registry imports every built-in scene to know the types | no (left for later) |
+
+**What changed.** `WebPage.screenshot(n)` sends `Page.captureScreenshot` on vidgen's own CDP
+session with what Playwright's `page.screenshot(type="png")` sends — `Page.getLayoutMetrics`'
+visual viewport for the clip (its place, scale and size, the size rounded as Playwright's
+`enclosingIntSize`), `captureBeyondViewport: false` — and `optimizeForSpeed: true`; around it,
+carets are hidden in every frame of the page and shown again as Playwright does
+(`inPagePrepareForScreenshots`: without it a focused input's caret is in the picture; a test
+shows it). Two things differ from Playwright's call and are handled: the device scale of a
+`design_width` page is an emulation of Playwright's CDP session, not of vidgen's, so the clip's
+scale is the visual viewport's times the device scale (without it the picture came out 800x450
+for a 1280x720 frame); and the time limit is vidgen's own (`_TimeLimit`, 30 s, as Playwright's
+screenshot timeout was). `WebPage.pixels(png)` decodes; `frame(n)` = `advance` + `screenshot` +
+`pixels` as before (`vidgen still` uses it). `make_web_clip` draws in the main thread and hands
+each PNG to `FramesClipWriter` (`browser/frames_clip.py`): `write_frames_clip` in a thread, at
+most two frames waiting; an error of either side stops both and leaves no clip or `.partial`.
+
+**Pixels: identical.** (1) The same page state taken both ways, every frame (the new screenshot
+first, then Playwright's): Escapement 1280x720 30 of 30, 640x360 60 of 60; the SVG page with
+alpha in a body region 92 of 92 at both sizes; the SVG page with `design_width` 92 of 92 at both
+sizes; a page with a focused input, text and alpha, at scale 1 and with `design_width`
+(`tests/test_web_speed.py`). (2) Whole frames clips of a forced render against the code before
+this step: Escapement final both scenes 92 of 92, preview 92 of 92; the SVG page in a body region
+92 of 92 (final) and 302 of 302 (preview). The `design_width` SVG page gave 90–91 of 92 and 299 of
+302 — but two renders with the old code differ the same way (frames 27 and 60, at most 6 levels
+in at most 5 pixels): the old path is not repeatable at a device scale other than 1, which is
+not this step's change. The `cycle` page (CSS transitions and animations) is not repeatable
+either: two Playwright screenshots of one page state differ in 4 to 9 of 92 frames (compositor
+animations move between two screenshots), recorded in the tasklist. **Cache keys:** unchanged
+(no page file, flag or input changed; `engine_id` is the same; the first render after the change
+reused every frames clip).
+
+**Speed after it** (whole scene workers, 92 frames at 1280x720, the film's `cathedral`, in
+turn): before 164.6 s and 166.2 s, after 138.2, 134.9 and 131.1 s (−18 %); the frames themselves
+1.61 s → 1.24–1.30 s each. Preview (640x360): 56.5 s → 51.8 s. The flat SVG pages (302 frames):
+24.9 / 23.0 s → 19.2 / 19.0 s and 37.1 / 34.0 s → 27.9 / 27.2 s. For the whole film at the
+reported 1.35 s a frame this is about 1.05–1.1 s a frame: about 1 h 45 min instead of 2 h 10 min
+with `--jobs 1` (not rendered; the two-scene copy suggests `--jobs 2` saves about 10 % more).
+
+**Progress while frames are drawn.** `FrameProgress` (`web/clip.py`) logs on the
+`vidgen.progress` logger at most every `PROGRESS_SECONDS` (10 s): `web frames 30/92, 1.24 s a
+frame, about 1 min 17 s left` (the rate and the time left from the frames after the first, which
+compiles the shaders), and after the last frame a summary: `web frames 92/92 drawn in 1 min 54 s
+(the page ready in 8.0 s before), 1.24 s a frame (the page's frame(t, ctx) 0.02 s, drawing and
+the screenshot 1.22 s)`. The worker prints these as `progress: …` lines (`PROGRESS_PREFIX`);
+`vidgen render` shows them as `[1/12] 04_escapement: web frames …` (`pipeline.progress_lines`,
+`_run_worker(on_progress=)`; in live mode, one job on a terminal, the worker's own lines show).
+They go where the render's other lines go: stdout, stderr with `--json`, so the MCP `render`
+tool reports them as progress. A failed worker's output tail leaves them out. `3d` scenes have no
+progress line (not asked).
+
+**Warming up shaders.** Measured on the film copy without its warm-up (the `composer.render()`
+and the 1-pixel `readPixels` in `load` removed): the page was ready in 1.5 s instead of 8 s, and
+frame 0's `frame(t, ctx)` took 4.5 s (three.js compiles and links the programs there and waits
+for them), then 1.4 s a frame as before. So the trick only moves the time; what it protects
+against is the frame time limit (10 s), which a page with more shaders on a slower machine could
+reach in frame 0. Now the first frame a page draws may take `FIRST_FRAME_TIMEOUT_S`
+(= `LOAD_TIMEOUT_S`, 30 s), later ones `FRAME_TIMEOUT_S` (10 s): a page needs no warm-up. vidgen
+does not draw frame 0 twice (a page that keeps state would change). The guide says so.
+
+**`performance.now()` stays on vidgen's clock** (§118.8): libraries animate from it (three.js'
+`Clock`, tweens), so a real clock would make the pictures depend on the machine's speed. It is
+not given a real-time twin either: a page that drew with it would no longer give the same frames.
+What the film wanted to know — how long a frame takes and where — is now in the summary line
+(the page's hook against drawing and the screenshot); the split inside the GL work is not
+visible from the page (the GL work is done by the GPU process after the hook returns).
+
+**Not done.** The WebGL work itself (1.1 s of the film's 1.24 s) is the page's: fewer passes or
+draws, or a smaller bloom, are the author's levers; a faster software GL (lavapipe through
+Vulkan) would change pixels and depend on the machine. Lazy imports (2.6 s a scene). Two pages
+or split scenes (above). Windows and macOS not tried (the CDP call is the one Playwright makes on
+every platform).

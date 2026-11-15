@@ -6899,7 +6899,7 @@ reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaug
 error or rejected promise at load, in a timer or callback, or in `frame`, and a page that is not
 ready within 30 s (its load event never came, or a module never finished loading). A `load` that
 does not return within 30 s, or a frame (its timers, callbacks and `frame`) that does not return
-within 10 s, stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
+within 10 s (the page's first frame: 30 s), stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
 10 s: a loop that never ends or a promise that never settles …`; vidgen ends the page's process.
 
 **Cache** (DESIGN §118.10). The screenshots, with their transparency, are written to a lossless clip
@@ -7089,6 +7089,23 @@ needs disk for its frames clips (about 5 GB for 3 minutes at 720p, lossless): se
 Drawing the frames alone at 1920x1080, 30 fps, measured for `examples/web` in Step 333 on the same
 machine on a faster day: an HTML + CSS page 453 ms per frame, a canvas script 325 ms, a three.js
 scene 550 ms. Keep `web` scenes short.
+
+**Speed, progress and warm-up** (Step 349; DESIGN §120.10). Each frame's screenshot is the PNG
+Playwright's `page.screenshot` gives, compressed quickly (`Page.captureScreenshot` with
+`optimizeForSpeed`: the same pixels, no change to any cache key), and the frames clip is decoded
+and encoded in a thread while the next frame is drawn. On 2 cores this made a detailed
+three.js film page 1.61 → 1.24–1.30 s a frame at 1280x720 (a 3 s scene 165 s → 135 s) and flat
+SVG pages about 20 % faster; most of what is left is the page's own WebGL work in software GL.
+While frames are drawn, `vidgen render` prints about every 10 s
+`[i/n] <scene>: web frames 120/482, 1.24 s a frame, about 7 min 29 s left`, and after the last a
+summary that splits a frame into the page's `frame(t, ctx)` and the drawing with the screenshot
+(and says how long the page took to become ready). The lines go to stdout, to stderr with
+`--json`, and so to the MCP `render` tool's progress; one job on a terminal shows the worker's
+own `progress: …` lines. The first frame a page draws may take 30 s (`frame(t, ctx)` 10 s after
+it): WebGL shaders are compiled then, so a page needs no warm-up in `load`.
+`performance.now()` stays on the video's clock (it stands still within a frame) and cannot time
+the page's code; the summary line does that. `--jobs 2` drew a two-scene WebGL test about 10 %
+faster than one job on 2 cores.
 
 **Cost of lint.** The reading is taken while the clip is drawn, after the screenshot of each frame a still
 will show (about 10–40 ms each), and kept beside the clip (`build/<quality>/web/<scene>.layout.json`,

@@ -129,8 +129,11 @@ def test_the_clip_is_reused_until_the_file_changes(tmp_path: Path, monkeypatch: 
         def __enter__(self) -> Page:
             return self
         def __exit__(self, *_: Any) -> None: ...
-        def frame(self, n: int) -> np.ndarray:
+        def advance(self, n: int) -> None:
             drawn.append(n)
+        def screenshot(self, n: int) -> bytes:
+            return b"png"
+        def pixels(self, png: bytes) -> np.ndarray:
             return np.zeros((16, 16, 4), dtype=np.uint8)
 
     monkeypatch.setattr(web_clip, "WebPage", Page)
@@ -280,7 +283,10 @@ def _fake_page(drawn: list[str], loads: dict[str, str]) -> type:
         def __enter__(self) -> Any:
             return self
         def __exit__(self, *_: Any) -> None: ...
-        def frame(self, n: int) -> np.ndarray:
+        def advance(self, n: int) -> None: ...
+        def screenshot(self, n: int) -> bytes:
+            return b"png"
+        def pixels(self, png: bytes) -> np.ndarray:
             return np.zeros((16, 16, 4), dtype=np.uint8)
 
     return Page

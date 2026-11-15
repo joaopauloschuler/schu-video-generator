@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–348)
+## Unreleased (Steps 193–349)
+
+### Faster `web` rendering, a progress line (Step 349)
+
+- **Faster frames, the same pixels.** A `web` scene's screenshot is now the PNG Playwright gives, compressed quickly (`Page.captureScreenshot` with `optimizeForSpeed`), and the frames clip is decoded and encoded while the next frame is drawn. On 2 cores: a detailed three.js film page 1.61 → 1.24–1.30 s a frame at 1280x720 (a 3 s scene 165 s → 135 s; the whole "Escapement" film estimated at about 1 h 45 min instead of 2 h 10 min), flat SVG pages about 20 % faster. The frames are identical to before (checked frame by frame on WebGL and SVG pages, at 720p and preview size, with alpha, in a body region and with `design_width`); no cache key changed, so nothing is drawn again.
+- **A progress line while frames are drawn**: `[4/12] 04_escapement: web frames 120/482, 1.24 s a frame, about 7 min 29 s left` about every 10 s, then a summary that splits a frame's time into the page's `frame(t, ctx)` and the drawing with the screenshot. Also on stderr with `--json`, so the MCP `render` tool reports it as progress.
+- **No shader warm-up needed**: the first frame a page draws may take 30 s (the others 10 s), so compiling three.js shaders there no longer risks the time limit.
+- Measured and not taken (DESIGN §120.10 has the table): WebP or JPEG screenshots, reading the WebGL canvas back, `Page.startScreencast`, `HeadlessExperimental.beginFrame`, other software-GL flags, two pages or split scenes, lazy imports. `--jobs 2` was about 10 % faster than one job on a two-scene WebGL test. `performance.now()` stays on the video's clock (documented).
 
 ### Smaller intermediate files (Step 348)
 
