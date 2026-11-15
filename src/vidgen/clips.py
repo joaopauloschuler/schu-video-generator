@@ -30,6 +30,7 @@ import numpy as np
 from manim import ImageMobject, config
 from PIL import Image as PILImage
 
+from vidgen.browser.frames_clip import ALPHA_TITLE
 from vidgen.errors import VidgenError
 from vidgen.render.ffmpeg import AUDIO_RATE, find_ffmpeg, run_ffmpeg
 
@@ -214,7 +215,10 @@ def clip_audio(path: Path, out: Path, timing: ClipTiming, *, length: float, volu
 class ClipReader:
     """Decodes a clip's frames in order and returns the one showing at a time in the file, as an
     RGBA array of ``size`` = (width, height) pixels cut from ``crop`` = (x, y, w, h) fractions of
-    the picture. Going back (a loop) or far ahead seeks; only the current frame is kept."""
+    the picture. Going back (a loop) or far ahead seeks; only the current frame is kept. A
+    compact clip of drawn frames (DESIGN.md §120.9) keeps its alpha in a second video stream
+    titled ``alpha``: a second reader (``stream``: its index among the video streams, read as
+    ``gray``) follows it and its picture becomes the alpha channel."""
 
     #: Jumps further ahead than this (seconds) seek instead of decoding every frame between.
     SEEK_AHEAD = 2.0
@@ -222,10 +226,13 @@ class ClipReader:
     #: requested time is already the one showing.
     TOLERANCE = 2e-3
 
-    def __init__(self, path: Path, size: tuple[int, int], crop: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)) -> None:
+    def __init__(self, path: Path, size: tuple[int, int], crop: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
+                 stream: int = 0) -> None:
         self.path = path
         self.size = (max(1, int(size[0])), max(1, int(size[1])))
         self.crop = crop
+        self._index = stream
+        self._alpha: ClipReader | None = None
         self._container: Any = None
         self._stream: Any = None
         self._frames: Iterator[Any] | None = None
@@ -241,8 +248,12 @@ class ClipReader:
             self._container = av.open(str(self.path))
         except (OSError, av.error.FFmpegError) as exc:
             raise VidgenError(f"cannot read video {self.path.name}: {exc}") from None
-        self._stream = self._container.streams.video[0]
+        self._stream = self._container.streams.video[self._index]
         self._stream.thread_type = "AUTO"
+        if self._index == 0:
+            mask = next((i for i, v in enumerate(self._container.streams.video) if i and v.metadata.get("title") == ALPHA_TITLE), None)
+            if mask is not None:
+                self._alpha = ClipReader(self.path, self.size, self.crop, stream=mask)
 
     def _decode_from(self, t: float) -> None:
         """(Re)start decoding at the key frame before ``t``."""
@@ -270,6 +281,8 @@ class ClipReader:
         frame = self._frame(t)
         if frame is not self._pixels_of:
             self._pixels = self._convert(frame)
+            if self._alpha is not None:
+                self._pixels[..., 3] = self._alpha.frame(t)
             self._pixels_of = frame
             self.serial += 1
         assert self._pixels is not None
@@ -280,13 +293,16 @@ class ClipReader:
         w, h = self.size
         cx, cy, cw, ch = self.crop
         full_w, full_h = max(w, round(w / cw)), max(h, round(h / ch))
-        pixels = frame.to_ndarray(width=full_w, height=full_h, format="rgba")
+        pixels = frame.to_ndarray(width=full_w, height=full_h, format="rgba" if self._index == 0 else "gray")
         x0 = min(max(round(cx * full_w), 0), full_w - w)
         y0 = min(max(round(cy * full_h), 0), full_h - h)
         return np.ascontiguousarray(pixels[y0 : y0 + h, x0 : x0 + w])
 
     def close(self) -> None:
         """Release the file."""
+        if self._alpha is not None:
+            self._alpha.close()
+            self._alpha = None
         if self._container is not None:
             self._container.close()
         self._container = self._stream = self._frames = self._current = self._next = None

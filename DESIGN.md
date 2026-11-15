@@ -263,7 +263,8 @@ src/vidgen/
                           # shared through a Cloudflare quick tunnel, `generate host-test`; §115)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
   browser/                # Chromium shared by `3d` and `web` (§118.5): chromium.py (start / stop, missing-browser
-                          # check and validate warning, FFV1 clip writer), timing.py (clip_plan: frames to draw;
+                          # check and validate warning), frames_clip.py (the frames clip writer: lossless FFV1
+                          # or compact H.264 + alpha stream, §120.9), timing.py (clip_plan: frames to draw;
                           # planned_still_frames: the frames a capture takes stills of, §118.12)
   web/                    # `web` scenes (§118): entry.py (page / script checks, fingerprint), page.py (serving
                           # the project folder, errors, screenshots), clip.py (the cached clip), inputs.py (theme
@@ -279,7 +280,8 @@ src/vidgen/
                           # (`make_3d_clip`: drawn or reused), passes.py (guide passes: depth, outline,
                           # mask; §114.14)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
-  render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
+  render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py, disk.py (frames clips:
+                          # disk estimate, warning, deleting, the build folder's size; §120.9),
                           # fingerprint.py (what a scene's render depends on, §14),
                           # jobs.py (`--jobs auto`: memory and cores, §70)
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
@@ -2962,6 +2964,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   than 2 s ahead seeks to the key frame before `t`. Only the current frame (and its converted
   picture) is held. Conversion is FFmpeg's scaler (`VideoFrame.to_ndarray(width, height,
   format="rgba")`) to the decode size of the whole picture, then the crop is sliced out.
+  A file with a second video stream titled `alpha` (a compact frames clip, §120.9) is read by
+  a second reader on that stream at the same times, its `gray` picture becoming the alpha channel.
   `set_resolution(scale)` sets the decode size: the size shown × `scale` (focus / zoom), as far as
   the clip has pixels inside the crop, and never less than the size shown — so at magnification 1
   the decoded frame has exactly the on-screen size and the camera copies it pixel for pixel:
@@ -24227,7 +24231,7 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | 345 | Synth instruments: orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam`) and a `choir` | §120.6 |
 | 346 | Expressive notes in the score format: dynamic marks, hairpins, slurs with a glide, vibrato speed and delay, settings per note, an instrument per section, a range warning | §120.7 |
 | 347 | Built-in music data for `web` scenes: `music_data:` gives a page `ctx.music` | §120.8 |
-| 348 | Smaller intermediate clips | later |
+| 348 | Smaller intermediate files: `render.intermediate: compact`, `render.keep_intermediates: false`, the disk estimate and report of `vidgen render` | §120.9 |
 | 349 | Faster `web` rendering, measured first | later |
 | 350 | Ready-made finishing for three.js `web` scenes | later |
 | 351 | Critical review, documents, an example | later |
@@ -24928,3 +24932,110 @@ its top level failed in about one run in three with `did not become ready within
   mix's bands served them). No measurement of the narration or effects. A cue starting inside a
   scene gives that scene no song time (it reads the cue playing at its start). Ducking makes the
   measurements dip under narration (as heard).
+
+### 120.9 Smaller intermediate files (Step 348)
+
+- **The report.** "Parallel Space v6" and "Escapement" (3 minutes at 1280x720, 30 fps) kept 4.7
+  and 4.9 GB of "lossless scene clips"; on a disk with about 1 GB free the ps6 agent rendered
+  one or two scenes at a time (`--max-scenes 2`) and deleted `build/final/web/*.mkv` by hand
+  between runs.
+- **Measured first: what a render keeps** (Escapement's build folder, and a copy with two of
+  its `web_cut` scenes, 3 s each from inside the film, plus a `bullets` slide, in
+  `/home/claude/work/scratch/al348/`):
+
+  | File | Format | Size | Needed again? |
+  |---|---|---|---|
+  | `web/<id>.mkv`, `three_d/<id>.mkv`: the **frames clip** a `web` / `3d` scene draws | FFV1 in Matroska, `bgra` (`3d`: `bgr0`), intra-only | WebGL film page: 26.2–28.3 MB/s at 720p30, 57.6 MB/s at 1080p30 (0.92–1.01 bytes per pixel and frame); a flat 2D page with text on a transparent background: 0.68 MB/s at 720p | only when the scene renders again for another reason than its page (title, timing, overlays, `--force`); the scene's render fingerprint reads the record beside it, not the clip |
+  | `web/<id>.json`, `.layout.json` | records | 4 KB | yes: fingerprint (files the page loaded), lint (page text) |
+  | `scenes/<id>.mp4`: the **scene clip** | H.264 `yuv420p` CRF 23 (Manim's encoder default; vidgen sets no options) | WebGL 720p 0.23–0.32 MB/s, 1080p 0.44 MB/s; the slide 0.04 MB/s | yes: the join copies it (stream copy); reused while the scene is current |
+  | `media/videos/<id>/partial/*.mp4` | Manim's partial movies | about the scene clip again | no (caching is off) |
+  | `padded/<id>.wav`, `padded/mix.wav` | PCM 48 kHz | 0.19 MB/s per scene, the mix again | rewritten by every join |
+  | `scenes/<id>.overlay.mov` | an alpha clip of moving overlays (only for a push / wipe) | small | by the join |
+  | `music/piece-*.npy` | the synthesized score | 141 MB for Escapement | yes (the score cache) |
+
+  So the 5 GB were the frames clips alone; the "scene clips" are already lossy and small, and
+  the joined video is a stream copy of them (checked: every decoded frame of the output equals
+  the scene clips' frames, MD5 per frame). Since a scene clip is CRF 23, the final picture is
+  already one lossy generation away from the page: against the lossless frames it measures
+  33.2–35.2 dB PSNR, SSIM 0.81–0.85 on the film's grainy frames.
+- **A smaller lossless setting: none for free.** On 90 frames of three Escapement scenes, PyAV
+  as the writer uses it: FFV1 as written (Golomb–Rice coder, level 1) 26.2–28.3 MB/s, 41–43 ms
+  per frame to encode, 34–42 ms to decode; level 3 with 4 slices the same size and time; the
+  range coder 9 % smaller (23.8 MB/s) but 50 % slower to encode and decode (62 / 64 ms), with
+  context model 1 10 % smaller at the same cost (at 1080p 52.5 MB/s against 57.6, 105 / 123 ms
+  against 62 / 71 ms); `bgr0` instead of `bgra` (no alpha plane) 1.7 % smaller; x264 lossless
+  (`libx264rgb -qp 0`) 43–49 MB/s, larger (the films' grain defeats inter prediction);
+  ProRes 4444 (not lossless) 39 MB/s. A 10 % gain for 50 % more coding time is not "free", so
+  the lossless clip stays exactly as it was: same codec and settings, the same coded packets
+  (checked on 20 film frames with alpha and on 10 noise frames with and without; the Matroska files' bytes differ between
+  any two writes because of their random UIDs, as before), the same cache keys.
+- **Opt-in compact frames: `render.intermediate: compact`** (`vidgen render --intermediate
+  compact`, MCP `render` `intermediate`). `vidgen.browser.frames_clip.write_frames_clip` (the
+  writer moved out of `browser/chromium.py`, where it was `write_ffv1_clip`) writes the picture as libx264 `yuv444p` CRF 12,
+  preset `veryfast` (4:4:4: no chroma subsampling on top of the scene clip's own), and, for
+  frames with alpha (every `web` clip), a lossless FFV1 `gray` alpha stream beside it in the
+  same Matroska file, titled `alpha`. `ClipReader` (`vidgen.clips`) reads such a file with a
+  second reader on that stream, at the same times, and puts its picture into the alpha channel,
+  so `ClipMobject` and everything above it are unchanged. A `3d` clip (opaque) is the picture
+  alone. Measured (same frames):
+
+  | | lossless FFV1 | compact |
+  |---|---|---|
+  | size, film WebGL page, 720p30 | 26.2–28.3 MB/s | 5.5–6.0 MB/s (4.6× smaller) |
+  | size, 1080p30 | 57.6 MB/s | 12.2 MB/s |
+  | size, flat 2D page with transparency, 720p | 0.68 MB/s | 0.35 MB/s (picture 0.05 + alpha 0.30) |
+  | alpha stream of an opaque page | — | 0.03 MB/s (720p), 0.06 (1080p) |
+  | encode / decode per 720p frame | 41–43 / 34–42 ms | 36–44 / 16–19 ms |
+  | frames clip vs the frames (PSNR, SSIM) | exact | 39.3–41.3 dB, 0.959–0.968 |
+  | scene clip vs the frames | 33.29 / 30.22 dB, SSIM 0.850 / 0.807 | 33.17 / 30.17 dB, SSIM 0.849 / 0.806 |
+  | scene clip vs the scene clip from lossless | — | 39.0 / 38.0 dB, SSIM 0.96 (the film); 47.6 dB, SSIM 0.9986 (flat page) |
+
+  (Scene clip rows: real renders of the copy's two film scenes, final and with `--intermediate
+  compact --force`; the frames compared are the lossless clip's. The same with `ffmpeg`
+  over 90 frames of three film scenes: final from lossless 33.21–35.18 dB, from compact CRF 12
+  32.97–35.10 dB, SSIM within ±0.002.) The trade-off: one more lossy generation before the scene
+  clip's CRF 23, which loses six to eight times more (in PSNR terms) than it does; the scene clip
+  made from compact frames differs from the one made from lossless frames by about what two CRF
+  23 encodes of the same picture differ by, and its distance to the page is 0.04–0.24 dB
+  larger. CRF 14–18 were measured too (4.4 to 2.2 MB/s, the final 0.1–0.3 dB further off); 12
+  was kept as the setting that is still "visually lossless" by the usual measure (SSIM 0.96+ on
+  grain, 52 dB PSNR on a flat page). Speed is equal (encoding the same, decoding twice as fast);
+  a frame of the film page costs about 1–2 s to draw, so neither matters.
+- **The cache.** The intermediate is not in the clip's key (so every existing clip, and the
+  layout readings keyed by it, stay valid). The record beside a compact clip says
+  `"intermediate": "compact"`; a record without it is lossless (all clips written before this
+  step). `clip_serves(stored, wanted)`: a lossless clip serves a render asking for either, a
+  compact one only `compact`; asking for lossless after a compact render draws the frames again
+  (`make_web_clip`, `make_3d_clip`). The scene's render fingerprint does not include the
+  setting: changing it does not render a current scene again (its scene clip is what the join
+  needs); to remake scenes from lossless frames after a compact render, use `--force`. The
+  command line's choice reaches each worker as `--intermediate` (the worker loads the config
+  from the file).
+- **Deleting what is no longer needed: `render.keep_intermediates: false`**
+  (`--clean-intermediates`, MCP `clean_intermediates`). After each scene renders (in the parent,
+  after `post_scene`), `disk.remove_frames_clips` deletes its frames clip (`web/<id>.mkv`,
+  `three_d/<id>.mkv`) and Manim's partial movies of that scene; after the join, every scene's
+  (clips left from earlier runs too). Kept: the records (the fingerprint still sees an edited
+  script or a fetched file: a test edits the script after a compact, cleaned render and the
+  scene renders again), the layout readings, the guide passes of `3d` scenes, the scene clips
+  and the joined video. The cost, honestly: a scene that renders again draws all its frames
+  again (for the film page 1–2 s a frame: 8 to 16 minutes for a 16-second scene at 720p), also
+  when only its title, timing or an overlay changed, with `--frames`, a frame thumbnail
+  without overlays (its own `_bare` folder) or `--guide-passes` on a reused `3d` scene. With
+  `--jobs N` at most N frames clips exist at once, so the peak is a scene or two, not the film.
+  This is what the ps6 agent did by hand, without `--max-scenes`.
+- **The disk, reported and checked.** Before the workers start, `vidgen render` estimates the
+  frames clips the scenes to render will write (`disk.expected_bytes`: scenes whose type draws
+  frames and whose clip is not kept already, at the full frame size, the scene's last rendered
+  length or its `duration` or its narration estimate, `BYTES_PER_PIXEL` 1.0 lossless / 0.22
+  compact: the film page's figures, an upper bound for flatter pages; with
+  `keep_intermediates: false` only the `jobs` largest) and logs a warning when the free disk
+  is smaller, naming compact, `--clean-intermediates` and `--max-scenes`. After the join it
+  prints `build:` with the build folder's size, the part in frames clips, the free disk and what
+  this run deleted (`--json`: `disk: {build, frames_clips, free, removed}` in bytes;
+  `RenderResult.disk`, `.removed`).
+- **Not done.** The scene clip's own quality (CRF 23, Manim's default) is untouched: it is not an
+  intermediate but the delivered picture (the join copies it); raising it would grow every
+  render and change every existing video. Lossless intermediates in fewer bytes would need a
+  codec PyAV does not ship or a slower FFV1 setting. The estimate does not know a page's
+  content, so flat pages are overestimated (by up to 40 times); the warning says "up to".

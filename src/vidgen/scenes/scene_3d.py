@@ -1,7 +1,8 @@
 """``3d``: a 3D scene drawn by three.js in headless Chromium (DESIGN.md §114), shown full-bleed under
 the scene's title, the overlays and the captions.
 
-Before the scene plays, its frames are drawn into a lossless clip
+Before the scene plays, its frames are drawn into a lossless clip (compact with
+``render.intermediate: compact``, DESIGN.md §120.9)
 (``<render_dir>/three_d/<scene_id>.mkv``, with the scene description beside it as ``.json``) and
 reused while the description and the page are unchanged (so are the guide passes asked for,
 ``<scene_id>.<pass>.mkv``); the clip is then a ``ClipMobject``
@@ -177,7 +178,7 @@ class Scene3D(NarratedScene):
         beside it (DESIGN.md §114.14)."""
         folder = self.project.render_dir(self.is_preview) / "three_d"
         description = self.description()
-        clip = make_3d_clip(folder, self.spec.id, description)
+        clip = make_3d_clip(folder, self.spec.id, description, self.project.config.render.intermediate)
         passes = tuple(p for p in GUIDE_PASSES if p in self.params.passes() or p in self.guide_passes)
         if passes:
             make_guide_passes(folder, self.spec.id, description, self._world, passes, self.params.depth_range)

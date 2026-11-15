@@ -745,12 +745,18 @@ def build_server(root: Path) -> Any:
                                                 "if more are left (call again to go on): a long final render in steps")] = None,
         guide_passes: Annotated[str | None, Field(description="also draw guide passes of every 3d scene beside its 3D clip: "
                                                   "'all', or a comma list of depth, outline, mask")] = None,
+        intermediate: Annotated[Literal["lossless", "compact"] | None, Field(
+            description="how web and 3d scenes keep their drawn frames: lossless (default) or compact (about 4.6 times smaller, "
+                        "one more lossy step); default: render.intermediate")] = None,
+        clean_intermediates: Annotated[bool, Field(description="delete each web or 3d scene's frames clip once it is rendered "
+                                                               "(a scene rendered again later draws its frames again)")] = False,
         all_languages: AllLanguages = False,
     ) -> Any:
         options = {
             "preview": preview and not draft, "draft": draft, "scene": scene, "variant": variant, "no-audio": no_audio,
             "audio-only": audio_only, "keep-going": keep_going, "jobs": jobs, "frames": frames, "force": force, "max-scenes": max_scenes,
-            "guide-passes": guide_passes, "all-languages": all_languages,
+            "guide-passes": guide_passes, "intermediate": intermediate, "clean-intermediates": clean_intermediates,
+            "all-languages": all_languages,
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 

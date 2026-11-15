@@ -9,7 +9,7 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vidgen.browser.chromium import write_ffv1_clip
+from vidgen.browser.frames_clip import clip_serves, write_frames_clip
 from vidgen.fileio import write_text_atomic
 from vidgen.web.entry import WebEntry, entry_of, entry_path
 from vidgen.web.inputs import design_width_of, page_shape
@@ -97,7 +97,7 @@ def _store_layouts(folder: Path, scene_id: str, key: str, layouts: Mapping[int, 
 def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size: tuple[int, int], fps: int, frames: int,
                   theme: Mapping[str, Any] | None = None, beats: Sequence[Mapping[str, Any]] = (),
                   shape: Mapping[str, Any] | None = None, layout_frames: Iterable[int] = (),
-                  music: Mapping[str, Any] | None = None) -> Path:
+                  music: Mapping[str, Any] | None = None, intermediate: str = "lossless") -> Path:
     """``folder/<scene_id>.mkv``: ``frames`` screenshots with alpha (RGBA, FFV1 ``bgra``) of the
     scene's page (``params``: its ``page`` or ``script``, a path in the project folder ``root``,
     its ``data`` and its ``design_width``) at ``fps`` and ``size`` (the frames' pixels: the page's
@@ -109,14 +109,17 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
     ``{"key", "inputs", "loaded"}`` beside it (``loaded``: served path -> SHA-256). When it draws,
     it also reads the page's text at ``layout_frames`` (after their screenshots) into
     ``<scene_id>.layout.json`` (:func:`web_page_layouts` reads them back, §118.12). ``music``:
-    the scene's music data, ``ctx.music`` (§120.8)."""
+    the scene's music data, ``ctx.music`` (§120.8). ``intermediate``: how the frames are kept
+    (§120.9; ``compact``: H.264 4:4:4 with a lossless alpha stream, the record then says
+    ``"intermediate": "compact"``); it is not in the key: a lossless clip is reused for either,
+    a compact one only while ``compact`` is asked for."""
     entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape,
                                          music=music)
     shape = inputs["shape"]
     clip, record = folder / f"{scene_id}.mkv", record_path(folder, scene_id)
     stored = read_record(record) or {}
     loaded = stored.get("loaded") if isinstance(stored.get("loaded"), dict) else {}
-    if clip.is_file() and stored.get("key") == key:
+    if clip.is_file() and stored.get("key") == key and clip_serves(stored.get("intermediate"), intermediate):
         changed = loaded_changed(root, loaded)
         if not changed:
             log.info("%s: reusing the web frames (%s)", scene_id, clip.name)
@@ -138,9 +141,10 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
     with WebPage(root, entry, scene_id=scene_id, size=size, fps=fps, frames=frames,
                  theme=dict(theme) if theme is not None else None, data=data, beats=[dict(b) for b in beats], shape=shape,
                  design_width=inputs.get("design_width"), music=dict(music) if music is not None else None) as page:
-        write_ffv1_clip(clip, fps, size, drawn(page), alpha=True)
+        write_frames_clip(clip, fps, size, drawn(page), alpha=True, intermediate=intermediate)
         served = dict(sorted(page.loaded.items()))
-    write_text_atomic(record, json.dumps({"key": key, "inputs": inputs, "loaded": served}, indent=1) + "\n")
+    kept = {} if intermediate == "lossless" else {"intermediate": intermediate}
+    write_text_atomic(record, json.dumps({"key": key, "inputs": inputs, "loaded": served, **kept}, indent=1) + "\n")
     _store_layouts(folder, scene_id, key, layouts)
     return clip
 

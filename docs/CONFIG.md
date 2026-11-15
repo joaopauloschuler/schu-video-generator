@@ -8,7 +8,7 @@ A project is a folder with one config file: `video.yaml` (or `video.yml` / `vide
 Unknown keys are an error everywhere except inside `params`, `theme.colors`, `theme.sizes` and
 the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are relative to the
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
-[format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
+[format](#format-and-preview), [intermediate files and disk](#intermediate-files-and-disk-render), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [characters](#characters-characters), [pronunciation](#pronunciation-pronunciation),
 [readback (speech to text)](#readback-vidgen-readback),
@@ -32,6 +32,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `draft` | 240 px on the shorter side, 8 fps | `vidgen render --draft`: `{width, height, fps}`, each optional; see [drafts](#drafts-vidgen-render---draft) |
+| `render` | `{intermediate: lossless, keep_intermediates: true}` | how `vidgen render` keeps the frames `web` and `3d` scenes draw: `intermediate: compact` (about 4.6 times smaller) and `keep_intermediates: false` (deleted once the scene is rendered); see [intermediate files and disk](#intermediate-files-and-disk-render) |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
 | `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices`, `sets` and `variants` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `sets` | `{}` | named `stage` sets (`name: {background, layers, props, marks, light, wind...}`) a stage scene uses with `set: NAME`; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
@@ -6486,7 +6487,8 @@ children round). Usually the parent is a `group`, but any object may be one (a l
 scene description beside it (`<scene id>.json`: objects with their ids and parents, camera, lights,
 timeline with the camera's path). A later render reuses the clip while the description, the page,
 three.js and the Playwright version are unchanged; `--force` renders the scene again but still
-reuses the clip (delete the clip to draw it again).
+reuses the clip (delete the clip to draw it again). `render:` keeps it compact or deletes it once
+the scene is rendered ([intermediate files and disk](#intermediate-files-and-disk-render)).
 
 **Guide passes** (off by default). The same 3D picture can also be drawn three plainer ways, as
 videos beside the clip. They are meant for tools that need the *layout* of a scene rather than its
@@ -6911,7 +6913,10 @@ scene's `data:`, the theme or the narration renders that scene again (and only i
 the `web` scene (`class WebCut(Web)` in `extensions/`; since Step 341, DESIGN §120.1: before it,
 an edit to such a scene's script was not noticed). `vidgen storyboard` renders a `web` scene like every scene
 (all of its frames at preview size; the clip is then reused by `vidgen render --preview` and
-`vidgen animatic`).
+`vidgen animatic`). The clip is large (a detailed WebGL page: about 26 MB per second of video at
+720p30): `render: {intermediate: compact}` keeps it about 4.6 times smaller and
+`keep_intermediates: false` deletes it once the scene is rendered; see
+[intermediate files and disk](#intermediate-files-and-disk-render).
 
 **Music data: `music_data`** (Step 347, DESIGN §120.8). A page that follows the music needs no
 script of its own to measure it: with `music_data: true` (or the mapping above) the page's `ctx`
@@ -7078,7 +7083,9 @@ a preview (final: 3 s cuts beside a preview of the same cut). The machine's spee
 times within an hour that day: trust the ratios more than the seconds. Work with
 [`vidgen render --draft`](#drafts-vidgen-render---draft) first; a page must scale to look right
 in one (sizes in `vw` / `vh` / `%` and the theme's size variables, or `design_width`). Lint and
-the storyboard never use a draft, so a draft causes no finding.
+the storyboard never use a draft, so a draft causes no finding. A long film of WebGL pages also
+needs disk for its frames clips (about 5 GB for 3 minutes at 720p, lossless): see
+[intermediate files and disk](#intermediate-files-and-disk-render).
 Drawing the frames alone at 1920x1080, 30 fps, measured for `examples/web` in Step 333 on the same
 machine on a faster day: an HTML + CSS page 453 ms per frame, a canvas script 325 ms, a three.js
 scene 550 ms. Keep `web` scenes short.
@@ -15613,6 +15620,46 @@ theme tokens or variants. If `video.yaml` is invalid, `vidgen schema` still work
 when it is most useful): it uses the file's `extensions` and `theme` as far as they are valid
 and prints a warning. `--scene` with an unknown type is an error (exit code 1).
 
+## Intermediate files and disk (`render:`)
+
+A `web` or `3d` scene first draws its frames into a **frames clip**
+(`build/<quality>/web/<scene>.mkv`, `three_d/<scene>.mkv`), then plays it in the scene, whose own
+clip (`scenes/<scene>.mp4`, H.264 CRF 23) the join copies into the video. The frames clips are by
+far the largest files of a render: lossless FFV1 takes about 1 byte per pixel and frame for a
+detailed WebGL page (measured on a three.js film: 26–28 MB per second of video at 720p30, 58
+MB/s at 1080p30, so 4.7–5 GB for a 3-minute film), much less for a flat page (0.7 MB/s at 720p
+for text and shapes); the scene clips take 0.04–0.4 MB/s. Every other scene type writes no
+frames clip.
+
+```yaml
+render:
+  intermediate: compact        # lossless (default) | compact
+  keep_intermediates: false    # default true
+```
+
+| key | default | |
+|---|---|---|
+| `intermediate` | `lossless` | `compact`: the frames are kept as H.264 4:4:4 at CRF 12 plus, for a page, a lossless alpha stream in the same file: about 4.6 times smaller for a WebGL page (5.5–6 MB/s at 720p30, 12 MB/s at 1080p30), half for a flat page with transparency. One more lossy step before the scene's own encode: the frames clip measures 39–41 dB PSNR (SSIM 0.96–0.97) against the lossless frames, and the scene clip made from it is 0.04–0.24 dB further from the page than the one made from lossless frames (the scene clip's CRF 23 itself is 6–8 dB further). Command line: `vidgen render --intermediate compact` |
+| `keep_intermediates` | `true` | `false`: a scene's frames clip is deleted as soon as the scene is rendered (and every scene's after the join): at most `--jobs` of them exist at once. Kept: the record beside it (so an edit to the page's script or a file it loads still renders the scene again), the scene clips and the video. Cost: a scene rendered again for any reason (an edited title, timing or overlay, `--force`, `--frames` stills, a thumbnail without overlays) draws all its frames again. Command line: `vidgen render --clean-intermediates` |
+
+- **Reuse.** A lossless frames clip serves a compact render too; a compact one is drawn again
+  when a render asks for lossless. Changing either setting does not render a current scene again
+  (its scene clip is what the join needs); after a compact render, `vidgen render --force` remakes
+  the scenes from lossless frames. Clips drawn before this setting existed are lossless and stay
+  valid.
+- **Disk check.** Before it renders, `vidgen render` estimates the frames clips of the scenes it
+  will draw (their length × size × frame rate × 1 byte, or 0.22 compact; with
+  `keep_intermediates: false` only `--jobs` of them) and warns when the disk has less free
+  space, naming the settings that help and `--max-scenes N` (render in steps). The estimate
+  is for a detailed WebGL page: a flatter page needs far less.
+- **Report.** After the join it prints the build folder's size, the part in frames clips, the
+  free disk and what was deleted, e.g.
+  `build:     .../build/final 4 MB (frames clips 0 KB), 6.9 GB free; 36 MB of frames clips deleted (keep_intermediates: false)`
+  (`--json`: `disk`).
+- **A long WebGL film on a small disk**: `render: {intermediate: compact, keep_intermediates:
+  false}` keeps one or two scenes' frames at a time (a 16-second 720p scene: about 90 MB
+  compact, 420 MB lossless) instead of the whole film's; `--max-scenes N` still renders in steps.
+
 ## Parallel renders (`--jobs`)
 
 `vidgen render`, `storyboard`, `lint`, `thumbnail`, `slides` and `gallery` take `--jobs N`
@@ -16842,6 +16889,7 @@ difference between two palette colours).
 | `elapsed` | float | wall time of the command |
 | `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: schu-video-generator wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
 | `chapters` | list | the chapters as written into the MP4 and the YouTube list (empty without chapters): `{title, number, scene, start, end, index, count, card, intro}` — `number` as written (`null`: none), `scene` the scene it starts at, `start` / `end` seconds in the video, `index` its position in this list (1-based) of `count`, `card` whether it starts with a `chapter` card, `intro` whether it is the chapter added at 0:00 before the first one; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
+| `disk` | object | the build folder after the join, in bytes: `{build, frames_clips, free, removed}` (its size, of it in `web` / `3d` frames clips, free on its disk, frames clips deleted in this run; [intermediate files and disk](#intermediate-files-and-disk-render)) |
 | `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
 
 `warnings` includes those printed by scene code during rendering (e.g. beats a scene never

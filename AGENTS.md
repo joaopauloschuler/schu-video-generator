@@ -3775,6 +3775,16 @@ move (240 px on the shorter side at the video's shape: 240x426 at 9:16, 240x240 
 draws single frames without rendering the scene. Keep `web` scenes short (a few
 beats each).
 
+**Disk.** A `web` scene's frames are kept in a lossless clip until the scene plays them
+(`build/<quality>/web/<scene>.mkv`): a detailed WebGL page takes about 26 MB per second of video
+at 720p30 (5 GB for a 3-minute film), a flat page far less. `vidgen render` warns before it starts
+when the disk may be too small and prints the build folder's size after the join. For a long
+WebGL film on a small disk set `render: {intermediate: compact, keep_intermediates: false}` (or
+`vidgen render --intermediate compact --clean-intermediates`): the frames clips are about 4.6
+times smaller (one more lossy step, far below the final encode's) and each is deleted once its
+scene is rendered (a scene rendered again later draws its frames again). See CONFIG,
+"Intermediate files and disk".
+
 - **A draft needs a page that scales.** Its window is 426 CSS pixels wide: a page sized in `vw`,
   `vh`, `%` and `var(--vidgen-size-…)` looks the same as at 1080p, only smaller, and so does a
   page with `design_width` (its window stays as wide as designed). A page in fixed pixels without

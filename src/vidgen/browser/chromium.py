@@ -3,7 +3,7 @@ DESIGN.md §114.4, §118).
 
 :class:`Chromium` starts Playwright and one Chromium and stops both; :func:`missing_dependency`
 checks cheaply (no browser started) that Playwright and its Chromium are installed;
-:func:`write_ffv1_clip` writes frames, in order, to a lossless FFV1 clip. WebGL runs on
+:mod:`vidgen.browser.frames_clip` keeps the frames drawn (DESIGN.md §120.9). WebGL runs on
 SwiftShader (Chromium's software GL), so the pixels do not depend on the graphics card.
 """
 
@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Iterable
 from importlib import metadata
 from pathlib import Path
 from types import TracebackType
@@ -155,33 +154,6 @@ class Chromium:
         self.browser = self.playwright = None
 
 
-def write_ffv1_clip(path: Path, fps: int, size: tuple[int, int], frames: Iterable[np.ndarray], *, alpha: bool = False) -> None:
-    """Write ``frames`` (RGB arrays, H x W x 3, ``size`` = (W, H); with ``alpha`` RGBA, H x W x 4,
-    straight alpha, kept as ``bgra``) in order to ``path`` (FFV1 in Matroska, lossless); to a
-    ``.partial`` file first, so a failure (also one raised while ``frames`` is iterated) leaves none."""
-    import av
-
-    width, height = size
-    path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(path.name + ".partial")
-    try:
-        with av.open(str(partial), mode="w", format="matroska") as container:
-            stream = container.add_stream("ffv1", rate=fps)
-            stored, given = ("bgra", "rgba") if alpha else ("bgr0", "rgb24")
-            stream.width, stream.height, stream.pix_fmt = width, height, stored
-            for n, pixels in enumerate(frames):
-                frame = av.VideoFrame.from_ndarray(pixels, format=given).reformat(format=stored)
-                frame.pts = n
-                container.mux(stream.encode(frame))
-            container.mux(stream.encode())
-        try:
-            os.replace(partial, path)
-        except PermissionError:   # Windows: the old clip is open in another program (a player)
-            raise VidgenError(f"cannot replace {path}: close the program that has it open and render again") from None
-    finally:
-        partial.unlink(missing_ok=True)
-
-
 def png_pixels(png: bytes, size: tuple[int, int] | None, what: str, *, alpha: bool = False) -> np.ndarray:
     """A PNG's RGB pixels (RGBA with ``alpha``), checked to be ``size`` (W, H; ``None``: not
     checked); ``what`` names the page in the error."""
@@ -198,5 +170,5 @@ def png_pixels(png: bytes, size: tuple[int, int] | None, what: str, *, alpha: bo
 
 __all__ = [
     "BROWSER_HINT", "BROWSER_SCENE_TYPES", "CHROMIUM_ARGS", "INSTALL_HINT", "Chromium", "browser_error", "first_line",
-    "install_warnings", "missing_dependency", "playwright_version", "png_pixels", "sync_api", "write_ffv1_clip",
+    "install_warnings", "missing_dependency", "playwright_version", "png_pixels", "sync_api",
 ]

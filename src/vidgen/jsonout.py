@@ -862,7 +862,8 @@ def render_document(
     elapsed: float,
     warnings: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
-    """The ``vidgen render --json`` document."""
+    """The ``vidgen render --json`` document (``disk``: bytes of the build folder, of its frames
+    clips, free on its disk and deleted in this run, DESIGN.md §120.9)."""
     timings = result.timings
     worker_warnings = [warning(message, scene) for scene, message in result.warnings]
     scenes = [
@@ -901,6 +902,9 @@ def render_document(
         mix=timings.get("mix"),
         chapters=timings.get("chapters", []),
         scenes=scenes,
+        disk=None if result.disk is None else {
+            "build": result.disk.total, "frames_clips": result.disk.frames_clips, "free": result.disk.free, "removed": result.removed,
+        },
     )
 
 

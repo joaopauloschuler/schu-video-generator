@@ -19,7 +19,8 @@ from typing import Any
 import numpy as np
 
 from vidgen.browser import chromium
-from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels, write_ffv1_clip
+from vidgen.browser.chromium import Chromium, first_line, playwright_version, png_pixels
+from vidgen.browser.frames_clip import write_frames_clip
 from vidgen.errors import VidgenError
 from vidgen.fonts import FONTS_DIR
 
@@ -128,13 +129,14 @@ class PageRenderer:
         self._chromium = self._page = None
 
 
-def write_clip(description: dict[str, Any], path: Path) -> None:
+def write_clip(description: dict[str, Any], path: Path, intermediate: str = "lossless") -> None:
     """Draw every frame of ``description`` in order and write them to ``path`` (FFV1 in
-    Matroska, lossless RGB); written to a ``.partial`` file first, so a failure leaves none."""
+    Matroska, lossless RGB; ``compact``: H.264 4:4:4, DESIGN.md §120.9); written to a
+    ``.partial`` file first, so a failure leaves none."""
     frames, fps = int(description["frames"]), int(description["fps"])
     size = (int(description["width"]), int(description["height"]))
     with PageRenderer(description) as page:
-        write_ffv1_clip(path, fps, size, (page.frame(n) for n in range(frames)))
+        write_frames_clip(path, fps, size, (page.frame(n) for n in range(frames)), intermediate=intermediate)
 
 
 __all__ = ["PageRenderer", "engine_id", "page_digest", "write_clip"]

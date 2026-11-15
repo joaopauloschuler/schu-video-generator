@@ -34,6 +34,7 @@ from vidgen.project import Project
 from vidgen.sound_design import designs_ambience
 from vidgen.references import description_text
 from vidgen.render import ffmpeg as ff
+from vidgen.render.disk import BuildUsage, build_usage, expected_bytes, free_bytes, remove_frames_clips, room_warning
 from vidgen.fileio import remove_file, write_text_atomic
 from vidgen.render.worker import (
     scene_activity_path,
@@ -70,7 +71,9 @@ class RenderResult:
     ``chapters.youtube``), else ``None``; ``thumbnail`` the thumbnail written after the join
     (with a ``thumbnail:`` config and ``auto``, DESIGN.md §53), else ``None``.
     ``guide_passes``: the guide pass files of each ``3d`` scene whose render has them (DESIGN.md
-    §114.14), by scene id.
+    §114.14), by scene id. ``disk``: the build folder's size, of it in frames clips, and the
+    free disk after the join; ``removed``: the bytes of frames clips deleted in this run
+    (``render.keep_intermediates: false``, DESIGN.md §120.9).
     """
 
     output: Path
@@ -86,18 +89,22 @@ class RenderResult:
     chapters: Path | None = None
     thumbnail: ThumbnailResult | None = None
     guide_passes: dict[str, list[Path]] = field(default_factory=dict)
+    disk: BuildUsage | None = None
+    removed: int = 0
 
 
 @dataclass
 class SceneRuns:
     """What :func:`render_scenes` did, in config order: scenes rendered, failures
-    (``{scene, exit_code, output_tail}``), wall seconds per scene and ``(scene_id, message)``
-    worker warnings."""
+    (``{scene, exit_code, output_tail}``), wall seconds per scene, ``(scene_id, message)``
+    worker warnings and the bytes of frames clips deleted after their scenes rendered
+    (``render.keep_intermediates: false``)."""
 
     rendered: list[str] = field(default_factory=list)
     failed: list[dict[str, Any]] = field(default_factory=list)
     seconds: dict[str, float] = field(default_factory=dict)
     warnings: list[tuple[str, str]] = field(default_factory=list)
+    removed: int = 0
 
 
 @dataclass
@@ -278,6 +285,7 @@ def _run_worker(
         cmd += ["--frames", str(frames)]
     if guide_passes:
         cmd += ["--guide-passes", ",".join(guide_passes)]
+    cmd += ["--intermediate", project.config.render.intermediate]   # also when the command line chose it (§120.9)
     if project.bare:
         cmd.append("--bare")
     # Scenes never need the ElevenLabs key: keep it out of the processes that run scene code.
@@ -388,7 +396,8 @@ def _render_scenes(
     :func:`with_carried`; a scene that carries objects starts after the scene before it).
 
     Without ``keep_going`` the first failure raises (with ``jobs > 1``, scenes already running
-    finish first). ``post_scene`` is dispatched here, in the parent, after each success.
+    finish first). ``post_scene`` is dispatched here, in the parent, after each success; then,
+    with ``render.keep_intermediates: false``, the scene's frames clip is deleted (§120.9).
     """
     live = jobs == 1 and sys.stderr.isatty()
     scene_ids = with_carried(project, preview, scene_ids)
@@ -436,6 +445,8 @@ def _render_scenes(
         )
         runs.rendered.append(run.scene_id)
         runs.seconds[run.scene_id] = round(run.seconds, 3)
+        if not project.config.render.keep_intermediates:
+            runs.removed += remove_frames_clips(project, preview, [run.scene_id])
     runs.rendered.sort(key=order.__getitem__)
     runs.failed.sort(key=lambda f: order[f["scene"]])
     runs.warnings.sort(key=lambda w: order[w[0]])  # stable: a scene's warnings keep their order
@@ -802,6 +813,18 @@ def write_frames_index(project: Project, preview: bool, timings: dict[str, Any],
     return target
 
 
+def _warn_room(project: Project, preview: bool, to_render: list[str], jobs: int) -> None:
+    """Warn when the disk has less room than the frames clips of ``to_render`` are expected to
+    take (all of them kept, or with ``render.keep_intermediates: false`` the ``jobs`` largest at
+    a time; DESIGN.md §120.9)."""
+    settings = project.config.render
+    keep = settings.keep_intermediates
+    needed = expected_bytes(project, preview, to_render, None if keep else jobs)
+    message = room_warning(needed, free_bytes(project.render_dir(preview)), settings.intermediate == "compact", not keep)
+    if message is not None:
+        log.warning("%s", message)
+
+
 def scenes_to_render(
     project: Project, preview: bool, selected: list[str], no_audio: bool = False, frames: int = 0, force: bool = False,
     guide_passes: tuple[str, ...] = (),
@@ -911,6 +934,7 @@ def render_project(
         from vidgen.web.music import prepare_music_data
 
         prepare_music_data(project, preview, to_render)   # once, before the workers (DESIGN.md §120.8)
+        _warn_room(project, preview, to_render, jobs)
         runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames, guide_passes)
         if runs.failed:
             raise VidgenError(
@@ -928,6 +952,8 @@ def render_project(
             )
         print("joining scenes", flush=True)
         output, timings = join_scenes(project, preview, no_audio, ffmpeg)
+        if not project.config.render.keep_intermediates:   # every scene's render is current now (§120.9)
+            runs.removed += remove_frames_clips(project, preview, known)
         timings_file = project.render_dir(preview) / "timings.json"
         write_json(timings_file, timings)
         srt = project.srt_path(preview)
@@ -962,6 +988,8 @@ def render_project(
             frames_index=index,
             chapters=chapters_file,
             guide_passes=guide_pass_outputs(project, preview),
+            disk=build_usage(project, preview),
+            removed=runs.removed,
         )
     if wants_thumbnail:  # after the session: a frame thumbnail may render a scene
         from vidgen.thumbnail import make_thumbnail

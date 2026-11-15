@@ -844,6 +844,10 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
     project = Project.load(args.project, variant=variant, output_dir=args.output_dir, draft=args.draft)
     if args.audio_only or project.config.audio_only:
         return _render_audio(args, project, started)
+    if args.intermediate is not None:   # the command line wins over render: in the config (DESIGN.md §120.9)
+        project.config.render.intermediate = args.intermediate
+    if args.clean_intermediates:
+        project.config.render.keep_intermediates = False
     result = render_project(
         project,
         preview=args.preview or args.draft,
@@ -874,7 +878,20 @@ def _render(args: argparse.Namespace, variant: str | None) -> CommandResult:
     mix = result.timings.get("mix")
     if mix is not None:
         print(f"loudness:  {_loudness_line(mix)}")
+    if result.disk is not None:
+        print(f"build:     {_build_line(project, args.preview or args.draft, result)}")
     return 0
+
+
+def _build_line(project: Project, preview: bool, result: Any) -> str:
+    """The build folder's size, its frames clips, the free disk and what this run deleted (§120.9)."""
+    from vidgen.render.disk import size_text
+
+    disk = result.disk
+    line = f"{project.render_dir(preview)} {size_text(disk.total)} (frames clips {size_text(disk.frames_clips)}), {size_text(disk.free)} free"
+    if result.removed:
+        line += f"; {size_text(result.removed)} of frames clips deleted (keep_intermediates: false)"
+    return line
 
 
 def _guide_passes(args: argparse.Namespace) -> tuple[str, ...]:
@@ -894,6 +911,7 @@ def _render_audio(args: argparse.Namespace, project: Project, started: float) ->
     video_only = [name for name, given in (
         ("--scene", args.scene), ("--no-audio", args.no_audio), ("--frames", args.frames or args.frames_per_beat),
         ("--max-scenes", args.max_scenes), ("--keep-going", args.keep_going), ("--guide-passes", args.guide_passes),
+        ("--intermediate", args.intermediate), ("--clean-intermediates", args.clean_intermediates),
     ) if given]
     if video_only:
         raise VidgenError(f"{', '.join(video_only)}: not with an audio-only render (no scene is rendered)")
@@ -2665,6 +2683,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-scenes", type=int, metavar="N",
         help="render at most N scenes in this run, then stop without joining if more are left (run again to go on; "
         "finished scenes are kept): a long project in steps",
+    )
+    p.add_argument(
+        "--intermediate", choices=["lossless", "compact"],
+        help="how web and 3d scenes keep their drawn frames until the scene plays them (build/.../web/, three_d/): lossless (FFV1, "
+        "the default; about 26 MB a second at 720p for a detailed WebGL page) or compact (H.264 4:4:4 CRF 12 with a lossless alpha "
+        "stream, about 4.6 times smaller, one more lossy step); also render.intermediate:",
+    )
+    p.add_argument(
+        "--clean-intermediates", action="store_true",
+        help="delete a web or 3d scene's frames clip once the scene is rendered, and every scene's after the join (the scene clips "
+        "stay; a scene rendered again later draws its frames again); also render.keep_intermediates: false",
     )
     output_dir_arg(p)
     all_languages_arg(p)

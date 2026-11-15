@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–347)
+## Unreleased (Steps 193–348)
+
+### Smaller intermediate files (Step 348)
+
+- **`render: {intermediate: compact}`** (`vidgen render --intermediate compact`, MCP `intermediate`) keeps the frames a `web` or `3d` scene draws as H.264 4:4:4 (CRF 12) with a lossless alpha stream instead of lossless FFV1: about 4.6 times smaller for a WebGL page (5.5–6 MB/s instead of 26–28 MB/s at 720p30). One more lossy step, measured: the scene clip ends 0.04–0.24 dB further from the page than when made from lossless frames. Lossless stays the default and is unchanged (no setting was smaller at the same speed).
+- **`render: {keep_intermediates: false}`** (`--clean-intermediates`, MCP `clean_intermediates`) deletes a scene's frames clip once the scene is rendered and every scene's after the join; edits are still noticed; a scene rendered again later draws its frames again.
+- **`vidgen render`** warns before it starts when the disk may be too small for the frames clips and prints the build folder's size after the join (`build:`; `--json`: `disk`).
+- Measured on the films' frames; details in DESIGN §120.9, docs in `docs/CONFIG.md` ("Intermediate files and disk").
 
 ### Music data for `web` scenes (Step 347)
 

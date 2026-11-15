@@ -2,7 +2,8 @@
 Chromium at the render's frame rate and shown full-bleed (``region: bleed``) or in the body region
 under a title drawn by vidgen (``region: body``), under the overlays and captions.
 
-Before the scene plays, its frames are drawn into a lossless clip with alpha
+Before the scene plays, its frames are drawn into a lossless clip with alpha (compact with
+``render.intermediate: compact``, DESIGN.md §120.9)
 (``<render_dir>/web/<scene_id>.mkv``, with what it was drawn from beside it as ``.json``) at the
 size of the box the page fills, and reused while nothing that draws them changed; the clip is
 then a ``ClipMobject`` covering that box, so what the page leaves transparent shows the video's
@@ -182,7 +183,7 @@ class Web(NarratedScene):
         self._clip_args: dict[str, Any] = self.page_clip_args(box)
         self._still_frames = planned_still_frames(self)
         self._layouts: dict[int, dict[str, Any]] = {}
-        return make_web_clip(**self._clip_args, layout_frames=self._still_frames)
+        return make_web_clip(**self._clip_args, layout_frames=self._still_frames, intermediate=self.project.config.render.intermediate)
 
     def page_layout(self, frame: int) -> tuple[dict[str, Any], Mobject] | None:
         """What text the page shows at output frame ``frame`` (the clip's frame of that index) and

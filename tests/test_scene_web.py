@@ -689,12 +689,12 @@ def test_the_clip_keeps_alpha_and_follows_the_shape(tmp_path: Path, monkeypatch:
 def test_frames_with_alpha_are_stored_with_alpha(tmp_path: Path) -> None:
     import av
 
-    from vidgen.browser.chromium import write_ffv1_clip
+    from vidgen.browser.frames_clip import write_frames_clip
 
     frame = np.zeros((6, 8, 4), dtype=np.uint8)
     frame[:, :4] = (255, 40, 0, 128)   # half transparent, straight alpha
-    write_ffv1_clip(tmp_path / "a.mkv", 5, (8, 6), [frame, frame], alpha=True)
-    write_ffv1_clip(tmp_path / "o.mkv", 5, (8, 6), [frame[..., :3]])
+    write_frames_clip(tmp_path / "a.mkv", 5, (8, 6), [frame, frame], alpha=True)
+    write_frames_clip(tmp_path / "o.mkv", 5, (8, 6), [frame[..., :3]])
     with av.open(str(tmp_path / "a.mkv")) as clip:
         assert clip.streams.video[0].codec_context.pix_fmt == "bgra"
         assert np.array_equal(next(clip.decode(video=0)).to_ndarray(format="rgba"), frame)
