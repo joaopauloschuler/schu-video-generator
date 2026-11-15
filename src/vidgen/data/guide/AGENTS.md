@@ -3616,6 +3616,41 @@ only by a page whose own `@font-face` names it (`src: url("../fonts/x.woff2")`).
 captions, a page's CSS and theme variable, the designed thumbnail; static `.ttf`, `.woff` and a
 variable `.ttf`); not tried on Windows or macOS.
 
+**Looking at single frames: `vidgen still`.** To see what the page shows at one moment, do not
+render the scene: `vidgen still . --scene gears --at 2.5` writes that frame as a PNG
+(`exports/stills/gears_0002.500s.png`) in a few seconds. It is the picture the render draws for
+that frame: the same page, clock, theme, `data:`, beats, size and frame rate (checked pixel for
+pixel against rendered clips).
+
+```
+vidgen still . --scene gears --at 2.5                         # one frame, final size
+vidgen still . --scene gears --at 0,4,8,12 --sheet look.png   # four frames in one browser + a contact sheet
+vidgen still . --scene gears --count 12 --size preview --sheet look.png --out /tmp/gears
+vidgen still . --scene gears --frame 75 --size 640x360 --out one.png
+```
+
+- `--at` counts **seconds from the scene's start** (the `t` your `frame(t, ctx)` gets), not the
+  video's time; `--frame N` is a frame number; `--count N` spreads N stills over the scene. Repeat
+  them or give lists (`--at 1,2.5,4`).
+- `--size final` (default) `| preview | draft | WIDTHxHEIGHT`: the page is laid out and drawn for
+  a video of that size. A smaller size is much faster for a WebGL page (a three.js film: 2.2 s per
+  still at 1280x720, 0.5 s at 640x360, 0.3 s at 320x180, after 9 s to load the page).
+- Give times **in increasing order**: they are drawn on one page. The clock only runs forward,
+  so an earlier time opens the page again (its load time once more).
+- The still is the page alone, over the video's background colour (`--transparent` keeps its
+  transparency): no title drawn by vidgen, no captions or overlays, no fade. With `region: body`
+  it has the size of the page's box.
+- **A page that keeps state.** By default the clock moves straight to the frame's time. That is
+  the render's picture when the page draws from the time alone (`frame(t, ctx)` computing
+  everything from `t`, CSS animations, the Web Animations API, anime.js, D3 transitions, GSAP with
+  `lagSmoothing(0)`). A page that adds something up from frame to frame (a simulation stepped in
+  `requestAnimationFrame`, a canvas drawn over itself, a counter; a D3 force simulation on its own timer; Motion,
+  lottie-web or plain GSAP playing by themselves) shows a still as if the frames before it had not been drawn. `--exact`
+  steps the page through every frame before the still, as the render does: the render's picture
+  again, at the cost of every frame's drawing time.
+- Works for `web` and for your own types that subclass it. For other scene types use
+  `vidgen storyboard --scene ID`. Over MCP: the `still` tool (returns the pictures).
+
 **The lint loop.** `vidgen lint` reads the page's text at each still (its box, its size as drawn,
 its colour and what is behind it) and checks it with the usual rules: `off_frame`, `text_overlap`,
 `min_font`, `contrast`, `safe_area` (also text under the captions, named so), plus `web_clipped`
@@ -3685,7 +3720,8 @@ own speed changed up to 4 times within an hour on the day of these measurements,
 ratios more than the seconds. Work in this order: `vidgen render --draft` to see the whole video
 move (240 px on the shorter side at the video's shape: 240x426 at 9:16, 240x240 at 1:1;
 `draft: {width: 480, height: 270, fps: 12}` in the config for a larger one), `--preview` and
-`vidgen lint` when the timing is right, the final render once. Keep `web` scenes short (a few
+`vidgen lint` when the timing is right, the final render once. To look at one moment, `vidgen still` (above)
+draws single frames without rendering the scene. Keep `web` scenes short (a few
 beats each).
 
 - **A draft needs a page that scales.** Its window is 426 CSS pixels wide: a page sized in `vw`,

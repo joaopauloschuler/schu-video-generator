@@ -71,7 +71,8 @@ agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provide
 free: no confirm_cost); then `render`. `schema` with \
 scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_icons` / \
 `list_themes` / `list_sfx` / `list_music` what exists, `character_sheet` a cartoon character's \
-poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats; \
+poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats, `still` single frames of a web \
+scene's page at exact times without rendering it; \
 `music_template` / `music_patches` / `music_render` / `music_check` write and check original music as score files \
 (assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe). A person shaping music in \
 `vidgen studio` may hand you a session with listening notes: `studio_sessions` -> `studio_read` -> `studio_check` -> \
@@ -540,6 +541,38 @@ def build_server(root: Path) -> Any:
         doc = await call(ctx, args_of(["storyboard"], [str(where(project))], options), heavy=True)
         sheets = sorted(doc.get("sheets", []), key=lambda s: s.get("kind") != "video")
         return paged(doc, [Path(s["path"]) for s in sheets], image_offset, images)
+
+    @tool("Single frames of a web scene's page (type web or an extension type that subclasses Web) at exact times, "
+          "WITHOUT rendering the scene: each is the picture the render's page shows at that time (same page, clock, "
+          "theme, data, size). Several times are drawn in one browser, fastest in increasing order. Returns the "
+          "stills as images (the contact sheet first when sheet=true) and their paths; nothing is written under build/.", writes)
+    async def still(
+        ctx: Context,
+        scene: Annotated[str, Field(description="the web scene's id")],
+        project: Project = ".",
+        at: Annotated[list[float] | None, Field(description="times in seconds from the scene's start")] = None,
+        frame: Annotated[list[int] | None, Field(description="frame numbers at the size's frame rate (drawn after the at times)")] = None,
+        count: Annotated[int | None, Field(ge=1, le=64, description="this many stills spread evenly over the scene")] = None,
+        size: Annotated[str, Field(description="final (default), preview, draft, or WIDTHxHEIGHT (even numbers; smaller is faster)")] = "final",
+        variant: Variant = None,
+        out: Annotated[str | None, Field(description="a folder for the stills (default <project>/exports/stills)")] = None,
+        sheet: Annotated[bool, Field(description="also one labelled contact sheet of the stills (contact_sheet.png in the folder)")] = False,
+        columns: Annotated[int | None, Field(ge=1, le=12, description="with sheet: stills per row")] = None,
+        exact: Annotated[bool, Field(description="step the page through every frame before each still, as the render does: "
+                                                 "for a page that keeps state from frame to frame (slower)")] = False,
+        transparent: Annotated[bool, Field(description="keep the page's transparency instead of the video's background colour")] = False,
+        images: Images = DEFAULT_IMAGES,
+        image_offset: Offset = 0,
+    ) -> Any:
+        root = where(project)
+        folder = where(out, "out") if out else (root if root.is_dir() else root.parent) / "exports" / "stills"
+        options = {
+            "scene": scene, "at": at, "frame": frame, "count": count, "size": size, "variant": variant, "out": str(folder),
+            "sheet": str(folder / "contact_sheet.png") if sheet else None, "columns": columns, "exact": exact, "transparent": transparent,
+        }
+        doc = await call(ctx, args_of(["still"], [str(root)], options), heavy=True)
+        paths = ([doc["sheet"]] if doc.get("sheet") else []) + [s["path"] for s in doc.get("stills", [])]
+        return paged(doc, [Path(p) for p in paths], image_offset, images)
 
     @tool("An animatic: the storyboard's stills (beat ends and half-way through actions) held in time with the "
           "narration, with the video's audio (narration, effects, music) and captions, as an MP4 "

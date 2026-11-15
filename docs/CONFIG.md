@@ -6726,6 +6726,51 @@ export function layout(t, ctx) {
 }
 ```
 
+**Single frames: `vidgen still`** (Step 342, DESIGN §120.3). `vidgen still [PROJECT] --scene ID
+(--at SECONDS | --frame N | --count N)... [--size final|preview|draft|WxH] [--variant NAME]
+[--out FILE|DIR] [--sheet FILE [--columns N]] [--exact] [--transparent] [--json]` writes frames of
+a `web` scene's page as PNG files without rendering the scene. vidgen builds the scene as a render
+does and opens its page with the same theme, `data:`, beats, shape, size and frame rate, so a
+still is the picture the render's page clip (`build/<quality>/web/<scene>.mkv`) holds for that
+frame (compared pixel for pixel in `tests/test_web_still.py` and with eight frames of the film
+"Escapement" at 1280x720).
+
+| option | |
+|---|---|
+| `--scene ID` | the scene: type `web` or an extension type that subclasses `Web`; another type is an error naming `vidgen storyboard --scene ID` |
+| `--at SECONDS` | seconds from the scene's start (the page's `t`); the frame `round(t * fps)`, which is the frame the render shows then. Repeatable, and a list: `--at 1,2.5,4` |
+| `--frame N` | a frame number at the size's frame rate (0 is the first). Repeatable, and a list |
+| `--count N` | N stills spread evenly over the scene (the middle of each of N equal parts), after those of `--at` / `--frame` |
+| `--size` | `final` (default), `preview` or `draft`: that render's size and frame rate; `WIDTHxHEIGHT` (even numbers): a video frame of that size at the final frame rate, the theme's sizes scaled to it |
+| `--out` | a `.png` file (one still only) or a folder; default `<project>/exports/stills/`. Files in a folder are `<scene>_<seconds>s.png` (`gears_0012.500s.png`) |
+| `--sheet FILE` | also a contact sheet (PNG or JPEG, up to 1920 px wide) of the stills in the order asked, each labelled `scene  12.500 s  f375`; `--columns N` (1–12) sets the stills per row |
+| `--exact` | step the page through every frame before each still (see below) |
+| `--transparent` | keep the page's alpha; by default the page is laid over the video's background colour |
+
+- **Order.** Stills are drawn in the order asked, on one page while each is later than the one
+  before. The clock cannot go back: a still at or before the page's time opens a new page (the
+  load time again); the same frame asked twice is drawn once.
+- **A page that depends on the frames before it.** Without `--exact` the clock moves straight to
+  the frame's time: every timer due by then runs, then one round of animation-frame callbacks,
+  then `frame(t, ctx)`. A page that draws from the time alone gives the render's picture. A page
+  that keeps state from frame to frame (a `requestAnimationFrame` loop adding up, a canvas drawn
+  over itself; Motion, lottie-web or GSAP without `lagSmoothing(0)` playing by themselves, §118.15)
+  gives the picture it would show had the frames between not been drawn, and a later still on the
+  same page depends on the stills before it. `--exact` runs every frame from the page's time to
+  the still (no screenshots in between), as a render does. Not covered by `--exact`: a WebGL
+  canvas that is never cleared and relies on Chromium showing every frame.
+- **What a still is not.** The video's frame also has what vidgen draws: the title, overlays and
+  captions, the fade at the scene's end, and H.264. With `region: body` the still is the page's
+  box, not the whole frame.
+- **Nothing is rendered or cached**: no file under `build/<quality>/`, and with `--out` and
+  `--sheet` elsewhere nothing in the project folder (loading a project may write `build/fonts/`
+  and Python's `__pycache__` in `extensions/`, as every command does).
+- **Speed** (the film "Escapement", a three.js page with depth of field and motion blur, 2 cores):
+  the page is ready after about 9 s (plus about 3 s for vidgen to start); then 2.2 s per still at
+  1280x720, 0.5 s at 640x360 and 0.3 s at 320x180. `--exact` costs each stepped frame's drawing
+  time (about 0.4 s a frame at 640x360 there).
+- `--json`: see [`vidgen still --json`](#vidgen-still---json). Over MCP: the `still` tool.
+
 **Render cost.** Every frame is a screenshot of the whole page, so a `web` scene renders far slower
 than a built-in one, and the time grows with the number of frames and their size. Measured on a
 slow 1-CPU machine on two scenes of 20 s (a whole `vidgen render` of the scene, Chromium's start
@@ -16168,7 +16213,7 @@ default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` gi
 `narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `audio_check`
 (`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
 sound alone), `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
+`thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
 (`vidgen story draft`: `input_path` or `story_text`, `out`, `style`, `format`, `narrator`, `seed`,
 `force`), `shorts_suggest` (`vidgen shorts suggest`: `project`, `count`, `min_seconds`,
@@ -16232,7 +16277,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft`, `vidgen shorts suggest` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft`, `vidgen shorts suggest`, `vidgen animatic` and `vidgen still` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -16560,6 +16605,24 @@ files against each other); `ok` is false when any file or that check fails.
 
 Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
 on a failed scene are as for `vidgen render --json`.
+
+### `vidgen still --json`
+
+| key | type | |
+|---|---|---|
+| `scene` | str | the scene's id |
+| `type` | str | its scene type (`web` or a subclass type) |
+| `entry` | str | its `page:` or `script:` file |
+| `size` | str | `final`, `preview`, `draft` or `WxH` as asked |
+| `width`, `height` | int | the stills' size in px (the page's box; smaller than the frame with `region: body`) |
+| `fps`, `frames` | int | the frame rate and how many frames the render draws of the page |
+| `region` | str | `bleed` or `body` |
+| `exact`, `transparent` | bool | as asked |
+| `stills` | list | in the order asked: `{path, frame, time, seconds}` (`time` = `frame / fps`, seconds from the scene's start; `seconds`: how long drawing it took, a new page's load included) |
+| `sheet` | str \| null | the contact sheet |
+| `pages` | int | pages opened (1 when the stills were in increasing order) |
+| `load_seconds` | float | until the first page was ready |
+| `seconds` | float | wall time of the command |
 
 ### `vidgen animatic --json`
 

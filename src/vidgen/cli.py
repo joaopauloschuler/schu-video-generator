@@ -1115,6 +1115,35 @@ def cmd_thumbnail(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_still(args: argparse.Namespace) -> CommandResult:
+    """Write single frames of a ``web`` scene's page (PNG) without rendering its clip."""
+    from vidgen.web.still import Moment, make_web_stills
+
+    if args.scene is None:
+        raise VidgenError("which scene? give --scene ID (vidgen still draws frames of one web scene's page)")
+    started = time.monotonic()
+
+    def report(still: Any) -> None:
+        print(f"still: {still.path}  (frame {still.frame}, {still.time:.3f} s, drawn in {still.seconds:.2f} s)", flush=True)
+
+    result = make_web_stills(
+        args.project, args.scene, moments=[Moment(kind, value) for kind, value in args.moments or []], count=args.count,
+        size=args.size, variant=args.variant, out=Path(args.out) if args.out else None,
+        sheet=Path(args.sheet) if args.sheet else None, columns=args.columns, exact=args.exact, transparent=args.transparent,
+        on_still=report,
+    )
+    elapsed = time.monotonic() - started
+    if args.json:
+        return jsonout.still_document(result, elapsed)
+    if result.sheet is not None:
+        print(f"sheet: {result.sheet}")
+    drawing = sum(still.seconds for still in result.stills)
+    print(f"{len(result.stills)} still(s) of {result.scene} ({result.entry}) at {result.width}x{result.height}, {result.fps} fps "
+          f"({result.size}{', every frame stepped' if result.exact else ''}): page ready in {result.load_seconds:.1f} s, "
+          f"{drawing / len(result.stills):.2f} s per still, {elapsed:.1f} s in all")
+    return 0
+
+
 def cmd_character(args: argparse.Namespace) -> int:
     """Print a declared character's look, colours, poses and expressions; with ``--png``, also write one still of it."""
     from vidgen import extensions
@@ -2298,6 +2327,22 @@ class _Parser(argparse.ArgumentParser):
         raise UsageError(self, message)
 
 
+class _MomentAction(argparse.Action):
+    """``--at`` and ``--frame`` of ``vidgen still``: each value (or comma-separated list) is added
+    to one list of ``(kind, value)`` in the order given on the command line."""
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: Any, option_string: str | None = None) -> None:
+        kind = "frame" if option_string == "--frame" else "at"
+        moments = list(getattr(namespace, self.dest, None) or [])
+        for part in str(values).split(","):
+            try:
+                moments.append((kind, float(int(part)) if kind == "frame" else float(part)))
+            except ValueError:
+                what = "a frame number" if kind == "frame" else "a number of seconds"
+                parser.error(f"argument {option_string}: {part.strip()!r} is not {what}")
+        setattr(namespace, self.dest, moments)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argparse parser for all subcommands."""
     parser = _Parser(
@@ -2680,6 +2725,26 @@ def build_parser() -> argparse.ArgumentParser:
     jobs_arg(p, when=" when scenes must be rendered")
     output_dir_arg(p)
     p.set_defaults(func=cmd_thumbnail)
+
+    p = sub.add_parser(
+        "still", help="single frames (PNG) of a web scene's page at exact times, without rendering its clip; several in one browser, a contact sheet on request")
+    project_arg(p)
+    p.add_argument("--scene", metavar="ID", help="the web scene (type web or an extension type that subclasses Web)")
+    p.add_argument("--at", dest="moments", action=_MomentAction, metavar="SECONDS",
+                   help="a still at this time, seconds from the scene's start (repeatable; also 1,2.5,4): the frame the render shows then")
+    p.add_argument("--frame", dest="moments", action=_MomentAction, metavar="N", help="a still of this frame number at the size's frame rate (repeatable; also 0,30,60)")
+    p.add_argument("--count", type=int, metavar="N", help="N stills spread evenly over the scene")
+    p.add_argument("--size", default="final", metavar="final|preview|draft|WxH",
+                   help="the render the page is drawn for: the final format (default), the preview's, the draft's, or a frame of WIDTHxHEIGHT at the final frame rate")
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument("--out", "-o", metavar="FILE|DIR", help="a .png file (one still) or a folder (default: <project>/exports/stills/; files <scene>_<seconds>s.png)")
+    p.add_argument("--sheet", metavar="FILE", help="also write a contact sheet of the stills (PNG or JPEG), each labelled with its time and frame")
+    p.add_argument("--columns", type=int, metavar="N", help="with --sheet: stills per row (default: chosen from their number)")
+    p.add_argument("--exact", action="store_true",
+                   help="step the page through every frame before each still, as the render does (for a page that keeps state from frame to frame; slower)")
+    p.add_argument("--transparent", action="store_true", help="keep the page's transparency (default: the page over the video's background colour)")
+    json_arg(p)
+    p.set_defaults(func=cmd_still)
 
     p = sub.add_parser("character", help="show a character of characters: (its look and colours); --png writes one still of it")
     p.add_argument("name", help="the character's name (from characters:)")

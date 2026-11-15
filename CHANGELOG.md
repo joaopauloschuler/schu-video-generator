@@ -5,7 +5,17 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–341)
+## Unreleased (Steps 193–342)
+
+### `vidgen still`: one frame of a `web` scene at an exact time, without rendering it (Step 342)
+
+- New command: `vidgen still PROJECT --scene ID --at SECONDS` writes that frame of a `web` scene's page as a PNG (`exports/stills/<scene>_<seconds>s.png`, or `--out FILE|DIR`). It is the picture the render draws for that frame: vidgen builds the scene as a render does and opens the page with the same theme, `data:`, beats, size and frame rate. Compared pixel for pixel with rendered lossless page clips in a test, and with eight frames of the film "Escapement" at 1280x720.
+- `--at` is seconds from the scene's start and takes lists and repeats (`--at 0,4,8,12`); `--frame N` names a frame; `--count N` spreads N stills over the scene. Stills in increasing order are drawn on one page in one browser.
+- `--size final|preview|draft|WIDTHxHEIGHT` (default final); `--sheet FILE [--columns N]` adds a labelled contact sheet; `--transparent` keeps the page's alpha (default: over the video's background colour); `--json`.
+- A page that keeps state from frame to frame (a simulation stepped per frame, Motion or lottie-web playing by themselves) shows a still as if the frames before had not been drawn; `--exact` steps through every frame first, as a render does (slower).
+- Works for the type `web` and for extension types that subclass it; another scene type is an error naming `vidgen storyboard --scene ID`. Nothing is written under `build/<quality>/`.
+- Measured on "Escapement" (2 cores): page ready after about 9 s, then 2.2 s per still at 1280x720, 0.5 s at 640x360, 0.3 s at 320x180.
+- MCP: the `still` tool (returns the pictures). Guide: `vidgen guide web`, "Looking at single frames". DESIGN §120.3; tests `tests/test_web_still.py`.
 
 ### Fixed: an edited script of a `web` scene of your own type was not rendered again (Step 341)
 

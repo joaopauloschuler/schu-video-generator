@@ -24220,7 +24220,7 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | Step | What | Section |
 |---|---|---|
 | 341 | Fix: a scene of an extension type that subclasses `Web` was not rendered again when its script changed; a module waiting for several fetches sometimes never became ready | §120.1, §120.2 |
-| 342 | A single-frame still command for `web` scenes | later |
+| 342 | `vidgen still`: single frames of a `web` scene's page without rendering it | §120.3 |
 | 343 | Synth instruments: brass and organ | later |
 | 344 | Synth instruments: bowed strings | later |
 | 345 | Synth instruments: timpani, pitched toms, taiko / frame drums, choir | later |
@@ -24290,3 +24290,83 @@ its top level failed in about one run in three with `did not become ready within
   which keeps Playwright answering the page's requests (`time.sleep` would not). The message of a
   page that never becomes ready is unchanged up to its last part (`: not ready after 30000 ms`).
 - Frames, clip keys and the page's script are unchanged (`data/web/*.js` untouched).
+
+### 120.3 `vidgen still`: single frames of a `web` scene's page (Step 342)
+
+- **The report.** The films' authors had no way to see one full-size frame of a `web` scene at
+  an exact time without rendering its clip (Escapement: 2 s a frame, 480 frames a scene). Each
+  wrote a script that drove `vidgen.web.page.WebPage` itself, with a theme copied by hand, the
+  scene's `data:` typed again, several times in one browser session, several sizes and a contact
+  sheet.
+- **Existing commands looked at first.** `vidgen storyboard`, `vidgen lint` and `vidgen render
+  --frames` take stills from a scene's render (the whole clip is drawn; stills at beat ends).
+  `vidgen thumbnail --scene ID --at S` extracts a frame from the scene's rendered MP4 and writes
+  it as the video's thumbnail. None draws a frame without the render, so this is a new command;
+  it reuses `WebPage`, the scene class and `vidgen.sheets.load_font`.
+- **Command.** `vidgen still [PROJECT] --scene ID (--at SECONDS | --frame N | --count N)...
+  [--size final|preview|draft|WxH] [--variant NAME] [--out FILE|DIR] [--sheet FILE [--columns N]]
+  [--exact] [--transparent] [--json]` (`cli.cmd_still`, `vidgen.web.still.make_web_stills`).
+- **Same page setup as the render.** `still.page_setup` builds the scene as the render worker
+  does: the project loaded for the quality (`Project.load(draft=)`), its extensions activated,
+  Manim configured by `render.worker.configure_manim` (inside `manim.tempconfig`, with a
+  temporary media folder), the scene's class instantiated, not rendered. The scene then says what
+  its page is drawn from: `Web.page_clip_args(box=None)`, the arguments of `make_web_clip` (page
+  size from the scene's own `_title()` and `_page_box()`, frame rate, frame count from
+  `clip_plan`, theme and beats from `web_page_inputs`, the shape). `Web._draw_view` uses the same
+  method, so a render and a still cannot differ in these. `make_web_stills` opens one `WebPage`
+  with them and calls `page.frame(n)`.
+- **Time.** `--at t` is seconds from the scene's start (the page's `t`); the frame is
+  `round(t * fps)`, the frame whose picture the render shows at that time. `--frame N` names it
+  directly. Allowed: 0 to `frames - 1` (the frames the render draws, its spare frames included);
+  outside is an error naming the range. Video time is not accepted (see "Not done").
+- **Size.** `final`, `preview`, `draft`: that render's format. `WxH`: the project's `format`
+  replaced by that size at the final frame rate before the extensions are activated, so the
+  theme's sizes, the shape and the page box follow it (`FormatConfig`'s rule holds: even numbers).
+- **Order and state.** Stills are drawn in the order asked. One page serves while each frame is
+  later than the page's; otherwise the page is closed and a new one opened (the clock cannot run
+  back); a frame asked twice is drawn once. Default: `page.frame(n)` straight from the page's
+  frame (all timers due run, one round of animation-frame callbacks, then `frame(t, ctx)`,
+  `data/web/runtime.js`). For a page whose picture is a function of the time (§118.15's
+  "alone: yes" rows) this is the render's frame. For one that keeps state ("alone: no": Motion,
+  lottie-web autoplay, GSAP's own ticker, a D3 force simulation, a counter, a canvas drawn over
+  itself) it is the picture without the frames between, and it depends on the stills drawn before
+  it on the same page. `--exact` calls `page.advance(k)` for every frame from the page's to
+  `n - 1` first (no screenshots, as `web_page_layouts` does, §118.12), which is what the render
+  does apart from the screenshots. The default is the fast one because the films' pages are
+  functions of the time and a stepped still costs every frame's drawing time (0.4 s a frame at
+  640x360 on Escapement); the guide says when `--exact` is needed.
+- **What is written.** PNG files: `--out FILE.png` (one still) or a folder, default
+  `<project>/exports/stills/`, named `<scene>_<seconds, 8 wide, 3 decimals>s.png`. The page's
+  RGBA laid over the theme's background colour (RGB), or the RGBA itself with `--transparent`.
+  `--sheet FILE`: a grid up to 1920 px wide (`still.contact_sheet`), each still scaled down to
+  its column (never enlarged) with `scene  t s  fN` under it; columns `ceil(sqrt(n))` up to 6, or
+  `--columns`. Nothing under `build/<quality>/`: no clip, no record, no fingerprint is read or
+  written, so no cache key is touched.
+- **Errors** (`VidgenError`): an unknown scene with the closest id and the list of web scenes; a
+  scene of another type, naming `vidgen storyboard --scene ID --per-beat N` (drawing other types
+  needs their render: not cheap, not built); a time or frame outside the scene; no `--scene`; no
+  time at all; a bad `--size` (did-you-mean for a quality's name); `--out FILE.png` with several
+  stills.
+- **Proof.** `tests/test_web_still.py::test_stills_equal_the_frames_of_the_rendered_page_clip`
+  renders a small project and compares stills with the frames of `build/<quality>/web/<scene>.mkv`
+  (FFV1, lossless, with alpha) with `np.array_equal`: a `Web` subclass at final and preview size,
+  a page in `region: body` under a title (over the background), and a page that counts its
+  frames (`--exact` equal to the clip; without it the documented other picture). On the film:
+  eight stills of `04_escapement` at 1280x720 (`--transparent`, frames 0 to 420) are identical to
+  the frames of the film's own `build/final/web/04_escapement.mkv`.
+- **Measured** on Escapement (three.js, depth of field and motion blur by repeated drawing; 2
+  cores): vidgen starts in about 3 s, the page is ready after 8.4 to 9.5 s, then 2.17 s per still
+  at 1280x720 (8 stills, 30 s in all), 0.52 s at 640x360 (`preview`), 0.26 s at 320x180;
+  `--exact` at 640x360: 6.2 s for frame 15 (16 frames). A render of that scene draws 480 frames.
+- **MCP.** The `still` tool follows the command (`at` and `frame` as lists, `sheet: true` writes
+  `contact_sheet.png` in the stills' folder) and returns the pictures, the sheet first, paged like
+  the storyboard's. Paging draws the stills again (nothing is cached).
+- **JSON.** `vidgen still --json`: `scene, type, entry, size, width, height, fps, frames, region,
+  exact, transparent, stills: [{path, frame, time, seconds}], sheet, pages, load_seconds, seconds`.
+- **Interfaces.** `vidgen.scenes.web.Web.page_clip_args` (new method, used by `_draw_view`);
+  `vidgen.web.still` (internal module); `vidgen.api` unchanged.
+- **Not done.** A time on the video's clock (`--at` without `--scene`); stills of other scene
+  types; values of `data:` overridden from the command line; with `--exact`, a WebGL canvas that
+  is never cleared and relies on every frame being shown may still differ (no screenshot is taken
+  of the stepped frames); a still with vidgen's title, overlays and captions. Windows and macOS
+  not tried.
