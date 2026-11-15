@@ -4138,6 +4138,18 @@ again only when the file changes). You cannot hear it, so work from measurements
    or your own `drawbars: "00 8400 000"` (in quotes) and wants a long `reverb`. Under a voice
    keep brass soft, with `brightness` up to 0.4, and prefer the horn. Recipes:
    `docs/COOKBOOK-MUSIC.md`, section 8.
+   **Bowed strings**: `violins`, `violas`, `cellos` and `double_basses` are sections (`players: 1`
+   makes a solo instrument). The setting `stroke` picks how they play. `stroke: sustain` bows
+   a note while its steps hold it; write a phrase without rests and the notes join.
+   `stroke: spiccato` plays one short stroke per note: use it for ostinatos in sixteenths, every
+   stroke is the same and equally loud (do not play a `pad` note by note for that, its level
+   changes from note to note). `stroke: tremolo` is a held note of fast strokes: with
+   `brightness: 0.8` and a rising `volume` curve a tension bed. `stroke: pizzicato` plucks; the
+   note rings until its steps end. `brightness`
+   0 is dark (over the fingerboard), 1 glassy (at the bridge); `mute: 1` veils; `attack` 0.5 and
+   more is a swell. A section of the piece can change the stroke:
+   `sections: {drop: {settings: {stroke: spiccato}}}`. Recipes: `docs/COOKBOOK-MUSIC.md`,
+   section 9.
 5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
    (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
    on the part of the piece the video plays). A piece keeps its own pace; to make its lift begin

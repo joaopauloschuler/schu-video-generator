@@ -5,6 +5,7 @@ over the note (brass getting brighter as it gets louder) is a cross-fade between
 
 from __future__ import annotations
 
+import math
 import zlib
 from collections.abc import Callable, Mapping
 from functools import lru_cache
@@ -53,14 +54,17 @@ def harmonic_count(freq: float, limit: float = HIGHEST_PARTIAL) -> int:
     return max(int(limit / freq), 1)
 
 
-def wavetables(amplitudes: np.ndarray) -> np.ndarray:
+def wavetables(amplitudes: np.ndarray, phases: np.ndarray | None = None) -> np.ndarray:
     """One period of ``sum(a[h] * sin(2 pi (h + 1) x))`` per row of ``amplitudes`` ``(rows,
     harmonics)``: float64 ``(rows, size + 1)``, the first sample repeated at the end (for
-    :func:`read_tables`)."""
+    :func:`read_tables`). With ``phases`` (per harmonic, in cycles) harmonic ``h`` is
+    ``sin(2 pi ((h + 1) x + phases[h]))`` in every row."""
     rows, count = amplitudes.shape
     size = max(2048, 1 << (count * _SAMPLES_PER_CYCLE - 1).bit_length())
     spectrum = np.zeros((rows, size // 2 + 1), dtype=np.complex128)
     spectrum[:, 1 : count + 1] = -0.5j * size * amplitudes
+    if phases is not None:
+        spectrum[:, 1 : count + 1] *= np.exp(2j * np.pi * phases)
     tables = np.empty((rows, size + 1))
     tables[:, :size] = np.fft.irfft(spectrum, size, axis=1)
     tables[:, size] = tables[:, 0]
@@ -113,3 +117,27 @@ def band_noise(rng: np.random.Generator, n: int, center: float, width: float, lo
     much above ``lowpass``; RMS 1."""
     noise = _filtered(rng.standard_normal(n), lambda f: _band(f, center, width) * _lowpass(f, lowpass, 4))
     return noise / max(float(np.sqrt(np.mean(noise**2))), 1e-12)
+
+
+def smoothed(power: np.ndarray, length: int) -> np.ndarray:
+    """``power`` averaged twice over ``length`` samples around each sample (a triangle window)."""
+    for _ in range(2):
+        total = np.concatenate([[0.0], np.cumsum(power)])
+        at = np.arange(len(power))
+        power = (total[np.minimum(at + length // 2 + 1, len(power))] - total[np.maximum(at - length // 2, 0)]) / length
+    return power
+
+
+def levelled(section: np.ndarray, players_power: np.ndarray, freq: float) -> np.ndarray:
+    """``section`` (stereo, the players summed) with its slow level changes taken out. Players a
+    few cents apart drift in and out of step, so their sum is, for a second at a time and by
+    chance, up to 6 dB louder or far quieter than the players are together: one note of a line
+    would be weak, the next strong. The gain here (at most 8 dB either way) brings the sum's power,
+    averaged over whole periods of the note (50 ms or more), to the sum of the players' powers
+    (``players_power``, per sample); the tone still moves as harmonics come and go."""
+    period = RATE / freq
+    length = max(int(round(period * math.ceil(0.05 * RATE / period))), 1)
+    wanted = smoothed(players_power, length)
+    measured = smoothed(0.5 * np.sum(section**2, axis=1), length)
+    floor = 1e-9 * max(float(wanted.max()), 1e-30)
+    return section * np.clip(np.sqrt((wanted + floor) / (measured + floor)), 0.4, 2.5)[:, None]

@@ -40,6 +40,7 @@ from vidgen.music import (
 from vidgen.sfx import RATE, _band, _filtered, _lowpass, _tone
 from vidgen.studio.brass import horn_note, low_brass_note, trumpet_note
 from vidgen.studio.organ import REGISTRATION_NAMES, REGISTRATIONS, organ_note, read_drawbars
+from vidgen.studio.strings import STROKES, basses_note, cellos_note, violas_note, violins_note
 
 #: Instrument kinds: ``drum`` (no pitch: hits), ``note`` (one sound per note, a chord is its
 #: notes together), ``pad`` (sustained chords, cross-faded; can also play held notes).
@@ -283,11 +284,39 @@ _PLAYERS = "players in unison: 1 a solo (mono), more a section spread from left 
 _SECTION_DETUNE = "cents the players of a section are apart"
 
 
+def _string_settings(players: float) -> dict[str, Setting]:
+    return _settings(
+        stroke=(0.0, 0.0, float(len(STROKES) - 1), "how it is played: sustain: bowed for as long as its steps hold it; spiccato: one short bounced stroke per "
+                "note, the same every time (for ostinatos; `length` 0.15 is a staccato); tremolo: a held note of fast bow strokes (`speed`); pizzicato: "
+                "plucked, ringing until its steps end", STROKES),
+        players=(players, 1.0, 12.0, "players in unison: 1 a solo (mono), more a section spread from left to right (each with its own instrument, "
+                 "tuning, vibrato and timing; as loud as one player)"),
+        attack=(0.1, 0.02, 4.0, "sustain, tremolo: seconds to reach full level: 0.03-0.06 a firm stroke with a bite, 0.1-0.3 smooth, 0.5 and more a swell"),
+        brightness=(0.5, 0.0, 1.0, "where the bow is: 0 over the fingerboard (sul tasto: dark, flute-like), 0.5 ordinary, 1 at the bridge (sul ponticello: "
+                    "glassy, thin); the level stays"),
+        vibrato=(12.0, 0.0, 50.0, "sustain: vibrato depth in cents (about 5.8 Hz); it begins 0.16 s into a note and takes 0.35 s to grow, so short notes have none"),
+        accent=(1.0, 0.0, 2.0, "the bite at the start of a stroke (0 none, 1 natural, 2 hard): scratch, a short overshoot, more highs; tremolo: how deep each "
+                "stroke dips; pizzicato: how hard it is plucked"),
+        length=(0.07, 0.03, 0.4, "spiccato: seconds the bow stays on the string (0.05 light and bounced, 0.07 spiccato, 0.15-0.25 staccato to marcato)"),
+        speed=(13.0, 6.0, 20.0, "tremolo: bow strokes per second (the players of a section each a little off, so a section shimmers)"),
+        decay=(1.0, 0.3, 3.0, "spiccato, pizzicato: how long the string rings on, times its natural time (low notes ring longer)"),
+        bow=(1.0, 0.0, 4.0, "level of the bow's rosin noise and scratch (1 natural, 0 none)"),
+        mute=(0.0, 0.0, 1.0, "a mute on the bridge (con sordino): 0 open, 1 muted (veiled, the highs and the nasal peak gone)"),
+        detune=(8.0, 0.0, 30.0, _SECTION_DETUNE),
+        ring=(0.25, 0.03, 3.0, "seconds of the release after its held steps (the string rings on as it darkens; notes that follow without a rest overlap "
+              "into a legato)"),
+    )
+
+
+def _strings(name: str, words: str, level: float, octave: int, low: str, high: str, players: float, make: Callable[..., np.ndarray]) -> Instrument:
+    return _orchestral(name, words, level, octave, low, high, _string_settings(players), make, "strings")
+
+
 def _pad(name: str, words: str, level: float, octave: int, harmonics: tuple[float, ...], settings: dict[str, Setting]) -> Instrument:
     return Instrument(name, "pad", words, level, octave, settings, harmonics=harmonics, group="pads")
 
 
-#: The instrument library by name, in catalogue order (drums, noises, basses, plucks and keys, leads, brass, organ, pads).
+#: The instrument library by name, in catalogue order (drums, noises, basses, plucks and keys, leads, brass, organ, strings, pads).
 INSTRUMENTS: dict[str, Instrument] = {
     i.name: i
     for i in (
@@ -378,6 +407,13 @@ INSTRUMENTS: dict[str, Instrument] = {
                         click=(0.0, 0.0, 1.0, "level of a key click when a key goes down and up (0 none)"),
                         ring=(0.09, 0.02, 2.0, "seconds of the release after its held steps"),
                     ), organ_note, "organ"),
+        _strings("violins", "a violin section (`players: 1`: a solo violin): bowed, with the body of the instrument in the tone; `stroke` picks "
+                 "sustain, spiccato, tremolo or pizzicato", 0.115, 4, "G3", "C7", 6.0, violins_note),
+        _strings("violas", "a viola section: the darker, slightly nasal middle voice of the strings; strokes as for the violins", 0.115, 3, "C3", "E6", 5.0, violas_note),
+        _strings("cellos", "a cello section: warm tenor and bass lines, low ostinatos (`stroke: spiccato`); strokes as for the violins", 0.115, 2, "C2", "A5", 4.0,
+                 cellos_note),
+        _strings("double_basses", "a double bass section: the floor of the strings; bowed, or `stroke: pizzicato` for a plucked bass line", 0.115, 1, "C1", "G4",
+                 3.0, basses_note),
         _pad("pad", "a warm, wide synthesizer-string pad (PADsynth), with an optional airy layer and sub", 0.3, 3, _WARM,
              _pad_settings(2600.0, 0.25, 18.0, 1.6)),
         _pad("supersaw", "supersaw-like chords: a cloud of detuned saws, wide (sweep it with lowpass, gate it, duck it)", 0.2, 3, _SAW,
@@ -390,4 +426,4 @@ INSTRUMENTS: dict[str, Instrument] = {
 #: The airy layer of the pads (an octave up, wider).
 AIRY_HARMONICS, AIRY_WIDTH_CENTS = _AIRY, 30.0
 #: The catalogue's families in order.
-GROUPS = ("drums", "noises", "basses", "plucks and keys", "leads", "brass", "organ", "pads")
+GROUPS = ("drums", "noises", "basses", "plucks and keys", "leads", "brass", "organ", "strings", "pads")

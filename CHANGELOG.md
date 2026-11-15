@@ -5,7 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–343)
+## Unreleased (Steps 193–344)
+
+### Bowed strings for score files: `violins`, `violas`, `cellos`, `double_basses` (Step 344)
+
+- Four new instruments for score files, synthesised like the others (no samples, no SoundFont): `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5) and `double_basses` (C1–G4). Each is a section by default (6, 5, 4 and 3 players, up to 12; `players: 1` is a solo instrument). `vidgen music patches` lists them in a new family, `strings`.
+- **Four strokes**, chosen by the setting `stroke`: `sustain` (bowed for as long as the steps hold the note; notes without a rest between them overlap into a legato), `spiccato` (one short stroke per note; `length: 0.15` and more is a staccato), `tremolo` (a held note of fast bow strokes, 13 a second by default) and `pizzicato` (plucked; it rings until its steps end, low notes longer). A section of the piece can change the stroke.
+- **Even ostinatos.** Every spiccato stroke of a pitch is the same samples, and all pitches are equally loud (within 1 dB over each range), so sixteenths at 138 BPM and faster are even. The `pad` played note by note, which the film "Parallel Space" had to use, differs by up to 8 dB from note to note.
+- **The instrument's body is in the tone**: resonances at fixed frequencies that do not move with the note, a different piece of wood for every player of a section, and a vibrato that moves each harmonic's level with the pitch. A section's players are a few cents and milliseconds apart with their own vibrato; its level is steady while its harmonics beat.
+- Settings: `attack` (0.02–4 s: a firm stroke, a smooth one, a swell), `brightness` (0 bowed over the fingerboard, dark; 1 at the bridge, glassy), `vibrato` (cents, delayed), `accent` (the bite of a stroke), `length`, `speed` (tremolo), `decay`, `bow` (rosin noise), `mute` (con sordino), `detune`, `ring`.
+- Their level is that of the brass (a held note about −16.6 LUFS before the piece is levelled). A score that used a `pad` as violins will want the new instrument about 8 dB up.
+- The existing `pizzicato` instrument is unchanged. Existing scores are unchanged: the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
+- Measured, not listened to: nobody has heard these instruments yet (DESIGN §120.5 has the measurements). Demo files for listening were written outside the repository.
+- Limits: no slur or glide between notes, every stroke of a pitch is the same, and the track's `accent:` pattern changes a stroke's level but not its bite.
+- Docs: `docs/CONFIG.md` (score files: the instrument table, "Bowed strings"), `docs/COOKBOOK-MUSIC.md` section 9, the guide ("Making music"). Tests: `tests/test_studio_strings.py`.
+
 
 ### Brass and organ for score files: `trumpet`, `horn`, `low_brass`, `organ` (Step 343)
 

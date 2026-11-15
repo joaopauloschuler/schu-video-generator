@@ -2035,9 +2035,12 @@ with demo files for the owner to listen to.
 - [ ] Not done: nobody has listened (the owner's judgment of the demo files is open); no slur or glide between notes (Step 346); in `vidgen studio` the `drawbars` setting is a plain slider (0 to 888888888), not nine bars, and `registration` a slider over whole numbers without its names; a full table of ranges and settings in the cookbook is Step 351's
 
 ### Step 344 — Synth instruments II: bowed strings
-- [ ] Sustained section over the ranges of violins, violas, cellos and basses, with slow and fast attack
-- [ ] Short strokes (spiccato / staccato) that are even from note to note (PADsynth pads fluctuate per note: not for ostinati); tremolo; pizzicato if the existing one is weak
-- [ ] Judged by measurement and spectrograms; demo score and WAV per family
+- [x] Sustained section over the ranges of violins, violas, cellos and basses, with slow and fast attack: `violins`, `violas`, `cellos`, `double_basses` in a new family `strings` (`studio/strings.py`), each a section by default (`players: 1` a solo); fixed body resonances, a body per player, vibrato that moves the harmonics' levels, rosin noise, `brightness` (fingerboard to bridge), `mute`, a release that overlaps the next note
+- [x] Short strokes that are even from note to note: `stroke: spiccato` (`length` 0.15 and more: staccato), the same samples for the same note and every pitch equally loud (within 1 dB over each range; the `pad` note by note: 8 dB); `stroke: tremolo`; `stroke: pizzicato` (the old `pizzicato` measured: five harmonics, one decay at every pitch; kept unchanged)
+- [x] Judged by measurement and spectrograms (fixed formants over pitches, vibrato, attack, strokes, evenness in an ostinato through the renderer, section against solo, level over each range, aliasing, clicks, CPU); demo scores, WAV, M4A and `demo.txt` in `/home/claude/work/scratch/al344/demo/` (four instruments, the full section, old stand-ins against new, an ensemble with brass and organ)
+- [x] The scores of "Escapement" and "Parallel Space" (ps6) render to the same bytes as after Step 343
+- [x] Docs: CONFIG (instrument table, "Bowed strings"), `docs/COOKBOOK-MUSIC.md` section 9, the guide, CHANGELOG, DESIGN §120.5
+- [ ] Not done: nobody has listened; no slur or glide and no per-note bite (the track's `accent:` pattern changes a stroke's level only; Step 346); no round-robin variation between strokes (even by design), no measured tremolo, harmonics or col legno; in `vidgen studio` the `stroke` setting is a slider over 0–3 without its names (as `registration`)
 
 ### Step 345 — Synth instruments III: timpani, toms, taiko, choir
 - [ ] Timpani and pitched toms (the `kick` tops out at 160 → 70 Hz); a taiko / frame-drum family

@@ -399,3 +399,100 @@ hit:   {instrument: low_brass, octave: 2, settings: {attack: 0.18, brightness: 1
 Put a `boom` or a low `kick` under the hit's first step for the impact; the brass supplies the
 tone that follows.
 
+## 9. Bowed strings
+
+Four string instruments (Step 344; reference: [CONFIG](CONFIG.md#score-files-vidgen-music-render),
+`vidgen music patches`). Like the brass they are synthesised, not sampled, and were tuned by
+measurement: nobody has listened yet.
+
+| instrument | written range | default octave | players | what it is for |
+|---|---|---|---|---|
+| `violins` | G3–C7 | 4 | 6 | the melody, high held chords, tremolo beds, high ostinatos |
+| `violas` | C3–E6 | 3 | 5 | inner parts, the middle ostinato, a darker melody |
+| `cellos` | C2–A5 | 2 | 4 | tenor melodies, bass lines, the low ostinato |
+| `double_basses` | C1–G4 | 1 | 3 | the bass note under everything, bowed or plucked |
+
+| setting | default | what it does |
+|---|---|---|
+| `stroke` | `sustain` | `sustain` (bowed while held), `spiccato` (one short stroke per note), `tremolo` (a held note of fast strokes), `pizzicato` (plucked) |
+| `players` | by instrument | 1 a solo (mono); more a section in stereo, as loud as one player |
+| `attack` | 0.1 | sustain, tremolo: 0.03–0.06 firm with a bite, 0.1–0.3 smooth, 0.5–4 a swell |
+| `brightness` | 0.5 | 0 over the fingerboard (dark), 1 at the bridge (glassy); the level stays |
+| `vibrato` | 12 | cents; starts 0.16 s into a sustained note; 0 for a cold, still sound |
+| `accent` | 1 | the bite of a stroke, 0 (none) to 2 (hard); tremolo: the depth of each stroke; pizzicato: how hard it is plucked |
+| `length` | 0.07 | spiccato: seconds the bow is on the string; 0.05 very short, 0.15–0.25 staccato |
+| `speed` | 13 | tremolo: strokes a second (6–20) |
+| `decay` | 1 | spiccato, pizzicato: how long the string rings, times its natural time |
+| `bow` | 1 | rosin noise and scratch (0 none) |
+| `mute` | 0 | 1: con sordino (veiled) |
+| `detune` | 8 | cents between the players of a section |
+| `ring` | 0.25 | seconds of release; notes without a rest between them overlap by it |
+
+**How to write for them**
+
+- A melody: `stroke: sustain`, `attack` 0.1–0.2, no rests inside a phrase (`"A4 - - - D5 - E5 -"`),
+  a rest where the phrase breathes. For a solo instrument `players: 1` and `vibrato` 15–20.
+- An ostinato: `stroke: spiccato` on sixteenths. Every stroke of a pitch is identical and all
+  pitches are as loud, so the pattern is even by itself; give it life with the track's
+  `accent: "3+3+2"` and a `volume` curve over the section. Cellos in octave 2, violas in 3,
+  violins in 4 doubling the pattern is the film-score engine. Above about 170 BPM use
+  `length: 0.05`. Do not use `pad` or `supersaw` note by note for this: their level changes
+  from note to note.
+- A tension bed: violins and violas `stroke: tremolo` on two or three notes held for bars, with
+  `brightness: 0.8` and `volume: {from: -20, to: 0}`; cellos and basses hold a low note with
+  `attack: 1.5`.
+- Chords for the whole section: basses `x` in octave 1, cellos `1+5` in octave 2, violas
+  `v1+v2`, violins `v2+v3` or the melody. Seat them with `pan` (violins −0.4, violas −0.05,
+  cellos 0.25, basses 0.15) and give all one `reverb` (`size` 3.5–4.5, `mix` 0.3–0.4).
+- A plucked bass: `double_basses` with `stroke: pizzicato` on `"x . . . x . . ."`; hold a note
+  (`"x - - -"`) to let it ring.
+- Quiet strings are not `volume` alone: `brightness: 0.25`, `attack: 0.5`, `accent: 0`, and
+  `mute: 1` for a veiled sound. Under a voice keep violins out of 1–3 kHz melodies or mute them.
+- Replacing a `pad` that played "violins" note by note: the strings sit about 8 dB lower than
+  the pad at the same `volume` (the level of the brass and of piano chords), so raise the track.
+
+**A string section: melody, ostinato and a tremolo bed** (D minor, 138 BPM; original)
+
+```yaml
+version: 1
+title: String engine
+key: D minor
+tempo: 138
+loop: false
+progression: "Dm Bb Gm A"
+chord_bars: 2
+sections:
+  - {name: bed, bars: 8}
+  - {name: engine, bars: 8}
+tracks:
+  violins:
+    instrument: violins
+    pan: -0.4
+    reverb: {size: 3.5, mix: 0.32, tone: 4500}
+    sections:
+      bed: {settings: {stroke: tremolo, brightness: 0.8, attack: 0.4}, volume: {from: -20, to: 0},
+            steps: "D5+A5 | - | - | - | D5+Bb5 | - | C#5+A5 | - - - - - - - - - - - - - - . ."}
+      engine: {settings: {attack: 0.14},
+               steps: "A4 - - - - - - - D5 - - - E5 - - - | F5 - - - - - - - E5 - - - D5 - - - | D5 - - - - - - - - - - - F5 - - - | Bb5 - - - - - - - A5 - - - G5 - - - | G5 - - - - - - - - - - - D5 - - - | Bb4 - - - - - - - - - - - D5 - - - | E5 - - - - - - - - - - - C#5 - - - | D5 - - - - - - - - - - - . . . ."}
+  violas:
+    instrument: violas
+    pan: -0.05
+    reverb: {size: 3.5, mix: 0.32, tone: 4500}
+    sections:
+      bed: {settings: {stroke: tremolo, brightness: 0.8, attack: 0.4}, volume: {from: -20, to: 0}, steps: "F4 | - | - | - | F4 | - | E4 | - - - - - - - - - - - - - - . ."}
+      engine: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3"}
+  cellos:
+    instrument: cellos
+    pan: 0.25
+    reverb: {size: 3.5, mix: 0.32, tone: 4500}
+    sections:
+      bed: {settings: {attack: 1.5, brightness: 0.35}, volume: {from: -16, to: 0}, steps: "x | - | - | - | x | - | x | - - - - - - - - - - - - - - . ."}
+      engine: {settings: {stroke: spiccato}, accent: "3+3+2", steps: "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3"}
+  basses:
+    instrument: double_basses
+    pan: 0.15
+    reverb: {size: 3.5, mix: 0.32, tone: 4500}
+    sections:
+      bed: {settings: {attack: 1.5, brightness: 0.35}, volume: {from: -16, to: 0}, steps: "x | - | - | - | x | - | x | - - - - - - - - - - - - - - . ."}
+      engine: {settings: {stroke: pizzicato}, steps: "x . . . . . . . x . . . . . x ."}
+```

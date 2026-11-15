@@ -147,6 +147,7 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
 
     text = (ROOT / "docs" / "COOKBOOK-MUSIC.md").read_text(encoding="utf-8")
     genres, brass = text.split("## 8. Brass and organ")
+    brass, strings = brass.split("## 9. Bowed strings")
     blocks = re.findall(r"```yaml\n(.*?)```", genres, flags=re.S)
     assert len(blocks) == 5   # documentary, trance, synthwave, cosmic, cartoon
     for block in blocks:
@@ -156,6 +157,9 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
     score = parse_music_score(yaml.safe_load(chorale), "COOKBOOK-MUSIC.md")
     assert {t.instrument.name for t in score.tracks} == {"organ", "horn", "low_brass", "trumpet"}
     parse_music_score({"key": "D minor", "tempo": 100, "bars": 4, "progression": "i VI", "tracks": yaml.safe_load(low_tracks)}, "COOKBOOK-MUSIC.md")
+    (engine,) = re.findall(r"```yaml\n(.*?)```", strings, flags=re.S)   # Step 344: a string section
+    score = parse_music_score(yaml.safe_load(engine), "COOKBOOK-MUSIC.md")
+    assert {t.instrument.name for t in score.tracks} == {"violins", "violas", "cellos", "double_basses"}
     assert "examples/gps-time-of-flight/README.md" in text and "music/README.md" in text
     for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md"):
         assert "COOKBOOK-MUSIC.md" in (ROOT / doc).read_text(encoding="utf-8"), doc

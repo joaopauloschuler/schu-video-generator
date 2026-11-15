@@ -3924,6 +3924,7 @@ does):
 | leads | `soft_lead` (attack, vibrato, tone, ring: it sustains while held) |
 | brass | `trumpet` (a solo trumpet, E3–C6), `horn` (a French horn: round and dark, B1–F5), `low_brass` (a trombone section, E1–F4; `tuba`: a tuba an octave under it): attack (seconds to full level: 0.02–0.06 tongued, 0.15–0.4 soft, 1–4 a swell that opens), brightness (0 soft and dark to 1 blaring: the harmonics change, the level stays), vibrato (cents; begins 0.3 s into a note), breath, ring (the release), players (1 a solo; more a section in unison, in stereo), detune (cents between the players), mute (trumpet, horn) |
 | organ | `organ` (C1–C7): registration (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`), drawbars (`"00 8400 000"`: your own nine bars), tone, chiff, attack, chorus, detune, click, ring |
+| strings | `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5), `double_basses` (C1–G4), each a section (`players: 1` a solo): stroke (`sustain`, `spiccato`, `tremolo`, `pizzicato`), players, attack (sustain and tremolo: 0.03–0.06 firm, 0.1–0.3 smooth, 0.5 and more a swell), brightness (0 over the fingerboard: dark; 0.5 ordinary; 1 at the bridge: glassy), vibrato (cents; begins 0.16 s into a note), accent (the bite of a stroke, 0–2), length (spiccato: seconds the bow is on the string), speed (tremolo: strokes a second), decay (how long short strokes ring), bow (rosin noise), mute (con sordino), detune (cents between the players), ring (the release) |
 | pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), sub_width (0 centred, the default; 1 its own phases on each side: wider, thinner in mono, as scores rendered before Step 186 and the `skyline` bed), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
 
 **Brass and organ** (Step 343; no samples: additive synthesis). Each sustains for as long as its
@@ -3959,6 +3960,42 @@ pedal:   {instrument: organ, octave: 1, settings: {drawbars: "86 8400 000"}, ste
   works too.
 - Limits: a note cannot slur into the next (each has its own attack), and nobody has listened to
   these instruments: they are judged by measurement (DESIGN §120.4).
+
+**Bowed strings** (Step 344; no samples: additive synthesis with the instrument's body in it).
+Four instruments, each a section by default, each with four strokes:
+
+```yaml
+violins: {instrument: violins, settings: {attack: 0.14}, steps: "A4 - - - D5 - E5 - | F5 - - - - - . .", reverb: {size: 3.5, mix: 0.35}}
+solo:    {instrument: cellos, settings: {players: 1, vibrato: 18}, steps: "D3 - - - A3 - - - | G3 - - - - - . ."}
+ost:     {instrument: cellos, settings: {stroke: spiccato}, steps: "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3", accent: "3+3+2"}
+bed:     {instrument: violas, settings: {stroke: tremolo, brightness: 0.8}, steps: "* | - | - | -", volume: {from: -20, to: 0}}
+bass:    {instrument: double_basses, settings: {stroke: pizzicato}, steps: "x . . . x . . ."}
+```
+
+- **`stroke: sustain`** (the default) bows a note for as long as its steps hold it. `attack`
+  0.03–0.06 is a firm stroke with a bite, 0.1–0.3 smooth, 0.5 and more a swell. Notes that
+  follow each other without a rest overlap for `ring` seconds (0.25): write a line without
+  rests for a legato. Vibrato comes in after 0.16 s.
+- **`stroke: spiccato`** plays one short stroke per note whatever its length: the bow bites
+  (10–20 ms), stays `length` seconds (0.07; 0.15–0.25 is a staccato) and the string rings out.
+  Every stroke of a pitch is the same samples and every pitch is as loud, so sixteenths at
+  138 BPM and faster are even; shape the line with the track's `accent:` pattern and `volume`.
+  For very fast notes use `length: 0.05`.
+- **`stroke: tremolo`** is a held note of fast bow strokes (`speed`, 13 a second). A section's
+  players are not in step, so it shimmers: with `brightness: 0.8` and a `volume` curve it is the
+  tension bed of film scores.
+- **`stroke: pizzicato`** plucks. A note rings until its steps end (hold a bass note with
+  `"x - - -"` to let it ring), low notes longer than high ones. The older `pizzicato`
+  instrument is unchanged (five harmonics, the same decay at every pitch).
+- **`players`**: violins 6, violas 5, cellos 4, double basses 3 by default; 1 is a solo
+  instrument (mono), up to 12. A section is as loud as one player; its players are a few cents
+  (`detune`) and milliseconds apart, each with an instrument and a vibrato of its own, spread
+  from left to right. Seat the sections with `pan` (violins left, cellos and basses right).
+- **`brightness`** is where the bow touches: 0 over the fingerboard (dark, flute-like), 1 at the
+  bridge (glassy). **`mute: 1`** is con sordino. **`accent`** (0–2) is the bite of each stroke.
+- A `sections:` entry can change the stroke: `sections: {drop: {settings: {stroke: spiccato}}}`.
+- Limits: no slur or glide between notes, every stroke of a pitch is the same, and nobody has
+  listened to these instruments: they are judged by measurement (DESIGN §120.5).
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):

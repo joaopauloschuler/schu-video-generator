@@ -24222,6 +24222,7 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | 341 | Fix: a scene of an extension type that subclasses `Web` was not rendered again when its script changed; a module waiting for several fetches sometimes never became ready | §120.1, §120.2 |
 | 342 | `vidgen still`: single frames of a `web` scene's page without rendering it | §120.3 |
 | 343 | Synth instruments: brass (`trumpet`, `horn`, `low_brass`) and a drawbar `organ` for score files | §120.4 |
+| 344 | Synth instruments: bowed strings (`violins`, `violas`, `cellos`, `double_basses`; sustained, spiccato, tremolo, pizzicato) | §120.5 |
 | 344 | Synth instruments: bowed strings | later |
 | 345 | Synth instruments: timpani, pitched toms, taiko / frame drums, choir | later |
 | 346 | Expressive notes in the score format | later |
@@ -24414,7 +24415,7 @@ its top level failed in about one run in three with `did not become ready within
     Players a few cents apart drift in and out of step slowly, so their plain sum is for a second
     at a time up to 6 dB louder or much quieter than the players together, by chance per pitch:
     measured before the fix, four horns differed by 9 dB from note to note in the first 0.3 s.
-    `_levelled` therefore brings the sum's power, averaged over whole periods (50 ms or more), to
+    `levelled` (in `additive.py` since Step 344) therefore brings the sum's power, averaged over whole periods (50 ms or more), to
     the sum of the players' powers (a gain of at most 8 dB either way). Choosing the players'
     starting phases instead was tried and did not help beyond the first 50 ms.
   - `low_brass` is a trombone section (4 players by default) with `tuba`: the level of a tuba an
@@ -24483,3 +24484,106 @@ its top level failed in about one run in three with `did not become ready within
   horn has no hand-stopping pitch change; the organ has no swell box, no tremulant and no
   Leslie; a section's players do not differ in tone. Nobody has listened: the judgment is by
   measurement and spectrograms, with demo files for the owner.
+
+### 120.5 Bowed strings for score files (Step 344)
+
+- **The report.** "Parallel Space v6" played its violins on the PADsynth `pad` note by note and
+  its short bow strokes on `soft_lead`. Its agent wrote: "single clean voices, not a section, may
+  read as a synth sequence rather than bowed strings", and "PADsynth pads fluctuate randomly in
+  level from note to note, so they are unusable for an even ostinato". Measured here on
+  sixteenths at 138 BPM: the `pad`'s notes differ by up to 8 dB, and the same note played again
+  by up to 4.3 dB (its wave is one long random loop, read from wherever the note falls).
+- **Four instruments** of kind `note` in a new catalogue family `strings` (between `organ` and
+  `pads`): `violins` (G3–C7, 6 players), `violas` (C3–E6, 5), `cellos` (C2–A5, 4),
+  `double_basses` (C1–G4, 3; not `basses`, which is the family of the synth basses). One model
+  (`studio/strings.py`), four bodies, and a setting `stroke` with the named values `sustain`,
+  `spiccato`, `tremolo`, `pizzicato` (a section of the piece can change it like any setting, so
+  one track bows a melody in one section and plays an ostinato in the next). `players: 1` is a
+  solo instrument (mono). The old `pizzicato` instrument is unchanged.
+- **The string.** `bowed(body, Hz, brightness)`: a bowed string moves like a sawtooth, harmonic
+  `h` at `1 / h`, for `brightness` 0.5. Towards 0 (the bow over the fingerboard, sul tasto) the
+  exponent grows to 2.1 and a corner falls from 3.2 kHz to 1 kHz (violin; lower for the larger
+  bodies); towards 1 (at the bridge, sul ponticello) the exponent falls to 0.3, the corner rises
+  and the fundamental thins (to 0.3 at 1). `plucked(...)`: a string pulled aside a sixth of the
+  way along (`|sin(pi h p)| / h`, a low-pass at about 2.4 kHz), nearer the bridge and harder for
+  more `brightness` and `accent`.
+- **The body** is what separates a string instrument from a saw wave behind a filter.
+  `response(body, Hz, player, mute)` is a curve in dB fixed in frequency: little under the air
+  resonance (violin 275 Hz, viola 225, cello 98, bass 60), three narrow air and plate
+  resonances (+4 to +5 dB), a broad "bridge hill" (2.7 kHz / 2.2 / 1.4 / 0.82, +5 to +7 dB), a dip
+  under it, a roll-off above 4.6 / 3.9 / 3.0 / 2.1 kHz, and 40 narrow resonances of ±5 dB
+  between them, drawn once per body **and per player** (every player of a section has another
+  piece of wood, the same one for every note). A harmonic's amplitude is the string's times the
+  body's at that harmonic's frequency, so every pitch has its own balance of harmonics.
+  `mute` (con sordino) takes the bridge hill away, adds a small hump under it and lowers the
+  highs by 9 dB.
+- **Vibrato moves the tone, not only the pitch.** A sustained note's wave tables are 5 rows: the
+  body sampled at 5 pitches across the vibrato's swing; the note reads between the rows along its
+  pitch. Each harmonic therefore rises and falls as it slides along the body's slopes (measured
+  at A4, 12 cents: 1 dB on the fundamental, 3.5 dB on harmonic 8, 5.4 dB on harmonic 10; without
+  vibrato 0.1 dB). The vibrato begins 0.16 s into a note and grows for 0.35 s (5.8 Hz for a
+  solo; each player of a section 5.2–6.4 Hz, 0.6–1.1 of the depth, its own delay and phase).
+- **The bow.** Rosin noise shaped by the body, in bursts once per period of the note, following
+  the players' level (3.5 % of the tone, twice that in a tremolo); a scratch of 12–24 ms where a
+  stroke begins when the `attack` is under 0.15 s (and always in a spiccato), with a short
+  overshoot; both scaled by `accent` (0–2) and `bow` (0–4). A sustained note starts and ends
+  with fewer upper harmonics (a cross-fade to a darker spectrum while its level is under the
+  full level); its release lasts `ring` seconds (0.25 by default), so notes that follow each
+  other without a rest overlap: the nearest thing to a legato until Step 346.
+- **Short strokes are made from time alone.** A spiccato's spectrum is a row of wave tables per
+  moment since the stroke began: the bite (brighter by `0.12 * accent`), the bow on the string
+  for `length` seconds (0.07; 0.15–0.25 is a staccato), then the string ringing on with every
+  harmonic dying at its own speed (the fundamental's time 55 ms for a violin at A4, longer for
+  lower notes and larger bodies, times `decay`; harmonic `h` faster by `1 + 0.12 (h - 1)`). A
+  pizzicato is the plucked spectrum ringing from the start (200 ms at A4 on a violin, 1.3 s at
+  E1 on a bass; harmonic `h` faster by `1 + 0.3 (h - 1)`), a pitch 10 cents sharp for 30 ms and
+  a thump of the body. Both ring until their steps end and are then damped over `ring`. Nothing
+  depends on chance at render time: the same pitch, length, settings and track give the same
+  samples (and `additive.remembered` makes each note of an ostinato once).
+- **A section that is even.** Each player is a few cents off (`detune`, 8), starts up to 30 ms
+  late in a sustained note, 6 ms in a spiccato, 12 ms in a pizzicato, and stands somewhere from
+  left to right. Three things keep the level steady:
+  1. A sustained note's slow swings are taken out by `additive.levelled` (moved there from
+     `brass.py`, unchanged), here on each side alone: without that the section leant up to 3 dB
+     to one side on some notes.
+  2. In a stroke of a tenth of a second the players' low harmonics stay as they began, adding
+     up at one pitch and cancelling at the next: the first version's notes were up to 2.5 dB
+     apart in loudness between a solo and a section at the same pitch. `_in_step` therefore
+     picks, per harmonic, of 16 random sets of the players' phases the one whose sum is nearest
+     the sum of the players' powers (`wavetables` gained an optional phase per harmonic), and
+     the energy of each side is then set to that of its players.
+  3. Every note is set to the same loudness, not the same RMS: `_loud` weighs the harmonics as
+     the loudness measure does (4 dB more above about 1.5 kHz), so a high violin note is not
+     louder than a low one.
+- **Tremolo.** The level of a held note follows fast bow strokes (`speed`, 13 a second): between
+  a floor and 1, the string ringing on between strokes (dips of 7 dB at `accent: 1`, 10 dB at 2),
+  the tone darker in the dips; each player of a section 10 % faster or slower and anywhere in
+  its stroke, so a section's dips are 4 to 5 dB and never in step: the tension bed of film
+  scores. As loud as the sustained note; a crescendo is a `volume` curve.
+- **Levels.** A held note measures −16.3 to −17.0 LUFS over every range, section or solo (brass:
+  −16.1 to −16.8). A spiccato ostinato in sixteenths is about 1 dB louder than held notes, a
+  pizzicato line 1 to 2 dB quieter.
+- **Measured** (scratch scripts; tables in HANDOFF Step 344): harmonic levels against the body
+  curve over 2 octaves correlate with r > 0.98 after each note's own offset; attack to 90 % in
+  21 ms (`attack: 0.03`), 73–80 ms (0.1), 370 ms (0.5); a section's spiccato reaches 90 % in 9–18 ms
+  (basses 21–24; a solo 6–9) and is 20 dB down after 120–260 ms; spiccato notes over each range within
+  1.0 dB (sd 0.2) in loudness, the same note identical; a section's level swings by 0.4–2 dB in
+  50 ms frames while single harmonics beat by 11–20 dB (solo: under 1 dB and 0.5–4 dB with
+  vibrato), the two sides correlate at 0.65–0.75; power between the harmonics at the top of each
+  range under −85 dB for a sustained note (−75 dB at C1), nothing above 16.3 kHz (−110 dB);
+  first sample 0, last under −160 dB; a section costs 50–65 ms of CPU per second of one
+  sustained note (solo 16–18; `soft_lead` 8–11), a fresh spiccato note 21–55 ms once, and 128
+  sixteenths render in 0.4–0.8 s.
+- **The old `pizzicato`** has five harmonics with fixed weights, the same decay at every pitch
+  (20 dB in 0.54 s from E1 to E6), no noise and no body; it stays as it is for existing scores.
+  The strings' pizzicato has 9 to 52 harmonics by pitch and rings 0.23 s (E6) to 1.9 s (E1).
+- **Existing scores are unchanged.** No existing instrument, default or cache key changed;
+  `brass.py` lost `_levelled` and `_smoothed` to `additive.py` (the same code). Both film scores
+  render to the same bytes as after Step 343 (SHA-256 in HANDOFF).
+- **Honest limits.** A model, not a recording, and nobody has listened. No slur or glide (each
+  note is bowed anew), no bow changes inside a long note, no open-string or position
+  differences, no harmonics, col legno or measured tremolo; every stroke of a pitch is the same
+  (even by design: a real section varies a little); an `accent:` pattern on the track changes a
+  stroke's level, not its bite (the bite is the setting `accent`; per-note loudness is
+  Step 346); the tone of the section is six instruments, not sixteen; notes outside the written
+  range are played without a warning.

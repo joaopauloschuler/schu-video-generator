@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from vidgen.sfx import RATE
-from vidgen.studio.additive import band_noise, harmonic_count, phase_cycles, raised_cosine, read_tables, remembered, seeded, wavetables
+from vidgen.studio.additive import band_noise, harmonic_count, levelled, phase_cycles, raised_cosine, read_tables, remembered, seeded, wavetables
 
 #: Tables a note cross-fades between, from brightness 0 to its highest.
 _LEVELS = 8
@@ -133,35 +133,11 @@ def _breath(body: Body, n: int, held: int, s: Mapping[str, float], rng: np.rando
     return 0.012 * s["breath"] * band_noise(rng, n, 2 * body.cutoff, 0.9, 9000.0) * level * (0.5 + 2.0 * np.exp(-t / 0.05))
 
 
-def _smoothed(power: np.ndarray, length: int) -> np.ndarray:
-    """``power`` averaged twice over ``length`` samples around each sample (a triangle window)."""
-    for _ in range(2):
-        total = np.concatenate([[0.0], np.cumsum(power)])
-        at = np.arange(len(power))
-        power = (total[np.minimum(at + length // 2 + 1, len(power))] - total[np.maximum(at - length // 2, 0)]) / length
-    return power
-
-
-def _levelled(section: np.ndarray, players_power: np.ndarray, freq: float) -> np.ndarray:
-    """``section`` (stereo, the players summed) with its slow level changes taken out. Players a
-    few cents apart drift in and out of step, so their sum is, for a second at a time and by
-    chance, up to 6 dB louder or far quieter than the players are together: one note of a line
-    would be weak, the next strong. The gain here (at most 8 dB either way) brings the sum's power,
-    averaged over whole periods of the note (50 ms or more), to the sum of the players' powers
-    (``players_power``, per sample); the tone still moves as harmonics come and go."""
-    period = RATE / freq
-    length = max(int(round(period * math.ceil(0.05 * RATE / period))), 1)
-    wanted = _smoothed(players_power, length)
-    measured = _smoothed(0.5 * np.sum(section**2, axis=1), length)
-    floor = 1e-9 * max(float(wanted.max()), 1e-30)
-    return section * np.clip(np.sqrt((wanted + floor) / (measured + floor)), 0.4, 2.5)[:, None]
-
-
 def brass_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: str, below: Body | None = None) -> np.ndarray:
     """A brass note of ``n`` samples (its last ``ring`` seconds are the release): mono for one
     player, stereo ``(n, 2)`` for a section (``players`` > 1) or when ``below`` doubles it an
     octave lower (the ``tuba`` setting's level). A section's level is evened out
-    (:func:`_levelled`). The same ``seed``, pitch, length and settings give the same samples."""
+    (:func:`~vidgen.studio.additive.levelled`). The same ``seed``, pitch, length and settings give the same samples."""
     held = max(n - max(int(s["ring"] * RATE), 1), 0)
     players = int(round(s.get("players", 1.0)))
     rng = seeded("brass", seed, round(freq, 3))
@@ -186,7 +162,7 @@ def brass_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: st
         mono = s["tuba"] * _player(below, lowest, n, held, s, float(rng.uniform(-2, 2)), int(0.01 * RATE), rng.uniform(), rng)
         out += mono[:, None]
         players_power += mono**2
-    out = _levelled(out, players_power, lowest)
+    out = levelled(out, players_power, lowest)
     return out + _breath(body, n, held, s, rng)[:, None]
 
 
