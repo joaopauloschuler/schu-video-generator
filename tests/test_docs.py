@@ -149,6 +149,7 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
     genres, brass = text.split("## 8. Brass and organ")
     brass, strings = brass.split("## 9. Bowed strings")
     strings, percussion = strings.split("## 10. Orchestral percussion and choir")
+    percussion, expressive = percussion.split("## 11. Making it expressive")
     blocks = re.findall(r"```yaml\n(.*?)```", genres, flags=re.S)
     assert len(blocks) == 5   # documentary, trance, synthwave, cosmic, cartoon
     for block in blocks:
@@ -164,6 +165,10 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
     (hits,) = re.findall(r"```yaml\n(.*?)```", percussion, flags=re.S)   # Step 345: two rises into two hits
     score = parse_music_score(yaml.safe_load(hits), "COOKBOOK-MUSIC.md")
     assert {t.instrument.name for t in score.tracks} == {"choir", "timpani", "toms", "frame_drum", "snare_drum", "cymbal", "taiko", "bass_drum", "tam_tam"}
+    (marked,) = re.findall(r"```yaml\n(.*?)```", expressive, flags=re.S)   # Step 346: marks, slurs, a roll into a hit
+    score = parse_music_score(yaml.safe_load(marked), "COOKBOOK-MUSIC.md")
+    steps = [s for t in score.tracks for p in t.parts.values() for bar in p.steps or () for s in bar]
+    assert any(s.slur for s in steps) and any(s.changes for s in steps) and any(s.level != s.level_end for s in steps)
     assert "examples/gps-time-of-flight/README.md" in text and "music/README.md" in text
     for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md"):
         assert "COOKBOOK-MUSIC.md" in (ROOT / doc).read_text(encoding="utf-8"), doc

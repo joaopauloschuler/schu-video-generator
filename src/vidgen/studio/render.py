@@ -14,17 +14,17 @@ import bisect
 import math
 import zlib
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from vidgen.music import _add_panned, _circular_add, _finish, _hz, _level_gain, _pad_wave, _tone_filter, _xfade_window
 from vidgen.sfx import RATE, _highpass, _lowpass
 from vidgen.studio import effects as fx
-from vidgen.studio.instruments import AIRY_HARMONICS, AIRY_WIDTH_CENTS, Instrument
+from vidgen.studio.instruments import AIRY_HARMONICS, AIRY_WIDTH_CENTS, INSTRUMENTS, Instrument
 from vidgen.studio.patterns import ACCENT_GAIN, Pattern, Step, accent_steps
 from vidgen.studio.score_file import ChordSlot, MusicScore, Section, Track, TrackPart
-from vidgen.studio.theory import degree_interval, led_voicing, note_name
+from vidgen.studio.theory import degree_interval, led_voicing, note_name, note_number
 
 #: Seconds a one-shot keeps after its last bar for the notes' tails (cut where it falls silent).
 TAIL_SECONDS = 8.0
@@ -34,12 +34,23 @@ BEFORE_SECONDS = 1.6
 PAD_TABLE = 2**18
 #: The notes played: others are left out with a warning.
 LOWEST_HZ, HIGHEST_HZ = 20.0, 12000.0
+#: Expression (DESIGN.md §120.7). A note shorter than this takes the dynamic at its start; a
+#: longer one follows a level that moves by at least :data:`SHAPED_DB` inside it.
+SHAPED_SECONDS, SHAPED_DB = 0.25, 1.0
+#: ``fp`` / ``sfz``: seconds the loud start is held and seconds it takes to fall to the level.
+BURST_HOLD, BURST_FALL = 0.07, 0.18
+#: The power of the way from the softest to the loudest tone of a note whose level moves: above
+#: 1, so the upper harmonics come late in a crescendo, as they do when an instrument gets louder.
+_TONE_CURVE = 1.5
 
 
 @dataclass
 class _Event:
     """A note or hit of one track: from ``start`` for ``length`` samples (its held steps);
-    ``index``: its step in the bar; ``unit``: the length of its last step."""
+    ``index``: its step in the bar; ``unit``: the length of its last step. ``levels``: per step
+    it lasts, the step's start (samples from ``start``) and the dynamic in dB at its start and
+    end; ``slurred``: the further notes of its slur, each with its start (samples from
+    ``start``)."""
 
     start: int
     length: int
@@ -47,6 +58,13 @@ class _Event:
     gain: float
     index: int
     unit: int
+    levels: list[tuple[int, float, float]] = field(default_factory=list)
+    slurred: list[tuple[int, Step]] = field(default_factory=list)
+
+    @property
+    def plain(self) -> bool:
+        """Whether nothing of §120.7 touches it (it is played exactly as before Step 346)."""
+        return not (self.slurred or self.step.changes or self.step.burst or any(a or b for _, a, b in self.levels))
 
 
 class _Canvas:
@@ -117,8 +135,11 @@ def _events_and_last(
         first = (section.first_bar + b) * score.bar
         for k, step in enumerate(bar_steps):
             t0, t1 = first + round(k * score.bar / len(bar_steps)), first + round((k + 1) * score.bar / len(bar_steps))
-            if step.kind == "hold":
+            if step.kind == "hold" or (step.slur and current is not None):
                 if current is not None:
+                    if step.slur:
+                        current.slurred.append((current.length, step))
+                    current.levels.append((current.length, step.level, step.level_end))
                     current.length += t1 - t0
                     current.unit = t1 - t0
                 continue
@@ -126,7 +147,7 @@ def _events_and_last(
                 current = None
                 continue
             gain = ACCENT_GAIN if accents is not None and k in accents and not step.marked else step.gain
-            current = _Event(t0, t1 - t0, step, gain, k, t1 - t0)
+            current = _Event(t0, t1 - t0, step, gain, k, t1 - t0, [(0, step.level, step.level_end)])
             events.append(current)
     return events, current
 
@@ -203,6 +224,41 @@ class _Skipped:
         return out
 
 
+def range_warnings(score: MusicScore) -> list[str]:
+    """One line per track and instrument whose notes leave the instrument's written range
+    (:attr:`~vidgen.studio.instruments.Instrument.range`; DESIGN.md §120.7): how many, the
+    lowest or highest and where. The notes are played all the same; nothing is synthesised here."""
+    out = []
+    for track in score.tracks:
+        if track.play_chords:
+            continue
+        voicer = _Voicer()
+        outside: dict[tuple[str, bool], list[tuple[int, str]]] = {}
+        for section, part, events in _track_events(score, track):
+            instrument = track.instrument_of(part)
+            if instrument.kind == "drum":
+                continue
+            low, high = (note_number(n) for n in instrument.range) if instrument.range is not None else (0, 127)
+            for event in events:
+                for start, step in [(0, event.step)] + event.slurred:
+                    slot = _slot_at(section, event.start + start) if section.chords else None
+                    for pitch in voicer.pitches(step, slot, part):
+                        if not low <= pitch <= high:
+                            outside.setdefault((instrument.name, pitch < low), []).append((pitch, section.name))
+        for (name, below), notes in outside.items():
+            pitch, where = min(notes) if below else max(notes)
+            sections = list(dict.fromkeys(s for _, s in notes))
+            written = INSTRUMENTS[name].range
+            assert written is not None
+            out.append(
+                f"tracks.{track.name}: {len(notes)} note{'s' if len(notes) != 1 else ''} {'below' if below else 'above'} the written range of {name} "
+                f"({written[0]} to {written[1]}): the {'lowest' if below else 'highest'} is {note_name(pitch)} in section '{where}'"
+                f"{'' if len(sections) == 1 else f' ({len(sections)} sections)'}; they are played, but the instrument is not made for them: "
+                "change the notes, the octave, or the instrument"
+            )
+    return out
+
+
 CanvasFor = Callable[[str], _Canvas]
 
 
@@ -227,37 +283,121 @@ def _track_events(score: MusicScore, track: Track) -> list[tuple[Section, TrackP
     return out
 
 
+def _dynamic(event: _Event, n: int) -> tuple[float, np.ndarray | None]:
+    """An event's dynamic over the ``n`` samples of its sound: the dB at its start and, when
+    the level moves inside it (a hairpin over a note of :data:`SHAPED_SECONDS` or more, ``fp``,
+    ``sfz``), the dB per sample (the last level after its held steps); else ``None``."""
+    first = event.levels[0][1] + event.step.burst
+    if event.length < SHAPED_SECONDS * RATE:
+        return first, None
+    ends = [start for start, _, _ in event.levels[1:]] + [event.length]
+    at = [x for (start, _, _), end in zip(event.levels, ends) for x in (start, end - 1)]
+    db = [x for _, a, b in event.levels for x in (a, b)]
+    if max(db) - min(db) < SHAPED_DB and not event.step.burst:
+        return first, None
+    curve = np.interp(np.arange(n), at, db)
+    if event.step.burst:
+        fall = np.clip((np.arange(n) - BURST_HOLD * RATE) / (BURST_FALL * RATE), 0.0, 1.0)
+        curve += event.step.burst * (0.5 + 0.5 * np.cos(np.pi * fall))
+    return first, curve
+
+
+def _toned(instrument: Instrument, settings: Mapping[str, float], db: float) -> Mapping[str, float]:
+    """``settings`` as ``instrument`` plays ``db`` louder than an unmarked note (whole dB: a
+    crescendo over many notes then needs few different notes); the same mapping for 0."""
+    whole = float(round(db))
+    return instrument.respond(settings, whole) if instrument.respond is not None and whole else settings
+
+
+def _expressive(instrument: Instrument, settings: Mapping[str, float], event: _Event, n: int, make: Callable[[Mapping[str, float]], np.ndarray]) -> np.ndarray:
+    """An event's sound with its dynamics (DESIGN.md §120.7): ``make(settings)`` is the note or
+    hit with these settings; ``n``: the samples its level curve is laid over. The level is a
+    gain; an instrument with a response to dynamics also plays brighter or harder, and a level
+    that moves inside the note cross-fades between the note at its softest and at its loudest
+    (the same players and phases, so only the harmonics' levels move). ``touch``: how far an
+    accent or a soft hit changes the tone too."""
+    first, curve = _dynamic(event, n)
+    accent = settings.get("touch", 0.0) * 20 * math.log10(event.gain)
+    if curve is None:
+        return make(_toned(instrument, settings, first + accent)) * _db(first)
+    low, high = float(curve.min()) + accent, float(curve.max()) + accent
+    soft = np.asarray(make(_toned(instrument, settings, low)), dtype=float)
+    size = len(soft)
+    sound = soft
+    if instrument.respond is not None and round(low) != round(high):
+        loud = make(_toned(instrument, settings, high))
+        size = max(size, len(loud))
+        soft, loud = (np.concatenate([x, np.zeros((size - len(x),) + x.shape[1:])]) if len(x) < size else x for x in (soft, loud))
+        share = np.clip((_stretched(curve, size) + accent - low) / (high - low), 0.0, 1.0) ** _TONE_CURVE
+        sound = soft + (loud - soft) * share.reshape((size,) + (1,) * (soft.ndim - 1))
+    return sound * (10 ** (_stretched(curve, size) / 20)).reshape((size,) + (1,) * (sound.ndim - 1))
+
+
+def _stretched(curve: np.ndarray, size: int) -> np.ndarray:
+    """``curve`` over ``size`` samples: cut, or held at its last value."""
+    return curve[:size] if size <= len(curve) else np.concatenate([curve, np.full(size - len(curve), curve[-1])])
+
+
 def _render_hits(canvas_for: CanvasFor, score: MusicScore, track: Track, skipped: _Skipped) -> None:
-    """A drum or note track: each event synthesised alone and added at its time."""
-    instrument = track.instrument
+    """A drum or note track: each event synthesised alone and added at its time. An event
+    without marks is played as before Step 346; one with marks through :func:`_expressive`."""
     voicer = _Voicer()
     drums: dict[tuple[object, ...], np.ndarray] = {}
     for section, part, events in _track_events(score, track):
+        instrument = track.instrument_of(part)
         canvas = canvas_for(section.name)
         level = instrument.level * _db(part.volume_db)
         for event in events:
             held = event.length / RATE
             pan = float(np.clip(part.pan + (part.spread if event.index % 2 else -part.spread), -1, 1))
+            plain = event.plain and not (part.settings.get("touch") and event.gain != 1.0)
+            settings = part.settings if not event.step.changes else {**part.settings, **dict(event.step.changes)}
             if instrument.kind == "drum":
                 assert instrument.make is not None
-                key = (tuple(sorted(part.settings.items())), event.length)
-                if key not in drums:
-                    drums[key] = instrument.make(part.settings, held)
-                canvas.add(event.start, drums[key] * (level * event.gain), pan)
+
+                def hit(played: Mapping[str, float]) -> np.ndarray:
+                    key = (instrument.name, tuple(sorted(played.items())), event.length)
+                    if key not in drums:
+                        drums[key] = instrument.make(played, held)
+                    return drums[key]
+
+                sound = hit(settings) if plain else _expressive(instrument, settings, event, event.length, hit)
+                canvas.add(event.start, sound * (level * event.gain), pan)
                 continue
             slot = _slot_at(section, event.start) if section.chords else None
             pitches = skipped.audible(track.name, section.name, voicer.pitches(event.step, slot, part))
             if not pitches:
                 continue
             if instrument.kind == "pad":
-                _add_pad_note(canvas, score, track, part, pitches, slot, event, level)
+                gain = level if plain else level * _db(_dynamic(event, 0)[0])
+                _add_pad_note(canvas, score, track, part, pitches, slot, event, gain)
                 continue
             assert instrument.make is not None
-            n = int((held + part.settings.get("ring", 0.0)) * RATE)
+            n = int((held + settings.get("ring", 0.0)) * RATE)
             scale = level * event.gain / math.sqrt(len(pitches))
             seed = (f"studio:{score.seed}:{track.name}",) if instrument.seeded else ()
+            phrase = _phrase(section, part, event, voicer, pitches[0], settings)
             for p in pitches:
-                canvas.add(event.start, instrument.make(_hz(p), n, part.settings, *seed) * scale, pan)
+                if plain:
+                    canvas.add(event.start, instrument.make(_hz(p), n, settings, *seed) * scale, pan)
+                    continue
+
+                def note(played: Mapping[str, float]) -> np.ndarray:
+                    return instrument.make(_hz(p), n, played, *seed, phrase=phrase) if phrase else instrument.make(_hz(p), n, played, *seed)
+
+                canvas.add(event.start, _expressive(instrument, settings, event, n, note) * scale, pan)
+
+
+def _phrase(section: Section, part: TrackPart, event: _Event, voicer: _Voicer, first: int, settings: Mapping[str, float]) -> tuple[tuple[int, float, int], ...]:
+    """The slurred notes of ``event`` for its instrument (:data:`vidgen.studio.additive.Phrase`):
+    each note's start, its pitch in semitones above the event's ``first`` pitch (a MIDI number)
+    and its glide (the ``glide`` setting in force at the note) in samples."""
+    out = []
+    for start, step in event.slurred:
+        slot = _slot_at(section, event.start + start) if section.chords else None
+        glide = dict(step.changes).get("glide", settings.get("glide", 0.06))
+        out.append((start, float(voicer.pitches(step, slot, part)[0] - first), int(glide * RATE)))
+    return tuple(out)
 
 
 def _sub_note(slot: ChordSlot | None) -> int | None:
@@ -322,7 +462,7 @@ def _add_pad_note(canvas: _Canvas, score: MusicScore, track: Track, part: TrackP
     t = np.arange(n)
     env = np.clip((t + 0.5) / attack, 0.0, 1.0) * np.where(t < event.length, 1.0, np.cos(0.5 * np.pi * np.clip((t - event.length) / release, 0, 1)))
     seed = f"studio:{score.seed}:{track.name}:{tuple(pitches)}"
-    waves = _pad_layers(track.instrument, s, tuple(pitches), _sub_note(slot), seed)
+    waves = _pad_layers(track.instrument_of(part), s, tuple(pitches), _sub_note(slot), seed)
     sound = _pad_sound(score, s, waves, event.start, n) * env[:, None] * (level * event.gain) * _pan_gains(part.pan)
     canvas.add_stereo(event.start, sound)
 
@@ -345,7 +485,7 @@ def _render_held_chords(canvas_for: CanvasFor, score: MusicScore, track: Track, 
                 held[-1] = (start, length + slot.length, notes, sub)
             else:
                 held.append((slot.start, slot.length, notes, _sub_note(slot)))
-        level = track.instrument.level * _db(part.volume_db)
+        level = track.instrument_of(part).level * _db(part.volume_db)
         canvas = canvas_for(section.name)
         for start, length, notes, sub in held:
             if not notes:
@@ -353,7 +493,7 @@ def _render_held_chords(canvas_for: CanvasFor, score: MusicScore, track: Track, 
             fade = 2 * (min(int(part.settings["fade"] * RATE), length) // 2)
             env = _xfade_window(length, fade)
             first = start - fade // 2
-            waves = _pad_layers(track.instrument, part.settings, notes, sub, f"studio:{score.seed}:{track.name}:span{span}")
+            waves = _pad_layers(track.instrument_of(part), part.settings, notes, sub, f"studio:{score.seed}:{track.name}:span{span}")
             span += 1
             sound = _pad_sound(score, part.settings, waves, first, length + fade)
             canvas.add_stereo(first, sound * env[:, None] * level * _pan_gains(part.pan))
@@ -408,9 +548,16 @@ def _filter_curve(score: MusicScore, track: Track, kind: str) -> tuple[np.ndarra
     return np.exp(fx.smooth(np.log(cutoff), fx.SMOOTH_SECONDS, score.loop)), fx.smooth(unfiltered, fx.SMOOTH_SECONDS, score.loop)
 
 
+def _start_gain(event: _Event) -> float:
+    """The gain of an event's dynamic mark at its start (1 for an unmarked note)."""
+    db = event.levels[0][1] + event.step.burst if event.levels else 0.0
+    return _db(db) if db else 1.0
+
+
 def _hit_times(score: MusicScore, tracks: Mapping[str, Track], name: str) -> list[tuple[int, float]]:
     """When track ``name`` sounds (its hits and notes; its chords for ``play: chords``), or
-    every beat for ``beat``, with each hit's level (1 a plain hit, 1.5 an accent, 0.5 soft)."""
+    every beat for ``beat``, with each hit's level (1 a plain hit, 1.5 an accent, 0.5 soft;
+    times its dynamic mark's gain, DESIGN.md §120.7)."""
     if name == "beat":
         return [(t, 1.0) for t in range(0, score.samples, score.beat)]
     track = tracks[name]
@@ -422,7 +569,7 @@ def _hit_times(score: MusicScore, tracks: Mapping[str, Track], name: str) -> lis
         if part.steps is None:
             times.extend((s.start, 1.0) for s in section.chords)
         else:
-            times.extend((e.start, e.gain) for e in _events(score, section, part.steps, part.accent))
+            times.extend((e.start, e.gain * _start_gain(e)) for e in _events(score, section, part.steps, part.accent))
     return times
 
 
@@ -623,7 +770,7 @@ def mix_track_stems(
         for where, notes in stem.skipped.items():
             skipped.notes.setdefault(where, []).extend(notes)
     if warnings is not None:
-        warnings.extend(skipped.warnings())
+        warnings.extend(skipped.warnings() + range_warnings(score))
     if canvas.wrap:
         x = _master_filter(canvas.data, score, threads, fast_fft)
     else:
@@ -665,7 +812,7 @@ def render_music_score(score: MusicScore, warnings: list[str] | None = None) -> 
         else:
             _render_hits(lambda name: canvas, score, track, skipped)
     if warnings is not None:
-        warnings.extend(skipped.warnings())
+        warnings.extend(skipped.warnings() + range_warnings(score))
     if canvas.wrap:
         return _finish(_tone_filter(canvas.data, score.lowpass, score.highpass))
     x = canvas.data[canvas.before :]

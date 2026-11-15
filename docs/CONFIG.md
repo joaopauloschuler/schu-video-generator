@@ -3896,8 +3896,9 @@ A track: `instrument` (below); `steps` (a string, or a list of strings played in
 each group starts, repeated over the bar); `octave` (where the chord's root sits, C4 middle C;
 default per instrument); `transpose` (semitones); `volume` (dB); `pan` (−1 to 1); `settings`
 (the instrument's); `rest: [sections]` or `only: [sections]`; `sections: {lift: {steps, accent,
-octave, transpose, volume, pan, settings, ...effects}}` changes for one section; and the effects
-below.
+octave, transpose, volume, pan, settings, instrument, ...effects}}` changes for one section
+(`instrument`: another instrument of the track's sort plays that section, starting from its own
+settings; see **Expressive notes** below); and the effects below.
 
 Steps: `|` separates bars and each bar is split into as many equal steps as it has symbols
 (16 = sixteenths in 4/4); the pattern repeats from each section's start. `x` a hit (a pitched
@@ -3911,6 +3912,8 @@ down), `v1`–`v9` the notes of the chord's voicing from the lowest (the written
 chord as `*` plays it; past the top it starts again an octave up; `'` / `,` too), notes like `E5`,
 `F#3`, `Bb4`; `x'` / `x,` the bass note an octave up / down; `+` plays notes together in one step
 (`v2+v3+v4`, `C4+E4+G4`); `!` / `?` after a hit accents / softens it. Spaces only help reading.
+A track's steps may also carry marks in square brackets (`[p <]`, `[ff]`, `[pizzicato]`,
+`[pitch=90]`) and slurs in parentheses (`(A4 - C5 -)`): see **Expressive notes** below.
 
 Instruments (settings in brackets; `vidgen music patches` lists defaults, ranges and what each
 does):
@@ -3921,12 +3924,12 @@ does):
 | noises | `riser` (low, high; swells over its held steps), `pulsar` (high, low, sweep, noise, tone: a pulsar's chirp), `static` (low, high, wander, fade: radio static for its held steps, `"x \| - \| - \| -"`) |
 | basses | `synth_bass` (decay, tone, ring), `analog_bass` (decay, tone, closed, snap, detune, ring), `sub` (decay, tone, second, third, ring) |
 | plucks and keys | `pluck` (+ bright), `fm_pluck` (+ index), `square_pluck`, `pizzicato`, `music_box`, `bell`, `piano` (decay, tone, ring: seconds a note sounds on after its held steps), `woodblock` (tone) |
-| leads | `soft_lead` (attack, vibrato, tone, ring: it sustains while held) |
-| brass | `trumpet` (a solo trumpet, E3–C6), `horn` (a French horn: round and dark, B1–F5), `low_brass` (a trombone section, E1–F4; `tuba`: a tuba an octave under it): attack (seconds to full level: 0.02–0.06 tongued, 0.15–0.4 soft, 1–4 a swell that opens), brightness (0 soft and dark to 1 blaring: the harmonics change, the level stays), vibrato (cents; begins 0.3 s into a note), breath, ring (the release), players (1 a solo; more a section in unison, in stereo), detune (cents between the players), mute (trumpet, horn) |
+| leads | `soft_lead` (attack, vibrato, vibrato_speed, vibrato_delay, tone, ring: it sustains while held; glide: it slurs) |
+| brass | `trumpet` (a solo trumpet, E3–C6), `horn` (a French horn: round and dark, B1–F5), `low_brass` (a trombone section, E1–F4; `tuba`: a tuba an octave under it): attack (seconds to full level: 0.02–0.06 tongued, 0.15–0.4 soft, 1–4 a swell that opens), brightness (0 soft and dark to 1 blaring: the harmonics change, the level stays), vibrato (cents), vibrato_speed (5.3 Hz), vibrato_delay (0.28 s into a note), breath, ring (the release), players (1 a solo; more a section in unison, in stereo), detune (cents between the players), mute (trumpet, horn), glide (slurs), touch |
 | organ | `organ` (C1–C7): registration (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`), drawbars (`"00 8400 000"`: your own nine bars), tone, chiff, attack, chorus, detune, click, ring |
-| strings | `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5), `double_basses` (C1–G4), each a section (`players: 1` a solo): stroke (`sustain`, `spiccato`, `tremolo`, `pizzicato`), players, attack (sustain and tremolo: 0.03–0.06 firm, 0.1–0.3 smooth, 0.5 and more a swell), brightness (0 over the fingerboard: dark; 0.5 ordinary; 1 at the bridge: glassy), vibrato (cents; begins 0.16 s into a note), accent (the bite of a stroke, 0–2), length (spiccato: seconds the bow is on the string), speed (tremolo: strokes a second), decay (how long short strokes ring), bow (rosin noise), mute (con sordino), detune (cents between the players), ring (the release) |
-| percussion | played by note name: `timpani` (D2–A3; modes at the kettledrum's 1 : 1.5 : 2 : 2.44 : 2.9) and `toms` (concert toms, G1–C5): stroke (`hit`, `roll`), speed (roll: blows a second), mallet (0 soft felt to 1 hard wood: brightness, not level), decay, ring (seconds before a hand damps it), toms also drop (semitones the pitch falls after the blow) and shell. Played as drum steps: `taiko` (pitch 36–130 Hz, mallet, decay, drop, players, apart), `bass_drum` (a gran cassa: pitch 26–75 Hz, mallet, decay, players, apart), `frame_drum` (pitch 55–280 Hz, mallet, edge: 0 the middle to 1 the rim, decay, players, apart), `snare_drum` (stroke `hit` / `roll`, speed, pitch, mallet, snares, decay, players, apart), `cymbal` (a suspended cymbal: stroke `hit` / `swell`, speed, pitch: the size, mallet, decay), `tam_tam` (stroke `hit` / `swell`, speed, pitch, mallet, bloom, decay) |
-| choir | `choir` (E2–C6; a choir pad, no words): vowel (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), voices (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`), singers (8; 1–16), attack, brightness (0 soft to 1 full voice), vibrato (cents), breath, detune, morph (the vowel a held note turns into), ring |
+| strings | `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5), `double_basses` (C1–G4), each a section (`players: 1` a solo): stroke (`sustain`, `spiccato`, `tremolo`, `pizzicato`), players, attack (sustain and tremolo: 0.03–0.06 firm, 0.1–0.3 smooth, 0.5 and more a swell), brightness (0 over the fingerboard: dark; 0.5 ordinary; 1 at the bridge: glassy), vibrato (cents), vibrato_speed (5.8 Hz), vibrato_delay (0.16 s into a note), accent (the bite of a stroke, 0–2), length (spiccato: seconds the bow is on the string), speed (tremolo: strokes a second), decay (how long short strokes ring), bow (rosin noise), mute (con sordino), detune (cents between the players), ring (the release), glide (slurs), touch |
+| percussion | played by note name: `timpani` (D2–A3; modes at the kettledrum's 1 : 1.5 : 2 : 2.44 : 2.9) and `toms` (concert toms, G1–C5): stroke (`hit`, `roll`), speed (roll: blows a second), mallet (0 soft felt to 1 hard wood: brightness, not level), decay, ring (seconds before a hand damps it), toms also drop (semitones the pitch falls after the blow) and shell. Played as drum steps: `taiko` (pitch 36–130 Hz, mallet, decay, drop, players, apart), `bass_drum` (a gran cassa: pitch 26–75 Hz, mallet, decay, players, apart), `frame_drum` (pitch 55–280 Hz, mallet, edge: 0 the middle to 1 the rim, decay, players, apart), `snare_drum` (stroke `hit` / `roll`, speed, pitch, mallet, snares, decay, players, apart), `cymbal` (a suspended cymbal: stroke `hit` / `swell`, speed, pitch: the size, mallet, decay), `tam_tam` (stroke `hit` / `swell`, speed, pitch, mallet, bloom, decay); every one also touch |
+| choir | `choir` (E2–C6; a choir pad, no words): vowel (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), voices (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`), singers (8; 1–16), attack, brightness (0 soft to 1 full voice), vibrato (cents), vibrato_speed (5.5 Hz), vibrato_delay (0.3 s), breath, detune, morph (the vowel a held note turns into), ring, glide (slurs), touch |
 | pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), sub_width (0 centred, the default; 1 its own phases on each side: wider, thinner in mono, as scores rendered before Step 186 and the `skyline` bed), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
 
 **Brass and organ** (Step 343; no samples: additive synthesis). Each sustains for as long as its
@@ -3960,7 +3963,8 @@ pedal:   {instrument: organ, octave: 1, settings: {drawbars: "86 8400 000"}, ste
   click. For a pedal, add a second organ track in octave 1 or 2 on the bass note (`x`).
 - A name is accepted where `music patches` lists names (`registration: flute`); the number from 0
   works too.
-- Limits: a note cannot slur into the next (each has its own attack), and nobody has listened to
+- Since Step 346 notes can be slurred (`(A4 - C5 -)`: no new attack) and dynamic marks change
+  the brightness as well as the level (**Expressive notes** below). Nobody has listened to
   these instruments: they are judged by measurement (DESIGN §120.4).
 
 **Bowed strings** (Step 344; no samples: additive synthesis with the instrument's body in it).
@@ -3996,8 +4000,10 @@ bass:    {instrument: double_basses, settings: {stroke: pizzicato}, steps: "x . 
 - **`brightness`** is where the bow touches: 0 over the fingerboard (dark, flute-like), 1 at the
   bridge (glassy). **`mute: 1`** is con sordino. **`accent`** (0–2) is the bite of each stroke.
 - A `sections:` entry can change the stroke: `sections: {drop: {settings: {stroke: spiccato}}}`.
-- Limits: no slur or glide between notes, every stroke of a pitch is the same, and nobody has
-  listened to these instruments: they are judged by measurement (DESIGN §120.5).
+- Since Step 346 sustained and tremolo notes can be slurred with a glide, strokes can change
+  note by note (`[spiccato]`), and dynamic marks change the bite and brightness (**Expressive
+  notes** below). Every stroke of a pitch at one dynamic is the same, and nobody has listened
+  to these instruments: they are judged by measurement (DESIGN §120.5).
 
 **Orchestral percussion** (Step 345; no samples: every drum is the sum of the modes its head or
 its metal has). The `kick` is a sine that glides from at most 160 Hz to at most 70 Hz; these
@@ -4079,10 +4085,71 @@ open:  {instrument: choir, settings: {vowel: mm, morph: aah, attack: 3}, steps: 
   a straight early-music tone; **`morph`** names the vowel a held note turns into.
 - Its level is that of the strings and the brass (a held note −15.5 to −17 LUFS), so it starts
   at `volume: 0`; give it a hall (`reverb: {size: 4.5, mix: 0.36}`).
-- Limits: no words, no consonants, no slur between notes (each note has its own attack), the
+- Limits: no words, no consonants (since Step 346 notes can be slurred: `(A3 - C4 -)`), the
   singers of one kind share one table of formants (only their throat lengths differ), nothing
   but breath above 5 kHz; nobody has listened to it: it is judged by measurement (DESIGN
   §120.6).
+
+**Expressive notes** (Step 346; DESIGN §120.7). Marks in square brackets stand before a step
+in a track's `steps` and stay in force until another mark changes them (when the pattern
+repeats it starts again as written). A score without marks sounds exactly as before.
+
+```yaml
+trumpet: {instrument: trumpet, steps: "[p <] D4 - A4 - G4 - Bb4 - | [mf >] A4 - F4 - E4 - - - | [p] ."}
+swell:   {instrument: horn, settings: {players: 4}, steps: "[p <] D4 - - - [f >] - - - [p] ."}
+violin:  {instrument: violins, settings: {players: 1, vibrato: 20, vibrato_delay: 0.4}, steps: "(A4 - - C5 [glide=0.3] E5 - - -) D5 - . ."}
+cellos:  {instrument: cellos, steps: "[pizzicato] D3 . A2 . [spiccato f] D3 D3 F3 F3 | [sustain fp <] G3 - - - - - - - [ff]"}
+timpani: {instrument: timpani, settings: {mallet: 0.2}, steps: "[roll pp <] A2 - - - - - - - | [hit ff] D2 . . . . . . ."}
+taiko:   {instrument: taiko, steps: "[pitch=62] X . . x [pitch=100 mp] x x . . | [default ff] X . . . . . . ."}
+```
+
+| mark | what it does |
+|---|---|
+| `[ppp]` `[pp]` `[p]` `[mp]` `[mf]` `[f]` `[ff]` `[fff]` | the level from this step on: −20, −15, −10, −5, 0, +4, +7, +10 dB against an unmarked note (`mf`); on instruments with a response to dynamics also the tone (below) |
+| `[-6]`, `[+2.5]` | a level in dB (−40 to +12), with its sign |
+| `[p <]` ... `[f]`, `[f >]` ... `[p]` | a hairpin: the level moves in a straight line (in dB) from this step to the next dynamic, which must be louder for `<` and softer for `>`; over a held note it is a crescendo or diminuendo inside the note, over many notes one over the phrase. `[p<]` is the same; the mark that ends it may stand after the last step |
+| `[fp]` (`ffp`, `fpp`, `mfp` ...) | the note starts at the first level and falls to the second within 0.25 s; the second stays in force |
+| `[sfz]` | this note starts 7 dB over the level in force and comes back within 0.25 s |
+| `[name=value]` | one of the instrument's settings from this step on (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`, `[glide=0.3]`); a named value may stand alone when only one setting has it (`[pizzicato]`, `[roll]`, `[hit]`) |
+| `[default]` | every setting back to the track's (the section's) own |
+| `( ... )` | a slur: the notes inside after the first are not attacked again; the pitch glides to each in `glide` seconds (0.06; 0.15–0.4 a portamento), starting just before the note's step; vibrato, bow and breath go on |
+
+Several items share one mark: `[f stroke=spiccato]`. Every mistake names the mark, where it
+stands and the nearest word (`[spicato]: unknown mark; did you mean 'spiccato'?`).
+
+- **The tone follows the level** on the instruments `vidgen music patches` marks "dynamics change
+  its tone": brass gets brighter (its `brightness`), strings brighter with more bite (`brightness`
+  and `accent`), the choir fuller (`brightness`), the orchestral drums and metal are struck
+  harder (`mallet`, and the pitch `drop` of toms and taiko). The organ, the pads and the older
+  instruments change level only; a pad note takes the level at its start. Inside a held note
+  of a quarter second or more the level and the tone move smoothly (a cross-fade between the
+  note played at its softest and at its loudest level); shorter notes take the level at their
+  start.
+- **`touch`** (0 to 1; 0 by default so older scores do not change): how much `X`, `o`, `!`, `?`
+  and the `accent:` groups change the tone as well as the level; at 1 an accent bites as a
+  dynamic mark of the same level would.
+- **Marks compose** with `accent:`, `X` / `o`, `volume` (a number or a curve) and a duck that
+  follows its hits: each multiplies the level.
+- **Slurs** need single notes (no chord, `+`, `*` or rest inside) and an instrument that can slur:
+  `trumpet`, `horn`, `low_brass`, `violins`, `violas`, `cellos`, `double_basses` (with `stroke:
+  sustain` or `tremolo`), `choir` and `soft_lead`. Inside a slur only `glide` may change; dynamics
+  may. A slur is one note for a duck, an `accent:` group and the studio's step grid.
+- **Vibrato** has three settings on those instruments: `vibrato` (depth, cents), `vibrato_speed`
+  (Hz) and `vibrato_delay` (seconds into a note before it grows); in a section or choir each
+  player keeps its own speed and delay around them. Set them for the track, per section
+  (`sections: {lift: {settings: {vibrato_speed: 6}}}`) or per note (`[vibrato=30]`).
+- **An instrument per section**: `sections: {lift: {instrument: trumpet}}`. A note track can
+  change to another note instrument (a `play: chords` track to another pad), a drum track to
+  another drum; the section's settings start from the new instrument's defaults, the steps,
+  octave, volume and effects are the track's unless the section changes them.
+- **Range**: notes outside an instrument's written range are played and reported (`vidgen music
+  render` warnings, a `range` note in `vidgen music check`).
+- **Cost**: a note with a dynamic is made once per whole dB; a held note whose level moves is
+  made twice (its softest and its loudest tone). A crescendo over many short hits makes a new
+  blow per dB: 64 sixteenths of a six-player taiko under `[pp <] ... [ff]` took 5 s instead of
+  0.3 s on a 2-core machine.
+- Not offered: a glide between notes that are attacked anew, a slur through a chord, a hairpin
+  inside a pad note, words for the choir.
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):
@@ -4111,7 +4178,7 @@ hat: {instrument: hat, steps: "o.x. o.x. o.x. o.xo", spread: 0.3}
 | `spread` | 0 to 1 | odd steps this far right of `pan`, even steps as far left |
 | `width` | 0 to 2, or a curve | stereo width: 0 mono, 1 as it is, 2 extra wide |
 | `lowpass`, `highpass` | Hz, or a curve | gentle filters on the track; a curve is a filter sweep |
-| `duck` | `{to, depth, release, follow}` or a track name | side-chain ducking: dips by `depth` (0.45) at every hit of track `to` (or `beat`: every beat), back in `release` s (0.15); `follow: true` scales each dip by the hit's level (`o` half as deep, `X` 1.5 times; default `false`: every hit as deep, so a muted kick still pumps) |
+| `duck` | `{to, depth, release, follow}` or a track name | side-chain ducking: dips by `depth` (0.45) at every hit of track `to` (or `beat`: every beat), back in `release` s (0.15); `follow: true` scales each dip by the hit's level (`o` half as deep, `X` 1.5 times, and the dynamic mark at its start: `[p]` 10 dB less; default `false`: every hit as deep, so a muted kick still pumps) |
 | `gate` | `{steps, duty, floor}` or a pattern | open on the pattern's hits (`x` fully, `o` to 0.4, `-` longer) for `duty` (0.55) of the step, `floor` (0.08) between |
 | `echo` | `{delay, feedback, repeats, pingpong}` or `true` | echoes `delay` beats apart (0.75), each `feedback` (0.35) quieter, `repeats` (2), alternating sides (`pingpong: true`) |
 | `reverb` | `{size, mix, tone, predelay}` or `true` | a room: a tail of `size` s (1.8) at `mix` (0.2), low-passed at `tone` Hz (4000), after `predelay` s (0.02) |
@@ -4174,6 +4241,7 @@ Each line is `ok`, `note` or `FIX`:
 | key | share of the pitched tracks' sound on the key's notes, per section; and under each chord, each pitched track's share on the key's or the chord's notes (a track with at least 5 % of the pitched sound there) | under 75 % in a section; a track under 25 % under a chord (a line written against its chord: the advice names the track, the notes off it and the chord's notes) |
 | sections | a section named `lift` (`drop`, `chorus`, `climax`...) against the one before (the first section of a loop: the last); one named `build` (`rise`...) second half against first | a lift less than 0.5 dB louder and 1.5 dB brighter; a build rising less than 0.5 dB and brightening less than 1 dB; a note when a lift is 1 dB or more quieter than an earlier section and no brighter (a lift after a quiet break passes against the break but may not feel like the high point) |
 | narration | the demo: the voice's 300 Hz–3 kHz over the music's while it speaks | under 15 dB |
+| range | scores: notes outside an instrument's written range (the brass, strings, timpani, toms and choir have one; `music patches` shows it) | any (a note: they are played all the same; `vidgen music render` prints the same as a warning) |
 
 All 16 built-in beds and their templates pass with no notes. For a score, every track is also
 played on its own, so the report lists each track's share of the power, of the voice range, of

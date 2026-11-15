@@ -1699,6 +1699,11 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def _section_instruments(track: dict[str, Any]) -> str:
+    """``; horn in lift`` for a track of a score outline whose sections change instrument."""
+    return "".join(f"; {name} in {section}" for section, name in track.get("instruments", {}).items())
+
+
 def _music_render(args: argparse.Namespace) -> CommandResult:
     """``vidgen music render SCORE.yaml [--out FILE.wav|FILE.mp3]``: play a score file (DESIGN.md §93)."""
     from vidgen import loudness
@@ -1742,7 +1747,8 @@ def _music_render(args: argparse.Namespace) -> CommandResult:
           f"({'a seamless loop' if score.loop else f'one pass, {len(audio) / RATE:.2f} s with its ending'})")
     for s in outline["sections"]:
         print(f"    {s['start']:7.2f} s  {s['name']:<10} {s['bars']:>3} bars  {s['key']:<10} {' '.join(s['chords'])}")
-    print("tracks: " + ", ".join(f"{t['name']} ({t['instrument']}{': ' + ', '.join(t['effects']) if t['effects'] else ''})" for t in outline["tracks"]))
+    print("tracks: " + ", ".join(f"{t['name']} ({t['instrument']}{_section_instruments(t)}{': ' + ', '.join(t['effects']) if t['effects'] else ''})"
+                                 for t in outline["tracks"]))
     print(f"loudness: {meter.integrated:.1f} LUFS integrated, true peak {meter.true_peak:.1f} dBTP")
     print(f"wrote: {out}")
     return 0

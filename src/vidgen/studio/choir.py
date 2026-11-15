@@ -23,7 +23,21 @@ from collections.abc import Mapping
 import numpy as np
 
 from vidgen.sfx import RATE, _filtered
-from vidgen.studio.additive import harmonic_count, levelled, loudness, phase_cycles, raised_cosine, read_tables, remembered, seeded, smoothed, wavetables
+from vidgen.studio.additive import (
+    Phrase,
+    harmonic_count,
+    levelled,
+    loudness,
+    phase_cycles,
+    phrase_pitch,
+    phrase_tone,
+    raised_cosine,
+    read_tables,
+    remembered,
+    seeded,
+    smoothed,
+    wavetables,
+)
 
 #: The vowels, in the order of the ``vowel`` setting's numbers.
 VOWELS = ("ooh", "aah", "eeh", "mm", "oh", "ee")
@@ -83,6 +97,9 @@ _SOFT, _FULL = 2.0, 1.0
 _PITCH_ROWS = 5
 #: Breath against the tone.
 _BREATH = 0.03
+#: One singer's default vibrato speed in Hz and seconds before it begins (the settings
+#: ``vibrato_speed`` and ``vibrato_delay``; the singers of a section lie around them).
+VIBRATO_HZ, VIBRATO_DELAY = 5.5, 0.3
 
 
 def formants(kind: str, vowel: str, freq: float, throat: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
@@ -141,16 +158,20 @@ def _cents(n: int, s: Mapping[str, float], rng: np.random.Generator, offset: int
     cents = -rng.uniform(10.0, 35.0) * np.where(t >= 0, np.exp(-np.maximum(t, 0.0) / 0.06), 0.0)
     for depth in (3.0, 2.0, 1.2):
         cents += depth * np.sin(2 * np.pi * (rng.uniform(0.3, 2.6) * t + rng.uniform()))
-    speed, depth, delay = (5.5, 1.0, 0.3) if alone else (rng.uniform(4.8, 6.2), rng.uniform(0.5, 1.2), rng.uniform(0.2, 0.6))
+    hz, wait = s.get("vibrato_speed", VIBRATO_HZ), s.get("vibrato_delay", VIBRATO_DELAY)
+    speed, depth, delay = (hz, 1.0, wait) if alone else (rng.uniform(4.8, 6.2) * (hz / VIBRATO_HZ), rng.uniform(0.5, 1.2), rng.uniform(0.2, 0.6) * (wait / VIBRATO_DELAY))
     phase = rng.uniform()
     if s["vibrato"] > 0:
         cents += s["vibrato"] * depth * np.clip((t - delay) / 0.5, 0.0, 1.0) * np.sin(2 * np.pi * (speed * t + phase))
     return cents
 
 
-def _singer(kind: str, freq: float, n: int, held: int, s: Mapping[str, float], offset: int, alone: bool, rng: np.random.Generator) -> np.ndarray:
+def _singer(kind: str, freq: float, n: int, held: int, s: Mapping[str, float], offset: int, alone: bool, rng: np.random.Generator,
+            phrase: Phrase = ()) -> np.ndarray:
     """One singer's note at ``freq`` Hz (the singer's own tuning): mono, the held part as loud
-    (:func:`~vidgen.studio.additive.loudness`) whatever the pitch, vowel and kind of voice."""
+    (:func:`~vidgen.studio.additive.loudness`) whatever the pitch, vowel and kind of voice.
+    ``phrase``: the further notes it is slurred to: the breath goes on, the pitch glides to
+    each, and the mouth is shaped for each note in turn."""
     throat = 1.0 if alone else rng.uniform(0.96, 1.04)
     attack = s["attack"] * (1.0 if alone else rng.uniform(0.8, 1.3))
     level = raised_cosine(n, int(attack * RATE), offset) * (1 - raised_cosine(n, n - held, held))
@@ -158,18 +179,25 @@ def _singer(kind: str, freq: float, n: int, held: int, s: Mapping[str, float], o
     cents = _cents(n, s, rng, offset, alone)
     span = float(np.abs(cents).max()) + 1.0
     offsets = np.linspace(-span, span, _PITCH_ROWS)
-    phase = phase_cycles(freq * 2 ** (cents / 1200), n, rng.uniform())
+    turns = freq * 2 ** (cents / 1200) if not phrase else freq * 2 ** (cents / 1200 + phrase_pitch(n, phrase, offset) / 12)
+    phase = phase_cycles(turns, n, rng.uniform())
     row = (cents + span) * ((_PITCH_ROWS - 1) / (2 * span))
+    # the mouth moves from one vowel to the other over the middle of the held note
+    share = raised_cosine(n, max(int(0.7 * held), 1), int(0.15 * held)) if int(s["morph"]) else None
 
-    def sung(vowel: str) -> np.ndarray:
-        spectra = np.stack([spectrum(kind, vowel, freq, s["brightness"], throat, float(c)) for c in offsets])
-        return read_tables(wavetables(spectra), phase, row) / loudness(spectra[_PITCH_ROWS // 2], freq)
+    def sung(vowel: str, hz: float, first: int, last: int) -> np.ndarray:
+        spectra = np.stack([spectrum(kind, vowel, hz, s["brightness"], throat, float(c)) for c in offsets])
+        return read_tables(wavetables(spectra), phase[first:last], row[first:last]) / loudness(spectra[_PITCH_ROWS // 2], hz)
 
-    tone = sung(VOWELS[int(s["vowel"])])
-    if int(s["morph"]):
-        # the mouth moves from one vowel to the other over the middle of the held note
-        share = raised_cosine(n, max(int(0.7 * held), 1), int(0.15 * held))
-        tone += share * (sung(MORPHS[int(s["morph"])]) - tone)
+    def voiced(semitones: float, first: int, last: int) -> np.ndarray:
+        """The tone of the note ``semitones`` above ``freq`` over the samples ``first`` to ``last``."""
+        hz = freq * 2 ** (semitones / 12) if semitones else freq
+        tone = sung(VOWELS[int(s["vowel"])], hz, first, last)
+        if share is not None:
+            tone += share[first:last] * (sung(MORPHS[int(s["morph"])], hz, first, last) - tone)
+        return tone
+
+    tone = voiced(0.0, 0, n) if not phrase else phrase_tone(n, phrase, offset, voiced)
     return tone * level
 
 
@@ -193,11 +221,12 @@ def _breath(kinds: list[str], freq: float, n: int, s: Mapping[str, float], power
 
 
 @remembered
-def choir_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
+def choir_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
     """A choir note of ``n`` samples (its last ``ring`` seconds are the release): stereo
     ``(n, 2)`` for a section, mono for one singer. A section's slow level swings are taken out
-    on each side (:func:`~vidgen.studio.additive.levelled`). The same ``seed``, pitch, length
-    and settings give the same samples."""
+    on each side (:func:`~vidgen.studio.additive.levelled`). ``phrase``: the notes slurred to it
+    (:data:`~vidgen.studio.additive.Phrase`; the singers who began the phrase sing all of it).
+    The same ``seed``, pitch, length, settings and phrase give the same samples."""
     held = max(n - max(int(s["ring"] * RATE), 1), 0)
     singers = int(round(s["singers"]))
     rng = seeded("choir", seed, round(freq, 3))
@@ -207,13 +236,13 @@ def choir_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.nda
     late = np.zeros(1, dtype=np.intp) if singers == 1 else (rng.uniform(0.0, min(0.07, 0.4 * s["attack"]), singers) * RATE).astype(np.intp)
     late -= late.min()
     if singers == 1:
-        mono = _singer(kinds[0], float(tuned[0]), n, held, s, 0, True, rng)
+        mono = _singer(kinds[0], float(tuned[0]), n, held, s, 0, True, rng, phrase)
         return mono + _breath(kinds, freq, n, s, smoothed(mono**2, int(RATE / freq) + 1), rng)
     out = np.zeros((n, 2))
     sides_power = np.zeros((n, 2))
     places = rng.permutation(spread)  # the kinds of voice stand mixed, not basses left and sopranos right
     for k in range(singers):
-        mono = _singer(kinds[k], float(tuned[k]), n, held, s, int(late[k]), False, rng)
+        mono = _singer(kinds[k], float(tuned[k]), n, held, s, int(late[k]), False, rng, phrase)
         angle = (0.8 * places[k] + 1) * math.pi / 4
         sides = math.sqrt(2 / singers) * np.array([math.cos(angle), math.sin(angle)])
         out += mono[:, None] * sides

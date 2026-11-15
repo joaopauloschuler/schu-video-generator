@@ -24223,9 +24223,8 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | 342 | `vidgen still`: single frames of a `web` scene's page without rendering it | §120.3 |
 | 343 | Synth instruments: brass (`trumpet`, `horn`, `low_brass`) and a drawbar `organ` for score files | §120.4 |
 | 344 | Synth instruments: bowed strings (`violins`, `violas`, `cellos`, `double_basses`; sustained, spiccato, tremolo, pizzicato) | §120.5 |
-| 344 | Synth instruments: bowed strings | later |
-| 345 | Synth instruments: timpani, pitched toms, taiko / frame drums, choir | later |
-| 346 | Expressive notes in the score format | later |
+| 345 | Synth instruments: orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam`) and a `choir` | §120.6 |
+| 346 | Expressive notes in the score format: dynamic marks, hairpins, slurs with a glide, vibrato speed and delay, settings per note, an instrument per section, a range warning | §120.7 |
 | 347 | Built-in music data for `web` scenes | later |
 | 348 | Smaller intermediate clips | later |
 | 349 | Faster `web` rendering, measured first | later |
@@ -24721,3 +24720,93 @@ its top level failed in about one run in three with `did not become ready within
   partials are steady lines for seconds where a real cymbal's wander, and the tam-tam's bloom
   is an envelope, not the mode coupling that causes it. No rim shot, brushes, choke or
   flams. A `drum` instrument cannot change pitch within a track's section.
+
+### 120.7 Expressive notes in the score format (Step 346)
+
+- **The reports.** "No per-note velocity or crescendo within a note, no portamento, vibrato fixed
+  at 5 Hz." "One track cannot change instrument per section." And from Steps 343–345: "the
+  track's `accent:` pattern changes a stroke's level, not its bite", "a roll and the hit it leads
+  to are two tracks because `stroke` is a per-section setting", "a drum track's `pitch` is one
+  value per section", "a note outside the written range plays without a warning".
+- **The rule above all others**: a score that uses none of the new notation plays the same
+  samples as before. Every new setting has the old constant as its default, every new code path
+  is entered only by a mark, and the old path's arithmetic is not touched.
+- **The notation: marks in square brackets inside `steps`.** A mark stands before a step (a
+  note, a hit, a hold `-`, a rest) and holds one or more items separated by spaces:
+  `"[p] A4 - C5 - | [f stroke=spiccato] E5 E5 E5 E5"`. Everything a mark sets stays until
+  another mark changes it, as a dynamic in printed music does; when the pattern repeats it
+  starts again as written. Three kinds of item:
+  - *Dynamics*: `ppp pp p mp mf f ff fff` (−20, −15, −10, −5, 0, +4, +7, +10 dB against an
+    unmarked note, which is `mf`), or a number of dB with its sign (`[-6]`, `[+2.5]`).
+    `<` and `>` open a hairpin: the level moves in a straight line (in dB, over time) from this
+    step to the next dynamic mark, which says where it arrives: `"[p <] A4 - - - - - - - | [f] ."`
+    is a crescendo inside one held note, `"[pp <] C3 D3 E3 F3 | G3 A3 B3 C4 | [ff] D4"` one
+    over a phrase. Name and hairpin may be written together (`[p<]`). A mark may stand at the
+    very end of the steps to end a hairpin there. `fp` (also `ffp`, `fpp`, `mfp` …: a loud
+    name followed by a soft one) starts the note at the first level and drops to the second
+    within a quarter of a second; `sfz` starts 7 dB above the level in force and comes back.
+    A swell is two hairpins: `"[p <] A3 - - - [f >] - - - [p] ."`.
+  - *Settings*: `name=value` sets one of the instrument's settings from this step on
+    (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`); a named value may be
+    written alone when only one setting of the instrument has it (`[pizzicato]`, `[roll]`,
+    `[hit]`). `[default]` puts every setting back to the part's own. This is the one mechanism
+    for a strings line mixing strokes, a roll into a hit on one timpani track and a drum's
+    pitch per hit.
+  - Hairpins and `fp` need a dynamic mark with a level, a setting mark an instrument that has
+    the setting; every mistake names the mark, its place and the nearest known word.
+- **Slurs are parentheses**: `"(A4 - C5 - E5 - - -) . ."`. The notes after the first are not
+  attacked again: the phrase is one note whose pitch moves, with its vibrato, body and breath
+  going on. Each new pitch is reached by a glide of `glide` seconds (a setting of every
+  instrument that can slur; 0.06 by default: a clean legato; 0.15–0.4 is a portamento),
+  beginning before the new note's step and arriving just after it. Inside a slur only single
+  notes may stand (no chord, `+` or rest: an error), and of the settings only `glide` may
+  change. Instruments that slur: `trumpet`, `horn`, `low_brass`, the four strings (sustain
+  and tremolo), `choir`, `soft_lead`; on any other a slur is an error that lists them.
+  A glide between attacked notes is not offered.
+- **What a dynamic does.** It always changes the level. On an instrument with a response to
+  dynamics it also changes the tone (`Instrument.respond`, settings as played `dB` louder than
+  `mf`): brass `brightness` (the same curve its own attack follows), strings `brightness` and
+  `accent` (the bite), choir `brightness`, struck percussion `mallet` (and `drop` where the
+  head has one). The organ, the older instruments and the pads change level only. A level
+  that moves inside a note (a hairpin over a note of a quarter second or more, `fp`, `sfz`)
+  is a gain curve on the note and, for an instrument with a response, a cross-fade between
+  the note played at the softest and at the loudest level of the curve; both are the same
+  players in the same phases, so the cross-fade moves each harmonic's level and nothing
+  cancels. Shorter notes take the level at their start.
+- **`touch`** (a setting of the instruments with a response, 0 by default): how much an accent
+  or a soft note written the old way (`X`, `o`, `!`, `?`, the `accent:` groups) also changes
+  the tone: at 1 as a dynamic mark of the same level. It is 0 by default because existing
+  scores must not change.
+- **Vibrato**: `vibrato_speed` (Hz) and `vibrato_delay` (seconds before it begins) beside the
+  existing depth `vibrato`, on `trumpet`, `horn`, `low_brass`, the strings, `choir` and
+  `soft_lead`; the defaults are the constants used until now. In a section each player keeps
+  its own speed and delay around the setting. Per section through `settings:`, per note
+  through a mark.
+- **An instrument per section**: `sections: {lift: {instrument: horn}}` on a track. The
+  section's instrument must be of the track's sort (a drum for a drum, a pitched instrument
+  for a pitched one; a `play: chords` track stays with the pads); its settings start from the
+  new instrument's defaults (the track's `settings` belong to the track's instrument), the
+  rest of the part (steps, octave, volume, effects) is the track's.
+- **Range**: `vidgen music render`, `vidgen music check` and the studio's mix report the
+  notes outside an instrument's written range as a warning; they are played as before.
+- **What else reads the marks.** A duck with `follow: true` scales each dip by the dynamic at
+  the hit's start as well as by its accent. A slurred phrase is one event: one dip, one
+  `accent:` position. A pad note takes the dynamic at its start (no shape inside it). `vidgen
+  music render` names a section's instrument in its track line (`melody (horn; trumpet in
+  lift)`). The studio's step grid passes over marks and parentheses (it shows the steps, and
+  a cell's edit keeps the marks in the text); it does not show dynamics, hairpins or slurs.
+- **Cost.** A note at a whole-dB dynamic is one more entry in the note memory; a note whose
+  level moves is made twice. Many short hits under a long hairpin are the costly case (one
+  new blow per dB: 64 hits of a six-player taiko 5.1 s against 0.31 s plain).
+- **In the code.** `patterns.parse_steps` reads the marks and resolves the dynamics (each
+  `Step` gets the level at its start and end, `burst` for `fp` / `sfz`, `slur`, and its raw
+  setting items); `score_file` resolves the setting items against the instrument
+  (`Step.changes`); `render._events_and_last` gives every event its level segments and its
+  slurred notes; `render._render_hits` plays an event that carries none of this exactly as
+  before, and any other through `_expressive`. A slurred phrase is handed to the instrument
+  as `phrase` (`(start sample, semitones, glide samples)` per further note): one phase runs
+  through the phrase and each note's own wave tables are cross-faded on it
+  (`additive.phrase_tone`), the higher note's tables sounding during a glide so that no
+  harmonic passes 16 kHz. The note memory (`additive.remembered`) keys on the phrase; the
+  dynamics reach an instrument as settings, which it keys on already.
+

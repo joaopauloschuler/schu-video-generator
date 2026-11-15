@@ -23,25 +23,86 @@ _SAMPLES_PER_CYCLE = 128
 #: Notes up to this many samples are remembered (the last 48: under 70 MB of stereo notes).
 _REMEMBERED_SAMPLES = 2 * RATE
 
-NoteMaker = Callable[[float, int, Mapping[str, float], str], np.ndarray]
+#: The further notes of a slurred phrase (DESIGN.md §120.7): per note its start in samples from
+#: the phrase's start, its pitch in semitones above the first note and its glide in samples.
+Phrase = tuple[tuple[int, float, int], ...]
+#: Seconds over which one note's wave tables give way to the next's in a slurred phrase.
+_JOIN = 0.03
+#: The share of a glide that lies before the new note's step (the rest after it).
+_GLIDE_EARLY = 0.7
+
+NoteMaker = Callable[..., np.ndarray]
 
 
 def remembered(make: NoteMaker) -> NoteMaker:
-    """``make`` (``(Hz, samples, settings, seed) -> note``) remembering its last short notes: an
-    ostinato repeats a few notes hundreds of times. The notes it returns are read-only."""
+    """``make`` (``(Hz, samples, settings, seed) -> note``; one that can slur also takes a
+    :data:`Phrase`) remembering its last short notes: an ostinato repeats a few notes hundreds
+    of times. The notes it returns are read-only."""
 
     @lru_cache(maxsize=48)
-    def kept(freq: float, n: int, settings: tuple[tuple[str, float], ...], seed: str) -> np.ndarray:
-        note = make(freq, n, dict(settings), seed)
+    def kept(freq: float, n: int, settings: tuple[tuple[str, float], ...], seed: str, phrase: Phrase) -> np.ndarray:
+        note = make(freq, n, dict(settings), seed, phrase) if phrase else make(freq, n, dict(settings), seed)
         note.setflags(write=False)
         return note
 
-    def note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
+    def note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
         if n > _REMEMBERED_SAMPLES:
-            return make(freq, n, s, seed)
-        return kept(freq, n, tuple(sorted(s.items())), seed)
+            return make(freq, n, s, seed, phrase) if phrase else make(freq, n, s, seed)
+        return kept(freq, n, tuple(sorted(s.items())), seed, phrase)
 
     return note
+
+
+def _glides(n: int, phrase: Phrase, offset: int) -> list[tuple[int, int, float, float]]:
+    """The glides of a slurred phrase of ``n`` samples whose player starts ``offset`` samples
+    late: per further note the first and last sample of its glide and the pitches (semitones
+    above the first note) it leaves and reaches. A glide begins before its note's step and
+    never before the glide before it is over."""
+    join = int(_JOIN * RATE)
+    out: list[tuple[int, int, float, float]] = []
+    earliest, before = join, 0.0
+    for start, semitones, glide in phrase:
+        first = min(max(start + offset - int(_GLIDE_EARLY * glide), earliest), max(n - 1, 0))
+        last = min(first + max(glide, 1), n)
+        out.append((first, last, before, semitones))
+        earliest, before = last + 2 * join, semitones
+    return out
+
+
+def phrase_pitch(n: int, phrase: Phrase, offset: int = 0) -> np.ndarray:
+    """The pitch of a slurred phrase over its ``n`` samples, in semitones above its first note:
+    level on each note, a raised-cosine glide to each further one."""
+    pitch = np.zeros(n)
+    for first, last, before, after in _glides(n, phrase, offset):
+        pitch[first:last] = before + (after - before) * raised_cosine(last - first, last - first)
+        pitch[last:] = after
+    return pitch
+
+
+def phrase_tone(n: int, phrase: Phrase, offset: int, tone: Callable[[float, int, int], np.ndarray]) -> np.ndarray:
+    """A slurred phrase's tone: ``tone(semitones, first, last)`` is the tone of the note that
+    many semitones above the first over the samples ``first`` to ``last`` (every note read
+    along the same phase, so two of them add harmonic by harmonic). Each note's tone gives way
+    to the next's over 30 ms: before a glide upwards and after a glide downwards, so the
+    higher note's wave tables (which hold fewer harmonics) sound while the pitch moves and
+    nothing is read above the pitch it was made for."""
+    join = int(_JOIN * RATE)
+    windows = [(max(first - join, 0), first) if after > before else (last, min(last + join, n)) for first, last, before, after in _glides(n, phrase, offset)]
+    out = np.zeros(n)
+    for k, semitones in enumerate([0.0] + [note[1] for note in phrase]):
+        first = windows[k - 1][0] if k else 0
+        last = windows[k][1] if k < len(windows) else n
+        if last <= first:
+            continue
+        weight = np.ones(last - first)
+        if k:
+            size = windows[k - 1][1] - first
+            weight[:size] = raised_cosine(size, size)
+        if k < len(windows):
+            size = last - windows[k][0]
+            weight[len(weight) - size :] *= 1 - raised_cosine(size, size)
+        out[first:last] += weight * tone(semitones, first, last)
+    return out
 
 
 def seeded(*parts: object) -> np.random.Generator:

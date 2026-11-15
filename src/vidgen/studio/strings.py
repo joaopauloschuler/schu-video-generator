@@ -27,14 +27,28 @@ from functools import lru_cache
 import numpy as np
 
 from vidgen.sfx import RATE, _filtered
-from vidgen.studio.additive import harmonic_count, levelled, phase_cycles, raised_cosine, read_tables, remembered, seeded, smoothed, wavetables
+from vidgen.studio.additive import (
+    Phrase,
+    harmonic_count,
+    levelled,
+    phase_cycles,
+    phrase_pitch,
+    phrase_tone,
+    raised_cosine,
+    read_tables,
+    remembered,
+    seeded,
+    smoothed,
+    wavetables,
+)
 from vidgen.studio.additive import loudness as _loud
 
 #: The strokes, in the order of the ``stroke`` setting's numbers.
 STROKES = ("sustain", "spiccato", "tremolo", "pizzicato")
 _SPICCATO, _TREMOLO, _PIZZICATO = 1, 2, 3
 
-#: Vibrato: seconds before it begins and seconds over which it grows; a solo's speed in Hz.
+#: Vibrato: the default seconds before it begins (the setting ``vibrato_delay``), the seconds over
+#: which it grows, and a solo's default speed in Hz (``vibrato_speed``).
 VIBRATO_DELAY, VIBRATO_GROWS, VIBRATO_HZ = 0.16, 0.35, 5.8
 #: Tables across the vibrato's swing (the body's response at pitches from flat to sharp).
 _PITCH_ROWS = 5
@@ -154,7 +168,8 @@ def _cents(n: int, s: Mapping[str, float], rng: np.random.Generator, offset: int
     cents = np.zeros(n)
     for depth in (1.2, 0.8):
         cents += depth * np.sin(2 * np.pi * (rng.uniform(0.4, 2.2) * t + rng.uniform()))
-    speed, depth, delay = (VIBRATO_HZ, 1.0, VIBRATO_DELAY) if alone else (rng.uniform(5.2, 6.4), rng.uniform(0.6, 1.1), VIBRATO_DELAY * rng.uniform(0.7, 1.6))
+    hz, wait = s.get("vibrato_speed", VIBRATO_HZ), s.get("vibrato_delay", VIBRATO_DELAY)
+    speed, depth, delay = (hz, 1.0, wait) if alone else (rng.uniform(5.2, 6.4) * (hz / VIBRATO_HZ), rng.uniform(0.6, 1.1), wait * rng.uniform(0.7, 1.6))
     phase = rng.uniform()
     if vibrato and s["vibrato"] > 0:
         grown = np.clip((t - delay) / VIBRATO_GROWS, 0.0, 1.0)
@@ -163,9 +178,11 @@ def _cents(n: int, s: Mapping[str, float], rng: np.random.Generator, offset: int
 
 
 def _held_player(body: Body, freq: float, n: int, held: int, s: Mapping[str, float], player: int, offset: int, alone: bool,
-                 rng: np.random.Generator) -> np.ndarray:
+                 rng: np.random.Generator, phrase: Phrase = ()) -> np.ndarray:
     """One player's sustained or tremolo note at ``freq`` Hz (the player's own tuning): mono, the
-    held part as loud (:func:`~vidgen.studio.additive.loudness`) whatever the pitch and settings."""
+    held part as loud (:func:`~vidgen.studio.additive.loudness`) whatever the pitch and settings.
+    ``phrase``: the further notes it is slurred to: the bow stays on the string, the pitch glides
+    to each, and every note is the body's answer to its own pitch."""
     tremolo = int(s["stroke"]) == _TREMOLO
     t = np.arange(n) / RATE
     shape = raised_cosine(n, int(s["attack"] * RATE), offset) * (1 - raised_cosine(n, n - held, held))
@@ -179,19 +196,28 @@ def _held_player(body: Body, freq: float, n: int, held: int, s: Mapping[str, flo
         loudness = math.sqrt(float(np.mean(strokes**2)))
     cents = _cents(n, s, rng, offset, alone, vibrato=not tremolo)
     span = float(np.abs(cents).max()) + 1.0
-    number, _ = _partials(freq)
-    string = bowed(body, freq, s["brightness"])
     offsets = np.linspace(-span, span, _PITCH_ROWS)
-    spectra = np.stack([string * _gain(body, freq * 2 ** (c / 1200) * number, player, s) for c in offsets])
-    phase = phase_cycles(freq * 2 ** (cents / 1200), n, 0.0 if alone else rng.uniform())
-    steady = _loud(spectra[_PITCH_ROWS // 2], freq)
-    tone = read_tables(wavetables(spectra), phase, (cents + span) * ((_PITCH_ROWS - 1) / (2 * span))) / steady
-    # the bow not yet (or no longer) biting: the note starts and ends with fewer upper harmonics
-    soft = np.flatnonzero(shape < 0.995)
-    if len(soft):
-        dark = bowed(body, freq, max(s["brightness"] - 0.3, 0.0)) * _gain(body, freq * number, player, s)
-        weight = shape[soft] ** 0.8
-        tone[soft] = weight * tone[soft] + (1 - weight) * read_tables(wavetables(dark[None, :]), phase[soft]) / _loud(dark, freq)
+    turns = freq * 2 ** (cents / 1200) if not phrase else freq * 2 ** (cents / 1200 + phrase_pitch(n, phrase, offset) / 12)
+    phase = phase_cycles(turns, n, 0.0 if alone else rng.uniform())
+    row = (cents + span) * ((_PITCH_ROWS - 1) / (2 * span))
+
+    def voiced(semitones: float, first: int, last: int) -> np.ndarray:
+        """The tone of the note ``semitones`` above ``freq`` over the samples ``first`` to ``last``."""
+        hz = freq * 2 ** (semitones / 12) if semitones else freq
+        number, _ = _partials(hz)
+        string = bowed(body, hz, s["brightness"])
+        spectra = np.stack([string * _gain(body, hz * 2 ** (c / 1200) * number, player, s) for c in offsets])
+        steady = _loud(spectra[_PITCH_ROWS // 2], hz)
+        tone = read_tables(wavetables(spectra), phase[first:last], row[first:last]) / steady
+        # the bow not yet (or no longer) biting: the note starts and ends with fewer upper harmonics
+        soft = np.flatnonzero(shape[first:last] < 0.995)
+        if len(soft):
+            dark = bowed(body, hz, max(s["brightness"] - 0.3, 0.0)) * _gain(body, hz * number, player, s)
+            weight = shape[first:last][soft] ** 0.8
+            tone[soft] = weight * tone[soft] + (1 - weight) * read_tables(wavetables(dark[None, :]), phase[first:last][soft]) / _loud(dark, hz)
+        return tone
+
+    tone = voiced(0.0, 0, n) if not phrase else phrase_tone(n, phrase, offset, voiced)
     return tone * level / loudness
 
 
@@ -273,11 +299,13 @@ def _through_body(body: Body, noise: np.ndarray, mute: float, low: float, high: 
     return out / max(float(np.sqrt(np.mean(out**2))), 1e-12)
 
 
-def _bow_noise(body: Body, freq: float, n: int, s: Mapping[str, float], power: np.ndarray, start: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+def _bow_noise(body: Body, freq: float, n: int, s: Mapping[str, float], power: np.ndarray, start: np.ndarray, rng: np.random.Generator,
+               phrase: Phrase = ()) -> np.ndarray:
     """The noise of a note: rosin hiss while the bow is on the string, in step with the string
     (a burst each period) and following the players' level (``power``, per sample); a scratch
     where a stroke begins; for a pizzicato the thump of the finger leaving the string instead.
-    ``start``: 0 before the note's first player starts, rising to 1 within 2 ms."""
+    ``start``: 0 before the note's first player starts, rising to 1 within 2 ms. ``phrase``: the
+    notes slurred to it (the bursts follow the pitch)."""
     stroke = int(s["stroke"])
     t = np.arange(n) / RATE
     hill = body.formants[-1][0]
@@ -285,7 +313,8 @@ def _bow_noise(body: Body, freq: float, n: int, s: Mapping[str, float], power: n
         thump = _through_body(body, rng.standard_normal(n), s["mute"], body.air, 1.5 * hill)
         return _THUMP * s["accent"] * thump * start * np.exp(-t / (0.006 * body.slow))
     hiss = _through_body(body, rng.standard_normal(n), s["mute"], 0.5 * hill, 12000.0)
-    pulse = (0.5 + 0.5 * np.cos(2 * np.pi * freq * t)) ** 3 / 0.56  # RMS 1
+    angle = 2 * np.pi * freq * t if not phrase else 2 * np.pi * phase_cycles(freq * 2 ** (phrase_pitch(n, phrase) / 12), n)
+    pulse = (0.5 + 0.5 * np.cos(angle)) ** 3 / 0.56  # RMS 1
     bite = s["accent"] * (1.0 if stroke == _SPICCATO else float(np.clip(1 - s["attack"] / _BITTEN, 0.0, 1.0)))
     level = _ROSIN * (2.0 if stroke == _TREMOLO else 1.0) * np.sqrt(np.maximum(power, 0.0)) * pulse + _SCRATCH * bite * start * np.exp(-t / (0.012 * body.slow))
     return s["bow"] * hiss * level * start * start[::-1]
@@ -294,13 +323,14 @@ def _bow_noise(body: Body, freq: float, n: int, s: Mapping[str, float], power: n
 # ----- a note --------------------------------------------------------------------------------------
 
 
-def string_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
+def string_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
     """A string note of ``n`` samples (its last ``ring`` seconds are the release): mono for one
     player, stereo ``(n, 2)`` for a section (``players`` > 1), whose level is evened (a
     sustained note's slow swings by :func:`~vidgen.studio.additive.levelled`, each side alone; a short stroke's
     players begin in step harmonic by harmonic, :func:`_in_step`, and its energy on each side is
-    set to that of its players). The same ``seed``, pitch, length and settings give the same
-    samples."""
+    set to that of its players). ``phrase``: the notes slurred to it (sustained and tremolo
+    notes; :data:`~vidgen.studio.additive.Phrase`). The same ``seed``, pitch, length, settings
+    and phrase give the same samples."""
     stroke = int(s["stroke"])
     short = stroke in (_SPICCATO, _PIZZICATO)
     held = max(n - max(int(s["ring"] * RATE), 1), 0)
@@ -324,10 +354,10 @@ def string_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: s
         phases -= np.arange(1, count + 1) * (tuned * (0.02 - late / RATE))[:, None]
         notes = [_short_player(body, float(tuned[k]), n, held, s, *rings[k], phases[k], int(late[k])) for k in range(players)]
     elif players == 1:
-        mono = _held_player(body, float(tuned[0]), n, held, s, 0, 0, True, rng)
-        return mono + _bow_noise(body, freq, n, s, smoothed(mono**2, int(RATE / freq) + 1), start, rng)
+        mono = _held_player(body, float(tuned[0]), n, held, s, 0, 0, True, rng, phrase)
+        return mono + _bow_noise(body, freq, n, s, smoothed(mono**2, int(RATE / freq) + 1), start, rng, phrase)
     else:
-        notes = [_held_player(body, float(tuned[k]), n, held, s, k, int(late[k]), False, rng) for k in range(players)]
+        notes = [_held_player(body, float(tuned[k]), n, held, s, k, int(late[k]), False, rng, phrase) for k in range(players)]
     out = np.zeros((n, 2))
     sides_power = np.zeros((n, 2))
     for k, mono in enumerate(notes):
@@ -341,7 +371,7 @@ def string_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: s
         for side in range(2):  # each side on its own, so the section does not lean left on one note and right on the next
             out[:, side : side + 1] = levelled(out[:, side : side + 1], 0.5 * sides_power[:, side], freq)
         power = smoothed(0.5 * sides_power.sum(axis=1), int(RATE / freq) + 1)
-    return out + np.stack([_bow_noise(body, freq, n, s, power, start, rng) for _ in range(2)], axis=1)
+    return out + np.stack([_bow_noise(body, freq, n, s, power, start, rng, phrase) for _ in range(2)], axis=1)
 
 
 def _contact(n: int, s: Mapping[str, float]) -> np.ndarray:
@@ -354,20 +384,20 @@ _BODIES = {body.name: body for body in (VIOLIN, VIOLA, CELLO, BASS)}
 
 
 @remembered
-def violins_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
-    return string_note(VIOLIN, freq, n, s, seed)
+def violins_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
+    return string_note(VIOLIN, freq, n, s, seed, phrase)
 
 
 @remembered
-def violas_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
-    return string_note(VIOLA, freq, n, s, seed)
+def violas_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
+    return string_note(VIOLA, freq, n, s, seed, phrase)
 
 
 @remembered
-def cellos_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
-    return string_note(CELLO, freq, n, s, seed)
+def cellos_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
+    return string_note(CELLO, freq, n, s, seed, phrase)
 
 
 @remembered
-def basses_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
-    return string_note(BASS, freq, n, s, seed)
+def basses_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
+    return string_note(BASS, freq, n, s, seed, phrase)

@@ -82,7 +82,7 @@ def _pitched(steps: Any) -> bool:
     from vidgen.studio.patterns import parse_steps
 
     try:
-        pattern = parse_steps(steps, "steps", True)
+        pattern = parse_steps(steps, "steps", True, True)
     except VidgenError:
         return False
     return any(s.pitched for bar in pattern for s in bar)

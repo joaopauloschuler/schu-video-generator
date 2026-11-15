@@ -23,7 +23,20 @@ from dataclasses import dataclass
 import numpy as np
 
 from vidgen.sfx import RATE
-from vidgen.studio.additive import band_noise, harmonic_count, levelled, phase_cycles, raised_cosine, read_tables, remembered, seeded, wavetables
+from vidgen.studio.additive import (
+    Phrase,
+    band_noise,
+    harmonic_count,
+    levelled,
+    phase_cycles,
+    phrase_pitch,
+    phrase_tone,
+    raised_cosine,
+    read_tables,
+    remembered,
+    seeded,
+    wavetables,
+)
 
 #: Tables a note cross-fades between, from brightness 0 to its highest.
 _LEVELS = 8
@@ -33,7 +46,8 @@ _BLARE = 1.6
 _SOFT_TILT = 1.2
 #: Seconds the pitch scoop takes to come within a third of its start.
 _SCOOP_SECONDS = 0.035
-#: Vibrato: speed (Hz), seconds before it begins and seconds over which it grows.
+#: Vibrato: the default speed (Hz) and seconds before it begins (the settings ``vibrato_speed`` and
+#: ``vibrato_delay``), and the seconds over which it grows.
 VIBRATO_HZ, VIBRATO_DELAY, VIBRATO_GROWS = 5.3, 0.28, 0.45
 #: The tuba doubles a note an octave lower down to this (Hz); under it, in unison.
 _LOWEST_TUBA = 27.0
@@ -104,26 +118,39 @@ def _cents(n: int, body: Body, s: Mapping[str, float], detune: float, rng: np.ra
     for depth in (1.4, 0.9):
         cents += depth * np.sin(2 * np.pi * (rng.uniform(0.4, 2.4) * t + rng.uniform()))
     if s["vibrato"] > 0:
-        grown = np.clip((t - VIBRATO_DELAY) / VIBRATO_GROWS, 0.0, 1.0)
-        cents += s["vibrato"] * grown * np.sin(2 * np.pi * (VIBRATO_HZ * t + rng.uniform()))
+        grown = np.clip((t - s.get("vibrato_delay", VIBRATO_DELAY)) / VIBRATO_GROWS, 0.0, 1.0)
+        cents += s["vibrato"] * grown * np.sin(2 * np.pi * (s.get("vibrato_speed", VIBRATO_HZ) * t + rng.uniform()))
     return cents
 
 
-def _player(body: Body, freq: float, n: int, held: int, s: Mapping[str, float], detune: float, offset: int, start: float, rng: np.random.Generator) -> np.ndarray:
+def _player(body: Body, freq: float, n: int, held: int, s: Mapping[str, float], detune: float, offset: int, start: float, rng: np.random.Generator,
+            phrase: Phrase = ()) -> np.ndarray:
     """One player's note from the point ``start`` of its wave (in cycles): mono, the sustained
-    part at RMS 1 whatever the pitch and brightness."""
+    part at RMS 1 whatever the pitch and brightness. ``phrase``: the further notes it is slurred
+    to (``freq`` is the first): the pitch glides to each, the level, the vibrato and the wave go
+    on; every note has the spectrum of its own pitch."""
     level = _level(n, held, s["attack"], offset)
     brightness = s["brightness"] * level**_BLARE
     highest = max(float(brightness.max()), 1e-3)
     levels = np.linspace(0.0, highest, _LEVELS)
-    spectra = np.stack([spectrum(body, freq, b, s.get("mute", 0.0)) for b in levels])
     cents = _cents(n, body, s, detune, rng, offset)
-    tone = read_tables(wavetables(spectra), phase_cycles(freq * 2 ** (cents / 1200), n, start), brightness * ((_LEVELS - 1) / highest))
+    row = brightness * ((_LEVELS - 1) / highest)
     # the held note's spectrum as the tables give it (between two of them), for its RMS
     k = min(int(s["brightness"] / highest * (_LEVELS - 1)), _LEVELS - 2)
     share = s["brightness"] / highest * (_LEVELS - 1) - k
-    steady = (1 - share) * spectra[k] + share * spectra[k + 1]
-    return tone * level / math.sqrt(0.5 * float(np.sum(steady**2)))
+    if not phrase:
+        spectra = np.stack([spectrum(body, freq, b, s.get("mute", 0.0)) for b in levels])
+        tone = read_tables(wavetables(spectra), phase_cycles(freq * 2 ** (cents / 1200), n, start), row)
+        steady = (1 - share) * spectra[k] + share * spectra[k + 1]
+        return tone * level / math.sqrt(0.5 * float(np.sum(steady**2)))
+    phase = phase_cycles(freq * 2 ** (cents / 1200 + phrase_pitch(n, phrase, offset) / 12), n, start)
+
+    def voiced(semitones: float, first: int, last: int) -> np.ndarray:
+        spectra = np.stack([spectrum(body, freq * 2 ** (semitones / 12), b, s.get("mute", 0.0)) for b in levels])
+        steady = (1 - share) * spectra[k] + share * spectra[k + 1]
+        return read_tables(wavetables(spectra), phase[first:last], row[first:last]) / math.sqrt(0.5 * float(np.sum(steady**2)))
+
+    return phrase_tone(n, phrase, offset, voiced) * level
 
 
 def _breath(body: Body, n: int, held: int, s: Mapping[str, float], rng: np.random.Generator) -> np.ndarray:
@@ -133,11 +160,13 @@ def _breath(body: Body, n: int, held: int, s: Mapping[str, float], rng: np.rando
     return 0.012 * s["breath"] * band_noise(rng, n, 2 * body.cutoff, 0.9, 9000.0) * level * (0.5 + 2.0 * np.exp(-t / 0.05))
 
 
-def brass_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: str, below: Body | None = None) -> np.ndarray:
+def brass_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: str, below: Body | None = None, phrase: Phrase = ()) -> np.ndarray:
     """A brass note of ``n`` samples (its last ``ring`` seconds are the release): mono for one
     player, stereo ``(n, 2)`` for a section (``players`` > 1) or when ``below`` doubles it an
     octave lower (the ``tuba`` setting's level). A section's level is evened out
-    (:func:`~vidgen.studio.additive.levelled`). The same ``seed``, pitch, length and settings give the same samples."""
+    (:func:`~vidgen.studio.additive.levelled`). ``phrase``: the notes slurred to it
+    (:data:`~vidgen.studio.additive.Phrase`). The same ``seed``, pitch, length, settings and
+    phrase give the same samples."""
     held = max(n - max(int(s["ring"] * RATE), 1), 0)
     players = int(round(s.get("players", 1.0)))
     rng = seeded("brass", seed, round(freq, 3))
@@ -147,19 +176,19 @@ def brass_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: st
     late -= late.min()
     doubled = below is not None and s.get("tuba", 0.0) > 0
     if players == 1 and not doubled:
-        return _player(body, freq, n, held, s, float(detunes[0]), 0, 0.0, rng) + _breath(body, n, held, s, rng)
+        return _player(body, freq, n, held, s, float(detunes[0]), 0, 0.0, rng, phrase) + _breath(body, n, held, s, rng)
     out = np.zeros((n, 2))
     players_power = np.zeros(n)
     for k in range(players):
         angle = (0.7 * spread[k] + 1) * math.pi / 4
-        mono = _player(body, freq, n, held, s, float(detunes[k]), int(late[k]), rng.uniform(), rng) / math.sqrt(players)
+        mono = _player(body, freq, n, held, s, float(detunes[k]), int(late[k]), rng.uniform(), rng, phrase) / math.sqrt(players)
         out += mono[:, None] * (math.sqrt(2) * np.array([math.cos(angle), math.sin(angle)]))
         players_power += mono**2
     lowest = freq
     if doubled:
         assert below is not None
         lowest = freq / 2 if freq / 2 >= _LOWEST_TUBA else freq
-        mono = s["tuba"] * _player(below, lowest, n, held, s, float(rng.uniform(-2, 2)), int(0.01 * RATE), rng.uniform(), rng)
+        mono = s["tuba"] * _player(below, lowest, n, held, s, float(rng.uniform(-2, 2)), int(0.01 * RATE), rng.uniform(), rng, phrase)
         out += mono[:, None]
         players_power += mono**2
     out = levelled(out, players_power, lowest)
@@ -167,15 +196,15 @@ def brass_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: st
 
 
 @remembered
-def trumpet_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
-    return brass_note(TRUMPET, freq, n, s, seed)
+def trumpet_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
+    return brass_note(TRUMPET, freq, n, s, seed, phrase=phrase)
 
 
 @remembered
-def horn_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
-    return brass_note(HORN, freq, n, s, seed)
+def horn_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
+    return brass_note(HORN, freq, n, s, seed, phrase=phrase)
 
 
 @remembered
-def low_brass_note(freq: float, n: int, s: Mapping[str, float], seed: str) -> np.ndarray:
-    return brass_note(TROMBONE, freq, n, s, seed, below=TUBA)
+def low_brass_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
+    return brass_note(TROMBONE, freq, n, s, seed, below=TUBA, phrase=phrase)

@@ -26,7 +26,7 @@ from vidgen.loudness import LoudnessMeter, integrated_loudness, kweighted_power,
 from vidgen.music import MUSIC_LEVEL
 from vidgen.sfx import RATE, _highpass, _lowpass, decode_audio
 from vidgen.studio import measure
-from vidgen.studio.render import TrackStem, mix_track_stems, render_music_stems
+from vidgen.studio.render import TrackStem, mix_track_stems, range_warnings, render_music_stems
 from vidgen.studio.score_file import ChordSlot, MusicScore, Section, Track
 from vidgen.studio.theory import note_name
 
@@ -379,6 +379,10 @@ def check_music_score(
         between=pause,
     )
     report.audio = mix
+    outside = range_warnings(score)
+    if outside:
+        report.findings.append(Finding("range", "note", "; ".join(line.split("; they are played")[0] for line in outside),
+                                       ["they are played all the same; change the notes, the track's octave or transpose, or the instrument"]))
     report.facts.update(
         {"title": score.title, "key": score.key.name, "tempo": score.tempo, "time": f"{score.time[0]}/{score.time[1]}", "bars": score.bars}
     )

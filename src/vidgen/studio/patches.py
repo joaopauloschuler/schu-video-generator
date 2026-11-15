@@ -33,8 +33,10 @@ def _setting(s: Setting) -> dict[str, Any]:
 
 
 def patch_catalog() -> dict[str, Any]:
-    """Every instrument (name, family, kind, description, level, default octave, settings) and
-    every effect (description, example, fields), as data."""
+    """Every instrument (name, family, kind, description, level, default octave, settings;
+    ``range`` when it has a written one; ``dynamics: true`` when a dynamic mark changes its tone
+    as well as its level, ``slurs: true`` when it can slur: DESIGN.md §120.7) and every effect
+    (description, example, fields), as data."""
     return {
         "instruments": [
             {
@@ -47,6 +49,8 @@ def patch_catalog() -> dict[str, Any]:
                 "octave": i.octave,
                 "settings": {k: _setting(s) for k, s in i.settings.items()},
                 **({"range": list(i.range)} if i.range else {}),
+                **({"dynamics": True} if i.respond is not None else {}),
+                **({"slurs": True} if i.slurs is not None else {}),
             }
             for group in GROUPS
             for i in INSTRUMENTS.values()
@@ -76,7 +80,8 @@ def patch_text() -> str:
             lines += ["", f"{group.upper()}"]
         octave = f"; octave {i['octave']}" if i["octave"] is not None else ""
         made_for = f"; made for {i['range'][0]} to {i['range'][1]}" if "range" in i else ""
-        lines.append(f"  {i['name']} ({i['kind']}{octave}{made_for}): {i['words']}")
+        marks = "; ".join(w for w, key in (("dynamics change its tone", "dynamics"), ("slurs", "slurs")) if key in i)
+        lines.append(f"  {i['name']} ({i['kind']}{octave}{made_for}{'; ' + marks if marks else ''}): {i['words']}")
         for name, s in i["settings"].items():
             if "choices" in s:
                 lines.append(f"      {name:<8} {s['choices'][s['default']]:>7}  ({', '.join(s['choices'])}; or its number from 0)  {s['words']}")
@@ -94,5 +99,12 @@ def patch_text() -> str:
         "",
         "Curves (volume, width, lowpass, highpass): a number; {from: a, to: b} ramps over the section; [[bar, value], ...]",
         "points (bars from the section's start, fractions allowed) are joined by straight lines (frequencies in octaves).",
+        "",
+        "Marks in a track's steps, each in force until changed (vidgen guide music, \"Expression\"):",
+        "  [pp] [p] [mp] [mf] [f] [ff], [-6] (dB)   a dynamic: the level and, on instruments marked above, the tone",
+        "  [p <] ... [f]    a hairpin: the level moves from this step to the next dynamic ([f >] ... [p] falls); under a held note it shapes the note",
+        "  [fp] [sfz]       a loud start falling to piano; a start 7 dB over the level in force",
+        "  [stroke=pizzicato] [pitch=90] [roll]   a setting of the instrument from this step on (a named value may stand alone); [default] ends them",
+        "  (A4 - C5 - E5 -)  a slur: one note gliding from pitch to pitch (the glide setting: seconds)",
     ]
     return "\n".join(lines)

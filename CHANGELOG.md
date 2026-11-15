@@ -5,7 +5,20 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–345)
+## Unreleased (Steps 193–346)
+
+### Expressive notes in score files (Step 346)
+
+- **Dynamics per note.** Marks in square brackets before a step in a track's `steps`: `[pp] [p] [mp] [mf] [f] [ff]` (also `ppp`, `fff`, or dB: `[-6]`), in force until changed; an unmarked note is `mf`. On brass, strings, the choir and the orchestral drums a dynamic changes the tone as well as the level: louder brass is brighter, louder strings brighter with more bite, a louder choir fuller, a louder drum struck harder. The organ, pads and older instruments change level only.
+- **Shapes.** Hairpins `[p <] ... [f]` and `[f >] ... [p]` move the level from their step to the next dynamic: inside one held note (a crescendo whose tone opens as it grows) or over a phrase. Swells, `[fp]` and `[sfz]`.
+- **Slurs and glides.** `(A4 - C5 - E5 - - -)` is one bow or breath: no new attack, the pitch glides in `glide` seconds (0.06 legato, 0.2–0.4 a portamento; `[glide=0.3]` for one note), the vibrato goes on. On `trumpet`, `horn`, `low_brass`, the strings (sustained, tremolo), `choir` and `soft_lead`.
+- **Vibrato** speed and delay: the settings `vibrato_speed` and `vibrato_delay` beside `vibrato`, per track, section or note.
+- **Settings per note** with the same marks: `[pizzicato] D3 [spiccato] D3 D3 [sustain] G3 - -` on one strings track, `[roll pp <] A2 - - - | [hit ff] D2` on one timpani track, `[pitch=100] x` on a taiko. `[default]` returns to the track's settings. `touch: 1` makes the old accents (`X`, `!`, `accent:`) bite too.
+- **An instrument per section**: `sections: {lift: {instrument: trumpet}}` on a track.
+- **Range warning**: notes outside an instrument's written range are reported by `vidgen music render` and `vidgen music check` (they still play).
+- A duck with `follow: true` follows the hits' dynamics. Every mistake in a mark is an error naming the mark and the nearest word.
+- Existing scores are unchanged: "Escapement", "Parallel Space" and twelve demo scores of Steps 343–345 render to the same bytes as before.
+- Measured, not listened to (DESIGN §120.7). Docs: `docs/CONFIG.md` ("Expressive notes"), `docs/COOKBOOK-MUSIC.md` section 11, the guide ("Expression"). Tests: `tests/test_studio_expression.py`.
 
 ### Orchestral percussion and a choir for score files (Step 345)
 

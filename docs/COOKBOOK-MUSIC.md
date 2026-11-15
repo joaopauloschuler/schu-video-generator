@@ -521,13 +521,14 @@ the bloom the taiko's short crack lacks), a crash, and for a last chord the tam-
 sketch below is this, twice, with a choir.
 
 **Rolls and swells.** `stroke: roll` holds a steady level: write the crescendo as
-`volume: [[0, -24], [2, 0]]` (bars from the section's start). `stroke: swell` needs no curve.
-A roll and the hit it leads to are two tracks, because `stroke` is a setting of a track's
-section. Use a soft mallet for a timpani roll (`mallet: 0.2`) and a short `ring` (0.3), or the
+`volume: [[0, -24], [2, 0]]` (bars from the section's start), or, since Step 346, with marks
+on one track: `"[roll pp <] A2 - - - - - - - | [hit ff] D2 . . ."` (section 11).
+`stroke: swell` needs no curve. Use a soft mallet for a timpani roll (`mallet: 0.2`) and a short `ring` (0.3), or the
 roll rings on over the hit.
 
-**Soft and loud.** A soft stroke is a softer mallet and less volume together
-(`{mallet: 0.15}`, `volume: -8`); `X` and `o` in the steps change the level only.
+**Soft and loud.** A dynamic mark does both: `[p] x` is softer and rounder, `[ff] x` louder
+and harder (section 11). `X` and `o` in the steps change the level only, unless the track has
+`touch: 1`.
 
 **Tuning drums.** Timpani play the root and the fifth of the chord (`D2`, `A2`); keep them
 between D2 and A3. A taiko's `pitch` need not fit the key, but an ensemble a fifth or an
@@ -621,10 +622,117 @@ Things that go wrong:
 
 - *A timpani part written with `x`* follows the chord's bass note in the track's octave: write
   note names.
-- *A roll that never grows*: `stroke: roll` is steady; add the `volume` curve.
+- *A roll that never grows*: `stroke: roll` is steady; add a hairpin (`[roll pp <] ... [ff]`)
+  or the `volume` curve.
 - *A swell that peaks early or late*: it peaks where its held steps end. `"x | -"` over the two
   bars before the hit, then nothing.
 - *The hit is all crack*: add the `bass_drum`, or lower the taiko's `mallet` to 0.4.
 - *The choir sounds like an organ*: more `singers` and `detune`, a longer `attack`, more
   reverb; a single held chord without movement is its weakest use.
 - *Sopranos above A5* have one vowel only (a real choir's too); write the vowel lower.
+
+## 11. Making it expressive
+
+Marks make a line breathe: dynamics, hairpins, slurs and per-note settings (Step 346;
+reference: [CONFIG](CONFIG.md#score-files-vidgen-music-render), DESIGN §120.7). A score without
+them sounds exactly as before, so add them to a finished piece one track at a time and compare
+with `vidgen music check ... --compare`.
+
+| write | what it does | where |
+|---|---|---|
+| `[pp] [p] [mp] [mf] [f] [ff]`, `[-6]` | the level from this step on (−15, −10, −5, 0, +4, +7 dB; an unmarked note is `mf`) and the tone | every note and drum track |
+| `[p <] ... [f]`, `[f >] ... [p]` | a hairpin: the level moves from its step to the next dynamic, inside a held note or over a phrase | every track |
+| `[fp]`, `[sfz]` | a loud start dropping to piano in 0.25 s; one note 7 dB over the level in force | every track |
+| `[spiccato]`, `[stroke=pizzicato]`, `[pitch=100]`, `[default]` | a setting from this step on; `[default]` returns to the track's | every instrument with settings |
+| `(A4 - C5 - E5 - - -)` | a slur: one bow or breath, the pitch gliding (`glide` seconds) | brass, strings (sustain, tremolo), `choir`, `soft_lead` |
+| `vibrato_speed`, `vibrato_delay` | the vibrato's speed (Hz) and when it begins (s), beside its depth `vibrato` | the same instruments |
+| `sections: {lift: {instrument: trumpet}}` | the track plays another instrument in that section | a note track to a note instrument, a drum track to a drum |
+
+**The tone follows the level.** On brass a louder note is blown harder (brighter), on strings
+more bow (brighter, with more bite at the stroke's start), a choir sings fuller, a drum is
+struck harder (the `mallet` and, on toms and taiko, the pitch drop). The organ, the pads and
+the older instruments only get louder. That is the difference from a `volume` curve, which
+turns the same sound up: a crescendo written as a hairpin opens the tone as it grows. Keep
+`volume` for the mix and marks for the music. `touch: 1` makes the old accents (`X`, `!`,
+`accent: 3+3+2`) bite as a dynamic mark would; it is 0 by default so old scores stay as they
+were.
+
+**Hairpins.** A hairpin runs from the step that opens it to the next dynamic, which says where
+it arrives; that mark may stand at the very end of the steps (`"[p <] A3 - - - - - - - [f]"`).
+Inside a held note the level and the tone move smoothly; notes shorter than a quarter second
+take the level at their start, so over a phrase of short notes each note is a little louder
+than the one before. A swell is two hairpins: `"[p <] A3 - - - [f >] - - - [p] ."`. A `fp`
+followed by `<` is the film-score brass swell from nothing: `"[fp <] D4 - - - - - - - [ff]"`.
+
+**Slurs.** Notes in parentheses are not attacked again: on a violin the bow keeps moving, on a
+trumpet the breath goes on; the vibrato does not restart. `glide: 0.06` (the default) is a clean
+legato; 0.15–0.4 is a portamento, a slide a singer would make; set it for one note with
+`[glide=0.3]` before it. Only single notes stand inside a slur, and of the settings only
+`glide` may change there. A slur on a pizzicato, a drum or a pad is an error.
+
+**One track, many strokes.** `[pizzicato] D3 A2 [spiccato f] D3 D3 F3 F3 | [sustain] G3 - - -`
+plays three ways of bowing on one cellos track; `[roll pp <] A2 - - - | [hit ff] D2` is a
+timpani roll growing into a hit; `[pitch=62] X . [pitch=100] x x` is a big and a smaller taiko
+answering on one track.
+
+**Vibrato.** A solo violin with `vibrato: 20, vibrato_delay: 0.4` sings: short notes stay
+straight, long ones bloom. `vibrato_speed: 4.5` and a depth of 30 is slow and wide (romantic),
+7 Hz nervous. In a section each player keeps its own speed and delay around the setting.
+
+```yaml
+# 8 bars, D minor, 80 BPM: a slurred violin line with slides, cellos changing stroke,
+# horns swelling, a timpani roll into a hit and a choir growing (an original phrase)
+key: D minor
+tempo: 80
+loop: false
+sections:
+  - {name: alone, bars: 4, progression: "Dm Bb Gm A"}
+  - {name: grow, bars: 4, progression: "Dm Bb Gm A"}
+tracks:
+  violin:
+    instrument: violins
+    settings: {players: 1, vibrato: 20, vibrato_delay: 0.4}
+    reverb: {size: 2.6, mix: 0.26}
+    steps: "[mp <] (A4 - - D5 F5 - E5 - | [glide=0.25] D5 - - - - - [mf >] - -) | (C5 - Bb4 - A4 - G4 - | A4 - - - - - - -) [p]"
+  cellos:
+    instrument: cellos
+    reverb: {size: 2.6, mix: 0.24}
+    steps: "[pizzicato mf] D3 . . A2 . . D3 . | Bb2 . . F3 . . Bb2 . | G2 . . D3 . . G2 . | [sustain <] A2 - - - - - - - [f]"
+    sections:
+      grow: {steps: "[spiccato p <] D3 D3 D3 D3 D3 D3 D3 D3 | Bb2 Bb2 Bb2 Bb2 Bb2 Bb2 Bb2 Bb2 | G2 G2 G2 G2 G2 G2 G2 G2 | [sustain ff] A2 - - - - - - -"}
+  horns:
+    instrument: horn
+    settings: {players: 4}
+    only: [grow]
+    reverb: {size: 2.8, mix: 0.28}
+    steps: "[fp <] D4 - - - - - - - | [mf] (D4 - - F4 - - A4 -) | [fp <] Bb3 - - - - - - - | [f <] (A3 - - C#4 - - E4 -) [ff]"
+  choir:
+    instrument: choir
+    reverb: {size: 4.5, mix: 0.36}
+    settings: {vowel: ooh}
+    steps: "[pp <] * - - - - - - - | [p >] * - - - - - - - [pp]"
+    sections:
+      grow: {settings: {vowel: aah}, steps: "[p <] * - - - - - - - | * - - - - - - - | * - - - - - - - | [ff] * - - - - - - -"}
+  timpani:
+    instrument: timpani
+    only: [grow]
+    settings: {mallet: 0.2}
+    steps: ". | . | [roll pp <] D2 - - - - - - - | [hit ff] A2 . . . . . . ."
+```
+
+Things that go wrong:
+
+- *"the hairpin '<' has no end"*: write the level it reaches after it (`[f]`, at the end if
+  need be).
+- *A crescendo that sounds like a fader*: the instrument has no response to dynamics (an
+  organ, a pad, a `soft_lead`), or it was written as a `volume` curve.
+- *"a mark changes a setting inside a slur"*: close the slur before the mark; a slur is one
+  note.
+- *A slide everywhere*: `glide` is set on the track; set it before one note instead
+  (`[glide=0.3] E5`).
+- *A section's settings vanished*: a section that changes instrument starts from the new
+  instrument's own settings.
+- *A range warning*: the notes play, but the instrument is not made for them; move the octave
+  or give the line to a neighbour (violins to violas, horn to trumpet).
+- *A long crescendo over many short drum hits renders slowly*: every whole dB is a new blow (a
+  six-player taiko over 64 sixteenths took 5 s instead of 0.3 s).

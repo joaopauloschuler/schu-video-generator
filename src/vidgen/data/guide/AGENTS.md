@@ -4155,8 +4155,8 @@ again only when the file changes). You cannot hear it, so work from measurements
    `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, and the metal `cymbal` and `tam_tam`.
    `players: 6` on the `taiko` in a hall is the wall of drums of film scores. `mallet`, from 0
    (soft) to 1 (hard), sets the brightness of a blow; `pitch` in Hz tunes a big drum. `stroke: roll` (timpani,
-   toms, snare drum) rolls for the held steps; shape its crescendo with a `volume` curve and
-   put the hit on a second track. `stroke: swell` on `cymbal` or `tam_tam` grows by itself
+   toms, snare drum) rolls for the held steps; a roll growing into a hit is one track:
+   `"[roll pp <] A2 - - - - - - - | [hit ff] D2 . . ."` (see **Expression**). `stroke: swell` on `cymbal` or `tam_tam` grows by itself
    until its held steps end: end it on the hit. Do not build drums from the `kick` any more:
    it is one sine and stops at 160 Hz.
    **Choir**: `choir` holds a vowel (`vowel: ooh | aah | eeh | mm | oh | ee`); it is a choir
@@ -4165,6 +4165,23 @@ again only when the file changes). You cannot hear it, so work from measurements
    (`"* | - | - | -"`), give it a hall, and use `attack: 1` or more for a swell;
    `{vowel: mm, morph: aah}` opens a held note from a hum. Recipes: `docs/COOKBOOK-MUSIC.md`,
    section 10.
+   **Expression**: marks in square brackets stand before a step in a track's `steps` and last
+   until changed. Dynamics `[pp] [p] [mp] [mf] [f] [ff]` (or dB: `[-6]`; an unmarked note is
+   `mf`) change the level and, on brass, strings, choir and the orchestral drums, the tone:
+   louder is brighter and bites harder (the organ and the older instruments change level only).
+   A hairpin `[p <] ... [f]` or `[f >] ... [p]` moves the level from its step to the next
+   dynamic: over a held note it is a crescendo inside the note, over many notes a phrase
+   growing; a swell is `"[p <] A3 - - - [f >] - - - [p] ."`. `[fp]` starts loud and drops,
+   `[sfz]` stabs one note. A setting changes per note: `[pizzicato] D3 A2 [spiccato] D3 D3
+   [sustain] G3 - - -` on one cellos track, `[pitch=100] x` on a taiko, `[vibrato=0]`,
+   `[default]` back to the track's settings. Parentheses slur: `"(A4 - C5 - E5 - - -)"` is one
+   bow or breath whose pitch moves (brass, strings sustained or tremolo, choir, `soft_lead`);
+   `glide` sets the slide in seconds (0.06 clean, 0.2–0.4 a portamento, `[glide=0.3]` before one
+   note). `vibrato_speed` in Hz and `vibrato_delay` in seconds join `vibrato` on those instruments.
+   A section may play another instrument on the same track:
+   `sections: {lift: {instrument: trumpet}}`. A score without marks sounds exactly as before.
+   Notes outside an instrument's written range are reported by `vidgen music check` and
+   `render`. Recipes: `docs/COOKBOOK-MUSIC.md`, section 11.
 5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
    (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
    on the part of the piece the video plays). A piece keeps its own pace; to make its lift begin
