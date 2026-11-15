@@ -1454,3 +1454,20 @@ drawn on a canvas, `layout(t, ctx)`; a page puts them on `window.vidgen`, a scri
 **Promoting.** A page that proved useful in many videos is a candidate for a real scene type
 (section 7): a Python built-in can call `make_web_clip` (in `vidgen.api`, the code the `web` type
 uses) with its own params as `data`, as the `web` type does.
+
+**A variant of the `web` type.** A scene type of your own may subclass the built-in class, for
+example to cut instead of fading out:
+
+```python
+from vidgen.api import scene
+from vidgen.scenes.web import Web
+
+
+@scene("web_cut")
+class WebCut(Web):
+    outro = 0.0
+```
+
+Its scenes take the same params and are cached like `web` scenes: an edit to the script, or to a
+file the page imports or fetches, renders them again (since Step 341; DESIGN §120.1).
+`vidgen.scenes.web` is not part of `vidgen.api`, so check such a class after an update of vidgen.

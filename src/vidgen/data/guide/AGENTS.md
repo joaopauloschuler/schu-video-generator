@@ -3700,6 +3700,8 @@ beats each).
   never replaces a preview. An unchanged scene is not drawn again: the frames are kept with every
   file the page loaded, and editing any of them (or its `data:`, the theme or the narration) draws
   that scene again.
+  This also holds for a scene of your own type that subclasses `Web` (for example a `web_cut`
+  without the fade-out).
 
 <!-- topic: particle-physics (also: particle, particle_physics, hep, higgs, standard-model, collider, feynman-diagrams) -->
 ## Particle physics: particles, collisions and discoveries

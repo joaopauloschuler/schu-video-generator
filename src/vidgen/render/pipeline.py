@@ -905,8 +905,9 @@ def render_project(
         remove_file(frames_index)  # rewritten below when stills are requested; never stale
         if force:  # a web scene's frames are drawn again too (its clip is otherwise reused, §118.10)
             from vidgen.web.clip import forget_web_clips
+            from vidgen.web.entry import is_web_type
 
-            forget_web_clips(project.render_dir(preview) / "web", [sid for sid in to_render if project.scene(sid).type == "web"])
+            forget_web_clips(project.render_dir(preview) / "web", [sid for sid in to_render if is_web_type(project.scene(sid).type)])
         runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames, guide_passes)
         if runs.failed:
             raise VidgenError(

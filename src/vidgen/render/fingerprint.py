@@ -16,7 +16,8 @@ With overlays, also what the planned timeline reads from every scene (``vidgen.v
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
-With a ``web`` scene (DESIGN.md §118.10): its page or script file and every file its page loaded
+With a ``web`` scene (DESIGN.md §118.10; also a scene of an extension type that subclasses
+``Web``, §120.1): its page or script file and every file its page loaded
 in the last render that drew its clip (contents; the record beside the clip lists them; the
 worker records the files as the page loaded them, :func:`drawn_fingerprint`), and the beats'
 stored alignments (``ctx.beats`` has word times).
@@ -357,8 +358,11 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
         previous = project.config.scenes[index - 1]
         clip = previous.params.get("path")
         data["match_previous"] = [scene_fingerprint(project, previous.id), _stat(project.root / clip) if isinstance(clip, str) else None]
-    if spec.type == "web":
-        # the page or script file a web scene names and the files its page loaded (DESIGN.md §118.10)
+    from vidgen.web.entry import is_web_type
+
+    if is_web_type(spec.type):
+        # the page or script file a web scene names and the files its page loaded (DESIGN.md §118.10);
+        # also for an extension's scene type that subclasses Web (Step 341, §120.1)
         data["web"] = _web_inputs(project, spec)
     from vidgen.videogen.compose import scene_placements
 

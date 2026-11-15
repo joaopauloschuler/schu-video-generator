@@ -22,6 +22,7 @@ import os
 import re
 import signal
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
@@ -69,6 +70,8 @@ CANVAS_PATH = "__vidgen__/canvas.html"
 WEB_ARGS: tuple[str, ...] = ("--hide-scrollbars", "--force-color-profile=srgb", "--disable-partial-raster")
 #: How long the page may take to become ready (milliseconds).
 READY_TIMEOUT_MS = 30_000
+#: Milliseconds between two looks at whether the page is ready.
+READY_POLL_MS = 20
 #: How long vidgen's start (fonts, pictures, videos, then the page's ``load(ctx)``) may take (seconds).
 LOAD_TIMEOUT_S = 30.0
 #: How long one frame (its timers, animation-frame callbacks and ``frame(t, ctx)``) may take (seconds).
@@ -449,11 +452,8 @@ class WebPage:
         is_script = self.entry.kind == "script"
         try:
             page.goto(self._url(), wait_until="load", timeout=READY_TIMEOUT_MS)
-            page.wait_for_function(
-                "s => window.__vidgen.errors.length > 0 || (document.readyState === 'complete' && (!s || window.__vidgen.ready))",
-                arg=is_script, timeout=READY_TIMEOUT_MS,
-            )
-        except api.TimeoutError as exc:
+            self._wait_until_ready(is_script)
+        except (api.TimeoutError, TimeoutError) as exc:
             raise self._not_ready(exc) from None
         except api.Error as exc:
             raise VidgenError(f"scene '{self.scene_id}': {self.entry.posix} did not load: {first_line(exc)}") from None
@@ -463,6 +463,23 @@ class WebPage:
                 "beats": self.beats, **self.shape}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
+
+    def _wait_until_ready(self, is_script: bool) -> None:
+        """Wait until the page has loaded (and, for a ``script:``, its module has finished, with
+        every top-level ``await``) or has reported an error; :class:`TimeoutError` after
+        :data:`READY_TIMEOUT_MS`.
+
+        Asked from here every :data:`READY_POLL_MS`, not with Playwright's ``wait_for_function``:
+        that polls inside the page on ``requestAnimationFrame`` or ``setTimeout``, which are
+        vidgen's clock standing still at 0, so it looked once and a module still waiting for a
+        ``fetch`` at that moment was never looked at again (Step 341, DESIGN.md §120.2).
+        ``wait_for_timeout`` keeps Playwright answering the page's requests meanwhile."""
+        ready = "s => window.__vidgen.errors.length > 0 || (document.readyState === 'complete' && (!s || window.__vidgen.ready))"
+        end = time.monotonic() + READY_TIMEOUT_MS / 1000
+        while not self._page.evaluate(ready, is_script):
+            if time.monotonic() >= end:
+                raise TimeoutError(f"not ready after {READY_TIMEOUT_MS} ms")
+            self._page.wait_for_timeout(READY_POLL_MS)
 
     def _overrun(self, hook: str, seconds: float) -> VidgenError:
         extra = " (time stands still at 0 before frame 0, so a timer it waits for never fires)" if hook == "load(ctx)" else ""
@@ -534,6 +551,6 @@ class WebPage:
         self._chromium = self._page = None
 
 
-__all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
+__all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_POLL_MS", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
            "content_type", "engine_id", "error_location", "error_message", "fit_pixels", "google_font_families", "google_font_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
            "renderer_pids", "runtime_digest", "script_base", "unshipped_addon_message"]

@@ -6677,7 +6677,9 @@ was drawn (the page or script, styles, pictures, fonts, modules, fetched data, v
 first asked for on a later frame, and one asked for but missing). The clip is reused, and the
 scene not rendered again, while all of that is unchanged; an edit to any of those files, to the
 scene's `data:`, the theme or the narration renders that scene again (and only it). `vidgen render
---force` draws the frames again too. `vidgen storyboard` renders a `web` scene like every scene
+--force` draws the frames again too. The same holds for a scene of your own type that subclasses
+the `web` scene (`class WebCut(Web)` in `extensions/`; since Step 341, DESIGN §120.1: before it,
+an edit to such a scene's script was not noticed). `vidgen storyboard` renders a `web` scene like every scene
 (all of its frames at preview size; the clip is then reused by `vidgen render --preview` and
 `vidgen animatic`).
 

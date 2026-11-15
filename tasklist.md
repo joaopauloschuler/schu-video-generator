@@ -1996,6 +1996,66 @@ the internet while rendering; whole-page screenshots are accepted even if slow.
 ### Step 309 — Money safety: the tunnel, the submit, and interrupted submits
 - [x] During a generate run the quick tunnel stays open until the job reaches a final state (bounded by `host_max_minutes`), no longer closed after every file was fetched; `close_when_fetched`, the grace period and `host_grace_seconds` removed (docs say the longer exposure is the price); `host_max_minutes` default 20, range 5-120, must leave room for `poll_timeout` (shots blocked, `generate_clip` refuses); a paid submit is refused when the tunnel is closed or nearly out of time; `url_of` refuses a closed host; a `submit_intent` line is on disk before every paid POST and a request with an unknown outcome is not paid again until `vidgen generate resolve --intent ID --not-charged | --job JOB_ID | --charged`; plan, run, status, `generate ledger` and the budget show and count it
 
+## Phase AL — What three music films asked of the generator (owner's request, 2026-11-14)
+
+Each step is done by one agent, in order. Three music films were made with vidgen as plain
+projects outside this repository ("Parallel Space" twice, "Escapement"); their authors reported
+these limits and the owner asked for all of them to be built (DESIGN §120). Rules of the phase:
+the films' scores synthesize to the same audio as before each step; stored cache keys are not
+invalidated without a written reason; instruments are judged by measurement and spectrograms,
+with demo files for the owner to listen to.
+
+### Step 341 — Fix: an edited script of a `web` scene of an extension type was not rendered again
+- [x] Reproduced with the Escapement layout (`web_cut` = `class WebCut(Web)` in `extensions/`, `params.script: extensions/x.js`, the script importing a file and fetching a JSON beside it) in a scratch project: after an edit to the script, the imported file or the fetched file, `vidgen render .` rendered the plain `web` scene and reused both `web_cut` scenes (final, `--preview`, `--draft`, `--jobs 2`)
+- [x] Cause: the render fingerprint added the script and the loaded files only `if spec.type == "web"`; fixed with `vidgen.web.entry.is_web_type` (the type's class has the built-in `Web` among its bases), used by the fingerprint and by `--force` (which did not draw a subclass scene's frames again) (DESIGN §120.1)
+- [x] Found on the way and fixed: a `script:` module that awaits several fetches at its top level failed about one run in three with "did not become ready within 30 s" (Playwright polled on the page's `requestAnimationFrame` / `setTimeout`, which are vidgen's clock standing at 0); vidgen now asks from Python every 20 ms (DESIGN §120.2)
+- [x] Checked for `web` and for the subclass: imported and fetched files, a file asked for and missing that appears later, a file recorded only by the first render, final / preview / draft after one edit, `--jobs 2`; regression tests `tests/test_web_extension_cache.py`
+- [x] The scores of "Escapement" and "Parallel Space" (ps6) synthesize to the same samples before and after
+- [ ] Not covered: an extension scene type that does not subclass `Web` and calls `vidgen.api.make_web_clip` itself (its script is in no render fingerprint); the real Escapement project was not rendered (read-only; its layout was rebuilt small); Windows and macOS
+- [ ] Seen, not fixed (also on Step 340's code): `tests/test_scene_web.py::test_the_page_is_given_theme_data_beats_and_three` fails about two runs in three here: a CSS transition started by a beat is sometimes one step ahead at the beat's first frame (red 238 instead of 248)
+
+### Step 342 — One frame of a `web` scene as a still
+- [ ] `vidgen still PROJECT --scene ID --at SECONDS|--frame N [--size final|preview|WxH] --out file.png`: one full-size frame at an exact time on vidgen's clock without rendering the clip; several `--at` values in one browser session; any scene type if cheap; an MCP tool following the CLI
+
+### Step 343 — Synth instruments I: brass and organ
+- [ ] Brass: a solo trumpet-like and a horn-like instrument, a low brass section
+- [ ] Organ: drawbar-style with a few registrations
+- [ ] Judged by measurement and spectrograms; demo score and WAV per family
+
+### Step 344 — Synth instruments II: bowed strings
+- [ ] Sustained section over the ranges of violins, violas, cellos and basses, with slow and fast attack
+- [ ] Short strokes (spiccato / staccato) that are even from note to note (PADsynth pads fluctuate per note: not for ostinati); tremolo; pizzicato if the existing one is weak
+- [ ] Judged by measurement and spectrograms; demo score and WAV per family
+
+### Step 345 — Synth instruments III: timpani, toms, taiko, choir
+- [ ] Timpani and pitched toms (the `kick` tops out at 160 → 70 Hz); a taiko / frame-drum family
+- [ ] A choir (ooh / aah vowels by formants), honest about its quality
+- [ ] Judged by measurement and spectrograms; demo score and WAV per family
+
+### Step 346 — Expressive notes in the score format
+- [ ] Per-note loudness (velocity, accents); a crescendo / diminuendo inside a held note; glide (portamento) between notes; vibrato speed, depth and delay
+- [ ] One track changing instrument per section, if it fits cleanly
+
+### Step 347 — Built-in music data for `web` scenes
+- [ ] Per-frame spectrum bands, level, low end and onset, and drum hits and notes per track from the score, handed to the page through the existing data / beats mechanism (no hand-written script); cached, in the cache keys, deterministic
+- [ ] Shown equal to what `scripts/make_ps_audio.py` (Parallel Space) and `scripts/make_audio.py` (Escapement) made
+
+### Step 348 — Smaller intermediate clips
+- [ ] Measured first (the lossless scene clips took about 5 GB per 3-minute 720p film)
+- [ ] An opt-in compact intermediate (lossless stays the default unless a smaller lossless setting is free) and / or deleting a scene's intermediate once it is no longer needed, with the join still exact; trade-offs documented
+
+### Step 349 — Faster `web` rendering
+- [ ] Measured: where a frame's time goes (the screenshot's fixed cost, `--jobs 2` against 1 on 2 cores for a WebGL page, the Python import per worker)
+- [ ] Tried only where the output stays pixel-identical or the difference is documented and opt-in: reading the canvas back instead of a page screenshot, a cheaper screenshot format or path, two pages
+- [ ] A progress line while frames are drawn; if no safe gain exists, the measurements reported and nothing forced
+
+### Step 350 — Ready-made finishing for three.js `web` scenes
+- [ ] A shipped helper module (an import-map name): depth of field, motion blur (sub-frames accumulated on vidgen's clock), and the films' finishing chain (bloom on highlights, tone mapping, grade, vignette, grain, FXAA); deterministic, documented, with an example page
+
+### Step 351 — Critical review of Steps 341–350
+- [ ] Review with fixes; `vidgen guide` topics, CONFIG, a cookbook for the music instruments with a table of ranges and settings, the README's feature list
+- [ ] A small example under `examples/` using the new instruments, expressive notes, built-in music data and the finishing helper (no media committed); leftovers recorded here
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

@@ -23534,6 +23534,8 @@ the page stays in standards mode). The Python scene computes `theme` and `beats`
 - **`--force`**: `render_project` removes the records (`forget_web_clips`) of the `web` scenes it
   renders, so their frames are drawn again; without `--force` a re-render reuses an unchanged clip.
 - `3d` clips and keys are unchanged.
+- **Step 341:** all of this also holds for a scene of an extension type that subclasses `Web`
+  (`is_web_type`, §120.1); until then such a scene had no `web` part and its script was in no key.
 
 ### 118.11 A `web` scene fits with the rest of a video (Step 331)
 
@@ -24206,3 +24208,85 @@ by the whole video.
   `.ttf`, with `.woff` and with the variable `.ttf`, and in a fallback font without the folder;
   both scenes are rendered again after each change of `fonts/` and reused after none. Not tried
   on Windows or macOS.
+
+## 120. What three music films asked of the generator (Phase AL, Steps 341–351)
+
+Three music films were made with vidgen as plain projects outside this repository: "Parallel
+Space" (two versions; three.js `web` scenes, a 29-track score, a hand-written script that gave
+the page the spectrum, the drum hits and the notes) and "Escapement" (clockwork in three.js with
+hand-written depth of field and motion blur). Their authors reported limits, and the owner asked
+(2026-11-14) for all of them to be built. One step each:
+
+| Step | What | Section |
+|---|---|---|
+| 341 | Fix: a scene of an extension type that subclasses `Web` was not rendered again when its script changed; a module waiting for several fetches sometimes never became ready | §120.1, §120.2 |
+| 342 | A single-frame still command for `web` scenes | later |
+| 343 | Synth instruments: brass and organ | later |
+| 344 | Synth instruments: bowed strings | later |
+| 345 | Synth instruments: timpani, pitched toms, taiko / frame drums, choir | later |
+| 346 | Expressive notes in the score format | later |
+| 347 | Built-in music data for `web` scenes | later |
+| 348 | Smaller intermediate clips | later |
+| 349 | Faster `web` rendering, measured first | later |
+| 350 | Ready-made finishing for three.js `web` scenes | later |
+| 351 | Critical review, documents, an example | later |
+
+Rules of the phase: the films' scores must synthesize to the same audio as before each step, and
+stored cache keys are not invalidated without a written reason.
+
+### 120.1 A scene type that subclasses `Web` is a `web` scene for the cache (Step 341)
+
+- **The report.** In "Escapement", after an edit to `extensions/escapement.js`, `vidgen render .`
+  reused the old scene clips; only `--force --scene ID` rendered them again. The project's twelve
+  scenes are of an extension type: `extensions/webcut.py` holds `@scene("web_cut") class
+  WebCut(Web): outro = 0.0`, and each scene has `params: {script: extensions/escapement.js, data:
+  {...}}`; the script fetches `./escapement_audio.json`.
+- **Reproduced** in a scratch project of that layout (two `web_cut` scenes and one `web` scene on
+  one script that imports `./helper.js` and fetches `./x_audio.json`): after an edit to the
+  script, to the imported file or to the fetched file, `vidgen render .` rendered the `web` scene
+  and reused both `web_cut` scenes, at every quality and with `--jobs 2`.
+- **Cause.** The render fingerprint added a scene's `web` part (§118.10: the script's SHA-256 and
+  every file the page loaded) only `if spec.type == "web"`. A scene of another type name had no
+  such part, so nothing in its fingerprint named the script: `extensions` in the fingerprint
+  digests the `*.py` files of the extension folders only, and `assets` only `assets/`. The scene's
+  render was therefore "current" and its worker never ran, so the clip's own check
+  (`make_web_clip`, which does compare the script and the loaded files) was never reached. Step
+  330's claim held for the type `web` and for no subclass of it.
+- **Fix.** `vidgen.web.entry.is_web_type(name)`: true for `web` and for a registered type whose
+  class has the built-in `vidgen.scenes.web.Web` among its bases (told from the class's `__mro__`
+  by module and name, so nothing is imported). `fingerprint_inputs` uses it, and so does
+  `render_project` for `--force` (which removed the clip records of `web` scenes only: a forced
+  `web_cut` scene was rendered again but showed its stored frames). A type the registry does not
+  know (no project session active) counts only when it is `web` itself; then the fingerprint of a
+  subclass scene lacks the part and differs from the stored one, so the scene is rendered again
+  rather than wrongly reused. Every caller of `scene_fingerprint` in vidgen runs inside a
+  project session.
+- **Not a web type:** an extension scene that does not subclass `Web` and calls
+  `vidgen.api.make_web_clip` itself. Its script is in no fingerprint; it should subclass `Web`, or
+  keep its page under `assets/` (size and time are in every scene's fingerprint).
+- **Stored renders.** The fingerprint of a scene of a `Web` subclass now has the `web` part, so
+  each such scene is rendered once more after this step (reason: the stored renders may be stale,
+  which was the fault). Its frames clip (`build/<quality>/web/<scene>.mkv`) has its own key, which
+  did not change: the frames are reused when the script and loaded files are as recorded, and
+  drawn again when not. Scenes of type `web` and of every other type keep the same inputs.
+- **Checked, and already right** for the type `web` (and now for subclasses): files the script
+  imports and fetches; a file asked for and not found that is created later; a file recorded only
+  by the first render; an edit seen at one quality and then at the others (final, `--preview`,
+  `--draft`); `--jobs 2`. Tests: `tests/test_web_extension_cache.py`.
+
+### 120.2 Waiting for a page to become ready (Step 341)
+
+Found while reproducing §120.1. A `script:` module that awaited two fetches one after the other at
+its top level failed in about one run in three with `did not become ready within 30 s`.
+
+- **Cause.** `WebPage._open` waited with Playwright's `page.wait_for_function`. That looks once
+  and then looks again from inside the page, on `requestAnimationFrame` or on `setTimeout`. Both
+  are vidgen's clock (§118.8), which stands at 0 until frame 0, so the second look never came. A
+  module that had finished by the first look was fine (one fetch usually had); one still waiting
+  then was never seen to finish. Measured on a module with two awaited fetches, before: 6 of 14
+  opens failed with the default polling and 9 of 14 with `polling=50`; after: 0 of 14.
+- **Fix.** `WebPage._wait_until_ready` asks from Python (`page.evaluate`) every `READY_POLL_MS`
+  (20 ms) until `READY_TIMEOUT_MS`, and waits between two looks with `page.wait_for_timeout`,
+  which keeps Playwright answering the page's requests (`time.sleep` would not). The message of a
+  page that never becomes ready is unchanged up to its last part (`: not ready after 30000 ms`).
+- Frames, clip keys and the page's script are unchanged (`data/web/*.js` untouched).

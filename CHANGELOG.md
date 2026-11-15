@@ -5,7 +5,16 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–340)
+## Unreleased (Steps 193–341)
+
+### Fixed: an edited script of a `web` scene of your own type was not rendered again (Step 341)
+
+- **Fixed:** a scene of an extension scene type that subclasses the `web` scene (for example `@scene("web_cut") class WebCut(Web): outro = 0.0`) was reused after an edit to its `script:` / `page:` file or to a file the page imports or fetches; only `vidgen render --force --scene ID` rendered it again. The render fingerprint looked at these files only for the type named `web`. It now does for every type whose class subclasses `Web`. Found in the music film "Escapement"; reproduced in a small project of the same layout before the fix.
+- After updating, each scene of such a type is rendered once more (its stored render may be out of date). Its frames are drawn again only if the script or a loaded file differs from what was recorded. Scenes of type `web` are not affected.
+- **Fixed:** `vidgen render --force` did not draw the frames of such a scene again when its files were unchanged.
+- **Fixed:** a `script:` module that awaits several `fetch()` calls one after the other at its top level failed in about one run in three with `did not become ready within 30 s` (6 of 14 opens of a module with two fetches; 0 of 14 after). vidgen looked once and then waited on a timer of the page, which is vidgen's own clock and stands still before the first frame.
+- Not covered: an extension scene type that does not subclass `Web` and calls `make_web_clip` itself. DESIGN §120.1, §120.2; tests `tests/test_web_extension_cache.py`.
+- This step opens Phase AL ("What three music films asked of the generator", Steps 341–351) in `tasklist.md` and DESIGN §120.
 
 ### A fast draft of a video with `web` scenes; the README names the six kinds of scene (Step 340)
 

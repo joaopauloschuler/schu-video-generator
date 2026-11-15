@@ -87,4 +87,19 @@ def entry_digest(root: Path, params: Any) -> dict[str, Any]:
     return {"kind": entry.kind, "path": entry.posix, "sha256": digest}
 
 
-__all__ = ["SUFFIXES", "WebEntry", "entry_digest", "entry_of", "entry_path", "entry_problems", "inside", "web_entry_problems"]
+def is_web_type(name: str) -> bool:
+    """True when the scene type ``name`` is ``web`` or a registered type whose class subclasses
+    the built-in ``Web`` scene (an extension's ``class WebCut(Web)``): such a scene shows a page
+    too, so its script and the files its page loaded are render inputs (DESIGN.md §120.1).
+
+    Told by the class's bases, so nothing is imported here. A type the registry does not know
+    (no project is active) counts only when it is ``web`` itself."""
+    from vidgen import registry
+
+    entry = registry.find(name)
+    if entry is None:
+        return name == "web"
+    return any(base.__module__ == "vidgen.scenes.web" and base.__name__ == "Web" for base in entry.cls.__mro__)
+
+
+__all__ = ["SUFFIXES", "WebEntry", "entry_digest", "entry_of", "entry_path", "entry_problems", "inside", "is_web_type", "web_entry_problems"]
