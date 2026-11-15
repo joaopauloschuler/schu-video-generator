@@ -39,7 +39,18 @@ from vidgen.music import (
 )
 from vidgen.sfx import RATE, _band, _filtered, _lowpass, _tone
 from vidgen.studio.brass import horn_note, low_brass_note, trumpet_note
+from vidgen.studio.choir import MORPHS, VOICES, VOWELS, choir_note
 from vidgen.studio.organ import REGISTRATION_NAMES, REGISTRATIONS, organ_note, read_drawbars
+from vidgen.studio.percussion import (
+    bass_drum_sound,
+    cymbal_sound,
+    frame_drum_sound,
+    snare_drum_sound,
+    taiko_sound,
+    tam_tam_sound,
+    timpani_note,
+    toms_note,
+)
 from vidgen.studio.strings import STROKES, basses_note, cellos_note, violas_note, violins_note
 
 #: Instrument kinds: ``drum`` (no pitch: hits), ``note`` (one sound per note, a chord is its
@@ -312,11 +323,35 @@ def _strings(name: str, words: str, level: float, octave: int, low: str, high: s
     return _orchestral(name, words, level, octave, low, high, _string_settings(players), make, "strings")
 
 
+_MALLET = "what strikes it, 0 to 1: the harder, the brighter the blow and the more of its own knock (the level stays)"
+_DRUM_DECAY = "how long it rings, times its natural time (lower drums ring longer)"
+_DRUM_PLAYERS = "drums struck together: 1 one drum (mono), more an ensemble spread from left to right, each drum tuned a little apart (as loud as one)"
+_APART = "seconds the players of an ensemble are apart at most (0: exactly together)"
+_HIT_ROLL = ("hit", "roll")
+_HIT_SWELL = ("hit", "swell")
+
+
+def _roll(speed: float, low: float, high: float) -> dict[str, tuple[Any, ...]]:
+    return {
+        "stroke": (0.0, 0.0, 1.0, "hit: one blow; roll: fast blows of both hands for as long as its steps hold it (\"x - - -\"), at a steady level: shape a "
+                   "crescendo with a volume curve", _HIT_ROLL),
+        "speed": (speed, low, high, "roll: blows per second"),
+    }
+
+
+def _swell(speed: float) -> dict[str, tuple[Any, ...]]:
+    return {
+        "stroke": (0.0, 0.0, 1.0, "hit: one blow, ringing out; swell: a roll with soft mallets that grows from nearly nothing until its held steps end "
+                   "(\"x | - | - | -\"), then rings out: end it on the bar where the hit falls", _HIT_SWELL),
+        "speed": (speed, 5.0, 24.0, "swell: blows per second"),
+    }
+
+
 def _pad(name: str, words: str, level: float, octave: int, harmonics: tuple[float, ...], settings: dict[str, Setting]) -> Instrument:
     return Instrument(name, "pad", words, level, octave, settings, harmonics=harmonics, group="pads")
 
 
-#: The instrument library by name, in catalogue order (drums, noises, basses, plucks and keys, leads, brass, organ, strings, pads).
+#: The instrument library by name, in catalogue order (drums, noises, basses, plucks and keys, leads, brass, organ, strings, percussion, choir, pads).
 INSTRUMENTS: dict[str, Instrument] = {
     i.name: i
     for i in (
@@ -414,6 +449,77 @@ INSTRUMENTS: dict[str, Instrument] = {
                  cellos_note),
         _strings("double_basses", "a double bass section: the floor of the strings; bowed, or `stroke: pizzicato` for a plucked bass line", 0.115, 1, "C1", "G4",
                  3.0, basses_note),
+        _orchestral("timpani", "timpani (kettledrums), played by note name (\"D2 . . A2\"): a drum with a pitch, its overtones a fifth, an octave and a "
+                    "tenth above the note; `stroke: roll` for a roll", 0.22, 2, "D2", "A3",
+                    _settings(**_roll(11.0, 5.0, 22.0),
+                              mallet=(0.4, 0.0, 1.0, _MALLET + ": 0.15 soft felt (round, for rolls), 0.4 medium, 0.8 wood (clear, hard)"),
+                              decay=(1.0, 0.2, 2.5, _DRUM_DECAY),
+                              ring=(3.0, 0.05, 8.0, "seconds it rings on after its held steps before a hand damps it: 3 lets it ring out, 0.1-0.3 is a damped (secco) note")),
+                    timpani_note, "percussion"),
+        _orchestral("toms", "concert toms from high to floor, played by note name (a fill: \"C4 A3 F3 . D3 A2 F2 .\"): the pitch falls as the head "
+                    "settles, the shell rings under it", 0.24, 2, "G1", "C5",
+                    _settings(**_roll(14.0, 5.0, 26.0),
+                              mallet=(0.75, 0.0, 1.0, _MALLET + ": 0.2 a felt mallet (round, like small timpani), 0.75 a stick"),
+                              drop=(1.0, 0.0, 4.0, "semitones the pitch starts sharp before it falls to the note (0 none, 2-3 a slack, growling head)"),
+                              decay=(1.0, 0.2, 3.0, _DRUM_DECAY),
+                              shell=(1.0, 0.0, 3.0, "level of the shell's own ring (0: the head alone)"),
+                              ring=(1.5, 0.05, 6.0, "seconds it rings on after its held steps before it is damped")),
+                    toms_note, "percussion"),
+        _drum("taiko", "a taiko, the big drum of film-score hits: a hard stick on a thick head over a barrel, a crack and a long low tail; `players` "
+              "makes it an ensemble", 0.3,
+              _settings(pitch=(62.0, 36.0, 130.0, "the head's lowest note in Hz (45 huge, 62 big, 100 a smaller drum answering)"),
+                        mallet=(0.7, 0.0, 1.0, _MALLET), decay=(1.0, 0.2, 2.5, _DRUM_DECAY),
+                        drop=(1.5, 0.0, 4.0, "semitones the pitch starts sharp before it falls"),
+                        players=(1.0, 1.0, 8.0, _DRUM_PLAYERS), apart=(0.022, 0.0, 0.08, _APART)), taiko_sound, "percussion"),
+        _drum("bass_drum", "a concert bass drum (gran cassa): a soft beater on a wide head, a deep bloom without a click and a long tail", 0.3,
+              _settings(pitch=(40.0, 26.0, 75.0, "the head's lowest note in Hz"), mallet=(0.25, 0.0, 1.0, _MALLET), decay=(1.0, 0.2, 2.5, _DRUM_DECAY),
+                        players=(1.0, 1.0, 4.0, _DRUM_PLAYERS), apart=(0.03, 0.0, 0.08, _APART)), bass_drum_sound, "percussion"),
+        _drum("frame_drum", "a frame drum played by hand: one head on a hoop; `edge` moves the stroke from the deep middle to the bright rim", 0.2,
+              _settings(pitch=(110.0, 55.0, 280.0, "the head's lowest note in Hz"),
+                        mallet=(0.4, 0.0, 1.0, _MALLET + ": 0.2 the flat hand, 0.4 fingers, 0.9 a stick"),
+                        edge=(0.0, 0.0, 1.0, "where it is struck: 0 the middle (deep, open), 1 at the rim (short and bright); change it per section, or use "
+                              "two tracks for a pattern of both"),
+                        decay=(1.0, 0.2, 2.5, _DRUM_DECAY), players=(1.0, 1.0, 8.0, _DRUM_PLAYERS), apart=(0.015, 0.0, 0.08, _APART)),
+              frame_drum_sound, "percussion"),
+        _drum("snare_drum", "an orchestral snare drum: a short head and the rattle of the snare wires; `stroke: roll` for a roll, `players` for a line "
+              "of field drums", 0.22,
+              _settings(**_roll(26.0, 10.0, 40.0),
+                        pitch=(185.0, 130.0, 280.0, "the head's lowest note in Hz"), mallet=(0.7, 0.0, 1.0, _MALLET),
+                        snares=(1.0, 0.0, 2.0, "level of the snare wires (0: snares off, a dry tom-like drum)"),
+                        decay=(1.0, 0.4, 2.5, "how long head and wires ring, times their natural time"),
+                        players=(1.0, 1.0, 8.0, _DRUM_PLAYERS), apart=(0.012, 0.0, 0.08, _APART)), snare_drum_sound, "percussion"),
+        _drum("cymbal", "a suspended cymbal: a blow that rings for seconds (a crash with a soft start), or `stroke: swell`, the mallet roll that "
+              "grows into a hit (stereo)", 0.065,
+              _settings(**_swell(14.0),
+                        pitch=(1.0, 0.6, 1.6, "the size: under 1 a larger, lower cymbal, over 1 a smaller, higher one"),
+                        mallet=(0.5, 0.0, 1.0, _MALLET + ": 0.2 soft yarn (a wash), 0.5 a medium mallet, 1 a stick (a ping)"),
+                        decay=(1.0, 0.2, 2.0, "how long it rings, times its natural time")), cymbal_sound, "percussion"),
+        _drum("tam_tam", "a tam-tam (a large flat gong): a dark blow whose highs arrive a second later and a very long tail; `stroke: swell` grows "
+              "into one (stereo)", 0.1,
+              _settings(**_swell(9.0),
+                        pitch=(1.0, 0.6, 1.8, "the size: under 1 a larger, lower gong, over 1 a smaller one"),
+                        mallet=(0.3, 0.0, 1.0, _MALLET),
+                        bloom=(1.0, 0.0, 2.0, "how much the highs grow in after the blow (0: none, a dull gong; 2: a roaring one)"),
+                        decay=(1.0, 0.2, 2.0, "how long it rings, times its natural time")), tam_tam_sound, "percussion"),
+        _orchestral("choir", "a choir holding a vowel (a choir pad: no words): `vowel` picks " + ", ".join(VOWELS) + "; `voices` who sings ("
+                    + ", ".join(VOICES) + "); hold chords with \"* | - | - | -\" in a hall", 0.125, 3, "E2", "C6",
+                    _settings(
+                        vowel=(0.0, 0.0, float(len(VOWELS) - 1), "the vowel held: ooh (dark, round), aah (open, full), eeh (brighter, as in \"bed\"), mm (a hum, "
+                               "the mouth closed), oh, ee (thin and bright)", VOWELS),
+                        voices=(0.0, 0.0, float(len(VOICES) - 1), "who sings: mixed (every note by the kinds of voice that reach it: basses lowest, then tenors, "
+                                "altos, sopranos), men (basses and tenors), women (altos and sopranos), or one kind for every note", VOICES),
+                        singers=(8.0, 1.0, 16.0, "singers on each note: each with its own throat, tuning, vibrato and entry (as loud as one; 1 is a single, "
+                                 "plainly synthetic voice, mono)"),
+                        attack=(0.25, 0.03, 4.0, "seconds to reach full level (each singer a little sooner or later): 0.08 firm, 0.25 sung, 1 and more a swell"),
+                        brightness=(0.5, 0.0, 1.0, "how the voices sing: 0 soft and covered, 1 full voice (more upper harmonics; the level stays)"),
+                        vibrato=(16.0, 0.0, 50.0, "vibrato depth in cents; every singer has its own speed (4.8-6.2 Hz), depth and delay (0.2-0.6 s); 0 is a "
+                                 "straight, early-music tone"),
+                        breath=(1.0, 0.0, 4.0, "level of the breath in the voices (1 natural, 0 none, 3 airy)"),
+                        detune=(10.0, 0.0, 30.0, "cents the singers of a section are apart"),
+                        morph=(0.0, 0.0, float(len(MORPHS) - 1), "the vowel a held note turns into over its middle (none: it keeps its vowel): `vowel: mm, "
+                               "morph: aah` opens from a hum", MORPHS),
+                        ring=(0.4, 0.05, 3.0, "seconds of the release after its held steps (notes that follow without a rest overlap)"),
+                    ), choir_note, "choir"),
         _pad("pad", "a warm, wide synthesizer-string pad (PADsynth), with an optional airy layer and sub", 0.3, 3, _WARM,
              _pad_settings(2600.0, 0.25, 18.0, 1.6)),
         _pad("supersaw", "supersaw-like chords: a cloud of detuned saws, wide (sweep it with lowpass, gate it, duck it)", 0.2, 3, _SAW,
@@ -426,4 +532,4 @@ INSTRUMENTS: dict[str, Instrument] = {
 #: The airy layer of the pads (an octave up, wider).
 AIRY_HARMONICS, AIRY_WIDTH_CENTS = _AIRY, 30.0
 #: The catalogue's families in order.
-GROUPS = ("drums", "noises", "basses", "plucks and keys", "leads", "brass", "organ", "strings", "pads")
+GROUPS = ("drums", "noises", "basses", "plucks and keys", "leads", "brass", "organ", "strings", "percussion", "choir", "pads")

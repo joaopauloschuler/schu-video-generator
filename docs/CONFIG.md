@@ -3925,6 +3925,8 @@ does):
 | brass | `trumpet` (a solo trumpet, E3–C6), `horn` (a French horn: round and dark, B1–F5), `low_brass` (a trombone section, E1–F4; `tuba`: a tuba an octave under it): attack (seconds to full level: 0.02–0.06 tongued, 0.15–0.4 soft, 1–4 a swell that opens), brightness (0 soft and dark to 1 blaring: the harmonics change, the level stays), vibrato (cents; begins 0.3 s into a note), breath, ring (the release), players (1 a solo; more a section in unison, in stereo), detune (cents between the players), mute (trumpet, horn) |
 | organ | `organ` (C1–C7): registration (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`), drawbars (`"00 8400 000"`: your own nine bars), tone, chiff, attack, chorus, detune, click, ring |
 | strings | `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5), `double_basses` (C1–G4), each a section (`players: 1` a solo): stroke (`sustain`, `spiccato`, `tremolo`, `pizzicato`), players, attack (sustain and tremolo: 0.03–0.06 firm, 0.1–0.3 smooth, 0.5 and more a swell), brightness (0 over the fingerboard: dark; 0.5 ordinary; 1 at the bridge: glassy), vibrato (cents; begins 0.16 s into a note), accent (the bite of a stroke, 0–2), length (spiccato: seconds the bow is on the string), speed (tremolo: strokes a second), decay (how long short strokes ring), bow (rosin noise), mute (con sordino), detune (cents between the players), ring (the release) |
+| percussion | played by note name: `timpani` (D2–A3; modes at the kettledrum's 1 : 1.5 : 2 : 2.44 : 2.9) and `toms` (concert toms, G1–C5): stroke (`hit`, `roll`), speed (roll: blows a second), mallet (0 soft felt to 1 hard wood: brightness, not level), decay, ring (seconds before a hand damps it), toms also drop (semitones the pitch falls after the blow) and shell. Played as drum steps: `taiko` (pitch 36–130 Hz, mallet, decay, drop, players, apart), `bass_drum` (a gran cassa: pitch 26–75 Hz, mallet, decay, players, apart), `frame_drum` (pitch 55–280 Hz, mallet, edge: 0 the middle to 1 the rim, decay, players, apart), `snare_drum` (stroke `hit` / `roll`, speed, pitch, mallet, snares, decay, players, apart), `cymbal` (a suspended cymbal: stroke `hit` / `swell`, speed, pitch: the size, mallet, decay), `tam_tam` (stroke `hit` / `swell`, speed, pitch, mallet, bloom, decay) |
+| choir | `choir` (E2–C6; a choir pad, no words): vowel (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), voices (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`), singers (8; 1–16), attack, brightness (0 soft to 1 full voice), vibrato (cents), breath, detune, morph (the vowel a held note turns into), ring |
 | pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), sub_width (0 centred, the default; 1 its own phases on each side: wider, thinner in mono, as scores rendered before Step 186 and the `skyline` bed), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
 
 **Brass and organ** (Step 343; no samples: additive synthesis). Each sustains for as long as its
@@ -3996,6 +3998,91 @@ bass:    {instrument: double_basses, settings: {stroke: pizzicato}, steps: "x . 
 - A `sections:` entry can change the stroke: `sections: {drop: {settings: {stroke: spiccato}}}`.
 - Limits: no slur or glide between notes, every stroke of a pitch is the same, and nobody has
   listened to these instruments: they are judged by measurement (DESIGN §120.5).
+
+**Orchestral percussion** (Step 345; no samples: every drum is the sum of the modes its head or
+its metal has). The `kick` is a sine that glides from at most 160 Hz to at most 70 Hz; these
+are drums with overtones, a mallet and a pitch that can be chosen:
+
+```yaml
+timp:   {instrument: timpani, steps: "D2 . . . A2 . . . | D2 . A2 . D2 - - -"}             # by note name
+roll:   {instrument: timpani, settings: {stroke: roll, mallet: 0.2, ring: 0.3}, steps: "A2 | - | - | .", volume: [[0, -24], [3, 0]]}
+fill:   {instrument: toms, steps: "C4 . A3 . F3 . D3 . A2 A2 F2 . D2 . . ."}                # high to floor
+taiko:  {instrument: taiko, settings: {players: 6}, steps: "X..x ..x. X... x.x.", reverb: {size: 3.4, mix: 0.3}}
+bd:     {instrument: bass_drum, steps: "x | . | . | ."}
+frame:  {instrument: frame_drum, steps: "x..o ..x. o..x ..o."}
+snares: {instrument: snare_drum, settings: {stroke: roll, players: 4}, steps: "x | - | . | .", volume: [[0, -24], [2, 0]]}
+swell:  {instrument: cymbal, settings: {stroke: swell}, steps: ". | . | x | -"}             # grows until its steps end: put the hit there
+gong:   {instrument: tam_tam, steps: "x | . | . | ."}
+```
+
+- **`timpani` and `toms` are written as notes** (`D2`, `A2+D3`), not as `x` (on a pitched
+  instrument `x` is the chord's bass note). Timpani are made for D2–A3 and play a little
+  beyond; toms run from a floor tom (G1) to a high concert tom (C5). A note rings for its held
+  steps plus `ring` seconds and is then damped: `ring: 3` (the timpani's default) lets it ring
+  out, `ring: 0.15` is a damped note. Lower drums ring longer.
+- **`taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam` are drum tracks**
+  (`x`, `X` accented, `o` soft); their `pitch` is a setting in Hz (the metal's: a size, 1 the
+  normal one). Two drums of different pitch are two tracks, or one track whose `sections:`
+  change `pitch`.
+- **`mallet`** (0–1) is how hard the thing is that strikes: a soft mallet wakes the low modes
+  only, a hard one all of them and adds its knock. It changes the tone, not the level (a
+  very hard stick on a tom is 2–3 dB lower in its body). Soft and loud playing is `volume`,
+  `X` / `o` and `mallet` together: `{mallet: 0.15}` at `volume: -8` is a soft stroke.
+- **`stroke: roll`** (timpani, toms, snare drum) rolls for the held steps at a steady level;
+  a crescendo is a `volume` curve, and the hit it leads to is a second track (a setting such as
+  `stroke` belongs to a track's section, not to a single note).
+  **`stroke: swell`** (cymbal, tam-tam) grows by itself from nearly nothing to a full blow at
+  the end of its held steps and rings out after it: end it where the hit falls.
+- **`players`** (taiko, bass drum, frame drum, snare drum) makes an ensemble: drums tuned up
+  to 3 % apart, struck up to `apart` seconds apart, spread from left to right, together as
+  loud as one drum. `players: 6` with a hall reverb is the wall of drums of film scores.
+- **Levels**: a taiko or bass drum at `volume: 0` is as loud as the `kick` and the `boom`
+  (their loudest 0.4 s: −13.9 and −13.8 LUFS; `kick` −12.8, `boom` −13.9); timpani −14, toms −15
+  to −18, frame drum, snare drum, cymbal and tam-tam −17 to −18. A score that used the `kick`
+  at `volume: 3` as a taiko will want the `taiko` at about 4.
+- **What the older instruments do not cover** (measured): the `riser` is a band of noise that
+  sweeps upward and stops; it has no partials and no ring. `open_hat` lasts 90 ms at most,
+  `gated_snare` 0.27 s and has no roll. A cymbal swell, a crash, a tam-tam and a snare roll
+  therefore are instruments of their own.
+- Every blow at the same settings is the same samples (an ensemble too), and a drum is made
+  once per setting and pitch: a pattern of hundreds of hits costs about what the `kick` costs.
+  The first cymbal or tam-tam of a render takes about a second to make.
+- Limits: a real player's blows differ a little, these do not; a roll is the same blow
+  repeated; no rim shots, no brushes, no choked cymbal; nobody has listened to these
+  instruments: they are judged by measurement (DESIGN §120.6).
+
+**Choir** (Step 345; formant synthesis). `choir` holds a vowel: it is a choir *pad* (ooh, aah,
+a hum), and it sings no words. Expect the sound of a synthesised choir stop, not of a recorded
+choir.
+
+```yaml
+choir: {instrument: choir, settings: {vowel: aah}, steps: "* | - | - | -", reverb: {size: 4.5, mix: 0.36}}
+men:   {instrument: choir, octave: 3, settings: {vowel: ooh, voices: men}, steps: "1+5 - - - - - - -"}
+open:  {instrument: choir, settings: {vowel: mm, morph: aah, attack: 3}, steps: "D3+A3+D4+F4 | - | - | -", volume: {from: -14, to: 0}}
+```
+
+- **`vowel`**: `ooh` (dark and round, the default), `aah` (open, the fullest), `eeh` (as in
+  "bed"), `mm` (a hum), `oh`, `ee`. The vowel is five resonances (formants) of the mouth at
+  fixed frequencies, different for each kind of voice; they stay where they are when the pitch
+  moves.
+- **`voices`**: `mixed` (the default) gives every note to the kinds of voice that reach it
+  (basses up to about G3, tenors D3–E4, altos A3–C5, sopranos from E4, each fading out over four semitones beyond), so a chord from D2 to A5
+  is sung by a whole choir; `men`, `women`, or one kind (`basses`, `tenors`, `altos`,
+  `sopranos`) for every note. For four real parts use four tracks, one kind each.
+- **High notes**: above its first formant (an `ooh` above E4, an `aah` above G5) the mouth
+  opens and the vowels become alike, as they do with real sopranos. Above A5 every vowel is
+  nearly a pure tone.
+- **`singers`** (8) sing each note, each with a throat, tuning, vibrato and entry of its own,
+  spread from left to right; a section is as loud as one singer. `singers: 1` is one voice
+  and sounds plainly synthetic. **`attack`** 0.25 is sung, 1 and more a swell;
+  **`brightness`** 0 is soft and covered, 1 full voice; **`vibrato: 0`** with `detune: 5` is
+  a straight early-music tone; **`morph`** names the vowel a held note turns into.
+- Its level is that of the strings and the brass (a held note −15.5 to −17 LUFS), so it starts
+  at `volume: 0`; give it a hall (`reverb: {size: 4.5, mix: 0.36}`).
+- Limits: no words, no consonants, no slur between notes (each note has its own attack), the
+  singers of one kind share one table of formants (only their throat lengths differ), nothing
+  but breath above 5 kHz; nobody has listened to it: it is judged by measurement (DESIGN
+  §120.6).
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):

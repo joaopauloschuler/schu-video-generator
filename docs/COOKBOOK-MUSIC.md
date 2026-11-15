@@ -496,3 +496,135 @@ tracks:
       bed: {settings: {attack: 1.5, brightness: 0.35}, volume: {from: -16, to: 0}, steps: "x | - | - | - | x | - | x | - - - - - - - - - - - - - - . ."}
       engine: {settings: {stroke: pizzicato}, steps: "x . . . . . . . x . . . . . x ."}
 ```
+
+## 10. Orchestral percussion and choir
+
+Eight percussion instruments and a choir (Step 345; reference:
+[CONFIG](CONFIG.md#score-files-vidgen-music-render), `vidgen music patches`). Synthesised, not
+sampled, and tuned by measurement: nobody has listened yet.
+
+| instrument | written as | range or pitch | what it is for |
+|---|---|---|---|
+| `timpani` | notes (`D2 . A2 .`) | D2–A3 (plays C2–C4) | the pitched drum under the brass: roots and fifths, rolls |
+| `toms` | notes (`C4 A3 F3 D3`) | G1 (floor) – C5 (high) | fills from high to low, low tribal patterns |
+| `taiko` | drum steps (`X..x`) | `pitch` 36–130 Hz (62) | the big film-score hit; `players: 6` an ensemble |
+| `bass_drum` | drum steps | `pitch` 26–75 Hz (40) | a deep, soft bloom under a hit; a slow pulse |
+| `frame_drum` | drum steps | `pitch` 55–280 Hz (110) | hand-drum patterns; `edge: 1` the rim |
+| `snare_drum` | drum steps | `pitch` 130–280 Hz (185) | march figures, `stroke: roll` into a hit |
+| `cymbal` | drum steps | `pitch` 0.6–1.6 (size) | a crash; `stroke: swell` grows into a hit |
+| `tam_tam` | drum steps | `pitch` 0.6–1.8 (size) | the dark gong on the last chord, a soft one at the start |
+| `choir` | notes and chords | E2–C6 | held vowels (`ooh aah eeh mm oh ee`): a pad of voices, no words |
+
+**Into a hit.** The bar before the hit: a snare roll and a timpani roll under `volume` curves,
+and a cymbal swell that ends on the hit. On the hit: taikos, a bass drum under them (it adds
+the bloom the taiko's short crack lacks), a crash, and for a last chord the tam-tam. The
+sketch below is this, twice, with a choir.
+
+**Rolls and swells.** `stroke: roll` holds a steady level: write the crescendo as
+`volume: [[0, -24], [2, 0]]` (bars from the section's start). `stroke: swell` needs no curve.
+A roll and the hit it leads to are two tracks, because `stroke` is a setting of a track's
+section. Use a soft mallet for a timpani roll (`mallet: 0.2`) and a short `ring` (0.3), or the
+roll rings on over the hit.
+
+**Soft and loud.** A soft stroke is a softer mallet and less volume together
+(`{mallet: 0.15}`, `volume: -8`); `X` and `o` in the steps change the level only.
+
+**Tuning drums.** Timpani play the root and the fifth of the chord (`D2`, `A2`); keep them
+between D2 and A3. A taiko's `pitch` need not fit the key, but an ensemble a fifth or an
+octave under the bass note sits better than one a semitone off: 62 Hz is near B1, 73 Hz is D2.
+
+**The choir.** Write it like a pad that takes notes: chords with `*` or note names, long
+holds, a hall. `voices: mixed` shares each note out by its pitch, so one track can sing a chord
+from the basses to the sopranos; for a chorale write four tracks (`voices: sopranos`, `altos`,
+`tenors`, `basses`). `ooh` under a voice-over (dark, little above 1 kHz), `aah` for the climax
+(with `brightness: 0.7`), `mm` for the quietest bars. It will not pass for a recorded choir in
+an exposed place: keep it inside the orchestra or under a reverb.
+
+```yaml
+# a 12-bar sketch: two rises into two hits, D minor, 100 BPM
+key: D minor
+tempo: 100
+loop: false
+sections:
+  - {name: rise, bars: 4, progression: "Dm Bb Gm A"}
+  - {name: hit, bars: 2, progression: "Dm Dm"}
+  - {name: again, bars: 4, progression: "Bb Gm A A"}
+  - {name: end, bars: 2, progression: "D D"}
+tracks:
+  choir:
+    instrument: choir
+    reverb: {size: 4.5, mix: 0.36, tone: 4500}
+    sections:
+      rise: {settings: {vowel: mm, morph: ooh, attack: 1.5}, volume: {from: -10, to: -2}, steps: "* - - - - - - -"}
+      hit: {settings: {vowel: aah, brightness: 0.7, attack: 0.12}, steps: "D3+A3+D4+F4+A4 | - - - - - . ."}
+      again: {settings: {vowel: ooh, voices: men}, octave: 3, steps: "1+5 - - - - - - -"}
+      end: {settings: {vowel: aah, brightness: 0.7, attack: 0.12, ring: 1.5}, steps: "D3+A3+D4+F#4+A4 | - - - - - . ."}
+  timpani:
+    instrument: timpani
+    sections:
+      rise: {settings: {ring: 0.8}, steps: ["D2 . . . . . . . . . . . A2 . . .", "D2 . . . . . . . . . . . F2 . F2 .", "G2 . . . . . . . G2 . . . D3 . G2 .", "A2 . . A2 . . A2 . A2 . A2 . A2 A2 A2 A2"]}
+      hit: {steps: "D2+A2 . . . . . . . | ."}
+      again: {settings: {stroke: roll, mallet: 0.2, ring: 0.3}, volume: [[0, -24], [4, 0]], steps: "Bb2 | G2 | A2 | -"}
+      end: {steps: "D2+A2 . . . . . . . | ."}
+  toms:
+    instrument: toms
+    only: [rise]
+    steps: [".", ".", ".", ". . . . . . . . C4 . A3 . F3 F3 D3 A2"]
+  frame:
+    instrument: frame_drum
+    reverb: {size: 2.8, mix: 0.3}
+    only: [rise, again]
+    volume: -4
+    steps: "x..o ..x. o..x ..o."
+  snares:
+    instrument: snare_drum
+    only: [rise, again]
+    settings: {stroke: roll, players: 4}
+    sections:
+      rise: {volume: [[0, -60], [2.99, -60], [3, -20], [4, 0]], steps: ". | . | . | x"}
+      again: {volume: [[0, -60], [1.99, -60], [2, -24], [4, 0]], steps: ". | . | x | -"}
+  swell:
+    instrument: cymbal
+    only: [rise, again]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      rise: {steps: ". | . | x | -"}
+      again: {steps: ". | . | x | -"}
+  taiko:
+    instrument: taiko
+    settings: {players: 6}
+    reverb: {size: 3.4, mix: 0.3, tone: 3000}
+    sections:
+      rise: {volume: -5, steps: ["X... .... .... ....", "X... .... .... ....", "X... .... ..x. ....", "X... .... x... x.x."]}
+      hit: {volume: 1, steps: "X..x ..x. X... x.x. | X..x ..x. x.x. xxxx"}
+      again: {volume: -5, steps: "X... .... .... ...."}
+      end: {volume: 2, steps: "X | ."}
+  bass_drum:
+    instrument: bass_drum
+    only: [hit, end]
+    steps: "x | ."
+  crash:
+    instrument: cymbal
+    only: [hit, end]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: "x | ."
+  gong:
+    instrument: tam_tam
+    only: [end]
+    reverb: {size: 4.5, mix: 0.36}
+    steps: "x | ."
+```
+
+Things that go wrong:
+
+- *A timpani part written with `x`* follows the chord's bass note in the track's octave: write
+  note names.
+- *A roll that never grows*: `stroke: roll` is steady; add the `volume` curve.
+- *A swell that peaks early or late*: it peaks where its held steps end. `"x | -"` over the two
+  bars before the hit, then nothing.
+- *The hit is all crack*: add the `bass_drum`, or lower the taiko's `mallet` to 0.4.
+- *The choir sounds like an organ*: more `singers` and `detune`, a longer `attack`, more
+  reverb; a single held chord without movement is its weakest use.
+- *Sopranos above A5* have one vowel only (a real choir's too); write the vowel lower.

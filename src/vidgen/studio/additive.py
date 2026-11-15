@@ -141,3 +141,13 @@ def levelled(section: np.ndarray, players_power: np.ndarray, freq: float) -> np.
     measured = smoothed(0.5 * np.sum(section**2, axis=1), length)
     floor = 1e-9 * max(float(wanted.max()), 1e-30)
     return section * np.clip(np.sqrt((wanted + floor) / (measured + floor)), 0.4, 2.5)[:, None]
+
+
+def loudness(amplitudes: np.ndarray, freq: float) -> float:
+    """How loud harmonics of ``freq`` Hz with these amplitudes are together: their RMS as the
+    ear weighs it (the loudness measure's curve: 4 dB more above about 1.5 kHz, little under
+    40 Hz). Notes are set to the same value of this, so a high note with all its energy where
+    the ear is keen is not louder than a low one."""
+    freqs = freq * np.arange(1, len(amplitudes) + 1)
+    weight = 10 ** (0.2 / (1 + (1500.0 / freqs) ** 2)) / (1 + (38.0 / freqs) ** 2)
+    return math.sqrt(0.5 * float(np.sum((amplitudes * weight) ** 2))) + 1e-30

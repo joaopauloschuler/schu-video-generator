@@ -28,6 +28,7 @@ import numpy as np
 
 from vidgen.sfx import RATE, _filtered
 from vidgen.studio.additive import harmonic_count, levelled, phase_cycles, raised_cosine, read_tables, remembered, seeded, smoothed, wavetables
+from vidgen.studio.additive import loudness as _loud
 
 #: The strokes, in the order of the ``stroke`` setting's numbers.
 STROKES = ("sustain", "spiccato", "tremolo", "pizzicato")
@@ -126,16 +127,6 @@ def plucked(body: Body, freq: float, brightness: float, accent: float) -> np.nda
     return np.sqrt(np.sin(np.pi * number * place) ** 2 + 0.02) / number / np.sqrt(1 + (freq * number / corner) ** 2) * fade
 
 
-def _loud(amplitudes: np.ndarray, freq: float) -> float:
-    """How loud harmonics of ``freq`` Hz with these amplitudes are together: their RMS as the
-    ear weighs it (the loudness measure's curve: 4 dB more above about 1.5 kHz, little under
-    40 Hz). Notes are set to the same value of this, so a high note with all its energy where
-    the ear is keen is not louder than a low one."""
-    freqs = freq * np.arange(1, len(amplitudes) + 1)
-    weight = 10 ** (0.2 / (1 + (1500.0 / freqs) ** 2)) / (1 + (38.0 / freqs) ** 2)
-    return math.sqrt(0.5 * float(np.sum((amplitudes * weight) ** 2))) + 1e-30
-
-
 def _gain(body: Body, freqs: np.ndarray, player: int, s: Mapping[str, float]) -> np.ndarray:
     return 10 ** (response(body, freqs, player, s["mute"]) / 20)
 
@@ -174,7 +165,7 @@ def _cents(n: int, s: Mapping[str, float], rng: np.random.Generator, offset: int
 def _held_player(body: Body, freq: float, n: int, held: int, s: Mapping[str, float], player: int, offset: int, alone: bool,
                  rng: np.random.Generator) -> np.ndarray:
     """One player's sustained or tremolo note at ``freq`` Hz (the player's own tuning): mono, the
-    held part as loud (:func:`_loud`) whatever the pitch and settings."""
+    held part as loud (:func:`~vidgen.studio.additive.loudness`) whatever the pitch and settings."""
     tremolo = int(s["stroke"]) == _TREMOLO
     t = np.arange(n) / RATE
     shape = raised_cosine(n, int(s["attack"] * RATE), offset) * (1 - raised_cosine(n, n - held, held))

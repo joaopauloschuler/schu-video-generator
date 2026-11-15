@@ -665,7 +665,7 @@ def build_server(root: Path) -> Any:
         target = out or (Path("assets") / "music" / f"{bed}.yaml").as_posix()
         return answer(await call(ctx, args_of(["music"], ["template", bed], {"out": str(where(target, "out")), "force": force})))
 
-    @tool("Every score-file instrument (drums, noises, basses, plucks and keys, leads, brass, organ, strings, pads) with its settings, ranges "
+    @tool("Every score-file instrument (drums, noises, basses, plucks and keys, leads, brass, organ, strings, percussion, choir, pads) with its settings, ranges "
           "and level, and every track effect (sweeps, ducking, gate, echo, reverb, width, volume curves), in words.", read_only)
     async def music_patches(ctx: Context) -> Any:
         return answer(await call(ctx, args_of(["music"], ["patches"])))

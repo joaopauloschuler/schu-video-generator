@@ -2043,9 +2043,13 @@ with demo files for the owner to listen to.
 - [ ] Not done: nobody has listened; no slur or glide and no per-note bite (the track's `accent:` pattern changes a stroke's level only; Step 346); no round-robin variation between strokes (even by design), no measured tremolo, harmonics or col legno; in `vidgen studio` the `stroke` setting is a slider over 0–3 without its names (as `registration`)
 
 ### Step 345 — Synth instruments III: timpani, toms, taiko, choir
-- [ ] Timpani and pitched toms (the `kick` tops out at 160 → 70 Hz); a taiko / frame-drum family
-- [ ] A choir (ooh / aah vowels by formants), honest about its quality
-- [ ] Judged by measurement and spectrograms; demo score and WAV per family
+- [x] Timpani and pitched toms (the `kick` tops out at 160 → 70 Hz): `timpani` (D2–A3, the kettledrum's modes 1 : 1.5 : 2 : 2.44 : 2.9, decay by pitch, `mallet`, `stroke: roll`, `ring` for damped notes) and `toms` (G1–C5, `drop`, `shell`, `mallet`), both played by note name (`studio/percussion.py`, family `percussion`)
+- [x] A taiko / frame-drum family as drum steps: `taiko`, `bass_drum`, `frame_drum` (`edge`), each with `pitch`, `mallet`, `decay`, `players` and `apart` (an ensemble); and, because `riser`, `open_hat` and `gated_snare` measured as no substitute, `snare_drum` (`stroke: roll`, `players`), `cymbal` and `tam_tam` (`stroke: swell`)
+- [x] A choir (`choir`, family `choir`, `studio/choir.py`): vowels `ooh`, `aah`, `eeh`, `mm`, `oh`, `ee` by five formants per kind of voice; `voices` (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`); `singers` with their own throat, tuning, vibrato and entry; the first formant follows a note above it; `morph`. Honest about its quality: a choir pad, no words
+- [x] Judged by measurement and spectrograms (partial ratios against theory, decay against pitch, attack, mallet, levels against `kick` / `boom` and across the ranges, rolls, ensembles, aliasing, clicks, CPU, dense patterns through the renderer; formants per vowel and kind of voice, the section's chorus, vibrato, attack, loudness over the range); demo scores, WAV, M4A and `demo.txt` in `/home/claude/work/scratch/al345/demo/` (timpani, toms, big drums, choir, old stand-ins against new, a cinematic cue with brass, organ, strings, percussion and choir)
+- [x] The scores of "Escapement" and "Parallel Space" (ps6) render to the same bytes as after Step 344
+- [x] Docs: CONFIG (instrument table, "Orchestral percussion", "Choir"), `docs/COOKBOOK-MUSIC.md` section 10, the guide, CHANGELOG, DESIGN §120.6
+- [ ] Not done: nobody has listened; every blow at the same settings is identical and a roll repeats one blow (no round-robin); soft and loud differ by `mallet` and volume only (per-note loudness: Step 346); a `drum` instrument's `pitch` cannot change inside a section (two tracks); no rim shot, brushes, choked cymbal or flams; the choir has no words, consonants or slurs and nothing but breath above 5 kHz; in `vidgen studio` the named settings (`stroke`, `vowel`, `voices`, `morph`) are sliders over their numbers; `vidgen music check` was not run on a piece using these instruments
 
 ### Step 346 — Expressive notes in the score format
 - [ ] Per-note loudness (velocity, accents); a crescendo / diminuendo inside a held note; glide (portamento) between notes; vibrato speed, depth and delay

@@ -5,7 +5,20 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–344)
+## Unreleased (Steps 193–345)
+
+### Orchestral percussion and a choir for score files (Step 345)
+
+- Nine new instruments for score files, synthesised like the others (no samples, no SoundFont), in two new families of `vidgen music patches`, `percussion` and `choir`.
+- **Timpani and toms, played by note name.** `timpani` (written D2–A3) ring in a kettledrum's own overtones (1 : 1.5 : 2 : 2.44 : 2.9, not a harmonic series), lower drums longer. `toms` are concert toms from a floor tom (G1) to a high tom (C5); the pitch falls to the note after the blow (`drop`). Both take `stroke: roll`, a `mallet` from soft felt (0) to hard wood (1) and `ring` (how long a note sounds before it is damped). The `kick`, which films had used for toms, stops at 160 Hz.
+- **Big drums, played as drum steps.** `taiko` (a hard attack and a long low tail; `players: 6` is an ensemble spread from left to right), `bass_drum` (a concert bass drum), `frame_drum` (`edge` moves the stroke from the middle to the rim), `snare_drum` (`stroke: roll`, `players` for a line of drums). Each has a `pitch` in Hz.
+- **Metal.** `cymbal` (a suspended cymbal: a crash, or `stroke: swell`, a mallet roll that grows until its held steps end) and `tam_tam` (a gong whose highs arrive after the blow). The `riser`, `open_hat` and `gated_snare` do not cover these: a noise sweep without ring, 90 ms, and 0.27 s without a roll.
+- **`choir`** holds a vowel: `ooh`, `aah`, `eeh`, `mm`, `oh` or `ee`, by formant synthesis with the formants of basses, tenors, altos and sopranos. `voices: mixed` gives each note to the kinds of voice that reach it; `men`, `women` or one kind choose. 8 singers a note by default, each with its own tuning, vibrato and entry. `morph` turns a held note into another vowel. It is a choir pad: it sings no words and will not pass for a recorded choir.
+- Every blow at the same settings is the same samples, and a drum is made once per setting: 256 sixteenths cost about what the `kick` costs.
+- Levels: `taiko` and `bass_drum` are as loud as `kick` and `boom` at `volume: 0`; the choir is as loud as the strings and the brass.
+- Existing scores are unchanged: the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
+- Measured, not listened to (DESIGN §120.6). Demo files for listening were written outside the repository.
+- Docs: `docs/CONFIG.md` (score files: the instrument table, "Orchestral percussion", "Choir"), `docs/COOKBOOK-MUSIC.md` section 10, the guide ("Making music"). Tests: `tests/test_studio_percussion_choir.py`.
 
 ### Bowed strings for score files: `violins`, `violas`, `cellos`, `double_basses` (Step 344)
 

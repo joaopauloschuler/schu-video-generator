@@ -24587,3 +24587,137 @@ its top level failed in about one run in three with `did not become ready within
   stroke's level, not its bite (the bite is the setting `accent`; per-note loudness is
   Step 346); the tone of the section is six instruments, not sixteen; notes outside the written
   range are played without a warning.
+
+### 120.6 Orchestral percussion and a choir for score files (Step 345)
+
+- **The report.** "The `kick` tops out at 160→70 Hz, so higher toms and frame drums cannot be
+  made." Both films built their taiko, tom and frame drum from the `kick` (one sine gliding
+  down, a click) and their deep hits from the `boom` (one sine); "Escapement" called a
+  `supersaw` pad its choir. Measured first, what the older instruments cover: the `riser` is a
+  band of noise 0.35 octaves wide sweeping up and cut off at its end (no partials, no ring);
+  `open_hat` lasts 90 ms at any setting; `gated_snare` 0.27 s, with no roll; there is no crash.
+  So a cymbal swell, a tam-tam and a snare roll were built too.
+- **Nine instruments** in two new families of the catalogue, `percussion` and `choir` (after
+  `strings`, before `pads`), numpy only: `studio/percussion.py`, `studio/choir.py`.
+  - Kind `note`, played by note name, with a written range: `timpani` (D2–A3), `toms`
+    (G1–C5), `choir` (E2–C6).
+  - Kind `drum`, played as drum steps, pitch as a setting: `taiko`, `bass_drum`, `frame_drum`,
+    `snare_drum`, `cymbal`, `tam_tam`. They are drum tracks because that is how the films wrote
+    them (`"X... .... ..x. x.x."`); timpani and toms are note tracks because a part moves
+    between drums.
+- **A struck head** (`struck`, a `Head`): a sum of decaying sines at the head's mode
+  frequencies, which are not a harmonic series.
+  - *Modes.* A plain membrane's are the zeros of the Bessel functions: 1, 1.594, 2.136, 2.296,
+    2.653, 2.918, ... (`MEMBRANE`, 16 of them: toms, taiko, bass drum, frame drum, snare drum). A
+    kettledrum's air and kettle move the modes with a line across the head to 1 : 1.504 : 1.99 :
+    2.44 : 2.91 : 3.36 ... of the note (`KETTLE`, after Rossing's measurements), which is why a
+    timpano has a pitch; its modes without such a line (0.85, 1.68, 2.09, 2.66 times the note:
+    `KETTLE_DULL`) are there for 0.1 s as the thump of the blow.
+  - *Levels and decay.* Mode `m` has the level `m ** -falls` and rings `m ** -dies` as long
+    as the lowest (per head); the lowest falls by 60 dB in `seconds * (110 / Hz) ** by_pitch`,
+    so low drums ring longer. A kettledrum's note radiates best and dies before its fifth and
+    octave (`lasting`: 1, 1.25, 1.15, 0.9), so in the tail the fifth is as strong as the note.
+  - *The mallet* (`mallet`, 0–1) is a low-pass on the blow (timpani 160 Hz to 3 kHz, taiko
+    500 Hz to 4.2 kHz) and a tilt of the mode levels (`m ** -(falls * (1.5 - mallet))`), plus
+    its own knock: noise for a few milliseconds, level `0.05 + mallet ** 1.5`. The modes start
+    with alternating signs (a blow off the centre does not start them all the same way), the
+    whole blow fades in over 0.4 of the low-pass's period: the first sample is exactly 0.
+  - *The blow stretches the head*: every mode starts `drop` semitones sharp and settles with
+    a time constant of `0.045 + 4 / Hz` s (toms: the setting `drop`, 1; taiko 1.5; timpani
+    0.1–0.18 by mallet).
+  - *The shell* of a tom or the barrel of a taiko: two short modes at fixed multiples.
+    `edge` (frame drum) weakens the low modes, strengthens the upper ones and shortens the ring.
+  - *Loudness.* A blow is set to RMS 1 over its first 0.15 s, and lower when its peak would
+    pass 3.6 times that (a very short or very hard blow is turned down, not the others up).
+- **Made once.** `struck` is remembered per head, pitch and settings (48 blows); a note or a
+  drum hit is that array cut to its length and, if cut before it has died, damped over 70 ms
+  (`ring` on timpani and toms: 3 s lets a timpano ring out, 0.15 s is a damped note). A `note`
+  instrument's `make` gets the track's seed: each track's drum has modes up to 0.5 % off the
+  model's (two timpani tracks in unison are two drums); a `drum` instrument has no seed and is
+  the same in every track.
+- **Rolls** (`stroke: roll`: timpani, toms, snare drum) are a train of blows through the
+  drum's own ring: a convolution of the blow with impulses `speed` times a second, each up to
+  6 % early or late, the two hands 12 % apart in force. On a pitched drum every blow falls on a
+  whole number of the note's periods after the first: the first version struck at any moment,
+  and blows against the head's motion took 9 dB out of the level from one 50 ms frame to the
+  next (now 2–3 dB). A roll has 0.7 of a blow's level (a snare roll 0.42: its single blow is
+  over in 0.1 s) and is steady: a crescendo is a `volume` curve.
+- **Ensembles** (`players`): each player's drum up to 3 % higher or lower, up to `apart`
+  seconds late, up to 1.5 dB off, spread from left to right; the sum's energy is set to one
+  drum's (the first version was up to 2.6 dB louder by chance).
+- **The snare drum** is a short head (0.35 of the level) and its wires: noise of 0.9 to
+  about 6 kHz that dies in 0.16 s (`snares`, 0 takes them off).
+- **Metal** (`clanged`, a `Metal`): the lowest modes one by one as sines (cymbal 36 from
+  310 Hz to 2.6 kHz, tam-tam 44 from 58 to 900 Hz; fixed per instrument, evenly spread with a
+  random offset, so they are no harmonic series), above them 14 bands of noise up to 14 kHz made
+  from random spectra, each band with its own decay (`seconds * (1000 / Hz) ** faster`: the
+  highs die first). The tam-tam's upper partials are weak at the blow and arrive over the
+  first second (`bloom`): measured, the share of power above 1.5 kHz rises from −21 dB at the
+  blow to −7 dB after 1 s. `stroke: swell` is a roll of soft blows (growing by 24 dB) plus one
+  of harder blows (by 39 dB) until the held steps end; its loudest 0.4 s has the level of a
+  single blow and lies at their end. Stereo.
+- **The choir** (`choir.py`) is formant synthesis on the wave tables of §120.4.
+  - *The voice*: harmonic `h` at `h ** -2` (soft) to `h ** -1` (full voice; `brightness`).
+  - *The vowel*: five resonators one after another (a cascade, as in Klatt's synthesiser),
+    `F ** 2 / sqrt((F ** 2 - f ** 2) ** 2 + (B f) ** 2)`, with the formant frequencies and
+    bandwidths of sung vowels for basses, tenors, altos and sopranos from the Csound manual's
+    table (after IRCAM's CHANT): `aah` a, `eeh` e, `ee` i, `oh` o, `ooh` u. `mm` is a low first
+    formant (240–300 Hz), broad weak ones above and a further low-pass at 700 Hz.
+  - *Formants stay while the pitch moves*: a note's tables are five rows, the formants
+    sampled at five pitches across the singer's vibrato and drift, read along the pitch.
+  - *High notes* (`formants`): when the note is above the first formant, the first formant is
+    the note and its bandwidth grows in proportion; the second stays at least a third above
+    it. Measured for sopranos: at C5 an `ooh`'s fundamental is the strongest partial by 42 dB;
+    from G5 up `ooh` and `aah` are both a fundamental with every other partial 38 dB or more
+    under it.
+  - *A section* (`singers`, 8): each singer's formants 0.96–1.04 of the table's (another
+    throat), `detune` and ±2 cents of tuning, a scoop of 10–35 cents into the note, a wander of
+    a few cents, a vibrato of 4.8–6.2 Hz at 0.5–1.2 of the depth beginning after 0.2–0.6 s, an
+    entry up to 70 ms late with 0.8–1.3 of the `attack`, a place from left to right (the kinds
+    of voice mixed). Each side's slow level swings are taken out by `additive.levelled`.
+  - *Who sings* (`section`): `mixed`, `men` and `women` share a note out among the kinds of
+    voice that reach it (comfortable: basses E2–G3, tenors D3–E4, altos A3–C5, sopranos E4–E6,
+    fading over 4 semitones outside; middle C: 4 tenors and 4 altos), the nearest kind when
+    none does.
+  - *Breath*: noise through the vowel's formants (three times as broad), 3 % of the tone, more
+    in the first 0.15 s, 0.3 of that in a hum. *Morph*: the same phases read from the second
+    vowel's tables, cross-faded over the middle 70 % of the held time.
+  - Every note is set to equal loudness (`additive.loudness`, moved there from `strings.py`).
+- **Levels** (before the piece is brought to −28 LUFS; the loudest 0.4 s of one blow): `taiko`
+  −13.9 LUFS, `bass_drum` −13.8, `timpani` −14.5 to −13.7 over C2–C4, `toms` −18.1 to −15.4
+  over G1–C5, `frame_drum` −17.4, `snare_drum` −17.5, `cymbal` −17.8, `tam_tam` −17.0; for
+  comparison `kick` −12.8, `boom` −13.9, the kick as ps6's taiko −11.0 (and played there at
+  +3 dB). The choir's held notes: −17.0 to −15.5 LUFS over every range and vowel (strings −17.0
+  to −16.3). The new drums have higher peaks than the old ones at the same loudness (taiko
+  +0.7 dB, kick −2.5 dB): they have an attack.
+- **Measured** (scratch scripts; tables in HANDOFF Step 345): timpani partials at 1.500, 1.989,
+  2.446, 2.918 times the note at D2, A2, F3 and A3 (theory 1.504, 1.99, 2.44, 2.91), the note
+  itself within 1 cent; the main mode 20 dB down after 1.10 s at C2 and 0.58 s at C4 (toms
+  0.48 s at G1 to 0.18 s at C5, taiko 0.84 s, bass drum 1.54 s, frame drum 0.26 s); a tom with
+  `drop: 3` is 2.4 semitones sharp in its first 40 ms and on the note after 0.2 s; mallet 0.1
+  to 0.9 raises a timpano's centroid in the first 50 ms from 117 to 225 Hz at the same loudness
+  (toms: 147 to 224 Hz, 3.6 dB lower at mallet 1); rolls at 8, 11 and 16 blows a second
+  measure 8.0, 11.2 and 16.0; ensembles within 0.4 dB of one drum, the two sides correlating
+  at 0.70–0.88; nothing above 16 kHz (−120 dB or lower), first sample 0; a blow costs 8–90 ms
+  once (eight taikos 0.3 s, a cymbal 0.7 s, a tam-tam 1.2 s) and nothing after; 256 sixteenths through the renderer
+  take 0.6–1.3 s of CPU (the `kick`: 0.6 s) and repeat sample for sample. Choir: formants
+  measured on rendered notes within 8 % of the table (most within 3 %; a first formant under
+  the notes measured cannot be seen); a section's level
+  swings by 1–2 dB in 50 ms frames (4.5 dB at G4, where three kinds of voice share the note)
+  while single harmonics cancel completely at moments; one singer's pitch is steady within
+  3 cents from 0.1 to 0.5 s and swings ±16–20 cents after 1 s at 5.6 Hz; attack to 90 % in
+  79 ms (`attack: 0.08`), 224 ms (0.25), 837 ms (1); power between the harmonics −95 dB without
+  breath, −31 dB with it; 8 singers cost 80 ms of CPU per second of one note.
+- **Existing scores are unchanged.** No existing instrument, default or cache key changed
+  (`strings.py` lost `_loud` to `additive.loudness`, the same code). Both film scores render
+  to the same bytes as after Step 344 (SHA-256 in HANDOFF).
+- **Honest limits.** Nobody has listened. The choir is a pad of vowels: no words, no
+  consonants, no slur between notes; one table of formants per kind of voice; apart from
+  breath nothing above about 5 kHz (the five-resonator model stops there), so it is darker than
+  a recorded choir; a single voice sounds synthetic. The drums: every blow at the same settings
+  is identical (asked for; a player's blows differ), a roll repeats one blow, soft and loud
+  differ only by `mallet` and volume, a taiko's attack takes 10 ms to half its peak (the
+  `kick`: 2 ms) with a crack 24 dB under the body in the first 50 ms, the cymbal's lowest
+  partials are steady lines for seconds where a real cymbal's wander, and the tam-tam's bloom
+  is an envelope, not the mode coupling that causes it. No rim shot, brushes, choke or
+  flams. A `drum` instrument cannot change pitch within a track's section.

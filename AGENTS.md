@@ -4150,6 +4150,21 @@ again only when the file changes). You cannot hear it, so work from measurements
    more is a swell. A section of the piece can change the stroke:
    `sections: {drop: {settings: {stroke: spiccato}}}`. Recipes: `docs/COOKBOOK-MUSIC.md`,
    section 9.
+   **Orchestral percussion**: `timpani` and `toms` are written as notes (`"D2 . . . A2 . . ."`;
+   timpani D2–A3, toms from a floor tom G1 to a high tom C5), the big drums as drum steps:
+   `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, and the metal `cymbal` and `tam_tam`.
+   `players: 6` on the `taiko` in a hall is the wall of drums of film scores. `mallet`, from 0
+   (soft) to 1 (hard), sets the brightness of a blow; `pitch` in Hz tunes a big drum. `stroke: roll` (timpani,
+   toms, snare drum) rolls for the held steps; shape its crescendo with a `volume` curve and
+   put the hit on a second track. `stroke: swell` on `cymbal` or `tam_tam` grows by itself
+   until its held steps end: end it on the hit. Do not build drums from the `kick` any more:
+   it is one sine and stops at 160 Hz.
+   **Choir**: `choir` holds a vowel (`vowel: ooh | aah | eeh | mm | oh | ee`); it is a choir
+   pad and sings no words. `voices: mixed` gives each note to the kinds of voice that reach it;
+   `men`, `women`, `basses`, `tenors`, `altos`, `sopranos` choose. Hold chords
+   (`"* | - | - | -"`), give it a hall, and use `attack: 1` or more for a swell;
+   `{vowel: mm, morph: aah}` opens a held note from a hum. Recipes: `docs/COOKBOOK-MUSIC.md`,
+   section 10.
 5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
    (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
    on the part of the piece the video plays). A piece keeps its own pace; to make its lift begin
