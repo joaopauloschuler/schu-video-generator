@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from vidgen.studio.effects import EFFECTS, Field
-from vidgen.studio.instruments import GROUPS, INSTRUMENTS
+from vidgen.studio.instruments import GROUPS, INSTRUMENTS, Setting
 
 _KIND_WORDS = {
     "drum": "a drum or noise: steps of x X o . - (no pitch)",
@@ -24,6 +24,14 @@ def _field(f: Field) -> dict[str, Any]:
     return {"default": f.default, "low": f.low, "high": f.high, "words": f.words}
 
 
+def _setting(s: Setting) -> dict[str, Any]:
+    """A setting as data; one with named values also has ``choices`` (the names of 0, 1, ...)."""
+    out: dict[str, Any] = {"default": _number(s.default), "low": _number(s.low), "high": _number(s.high), "words": s.words}
+    if s.choices:
+        out["choices"] = list(s.choices)
+    return out
+
+
 def patch_catalog() -> dict[str, Any]:
     """Every instrument (name, family, kind, description, level, default octave, settings) and
     every effect (description, example, fields), as data."""
@@ -37,7 +45,8 @@ def patch_catalog() -> dict[str, Any]:
                 "words": i.words,
                 "level": i.level,
                 "octave": i.octave,
-                "settings": {k: {"default": _number(s.default), "low": _number(s.low), "high": _number(s.high), "words": s.words} for k, s in i.settings.items()},
+                "settings": {k: _setting(s) for k, s in i.settings.items()},
+                **({"range": list(i.range)} if i.range else {}),
             }
             for group in GROUPS
             for i in INSTRUMENTS.values()
@@ -66,9 +75,13 @@ def patch_text() -> str:
             group = i["group"]
             lines += ["", f"{group.upper()}"]
         octave = f"; octave {i['octave']}" if i["octave"] is not None else ""
-        lines.append(f"  {i['name']} ({i['kind']}{octave}): {i['words']}")
+        made_for = f"; made for {i['range'][0]} to {i['range'][1]}" if "range" in i else ""
+        lines.append(f"  {i['name']} ({i['kind']}{octave}{made_for}): {i['words']}")
         for name, s in i["settings"].items():
-            lines.append(f"      {name:<8} {s['default']:>7}  ({s['low']} to {s['high']})  {s['words']}")
+            if "choices" in s:
+                lines.append(f"      {name:<8} {s['choices'][s['default']]:>7}  ({', '.join(s['choices'])}; or its number from 0)  {s['words']}")
+            else:
+                lines.append(f"      {name:<8} {s['default']:>7}  ({s['low']} to {s['high']})  {s['words']}")
     lines += ["", "Effects and movement (on a track, or in its sections: {name: {...}} changes; none / off switches one off there):"]
     for e in catalog["effects"]:
         lines += ["", f"  {e['name']}: {e['words']}", f"      e.g. {e['example']}"]

@@ -323,3 +323,79 @@ even "left as is: …"), change only what the notes ask for, keep tempo and key 
 and run `studio_check` before proposing — a person's ear decides, but the check catches what
 would sit badly under a voice. When a person asks an agent to "make the music better" without
 saying how, suggesting the studio is often the shortest way to find out what they hear.
+
+## 8. Brass and organ
+
+Four instruments made for the orchestral colours of film scores (Step 343; reference:
+[CONFIG](CONFIG.md#score-files-vidgen-music-render), `vidgen music patches`). They are synthesised, not
+sampled, and were tuned by measurement: nobody has listened yet, so check a piece that leans on
+them with `vidgen music check` and by ear.
+
+| instrument | written range | default octave | what it is for | settings to reach for first |
+|---|---|---|---|---|
+| `trumpet` | E3–C6 | 4 | a singing solo line, fanfares | `attack` 0.02 (tongued) to 0.3 (soft); `brightness` 0.15 (far, soft) to 1 (blaring); `vibrato` 0–15; `mute: 1`; `players: 3` for a section |
+| `horn` | B1–F5 | 3 | warm held notes and slow counter-lines in the tenor; `players: 4` for the film-score horn line | `attack` 0.1–0.3; `brightness` 0.3–0.5 (round) or 0.9 (brassy); `mute: 1` (stopped) |
+| `low_brass` | E1–F4 | 2 | sustained low chords, swells, heavy low notes; a section of 4 | `attack` 1–4 with `brightness: 1` (a swell that opens); `tuba` 0.5–1; `players` up to 8 |
+| `organ` | C1–C7 | 3 | held chords, chorales, a pedal bass | `registration` (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`); `drawbars: "86 8400 000"` |
+
+**How to write for them**
+
+- Hold notes with `-` and end them with `.`: `"A4 - - - - - . ."`. A phrase breathes where it
+  rests. Each note has its own attack, so for a smooth line use `attack: 0.1`–`0.2` and let the
+  notes touch (no rest between them); for a fanfare use `attack: 0.02` with rests.
+- Loud and soft are `brightness`, not `volume`: 0.2 with `attack: 0.3` sounds far and gentle, 1.0
+  with `attack: 0.02` sounds close and hard, at the same level. Use `sections:` to change it:
+  `sections: {climax: {settings: {brightness: 1.0}}}`.
+- A swell: one long note with `attack` as long as the swell (up to 4 s): it starts dark and opens.
+  A `volume` curve on top makes it longer (`volume: {from: -12, to: 0}`), but only the instrument's
+  own `attack` changes the tone.
+- Keep them in their range: a trumpet under E3 or a horn above F5 still plays, but stops sounding
+  like one. Put chords for horns in octave 3 (`v2+v3`: two inner notes of the chord's voicing) and
+  the low brass on root and fifth in octave 2 (`"1+5 | -"`); thirds in the low brass are muddy
+  under about C3.
+- Brass in the voice's range (300 Hz–3 kHz) competes with narration more than a pad does. Under a
+  voice: `brightness` at most 0.4, the horn rather than the trumpet, and a reverb with a dark
+  `tone`.
+- The organ needs a room: `reverb: {size: 4, mix: 0.35}` or more. `cathedral` is loud in the
+  highs (mixtures); under a voice use `principal` or `flute`, or lower `tone` to 3000.
+- An organ note never decays. Give long chords an end (`"* - - - - - - ."`) or the piece has no air.
+
+**A brass chorale with an organ** (D minor, 84 BPM; original)
+
+```yaml
+version: 1
+title: Chorale
+key: D minor
+tempo: 84
+loop: false
+progression: "Dm Bb F C Gm Dm A D"
+sections:
+  - {name: organ, bars: 8}
+  - {name: all, bars: 8}
+tracks:
+  organ:   {instrument: organ, settings: {registration: principal}, steps: "* - - - - - - -",
+            reverb: {size: 5, mix: 0.4, tone: 4500},
+            sections: {all: {settings: {registration: cathedral}}}}
+  pedal:   {instrument: organ, octave: 1, settings: {drawbars: "86 8400 000"}, steps: "x - - - - - - -",
+            reverb: {size: 5, mix: 0.4, tone: 3000}}
+  horns:   {instrument: horn, only: [all], settings: {players: 4, attack: 0.14}, steps: "v2+v3 - - - - - - -",
+            reverb: {size: 5, mix: 0.4, tone: 4500}}
+  low:     {instrument: low_brass, only: [all], settings: {attack: 0.25, tuba: 0.5}, steps: "x - - - x' - - - | x - - - - - - -",
+            reverb: {size: 5, mix: 0.4, tone: 4500}}
+  trumpet: {instrument: trumpet, only: [all], settings: {attack: 0.07, vibrato: 10},
+            reverb: {size: 5, mix: 0.4, tone: 4500},
+            steps: "D5 - - - F5 - E5 - | D5 - - - - - Bb4 - | C5 - - - A4 - - - | G4 - - - - - E4 - | G4 - - Bb4 - - D5 - | F5 - - - E5 - D5 - | E5 - - - - - C#5 - | D5 - - - - - - -"}
+```
+
+**The low swell and the heavy low note**
+
+```yaml
+swell: {instrument: low_brass, octave: 2, settings: {attack: 3.2, brightness: 1.0, tuba: 0.8, players: 6, ring: 0.4},
+        steps: "x | - - - - - - - . | . | .", reverb: {size: 4.5, mix: 0.4}}
+hit:   {instrument: low_brass, octave: 2, settings: {attack: 0.18, brightness: 1.0, tuba: 1.0, players: 8, detune: 10, ring: 0.6},
+        steps: "1+5 - - - - - . . | .", reverb: {size: 4.5, mix: 0.35}}
+```
+
+Put a `boom` or a low `kick` under the hit's first step for the impact; the brass supplies the
+tone that follows.
+

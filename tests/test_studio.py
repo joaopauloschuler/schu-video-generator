@@ -481,7 +481,7 @@ def test_patches_describe_every_instrument_and_effect(capsys: pytest.CaptureFixt
         assert f"  {name} (" in text or f"  {name}: " in text, name
     assert cli.main(["music", "patches", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
-    assert doc["action"] == "patches" and [i["name"] for i in doc["instruments"]] == [n for g in ("drums", "noises", "basses", "plucks and keys", "leads", "pads") for n, i in INSTRUMENTS.items() if i.group == g]
+    assert doc["action"] == "patches" and [i["name"] for i in doc["instruments"]] == [n for g in ("drums", "noises", "basses", "plucks and keys", "leads", "brass", "organ", "pads") for n, i in INSTRUMENTS.items() if i.group == g]
     assert set(INSTRUMENTS) >= {"kick", "clap", "hat", "gated_snare", "synth_bass", "analog_bass", "sub", "supersaw", "pad", "saw_pad", "glass", "pluck",
                                 "bell", "piano", "soft_lead", "pulsar", "static", "riser"}
     for i in doc["instruments"]:

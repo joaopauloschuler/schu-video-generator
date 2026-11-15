@@ -21,7 +21,7 @@ import yaml
 from vidgen.errors import VidgenError
 from vidgen.sfx import RATE
 from vidgen.studio.effects import EFFECTS, Curve, Duck, Echo, Gate, Reverb, is_off, parse_curve, parse_duck, parse_echo, parse_gate, parse_reverb
-from vidgen.studio.instruments import INSTRUMENTS, Instrument
+from vidgen.studio.instruments import INSTRUMENTS, Instrument, Setting
 from vidgen.studio.patterns import Pattern, accent_steps, parse_accent, parse_steps
 from vidgen.studio.theory import Chord, Key, note_number, parse_chord, parse_key
 
@@ -490,6 +490,19 @@ def _check_lead_holds(r: _Reader, where: str, sections: list[Section], parts: Ma
                   f"'{before.name}' just before: start with a note or x")
 
 
+def _setting_value(r: _Reader, setting: Setting, value: Any, where: str) -> float | None:
+    """An instrument setting's number: a name of its ``choices`` gives its index, a setting with
+    its own notation is read by its ``read``; else a number in its range."""
+    if setting.choices and isinstance(value, str):
+        if value in setting.choices:
+            return float(setting.choices.index(value))
+        r.add(where, f"unknown name '{value}'{_close(value, setting.choices)} (one of: {', '.join(setting.choices)})")
+        return None
+    if setting.read is not None:
+        return r.attempt(where, setting.read, value, where)
+    return r.number(value, where, setting.low, setting.high, integer=bool(setting.choices))
+
+
 def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, base: TrackPart | None) -> TrackPart | None:
     """A track's part from its settings (``base`` None) or a section's changes to ``base``."""
     count = len(r.problems)
@@ -536,7 +549,7 @@ def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, 
         given = r.mapping(spec["settings"], f"{where}.settings", list(instrument.settings), f"{instrument.name} settings")
         for k, v in given.items():
             s = instrument.settings[k]
-            value = r.number(v, f"{where}.settings.{k}", s.low, s.high)
+            value = _setting_value(r, s, v, f"{where}.settings.{k}")
             if value is not None:
                 settings[k] = value
     if len(r.problems) > count:

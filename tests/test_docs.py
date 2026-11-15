@@ -146,11 +146,16 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
     from vidgen.studio import parse_music_score
 
     text = (ROOT / "docs" / "COOKBOOK-MUSIC.md").read_text(encoding="utf-8")
-    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    genres, brass = text.split("## 8. Brass and organ")
+    blocks = re.findall(r"```yaml\n(.*?)```", genres, flags=re.S)
     assert len(blocks) == 5   # documentary, trance, synthwave, cosmic, cartoon
     for block in blocks:
         score = parse_music_score(yaml.safe_load(block), "COOKBOOK-MUSIC.md")
         assert score.loop and score.tracks
+    chorale, low_tracks = re.findall(r"```yaml\n(.*?)```", brass, flags=re.S)   # Step 343: a whole score, then two tracks
+    score = parse_music_score(yaml.safe_load(chorale), "COOKBOOK-MUSIC.md")
+    assert {t.instrument.name for t in score.tracks} == {"organ", "horn", "low_brass", "trumpet"}
+    parse_music_score({"key": "D minor", "tempo": 100, "bars": 4, "progression": "i VI", "tracks": yaml.safe_load(low_tracks)}, "COOKBOOK-MUSIC.md")
     assert "examples/gps-time-of-flight/README.md" in text and "music/README.md" in text
     for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md"):
         assert "COOKBOOK-MUSIC.md" in (ROOT / doc).read_text(encoding="utf-8"), doc

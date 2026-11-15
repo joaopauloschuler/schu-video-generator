@@ -255,8 +255,9 @@ def _render_hits(canvas_for: CanvasFor, score: MusicScore, track: Track, skipped
             assert instrument.make is not None
             n = int((held + part.settings.get("ring", 0.0)) * RATE)
             scale = level * event.gain / math.sqrt(len(pitches))
+            seed = (f"studio:{score.seed}:{track.name}",) if instrument.seeded else ()
             for p in pitches:
-                canvas.add(event.start, instrument.make(_hz(p), n, part.settings) * scale, pan)
+                canvas.add(event.start, instrument.make(_hz(p), n, part.settings, *seed) * scale, pan)
 
 
 def _sub_note(slot: ChordSlot | None) -> int | None:

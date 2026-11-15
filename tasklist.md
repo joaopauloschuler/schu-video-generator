@@ -2025,9 +2025,14 @@ with demo files for the owner to listen to.
 - [ ] Not done: a time on the video's clock (without `--scene`); stills of other scene types; `data:` values overridden on the command line; a still with vidgen's title, overlays and captions; `--exact` on a WebGL canvas that is never cleared was not tried; Windows and macOS
 
 ### Step 343 — Synth instruments I: brass and organ
-- [ ] Brass: a solo trumpet-like and a horn-like instrument, a low brass section
-- [ ] Organ: drawbar-style with a few registrations
-- [ ] Judged by measurement and spectrograms; demo score and WAV per family
+- [x] Brass: `trumpet`, `horn`, `low_brass` (a trombone section with a `tuba` setting), one model with four bodies: the spectrum follows the level (8 wave tables cross-faded along `brightness * level ** 1.6`), a pitch scoop and breath at the start, fixed formants, delayed vibrato, `attack` 0.01–4 s, `players` for a section, `mute` (`studio/brass.py`, `studio/additive.py`; DESIGN §120.4)
+- [x] Organ: `organ`, nine drawbar ranks, registrations `cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`, own `drawbars: "00 8400 000"`; steady, every note the same level; chiff, optional `chorus`, `detune`, `click` (`studio/organ.py`)
+- [x] Score format: a setting can have named values (`registration: flute`) or its own notation (`drawbars`); an instrument can take a seed (track name and score seed) and has a written range, shown by `music patches`
+- [x] Judged by measurement and spectrograms (attack, brightness against level, pitch at the start, vibrato, level across the range and inside a note, aliasing, clicks, CPU per note); demo scores, WAV, M4A and `demo.txt` in `/home/claude/work/scratch/al343/demo/` (four instruments, old stand-ins against new, all together)
+- [x] The scores of "Escapement" and "Parallel Space" (ps6) render to the same bytes before and after
+- [x] Docs: CONFIG (instrument table, "Brass and organ"), `docs/COOKBOOK-MUSIC.md` section 8, the guide, CHANGELOG, DESIGN §120.4
+- [x] Decided differently from the first plan (accepted by the coordinator): the organ's chorus is off by default (with it a held note's level swings by a few dB; it is the `chorus` setting); a brass section's level is evened by a slow gain of at most 8 dB (without it four horns differed by 9 dB from note to note)
+- [ ] Not done: nobody has listened (the owner's judgment of the demo files is open); no slur or glide between notes (Step 346); in `vidgen studio` the `drawbars` setting is a plain slider (0 to 888888888), not nine bars, and `registration` a slider over whole numbers without its names; a full table of ranges and settings in the cookbook is Step 351's
 
 ### Step 344 — Synth instruments II: bowed strings
 - [ ] Sustained section over the ranges of violins, violas, cellos and basses, with slow and fast attack

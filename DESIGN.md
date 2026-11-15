@@ -24221,7 +24221,7 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 |---|---|---|
 | 341 | Fix: a scene of an extension type that subclasses `Web` was not rendered again when its script changed; a module waiting for several fetches sometimes never became ready | §120.1, §120.2 |
 | 342 | `vidgen still`: single frames of a `web` scene's page without rendering it | §120.3 |
-| 343 | Synth instruments: brass and organ | later |
+| 343 | Synth instruments: brass (`trumpet`, `horn`, `low_brass`) and a drawbar `organ` for score files | §120.4 |
 | 344 | Synth instruments: bowed strings | later |
 | 345 | Synth instruments: timpani, pitched toms, taiko / frame drums, choir | later |
 | 346 | Expressive notes in the score format | later |
@@ -24370,3 +24370,116 @@ its top level failed in about one run in three with `did not become ready within
   is never cleared and relies on every frame being shown may still differ (no screenshot is taken
   of the stepped frames); a still with vidgen's title, overlays and captions. Windows and macOS
   not tried.
+
+### 120.4 Brass and organ for score files (Step 343)
+
+- **The report.** "Parallel Space v6" was asked to replace bell sounds with "trumpets, organs,
+  violins or even drums". The score synthesizer (§93) had none, so the film built a trumpet from
+  `soft_lead` (a fixed saw-like spectrum behind a low-pass), brass and horn from `saw_pad`
+  (PADsynth saws with a slow attack) and an organ from the `glass` pad (three harmonics). Missing:
+  a spectrum that changes with the level, the attack of lips, body resonances, organ ranks.
+- **Four instruments** of kind `note`, in two new families of the catalogue (`brass`, `organ`,
+  between `leads` and `pads`): `trumpet`, `horn`, `low_brass`, `organ`. No samples, no SoundFont,
+  numpy only. Modules: `studio/additive.py` (wave tables), `studio/brass.py`, `studio/organ.py`;
+  registered in `studio/instruments.py`.
+- **Additive synthesis through wave tables** (`additive.py`). A note's harmonics (all at or under
+  16 kHz, the last 2 kHz faded: `HIGHEST_PARTIAL`) are summed once by an inverse FFT into one
+  period (`wavetables`; at least 128 samples per period of the highest harmonic, so linear
+  interpolation errs by under −70 dB), and the note reads the table along its phase
+  (`read_tables`). A note with 390 harmonics (E1) costs per sample what one with 3 does, vibrato
+  and pitch slides are a changing phase step, and a spectrum that changes over the note is a
+  cross-fade between a few tables (`row`). Nothing above the Nyquist frequency is ever made, so
+  there is nothing to alias. `remembered` keeps the last 48 notes of up to 2 s (an ostinato
+  repeats few notes many times).
+- **Brass** (`brass.py`), one model with four bodies (`TRUMPET`, `HORN`, `TROMBONE`, `TUBA`: the
+  bell's cutoff 1250 / 480 / 620 / 300 Hz, two or three fixed formants, roll-off above the cutoff
+  when soft and when loud, cents of scoop):
+  - *The spectrum follows the level.* `spectrum(body, Hz, brightness)`: harmonic `h` is weaker by
+    `h ** -(1.2 * (1 - b))` (soft playing: nearly a sine), a high-pass at the cutoff (the tube
+    radiates little below it), a roll-off above `cutoff * 2 ** (0.5 * (b - 0.5))` whose power
+    falls from about 4.5 (soft) to 1.5 (loud), and the formants. A note cross-fades between 8
+    such spectra along `b(t) = brightness * level(t) ** 1.6`: the upper harmonics arrive after
+    the fundamental in the attack, a long attack is a swell that opens, the release darkens. The
+    held part is normalised to RMS 1 whatever the pitch and brightness, so `brightness` changes
+    the tone, not the level.
+  - *The lips.* The pitch starts `scoop` cents flat (trumpet 28, horn 36, trombone 22, tuba 18)
+    and reaches the note with a time constant of 35 ms; an attack of 0.12 s or less is "tongued"
+    and overshoots by up to a quarter for a tenth of a second; breath noise around twice the
+    cutoff, strongest in the first 50 ms; two slow random pitch drifts of about 1 cent.
+  - *Vibrato* 5.3 Hz, nothing before 0.28 s, full after a further 0.45 s (short notes have none).
+    Default 9 cents on the trumpet, 0 on horn and low brass (orchestral horns and trombones play
+    straight).
+  - *Sections* (`players` > 1): each player `detune` cents apart (permuted) plus up to 1.5 cents
+    of its own, entering up to 28 ms late, spread left to right (stereo; a solo is mono).
+    Players a few cents apart drift in and out of step slowly, so their plain sum is for a second
+    at a time up to 6 dB louder or much quieter than the players together, by chance per pitch:
+    measured before the fix, four horns differed by 9 dB from note to note in the first 0.3 s.
+    `_levelled` therefore brings the sum's power, averaged over whole periods (50 ms or more), to
+    the sum of the players' powers (a gain of at most 8 dB either way). Choosing the players'
+    starting phases instead was tried and did not help beyond the first 50 ms.
+  - `low_brass` is a trombone section (4 players by default) with `tuba`: the level of a tuba an
+    octave lower (in unison under 27 Hz). With `attack` 1 to 4 and `brightness` 1 it is the low
+    swell of film scores; `attack` about 0.2, `tuba: 1`, 8 players and a second or a fifth added
+    is the heavy low note of trailers.
+  - Settings: `attack` (0.01–4 s), `brightness` (0–1), `vibrato` (0–40 cents), `breath` (0–4),
+    `ring` (the release, 0.03–2 s), `players`, `detune` (0–25 cents); trumpet and horn `mute`
+    (0–1: lows thinned, a peak near 2.2 kHz); low brass `tuba` (0–1.5). Written ranges (shown by
+    `music patches`, not enforced): trumpet E3–C6, horn B1–F5, low brass E1–F4.
+- **Organ** (`organ.py`). Nine ranks at the drawbar footages 16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5'
+  1 1/3' 1' (pitch ratios 0.5, 1.5, 1, 2, 3, 4, 5, 6, 8), each drawn 0 to 8 at 3 dB a step. A
+  rank above 6 kHz plays an octave lower (mixtures break back, a tonewheel organ folds), one under
+  27 Hz an octave higher; ranks that land on one pitch are one rank with their powers added.
+  - `registration` names the drawbars and the kind of pipe: `cathedral` (`608756045`, principals:
+    16' 8' 4' and mixtures, the default), `principal` (8' + 4'), `flute` (stopped flute: odd
+    harmonics), `reed` (many harmonics, a peak near 1.5 kHz), `drawbar` (`888000000`, sine ranks:
+    an electric organ), `full` (every bar out, sines). `drawbars` (nine digits in quotes,
+    `"00 8400 000"`) replaces the registration's bars and keeps its pipes.
+  - *Steady.* No decay; every pipe starts at the same point of its wave and the note is
+    normalised by the power of the partials as they add (ranks share partials: the 4' rank's
+    fundamental is the 8' rank's second harmonic), so a note has the same level and tone every
+    time, whatever the registration, plus 1 dB per octave towards the bass (measured: the same
+    loudness in LUFS from C1 to C7). An earlier version with two detuned pipes per rank beat by
+    3 to 9 dB inside a note; that is now the option `chorus` (a second pipe per rank 3 to 6 cents
+    away on the other side: a celeste). `detune` (default 0) puts the ranks a fraction of a cent
+    apart: slow shimmer, and the tone of a held note then drifts.
+  - *Speech.* A pipe reaches its level after `speech` periods (9 for principals, 7 flutes, 5
+    reeds; low pipes later; never under 10 ms, which is also the electric organ's), with a
+    "chiff": its octave (the stopped flute: its twelfth) sounding first, and 35 ms of wind noise.
+    The release is a raised cosine over `ring` (0.09 s). `click` (default 0) adds an electric
+    organ's key click.
+  - *Stereo.* A rank's pipe stands 0.2 to the left or right, alternating by semitone and by rank
+    (as pipes stand in a case), so a single note is near the middle and a chord is wide.
+- **Score format.** Settings were numbers only. `Setting` gained `choices` (names for the whole
+  numbers from 0: `registration: flute`, or `2`) and `read` (a setting with its own notation:
+  `drawbars`); `score_file._setting_value` reads them and reports an unknown name with the closest
+  one. Inside the score both are still numbers (`TrackPart.settings` is unchanged), so a section
+  can change them like any setting. An unquoted `drawbars: 008400000` is refused (YAML reads it
+  as another number). `Instrument` gained `seeded` (its `make` takes a seed text,
+  `studio:<score seed>:<track name>`: two tracks in unison are two players, while one track
+  plays the same note the same way every time) and `range`. `music patches --json` gained
+  `range` on these four instruments and `choices` on `registration`; other entries are unchanged.
+- **Levels.** One held note at default settings measures -16.4 LUFS (trumpet), -16.8 (horn),
+  -16.1 (low brass), -17.1 (organ), each note alone before the piece is brought to -28. The
+  existing instruments span -7.8 (`pad` chords) to -21 (`glass`, `sub`); `soft_lead` is -20.4,
+  piano chords -16, a `saw_pad` chord -10. The four sit at the level of piano chords: 3 to 4 dB
+  above `soft_lead` (brass carries more than a synth lead) and 6 dB under the saw pads, so a
+  score that replaces a `saw_pad` "brass" with `low_brass` raises it by about 6 dB. A chord is as
+  loud as one note (as for every `note` instrument), a section as loud as one player.
+- **Measured** (scratch scripts; tables in HANDOFF Step 343): attack to 90 % in 39 ms (trumpet
+  default), 14 ms (`attack: 0.02`), 258 ms (`attack: 0.3`); the eighth harmonic reaches half its
+  level 13 ms after the fundamental; spectral centroid at A4 from 655 Hz (`brightness: 0`) to
+  2059 Hz (1) at the same RMS; pitch 11 cents flat at 30 ms, within 1 cent at 100 ms; vibrato
+  under 1 cent before 0.3 s, ±10 cents after 1 s, 5.3 Hz; level across each range within 0.1 dB
+  RMS and 0.2 dB LUFS (solo and sections), the level inside a held note within 0.1 dB (organ,
+  solo brass) and 0.6 dB (sections); power between the harmonics at C6 and A6 under
+  −95 dB (no aliasing), no partial above 15.9 kHz; first sample 0, last under −140 dB; one note
+  costs 12 ms of CPU per second of sound (trumpet, horn), 37 ms (four trombones), 6 to 36 ms
+  (organ, by registration) against 7 ms for `soft_lead`.
+- **Existing scores are unchanged.** `_render_hits` passes the seed only to `seeded` instruments;
+  no existing instrument, default or cache key changed. Both film scores render to the same
+  bytes as on the code of Step 342 (SHA-256 in HANDOFF).
+- **Honest limits.** These are models, not recordings: no valve or slide noise, no slurs between
+  notes (each note has its own attack; Step 346 plans glide), no flutter-tongue, no falls; the
+  horn has no hand-stopping pitch change; the organ has no swell box, no tremulant and no
+  Leslie; a section's players do not differ in tone. Nobody has listened: the judgment is by
+  measurement and spectrograms, with demo files for the owner.

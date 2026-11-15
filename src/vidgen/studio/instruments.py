@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import Any
 
 import numpy as np
 
@@ -37,6 +38,8 @@ from vidgen.music import (
     _woodblock,
 )
 from vidgen.sfx import RATE, _band, _filtered, _lowpass, _tone
+from vidgen.studio.brass import horn_note, low_brass_note, trumpet_note
+from vidgen.studio.organ import REGISTRATION_NAMES, REGISTRATIONS, organ_note, read_drawbars
 
 #: Instrument kinds: ``drum`` (no pitch: hits), ``note`` (one sound per note, a chord is its
 #: notes together), ``pad`` (sustained chords, cross-faded; can also play held notes).
@@ -45,12 +48,18 @@ KINDS = ("drum", "note", "pad")
 
 @dataclass(frozen=True)
 class Setting:
-    """An instrument setting: its default, allowed range and what it changes."""
+    """An instrument setting: its default, allowed range and what it changes. A setting is a
+    number in the score; two kinds may be written another way. ``choices``: names for the whole
+    numbers from 0 (``registration: flute``; the number is accepted too). ``read``: a function
+    ``(value, where) -> number`` for a value with its own notation (the organ's ``drawbars``),
+    raising :class:`~vidgen.errors.VidgenError` for one it cannot read."""
 
     default: float
     low: float
     high: float
     words: str
+    choices: tuple[str, ...] = ()
+    read: Callable[[Any, str], float] | None = None
 
 
 @dataclass(frozen=True)
@@ -66,11 +75,17 @@ class Instrument:
     level: float
     octave: int | None
     settings: Mapping[str, Setting] = field(default_factory=dict)
-    #: drum: ``(settings, held seconds) -> mono (n,) or stereo (n, 2)``; note: ``(Hz, samples, settings) -> mono``.
+    #: drum: ``(settings, held seconds) -> mono (n,) or stereo (n, 2)``; note: ``(Hz, samples,
+    #: settings) -> mono or stereo``, with ``seeded`` ``(Hz, samples, settings, seed text)``.
     make: Callable[..., np.ndarray] | None = None
     #: pad: harmonic amplitudes (spread by the ``detune`` setting).
     harmonics: tuple[float, ...] = ()
     group: str = ""
+    #: note: ``make`` takes a seed (the score's seed and the track's name), so two tracks in
+    #: unison are two players, not one twice as loud.
+    seeded: bool = False
+    #: The lowest and highest note it is meant for (``("E3", "C6")``); notes outside are played.
+    range: tuple[str, str] | None = None
 
 
 _DECAY = "seconds for the sound to fall to about a third"
@@ -217,7 +232,7 @@ def _lead_note(freq: float, n: int, s: Mapping[str, float]) -> np.ndarray:
     return y * (1 - np.exp(-t / s["attack"])) * fall / 1.6
 
 
-def _settings(**items: tuple[float, float, float, str]) -> dict[str, Setting]:
+def _settings(**items: tuple[Any, ...]) -> dict[str, Setting]:
     return {name: Setting(*values) for name, values in items.items()}
 
 
@@ -245,11 +260,34 @@ def _voice(name: str, words: str, level: float, octave: int, settings: dict[str,
     return Instrument(name, "note", words, level, octave, settings, make, group=group)
 
 
+def _orchestral(name: str, words: str, level: float, octave: int, low: str, high: str, settings: dict[str, Setting],
+                make: Callable[..., np.ndarray], group: str) -> Instrument:
+    return Instrument(name, "note", words, level, octave, settings, make, group=group, seeded=True, range=(low, high))
+
+
+def _brass_settings(attack: float, brightness: float, vibrato: float, ring: float, **more: tuple[Any, ...]) -> dict[str, Setting]:
+    return _settings(
+        attack=(attack, 0.01, 4.0, "seconds to reach full level: 0.02-0.06 tongued (hard, with a short accent), 0.15-0.4 soft, 1 and more a swell "
+                "that opens as it grows"),
+        brightness=(brightness, 0.0, 1.0, "how hard it is blown: 0 round and dark (pianissimo), 1 blaring (fortissimo); the level stays, the "
+                    "harmonics change"),
+        vibrato=(vibrato, 0.0, 40.0, "vibrato depth in cents (5.3 Hz); it begins 0.3 s into a note, so short notes have none"),
+        breath=(1.0, 0.0, 4.0, "level of the breath noise (1 natural, 0 none)"),
+        ring=(ring, 0.03, 2.0, "seconds of the release after its held steps"),
+        **more,
+    )
+
+
+_MUTE = (0.0, 0.0, 1.0, "a straight mute: 0 open, 1 muted (thin, nasal, a little quieter)")
+_PLAYERS = "players in unison: 1 a solo (mono), more a section spread from left to right"
+_SECTION_DETUNE = "cents the players of a section are apart"
+
+
 def _pad(name: str, words: str, level: float, octave: int, harmonics: tuple[float, ...], settings: dict[str, Setting]) -> Instrument:
     return Instrument(name, "pad", words, level, octave, settings, harmonics=harmonics, group="pads")
 
 
-#: The instrument library by name, in catalogue order (drums, noises, basses, plucks and keys, leads, pads).
+#: The instrument library by name, in catalogue order (drums, noises, basses, plucks and keys, leads, brass, organ, pads).
 INSTRUMENTS: dict[str, Instrument] = {
     i.name: i
     for i in (
@@ -311,6 +349,35 @@ INSTRUMENTS: dict[str, Instrument] = {
         _voice("soft_lead", "a soft, mellow lead for melodies: a saw-like tone with a gentle vibrato; it sustains while held", 0.15, 5,
                _settings(attack=(0.03, 0.003, 1.0, "seconds to fade in"), vibrato=(12.0, 0.0, 50.0, "vibrato depth in cents (5 Hz)"),
                          tone=(2400.0, 600.0, 6000.0, _TONE), ring=(0.25, 0.02, 3.0, "seconds of the release after its held steps")), _lead_note, "leads"),
+        _orchestral("trumpet", "a solo trumpet: bright and singing; the tone opens as each note speaks, vibrato comes in on held notes", 0.1, 4, "E3", "C6",
+                    _brass_settings(0.05, 0.6, 9.0, 0.12, mute=_MUTE, players=(1.0, 1.0, 6.0, _PLAYERS), detune=(6.0, 0.0, 25.0, _SECTION_DETUNE)),
+                    trumpet_note, "brass"),
+        _orchestral("horn", "a horn (French horn): round, warm and distant, darker than the trumpet; `players: 4` is the film-score horn section", 0.113, 3,
+                    "B1", "F5",
+                    _brass_settings(0.09, 0.4, 0.0, 0.18, mute=_MUTE, players=(1.0, 1.0, 8.0, _PLAYERS), detune=(6.0, 0.0, 25.0, _SECTION_DETUNE)),
+                    horn_note, "brass"),
+        _orchestral("low_brass", "a low brass section (trombones, with `tuba` a tuba an octave under them): sustained chords, and with a long "
+                    "`attack` the low swell (\"braam\") of film scores", 0.12, 2, "E1", "F4",
+                    _brass_settings(0.07, 0.55, 0.0, 0.25, players=(4.0, 1.0, 8.0, _PLAYERS), detune=(7.0, 0.0, 25.0, _SECTION_DETUNE),
+                                    tuba=(0.0, 0.0, 1.5, "level of a tuba doubling each note an octave lower (0 none)")),
+                    low_brass_note, "brass"),
+        _orchestral("organ", "a drawbar organ: nine ranks at the organ footages; `registration` picks a named one (" + ", ".join(REGISTRATION_NAMES)
+                    + "), `drawbars` sets the nine bars yourself; hold chords with \"* | - | - | -\" and give it a long reverb", 0.14, 3, "C1", "C7",
+                    _settings(
+                        registration=(0.0, 0.0, float(len(REGISTRATIONS) - 1),
+                                      "the stops drawn: " + "; ".join(f"{r.name}: {r.words}" for r in REGISTRATIONS), REGISTRATION_NAMES),
+                        drawbars=(0.0, 0.0, 888888888.0, "the nine drawbars 16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5' 1 1/3' 1', each 0 (off) to 8 (full; a step "
+                                  "down halves the power), in quotes: \"00 8400 000\"; they replace the registration's bars, the pipes stay its kind (0: the "
+                                  "registration's own)", (), read_drawbars),
+                        tone=(7000.0, 500.0, 12000.0, _TONE),
+                        detune=(0.0, 0.0, 15.0, "cents the ranks are out of tune with each other (about a third of it): a chord shimmers slowly, a held note's tone "
+                                "drifts (0: every rank in tune, the tone stands still); with `chorus` its pipes are a further 1-2 times this apart (then at least 3)"),
+                        chorus=(0.0, 0.0, 1.0, "level of a second, detuned pipe on every rank: a slow beating like a celeste stop (0 none: a steady tone)"),
+                        chiff=(1.0, 0.0, 3.0, "strength of the pipes' speech noise, times the registration's own (0 none; drawbar and full have none)"),
+                        attack=(1.0, 0.2, 5.0, "how slowly the pipes speak, times the registration's own (low pipes speak later than high ones)"),
+                        click=(0.0, 0.0, 1.0, "level of a key click when a key goes down and up (0 none)"),
+                        ring=(0.09, 0.02, 2.0, "seconds of the release after its held steps"),
+                    ), organ_note, "organ"),
         _pad("pad", "a warm, wide synthesizer-string pad (PADsynth), with an optional airy layer and sub", 0.3, 3, _WARM,
              _pad_settings(2600.0, 0.25, 18.0, 1.6)),
         _pad("supersaw", "supersaw-like chords: a cloud of detuned saws, wide (sweep it with lowpass, gate it, duck it)", 0.2, 3, _SAW,
@@ -323,4 +390,4 @@ INSTRUMENTS: dict[str, Instrument] = {
 #: The airy layer of the pads (an octave up, wider).
 AIRY_HARMONICS, AIRY_WIDTH_CENTS = _AIRY, 30.0
 #: The catalogue's families in order.
-GROUPS = ("drums", "noises", "basses", "plucks and keys", "leads", "pads")
+GROUPS = ("drums", "noises", "basses", "plucks and keys", "leads", "brass", "organ", "pads")

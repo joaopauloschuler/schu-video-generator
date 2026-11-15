@@ -4129,6 +4129,15 @@ again only when the file changes). You cannot hear it, so work from measurements
    genre sketches (documentary, trance, synthwave, cosmic, cartoon): `docs/COOKBOOK-MUSIC.md`; a
    worked example with its log: `examples/gps-time-of-flight` (its piece is now the bed
    `time_of_flight`).
+   **Orchestral colours**: `trumpet`, `horn`, `low_brass` and `organ` are synthesised
+   instruments like the others (no samples); `low_brass` is a trombone section, and its `tuba`
+   setting adds a tuba underneath. Hold notes with `-`, as in `"A4 - - - . ."`. On brass two
+   settings shape the note: `brightness`, from 0 (soft and dark) to 1 (blaring), and `attack`
+   in seconds: 0.02 is tongued, 0.3 soft, 1 to 4 a swell that opens; `players: 4` makes a
+   section. The organ takes `registration: cathedral | principal | flute | reed | drawbar | full`
+   or your own `drawbars: "00 8400 000"` (in quotes) and wants a long `reverb`. Under a voice
+   keep brass soft, with `brightness` up to 0.4, and prefer the horn. Recipes:
+   `docs/COOKBOOK-MUSIC.md`, section 8.
 5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
    (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
    on the part of the piece the video plays). A piece keeps its own pace; to make its lift begin

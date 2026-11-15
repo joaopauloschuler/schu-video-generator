@@ -5,7 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–342)
+## Unreleased (Steps 193–343)
+
+### Brass and organ for score files: `trumpet`, `horn`, `low_brass`, `organ` (Step 343)
+
+- Four new instruments for score files (`vidgen music render`, `assets/music/NAME.yaml`), synthesised like the others (no samples, no SoundFont): `trumpet` (a solo trumpet, E3–C6), `horn` (a French horn, B1–F5), `low_brass` (a trombone section, E1–F4, with `tuba` a tuba an octave under it) and `organ` (a drawbar organ, C1–C7). `vidgen music patches` lists their settings under the new families `brass` and `organ`.
+- **Brass gets brighter as it gets louder.** `brightness` (0 soft and dark to 1 blaring) changes the harmonics and not the level; inside a note the tone follows the level, so a note opens as it speaks and a long `attack` (up to 4 s) is a swell that starts dark. The pitch starts a little flat, as lips do; vibrato begins 0.3 s into a note. `players` above 1 is a section in unison (a few cents and milliseconds apart, in stereo, as loud as one player); `mute` on trumpet and horn.
+- **Organ registrations by name**: `registration: cathedral` (principals 16' 8' 4' with mixtures, the default), `principal`, `flute`, `reed`, `drawbar`, `full`; or your own nine drawbars, `drawbars: "00 8400 000"` (in quotes). A note holds steadily and every note has the same level. Options: `chorus` (a second, detuned pipe per rank: a slow beating; off by default), `detune`, `chiff`, `click` (a key click; off by default), `tone`.
+- A setting can now have named values (`registration: flute`; the number works too). An unknown name is reported with the closest one.
+- Their levels match piano chords (a held note about −16.5 LUFS before the piece is levelled; `soft_lead` is −20.4, a `saw_pad` chord −10), so they start at `volume: 0`. A score that used a saw pad as brass will want the new instrument about 6 dB up.
+- A track plays the same note the same way every time; two tracks in unison are two players.
+- Measured, not listened to: nobody has heard these instruments yet. Attack, brightness, pitch at the start, vibrato, level across each range, aliasing at the top of the range, clicks and CPU time were measured (DESIGN §120.4), and spectrograms were looked at. Demo files for listening were written outside the repository.
+- Limits: no slur between notes (each note has its own attack), no valve noise, no flutter-tongue; the organ has no swell box, tremulant or Leslie. In `vidgen studio` the `drawbars` setting shows as a plain slider: type the digits in the score instead.
+- Existing scores are unchanged: no existing instrument, default or cache key was touched, and the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
+- Docs: `docs/CONFIG.md` (score files: the instrument table, "Brass and organ"), `docs/COOKBOOK-MUSIC.md` section 8, the guide ("Making music"). Tests: `tests/test_studio_brass_organ.py`.
+
 
 ### `vidgen still`: one frame of a `web` scene at an exact time, without rendering it (Step 342)
 

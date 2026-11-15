@@ -3922,7 +3922,43 @@ does):
 | basses | `synth_bass` (decay, tone, ring), `analog_bass` (decay, tone, closed, snap, detune, ring), `sub` (decay, tone, second, third, ring) |
 | plucks and keys | `pluck` (+ bright), `fm_pluck` (+ index), `square_pluck`, `pizzicato`, `music_box`, `bell`, `piano` (decay, tone, ring: seconds a note sounds on after its held steps), `woodblock` (tone) |
 | leads | `soft_lead` (attack, vibrato, tone, ring: it sustains while held) |
+| brass | `trumpet` (a solo trumpet, E3–C6), `horn` (a French horn: round and dark, B1–F5), `low_brass` (a trombone section, E1–F4; `tuba`: a tuba an octave under it): attack (seconds to full level: 0.02–0.06 tongued, 0.15–0.4 soft, 1–4 a swell that opens), brightness (0 soft and dark to 1 blaring: the harmonics change, the level stays), vibrato (cents; begins 0.3 s into a note), breath, ring (the release), players (1 a solo; more a section in unison, in stereo), detune (cents between the players), mute (trumpet, horn) |
+| organ | `organ` (C1–C7): registration (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`), drawbars (`"00 8400 000"`: your own nine bars), tone, chiff, attack, chorus, detune, click, ring |
 | pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), sub_width (0 centred, the default; 1 its own phases on each side: wider, thinner in mono, as scores rendered before Step 186 and the `skyline` bed), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
+
+**Brass and organ** (Step 343; no samples: additive synthesis). Each sustains for as long as its
+steps hold it (`"A4 - - - . ."`), plays chords (`*`, `C4+E4+G4`) and sounds the same every time a
+track plays the same note. Their levels match the other instruments', so start at `volume: 0`.
+
+```yaml
+trumpet: {instrument: trumpet, steps: "D5 - - A4 D5 - F5 - | E5 - - - - - . .", reverb: {size: 3, mix: 0.3}}
+fanfare: {instrument: trumpet, settings: {attack: 0.02, brightness: 1.0, players: 3}, steps: "* . * * * - - ."}
+horns:   {instrument: horn, settings: {players: 4, attack: 0.14}, steps: "v2+v3 | -"}
+swell:   {instrument: low_brass, settings: {attack: 3, brightness: 1.0, tuba: 0.8}, steps: "x | - | . | ."}
+organ:   {instrument: organ, settings: {registration: principal}, steps: "* | -", reverb: {size: 5, mix: 0.4}}
+pedal:   {instrument: organ, octave: 1, settings: {drawbars: "86 8400 000"}, steps: "x | -"}
+```
+
+- **Brass gets brighter as it gets louder.** `brightness` sets how hard the note is blown; inside
+  a note the tone follows the level, so a note opens as it speaks and an `attack` of seconds is a
+  swell that starts dark. The pitch starts a little flat for about 50 ms, as lips do. `players`
+  above 1 is a section (a few cents and milliseconds apart, spread across the stereo field, as
+  loud as one player); `low_brass` is a section of 4 by default. For the heavy low note of film
+  trailers: `low_brass` with `{attack: 0.2, brightness: 1.0, tuba: 1.0, players: 8}` on
+  `"1+5 - - - - - . ."` in octave 2, or with a second added (`D2+Eb2+A2`) for a cluster.
+- **Organ registrations.** `cathedral` (the default): principals 16' 8' 4' with mixtures, the
+  big church organ; `principal`: 8' + 4', plain and singing; `flute`: a soft stopped flute;
+  `reed`: nasal and rich; `drawbar`: an electric organ's first three bars; `full`: an electric
+  organ with every bar out. `drawbars` sets the nine bars yourself, in the order 16' 5 1/3' 8' 4'
+  2 2/3' 2' 1 3/5' 1 1/3' 1', each 0 (off) to 8 (full), **in quotes** (`"00 8400 000"`; spaces
+  are free); the pipes stay the registration's kind. A note holds steadily and every note has
+  the same level. `chorus: 0.5` adds a second, detuned pipe to every rank (a slow beating);
+  `chiff: 0` removes the pipes' breathy start; `click` (default 0) is an electric organ's key
+  click. For a pedal, add a second organ track in octave 1 or 2 on the bass note (`x`).
+- A name is accepted where `music patches` lists names (`registration: flute`); the number from 0
+  works too.
+- Limits: a note cannot slur into the next (each has its own attack), and nobody has listened to
+  these instruments: they are judged by measurement (DESIGN §120.4).
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):
