@@ -14,6 +14,7 @@ from vidgen.fileio import write_text_atomic
 from vidgen.web.entry import WebEntry, entry_of, entry_path
 from vidgen.web.inputs import design_width_of, page_shape
 from vidgen.web.loaded import current_loaded, read_record, record_path
+from vidgen.web.music import helper_digest, payload_digest
 from vidgen.web.page import WebPage, engine_id, layout_digest
 
 log = logging.getLogger("vidgen.web")
@@ -32,17 +33,20 @@ def scene_data(params: Any) -> dict[str, Any]:
 def clip_inputs(root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
                 theme: Mapping[str, Any] | None = None, data: Mapping[str, Any] | None = None,
                 beats: Sequence[Mapping[str, Any]] = (), shape: Mapping[str, Any] | None = None,
-                design_width: int | None = None) -> dict[str, Any]:
+                design_width: int | None = None, music: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """What the clip is drawn from (stored in its record): the entry and its file's SHA-256,
     the size (the frames' pixels; the page's window too unless ``design_width`` gives its width
     in CSS pixels, §118.17: then ``design_width`` is among the inputs, and left out otherwise so
     that the keys of clips without it stay as they were), frame rate and frame count, what the page is given (theme,
     data, beats, the video's shape: aspect, orientation, frame size, region), that the frames
     keep their alpha, and vidgen's page files and Playwright version. The other files the page loads are checked
-    from the record (:func:`loaded_changed`)."""
+    from the record (:func:`loaded_changed`). ``music`` (§120.8, ``ctx.music``): with it the
+    inputs name its SHA-256 and the music helper's; without it they leave ``music`` out, so the
+    keys of clips without music data stay as they were."""
     path = entry_path(root, entry, scene_id)
     return {
         **({} if design_width is None else {"design_width": design_width}),
+        **({} if music is None else {"music": {"data": payload_digest(music), "helper": helper_digest()}}),
         "version": CLIP_VERSION, "engine": engine_id(), "scene": scene_id, "kind": entry.kind, "path": entry.posix,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "width": size[0], "height": size[1], "fps": fps, "frames": frames,
@@ -59,13 +63,13 @@ def loaded_changed(root: Path, loaded: Mapping[str, str | None]) -> list[str]:
 
 def _clip_key(root: Path, scene_id: str, params: Any, *, size: tuple[int, int], fps: int, frames: int,
               theme: Mapping[str, Any] | None, beats: Sequence[Mapping[str, Any]],
-              shape: Mapping[str, Any] | None) -> tuple[WebEntry, dict[str, Any], dict[str, Any], str]:
+              shape: Mapping[str, Any] | None, music: Mapping[str, Any] | None = None) -> tuple[WebEntry, dict[str, Any], dict[str, Any], str]:
     """The entry, ``data``, inputs (:func:`clip_inputs`) and key of a scene's clip."""
     entry = entry_of(params)
     data = scene_data(params)
     shape = dict(shape) if shape is not None else page_shape(size)
     inputs = clip_inputs(root, entry, scene_id=scene_id, size=size, fps=fps, frames=frames, theme=theme, data=data, beats=beats,
-                         shape=shape, design_width=design_width_of(params))
+                         shape=shape, design_width=design_width_of(params), music=music)
     key = hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     return entry, data, inputs, key
 
@@ -92,7 +96,8 @@ def _store_layouts(folder: Path, scene_id: str, key: str, layouts: Mapping[int, 
 
 def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size: tuple[int, int], fps: int, frames: int,
                   theme: Mapping[str, Any] | None = None, beats: Sequence[Mapping[str, Any]] = (),
-                  shape: Mapping[str, Any] | None = None, layout_frames: Iterable[int] = ()) -> Path:
+                  shape: Mapping[str, Any] | None = None, layout_frames: Iterable[int] = (),
+                  music: Mapping[str, Any] | None = None) -> Path:
     """``folder/<scene_id>.mkv``: ``frames`` screenshots with alpha (RGBA, FFV1 ``bgra``) of the
     scene's page (``params``: its ``page`` or ``script``, a path in the project folder ``root``,
     its ``data`` and its ``design_width``) at ``fps`` and ``size`` (the frames' pixels: the page's
@@ -103,8 +108,10 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
     (:func:`~vidgen.web.inputs.page_shape`; default: a page filling a frame of ``size``, §118.11). Writes ``folder/<scene_id>.json`` =
     ``{"key", "inputs", "loaded"}`` beside it (``loaded``: served path -> SHA-256). When it draws,
     it also reads the page's text at ``layout_frames`` (after their screenshots) into
-    ``<scene_id>.layout.json`` (:func:`web_page_layouts` reads them back, §118.12)."""
-    entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape)
+    ``<scene_id>.layout.json`` (:func:`web_page_layouts` reads them back, §118.12). ``music``:
+    the scene's music data, ``ctx.music`` (§120.8)."""
+    entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape,
+                                         music=music)
     shape = inputs["shape"]
     clip, record = folder / f"{scene_id}.mkv", record_path(folder, scene_id)
     stored = read_record(record) or {}
@@ -130,7 +137,7 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
 
     with WebPage(root, entry, scene_id=scene_id, size=size, fps=fps, frames=frames,
                  theme=dict(theme) if theme is not None else None, data=data, beats=[dict(b) for b in beats], shape=shape,
-                 design_width=inputs.get("design_width")) as page:
+                 design_width=inputs.get("design_width"), music=dict(music) if music is not None else None) as page:
         write_ffv1_clip(clip, fps, size, drawn(page), alpha=True)
         served = dict(sorted(page.loaded.items()))
     write_text_atomic(record, json.dumps({"key": key, "inputs": inputs, "loaded": served}, indent=1) + "\n")
@@ -140,12 +147,14 @@ def make_web_clip(root: Path, folder: Path, scene_id: str, params: Any, *, size:
 
 def web_page_layouts(root: Path, folder: Path, scene_id: str, params: Any, *, size: tuple[int, int], fps: int, frames: int,
                      theme: Mapping[str, Any] | None = None, beats: Sequence[Mapping[str, Any]] = (),
-                     shape: Mapping[str, Any] | None = None, at: Iterable[int] = ()) -> dict[int, dict[str, Any]]:
+                     shape: Mapping[str, Any] | None = None, at: Iterable[int] = (),
+                     music: Mapping[str, Any] | None = None) -> dict[int, dict[str, Any]]:
     """The page's text at frames ``at`` (frame -> the reading of ``data/web/layout.js``, page
     pixels), for the clip :func:`make_web_clip` makes from the same arguments: the readings kept
     beside the clip, else read now in one Chromium that steps the page frame by frame (no
     screenshots) to the last frame missing, and kept for next time (§118.12)."""
-    entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape)
+    entry, data, inputs, key = _clip_key(root, scene_id, params, size=size, fps=fps, frames=frames, theme=theme, beats=beats, shape=shape,
+                                         music=music)
     wanted = sorted({min(max(int(n), 0), frames - 1) for n in at})
     layouts = _stored_layouts(folder, scene_id, key)
     missing = [n for n in wanted if n not in layouts]
@@ -153,7 +162,8 @@ def web_page_layouts(root: Path, folder: Path, scene_id: str, params: Any, *, si
         log.info("%s: reading the page's text at %d frame(s), stepping %d frames", scene_id, len(missing), missing[-1] + 1)
         with WebPage(root, entry, scene_id=scene_id, size=size, fps=fps, frames=frames,
                      theme=dict(theme) if theme is not None else None, data=data, beats=[dict(b) for b in beats],
-                     shape=inputs["shape"], design_width=inputs.get("design_width")) as page:
+                     shape=inputs["shape"], design_width=inputs.get("design_width"),
+                     music=dict(music) if music is not None else None) as page:
             for n in range(missing[-1] + 1):
                 page.advance(n)
                 if n in missing:

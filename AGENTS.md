@@ -3337,6 +3337,7 @@ each); any other library must be a file in the project (below: no internet).
 | `data` | the scene's `data:` (`{}` without one) |
 | `beats` | `[{id, index, start, end, text, words: [{text, start, end}]}]`, seconds from the scene's start (`[]` without narration) |
 | `scene`, `frame`, `region` | the scene id, the video frame's `{width, height}`, `bleed` or `body` |
+| `music` | with `music_data:` only: the video's music ("Pictures that follow the music" below) |
 
 **The theme.** vidgen puts CSS variables on `:root` before your own styles: `var(--vidgen-text)`,
 `--vidgen-primary` (one per colour), `--vidgen-background`, `--vidgen-palette-0`…,
@@ -3369,6 +3370,56 @@ estimated from the word count, so the reveal moves a little when the voice arriv
 **Values from the YAML.** `params: {data: {moons: 3, label: "Moons", color: tertiary}}` is
 `ctx.data` (text, numbers, true / false, lists and mappings). A theme colour name in it is not
 looked up for you: `ctx.theme.colors[ctx.data.color]`.
+
+**Pictures that follow the music.** `music_data: true` in a scene's `params` gives the page
+`ctx.music`: the music the video plays (its `music:`: a score file, a bed or a music file, with
+its `start`, `loop`, `volume` and fades) measured at every video frame, and, when it is a score
+file, every track's hits and notes. No script of your own, no JSON beside the page: vidgen
+measures the music once (from the music it renders for the video anyway, kept in
+`build/music`), and an edit to the score draws the scene again.
+
+```yaml
+music: tidewater              # a score bed; or your piece (assets/music/*.yaml) or a music file
+scenes:
+  - id: drop
+    type: web
+    duration: 13.87
+    params: {script: extensions/space.js, music_data: true}   # or {bands: 32, tracks: [kick, hook]}
+```
+
+```js
+export function frame(t, ctx) {
+  const m = ctx.music;                     // every function reads the frame being drawn unless given a song time T
+  const glow = 0.3 + 0.7 * m.level();      // 0..1: the whole music's loudness
+  const thump = m.pulse("kick", 0.12);     // 1 at each kick, falling over 0.12 s (1.5 on an accent)
+  const lows = m.low(), air = m.band(m.bandCount - 1), hit = m.onset();
+  const note = m.last("hook");             // the hook's latest note: {time, duration, pitch, dynamic, stroke, slur...}
+  const hue = note ? (note.pitch % 12) / 12 : 0;
+  // m.hits("kick", T0, T1), m.notes("hook", T0, T1): the events starting in [T0, T1) (song seconds)
+}
+```
+
+- **Song time.** `ctx.music.t0` is the song time at the scene's start (seconds into the piece:
+  the music's `start:`, the scene's place in the video; through a loop's repeats it counts on),
+  so `T = t0 + t` and `ctx.music.now()` is the song time of the frame drawn. No `t0` by hand;
+  `music_data: {t0: 41.6}` sets one where you want another.
+- **Measured per frame** (each 0..1, normalised over the whole video and smoothed with a fast
+  rise and a slow fall): `band(i)` (`bandCount` bands, 16 by default, log-spaced from 40 Hz to
+  12 kHz, edges in `edges`; `bands()` all of them), `level()`, `low()` (under 150 Hz),
+  `onset()` (how much the sound grew since the frame before: drum hits, note starts). The page is
+  sent the scene's frames and 5 s on each side; further away it reads the nearest of them.
+- **From the score** (`ctx.music.score`: `tempo`, `bar`, `beat`, `sections`, `seconds`; `tracks`:
+  name → `{kind, instruments}`): `hits(track?, T0?, T1?)` (drum tracks), `notes(track?, T0?, T1?)`
+  (the others), `events(...)`, `last(track, T?)`, `sounding(track, T?)`, `pulse(track, decay?, T?)`,
+  `section(T?)`. An event has `time`, `duration`, `end`, `pitch` (MIDI; `pitches` for a chord),
+  `instrument`, `dynamic` (dB of its mark, 0 unmarked), `gain` (1.5 an accent, 0.5 soft),
+  `strength` (both together), `stroke` (`pizzicato`...), `slur`. A slurred note is a note of its
+  own with `slur: true`. `tracks: [kick, hook]` sends only those (a smaller page).
+- **Music that is not a score** (a music file, a bed made in code, composed music): the
+  measurements only; `ctx.music.score` is `null`. A scene where no music plays reads silence and
+  counts video time. A video without music cannot use `music_data` (`vidgen validate` says so).
+- The first render measures the music (a few seconds; the score is rendered first if the join
+  has not rendered it yet). `vidgen still` shows the frames with the same data.
 
 **three.js** comes with vidgen: `import * as THREE from "three"` in a `script:` or in a page's
 `<script type="module">` (with a chosen set of its add-ons, below):

@@ -2064,8 +2064,10 @@ with demo files for the owner to listen to.
 - [ ] Not done: nobody has listened; no glide between attacked notes and no slur through a chord; a pad note takes its dynamic at its start; the studio's step grid does not show marks or slurs (it keeps them); a long hairpin over many short drum hits is slow to render (one new blow per dB)
 
 ### Step 347 — Built-in music data for `web` scenes
-- [ ] Per-frame spectrum bands, level, low end and onset, and drum hits and notes per track from the score, handed to the page through the existing data / beats mechanism (no hand-written script); cached, in the cache keys, deterministic
-- [ ] Shown equal to what `scripts/make_ps_audio.py` (Parallel Space) and `scripts/make_audio.py` (Escapement) made
+- [x] `music_data: true | {bands, tracks, t0}` on a `web` scene: the page gets `ctx.music` (a helper, `data/web/music.js`, added only to such pages; it arrives with `ctx` like `ctx.data` and `ctx.beats`): per-frame spectrum bands, level, low end and onset of the music the video plays (cues, loop, volume, fades), every score track's hits and notes (time, duration, pitch, instrument, dynamic, stroke, slur) in song time, `t0` worked out; no hand-written script (DESIGN §120.8)
+- [x] Cached in `build/music/music-data-<key>.json`, made from the music cache (the score rendered only when the cache lacks it), before the workers start; its key in the scene's render fingerprint and clip key only for scenes using it (no other key changes); deterministic; a page is sent its scene's frames and the events as base64 bytes (54–112 KB for a 28 s scene against the film's 124 KB file)
+- [x] Shown equal to what `scripts/make_ps_audio.py` (Parallel Space) and `scripts/make_audio.py` (Escapement) made: within the films' 1/63 rounding except the last 0.7 s (the video's fade-out), every hit and note equal; `vidgen still` frames of copies using `ctx.music` equal (Escapement) or within 11 levels (ps6) of the originals; the two scores render to the same bytes
+- [ ] Not done: per-track audio analysis; a cue starting inside a scene gives that scene no song time; Windows and macOS not tried
 
 ### Step 348 — Smaller intermediate clips
 - [ ] Measured first (the lossless scene clips took about 5 GB per 3-minute 720p film)
@@ -2082,6 +2084,9 @@ with demo files for the owner to listen to.
 ### Step 351 — Critical review of Steps 341–350
 - [ ] Review with fixes; `vidgen guide` topics, CONFIG, a cookbook for the music instruments with a table of ranges and settings, the README's feature list
 - [ ] A small example under `examples/` using the new instruments, expressive notes, built-in music data and the finishing helper (no media committed); leftovers recorded here
+
+### Step 352 — Escapement as an example (owner's request, 2026-11-16)
+- [ ] Copy the source of `/home/claude/work/escapement` (video.yaml, score, extensions, scripts, README, PLAN, .gitignore; no generated audio, video, stills, build or output) into `examples/escapement/`, adapted to Step 347's built-in music data and Step 350's finishing helper where that simplifies it without changing the picture beyond trivial differences (proved with `vidgen still` comparisons); README with the render time and a `--draft` hint; an entry in the gallery / README example list; a validate-only test (no render in tests). After Step 351's review, or before it if 351 wants to review it
 
 ---
 

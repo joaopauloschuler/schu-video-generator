@@ -908,6 +908,9 @@ def render_project(
             from vidgen.web.entry import is_web_type
 
             forget_web_clips(project.render_dir(preview) / "web", [sid for sid in to_render if is_web_type(project.scene(sid).type)])
+        from vidgen.web.music import prepare_music_data
+
+        prepare_music_data(project, preview, to_render)   # once, before the workers (DESIGN.md §120.8)
         runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames, guide_passes)
         if runs.failed:
             raise VidgenError(

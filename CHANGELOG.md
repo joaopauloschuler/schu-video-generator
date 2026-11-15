@@ -5,7 +5,14 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–346)
+## Unreleased (Steps 193–347)
+
+### Music data for `web` scenes (Step 347)
+
+- **`music_data: true`** on a `web` scene gives its page `ctx.music`: the video's music measured at every video frame (spectrum bands, level, low end, onsets; each 0..1) and, when the music is a score file, every track's drum hits and notes with pitch, instrument, dynamic, stroke and slur. No script of your own and no JSON beside the page; the song time of the scene's start is worked out (`ctx.music.t0`, `ctx.music.now()`).
+- Functions on the page: `band(i)`, `bands()`, `level()`, `low()`, `onset()`, `hits(track, T0, T1)`, `notes(...)`, `last(track)`, `sounding(track)`, `pulse(track, decay)`, `section()`. Options: `{bands: 32, tracks: [kick, hook], t0: 41.6}`.
+- It measures what the video plays (the cue's start, loop, volume, fades, scene levels), from the music the join renders anyway; made once and kept in `build/music`. An edit to the score draws the scenes that use it again; other scenes are not affected and keep their cache keys.
+- It replaces the films' own scripts: on "Parallel Space" and "Escapement" the same numbers within the films' own rounding, the same hits and notes, and stills of a page using `ctx.music` equal (or within 11 of 255 levels) to the original. Docs: `docs/CONFIG.md` ("Music data"), the guide ("Pictures that follow the music"), `docs/COOKBOOK-MUSIC.md` section 12. Tests: `tests/test_web_music.py`.
 
 ### Expressive notes in score files (Step 346)
 

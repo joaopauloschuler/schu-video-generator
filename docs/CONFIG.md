@@ -6646,6 +6646,7 @@ command, same `vidgen validate` warning).
 | `region` | `bleed` \| `body` | `bleed` | `bleed`: the page fills the whole frame, edge to edge; `body`: the page fills the safe area below the title (the whole safe area without a title), clear of overlays that reserve room (bottom captions) and, in a Short, of the parts the app covers. The page is laid out at that size: its viewport, `ctx.width` / `ctx.height` and `100vw` / `100vh` are the region's pixels, not the frame squeezed |
 | `design_width` | int (200–8192) | — | for a page built in fixed pixels: the window width it was designed for, in CSS pixels (`1280`). The page is laid out in a window that wide and as high as its region's shape gives, and drawn at the video's size at every quality (see below) |
 | `data` | mapping | `{}` | values for the page, read as `ctx.data` (`{teeth: 24, color: primary}`): text, numbers, `true` / `false`, `null`, lists and mappings (a YAML date or a number key is an error naming its place, e.g. `data.when`); theme colour names are not looked up for you (`ctx.theme.colors[ctx.data.color]`) |
+| `music_data` | bool \| mapping | `false` | the video's music for the page as `ctx.music` (Step 347, see "Music data" below): `true`, or `{bands: 16, tracks: [kick, hook], t0: 41.6}` (`bands` 1–64, log-spaced from 40 Hz to 12 kHz; `tracks`: only these score tracks' events, default all; `t0`: the song time at the scene's start, default worked out) |
 
 Give exactly one of `page` and `script`.
 
@@ -6783,6 +6784,7 @@ vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets
 | `theme` | `{preset, background, colors, palette, fonts, sizes}`: `colors` name → hex (`text`, `dim`, `accent`, `highlight`, `primary`, `secondary`, `tertiary`, `surface` and the project's own), `palette` a list of hex, `fonts` → family name for `sans`, `serif`, `mono` and every font role (`body`, `heading`, `quote`, `quote_mark`, `code` and the project's), `sizes` name → CSS pixels (`title` … `small` and the project's: text that size is as tall as vidgen's text of that size in this frame) |
 | `data` | the scene's `data:` (`{}` without one) |
 | `beats` | the scene's narration beats in order: `{id, index, start, end, text, words}`; `start` / `end` in seconds from the scene's start (when the beat's voice starts and ends; the next beat starts after the pause), `words` = `[{text, start, end}]` timed like the captions (the voice's stored timings, else estimated). A scene without narration: `[]` |
+| `music` | only with `music_data:`: the music helper (below) |
 
 **Theme as CSS variables.** vidgen puts a `<style id="vidgen-theme">` first in the page's
 `<head>` (before the page's own styles, which therefore win) with these custom properties on
@@ -6910,6 +6912,67 @@ the `web` scene (`class WebCut(Web)` in `extensions/`; since Step 341, DESIGN §
 an edit to such a scene's script was not noticed). `vidgen storyboard` renders a `web` scene like every scene
 (all of its frames at preview size; the clip is then reused by `vidgen render --preview` and
 `vidgen animatic`).
+
+**Music data: `music_data`** (Step 347, DESIGN §120.8). A page that follows the music needs no
+script of its own to measure it: with `music_data: true` (or the mapping above) the page's `ctx`
+has `music`.
+
+*What is measured.* The music the video plays, mixed as the join mixes it (every `music:` cue and
+scene theme with its `start`, `section`, `loop`, `volume`, `fade_in` / `fade_out`, the scenes'
+`music:` levels and ducking; not the narration, effects or ambience), as a 16-bit file holds it,
+once per video frame over the whole video: a 4096-sample Hann window centred on the frame's time.
+`band(i)`: the mean power of band `i` in dB, 0 at its 20th percentile and 1 at its 99.5th; `level()`:
+the power from 25 Hz to 14 kHz, 0 at 36 dB under its 99.5th percentile; `low()`: 25–150 Hz, 0 at
+30 dB under; `onset()`: the mean rise of the log spectrum since the frame before, 1 at its 99.7th
+percentile. The percentiles are taken over the frames where music plays and is not silent. Then
+each value falls by at most a share per frame (bands 0.82, level 0.9, low 0.8, onset 0.7) and
+rises at once. These are the choices of the films "Parallel Space" and "Escapement", whose own
+scripts it replaces (their 16 bands, 40 Hz–12 kHz). A value is sent as one byte (0–255).
+
+*Score events.* When the cue playing at the scene's start is a score file (a project piece or a
+score bed), `ctx.music.score` has `tempo`, `time`, `beat` and `bar` (seconds), `seconds` (one
+pass), `loop`, `file`, `sections` (`{name, start, end}`) and `ctx.music.tracks` (name →
+`{kind: drum | note | pad | chords, instruments, count}`). Each track's events are read the way
+the synthesizer plays them (holds, ties into the next section, slurs, chords voiced as played,
+notes outside 20 Hz–12 kHz left out): `time`, `duration`, `end` (song seconds), `pitch` (MIDI, the
+first of a chord; `null` for a drum) and `pitches`, `track`, `instrument` (a section may change
+it), `kind` (`hit` or `note`), `dynamic` / `dynamicEnd` (dB of the dynamic mark at the start, with
+`fp` / `sfz`, and at the end; 0 unmarked), `gain` (1, 1.5 an accent, 0.5 soft), `strength`
+(`gain` × the mark), `stroke` (the instrument's `stroke` setting by name: `pizzicato`, `roll`...;
+`null` without one) and `slur` (a slurred note: not attacked again, a note of its own here). A
+`play: chords` track gives one note per chord held. A looping piece's events repeat for every pass
+the video plays.
+
+*Song time.* `ctx.music.t0` is the song time at the scene's start: the cue's `start` (and
+`section`), plus how far into the cue the scene starts; through a looping piece it counts on
+(`score.seconds` is one pass). `music_data: {t0: 41.6}` sets it instead. Where no cue plays at the
+scene's start, `t0` is the scene's video time and `source` is `null`.
+
+| `ctx.music.` | |
+|---|---|
+| `t0`, `now()`, `time(t)` | song time at the scene's start, of the frame drawn, at scene time `t` |
+| `band(i, T?)`, `bands(T?)`, `level(T?)`, `low(T?)`, `onset(T?)` | 0..1 at song time `T` (default: the frame drawn), between frames interpolated |
+| `bandCount`, `edges` | the bands and their `bandCount + 1` edges in Hz |
+| `hits(track?, T0?, T1?)`, `notes(track?, T0?, T1?)`, `events(track?, T0?, T1?)` | events starting in `[T0, T1)`; no track: every drum track (`hits`) / every other track (`notes`) / all |
+| `last(track, T?)`, `sounding(track, T?)` | the latest event started by `T` (or `null`); the events sounding at `T` |
+| `pulse(track, decay = 0.1, T?)` | the largest `strength × exp(-age / decay)` of the track's last 8 events (1 at a hit, falling) |
+| `section(T?)` | the score section playing at `T` |
+| `source`, `score`, `tracks` | the cue (`{kind, label, loop}`), the score's facts, the tracks (`null` / `{}` without a score) |
+| `fps`, `frames`, `first`, `from`, `to`, `start` | video frame rate and frames, the scene's first video frame, the frames sent, its start in seconds |
+
+An unknown track or band number is a JavaScript error naming the ones there are.
+
+*Size and cache.* The page is sent the measurements of its own frames and 5 s on each side (outside
+them it reads the nearest) and the score's events whole, as base64 bytes: for a 28 s scene of
+"Parallel Space" (16 bands) 112 KB with its 29 tracks, 54 KB with the 17 its script used (its own
+JSON file was 124 KB). The measurements are made once per video, frame rate and band count, from
+the music cache (`build/music/piece-*.npy`, rendered there first if missing, as the join does),
+and kept in `build/music/music-data-<key>.json`; its key (the music settings, the music files,
+the planned timeline, the narration files when the music ducks) is in the scene's render
+fingerprint and the page's clip key, so an edit to the score, a cue or a scene's length renders
+the scenes with `music_data` again; scenes without it are not affected. A video without music
+cannot use it (`vidgen validate`: `music_data: the video plays no music`). Music files other than
+score files (`.wav`, `.mp3`...) give the measurements only.
 
 **Lint reads the page** (DESIGN §118.12). At each still lint looks at (the beat ends; more with
 `vidgen storyboard --per-beat N` or a Short), vidgen asks the page what text it shows: every

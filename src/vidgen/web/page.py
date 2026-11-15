@@ -306,15 +306,18 @@ class WebPage:
     a page filling a frame of ``size``), in ``ctx`` and as attributes of ``<html>`` (§118.11).
     ``design_width`` (§118.17): the page's window is that many CSS pixels wide (:attr:`viewport`)
     and drawn at the device scale :attr:`scale`, so the frames are still ``size``; without it the
-    window is ``size`` at scale 1.
+    window is ``size`` at scale 1. ``music`` (§120.8): the scene's music data
+    (:func:`vidgen.web.music.scene_music`), given to the page as ``ctx.music`` by vidgen's music
+    helper; ``None``: no helper, no ``ctx.music``.
     :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
     to its SHA-256, a missing project file to ``None`` (§118.10)."""
 
     def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
                  theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
                  beats: list[dict[str, Any]] | None = None, shape: dict[str, Any] | None = None,
-                 design_width: int | None = None) -> None:
+                 design_width: int | None = None, music: dict[str, Any] | None = None) -> None:
         self.root, self.entry, self.scene_id = root, entry, scene_id
+        self.music = music
         self.size, self.fps, self.frames = size, fps, frames
         self.design_width = design_width
         self.viewport, self.scale = page_viewport(size, design_width)
@@ -446,6 +449,10 @@ class WebPage:
                                       device_scale_factor=1 if self.design_width is None else self.scale,
                                       timezone_id=TIMEZONE, locale=LOCALE)
         context.add_init_script(script=init_script(self.scene_id))
+        if self.music is not None:   # ctx.music (DESIGN.md §120.8): only on pages of scenes with music_data
+            from vidgen.web.music import helper_source
+
+            context.add_init_script(script=helper_source())
         context.route("**/*", self._serve)
         self._page = page = context.new_page()
         context.new_cdp_session(page).send("Emulation.setDefaultBackgroundColorOverride", {"color": TRANSPARENT})
@@ -460,7 +467,7 @@ class WebPage:
         self._limit = _TimeLimit(renderer_pids(browser))
         info = {"scene": self.scene_id, "width": width, "height": height, "fps": self.fps,
                 "frames": self.frames, "duration": self.frames / self.fps, "theme": self.theme, "data": self.data,
-                "beats": self.beats, **self.shape}
+                "beats": self.beats, **self.shape, **({} if self.music is None else {"music": self.music})}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
 

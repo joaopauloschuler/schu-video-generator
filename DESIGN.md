@@ -268,7 +268,8 @@ src/vidgen/
   web/                    # `web` scenes (§118): entry.py (page / script checks, fingerprint), page.py (serving
                           # the project folder, errors, screenshots), clip.py (the cached clip), inputs.py (theme
                           # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10),
-                          # layout.py (the page's text as layout objects, for lint; §118.12)
+                          # layout.py (the page's text as layout objects, for lint; §118.12), still.py
+                          # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -24225,11 +24226,12 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | 344 | Synth instruments: bowed strings (`violins`, `violas`, `cellos`, `double_basses`; sustained, spiccato, tremolo, pizzicato) | §120.5 |
 | 345 | Synth instruments: orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam`) and a `choir` | §120.6 |
 | 346 | Expressive notes in the score format: dynamic marks, hairpins, slurs with a glide, vibrato speed and delay, settings per note, an instrument per section, a range warning | §120.7 |
-| 347 | Built-in music data for `web` scenes | later |
+| 347 | Built-in music data for `web` scenes: `music_data:` gives a page `ctx.music` | §120.8 |
 | 348 | Smaller intermediate clips | later |
 | 349 | Faster `web` rendering, measured first | later |
 | 350 | Ready-made finishing for three.js `web` scenes | later |
 | 351 | Critical review, documents, an example | later |
+| 352 | "Escapement" as an example under `examples/` (owner's request, 2026-11-16) | later |
 
 Rules of the phase: the films' scores must synthesize to the same audio as before each step, and
 stored cache keys are not invalidated without a written reason.
@@ -24810,3 +24812,119 @@ its top level failed in about one run in three with `did not become ready within
   harmonic passes 16 kHz. The note memory (`additive.remembered`) keys on the phrase; the
   dynamics reach an instrument as settings, which it keys on already.
 
+### 120.8 Built-in music data for `web` scenes (Step 347)
+
+- **The report.** All three films gave their three.js pages the music through a hand-written
+  script run after every change to the score (`scripts/make_ps_audio.py` of "Parallel Space",
+  `scripts/make_audio.py` of "Escapement"): render the score to a WAV with `vidgen music
+  render`, measure it at 30 fps, read the score's tracks with `load_music_score`, write a
+  char-encoded JSON beside the script (ps6: 124 KB for 5,549 frames) that the page fetched; each
+  scene passed its place in the song by hand (`data: {t0: 41.6}`).
+- **The interface.** A `web` scene's param `music_data: false | true | {bands, tracks, t0}`
+  (`vidgen.web.music.MusicDataSettings`: `bands` 1–64, default 16; `tracks` a list of score
+  track names, default all; `t0` seconds). With it the page's `ctx` has `music`, built in the
+  page by vidgen's helper `data/web/music.js` from the data Python sends with `start(info)`. The
+  helper is a second init script, added only for such pages, which wraps
+  `window.__vidgen.start`: `runtime.js`, `clock.js` and `media.js` are unchanged, so
+  `engine_id()` and the clip keys of every other `web` scene stay as they were. Every function
+  takes an optional song time `T` (default `ctx.music.now()` = `t0 + performance.now() / 1000`,
+  vidgen's clock, so the frame drawn): `band(i)`, `bands()`, `level()`, `low()`, `onset()`;
+  `hits / notes / events(track?, T0?, T1?)`, `last(track)`, `sounding(track)`, `pulse(track,
+  decay)`, `section()`; `time(t)` maps scene time to song time. Naming follows the page's other
+  inputs (`ctx.theme`, `ctx.data`, `ctx.beats`); `T` is song time because the films wrote their
+  pictures as functions of the song time `T = t0 + t`.
+- **What is measured** (`analyse`). Decided: the music *the video plays*, not the score's own
+  render: `plan_music` + `plan_score` of `mix.py` on the planned timeline (`planned_timings`:
+  `VideoPlan`'s scene starts, durations and beats, in the shape of the join's timings), read
+  through `MusicTrack` (cue `start`, `section`, `loop`, `volume`, fades, the scenes' `music:`
+  levels, ducking, themes), so a page sees a fade or a quiet scene as it is heard; narration,
+  effects and ambience are left out. The mix is rounded as a 16-bit WAV holds it (`pcm16`) and
+  averaged to mono. Frame `f` of the whole video (plus 2 spare frames) is a 4096-sample Hann
+  window centred on sample `round(f * 48000 / fps)`; per frame: each band's mean power in dB
+  (`bands + 1` edges log-spaced 40 Hz–12 kHz; a band narrower than one FFT bin takes the bin
+  nearest its geometric centre: at 64 bands the lowest are), the power from 25 Hz to 14 kHz and
+  from 25 Hz to 150 Hz in dB, and the onset (the mean positive change of `log10(power + 1e-9)`
+  over 25 Hz–14 kHz since the frame before). Normalised over the frames where a cue plays and
+  the level is over −100 dB (`SILENT_DB`; digital silence is −120): a band 0 at its 20th and 1
+  at its 99.5th percentile, the level 0 at 36 dB under its 99.5th percentile, the low end 30 dB
+  under, the onset 1 at its 99.7th; then `released` (a value is at least `keep` of the one
+  before, mixed: 0.82, 0.9, 0.8, 0.7). These are the films' numbers; the silence rule is new
+  (the films had no silent frames: with all-silent music their formula gave a level of 1).
+- **Why 16-bit.** On the float mix the onset differed from the films' in most frames (mean
+  0.045, correlation 0.961 over ps6): a bin that is near silence in float has a log power that
+  jumps by tens of dB between frames, while in a 16-bit file the rounding noise holds it at about
+  −96 dB. Rounded as the WAV is, the onset matches (below).
+- **Score events** (`vidgen.studio.events.score_events`). Read the way `studio/render.py` plays
+  the score, with its own helpers (`_track_events`, `_Voicer`, `_Skipped`, `_slot_at`): holds,
+  notes tied into the next section, a loop's tail, accents (`ACCENT_GAIN`), chords voiced as
+  played (the voicer called in the renderer's order, slurred notes after their event), notes
+  outside 20 Hz–12 kHz left out, a section's own instrument. Per event: time, duration, pitches
+  (MIDI), instrument, dynamic at the start (with `burst`) and at the end, gain, the `stroke`
+  setting by name (`Setting.choices`) and `slur`. A slurred note (`_Event.slurred`) is its own
+  note with `slur: true`, from its step to the next slurred note or the event's end. `play:
+  chords` tracks give one note per chord held, merged as `_render_held_chords` merges them.
+  Nothing is synthesised (ps6's 29 tracks, 5,327 events: 0.6 s).
+- **Song time.** The cue playing at the scene's start (`music:` cues first, scene themes only
+  when there is none): `t0 = offset + (scene start − cue start)`, `offset` = the cue's `start`
+  plus its `section`'s start, taken modulo one pass for a looping piece (as `Source` does).
+  Through a loop's repeats song time counts on and the events are repeated for every pass the
+  cue plays (events before song time 0 are dropped). No cue at the scene's start: `t0` = the
+  scene's video time, `source` and `score` `null`. `music_data: {t0}` overrides it.
+- **Transfer.** The video's data (`video_music_data`) holds every frame; a page is sent its
+  scene's frames and `PAGE_MARGIN_SECONDS` = 5 s on each side (reading outside gives the edge
+  frame) and the score's events whole (a page counts hits from the start: "Escapement" does).
+  Series: one byte per value (0–255; the films used 64 levels), base64. Events per track as
+  columns of base64 typed arrays: start and duration in 48 kHz samples (`uint32`, exact), first
+  pitch (`uint8`), other pitches of chords as a sparse map, dynamics and gains (`float32`),
+  instrument, stroke, slur (`uint8`); a column with only default values is left out. ps6's
+  `05_heart` (28 s): 112 KB with all 29 tracks, 54 KB with the 17 tracks its script used (its
+  JSON: 124 KB). Decided against compressing: deflate gained 10–15 % on these bytes.
+- **Cache and keys.** `music_inputs` (cheap: no audio is read): the data version, vidgen's version
+  (a piece's render depends on it), the frame rate, every `music:` cue, `score:`, `soundfont`,
+  each scene's `music:` and beats' motifs, the files under `assets/music` and each cue's file
+  (score files by SHA-256, others by size and time), the planned timeline (scene starts,
+  durations, beat spans) and, when any music ducks, every narration MP3's size and time.
+  `music_data_key` adds the band count; the data is kept in
+  `build/music/music-data-<key>.json`. Rendering the music goes through `Source` with the join's
+  cache folder `build/music`, so a piece already rendered is read from `piece-<key>.npy` and one
+  not rendered yet is rendered and stored there (the join then reuses it). `render_project`
+  makes it in the parent process before the workers start (`prepare_music_data`), so two
+  workers never render the music at once; a worker (or `vidgen still`, lint) that finds no data
+  makes it itself. The render fingerprint's `web` part gets `music` (the key at the format's
+  frame rate) only for a scene with `music_data`; the clip inputs get `music: {data: SHA-256 of
+  what the page is sent, helper: SHA-256 of music.js}` only then. **No stored key changes**:
+  scenes without `music_data` have the same fingerprint and clip inputs as before (the
+  `vidgen_source` digest changes with every step). Old `music-data-*.json` files stay in
+  `build/music` like old piece renders.
+- **Checks.** `Web.validate_project`: `music_data` in a video without music (no cue, no theme)
+  is `music_data: the video plays no music; ...`; `tracks` naming a track the score lacks is a
+  `VidgenError` with did-you-mean; `tracks` where the scene's music is not a score file is an
+  error. In the page: an unknown track or band number throws, naming the ones there are.
+- **Equivalence with the films** (scratch: `/home/claude/work/scratch/al347/`; `tools/compare.py`).
+  Copies of ps6 and Escapement; their scores rendered once with `vidgen music render`'s code
+  (WAV SHA-256 equal to Step 346's), the films' own scripts run on the WAVs (ps6's output is
+  byte-identical to its shipped `ps_audio.json`; Escapement's shipped JSON is older than its
+  score and was made again), the samples given to each copy's music cache. ps6, 5,548 frames
+  at 30 fps, 16 bands: bands, level and low end within 0.016 of the film's (its quantisation
+  step is 1/63 = 0.016; mean 0.004), the onset too except in the last 0.73 s (frames
+  5526–5547: max 0.14), where the video's 1.5 s `fade_out` acts and the film's WAV had none;
+  Escapement the same (level, low end within 0.0099; onset off in the last 17 frames). Events:
+  every exported track of both films equal in count, time and length (1e-4 s), gains equal,
+  pitches equal (where the films wrote 0 for a chord degree, ours is the pitch played). Stills
+  (`vidgen still`, 1280x720) of a copy whose script reads `ctx.music` instead of the JSON (and
+  `ctx.music.t0` instead of `data.t0`): ps6 `05_heart` at 1, 9.5 and 20 s within 11 levels of
+  the original (PSNR 67–83 dB; the 64 levels of the films' JSON against 256); Escapement
+  `04_escapement` and `08_falter` at six times pixel-identical (its pictures read only events
+  and the mechanism's beats, which its copy builds from `ctx.music.events`).
+- **Public interface.** The `web` param `music_data` and the page's `ctx.music`. `vidgen.api`
+  gains three names, because built-in scenes import only `vidgen.api`
+  (`tests/test_builtin_scenes.py`): `WebMusicData` (= `vidgen.web.music.MusicDataSettings`),
+  `video_has_music(config)` and `web_scene_music(project, scene_id, fps, settings)` (what the
+  page is sent; pass it as `make_web_clip(..., music=)`).
+- **Measured.** The video's data: 4.7–5.4 s for a 3-minute film (FFT and percentiles; the
+  music read from the cache); a page's data for one scene: 0.6 s more (the score's events). A
+  scene without `music_data` costs nothing (one look at its params when the render starts).
+- **Not done.** No per-track audio analysis (the films did not ask; a track's events plus the
+  mix's bands served them). No measurement of the narration or effects. A cue starting inside a
+  scene gives that scene no song time (it reads the cue playing at its start). Ducking makes the
+  measurements dip under narration (as heard).

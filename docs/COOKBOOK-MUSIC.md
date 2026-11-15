@@ -18,7 +18,8 @@ Contents: [room for the voice](#1-room-for-the-voice) ·
 [energy curves](#2-energy-curves-builds-and-lifts) · [loops](#3-loop-design) ·
 [check and compare](#4-using-check-and-compare) · [genre sketches](#5-genre-recipes-as-score-sketches) ·
 [common mistakes](#6-common-mistakes-and-their-fixes) ·
-[a person and an agent in the studio](#7-a-person-and-an-agent-in-the-studio)
+[a person and an agent in the studio](#7-a-person-and-an-agent-in-the-studio) ·
+[pictures that follow the score](#12-pictures-that-follow-the-score)
 
 ## 1. Room for the voice
 
@@ -736,3 +737,50 @@ Things that go wrong:
   or give the line to a neighbour (violins to violas, horn to trumpet).
 - *A long crescendo over many short drum hits renders slowly*: every whole dB is a new blow (a
   six-player taiko over 64 sixteenths took 5 s instead of 0.3 s).
+
+## 12. Pictures that follow the score
+
+A `web` scene can follow the music without a script that measures it (Step 347; `docs/CONFIG.md`,
+"Music data"). The films that asked for it ("Parallel Space", "Escapement") each kept a Python
+script that rendered the score, measured the WAV and wrote a JSON file beside the page, run by
+hand after every change to the score. Now `music_data: true` hands the page `ctx.music` and the
+render keeps it current.
+
+```yaml
+music: {source: night_drive, fade_in: 0, fade_out: 1.5}   # a project piece: assets/music/night_drive.yaml
+scenes:
+  - id: drop
+    type: web
+    duration: 13.87                       # 8 bars at 138.46 BPM: scenes that start on a bar line
+    params:
+      script: extensions/space.js
+      music_data: {tracks: [kick, taiko, hook, violins]}   # only what the page reads: a smaller page
+```
+
+What a page usually takes from it, in song time (`T = ctx.music.now()`):
+
+- **The pulse of a drum**: `ctx.music.pulse("kick", 0.1)` is 1 at each kick (1.5 on an accent,
+  more under `[ff]`) and falls in 0.1 s. Brightness and glow follow it well; the camera and the
+  zoom should not (the films' owner asked for the brightness to pulse, never the zoom).
+- **The tune**: `ctx.music.last("hook")` is the hook's latest note (`pitch`, `time`, `duration`,
+  `dynamic`, `stroke`, `slur`); `ctx.music.sounding("violins")` the notes held now. A slurred
+  note is a note of its own with `slur: true`, so a picture can move on a slur without a new
+  flash.
+- **The texture**: `level()`, `low()`, `band(i)` and `onset()` are the measured sound, each 0..1,
+  smoothed with a fast rise and a slow fall. Use them for what the score does not say: how dense
+  the mix is, how much low end, the reverb tail, a riser.
+- **The form**: `ctx.music.section().name` and `ctx.music.score.bar` (seconds per bar) place a
+  picture in the piece; the score's `sections` give their song times.
+
+Things that go wrong:
+
+- *Pictures late by a scene's start*: use `ctx.music.now()` or `t0 + t`, not `t`; `t` is the
+  scene's own time.
+- *A drum track that never pulses*: the name is the score's track name, not the instrument's
+  (`taiko`, not `kick`); an unknown name is an error listing the tracks.
+- *Pictures that jump at a cut*: two scenes read the same song time at the cut only when the
+  second starts where the first ends; `music_data: {t0: ...}` is for a scene that should be
+  somewhere else in the song.
+- *A slow first render*: the music is measured once (a few seconds); when the score was never
+  rendered for the video, it is rendered first (minutes for a long orchestral score), and the
+  join then reuses it.

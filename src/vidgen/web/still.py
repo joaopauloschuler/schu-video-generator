@@ -313,7 +313,7 @@ def make_web_stills(
         started = time.monotonic()
         opened = WebPage(project.root, entry, scene_id=scene_id, size=(width, height), fps=fps, frames=frames, theme=args["theme"],
                          data=scene_data(params), beats=[dict(b) for b in args["beats"]], shape=args["shape"],
-                         design_width=design_width_of(params)).__enter__()
+                         design_width=design_width_of(params), music=args.get("music")).__enter__()
         if result.pages == 0:
             result.load_seconds = time.monotonic() - started
         result.pages += 1

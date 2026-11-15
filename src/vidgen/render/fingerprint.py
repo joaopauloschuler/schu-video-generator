@@ -220,11 +220,30 @@ def _web_inputs(project: Project, spec: SceneConfig) -> dict[str, Any]:
     from vidgen.web.loaded import current_loaded, recorded_loaded
 
     paths = [rel for record in _web_records(project, spec.id) for rel in recorded_loaded(record)]
-    return {
+    data = {
         **entry_digest(project.root, spec.params),
         "loaded": current_loaded(project.root, paths),
         "align": {beat.id: _stat(project.audio_dir / f"{beat.id}.align.json") for beat in spec.beats},
     }
+    music = _web_music(project, spec)
+    if music is not None:   # left out without music_data:, so other web scenes keep their fingerprints
+        data["music"] = music
+    return data
+
+
+def _web_music(project: Project, spec: SceneConfig) -> str | None:
+    """The key of the music data a ``web`` scene with ``music_data:`` is given (DESIGN.md
+    §120.8; the music's settings and files and the planned timeline, at the video's frame
+    rate, made without rendering any music), ``None`` without it or when the video plays none."""
+    from vidgen.web.music import has_music, music_data_key, scene_music_settings
+
+    try:
+        settings = scene_music_settings(spec.params)
+    except ValueError:
+        return None
+    if settings is None or not has_music(project.config):
+        return None
+    return music_data_key(project, project.config.format.fps, settings.bands)
 
 
 def drawn_fingerprint(inputs: dict[str, Any], project: Project, preview: bool, scene_id: str) -> str:
