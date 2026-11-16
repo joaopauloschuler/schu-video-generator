@@ -3743,6 +3743,21 @@ look per role, on the kit above: `reactions(ctx.music, ctx.data.react)`, `colour
 bar lines when you join or split them. `--json` gives the plan as data. The plan reads notes,
 not sound or words: check its roles against what you hear described (`vidgen music check`).
 
+**Watching the result: `vidgen motion check`.** Stills cannot show what happens between frames.
+After a render (`--draft` first), `vidgen motion check . --draft --json` decodes the video at
+160 px wide (no render; a minute in about 10 s) and lists, with time, frame, scene and
+severity: `blank` (black or flat frames entered abruptly inside a scene: a frame that failed to
+draw, e.g. a NaN in a shader; **error**), `flash` (one or two frames much brighter or darker than
+both neighbours), `flicker` (the light going up and down every frame or two), `pop` (a region
+shown for one or two frames), `strobe` (a pattern turning about half its repeat a frame),
+`frozen` (no visible change for 1.5 s or more) and `cut_jump` (a big change of brightness across
+a cut). Flashes, pops and pulses on the score's drum hits and note starts are info: a reaction to
+the music, not a fault. Each finding has a contact strip PNG (`build/<quality>/motion/`, the
+finding's frames framed in red): open the errors' and warnings' strips, then `vidgen still` the
+scene at that time to find the cause. Without a whole render, `--source scenes` reads the scene
+clips in `build/`. Thresholds: `--threshold NAME=VALUE` (`docs/CONFIG.md`, "Motion check"); MCP
+`motion_check` returns the strips as pictures.
+
 **Animation and chart libraries.** These ship with vidgen: import them by name, in a
 `<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's
 clock. "Plays by itself" means the library's own loop follows the video's time from the scene's

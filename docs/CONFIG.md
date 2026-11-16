@@ -16575,6 +16575,88 @@ scene's `status`: `rendered` or `reused`). So `vidgen render --preview` after a 
 lint of the preview only joins the video, and keeps their stills. `--force` renders every scene
 again; `--scene ID` renders those scenes whatever their state.
 
+## Motion check (`vidgen motion check`)
+
+```bash
+vidgen motion check                          # this project's rendered video (else its scene clips in build/)
+vidgen motion check output/my_video.mp4      # any video file
+vidgen motion check . --draft --source scenes --threshold flash=0.12 --fail-on warning --json
+```
+
+`vidgen motion check [FILE|PROJECT] [--source auto|video|scenes] [--variant NAME] [--preview |
+--draft] [--output-dir DIR] [--out DIR] [--no-strips] [--threshold NAME=VALUE ...] [--fail-on
+error|warning|info|never] [--json]` (Step 360, DESIGN §121.3) watches a rendered video for what a
+still cannot show: frames that fail to draw, one-frame flashes, flicker, things popping in and
+out, strobing, frozen stretches and jumps at cuts. It renders nothing.
+
+- **What it watches.** A video file; or a project's rendered video (`output/<name>.mp4`, the
+  `_preview` / `_draft` one with `--preview` / `--draft`) with its scenes from the render's
+  `timings.json`; or, when that video is missing (or with `--source scenes`), the scene clips in
+  `build/<quality>/scenes/` one after the other (cut to cut: no transitions or overlays). Nothing
+  rendered: the message names the `vidgen render` command.
+- **How.** ffmpeg decodes the video once at 160 px wide (area scaling) and pipes the raw frames;
+  each frame is reduced to its mean luma and spread, colour means, a 16-bin luma histogram and
+  10 x 10 px block means with each block's change from 1, 2 and 3 frames before, then dropped (about
+  1 KB a frame). Parallel Space and Escapement (3 min at 1280x720 each) take about 25 s on 2 cores.
+- **The score's events.** In a project whose `music:` plays a score file (a project piece or a
+  score bed), every drum hit and note start of its drum and melodic tracks (not pads or chords) is
+  placed in video time (the cue's scenes, `start`, `section`, loop). A flash, pop or flicker that
+  falls on them (0.5 frame before to `beat_frames` after) is a reaction to the music: info, not a
+  warning. Scene themes (`score:`) are not read.
+
+| check | severity | what it reports |
+|---|---|---|
+| `blank` | error inside a scene; info at a cut or after a fade | near-uniform frames (luma spread under `blank_std`: black, white, one flat colour) entered or left by a step of `blank_jump` or more: a frame that failed to draw (Parallel Space v7: 20 black frames from a NaN in a shader). A uniform stretch reached by a fade is info when it lasts `dark_seconds`; one at the very start or end of the video is not reported |
+| `flash` | warning; info on a hit or note | one or two frames at least `flash` brighter (flash) or darker (drop-out) than the frame before, the next one back within `flash_revert` of the step |
+| `flicker` | warning; info when beat-locked | the luma going up and down (steps of `flicker`, or `flicker_block` in `flicker_blocks` blocks or more) on `flicker_share` of the frames of a `flicker_window`-frame window; when `beat_share` of its peaks fall on the score's events: beat-locked pulses (info). A kick's pulse that decays over a few frames is neither |
+| `pop` | warning; info when small (under `pop_blocks` blocks) or on hits | blocks that change by `pop` and come back within `pop_revert` of it one or two frames later, while the blocks around them stay still (three in four under `pop_quiet`, none changing by `pop`: else it is something moving); over `pop_area` of the frame it is a flash. The strip marks the place with a yellow box |
+| `strobe` | warning | `strobe_blocks` blocks or more alternating between two pictures (a change of `strobe`, and two frames back almost the same) on `strobe_share` of a second's frames, the region's brightness staying: a wheel or pattern moving about half its repeat a frame |
+| `frozen` | info | frames without visible change (mean change under `frozen`; at 160 px a small slow change, such as thin text fading in, counts as none) for `frozen_seconds` or longer inside a scene (a title held on purpose, or a page whose clock stopped) |
+| `cut_jump` | info | a luma step of `cut_luma` or a histogram distance of `cut_hist` across a cut (a scene start, or a clip's start) |
+
+Findings of one kind closer than `group_seconds` are one finding. The aliasing of a rotation that
+lands near a whole repeat a frame (it seems to turn slowly or backwards) is not found: it looks
+like slow motion in the pixels, and only the scene knows the intended speed.
+
+**Thresholds** (luma and changes are 0..1, 1 = black to white; `--threshold NAME=VALUE`, repeatable):
+
+| name | default | | name | default |
+|---|---|---|---|---|
+| `width` | 160 | | `pop` | 0.12 |
+| `blank_std` | 0.012 | | `pop_revert` | 0.35 |
+| `blank_jump` | 0.06 | | `pop_quiet` | 0.04 |
+| `dark_seconds` | 1.0 | | `pop_area` | 0.5 |
+| `flash` | 0.08 | | `pop_blocks` | 2 |
+| `flash_revert` | 0.35 | | `strobe` | 0.06 |
+| `flicker` | 0.02 | | `strobe_blocks` | 4 |
+| `flicker_block` | 0.05 | | `strobe_share` | 0.5 |
+| `flicker_blocks` | 3 | | `frozen` | 0.0015 |
+| `flicker_window` | 12 | | `frozen_seconds` | 1.5 |
+| `flicker_share` | 0.6 | | `cut_luma` | 0.2 |
+| `beat_frames` | 1.5 | | `cut_hist` | 0.8 |
+| `beat_share` | 0.7 | | `group_seconds` | 0.5 |
+| `strip_width` | 240 | | `max_strips` | 40 |
+
+**Output.** A line per finding, most severe first, then by time:
+
+```text
+output/parallel_space_v7.mp4: 5546 frames at 30 fps (184.9 s), watched at 160x90 in 24.4 s
+  scenes: 11
+  music events: 5093 hits and notes of parallel_space
+warning   104.93 s  frame   3148 06_build  flash: 1-frame flash: luma 0.45 -> 0.55 -> 0.48
+        strip: build/final/motion/01_flash_0104.93s.png
+info       80.60 s  frame   2418 05_heart  flash: 1-frame drop-out on a hit or note of the score: luma 0.46 -> 0.38 -> 0.44
+...
+0 error(s), 1 warning(s), 21 info
+```
+
+and a **contact strip** per finding (`NN_<kind>_<seconds>s.png`, the `max_strips` most severe;
+`--no-strips`: none) in `--out` (default `build/<quality>/motion/` in a project, `<video>_motion/`
+in the current folder for a file; old strips there are replaced): two frames before, the
+finding's frames (the first two and last two of a long one) framed in red, two after, each 240 px
+wide and labelled with its frame and time. Exit code 1 when a finding is at `--fail-on` or worse
+(default `error`).
+
 ## Animatic (`vidgen animatic`)
 
 `vidgen animatic [PROJECT]` writes `<output>[_<variant>]_animatic.mp4` into the
@@ -16761,7 +16843,9 @@ back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`,
 list), `music_patches`, `music_render` (`score`: a path or a project piece's or bed's name, `out`
 default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` given the same way,
 `narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `audio_check`
-(`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
+(`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `motion_check` (`vidgen motion check`: `target`, `source`,
+`variant`, `preview`, `draft`, `threshold`, `fail_on` default `never`, `out` default `build/mcp/motion` for a file, `images`,
+`image_offset`: returns the contact strips as pictures), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
 sound alone), `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
@@ -17150,6 +17234,27 @@ and the files', and `files` lists `{file, title, start, end, check, stereo}`.
 fails, or with `--mono` the mono check. A project split into chapter files adds `files` (`{file,
 measured, checks}` each; `file` / `measured` / `checks` are the first's) and `files_check` (the
 files against each other); `ok` is false when any file or that check fails.
+
+### `vidgen motion --json`
+
+`vidgen motion check FILE|PROJECT --json` ([Motion check](#motion-check-vidgen-motion-check)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `check` |
+| `source`, `files` | str, list | what was watched (the video, or the project with `(scene clips)`) and the files decoded |
+| `fps`, `frames`, `duration` | number | the video's frame rate, frames decoded and their seconds |
+| `size` | list | `[width, height]` it was watched at |
+| `seconds` | number | how long the check took |
+| `scenes` | list | `{id, start, end}` (seconds; empty for a plain file) |
+| `hits`, `hit_source` | int, str | how many hits and notes of the score were placed, and the score (`null`: none) |
+| `notes` | list | what could not be read (old `timings.json`, scenes not rendered, a score that failed) |
+| `counts` | object | `{error, warning, info}` |
+| `findings` | list | `{kind, severity, frame, end_frame, time, end_time, scene, message, value, strip, box}`: frames of the whole video (`end_frame` included; `end_time` after it), `value` the number that tripped the check, `strip` the PNG (`null` past `max_strips` or with `--no-strips`), `box` where in the frame (`[x0, y0, x1, y1]` shares) for pops and strobing |
+| `out` | str | the strips' folder (`null` with `--no-strips`) |
+| `thresholds` | object | every threshold as used |
+
+`ok` is false when a finding is at `--fail-on` or worse (default `error`).
 
 ### `vidgen storyboard --json`
 

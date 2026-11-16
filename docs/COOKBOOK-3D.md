@@ -112,6 +112,8 @@ model. The walkthrough, which pass to choose and the limits:
   (an object the beat is about is mostly outside the frame) and `three_d_hidden` (mostly behind a
   nearer one) — estimates from spheres, so a tall stand-in counts a little larger than it is.
 - The 3D frames are cached: a caption or title change re-renders the scene but reuses the clip.
+- `vidgen motion check` watches the rendered video for what stills miss: black frames, one-frame
+  flashes, flicker, popping, strobing (section 11).
 
 ## 7. Common mistakes
 
@@ -242,3 +244,42 @@ For the three film scores the plan is close to what their authors cut: `escapeme
 splits the 16-bar `pulse` and keeps `heart` and `heart2` apart, where the film shows 16-bar
 scenes); DESIGN §121.2 has the tables.
 
+
+## 11. Checking a music video
+
+A still shows one frame; a music video goes wrong between frames: a shader that returns NaN for
+a moment draws black frames (Parallel Space v7 had 20 of them), an envelope that restarts at zero
+dips the light for one frame, a spinning wheel strobes. Watching three minutes for that is slow and
+easy to miss. `vidgen motion check` watches for you (reference: [CONFIG, "Motion
+check"](CONFIG.md#motion-check-vidgen-motion-check)):
+
+```bash
+vidgen render my_video --draft                   # or the final render you are about to publish
+vidgen motion check my_video --draft             # its rendered video, about 10 s a minute
+vidgen motion check output/my_video.mp4          # any file
+```
+
+- **Read the errors first.** `blank` inside a scene is a frame that failed to draw: open the
+  strip, find the scene and time, then `vidgen still my_video --scene ID --at SECONDS` to see the
+  page at that moment, and look for a division by zero, a `normalize` of a zero vector or a
+  `pow` of a negative number in the shaders.
+- **Warnings are worth a look.** A one-frame `flash` or drop-out that does not fall on a hit or
+  note is often a camera passing through an object, a value jumping on a section boundary or a
+  reaction without its attack; `flicker` is something oscillating every frame or two (a value
+  that changes sign, two layers fighting at one depth); `pop` a part shown for one or two frames;
+  `strobe` a pattern turning about half its repeat a frame (slow it, or blur it).
+- **Info is the music doing its job.** Flashes, pops and pulses that start on the score's drum
+  hits and note starts are listed as info (a pulse that rises on the kick and decays over a few
+  frames is not reported at all). A light that drops for one frame on every note of a line is
+  still worth a look in the strip: an envelope that starts at 0 dims the picture on each note.
+  `frozen` is a held title, or a page whose clock stopped; `cut_jump` a hard change of brightness
+  across a cut, deliberate or not.
+- **Before the final render**, check the scene clips you have: `--source scenes` reads the clips
+  in `build/` (cut to cut) when the whole video is not rendered yet.
+
+On the two finished example films: Parallel Space v7 (fixed) has no blank frames; one warning (a
+tunnel ring passing the camera brightens one frame in `06_build`) and 21 infos (seven cuts with
+jumps in brightness, eleven flashes and dips on notes and hits, among them one-frame dips on the
+`hook` notes in `05_heart`, a small glint, two held frames in the coda); Escapement has none above
+info (seven cut jumps, small glints in its gears, the still opening on the watch while the title
+fades in, and the held ending).

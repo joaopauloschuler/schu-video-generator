@@ -721,6 +721,33 @@ def build_server(root: Path) -> Any:
         options = {"preset": preset, "variant": variant, "preview": preview}
         return answer(await call(ctx, args_of(["audio"], ["check", str(where(target, "target"))], options)))
 
+    @tool("Watch a rendered video for motion faults, for agents that cannot watch it: decodes it at 160 px wide (no render) "
+          "and reports black or blank frames inside a scene, one- or two-frame flashes and drop-outs, flicker, popping regions, "
+          "strobing, frozen stretches and brightness jumps at cuts, each with time, frame, scene and severity (pulses on the "
+          "score's hits and notes are info). Returns the findings' contact strips as pictures (the finding's frames framed in red).", writes)
+    async def motion_check(
+        ctx: Context,
+        target: Annotated[str, Field(description="a video file or a project folder (its rendered video, else its scene clips), relative to the root")] = ".",
+        source: Annotated[Literal["auto", "video", "scenes"], Field(description="a project's rendered video or its scene clips (auto: the video if rendered)")] = "auto",
+        variant: Variant = None,
+        preview: Annotated[bool, Field(description="a project's preview render")] = False,
+        draft: Annotated[bool, Field(description="a project's draft render")] = False,
+        threshold: Annotated[list[str] | None, Field(description="NAME=VALUE changes, e.g. flash=0.12 (docs/CONFIG.md lists them)")] = None,
+        fail_on: Annotated[Literal["error", "warning", "info", "never"], Field(
+            description="lowest severity that makes ok false (default never: the strips come back whatever is found)")] = "never",
+        images: Images = DEFAULT_IMAGES,
+        out: Annotated[str | None, Field(description="folder for the strips, relative to the root (default: build/<quality>/motion "
+                                                     "in a project, build/mcp/motion for a video file)")] = None,
+        image_offset: Offset = 0,
+    ) -> Any:
+        path = where(target, "target")
+        video_file = path.is_file() and path.suffix.lower() not in (".yaml", ".yml")
+        strips = where(out, "out") if out else where(str(WORK_DIR / "motion"), "out") if video_file else None
+        options = {"source": source, "variant": variant, "preview": preview, "draft": draft, "threshold": threshold, "fail-on": fail_on,
+                   "out": str(strips) if strips else None}
+        doc = await call(ctx, args_of(["motion"], ["check", str(path)], options), heavy=True)
+        return paged(doc, [Path(f["strip"]) for f in doc.get("findings", []) if f.get("strip")], image_offset, images)
+
     # ----- outputs ---------------------------------------------------------------------------------
 
     @tool("Render the video (MP4 + SRT + timings) and its thumbnail. preview=true (default) is fast and small; "

@@ -38,7 +38,7 @@ JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
     "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts", "audio",
-    "generate",
+    "generate", "motion",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -1031,6 +1031,32 @@ def _loudness_line(mix: dict[str, Any], limiter: bool = False) -> str:
     if mix["music"]:
         notes.append("music: " + ", ".join(m["source"] for m in mix["music"]))
     return level + peak + (f" ({'; '.join(notes)})" if notes else "")
+
+
+def cmd_motion(args: argparse.Namespace) -> CommandResult:
+    """``vidgen motion check FILE|PROJECT``: watch a rendered video at low resolution for blank
+    frames, flashes, flicker, pops, strobing, frozen stretches and jumps at cuts, with a contact
+    strip per finding (DESIGN.md §121.3); nothing is rendered."""
+    from vidgen import motion_check
+
+    target = Path(args.target)
+    thresholds = motion_check.Thresholds().with_overrides(args.threshold)
+    if target.is_dir() or target.name in CONFIG_NAMES:
+        project = Project.load(target, variant=args.variant, output_dir=args.output_dir, draft=args.draft)
+        preview = args.preview or args.draft
+        source = motion_check.project_source(project, preview, args.source)
+        out = Path(args.out) if args.out else project.render_dir(preview) / "motion"
+    else:
+        if args.source == "scenes" or args.variant or args.preview or args.draft:
+            raise VidgenError(f"motion check {target}: --source scenes, --variant, --preview and --draft are for a project folder, not a video file")
+        source = motion_check.file_source(target)
+        out = Path(args.out) if args.out else Path(f"{target.stem}_motion")
+    report = motion_check.run_check(source, thresholds, None if args.no_strips else out)
+    failed = report.fails(args.fail_on)
+    if args.json:
+        return jsonout.envelope("motion", not failed, action="check", **motion_check.report_json(report))
+    print(motion_check.report_text(report))
+    return 1 if failed else 0
 
 
 def cmd_storyboard(args: argparse.Namespace) -> CommandResult:
@@ -2765,6 +2791,28 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--draft", action="store_true", help="a project's draft render")
     output_dir_arg(p)
     p.set_defaults(func=cmd_audio)
+
+    p = sub.add_parser(
+        "motion",
+        help="motion check: watch a rendered video (a file or a project's render) at low resolution for blank or black frames, "
+        "one-frame flashes, flicker, popping, strobing, frozen stretches and jumps at cuts; a contact strip PNG per finding",
+    )
+    p.add_argument("action", choices=["check"], help="check: decode the video at 160 px wide and report each fault with its time, frame, scene and severity")
+    p.add_argument("target", nargs="?", default=".", help="a video file (mp4, mov, webm...), or a project dir or config file: its rendered video, "
+                   "else its rendered scene clips (default: .)")
+    p.add_argument("--source", choices=["auto", "video", "scenes"], default="auto",
+                   help="a project's rendered video, or its scene clips in build/ (auto: the video if rendered, else the clips; nothing is rendered)")
+    p.add_argument("--variant", metavar="NAME", help="a project's variant (its render)")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--preview", action="store_true", help="a project's preview render")
+    quality.add_argument("--draft", action="store_true", help="a project's draft render")
+    output_dir_arg(p)
+    p.add_argument("--out", metavar="DIR", help="folder for the contact strips (default: build/<quality>/motion in a project, <video>_motion here for a file)")
+    p.add_argument("--no-strips", action="store_true", help="only the report, no contact strips")
+    p.add_argument("--threshold", action="append", default=[], metavar="NAME=VALUE",
+                   help="change a threshold, e.g. flash=0.12 or frozen_seconds=3 (repeatable; docs/CONFIG.md lists them)")
+    p.add_argument("--fail-on", choices=["error", "warning", "info", "never"], default="error", help="lowest severity that makes the exit code 1 (default: error)")
+    p.set_defaults(func=cmd_motion)
 
     p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")
     project_arg(p)

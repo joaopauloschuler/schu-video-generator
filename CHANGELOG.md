@@ -5,10 +5,19 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–359
+## Steps 193–360
 
-### Music-video tools (Phase AM, Steps 358–359)
+### Music-video tools (Phase AM, Steps 358–360)
 
+- **`vidgen motion check FILE|PROJECT`** (Step 360): watches a rendered video for what stills
+  cannot show, without rendering anything: a video file, a project's rendered video (scenes from
+  its `timings.json`) or its scene clips in `build/` (`--source scenes`), decoded once at 160 px
+  wide. Reports, with time, frame, scene and severity: black or blank frames inside a scene
+  (error), one- and two-frame flashes and drop-outs, flicker, regions popping in and out for a
+  frame or two, strobing, frozen stretches and brightness jumps at cuts; flashes, pops and pulses
+  on the score's drum hits and note starts are info. A contact strip PNG per finding, `--json`,
+  `--threshold NAME=VALUE`, `--fail-on`; MCP tool `motion_check` returns the strips. On the
+  finished films: Parallel Space v7 has no blank frames and one warning, Escapement none.
 - **`vidgen music plan SCORE`** (Step 359): a music video's scenes proposed from a score file,
   without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro;
   from its name or its energy), scenes cut on bar lines (a section over 16 s split on the phrase

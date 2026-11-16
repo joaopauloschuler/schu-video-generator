@@ -2137,7 +2137,10 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [ ] Not done: no draft rendered (stills of the seven looks at 480x270 from a 22 s synthetic score only); no MCP tool for the plan; Windows / macOS not tried
 
 ### Step 360 — A "watch it" motion check
-- [ ] `vidgen check-motion` (name to fit the CLI): flicker, popping, blank frames, frozen stretches, brightness jumps at cuts, strobing; a report with contact strips; thresholds documented; tested on synthetic clips
+- [x] `vidgen motion check FILE|PROJECT [--source auto|video|scenes] [--preview|--draft] [--variant] [--out DIR] [--no-strips] [--threshold NAME=VALUE] [--fail-on] [--json]` (beside `vidgen audio check`): one ffmpeg decode at 160 px, per-frame luma / colour / histogram / 10 px block changes; blank frames (error inside a scene), flashes and drop-outs, flicker (beat-locked: info), pops (a still ring around them), strobing (period-2 alternation), frozen stretches, jumps at cuts; the score's hits and notes in video time mark reactions to the music as info — DESIGN §121.3
+- [x] A contact strip PNG per finding; thresholds in CONFIG "Motion check"; MCP `motion_check`; guide, COOKBOOK-3D section 11, README
+- [x] Tested on synthetic frames and tiny encoded clips; run on the finished films (read-only): Parallel Space v7 0 errors, 1 warning, 21 info; Escapement 0 errors, 0 warnings, 17 info (tuned: note starts count as music events, one-block pops are info)
+- [ ] Not done: aliasing that looks like a slow or backwards turn (needs the scene's intended speed); scene themes (`score:`) not read for music events; no `--render` (render first); Windows / macOS not tried
 
 ### Step 361 — More choir
 - [ ] Syllables, a soloist voice, a whispered texture, a syllable per note; the existing choir byte-identical by default; demo clips

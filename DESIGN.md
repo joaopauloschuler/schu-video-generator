@@ -195,6 +195,7 @@ src/vidgen/
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
+  motion_check.py         # `vidgen motion check`: a rendered video watched at 160 px for blank frames, flashes, flicker, pops, strobing, frozen stretches, jumps at cuts; contact strips (§121.3)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
                           # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
@@ -25442,7 +25443,7 @@ same things by hand. The owner chose four features (2026-11-16), one step each, 
 |---|---|---|
 | 358 | A library of three.js building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`); the examples ported to it, their copies deleted | §121.1 |
 | 359 | A storyboard from the music: `vidgen music plan` (cut points, a colour per section, the events each scene reacts to, a draft project of `web_cut` scenes with starter pages) | §121.2 |
-| 360 | A "watch it" motion check: flicker, popping, blank frames, frozen stretches, jumps at cuts, strobing | |
+| 360 | A "watch it" motion check: `vidgen motion check` (blank frames, flashes, flicker, popping, strobing, frozen stretches, jumps at cuts; a contact strip per finding) | §121.3 |
 | 361 | More choir: syllables, a soloist, a breathy texture, a syllable per note | |
 | 362 | Critical review with fixes; docs | |
 
@@ -25624,3 +25625,91 @@ material, joins, moments, reactions and colours on a small synthetic score; the 
 the printout and `--json`; user errors; a written draft validated (no render); the three films'
 plans against their `video.yaml` cuts; one `slow` test drawing one still of a drafted page at
 160x90. `tests/test_web_music_video_kit.py` tests the four music-time additions in Node.
+
+### 121.3 A "watch it" motion check: `vidgen motion check` (Step 360)
+
+**The name.** `vidgen lint` checks stills it renders itself; `vidgen audio check FILE|PROJECT`
+measures a rendered file. The new check reads a rendered video, so it follows `audio check`:
+`vidgen motion check FILE|PROJECT` (a group with one action, room for more), with `audio
+check`'s `--variant`, `--preview` / `--draft`, `--output-dir` and `--json`, and `lint`'s
+`--fail-on`. It never renders: a project with no render gets the `vidgen render` command to run.
+
+**What is watched.** A file; a project's rendered video, with its scenes from the render's
+`timings.json` (start and duration per scene, so a crossfade's frames belong to the scene that
+starts in it); or, when that is missing or with `--source scenes`, the scene clips of
+`build/<quality>/scenes/` one after the other (each clip a scene; the comparisons across a clip's
+start see a cut). The clips miss what the join adds (transitions, overlays) but exist before the
+join, and after a `--scene` re-render.
+
+**One decode, small numbers.** ffmpeg scales to 160 px wide with the area filter and pipes raw
+RGB (no PyAV decode loop: ffmpeg's decoder threads and scaler run beside Python). Per frame: luma
+mean and standard deviation (Rec. 709), RGB means, a 16-bin luma histogram, 10 x 10 px block
+means, and each block's mean absolute change from 1, 2 and 3 frames before (three frames kept);
+the frame is then dropped. Blocks are float16: about 1 KB a frame, 6 MB for the 3-minute films,
+110 MB for an hour at 30 fps. The strips decode again only the frames they show (ffmpeg seeks 1 s
+before the first and selects by frame number: exact frames, checked by a test).
+
+**The checks and why each looks the way it does** (thresholds and defaults: CONFIG "Motion check"):
+
+- **Blank** = luma spread under 3/255 (black, white, a flat colour). What makes it a fault is how
+  it starts or ends: the v7 bug went from a bright frame to black in one frame. A fade into black
+  is a choice (info when long), a cut to black is a choice (info), a video that starts or ends on
+  black is normal (not reported).
+- **Flash / drop-out**: one or two frames whose luma steps away by `flash` and comes back. A
+  kick's light pulse rises in one frame and decays over several, so it does not come back within
+  two frames and is not a flash; the films' `hitEnvelope` pulses pass unreported.
+- **Flicker**: direction reversals of the luma (frame or block) on 60 % of a 12-frame window; a
+  pulse every beat reverses at most twice per beat (a beat is 13 frames at 138 BPM), flicker every
+  frame. Local flicker whose region keeps its brightness while its blocks swap light and dark is
+  left to strobe.
+- **Beat-locked or not.** Music films pulse on purpose. In a project, the hits and note starts of
+  the score files its `music:` cues play are placed in video time with `score_events` (Step 347:
+  no synthesis), with the cue's `start`, `section` and loop; a flash, pop or flicker that starts on
+  them (½ frame before to 1.5 frames after, the frame a page's reaction to an event first shows)
+  is info. Notes count, not only drums: the films react to melodies too (Parallel Space's
+  `05_heart` dips its light on `hook` notes, some of them slurred). Pads and chords are left out
+  (held, they would mark most frames).
+- **Pop**: blocks that change by 0.12 and are back within 35 % of the change one or two frames
+  later, while the ring of blocks around them stays still. The ring is what separates a pop from
+  motion: an object that moves leaves the block it was in, so a neighbour changes too. A one-block
+  pop (80 px at 1280) is info: on the films they were all glints on gears and crystals.
+- **Strobe**: blocks whose change from the frame before is large while the frame two back is
+  almost the same, on half of a second's frames: the period-2 aliasing of a pattern moving half
+  its repeat a frame. Aliasing near a whole repeat a frame looks like a slow or reversed turn and
+  cannot be told from intended slow motion without the scene's own speed, so it is not found.
+- **Frozen**: mean change under 0.0015 for 1.5 s inside a scene (split at cuts); info, since a
+  title can be held. At 160 px thin text fading in counts as no change (Escapement's opening).
+- **Cut jump**: a luma step of 0.2 or a histogram distance of 0.8 across a scene start; info (a
+  cut from a dark build into a bright drop is often the point). A cut to or from a blank frame is
+  left to `blank`.
+
+Findings of one kind within 0.5 s merge (a burst of pops is one line). The checks run in an order
+that keeps one cause one finding: blank, flash, flicker, strobe, pop (a pop is not looked for
+inside a flash, flicker, strobe or within two frames of a cut).
+
+**Output.** Text (a line per finding, errors first), `--json` (`motion` document), and a contact
+strip per finding: two frames before, the finding's frames (first two and last two of a long one)
+framed in red, two after, 240 px each, a yellow box where a pop or strobe is. Old strips in the
+folder are replaced. Exit 1 at `--fail-on` (default `error`). MCP `motion_check` defaults
+`fail_on` to `never`, because the server returns pictures only with `ok` true.
+
+**The finished films** (read-only; 1280x720, 30 fps; about 25 s each on 2 cores, peak memory 139 MB):
+
+| film | errors | warnings | info |
+|---|---|---|---|
+| Parallel Space v7 (`ps7/output/parallel_space_v7.mp4`) | 0 (the NaN black frames were fixed) | 1: a one-frame flash in `06_build` at 104.93 s, two frames after a hit (a tunnel ring passing the camera) | 21: 7 cut jumps, 11 flashes / dips on hits and notes (5 one-frame dips on `hook` notes in `05_heart`), 1 one-block glint, 2 held frames in the coda |
+| Escapement (`escapement/output/escapement.mp4`) | 0 | 0 | 17: 7 cut jumps, 6 one-block glints (2 on hits), 4 still stretches (the opening while the title fades in, the ending) |
+
+Tuning on them: the first run gave Parallel Space 7 warnings and Escapement 4. The `05_heart` dips
+fall on `hook` notes, some slurred: note starts (slurred too) joined the drum hits. The one-block
+pops were specular glints: `pop_blocks` 2 made them info. The scene clips of Parallel Space
+(`--source scenes`) give the same findings a frame later at the cuts (the clips' rounding).
+
+**Tests** (`tests/test_motion_check.py`): the checks on synthetic numpy frames (80 x 40, no
+ffmpeg): clean motion, black frames inside / at a cut / at the ends, a fade to black, flashes and
+drop-outs with and without a hit, flicker vs beat-locked flicker vs decaying kick pulses, local
+flicker, pops of one and two frames, a small pop, a moving square that is not a pop, a strobing
+wheel, a frozen stretch split by a cut, a cut jump; threshold names; the score's events in video
+time (tidewater looped from 50 s); the command on an encoded clip with its strip's frames
+checked; a slow test with a project's scene clips and its rendered video. `test_mcp.py` gains a
+slow `motion_check` call.

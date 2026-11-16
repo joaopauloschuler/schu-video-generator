@@ -1,0 +1,891 @@
+"""``vidgen motion check``: watch a rendered video for motion faults (DESIGN.md §121.3).
+
+The video (a file, a project's rendered video, or its rendered scene clips) is decoded once by
+ffmpeg at low resolution (:attr:`Thresholds.width`, 160 px wide) and piped as raw RGB frames; each
+frame becomes a few numbers (mean luma and its spread, the colour means, a 16-bin luma histogram,
+10 x 10 px block means and the blocks' change from the last three frames) and is dropped, so the
+memory is about 1 KB a frame and the time is the decode's. The checks then read those series:
+
+- ``blank``: near-uniform frames (black, or one flat colour) entered or left abruptly, the NaN
+  shader bug of Parallel Space v7 (error inside a scene; info at a cut); a long dark stretch
+  reached by a fade is info.
+- ``flash``: one or two frames much brighter (flash) or darker (drop-out) than both neighbours
+  (warning; info when it starts on a drum hit or a note of the project's score: a reaction to the music).
+- ``flicker``: the luma (of the frame, or of a few blocks) going up and down every frame or two
+  for a stretch (warning; info when its peaks fall on the score's hits and notes: beat-locked pulses).
+- ``pop``: a region that changes for one or two frames and comes back while the blocks around
+  it stay still (warning).
+- ``strobe``: many blocks alternating between two pictures frame by frame for a stretch, the
+  temporal aliasing of a fast rotation or a pattern moving half its period a frame (warning).
+- ``frozen``: frames without visible change for long inside a scene (info).
+- ``cut_jump``: a large change of brightness or of the luma histogram across a cut (info).
+
+Each finding has its time, frame, scene and severity and a contact strip PNG of the frames
+around it (decoded again, at :attr:`Thresholds.strip_width`).
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import difflib
+import math
+import subprocess
+import time
+from collections import deque
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Literal
+
+import numpy as np
+
+from vidgen.errors import VidgenError
+
+Severity = Literal["error", "warning", "info"]
+SEVERITIES: tuple[Severity, ...] = ("error", "warning", "info")
+#: Block side in pixels of the decoded frame.
+BLOCK = 10
+#: Luma weights (Rec. 709).
+_LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+
+
+@dataclass
+class Thresholds:
+    """What the checks count as a fault. Luma and changes are 0..1 (1 = white, or a change from
+    black to white); ``--threshold NAME=VALUE`` sets one."""
+
+    width: int = 160
+    """Width the video is decoded at (pixels; the height keeps the aspect ratio)."""
+    blank_std: float = 0.012
+    """A frame whose luma spread (standard deviation) is under this is near-uniform (3/255)."""
+    blank_jump: float = 0.06
+    """A uniform run entered or left by a luma step of at least this is abrupt (a fault, not a fade)."""
+    dark_seconds: float = 1.0
+    """A uniform run reached by a fade is reported (info) when at least this long and inside the video."""
+    flash: float = 0.08
+    """A frame's luma step (to it and back) that makes a flash or a drop-out."""
+    flash_revert: float = 0.35
+    """...when the frame after comes back to within this share of the step."""
+    flicker: float = 0.02
+    """A frame-to-frame luma step counted in an oscillation (the whole frame)."""
+    flicker_block: float = 0.05
+    """The same for one 10 x 10 block (local flicker)."""
+    flicker_blocks: int = 3
+    """Blocks that must oscillate together for local flicker."""
+    flicker_window: int = 12
+    """Frames of the sliding window an oscillation is counted in."""
+    flicker_share: float = 0.6
+    """Share of the window's frames that must reverse direction (up, down, up...)."""
+    pop: float = 0.12
+    """A block's mean change that makes it pop (when it comes back one or two frames later)."""
+    pop_revert: float = 0.35
+    """...to within this share of the change."""
+    pop_quiet: float = 0.04
+    """Three in four blocks around a popping region change less than this, and none by ``pop`` (else it is something moving)."""
+    pop_area: float = 0.5
+    """A pop covering more than this share of the frame is a flash, not a pop."""
+    pop_blocks: int = 2
+    """A pop of fewer blocks than this is info (a glint or a spark more often than a fault)."""
+    strobe: float = 0.06
+    """A block's change that counts as alternating (when two frames back it is almost the same)."""
+    strobe_blocks: int = 4
+    """Blocks alternating in one frame for the frame to strobe."""
+    strobe_share: float = 0.5
+    """Share of a second's frames that strobe for a strobing stretch."""
+    frozen: float = 0.0015
+    """Mean change under which two frames are the same (encoder noise stays under it)."""
+    frozen_seconds: float = 1.5
+    """Unchanging frames at least this long inside a scene are a frozen stretch."""
+    cut_luma: float = 0.2
+    """A luma step across a cut that is a jump."""
+    cut_hist: float = 0.8
+    """A luma-histogram distance across a cut (L1 of the 16-bin shares, 0..2) that is a jump."""
+    beat_frames: float = 1.5
+    """A flash or pulse that starts this many frames or less after a drum hit or a note start follows the music."""
+    beat_share: float = 0.7
+    """Share of a flicker's peaks on hits and notes that makes it beat-locked pulses (info)."""
+    group_seconds: float = 0.5
+    """Findings of one kind closer than this are one finding."""
+    strip_width: int = 240
+    """Width of each frame in the contact strips (pixels)."""
+    max_strips: int = 40
+    """Contact strips written at most (the most severe findings first)."""
+
+    def with_overrides(self, pairs: Sequence[str]) -> Thresholds:
+        """A copy with ``NAME=VALUE`` pairs applied; :class:`VidgenError` for an unknown name or a bad value."""
+        names = {f.name: f for f in dataclasses.fields(self)}
+        changes: dict[str, Any] = {}
+        for pair in pairs:
+            name, sep, value = pair.partition("=")
+            name = name.strip().replace("-", "_")
+            if not sep or name not in names:
+                close = difflib.get_close_matches(name, list(names), n=1)
+                hint = f" (did you mean '{close[0]}'?)" if close else ""
+                raise VidgenError(f"--threshold {pair}: expected NAME=VALUE with a known name{hint}; names: {', '.join(names)}")
+            kind = int if names[name].type in (int, "int") else float
+            try:
+                number = kind(value)
+            except ValueError:
+                raise VidgenError(f"--threshold {pair}: {value!r} is not a {'whole ' if kind is int else ''}number") from None
+            if number < 0 or (kind is int and number == 0 and name in ("width", "strip_width", "flicker_window")):
+                raise VidgenError(f"--threshold {pair}: must be positive")
+            changes[name] = number
+        return dataclasses.replace(self, **changes)
+
+    def to_json(self) -> dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+# ----- the input ---------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Segment:
+    """One file to decode, placed at ``first`` (its frame 0 in the whole timeline)."""
+
+    path: Path
+    first: int = 0
+
+
+@dataclass(frozen=True)
+class SceneSpan:
+    """A scene's frames ``start`` to ``end`` (exclusive) in the timeline."""
+
+    id: str
+    start: int
+    end: int
+
+
+@dataclass
+class Source:
+    """What to watch: the files (one video, or a project's scene clips in order), the frame
+    rate, the scenes (empty when unknown) and the music's events: drum hits and note starts
+    (timeline frames, may be fractional)."""
+
+    label: str
+    segments: list[Segment]
+    fps: float
+    scenes: list[SceneSpan] = field(default_factory=list)
+    hits: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    hit_source: str | None = None
+    notes: list[str] = field(default_factory=list)
+    clips: bool = False
+    """One segment per scene (a project's scene clips): the scenes follow the decoded clips."""
+
+
+def probe(path: Path) -> tuple[int, int, float]:
+    """``(width, height, fps)`` of a video file's first video stream; :class:`VidgenError` if it has none."""
+    import av
+
+    try:
+        with av.open(str(path)) as container:
+            if not container.streams.video:
+                raise VidgenError(f"{path}: no video stream")
+            stream = container.streams.video[0]
+            rate = stream.average_rate or stream.guessed_rate or 30
+            return stream.codec_context.width, stream.codec_context.height, float(rate)
+    except av.error.FFmpegError as exc:
+        raise VidgenError(f"{path}: cannot read it as a video ({exc})") from None
+
+
+def _decoded_size(width: int, height: int, target: int) -> tuple[int, int]:
+    w = min(target, width)
+    w -= w % 2
+    h = max(2, round(height * w / width / 2) * 2)
+    return w, h
+
+
+def decode_frames(path: Path, width: int, ffmpeg: str | None = None) -> Iterator[np.ndarray]:
+    """The video's frames as ``uint8`` RGB arrays ``(h, w, 3)``, scaled to ``width`` by ffmpeg
+    (area filter) and read from a pipe one at a time."""
+    from vidgen.render.ffmpeg import find_ffmpeg
+
+    src_w, src_h, _ = probe(path)
+    w, h = _decoded_size(src_w, src_h, width)
+    command = [ffmpeg or find_ffmpeg(), "-v", "error", "-nostdin", "-i", str(path), "-map", "0:v:0", "-vf", f"scale={w}:{h}:flags=area",
+               "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
+    size = w * h * 3
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert proc.stdout is not None and proc.stderr is not None
+    try:
+        while True:
+            data = proc.stdout.read(size)
+            if len(data) < size:
+                break
+            yield np.frombuffer(data, dtype=np.uint8).reshape(h, w, 3)
+    finally:
+        proc.stdout.close()
+        err = proc.stderr.read().decode("utf-8", "replace")
+        proc.stderr.close()
+        code = proc.wait()
+    if code != 0:
+        raise VidgenError(f"ffmpeg could not decode {path}: {err.strip()[-400:]}")
+
+
+# ----- the features ------------------------------------------------------------------------------------
+
+
+@dataclass
+class Features:
+    """Per frame of the timeline: ``luma`` mean and ``spread`` (std), ``rgb`` means, ``hist``
+    (16 luma bins, shares), ``mad`` mean absolute change from the frame before (NaN at a file's
+    first frame), ``blocks`` the block means and ``d1``/``d2``/``d3`` each block's mean absolute
+    change from 1, 2 and 3 frames before (NaN where there is none), ``starts`` the frames where a
+    file starts."""
+
+    luma: np.ndarray
+    spread: np.ndarray
+    rgb: np.ndarray
+    hist: np.ndarray
+    mad: np.ndarray
+    blocks: np.ndarray
+    d1: np.ndarray
+    d2: np.ndarray
+    d3: np.ndarray
+    starts: list[int]
+    size: tuple[int, int]
+
+    @property
+    def count(self) -> int:
+        return len(self.luma)
+
+
+def _blocks(gray: np.ndarray) -> np.ndarray:
+    h, w = gray.shape
+    bh, bw = h // BLOCK, w // BLOCK
+    return gray[: bh * BLOCK, : bw * BLOCK].reshape(bh, BLOCK, bw, BLOCK).mean(axis=(1, 3))
+
+
+def measure(frames_by_file: Sequence[Iterator[np.ndarray]]) -> Features:
+    """The :class:`Features` of the files' frames, one file after the other."""
+    cols: dict[str, list[Any]] = {k: [] for k in ("luma", "spread", "rgb", "hist", "mad", "blocks", "d1", "d2", "d3")}
+    starts: list[int] = []
+    size = (0, 0)
+    nan_blocks: np.ndarray | None = None
+    for frames in frames_by_file:
+        starts.append(len(cols["luma"]))
+        recent: deque[np.ndarray] = deque(maxlen=3)
+        for rgb in frames:
+            f = rgb.astype(np.float32) / 255.0
+            gray = f @ _LUMA
+            size = (gray.shape[1], gray.shape[0])
+            cols["luma"].append(float(gray.mean()))
+            cols["spread"].append(float(gray.std()))
+            cols["rgb"].append(f.reshape(-1, 3).mean(axis=0))
+            cols["hist"].append(np.histogram(gray, bins=16, range=(0.0, 1.0))[0] / gray.size)
+            cols["blocks"].append(_blocks(gray).astype(np.float16))
+            if nan_blocks is None:
+                nan_blocks = np.full(cols["blocks"][-1].shape, np.nan, dtype=np.float16)
+            for k, name in ((1, "d1"), (2, "d2"), (3, "d3")):
+                cols[name].append(_blocks(np.abs(gray - recent[-k])).astype(np.float16) if len(recent) >= k else nan_blocks)
+            cols["mad"].append(float(np.abs(gray - recent[-1]).mean()) if recent else math.nan)
+            recent.append(gray)
+    if not cols["luma"]:
+        raise VidgenError("motion check: the video has no frames")
+    arrays = {k: np.array(v, dtype=np.float16 if k in ("blocks", "d1", "d2", "d3") else np.float32) for k, v in cols.items()}
+    return Features(starts=starts, size=size, **arrays)
+
+
+# ----- the checks --------------------------------------------------------------------------------------
+
+
+@dataclass
+class Finding:
+    """One fault: ``kind``, ``severity``, timeline frames ``frame`` to ``end`` (inclusive), the
+    scene, a sentence and the value that tripped it; ``strip`` the contact strip once written."""
+
+    kind: str
+    severity: Severity
+    frame: int
+    end: int
+    message: str
+    value: float
+    scene: str | None = None
+    time: float = 0.0
+    strip: Path | None = None
+    box: tuple[float, float, float, float] | None = None
+    """Where in the frame (shares ``x0, y0, x1, y1``), for a local finding."""
+
+    def to_json(self, fps: float) -> dict[str, Any]:
+        return {"kind": self.kind, "severity": self.severity, "frame": self.frame, "end_frame": self.end,
+                "time": round(self.frame / fps, 3), "end_time": round((self.end + 1) / fps, 3), "scene": self.scene,
+                "message": self.message, "value": round(self.value, 4), "strip": str(self.strip) if self.strip else None,
+                "box": [round(v, 3) for v in self.box] if self.box else None}
+
+
+def _runs(mask: np.ndarray) -> list[tuple[int, int]]:
+    """``(first, last)`` of each run of True."""
+    if not mask.any():
+        return []
+    padded = np.concatenate([[False], mask, [False]]).astype(np.int8)
+    edges = np.flatnonzero(np.diff(padded))
+    return [(int(a), int(b) - 1) for a, b in zip(edges[::2], edges[1::2])]
+
+
+def _cuts(source: Source, feats: Features) -> list[int]:
+    """Frames where a new shot starts: scene starts (and file starts) after frame 0."""
+    cuts = {s.start for s in source.scenes} | set(feats.starts)
+    return sorted(c for c in cuts if 0 < c < feats.count)
+
+
+def _on_beat(frames: np.ndarray, hits: np.ndarray, th: Thresholds) -> np.ndarray:
+    """For each frame, whether a music event falls ``0.5`` frame after to ``beat_frames`` before it."""
+    if not len(hits) or not len(frames):
+        return np.zeros(len(frames), dtype=bool)
+    k = np.searchsorted(hits, frames + 0.5, side="right") - 1
+    ok = k >= 0
+    gap = np.where(ok, frames - hits[np.clip(k, 0, None)], np.inf)
+    return ok & (gap <= th.beat_frames)
+
+
+def check_blank(feats: Features, cuts: Sequence[int], th: Thresholds, fps: float) -> list[Finding]:
+    n = feats.count
+    out = []
+    for a, b in _runs(feats.spread < th.blank_std):
+        if a == 0 or b == n - 1:
+            continue  # the video starts or ends on black
+        entry = abs(float(feats.luma[a] - feats.luma[a - 1]))
+        leave = abs(float(feats.luma[b + 1] - feats.luma[b]))
+        mean = float(feats.luma[a : b + 1].mean())
+        what = "black" if mean < 0.04 else "white" if mean > 0.9 else f"uniform (luma {mean:.2f})"
+        count = b - a + 1
+        at_cut = any(a - 1 <= c <= b + 2 for c in cuts)
+        frames = f"{count} {what} frame{'s' if count > 1 else ''}"
+        if max(entry, leave) >= th.blank_jump:
+            how = f"entered by a step of {entry:.2f}, left by {leave:.2f}"
+            if at_cut:
+                out.append(Finding("blank", "info", a, b, f"{frames} at a cut ({how})", max(entry, leave)))
+            else:
+                out.append(Finding("blank", "error", a, b, f"{frames} inside the scene ({how}): a frame failed to draw?", max(entry, leave)))
+        elif count >= th.dark_seconds * fps:
+            out.append(Finding("blank", "info", a, b, f"{frames} ({count / fps:.1f} s) reached by a fade", mean))
+    return out
+
+
+def _blank_mask(feats: Features, th: Thresholds) -> np.ndarray:
+    return feats.spread < th.blank_std
+
+
+def check_flash(feats: Features, hits: np.ndarray, th: Thresholds) -> list[Finding]:
+    y = feats.luma.astype(np.float64)
+    n = len(y)
+    blank = _blank_mask(feats, th)
+    found: list[tuple[int, int, float]] = []
+    t = 1
+    while t < n - 1:
+        step = y[t] - y[t - 1]
+        if abs(step) >= th.flash and not blank[t]:
+            for width in (1, 2):
+                after = t + width
+                if after >= n:
+                    break
+                inner = y[t : after]
+                back = y[after] - y[t - 1]
+                same_side = np.all(np.sign(inner - y[t - 1]) == np.sign(step)) and np.all(np.abs(inner - y[t - 1]) >= th.flash)
+                if same_side and abs(back) <= th.flash_revert * abs(step):
+                    found.append((t, after - 1, float(step)))
+                    t = after
+                    break
+        t += 1
+    out = []
+    beat = _on_beat(np.array([f[0] for f in found], dtype=float), hits, th)
+    for (a, b, step), on in zip(found, beat):
+        word = "flash" if step > 0 else "drop-out"
+        count = b - a + 1
+        sev: Severity = "info" if on else "warning"
+        tail = " on a hit or note of the score" if on else ""
+        out.append(Finding("flash", sev, a, b, f"{count}-frame {word}{tail}: luma {y[a - 1]:.2f} -> {y[a]:.2f} -> {y[b + 1]:.2f}", abs(step)))
+    return out
+
+
+def _oscillating(series: np.ndarray, step: float, window: int, share: float) -> np.ndarray:
+    """Frames inside a window where the series reverses direction with steps of at least ``step``
+    on at least ``share`` of the frames; ``series`` is frames x channels, the result too."""
+    d = np.diff(series, axis=0)
+    d = np.nan_to_num(d)
+    rev = (d[:-1] * d[1:] < 0) & (np.abs(d[:-1]) >= step) & (np.abs(d[1:]) >= step)
+    rev = np.concatenate([np.zeros((1, *rev.shape[1:]), bool), rev, np.zeros((1, *rev.shape[1:]), bool)])  # at frame t: t-1 -> t -> t+1
+    if len(rev) < window:
+        return np.zeros_like(rev)
+    csum = np.concatenate([np.zeros((1, *rev.shape[1:])), np.cumsum(rev, axis=0)])
+    counts = csum[window:] - csum[:-window]  # window starting at k
+    hot = counts >= share * window
+    out = np.zeros_like(rev)
+    for k in np.flatnonzero(hot.any(axis=tuple(range(1, hot.ndim))) if hot.ndim > 1 else hot):
+        out[k : k + window] |= hot[k]
+    return out & (rev | np.roll(rev, 1, axis=0) | np.roll(rev, -1, axis=0))
+
+
+def _peaks(y: np.ndarray, a: int, b: int, step: float) -> np.ndarray:
+    seg = y[max(a - 1, 0) : b + 2]
+    d = np.diff(seg)
+    idx = np.flatnonzero((d[:-1] >= step) & (d[1:] < 0)) + 1 + max(a - 1, 0)
+    return idx.astype(float)
+
+
+def check_flicker(feats: Features, cuts: Sequence[int], hits: np.ndarray, th: Thresholds) -> list[Finding]:
+    y = feats.luma.astype(np.float64)
+    whole = _oscillating(y[:, None], th.flicker, th.flicker_window, th.flicker_share)[:, 0]
+    blocks = feats.blocks.reshape(feats.count, -1).astype(np.float64)
+    local_hot = _oscillating(blocks, th.flicker_block, th.flicker_window, th.flicker_share)
+    local = local_hot.sum(axis=1) >= th.flicker_blocks
+    mask = whole | local
+    for c in cuts:  # a cut is a step, not an oscillation
+        mask[c] = mask[c] and (mask[c - 1] if c > 0 else False) and (mask[c + 1] if c + 1 < len(mask) else False)
+    out = []
+    for a, b in _runs(mask):
+        if b - a + 1 < max(4, th.flicker_window // 2):
+            continue
+        if not whole[a : b + 1].any():
+            hot = local_hot[a : b + 1].any(axis=0)
+            region_step = np.abs(np.diff(blocks[a : b + 1][:, hot].mean(axis=1))).mean()
+            block_step = np.abs(np.diff(blocks[a : b + 1][:, hot], axis=0)).mean()
+            if region_step < 0.5 * block_step:
+                continue  # blocks swap light and dark, the region's brightness stays: strobing (check_strobe)
+        if whole[a : b + 1].any():
+            region, series, step = "the whole frame", y, th.flicker
+        else:
+            k = int(np.argmax(np.abs(np.diff(blocks[a : b + 1], axis=0)).sum(axis=0)))  # the block that swings most
+            region, series, step = f"{int(local_hot[a : b + 1].any(axis=0).sum())} blocks", blocks[:, k], th.flicker_block
+        swing = float(np.abs(np.diff(series[a : b + 1])).mean())
+        peaks = _peaks(series, a, b, step)
+        on = _on_beat(peaks, hits, th)
+        locked = len(peaks) >= 2 and on.mean() >= th.beat_share
+        rate = len(peaks) / max((b - a + 1), 1)
+        if locked:
+            out.append(Finding("flicker", "info", a, b, f"beat-locked pulses in {region}: {len(peaks)} peaks, {on.sum()} on hits or notes of the score", swing))
+        else:
+            out.append(Finding("flicker", "warning", a, b, f"flicker in {region}: luma up and down every {1 / rate:.1f} frames"
+                               f" ({swing:.3f} a frame)" if rate else f"flicker in {region}", swing))
+    return out
+
+
+def _dilate(mask: np.ndarray) -> np.ndarray:
+    out = mask.copy()
+    out[1:, :] |= mask[:-1, :]
+    out[:-1, :] |= mask[1:, :]
+    out[:, 1:] |= mask[:, :-1]
+    out[:, :-1] |= mask[:, 1:]
+    out[1:, 1:] |= mask[:-1, :-1]
+    out[:-1, :-1] |= mask[1:, 1:]
+    out[1:, :-1] |= mask[:-1, 1:]
+    out[:-1, 1:] |= mask[1:, :-1]
+    return out
+
+
+def _pop_at(feats: Features, t: int, th: Thresholds) -> tuple[int, np.ndarray] | None:
+    """``(width, mask)`` of a pop starting at frame ``t`` (1 or 2 frames; ``mask`` its blocks),
+    ``None`` if none."""
+    n = feats.count
+    d1 = feats.d1
+    changed = np.nan_to_num(d1[t]) >= th.pop
+    if not changed.any():
+        return None
+    for width in (1, 2):
+        back = t + width
+        if back >= n:
+            return None
+        far = feats.d2[back] if width == 1 else feats.d3[back]
+        returned = np.nan_to_num(far, nan=np.inf) <= th.pop_revert * np.nan_to_num(d1[t])
+        leaving = np.nan_to_num(d1[back]) >= 0.5 * th.pop
+        held = True if width == 1 else bool(np.all(np.nan_to_num(d1[t + 1][changed], nan=np.inf) < 0.5 * d1[t][changed]))
+        mask = changed & returned & leaving
+        if not mask.any() or not held:
+            continue
+        if mask.mean() > th.pop_area:
+            return None
+        ring = _dilate(mask) & ~mask
+        if ring.any():
+            quiet = (np.nan_to_num(d1[t][ring], nan=np.inf) < th.pop_quiet) & (np.nan_to_num(d1[back][ring], nan=np.inf) < th.pop_quiet)
+            if quiet.mean() < 0.75 or np.nan_to_num(d1[t][ring]).max() >= th.pop:
+                continue  # its neighbours change too: something moving
+        return width, mask
+    return None
+
+
+def _box(mask: np.ndarray) -> tuple[float, float, float, float]:
+    """The blocks' bounding box as shares of the frame ``(x0, y0, x1, y1)``."""
+    rows, cols = np.flatnonzero(mask.any(axis=1)), np.flatnonzero(mask.any(axis=0))
+    h, w = mask.shape
+    return cols[0] / w, rows[0] / h, (cols[-1] + 1) / w, (rows[-1] + 1) / h
+
+
+def check_pop(feats: Features, hits: np.ndarray, skip: np.ndarray, th: Thresholds, fps: float) -> list[Finding]:
+    candidates = np.flatnonzero(np.nan_to_num(feats.d1.reshape(feats.count, -1)).max(axis=1) >= th.pop)
+    pops: list[tuple[int, int, np.ndarray]] = []
+    last = -10
+    for t in candidates:
+        t = int(t)
+        if t <= last or skip[t]:
+            continue
+        found = _pop_at(feats, t, th)
+        if found:
+            pops.append((t, t + found[0] - 1, found[1]))
+            last = t + found[0]
+    out = []
+    gap = max(1, round(th.group_seconds * fps))
+    group: list[tuple[int, int, np.ndarray]] = []
+    for pop in [*pops, None]:
+        if group and (pop is None or pop[0] - group[-1][1] > gap):
+            a, b = group[0][0], group[-1][1]
+            on = _on_beat(np.array([g[0] for g in group], float), hits, th)
+            most = max(int(g[2].sum()) for g in group)
+            frames = "/".join(str(g[1] - g[0] + 1) for g in group[:6])
+            words = f"{len(group)} pops" if len(group) > 1 else "a pop"
+            small = most < th.pop_blocks
+            sev: Severity = "info" if on.all() or small else "warning"
+            tail = " on hits or notes of the score" if on.all() else " (small: a glint or spark?)" if small else ""
+            union = np.logical_or.reduce([g[2] for g in group])
+            out.append(Finding("pop", sev, a, b, f"{words}{tail}: up to {most} block{'s' if most > 1 else ''} appear for {frames} frame(s) and go",
+                               float(most), box=_box(union)))
+            group = []
+        if pop is not None:
+            group.append(pop)
+    return out
+
+
+def check_strobe(feats: Features, skip: np.ndarray, th: Thresholds, fps: float) -> list[Finding]:
+    n = feats.count
+    d1 = np.nan_to_num(feats.d1.reshape(n, -1).astype(np.float64))
+    d2 = np.nan_to_num(feats.d2.reshape(n, -1).astype(np.float64), nan=np.inf)
+    prev = np.vstack([np.zeros((1, d1.shape[1])), d1[:-1]])
+    alt = (d1 >= th.strobe) & (prev >= th.strobe) & (d2 <= 0.5 * d1)
+    frames = (alt.sum(axis=1) >= th.strobe_blocks) & ~skip
+    window = max(2, round(fps))
+    csum = np.concatenate([[0], np.cumsum(frames)])
+    hot = np.zeros(n, bool)
+    for k in np.flatnonzero(csum[window:] - csum[:-window] >= th.strobe_share * window):
+        hot[k : k + window] |= frames[k : k + window]
+    out = []
+    for a, b in _runs(hot):
+        if b - a + 1 < window // 2:
+            continue
+        most = int(alt[a : b + 1].sum(axis=1).max())
+        out.append(Finding("strobe", "warning", a, b, f"strobing for {(b - a + 1) / fps:.1f} s: up to {most} blocks alternate between two pictures "
+                           "frame by frame (something turning or moving about half its repeat a frame)", float(most),
+                           box=_box((alt[a : b + 1].mean(axis=0) >= 0.3).reshape(feats.blocks.shape[1:]) | (alt[a : b + 1].sum(axis=0) == alt[a : b + 1].sum(axis=0).max()).reshape(feats.blocks.shape[1:]))))
+    return out
+
+
+def check_frozen(feats: Features, cuts: Sequence[int], th: Thresholds, fps: float) -> list[Finding]:
+    still = np.nan_to_num(feats.mad, nan=np.inf) < th.frozen
+    still &= ~_blank_mask(feats, th)
+    for c in cuts:
+        still[c] = False
+    out = []
+    for a, b in _runs(still):
+        a -= 1  # the first frame of the stretch is the one the others repeat
+        count = b - a + 1
+        if count >= th.frozen_seconds * fps:
+            out.append(Finding("frozen", "info", a, b, f"{count} frames without visible change ({count / fps:.1f} s)", float(count)))
+    return out
+
+
+def check_cuts(feats: Features, cuts: Sequence[int], th: Thresholds) -> list[Finding]:
+    out = []
+    blank = _blank_mask(feats, th)
+    for c in cuts:
+        if blank[c] or blank[c - 1]:
+            continue  # a cut to or from a blank frame: check_blank reports it
+        step = float(feats.luma[c] - feats.luma[c - 1])
+        dist = float(np.abs(feats.hist[c] - feats.hist[c - 1]).sum())
+        if abs(step) >= th.cut_luma or dist >= th.cut_hist:
+            word = "brighter" if step > 0 else "darker"
+            out.append(Finding("cut_jump", "info", c, c, f"cut {abs(step):.2f} {word} (luma {feats.luma[c - 1]:.2f} -> {feats.luma[c]:.2f}, "
+                               f"histogram distance {dist:.2f})", max(abs(step), dist)))
+    return out
+
+
+def find_faults(feats: Features, source: Source, th: Thresholds) -> list[Finding]:
+    """Every check's findings, with their scenes and times, most severe first, then by time."""
+    fps = source.fps
+    cuts = _cuts(source, feats)
+    hits = np.sort(np.asarray(source.hits, dtype=float))
+    found = check_blank(feats, cuts, th, fps) + check_flash(feats, hits, th)
+    skip = _blank_mask(feats, th)
+    for f in found:
+        skip[max(0, f.frame - 1) : f.end + 3] = True
+    flicker = check_flicker(feats, cuts, hits, th)
+    for f in flicker:
+        skip[f.frame : f.end + 1] = True
+    cut_skip = skip.copy()
+    for c in cuts:
+        cut_skip[max(0, c - 2) : c + 3] = True
+    strobe = check_strobe(feats, cut_skip, th, fps)
+    for f in strobe:
+        cut_skip[f.frame : f.end + 2] = True
+    found += flicker + strobe + check_pop(feats, hits, cut_skip, th, fps)
+    found += check_frozen(feats, cuts, th, fps) + check_cuts(feats, cuts, th)
+    for f in found:
+        f.time = f.frame / fps
+        f.scene = next((s.id for s in source.scenes if s.start <= f.frame < s.end), None)
+    found.sort(key=lambda f: (SEVERITIES.index(f.severity), f.frame))
+    return found
+
+
+# ----- contact strips ----------------------------------------------------------------------------------
+
+
+def _strip_frames(f: Finding, count: int) -> list[int]:
+    if f.end - f.frame <= 3:
+        frames = list(range(f.frame - 2, f.end + 3))
+    else:
+        frames = [f.frame - 2, f.frame - 1, f.frame, f.frame + 1, f.end - 1, f.end, f.end + 1, f.end + 2]
+    return [k for k in dict.fromkeys(frames) if 0 <= k < count]
+
+
+def grab_frames(path: Path, fps: float, frames: Sequence[int], width: int, ffmpeg: str | None = None) -> dict[int, np.ndarray]:
+    """Frames ``frames`` (file frame numbers) of ``path`` as RGB arrays ``width`` wide: one
+    ffmpeg call seeking near the first and selecting by frame number from there."""
+    from vidgen.render.ffmpeg import find_ffmpeg
+
+    if not frames:
+        return {}
+    first, last = min(frames), max(frames)
+    seek = max(0.0, first / fps - 1.0)
+    skip = round(seek * fps)
+    src_w, src_h, _ = probe(path)
+    w, h = _decoded_size(src_w, src_h, width)
+    command = [ffmpeg or find_ffmpeg(), "-v", "error", "-nostdin", "-ss", f"{seek:.6f}", "-i", str(path), "-map", "0:v:0",
+               "-vf", f"select='between(n\\,{first - skip}\\,{last - skip})',scale={w}:{h}", "-fps_mode", "passthrough",
+               "-frames:v", str(last - first + 1), "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
+    result = subprocess.run(command, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise VidgenError(f"ffmpeg could not read frames of {path}: {result.stderr.decode('utf-8', 'replace').strip()[-400:]}")
+    size = w * h * 3
+    data = result.stdout
+    got = {first + k: np.frombuffer(data[k * size : (k + 1) * size], np.uint8).reshape(h, w, 3) for k in range(len(data) // size)}
+    return {k: got[k] for k in frames if k in got}
+
+
+def write_strip(f: Finding, source: Source, count: int, out: Path, index: int, th: Thresholds) -> Path:
+    """The contact strip of ``f``: the frames around it side by side, the finding's frames framed
+    in red, each labelled with its frame and time."""
+    from PIL import Image, ImageDraw
+
+    from vidgen.sheets import load_font
+
+    wanted = _strip_frames(f, count)
+    images: dict[int, np.ndarray] = {}
+    starts = [s.first for s in source.segments]
+    for k, seg in enumerate(source.segments):
+        end = starts[k + 1] if k + 1 < len(starts) else count
+        local = [t - seg.first for t in wanted if seg.first <= t < end]
+        for t, img in grab_frames(seg.path, source.fps, local, th.strip_width).items():
+            images[t + seg.first] = img
+    tiles = [(t, images[t]) for t in wanted if t in images]
+    if not tiles:
+        raise VidgenError(f"motion check: could not read the frames around frame {f.frame}")
+    h, w = tiles[0][1].shape[:2]
+    pad, label = 4, 30
+    font = load_font(12)
+    sheet = Image.new("RGB", (len(tiles) * (w + pad) + pad, h + label + 2 * pad + 18), (24, 24, 24))
+    draw = ImageDraw.Draw(sheet)
+    draw.text((pad, pad), f"{f.severity} {f.kind}: {f.message}"[:160], fill=(235, 235, 235), font=font)
+    for k, (t, img) in enumerate(tiles):
+        x, y = pad + k * (w + pad), pad + 18
+        sheet.paste(Image.fromarray(np.ascontiguousarray(img)), (x, y))
+        if f.frame <= t <= f.end:
+            draw.rectangle((x - 2, y - 2, x + w + 1, y + h + 1), outline=(230, 40, 40), width=2)
+        if f.box is not None:
+            x0, y0, x1, y1 = f.box
+            draw.rectangle((x + x0 * w - 1, y + y0 * h - 1, x + x1 * w, y + y1 * h), outline=(250, 210, 40), width=1)
+        draw.text((x, y + h + 4), f"f {t}  {t / source.fps:.2f} s", fill=(200, 200, 200), font=font)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{index:02d}_{f.kind}_{f.time:07.2f}s.png"
+    sheet.save(path)
+    return path
+
+
+# ----- the whole check ---------------------------------------------------------------------------------
+
+
+@dataclass
+class MotionReport:
+    """The result: what was watched, its size, the findings and how long it took."""
+
+    source: Source
+    frames: int
+    size: tuple[int, int]
+    seconds: float
+    thresholds: Thresholds
+    findings: list[Finding]
+    out: Path | None
+
+    def counts(self) -> dict[str, int]:
+        return {s: sum(1 for f in self.findings if f.severity == s) for s in SEVERITIES}
+
+    def fails(self, fail_on: str) -> bool:
+        if fail_on == "never":
+            return False
+        limit = SEVERITIES.index(fail_on)  # type: ignore[arg-type]
+        return any(SEVERITIES.index(f.severity) <= limit for f in self.findings)
+
+
+def run_check(source: Source, th: Thresholds, out: Path | None) -> MotionReport:
+    """Decode ``source``, run the checks and write a contact strip per finding (the
+    :attr:`Thresholds.max_strips` most severe) into ``out`` (none when ``None``)."""
+    began = time.monotonic()
+    feats = measure([decode_frames(seg.path, th.width) for seg in source.segments])
+    starts = feats.starts
+    source.segments = [dataclasses.replace(seg, first=first) for seg, first in zip(source.segments, starts)]
+    if source.clips:
+        ends = [*starts[1:], feats.count]
+        source.scenes = [SceneSpan(s.id, a, b) for s, a, b in zip(source.scenes, starts, ends)]
+    findings = find_faults(feats, source, th)
+    if out is not None:
+        for old in out.glob("[0-9][0-9]_*s.png") if out.is_dir() else ():
+            old.unlink()
+        for k, f in enumerate(findings[: th.max_strips], start=1):
+            f.strip = write_strip(f, source, feats.count, out, k, th)
+    return MotionReport(source, feats.count, feats.size, time.monotonic() - began, th, findings, out)
+
+
+def report_text(report: MotionReport) -> str:
+    """The report in words: what was watched, one line per finding, the totals."""
+    src = report.source
+    fps = src.fps
+    lines = [f"{src.label}: {report.frames} frames at {fps:g} fps ({report.frames / fps:.1f} s), watched at "
+             f"{report.size[0]}x{report.size[1]} in {report.seconds:.1f} s"]
+    lines.append(f"  scenes: {len(src.scenes)}" if src.scenes else "  scenes: unknown (a plain video file)")
+    lines.append(f"  music events: {len(src.hits)} hits and notes of {src.hit_source}" if src.hit_source else "  music events: none (no score file plays)")
+    lines += [f"  note: {n}" for n in src.notes]
+    for f in report.findings:
+        where = f" {f.scene}" if f.scene else ""
+        lines.append(f"{f.severity:<7} {f.time:8.2f} s  frame {f.frame:>6}{where}  {f.kind}: {f.message}")
+        if f.strip:
+            lines.append(f"        strip: {f.strip}")
+    c = report.counts()
+    lines.append(f"{c['error']} error(s), {c['warning']} warning(s), {c['info']} info" if report.findings else "no findings")
+    return "\n".join(lines)
+
+
+def report_json(report: MotionReport) -> dict[str, Any]:
+    """The report's fields for ``vidgen motion check --json``."""
+    src = report.source
+    return {
+        "source": src.label, "files": [str(s.path) for s in src.segments], "fps": src.fps, "frames": report.frames,
+        "duration": round(report.frames / src.fps, 3), "size": list(report.size), "seconds": round(report.seconds, 2),
+        "scenes": [{"id": s.id, "start": round(s.start / src.fps, 3), "end": round(s.end / src.fps, 3)} for s in src.scenes],
+        "hits": len(src.hits), "hit_source": src.hit_source, "notes": list(src.notes),
+        "counts": report.counts(), "findings": [f.to_json(src.fps) for f in report.findings],
+        "out": str(report.out) if report.out else None, "thresholds": report.thresholds.to_json(),
+    }
+
+
+# ----- sources -----------------------------------------------------------------------------------------
+
+
+def file_source(path: Path) -> Source:
+    """A plain video file: no scenes, no music events."""
+    if not path.is_file():
+        raise VidgenError(f"{path}: no such file")
+    _, _, fps = probe(path)
+    return Source(str(path), [Segment(path)], fps)
+
+
+def music_events(project: Any, starts: dict[str, float], ends: dict[str, float]) -> tuple[np.ndarray, str | None, list[str]]:
+    """The video seconds of every drum hit and note start (melodic tracks, slurred notes too;
+    not pads or chords) of the score files the project's ``music:`` cues play (with the cue's
+    ``start``, ``section`` and loop), the scores' names, and notes on what could not be read.
+    Scene themes (``score:``) are left out."""
+    from vidgen.music import cue_scene_range
+    from vidgen.music_pieces import cue_score, section_start
+    from vidgen.studio import load_music_score
+    from vidgen.studio.events import score_events, track_kind
+
+    order = [s.id for s in project.config.scenes]
+    times: list[float] = []
+    names: list[str] = []
+    notes: list[str] = []
+    for cue in project.config.music_cues:
+        try:
+            path = cue_score(cue, project.root)
+            if path is None:
+                continue
+            first, last = cue_scene_range(cue, order)
+            if order[first] not in starts or order[last] not in ends:
+                continue
+            score = load_music_score(path)
+            offset = float(cue.start) + section_start(cue, project.root)
+        except (VidgenError, ValueError) as exc:
+            notes.append(f"music cue {cue.source}: no music events ({exc})")
+            continue
+        events = score_events(score)
+        song = np.array(sorted(e.time for t in score.tracks if track_kind(t) in ("drum", "note") for e in events[t.name]), dtype=float)
+        begin, finish = starts[order[first]], ends[order[last]]
+        if score.loop and score.seconds > 0:
+            offset %= score.seconds
+            passes = range(0, math.ceil((offset + finish - begin) / score.seconds) + 1)
+            song = np.concatenate([song + k * score.seconds for k in passes]) if len(song) else song
+        placed = begin + song - offset
+        times += [float(t) for t in placed if begin - 1e-6 <= t < finish]
+        names.append(path.stem)
+    return np.array(sorted(times)), (", ".join(dict.fromkeys(names)) or None), notes
+
+
+def project_source(project: Any, preview: bool, prefer: str = "auto") -> Source:
+    """A project's rendered video (with its scenes from the render's ``timings.json``), or, when
+    that is missing or ``prefer`` is ``scenes``, its rendered scene clips in order. Nothing is
+    rendered: :class:`VidgenError` naming the command when neither exists."""
+    import json
+
+    from vidgen.render.worker import scene_timings_path, scene_video_path
+
+    video = project.output_path(preview)
+    timings_file = project.render_dir(preview) / "timings.json"
+    quality = "draft" if project.draft else "preview" if preview else "final"
+    flag = {"draft": " --draft", "preview": " --preview", "final": ""}[quality]
+    notes: list[str] = []
+    if prefer in ("auto", "video") and video.is_file():
+        _, _, fps = probe(video)
+        scenes: list[SceneSpan] = []
+        starts: dict[str, float] = {}
+        ends: dict[str, float] = {}
+        if timings_file.is_file():
+            data = json.loads(timings_file.read_text(encoding="utf-8"))
+            if timings_file.stat().st_mtime + 1 < video.stat().st_mtime:
+                notes.append(f"{timings_file.name} is older than the video: scene times may be off")
+            for s in data.get("scenes", []):
+                starts[s["id"]], ends[s["id"]] = float(s["start"]), float(s["start"]) + float(s["duration"])
+                scenes.append(SceneSpan(s["id"], round(starts[s["id"]] * fps), round(ends[s["id"]] * fps)))
+        else:
+            notes.append("no timings.json beside the render: scenes unknown")
+        hits, names, more = music_events(project, starts, ends) if starts else (np.zeros(0), None, [])
+        return Source(str(video), [Segment(video)], fps, scenes, hits * fps, names, notes + more)
+    if prefer == "video":
+        raise VidgenError(f"{video}: not rendered yet (vidgen render {project.root}{flag}); or watch its scene clips: --source scenes")
+    clips = [(spec.id, scene_video_path(project, preview, spec.id)) for spec in project.config.scenes]
+    found = [(sid, path) for sid, path in clips if path.is_file()]
+    if not found:
+        raise VidgenError(f"{project.root}: nothing rendered at {quality} quality (no {video.name}, no scene clips in "
+                          f"{project.render_dir(preview) / 'scenes'}); render it first (vidgen render {project.root}{flag}) or give a video file")
+    missing = [sid for sid, path in clips if not path.is_file()]
+    if missing:
+        notes.append(f"{len(missing)} scene(s) not rendered, left out: {', '.join(missing[:8])}{' ...' if len(missing) > 8 else ''}")
+    _, _, fps = probe(found[0][1])
+    scenes, starts, ends = [], {}, {}
+    t = 0.0
+    frame = 0
+    for sid, path in found:
+        timing = scene_timings_path(project, preview, sid)
+        duration = None
+        if timing.is_file():
+            duration = float(json.loads(timing.read_text(encoding="utf-8")).get("duration", 0)) or None
+        if duration is None:
+            import av
+
+            with av.open(str(path)) as c:
+                st = c.streams.video[0]
+                duration = float(st.frames / fps) if st.frames else float(c.duration or 0) / 1e6
+        count = round(duration * fps)
+        scenes.append(SceneSpan(sid, frame, frame + count))
+        starts[sid], ends[sid] = t, t + duration
+        frame += count
+        t += duration
+    if not missing:
+        hits, names, more = music_events(project, starts, ends)
+    else:
+        hits, names, more = np.zeros(0), None, ["music events left out: scenes are missing, the music's timing is unknown"]
+    notes.append("scene clips, cut to cut (no transitions or overlays)")
+    return Source(f"{project.root} (scene clips)", [Segment(p) for _, p in found], fps, scenes, hits * fps, names, notes + more, clips=True)
