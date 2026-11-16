@@ -166,7 +166,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     score's hits and notes, so pictures follow the score with no script of your own; three.js pages
     get a ready-made film finish from the module `vidgen/three-finish`: depth of field, motion blur,
     bloom, tone mapping, grade, vignette, grain; `vidgen still` draws one frame at an exact time
-    without rendering the scene);
+    without rendering the scene; `vidgen music plan` reads a score and drafts a music video of `web`
+    scenes cut on its bar lines, a colour per section and a starter page per scene that follows the
+    score's drums, melodies and pads);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -720,6 +722,7 @@ narration.
 | `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with schu-video-generator's own instruments and writes a WAV or MP3; also takes a project piece's or a built-in bed's name ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
+| `vidgen music plan SCORE.yaml\|NAME [--out DIR] [--force] [--max-scene S] [--min-scene S] [--json]` | proposes a music video's scenes from a score file without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro), cuts on bar lines (long sections split on a phrase line where the material changes), drops, breaths and silent bars, a colour per scene and the tracks each scene follows (drums pulse the light, melodies leave glints, pads set the glow); `--out` writes and validates a draft project of `web_cut` scenes with a starter page each ([CONFIG](docs/CONFIG.md#a-music-video-from-a-score-vidgen-music-plan)) |
 | `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
 | `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
 | `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when symusic and the SoundFont are there |
@@ -1009,7 +1012,7 @@ my_video/
   through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
   [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
   [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
-  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`).
+  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`), from a score to a music video (`vidgen music plan`).
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

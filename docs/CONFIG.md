@@ -4264,6 +4264,84 @@ sections and the voice range's edges, with a lane under it showing each bar's vo
 against the limit (red above). `--compare OTHER` checks a second score or audio file, prints a
 side-by-side table and draws both on one time scale (`<name>-vs-<other>.png`).
 
+#### A music video from a score (`vidgen music plan`)
+
+```bash
+vidgen music plan assets/music/my_song.yaml                 # the plan in words: sections, cuts, colours, reactions
+vidgen music plan my_song --json                            # the same as one JSON document
+vidgen music plan my_song --out my_video                    # and a draft project to start from
+vidgen music plan my_song --out my_video --max-scene 12 --min-scene 4 --force
+```
+
+`vidgen music plan SCORE [--out DIR] [--force] [--max-scene SECONDS] [--min-scene SECONDS]
+[--json]` (Step 359, DESIGN §121.2) reads a score file (a path, a project piece's name or a score
+bed's: `tidewater`, `skyline`, `time_of_flight`; another bed: write its template first) without
+playing it, and proposes the scenes of a music video, each starting on a bar line:
+
+- **Roles.** Every section gets one of `intro`, `verse`, `build`, `drop`, `climax`, `breakdown`,
+  `outro`: from its name when the name says it (`intro`, `dawn`, `prelude`; `verse`, `groove`;
+  `build`, `rise`, `riser`, `pre`; `drop`, `chorus`; `climax`, `peak`; `break`, `bridge`,
+  `interlude`; `outro`, `coda`, `end`, `ending`; also as a part of the name, `verse_b`), else from
+  its **energy**: per bar, half a point for each track that sounds and up to half a point for how
+  many notes and hits each starts (eight or more: the half point), scaled to the piece's busiest
+  bar; a section's energy is its bars' mean. First and under 0.6: intro; last and under 0.75:
+  outro; 0.9 or more: climax; rising (second half 0.15 above the first, or a `riser` in it) into a
+  fuller section: build; 0.2 above the one before and 0.7 or more: drop; 0.25 under the one
+  before: breakdown; else verse. The printout gives the reason.
+- **Cuts.** A scene per section; a section longer than `--max-scene` (default 16 s) is cut on a
+  phrase line (every 4 bars from its start) where the material changes most — tracks that come in
+  or leave over the phrases on either side, the progression starting again, a big change of
+  energy, a bar with few new notes just before — preferring the middle, both parts at least
+  `--min-scene`; again while a part is too long. A section of 16 bars or more that fits is still
+  cut in two (8 bars or more each) when the material changes clearly there. A section shorter than
+  `--min-scene` (default 5 s) is joined to the scene before. Each scene lasts whole frames from
+  bar line to bar line at 30 fps (`round(end · 30) − round(start · 30)` frames), so no error adds
+  up; the last scene of a one-pass score holds 3 s more for the last chord (a loop: none).
+- **Moments** (listed under their scene): `drop` (a bar 0.25 above the mean of the two before and
+  0.55 or more; one per three bars), `breath` (a bar with at most a quarter of its neighbours' new
+  notes, both of them with four or more), `silent` (nothing sounds), `riser` (a `riser` hit).
+- **A colour per scene**, the colour script: a hue, saturation and lightness per role (intro
+  blue, verse teal, build violet, drop magenta, climax orange, breakdown indigo, outro pale blue),
+  more saturated and brighter with the scene's energy, turned 8° towards blue in a minor, dorian or
+  phrygian key and towards gold in the others; `base`, `accent` (the hue turned 160°, for glints
+  and rings) and `deep` (the background), as `#rrggbb`.
+- **Reactions**: the tracks each scene follows, from the instruments that play in it: low drums
+  (`kick`, `boom`, `taiko`, `bass_drum`, `frame_drum`, `pulsar`, `timpani`, `toms`) **pulse** the
+  brightness (at most two, the busiest); accents (`clap`, the snares, `cymbal`, `tam_tam`,
+  `open_hat`, `snap`; at most four a bar) send **rings** (one, nearest one a bar); a pitched line at
+  or above G3 with at most eight notes a bar leaves **glints** (two, the highest); pads, `play:
+  chords` tracks and held notes (a median of two beats or more) set the **glow** (one, pads and
+  voices first). Hats, ticks, noise and risers are left out (too dense to follow).
+
+`--out DIR` writes a draft project in the folder (new or empty; a folder with files in it only
+with `--force`) and validates it (problems are printed, exit 1):
+
+- `video.yaml`: 1280x720 at 30 fps, `transition: cut`, `music:` the score from its start (no fade
+  in, 1.5 s fade out, no ducking), a header with the form, and one `web_cut` scene per cut with
+  its `duration`, `params.script` (`extensions/<id>.js`), `music_data: {tracks: [...]}` (the
+  tracks it follows) and `data:` its plan: `role`, `look`, `seed`, `energy`, `bar` (s), `start` /
+  `end` (song seconds of its first and after its last bar), `until` (its end with the tail),
+  `colours`, `grade` (three-finish's `temperature` and `saturation` for the role), `react`
+  (`{pulse, ring, glint, glow}`), `drops` (song seconds), and `script` (the colour script: every
+  scene's `{at, role, base, accent, deep}`, written once with a YAML anchor);
+- the score under `assets/music/` (unless it is in the folder already, then it is used there);
+- `extensions/web_cut.py`: the `web` scene without its 0.5 s fade-out, so the scenes cut straight
+  into each other on the bar line (`web` has no option for it; the example films do the same);
+- `extensions/<id>.js`: a starter page per scene, the look of its role, built on
+  `vidgen/three-kit`, `vidgen/music-time` and `vidgen/three-finish`, reading everything from
+  `ctx.data`: `intro` **drift** (a slow flight through a nebula and stars), `verse` **orbit** (a
+  tesseract the camera circles in a shell of stars), `build` **tunnel** (a tunnel of rings on the
+  beat, faster to the end), `drop` **swarm** (crystals around a flare, rings from the accents),
+  `climax` **rings** (great rings, a crystal field, the spectrum as rays), `breakdown` **dust** (one
+  crystal in drifting dust), `outro` **ribbon** (the melody as a ribbon of light, the camera
+  drawing back, fading out over the tail). Two scenes of one role get other seeds, turns and
+  colours. Every page draws from song time alone; pulses change light, never the camera or a size.
+
+The plan does not listen: a piece whose sections are named but whose energy says otherwise gets
+the name's role. Edit the draft as any project: change the pages, join or move scenes (keep each
+duration a whole number of frames between bar lines), then `vidgen still DIR --scene ID --at 2
+--size 640x360` and `vidgen render DIR --draft`.
+
 #### Project pieces: score files in a video
 
 A score file in the project's `assets/music` is a **project piece**: it plays like a built-in bed.
@@ -6975,6 +7053,10 @@ by hand; those films now import them.
 | `noteAt(track, T)` → `{i, p, age, d}` or `null`, `noteEnvelope(track, T, decay)`, `noteLevel(track, T, attack=0.05, release=0.5)` | the note playing or played last; a glint on each note; a held note's level |
 | `melody(track, T, glide=0.07)` → `[pitch, level]` | the pitch gliding from the note before (when it ended under 0.4 s earlier) |
 | `eventLevel(event, T)`, `signalLevel(ctx.music, track, T, release=0.6)` | on `ctx.music`'s events: an event's level through its hairpin times its accent; how strongly a track sounds (its loudest event of the last 12 s still sounding, faded over `release`) |
+| `orbit(T, {centre, radius=20, height=3, speed=0.05, phase=0, bob=0})` → `[x, y, z, lx, ly, lz]` | the camera circling `centre` at `speed` radians a second, its height swinging by `bob` (Step 359); spread into `aimCamera(...orbit(T, …))` |
+| `pathPoint(points, u)`, `flyThrough(points, u, ahead=0.05)` → `[x, y, z, lx, ly, lz]` | a smooth path through every point (Catmull-Rom, u from 0 to 1, the ends continued); a flight along it looking `ahead` further on |
+| `colourScript(stops, glide=0)` → `(T) => stop` | the stop in force at T of `[{at, base: "#rrggbb", …}]` (as `vidgen music plan` writes `data.script`), its colours as numbers `0xrrggbb`; with `glide` they ease into the next stop's over the seconds before it |
+| `reactions(ctx.music, react, {decay=0.18, release=1.2, drops=[], flash=0.5})` | what a drafted page follows (`react` = `{pulse, ring, glint, glow}` track names): `{song, pulse(T), glow(T), drop(T), ring, glints}`: the strongest pulse envelope, the loudest glow track (the measured `level` without one), a flash after each drop, the ring track's hits and the glint tracks' notes |
 
 `vidgen/three-kit` (call `setStage({renderer, scene, camera, width, height})` once in `load`;
 builders add to the stage's scene unless given `parent`; `inPortal: true` draws a thing only
@@ -16981,6 +17063,18 @@ difference between two palette colours).
 | `templates` | list | `{name, title, key, tempo, time, bars, seconds, sections, tracks, description}`, one per bed |
 | `template` | object | when one was written: its entry of `templates` |
 | `path` | str | when one was written: the file |
+
+`vidgen music plan --json` ([A music video from a score](#a-music-video-from-a-score-vidgen-music-plan)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `plan` |
+| `score`, `title`, `key`, `mode`, `tempo`, `time`, `bar_seconds`, `bars`, `loop`, `seconds`, `tail`, `fps` | | the score's facts; `tail` the seconds the last scene holds after the last bar |
+| `sections` | list | `{name, role, first_bar, bars, energy, why}` (bars count from 1) |
+| `scenes` | list | `{id, section, role, look, first_bar, bars, start, end, duration, frames, energy, colours, react, enters, leaves, why, moments}`: `start` / `end` song seconds (`end` with the tail on the last), `colours` `{base, accent, deep}`, `react` `{pulse, ring, glint, glow}` track names, `enters` / `leaves` the tracks that come in or stop against the scene before |
+| `moments` | list | `{kind, bar, time, note}`: `drop`, `breath`, `silent`, `riser` |
+| `tracks` | object | every track that plays → its reaction (`pulse`, `ring`, `glint`, `glow`) or null |
+| `draft` | object | with `--out`: `{root, config, created, files, problems}`, else null; `ok` is false when the draft has problems |
 
 `vidgen music page --json` ([Listen page](#listen-page-vidgen-music-page)):
 

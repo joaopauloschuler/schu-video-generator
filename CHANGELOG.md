@@ -5,9 +5,25 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–358)
+## Unreleased (Steps 193–359)
 
-### Music-video tools (Phase AM, Step 358)
+### Music-video tools (Phase AM, Steps 358–359)
+
+- **`vidgen music plan SCORE`** (Step 359): a music video's scenes proposed from a score file,
+  without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro;
+  from its name or its energy), scenes cut on bar lines (a section over 16 s split on the phrase
+  line where the material changes most, one under 5 s joined to the one before; `--max-scene`,
+  `--min-scene`), drops, breaths, silent bars and risers, a colour per scene from a colour script
+  (cool → warm → calm, tinted by the key's mode) and the tracks each scene follows (low drums
+  pulse the light, accents send rings, melodies leave glints, pads set the glow); `--json`.
+  `--out DIR` writes and validates a draft project: `video.yaml` with the score as `music:`, a
+  `web_cut` scene per cut (whole frames between bar lines, `music_data`, its plan in `data:`),
+  `extensions/web_cut.py`, and a starter page per scene, one look per role, built on the kit
+  (`docs/CONFIG.md`, "A music video from a score"; COOKBOOK-3D section 10). For the film scores
+  the plan cuts `escapement` and `signal-fire` exactly where the films cut, and `parallel-space`
+  at every film cut plus two.
+- `vidgen/music-time` gains camera paths (`orbit`, `pathPoint`, `flyThrough`), a colour script
+  (`colourScript`) and `reactions` (a drafted page's pulse, glow, drop flash, rings and glints).
 
 - **Building blocks for music videos**: two of vidgen's own modules for `web` scenes, imported by
   name like `vidgen/three-finish`. `vidgen/music-time`: the score's tracks as arrays

@@ -193,3 +193,52 @@ composed from them in `ps.js`.
   `examples/escapement` and `examples/signal-fire` were ported this way with pixel-identical
   stills; what would have changed a picture (Escapement's watch, studio and finishing) stayed in
   the film's script.
+
+## 10. From a score to a music video
+
+The example films were cut by hand: their authors read the score, found the sections, split the
+long ones, chose a colour and a set for each and the tracks each set answers. `vidgen music plan`
+does that first pass from the score file itself (reference: [CONFIG, "A music video from a
+score"](CONFIG.md#a-music-video-from-a-score-vidgen-music-plan)), without playing it:
+
+```bash
+vidgen music plan assets/music/my_song.yaml                 # read the plan first
+vidgen music plan assets/music/my_song.yaml --out my_video  # then draft the project
+vidgen still my_video --scene 05_drop --at 2 --size 640x360
+```
+
+```text
+scenes (12, cut on bar lines; durations at 30 fps):
+  01_winding         0.00 s  bars 1-8      16.00 s  intro     drift  #477bba / #d88d78
+                    reacts to brightness pulse: boom; glints: box, tock; glow level: brass
+  ...
+  08_orrery_2      112.00 s  bars 57-60     8.00 s  breakdown dust   #4845a5 / #d5ba7c
+                    breath at bar 60 (118.00 s): 3 new notes between 9 and 42
+                    why: longer than 16 s: split at bar 57 (change 0.41)
+```
+
+- **Read the plan before the draft.** Each section's role says why (its name, or its energy
+  against its neighbours); each cut says why (a whole section, too long, the material changes).
+  A section named `drop` that is quiet is still called a drop: rename it or change the role in
+  the draft's `data`.
+- **The cuts are the film's grid.** Every scene lasts whole frames from one bar line to the next,
+  and every page draws from song time (`ctx.music.time(t)`), so the cut between two scenes falls
+  on the beat and nothing jumps. Join or split scenes on bar lines only (a 16-bar section of a
+  120 BPM song: two scenes of 16 s); keep scenes under about 16 s, or give a long one a camera
+  move that changes the view.
+- **One look per role, then make it yours.** The draft gives each role a starter page (a nebula
+  flight for the intro, a tesseract for a verse, a tunnel for a build, a crystal swarm for a drop,
+  rings and rays for the climax, dust for a break, a ribbon for the end), coloured from the colour
+  script: cool and sparse at the start, warm and saturated at the peak, calm at the end. The
+  pages are short and use the kit's parts; replace a set, keep its `update(t)` drawing from `T`.
+- **Reactions are light.** `reactions(ctx.music, data.react)` gives `pulse(T)` (the kick's light),
+  `glow(T)` (the pad), the glints' notes and the rings' hits; the starters feed them to
+  brightness, glints and rings, never to the camera or a size.
+- **What it does not know.** The plan reads notes, not sound: a track made loud by its mix, a
+  lyric, a story. Watch a still per scene (`vidgen still --count 3`), then a `--draft` render.
+
+For the three film scores the plan is close to what their authors cut: `escapement` and
+`signal-fire` exactly (12 and 3 scenes on the same bars), `parallel-space` with two more cuts (it
+splits the 16-bar `pulse` and keeps `heart` and `heart2` apart, where the film shows 16-bar
+scenes); DESIGN §121.2 has the tables.
+

@@ -799,7 +799,10 @@ reactions to the score (`hitEnvelope`, `noteLevel`, `melody`, `signalLevel` in `
 and light-on-black building blocks (`vidgen/three-kit`): [section
 9](COOKBOOK-3D.md#9-building-blocks-for-music-videos) there. A worked
 example of both: [examples/signal-fire](../examples/signal-fire/README.md) (each track the page
-reads, and what it does with it, is listed at the top of its script).
+reads, and what it does with it, is listed at the top of its script). To start a music video from a score
+instead of from an empty page: `vidgen music plan assets/music/my_song.yaml --out my_video`
+drafts the scenes on the score's bar lines with a colour and a starter page each ([COOKBOOK-3D.md,
+section 10](COOKBOOK-3D.md#10-from-a-score-to-a-music-video)).
 
 ## 13. Every instrument at a glance
 

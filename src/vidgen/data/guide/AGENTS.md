@@ -3728,6 +3728,21 @@ export function frame(t) {
   film built on them: `examples/parallel-space`; smaller uses: `examples/escapement` (envelopes,
   keyframes, dust) and `examples/signal-fire` (`signalLevel`).
 
+**From a score to a music video: `vidgen music plan`.** Before writing pages for a song, let
+vidgen read its score: `vidgen music plan assets/music/my_song.yaml` prints a role per section
+(intro, verse, build, drop, climax, breakdown, outro) and why, the scenes cut on bar lines (a
+section over 16 s split on a phrase line where the material changes, one under 5 s joined to the
+one before), drops, breaths and silent bars, a colour per scene (cool at the start, warm at the
+peak) and the tracks each scene follows (low drums pulse the light, accents send rings, melodies
+leave glints, pads set the glow). `--out my_video` writes and validates a draft: `video.yaml`
+with the score as `music:`, a `web_cut` scene per cut (the `web` scene without its fade-out, in
+`extensions/web_cut.py`) whose `duration` is whole frames between two bar lines, `music_data`
+with its tracks, `data:` with its plan, and a starter page per scene (`extensions/<id>.js`, one
+look per role, on the kit above: `reactions(ctx.music, ctx.data.react)`, `colourScript`, `orbit`,
+`flyThrough`). Look at a still of each scene, then make the pages your own; keep each scene on
+bar lines when you join or split them. `--json` gives the plan as data. The plan reads notes,
+not sound or words: check its roles against what you hear described (`vidgen music check`).
+
 **Animation and chart libraries.** These ship with vidgen: import them by name, in a
 `<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's
 clock. "Plays by itself" means the library's own loop follows the video's time from the scene's

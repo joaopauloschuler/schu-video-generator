@@ -299,6 +299,7 @@ src/vidgen/
   music.py                # background music: generated beds, music files and composed music as looping sources (§48, §82, §83; no manim)
   music_pieces.py         # project pieces: score files in assets/music played like beds, rendered at the join and cached (§93.10)
   composer.py             # composed music from a mood: moods, instruments, chords, phrases, melody, accompaniment (§83; pure, seeded, no manim)
+  music_video_plan.py     # `vidgen music plan`: a music video's scenes from a score file (roles, cuts on bar lines, moments, colours, reactions) and its draft project (§121.2)
   musicfit.py             # composed music that follows the video: bar lines at scene changes, per-scene moods, swells, pauses, cadence, stings (§84)
   score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
   soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
@@ -350,6 +351,7 @@ src/vidgen/
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
   data/web/modules/        # vidgen's own modules for web scenes: three-finish.js `vidgen/three-finish` (§120.11); music-time.js
                           # `vidgen/music-time` and three-kit.js `vidgen/three-kit`: building blocks for music videos (§121.1)
+  data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -25439,7 +25441,7 @@ same things by hand. The owner chose four features (2026-11-16), one step each, 
 | Step | What | Section |
 |---|---|---|
 | 358 | A library of three.js building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`); the examples ported to it, their copies deleted | §121.1 |
-| 359 | A storyboard from the music: cut points, a colour per section, the events each scene reacts to, a draft `video.yaml` | |
+| 359 | A storyboard from the music: `vidgen music plan` (cut points, a colour per section, the events each scene reacts to, a draft project of `web_cut` scenes with starter pages) | §121.2 |
 | 360 | A "watch it" motion check: flicker, popping, blank frames, frozen stretches, jumps at cuts, strobing | |
 | 361 | More choir: syllables, a soloist, a breathy texture, a syllable per note | |
 | 362 | Critical review with fixes; docs | |
@@ -25528,3 +25530,97 @@ stills differ slightly: 6 of 36 identical (the dawn and the coda read no bands),
 dB PSNR, mostly one or two levels; the most at the tips of the sun's spectrum rays (up to 89
 levels on a few pixels, `07_drop1` at 1.5 s). Side by side (before | after | difference × 10):
 `side2/ps/`. That is above the phase's 45 dB bar, so the script and the JSON were deleted.
+
+### 121.2 A storyboard from the music: `vidgen music plan` (Step 359)
+
+**The name.** `vidgen plan` already drafts a project from an outline, `vidgen storyboard` draws
+contact sheets of a rendered project; the new command is a music tool that reads a score file and
+drafts a project, so it is `vidgen music plan SCORE` beside `music render`, `check` and
+`template`, with their `--out`, `--force` and `--json` (the brief's `--write DIR` is `--out DIR`,
+as `music template --out` writes its file). Without `--out` it only prints.
+
+**Reading the score, not the sound.** The plan runs on `vidgen.studio.events.score_events`
+(Step 347): every note and hit with its track, instrument, time, length and pitch, as the renderer
+plays them. Nothing is synthesized, so a plan takes milliseconds (Parallel Space: 0.2 s with the
+import). Per bar it keeps the tracks that sound, how many events start per track, and the chord;
+its **energy** is half a point per sounding track plus up to half a point per track for its
+onsets (8 or more a bar: the half point), scaled to the busiest bar. Counting tracks and capping
+onsets keeps a hi-hat's 16 hits a bar from outweighing an orchestra coming in.
+
+**Roles** (`intro`, `verse`, `build`, `drop`, `climax`, `breakdown`, `outro`) come from the
+section's name when a word of it says so (split on `_` and digits: `heart2`, `verse_b`), else
+from energy against the piece and the neighbours (CONFIG lists the thresholds). Names win because
+the author named the form; the words are generic (`dawn`, `coda`, `bridge`), not the films'
+own (`winding`, `orrery`), so the films test the energy rules too.
+
+**Cuts.** A scene per section, then: a section longer than `--max-scene` (16 s) is split on a
+phrase line (every 4 bars from the section's start) chosen by a change score — the Jaccard
+distance between the tracks sounding in the phrases before and after, +0.25 when the progression
+starts again there, +0.5 × the energy step, +0.2 after a bar with few onsets — plus a pull to the
+middle; recursively. A 16-bar-or-longer section that fits is still split (into parts of 8 bars or
+more) when the change score reaches 0.45: "a 16-bar section into 2 × 8 when the material
+changes", and never an 8-bar section into two 4-bar flashes. A section under `--min-scene` (5 s)
+joins the scene before (the films' `end` bars ride on their coda). 16 s is the films' own
+longest scene but two (Escapement's 8 bars at 120 BPM; Parallel Space kept two 16-bar scenes of
+27.7 s, which the plan splits).
+
+**Durations on bar lines in whole frames.** A scene's frames are `round(end · fps) −
+round(start · fps)`, so the plan's frame count for each bar line is the rounded song time and no
+rounding error accumulates (Tidewater's 2.222 s bars give 267, 266, 267 frames); the scene plan
+(`VideoPlan`) rounds `duration · fps` back to the same count, and `ctx.music.t0` is within half a
+frame of the bar line. The last scene of a one-pass score holds 3 s for the last chord (the films
+used 3 to 4.6 s); a loop gets none.
+
+**Moments** are listed, not cut on: a cut on every drop would cut mid-phrase. The starter pages
+flash on the drops (`drop(T)` into three-finish's `flash`).
+
+**Colour script.** A role's hue, saturation and lightness (intro 205°, verse 185°, build 280°,
+drop 325°, climax 32°, breakdown 250°, outro 220° pale), scaled by the scene's energy (saturation
+×0.75–1, lightness ×0.88–1) and turned 8° towards 230° (blue) in minor, dorian and phrygian keys,
+towards 45° (gold) in the others. `accent` is the hue + 160° (glints and rings stand out),
+`deep` a near-black of the hue (the sky). Written as `#rrggbb` per scene and, once, as the whole
+script with a YAML anchor, so a page that spans two sections (a coda with its end) can follow it.
+
+**Reactions** by instrument: the brief's mapping (kick → brightness, melody → glints, pads →
+glow) plus accents → rings. A track's reaction comes from the instrument it plays in that scene
+(a section can change it, §120.7); hats, ticks, noise and risers are left out as too dense or not
+a line. Limits per scene: two pulses, one ring, two glints, one glow; `music_data.tracks` lists
+just those, keeping the page's data small.
+
+**The draft.** `video.yaml` (header with the form, `transition: cut`, the music cue as the films
+write it), `extensions/web_cut.py` and a page per scene. The `web` scene has no option to drop
+its 0.5 s fade-out (`outro` is a class attribute), so the draft writes the same five-line
+extension the three films carry rather than adding a param in this step. The score is copied to
+`assets/music/` (a cue's source must be under the project) unless it is in the folder already.
+The draft is validated before the command returns (exit 1 with the problems).
+
+**Starter pages** (`data/web/starters/*.js`, 48–53 lines each, copied verbatim; everything
+scene-specific is in `ctx.data`): one look per role from the kit, so consecutive sections look
+different and two scenes of one role differ by seed, turning direction and colour. Library
+additions they needed (the two Step 358 left for this step), in `vidgen/music-time` (plain
+numbers, testable in Node): `orbit(T, …)` and `pathPoint` / `flyThrough(points, u, ahead)` (a
+Catmull-Rom path through every point, its ends continued) for the camera, `colourScript(stops,
+glide)` for the colour script, and `reactions(ctx.music, react, {drops})` for the four reactions
+and the drop flash. The first looks were too bright at 320x180 (three-finish's bloom on a 80-px
+buffer over 26 crystals' edges and 96 rays): the starters use bloom 0.5 / radius 0.35 /
+threshold 1.0 at half scale, and the climax's rays and flare were toned down; stills at 480x270:
+`/home/claude/work/scratch/am359/looks_sheet.png`.
+
+**The three film scores against their real cuts** (bars from 1; `|` a cut):
+
+| film | real scenes (first bar, length) | the plan | role / look per planned scene |
+|---|---|---|---|
+| Signal Fire (90 BPM, 2.667 s bars) | embers 1 (8 s) \| gather 4 (8 s) \| fire 7 (11 s) | the same: 1 \| 4 \| 7 (`end`, 1 bar, joined; 3 s tail) | intro/drift, drop/swarm, climax/rings |
+| Escapement (120 BPM, 2 s bars) | winding 1 \| dial 9 \| through 17 \| escapement 25 \| cathedral 33 \| threefour 41 \| orrery 49 \| falter 57 (8 s) \| build 61 \| climax1 69 \| climax2 77 \| coda 85 (23 s) | the same 12 cuts: movement, cathedral and climax split 8 \| 8 (over 16 s), orrery 8 \| 4 (the falter: its change score is highest at bar 57), `end` joined to the coda (20 s + 3 s) | intro/drift, verse/orbit, build/tunnel ×2, drop/swarm ×2, breakdown/dust ×2, build/tunnel, climax/rings ×2, outro/ribbon |
+| Parallel Space (138.46 BPM, 1.733 s bars) | dawn 1 \| pulse 9 (16 bars) \| groove1 25 \| groove2 33 \| heart 41 (16 bars: heart + heart2) \| build 57 \| drop1 65 \| drop2 73 \| climax 81 \| afterglow 89 \| coda 97 (18.47 s) | 13 scenes: every real cut and two more, at bar 17 (the 16-bar `pulse` is 27.7 s) and 49 (`heart2` is its own section); coda 16.87 s (3 s tail, the film 4.6 s) | intro/drift, build/tunnel ×2, verse/orbit ×2, breakdown/dust, build/tunnel ×2, drop/swarm ×2, climax/rings, breakdown/dust, outro/ribbon |
+
+Roles that differ from the films' intent: Parallel Space's `pulse` is a build by energy (rising
+into the fuller `groove`), its `heart2` a build (a riser, `groove`-level energy after the sparse
+`heart`); Escapement's `cathedral` a drop and `orrery` a breakdown; Signal Fire's `gather` a drop
+(the brass and taikos come in). They are what the notes say; the author keeps or renames.
+
+**Tests** (`tests/test_music_video_plan.py`): roles, cuts, frames, splits for length and for
+material, joins, moments, reactions and colours on a small synthetic score; the starters' imports;
+the printout and `--json`; user errors; a written draft validated (no render); the three films'
+plans against their `video.yaml` cuts; one `slow` test drawing one still of a drafted page at
+160x90. `tests/test_web_music_video_kit.py` tests the four music-time additions in Node.

@@ -2124,14 +2124,17 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [x] `vidgen/music-time` (song time, bars, the score's events as arrays, reactions, seeded numbers, easing, keyframes) and `vidgen/three-kit` (glowing strokes, crystals, tesseract, nebula sky, portals, star fields, flares, shock rings, glints, ribbons, spectrum rays, tunnels, corridor, rings, swarms, dust, camera aim) on the import map; CONFIG, guide, COOKBOOK-3D section 9, DESIGN §121.1; Node and Chromium tests
 - [x] Examples ported with pixel-identical `vidgen still` stills (89 compared): `parallel-space` (`ps.js` 1,313 → 799 lines), `escapement` (only the pieces that stay identical: 1,238 → 1,187), `signal-fire` (220 → 200), `three-finish` (114 → 114)
 - [x] Parallel Space reads `music_data`: `scripts/make_ps_audio.py` and `ps_audio.json` deleted (hits and notes equal; bands and level measured from the mix: 6 of 36 stills identical, the rest 53.5–85 dB PSNR)
-- [ ] Not built (no film uses them yet; for Step 359's starter pages): a sections → colour script helper, orbit / fly-through camera paths beyond `keyframes`, `glide` and `aimCamera`
+- [x] ~~Not built~~ Built in Step 359 for its starter pages: a colour script (`colourScript`), orbit / fly-through camera paths (`orbit`, `pathPoint`, `flyThrough`)
 - [ ] Not done: no film rendered (stills only); Windows and macOS not tried
 
 ### Step 358.1 — Gallery YouTube section: thumbnails only (owner's request)
 - [x] `youtube_lines()` writes one clickable thumbnail per paragraph (title as alt text); title/channel lines and `YOUTUBE_VIDEOS`' `channel` field removed; `docs/gallery/README.md` and `tests/test_gallery.py` updated — done, nothing rendered
 
 ### Step 359 — A storyboard from the music
-- [ ] `vidgen music plan <score>` (name to fit the CLI): cut points, a colour per section, events per scene, a draft `video.yaml` of `web` scenes using Step 358's library, dry run and `--json`
+- [x] `vidgen music plan SCORE [--out DIR] [--force] [--max-scene S] [--min-scene S] [--json]`: roles per section (name or energy), cuts on bar lines (long sections split on the phrase line where the material changes, short ones joined; whole frames), drops / breaths / silent bars / risers, a colour script, the tracks each scene follows (pulse, ring, glint, glow); printout and `--json` — DESIGN §121.2
+- [x] `--out`: a validated draft project: `video.yaml` (`music:` the score, `web_cut` scenes with `music_data` and their plan in `data:`), `extensions/web_cut.py`, a starter page per scene (seven looks, `data/web/starters/`, on three-kit / music-time / three-finish); `vidgen/music-time` gains `orbit`, `pathPoint`, `flyThrough`, `colourScript`, `reactions` (the Step 358 leftovers)
+- [x] The film scores' plans against their real cuts: `escapement` and `signal-fire` the same, `parallel-space` every cut plus two (DESIGN §121.2 table); docs: CONFIG, README, guide, COOKBOOK-3D section 10, COOKBOOK-MUSIC pointer, CHANGELOG
+- [ ] Not done: no draft rendered (stills of the seven looks at 480x270 from a 22 s synthetic score only); no MCP tool for the plan; Windows / macOS not tried
 
 ### Step 360 — A "watch it" motion check
 - [ ] `vidgen check-motion` (name to fit the CLI): flicker, popping, blank frames, frozen stretches, brightness jumps at cuts, strobing; a report with contact strips; thresholds documented; tested on synthetic clips

@@ -117,6 +117,38 @@ out.push(T.eventLevel(tracks.low[0], 0.25), T.eventLevel(tracks.low[0], 1.25), T
     assert fading == pytest.approx(0.5) and gone == 0
 
 
+def test_music_time_camera_paths_colour_script_and_reactions(tmp_path: Path) -> None:
+    """Step 359's additions: orbit, pathPoint, flyThrough, colourScript, reactions."""
+    out = _run_in_node(tmp_path, FAKE_MUSIC + """
+M.level = () => 0.25;
+out.push(T.orbit(0, {radius: 10, height: 2}), T.orbit(Math.PI / 2 / 0.5, {centre: [1, 0, 0], radius: 10, height: 2, speed: 0.5}));
+const P = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]];
+out.push(T.pathPoint(P, 0), T.pathPoint(P, 1 / 3), T.pathPoint(P, 1), T.pathPoint(P, 2), T.pathPoint([[0, 0, 0], [4, 2, 0]], 0.5));
+out.push(T.flyThrough(P, 0.5, 0.1), T.flyThrough(P, 1, 0.1));
+const S = T.colourScript([{at: 0, role: "intro", base: "#000000"}, {at: 4, role: "drop", base: "#ff8000"}]);
+const G = T.colourScript([{at: 0, base: "#000000"}, {at: 4, base: "#ff8000"}], 2);
+out.push(S(-1), S(3.999), S(4), S(99), G(1), G(3).base, G(3.999999).base, G(4).base);
+const R = T.reactions(M, {pulse: ["kick"], ring: ["kick"], glint: ["hook"], glow: ["pad"]}, {drops: [2]});
+const E = T.reactions(M, {});
+out.push(R.pulse(0.5), R.glow(1), R.drop(1.9), R.drop(2.5), R.ring === R.song.hits.kick, R.glints.length, Array.from(R.glints[0].p), E.pulse(0.5), E.glow(1), E.ring, E.drop(5));
+""")
+    assert out[0] == pytest.approx([0, 2, 10, 0, 0, 0])
+    assert out[1] == pytest.approx([11, 2, 0, 1, 0, 0], abs=1e-9)          # a quarter turn at 0.5 rad/s
+    start, third, end, past, middle = out[2:7]
+    assert start == pytest.approx([0, 0, 0]) and third == pytest.approx([10, 0, 0]) and end == pytest.approx([0, 10, 0])
+    assert past == end and middle == pytest.approx([2, 1, 0])                  # through every point; clamped; straight for two
+    mid, last = out[7:9]
+    assert len(mid) == 6 and mid[:3] == pytest.approx([11.25, 5, 0]) and mid[4] > mid[1]
+    assert last[:3] == pytest.approx([0, 10, 0]) and last[3] < 0                # past the end: on in its direction (-x)
+    before, held, at, after, early, gliding, last_moment, cut = out[9:17]
+    assert before["role"] == "intro" and before["base"] == 0 and held["base"] == 0 and at == {"at": 4, "role": "drop", "base": 0xff8000} and after["role"] == "drop"
+    assert early["base"] == 0 and 0 < gliding < 0xff8000 and gliding >> 16 == 128 and last_moment >> 16 > 250 and cut == 0xff8000
+    pulse, glow, before_drop, after_drop, ring, glints, pitches, no_pulse, level, no_ring, no_drop = out[17:28]
+    assert pulse == pytest.approx(1.25) and glow == pytest.approx(1) and before_drop == 0 and after_drop == pytest.approx(np.exp(-1))
+    assert ring is True and glints == 1 and pitches == [60, 64, 0]
+    assert no_pulse == 0 and level == 0.25 and no_ring is None and no_drop == 0
+
+
 def test_three_kit_geometry_and_its_stage(tmp_path: Path) -> None:
     out = _run_in_node(tmp_path, """
 out.push(err(() => new K.Glow(4)), err(() => K.polyhedronEdges("sphere")));

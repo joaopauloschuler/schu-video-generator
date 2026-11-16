@@ -40,6 +40,55 @@ export function keyframes(keys, t) {
 /** One smooth move from point a to point b (arrays) as u goes from 0 to 1 (quintic ease, no stop in the middle). */
 export const glide = (a, b, u) => a.map((v, k) => mix(v, b[k], smootherstep(u)));
 
+// ---------- camera paths (Step 359) ----------
+/** The camera circling `centre` at song time T: [x, y, z, lx, ly, lz] for three-kit's aimCamera(...x).
+ * radius, height (above the centre), speed (radians a second; negative turns the other way), phase
+ * (the angle at T = 0), bob (how far the height swings, once every two turns). From T alone, so the
+ * same T gives the same place on both sides of a cut. */
+export function orbit(T, {centre = [0, 0, 0], radius = 20, height = 3, speed = 0.05, phase = 0, bob = 0} = {}) {
+  const a = phase + speed * T;
+  return [centre[0] + Math.sin(a) * radius, centre[1] + height + bob * Math.sin(a * 0.5), centre[2] + Math.cos(a) * radius, centre[0], centre[1], centre[2]];
+}
+/** The point at u (0..1, clamped) on a smooth path through every one of `points` ([[x, y, z], ...], two
+ * or more): a Catmull-Rom spline, one segment per pair, the ends continued in their own direction. */
+export function pathPoint(points, u) {
+  const n = points.length - 1, s = clamp(u) * n, i = Math.min(n - 1, Math.floor(s)), f = s - i;
+  const at = (k) => k < 0 ? points[0].map((v, j) => 2 * v - points[1][j]) : k > n ? points[n].map((v, j) => 2 * v - points[n - 1][j]) : points[k];
+  const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+  return p1.map((_, k) => 0.5 * (2 * p1[k] + (p2[k] - p0[k]) * f + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * f * f + (3 * p1[k] - p0[k] - 3 * p2[k] + p3[k]) * f * f * f));
+}
+/** A flight along the path through `points` at u (0..1): [x, y, z, lx, ly, lz], looking at the point
+ * `ahead` further along it (beyond the end: on along the last segment's direction). */
+export function flyThrough(points, u, ahead = 0.05) {
+  const p = pathPoint(points, u), v = u + ahead;
+  const q = v <= 1 ? pathPoint(points, v) : pathPoint(points, 1).map((e, k) => e + (e - pathPoint(points, 1 - (v - 1))[k]));
+  return [...p, ...q];
+}
+
+// ---------- a colour script (Step 359) ----------
+const HEX = /^#[0-9a-f]{6}$/i;
+const channels = (c) => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+/** A colour script: `stops` [{at: song seconds, base: "#rrggbb", ...}, ...] sorted by `at` (as `vidgen music
+ * plan` writes them in data.script). Returns (T) => the stop in force at T (the last at or before it; the
+ * first before any) with its "#rrggbb" values as numbers (0xrrggbb, for three.js's Color or three-kit's
+ * color). With glide > 0 the colours ease into the next stop's over the `glide` s before it, so they
+ * still change exactly at the stop (a cut on a bar line) and never across it. */
+export function colourScript(stops, glide = 0) {
+  const parsed = stops.map((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, typeof v === "string" && HEX.test(v) ? parseInt(v.slice(1), 16) : v])));
+  return (T) => {
+    let i = 0;
+    while (i + 1 < parsed.length && parsed[i + 1].at <= T + 1e-6) i++;
+    const a = parsed[i], b = parsed[i + 1];
+    if (!(glide > 0) || !b || T < b.at - glide) return a;
+    const u = smoothstep(b.at - glide, b.at, T), out = {...a};
+    for (const k of Object.keys(a)) if (k !== "at" && typeof a[k] === "number" && typeof b[k] === "number" && typeof stops[i][k] === "string") {
+      const x = channels(a[k]), y = channels(b[k]);
+      out[k] = x.reduce((c, v, j) => (c << 8) | Math.round(mix(v, y[j], u)), 0);
+    }
+    return out;
+  };
+}
+
 // ---------- bars and beats ----------
 /** How many whole `length`s (a bar, a beat, a sixteenth, in seconds) have passed at T: robust to a T a
  * rounding error short of a bar line. */
@@ -114,4 +163,24 @@ export function signalLevel(music, track, T, release = 0.6) {
     if (after < release) v = Math.max(v, eventLevel(e, Math.min(T, e.end)) * (after > 0 ? 1 - after / release : 1));
   }
   return v;
+}
+
+// ---------- what a scene follows (Step 359) ----------
+/** The reactions a page drafted by `vidgen music plan` follows. `react` = {pulse, ring, glint, glow}: track
+ * names (data.react). Returns {song} (trackArrays of them) and functions of song time T: pulse(T) the
+ * strongest envelope of the pulse tracks (hitEnvelope, `decay` s; 0 without any) for brightness; glow(T)
+ * the loudest glow track (signalLevel, `release` s; without any, the measured level ctx.music.level(T));
+ * drop(T) a flash after each of `drops` (song seconds) fading over `flash` s; and ring (the first ring
+ * track's hits or null) and glints (the glint tracks' notes) for three-kit's shock rings and glints. */
+export function reactions(music, react = {}, {decay = 0.18, release = 1.2, drops = [], flash = 0.5} = {}) {
+  const pulse = react.pulse ?? [], ring = react.ring ?? [], glint = react.glint ?? [], glow = react.glow ?? [];
+  const song = trackArrays(music, {hits: [...new Set([...pulse, ...ring])], notes: glint});
+  return {
+    song,
+    pulse: (T) => pulse.reduce((v, n) => Math.max(v, hitEnvelope(song.hits[n], T, decay)), 0),
+    glow: (T) => glow.length ? glow.reduce((v, n) => Math.max(v, signalLevel(music, n, T, release)), 0) : music.level(T),
+    drop: (T) => drops.reduce((v, d) => T >= d - 1e-6 ? Math.max(v, Math.exp(-(T - d) / flash)) : v, 0),
+    ring: ring.length ? song.hits[ring[0]] : null,
+    glints: glint.map((n) => song.notes[n]),
+  };
 }
