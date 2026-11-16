@@ -223,55 +223,34 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
    This installs every Python package schu-video-generator uses: Manim, pydantic, PyYAML, PyAV, Kokoro
    with PyTorch (Python 3.10–3.12), Playwright, symusic, faster-whisper, fpdf2 and the MCP SDK
    (pre-built wheels; no compiler needed). You never install a Python package yourself.
-4. **Fonts**: nothing to install. schu-video-generator bundles Inter (sans), Source Serif 4 (serif) and
-   JetBrains Mono NL (code), all SIL Open Font License (see `THIRD_PARTY_NOTICES.md`). Any
-   installed font works too, e.g. `theme: {font: Segoe UI}`.
-5. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
+4. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
    a new terminal. schu-video-generator reads the key only from this variable and never writes it anywhere.
    With `voice: {provider: openrouter, model: ..., voice: ...}` narration goes through OpenRouter
-   instead and needs the **OpenRouter API key** of step 9 (`OPENROUTER_API_KEY`), not this one.
-6. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
+   instead and needs the **OpenRouter API key** of step 6 (`OPENROUTER_API_KEY`), not this one.
+5. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
    [MiKTeX](https://miktex.org/download) (it includes `dvisvgm`; allow it to install missing
    packages on the fly) and open a new terminal.
-7. PDF slide decks (`vidgen slides --format pdf`): nothing to install.
-8. `vidgen readback` with local speech to text: nothing to install (faster-whisper's first run
-   downloads the Whisper model from the Hugging Face Hub, ~500 MB
-   for `small`).
-9. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
+6. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
    `setx OPENAI_API_KEY your_key`, or, with `imagegen: {provider: openrouter, model: ...}`, an
    **OpenRouter API key** (from <https://openrouter.ai/keys>), `setx OPENROUTER_API_KEY your_key`;
    then open a new terminal. Each is read only from its variable, never written anywhere. The
    same OpenRouter key voices the narration with `voice: {provider: openrouter, ...}`.
-10. `vidgen mcp` (the MCP server for AI agents): nothing to install.
-11. Free local narration (`voice: {provider: kokoro}`): nothing more to install — PyTorch
-    (Windows wheels from PyPI are CPU-only, ~250 MB), the `kokoro` package and its phonemizer come
-    with the plain install. **Python 3.10–3.12**: the `kokoro` package declares no support for 3.13
-    yet, so make this virtual environment with `py -3.12 -m venv .venv` (on 3.13 it is left out
-    and `vidgen tts` says so). No API key. The first `vidgen tts` downloads
-    the model from Hugging Face (`kokoro-v1_0.pth`, 327 MB, plus ~0.5 MB per voice) into
-    `%USERPROFILE%\.cache\huggingface\hub` (set `HF_HOME` to move it), and for English voices
-    spaCy's small English model (13 MB, installed with pip); after that it works offline.
-    **espeak-ng** (Kokoro's pronunciation for Spanish, French, Hindi, Italian and Portuguese, and
-    for English words missing from its dictionary) comes inside the `espeakng-loader` wheel, and
-    kokoro loads that copy: nothing else to install. If `vidgen tts` says espeak-ng cannot be
-    loaded, reinstall schu-video-generator; installing espeak-ng itself (`espeak-ng.msi` from <https://github.com/espeak-ng/espeak-ng/releases>) only
-    helps older kokoro / misaki versions, which find it through the environment variable
-    `PHONEMIZER_ESPEAK_LIBRARY=C:\Program Files\eSpeak NG\libespeak-ng.dll`. Japanese voices are not
-    available: `pyopenjtalk` has no pre-built release and would need a C++ compiler, so use
-    another voice provider for Japanese.
-12. Composed music (music written as notes and played with real instruments, Phase N): symusic
-    0.5.9 comes with the plain install. The SoundFont it plays with,
-    GeneralUser GS 2.0.3 (32.3 MB, free for commercial use), is downloaded on first use into
-    `%LOCALAPPDATA%\vidgen\soundfonts` and checked against its SHA-256; `vidgen soundfont fetch`
-    downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
-    Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
-    by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
-13. Optional, only for `3d` and `web` scenes (headless Chromium, Phases AI and AK): the plain install
-    brings Playwright; `py -m playwright install chromium` downloads the browser (~150 MB, once).
-    three.js itself ships with schu-video-generator (the core and a chosen set of add-ons for `web`
-    scenes: glTF loading, environment lighting, bloom, HTML labels, thick lines, rounded boxes, SVG
-    shapes, orbit controls), and so do anime.js, Motion, D3, Chart.js and lottie-web for `web`
-    scenes; nothing is fetched while rendering.
+7. Optional, for free local narration (`voice: {provider: kokoro}`): use **Python 3.10–3.12** for
+   the virtual environment (`py -3.12 -m venv .venv`), because the `kokoro` package does not
+   support 3.13 yet. The first `vidgen tts` downloads the model from Hugging Face
+   (`kokoro-v1_0.pth`, 327 MB, plus ~0.5 MB per voice) into `%USERPROFILE%\.cache\huggingface\hub`
+   (set `HF_HOME` to move it). If `vidgen tts` says espeak-ng cannot be loaded, reinstall
+   schu-video-generator. Japanese voices are not available.
+8. Optional, for composed music played with real instruments: the GeneralUser GS 2.0.3 SoundFont
+   (32.3 MB, free for commercial use) is downloaded on first use into
+   `%LOCALAPPDATA%\vidgen\soundfonts`; `vidgen soundfont fetch` downloads it now, and
+   `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
+   Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
+   by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
+9. Optional, only for `3d` and `web` scenes: the headless Chromium browser,
+   `py -m playwright install chromium` (~150 MB, once).
+10. Optional, for `vidgen readback` with local speech to text: the first run downloads the Whisper
+    model from the Hugging Face Hub (~500 MB for `small`).
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
@@ -305,7 +284,7 @@ export OPENAI_API_KEY=your_key                # generated pictures (vidgen image
 export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter and/or voice.provider: openrouter
 
 # 6. Optional: free local narration with Kokoro (voice.provider: kokoro); Python 3.10-3.12 only
-sudo apt install espeak-ng                    # optional fallback: kokoro uses the copy bundled in espeakng-loader
+sudo apt install espeak-ng                    # only if vidgen tts says espeak-ng cannot be loaded
 
 # 7. Optional: composed music; the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
 vidgen soundfont fetch                        # or let the first composed render download it
@@ -314,8 +293,7 @@ vidgen soundfont fetch                        # or let the first composed render
 python -m playwright install chromium         # add --with-deps if Chromium's system libraries are missing
 ```
 
-Fonts are bundled, so there is nothing to install for them. Other distributions need the same
-pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
+Other distributions need the same pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
 `sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
 terminal needs `source .venv/bin/activate` again before running `vidgen`.
 (macOS keeps the SoundFont in `~/Library/Caches/vidgen`).
@@ -325,10 +303,8 @@ terminal needs `source .venv/bin/activate` again before running `vidgen`.
 install downloads about 3.3 GB (about 3 GB of it PyTorch, `triton` and the `nvidia-*` packages); with
 an NVIDIA GPU, `voice: {device: cuda}` uses them. The first `vidgen tts` downloads the model from Hugging Face (`kokoro-v1_0.pth`,
 327 MB, plus ~0.5 MB per voice) into `~/.cache/huggingface/hub` (`HF_HOME` moves it) and, for
-English, spaCy's `en_core_web_sm` (13 MB, with pip); later runs need no network. espeak-ng comes
-bundled in the `espeakng-loader` wheel; `sudo apt install espeak-ng` does no harm and is the
-fallback named by schu-video-generator's error if the bundled library cannot be loaded. Japanese
-voices are not available (`pyopenjtalk` needs a C++ compiler); Chinese voices come with the plain install.
+English, spaCy's `en_core_web_sm` (13 MB, with pip); later runs need no network. If `vidgen tts`
+says espeak-ng cannot be loaded, `sudo apt install espeak-ng`. Japanese voices are not available.
 
 ### macOS
 
