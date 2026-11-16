@@ -24539,7 +24539,8 @@ its top level failed in about one run in three with `did not become ready within
 - **The bow.** Rosin noise shaped by the body, in bursts once per period of the note, following
   the players' level (3.5 % of the tone, twice that in a tremolo); a scratch of 12–24 ms where a
   stroke begins when the `attack` is under 0.15 s (and always in a spiccato), with a short
-  overshoot; both scaled by `accent` (0–2) and `bow` (0–4). A sustained note starts and ends
+  overshoot; both scaled by `accent` (0–2) and `bow` (0–4); since Step 366 a held note's hiss
+  stays under the tone's own highs (§121.8). A sustained note starts and ends
   with fewer upper harmonics (a cross-fade to a darker spectrum while its level is under the
   full level); its release lasts `ring` seconds (0.25 by default), so notes that follow each
   other without a rest overlap: the nearest thing to a legato until Step 346.
@@ -25434,7 +25435,7 @@ The owner asked for the published film as an example, source only. `examples/esc
   no range warnings, the event counts the exporter had, the page reads only `ctx.music` and every
   track it is given exists.
 
-## 121. Music-video tools (Phase AM, Steps 358–364)
+## 121. Music-video tools (Phase AM, Steps 358–366)
 
 Three music films were made as `web` scenes and are now examples (`examples/parallel-space`,
 `examples/escapement`, `examples/signal-fire`; with `examples/three-finish`). Each rebuilt the
@@ -25449,6 +25450,7 @@ same things by hand. The owner chose four features (2026-11-16), one step each, 
 | 362 | Critical review with fixes; docs | §121.5 |
 | 363 | The owner heard a "sht" at every `d`: its burst made soft | §121.6 |
 | 364 | Escapement's opening title and end card for every film: `vidgen/title-cards`, COOKBOOK-3D section 12 | §121.7 |
+| 366 | The owner heard a breathy "fo" in Parallel Space's `swell` (soft, slow viola notes): the strings' rosin hiss kept under the tone's highs | §121.8 |
 
 Rules of the phase: the films must look the same (stills compared before and after) and their
 scores synthesize to the same audio; nothing is rendered that a still or a test can show.
@@ -25981,3 +25983,50 @@ torus knot) with `titleCard` at 7 s (640x360) and `endCard` at 9 s (360x640, por
 did-you-mean; timing and layout in 16:9, 21:9 and 9:16 in Node; the docs; one slow Chromium test
 drawing a page with both cards twice at 320x180 and 180x320: same pixels, nothing before the
 title, the title in the left half, the end card later).
+
+### 121.8 The strings without the "fo" of a slow, soft note (Step 366)
+
+**Why.** Listening to Parallel Space the owner heard a breathy sound, "like an air instrument",
+that went only when the track `swell` was silenced (v8 silenced it in heart / heart2): single
+viola notes in octave 3, `attack: 0.6, brightness: 0.25, ring: 1.2`, 5 players, in a hall.
+
+**Measured** (a note with `bow: 1` minus the same note with `bow: 0`, 25 ms frames; scripts in
+`/home/claude/work/scratch/am366/tools/`): the rosin hiss (§120.5: 3.5 % of the tone, shaped by
+the body from half the bridge hill to 12 kHz) followed the tone's level, so as a whole it stood
+30 dB under the tone, as in every note. But a dark tone has little above 4 kHz, and a note that
+swells in or dies away is darker still (the cross-fade to the spectrum 0.3 darker): there the
+hiss stood alone. In the `swell` note it was above 4 kHz 8 dB over the tone at the median frame
+and up to 25 dB over it while swelling in and dying away (35 dB at `brightness: 0`, 42 dB for
+basses at 0.3): a breath with the note's envelope, drawn out by the hall's reverb, and in a
+section it came 25 ms before the tone. One player or five: the same (+24 / +25 dB);
+`brightness: 0.5` with the same slow attack: +9 dB at the ends, under the tone while held. A
+real bowed string's noise is well under its harmonics, mostly at the bow change, and lower
+against the tone at softer, darker (sul tasto) bowing; the model did the opposite.
+
+**Fix** (`strings.py` `_rosin_room`, applied in `_bow_noise` to held and tremolo notes; the
+held player also returns `bitten`, its share of the full tone per sample, a section's the
+players' mean): in each octave band of the hiss (from half the bridge hill up to 12 kHz) the
+hiss may stand out of the tone no more than it does in an ordinary note (`brightness` 0.5, or
+the note's own if brighter) at full bow. The limit is worked out from the note's spectra (its
+own and its darker one, mixed as `bitten` says, on a grid of 21 steps): one small table per
+note. The scratch at a bitten start, the spiccato and the pizzicato are not touched.
+
+| `swell` note (violas F#3, 5 players) | before | after |
+|---|---|---|
+| hiss above 4 kHz against the tone, worst frame / median | +25 / +8 dB | −7 / −15 dB |
+| hiss against the tone, whole note | −30.5 dB | −52 dB |
+| its first 150 ms | −32 dB | −62 dB |
+| the hiss comes within 20 dB of its peak | 25 ms before the tone | 100 ms after it |
+
+**What else changes.** An ordinary or bright note (`brightness` 0.5 or more) is the same while
+held at full bow; only its slow attack and its release, darker, lose a little hiss (about 1 dB
+of the noise's energy, 40–60 dB under the music). Spiccato and pizzicato: the same samples.
+Soft dynamics (which lower `brightness`) and `brightness` under 0.5 have far less hiss: the
+Step 344 demos' "soft" 4–9 dB less above 2.5 kHz, "tasto" up to 22 dB. So every score that
+holds string notes changes a little: of the examples, `parallel-space` (v8: the `swell` still
+plays in dawn and coda; the WAV `06d2f7b4…` → `c00ba876…`) and `signal-fire` (`7a840620…` →
+`2622bd8f…`), by −51 and −48 dB of the piece; `escapement` has no strings and stays
+byte-identical (`271de0c6…4dc8`, rendered after the change). No test holds an audio hash of
+those scores (theirs hash the score file, unchanged). Tests: `tests/test_studio_strings.py`
+`test_a_slow_soft_swell_has_no_breath_above_its_tone` (fails on the old hiss) and
+`test_an_ordinary_note_keeps_its_rosin_at_full_bow`.

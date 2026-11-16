@@ -12,7 +12,7 @@ from vidgen.errors import VidgenError
 from vidgen.sfx import RATE
 from vidgen.studio import INSTRUMENTS, parse_music_score, patch_catalog, render_music_score
 from vidgen.studio.additive import HIGHEST_PARTIAL, read_tables, wavetables
-from vidgen.studio.strings import BASS, CELLO, STROKES, VIOLA, VIOLIN, bowed, response
+from vidgen.studio.strings import BASS, CELLO, STROKES, VIOLA, VIOLIN, _rosin_room, bowed, response
 
 STRINGS = ("violins", "violas", "cellos", "double_basses")
 SUSTAIN, SPICCATO, TREMOLO, PIZZICATO = (float(k) for k in range(4))
@@ -139,6 +139,47 @@ def test_attack_brightness_mute_and_release() -> None:
     for y in (plain, _note("cellos", G2, 0.3), _note("violins", A4, 0.2, stroke=SPICCATO), _note("double_basses", 55.0, 0.3, stroke=PIZZICATO), _note("violas", 220.0, 0.4, stroke=TREMOLO)):
         peak = np.abs(y).max()
         assert np.abs(y[0]).max() < 1e-6 * peak and np.abs(y[-1]).max() < 1e-4 * peak
+
+
+def test_a_slow_soft_swell_has_no_breath_above_its_tone() -> None:
+    """Step 366: Parallel Space's `swell` (violas, F#3, attack 0.6, brightness 0.25, ring 1.2) made
+    a "fo": the rosin hiss stood 1 to 27 dB over the dark tone above 4 kHz while it swelled in
+    and died away. The hiss is now held within the tone's highs (DESIGN.md §121.8)."""
+    swell = {"attack": 0.6, "brightness": 0.25, "vibrato": 10.0, "ring": 1.2, "accent": 0.0}
+    tone, played = (_mono(_note("violas", 185.0, 0.87, bow=bow, **swell)) for bow in (0.0, 1.0))
+    noise = played - tone
+    size = int(0.05 * RATE)
+    highs = np.fft.rfftfreq(size, 1 / RATE) >= 4000
+
+    def above_4k(y: np.ndarray, start: float) -> float:
+        part = y[int(start * RATE) : int(start * RATE) + size] * np.hanning(size)
+        return float(np.sum(np.abs(np.fft.rfft(part))[highs] ** 2))
+
+    swelling_and_dying = [*np.arange(0.0, 0.55, 0.05), *np.arange(0.9, 1.9, 0.05)]
+    worst = max(10 * math.log10(above_4k(noise, t) / above_4k(tone, t)) for t in swelling_and_dying)
+    assert worst < -3.0  # Step 344: +27 dB
+    assert 10 * math.log10(np.sum(noise**2) / np.sum(tone**2)) < -45.0  # Step 344: -33 dB
+    # the noise does not lead the tone: it comes within 20 dB of its peak no sooner, and in the
+    # note's first 150 ms (from 30 dB under the tone's peak) it stays far under the tone
+    tone_level, noise_level = _level(tone, 0.025), _level(noise, 0.025)
+    begins = int(np.argmax(tone_level > 10 ** (-30 / 20) * tone_level.max()))
+    assert np.argmax(noise_level > 0.1 * noise_level.max()) >= np.argmax(tone_level > 0.1 * tone_level.max())
+    first = slice(begins, begins + int(0.15 * RATE))
+    assert 10 * math.log10(np.sum(noise[first] ** 2) / np.sum(tone[first] ** 2)) < -45.0  # Step 344: -32 dB
+
+
+def test_an_ordinary_note_keeps_its_rosin_at_full_bow() -> None:
+    """The limit of Step 366 leaves a note at full bow with ``brightness`` 0.5 or more as it was;
+    it takes the hiss down only where the tone is darker (a dark note, a swell, a release)."""
+    for name, body, freqs in (("violins", VIOLIN, (196.0, 440.0, 2093.0)), ("violas", VIOLA, (130.8, 293.7, 1318.5)), ("cellos", CELLO, (65.4, 196.0, 880.0)),
+                              ("double_basses", BASS, (32.7, 55.0, 392.0))):
+        s = {k: v.default for k, v in INSTRUMENTS[name].settings.items()}
+        for freq in freqs:
+            for change in ({}, {"mute": 1.0}, {"stroke": TREMOLO}):
+                room = _rosin_room(body, freq, s | change, np.array([0.0, 1.0]))
+                assert room[1] == 1.0 and room[0] < 1.0  # the release, darker, has less
+            assert np.all(_rosin_room(body, freq, s | {"brightness": 0.8}, np.array([0.0, 1.0])) == 1.0)  # a bright note's release is as dark as an ordinary note
+            assert _rosin_room(body, freq, s | {"brightness": 0.25}, np.array([1.0]))[0] < 0.3
 
 
 @pytest.mark.parametrize("name,freqs", [("violins", (196.0, 440.0, 1318.5, 2093.0)), ("violas", (130.8, 293.7, 1318.5)), ("cellos", (65.4, 196.0, 880.0)),

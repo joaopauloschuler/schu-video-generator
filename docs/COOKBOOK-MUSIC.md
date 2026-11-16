@@ -432,7 +432,7 @@ measurement: nobody has listened yet.
 | `length` | 0.07 | spiccato: seconds the bow is on the string; 0.05 very short, 0.15–0.25 staccato |
 | `speed` | 13 | tremolo: strokes a second (6–20) |
 | `decay` | 1 | spiccato, pizzicato: how long the string rings, times its natural time |
-| `bow` | 1 | rosin noise and scratch (0 none) |
+| `bow` | 1 | rosin noise and scratch (0 none); a held note's hiss stays under its tone's highs, so dark and swelling notes have less |
 | `mute` | 0 | 1: con sordino (veiled) |
 | `detune` | 8 | cents between the players of a section |
 | `ring` | 0.25 | seconds of release; notes without a rest between them overlap by it |

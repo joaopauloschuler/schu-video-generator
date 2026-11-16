@@ -5,9 +5,16 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–365
+## Steps 193–366
 
-### Music-video tools (Phase AM, Steps 358–365)
+### Music-video tools (Phase AM, Steps 358–366)
+
+- **Strings without a breath in slow, soft notes** (Step 366): a soft held note of the strings
+  (low `brightness`, a soft dynamic, or a slow `attack` that swells in) had its bow's rosin hiss
+  standing over the dark tone in the highs, a breathy "fo" with the note's envelope (Parallel
+  Space's `swell`). The hiss now stays under the tone's own highs, as in an ordinary note: about
+  21 dB less in such notes. Spiccato, pizzicato and notes held at ordinary or bright bow sound as
+  before (their releases a hair less hiss); scores with held string notes change a little.
 
 - **Parallel Space v8** (Step 365): `examples/parallel-space` is now the version the owner
   approved. An opening title and an end card from `vidgen/title-cards` (the light in the right

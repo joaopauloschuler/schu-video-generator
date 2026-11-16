@@ -2168,6 +2168,11 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [x] `examples/parallel-space` updated to v8 from `/home/claude/work/ps8` (`video.yaml`, the score, `extensions/ps.js`; `.gitignore` and `webcut.py` unchanged): opening title and end card via `vidgen/title-cards`, the score's silent parts, output `parallel_space_v8`
 - [x] Example README for visitors (the opening and end card, the silent parts, render cost 0.5–1.0 s a frame); README example entry; `tests/test_parallel_space_example.py` (v8 score SHA-256, `vidgen/title-cards`, output name)
 
+### Step 366 — The strings' "fo" in slow, soft notes (owner's bug report)
+- [x] Measured first (`swell` alone and variants: bow off, 1 / 5 players, attack, brightness, a dry and a reverberant copy): the rosin hiss 8 dB over the tone above 4 kHz at the median frame and up to 25 dB while a dark note swells in or dies away; the cause: the hiss followed the tone's level, not its highs — DESIGN §121.8
+- [x] Fix: `_rosin_room` keeps a held note's hiss, octave band by octave band, under the tone as in an ordinary note at full bow; spiccato and pizzicato the same samples; Escapement byte-identical (`271de0c6…4dc8`); the parallel-space and signal-fire scores change a little (hashes in DESIGN §121.8)
+- [x] Regression tests (`test_a_slow_soft_swell_has_no_breath_above_its_tone`, fails on the old hiss; `test_an_ordinary_note_keeps_its_rosin_at_full_bow`); the seven Step 344 demos and two `swell` clips before / after in `/home/claude/work/scratch/am366/demo/`; docs: DESIGN §120.5, §121.8, COOKBOOK-MUSIC (`bow`), CHANGELOG
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
