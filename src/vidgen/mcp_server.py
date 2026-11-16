@@ -74,7 +74,8 @@ scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_i
 poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats, `still` single frames of a web \
 scene's page at exact times without rendering it; \
 `music_template` / `music_patches` / `music_render` / `music_check` write and check original music as score files \
-(assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe). A person shaping music in \
+(assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe), `music_plan` a music \
+video's storyboard and draft from one, `motion_check` watches a rendered video for flicker and black frames. A person shaping music in \
 `vidgen studio` may hand you a session with listening notes: `studio_sessions` -> `studio_read` -> `studio_check` -> \
 `studio_propose` (one line per note; `studio_variations` gives four variations to start from). Every \
 tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
@@ -705,6 +706,22 @@ def build_server(root: Path) -> Any:
         doc = await call(ctx, args_of(["music"], ["check", piece(source, "source")], options), heavy=True)
         picture = (doc.get("files") or {}).get("spectrogram")
         return answer(doc, [Path(picture)] if picture and images else [])
+
+    @tool("A music video's storyboard from a score file (nothing synthesised): cuts on bar lines (a scene per section, "
+          "long ones split on phrase lines, short ones joined), a colour per section, the moments (drops, breaths, risers) "
+          "and the tracks each scene should react to. out=DIR also writes a draft project there: video.yaml of web_cut "
+          "scenes on those bars, the score, a starter page per scene on vidgen/three-kit and vidgen/music-time (validated).", writes)
+    async def music_plan(
+        ctx: Context,
+        score: Annotated[str, Field(description="the score file, relative to the root (e.g. assets/music/my_theme.yaml), or a project "
+                                                "piece's name (my_theme) or a score bed's (tidewater)")],
+        out: Annotated[str | None, Field(description="folder for the draft project, relative to the root (none: the plan only)")] = None,
+        force: Annotated[bool, Field(description="overwrite the draft's files if they exist")] = False,
+        max_scene: Annotated[float, Field(gt=0, description="split a section longer than this many seconds on a phrase line")] = 16.0,
+        min_scene: Annotated[float, Field(gt=0, description="join a section shorter than this many seconds to the one before")] = 5.0,
+    ) -> Any:
+        options = {"out": str(where(out, "out")) if out else None, "force": force, "max-scene": max_scene, "min-scene": min_scene}
+        return answer(await call(ctx, args_of(["music"], ["plan", piece(score, "score")], options)))
 
     @tool("Measure an audio file, or a project's audio-only render (render with audio_only=true), for agents that cannot "
           "listen: loudness (LUFS), true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per "

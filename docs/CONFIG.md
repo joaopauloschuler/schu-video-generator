@@ -7080,7 +7080,7 @@ by hand; those films now import them.
 | `hitEnvelope(track, T, decay)` | a drum's light: each of its last three hits its gain (at most 1.25) falling by `exp(−age / decay)`, the largest; 0 for a missing track |
 | `hitCount(track, T)`, `hitAge(track, T)` | hits so far; seconds since the last (1e9 before the first) |
 | `noteAt(track, T)` → `{i, p, age, d}` or `null`, `noteEnvelope(track, T, decay)`, `noteLevel(track, T, attack=0.05, release=0.5)` | the note playing or played last; a glint on each note; a held note's level |
-| `melody(track, T, glide=0.07)` → `[pitch, level]` | the pitch gliding from the note before (when it ended under 0.4 s earlier) |
+| `melody(track, T, glide=0.07)` → `[pitch, level]` | the pitch gliding from the note before (when it ended under 0.4 s earlier); the level as `noteLevel` with a 0.05 s attack that rises from the level the note before has at the new note's start (a legato line keeps its light) and a 0.45 s release |
 | `eventLevel(event, T)`, `signalLevel(ctx.music, track, T, release=0.6)` | on `ctx.music`'s events: an event's level through its hairpin times its accent; how strongly a track sounds (its loudest event of the last 12 s still sounding, faded over `release`) |
 | `orbit(T, {centre, radius=20, height=3, speed=0.05, phase=0, bob=0})` → `[x, y, z, lx, ly, lz]` | the camera circling `centre` at `speed` radians a second, its height swinging by `bob` (Step 359); spread into `aimCamera(...orbit(T, …))` |
 | `pathPoint(points, u)`, `flyThrough(points, u, ahead=0.05)` → `[x, y, z, lx, ly, lz]` | a smooth path through every point (Catmull-Rom, u from 0 to 1, the ends continued); a flight along it looking `ahead` further on |
@@ -16871,7 +16871,9 @@ back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`,
 `out`), `music_template` (`bed`, `out` default `assets/music/<bed>.yaml`, `force`; no `bed`: the
 list), `music_patches`, `music_render` (`score`: a path or a project piece's or bed's name, `out`
 default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` given the same way,
-`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `audio_check`
+`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `music_plan`
+(`vidgen music plan`: `score` given as for `music_render`, `out` the draft's folder (none: the plan only), `force`,
+`max_scene`, `min_scene`), `audio_check`
 (`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `motion_check` (`vidgen motion check`: `target`, `source`,
 `variant`, `preview`, `draft`, `threshold`, `fail_on` default `never`, `out` default `build/mcp/motion` for a file, `images`,
 `image_offset`: returns the contact strips as pictures), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the

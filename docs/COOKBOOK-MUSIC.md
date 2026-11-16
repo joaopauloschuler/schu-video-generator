@@ -838,7 +838,9 @@ example of both: [examples/signal-fire](../examples/signal-fire/README.md) (each
 reads, and what it does with it, is listed at the top of its script). To start a music video from a score
 instead of from an empty page: `vidgen music plan assets/music/my_song.yaml --out my_video`
 drafts the scenes on the score's bar lines with a colour and a starter page each ([COOKBOOK-3D.md,
-section 10](COOKBOOK-3D.md#10-from-a-score-to-a-music-video)).
+section 10](COOKBOOK-3D.md#10-from-a-score-to-a-music-video)); once rendered, `vidgen motion check
+my_video` watches it for black frames, flicker and one-frame flashes ([section
+11](COOKBOOK-3D.md#11-checking-a-music-video)).
 
 ## 13. Every instrument at a glance
 

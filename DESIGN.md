@@ -25445,7 +25445,7 @@ same things by hand. The owner chose four features (2026-11-16), one step each, 
 | 359 | A storyboard from the music: `vidgen music plan` (cut points, a colour per section, the events each scene reacts to, a draft project of `web_cut` scenes with starter pages) | §121.2 |
 | 360 | A "watch it" motion check: `vidgen motion check` (blank frames, flashes, flicker, popping, strobing, frozen stretches, jumps at cuts; a contact strip per finding) | §121.3 |
 | 361 | More choir: syllables, a soloist, a whispered texture, a syllable per note | §121.4 |
-| 362 | Critical review with fixes; docs | |
+| 362 | Critical review with fixes; docs | §121.5 |
 
 Rules of the phase: the films must look the same (stills compared before and after) and their
 scores synthesize to the same audio; nothing is rendered that a still or a test can show.
@@ -25814,3 +25814,54 @@ two vowels; nothing is sampled, nothing spells a language.
   each harmonic's level but is not a resonance sweeping continuously (steps of 6–25 ms, finer
   than the 25 ms frames that measured them). The soloist is still one synthetic voice: brighter
   and more alive, not a recorded singer. A whispered `m` or `n` is a quiet noise only.
+
+### 121.5 Review of Steps 358–361 (Step 362)
+
+Fixed:
+
+- **`melody` dimmed the light on every legato note.** `vidgen/music-time`'s `melody(track, T)`
+  restarted each note's level at 0 with a 0.05 s attack, so a frame that fell just after a note
+  start of a line held without a gap was up to 25 % darker than its neighbours (the one-frame
+  dips `vidgen motion check` listed on the `hook` notes of Parallel Space's `05_heart`; luma
+  0.54 → 0.41 → 0.50 in a 320x180 still at 11.23 / 11.27 / 11.30 s). The attack now rises from the
+  level the note before has at the new note's start (held: 1; released: its 0.45 s decay); a
+  first note, or one after a long rest, rises from 0 or nearly so as before. Only frames within
+  0.05 s of a note start change (and the ribbon `updateRibbon`, which samples the melody over
+  9 s, loses its darker gap at each note: 38–40 dB PSNR elsewhere in `05_heart`). After: the
+  same frames read 0.552 / 0.552 / 0.554, and 12.93–13.07 s (two dips before: 0.465, 0.561)
+  0.612–0.618. `noteLevel` keeps starting each note from 0 (a swell per note, as the films use
+  it). Escapement, Signal Fire and Three Finish do not call `melody`.
+- **The range warning crashed on a note above MIDI 127 of an instrument without a written
+  range** (`studio/render.py` `range_warnings`: `assert written is not None`): a `bell` at
+  `octave: 8, transpose: 36` stopped `render_music_score(score, warnings)`. Only instruments with
+  a written range are checked now (the 20 Hz–12 kHz limit still reports the others). This was
+  the cause of the five slow `tests/test_studio_stems.py` failures since Step 346; they pass. No
+  sample changes (the function builds strings); the Escapement score renders to `271de0c6…4dc8`
+  as before.
+- **`vidgen motion check` could hang on a damaged file**: ffmpeg's stderr went to a pipe that
+  was read only after the frames, so more than a pipe's worth of decode errors (4 KB on Windows)
+  would block both programs. It goes to a temporary file now.
+- **No MCP tool for `vidgen music plan`**: `music_plan` (`score` given as `music_render`'s,
+  `out`, `force`, `max_scene`, `min_scene`) runs the command and returns its document.
+- **Docs**: the guide's `music_data` example asked `tidewater` for a `hook` track it does not
+  have (now `melody`); `web/music.py`'s docstring named the deleted `make_ps_audio.py`;
+  `morph` is ignored with a syllable (now said in the setting's own description, as CONFIG
+  already said); the README's Features list has a "Music videos" item naming the kit, the plan,
+  the motion check and the choir's syllables, soloist and whisper; the install sections and
+  Features no longer say what does not need installing; CHANGELOG lines that only said the
+  instruments were "measured, not listened to" are gone; COOKBOOK-3D section 9 says Parallel
+  Space's stills are 53.5 dB+ (not identical) after its move to `music_data`, COOKBOOK-MUSIC
+  section 12 points to COOKBOOK-3D section 11.
+
+Looked at and left:
+
+- `morph` with a syllable stays a documented no-op rather than an error: a track may set
+  `morph` and a note mark switch to a syllable later; an error there would need cross-setting
+  checks per note that the score reader does not have.
+- Cache keys: `vidgen/music-time` and `vidgen/three-kit` are served files recorded in a page's
+  loaded files (three-kit imports music-time, so both are recorded), as `vidgen/three-finish`
+  is; a page that imports neither keeps its key. This step's `music-time.js` change re-keys the
+  examples' scenes once.
+- Determinism: the plan's seeds come from the scene id (a sum of character codes, not Python's
+  salted `hash()`); the starters and the kit draw seeded numbers only (`rng`, `hash`).
+

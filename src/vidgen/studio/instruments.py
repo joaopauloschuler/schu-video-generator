@@ -599,7 +599,8 @@ INSTRUMENTS: dict[str, Instrument] = {
                         breath=(1.0, 0.0, 4.0, "level of the breath in the voices (1 natural, 0 none, 3 airy)"),
                         detune=(10.0, 0.0, 30.0, "cents the singers of a section are apart"),
                         morph=(0.0, 0.0, float(len(MORPHS) - 1), "the vowel a held note turns into over its middle (none: it keeps its vowel): `vowel: mm, "
-                               "morph: aah` opens from a hum", MORPHS),
+                               "morph: aah` opens from a hum; with `syllable: vowel` only (a syllable sings its own vowels: "
+                               "`syllable: mm-ah` for a hum that opens)", MORPHS),
                         ring=(0.4, 0.05, 3.0, "seconds of the release after its held steps (notes that follow without a rest overlap)"),
                         glide=(0.08, 0.01, 1.0, _GLIDE),
                         touch=_TOUCH,

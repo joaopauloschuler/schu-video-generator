@@ -137,14 +137,19 @@ export function noteEnvelope(track, T, decay) { const q = noteAt(track, T); retu
 /** How loud a held note sounds at T: a linear attack over `attack` s, held for its length, then exp(-after / release). */
 export function noteLevel(track, T, attack = 0.05, release = 0.5) { const q = noteAt(track, T); if (!q) return 0; return q.age < q.d ? clamp(q.age / attack) : Math.exp(-(q.age - q.d) / release); }
 /** The melody's [pitch, level] at T: the pitch glides from the note before (when it ended under 0.4 s
- * earlier) over `glide` s; the level as noteLevel with a 0.45 s release. Before the first note: [first pitch or 69, 0]. */
+ * earlier) over `glide` s; the level as noteLevel with a 0.45 s release, a note's 0.05 s attack rising
+ * from the level the note before has at its start (a line of notes keeps its light). Before the first
+ * note: [first pitch or 69, 0]. */
 export function melody(track, T, glide = 0.07) {
   const i = track ? lastIndex(track.t, T) : -1;
   if (i < 0) return [track && track.p.length ? track.p[0] : 69, 0];
   const age = T - track.t[i], prev = i > 0 && track.t[i] - (track.t[i - 1] + track.d[i - 1]) < 0.4 ? track.p[i - 1] : track.p[i];
   const p = mix(prev, track.p[i], smoothstep(0, glide, age));
-  const amp = age < track.d[i] ? clamp(age / 0.05) : Math.exp(-(age - track.d[i]) / 0.45);
-  return [p, amp];
+  if (age >= track.d[i]) return [p, Math.exp(-(age - track.d[i]) / 0.45)];
+  const rise = clamp(age / 0.05);
+  if (rise >= 1 || i === 0) return [p, rise];
+  const before = track.t[i] - track.t[i - 1], from = before < track.d[i - 1] ? clamp(before / 0.05) : Math.exp(-(before - track.d[i - 1]) / 0.45);
+  return [p, from + (1 - from) * rise];
 }
 
 // ---------- reactions (ctx.music events) ----------

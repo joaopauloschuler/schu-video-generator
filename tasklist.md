@@ -2134,7 +2134,7 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [x] `vidgen music plan SCORE [--out DIR] [--force] [--max-scene S] [--min-scene S] [--json]`: roles per section (name or energy), cuts on bar lines (long sections split on the phrase line where the material changes, short ones joined; whole frames), drops / breaths / silent bars / risers, a colour script, the tracks each scene follows (pulse, ring, glint, glow); printout and `--json` — DESIGN §121.2
 - [x] `--out`: a validated draft project: `video.yaml` (`music:` the score, `web_cut` scenes with `music_data` and their plan in `data:`), `extensions/web_cut.py`, a starter page per scene (seven looks, `data/web/starters/`, on three-kit / music-time / three-finish); `vidgen/music-time` gains `orbit`, `pathPoint`, `flyThrough`, `colourScript`, `reactions` (the Step 358 leftovers)
 - [x] The film scores' plans against their real cuts: `escapement` and `signal-fire` the same, `parallel-space` every cut plus two (DESIGN §121.2 table); docs: CONFIG, README, guide, COOKBOOK-3D section 10, COOKBOOK-MUSIC pointer, CHANGELOG
-- [ ] Not done: no draft rendered (stills of the seven looks at 480x270 from a 22 s synthetic score only); no MCP tool for the plan; Windows / macOS not tried
+- [ ] Not done: no draft rendered (stills of the seven looks at 480x270 from a 22 s synthetic score only); ~~no MCP tool for the plan~~ (Step 362: `music_plan`); Windows / macOS not tried
 
 ### Step 360 — A "watch it" motion check
 - [x] `vidgen motion check FILE|PROJECT [--source auto|video|scenes] [--preview|--draft] [--variant] [--out DIR] [--no-strips] [--threshold NAME=VALUE] [--fail-on] [--json]` (beside `vidgen audio check`): one ffmpeg decode at 160 px, per-frame luma / colour / histogram / 10 px block changes; blank frames (error inside a scene), flashes and drop-outs, flicker (beat-locked: info), pops (a still ring around them), strobing (period-2 alternation), frozen stretches, jumps at cuts; the score's hits and notes in video time mark reactions to the music as info — DESIGN §121.3
@@ -2149,7 +2149,9 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [ ] Not done: nobody has listened; consonants start on the step (not before it); only the consonants l, n, m and d; the studio has no control for syllables (marks are kept in the text); Windows / macOS not tried
 
 ### Step 362 — Review of Steps 358–361
-- [ ] Critical review with fixes; docs (guide, CONFIG, cookbooks, README feature list); tasklist leftovers
+- [x] Critical review with fixes (DESIGN §121.5): `melody`'s one-frame dip on each legato note fixed in `vidgen/music-time` (proved by 320x180 stills of PS `05_heart`); `range_warnings` crash on notes above MIDI 127 of instruments without a written range (the five failing slow `test_studio_stems.py` tests since Step 346) fixed; `vidgen motion check`'s ffmpeg stderr to a file (no pipe deadlock); MCP `music_plan` added (Step 359's leftover)
+- [x] Docs: the guide's `tidewater` example reads `melody` (no `hook` there); `web/music.py` docstring; `morph` with a syllable documented in the setting; README Features "Music videos" item and no "no install" notes; CHANGELOG without "measured, not listened to"; COOKBOOK-3D 9 and 11, COOKBOOK-MUSIC 12, `docs/COOKBOOK.md` index, CONFIG (`melody` row, MCP tool list)
+- [ ] Left: `morph` with a syllable is a documented no-op, not an error; the PS `afterglow` scene's `melody` fix is the same code as `heart`'s but no still was taken there; Windows / macOS not tried
 
 ---
 

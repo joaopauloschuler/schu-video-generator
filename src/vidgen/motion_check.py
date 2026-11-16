@@ -30,6 +30,7 @@ import dataclasses
 import difflib
 import math
 import subprocess
+import tempfile
 import time
 from collections import deque
 from collections.abc import Iterator, Sequence
@@ -205,19 +206,22 @@ def decode_frames(path: Path, width: int, ffmpeg: str | None = None) -> Iterator
     command = [ffmpeg or find_ffmpeg(), "-v", "error", "-nostdin", "-i", str(path), "-map", "0:v:0", "-vf", f"scale={w}:{h}:flags=area",
                "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
     size = w * h * 3
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert proc.stdout is not None and proc.stderr is not None
-    try:
-        while True:
-            data = proc.stdout.read(size)
-            if len(data) < size:
-                break
-            yield np.frombuffer(data, dtype=np.uint8).reshape(h, w, 3)
-    finally:
-        proc.stdout.close()
-        err = proc.stderr.read().decode("utf-8", "replace")
-        proc.stderr.close()
-        code = proc.wait()
+    # ffmpeg's messages go to a file, not a second pipe: a damaged file can log more than a pipe holds
+    # (4 KB on Windows) while the frames are read, and both programs would wait for each other
+    with tempfile.TemporaryFile() as log:
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=log)
+        assert proc.stdout is not None
+        try:
+            while True:
+                data = proc.stdout.read(size)
+                if len(data) < size:
+                    break
+                yield np.frombuffer(data, dtype=np.uint8).reshape(h, w, 3)
+        finally:
+            proc.stdout.close()
+            code = proc.wait()
+            log.seek(0)
+            err = log.read().decode("utf-8", "replace")
     if code != 0:
         raise VidgenError(f"ffmpeg could not decode {path}: {err.strip()[-400:]}")
 

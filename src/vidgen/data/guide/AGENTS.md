@@ -3386,7 +3386,7 @@ scenes:
   - id: drop
     type: web
     duration: 13.87
-    params: {script: extensions/space.js, music_data: true}   # or {bands: 32, tracks: [kick, hook]}
+    params: {script: extensions/space.js, music_data: true}   # or {bands: 32, tracks: [kick, melody]}
 ```
 
 ```js
@@ -3396,9 +3396,9 @@ export function frame(t, ctx) {
   const glow = 0.3 + 0.7 * m.level();      // 0..1: the whole music's loudness
   const thump = m.pulse("kick", 0.12);     // 1 at each kick, falling over 0.12 s (1.5 on an accent)
   const lows = m.low(), air = m.band(m.bandCount - 1), hit = m.onset();
-  const note = m.last("hook");             // the hook's latest note: {time, duration, pitch, dynamic, stroke, slur...}
+  const note = m.last("melody");           // the melody's latest note: {time, duration, pitch, dynamic, stroke, slur...}
   const hue = note ? (note.pitch % 12) / 12 : 0;
-  // m.hits("kick", T0, T1), m.notes("hook", T0, T1): the events starting in [T0, T1) (song seconds)
+  // m.hits("kick", T0, T1), m.notes("melody", T0, T1): the events starting in [T0, T1) (song seconds)
 }
 ```
 
@@ -3417,7 +3417,7 @@ export function frame(t, ctx) {
   `section(T?)`. An event has `time`, `duration`, `end`, `pitch` (MIDI; `pitches` for a chord),
   `instrument`, `dynamic` (dB of its mark, 0 unmarked), `gain` (1.5 an accent, 0.5 soft),
   `strength` (both together), `stroke` (`pizzicato`...), `slur`. A slurred note is a note of its
-  own with `slur: true`. `tracks: [kick, hook]` sends only those (a smaller page).
+  own with `slur: true`. `tracks: [kick, melody]` sends only those (a smaller page).
 - **Music that is not a score** (a music file, a bed made in code, composed music): the
   measurements only; `ctx.music.score` is `null`. A scene where no music plays reads silence and
   counts video time. A video without music cannot use `music_data` (`vidgen validate` says so).
@@ -3742,6 +3742,7 @@ look per role, on the kit above: `reactions(ctx.music, ctx.data.react)`, `colour
 `flyThrough`). Look at a still of each scene, then make the pages your own; keep each scene on
 bar lines when you join or split them. `--json` gives the plan as data. The plan reads notes,
 not sound or words: check its roles against what you hear described (`vidgen music check`).
+Over MCP: `music_plan` (`score`, `out`).
 
 **Watching the result: `vidgen motion check`.** Stills cannot show what happens between frames.
 After a render (`--draft` first), `vidgen motion check . --draft --json` decodes the video at

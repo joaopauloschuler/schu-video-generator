@@ -84,8 +84,8 @@ Videos made with schu-video-generator are listed in the gallery's [Videos on You
 - **An orchestra for score files**: brass (`trumpet`, `horn`, `low_brass`), a drawbar `organ`,
   bowed strings (`violins`, `violas`, `cellos`, `double_basses`: sustained, spiccato, tremolo,
   pizzicato), orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`,
-  `snare_drum`, `cymbal`, `tam_tam`) and a `choir` on vowels, beside the synth drums, basses,
-  plucks, leads and pads; all synthesised, no samples ([every instrument in one
+  `snare_drum`, `cymbal`, `tam_tam`) and a `choir` on vowels and syllables (`la`, `na`, `mm-ah`...)
+  with a soloist and a whisper, beside the synth drums, basses, plucks, leads and pads; all synthesised, no samples ([every instrument in one
   table](docs/COOKBOOK-MUSIC.md#13-every-instrument-at-a-glance)).
 - **Expressive notes**: dynamics (`[pp]` to `[fff]`), hairpins inside a held note or over a phrase,
   `fp` and `sfz`, slurs with a glide, vibrato speed and delay, a setting per note
@@ -157,10 +157,10 @@ draft project to refine: its `# TODO:` comments list what to check first.
 `vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `music_plan`, `audio_check`, `motion_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
-video. It uses the official MCP Python SDK, which comes with a plain install.
+video. It uses the official MCP Python SDK.
 
 Claude Desktop (`claude_desktop_config.json`; on Windows give the full path of `vidgen.exe` in
 the venv's `Scripts` folder if `vidgen` is not on the PATH):
@@ -222,7 +222,7 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
    ```
    This installs every Python package schu-video-generator uses: Manim, pydantic, PyYAML, PyAV, Kokoro
    with PyTorch (Python 3.10–3.12), Playwright, symusic, faster-whisper, fpdf2 and the MCP SDK
-   (pre-built wheels; no compiler needed). You never install a Python package yourself.
+   (pre-built wheels).
 4. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
    a new terminal. schu-video-generator reads the key only from this variable and never writes it anywhere.
    With `voice: {provider: openrouter, model: ..., voice: ...}` narration goes through OpenRouter
@@ -866,7 +866,7 @@ remaining rendering tests. No test needs network or keys.
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
   `standard`, `large`; vertical video gets `large` automatically); `vidgen list-themes
   --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
-- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with schu-video-generator (no install);
+- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with schu-video-generator;
   presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
 - **Icons**: 200 built-in line icons (Lucide, ISC) in eight categories
   ([catalogue](docs/ICONS.md)), searchable by concept, recoloured by the
@@ -1004,8 +1004,16 @@ remaining rendering tests. No test needs network or keys.
   cartoons), played with real instruments ([reference](docs/CONFIG.md#composed-music-compose)):
   composed for the video's timings, every scene change on a bar line, a mood per scene
   (`music: {mood: tense}`), swells on reveals, a pause before a punchline and a closing cadence
-  ([follows the video](docs/CONFIG.md#music-that-follows-the-video)). Without the extra the mood's
-  bed plays and `vidgen validate` says so.
+  ([follows the video](docs/CONFIG.md#music-that-follows-the-video)).
+- **Music videos**: three.js `web` pages built from `vidgen/three-kit` (glowing lines, crystals,
+  a tesseract, nebula skies, star fields, tunnels, rings, ribbons, dust, camera paths) and
+  `vidgen/music-time` (song time and bars, the score's hits and notes as envelopes, a colour script,
+  reactions: a kick pulses the light, a note leaves a glint); `vidgen music plan` reads a score file
+  and drafts the video (cuts on its bar lines, a colour per section, a starter page per scene);
+  `vidgen motion check` watches the render for black frames, flashes, flicker, popping, strobing,
+  frozen stretches and jumps at cuts; the score's `choir` sings syllables (`la`, `na`, `da`,
+  `mm-ah`, `ah-oh`), a soloist over the section and a whisper, a syllable per note
+  ([cookbook](docs/COOKBOOK-3D.md#9-building-blocks-for-music-videos)).
 - **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
   `crossfade` (the scenes overlap, the video gets shorter by it), `fade_color` through a theme
   colour (`{type: fade_color, color: surface, duration: 1.2}`), `push` (the next scene slides in

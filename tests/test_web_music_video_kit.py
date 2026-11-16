@@ -97,7 +97,7 @@ out.push(Array.from(S.hits.kick.t), Array.from(S.hits.kick.g), Array.from(S.note
 out.push(T.hitEnvelope(S.hits.kick, 0.5, 0.1), T.hitEnvelope(undefined, 1, 1), T.hitCount(S.hits.kick, 0.6), T.hitAge(S.hits.kick, -1));
 out.push(T.noteAt(S.notes.melody, 0.75), T.noteLevel(S.notes.melody, 0.525), T.noteLevel(S.notes.melody, 1.5, 0.05, 0.5), T.noteEnvelope(S.notes.melody, 0.6, 0.1));
 out.push(T.melody(S.notes.melody, -1), T.melody(S.notes.melody, 0.5)[0], T.melody(S.notes.melody, 0.7)[0]);
-out.push(T.eventLevel(tracks.low[0], 0.25), T.eventLevel(tracks.low[0], 1.25), T.signalLevel(M, "low", 1.25), T.signalLevel(M, "low", 1.55), T.signalLevel(M, "low", 1.85));
+out.push(T.eventLevel(tracks.low[0], 0.25), T.eventLevel(tracks.low[0], 1.25), T.signalLevel(M, "low", 1.25), T.signalLevel(M, "low", 1.55), T.signalLevel(M, "low", 1.85));out.push(T.melody(S.notes.melody, 0.01)[1], T.melody(S.notes.melody, 0.5)[1], T.melody(S.notes.melody, 0.525)[1], T.melody(S.notes.melody, 0.6)[1]);
 """)
     shapes, seeded, moves, (clock, whole, short), (kick_t, kick_g, pitches, gathered, idx, before) = out[0], out[1:4], out[4:8], out[8:11], out[11:17]
     assert shapes == pytest.approx([1, 0, 2.5, 0.5, 1, 0.5, 1, 0.1])
@@ -115,6 +115,10 @@ out.push(T.eventLevel(tracks.low[0], 0.25), T.eventLevel(tracks.low[0], 1.25), T
     start, end, held, fading, gone = out[28:33]
     assert start == pytest.approx(10 ** (-6 / 20)) and end == pytest.approx(1) and held == pytest.approx(1)
     assert fading == pytest.approx(0.5) and gone == 0
+    # Step 362: a note's attack rises from the level the note before has at its start (no dip on each note)
+    first, onset, rising, held = out[33:37]
+    carried = np.exp(-0.1 / 0.45)  # the first note ended 0.1 s before the second
+    assert first == pytest.approx(0.2) and onset == pytest.approx(carried) and rising == pytest.approx(carried + (1 - carried) * 0.5) and held == 1
 
 
 def test_music_time_camera_paths_colour_script_and_reactions(tmp_path: Path) -> None:

@@ -136,6 +136,12 @@ the length of a spectrum ray or the glow of a crystal a little: in stills of eve
 moments, 6 of 36 are identical and the rest differ by 53.5 to 85 dB PSNR, most pixels by one or two
 levels and the tips of the sun's rays by more (up to 89 levels on a few pixels).
 
+One thing differs on purpose: the published film's hook dimmed for one frame at the start of each
+legato note in `heart` and `afterglow` (its melody light restarted at zero; `vidgen motion check` lists
+these dips). The kit's `melody` now starts a note's light from where the note before left it, so
+those frames keep the light of their neighbours, and the ribbon of the hook has no darker gap at
+each note.
+
 ## Notes on the pictures
 
 - Everything is a function of the song time (`ctx.music.t0` plus the scene's clock): no state is carried

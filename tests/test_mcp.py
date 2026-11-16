@@ -207,7 +207,7 @@ TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview", "story_draft", "shorts_suggest",
-    "music_template", "music_patches", "music_render", "music_check", "audio_check", "motion_check",
+    "music_template", "music_patches", "music_render", "music_check", "music_plan", "audio_check", "motion_check",
     "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
     "generate_plan", "generate_run", "generate_status", "generate_takes", "generate_pick", "generate_host_test", "still",
 }
@@ -426,6 +426,21 @@ def test_server_motion_check_returns_the_strips(tmp_path: Path) -> None:
         assert [c.type for c in result.content] == ["text", "image"]
         assert Path(doc["findings"][0]["strip"]).parent == (tmp_path / "build" / "mcp" / "motion").resolve()
         assert "outside the folder" in error_text(await client.call_tool("motion_check", {"target": "../x.mp4"}))
+
+    run_session(tmp_path, body)
+
+
+@pytest.mark.slow
+def test_server_music_plan_drafts_a_music_video(tmp_path: Path) -> None:
+    """Step 362: music_plan proposes the scenes of a score bed and writes a draft under the root."""
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("music_plan", {"score": "tidewater"}))
+        assert doc["ok"] is True and doc["action"] == "plan" and doc["scenes"] and doc["draft"] is None
+        doc = doc_of(await client.call_tool("music_plan", {"score": "tidewater", "out": "mv", "max_scene": 12}))
+        assert Path(doc["draft"]["config"]) == (tmp_path / "mv" / "video.yaml").resolve() and not doc["draft"]["problems"]
+        assert "already exists" in error_text(await client.call_tool("music_plan", {"score": "tidewater", "out": "mv"}))
+        assert "outside the folder" in error_text(await client.call_tool("music_plan", {"score": "tidewater", "out": "../mv"}))
 
     run_session(tmp_path, body)
 

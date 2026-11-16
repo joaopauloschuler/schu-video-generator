@@ -193,8 +193,12 @@ composed from them in `ps.js`.
 - **Porting your own film to them.** Move a piece only when stills stay the same: `vidgen still`
   before and after at a few times per scene and compare the PNGs. `examples/parallel-space`,
   `examples/escapement` and `examples/signal-fire` were ported this way with pixel-identical
-  stills; what would have changed a picture (Escapement's watch, studio and finishing) stayed in
-  the film's script.
+  stills (Parallel Space then moved to `music_data`, whose spectrum is measured from the mix:
+  53.5 dB PSNR or closer); what would have changed a picture (Escapement's watch, studio and
+  finishing) stayed in the film's script.
+- **A line of notes keeps its light.** `melody(track, T)` starts each note's 0.05 s attack from
+  the level the note before has at that moment, so a legato line does not dim for a frame on
+  every note; `noteLevel` starts each note from 0 (a swell per note), `noteEnvelope` from 1 (a glint).
 
 ## 10. From a score to a music video
 
@@ -280,6 +284,8 @@ vidgen motion check output/my_video.mp4          # any file
 On the two finished example films: Parallel Space v7 (fixed) has no blank frames; one warning (a
 tunnel ring passing the camera brightens one frame in `06_build`) and 21 infos (seven cuts with
 jumps in brightness, eleven flashes and dips on notes and hits, among them one-frame dips on the
-`hook` notes in `05_heart`, a small glint, two held frames in the coda); Escapement has none above
+`hook` notes in `05_heart`, a small glint, two held frames in the coda; the dips came from the
+kit's `melody` restarting each note's light at 0, fixed since: a still on such a note keeps the
+light of the frames around it); Escapement has none above
 info (seven cut jumps, small glints in its gears, the still opening on the watch while the title
 fades in, and the held ending).

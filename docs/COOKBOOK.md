@@ -7,8 +7,8 @@ the config reference (`docs/CONFIG.md`) say what schu-video-generator *can* do. 
 videos *work*: hooks, pacing, sound, credits, labels, voice, and the QA loop. For a YouTube Short
 that shows source code, see [COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md);
 for writing your own music as score files (room for the voice, builds and lifts, loops, genre
-sketches, the orchestral instruments: brass, organ, strings, percussion, choir; expressive notes,
-music data for web pages, the instrument table), see [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md); for cell-biology lectures and research
+sketches, the orchestral instruments: brass, organ, strings, percussion, a choir with syllables, a soloist and a whisper;
+expressive notes, music data for web pages, the instrument table), see [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md); for cell-biology lectures and research
 explainers (accuracy, level of detail, zooming, pacing dense content), see
 [COOKBOOK-CELL-BIOLOGY.md](COOKBOOK-CELL-BIOLOGY.md); for genetics and medical genetics (NSGC,
 ISCN, HGVS notation, exact numbers, a counselling tone), see
@@ -317,7 +317,7 @@ kick-and-bass beds are bass-heavy and sound lighter on phone and laptop speakers
 ([CONFIG](CONFIG.md#background-music-music)). When no bed fits, write your own piece as a score
 file from a bed's template (`music: my_theme` plays `assets/music/my_theme.yaml`): see
 [COOKBOOK-MUSIC.md](COOKBOOK-MUSIC.md) for the craft, genre sketches, the orchestral instruments
-(brass, organ, strings, percussion, choir), expressive notes and the instrument table.
+(brass, organ, strings, percussion, choir with syllables), expressive notes and the instrument table.
 
 | sound | use for | gain we used |
 |---|---|---|

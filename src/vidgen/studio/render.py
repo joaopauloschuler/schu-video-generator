@@ -244,13 +244,13 @@ def range_warnings(score: MusicScore) -> list[str]:
                 for start, step in [(0, event.step)] + event.slurred:
                     slot = _slot_at(section, event.start + start) if section.chords else None
                     for pitch in voicer.pitches(step, slot, part):
-                        if not low <= pitch <= high:
+                        if instrument.range is not None and not low <= pitch <= high:  # no written range: the 20 Hz-12 kHz limit alone
                             outside.setdefault((instrument.name, pitch < low), []).append((pitch, section.name))
         for (name, below), notes in outside.items():
             pitch, where = min(notes) if below else max(notes)
             sections = list(dict.fromkeys(s for _, s in notes))
             written = INSTRUMENTS[name].range
-            assert written is not None
+            assert written is not None  # only instruments with a written range are collected
             out.append(
                 f"tracks.{track.name}: {len(notes)} note{'s' if len(notes) != 1 else ''} {'below' if below else 'above'} the written range of {name} "
                 f"({written[0]} to {written[1]}): the {'lowest' if below else 'highest'} is {note_name(pitch)} in section '{where}'"

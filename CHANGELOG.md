@@ -5,9 +5,18 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–361
+## Steps 193–362
 
-### Music-video tools (Phase AM, Steps 358–361)
+### Music-video tools (Phase AM, Steps 358–362)
+
+- **Review fixes** (Step 362): `vidgen/music-time`'s `melody` no longer dims the light for a frame
+  at each note of a legato line (a note's attack rises from the level the note before has; in
+  `examples/parallel-space` the `hook`'s light in `heart` and `afterglow` stays steady across its
+  notes). A note above MIDI 127 on an instrument without a written range (e.g. a `bell` with
+  `octave: 8`) no longer stops a render that collects warnings. `vidgen motion check` cannot hang
+  on a file that makes ffmpeg print many errors. MCP tool `music_plan` (`vidgen music plan`). The
+  guide's music-data example reads `tidewater`'s `melody` track (it has no `hook`); the choir's
+  `morph` says it works with `syllable: vowel` only; README Features gains "Music videos".
 
 - **More choir** (Step 361): `choir` sings syllables, still with no words. `syllable` (a track
   or section setting, or per note: `[la]`, `[na]`, `[mm-ah]`, `[syllable=da]`) starts a note with
@@ -151,7 +160,7 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - **Range warning**: notes outside an instrument's written range are reported by `vidgen music render` and `vidgen music check` (they still play).
 - A duck with `follow: true` follows the hits' dynamics. Every mistake in a mark is an error naming the mark and the nearest word.
 - Existing scores are unchanged: "Escapement", "Parallel Space" and twelve demo scores of Steps 343–345 render to the same bytes as before.
-- Measured, not listened to (DESIGN §120.7). Docs: `docs/CONFIG.md` ("Expressive notes"), `docs/COOKBOOK-MUSIC.md` section 11, the guide ("Expression"). Tests: `tests/test_studio_expression.py`.
+- Docs: `docs/CONFIG.md` ("Expressive notes"), `docs/COOKBOOK-MUSIC.md` section 11, the guide ("Expression"). Tests: `tests/test_studio_expression.py`.
 
 ### Orchestral percussion and a choir for score files (Step 345)
 
@@ -163,7 +172,6 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - Every blow at the same settings is the same samples, and a drum is made once per setting: 256 sixteenths cost about what the `kick` costs.
 - Levels: `taiko` and `bass_drum` are as loud as `kick` and `boom` at `volume: 0`; the choir is as loud as the strings and the brass.
 - Existing scores are unchanged: the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
-- Measured, not listened to (DESIGN §120.6). Demo files for listening were written outside the repository.
 - Docs: `docs/CONFIG.md` (score files: the instrument table, "Orchestral percussion", "Choir"), `docs/COOKBOOK-MUSIC.md` section 10, the guide ("Making music"). Tests: `tests/test_studio_percussion_choir.py`.
 
 ### Bowed strings for score files: `violins`, `violas`, `cellos`, `double_basses` (Step 344)
@@ -175,7 +183,6 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - Settings: `attack` (0.02–4 s: a firm stroke, a smooth one, a swell), `brightness` (0 bowed over the fingerboard, dark; 1 at the bridge, glassy), `vibrato` (cents, delayed), `accent` (the bite of a stroke), `length`, `speed` (tremolo), `decay`, `bow` (rosin noise), `mute` (con sordino), `detune`, `ring`.
 - Their level is that of the brass (a held note about −16.6 LUFS before the piece is levelled). A score that used a `pad` as violins will want the new instrument about 8 dB up.
 - The existing `pizzicato` instrument is unchanged. Existing scores are unchanged: the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
-- Measured, not listened to: nobody has heard these instruments yet (DESIGN §120.5 has the measurements). Demo files for listening were written outside the repository.
 - Limits: no slur or glide between notes, every stroke of a pitch is the same, and the track's `accent:` pattern changes a stroke's level but not its bite.
 - Docs: `docs/CONFIG.md` (score files: the instrument table, "Bowed strings"), `docs/COOKBOOK-MUSIC.md` section 9, the guide ("Making music"). Tests: `tests/test_studio_strings.py`.
 
@@ -188,7 +195,6 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - A setting can now have named values (`registration: flute`; the number works too). An unknown name is reported with the closest one.
 - Their levels match piano chords (a held note about −16.5 LUFS before the piece is levelled; `soft_lead` is −20.4, a `saw_pad` chord −10), so they start at `volume: 0`. A score that used a saw pad as brass will want the new instrument about 6 dB up.
 - A track plays the same note the same way every time; two tracks in unison are two players.
-- Measured, not listened to: nobody has heard these instruments yet. Attack, brightness, pitch at the start, vibrato, level across each range, aliasing at the top of the range, clicks and CPU time were measured (DESIGN §120.4), and spectrograms were looked at. Demo files for listening were written outside the repository.
 - Limits: no slur between notes (each note has its own attack), no valve noise, no flutter-tongue; the organ has no swell box, tremulant or Leslie. In `vidgen studio` the `drawbars` setting shows as a plain slider: type the digits in the score instead.
 - Existing scores are unchanged: no existing instrument, default or cache key was touched, and the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
 - Docs: `docs/CONFIG.md` (score files: the instrument table, "Brass and organ"), `docs/COOKBOOK-MUSIC.md` section 8, the guide ("Making music"). Tests: `tests/test_studio_brass_organ.py`.
