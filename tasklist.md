@@ -2127,6 +2127,9 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [ ] Not built (no film uses them yet; for Step 359's starter pages): a sections → colour script helper, orbit / fly-through camera paths beyond `keyframes`, `glide` and `aimCamera`
 - [ ] Not done: no film rendered (stills only); Windows and macOS not tried
 
+### Step 358.1 — Gallery YouTube section: thumbnails only (owner's request)
+- [x] `youtube_lines()` writes one clickable thumbnail per paragraph (title as alt text); title/channel lines and `YOUTUBE_VIDEOS`' `channel` field removed; `docs/gallery/README.md` and `tests/test_gallery.py` updated — done, nothing rendered
+
 ### Step 359 — A storyboard from the music
 - [ ] `vidgen music plan <score>` (name to fit the CLI): cut points, a colour per section, events per scene, a draft `video.yaml` of `web` scenes using Step 358's library, dry run and `--json`
 

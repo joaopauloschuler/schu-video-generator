@@ -388,7 +388,7 @@ def test_committed_gallery_ends_with_the_youtube_videos() -> None:
         vid = gallery.youtube_id(video["url"])
         thumb = f"[![{video['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)](https://youtu.be/{vid})"
         assert thumb in section
-        assert f"**[{video['title']}](https://youtu.be/{vid})** · {video['channel']}" in section
+    assert "**[" not in section and " · " not in section, "the YouTube section shows only the thumbnails"
 
 
 def test_youtube_id_reads_short_and_watch_links() -> None:

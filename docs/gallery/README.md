@@ -169,8 +169,4 @@ Videos made with schu-video-generator:
 
 [![How to create this AI music video in the video description](https://img.youtube.com/vi/J8gljBhqtTo/hqdefault.jpg)](https://youtu.be/J8gljBhqtTo)
 
-**[How to create this AI music video in the video description](https://youtu.be/J8gljBhqtTo)** · Artificial Intelligence Video Art
-
 [![How to create long cartoon videos with AI? I will teach you!](https://img.youtube.com/vi/tjqrvbYNbGE/hqdefault.jpg)](https://youtu.be/tjqrvbYNbGE)
-
-**[How to create long cartoon videos with AI? I will teach you!](https://youtu.be/tjqrvbYNbGE)** · Artificial Intelligence with Python

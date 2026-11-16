@@ -135,12 +135,10 @@ YOUTUBE_VIDEOS: list[dict[str, str]] = [
     {
         "title": "How to create this AI music video in the video description",
         "url": "https://youtu.be/J8gljBhqtTo",
-        "channel": "Artificial Intelligence Video Art",
     },
     {
         "title": "How to create long cartoon videos with AI? I will teach you!",
         "url": "https://youtu.be/tjqrvbYNbGE",
-        "channel": "Artificial Intelligence with Python",
     },
 ]
 
@@ -161,7 +159,7 @@ def youtube_id(url: str) -> str:
 
 
 def youtube_lines() -> list[str]:
-    """The index's "Videos on YouTube" section: per video, a clickable thumbnail, then its title and channel.
+    """The index's "Videos on YouTube" section: one clickable thumbnail per video, its title as the alt text.
 
     The thumbnail is YouTube's own (``img.youtube.com``), so no image is kept in the repository.
     """
@@ -170,13 +168,7 @@ def youtube_lines() -> list[str]:
     lines = ["## Videos on YouTube", "", "Videos made with schu-video-generator:", ""]
     for v in YOUTUBE_VIDEOS:
         vid = youtube_id(v["url"])
-        link = f"https://youtu.be/{vid}"
-        lines += [
-            f"[![{v['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)]({link})",
-            "",
-            f"**[{v['title']}]({link})** · {v['channel']}",
-            "",
-        ]
+        lines += [f"[![{v['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)](https://youtu.be/{vid})", ""]
     return lines
 
 

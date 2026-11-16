@@ -27140,3 +27140,8 @@ project), repo work is generic.
 - **Not built**: a sections → colour script helper and orbit / fly-through camera paths (no film uses them; Step 359's starter pages are their first user). **Not verified**: no film rendered (stills only); Windows / macOS.
 - **How to test**: `python -m pytest -q tests/test_web_music_video_kit.py` (Node needed for two tests); with Chromium `-m "slow or not slow"`; stills: `bash /home/claude/work/scratch/am358/tools/stills.sh PROJECT OUTDIR preview 05_heart:3,13,24` then `python /home/claude/work/scratch/am358/tools/cmp.py BEFORE AFTER [SIDE_DIR]`.
 
+## Step 358.1 — Gallery YouTube section shows only the thumbnails
+
+- **Why** (owner, 2026-11-16): leave only the clickable thumbnail images in "Videos on YouTube".
+- **Built**: `src/vidgen/gallery.py` `youtube_lines()` now writes, after "Videos made with schu-video-generator:", one paragraph per video: `[![<title>](https://img.youtube.com/vi/<id>/hqdefault.jpg)](https://youtu.be/<id>)`. The `**[title](url)** · channel` lines are gone; nothing else used `channel`, so it was dropped from `YOUTUBE_VIDEOS` (entries are `{title, url}`). `docs/gallery/README.md` tail edited to exactly what the function writes.
+- **Tests**: `test_committed_gallery_ends_with_the_youtube_videos` checks the thumbnails and that no title/channel line remains. `python -m pytest -q tests/test_gallery.py tests/test_docs.py`: 90 passed. Nothing rendered.
