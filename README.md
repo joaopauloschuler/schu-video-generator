@@ -611,7 +611,8 @@ my_video/
   for vidgen's own synthesizer (men's choir, strings, horn, organ, synth drums and supersaws) and
   eleven three.js `web` scenes of a flight through space and parallel realities, among them a
   mirror corridor of nine receding copies of the flight, composed from vidgen's building blocks
-  `vidgen/three-kit` and `vidgen/music-time`; the pictures follow the music through `music_data`
+  `vidgen/three-kit` and `vidgen/music-time`, with an opening title and an end card from
+  `vidgen/title-cards`; the pictures follow the music through `music_data`
   (the final render takes
   about 1 h on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16

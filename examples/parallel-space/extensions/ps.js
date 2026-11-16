@@ -1,4 +1,4 @@
-// Parallel Space (v7): one three.js module for every scene of the music video (data.mode picks the set).
+// Parallel Space (v8): one three.js module for every scene of the music video (data.mode picks the set).
 //
 // Everything is a function of the song time T = ctx.music.t0 + t on a grid of 52 frames per bar
 // (138.46 BPM at 30 fps): no state is carried from frame to frame or from scene to scene, and
@@ -27,10 +27,16 @@ import {setStage, color, mixColor, Glow, circleSegments, polyhedronEdges, POLYHE
   TESSERACT_VERTICES, TESSERACT_EDGES, project4, tesseractAngles, makeTesseract, updateTesseract, wrapZ, makeStarField, updateStarField, makeStarShell,
   makeFlare, setFlare, makeShockRings, updateShockRings, updateGlints, makeRibbon, updateRibbon, makeSpectrumRays, updateSpectrumRays, updateTunnel,
   makeLattice, updateLattice, makeRingStructure, updateRingStructure, makeCrystalField, updateCrystalField, makeCrystalSwarm, updateCrystalSwarm, aimCamera} from "vidgen/three-kit";
+import {titleCard, endCard} from "vidgen/title-cards";
 
 const {bar: BAR, beat: BEAT, sixteenth: S16} = barClock(52 / 30), TAU = Math.PI * 2;
 let R, S, C, composer, bloom, fin, W, H, AU, mode, t0;
-let titleEl, endEl;
+let card;                                       // the opening title (dawn) or the end card (coda): vidgen/title-cards
+// the opening and the end card frame the one light off centre: in the right third under the title, in the left third
+// under the end card (the title block takes the other third). SIDE is tan(the angle off the axis), so the light stays
+// in its third while the camera moves: about 23 degrees, a little over half way out in a 50-degree, 16:9 frame
+// (the light's centre near 76 % of the width in the opening, 24 % at the end).
+const SIDE = 0.43;
 const O = {};
 const uRes = {value: new THREE.Vector2(1280, 720)};
 
@@ -98,7 +104,8 @@ const BLACK = new THREE.Color(0, 0, 0), ONE = new THREE.Color(1, 1, 1);
 // ====================================================================================================
 const MODES = {};
 
-// ---- dawn (bars 0-8): one small light in a very large dark; the title; a far men's choir, then a clock starts ----
+// ---- dawn (bars 0-8): one small light in a very large dark, in the right third; the title in the left third, on
+//      calm dark space; a far men's choir lights stars around the light, then a clock starts ----
 MODES.dawn = {
   build() {
     O.sky = new SkyDome(3);
@@ -114,27 +121,31 @@ MODES.dawn = {
   frame(T, t) {
     const p = clamp(t / (8 * BAR)), boom = hitEnvelope(AU.hits.boom, T, 1.4), horn = noteLevel(AU.notes.horn, T, 0.5, 1.2);
     const cz = -62 * smootherstep(p * 0.96);
-    aimCamera(Math.sin(T * 0.11) * 2.4, 1.0 + Math.cos(T * 0.09) * 1.2, cz, 0, 0, -150, 0.03 * Math.sin(T * 0.13), 50);
+    const cx = Math.sin(T * 0.11) * 2.4;
+    aimCamera(cx, 1.0 + Math.cos(T * 0.09) * 1.2, cz, cx - SIDE * (150 + cz), 0, -150, 0.03 * Math.sin(T * 0.13), 50);     // the light in the right third
     O.sky.turn(T);
-    O.sky.colors(color(0x010207), color(0x051a33), mixColor(color(0x1c6a8c), color(0x4a8a9a), horn), 0.32 + 0.2 * p);
+    card.update(t);
+    const calm = smoothstep(0.5 * BAR, 3 * BAR, t);                                                                         // the sky quieter from the title on, to the cut
+    O.sky.colors(color(0x010207), color(0x051a33), mixColor(color(0x1c6a8c), color(0x4a8a9a), horn), (0.32 + 0.2 * p) * (1 - 0.32 * calm));
     O.sky.light(1, V3.set(0.05, 0.02, -1), mixColor(ICE, AMBER, horn * 0.5), 0.03 + 0.10 * boom + 0.05 * horn, 14);
-    O.sky.light(2, V3.set(-0.6, 0.5, -0.4), BLUE, 0.02 + 0.02 * p, 3);
+    O.sky.light(2, V3.set(0.7, 0.45, -0.4), BLUE, 0.02 + 0.02 * p, 3);                                                     // to the right, away from the title
     updateStarField(O.stars, T, 6 * t, 0.0, cz, 1);
     updateStarField(O.dust, T, 3 * t, 0.0, cz, 0.12, 4);
     updateTesseract(O.tes, tesseractAngles(T * 0.35 + 2), mixColor(ICE, WHITE, boom), 1.1 + 2.2 * boom + 0.5 * horn, 2.2 + 3 * boom);
     setFlare(O.flare, mixColor(ICE, AMBER, horn * 0.6), 0.5 + 1.6 * boom + 0.6 * horn, T * 0.05, 26 + 10 * boom);
-    updateShockRings(O.shocks, AU.hits.boom, T, ICE, {at: O.tes.position, r0: 6, r1: 150, life: 6, gain: 2.2, face: true});
+    updateShockRings(O.shocks, AU.hits.boom, T, ICE, {at: O.tes.position, r0: 6, r1: 48, life: 6, gain: 2.2 * (1 - 0.7 * calm), face: true});   // they stay near the light
     // a clock around the light: every tick lights the next mark
     const ticks = AU.hits.tick, ti = lastIndex(ticks.t, T), te = hitEnvelope(AU.hits.tick, T, 0.22);
     for (let i = 0; i < 16; i++) { const back = ti < 0 ? 99 : ((ti - i) % 16 + 16) % 16; O.dial.col(i, ICE, ti < 0 ? 0 : 0.18 + (back < 5 ? te * Math.pow(0.5, back) * 3.2 : 0)); }
     O.dial.flush(false, true); O.dial.mesh.quaternion.copy(C.quaternion);
     // every note of the far choir (the track named trumpet) lights a star for a while, higher notes higher up
-    // (v7 sings it two octaves under v6's trumpet: 46 here was 70, so the stars stay where they were)
+    // (v7 sings it two octaves under v6's trumpet: 46 here was 70, so the stars stay where they were); v8: only on
+    // the light's side and around it, never under the title
     const bells = AU.notes.call, bi = lastIndex(bells.t, T);
     for (let k = 0; k < 12; k++) {
       const j = bi - k, base = k * 5;
       if (j < 0 || T - bells.t[j] > 5) { for (let q = 0; q < 5; q++) O.glints.hide(base + q); continue; }
-      const age = T - bells.t[j], e = Math.exp(-age / 1.6) * clamp(age / 0.08), a = hash(j, 1) * TAU, rr = 26 + 30 * hash(j, 2);
+      const age = T - bells.t[j], e = Math.exp(-age / 1.6) * clamp(age / 0.08), a = (hash(j, 1) - 0.5) * 3.9, rr = 26 + 30 * hash(j, 2);
       const x = Math.cos(a) * rr * 1.5, y = (bells.p[j] - 46) * 2.6 + Math.sin(a) * 8, z = -150 + 30 * (hash(j, 3) - 0.5), s = 2.2 * e + 0.4;
       O.glints.dot(base, x, y, z); O.glints.col(base, WHITE, 5 * e, 2.4);
       O.glints.seg(base + 1, x - s * 2, y, z, x + s * 2, y, z); O.glints.seg(base + 2, x, y - s, z, x, y + s, z);
@@ -143,10 +154,6 @@ MODES.dawn = {
     }
     O.glints.flush();
     finish(T, {exp: 1.0, bloom: 0.7, fade: smoothstep(0, 2.2, t), flash: 0, lift: color(0x020409), gain: new THREE.Color(0.96, 1.0, 1.06), vig: 0.7});
-    const a = smoothstep(BAR * 0.9, BAR * 1.5, t) * (1 - smoothstep(BAR * 3.5, BAR * 4.2, t));
-    titleEl.style.opacity = a.toFixed(3); titleEl.style.display = a > 0.002 ? "block" : "none";
-    titleEl.style.letterSpacing = "0";
-    titleEl.firstChild.style.letterSpacing = (0.42 + 0.06 * smoothstep(BAR * 0.9, BAR * 4.2, t)).toFixed(4) + "em";
   },
 };
 
@@ -705,7 +712,8 @@ MODES.afterglow = {
   },
 };
 
-// ---- coda (bars 96-104 and the last chord's tail): the one light again, far in a large dark, now warm; the end card ----
+// ---- coda (bars 96-104 and the last chord's tail): the one light again, far in a large dark, now warm, in the left
+//      third; the end card in the right third (the opening mirrored) ----
 const TAIL = 4.6;
 MODES.coda = {
   build() {
@@ -721,11 +729,13 @@ MODES.coda = {
   },
   frame(T, t) {
     const L = 8 * BAR, END = L + TAIL, p = clamp(t / L), boom = hitEnvelope(AU.hits.boom, T, 1.4), taiko = hitEnvelope(AU.hits.taiko, T, 0.8), hk = noteLevel(AU.notes.hook, T, 0.3, 2.5);
-    const major = smoothstep(3.6 * BAR, 6.5 * BAR, t), card = smoothstep(2.9 * BAR, 4.3 * BAR, t), out = 1 - smoothstep(END - 2.6, END - 0.4, t);
-    const cz = -62 + 70 * smootherstep(t / END) , drop = 0.3 * (cz + 150) * smootherstep(clamp(t / (4.3 * BAR)));           // the light sinks under the words
-    aimCamera(Math.sin(T * 0.11) * 2.4, 1.0 + Math.cos(T * 0.09) * 1.2, cz, 0, drop, -150, 0.03 * Math.sin(T * 0.13), 50);
+    const major = smoothstep(3.6 * BAR, 6.5 * BAR, t), out = 1 - smoothstep(END - 2.6, END - 0.4, t), shown = card.update(t);
+    card.element.style.opacity = (shown * out).toFixed(3);                                                                  // the card fades with the picture
+    const cz = -62 + 70 * smootherstep(t / END), cx = Math.sin(T * 0.11) * 2.4;
+    const aside = SIDE * (150 + cz) * smootherstep(clamp(t / (4.3 * BAR)));                                                 // the light moves into the left third
+    aimCamera(cx, 1.0 + Math.cos(T * 0.09) * 1.2, cz, cx + aside, 0, -150, 0.03 * Math.sin(T * 0.13), 50);
     O.sky.turn(T);
-    O.sky.colors(color(0x010207), mixColor(color(0x051a33), color(0x1a1430), major), mixColor(color(0x3a80a0), color(0xd08a5a), major), 0.5 - 0.2 * card);
+    O.sky.colors(color(0x010207), mixColor(color(0x051a33), color(0x1a1430), major), mixColor(color(0x3a80a0), color(0xd08a5a), major), 0.5 - 0.2 * shown);
     O.sky.light(1, V3.set(0, -0.3, -1), mixColor(ICE, GOLD, 0.3 + 0.7 * major), 0.06 + 0.16 * major + 0.1 * boom + 0.05 * hk, 9);
     O.sky.light(2, V3.set(-0.6, 0.5, -0.4), BLUE, 0.035, 3);
     updateStarField(O.stars, T, -4 * t, 0.0, cz, 1);
@@ -733,44 +743,26 @@ MODES.coda = {
     const warm = mixColor(ICE, GOLD, 0.25 + 0.75 * major);
     updateTesseract(O.tes, tesseractAngles(T * 0.35 + 2), mixColor(warm, WHITE, boom), 1.2 + 2.0 * boom + 0.6 * hk + 0.5 * major, 2.4 + 3 * boom);
     setFlare(O.flare, warm, 0.7 + 1.4 * boom + 0.5 * hk + 0.6 * major + 0.5 * taiko, T * 0.05, 28 + 10 * boom + 14 * major);
-    updateShockRings(O.shocks, AU.hits.boom, T, warm, {at: O.tes.position, r0: 6, r1: 170, life: 6, gain: 2.2, face: true});
+    updateShockRings(O.shocks, AU.hits.boom, T, warm, {at: O.tes.position, r0: 6, r1: 170, life: 6, gain: 2.2 * (1 - 0.6 * shown), face: true});
     tickDial(O.dial, T, warm);
     const bt = AU.notes.call.t;
-    updateGlints(O.glints, AU.notes.call, T, {n: 16, life: 4.5, rise: 0.08, c: GOLD, size: 2.0, gain: 5, place: (j) => { const s = (bt[j] / S16) % 32, side = j % 2 ? 1 : -1; return [side * (34 + 3.2 * s) , -52 + 3.4 * s + 10 * hash(j, 2), -150 + 30 * (hash(j, 3) - 0.5)]; }});
-    finish(T, {exp: 1.0 - 0.12 * card, bloom: 0.7, fade: out, flash: 0.6 * Math.exp(-t / 0.6), flashCol: mixColor(ROSE, WHITE, 0.5), lift: mixColor(color(0x020409), color(0x050304), major), gain: mixColor(COLD, WARM, major), vig: 0.7});
-    const a = card * out;
-    endEl.style.opacity = a.toFixed(3); endEl.style.display = a > 0.002 ? "block" : "none";
+    updateGlints(O.glints, AU.notes.call, T, {n: 16, life: 4.5, rise: 0.08, c: GOLD, size: 2.0, gain: 5, place: (j) => { const s = (bt[j] / S16) % 32, side = j % 2 ? 1 : -1; return [-45 + side * (12 + 1.8 * s), -52 + 3.4 * s + 10 * hash(j, 2), -150 + 30 * (hash(j, 3) - 0.5)]; }});   // around the light, off the card
+    finish(T, {exp: 1.0 - 0.12 * shown, bloom: 0.7, fade: out, flash: 0.6 * Math.exp(-t / 0.6), flashCol: mixColor(ROSE, WHITE, 0.5), lift: mixColor(color(0x020409), color(0x050304), major), gain: mixColor(COLD, WARM, major), vig: 0.7});
   },
 };
 
 // ====================================================================================================
-function makeText() {
-  const css = document.createElement("style");
-  css.textContent = `
-    .ps-card{position:absolute;left:0;top:0;width:100vw;height:100vh;display:none;pointer-events:none;color:#f4f1ea;text-align:center;font-family:var(--vidgen-font-heading),Inter,sans-serif}
-    .ps-title{position:absolute;left:0;right:0;top:22.5vh;font-weight:400;font-size:4.3vw;letter-spacing:.42em;padding-left:.42em;white-space:nowrap;text-shadow:0 0 1.2vw rgba(140,210,255,.55),0 0 .25vw rgba(255,255,255,.7)}
-    .ps-rule{position:absolute;left:44vw;width:12vw;top:34.4vh;height:1px;background:linear-gradient(90deg,transparent,#bfe6ff,transparent);opacity:.85}
-    .ps-made{position:absolute;left:0;right:0;top:66.4vh;font-size:1.2vw;letter-spacing:.5em;padding-left:.5em;text-transform:uppercase;color:#a9c4d8;white-space:nowrap}
-    .ps-url{position:absolute;left:0;right:0;top:70.6vh;font-family:var(--vidgen-font-mono),monospace;font-size:1.62vw;letter-spacing:.02em;color:#e9f4ff;white-space:nowrap;text-shadow:0 0 .8vw rgba(120,200,255,.45)}
-    .ps-end .ps-title{top:27vh;font-size:2.5vw;color:#fff3df;text-shadow:0 0 1.2vw rgba(255,200,120,.5),0 0 .25vw rgba(255,255,255,.6)}
-    .ps-end .ps-rule{top:35.6vh;background:linear-gradient(90deg,transparent,#ffdca8,transparent)}
-    .ps-end .ps-made{top:39.4vh;color:#e2d3bf}
-    .ps-end .ps-url{top:44.4vh;font-size:1.9vw;color:#fff6e8;text-shadow:0 0 .8vw rgba(255,190,110,.45)}
-    .ps-line{position:absolute;left:0;right:0;font-size:1.72vw;letter-spacing:.16em;padding-left:.16em;white-space:nowrap;color:#fbf3e6;text-shadow:0 0 .6vw rgba(0,0,0,.8)}
-    .ps-thanks{position:absolute;left:0;right:0;top:62.5vh;font-size:1.2vw;letter-spacing:.5em;padding-left:.5em;text-transform:uppercase;color:#eadcc8;white-space:nowrap;text-shadow:0 0 .6vw rgba(0,0,0,.8)}`;
-  document.head.append(css);
-  const el = (cls, text, parent) => { const d = document.createElement("div"); d.className = cls; if (text) d.textContent = text; parent.append(d); return d; };
-  titleEl = el("ps-card", "", document.body); titleEl.dataset.vidgenId = "title-card"; titleEl.dataset.vidgenLint = "off";
-  el("ps-title", "PARALLEL SPACE", titleEl); el("ps-rule", "", titleEl); el("ps-made", "made with", titleEl);
-  el("ps-url", "https://github.com/joaopauloschuler/schu-video-generator", titleEl);
-  endEl = el("ps-card ps-end", "", document.body); endEl.dataset.vidgenId = "end-card"; endEl.dataset.vidgenLint = "off";
-  el("ps-title", "PARALLEL SPACE", endEl); el("ps-rule", "", endEl); el("ps-made", "made with", endEl);
-  el("ps-url", "https://github.com/joaopauloschuler/schu-video-generator", endEl);
-  el("ps-line", "is open source. Give it a star on GitHub.", endEl).style.top = "52vh";
-  el("ps-thanks", "Thank you for watching!", endEl);
+// the opening title and the end card (vidgen/title-cards: Escapement's type, timing and layout). The title comes up
+// over bars 2-3, settles, holds and is gone by bar 7.5, before the first cut; the end card mirrors it on the right
+// from bar 3 of the coda and fades out with the picture. The project's link is on the end card only.
+const TITLE = "PARALLEL SPACE", LINK = "https://github.com/joaopauloschuler/schu-video-generator";
+async function makeCard(ctx) {
+  if (mode === "dawn") return titleCard(ctx, {title: TITLE, subtitle: "A flight through parallel realities", shade: 0.7, start: BAR, fadeIn: 2 * BAR, hold: 3 * BAR, fadeOut: 1.5 * BAR});
+  if (mode === "coda") return endCard(ctx, {title: TITLE, subtitle: "Made with schu-video-generator", link: LINK, shade: 0.7, start: 3 * BAR});
+  return null;
 }
 
-export function load(ctx) {
+export async function load(ctx) {
   mode = ctx.data.mode; M = ctx.music; t0 = M.t0; W = ctx.width; H = ctx.height;
   AU = trackArrays(M, {hits: HIT_TRACKS, notes: NOTE_TRACKS, grid: S16});
   document.documentElement.style.background = "#000"; document.body.style.background = "#000"; document.body.style.margin = "0"; document.body.style.overflow = "hidden";
@@ -780,7 +772,7 @@ export function load(ctx) {
   S = new THREE.Scene();
   C = new THREE.PerspectiveCamera(55, W / H, 0.3, 4000);
   setStage({renderer: R, scene: S, camera: C, width: W, height: H});
-  makeText();
+  card = await makeCard(ctx);
   MODES[mode].build();
   const rt = new THREE.WebGLRenderTarget(W, H, {type: THREE.HalfFloatType, stencilBuffer: true});
   composer = new EffectComposer(R, rt);

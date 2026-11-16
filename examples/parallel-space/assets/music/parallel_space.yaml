@@ -9,9 +9,11 @@
 # middle register is now sung or bowed, one or two octaves lower:
 #   trumpet  (the name the pictures read) a men's choir: ooh at dawn (A2-F#3), a hummed mm in the groove,
 #            aah in the coda (octave 3)
-#   hook     a men's choir an octave under v6 (F#3-A4): ooh in the breakdown, aah in heart2; in the drop
-#            and the climax it only doubles the supersaw lead underneath, an octave or two down
-#   voice    the choir's basses an octave under the hook (F#2-A3): the low body
+#   hook     v8: a tenor soloist in the breakdown (heart, heart2; F#3-A4, an octave under v6) on an open ah;
+#            a men's choir in the afterglow (ooh), and in the drop and the climax doubling the supersaw lead
+#            underneath, an octave or two down
+#   voice    the men's choir: v8 hums the chords under the soloist in the breakdown (opening to ah in heart2);
+#            the basses an octave under the hook (F#2-A3) in the afterglow and the coda
 #   violins  real violins an octave under v6 (heart2), violas in the climax
 #   swell    violas in octave 3, each note swelling in;  spicc: violas, spiccato, octave 3;  vla: cellos, short strokes
 #   horn     the real horn section;  organ: the real organ, a soft flute stop, an octave lower (octave 3)
@@ -282,9 +284,9 @@ tracks:
     volume: -3.5
     only: [dawn, heart, heart2, drop, climax, afterglow, coda]
     sections:
-      dawn: {volume: {from: -11.5, to: -1.5}, steps: "* | - | - | - - - - - - - - - - - - - - - ."}
-      heart: {volume: -0.5}
-      heart2: {volume: 0.5}
+      dawn: {volume: -60, steps: "* | - | - | - - - - - - - - - - - - - - - ."}   # silent (v8): the flute stop puffed "fo" on each chord
+      heart: {volume: -60}
+      heart2: {volume: -60}
       afterglow: {volume: -0.5}
       coda: {volume: [[0, -0.5], [6, 1.5], [8, -6.5]], steps: "* | - | * | - | * | - | - | - - - - - - - - - - - - - - - ."}
   brass:              # low sustained swells: root, fifth and octave, each chord fading in slowly
@@ -298,7 +300,7 @@ tracks:
     only: [pulse, heart2, build, drop, climax, afterglow, coda]
     sections:
       pulse: {steps: ". | . | . | . | . | . | . | . | 1+5+8 | - | 1+5+8 | - | 1+5+8 | - | 1+5+8 | -", volume: [[8, -8], [16, 1]], lowpass: [[8, 500], [16, 1500]]}
-      heart2: {volume: {from: -13, to: -5}, lowpass: {from: 500, to: 1400}}
+      heart2: {volume: -60, lowpass: {from: 500, to: 1400}}   # silent (v8): the brass-like swell in the breakdown
       build: {volume: [[0, -4], [7.6, 2], [7.66, -50], [8, -50]], lowpass: {from: 700, to: 2600}}
       drop: {volume: 0, lowpass: 1800, settings: {tone: 1500, attack: 0.5, release: 0.8, detune: 18}}
       climax: {volume: 2, lowpass: 2600, settings: {tone: 1900, attack: 0.4, release: 0.8, detune: 20}}
@@ -335,20 +337,20 @@ tracks:
     sections:
       dawn:           # A2-F#3: a few basses, slowly, each phrase on one breath
         steps: ". | [pp <] C#3 - - - - - - - - - . . (A2 - - - | C#3 - - - - - - - [mp >] E3 - - - - - - - | C#3 - - - - - - - - - - -) [p] . . . . | [pp <] D3 - - - - - - - - - . . (A2 - - - | D3 - - - - - - - [mp >] F#3 - - - - - - - | D3 - - - - - - - - - - -) [p] . . . . | [p <] (E3 - - - C#3 - - - A2 - - - - - - -) [mp]"
-        volume: 8
+        volume: -60   # silent (v8): the notes stay for the pictures
       groove:         # the hook's first bars hummed far away, second half only (G#2-A3)
         steps: [".", ".", ".", ".", ".", ".", ".", ".",
                 "C#3 - . C#3 - . A2 - C#3 - . E3 - . C#3 -", ".", "D3 - . D3 - . A2 - D3 - . F#3 - . D3 -", ".",
                 "E3 - . E3 - . C#3 - E3 - . A3 - . E3 -", ".", "B2 - . B2 - . G#2 - B2 - . E3 - . B2 -", "."]
         settings: {vowel: mm, voices: men, singers: 6, attack: 0.07, brightness: 0.25, vibrato: 6, ring: 0.25}
         highpass: 120
-        volume: 1
+        volume: -60   # silent (v8): the notes stay for the pictures
         echo: {delay: 0.75, feedback: 0.3, repeats: 3, pingpong: true}
       coda:           # D, E, then F# major climbing to its third (octave 3: octave 2 would go under the basses' E2)
         octave: 3
         steps: "1 - - - 3 - - - 5 - - - 8 - - - | - - - - - - - - . . . . . . . . | 1 - - - 3 - - - 5 - - - 8 - - - | - - - - - - - - . . . . . . . . | 1 - - - 3 - - - 5 - - - 8 - - - | 8 - - - - - - - 3' - - - - - - - | 3' - - - - - - - - - - - - - - - | - - - - - - - - . . . . . . . ."
         settings: {vowel: aah, voices: men, singers: 8, attack: 0.3, brightness: 0.45, vibrato: 14, ring: 1.5}
-        volume: [[0, 2], [6, 2], [8, -5]]
+        volume: -60   # silent (v8): the notes stay for the pictures
         echo: off
   violins:            # a viola section on the hook, an octave under v6's violins: with the choir in heart2,
                       # under the lead in the climax (two octaves under it)
@@ -388,8 +390,8 @@ tracks:
     only: [dawn, heart, heart2, afterglow, coda]
     sections:
       dawn: {volume: {from: -7.5, to: 0.5}}
-      heart: {volume: 0.5}
-      heart2: {volume: 2.5}
+      heart: {volume: -60}    # silent (v8): its swelling notes made the "fo"
+      heart2: {volume: -60}
       coda: {volume: {from: 2.5, to: -4.5}}
   # ------------------------------------------------------------------ the hook
   hook:               # a men's choir, an octave under v6's singing lead (F#3-A4): ooh in the breakdown, opening
@@ -401,15 +403,25 @@ tracks:
     only: [heart, heart2, drop, climax, afterglow, coda]
     steps: *hook12
     sections:
-      heart:          # the hook sung slowly: the same notes, the repeated ones tied, each phrase one breath
+      heart:          # v8: a tenor soloist sings the hook slowly: the same notes, the repeated ones tied, each phrase
+                      # one breath on an open "ah", entering on a soft hum that opens ("mm-ah"); the men hum the chords under it
         steps: &song12
-          - "[mp <] (C#4 - - - - - A3 - C#4 - - - E4 - C#4 - | [mf >] B3 - - - A3 - - - G#3 - - - A3 - - -) [mp]"
-          - "[mp <] (D4 - - - - - A3 - D4 - - - F#4 - D4 - | [mf >] C#4 - - - A3 - - - F#3 - - - A3 - - -) [mp]"
-          - "[mp <] (E4 - - - - - C#4 - E4 - - - A4 - E4 - | [f >] C#4 - - - B3 - - - A3 - - - C#4 - - -) [mp]"
-          - "[mp <] (B3 - - - - - G#3 - B3 - - - E4 - B3 - | [f >] G#4 - - - - - - - F#4 - - - E4 - - -) [mp]"
-        settings: {vowel: ooh, voices: men, singers: 10, attack: 0.25, brightness: 0.4, vibrato: 18, ring: 0.7, glide: 0.12}
-        volume: 4.8
-      heart2: {settings: {vowel: aah, voices: men, singers: 12, attack: 0.12, brightness: 0.55, vibrato: 16, ring: 0.5}, volume: 2}
+          - "[mp <] [mm-ah] (C#4 - - - - - A3 - C#4 - - - E4 - C#4 - | [mf >] B3 - - - A3 - - - G#3 - - - A3 - - -) [mp]"
+          - "[mp <] [mm-ah] (D4 - - - - - A3 - D4 - - - F#4 - D4 - | [mf >] C#4 - - - A3 - - - F#3 - - - A3 - - -) [mp]"
+          - "[mp <] [mm-ah] (E4 - - - - - C#4 - E4 - - - A4 - E4 - | [f >] C#4 - - - B3 - - - A3 - - - C#4 - - -) [mp]"
+          - "[mp <] [mm-ah] (B3 - - - - - G#3 - B3 - - - E4 - B3 - | [f >] G#4 - - - - - - - F#4 - - - E4 - - -) [mp]"
+        settings: {vowel: aah, voices: tenors, soloist: true, attack: 0.2, brightness: 0.25, vibrato: 18, ring: 0.7, glide: 0.12, turn: 0.35}
+        lowpass: 3000       # the soloist's ring near 3 kHz carries; a gentle roll-off keeps 2-5 kHz from turning harsh
+        volume: -60   # silent (v8): the notes stay for the pictures
+      heart2:         # the soloist again, a little fuller, each phrase entering on a soft "la"; the choir opens behind it
+        steps:
+          - "[mf <] [la] (C#4 - - - - - A3 - C#4 - - - E4 - C#4 - | [f >] B3 - - - A3 - - - G#3 - - - A3 - - -) [mf]"
+          - "[mf <] [la] (D4 - - - - - A3 - D4 - - - F#4 - D4 - | [f >] C#4 - - - A3 - - - F#3 - - - A3 - - -) [mf]"
+          - "[mf <] [la] (E4 - - - - - C#4 - E4 - - - A4 - E4 - | [f >] C#4 - - - B3 - - - A3 - - - C#4 - - -) [mf]"
+          - "[mf <] [la] (B3 - - - - - G#3 - B3 - - - E4 - B3 - | [f >] G#4 - - - - - - - F#4 - - - E4 - - -) [mf]"
+        settings: {vowel: aah, voices: tenors, soloist: true, attack: 0.15, brightness: 0.3, vibrato: 16, ring: 0.5, glide: 0.1}
+        lowpass: 3400
+        volume: -60   # silent (v8): the notes stay for the pictures
       drop:           # under the lead, an octave down
         settings: {vowel: aah, voices: men, singers: 12, attack: 0.08, brightness: 0.55, vibrato: 12, ring: 0.3}
         duck: {to: kick, depth: 0.3, release: 0.14}
@@ -419,23 +431,40 @@ tracks:
         settings: {vowel: aah, voices: men, singers: 12, attack: 0.08, brightness: 0.65, vibrato: 12, ring: 0.3}
         duck: {to: kick, depth: 0.3, release: 0.14}
         volume: -7
-      afterglow: {steps: *song12, settings: {vowel: ooh, voices: men, singers: 10, attack: 0.3, brightness: 0.35, vibrato: 18, ring: 0.9, glide: 0.12}, volume: {from: 4.7, to: 1.7}}
+      afterglow:      # the men's choir again (v7), the hook slowly on ooh
+        steps: &choir12
+          - "[mp <] (C#4 - - - - - A3 - C#4 - - - E4 - C#4 - | [mf >] B3 - - - A3 - - - G#3 - - - A3 - - -) [mp]"
+          - "[mp <] (D4 - - - - - A3 - D4 - - - F#4 - D4 - | [mf >] C#4 - - - A3 - - - F#3 - - - A3 - - -) [mp]"
+          - "[mp <] (E4 - - - - - C#4 - E4 - - - A4 - E4 - | [f >] C#4 - - - B3 - - - A3 - - - C#4 - - -) [mp]"
+          - "[mp <] (B3 - - - - - G#3 - B3 - - - E4 - B3 - | [f >] G#4 - - - - - - - F#4 - - - E4 - - -) [mp]"
+        settings: {vowel: ooh, voices: men, singers: 10, attack: 0.3, brightness: 0.35, vibrato: 18, ring: 0.9, glide: 0.12}
+        volume: {from: 4.7, to: 1.7}
       coda:           # F#-A, G#-B, then up the F# major chord to the keynote: ooh opening to aah
         steps: "F#3 | A3 | G#3 | B3 | A#3 | C#4 | F#4 | - - - - - - - - . . . . . . . ."
         settings: {vowel: ooh, morph: aah, voices: men, singers: 10, attack: 0.4, brightness: 0.4, vibrato: 18, ring: 2.0}
         volume: [[0, 1], [6, 1], [8, -7]]
         reverb: {size: 6.0, mix: 0.5, tone: 4500, predelay: 0.04}
-  voice:              # the choir's basses an octave under the hook (F#2-A3): the low body (v6: a saw pad)
+  voice:              # the men's choir under the hook: in heart and heart2 (v8) it hums the chords quietly under the
+                      # tenor soloist and opens from "mm" to "ah" for the lift; in the afterglow and the coda the
+                      # basses an octave under the hook (F#2-A3), as in v7
     instrument: choir
     settings: {vowel: mm, voices: basses, singers: 8, attack: 0.3, brightness: 0.3, vibrato: 10, ring: 0.7}
     reverb: {size: 4.0, mix: 0.35, tone: 3500}
     width: 0.9
     only: [heart, heart2, afterglow, coda]
-    steps: *song12
+    steps: *choir12
     transpose: -12
     sections:
-      heart: {volume: {from: -8, to: -3}}
-      heart2: {steps: *hook12, settings: {vowel: ooh, voices: basses, singers: 8, attack: 0.15, brightness: 0.35, vibrato: 10, ring: 0.5}, volume: -2.5}
+      heart:          # the chords hummed low (E2-C#4), one every two bars
+        transpose: 0
+        steps: "[pp <] F#2+C#3+A3 | - - - - - - - - - - - - - - - . | A2+D3+F#3 | - - - - - - - - - - - - - - - . | A2+E3+C#4 | - - - - - - - - - - - - - - - . | E2+B2+G#3 | - - - - - - - - - - - - - - - . [p]"
+        settings: {vowel: mm, voices: men, singers: 10, attack: 0.7, brightness: 0.25, vibrato: 8, ring: 1.0}
+        volume: -60   # silent (v8): the notes stay for the pictures
+      heart2:         # the hum opens: two chords on "mm", one that opens to "ah", the last on "ah"
+        transpose: 0
+        steps: "[p] F#2+C#3+F#3+A3 | - - - - - - - - - - - - - - - . | A2+D3+F#3+A3 | - - - - - - - - - - - - - - - . | [mp <] [mm-ah] A2+E3+A3+C#4 | - - - - - - - - - - - - - - - . | [syllable=vowel] [vowel=aah] E2+B2+E3+G#3 | - - - - - - - - - - - - - - - . [mf]"
+        settings: {vowel: mm, voices: men, singers: 12, attack: 0.5, brightness: 0.3, vibrato: 10, ring: 0.8}
+        volume: -60   # silent (v8): the notes stay for the pictures
       afterglow: {volume: {from: -2, to: -6}, settings: {vowel: mm, voices: basses, singers: 8, attack: 0.35, brightness: 0.25, vibrato: 10, ring: 0.9}}
       coda:
         steps: "F#3 | A3 | G#3 | B3 | A#3 | C#4 | F#4 | - - - - - - - - . . . . . . . ."
@@ -458,7 +487,7 @@ tracks:
     sections:
       dawn: {steps: ". | . | . | . | F#3 - A3 - | D4 | E4 - D4 - | A3 - - .", volume: {from: 0, to: 2}, settings: {players: 4, attack: 0.5, brightness: 0.25, ring: 1.2}}
       pulse: {steps: ". | . | . | . | . | . | . | . | C#4 | - | D4 | - | E4 | - | E4 | G#4", volume: [[8, -2], [16, 3]], settings: {players: 4, attack: 0.5, brightness: 0.3, ring: 0.9}}
-      heart2: {volume: {from: -2, to: 2}}
+      heart2: {volume: -60}   # silent (v8): the horns made the "fo" in the breakdown
       drop: {volume: 3, settings: {players: 4, attack: 0.12, brightness: 0.55, ring: 0.5}, duck: {to: kick, depth: 0.3, release: 0.14}}
       climax: {steps: ["A3 | F#3 - A3 -", "B3 | G#3 - B3 -", "C#4 | A3 - C#4 -", "E4 | C#4 - E4 -"], volume: 4,
                settings: {players: 4, attack: 0.1, brightness: 0.65, ring: 0.5}, duck: {to: kick, depth: 0.3, release: 0.14}}

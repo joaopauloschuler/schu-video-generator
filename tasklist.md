@@ -2164,6 +2164,10 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [x] `vidgen/title-cards` (`titleCard`, `endCard`, `update(t)`; `cardOptions` with did-you-mean, `cardAlpha`, `cardSettle`, `cardLayout`): HTML text over the page with Escapement's look and timing as defaults, 16:9 and 9:16, fit to the block, a soft dark gradient; CONFIG table, guide (web topic, `extensions/opening.js`), DESIGN §121.7
 - [x] Tests (`tests/test_web_title_cards.py`: Node, docs, one slow Chromium test); stills of Escapement's opening and end card and of a test page (16:9 title, 9:16 end card) in `/home/claude/work/scratch/am364/`; no example changed
 
+### Step 365 — Parallel Space v8 in the example (owner approved v8)
+- [x] `examples/parallel-space` updated to v8 from `/home/claude/work/ps8` (`video.yaml`, the score, `extensions/ps.js`; `.gitignore` and `webcut.py` unchanged): opening title and end card via `vidgen/title-cards`, the score's silent parts, output `parallel_space_v8`
+- [x] Example README for visitors (the opening and end card, the silent parts, render cost 0.5–1.0 s a frame); README example entry; `tests/test_parallel_space_example.py` (v8 score SHA-256, `vidgen/title-cards`, output name)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

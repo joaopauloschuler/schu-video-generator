@@ -1,6 +1,7 @@
-"""examples/parallel-space (Step 355): the music film "Parallel Space" (v7) as an example, source
+"""examples/parallel-space (Step 355): the music film "Parallel Space" as an example (v7; v8 since Step 365), source
 only. Since Step 358 its page reads the music through `ctx.music` (`music_data`) and is built on
-vidgen's modules `vidgen/three-kit` and `vidgen/music-time`. Validate only: no render and no
+vidgen's modules `vidgen/three-kit` and `vidgen/music-time`; since Step 365 its opening title and
+end card are `vidgen/title-cards`. Validate only: no render and no
 synthesis here (the README gives the render's cost)."""
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ from vidgen.studio.render import range_warnings
 
 EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "parallel-space"
 SCORE = EXAMPLE / "assets" / "music" / "parallel_space.yaml"
-#: SHA-256 of the film's v7 score file (line ends as "\n"): the example plays the score unchanged.
-SCORE_SHA256 = "b1c7286ddb67f587d4cb63af8b285de5cb0d03946a5b58ef844b33571b564893"
+#: SHA-256 of the film's v8 score file (line ends as "\n"): the example plays the score unchanged.
+SCORE_SHA256 = "0f9cccd48ec89e1fbaa68978518ed106e5c546007e0275204eed4d63ce746f87"
 #: Where each scene starts, in bars of the song (one bar = 52 frames at 30 fps).
 BAR_STARTS = [0, 8, 24, 32, 40, 56, 64, 72, 80, 88, 96]
 BAR = Fraction(52, 30)
@@ -55,6 +56,8 @@ def test_the_page_reads_the_music_through_ctx_music_only() -> None:
     page = (EXAMPLE / "extensions" / "ps.js").read_text(encoding="utf-8")
     assert "ctx.music" in page and "fetch(" not in page and "ps_audio" not in page
     assert 'from "vidgen/three-kit"' in page and 'from "vidgen/music-time"' in page
+    assert 'from "vidgen/title-cards"' in page and "makeText" not in page
+    assert Project.load(EXAMPLE).config.output == "parallel_space_v8"
     names = {t.name for t in load_music_score(SCORE).tracks}
     project = Project.load(EXAMPLE)
     with extensions.project_session(project):

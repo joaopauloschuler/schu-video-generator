@@ -4,30 +4,39 @@ A 1280×720, 30 fps music film, 3:05 long: an original hybrid cinematic / trance
 138.46 beats to the minute in F# minor, and eleven three.js scenes of a flight through space and
 parallel realities. The score is written for vidgen's own synthesizer: a men's choir, strings,
 a horn section, an organ, synth drums and supersaws. It opens slowly on one far light, grows an
-ostinato layer by layer, lets the choir sing the hook in the breakdown, stops for a breath before
+ostinato layer by layer, lets the hook glow as a line of light round a great crystal in the breakdown, stops for a breath before
 the trance drop, climbs to a second, higher climax and resolves on F# major in the coda. One bar
 is exactly 52 frames, so every scene cuts on a bar line.
 
-This folder is the film's source (version 7, the latest), made with
+This folder is the film's source (version 8, the latest), made with
 [schu-video-generator](https://github.com/joaopauloschuler/schu-video-generator) (`vidgen`).
 Music and picture are generated from these files only: vidgen's own synthesizer plays the score
 and Chromium draws the pictures, with no samples and no SoundFont. The code and the score were written by AI agents under the owner's direction.
+
+## The opening title and the end card
+
+The film opens on one far light in the right third of the frame; the title, *Parallel Space*,
+with a thin rule and the subtitle "A flight through parallel realities", comes up slowly in the
+left third over calm dark space, holds, and is gone before the first cut. The end card mirrors
+it: the light, now warm, moves into the left third, and the card in the right third carries the
+title, the credit "made with schu-video-generator" and the project's link, fading out with the
+picture. Both are `titleCard` and `endCard` from vidgen's module `vidgen/title-cards`.
 
 ## Form
 
 | Bars | Time | Music section | Scene | Pictures |
 |---|---|---|---|---|
-| 0–8 | 0:00 | dawn | `01_dawn` | One small light in a large cold dark; the title; a far men's choir lights stars, a clock starts to tick |
+| 0–8 | 0:00 | dawn | `01_dawn` | One small light in a large cold dark, in the right third; the title in the left third; the notes of a far choir line light stars, a clock starts to tick |
 | 8–24 | 0:14 | pulse | `02_pulse` | The ostinato lights a corridor of cells note by note; it opens onto great rings |
 | 24–32 | 0:42 | groove | `03_groove1` | The mirror corridor: two huge glass planes, each showing another, later, tinted copy of the flight; solids split on the kick, the seams flash with the gated chords; the planes fold into one solid |
 | 32–40 | 0:55 | groove | `04_groove2` | A portal shows another, warm universe; we fly into it |
-| 40–56 | 1:09 | heart, heart2 | `05_heart` | The hook, sung, as a line of light around a great crystal; rings wake, the camera pulls far back |
+| 40–56 | 1:09 | heart, heart2 | `05_heart` | The hook as a line of light around a great crystal; rings wake, the camera pulls far back |
 | 56–64 | 1:37 | build | `06_build` | The corridor again, hot and accelerating towards a white star; a breath of dark before the hit |
 | 64–72 | 1:51 | drop | `07_drop1` | The sun: the spectrum is its rays, the lead melody its orbit, the kick sends rings down the flight |
 | 72–80 | 2:05 | drop | `08_drop2` | Around the sun; five portals look back into the cold universe |
 | 80–88 | 2:19 | climax | `09_climax` | The sun inside the great rings, seen from farther and farther away |
 | 88–96 | 2:33 | afterglow | `10_afterglow` | The same place cooling from gold to violet; the hook, an octave lower, drifts round it |
-| 96–104 + 4.6 s | 2:46 | coda | `11_coda` | The one light again, now warm; the end card |
+| 96–104 + 4.6 s | 2:46 | coda | `11_coda` | The one light again, now warm, in the left third; the end card in the right third |
 
 104 bars = 180.27 s, plus 4.6 s for the last chord to ring out.
 
@@ -50,13 +59,19 @@ it, but it is not part of this example and is not needed). What the main voices 
 
 | Track | Instrument |
 |---|---|
-| `trumpet` (the name the pictures read) | a men's choir far away in a long hall: `ooh` at dawn (A2–F#3), a hummed `mm` in the groove, `aah` in the coda |
-| `hook` | a men's choir (F#3–A4): `ooh` in the breakdown, `aah` in heart2; in the drop and the climax it doubles the supersaw lead an octave or two under |
-| `voice` | the choir's basses an octave under the hook: the low body |
+| `trumpet` (the name the pictures read) | a far men's choir line (dawn, groove, coda), kept silent |
+| `hook` | the hook (F#3–A4): a tenor soloist's line in the breakdown (`heart`, `heart2`), kept silent; a men's choir on `ooh` in the afterglow; in the drop and the climax the men's choir doubles the supersaw lead an octave or two under |
+| `voice` | the men's choir: hummed chords under the soloist in the breakdown, kept silent; in the afterglow and the coda the basses an octave under the hook |
 | `lead` | the supersaw lead of the drop and the climax |
-| `violins`, `swell`, `spicc`, `vla` | violas and cellos: on the hook, swelling single notes, spiccato sixteenths, short strokes |
-| `horn`, `organ`, `brass` | a horn section, an organ on a soft flute stop, low sustained swells |
+| `violins`, `swell`, `spicc`, `vla` | violas and cellos: on the hook, swelling single notes (silent in the breakdown), spiccato sixteenths, short strokes |
+| `horn`, `organ`, `brass` | a horn section, an organ on a soft flute stop, low brass-like swells (the organ silent in the opening and the breakdown, the horns and the swells in `heart2`) |
 | `kick`, `taiko`, `tom`, `boom`, `clap`, `snare`, `crash`, `tick`, `roll`, `frame` | the drums |
+
+Some parts are silent: in the opening and in the breakdown (1:10–1:37) the far choir line, the
+tenor soloist and the humming choir under it, the organ's flute stop, the horns, the brass-like
+swell and the swelling violas play at −60 dB. Their notes are kept in the score, so the pictures
+still follow them: the choir's call still lights the stars at dawn and the hook still draws its
+line of light round the crystal.
 
 The tempo is 138.4615 rather than 138.4615385: the longer figure would round each bar down to
 51.99 frames; this one gives exactly 52. The mix is normalised to −14 LUFS.
@@ -67,7 +82,7 @@ The tempo is 138.4615 rather than 138.4615385: the longer figure would round eac
 |---|---|
 | [video.yaml](video.yaml) | the project: format, music, and the eleven scenes (`web_cut`, one script; `data.mode` picks the scene; `music_data` names the score's tracks the page reads) |
 | [assets/music/parallel_space.yaml](assets/music/parallel_space.yaml) | the score: 30 tracks, 104 bars, played by vidgen's synthesizer |
-| [extensions/ps.js](extensions/ps.js) | every scene, the opening title and the end card (one three.js module, built from vidgen's `vidgen/three-kit` and `vidgen/music-time`) |
+| [extensions/ps.js](extensions/ps.js) | every scene, the opening title and the end card (one three.js module, built from vidgen's `vidgen/three-kit`, `vidgen/music-time` and `vidgen/title-cards`) |
 | [extensions/webcut.py](extensions/webcut.py) | `web_cut`: a `web` scene with no 0.5 s fade-out, so the cuts land on the bar |
 | [.gitignore](.gitignore) | keeps `build/`, `output/` and rendered audio and video out of version control |
 
@@ -81,8 +96,8 @@ vidgen validate .
 vidgen render .
 ```
 
-That writes `output/parallel_space_v7.mp4`. The pictures use bloom and a baked nebula sky and
-are drawn by the browser's software renderer where there is no GPU: about 0.5 to 0.75 s a frame
+That writes `output/parallel_space_v8.mp4`. The pictures use bloom and a baked nebula sky and
+are drawn by the browser's software renderer where there is no GPU: 0.5 to 1.0 s a frame
 was measured on a 2-core machine, so the film's 5,546 frames take **about 1 hour**. The first
 render also synthesizes the score (about 9 minutes on 2 cores); it is cached in `build/music`
 afterwards. On a machine with more cores, `vidgen render --jobs auto .` draws scenes in parallel.
@@ -111,8 +126,8 @@ A smaller delivery copy under 25 MB: re-encode the video in two passes and copy 
 Windows use `NUL` instead of `/dev/null`):
 
 ```bash
-ffmpeg -y -i output/parallel_space_v7.mp4 -c:v libx264 -preset slow -b:v 840k -pass 1 -pix_fmt yuv420p -profile:v high -an -f null /dev/null
-ffmpeg -i output/parallel_space_v7.mp4 -c:v libx264 -preset slow -b:v 840k -pass 2 -pix_fmt yuv420p -profile:v high -movflags +faststart -c:a copy output/parallel_space_v7_delivery.mp4
+ffmpeg -y -i output/parallel_space_v8.mp4 -c:v libx264 -preset slow -b:v 840k -pass 1 -pix_fmt yuv420p -profile:v high -an -f null /dev/null
+ffmpeg -i output/parallel_space_v8.mp4 -c:v libx264 -preset slow -b:v 840k -pass 2 -pix_fmt yuv420p -profile:v high -movflags +faststart -c:a copy output/parallel_space_v8_delivery.mp4
 ```
 
 ## How the pictures hear the music
@@ -129,19 +144,6 @@ After a change to the score nothing else needs rebuilding: the next render (or `
 measures the music again. If you change the form of the score (the number of bars in a section),
 change the scene durations in `video.yaml` and the bar numbers in `ps.js` to match.
 
-The published film read the music from a data file made by a script of its own. The example
-reads the same hits and notes from `ctx.music` (every time, gain and length equal); the spectrum
-and level are measured from the video's mix with 256 steps instead of the file's 64. That changes
-the length of a spectrum ray or the glow of a crystal a little: in stills of every scene at three
-moments, 6 of 36 are identical and the rest differ by 53.5 to 85 dB PSNR, most pixels by one or two
-levels and the tips of the sun's rays by more (up to 89 levels on a few pixels).
-
-One thing differs on purpose: the published film's hook dimmed for one frame at the start of each
-legato note in `heart` and `afterglow` (its melody light restarted at zero; `vidgen motion check` lists
-these dips). The kit's `melody` now starts a note's light from where the note before left it, so
-those frames keep the light of their neighbours, and the ribbon of the hook has no darker gap at
-each note.
-
 ## Notes on the pictures
 
 - Everything is a function of the song time (`ctx.music.t0` plus the scene's clock): no state is carried
@@ -155,5 +157,4 @@ each note.
   grain.
 - The building blocks — glowing strokes, glass crystals, the tesseract, the nebula sky, portals,
   star fields, flares, shock rings, the hook's ribbon, the spectrum's rays, the corridor and the
-  great rings — come from vidgen's module `vidgen/three-kit` (they were written for this film and
-  moved there in Step 358); `ps.js` composes them into the scenes.
+  great rings — come from vidgen's module `vidgen/three-kit` (written first for this film); `ps.js` composes them into the scenes.

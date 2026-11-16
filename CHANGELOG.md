@@ -5,9 +5,16 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–364
+## Steps 193–365
 
-### Music-video tools (Phase AM, Steps 358–364)
+### Music-video tools (Phase AM, Steps 358–365)
+
+- **Parallel Space v8** (Step 365): `examples/parallel-space` is now the version the owner
+  approved. An opening title and an end card from `vidgen/title-cards` (the light in the right
+  third under the title, in the left third under the end card, which carries the credit and the
+  project's link); in the opening and the breakdown the far choir line, the tenor soloist and the
+  humming choir, the organ's flute stop, the horns, the brass-like swell and the swelling violas
+  are silent, their notes kept so the pictures still follow them; output `parallel_space_v8`.
 
 - **Opening titles and end cards for films** (Step 364): `vidgen/title-cards`, a module for any
   `web` page: `await titleCard(ctx, {title, subtitle})` and `await endCard(ctx, {title, subtitle,

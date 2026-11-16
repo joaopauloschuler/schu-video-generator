@@ -27246,3 +27246,12 @@ project), repo work is generic.
 - **Not changed**: no example (Parallel Space v8 will use the module next; Escapement keeps its own `makeText`). No video rendered; 4 small stills.
 - **Gaps**: the end card in 16:9 and the title in 9:16 were drawn only by the slow test at tiny size, not looked at; no MCP or YAML-only form (a page imports it); Windows / macOS not tried.
 - **How to test**: `python -m pytest -q tests/test_web_title_cards.py -m "slow or not slow"`; by eye `vidgen still /home/claude/work/scratch/am364/demo --scene opening --at 7 --size 640x360`.
+
+## Step 365 — Parallel Space v8 in `examples/parallel-space`
+
+- **Why** (owner, 2026-11-16): v8 approved ("ESPETACULAR"); the example becomes v8.
+- **Done**: copied the tracked source of `/home/claude/work/ps8` (13 commits on top of the example as it was) over the example: `video.yaml` (header, `output: parallel_space_v8`), `assets/music/parallel_space.yaml` (the v8 score; SHA-256 `0f9cccd4…`), `extensions/ps.js` (`titleCard` / `endCard` from `vidgen/title-cards` replace the page's own `makeText`; the light in the right third under the title, the left third under the end card; stars, shock rings and glints kept off the cards). `.gitignore` and `extensions/webcut.py` identical. Diffed before/after: only those changes.
+- **Score**: at −60 dB with the notes kept (so `music_data` still carries them to the pictures): `trumpet` (the far choir line: dawn, groove, coda), `hook` and `voice` in heart / heart2 (the tenor soloist and the hummed chords), `organ` in dawn / heart / heart2, `brass` and `horn` in heart2, `swell` in heart / heart2.
+- **README** of the example rewritten for visitors: "What changed in v8" and the paragraphs about the published v7 film's data file and the melody-dip fix removed; new section on the opening title and end card; the silent parts in "The score"; render 0.5–1.0 s a frame (about 1 h on 2 cores). Top README example entry names `vidgen/title-cards`.
+- **Tests**: `tests/test_parallel_space_example.py` (hash, `vidgen/title-cards` import, no `makeText`, output name), `tests/test_docs.py`, `tests/test_gallery.py`: all pass. Nothing rendered (v8 was rendered and approved in `/home/claude/work/ps8`).
+- **How to test**: `python -m pytest -q tests/test_parallel_space_example.py`.
