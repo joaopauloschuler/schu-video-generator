@@ -5,7 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–354)
+## Unreleased (Steps 193–355)
+
+### "Parallel Space" as an example (Step 355)
+
+- **`examples/parallel-space`**: the 3:05 trance and choir music film "Parallel Space" (v7), source only (score unchanged, `video.yaml`, one three.js module, its audio data file and the script that rebuilds it, the `web_cut` type, README). Listed in the README and the scene gallery ("Pictures and media"); `tests/test_parallel_space_example.py` (validate only).
 
 ### Docs (Step 354)
 

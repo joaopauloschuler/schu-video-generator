@@ -2105,6 +2105,10 @@ with demo files for the owner to listen to.
 ### Step 354 — Docs catch up with Phase AL
 - [x] README and `docs/COOKBOOK.md` describe `docs/COOKBOOK-MUSIC.md` with its sections 8–13 (orchestral instruments, expressive notes, music data for web pages, the instrument table) and `docs/COOKBOOK-3D.md` with its section 8 (`vidgen/three-finish`); `docs/WINDOWS-CHECK.md` step 7 (`vidgen still`, `--intermediate compact --clean-intermediates`, the progress line, `music_data`, `vidgen music render` / `check` of the Signal Fire score, an optional `--draft` of Escapement) and an honest time estimate; CLAUDE.md's commit trailers name the current session
 
+### Step 355 — Parallel Space as an example (owner's request, 2026-11-16)
+- [x] Copy the source of `/home/claude/work/ps7` (v7: video.yaml, the score, `ps.js`, `ps_audio.json`, `webcut.py`, `scripts/make_ps_audio.py`, .gitignore; not `night_drive.yaml`, build or output) into `examples/parallel-space/` as is (no port to `music_data`); README for visitors; README example list entry and gallery note; `tests/test_parallel_space_example.py` (validate only) — done, no rendering
+- [ ] Not done: nothing rendered from the example (no still, draft or final; the render time is the earlier measurement of the film); Windows and macOS not tried
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

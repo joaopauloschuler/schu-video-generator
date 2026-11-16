@@ -967,6 +967,13 @@ my_video/
   `music_data`), an exploded view at the climax and one silent bar where everything stops; the
   film's own depth of field, motion blur and finishing (the final render takes
   about 1 h 30 min to 2 h on 2 cores, `vidgen still` and `--draft` for quick looks).
+- [examples/parallel-space](examples/parallel-space/README.md) — "Parallel Space", a 3:05
+  music film, source only: an original hybrid cinematic / trance score at 138.46 BPM in F# minor
+  for vidgen's own synthesizer (men's choir, strings, horn, organ, synth drums and supersaws) and
+  eleven three.js `web` scenes of a flight through space and parallel realities, among them a
+  mirror corridor of nine receding copies of the flight; the pictures follow the music through
+  the film's own data file, rebuilt by a script when the score changes (the final render takes
+  about 1 h on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

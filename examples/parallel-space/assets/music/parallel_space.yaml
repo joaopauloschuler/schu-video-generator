@@ -1,0 +1,505 @@
+# Parallel Space: the cinematic hybrid of Night Drive (assets/music/night_drive.yaml, kept beside
+# it as the original). Same tempo (138.46 BPM: one bar is exactly 52 frames at 30 fps), same key
+# (F# minor), same hook and the same trance drop; a new cinematic opening, an ostinato that grows
+# layer by layer, a breakdown where a men's choir carries the hook over wide pads, a build
+# that stops for a breath before the hit, a second, higher climax and a spacious coda that resolves
+# on F# major. Everything is played by vidgen's own synthesizer: no samples, no SoundFont.
+#
+# The orchestra (v7): no high synth leads. What v6 played on soft_lead and pads in the high
+# middle register is now sung or bowed, one or two octaves lower:
+#   trumpet  (the name the pictures read) a men's choir: ooh at dawn (A2-F#3), a hummed mm in the groove,
+#            aah in the coda (octave 3)
+#   hook     a men's choir an octave under v6 (F#3-A4): ooh in the breakdown, aah in heart2; in the drop
+#            and the climax it only doubles the supersaw lead underneath, an octave or two down
+#   voice    the choir's basses an octave under the hook (F#2-A3): the low body
+#   violins  real violins an octave under v6 (heart2), violas in the climax
+#   swell    violas in octave 3, each note swelling in;  spicc: violas, spiccato, octave 3;  vla: cellos, short strokes
+#   horn     the real horn section;  organ: the real organ, a soft flute stop, an octave lower (octave 3)
+#   frame    a low frame drum: the kick's sine at 150 -> 66 Hz, short, in a hall
+#   brass    low sustained swells (saw pad, octave 2), as before
+#
+# Form (bars of 4/4; 8 bars = 13.867 s; every section is a multiple of 8 bars, so scenes cut on bars):
+#   dawn 8 | pulse 16 | groove 16 | heart 8 | heart2 8 | build 8 | drop 16 | climax 8 | afterglow 8 | coda 8
+#   = 104 bars, 180.27 s, plus the last chord's tail.
+version: 1
+title: Parallel Space
+description: Night Drive as a cinematic hybrid in F# minor - a slow opening, a growing ostinato, the hook on a singing lead, the trance drop with low swells and big drums, a higher climax and a coda that resolves.
+key: F# minor
+tempo: 138.4615                    # 138.4615385 would round each bar down to 51.99 frames; this gives exactly 52
+seed: 7
+loop: false
+progression: "i VI III VII"        # F#m D A E, two bars each (Night Drive's progression)
+chord_bars: 2
+master: {lowpass: 12000, highpass: 28}
+sections:
+  - {name: dawn, bars: 8, progression: "F#m(add9) D/F#", chord_bars: 4}     # a pedal F# under two slow chords
+  - {name: pulse, bars: 16}
+  - {name: groove, bars: 16}
+  - {name: heart, bars: 8, progression: "F#m(add9) Dmaj7 A(add9) E"}
+  - {name: heart2, bars: 8, progression: "F#m(add9) Dmaj7 A(add9) E"}
+  - {name: build, bars: 8}
+  - {name: drop, bars: 16}
+  - {name: climax, bars: 8, progression: "D E F#m A"}                       # starts on VI and climbs: the lift
+  - {name: afterglow, bars: 8}
+  - {name: coda, bars: 8, progression: "D E F# F#"}                         # VI VII I: it resolves on the major chord
+tracks:
+  # ------------------------------------------------------------------ drums
+  kick:
+    instrument: kick
+    settings: {high: 125, low: 46, decay: 0.22, click: 0.12}
+    steps: "x... x... x... x..."
+    only: [pulse, groove, build, drop, climax, afterglow]
+    sections:
+      pulse:          # a heartbeat from bar 9
+        settings: {high: 96, low: 42, decay: 0.3, click: 0.03}
+        volume: -4
+        steps: ". | . | . | . | . | . | . | . | x... .... ..x. .... | x... .... ..x. .... | x... .... ..x. .... | x... .... ..x. .... | x... .... ..x. .... | x... .... ..x. .... | x... .... ..x. .... | x... .... .... ...."
+      build: {steps: ["x... x... x... x...", "x... x... x... x...", "x... x... x... x...", "x... x... x... x...",
+                      "x... x... x... x...", "x... x... x... x...", "x... x... x... x...", "...."]}
+      afterglow:      # the heartbeat again, walking away
+        settings: {high: 96, low: 42, decay: 0.3, click: 0.03}
+        steps: "x... .... ..x. ...."
+        volume: {from: -3, to: -18}
+  taiko:              # big low drum in a hall (the kick's sine, lower and longer)
+    instrument: kick
+    settings: {high: 105, low: 44, decay: 0.3, click: 0.14}
+    reverb: {size: 3.0, mix: 0.4, tone: 2600}
+    volume: 3
+    only: [pulse, heart2, build, drop, climax, afterglow, coda]
+    sections:
+      pulse:
+        steps: "X... .... .... .... | . | . | . | X... .... .... .... | . | . | .... .... .... x.x. | X... .... .... .... | . | X... .... .... .... | .... .... ..x. x.x. | X... .... ..x. .... | X... .... ..x. .... | X... ..x. ..x. ..x. | x.x. x.x. x.xx xxxx"
+        volume: [[0, -4], [12, -2], [16, 0]]
+      heart2: {steps: ". | . | . | . | X... .... .... .... | . | . | .... .... x... x.x.", volume: 0}
+      build:
+        steps: ["x... .... x... ....", "x... .... x... ....", "x... .... x... ....", "x... .... x... ....",
+                "x... x... x... x...", "x... x... x... x...", "x.x. x.x. x.x. x.x.", "xxxx xxxx xx.. ...."]
+        volume: [[0, -5], [6, -2], [8, 1]]
+      drop: {steps: ["X... .... .... ....", ".", ".", ".... .... ..x. x.xx"], volume: 2}
+      climax: {steps: ["X... .... .... ....", ".... .... x.x. x.xx"], volume: 0}
+      afterglow: {steps: "X... .... .... .... | . | . | . | x... .... .... .... | . | . | .", volume: 1}
+      coda: {steps: "X... .... .... .... | . | . | . | X... .... .... .... | . | . | .", volume: 1}
+  tom:                # a higher drum answering the taiko
+    instrument: kick
+    settings: {high: 155, low: 68, decay: 0.24, click: 0.2}
+    reverb: {size: 2.4, mix: 0.35, tone: 3000}
+    pan: 0.25
+    volume: 1
+    only: [pulse, build, drop, climax]
+    sections:
+      pulse:
+        steps: ". | . | . | .... .... .... ..x. | . | . | . | .... .... x.x. .... | . | . | . | .... .... x... .... | .... x... .... x... | .... x... .... x... | .... x... x... .x.x | .x.x .x.x .x.. ...."
+        volume: [[0, -5], [12, -3], [16, -1]]
+      build:
+        steps: [".", ".", ".... .... .... x.x.", ".... .... .... x.xx", ".... x... .... x...", "..x. ..x. ..x. ..x.", ".x.x .x.x .x.x .x.x", "xxxx xxxx xx.. ...."]
+        volume: [[0, -4], [8, 0]]
+      drop: {steps: [".", ".", ".", ".... .... x.x. ...."]}
+      climax: {steps: [".", ".... x... .x.x ...."], volume: 0}
+  boom:
+    instrument: boom
+    settings: {low: 36, decay: 1.5}
+    steps: "x | . | . | . | . | . | . | ."
+    volume: 3
+    rest: [build]
+    sections:
+      dawn: {steps: "x | . | . | . | x | . | . | .", volume: 2}
+      heart: {volume: 1}
+      heart2: {volume: 1}
+      afterglow: {volume: 1}
+      coda: {steps: "x | . | . | . | x | . | . | .", volume: 1}
+  tick:               # the clock: a ticking pulse through the cinematic parts
+    instrument: tick
+    steps: "X.o. x.o. X.o. x.o."
+    spread: 0.45
+    volume: 14
+    reverb: {size: 1.2, mix: 0.2}
+    only: [dawn, pulse, heart2, build, afterglow, coda]
+    sections:
+      dawn: {steps: ". | . | . | . | X... x... X... x... | X... x... X... x... | X.o. x.o. X.o. x.o. | X.o. x.o. X.o. x.o.", volume: {from: 9, to: 14}}
+      heart2: {volume: {from: 6, to: 14}}
+      build: {steps: ["X.o. x.o. X.o. x.o.", "X.o. x.o. X.o. x.o.", "X.o. x.o. X.o. x.o.", "X.o. x.o. X.o. x.o.",
+                      "X.o. x.o. X.o. x.o.", "X.o. x.o. X.o. x.o.", "X.o. x.o. X.o. x.o.", "X.o. x.o. X... ...."]}
+      afterglow: {volume: {from: 14, to: 11}}
+      coda: {steps: "X.o. x.o. X.o. x.o. | X.o. x.o. X.o. x.o. | X... x... X... x... | X... x... X... x... | X... .... x... .... | X... .... x... .... | X... .... .... .... | .", volume: {from: 11, to: 3}}
+  hat:
+    instrument: hat
+    steps: "o.x. o.x. o.x. o.xo"
+    spread: 0.3
+    volume: 10
+    only: [groove, build, drop, climax]
+    sections:
+      build: {steps: ["o.x. o.x. o.x. o.xo", "o.x. o.x. o.x. o.xo", "o.x. o.x. o.x. o.xo", "o.x. o.x. o.x. o.xo",
+                      "o.x. o.x. o.x. o.xo", "o.x. o.x. o.x. o.xo", "oxxo oxxo oxxo oxxo", "oxxo oxxo ox.. ...."]}
+      climax: {steps: "oxxo oxxo oxxo oxxx", volume: 11}
+  ohat:
+    instrument: open_hat
+    steps: "..x. ..x. ..x. ..x."
+    pan: 0.15
+    volume: 9
+    only: [groove, build, drop, climax]
+    sections:
+      build: {steps: ["..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.",
+                      "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "..x. ..x. .... ...."]}
+  crash:
+    instrument: open_hat
+    settings: {decay: 0.2, tone: 8000}
+    steps: "x | . | . | . | . | . | . | ."
+    volume: 9
+    width: 1.6
+    only: [groove, drop, climax]
+    sections:
+      drop: {steps: "X | . | . | . | x | . | . | ."}
+      climax: {steps: "X | . | x | .", volume: 10}
+  clap:
+    instrument: clap
+    steps: "....x.......x..."
+    reverb: {size: 1.2, mix: 0.25}
+    volume: 9
+    only: [groove, drop, climax]
+  snare:              # the 80s gated snare under the clap: a bigger backbeat in the drop
+    instrument: gated_snare
+    settings: {gate: 0.2, body: 200}
+    steps: "....x.......x..."
+    volume: 3
+    only: [drop, climax]
+    sections:
+      climax: {volume: 4, steps: ["....x.......x...", "....x.......x.xx"]}
+  roll:
+    instrument: clap
+    only: [build]
+    steps: ["x... x... x... x...", "x... x... x... x...", "x... x... x... x...", "x... x... x... x...",
+            "x.x. x.x. x.x. x.x.", "x.x. x.x. x.x. x.x.", "xxxx xxxx xxxx xxxx", "xxxx xxxx xx.. ...."]
+    volume: [[0, -4], [7, 7], [8, 10]]
+    reverb: {size: 1.6, mix: 0.3}
+  frame:              # a low frame drum far away in a hall: the hook's 3+3+2 before anything plays it (v5: pulsar chirps)
+    instrument: kick
+    settings: {high: 150, low: 66, decay: 0.11, click: 0.12}
+    steps: "x..o..x.o..x..o."
+    spread: 0.3
+    highpass: 60
+    reverb: {size: 3.4, mix: 0.45, tone: 2200}
+    volume: -9
+    only: [dawn, heart]
+    sections:
+      dawn: {steps: ["x..o..x.o..x..o.", "."], volume: {from: -8, to: -13}}
+      heart: {steps: ["x..o..x.o..x..o.", ".", ".", "."], volume: -10}
+  # ------------------------------------------------------------------ bass
+  bass:
+    instrument: analog_bass
+    settings: {tone: 1600, closed: 300, detune: 10}
+    steps: "..x. ..x. ..x. ..x."
+    volume: 3
+    only: [groove, build, drop, climax]
+    sections:
+      build: {steps: ["..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.",
+                      "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "...."]}
+      drop: {steps: ".xxx .xxx .xxx .xxx", volume: 2, settings: {tone: 2200, closed: 380, detune: 12}}
+      climax: {steps: ".xx'x .xx'x .xx'x .xx'x", volume: 2, settings: {tone: 2400, closed: 400, detune: 12}}
+  sub:                # a sine an octave under the bass, off the kick
+    instrument: sub
+    octave: 1
+    settings: {decay: 0.35, tone: 400, second: 0.1}
+    steps: "..x. ..x. ..x. ..x."
+    volume: -3
+    only: [groove, drop, climax]
+    sections:
+      groove: {volume: -6}
+  # ------------------------------------------------------------------ ostinato
+  ost:                # the ostinato: sixteenths with the hook's 3+3+2 accents, growing layer by layer
+    instrument: synth_bass
+    octave: 3
+    settings: {decay: 0.09, tone: 1300, ring: 0.03}
+    steps: "5 1 1 5 1 1 8 1 5 1 1 5 1 1 3 1"
+    accent: "3+3+2"
+    spread: 0.2
+    reverb: {size: 1.4, mix: 0.18}
+    only: [pulse, groove, heart2, build, drop, climax, afterglow]
+    sections:
+      pulse: {lowpass: [[0, 420], [8, 1200], [16, 3400]], volume: [[0, -9], [8, -2], [16, 2]]}
+      groove: {lowpass: 1500, volume: -7}
+      heart2: {lowpass: {from: 500, to: 2200}, volume: {from: -14, to: -3}}
+      build: {lowpass: {from: 1500, to: 5000}, volume: {from: -4, to: 1},
+              steps: ["5 1 1 5 1 1 8 1 5 1 1 5 1 1 3 1", "5 1 1 5 1 1 8 1 5 1 1 5 1 1 3 1", "5 1 1 5 1 1 8 1 5 1 1 5 1 1 3 1", "5 1 1 5 1 1 8 1 5 1 1 5 1 1 3 1",
+                      "5 1 1 5 1 1 8 1 5 1 1 5 1 1 3 1", "5 1 1 5 1 1 8 1 5 1 1 5 1 1 3 1", "5 1 1 5 1 1 8 1 5 1 1 5 1 1 3 1", "5 1 1 5 1 1 8 1 5 1 . . . . . ."]}
+      drop: {lowpass: 3000, volume: -5}
+      climax: {lowpass: 4500, volume: -3}
+      afterglow: {lowpass: {from: 2600, to: 500}, volume: {from: -4, to: -22}}
+  vla:                # the figure's accents as short cello strokes in octave 3 (v6: soft_lead strokes in octave 4)
+    instrument: cellos
+    octave: 3
+    settings: {stroke: spiccato, length: 0.11, brightness: 0.35, accent: 0.9, players: 4}
+    steps: "5 - . 5 - . 8 - 5 - . 5 - . 3 -"
+    spread: 0.3
+    pan: 0.25
+    reverb: {size: 2.2, mix: 0.25, tone: 3200}
+    only: [pulse, heart2, build]
+    sections:
+      pulse: {steps: ". | . | . | . | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 - | 5 - . 5 - . 8 - 5 - . 5 - . 3 -",
+              volume: [[4, -8.4], [16, 0.6]], lowpass: [[4, 900], [16, 2400]]}
+      heart2: {volume: {from: -12.4, to: -2.4}, lowpass: {from: 800, to: 2200}}
+      build: {volume: {from: -3.4, to: 1.6}, lowpass: {from: 1500, to: 3200},
+              steps: ["5 - . 5 - . 8 - 5 - . 5 - . 3 -", "5 - . 5 - . 8 - 5 - . 5 - . 3 -", "5 - . 5 - . 8 - 5 - . 5 - . 3 -", "5 - . 5 - . 8 - 5 - . 5 - . 3 -",
+                      "5 - . 5 - . 8 - 5 - . 5 - . 3 -", "5 - . 5 - . 8 - 5 - . 5 - . 3 -", "5 - . 5 - . 8 - 5 - . 5 - . 3 -", "5 - . 5 - . 8 - 5 - . . . . . ."]}
+  # ------------------------------------------------------------------ pads and swells
+  saws:
+    instrument: supersaw
+    play: chords
+    settings: {tone: 5000, fade: 0.25, detune: 34}
+    duck: {to: kick, depth: 0.6, release: 0.14}
+    only: [pulse, groove, build, drop, climax, afterglow]
+    sections:
+      pulse: {lowpass: [[0, 180], [8, 420], [16, 2000]], volume: [[0, -30], [8, -7], [16, 4]]}     # a long swell under the ostinato
+      groove: {volume: 6, lowpass: [[0, 1800], [16, 4200]], gate: {steps: "X..x..x.X..x..x.", duty: 0.5, floor: 0.1}}
+      build: {lowpass: [[0, 1200], [8, 7000]], gate: {steps: "XxxX xxXx XxxX xxXx", duty: 0.55, floor: 0.05},
+              volume: [[0, 2], [7.6, 5], [7.66, -50], [8, -50]]}                                # ...and a breath of silence before the hit
+      drop: {lowpass: 9000, volume: 5, width: 1.5, settings: {tone: 6000, fade: 0.25, detune: 34}}
+      climax: {lowpass: 10500, volume: 5.5, width: 1.6, settings: {tone: 6000, fade: 0.25, detune: 36}}
+      afterglow: {lowpass: {from: 3200, to: 350}, volume: {from: -2, to: -20}}
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 3200, air: 0.5, sub: 0.45}
+    volume: -1
+    sections:
+      dawn: {volume: [[0, -20], [3, -9], [8, -6]], lowpass: {from: 450, to: 2600}, width: 1.3, settings: {tone: 2400, air: 0.6, sub: 0.2, fade: 3.0}, highpass: 150}
+      pulse: {volume: -6, settings: {tone: 2000, air: 0.4, sub: 0.5}}
+      groove: {volume: -9, settings: {tone: 1800, air: 0.3, sub: 0.3}}
+      heart: {volume: {from: -7, to: -4}, width: 1.15, settings: {tone: 3200, air: 0.6, sub: 0.15, fade: 2.2}, highpass: 180}
+      heart2: {volume: {from: -4, to: -2}, width: 1.25, settings: {tone: 3600, air: 0.7, sub: 0.2, fade: 2.2}, highpass: 160}
+      build: {volume: [[0, -6], [7.6, -5], [7.66, -50], [8, -50]]}
+      drop: {volume: -4}
+      climax: {volume: -3, width: 1.4}
+      afterglow: {volume: {from: -3, to: -6}, width: 1.25, settings: {tone: 2800, air: 0.6, sub: 0.2, fade: 2.2}, highpass: 160}
+      coda: {volume: [[0, -5], [5, -4], [8, -14]], width: 1.25, settings: {tone: 2600, air: 0.7, sub: 0.2, fade: 3.0}, highpass: 170}
+  organ:              # a real organ on a soft flute stop holding the chords in octave 3 (v6: the near-sine glass pad in octave 4)
+    instrument: organ
+    octave: 3
+    steps: "* | - - - - - - - - - - - - - - - ."           # a chord every two bars, lifted for a breath before the next
+    settings: {registration: flute, tone: 2400, chiff: 0.5, detune: 2}
+    highpass: 200
+    width: 0.8
+    reverb: {size: 4.2, mix: 0.36, tone: 3200}
+    volume: -3.5
+    only: [dawn, heart, heart2, drop, climax, afterglow, coda]
+    sections:
+      dawn: {volume: {from: -11.5, to: -1.5}, steps: "* | - | - | - - - - - - - - - - - - - - - ."}
+      heart: {volume: -0.5}
+      heart2: {volume: 0.5}
+      afterglow: {volume: -0.5}
+      coda: {volume: [[0, -0.5], [6, 1.5], [8, -6.5]], steps: "* | - | * | - | * | - | - | - - - - - - - - - - - - - - - ."}
+  brass:              # low sustained swells: root, fifth and octave, each chord fading in slowly
+    instrument: saw_pad
+    octave: 2
+    settings: {tone: 1100, attack: 1.3, release: 1.2, detune: 16}
+    steps: "1+5+8 | -"
+    reverb: {size: 2.6, mix: 0.25}
+    width: 0.4
+    duck: {to: kick, depth: 0.4, release: 0.16}
+    only: [pulse, heart2, build, drop, climax, afterglow, coda]
+    sections:
+      pulse: {steps: ". | . | . | . | . | . | . | . | 1+5+8 | - | 1+5+8 | - | 1+5+8 | - | 1+5+8 | -", volume: [[8, -8], [16, 1]], lowpass: [[8, 500], [16, 1500]]}
+      heart2: {volume: {from: -13, to: -5}, lowpass: {from: 500, to: 1400}}
+      build: {volume: [[0, -4], [7.6, 2], [7.66, -50], [8, -50]], lowpass: {from: 700, to: 2600}}
+      drop: {volume: 0, lowpass: 1800, settings: {tone: 1500, attack: 0.5, release: 0.8, detune: 18}}
+      climax: {volume: 2, lowpass: 2600, settings: {tone: 1900, attack: 0.4, release: 0.8, detune: 20}}
+      afterglow: {volume: {from: -2, to: -9}, lowpass: {from: 1400, to: 500}}
+      coda: {volume: [[0, -7], [4, -4], [8, -12]], lowpass: 700}
+  # ------------------------------------------------------------------ short strings, choir, violas
+  spicc:              # sixteenths as short viola strokes in octave 3 (v6: soft_lead strokes in octave 4; v5: a bright FM pluck)
+    instrument: violas
+    steps: "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3"
+    accent: "3+3+2"
+    octave: 3
+    settings: {stroke: spiccato, length: 0.07, brightness: 0.3, accent: 0.8, players: 5}
+    volume: -1.5
+    spread: 0.3
+    pan: -0.05
+    highpass: 150
+    reverb: {size: 1.8, mix: 0.2, tone: 3500}
+    only: [groove, build, drop, climax]
+    sections:
+      groove: {lowpass: [[0, 900], [16, 2600]], volume: -0.5}
+      build: {lowpass: [[0, 1200], [8, 4000]],
+              steps: ["1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3", "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3", "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3", "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3",
+                      "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3", "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3", "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3", "1 5 8 1 5 8 5 3 . . . . . . . ."]}
+      drop: {settings: {stroke: spiccato, length: 0.07, brightness: 0.42, accent: 1.0, players: 5}, volume: -1.5}
+      climax: {settings: {stroke: spiccato, length: 0.07, brightness: 0.5, accent: 1.1, players: 5}, volume: -0.5}
+  trumpet:            # (the name the pictures read) a men's choir far away in a long hall, two octaves under v6's
+                      # trumpet: the hook's cell, very slowly, on ooh at dawn; hummed in the groove; aah in the coda
+    instrument: choir
+    settings: {vowel: ooh, voices: men, singers: 4, attack: 0.8, brightness: 0.3, vibrato: 10, ring: 1.0}
+    reverb: {size: 5.0, mix: 0.45, tone: 4000, predelay: 0.03}
+    echo: {delay: 1.5, feedback: 0.3, repeats: 2, pingpong: true}
+    volume: 2
+    only: [dawn, groove, coda]
+    sections:
+      dawn:           # A2-F#3: a few basses, slowly, each phrase on one breath
+        steps: ". | [pp <] C#3 - - - - - - - - - . . (A2 - - - | C#3 - - - - - - - [mp >] E3 - - - - - - - | C#3 - - - - - - - - - - -) [p] . . . . | [pp <] D3 - - - - - - - - - . . (A2 - - - | D3 - - - - - - - [mp >] F#3 - - - - - - - | D3 - - - - - - - - - - -) [p] . . . . | [p <] (E3 - - - C#3 - - - A2 - - - - - - -) [mp]"
+        volume: 8
+      groove:         # the hook's first bars hummed far away, second half only (G#2-A3)
+        steps: [".", ".", ".", ".", ".", ".", ".", ".",
+                "C#3 - . C#3 - . A2 - C#3 - . E3 - . C#3 -", ".", "D3 - . D3 - . A2 - D3 - . F#3 - . D3 -", ".",
+                "E3 - . E3 - . C#3 - E3 - . A3 - . E3 -", ".", "B2 - . B2 - . G#2 - B2 - . E3 - . B2 -", "."]
+        settings: {vowel: mm, voices: men, singers: 6, attack: 0.07, brightness: 0.25, vibrato: 6, ring: 0.25}
+        highpass: 120
+        volume: 1
+        echo: {delay: 0.75, feedback: 0.3, repeats: 3, pingpong: true}
+      coda:           # D, E, then F# major climbing to its third (octave 3: octave 2 would go under the basses' E2)
+        octave: 3
+        steps: "1 - - - 3 - - - 5 - - - 8 - - - | - - - - - - - - . . . . . . . . | 1 - - - 3 - - - 5 - - - 8 - - - | - - - - - - - - . . . . . . . . | 1 - - - 3 - - - 5 - - - 8 - - - | 8 - - - - - - - 3' - - - - - - - | 3' - - - - - - - - - - - - - - - | - - - - - - - - . . . . . . . ."
+        settings: {vowel: aah, voices: men, singers: 8, attack: 0.3, brightness: 0.45, vibrato: 14, ring: 1.5}
+        volume: [[0, 2], [6, 2], [8, -5]]
+        echo: off
+  violins:            # a viola section on the hook, an octave under v6's violins: with the choir in heart2,
+                      # under the lead in the climax (two octaves under it)
+    instrument: violas
+    settings: {attack: 0.1, brightness: 0.35, vibrato: 14, players: 6}
+    reverb: {size: 4.0, mix: 0.35, tone: 4500}
+    width: 0.7
+    pan: -0.1
+    only: [heart2, climax]
+    steps: &hook12    # the hook an octave under the lead; its legato second bars slurred
+      - "C#4 - - C#4 - - A3 - C#4 - - E4 - - C#4 - | (B3 - - - A3 - - - G#3 - - - A3 - - -)"
+      - "D4 - - D4 - - A3 - D4 - - F#4 - - D4 - | (C#4 - - - A3 - - - F#3 - - - A3 - - -)"
+      - "E4 - - E4 - - C#4 - E4 - - A4 - - E4 - | (C#4 - - - B3 - - - A3 - - - C#4 - - -)"
+      - "B3 - - B3 - - G#3 - B3 - - E4 - - B3 - | (G#4 - - - - - - - F#4 - - - E4 - - -)"
+    sections:
+      heart2: {volume: {from: -4, to: 2}}
+      climax:
+        steps: &high24  # the climax's melody two octaves under the lead
+          - "F#3 - - F#3 - - D3 - F#3 - - A3 - - F#3 - | (E3 - - - D3 - - - C#3 - - - D3 - - -)"
+          - "G#3 - - G#3 - - E3 - G#3 - - B3 - - G#3 - | (F#3 - - - E3 - - - D3 - - - E3 - - -)"
+          - "A3 - - A3 - - F#3 - A3 - - C#4 - - A3 - | (G#3 - - - F#3 - - - E3 - - - F#3 - - -)"
+          - "E3 - - E3 - - C#3 - E3 - - A3 - - E3 - | (C#4 - - - - - - - B3 - - - A3 - - -)"
+        settings: {attack: 0.06, brightness: 0.5, vibrato: 12, players: 6}
+        duck: {to: kick, depth: 0.25, release: 0.14}
+        volume: 3
+  swell:              # single viola notes on chord tones in octave 3, each swelling in slowly and dying away
+                      # (v6: the string pad an octave higher; v5: music-box glints)
+    instrument: violas
+    octave: 3
+    settings: {attack: 0.6, brightness: 0.25, vibrato: 10, ring: 1.2, players: 5, accent: 0}
+    steps: ["5 - - - - - - - . . . 8 - - - -", "- - - . . . 3 - - - - - - - . .", ". . 8 - - - - - - - . . 5 - - -", "- - - - . . . . 3 - - - - - 8 -"]
+    pan: 0.15
+    width: 0.7
+    highpass: 160
+    reverb: {size: 4.0, mix: 0.4, tone: 4000}
+    volume: 2.5
+    only: [dawn, heart, heart2, afterglow, coda]
+    sections:
+      dawn: {volume: {from: -7.5, to: 0.5}}
+      heart: {volume: 0.5}
+      heart2: {volume: 2.5}
+      coda: {volume: {from: 2.5, to: -4.5}}
+  # ------------------------------------------------------------------ the hook
+  hook:               # a men's choir, an octave under v6's singing lead (F#3-A4): ooh in the breakdown, opening
+                      # to aah in heart2; in the drop and the climax it only doubles the lead underneath
+    instrument: choir
+    settings: {vowel: aah, voices: men, singers: 10, attack: 0.12, brightness: 0.5, vibrato: 16, ring: 0.5}
+    reverb: {size: 4.5, mix: 0.4, tone: 4500, predelay: 0.04}
+    echo: {delay: 0.75, feedback: 0.25, repeats: 2, pingpong: true}
+    only: [heart, heart2, drop, climax, afterglow, coda]
+    steps: *hook12
+    sections:
+      heart:          # the hook sung slowly: the same notes, the repeated ones tied, each phrase one breath
+        steps: &song12
+          - "[mp <] (C#4 - - - - - A3 - C#4 - - - E4 - C#4 - | [mf >] B3 - - - A3 - - - G#3 - - - A3 - - -) [mp]"
+          - "[mp <] (D4 - - - - - A3 - D4 - - - F#4 - D4 - | [mf >] C#4 - - - A3 - - - F#3 - - - A3 - - -) [mp]"
+          - "[mp <] (E4 - - - - - C#4 - E4 - - - A4 - E4 - | [f >] C#4 - - - B3 - - - A3 - - - C#4 - - -) [mp]"
+          - "[mp <] (B3 - - - - - G#3 - B3 - - - E4 - B3 - | [f >] G#4 - - - - - - - F#4 - - - E4 - - -) [mp]"
+        settings: {vowel: ooh, voices: men, singers: 10, attack: 0.25, brightness: 0.4, vibrato: 18, ring: 0.7, glide: 0.12}
+        volume: 4.8
+      heart2: {settings: {vowel: aah, voices: men, singers: 12, attack: 0.12, brightness: 0.55, vibrato: 16, ring: 0.5}, volume: 2}
+      drop:           # under the lead, an octave down
+        settings: {vowel: aah, voices: men, singers: 12, attack: 0.08, brightness: 0.55, vibrato: 12, ring: 0.3}
+        duck: {to: kick, depth: 0.3, release: 0.14}
+        volume: -6
+      climax:         # under the lead, two octaves down
+        steps: *high24
+        settings: {vowel: aah, voices: men, singers: 12, attack: 0.08, brightness: 0.65, vibrato: 12, ring: 0.3}
+        duck: {to: kick, depth: 0.3, release: 0.14}
+        volume: -7
+      afterglow: {steps: *song12, settings: {vowel: ooh, voices: men, singers: 10, attack: 0.3, brightness: 0.35, vibrato: 18, ring: 0.9, glide: 0.12}, volume: {from: 4.7, to: 1.7}}
+      coda:           # F#-A, G#-B, then up the F# major chord to the keynote: ooh opening to aah
+        steps: "F#3 | A3 | G#3 | B3 | A#3 | C#4 | F#4 | - - - - - - - - . . . . . . . ."
+        settings: {vowel: ooh, morph: aah, voices: men, singers: 10, attack: 0.4, brightness: 0.4, vibrato: 18, ring: 2.0}
+        volume: [[0, 1], [6, 1], [8, -7]]
+        reverb: {size: 6.0, mix: 0.5, tone: 4500, predelay: 0.04}
+  voice:              # the choir's basses an octave under the hook (F#2-A3): the low body (v6: a saw pad)
+    instrument: choir
+    settings: {vowel: mm, voices: basses, singers: 8, attack: 0.3, brightness: 0.3, vibrato: 10, ring: 0.7}
+    reverb: {size: 4.0, mix: 0.35, tone: 3500}
+    width: 0.9
+    only: [heart, heart2, afterglow, coda]
+    steps: *song12
+    transpose: -12
+    sections:
+      heart: {volume: {from: -8, to: -3}}
+      heart2: {steps: *hook12, settings: {vowel: ooh, voices: basses, singers: 8, attack: 0.15, brightness: 0.35, vibrato: 10, ring: 0.5}, volume: -2.5}
+      afterglow: {volume: {from: -2, to: -6}, settings: {vowel: mm, voices: basses, singers: 8, attack: 0.35, brightness: 0.25, vibrato: 10, ring: 0.9}}
+      coda:
+        steps: "F#3 | A3 | G#3 | B3 | A#3 | C#4 | F#4 | - - - - - - - - . . . . . . . ."
+        settings: {vowel: ooh, voices: basses, singers: 8, attack: 0.5, brightness: 0.3, vibrato: 10, ring: 2.5}
+        volume: [[0, -5], [6, -5], [8, -14]]
+  horn:               # a slow counter-line in the tenor on a real horn section (v6: a saw pad)
+    instrument: horn
+    octave: 3
+    settings: {players: 4, attack: 0.22, brightness: 0.35, ring: 0.6}
+    reverb: {size: 3.5, mix: 0.32, tone: 3000}
+    pan: -0.15
+    width: 0.6
+    volume: 6
+    only: [dawn, pulse, heart2, drop, climax]
+    steps: &counter
+      - "F#3 | E3 - F#3 -"
+      - "F#3 | E3 - D3 -"
+      - "E3 | E3 - A3 -"
+      - "G#3 | B3 - G#3 -"
+    sections:
+      dawn: {steps: ". | . | . | . | F#3 - A3 - | D4 | E4 - D4 - | A3 - - .", volume: {from: 0, to: 2}, settings: {players: 4, attack: 0.5, brightness: 0.25, ring: 1.2}}
+      pulse: {steps: ". | . | . | . | . | . | . | . | C#4 | - | D4 | - | E4 | - | E4 | G#4", volume: [[8, -2], [16, 3]], settings: {players: 4, attack: 0.5, brightness: 0.3, ring: 0.9}}
+      heart2: {volume: {from: -2, to: 2}}
+      drop: {volume: 3, settings: {players: 4, attack: 0.12, brightness: 0.55, ring: 0.5}, duck: {to: kick, depth: 0.3, release: 0.14}}
+      climax: {steps: ["A3 | F#3 - A3 -", "B3 | G#3 - B3 -", "C#4 | A3 - C#4 -", "E4 | C#4 - E4 -"], volume: 4,
+               settings: {players: 4, attack: 0.1, brightness: 0.65, ring: 0.5}, duck: {to: kick, depth: 0.3, release: 0.14}}
+  lead:               # the supersaw lead of the drop and the climax: the hook at its own pitch (unchanged)
+    instrument: supersaw
+    settings: {tone: 6000, attack: 0.01, release: 0.25, detune: 30}
+    duck: {to: kick, depth: 0.35, release: 0.12}
+    width: 1.3
+    reverb: {size: 2.2, mix: 0.25}
+    only: [drop, climax]
+    volume: 4
+    steps: &hook
+      - "C#5 - - C#5 - - A4 - C#5 - - E5 - - C#5 - | B4 - - - A4 - - - G#4 - - - A4 - - -"
+      - "D5 - - D5 - - A4 - D5 - - F#5 - - D5 - | C#5 - - - A4 - - - F#4 - - - A4 - - -"
+      - "E5 - - E5 - - C#5 - E5 - - A5 - - E5 - | C#5 - - - B4 - - - A4 - - - C#5 - - -"
+      - "B4 - - B4 - - G#4 - B4 - - E5 - - B4 - | G#5 - - - - - - - F#5 - - - E5 - - -"
+    sections:
+      climax:
+        steps: &high
+          - "F#5 - - F#5 - - D5 - F#5 - - A5 - - F#5 - | E5 - - - D5 - - - C#5 - - - D5 - - -"
+          - "G#5 - - G#5 - - E5 - G#5 - - B5 - - G#5 - | F#5 - - - E5 - - - D5 - - - E5 - - -"
+          - "A5 - - A5 - - F#5 - A5 - - C#6 - - A5 - | G#5 - - - F#5 - - - E5 - - - F#5 - - -"
+          - "E5 - - E5 - - C#5 - E5 - - A5 - - E5 - | C#6 - - - - - - - B5 - - - A5 - - -"
+        volume: 4.5
+  # ------------------------------------------------------------------ noises
+  riser:
+    instrument: riser
+    settings: {low: 300, high: 6000}
+    only: [pulse, groove, heart2, build, drop]
+    volume: 4
+    sections:
+      pulse: {steps: ". | . | . | . | . | . | . | . | . | . | . | . | . | . | x | -", volume: 5}
+      groove: {steps: ". | . | . | . | . | . | . | . | . | . | . | . | . | . | x | -"}
+      heart2: {steps: ". | . | . | . | . | . | x | -", volume: 1, settings: {low: 200, high: 2500}}
+      build: {steps: ". | . | . | . | x | - | - | - - - - - . . .", volume: 8}
+      drop: {steps: ". | . | . | . | . | . | . | . | . | . | . | . | . | . | x | -", volume: 6}
+  static:
+    instrument: static
+    only: [dawn, heart]
+    steps: "x | - | - | - | - | - | - | -"
+    width: 1.6
+    volume: -2
+    sections:
+      dawn: {volume: -6}
