@@ -50,7 +50,7 @@ to the user.
 - Commit message: `Step N: <summary>` followed by a short body, then exactly these trailer lines:
 
       Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-      Claude-Session: https://claude.ai/code/session_019dnUhQr2V3uxDgrcPF2jrF
+      Claude-Session: https://claude.ai/code/session_013r6GmPmW4RZKBzpmNDgw6t
 
 - Do not commit generated media (`build/`, `media/`, `*.mp4`, `*.wav`, `*.srt` outputs, `__pycache__`).
   Exception: the kphi3 example's narration MP3s/hashes under `examples/kphi3/audio/` ARE committed.

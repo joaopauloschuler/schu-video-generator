@@ -27076,3 +27076,12 @@ project), repo work is generic.
 - **Tests**: `tests/test_escapement_example.py` (3, default run, 2.7 s: source only + `.gitignore`, validates, song starts on bar lines, the score's hash, no range warnings, event counts, the page reads `ctx.music` only); ran it, `test_gallery.py`, `test_signal_fire_example.py`, `test_docs.py`, `test_web_three_finish.py`.
 - **Not verified**: the whole film rendered from the example (and its MP4 against the published one); `vidgen render --draft` of the whole example; Windows and macOS.
 - **How to test**: `python -m pytest -q tests/test_escapement_example.py`; by hand `vidgen still examples/escapement --scene 06_threefour --at 7.27` (synthesizes the score first, about 5 min) and compare with the same still of a copy of the film (`/home/claude/work/scratch/al352/orig`; never draw stills inside the film folder: `vidgen still` writes to `<project>/exports/` by default).
+
+## Step 354 — Docs catch up with Phase AL: cookbook descriptions, a Windows check step, the commit trailers
+
+- **Cookbook descriptions**: README's documentation list and `docs/COOKBOOK.md` (intro and the music paragraph) now name `docs/COOKBOOK-MUSIC.md` sections 8–13 (brass, organ, strings, percussion, choir; expressive notes; music data for web pages; the instrument table) and `docs/COOKBOOK-3D.md` section 8 (`vidgen/three-finish`).
+- **`docs/WINDOWS-CHECK.md`**: new step 7 (Chromium; `vidgen still examples/three-finish`; `vidgen render examples/three-finish --preview --intermediate compact --clean-intermediates` with the undeletable-clip warning and the progress lines; `vidgen music render` and `check` of `examples/signal-fire/assets/music/signal_fire.yaml`; `vidgen render examples/signal-fire --draft`; optional `--draft` of `examples/escapement`); the time estimate now about an hour plus downloads; "What to send back" covers steps 1–7.
+- **CLAUDE.md**: the Git section's `Claude-Session` trailer names the current session; nothing else changed.
+- **Files**: `README.md`, `docs/COOKBOOK.md`, `docs/WINDOWS-CHECK.md`, `CLAUDE.md`, `CHANGELOG.md`, `tasklist.md` (Steps 353 and 354), `HANDOFF.md`. No code, no rendering.
+- **Tests**: `tests/test_docs.py`, `tests/test_guide.py` (172 passed).
+- **Not verified**: the Windows steps themselves (to be run by the owner); the step 7 timings are estimates from the Linux measurements in the examples' READMEs.

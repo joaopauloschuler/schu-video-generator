@@ -2099,6 +2099,12 @@ with demo files for the owner to listen to.
 - [x] Copy the source of `/home/claude/work/escapement` (video.yaml, score, extensions, scripts, README, PLAN, .gitignore; no generated audio, video, stills, build or output) into `examples/escapement/`, adapted to Step 347's built-in music data and Step 350's finishing helper where that simplifies it without changing the picture beyond trivial differences (proved with `vidgen still` comparisons); README with the render time and a `--draft` hint; an entry in the gallery / README example list; a validate-only test (no render in tests). After Step 351's review, or before it if 351 wants to review it — done: `examples/escapement` (video.yaml, the score unchanged, `escapement.js`, `webcut.py`, README, `.gitignore`); `music_data` replaced `scripts/make_audio.py` and `escapement_audio.json` (48 stills of all 12 scenes pixel-identical to the film's; the exporter's rounding of event times kept in the page); the film's own finishing kept (`vidgen/three-finish` was 28–34 dB off; named in the README); `webcut.py` kept (no built-in); PLAN folded into the README; score render SHA-256 `271de0c6…4dc8` as before, no range warnings; README list and gallery note; `tests/test_escapement_example.py` (DESIGN §120.13)
 - [ ] Not done: the whole film was not rendered from the example (render time estimated from 8 s rendered at final quality); `--draft` checked with one still only; Windows and macOS not tried
 
+### Step 353 — README example list without the 'no media/audio committed' notes
+- [x] README example list without the 'no media/audio committed' notes
+
+### Step 354 — Docs catch up with Phase AL
+- [x] README and `docs/COOKBOOK.md` describe `docs/COOKBOOK-MUSIC.md` with its sections 8–13 (orchestral instruments, expressive notes, music data for web pages, the instrument table) and `docs/COOKBOOK-3D.md` with its section 8 (`vidgen/three-finish`); `docs/WINDOWS-CHECK.md` step 7 (`vidgen still`, `--intermediate compact --clean-intermediates`, the progress line, `music_data`, `vidgen music render` / `check` of the Signal Fire score, an optional `--draft` of Escapement) and an honest time estimate; CLAUDE.md's commit trailers name the current session
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

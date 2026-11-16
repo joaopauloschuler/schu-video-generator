@@ -974,7 +974,8 @@ my_video/
   [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
   YouTube Short about code: layout, phone-readable code, narration, checks;
   [docs/COOKBOOK-MUSIC.md](docs/COOKBOOK-MUSIC.md) — writing music as score files: room for the
-  voice, builds and lifts, loops, check and compare, genre sketches;
+  voice, builds and lifts, loops, check and compare, genre sketches; the orchestral instruments
+  (brass, organ, strings, percussion, choir), expressive notes, music data for web pages, the instrument table;
   [docs/COOKBOOK-CELL-BIOLOGY.md](docs/COOKBOOK-CELL-BIOLOGY.md) — cell-biology lectures and
   research explainers: choosing the scene, accuracy, labelling, zooming, pacing, references;
   [docs/COOKBOOK-GENETICS.md](docs/COOKBOOK-GENETICS.md) — genetics lectures and medical genetics:
@@ -998,7 +999,7 @@ my_video/
   through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
   [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
   [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
-  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes.
+  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`.
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

@@ -5,7 +5,13 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–352)
+## Unreleased (Steps 193–354)
+
+### Docs (Step 354)
+
+- The music and 3D cookbooks' descriptions (README, `docs/COOKBOOK.md`) name their Phase AL
+  sections; `docs/WINDOWS-CHECK.md` has a step 7 for web stills, compact intermediates and their
+  deletion, the progress line, music data and the orchestral score.
 
 ### "Escapement" as an example (Step 352)
 
