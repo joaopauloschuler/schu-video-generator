@@ -161,3 +161,35 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   Put light and colour on the hits and keep the camera on the form (sections), never on a beat.
   Worked example: [`examples/signal-fire`](../examples/signal-fire/README.md), an orchestral cue
   and a finished three.js night scene that follows it, track by track.
+
+## 9. Building blocks for music videos
+
+Three music films were drawn as `web` scenes and each wrote the same parts by hand. Those parts
+ship as two modules (reference: [CONFIG, `web`](CONFIG.md#web), "Building blocks for music
+videos"; `vidgen guide web` has a page built from them): `vidgen/music-time` reads the music (the
+score's tracks as arrays, envelopes of hits and notes, the melody's pitch, bar lengths, seeded
+numbers, easing, keyframes) and `vidgen/three-kit` draws light on black (glowing strokes, glass
+crystals, a tesseract, a nebula sky, portals, star fields, flares, shock rings, the melody's
+ribbon, the spectrum's rays, tunnels, a corridor, great rings, swarms, dust). The worked example
+is [`examples/parallel-space`](../examples/parallel-space/README.md): every scene of the film is
+composed from them in `ps.js`.
+
+- **One script, one song time.** All scenes of a film can share one script that picks its set
+  from `data.mode`; each draws from `T = ctx.music.time(t)` alone, so a cut between two scenes on
+  a bar line is invisible and scenes render in any order.
+- **Hits are light.** `hitEnvelope(song.hits.kick, T, 0.1)` into `lightCrystal`, a `Glow`'s
+  `tint`, a flare's intensity or `updateTesseract`'s gain; a camera that moves on a beat, or a
+  shape that grows on it, looks like a fault. Notes leave glints (`updateGlints`), the melody a
+  ribbon (`updateRibbon`), the spectrum rays (`updateSpectrumRays`).
+- **Line widths are pixels.** A `Glow` keeps a width in 720p pixels (`px`) at any size of frame,
+  and grows with nearness only with `world`; it is cut at the camera's near plane, so a segment
+  that passes the camera does not sweep through the frame.
+- **Bloom makes them glow.** The strokes add light; finish with `vidgen/three-finish` (`bloom`
+  with a threshold under 1) or your own composer, as `examples/parallel-space` does.
+- **Seeds, not `Math.random`.** `makeStarField(n, …, seed)`, `rng(seed)` and `hash(i, k)` give the
+  same picture every render; change a seed to try another sky.
+- **Porting your own film to them.** Move a piece only when stills stay the same: `vidgen still`
+  before and after at a few times per scene and compare the PNGs. `examples/parallel-space`,
+  `examples/escapement` and `examples/signal-fire` were ported this way with pixel-identical
+  stills; what would have changed a picture (Escapement's watch, studio and finishing) stayed in
+  the film's script.

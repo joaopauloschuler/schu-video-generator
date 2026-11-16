@@ -8,9 +8,9 @@
 // grain, fxaa, tone), ctx.data.finish overrides options: both only for comparing stills.
 import * as THREE from "three";
 import {Finish, focusDistance, studioEnvironment, surfaceFinish, softShadows} from "vidgen/three-finish";
+import {smoothstep} from "vidgen/music-time";
 
 let finish, camera, spinner, gears = [], spheres = [];
-const ease = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
 
 function gearGeometry(teeth, radius, depth, hole) {
   const shape = new THREE.Shape(), pitch = (Math.PI * 2) / teeth, inner = radius * 0.9;
@@ -37,7 +37,7 @@ function update(t) {
   spinner.rotation.z = -t * 24;                // nearly 4 turns a second: a 180-degree shutter smears 0.4 rad
   gears[0].rotation.z = t * 0.35;
   gears[1].rotation.z = -t * 0.35 * (24 / 16);
-  const u = ease((t - 0.5) / 5);
+  const u = smoothstep(0.5, 5.5, t);
   camera.position.set(-2.6 + 1.2 * u, 1.35 - 0.15 * u, 4.6 - 0.5 * u);
   camera.lookAt(0.2, 0.45, 0);
 }
@@ -96,12 +96,12 @@ export function load(ctx) {
     update,
     bloom: !off.has("bloom"),                    // the defaults: strength 0.25, radius 0.2, threshold 1 (linear), half size
     toneMapping: off.has("tone") ? "none" : "aces",
-    grade: off.has("grade") ? {} : (t) => ({temperature: 0.12 - 0.2 * ease((t - 1) / 4), saturation: 1.05, contrast: 1.04, lift: [0.004, 0.006, 0.012]}),
+    grade: off.has("grade") ? {} : (t) => ({temperature: 0.12 - 0.2 * smoothstep(1, 5, t), saturation: 1.05, contrast: 1.04, lift: [0.004, 0.006, 0.012]}),
     vignette: off.has("vignette") ? 0 : 0.35,
     grain: off.has("grain") ? 0 : 0.02,
     antialias: off.has("fxaa") ? "none" : "fxaa",
     // the focus pull: from the front sphere to the gears at the back between 1.5 s and 4 s
-    dof: off.has("dof") ? false : (t) => ({focus: THREE.MathUtils.lerp(focusDistance(camera, front), focusDistance(camera, back), ease((t - 1.5) / 2.5)),
+    dof: off.has("dof") ? false : (t) => ({focus: THREE.MathUtils.lerp(focusDistance(camera, front), focusDistance(camera, back), smoothstep(1.5, 4, t)),
       fStop: 2.8, unit: 0.1, maxBlur: 12, quality: "medium"}),
     motionBlur: off.has("motion") ? false : {samples: 6, shutter: 180},
     ...(ctx.data.finish ?? {}),

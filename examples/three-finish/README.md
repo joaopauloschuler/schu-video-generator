@@ -6,7 +6,7 @@ does to a three.js picture (`vidgen guide web`, "Finishing three.js scenes"; the
 
 | file | what it shows |
 |---|---|
-| [extensions/still_life.js](extensions/still_life.js) | brass gears and five spheres (chrome, gold, brushed steel, copper, black lacquer) on slate, lit by `studioEnvironment` (soft boxes baked through PMREM) and one key light with `softShadows`; circular graining and brushing from `surfaceFinish`; the focus pulled from the front sphere to the gears at the back between 1.5 s and 4 s (`dof` as a function of `t` with `focusDistance`); the small gear in front spins at nearly 4 turns a second and is blurred by `motionBlur` (6 sub-frames over a 180° shutter, through the page's `update(t)`); default bloom on the lamp and the highlights, ACES, a grade that cools over the shot, vignette, grain, FXAA |
+| [extensions/still_life.js](extensions/still_life.js) | brass gears and five spheres (chrome, gold, brushed steel, copper, black lacquer) on slate, lit by `studioEnvironment` (soft boxes baked through PMREM) and one key light with `softShadows`; circular graining and brushing from `surfaceFinish`; the focus pulled from the front sphere to the gears at the back between 1.5 s and 4 s (`dof` as a function of `t` with `focusDistance`); the small gear in front spins at nearly 4 turns a second and is blurred by `motionBlur` (6 sub-frames over a 180° shutter, through the page's `update(t)`); default bloom on the lamp and the highlights, ACES, a grade that cools over the shot, vignette, grain, FXAA; the moves eased with `smoothstep` from `vidgen/music-time` |
 
 ```
 vidgen validate examples/three-finish

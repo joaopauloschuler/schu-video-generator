@@ -2115,6 +2115,30 @@ with demo files for the owner to listen to.
 ### Step 357 — YouTube thumbnails in the gallery (owner's request, 2026-11-16)
 - [x] Each entry of "Videos on YouTube" is a clickable thumbnail `[![title](https://img.youtube.com/vi/<id>/hqdefault.jpg)](https://youtu.be/<id>)` followed by the title and channel (one paragraph each, no image files in the repository); `youtube_id()` derives the id from `youtu.be/<id>` or `youtube.com/watch?v=<id>` and raises a clear error otherwise; committed index updated by hand; tests — done, nothing rendered
 
+## Phase AM — Music-video tools (owner's request, 2026-11-16)
+
+Three music films became examples (`examples/parallel-space`, `escapement`, `signal-fire`, with
+`three-finish`); each rebuilt the same things by hand. Four features and a review (DESIGN §121).
+
+### Step 358 — A library of three.js building blocks for music videos
+- [x] `vidgen/music-time` (song time, bars, the score's events as arrays, reactions, seeded numbers, easing, keyframes) and `vidgen/three-kit` (glowing strokes, crystals, tesseract, nebula sky, portals, star fields, flares, shock rings, glints, ribbons, spectrum rays, tunnels, corridor, rings, swarms, dust, camera aim) on the import map; CONFIG, guide, COOKBOOK-3D section 9, DESIGN §121.1; Node and Chromium tests
+- [x] Examples ported with pixel-identical `vidgen still` stills (89 compared): `parallel-space` (`ps.js` 1,313 → 799 lines), `escapement` (only the pieces that stay identical: 1,238 → 1,187), `signal-fire` (220 → 200), `three-finish` (114 → 114)
+- [x] Parallel Space reads `music_data`: `scripts/make_ps_audio.py` and `ps_audio.json` deleted (hits and notes equal; bands and level measured from the mix: 6 of 36 stills identical, the rest 53.5–85 dB PSNR)
+- [ ] Not built (no film uses them yet; for Step 359's starter pages): a sections → colour script helper, orbit / fly-through camera paths beyond `keyframes`, `glide` and `aimCamera`
+- [ ] Not done: no film rendered (stills only); Windows and macOS not tried
+
+### Step 359 — A storyboard from the music
+- [ ] `vidgen music plan <score>` (name to fit the CLI): cut points, a colour per section, events per scene, a draft `video.yaml` of `web` scenes using Step 358's library, dry run and `--json`
+
+### Step 360 — A "watch it" motion check
+- [ ] `vidgen check-motion` (name to fit the CLI): flicker, popping, blank frames, frozen stretches, brightness jumps at cuts, strobing; a report with contact strips; thresholds documented; tested on synthetic clips
+
+### Step 361 — More choir
+- [ ] Syllables, a soloist voice, a whispered texture, a syllable per note; the existing choir byte-identical by default; demo clips
+
+### Step 362 — Review of Steps 358–361
+- [ ] Critical review with fixes; docs (guide, CONFIG, cookbooks, README feature list); tasklist leftovers
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

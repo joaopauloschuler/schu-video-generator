@@ -5,7 +5,22 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–357)
+## Unreleased (Steps 193–358)
+
+### Music-video tools (Phase AM, Step 358)
+
+- **Building blocks for music videos**: two of vidgen's own modules for `web` scenes, imported by
+  name like `vidgen/three-finish`. `vidgen/music-time`: the score's tracks as arrays
+  (`trackArrays`), drum and note envelopes, the melody's gliding pitch, a track's level through
+  its hairpins, bar lengths, seeded numbers, easing, camera keyframes. `vidgen/three-kit`: glowing
+  strokes, glass crystals, a tesseract, a nebula sky, portals, star fields, flares, shock rings,
+  note glints, the melody as a ribbon, spectrum rays, tunnels, a corridor, great rings, swarms,
+  dust, a camera aim (`docs/CONFIG.md`, `web`; `vidgen guide web`; COOKBOOK-3D section 9).
+- The examples use them instead of their own copies, with pixel-identical stills:
+  `examples/parallel-space` (`ps.js` 1,313 → 799 lines), `examples/escapement` (1,238 → 1,187),
+  `examples/signal-fire` (220 → 200), `examples/three-finish`. Parallel Space now reads the music
+  through `music_data`; its `ps_audio.json` and `scripts/make_ps_audio.py` are gone (the same hits
+  and notes; spectrum and level measured from the mix: stills 53.5 dB PSNR or closer).
 
 ### Gallery (Steps 356–357)
 

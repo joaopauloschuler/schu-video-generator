@@ -348,7 +348,8 @@ src/vidgen/
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
                           # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
-  data/web/modules/        # three-finish.js: vidgen's own module `vidgen/three-finish` for three.js web scenes (§120.11)
+  data/web/modules/        # vidgen's own modules for web scenes: three-finish.js `vidgen/three-finish` (§120.11); music-time.js
+                          # `vidgen/music-time` and three-kit.js `vidgen/three-kit`: building blocks for music videos (§121.1)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -25428,3 +25429,102 @@ The owner asked for the published film as an example, source only. `examples/esc
   validation, the scenes' song starts on bar lines, the score's SHA-256 (line ends normalised),
   no range warnings, the event counts the exporter had, the page reads only `ctx.music` and every
   track it is given exists.
+
+## 121. Music-video tools (Phase AM, Steps 358–362)
+
+Three music films were made as `web` scenes and are now examples (`examples/parallel-space`,
+`examples/escapement`, `examples/signal-fire`; with `examples/three-finish`). Each rebuilt the
+same things by hand. The owner chose four features (2026-11-16), one step each, and a review:
+
+| Step | What | Section |
+|---|---|---|
+| 358 | A library of three.js building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`); the examples ported to it, their copies deleted | §121.1 |
+| 359 | A storyboard from the music: cut points, a colour per section, the events each scene reacts to, a draft `video.yaml` | |
+| 360 | A "watch it" motion check: flicker, popping, blank frames, frozen stretches, jumps at cuts, strobing | |
+| 361 | More choir: syllables, a soloist, a breathy texture, a syllable per note | |
+| 362 | Critical review with fixes; docs | |
+
+Rules of the phase: the films must look the same (stills compared before and after) and their
+scores synthesize to the same audio; nothing is rendered that a still or a test can show.
+
+### 121.1 Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit` (Step 358)
+
+**What the films shared.** Read side by side, the four example scripts repeated: easing and
+clamping (`clamp`, `mix`, a cubic and a quintic ease: all four), a sine hash (Parallel Space,
+Escapement), a seeded generator (Parallel Space), the score's hits and notes as sorted arrays
+with a binary search and a drum envelope (Parallel Space, Escapement: identical functions), a
+track's level through its hairpins (Signal Fire), keyframed camera moves (Escapement), a soft
+round dot texture (Escapement's dust, Signal Fire's embers: the same canvas gradient with other
+stops). Parallel Space alone held the light-on-black kit the owner listed (glowing strokes,
+crystals, tesseract, nebula sky, portals, star fields, flares, shock rings, ribbons, spectrum rays,
+tunnels, corridor, rings, swarms), written as reusable functions with one film's globals.
+
+**Two modules, on the import map beside `vidgen/three-finish`** (`web/loaded.py`
+`VIDGEN_MODULES`; files in `data/web/modules/`, already package data):
+
+- `vidgen/music-time` (117 lines, plain JavaScript, no imports): shaping (`clamp`, `mix`,
+  `smoothstep`, `smootherstep`, `easeOutCubic`, `dbToGain`), seeded numbers (`rng` = mulberry32,
+  `hash`), moves (`keyframes`, `glide`), bars (`barClock`, `count`), the score's events as arrays
+  (`trackArrays(ctx.music, {hits, notes, grid})` → `{t, g}` / `{t, d, p}` `Float32Array`s;
+  `lastIndex`) and reactions (`hitEnvelope`, `hitCount`, `hitAge`, `noteAt`, `noteEnvelope`,
+  `noteLevel`, `melody` on arrays; `eventLevel`, `signalLevel` on `ctx.music`'s events). Separate
+  from three.js so it can serve a Canvas or SVG page, and so its functions run in Node in tests.
+- `vidgen/three-kit` (609 lines; imports `three` and `vidgen/music-time`): `setStage`, `Glow`,
+  colours, polyhedra and crystals, `SkyDome`, portals, the tesseract, star fields and shells,
+  flares, shock rings, glints, ribbons, spectrum rays, tunnels, the lattice, the ring structure,
+  crystal fields and swarms, dust, `aimCamera` (CONFIG `web` lists every name).
+
+Decisions:
+
+- **The code moved, not rewritten.** Each function keeps its film's arithmetic and GLSL
+  (whitespace included), so the films' pictures stay identical; the renames are only of names
+  (`sstep` → `smoothstep`, `makeStars` → `makeStarField`, `env(name)` → `hitEnvelope(track)`).
+- **A stage, set once.** The kit's builders need the scene to add to, the renderer to bake a sky,
+  the camera that flares and rings face, and the frame's size for line widths (shared uniforms
+  `uRes`, `uK = height / 720`). `setStage({renderer, scene, camera, width, height})` sets them
+  for the page (one page = one module instance); a builder called before it throws a named error.
+- **`make…` / `update…` pairs** (`makeStarField` / `updateStarField`): a builder runs in `load`, its
+  update in `frame` from song time, keeping no state between frames. `make` avoids a page's
+  natural variable names (`const flare = flare(…)` was the first bug of the port).
+- **Arrays for the reactions.** Envelopes read `{t, g}` / `{t, d, p}` arrays, not `ctx.music`'s
+  event objects: both films drew from such arrays, a binary search over a `Float32Array` is cheap
+  per frame, and the arrays round as the films' exporters did (`grid`: times to 1/1000 of a
+  sixteenth, which Escapement's hammers need to stay identical, §120.13). `signalLevel` and
+  `eventLevel` read event objects because they need the dynamics.
+- **Callbacks where a film read its own data**: the spectrum, fields and swarms take `band(b)`,
+  the tunnel `look(index, time)` → `[colour, gain, sides]`, so they work with `ctx.music.band` or
+  anything else.
+- **Left in the films** (moving them would change a picture or serve one film only): Parallel
+  Space's composer and grade pass, its sun, mirror corridor, fold, title cards and clock dials;
+  Escapement's watch, studio (its own soft boxes; three-finish's `studioEnvironment` differs),
+  finishing chain, `setCam` (it rolls with `rotateZ`, not the up vector), glint sprites;
+  Signal Fire's sky dome, stones and its own hash (`sin(n·127.1 + 311.7)`, not
+  `sin(i·127.1 + k·311.7 + 0.5)`: it would move every stone); the still life's gears.
+- **Not built** from the owner's list, for want of a film that uses it: a sections → colour script
+  helper and orbit / fly-through camera paths beyond `keyframes`, `glide` and `aimCamera` (Step
+  359's storyboard writes pages that will use them; that step adds them with a user). Studio
+  environments exist already (`studioEnvironment` in `vidgen/three-finish`).
+- **Cache keys.** No existing key moves for pages that do not import the modules (the import map
+  is in no key). A page that imports them has them in its loaded-files record, so in its clip key
+  and fingerprint: the four examples' scenes render again once (their scripts changed anyway).
+
+**The examples ported**, proved with `vidgen still` before (HEAD 274177f) and after, 640x360 at
+three times per scene and 1280x720 at one or two (89 stills; `/home/claude/work/scratch/am358/`):
+
+| example | script lines before → after | removed besides | stills |
+|---|---|---|---|
+| `parallel-space` | `ps.js` 1,313 → 799 | `scripts/make_ps_audio.py` (190 lines), `extensions/ps_audio.json` (124 KB); dead `flux`, `lowE`, `gateEnv`, `boomFlash` | 36 of 36 identical on the kit with the old data file; then with `music_data`, see below |
+| `escapement` | `escapement.js` 1,238 → 1,187 | — | 38 of 38 identical |
+| `signal-fire` | `signal_fire.js` 220 → 200 | — | 11 of 11 identical |
+| `three-finish` | `still_life.js` 114 → 114 (its ease replaced by an import) | — | 4 of 4 identical |
+
+**Parallel Space reads `ctx.music`.** Its `music_data` sends 16 tracks (`trumpet` and `violins`
+gathered as the film's `call`); `trackArrays` with `grid: S16` gives every hit time and gain and
+every note time and length equal to `ps_audio.json`'s (checked as float32 for all 15 arrays:
+1,023 hits, 609 notes). Pitches differ only for 15 chord-degree notes of `call` in the coda
+(the file wrote 0), which the coda places by time, not pitch. The level and the 16 bands are
+measured from the video's mix with 256 steps (the file: from the score's WAV, 64 steps), so the
+stills differ slightly: 6 of 36 identical (the dawn and the coda read no bands), the rest 53.5–85
+dB PSNR, mostly one or two levels; the most at the tips of the sun's spectrum rays (up to 89
+levels on a few pixels, `07_drop1` at 1.5 s). Side by side (before | after | difference × 10):
+`side2/ps/`. That is above the phase's 45 dB bar, so the script and the JSON were deleted.

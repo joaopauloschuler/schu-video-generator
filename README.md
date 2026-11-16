@@ -973,8 +973,9 @@ my_video/
   music film, source only: an original hybrid cinematic / trance score at 138.46 BPM in F# minor
   for vidgen's own synthesizer (men's choir, strings, horn, organ, synth drums and supersaws) and
   eleven three.js `web` scenes of a flight through space and parallel realities, among them a
-  mirror corridor of nine receding copies of the flight; the pictures follow the music through
-  the film's own data file, rebuilt by a script when the score changes (the final render takes
+  mirror corridor of nine receding copies of the flight, composed from vidgen's building blocks
+  `vidgen/three-kit` and `vidgen/music-time`; the pictures follow the music through `music_data`
+  (the final render takes
   about 1 h on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
@@ -1008,7 +1009,7 @@ my_video/
   through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
   [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
   [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
-  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`.
+  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`).
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.

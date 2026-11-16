@@ -1,11 +1,11 @@
 """examples/parallel-space (Step 355): the music film "Parallel Space" (v7) as an example, source
-only, with its own audio data file (`ps_audio.json`, rebuilt by `scripts/make_ps_audio.py`).
-Validate only: no render and no synthesis here (the README gives the render's cost)."""
+only. Since Step 358 its page reads the music through `ctx.music` (`music_data`) and is built on
+vidgen's modules `vidgen/three-kit` and `vidgen/music-time`. Validate only: no render and no
+synthesis here (the README gives the render's cost)."""
 
 from __future__ import annotations
 
 import hashlib
-import json
 from fractions import Fraction
 from pathlib import Path
 
@@ -26,8 +26,7 @@ BAR = Fraction(52, 30)
 
 def test_the_example_is_source_only_and_validates() -> None:
     files = sorted(p.relative_to(EXAMPLE).as_posix() for p in EXAMPLE.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
-    assert files == [".gitignore", "README.md", "assets/music/parallel_space.yaml", "extensions/ps.js",
-                     "extensions/ps_audio.json", "extensions/webcut.py", "scripts/make_ps_audio.py", "video.yaml"]
+    assert files == [".gitignore", "README.md", "assets/music/parallel_space.yaml", "extensions/ps.js", "extensions/webcut.py", "video.yaml"]
     ignored = (EXAMPLE / ".gitignore").read_text(encoding="utf-8").split()
     assert {"build/", "output/", "*.wav", "*.mp4"} <= set(ignored)
     project = Project.load(EXAMPLE)
@@ -39,7 +38,7 @@ def test_the_example_is_source_only_and_validates() -> None:
         start = Fraction(0)
         for scene, bar in zip(scenes, BAR_STARTS):
             assert abs(start - bar * BAR) < Fraction(1, 1000), scene.id      # every scene starts on a bar line
-            assert abs(scene.params["data"]["t0"] - float(bar * BAR)) < 1e-6, scene.id
+            assert "t0" not in scene.params["data"], scene.id                # ctx.music.t0 is worked out by vidgen
             start += Fraction(scene.duration).limit_denominator(10**6)
         assert abs(float(start) - (104 * float(BAR) + 4.6)) < 1e-3        # 104 bars and 4.6 s for the last chord
 
@@ -52,12 +51,15 @@ def test_the_score_is_the_films_and_parses() -> None:
     assert len(score.tracks) == 30
 
 
-def test_the_page_reads_the_shipped_audio_data() -> None:
+def test_the_page_reads_the_music_through_ctx_music_only() -> None:
     page = (EXAMPLE / "extensions" / "ps.js").read_text(encoding="utf-8")
-    assert 'fetch(new URL("./ps_audio.json", import.meta.url))' in page
-    data = json.loads((EXAMPLE / "extensions" / "ps_audio.json").read_text(encoding="utf-8"))
-    assert data["fps"] == 30 and data["nbands"] == 16
-    assert data["n"] >= 5546                                              # a value for every frame of the film
-    assert len(data["bands"]) == data["n"] * data["nbands"]
+    assert "ctx.music" in page and "fetch(" not in page and "ps_audio" not in page
+    assert 'from "vidgen/three-kit"' in page and 'from "vidgen/music-time"' in page
     names = {t.name for t in load_music_score(SCORE).tracks}
-    assert {"hook", "lead", "trumpet", "violins", "horn", "swell", "vla", "kick"} <= names   # what the script exports
+    project = Project.load(EXAMPLE)
+    with extensions.project_session(project):
+        for scene in project.config.scenes:
+            tracks = scene.params["music_data"]["tracks"]
+            assert set(tracks) <= names
+            for track in tracks:
+                assert f'"{track}"' in page, track       # every track sent is one the page reads

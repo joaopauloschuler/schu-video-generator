@@ -4,9 +4,10 @@
 # Music: assets/music/parallel_space.yaml (138.46 BPM, F# minor; one bar = 52 frames at 30 fps), played by
 # vidgen's own synthesizer. Form: dawn 8 | pulse 16 | groove 16 | heart 16 | build 8 | drop 16 | climax 8 |
 # afterglow 8 | coda 8 = 104 bars (180.27 s) plus 4.6 s for the last chord to ring out.
-# Pictures: one three.js module (extensions/ps.js) in eleven web scenes of 8 or 16 bars, so every scene
-# starts on a bar (t0 is the scene's place in the song, in seconds). No city, no land: space, parallel
-# universes and geometric forms. The kick pulses the brightness of objects, never the zoom.
+# Pictures: one three.js module (extensions/ps.js, built on vidgen/three-kit and vidgen/music-time) in eleven
+# web scenes of 8 or 16 bars, so every scene starts on a bar. `music_data` gives the page the score's hits and
+# notes and the mix measured per frame (ctx.music; ctx.music.t0 is the scene's place in the song). No city,
+# no land: space, parallel universes and geometric forms. The kick pulses the brightness of objects, never the zoom.
 title: "Parallel Space"
 output: parallel_space_v7
 format: {width: 1280, height: 720, fps: 30}
@@ -20,44 +21,44 @@ scenes:
   - id: 01_dawn
     type: web_cut
     duration: 13.8666667
-    params: {script: extensions/ps.js, data: {mode: dawn, t0: 0.0000000}}
+    params: {script: extensions/ps.js, music_data: &music {tracks: [kick, taiko, tom, boom, clap, snare, crash, tick, roll, frame, hook, lead, trumpet, violins, horn, swell]}, data: {mode: dawn}}
   - id: 02_pulse
     type: web_cut
     duration: 27.7333333
-    params: {script: extensions/ps.js, data: {mode: pulse, t0: 13.8666667}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: pulse}}
   - id: 03_groove1
     type: web_cut
     duration: 13.8666667
-    params: {script: extensions/ps.js, data: {mode: groove1, t0: 41.6000000}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: groove1}}
   - id: 04_groove2
     type: web_cut
     duration: 13.8666667
-    params: {script: extensions/ps.js, data: {mode: groove2, t0: 55.4666667}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: groove2}}
   - id: 05_heart
     type: web_cut
     duration: 27.7333333
-    params: {script: extensions/ps.js, data: {mode: heart, t0: 69.3333333}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: heart}}
   - id: 06_build
     type: web_cut
     duration: 13.8666667
-    params: {script: extensions/ps.js, data: {mode: build, t0: 97.0666667}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: build}}
   - id: 07_drop1
     type: web_cut
     duration: 13.8666667
-    params: {script: extensions/ps.js, data: {mode: drop1, t0: 110.9333333}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: drop1}}
   - id: 08_drop2
     type: web_cut
     duration: 13.8666667
-    params: {script: extensions/ps.js, data: {mode: drop2, t0: 124.8000000}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: drop2}}
   - id: 09_climax
     type: web_cut
     duration: 13.8666667
-    params: {script: extensions/ps.js, data: {mode: climax, t0: 138.6666667}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: climax}}
   - id: 10_afterglow
     type: web_cut
     duration: 13.8666667
-    params: {script: extensions/ps.js, data: {mode: afterglow, t0: 152.5333333}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: afterglow}}
   - id: 11_coda
     type: web_cut
     duration: 18.4666667
-    params: {script: extensions/ps.js, data: {mode: coda, t0: 166.4000000}}
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: coda}}

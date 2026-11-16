@@ -3659,6 +3659,75 @@ mapSize})` and `focusDistance(camera, object)`.
 - The whole worked example is `examples/three-finish` (`vidgen still` it at three moments); the
   module's file is in the scene's cache key like every file the page loads.
 
+**Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit`.** Two more modules
+you import by name. `vidgen/music-time` reads the music: the score's tracks as arrays
+(`trackArrays(ctx.music, ...)`), a drum's light (`hitEnvelope`), a note's glint or level
+(`noteEnvelope`, `noteLevel`), the melody's gliding pitch (`melody`), how strongly a track sounds
+(`signalLevel`), bar lengths (`barClock`, `count`), seeded numbers (`rng`, `hash`), easing and
+camera keyframes (`smoothstep`, `smootherstep`, `keyframes`, `glide`). `vidgen/three-kit` draws
+light on black: glowing strokes (`Glow`), glass crystals, a tesseract, a nebula sky lit from
+inside (`SkyDome`), portals onto another sky, star fields you fly through, flares, shock rings from
+hits, the melody as a ribbon, the spectrum as rays, tunnels, a corridor, great rings, swarms, dust,
+and `aimCamera`. They are the parts the example films wrote by hand (`examples/parallel-space` is
+built from them).
+
+```yaml
+music: tidewater                 # a score bed with tracks kick and melody; or your own score
+scenes:
+  - id: drift
+    type: web
+    duration: 12
+    params: {script: extensions/kit.js, music_data: {tracks: [kick, melody]}}
+```
+
+```js
+// extensions/kit.js: a tesseract in a nebula; the kick lights it, every note of the melody leaves a glint
+import * as THREE from "three";
+import {trackArrays, hitEnvelope, smootherstep} from "vidgen/music-time";
+import {setStage, color, SkyDome, Glow, makeTesseract, updateTesseract, tesseractAngles,
+        makeStarField, updateStarField, updateGlints, aimCamera} from "vidgen/three-kit";
+import {Finish} from "vidgen/three-finish";
+const ICE = color(0x9fdcff), GOLD = color(0xffd166);
+let M, song, camera, sky, tes, stars, glints, finish;
+function update(t) {                       // everything from song time T: no state, so cuts do not show
+  const T = M.time(t), kick = hitEnvelope(song.hits.kick, T, 0.12);
+  aimCamera(Math.sin(T * 0.1) * 3, 1, 20 - 6 * smootherstep(t / 10), 0, 0, 0, 0.05 * Math.sin(T * 0.2), 50);
+  sky.turn(T); sky.follow(camera);
+  sky.colors(color(0x010308), color(0x06203a), color(0x2a7fa0), 0.4 + 0.3 * M.level(T));
+  updateStarField(stars, T, 4 * T);
+  updateTesseract(tes, tesseractAngles(T * 0.4), ICE, 1.2 + 2 * kick);       // the kick: brighter, never bigger
+  updateGlints(glints, song.notes.melody, T, {c: GOLD, life: 3, place: (i, pitch) => [(i % 5 - 2) * 3, (pitch - 69) * 0.4, -4]});
+}
+export function load(ctx) {
+  M = ctx.music;
+  song = trackArrays(M, {hits: ["kick"], notes: ["melody"]});
+  const renderer = new THREE.WebGLRenderer({canvas: ctx.canvas});
+  renderer.setSize(ctx.width, ctx.height, false);
+  const scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(50, ctx.width / ctx.height, 0.3, 4000);
+  setStage({renderer, scene, camera, width: ctx.width, height: ctx.height});   // before any builder
+  sky = new SkyDome(3);                                   // baked once from its seed
+  stars = makeStarField(600, [10, 200], 400, 11);
+  tes = makeTesseract({world: 0.05}); tes.scale.setScalar(2.5);
+  glints = new Glow(60, {px: 1.6, halo: 1.6, haloGain: 0.5});   // 5 segments a glint, 12 glints
+  finish = new Finish(renderer, scene, camera, ctx, {update, bloom: {strength: 0.6, radius: 0.5, threshold: 0.9}});
+}
+export function frame(t) {
+  finish.render(t);
+}
+```
+
+- **Light, not size.** Hits change brightness (`lightCrystal(c, kick)`, a `Glow`'s `tint`, a
+  flare's intensity); the camera and the sizes follow the form, never a beat.
+- **The stage.** `setStage` comes first in `load`; every builder adds to its scene (or `parent`).
+  A `Glow`'s widths are in 720p pixels (`px`) or scene units (`world`) and scale with the frame.
+- **Arrays or events.** The envelope functions read `trackArrays`' `{t, g}` / `{t, d, p}`;
+  `signalLevel(ctx.music, track, T)` and `eventLevel(e, T)` read `ctx.music`'s events (with
+  dynamics and hairpins). `ctx.music.pulse` and `last` stay available too.
+- Every name and its options: `docs/CONFIG.md`, "Building blocks for music videos". A whole
+  film built on them: `examples/parallel-space`; smaller uses: `examples/escapement` (envelopes,
+  keyframes, dust) and `examples/signal-fire` (`signalLevel`).
+
 **Animation and chart libraries.** These ship with vidgen: import them by name, in a
 `<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's
 clock. "Plays by itself" means the library's own loop follows the video's time from the scene's

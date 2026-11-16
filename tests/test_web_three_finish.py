@@ -30,7 +30,7 @@ STATIC_IMPORT = re.compile(r"^import\b[^;]*?\bfrom\s*['\"]([^'\"]+)['\"]", re.M 
 
 
 def test_the_module_is_served_by_its_import_name_only() -> None:
-    assert VIDGEN_MODULES == {"vidgen/three-finish": "three-finish.js"}
+    assert VIDGEN_MODULES["vidgen/three-finish"] == "three-finish.js"
     assert IMPORT_MAP["imports"]["vidgen/three-finish"] == f"/{URL_PATH}"
     assert vidgen_file("modules/three-finish.js") == MODULE and MODULE.is_file()
     assert vidgen_file("modules/other.js") is None and vidgen_file("modules/../modules/three-finish.js") is None

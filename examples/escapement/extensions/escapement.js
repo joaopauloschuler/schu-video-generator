@@ -26,6 +26,8 @@ import {UnrealBloomPass} from "three/addons/postprocessing/UnrealBloomPass.js";
 import {ShaderPass} from "three/addons/postprocessing/ShaderPass.js";
 import {Pass, FullScreenQuad} from "three/addons/postprocessing/Pass.js";
 import * as BGU from "three/addons/utils/BufferGeometryUtils.js";
+import {clamp, mix, smoothstep, smootherstep, easeOutCubic, hash, glide, keyframes, trackArrays, lastIndex, hitEnvelope, hitCount, hitAge, noteEnvelope} from "vidgen/music-time";
+import {setStage, color, mixColor, makeDustCloud, updateDustCloud} from "vidgen/three-kit";
 
 const BAR = 2, BEAT = 0.5, S16 = BAR / 16, TAU = Math.PI * 2, DEG = Math.PI / 180;
 let R, S, C, composer, scenePass, bloom, fin, aa, W, H, AU, mode, t0, PM;
@@ -33,15 +35,6 @@ let titleEl, endEl, Q = {};
 const O = {};
 
 // ---------- small helpers ----------
-const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
-const mix = (a, b, u) => a + (b - a) * u;
-const sstep = (a, b, x) => { const u = clamp((x - a) / (b - a)); return u * u * (3 - 2 * u); };
-const ease = (u) => { u = clamp(u); return u * u * u * (u * (u * 6 - 15) + 10); };
-const easeOut = (u) => 1 - Math.pow(1 - clamp(u), 3);
-const hash1 = (i, k = 0) => { const x = Math.sin(i * 127.1 + k * 311.7 + 0.5) * 43758.5453; return x - Math.floor(x); };
-const hx = (hex, m = 1) => new THREE.Color(hex).multiplyScalar(m);
-const TMPC = new THREE.Color();
-const lc = (a, b, u, m = 1) => TMPC.copy(a).lerp(b, clamp(u)).multiplyScalar(m).clone();
 const V2 = (x, y) => new THREE.Vector2(x, y);
 const pol = (r, a) => new THREE.Vector2(r * Math.cos(a), r * Math.sin(a));
 function arcPts(r, a0, a1, n, cx = 0, cy = 0) { const p = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; p.push(V2(cx + r * Math.cos(a), cy + r * Math.sin(a))); } return p; }
@@ -58,15 +51,8 @@ const NOTE_TRACKS = ["box", "horn", "lead", "cell", "chime", "twinkle", "pend", 
 // score's own tick and tock are used as written) and inside the SILENT_BAR (one tick on its first
 // beat, then nothing until the next bar).
 const START_BAR = 4, FALTER = [56, 60], SILENT_BAR = 67;
-const grid = (x) => Math.round(x / S16 * 1000) / 1000 * S16;
 function fromMusic(M) {
-  const hits = {}, notes = {};
-  for (const k of HIT_TRACKS) {
-    const h = M.events(k); hits[k] = {t: Float32Array.from(h, (e) => grid(e.time)), g: Float32Array.from(h, (e) => e.gain)};
-  }
-  for (const k of NOTE_TRACKS) {
-    const list = M.events(k); notes[k] = {t: Float32Array.from(list, (e) => grid(e.time)), d: Float32Array.from(list, (e) => grid(e.duration)), p: Float32Array.from(list, (e) => e.pitch ?? 0)};
-  }
+  const {hits, notes} = trackArrays(M, {hits: HIT_TRACKS, notes: NOTE_TRACKS, grid: S16});
   const bar = M.score.bar, f0 = FALTER[0] * bar, f1 = FALTER[1] * bar, s0 = SILENT_BAR * bar, s1 = s0 + bar;
   const end = bar * M.score.sections.reduce((a, s) => a + Math.round((s.end - s.start) / bar), 0);
   const beats = new Set();
@@ -74,39 +60,27 @@ function fromMusic(M) {
   for (const k of ["tick", "tock"]) for (const e of M.events(k, f0, f1)) beats.add(+e.time.toFixed(6));
   return {hits, notes, beats: Float64Array.from([...beats].sort((a, b) => a - b))};
 }
-function lastIdx(ts, T) { let lo = 0, hi = ts.length - 1, k = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (ts[m] <= T + 1e-5) { k = m; lo = m + 1; } else hi = m - 1; } return k; }
-// the envelope of a drum: 1 (more on an accent) at each hit, falling with `decay` seconds
-function env(name, T, decay) {
-  const h = AU.hits[name]; if (!h) return 0;
-  let v = 0;
-  for (let j = lastIdx(h.t, T), n = 0; j >= 0 && n < 3; j--, n++) v = Math.max(v, Math.min(h.g[j], 1.25) * Math.exp(-(T - h.t[j]) / decay));
-  return v;
-}
-function hitCount(name, T) { const h = AU.hits[name]; return h ? lastIdx(h.t, T) + 1 : 0; }
-function hitAge(name, T) { const h = AU.hits[name]; const i = h ? lastIdx(h.t, T) : -1; return i < 0 ? 1e9 : T - h.t[i]; }
-function note(name, T) { const n = AU.notes[name], i = n ? lastIdx(n.t, T) : -1; return i < 0 ? null : {i, p: n.p[i], age: T - n.t[i], d: n.d[i]}; }
-function noteEnv(name, T, decay) { const q = note(name, T); return q ? Math.exp(-q.age / decay) : 0; }
 
 // ---------- the mechanism's time ----------
 // beat(T): how many ticks the escapement has made (whole part) and how far the balance is through
 // its swing to the next (fraction). Between two ticks more than 1.2 s apart (the silent bar) the
 // balance swings out, hangs still, and falls back just in time for the next tick.
 function beat(T) {
-  const b = AU.beats, k = lastIdx(b, T);
+  const b = AU.beats, k = lastIndex(b, T);
   if (k < 0) return 0;
   if (k >= b.length - 1) return k + (T - b[k]) / BEAT;
   const gap = b[k + 1] - b[k]; let u = (T - b[k]) / gap;
-  if (gap > 1.2) { const a = 0.35 / gap, z = 0.25 / gap; u = u < a ? 0.5 * easeOut(u / a) : u > 1 - z ? 0.5 + 0.5 * Math.pow((u - (1 - z)) / z, 2) : 0.5; }
+  if (gap > 1.2) { const a = 0.35 / gap, z = 0.25 / gap; u = u < a ? 0.5 * easeOutCubic(u / a) : u > 1 - z ? 0.5 + 0.5 * Math.pow((u - (1 - z)) / z, 2) : 0.5; }
   return k + u;
 }
 // the same count as the train moves: each tick a quick step with a small mechanical overshoot
 function beatStep(T) {
-  const b = AU.beats, k = lastIdx(b, T);
+  const b = AU.beats, k = lastIndex(b, T);
   if (k < 0) return 0;
   const x = (T - b[k]) / 0.085;
   return k + 1 - Math.exp(-3.2 * x) * Math.cos(4.2 * x);
 }
-const tickEnv = (T, decay = 0.12) => { const k = lastIdx(AU.beats, T); return k < 0 ? 0 : Math.exp(-(T - AU.beats[k]) / decay); };
+const tickEnv = (T, decay = 0.12) => { const k = lastIndex(AU.beats, T); return k < 0 ? 0 : Math.exp(-(T - AU.beats[k]) / decay); };
 
 // ---------- procedural surface finish: normal maps computed from height functions ----------
 function normalMap(size, height, strength, wrap = true) {
@@ -248,7 +222,7 @@ function makeEnv(lights, sky, floor, blur = 0.02) {
   for (let i = 0; i < 8; i++) {
     const l = lights[i] || [[0, 0, 1], [1, 0, 0], 0, 0, 0.1, 0, 0x000000, 0];
     const L = new THREE.Vector3(...l[0]).normalize(), U = new THREE.Vector3(...l[1]); U.addScaledVector(L, -U.dot(L)).normalize();
-    u.uL.value.push(L); u.uU.value.push(U); u.uS.value.push(new THREE.Vector4(l[2], l[3], l[4], l[5])); u.uC.value.push(hx(l[6], l[7]));
+    u.uL.value.push(L); u.uU.value.push(U); u.uS.value.push(new THREE.Vector4(l[2], l[3], l[4], l[5])); u.uC.value.push(color(l[6], l[7]));
   }
   const sc = new THREE.Scene();
   sc.add(new THREE.Mesh(new THREE.SphereGeometry(50, 48, 24), new THREE.ShaderMaterial({uniforms: u, side: THREE.BackSide,
@@ -267,14 +241,14 @@ const STUDIO = {
     [[-0.88, 0.1, 0.46], [0, 1, 0], 0.045, 0.045, 0.02, 0, 0xffffff, 18],
     [[0.5, 0.42, 0.76], [1, 0, 0], 0.03, 0.03, 0.015, 0, 0xfff2dd, 26],
     [[0.1, -0.1, 1], [1, 0, 0], 0.9, 0.9, 0.8, 0.5, 0xfff4e6, 0.34],
-  ], hx(0x101216, 1), hx(0x0a0806, 1)),
+  ], color(0x101216, 1), color(0x0a0806, 1)),
   cool: () => makeEnv([
     [[-0.5, 0.62, 0.6], [1, 0, 0], 0.5, 0.36, 0.42, 0.3, 0xdde9ff, 1.2],
     [[0.86, -0.15, 0.48], [0, 1, 0], 0.12, 0.9, 0.06, 0, 0x9fc0ff, 1.3],
     [[-0.2, -0.92, 0.33], [1, 0, 0], 1.1, 0.09, 0.06, 0, 0xffc890, 0.7],
     [[0.5, 0.42, 0.76], [1, 0, 0], 0.03, 0.03, 0.015, 0, 0xffffff, 22],
     [[0.1, -0.1, 1], [1, 0, 0], 0.9, 0.9, 0.8, 0.5, 0xe6f0ff, 0.3],
-  ], hx(0x0a0d14, 1), hx(0x050608, 1)),
+  ], color(0x0a0d14, 1), color(0x050608, 1)),
 };
 
 // ---------- geometry ----------
@@ -412,7 +386,7 @@ function buildWatch(o = {}) {
   const jewel = jewelParts(0.36), jewelS = jewelParts(0.26);
   const screwG = screwGeo(0.52, 0.3), screwS = screwGeo(0.36, 0.24);
   let nS = 0;
-  const screw = (layer, x, y, z, small = false) => { const q = mesh(small ? screwS : screwG, M.blued, layer, x, y); q.position.z = z; q.rotation.z = hash1(++nS, 3) * Math.PI; return q; };
+  const screw = (layer, x, y, z, small = false) => { const q = mesh(small ? screwS : screwG, M.blued, layer, x, y); q.position.z = z; q.rotation.z = hash(++nS, 3) * Math.PI; return q; };
   const setJewel = (layer, p, z, small = false) => { const j = small ? jewelS : jewel; const a = mesh(j.chaton, M.gold, layer, p.x, p.y), b = mesh(j.ruby, M.ruby, layer, p.x, p.y); a.position.z = b.position.z = z; return b; };
 
   // --- main plate: perlage, a polished bevelled edge
@@ -565,7 +539,7 @@ function buildWatch(o = {}) {
   // the times the four-side hammer strikes: the beats, in the bars where the three plays against them
   const fourT = Float64Array.from(AU.beats.filter((b) => (b >= 80 - 1e-6 && b < 96) || (b >= 120 - 1e-6 && b <= 134.01)));
   const hammer = (h, ts, T) => {
-    const i = lastIdx(ts, T), tp = i < 0 ? 9 : T - ts[i], tn = i + 1 < ts.length ? ts[i + 1] - T : 9;
+    const i = lastIndex(ts, T), tp = i < 0 ? 9 : T - ts[i], tn = i + 1 < ts.length ? ts[i + 1] - T : 9;
     const lift = tn < 0.42 ? Math.pow((0.42 - tn) / 0.42, 1.6) : 0;
     h.g.rotation.z = h.base + h.out * (-0.3 * lift + h.strike * Math.exp(-tp / 0.03));
     return Math.exp(-tp / 0.12);
@@ -647,7 +621,7 @@ function buildWatch(o = {}) {
     }
     HS.mesh.geometry.attributes.position.needsUpdate = true;
     // winding: one tooth of the ratchet wheel for each click of the score
-    const nc = hitCount("ratchet", T), ca = hitAge("ratchet", T), w = nc - Math.exp(-ca / 0.03);
+    const nc = hitCount(AU.hits.ratchet, T), ca = hitAge(AU.hits.ratchet, T), w = nc - Math.exp(-ca / 0.03);
     const aR = -w * TAU / CAL.Nr;
     A.ratchet.rotation.z = aR; A.crownW.rotation.z = meshAngle(aR, CAL.Nr, CAL.Ncw, Math.atan2(CAL.crownW.y - CAL.barrel.y, CAL.crownW.x - CAL.barrel.x));
     A.click.rotation.z = A.clickBase + 0.14 * Math.exp(-ca / 0.05);
@@ -672,7 +646,7 @@ function buildWatch(o = {}) {
     for (const nme of layerNames) L[nme].position.z = e * off[nme];
     // assembly: parts come down out of the blur in front of the lens and seat themselves (opt.place: name -> 0..1)
     const pl = opt.place;
-    for (const nme in PARTS) { const u = pl ? (pl[nme] ?? 1) : 1, q = PARTS[nme]; q.visible = u > 0; const dz = (1 - easeOut(u)) * 26; if (q.parent === root) q.position.z += dz; else q.position.z = dz; }
+    for (const nme in PARTS) { const u = pl ? (pl[nme] ?? 1) : 1, q = PARTS[nme]; q.visible = u > 0; const dz = (1 - easeOutCubic(u)) * 26; if (q.parent === root) q.position.z += dz; else q.position.z = dz; }
   };
   const PARTS = {barrel: A.barrel, centre: A.centre, third: A.third, fourth: A.fourth, escape: A.escape, pallet: A.pallet, balance: L.balance, lowbridge: L.lowbridge, bridge: L.bridge, wind: L.wind, cock: L.cock, poly: L.poly};
   return {root, L, A, H, J, update: upd};
@@ -794,7 +768,7 @@ function finish(T, o = {}) {
   bloom.strength = o.bloom ?? 0.35; bloom.radius = o.bloomR ?? 0.5; bloom.threshold = o.bloomT ?? 1.0;
   const d = scenePass.blur.uniforms; d.uFocus.value = o.focus ?? 30; d.uAperture.value = (Q.dof ?? true) ? (o.aperture ?? 0) * H / 720 : 0; d.uMaxR.value = (o.maxR ?? 9) * H / 720;
 }
-const BLACK = hx(0x000000), ONE = new THREE.Color(1, 1, 1);
+const BLACK = color(0x000000), ONE = new THREE.Color(1, 1, 1);
 const VA = new THREE.Vector3(), VB = new THREE.Vector3();
 function setCam(px, py, pz, tx, ty, tz, roll = 0, fov = 30, up = null) {
   C.position.set(px, py, pz); C.up.set(0, 1, 0); if (up) C.up.set(up[0], up[1], up[2]);
@@ -811,64 +785,38 @@ function makeKey(col = 0xfff1e0, int = 0.7, dir = [-0.5, 0.62, 0.6], size = 22) 
 }
 
 // ---------- glints and dust ----------
-function spriteTex(kind) {
+// a glint: a bright point with a soft halo and two thin rays, drawn once
+function flareTexture() {
   const N = 128, c = document.createElement("canvas"); c.width = c.height = N; const g = c.getContext("2d");
   const grd = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
-  if (kind === "dust") { grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.35, "rgba(255,255,255,0.35)"); grd.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = grd; g.fillRect(0, 0, N, N); }
-  else {
-    grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.05, "rgba(255,255,255,0.55)"); grd.addColorStop(0.18, "rgba(255,255,255,0.1)"); grd.addColorStop(0.5, "rgba(255,255,255,0.02)"); grd.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = grd; g.fillRect(0, 0, N, N);
-    g.globalCompositeOperation = "lighter";
-    for (const [ang, len, wd] of [[0, 0.9, 1.0], [Math.PI / 2, 0.55, 1.0]]) {
-      g.save(); g.translate(N / 2, N / 2); g.rotate(ang); const lg = g.createLinearGradient(-N / 2 * len, 0, N / 2 * len, 0);
-      lg.addColorStop(0, "rgba(255,255,255,0)"); lg.addColorStop(0.5, "rgba(255,255,255,0.45)"); lg.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = lg; g.fillRect(-N / 2 * len, -wd / 2, N * len, wd); g.restore(); }
-  }
+  grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.05, "rgba(255,255,255,0.55)"); grd.addColorStop(0.18, "rgba(255,255,255,0.1)"); grd.addColorStop(0.5, "rgba(255,255,255,0.02)"); grd.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = grd; g.fillRect(0, 0, N, N);
+  g.globalCompositeOperation = "lighter";
+  for (const [ang, len, wd] of [[0, 0.9, 1.0], [Math.PI / 2, 0.55, 1.0]]) {
+    g.save(); g.translate(N / 2, N / 2); g.rotate(ang); const lg = g.createLinearGradient(-N / 2 * len, 0, N / 2 * len, 0);
+    lg.addColorStop(0, "rgba(255,255,255,0)"); lg.addColorStop(0.5, "rgba(255,255,255,0.45)"); lg.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = lg; g.fillRect(-N / 2 * len, -wd / 2, N * len, wd); g.restore(); }
   return new THREE.CanvasTexture(c);
 }
 function makeFlares(n) {
-  const tex = spriteTex("flare"), f = [];
+  const tex = flareTexture(), f = [];
   for (let i = 0; i < n; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true})); sp.visible = false; sp.renderOrder = 20; S.add(sp); f.push(sp); }
   return f;
 }
 function flare(f, i, pos, size, amt, col = WARMW) { const sp = f[i]; if (!sp) return; sp.visible = amt > 0.01; if (!sp.visible) return; sp.position.copy(pos); sp.scale.setScalar(size * 0.6 * (0.6 + 0.4 * Math.min(amt, 1.5))); sp.material.color.copy(col).multiplyScalar(amt); }
-function makeDust(n, box, size, seed = 1) {
-  const pos = new Float32Array(n * 3), g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  const m = new THREE.PointsMaterial({map: spriteTex("dust"), size, sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, color: 0xffffff});
-  const pts = new THREE.Points(g, m); pts.frustumCulled = false; S.add(pts);
-  return {pts, pos, n, box, seed};
-}
-function updateDust(d, T, col, amt, drift = 0.15) {
-  const [bx, by, bz, cx, cy, cz] = d.box;
-  for (let i = 0; i < d.n; i++) {
-    const wrap = (v, w) => ((v % w) + w) % w - w / 2;
-    d.pos[i * 3] = cx + wrap(hash1(i, d.seed) * bx + T * drift * (hash1(i, d.seed + 7) - 0.5), bx);
-    d.pos[i * 3 + 1] = cy + wrap(hash1(i, d.seed + 1) * by + T * drift * (hash1(i, d.seed + 8) - 0.5), by);
-    d.pos[i * 3 + 2] = cz + wrap(hash1(i, d.seed + 2) * bz + T * drift * 0.6 * (hash1(i, d.seed + 9) - 0.2), bz);
-  }
-  d.pts.geometry.attributes.position.needsUpdate = true; d.pts.material.color.copy(col).multiplyScalar(amt);
-}
-const WARMW = hx(0xfff0d8), GOLDC = hx(0xffc860), COOLW = hx(0xd8e8ff), AMBER = hx(0xff9a3c), RUBYC = hx(0xff3040), BLUEC = hx(0x5080ff);
+const WARMW = color(0xfff0d8), GOLDC = color(0xffc860), COOLW = color(0xd8e8ff), AMBER = color(0xff9a3c), RUBYC = color(0xff3040), BLUEC = color(0x5080ff);
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
-// a point moving through keyframes [[t, x, y, z], ...] with eased segments
-function path(keys, t) {
-  if (t <= keys[0][0]) return keys[0].slice(1);
-  for (let i = 0; i < keys.length - 1; i++) if (t <= keys[i + 1][0]) { const a = keys[i], b = keys[i + 1], u = sstep(0, 1, (t - a[0]) / (b[0] - a[0])); return a.slice(1).map((v, k) => mix(v, b[k + 1], u)); }
-  return keys[keys.length - 1].slice(1);
-}
-// one smooth move from a to b over the whole shot (no stops in the middle)
-const glide = (a, b, u) => a.map((v, k) => mix(v, b[k], ease(u)));
 
 // ====================================================================================================
 // Shots. Watch coordinates are millimetres: x to three o'clock, y to twelve, z out of the dial towards the viewer.
 const MODES = {};
 function watchWorld(studio = "warm", bg = 0x030304, keyInt = 0.7) {
-  S.environment = STUDIO[studio](); S.background = hx(bg);
+  S.environment = STUDIO[studio](); S.background = color(bg);
   O.w = buildWatch(); S.add(O.w.root);
   O.key = makeKey(0xfff1e0, keyInt);
   O.fl = makeFlares(14);
 }
 const movementOnly = (on = true) => { const L = O.w.L; L.hands.visible = L.glass.visible = L.case.visible = !on; };
 // light that answers the music: great drums and booms lift the whole studio a little, never the camera
-function pulse(T, base = 1, k = 0.28) { const v = base * (1 + k * Math.min(1.3, env("taiko", T, 0.35) + 0.8 * env("boom", T, 0.8))); S.environmentIntensity = v; return v; }
+function pulse(T, base = 1, k = 0.28) { const v = base * (1 + k * Math.min(1.3, hitEnvelope(AU.hits.taiko, T, 0.35) + 0.8 * hitEnvelope(AU.hits.boom, T, 0.8))); S.environmentIntensity = v; return v; }
 // Turn the studio so that its big soft box sits `off` radians (in azimuth) from where the flat plates mirror the
 // camera: near 0 the plates blaze, near 1.3 they show the box's falling edge, the stripes and the graining.
 function envTrack(camAz, off) { S.environmentRotation.set(0, 0, (Q.envsign ?? -1) * (camAz + Math.PI + off - 2.25)); }
@@ -886,7 +834,7 @@ MODES.hero = {
 // test: straight down on the escapement
 MODES.esctop = { build() { watchWorld(); movementOnly(); O.w.L.cock.visible = false; }, frame(T, t) { O.w.update(T, {dial: 0, open: 1}); O.w.L.cock.visible = false; O.w.L.balance.visible = !(Q.nobal);
   const p = CAL.pallet; const d = setCam(p.x - 0.5, p.y - 0.01, 16, p.x - 0.5, p.y, 1.8, 0, 30); finish(T, {focus: d, aperture: 0, vig: 0.2}); } };
-MODES.blank = { build() { S.background = hx(0x202020); }, frame(T, t) { setCam(0, 0, 50, 0, 0, 0); finish(T, {}); } };
+MODES.blank = { build() { S.background = color(0x202020); }, frame(T, t) { setCam(0, 0, 50, 0, 0, 0); finish(T, {}); } };
 MODES.wide = {
   build() { watchWorld(); },
   frame(T, t) {
@@ -902,23 +850,23 @@ MODES.wide = {
 MODES.winding = {
   build() { watchWorld("cool", 0x020203, 0.5); },
   frame(T, t) {
-    const run = sstep(4 * BAR - 0.2, 6 * BAR, T);
+    const run = smoothstep(4 * BAR - 0.2, 6 * BAR, T);
     O.w.update(T, {run});
     const u = t / (8 * BAR);
     const c = glide([-13, -36, 92, -19, -1, 2], [-3, -22, 66, -14, -0.5, 3], u);
     const d = setCam(c[0], c[1], c[2], c[3], c[4], c[5], 0, 30, [0, 0.35, 1]);
-    const wake = sstep(0, 1.0 * BAR, t), rat = env("ratchet", T, 0.12);
+    const wake = smoothstep(0, 1.0 * BAR, t), rat = hitEnvelope(AU.hits.ratchet, T, 0.12);
     pulse(T, 0.25 + 0.75 * wake, 0.5); O.key.intensity = 0.5 * wake;
-    S.environmentRotation.set(0, 0, -0.5 + 0.5 * ease(u));
+    S.environmentRotation.set(0, 0, -0.5 + 0.5 * smootherstep(u));
     flare(O.fl, 0, VA.set(21.6 + 1.3, 0.35, 2.2), 6, 0.4 * rat * wake, COOLW);
     flare(O.fl, 1, VA.set(0, -8.3, 6.2), 5, 0.6 * tickEnv(T, 0.1) * run, WARMW);
-    flare(O.fl, 2, VA.set(-9, 12, 8), 12, 0.8 * noteEnv("chime", T, 1.2) * (T > 14 ? 1 : 0), GOLDC);
-    const warm = sstep(4 * BAR, 8 * BAR, t);
-    finish(T, {exp: 0.95 * sstep(0, 0.7, t) + 0.25 * env("boom", T, 0.5) * sstep(0, 0.3, t), focus: d, aperture: 14, maxR: 7, bloom: 0.5, vig: 0.75,
-      gain: lc(hx(0xa9c0ff), hx(0xfff4e4), warm), lift: lc(hx(0x02040a), hx(0x040302), warm), sat: 0.9 + 0.1 * warm});
-    const a = sstep(1.2 * BAR, 2.2 * BAR, t) * (1 - sstep(6.2 * BAR, 7.2 * BAR, t));
+    flare(O.fl, 2, VA.set(-9, 12, 8), 12, 0.8 * noteEnvelope(AU.notes.chime, T, 1.2) * (T > 14 ? 1 : 0), GOLDC);
+    const warm = smoothstep(4 * BAR, 8 * BAR, t);
+    finish(T, {exp: 0.95 * smoothstep(0, 0.7, t) + 0.25 * hitEnvelope(AU.hits.boom, T, 0.5) * smoothstep(0, 0.3, t), focus: d, aperture: 14, maxR: 7, bloom: 0.5, vig: 0.75,
+      gain: mixColor(color(0xa9c0ff), color(0xfff4e4), warm), lift: mixColor(color(0x02040a), color(0x040302), warm), sat: 0.9 + 0.1 * warm});
+    const a = smoothstep(1.2 * BAR, 2.2 * BAR, t) * (1 - smoothstep(6.2 * BAR, 7.2 * BAR, t));
     titleEl.style.opacity = a.toFixed(3); titleEl.style.display = a > 0.002 ? "block" : "none";
-    titleEl.firstChild.style.letterSpacing = (0.26 + 0.03 * sstep(1.2 * BAR, 7.2 * BAR, t)).toFixed(4) + "em";
+    titleEl.firstChild.style.letterSpacing = (0.26 + 0.03 * smoothstep(1.2 * BAR, 7.2 * BAR, t)).toFixed(4) + "em";
   },
 };
 
@@ -927,18 +875,18 @@ MODES.dial = {
   build() { watchWorld("warm", 0x030303, 0.5); O.w.L.glass.visible = false; },
   frame(T, t) {
     O.w.update(T, {});
-    const u = t / (8 * BAR), push = Math.pow(sstep(6.4 * BAR, 8 * BAR, t), 2);
+    const u = t / (8 * BAR), push = Math.pow(smoothstep(6.4 * BAR, 8 * BAR, t), 2);
     const c = glide([-13, 3, 17, -1, 7, 5.3], [5, -21, 12, 0, -7.4, 5.3], u);
     const cz = mix(c[2], 6.4, push), cx = mix(c[0], 0.3, push), cy = mix(c[1], -9.6, push);
     const d = setCam(cx, cy, cz, mix(c[3], 0, push), mix(c[4], -8.3, push), c[5], 0, 34, [0, 0.5, 1]);
     pulse(T, 1.0, 0.2); S.environmentRotation.set(0, 0, 0.25 * Math.sin(t * 0.21) + 0.6 * u);
     // the music box lights the hour pearls: each pitch has its hour
     const nb = AU.notes.box;
-    if (nb) for (let k = 0; k < 6; k++) { const i = lastIdx(nb.t, T) - k; if (i < 0 || nb.t[i] < 15) { flare(O.fl, k, VA, 1, 0); continue; }
+    if (nb) for (let k = 0; k < 6; k++) { const i = lastIndex(nb.t, T) - k; if (i < 0 || nb.t[i] < 15) { flare(O.fl, k, VA, 1, 0); continue; }
       let h = (nb.p[i] * 7) % 12; if (h === 6) h = 5; const a = h / 12 * TAU, age = T - nb.t[i];
       flare(O.fl, k, VA.set(16.45 * Math.sin(a), 16.45 * Math.cos(a), 5.5), 4.5, 1.6 * Math.exp(-age / 0.9), GOLDC); }
     flare(O.fl, 7, VA.set(0, -8.3, 5.8), 2.2, 0.5 * tickEnv(T, 0.08), WARMW);
-    finish(T, {exp: 1.05 + 0.5 * push, focus: d * (1 - 0.1 * push), aperture: 30 - 8 * push, maxR: 11, bloom: 0.45 + 0.5 * push, vig: 0.6, gain: hx(0xfff3e2), lift: hx(0x050403),
+    finish(T, {exp: 1.05 + 0.5 * push, focus: d * (1 - 0.1 * push), aperture: 30 - 8 * push, maxR: 11, bloom: 0.45 + 0.5 * push, vig: 0.6, gain: color(0xfff3e2), lift: color(0x050403),
       flash: 0.25 * Math.exp(-t / 0.5) + 1.4 * Math.pow(push, 6), flashCol: WARMW});
   },
 };
@@ -957,7 +905,7 @@ MODES.through = {
     // a glint where each part seats itself
     const seats = [[1.9, CAL.centre], [2.9, CAL.fourth], [3.9, CAL.third], [4.9, CAL.escape], [5.9, CAL.balance], [7.15, CAL.barrel], [7.9, CAL.balance]];
     seats.forEach(([bar, p], i) => flare(O.fl, i, VA.set(p.x, p.y, 3.2), 6, b > bar ? 1.5 * Math.exp(-(b - bar) * BAR / 0.25) : 0, WARMW));
-    finish(T, {exp: 1.0, focus: d, aperture: 20, maxR: 10, bloom: 0.45, vig: 0.6, gain: hx(0xfff6ea), flash: 1.6 * Math.exp(-t / 0.35), flashCol: WARMW});
+    finish(T, {exp: 1.0, focus: d, aperture: 20, maxR: 10, bloom: 0.45, vig: 0.6, gain: color(0xfff6ea), flash: 1.6 * Math.exp(-t / 0.35), flashCol: WARMW});
   },
 };
 
@@ -972,8 +920,8 @@ MODES.escapement = {
     pulse(T, 1.0, 0.35); S.environmentRotation.set(0, 0, 0.35 * Math.sin(t * 0.3));
     const tk = tickEnv(T, 0.1);
     flare(O.fl, 0, VA.set(p.x, p.y, 2.4), 2.4, 0.9 * tk, RUBYC);
-    flare(O.fl, 1, VA.set(bal.x, bal.y, 4.6), 2.6, 0.35 * tk + 0.5 * env("taiko", T, 0.5), RUBYC);
-    finish(T, {exp: 1.0 + 0.1 * env("taiko", T, 0.4), focus: d, aperture: 30, maxR: 11, bloom: 0.45, vig: 0.65, gain: hx(0xfff1dc), lift: hx(0x050302), flash: 0.5 * Math.exp(-t / 0.4), flashCol: GOLDC});
+    flare(O.fl, 1, VA.set(bal.x, bal.y, 4.6), 2.6, 0.35 * tk + 0.5 * hitEnvelope(AU.hits.taiko, T, 0.5), RUBYC);
+    finish(T, {exp: 1.0 + 0.1 * hitEnvelope(AU.hits.taiko, T, 0.4), focus: d, aperture: 30, maxR: 11, bloom: 0.45, vig: 0.65, gain: color(0xfff1dc), lift: color(0x050302), flash: 0.5 * Math.exp(-t / 0.4), flashCol: GOLDC});
   },
 };
 
@@ -981,7 +929,7 @@ MODES.escapement = {
 function cathedralWorld() {
   watchWorld("warm", 0x2a1608, 1.0); movementOnly();          // the haze has the colour of the distance
   S.fog = new THREE.FogExp2(0x2a1608, 0.045);
-  O.dust = makeDust(260, [18, 18, 3, 0, -5, 1.4], 0.07, 3);
+  O.dust = makeDustCloud(260, [18, 18, 3, 0, -5, 1.4], 0.07, 3);
   C.near = 0.05; C.far = 120;
 }
 MODES.cathedral = {
@@ -993,15 +941,15 @@ MODES.cathedral = {
     if (!cut) c = glide([-0.6, -13.6, 0.5, 1.2, -4.0, 1.75, 62], [-0.2, -9.9, 0.62, 1.8, 0, 1.9, 62], b / 4);   // along the plate, under the fourth wheel, towards the centre
     else c = glide([4.9, -9.0, 0.35, 2.2, -5.2, 2.2, 58], [5.4, -6.6, 2.9, 1.6, -4.9, 1.75, 58], (b - 4) / 4);      // up past the third wheel and the pinion it drives
     const d = setCam(c[0], c[1], c[2], c[3], c[4], c[5], 0, c[6], [0, 0, 1]);
-    const tk = env("taiko", T, 0.5), bm = env("boom", T, 0.9);
+    const tk = hitEnvelope(AU.hits.taiko, T, 0.5), bm = hitEnvelope(AU.hits.boom, T, 0.9);
     pulse(T, 1.2, 0.4); O.key.intensity = 0.8 + 0.3 * tk; S.environmentRotation.set(0, 0, 0.6 + 0.06 * t);
-    updateDust(O.dust, T, AMBER, 0.5 + 0.6 * tk, 0.12);
+    updateDustCloud(O.dust, T, AMBER, 0.5 + 0.6 * tk, 0.12);
     S.fog.density = 0.036 - 0.006 * tk;
     flare(O.fl, 0, VA.set(CAL.centre.x, CAL.centre.y, 0.3), 1.6, 0.8 * tickEnv(T, 0.12), RUBYC);
     flare(O.fl, 1, VA.set(CAL.third.x, CAL.third.y, 0.3), 1.6, 0.8 * tickEnv(T, 0.12), RUBYC);
-    flare(O.fl, 2, VA.set(O.w.H.chime.hit.x, O.w.H.chime.hit.y, 2), 9, 1.2 * noteEnv("chime", T, 0.9), GOLDC);
+    flare(O.fl, 2, VA.set(O.w.H.chime.hit.x, O.w.H.chime.hit.y, 2), 9, 1.2 * noteEnvelope(AU.notes.chime, T, 0.9), GOLDC);
     const cutFlash = cut ? Math.exp(-(t - 4 * BAR) / 0.3) : Math.exp(-t / 0.4);
-    finish(T, {exp: 1.4 + 0.15 * tk, focus: d, aperture: 5, maxR: 5, bloom: 0.5, bloomT: 1.0, vig: 0.75, gain: hx(0xffe2bd), lift: hx(0x070402), sat: 1.05, flash: 0.22 * cutFlash, flashCol: AMBER});
+    finish(T, {exp: 1.4 + 0.15 * tk, focus: d, aperture: 5, maxR: 5, bloom: 0.5, bloomT: 1.0, vig: 0.75, gain: color(0xffe2bd), lift: color(0x070402), sat: 1.05, flash: 0.22 * cutFlash, flashCol: AMBER});
   },
 };
 
@@ -1013,14 +961,14 @@ MODES.threefour = {
     const b = t / BAR, A = CAL.polyA, Bp = CAL.polyB, mx = (A.x + Bp.x) / 2, my = (A.y + Bp.y) / 2, u = b / 8;
     const c = glide([mx + 7.4, my - 4.6, 5.2, mx - 0.4, my + 0.6, 1.0, 46], [mx + 10.5, my - 10.5, 13.5, mx - 1.2, my + 1.4, 1.0, 42], Math.pow(u, 1.2));
     const d = setCam(c[0], c[1], c[2], c[3], c[4], c[5], 0, c[6], [0, 0, 1]);
-    const tk = env("taiko", T, 0.5), g = O.w.update.glint;
+    const tk = hitEnvelope(AU.hits.taiko, T, 0.5), g = O.w.update.glint;
     pulse(T, 1.1, 0.4); O.key.intensity = 0.5 + 0.3 * tk; S.environmentRotation.set(0, 0, 1.2 + 0.05 * t);
-    updateDust(O.dust, T, AMBER, 0.4 + 0.5 * tk, 0.12);
+    updateDustCloud(O.dust, T, AMBER, 0.4 + 0.5 * tk, 0.12);
     S.fog.density = 0.022 - 0.008 * u;
-    flare(O.fl, 0, O.w.H.three.hit, 1.8, 0.8 * g.three, hx(0xff7a50));
+    flare(O.fl, 0, O.w.H.three.hit, 1.8, 0.8 * g.three, color(0xff7a50));
     flare(O.fl, 1, O.w.H.four.hit, 1.8, 0.7 * g.four, COOLW);
-    finish(T, {exp: 1.15 + 0.15 * tk - 0.12 * u, focus: d, aperture: 12 - 6 * u, maxR: 8, bloom: 0.3, bloomT: 1.25, vig: 0.8, gain: lc(hx(0xffe2bd), hx(0xffcfa0), u), lift: hx(0x080302), sat: 1.08,
-      flash: 0.2 * Math.exp(-t / 0.4) + 0.3 * sstep(7.6 * BAR, 8 * BAR, t), flashCol: AMBER});
+    finish(T, {exp: 1.15 + 0.15 * tk - 0.12 * u, focus: d, aperture: 12 - 6 * u, maxR: 8, bloom: 0.3, bloomT: 1.25, vig: 0.8, gain: mixColor(color(0xffe2bd), color(0xffcfa0), u), lift: color(0x080302), sat: 1.08,
+      flash: 0.2 * Math.exp(-t / 0.4) + 0.3 * smoothstep(7.6 * BAR, 8 * BAR, t), flashCol: AMBER});
   },
 };
 
@@ -1033,8 +981,8 @@ function nightTexture() {
   const N = 2048, c = document.createElement("canvas"); c.width = c.height = N; const g = c.getContext("2d"), k = N / 132;
   const bg = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2); bg.addColorStop(0, "#16296e"); bg.addColorStop(0.6, "#0b1647"); bg.addColorStop(1, "#060b2a");
   g.fillStyle = bg; g.fillRect(0, 0, N, N); g.translate(N / 2, N / 2);
-  for (let i = 0; i < 900; i++) { const a = hash1(i, 1) * TAU, r = Math.sqrt(hash1(i, 2)) * 64 * k, sz = 0.5 + 2.2 * Math.pow(hash1(i, 3), 6);
-    g.fillStyle = `rgba(255,${200 + Math.floor(40 * hash1(i, 4))},${110 + Math.floor(80 * hash1(i, 5))},${0.35 + 0.6 * hash1(i, 6)})`; g.beginPath(); g.arc(r * Math.cos(a), r * Math.sin(a), sz, 0, TAU); g.fill(); }
+  for (let i = 0; i < 900; i++) { const a = hash(i, 1) * TAU, r = Math.sqrt(hash(i, 2)) * 64 * k, sz = 0.5 + 2.2 * Math.pow(hash(i, 3), 6);
+    g.fillStyle = `rgba(255,${200 + Math.floor(40 * hash(i, 4))},${110 + Math.floor(80 * hash(i, 5))},${0.35 + 0.6 * hash(i, 6)})`; g.beginPath(); g.arc(r * Math.cos(a), r * Math.sin(a), sz, 0, TAU); g.fill(); }
   g.strokeStyle = "rgba(240,196,96,0.85)";
   for (const pl of PLANETS) { g.lineWidth = 0.14 * k; g.beginPath(); g.arc(0, 0, pl[1] * k, 0, TAU); g.stroke(); }
   g.lineWidth = 0.1 * k; for (let i = 0; i < 360; i += 2) { const a = i * DEG, r0 = (i % 30 === 0 ? 59.5 : i % 10 === 0 ? 61 : 62) * k; g.beginPath(); g.moveTo(r0 * Math.cos(a), r0 * Math.sin(a)); g.lineTo(63.5 * k * Math.cos(a), 63.5 * k * Math.sin(a)); g.stroke(); }
@@ -1077,86 +1025,86 @@ STUDIO.night = () => makeEnv([
   [[-0.2, -0.92, 0.33], [1, 0, 0], 1.1, 0.08, 0.06, 0, 0xffc890, 1.2],
   [[0.5, 0.42, 0.76], [1, 0, 0], 0.03, 0.03, 0.015, 0, 0xffffff, 14],
   [[0.1, -0.1, 1], [1, 0, 0], 0.9, 0.9, 0.8, 0.5, 0x8098e0, 0.2],
-], hx(0x05070f, 1), hx(0x030308, 1));
+], color(0x05070f, 1), color(0x030308, 1));
 // the orrery's own time: it runs with the song until bar 56, then only as fast as the faltering ticks
 const orreryTime = (T) => T < 56 * BAR ? T : 56 * BAR + (beat(T) - beat(56 * BAR)) * BEAT;
 function orreryWorld() {
-  S.environment = STUDIO.night(); S.background = hx(0x010103);
+  S.environment = STUDIO.night(); S.background = color(0x010103);
   O.or = buildOrrery(); O.fl = makeFlares(8);
-  O.dust = makeDust(320, [260, 260, 120, 0, 0, 10], 0.9, 5);
+  O.dust = makeDustCloud(320, [260, 260, 120, 0, 0, 10], 0.9, 5);
   C.near = 2; C.far = 600;
 }
 MODES.orrery = {
   build() { orreryWorld(); },
   frame(T, t) {
     const u = t / (8 * BAR), W = orreryTime(T);
-    O.or.update(W, 1 + 0.12 * noteEnv("box", T, 0.8));
-    const az = -1.9 + 0.9 * ease(u), el = mix(0.16, 0.5, ease(u)), dist = mix(52, 112, ease(u));
+    O.or.update(W, 1 + 0.12 * noteEnvelope(AU.notes.box, T, 0.8));
+    const az = -1.9 + 0.9 * smootherstep(u), el = mix(0.16, 0.5, smootherstep(u)), dist = mix(52, 112, smootherstep(u));
     const d = setCam(dist * Math.cos(el) * Math.cos(az), dist * Math.cos(el) * Math.sin(az), 9 + dist * Math.sin(el), 0, 0, 9, 0, 36, [0, 0, 1]);
     S.environmentIntensity = 1; S.environmentRotation.set(0, 0, 0.3 * t * 0.1);
-    updateDust(O.dust, T, hx(0xffe0a0), 0.9, 0.4);
-    flare(O.fl, 0, VA.set(0, 0, 13.4), 16, 0.16 + 0.1 * noteEnv("box", T, 1.0), hx(0xffb860));
-    const nt = AU.notes.twinkle; if (nt) for (let k = 0; k < 4; k++) { const i = lastIdx(nt.t, T) - k; if (i < 0 || nt.t[i] < 95) { flare(O.fl, 1 + k, VA, 1, 0); continue; }
-      const a = hash1(i, 11) * TAU, r = 30 + 30 * hash1(i, 12); flare(O.fl, 1 + k, VA.set(r * Math.cos(a), r * Math.sin(a), 0.4), 5, 0.7 * Math.exp(-(T - nt.t[i]) / 0.8), GOLDC); }
-    finish(T, {exp: 1.0, focus: d * 0.86, aperture: 16, maxR: 9, bloom: 0.45, bloomT: 1.0, vig: 0.7, gain: hx(0xeaf0ff), lift: hx(0x03040a), sat: 1.1, flash: 0.1 * Math.exp(-t / 0.7), flashCol: hx(0x4060d0)});
+    updateDustCloud(O.dust, T, color(0xffe0a0), 0.9, 0.4);
+    flare(O.fl, 0, VA.set(0, 0, 13.4), 16, 0.16 + 0.1 * noteEnvelope(AU.notes.box, T, 1.0), color(0xffb860));
+    const nt = AU.notes.twinkle; if (nt) for (let k = 0; k < 4; k++) { const i = lastIndex(nt.t, T) - k; if (i < 0 || nt.t[i] < 95) { flare(O.fl, 1 + k, VA, 1, 0); continue; }
+      const a = hash(i, 11) * TAU, r = 30 + 30 * hash(i, 12); flare(O.fl, 1 + k, VA.set(r * Math.cos(a), r * Math.sin(a), 0.4), 5, 0.7 * Math.exp(-(T - nt.t[i]) / 0.8), GOLDC); }
+    finish(T, {exp: 1.0, focus: d * 0.86, aperture: 16, maxR: 9, bloom: 0.45, bloomT: 1.0, vig: 0.7, gain: color(0xeaf0ff), lift: color(0x03040a), sat: 1.1, flash: 0.1 * Math.exp(-t / 0.7), flashCol: color(0x4060d0)});
   },
 };
 // ---- 08 falter (bars 56-60): the tick comes back late, later; the planets slow with it and the sun dims ----
 MODES.falter = {
   build() { orreryWorld(); },
   frame(T, t) {
-    const u = t / (4 * BAR), W = orreryTime(T), tk = tickEnv(T, 0.35), dim = 1 - 0.5 * ease(u);
+    const u = t / (4 * BAR), W = orreryTime(T), tk = tickEnv(T, 0.35), dim = 1 - 0.5 * smootherstep(u);
     O.or.update(W, dim * (0.75 + 0.5 * tk));
-    const az = -1.0 + 0.25 * u, el = mix(0.5, 1.1, ease(u)), dist = mix(112, 132, ease(u));
+    const az = -1.0 + 0.25 * u, el = mix(0.5, 1.1, smootherstep(u)), dist = mix(112, 132, smootherstep(u));
     const d = setCam(dist * Math.cos(el) * Math.cos(az), dist * Math.cos(el) * Math.sin(az), 9 + dist * Math.sin(el), 0, 0, 6, 0, 36, [0, 0, 1]);
-    S.environmentIntensity = dim; updateDust(O.dust, T, hx(0xa0b8ff), 0.6 * dim, 0.4 * dim);
-    flare(O.fl, 0, VA.set(0, 0, 13.4), 20, (0.15 + 0.25 * tk) * dim, hx(0xffb860));
-    finish(T, {exp: 1.0, focus: d, aperture: 6, maxR: 6, bloom: 0.45, bloomT: 1.0, vig: 0.75 + 0.15 * u, gain: lc(hx(0xeaf0ff), hx(0x9fb4ff), u), lift: hx(0x02030a), sat: 1.05 - 0.35 * u, fade: 1 - 0.5 * sstep(3.5 * BAR, 4 * BAR, t)});
+    S.environmentIntensity = dim; updateDustCloud(O.dust, T, color(0xa0b8ff), 0.6 * dim, 0.4 * dim);
+    flare(O.fl, 0, VA.set(0, 0, 13.4), 20, (0.15 + 0.25 * tk) * dim, color(0xffb860));
+    finish(T, {exp: 1.0, focus: d, aperture: 6, maxR: 6, bloom: 0.45, bloomT: 1.0, vig: 0.75 + 0.15 * u, gain: mixColor(color(0xeaf0ff), color(0x9fb4ff), u), lift: color(0x02030a), sat: 1.05 - 0.35 * u, fade: 1 - 0.5 * smoothstep(3.5 * BAR, 4 * BAR, t)});
   },
 };
 
 // ---- 09 build (bars 60-68): back at the movement, cold; it rises and brightens; in bar 67 everything stops ----
 MODES.build = {
-  build() { watchWorld("cool", 0x020203, 0.8); movementOnly(); O.dust = makeDust(160, [50, 50, 30, 0, 0, 14], 0.22, 9); },
+  build() { watchWorld("cool", 0x020203, 0.8); movementOnly(); O.dust = makeDustCloud(160, [50, 50, 30, 0, 0, 14], 0.22, 9); },
   frame(T, t) {
     const b = t / BAR, stop = b >= 7, u = clamp(b / 7), heat = Math.pow(u, 1.7);
     O.w.update(T, {dial: 0, run: 1});
-    const az = -2.2 + 1.5 * ease(b / 8), dist = mix(13, 62, ease(u)), el = mix(0.5, 1.05, ease(u)), bal = CAL.balance, tx = mix(bal.x, 0, ease(u)), ty = mix(bal.y, -0.5, ease(u));
+    const az = -2.2 + 1.5 * smootherstep(b / 8), dist = mix(13, 62, smootherstep(u)), el = mix(0.5, 1.05, smootherstep(u)), bal = CAL.balance, tx = mix(bal.x, 0, smootherstep(u)), ty = mix(bal.y, -0.5, smootherstep(u));
     const d = setCam(tx + dist * Math.cos(el) * Math.cos(az), ty + dist * Math.cos(el) * Math.sin(az), 2.5 + dist * Math.sin(el), tx, ty, 2.5, 0, 34, [0, 0, 1]);
-    const tk = env("taiko", T, 0.3), g = O.w.update.glint, hold = stop ? sstep(7.0, 7.2, b) : 0;
+    const tk = hitEnvelope(AU.hits.taiko, T, 0.3), g = O.w.update.glint, hold = stop ? smoothstep(7.0, 7.2, b) : 0;
     S.environmentIntensity = (1.0 + 0.25 * heat) * (1 + 0.3 * tk) * (1 - 0.72 * hold); O.key.intensity = (0.3 + 0.3 * heat) * (1 - 0.8 * hold);
     envTrack(az, 1.25 - 0.45 * heat - 0.25 * tk);
-    updateDust(O.dust, stop ? 14 : T, WARMW, (0.3 + 0.5 * heat) * (1 - 0.6 * hold), 0.5);
-    flare(O.fl, 0, O.w.H.three.hit, 3, 0.8 * g.three * (1 - hold), hx(0xff7a50));
+    updateDustCloud(O.dust, stop ? 14 : T, WARMW, (0.3 + 0.5 * heat) * (1 - 0.6 * hold), 0.5);
+    flare(O.fl, 0, O.w.H.three.hit, 3, 0.8 * g.three * (1 - hold), color(0xff7a50));
     flare(O.fl, 1, O.w.H.four.hit, 3, 0.7 * g.four * (1 - hold), COOLW);
-    flare(O.fl, 2, VA.set(bal.x, bal.y, 4.6), 7, stop ? 0.6 * hold * (1 - sstep(7.86, 7.97, b)) : 0, COOLW);
-    finish(T, {exp: (1.15 + 0.0 * heat) * (1 + 0.12 * tk), focus: d, aperture: mix(26, 6, u), maxR: 10, bloom: 0.4 + 0.5 * heat, vig: 0.7 + 0.2 * hold, gain: lc(lc(hx(0xd0dcff), hx(0xfff0d8), heat), hx(0x90a8e8), hold),
-      lift: hx(0x03040a), sat: (0.8 + 0.25 * heat) * (1 - 0.5 * hold), flash: 0.7 * Math.exp(-t / 0.4) + (stop ? 0.9 * Math.exp(-(t - 7 * BAR) / 0.18) : 0), flashCol: stop ? ONE : COOLW});
+    flare(O.fl, 2, VA.set(bal.x, bal.y, 4.6), 7, stop ? 0.6 * hold * (1 - smoothstep(7.86, 7.97, b)) : 0, COOLW);
+    finish(T, {exp: (1.15 + 0.0 * heat) * (1 + 0.12 * tk), focus: d, aperture: mix(26, 6, u), maxR: 10, bloom: 0.4 + 0.5 * heat, vig: 0.7 + 0.2 * hold, gain: mixColor(mixColor(color(0xd0dcff), color(0xfff0d8), heat), color(0x90a8e8), hold),
+      lift: color(0x03040a), sat: (0.8 + 0.25 * heat) * (1 - 0.5 * hold), flash: 0.7 * Math.exp(-t / 0.4) + (stop ? 0.9 * Math.exp(-(t - 7 * BAR) / 0.18) : 0), flashCol: stop ? ONE : COOLW});
   },
 };
 
 // ---- 10, 11 climax (bars 68-84): the movement flies apart on the hit, every part still in time; it closes again in the last bar ----
 function climaxFrame(T, t) {
   const tc = T - 68 * BAR, b = tc / BAR;
-  const open = 1 - Math.exp(-tc / 0.3) * Math.cos(tc * 5.2), close = ease((b - 15) / 0.97);
-  const e = (b < 15 ? open : 1 - close) * (1 + 0.03 * env("taiko", T, 0.25));
+  const open = 1 - Math.exp(-tc / 0.3) * Math.cos(tc * 5.2), close = smootherstep((b - 15) / 0.97);
+  const e = (b < 15 ? open : 1 - close) * (1 + 0.03 * hitEnvelope(AU.hits.taiko, T, 0.25));
   O.w.update(T, {dial: 1, explode: e});
   // a slow turn round the stack, rising from the plate to the dial; twice it comes in close
-  const u = b / 16, az = -2.35 + 2.5 * u, el = 0.36 + 0.2 * ease(u) + 0.3 * close + 0.07 * Math.sin(u * TAU * 2), near = Math.pow(0.5 - 0.5 * Math.cos(u * TAU * 2), 2);
+  const u = b / 16, az = -2.35 + 2.5 * u, el = 0.36 + 0.2 * smootherstep(u) + 0.3 * close + 0.07 * Math.sin(u * TAU * 2), near = Math.pow(0.5 - 0.5 * Math.cos(u * TAU * 2), 2);
   const dist = mix(mix(76, 50, near), 80, close), tz = mix(2.5, mix(3.5, 0 + 9 * u, near * 0.8), e), side = 7 * near * Math.sin(u * TAU);
   const d = setCam(side + dist * Math.cos(el) * Math.cos(az), dist * Math.cos(el) * Math.sin(az), tz + dist * Math.sin(el), side * 0.6, 0, tz, 0, 31, [0, 0, 1]);
-  const tk = env("taiko", T, 0.35), bm = env("boom", T, 0.9), ch = noteEnv("chime", T, 1.0), L = O.w.L;
-  const calm = sstep(8, 9.5, b);                              // in the second half the camera comes closer: less bloom, the soft box kept further from the mirror
+  const tk = hitEnvelope(AU.hits.taiko, T, 0.35), bm = hitEnvelope(AU.hits.boom, T, 0.9), ch = noteEnvelope(AU.notes.chime, T, 1.0), L = O.w.L;
+  const calm = smoothstep(8, 9.5, b);                              // in the second half the camera comes closer: less bloom, the soft box kept further from the mirror
   S.environmentIntensity = 1.4 * (1 + 0.16 * tk + 0.12 * bm); O.key.intensity = 0.4 + 0.12 * tk; envTrack(az, 1.4 + 0.2 * calm - (0.3 - 0.12 * calm) * tk - (0.2 - 0.08 * calm) * bm);
-  updateDust(O.dust, T, GOLDC, 0.7 + 0.5 * tk, 1.0);
+  updateDustCloud(O.dust, T, GOLDC, 0.7 + 0.5 * tk, 1.0);
   const tick = tickEnv(T, 0.1);
   [[CAL.centre, L.bridge], [CAL.third, L.bridge], [CAL.fourth, L.bridge], [CAL.escape, L.lowbridge], [CAL.pallet, L.lowbridge], [CAL.balance, L.cock]].forEach(([p, lay], i) =>
     flare(O.fl, i, VA.set(p.x, p.y, lay.position.z + (lay === L.cock ? 4.6 : 3.1)), 4.5, (0.45 * tick + 0.7 * ch) * e, i % 2 ? RUBYC : GOLDC));
   flare(O.fl, 7, VA.copy(O.w.H.chime.hit).setZ(L.poly.position.z + 1.6), 8, 1.0 * ch * e, GOLDC);
-  finish(T, {exp: 1.08 + 0.06 * tk, focus: d * (1 - 0.1 * near), aperture: 7 + 9 * near, maxR: 8, bloom: 0.6 - 0.2 * calm, bloomT: 0.95 + 0.3 * calm, vig: 0.62, gain: hx(0xfff0d6), lift: hx(0x04050c), sat: 1.12,
+  finish(T, {exp: 1.08 + 0.06 * tk, focus: d * (1 - 0.1 * near), aperture: 7 + 9 * near, maxR: 8, bloom: 0.6 - 0.2 * calm, bloomT: 0.95 + 0.3 * calm, vig: 0.62, gain: color(0xfff0d6), lift: color(0x04050c), sat: 1.12,
     flash: 0.7 * Math.exp(-tc / 0.2) + 0.12 * (b >= 8 ? Math.exp(-(tc - 8 * BAR) / 0.4) : 0) + 0.7 * Math.pow(clamp((b - 15.7) / 0.3), 3), flashCol: WARMW});
 }
-MODES.climax1 = { build() { watchWorld("warm", 0x030305, 0.45); movementOnly(); O.w.L.hands.visible = true; M.dial.color.setScalar(0.62); O.dust = makeDust(260, [150, 150, 80, 0, 0, 10], 0.7, 13); }, frame: climaxFrame };
+MODES.climax1 = { build() { watchWorld("warm", 0x030305, 0.45); movementOnly(); O.w.L.hands.visible = true; M.dial.color.setScalar(0.62); O.dust = makeDustCloud(260, [150, 150, 80, 0, 0, 10], 0.7, 13); }, frame: climaxFrame };
 MODES.climax2 = MODES.climax1;
 
 // ---- 12 coda (bars 84-94 and the last chord): the watch whole again, further and further away; the end card ----
@@ -1164,14 +1112,14 @@ MODES.coda = {
   build() { watchWorld("warm", 0x020202, 0.5); },
   frame(T, t) {
     O.w.update(T, {});
-    const L = 10 * BAR, END = L + 3, u = t / END, card = sstep(4 * BAR, 5.4 * BAR, t), out = 1 - sstep(END - 2.4, END - 0.3, t);
+    const L = 10 * BAR, END = L + 3, u = t / END, card = smoothstep(4 * BAR, 5.4 * BAR, t), out = 1 - smoothstep(END - 2.4, END - 0.3, t);
     const c = glide([5, -24, 58, 3, 0, 3], [36, -34, 118, 31, -2, 0], Math.pow(u, 0.6));
     const d = setCam(c[0], c[1], c[2], c[3], c[4], c[5], 0, 30, [0, 0.35, 1]);
     pulse(T, 1.0 - 0.35 * card, 0.3); S.environmentRotation.set(0, 0, -0.3 + 0.5 * u);
-    const ch = noteEnv("chime", T, 1.6) * (t > 7);
+    const ch = noteEnvelope(AU.notes.chime, T, 1.6) * (t > 7);
     flare(O.fl, 0, VA.set(-6, 12, 8), 14, 0.7 * ch, GOLDC);
     flare(O.fl, 1, VA.set(0, -8.3, 6.2), 4, 0.5 * tickEnv(T, 0.1), WARMW);
-    finish(T, {exp: 1.0 - 0.2 * card, focus: d, aperture: 12, maxR: 7, bloom: 0.5, vig: 0.7, gain: lc(hx(0xfff4e4), hx(0xffe6c8), u), lift: hx(0x040302), fade: out, flash: 1.3 * Math.exp(-t / 0.5), flashCol: WARMW});
+    finish(T, {exp: 1.0 - 0.2 * card, focus: d, aperture: 12, maxR: 7, bloom: 0.5, vig: 0.7, gain: mixColor(color(0xfff4e4), color(0xffe6c8), u), lift: color(0x040302), fade: out, flash: 1.3 * Math.exp(-t / 0.5), flashCol: WARMW});
     const a = card * out;
     endEl.style.opacity = a.toFixed(3); endEl.style.display = a > 0.002 ? "block" : "none";
   },
@@ -1212,6 +1160,7 @@ export async function load(ctx) {
   PM = new THREE.PMREMGenerator(R);
   S = new THREE.Scene();
   C = new THREE.PerspectiveCamera(30, W / H, 1, 400);
+  setStage({renderer: R, scene: S, camera: C, width: W, height: H});
   const serif = `"${ctx.theme.fonts.serif}", Georgia, serif`;
   try { await document.fonts.load(`600 40px "${ctx.theme.fonts.serif}"`); await document.fonts.load(`italic 500 40px "${ctx.theme.fonts.serif}"`); } catch (e) { /* the fallback serif is used */ }
   makeTextures(serif); makeMaterials(); makeText(serif, `"${ctx.theme.fonts.body}", sans-serif`, `"${ctx.theme.fonts.mono}", monospace`);

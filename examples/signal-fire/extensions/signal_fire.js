@@ -18,30 +18,14 @@
 // update(t) sets the whole scene from t and keeps no state between frames.
 import * as THREE from "three";
 import {Finish} from "vidgen/three-finish";
+import {smoothstep, eventLevel, signalLevel} from "vidgen/music-time";
+import {softDotTexture} from "vidgen/three-kit";
 
 const STONES = 9, EMBERS = 240, WAVES = 4;
-const ease = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
+// the stones', flames' and stars' own seeded numbers (not music-time's hash, which would move every stone)
 const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
-const dB = (v) => Math.pow(10, v / 20);
 
 let M, finish, camera, brazier, flames = [], beam, ring, waves = [], stones = [], embers, skyUniforms, fireLight;
-
-// The level of an event at song time T, 1 for an unmarked note: its dynamic moves from the start to
-// the end of a hairpin (`dynamic` → `dynamicEnd`, dB) and its accent (`gain`) scales it.
-function levelOf(e, T) {
-  const u = e.duration > 0 ? Math.min(1, Math.max(0, (T - e.time) / e.duration)) : 0;
-  return e.gain * dB(e.dynamic + (e.dynamicEnd - e.dynamic) * u);
-}
-
-// How strongly a track sounds at T (0 when silent): its loudest event sounding, faded out over `release` s.
-function sounding(track, T, release = 0.6) {
-  let v = 0;
-  for (const e of M.events(track, T - 12, T + 1e-6)) {
-    const after = T - e.end;
-    if (after < release) v = Math.max(v, levelOf(e, Math.min(T, e.end)) * (after > 0 ? 1 - after / release : 1));
-  }
-  return v;
-}
 
 function update(t) {
   const T = M.time(t);
@@ -49,14 +33,14 @@ function update(t) {
   // the camera: low inside the ring among the embers, turning and rising a little while the music
   // gathers, then lifted over the stones and drawn back for the fire; a function of song time, so
   // the cuts between the scenes do not show
-  const turn = 0.3 + 0.9 * ease((T - 2) / 22);
-  const height = 1.1 + 1.0 * ease((T - 8) / 8) + 3.5 * ease((T - 15) / 7);
-  const distance = 3.4 - 0.4 * ease(T / 8) + 6 * ease((T - 16.5) / 8);
+  const turn = 0.3 + 0.9 * smoothstep(2, 24, T);
+  const height = 1.1 + 1.0 * smoothstep(8, 16, T) + 3.5 * smoothstep(15, 22, T);
+  const distance = 3.4 - 0.4 * smoothstep(0, 8, T) + 6 * smoothstep(16.5, 24.5, T);
   camera.position.set(Math.sin(turn) * distance, height, Math.cos(turn) * distance);
-  camera.lookAt(0, 1.2 + 0.6 * ease((T - 15.5) / 9), 0);
+  camera.lookAt(0, 1.2 + 0.6 * smoothstep(15.5, 24.5, T), 0);
 
   // the fire: grows with the music's level and the brass, flickers on its own (sines of T, no randomness)
-  const brass = Math.max(sounding("horns", T), 1.2 * sounding("low", T));
+  const brass = Math.max(signalLevel(M, "horns", T), 1.2 * signalLevel(M, "low", T));
   const size = 0.4 + 0.35 * M.level(T) + 0.35 * Math.min(1.5, brass);
   flames.forEach((f, i) => {
     const flicker = 1 + 0.25 * Math.sin(T * (5.3 + i * 1.9) + i * 2.1) + 0.15 * Math.sin(T * (11.7 + i * 2.9) + i);
@@ -71,7 +55,7 @@ function update(t) {
   let k = 0;
   for (const track of ["solo", "cellos"]) {
     for (const e of M.notes(track, T - 3.5, T + 1e-6)) {
-      const strength = Math.min(1.6, levelOf(e, e.time)) * (track === "solo" ? 1.3 : 1);
+      const strength = Math.min(1.6, eventLevel(e, e.time)) * (track === "solo" ? 1.3 : 1);
       for (let j = 0; j < 3 && k < EMBERS; j++, k++) {
         const seed = e.index * 7 + j * 131 + (track === "solo" ? 9001 : 0);
         const age = T - e.time, a = hash(seed) * Math.PI * 2, r = 0.15 + 0.35 * hash(seed + 1) * age;
@@ -86,7 +70,7 @@ function update(t) {
 
   // the timpani's ring of light: each blow a pulse, a roll lighting it as loud as its hairpin has grown
   const roll = M.sounding("timpani", T).filter((e) => e.stroke === "roll");
-  const drum = roll.length ? 0.6 * levelOf(roll[0], T) : 0;
+  const drum = roll.length ? 0.6 * eventLevel(roll[0], T) : 0;
   ring.material.color.setRGB(1.0, 0.45, 0.15).multiplyScalar(0.2 + 1.6 * Math.max(drum, M.pulse("timpani", 0.35, T)));
 
   // taiko: the stones flash, and a shock ring runs outwards from each of the last few hits
@@ -107,16 +91,16 @@ function update(t) {
   const cur = notes[notes.length - 1], prev = notes[notes.length - 2];
   if (cur) {
     const h = (p) => 2.5 + (p - 60) * 0.42;
-    const height = prev && cur.slur ? THREE.MathUtils.lerp(h(prev.pitch), h(cur.pitch), ease((T - cur.time + 0.12) / 0.24)) : h(cur.pitch);
+    const height = prev && cur.slur ? THREE.MathUtils.lerp(h(prev.pitch), h(cur.pitch), smoothstep(0, 1, (T - cur.time + 0.12) / 0.24)) : h(cur.pitch);
     beam.scale.set(1, height, 1);
     beam.position.y = 1.2 + height / 2;
-    beam.material.color.setRGB(1, 0.85, 0.6).multiplyScalar(0.9 * sounding("trumpet", T, 0.8));
+    beam.material.color.setRGB(1, 0.85, 0.6).multiplyScalar(0.9 * signalLevel(M, "trumpet", T, 0.8));
     beam.visible = true;
   } else beam.visible = false;
 
   // the sky: the choir's glow over the horizon, the band of the voices' range in the measured mix
-  skyUniforms.uGlow.value = 0.9 * sounding("choir", T, 1.5) + 0.6 * M.band(Math.floor(M.bandCount * 0.45), T);
-  skyUniforms.uWarm.value = ease((T - 14) / 4);
+  skyUniforms.uGlow.value = 0.9 * signalLevel(M, "choir", T, 1.5) + 0.6 * M.band(Math.floor(M.bandCount * 0.45), T);
+  skyUniforms.uWarm.value = smoothstep(14, 18, T);
 }
 
 export function load(ctx) {
@@ -189,12 +173,8 @@ export function load(ctx) {
   const emberGeo = new THREE.BufferGeometry();
   emberGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(EMBERS * 3), 3));
   emberGeo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(EMBERS * 3), 3));
-  const dot = document.createElement("canvas");   // a soft round spark instead of a square point
-  dot.width = dot.height = 32;
-  const g = dot.getContext("2d"), grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-  grad.addColorStop(0, "rgba(255,255,255,1)"); grad.addColorStop(0.4, "rgba(255,255,255,0.5)"); grad.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = grad; g.fillRect(0, 0, 32, 32);
-  embers = new THREE.Points(emberGeo, new THREE.PointsMaterial({size: 0.14, map: new THREE.CanvasTexture(dot), vertexColors: true, transparent: true,
+  embers = new THREE.Points(emberGeo, new THREE.PointsMaterial({size: 0.14, map: softDotTexture(32, [0.4, 0.5]),   // a soft round spark, not a square point
+    vertexColors: true, transparent: true,
     blending: THREE.AdditiveBlending, depthWrite: false, fog: false}));
   embers.frustumCulled = false;
   scene.add(embers);
@@ -205,7 +185,7 @@ export function load(ctx) {
     bloom: {strength: 0.2, radius: 0.2, threshold: 1.2, scale: draft ? 0.25 : 0.5},
     toneMapping: "aces",
     // cool and blue among the embers, warm once the fire is lit
-    grade: (t) => { const w = ease((M.time(t) - 14) / 4); return {temperature: -0.18 + 0.36 * w, saturation: 0.95 + 0.15 * w, contrast: 1.05}; },
+    grade: (t) => { const w = smoothstep(14, 18, M.time(t)); return {temperature: -0.18 + 0.36 * w, saturation: 0.95 + 0.15 * w, contrast: 1.05}; },
     vignette: 0.4,
     grain: 0.025,
     // the crash and the gong: a warm flash over the frame, the gong's slower and fainter

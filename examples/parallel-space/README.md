@@ -65,12 +65,10 @@ The tempo is 138.4615 rather than 138.4615385: the longer figure would round eac
 
 | File | What it is |
 |---|---|
-| [video.yaml](video.yaml) | the project: format, music, and the eleven scenes (`web_cut`, one script; `data.mode` picks the scene, `data.t0` is its place in the song in seconds) |
+| [video.yaml](video.yaml) | the project: format, music, and the eleven scenes (`web_cut`, one script; `data.mode` picks the scene; `music_data` names the score's tracks the page reads) |
 | [assets/music/parallel_space.yaml](assets/music/parallel_space.yaml) | the score: 30 tracks, 104 bars, played by vidgen's synthesizer |
-| [extensions/ps.js](extensions/ps.js) | every scene, the opening title and the end card (one three.js module) |
-| [extensions/ps_audio.json](extensions/ps_audio.json) | what the pictures know about the music, already built so a render works as it is (JSON data, not a sound file) |
+| [extensions/ps.js](extensions/ps.js) | every scene, the opening title and the end card (one three.js module, built from vidgen's `vidgen/three-kit` and `vidgen/music-time`) |
 | [extensions/webcut.py](extensions/webcut.py) | `web_cut`: a `web` scene with no 0.5 s fade-out, so the cuts land on the bar |
-| [scripts/make_ps_audio.py](scripts/make_ps_audio.py) | rebuilds `ps_audio.json` after a change to the score |
 | [.gitignore](.gitignore) | keeps `build/`, `output/` and rendered audio and video out of version control |
 
 ## Render
@@ -119,34 +117,28 @@ ffmpeg -i output/parallel_space_v7.mp4 -c:v libx264 -preset slow -b:v 840k -pass
 
 ## How the pictures hear the music
 
-The pictures never hear the track. `ps.js` fetches `./ps_audio.json` when the page loads and does
-not start without it. The file holds, measured from the rendered music, one value per video frame
-of 16 spectrum bands, the level, the level under 150 Hz and the onset strength; and, read from the
-score, the sections and the times of the drums and of every note of the hook, the lead, the
-choir's call (track `trumpet`), the violas on the hook (track `violins`), the string swells and
-the horn. The shipped file matches the score as it is.
+The pictures never hear the track. Every scene has `music_data` in its params, so vidgen gives
+the page `ctx.music`: the music the video plays measured at every frame (16 spectrum bands and the
+level) and the score's own events in song time. `ps.js` copies the drums (kick, taikos, toms,
+booms, claps, snare, crash, ticks, the roll, the frame drum) and the notes of the hook, the lead,
+the choir's call (track `trumpet`) with the violas on the hook (track `violins`), the string
+swells and the horn into arrays with `trackArrays` of `vidgen/music-time`. `ctx.music.t0` is each
+scene's place in the song, worked out by vidgen from the scene durations.
 
-### Regenerating `ps_audio.json`
+After a change to the score nothing else needs rebuilding: the next render (or `vidgen still`)
+measures the music again. If you change the form of the score (the number of bars in a section),
+change the scene durations in `video.yaml` and the bar numbers in `ps.js` to match.
 
-Only needed after you change the score. Render the music first, then rebuild the data with the
-Python that vidgen is installed in (the script needs `numpy` and reads the score through vidgen):
-
-```bash
-vidgen music render assets/music/parallel_space.yaml --out build/parallel_space.wav
-python scripts/make_ps_audio.py build/parallel_space.wav extensions/ps_audio.json
-```
-
-A third argument names another score file. If you change the form of the score (the number of
-bars in a section), update the scene durations and `t0` values in `video.yaml` and the bar
-numbers in `ps.js` too.
-
-vidgen can also hand a page the score's hits and notes directly (`music_data` and `ctx.music`;
-see [examples/escapement](../escapement/README.md)), with no script to rerun. This film keeps its
-own data file, which also carries the measured spectrum the sun's rays are drawn from.
+The published film read the music from a data file made by a script of its own. The example
+reads the same hits and notes from `ctx.music` (every time, gain and length equal); the spectrum
+and level are measured from the video's mix with 256 steps instead of the file's 64. That changes
+the length of a spectrum ray or the glow of a crystal a little: in stills of every scene at three
+moments, 6 of 36 are identical and the rest differ by 53.5 to 85 dB PSNR, most pixels by one or two
+levels and the tips of the sun's rays by more (up to 89 levels on a few pixels).
 
 ## Notes on the pictures
 
-- Everything is a function of the song time (`t0` plus the scene's clock): no state is carried
+- Everything is a function of the song time (`ctx.music.t0` plus the scene's clock): no state is carried
   between frames or scenes and all randomness is seeded, so renders repeat exactly and scenes can
   be rendered in any order or in parallel.
 - The kick pulses the brightness of objects, never the zoom, the sky or the exposure. Rotations
@@ -155,3 +147,7 @@ own data file, which also carries the measured spectrum the sun's rays are drawn
 - Finishing is done in the page: three.js `EffectComposer` with `UnrealBloomPass`, then one pass
   for the ACES tone curve, a colour grade per section, a slight chromatic fringe, vignette and
   grain.
+- The building blocks — glowing strokes, glass crystals, the tesseract, the nebula sky, portals,
+  star fields, flares, shock rings, the hook's ribbon, the spectrum's rays, the corridor and the
+  great rings — come from vidgen's module `vidgen/three-kit` (they were written for this film and
+  moved there in Step 358); `ps.js` composes them into the scenes.

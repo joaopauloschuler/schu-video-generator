@@ -794,7 +794,10 @@ Things that go wrong:
   join then reuses it.
 
 The picture side, three.js pages that look like a film: [COOKBOOK-3D.md, section
-8](COOKBOOK-3D.md#8-finishing-threejs-web-scenes) and the module `vidgen/three-finish`. A worked
+8](COOKBOOK-3D.md#8-finishing-threejs-web-scenes) and the module `vidgen/three-finish`; ready-made
+reactions to the score (`hitEnvelope`, `noteLevel`, `melody`, `signalLevel` in `vidgen/music-time`)
+and light-on-black building blocks (`vidgen/three-kit`): [section
+9](COOKBOOK-3D.md#9-building-blocks-for-music-videos) there. A worked
 example of both: [examples/signal-fire](../examples/signal-fire/README.md) (each track the page
 reads, and what it does with it, is listed at the top of its script).
 

@@ -6950,6 +6950,62 @@ has no `PCFSoftShadowMap` (it falls back to `PCFShadowMap` with a warning); `"pc
 DESIGN §120.11. `warmUp` uses `renderer.compile` and one drawing, not `compileAsync`, whose
 polling timer never fires while the clock stands still in `load`.
 
+**Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit`** (Step 358,
+DESIGN §121.1). Two more of vidgen's own ES modules (MIT; `data/web/modules/music-time.js` and
+`three-kit.js`, served as `/__vidgen__/modules/<file>`), imported by name like
+`vidgen/three-finish`. `vidgen/music-time` is plain JavaScript (no three.js, no DOM);
+`vidgen/three-kit` imports `three` and `vidgen/music-time`. A page that imports neither is
+unchanged; one that does has them in its loaded files (its cache key). No config key. They hold
+what the example films (`examples/parallel-space`, `escapement`, `signal-fire`) had each written
+by hand; those films now import them.
+
+`vidgen/music-time`:
+
+| name | what it is |
+|---|---|
+| `clamp(x, a=0, b=1)`, `mix(a, b, u)`, `smoothstep(a, b, x)` (cubic), `smootherstep(u)` (quintic, clamped), `easeOutCubic(u)`, `dbToGain(db)` | shaping |
+| `rng(seed)` | a generator of numbers in [0, 1) from an integer seed (mulberry32) |
+| `hash(i, k=0)` | a number in [0, 1) for the pair (i, k), without state |
+| `keyframes([[t, x, y, …], …], t)`, `glide(a, b, u)` | a point through eased keyframes; one smooth move from point a to point b |
+| `barClock(bar, beats=4)` → `{bar, beat, sixteenth}`, `count(T, length)` | lengths of a bar; how many whole lengths have passed at T (`Math.floor(T / length + 1e-6)`) |
+| `trackArrays(ctx.music, {hits, notes, grid})` | `{hits: {name: {t, g}}, notes: {name: {t, d, p}}}`: the tracks' times, gains, lengths and pitches as sorted `Float32Array`s; `hits`/`notes` a list of track names or `{name: [tracks]}` to gather several; `grid` (seconds) rounds times to 1/1000 of it |
+| `lastIndex(times, T)` | the last index at or before T (10 µs tolerance), −1 before the first |
+| `hitEnvelope(track, T, decay)` | a drum's light: each of its last three hits its gain (at most 1.25) falling by `exp(−age / decay)`, the largest; 0 for a missing track |
+| `hitCount(track, T)`, `hitAge(track, T)` | hits so far; seconds since the last (1e9 before the first) |
+| `noteAt(track, T)` → `{i, p, age, d}` or `null`, `noteEnvelope(track, T, decay)`, `noteLevel(track, T, attack=0.05, release=0.5)` | the note playing or played last; a glint on each note; a held note's level |
+| `melody(track, T, glide=0.07)` → `[pitch, level]` | the pitch gliding from the note before (when it ended under 0.4 s earlier) |
+| `eventLevel(event, T)`, `signalLevel(ctx.music, track, T, release=0.6)` | on `ctx.music`'s events: an event's level through its hairpin times its accent; how strongly a track sounds (its loudest event of the last 12 s still sounding, faded over `release`) |
+
+`vidgen/three-kit` (call `setStage({renderer, scene, camera, width, height})` once in `load`;
+builders add to the stage's scene unless given `parent`; `inPortal: true` draws a thing only
+inside a portal's window and needs `new THREE.WebGLRenderer({…, stencil: true})`):
+
+| name | what it is |
+|---|---|
+| `Glow(max, {px, world, max, halo, haloGain, fog, depthTest, order, inPortal, parent})` | up to `max` glowing segments in one draw (a quad per segment, a core and a halo, added to the frame): `seg(i, ax, ay, az, bx, by, bz)`, `dot(i, x, y, z)`, `col(i, color, m, width)`, `rgb`, `hide(i)`, `tint(color, m)`, `count(n)`, `flush()`; `Glow.from(flatArray, options)`. Widths in 720p pixels (`px`, the least) or scene units (`world`); segments are cut at the near plane |
+| `color(hex, m=1)`, `mixColor(a, b, u, m=1)`, `WARM_WHITE` | colours (new objects) |
+| `circleSegments(n, r, z=0, rot=0)`, `portalOnly(material)` | a circle as segments; a material drawn only through a portal |
+| `POLYHEDRA`, `polyhedronGeometry(kind)`, `polyhedronEdges(kind)`, `glassMaterial(color, base, rim, inPortal)`, `makeCrystal(kind, lineColor, faceColor, {base, rim, px, world, fog, gain, inPortal, parent})`, `lightCrystal(crystal, k, dim)` | `octa`, `tetra`, `ico`, `dodeca`, `cube`; glass faces with bright rims and glowing edges; `lightCrystal` brightens towards white by k (a kick), never changes the size |
+| `TESSERACT_VERTICES`, `TESSERACT_EDGES`, `project4(v, angles, dist=3.1)`, `tesseractAngles(T, extra=0)`, `makeTesseract(options)`, `updateTesseract(tes, angles, color, gain=1.6, nodeGain=2.5)` | a hypercube turned in six planes and projected |
+| `SkyDome(seed, {size, parent})`: `turn(T, k)`, `colors(deep, thin, dense, gain)`, `light(n, dir, color, m, pow)`, `follow(camera)` | a nebula with stars baked once into a half-float cube map (640 px faces for a frame 600 px tall or more, else 256) and coloured and lit every frame |
+| `makePortal(radius, sky, {fog, parent})`, `lightPortal(portal, ringColor, m, rimColor, rimM, windowGain)`, `lightDial(portal, color, base, step, e, n=48)` | a ring whose window shows another `SkyDome` and marks the stencil; a dial of 48 marks lit like a clock |
+| `wrapZ(z0, dist, depth, camZ, near)`, `makeStarField(n, rad, depth, seed, {px, world, fog, tints, inPortal})`, `updateStarField(stars, T, dist, streak, camZ, gain, near)`, `makeStarShell(n, r0, r1, seed, {px, tints, flat, inPortal})` | stars along the flight axis (−z) that wrap, twinkle, fade in and stretch with speed; a still shell of stars around a centre |
+| `makeFlare(size, {streak, rays, depthTest, order, inPortal, parent})`, `setFlare(flare, color, intensity, rot, scale)` | a light: glow, a horizontal streak, slow rays, facing the camera |
+| `makeShockRings(n, seg)`, `updateShockRings(rings, hitsTrack, T, color, {at, r0, r1, life, gain, face, only})` | a ring growing and fading from each of the last n hits |
+| `updateGlints(glow, notesTrack, T, {n, life, rise, c, size, gain, place})` | a four-pointed star for each recent note at `place(index, pitch)` (a `Glow` of 5n segments) |
+| `makeRibbon(n, options)`, `updateRibbon(glow, notesTrack, T, span, pos, colorA, colorB, gain, tau, glide)` | `span` seconds of a melody drawn as a line placed by `pos(time, pitch, age, out)` |
+| `makeSpectrumRays(parent, options)`, `updateSpectrumRays(glow, band, r0, len, colorA, colorB, gain)` | 96 rays: 16 bands, mirrored, three times round; `band(b)` gives band b now (e.g. `(b) => ctx.music.band(b)`) |
+| `updateTunnel(glow, T, per, zOf, far, rad, look)` | polygons flying past, one every `per` s; `look(index, time)` → `[color, gain, sides]` |
+| `makeLattice(N, spacing, radius, {world, twist, inPortal})`, `updateLattice(lattice, T, dist, camZ, color, cellGain, strut)` | a twisting corridor of hexagons and struts, wrapped along the flight axis |
+| `makeRingStructure({radii, inPortal})`, `updateRingStructure(rings, T, color, gain, spin)` | great rings with scale marks turning about one centre |
+| `makeCrystalField(n, rad, depth, seed, palette, options)`, `updateCrystalField(field, T, dist, k, band, camZ, gain, near)`, `makeCrystalSwarm(n, rad, seed, palette, options)`, `updateCrystalSwarm(swarm, T, k, band, gain, spread)` | crystals along the flight axis or on slow orbits; every other one lit by k, the rest by their band |
+| `softDotTexture(size=128, [radius, alpha])`, `makeDustCloud(n, box, size, seed)`, `updateDustCloud(dust, T, color, amount, drift)` | a soft round point; motes drifting in a box `[w, h, d, cx, cy, cz]` |
+| `aimCamera(x, y, z, lx, ly, lz, roll=0, fov=55)` | the stage's camera placed, aimed and rolled |
+
+Errors: a builder before `setStage` throws `vidgen/three-kit: call setStage({scene, ...}) in load
+first`; an unknown polyhedron `vidgen/three-kit: no polyhedron "sphere" (octa, tetra, ico, dodeca,
+cube)`. Both stop the render with the scene, file and line.
+
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
 error or rejected promise at load, in a timer or callback, or in `frame`, and a page that is not
