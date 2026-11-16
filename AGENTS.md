@@ -3390,6 +3390,7 @@ scenes:
 ```
 
 ```js
+// extensions/space.js
 export function frame(t, ctx) {
   const m = ctx.music;                     // every function reads the frame being drawn unless given a song time T
   const glow = 0.3 + 0.7 * m.level();      // 0..1: the whole music's loudness
@@ -3422,6 +3423,8 @@ export function frame(t, ctx) {
   counts video time. A video without music cannot use `music_data` (`vidgen validate` says so).
 - The first render measures the music (a few seconds; the score is rendered first if the join
   has not rendered it yet). `vidgen still` shows the frames with the same data.
+- A whole worked example: `examples/signal-fire` (an orchestral cue written with dynamics, hairpins
+  and slurs, and a three.js page finished with `vidgen/three-finish` that reads ten of its tracks).
 
 **three.js** comes with vidgen: `import * as THREE from "three"` in a `script:` or in a page's
 `<script type="module">` (with a chosen set of its add-ons, below):
@@ -4369,7 +4372,8 @@ again only when the file changes). You cannot hear it, so work from measurements
    A section may play another instrument on the same track:
    `sections: {lift: {instrument: trumpet}}`. A score without marks sounds exactly as before.
    Notes outside an instrument's written range are reported by `vidgen music check` and
-   `render`. Recipes: `docs/COOKBOOK-MUSIC.md`, section 11.
+   `render`. Recipes: `docs/COOKBOOK-MUSIC.md`, section 11; every instrument with its range
+   and main settings in one table: section 13; a cue using all of this: `examples/signal-fire`.
 5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
    (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
    on the part of the piece the video plays). A piece keeps its own pace; to make its lift begin

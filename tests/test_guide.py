@@ -204,6 +204,32 @@ def web_topic_files() -> dict[str, str]:
     return files
 
 
+def _guide_music(root: Path, settings: Any) -> dict[str, Any]:
+    """``ctx.music`` for the web topic's music example: a 2 s video playing a score with the
+    tracks the example reads (``kick``, ``hook``), its render seeded into the music cache with
+    silence (the page reads the events; nothing is synthesised)."""
+    import numpy as np
+
+    from vidgen.music_pieces import piece_key
+    from vidgen.web import music as web_music
+
+    root.mkdir(parents=True)
+    score = {"tempo": 120, "key": "A minor", "progression": "i", "sections": [{"name": "a", "bars": 1}],
+             "tracks": {"kick": {"instrument": "kick", "steps": "x . x ."}, "hook": {"instrument": "soft_lead", "steps": "A4 C5 E5 -"}}}
+    (root / "assets" / "music").mkdir(parents=True)
+    tune = root / "assets" / "music" / "tune.yaml"
+    tune.write_text(yaml.safe_dump(score, sort_keys=False), encoding="utf-8")
+    (root / "build" / "music").mkdir(parents=True)
+    np.save(root / "build" / "music" / f"piece-{piece_key(tune)}.npy", np.zeros((96000, 2), np.float32), allow_pickle=False)
+    (root / "x.js").write_text("export function frame() {}\n", encoding="utf-8")
+    scene = {"id": "s", "type": "web", "duration": 2, "params": {"script": "x.js", "music_data": settings}}
+    config = {"title": "M", "format": {"width": 160, "height": 90, "fps": 10}, "transition": "cut", "music": "tune", "scenes": [scene]}
+    (root / "video.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    project = Project.load(root)
+    with extensions.project_session(project):
+        return web_music.scene_music(project, "s", 10, web_music.music_settings(settings))
+
+
 @pytest.mark.slow
 @pytest.mark.render
 def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
@@ -219,12 +245,13 @@ def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
         pytest.skip("no Chromium")
     files = web_topic_files()
     assert set(files) == {"extensions/hello.html", "extensions/orbit.js", "extensions/cube.js", "extensions/studio.js", "extensions/finished.js",
-                          "extensions/fragment.js"}
+                          "extensions/space.js", "extensions/fragment.js"}
     for rel, body in files.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(body, encoding="utf-8")
+    blocks = [yaml.safe_load(body) for lang, body in FENCE.findall(topic_text("web")) if lang == "yaml"]
     scenes = {s["params"].get("page") or s["params"]["script"]: s
-              for lang, body in FENCE.findall(topic_text("web")) if lang == "yaml" for s in yaml.safe_load(body)}
+              for block in blocks for s in (block.get("scenes", []) if isinstance(block, dict) else block)}
     theme = page_theme(Theme(), 270 / (72 * 8))
 
     def beats(scene: dict[str, Any]) -> list[dict[str, Any]]:
@@ -236,6 +263,8 @@ def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
         scene = scenes.get(rel, {"params": {}, "beats": [{"text": "a"}, {"text": "the shower starts"}]})
         params = {"script" if rel.endswith(".js") else "page": rel, "data": scene["params"].get("data", {})}
         args = {"size": (160, 90), "fps": 10, "frames": 10, "theme": theme, "beats": beats(scene)}
+        if scene["params"].get("music_data"):
+            args["music"] = _guide_music(tmp_path / "music", scene["params"]["music_data"])
         clip = make_web_clip(tmp_path, tmp_path / "web", Path(rel).stem, params, **args, layout_frames=[9])
         assert clip.stat().st_size > 0, rel
         reading = web_page_layouts(tmp_path, tmp_path / "web", Path(rel).stem, params, **args, at=[9])[9]

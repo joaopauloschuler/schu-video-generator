@@ -230,7 +230,9 @@ def test_a_clip_open_elsewhere_is_a_message(tmp_path: Path, monkeypatch: pytest.
         def __enter__(self) -> "Page":
             return self
         def __exit__(self, *_: Any) -> None: ...
-        def frame(self, n: int) -> np.ndarray:
+        def png(self, n: int) -> bytes:
+            return b""
+        def pixels(self, png: bytes) -> np.ndarray:
             return np.zeros((16, 16, 3), dtype=np.uint8)
 
     def refuse(*_: Any) -> None:
@@ -269,6 +271,25 @@ def test_page_frames_are_deterministic_and_follow_time() -> None:
     assert not np.array_equal(first[0], first[1])   # the box turned
     centre = first[0][45, 80]
     assert centre[0] > 100 and centre[0] > centre[2] and first[0][2, 2].tolist() == [0, 0, 0]
+
+
+@pytest.mark.slow
+@pytest.mark.render
+def test_the_clip_holds_the_pages_frames_and_reports_progress(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Step 351: the clip is written beside the drawing (the PNGs decoded in the writer's thread,
+    as a ``web`` scene's) and holds exactly the frames the page draws one by one; a ``3d frames``
+    summary line is logged on ``vidgen.progress``."""
+    _chromium_or_skip()
+    d = describe(params(objects=[{"id": "crate", "color": "#e04040", "spin": [0, 60, 0]}], background="#000000"), frames=6)
+    with browser.PageRenderer(d) as page:
+        one_by_one = [page.frame(n) for n in range(6)]
+    with caplog.at_level("INFO", logger="vidgen.progress"):
+        browser.write_clip(d, tmp_path / "s.mkv")
+    with av.open(str(tmp_path / "s.mkv")) as clip:
+        stored = [f.to_ndarray(format="rgb24") for f in clip.decode(video=0)]
+    assert len(stored) == 6
+    assert all(np.array_equal(a, b) for a, b in zip(one_by_one, stored))
+    assert any(r.getMessage().startswith("3d frames 6/6 drawn in ") for r in caplog.records)
 
 
 @pytest.mark.slow

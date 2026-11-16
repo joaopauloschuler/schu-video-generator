@@ -5,7 +5,34 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–350)
+## Unreleased (Steps 193–351)
+
+### Phase AL in one place: what three music films asked of the generator (Steps 341–351)
+
+Three music films made with vidgen ("Parallel Space", "Escapement") reported limits; Steps
+341–350 built all of them, Step 351 reviewed them. In short:
+
+- **Score files got an orchestra**: `trumpet`, `horn`, `low_brass`, `organ` (343); `violins`,
+  `violas`, `cellos`, `double_basses` with `stroke: sustain | spiccato | tremolo | pizzicato` (344);
+  `timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam`, `choir`
+  (345). One table of every instrument: `docs/COOKBOOK-MUSIC.md` section 13.
+- **Expressive notes** (346): dynamics `[pp]`–`[fff]`, hairpins, `fp` / `sfz`, slurs with a glide,
+  vibrato speed and delay, settings per note (`[pizzicato]`, `[roll]`), an instrument per section,
+  range warnings. Scores without marks play the same samples as before.
+- **Pictures that follow the music** (347): `music_data: true` on a `web` scene gives its page
+  `ctx.music` (the mix measured per frame, the score's hits and notes in song time); no script of
+  your own.
+- **Rendering `web` scenes**: an edit to the script of a scene whose type subclasses `Web` renders
+  it again (341); `vidgen still` draws single frames without rendering (342); `render.intermediate:
+  compact` and `keep_intermediates: false` for small disks (348); quicker screenshots and a
+  progress line (349); `vidgen/three-finish`, a ready-made finish for three.js pages (350).
+- **Step 351**: the guide's music code block runs in the test again; a flaky test made robust;
+  `vidgen studio` shows named settings (`stroke`, `registration`, `vowel`, `voices`, `morph`) as a
+  list of their names; `3d` scenes write their frames clip beside the drawing with a `3d frames`
+  progress line (same pixels); the cookbook's table of all instruments; a worked example,
+  [examples/signal-fire](examples/signal-fire/README.md): an original 24 s orchestral cue with
+  expressive marks and a three.js night scene that reads it through `ctx.music`, finished with
+  `vidgen/three-finish`. Review findings: DESIGN §120.12.
 
 ### Finishing for three.js `web` scenes: `vidgen/three-finish` (Step 350)
 

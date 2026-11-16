@@ -289,6 +289,38 @@ def test_inspector_sliders_instrument_and_effects(studio: tuple[StudioApp, Studi
     assert page.errors == []
 
 
+STRINGS = """\
+title: Strings
+key: A minor
+tempo: 120
+progression: "i"
+sections: [{name: a, bars: 1}]
+tracks:
+  low: {instrument: cellos, steps: "A2 - - -", settings: {stroke: 2}}
+"""
+
+
+@pytest.mark.slow
+def test_a_setting_with_named_values_is_a_list_of_its_names(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
+    """Step 351: ``stroke``, ``registration``, ``vowel`` ... are chosen by name, not on a slider of
+    their numbers; the score gets the name."""
+    app, server = studio
+    app.load(text=STRINGS)
+    page.goto(server.url)
+    wait_idle(page, 1)
+    page.click("#tracks .track[data-name=low] .name")
+    assert page.eval_on_selector("#set-stroke", "e => e.tagName") == "SELECT"
+    assert page.input_value("#set-stroke") == "tremolo"   # written as its number 2
+    assert page.eval_on_selector_all("#set-stroke option", "os => os.map((o) => o.value)") == ["sustain", "spiccato", "tremolo", "pizzicato"]
+    page.select_option("#set-stroke", "spiccato")
+    wait_idle(page, 2)
+    assert "stroke: spiccato" in current_text(app)
+    page.click("#g-sound .reset[data-reset=set-stroke]")
+    wait_idle(page, 3)
+    assert "stroke" not in current_text(app) and page.input_value("#set-stroke") == "sustain"
+    assert page.errors == []
+
+
 @pytest.mark.slow
 def test_step_grid_and_text_stay_in_step(studio: tuple[StudioApp, StudioServer], page: Any) -> None:
     app, server = studio

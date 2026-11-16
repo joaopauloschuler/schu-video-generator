@@ -6,11 +6,18 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from vidgen.browser.frames_clip import FramesClipWriter, clip_serves
+from vidgen.browser.frames_clip import (
+    PROGRESS_SECONDS,
+    FrameProgress,
+    FramesClipWriter,
+    clip_serves,
+    duration_text,
+    seconds_text,
+)
 from vidgen.fileio import write_text_atomic
 from vidgen.web.entry import WebEntry, entry_of, entry_path
 from vidgen.web.inputs import design_width_of, page_shape
@@ -19,84 +26,9 @@ from vidgen.web.music import helper_digest, payload_digest
 from vidgen.web.page import WebPage, engine_id, layout_digest
 
 log = logging.getLogger("vidgen.web")
-#: Progress while a clip's frames are drawn (DESIGN.md §120.10); the render worker prints it as
-#: ``progress: ...`` lines, which ``vidgen render`` shows under the scene's name.
-progress_log = logging.getLogger("vidgen.progress")
-#: Seconds between two progress lines (at most one line in this time; the last frame always has one).
-PROGRESS_SECONDS = 10.0
-
 #: Version of a clip's inputs (2: the theme, ``data``, beats and the files the page loaded; 3:
 #: the video's shape and frames with alpha).
 CLIP_VERSION = 3
-
-
-def seconds_text(seconds: float) -> str:
-    """``"1.21"`` or, under a tenth, ``"0.034"``: seconds a frame for a progress line."""
-    return f"{seconds:.2f}" if seconds >= 0.1 else f"{seconds:.3f}"
-
-
-def duration_text(seconds: float) -> str:
-    """``"45 s"``, ``"3 min 05 s"``, ``"1 h 07 min"``: a time span for a progress line."""
-    whole = max(0, round(seconds))
-    if whole < 60:
-        return f"{whole} s"
-    if whole < 3600:
-        return f"{whole // 60} min {whole % 60:02d} s"
-    return f"{whole // 3600} h {whole // 60 % 60:02d} min"
-
-
-class FrameProgress:
-    """Progress lines for ``total`` frames being drawn: ``web frames 30/90, 1.21 s a frame, about
-    1 min 13 s left`` at most every :data:`PROGRESS_SECONDS`, then a summary that splits a frame's
-    time into the page's ``frame(t, ctx)`` hook and the drawing with the screenshot (and says how
-    long the page took to become ready, ``ready_seconds``). The rate and what is left are from the
-    frames after the first (the first compiles a WebGL page's shaders)."""
-
-    def __init__(self, total: int, *, ready_seconds: float = 0.0, clock: Callable[[], float] = time.monotonic) -> None:
-        self.total, self._clock = total, clock
-        self.ready_seconds = ready_seconds
-        self.done = 0
-        self._started = self._last_line = clock()
-        self._after_first = clock()
-        self.hook_seconds = self.draw_seconds = 0.0
-
-    def seconds_per_frame(self) -> float | None:
-        """Mean seconds a frame since the first frame (``None`` before the second)."""
-        if self.done < 2:
-            return None
-        return (self._clock() - self._after_first) / (self.done - 1)
-
-    def line(self) -> str:
-        """The progress line for now."""
-        rate = self.seconds_per_frame()
-        if rate is None:
-            return f"web frames {self.done}/{self.total}"
-        return (f"web frames {self.done}/{self.total}, {seconds_text(rate)} s a frame, "
-                f"about {duration_text(rate * (self.total - self.done))} left")
-
-    def drawn(self, hook_seconds: float, draw_seconds: float) -> None:
-        """One more frame drawn: ``hook_seconds`` in the page's hooks, ``draw_seconds`` drawing it and taking the screenshot."""
-        self.done += 1
-        self.hook_seconds += hook_seconds
-        self.draw_seconds += draw_seconds
-        now = self._clock()
-        if self.done == 1:
-            self._after_first = now
-        if self.done < self.total and now - self._last_line >= PROGRESS_SECONDS:
-            self._last_line = now
-            progress_log.info("%s", self.line())
-
-    def summary(self) -> str:
-        """The line after the last frame."""
-        count = max(1, self.done)
-        return (f"web frames {self.done}/{self.total} drawn in {duration_text(self._clock() - self._started)} "
-                f"(the page ready in {self.ready_seconds:.1f} s before), "
-                f"{seconds_text((self._clock() - self._started) / count)} s a frame (the page's frame(t, ctx) "
-                f"{seconds_text(self.hook_seconds / count)} s, drawing and the screenshot {seconds_text(self.draw_seconds / count)} s)")
-
-    def finish(self) -> None:
-        """Log :meth:`summary`."""
-        progress_log.info("%s", self.summary())
 
 
 def scene_data(params: Any) -> dict[str, Any]:

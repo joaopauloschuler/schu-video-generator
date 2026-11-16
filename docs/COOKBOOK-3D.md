@@ -155,3 +155,9 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
 - **Porting a hand-written chain.** Map its passes to options (its tone curve: `"aces-narkowicz"`;
   its `pow(1/2.2)`: `encoding: "gamma2.2"`; its scene scale: `renderScale`), then compare stills:
   a copy of "Escapement" ported this way came within 28–34 dB PSNR of the film (DESIGN §120.11).
+- **Let the music drive it.** With `music_data` in the scene's params the page reads the score's
+  hits and notes and the measured mix as `ctx.music` (`vidgen guide web`, "Pictures that follow
+  the music"; [COOKBOOK-MUSIC.md, section 12](COOKBOOK-MUSIC.md#12-pictures-that-follow-the-score)).
+  Put light and colour on the hits and keep the camera on the form (sections), never on a beat.
+  Worked example: [`examples/signal-fire`](../examples/signal-fire/README.md), an orchestral cue
+  and a finished three.js night scene that follows it, track by track.

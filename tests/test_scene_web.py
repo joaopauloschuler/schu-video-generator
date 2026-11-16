@@ -552,8 +552,11 @@ def test_the_page_is_given_theme_data_beats_and_three(tmp_path: Path) -> None:
     assert state[1] == [["b1", 0, 0, None], ["b2", 1, 0.4, "b1"]]
     assert isinstance(state[2], str) and state[2].isdigit()
     assert state[3:6] == ["b2", "1", '"Source Serif 4", serif'] and state[6] is True
-    # the background is #F8F7F3 (red 248) until b2 starts at 0.4 s; the box fades to #1D4ED8 (red 29) in 0.4 s
-    assert reds[:5] == [248] * 5 and reds[8] == 29 and 29 < reds[6] < 248
+    # the background is #F8F7F3 (red 248) until b2 starts at 0.4 s; the box fades to #1D4ED8 (red 29) in 0.4 s. Frame 4
+    # (t = 0.4) is where the CSS transition starts: Chromium's compositor runs it and is sometimes one step ahead there
+    # (red 238 instead of 248 in about one run in three, on every step's code since Step 340; DESIGN §120.10, §120.12),
+    # so that frame may have begun to fade, but not by more than a step
+    assert reds[:4] == [248] * 4 and 225 <= reds[4] <= 248 and reds[8] == 29 and 29 < reds[6] < 248
     assert {"g.html", "g.css", "late.json", "__vidgen__/three/three.module.js", "__vidgen__/three/three.core.js",
             "__vidgen__/fonts/SourceSerif4/SourceSerif4-Regular.ttf"} <= set(loaded)
     with WebPage(tmp_path, WebEntry("script", "t.js"), scene_id="w", size=(64, 36), fps=10, frames=2, theme=theme) as page:

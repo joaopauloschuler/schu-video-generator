@@ -79,6 +79,16 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   a bed's template (`vidgen music template momentum`), check it in words and a spectrogram
   (`vidgen music check`); over MCP: `music_template`, `music_patches`, `music_render`,
   `music_check` ([reference](docs/CONFIG.md#project-pieces-score-files-in-a-video)).
+- **An orchestra for score files**: brass (`trumpet`, `horn`, `low_brass`), a drawbar `organ`,
+  bowed strings (`violins`, `violas`, `cellos`, `double_basses`: sustained, spiccato, tremolo,
+  pizzicato), orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`,
+  `snare_drum`, `cymbal`, `tam_tam`) and a `choir` on vowels, beside the synth drums, basses,
+  plucks, leads and pads; all synthesised, no samples ([every instrument in one
+  table](docs/COOKBOOK-MUSIC.md#13-every-instrument-at-a-glance)).
+- **Expressive notes**: dynamics (`[pp]` to `[fff]`), hairpins inside a held note or over a phrase,
+  `fp` and `sfz`, slurs with a glide, vibrato speed and delay, a setting per note
+  (`[pizzicato]`, a timpani `[roll]` into a `[hit]`), an instrument per section; a note outside an
+  instrument's range is reported ([cookbook](docs/COOKBOOK-MUSIC.md#11-making-it-expressive)).
 - **Royalty-free**: everything is generated, so it is free to use in your videos, also
   commercially, with no attribution.
 
@@ -149,7 +159,12 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     pushes in or flies to an object and follows it), `web` (a scene you write yourself as a web page
     in HTML, CSS and JavaScript, or a canvas or three.js script, screenshotted frame by frame in
     headless Chromium on the video's clock: CSS animations, timers and `requestAnimationFrame` follow
-    the narration, the theme comes as CSS variables, lint reads its text; `vidgen guide web`);
+    the narration, the theme comes as CSS variables, lint reads its text; `vidgen guide web`; with
+    `music_data` the page reads the video's music as `ctx.music`: the mix measured per frame and the
+    score's hits and notes, so pictures follow the score with no script of your own; three.js pages
+    get a ready-made film finish from the module `vidgen/three-finish`: depth of field, motion blur,
+    bloom, tone mapping, grade, vignette, grain; `vidgen still` draws one frame at an exact time
+    without rendering the scene);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -459,6 +474,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching schu-video-generator.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
   previews; `render`, `storyboard` and `lint` re-render only the scenes whose inputs changed.
+  Scenes drawn in a browser (`web`, `3d`) show a progress line while their frames are drawn, and
+  on a small disk `render: {intermediate: compact, keep_intermediates: false}` keeps their
+  intermediate frames clips about 4.6 times smaller or deletes them once used.
 - Windows, macOS and Linux; Python 3.10–3.13.
 
 ## For AI agents
@@ -940,6 +958,12 @@ my_video/
   6 s `web` scene finished with vidgen's module `vidgen/three-finish`: brass gears and metal spheres
   in a baked studio, a focus pull, a fast gear in motion blur, bloom, ACES, a grade, vignette,
   grain, FXAA (no media committed).
+- [examples/signal-fire](examples/signal-fire/README.md) — "Signal Fire", 27 s with no narration:
+  an original orchestral cue written with dynamics, hairpins and slurs (strings, horns, trumpet,
+  low brass, choir, timpani rolling into the hit, taikos, cymbals, tam-tam) and a three.js night of
+  standing stones around a fire that reads the score through `ctx.music` (embers on the cellos'
+  notes, a beam on the trumpet's pitch, flashes on the taikos), finished with `vidgen/three-finish`
+  (no media committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

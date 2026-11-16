@@ -4344,7 +4344,8 @@ Ctrl+C in the terminal stops it.
   its bars. A track's volume bar and pan knob (drag, arrow keys, double-click: centre), its steps
   text (click it, type, Enter), **×** to delete it, **+ track** to add one (an instrument
   picker). The inspector: the instrument, sliders made from `vidgen music patches` (ranges,
-  units, hover help), octave, transpose and accent, effects as chips (echo, duck, gate, reverb,
+  units, hover help; a setting with named values, such as `stroke`, `registration`, `vowel`,
+  `voices` or `morph`, is a list of its names and is written by name), octave, transpose and accent, effects as chips (echo, duck, gate, reverb,
   filter curves), the track per section (plays / rests, its own changes) and a step grid that
   follows the steps text both ways. The score file is editable: type YAML and the controls
   follow; a problem is shown inline with the same did-you-mean message as the command line, and
@@ -7156,7 +7157,8 @@ While frames are drawn, `vidgen render` prints about every 10 s
 summary that splits a frame into the page's `frame(t, ctx)` and the drawing with the screenshot
 (and says how long the page took to become ready). The lines go to stdout, to stderr with
 `--json`, and so to the MCP `render` tool's progress; one job on a terminal shows the worker's
-own `progress: …` lines. The first frame a page draws may take 30 s (`frame(t, ctx)` 10 s after
+own `progress: …` lines. A `3d` scene prints the same lines as `3d frames …` (since Step 351;
+its summary has no split: its page draws and reads its canvas in one call). The first frame a page draws may take 30 s (`frame(t, ctx)` 10 s after
 it): WebGL shaders are compiled then, so a page needs no warm-up in `load`.
 `performance.now()` stays on the video's clock (it stands still within a frame) and cannot time
 the page's code; the summary line does that. `--jobs 2` drew a two-scene WebGL test about 10 %

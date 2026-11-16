@@ -19,7 +19,15 @@ Contents: [room for the voice](#1-room-for-the-voice) ·
 [check and compare](#4-using-check-and-compare) · [genre sketches](#5-genre-recipes-as-score-sketches) ·
 [common mistakes](#6-common-mistakes-and-their-fixes) ·
 [a person and an agent in the studio](#7-a-person-and-an-agent-in-the-studio) ·
-[pictures that follow the score](#12-pictures-that-follow-the-score)
+[brass and organ](#8-brass-and-organ) · [bowed strings](#9-bowed-strings) ·
+[orchestral percussion and choir](#10-orchestral-percussion-and-choir) ·
+[making it expressive](#11-making-it-expressive) ·
+[pictures that follow the score](#12-pictures-that-follow-the-score) ·
+[every instrument at a glance](#13-every-instrument-at-a-glance)
+
+A worked example of sections 8–12 together: [examples/signal-fire](../examples/signal-fire/README.md),
+an original 24 s orchestral cue with dynamics, hairpins and slurs, and a three.js page that
+follows it.
 
 ## 1. Room for the voice
 
@@ -784,3 +792,63 @@ Things that go wrong:
 - *A slow first render*: the music is measured once (a few seconds); when the score was never
   rendered for the video, it is rendered first (minutes for a long orchestral score), and the
   join then reuses it.
+
+The picture side, three.js pages that look like a film: [COOKBOOK-3D.md, section
+8](COOKBOOK-3D.md#8-finishing-threejs-web-scenes) and the module `vidgen/three-finish`. A worked
+example of both: [examples/signal-fire](../examples/signal-fire/README.md) (each track the page
+reads, and what it does with it, is listed at the top of its script).
+
+## 13. Every instrument at a glance
+
+All score-file instruments in one table (`vidgen music patches` prints the same with every
+setting and its range; `--json` as data). *Written range*: the notes the instrument is made for;
+`vidgen music render`, `vidgen music check` and the studio report notes outside it, and still play
+them. The older instruments have no written range (nothing is reported): the column gives the
+octave their notes sit in by default. Drum instruments (`drum`) play hits, not notes: their pitch is
+a setting. ★: a dynamic mark changes the tone as well as the level; ◡: can slur (section 11).
+
+| family | instrument | kind | written range (or default octave) | settings to reach for first | typical use |
+|---|---|---|---|---|---|
+| drums | `kick` | drum | — | `high`, `low` (Hz of the glide), `decay`, `click` | the beat of electronic beds |
+| drums | `clap` | drum | — | `tone` | backbeat |
+| drums | `hat`, `open_hat` | drum | — | `decay`, `tone` | eighths and sixteenths, an open hat on the off-beat |
+| drums | `gated_snare` | drum | — | `gate`, `body` | an 80s backbeat |
+| drums | `snap` | drum | — | `tone`, `decay` | a soft backbeat under a voice |
+| drums | `tick` | drum | — | `tone` | clocks, a quiet pulse |
+| drums | `boom` | drum | — | `low`, `decay` | a deep hit marking a lift |
+| noises | `riser` | drum | — | `low`, `high` | a noise sweep into a section (held steps) |
+| noises | `pulsar` | drum | — | `high`, `low`, `sweep`, `noise` | a space-like ticking pulse |
+| noises | `static` | drum | — | `low`, `high`, `wander` | radio static held under a passage |
+| basses | `synth_bass` | note | octave 2 | `decay`, `tone` | the bass of documentary and pop beds |
+| basses | `analog_bass` | note | octave 2 | `tone`, `closed`, `snap`, `detune` | a plucky filtered bass, synthwave |
+| basses | `sub` | note | octave 1 | `decay`, `second` | a sub bass under a kick |
+| plucks and keys | `pluck`, `fm_pluck`, `square_pluck` | note | octave 4, 4, 5 | `decay`, `tone` (`bright`, `index`) | arpeggios and ostinatos |
+| plucks and keys | `pizzicato` | note | octave 4 | `decay`, `tone` | a light plucked line (`cellos` with `stroke: pizzicato` is the orchestral one) |
+| plucks and keys | `music_box`, `bell` | note | octave 5 | `decay`, `ring` | lullabies, a bell melody in a lift |
+| plucks and keys | `woodblock` | note | octave 5 | `tone` | a pitched tock, cartoons |
+| plucks and keys | `piano` | note | octave 4 | `decay`, `ring` | soft chords and melodies |
+| leads | `soft_lead` ◡ | note | octave 5 | `attack`, `vibrato`, `vibrato_speed`, `glide`, `tone` | a mellow synth melody |
+| brass | `trumpet` ★◡ | note | E3–C6 | `attack`, `brightness`, `vibrato`, `mute`, `players` | a solo line, fanfares |
+| brass | `horn` ★◡ | note | B1–F5 | `players: 4`, `attack`, `brightness` | warm held notes, the horn line of film scores |
+| brass | `low_brass` ★◡ | note | E1–F4 | `attack` (long: a swell), `brightness`, `tuba`, `players` | low chords, the swell into a hit |
+| organ | `organ` | note | C1–C7 | `registration` (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`), `drawbars`, `tone` | chorales, held chords, a pedal |
+| strings | `violins` ★◡ | note | G3–C7 | `stroke` (`sustain`, `spiccato`, `tremolo`, `pizzicato`), `players` (1: solo), `attack`, `brightness`, `vibrato` | the melody, high held chords, tremolo beds |
+| strings | `violas` ★◡ | note | C3–E6 | as the violins | inner parts, a middle ostinato |
+| strings | `cellos` ★◡ | note | C2–A5 | as the violins | tenor melodies, the low spiccato ostinato |
+| strings | `double_basses` ★◡ | note | C1–G4 | as the violins | the floor of the orchestra, bowed or plucked |
+| percussion | `timpani` ★ | note | D2–A3 | `stroke` (`hit`, `roll`), `mallet`, `ring`, `speed` | roots and fifths under the brass, a roll into the hit |
+| percussion | `toms` ★ | note | G1–C5 | `stroke`, `mallet`, `drop`, `shell` | fills from high to low |
+| percussion | `taiko` ★ | drum | `pitch` 36–130 Hz | `players` (an ensemble), `mallet`, `pitch` | the big film-score hit |
+| percussion | `bass_drum` ★ | drum | `pitch` 26–75 Hz | `mallet`, `decay` | a deep bloom under a hit |
+| percussion | `frame_drum` ★ | drum | `pitch` 55–280 Hz | `edge` (middle to rim), `mallet` | hand-drum patterns |
+| percussion | `snare_drum` ★ | drum | `pitch` 130–280 Hz | `stroke` (`hit`, `roll`), `players`, `snares` | march figures, a roll into a hit |
+| percussion | `cymbal` ★ | drum | `pitch` 0.6–1.6 (size) | `stroke` (`hit`, `swell`), `mallet` | a crash; a swell that ends on the hit |
+| percussion | `tam_tam` ★ | drum | `pitch` 0.6–1.8 (size) | `stroke`, `bloom`, `mallet` | the dark gong on a last chord |
+| choir | `choir` ★◡ | note | E2–C6 | `vowel` (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), `voices`, `singers`, `morph`, `attack` | held vowels, a pad of voices (no words) |
+| pads | `pad`, `supersaw`, `saw_pad`, `glass` | pad | octave 3 (`glass` 5) | `tone`, `attack`, `release`, `detune`, `air`, `sub` | chords (`play: chords`), the bed under everything |
+
+Not in the table: `touch` (on every ★ instrument, 0 by default: how much the old accents `X`,
+`o` change the tone) and `glide`, `vibrato_speed`, `vibrato_delay` (on every ◡ instrument).
+The choir's written range is the whole choir's; a part for one kind of voice (`voices:
+sopranos`) is reported only outside E2–C6, so keep it in that voice's own range yourself
+(sopranos about C4–A5, basses E2–C4).

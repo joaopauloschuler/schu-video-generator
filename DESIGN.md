@@ -24237,7 +24237,7 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | 348 | Smaller intermediate files: `render.intermediate: compact`, `render.keep_intermediates: false`, the disk estimate and report of `vidgen render` | §120.9 |
 | 349 | Faster `web` rendering, measured first: a quicker PNG, the frames clip written beside the drawing, a progress line, the first frame's time limit | §120.10 |
 | 350 | Ready-made finishing for three.js `web` scenes: the module `vidgen/three-finish` (depth of field, motion blur, bloom, tone mapping, grade, vignette, grain, FXAA, studio and nebula bakers, surface finishes, soft shadows) | §120.11 |
-| 351 | Critical review, documents, an example | later |
+| 351 | Critical review with fixes, documents, an example (`examples/signal-fire`) | §120.12 |
 | 352 | "Escapement" as an example under `examples/` (owner's request, 2026-11-16) | later |
 
 Rules of the phase: the films' scores must synthesize to the same audio as before each step, and
@@ -25299,3 +25299,95 @@ navy background is mostly lift, which sRGB's linear toe keeps darker), `04_escap
 needs the page's own geometry and sorting, so it stays a page technique; SMAA (not shipped among
 the add-ons; FXAA is vidgen's own); a transparent output (the composer's alpha is not meaningful
 after bloom, §118.14); MSAA of the scene target; resizing after construction.
+
+### 120.12 Review of Steps 341–350, documents, an example (Step 351)
+
+Each step's diff was read again (`git show` of 01c7d64 … 857c33c) for faults, edge cases, names
+that differ between steps, Windows hazards, cache-key gaps, determinism and docs that contradict
+the code. What was found and what was decided:
+
+**Fixed.**
+
+- *The guide's web-topic test had failed since Step 347* (`tests/test_guide.py::
+  test_the_web_topics_code_runs_in_chromium`, `slow`). Cause: Step 347's code block in "Pictures
+  that follow the music" began with `export function frame` instead of a comment naming its file
+  (the test writes every block to the file its first line names), its YAML block is a mapping
+  (`music:` + `scenes:`) where the test expected a list of scenes, and the page needs `ctx.music`,
+  which the test did not give. The block now starts `// extensions/space.js` (as the YAML names
+  it); the test reads mapping blocks and gives a page whose scene has `music_data` the data of a
+  tiny score project (the piece's render seeded with silence, so nothing is synthesised). The
+  block is drawn in Chromium again (it was never run before).
+- *`test_the_page_is_given_theme_data_beats_and_three` was flaky* (failed one to two runs in three
+  since Step 340): its frame at the start of a CSS transition is sometimes one step into the fade
+  (red 238 instead of 248), the compositor's non-repeatable timing measured in §120.10. The test
+  now allows that one frame up to a step (225–248) and still checks the frames before it and the
+  end exactly; 6 of 6 runs passed.
+- *Named settings in `vidgen studio`* (`registration`, `stroke`, `vowel`, `voices`, `morph`) were
+  number sliders. The inspector (`studio_app/static/inspector.js`, `choiceHtml`) now shows a
+  setting that has `choices` in the catalogue as a list of its names; a choice writes the name
+  (`stroke: spiccato`), a number in the score is shown as its name, reset works as for sliders.
+  Test: `tests/test_studio_ui.py::test_a_setting_with_named_values_is_a_list_of_its_names`.
+  `drawbars` stays a number slider (left).
+- *`3d` scenes reuse Step 349's writer and progress line.* Their page reads its own canvas
+  (`toDataURL`), so Step 349's screenshot does not apply; what applies is the rest:
+  `three_d.browser.write_clip` now puts each frame's PNG (`PageRenderer.png`) into
+  `FramesClipWriter`, which decodes it (`PageRenderer.pixels`, the same `png_pixels` as before)
+  and encodes it in its thread while the next frame is drawn, and `FrameProgress(what="3d
+  frames")` logs `3d frames 30/90, …` lines and a summary (no split: the page draws and reads
+  in one call). `FrameProgress`, `PROGRESS_SECONDS`, `duration_text`, `seconds_text` moved from
+  `web/clip.py` to `browser/frames_clip.py` (still importable from `web.clip`). Pixel identity:
+  `tests/test_scene_3d.py::test_the_clip_holds_the_pages_frames_and_reports_progress` compares
+  every frame of the written clip with `PageRenderer.frame(n)` drawn one by one (equal), which is
+  what the old `write_clip` wrote. No key changed (the clip's key is the description and the
+  engine).
+- *Docs*: `docs/COOKBOOK-MUSIC.md` section 13, one table of every score instrument (family, kind,
+  written range or default octave, settings to reach for first, typical use) and contents for
+  sections 8–13; cross-links between cookbook section 12 and `docs/COOKBOOK-3D.md` section 8; the
+  README's feature list (the orchestra, expressive notes, `music_data`, `vidgen/three-finish`,
+  `vidgen still`, progress, intermediates) and example list; CONFIG (studio, `3d` progress);
+  the guide (pointers to the table and the example); CHANGELOG (the phase in one place).
+
+**Checked and right.** Instrument, setting and value names agree between the catalogue, CONFIG,
+the guide and the cookbooks (`double_basses`, `low_brass`, `tam_tam`, `stroke`, `vowel`,
+`voices`, `morph`, `registration`); the page API is `ctx.music.*` everywhere (JavaScript fields
+in camelCase: `dynamicEnd`; Python's events: `dynamic_end`); the module is `vidgen/three-finish`
+in code, import map, guide and cookbook; the CLI flags (`--intermediate`, `--clean-intermediates`
+for `keep_intermediates: false`, `still --at/--frame/--count`) match their docs. Errors seen
+while writing the example named the place and the fix (a slur over one note; an unknown track
+in `music_data.tracks` names the score's tracks). Windows: frames clips and stills are written
+through `.partial` files and `os.replace` with a message when the target is open elsewhere;
+deleting intermediates keeps a clip that cannot be deleted with a warning. Determinism: two
+fresh pages of the example give byte-identical stills (`fire` at 3 s, checked);
+`music.js` uses no clock but vidgen's.
+
+**Left** (in the tasklist): `vidgen still` keeps every drawn frame and the sheet's tiles in memory
+at full size; `load_music_score` refuses a `str` path with an `AttributeError` (the score loader
+was left untouched in this step, so the films' audio needs no new proof); `ctx.music.sounding`
+looks at every earlier event of its track per call and the functions without a track sort all
+events per call; the choir's range warning uses E2–C6 whatever `voices` says; `drawbars` is a
+number slider; `3d` guide passes draw without the writer thread; nothing of the phase was tried
+on Windows or macOS.
+
+**The example**, `examples/signal-fire` ("Signal Fire", 27 s, 1280x720 at 30 fps, no narration):
+an original cue in C minor at 90 BPM (`assets/music/signal_fire.yaml`, 9 bars = 24 s and the last
+chord's ring) for solo violin (slurred, a glide up a sixth, late vibrato), violins, cellos (tremolo,
+spiccato and sustain marked on one track), double basses, four horns (`[fp <]`), trumpet (a
+slurred melody under a hairpin to `fff`), low brass (a swell into the hit), choir (`mm` morphing
+to `ooh`, then `aah`), timpani (a roll growing into the hit on the same track), taikos, bass drum,
+snare roll, cymbal swell and crash, tam-tam; the end in C major. Three `web_cut` scenes (8, 8,
+11 s; the extension type of §120.1) on one script (`extensions/signal_fire.js`) with
+`music_data: {tracks: [...]}` (ten tracks); vidgen works out `t0` (0, 8, 16). The page: embers on
+the violin's and the cellos' notes, the sky on the choir, a ring of light on the timpani (a roll as
+bright as its hairpin has grown, from `dynamic` → `dynamicEnd`), the stones and shock rings on the
+taikos, a beam whose height is the trumpet's pitch (gliding on slurred notes), a flash
+(`Finish`'s `flash`) on the crash and the gong; the camera follows song time, never a hit.
+Finished with bloom (threshold 1.2: at 1 the fire and the rings veiled the whole frame, seen in
+stills), ACES, a grade from cool to warm, vignette, grain, FXAA and depth of field on the brazier.
+Measured: the score renders in 49 s; `vidgen music check`: −27.9 LUFS, key C minor (0.93), no
+range warning, "unsteady" (32 dB from the quiet start to the hit: right for a cue without
+narration); the page 0.45 s a frame at 1280x720 (0.72 s a still with the page's setup); the final
+render about 8 min, 568 MB of frames clips. Looked at: stills at ten moments (four rounds of
+changes to the light), frames of the MP4 at ten moments, and spectrograms of the WAV and of the
+MP4's sound (the glide at 2.7 s, the spiccato grid from 8 s, the hit at 16 s, the trumpet's slides,
+the C major end at 21.3 s). Test: `tests/test_signal_fire_example.py` (validates; the score's
+instruments, slurs, strokes and growing roll; the page's tracks exist). Nobody has listened.
