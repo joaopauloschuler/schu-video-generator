@@ -5,10 +5,20 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–363
+## Steps 193–364
 
-### Music-video tools (Phase AM, Steps 358–363)
+### Music-video tools (Phase AM, Steps 358–364)
 
+- **Opening titles and end cards for films** (Step 364): `vidgen/title-cards`, a module for any
+  `web` page: `await titleCard(ctx, {title, subtitle})` and `await endCard(ctx, {title, subtitle,
+  link, lines})`, then `card.update(t)` in `frame`. The look of Escapement's opening and end card:
+  a small title with wide letter spacing in the left or right third, a thin rule, one subtitle in
+  small capitals, a soft dark gradient behind the block; fades in over the first bars, holds and
+  fades out before the first cut (the end card holds to the end). Sized to the frame in 16:9 and
+  9:16 (in a portrait frame the block sits in the lower part), a too-long title set smaller to fit,
+  options checked with a "did you mean". COOKBOOK-3D section 12, "Opening titles and end cards
+  for films", gives the rules (asymmetry, restraint, quiet space, slow timing, a matching end
+  card, and when not to use a title card).
 - **The choir's `d` without a "sht"** (Step 363): a `d` (`da`, `de` …) opened with a hiss up to
   12 kHz that the hall's reverb carried on ("sht"). Its burst is now a soft tick inside the
   voice's own band (around 2.4 kHz, little above 3.4 kHz, a third of the level); the `d` is heard

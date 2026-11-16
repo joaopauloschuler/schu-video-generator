@@ -289,3 +289,74 @@ kit's `melody` restarting each note's light at 0, fixed since: a still on such a
 light of the frames around it); Escapement has none above
 info (seven cut jumps, small glints in its gears, the still opening on the watch while the title
 fades in, and the held ending).
+
+## 12. Opening titles and end cards for films
+
+A film can open the way a cinema film does: the picture comes up from black, and for a few bars a
+small title sits beside its subject before the film begins; at the end the same type comes back
+on the other side. `examples/escapement` does this (its first scene, `01_winding`, and its last,
+`12_coda`). The rules it follows:
+
+- **Asymmetry.** The title block sits in the left or the right third of the frame; the subject
+  (the watch, the object, the landscape) fills the other side. Never centred on the subject, never
+  over it. The end card mirrors the opening: if the title was on the left with the subject on the
+  right, the end card is on the right with the subject on the left.
+- **Restraint.** A small title (about 4 % of the frame's width) with wide letter spacing, a thin
+  rule under it, one quiet subtitle in small capitals. Nothing else on screen: no logo, no
+  credits, no web address in the opening, no animation of the letters beyond a slow opening of
+  their spacing.
+- **Quiet space behind the text.** Dark, calm negative space: the subject is lit, the side the text
+  is on is not. Where the picture is busy there, a soft dark gradient from that edge of the frame
+  calms it (on by default in the ready-made card below).
+- **Slow timing.** Let the picture start alone for a bar or so; fade the title in over the next
+  bars, let it settle while the subject settles, hold it, and fade it out before the first cut
+  (Escapement: in over bars 2–3, held, out over bars 7–8 of an 8-bar opening).
+- **A matching end card.** The same typeface, colours and layout, a little smaller, on the other
+  side: the title, the rule, a subtitle, and the credits small (a line or two in italics). Hold it
+  to the end and let it fade with the picture.
+- **When not to.** Shorts and quick explainers start moving on frame 1: a viewer scrolling past
+  decides in the first second, and a title card there is a second of nothing. Keep a title card for
+  films watched from the start (a music video, a short film, a long explainer's chapter opening),
+  and say the title in the first moving shot otherwise.
+
+**The ready-made card: `vidgen/title-cards`.** A module you import by name gives both cards as
+HTML text over the page (crisp at every size, not drawn by WebGL), laid out as Escapement's, with
+its timing and colours as defaults (reference: [CONFIG, `web`](CONFIG.md#web), "Opening titles and
+end cards"):
+
+```js
+// extensions/film.js: the opening scene (data.mode "opening") and the last ("ending") of one script
+import {titleCard, endCard} from "vidgen/title-cards";
+let card;
+export async function load(ctx) {
+  // ... the three.js scene, its subject on the right in the opening, on the left at the end ...
+  card = ctx.data.mode === "opening"
+    ? await titleCard(ctx, {title: "TIDEWATER", subtitle: "a film in four tides"})            // left; in at 2 s, out by 14 s
+    : await endCard(ctx, {title: "TIDEWATER", subtitle: "music and pictures by ...", start: 8,  // right; holds to the end
+        lines: ["The score is played by vidgen's own synthesizer."]});
+}
+export function frame(t, ctx) {
+  card.update(t);              // its opacity from t alone (fade in, hold, fade out)
+  // ... draw the scene at t ...
+}
+```
+
+- **Time.** `start`, `fadeIn`, `hold`, `fadeOut` in the seconds `frame(t)` gets (defaults: 2, 2,
+  8, 2 for the title, so it is gone by 14 s of a 16 s opening; the end card fades in over 2.5 s
+  from 1 s and holds to the end). On a 120 BPM song a bar is 2 s: put `start` and the fades on bar
+  lines. Pass song time instead if you give `start` in song time.
+- **Place.** `side: "left"` (the title's default) or `"right"` (the end card's); in a portrait
+  frame both go to the lower part (`"top"` for the upper), left- or right-aligned by `align`. Sizes
+  follow the frame (1 % of a 16:9 frame's width, 1.7 % of a portrait frame's), a title too wide for
+  its side is set smaller until it fits, and the margins keep the text off the frame's edges.
+- **Look.** `font` (the theme's serif), `subFont` (the theme's body font), `color`, `subColor`,
+  `accent` (the rule), `glow` (a soft halo, `false` for none), `size`, `tracking` and `settle`
+  (how far the spacing opens while the card shows), `rule`, `shade` (the gradient's strength,
+  `false` for none), and on the end card `link` (one line in the theme's monospace) and `lines`.
+  A misspelt option stops the render with the reason (`unknown option "fadein" (did you mean
+  "fadeIn"?)`).
+- **Lint.** The cards are real text, so `vidgen lint` reads them (by `data-vidgen-id`
+  `title-card` / `end-card`); `min_font` is off for them, since the small subtitle is meant.
+- **Shade on a flat background.** On an even, very dark picture the gradient can show 8-bit steps
+  one level apart; a little grain (three-finish's `grain`) hides them, or set `shade: false` where
+  the picture is already dark there.

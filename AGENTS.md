@@ -3728,6 +3728,42 @@ export function frame(t) {
   film built on them: `examples/parallel-space`; smaller uses: `examples/escapement` (envelopes,
   keyframes, dust) and `examples/signal-fire` (`signalLevel`).
 
+**Opening titles and end cards: `vidgen/title-cards`.** A film watched from the start (a music
+video, a short film) can open as a cinema film does: the picture comes up from black and a small
+title sits beside its subject for a few bars, then fades before the first cut; the end card
+mirrors it on the other side. The module gives both as HTML text over the page, laid out and
+timed as `examples/escapement`'s (its `01_winding` and `12_coda`):
+
+```js
+// extensions/opening.js: a title on the left third, its subject (here a lit disc) on the right
+import {titleCard} from "vidgen/title-cards";
+let card;
+export async function load(ctx) {
+  document.body.style.background = "#05060a";
+  card = await titleCard(ctx, {title: "TIDEWATER", subtitle: "a film in four tides"});   // in at 2 s, out by 14 s
+}
+export function frame(t, ctx) {
+  const c = ctx.canvas.getContext("2d"), r = 0.3 * ctx.height;
+  c.clearRect(0, 0, ctx.width, ctx.height);
+  const g = c.createRadialGradient(0.7 * ctx.width - r / 3, 0.4 * ctx.height, 0, 0.7 * ctx.width, 0.5 * ctx.height, r);
+  g.addColorStop(0, "#f0c987"); g.addColorStop(1, "#3a2a14");
+  c.fillStyle = g; c.beginPath(); c.arc(0.7 * ctx.width, 0.5 * ctx.height, r, 0, 2 * Math.PI); c.fill();
+  card.update(t);                         // the card's opacity from t alone
+}
+```
+
+- **The rules** (COOKBOOK-3D section 12): the title in the left or right third and the subject on
+  the other side; small type, wide spacing, a thin rule, one quiet subtitle, nothing else (no web
+  address in the opening); dark, calm space behind the text (a soft gradient is on by default:
+  `shade`); fade in over the first bars, hold, fade out before the first cut. The end card
+  (`await endCard(ctx, {title, subtitle, link, lines: [...], start})`) uses the same type, smaller,
+  on the other side, with the credits small; it holds to the end.
+- **Not for Shorts or quick explainers**: their frame 1 moves. In a portrait frame the cards go
+  to the lower part (`side: "top"` for the upper).
+- Options (`side`, `start`, `fadeIn`, `hold`, `fadeOut`, `size`, `tracking`, `font`, `color`,
+  `accent`, `shade`, ...): `docs/CONFIG.md`, "Opening titles and end cards". A misspelt option
+  stops the render with a "did you mean".
+
 **From a score to a music video: `vidgen music plan`.** Before writing pages for a song, let
 vidgen read its score: `vidgen music plan assets/music/my_song.yaml` prints a role per section
 (intro, verse, build, drop, climax, breakdown, outro) and why, the scenes cut on bar lines (a

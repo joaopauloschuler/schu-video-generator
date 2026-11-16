@@ -351,7 +351,8 @@ src/vidgen/
                           # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
   data/web/modules/        # vidgen's own modules for web scenes: three-finish.js `vidgen/three-finish` (§120.11); music-time.js
-                          # `vidgen/music-time` and three-kit.js `vidgen/three-kit`: building blocks for music videos (§121.1)
+                          # `vidgen/music-time` and three-kit.js `vidgen/three-kit`: building blocks for music videos (§121.1);
+                          # title-cards.js `vidgen/title-cards`: an opening title and an end card for films (§121.7)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
@@ -25433,7 +25434,7 @@ The owner asked for the published film as an example, source only. `examples/esc
   no range warnings, the event counts the exporter had, the page reads only `ctx.music` and every
   track it is given exists.
 
-## 121. Music-video tools (Phase AM, Steps 358–363)
+## 121. Music-video tools (Phase AM, Steps 358–364)
 
 Three music films were made as `web` scenes and are now examples (`examples/parallel-space`,
 `examples/escapement`, `examples/signal-fire`; with `examples/three-finish`). Each rebuilt the
@@ -25447,6 +25448,7 @@ same things by hand. The owner chose four features (2026-11-16), one step each, 
 | 361 | More choir: syllables, a soloist, a whispered texture, a syllable per note | §121.4 |
 | 362 | Critical review with fixes; docs | §121.5 |
 | 363 | The owner heard a "sht" at every `d`: its burst made soft | §121.6 |
+| 364 | Escapement's opening title and end card for every film: `vidgen/title-cards`, COOKBOOK-3D section 12 | §121.7 |
 
 Rules of the phase: the films must look the same (stills compared before and after) and their
 scores synthesize to the same audio; nothing is rendered that a still or a test can show.
@@ -25916,3 +25918,66 @@ bytes on 2c758af and after).
   (basses and sopranos; `la`, `da`, `de` under −50 dB above 5 kHz, a whispered `da` no louder
   there than a whispered `la`); it fails on the Step 361 burst (−24.6 dB).
 
+### 121.7 Opening titles and end cards for films: `vidgen/title-cards` (Step 364)
+
+**Why.** The owner finds Escapement's opening (`01_winding`: "ESCAPEMENT", a rule and a subtitle
+in the left third, the watch on the right) and its end card (`12_coda`: the same type on the
+right, the watch on the left, "made with schu-video-generator", the link and two italic lines)
+very professional and wants that feeling available to every film.
+
+**What Escapement does** (`examples/escapement/extensions/escapement.js`, `makeText` and the two
+modes): HTML `<div>`s over the WebGL canvas, sized in `vw`/`vh`: title 3.9vw (end 2.7vw) in the
+theme's serif, weight 500, letter spacing 0.26em (end 0.3em) with a soft coloured `text-shadow`;
+a 1 px rule 9vw long, a gradient from gold `#d9b46a` to nothing; the subtitle 1.15vw in the theme's
+body font, upper case, spacing 0.42em, grey-blue (end warm grey); the end card's link in the
+monospace and two italic serif lines. The opening fades in over bars 1.2–2.2 and out over bars
+6.2–7.2 of an 8-bar, 16 s scene, while the spacing opens 0.26 → 0.29em; the end card fades in
+over bars 4–5.4 of the coda and goes with the picture's fade. Card `display: none` while hidden.
+
+**The module** (`data/web/modules/title-cards.js`, 230 lines, no imports, on the import map as
+`vidgen/title-cards` beside the three music-video modules; HTML and CSS, so it serves any `web`
+page, three.js or not): `titleCard(ctx, options)` and `endCard(ctx, options)` are async (they
+wait for the fonts, then measure), return `{element, options, layout, update(t)}`; `update(t)`
+sets the opacity (`cardAlpha`: smoothstep in over `fadeIn` from `start`, hold, smoothstep out;
+`hold: Infinity` holds to the end) and the spacing (`cardSettle`: from the fade in to the end of
+the fade out, or 8 s when held) and returns the opacity. Pure helpers `cardOptions`, `cardAlpha`,
+`cardSettle`, `cardLayout` are exported for tests (Node) and pages.
+
+Decisions:
+
+- **Escapement's numbers are the defaults**, translated from `vw`/`vh` to a unit `k` and a flex
+  column with gaps measured from its stills: title → rule 0.75 × the title's size, rule →
+  subtitle 1.7k, then 1.65k, the end card's lines 4.1k below with line height 1.65. The opening's
+  cool colours and the end card's warm ones are both kept (title / end defaults). Default timing:
+  2 + 2 + 8 + 2 s (in by 4 s, gone by 14 s of a 16 s opening); end card 1 s, 2.5 s fade, held. A
+  still of a test page at 640x360 puts the title, rule and subtitle within 3 px of Escapement's.
+- **The size unit.** `k` = 1 % of the width of a 16:9 frame, or of the height × 16/9 when the frame
+  is wider (21:9 does not grow the type), and 1.7 % of the width in a portrait frame (1.45 %
+  looked too small at 360x640). A line wider than its block is set smaller once, measured after the
+  fonts load (with the spacing at its widest), so a long title fits; italic lines wrap instead.
+- **Placement.** Landscape `left`: x 5.5 %, block 40 % wide, centred at 46 % of the height (the
+  opening's); `right`: x 51 %, 43.5 % wide, 45 % (the end card's). A portrait frame has no third
+  beside a subject, so `left` / `right` go to the lower part (centre at 64 %: above where Shorts
+  put their own text), aligned by `align`; `top` centres at 24 %. Margins 8 % of the width in
+  portrait, 5.5 % in landscape.
+- **The shade.** Not in Escapement (its studio is black there) but asked for: a linear gradient
+  from the block's edge of the frame, `shade` (0.45) black at the edge, 55 % of it at 32 %, none
+  at 62 % (55 % for top / bottom), fading with the card. On a flat near-black picture it shows
+  one-level 8-bit steps (measured: 2 → 5 over 400 px); grain hides them.
+- **Lint.** The cards are page text with `data-vidgen-id` `title-card` / `end-card`, so lint
+  checks them, with `data-vidgen-lint="off:min_font"`: a 1.15k subtitle has a cap height near 1.4 %
+  of the short side, under `min_font`'s 1.8 % error on purpose (Escapement opted out of every
+  rule). Hidden cards are `display: none`, so lint skips them.
+- **No link rule in the docs.** The cookbook says no web address belongs in the opening; where a
+  project link goes on an end card is left to the examples (owner's rule). `endCard` has a neutral
+  `link` line.
+- **Examples unchanged** in this step (Parallel Space v8 will use the module next); Escapement
+  keeps its own `makeText`.
+
+**Proof** (scratch `/home/claude/work/scratch/am364/`): `vidgen still` of Escapement `01_winding`
+at 8 s and `12_coda` at 14 s (640x360, `stills_esc/`), and of a test page (`demo/`, a lit
+torus knot) with `titleCard` at 7 s (640x360) and `endCard` at 9 s (360x640, portrait), in
+`demo/stills/`. Tests: `tests/test_web_title_cards.py` (served by name, no imports; options with
+did-you-mean; timing and layout in 16:9, 21:9 and 9:16 in Node; the docs; one slow Chromium test
+drawing a page with both cards twice at 320x180 and 180x320: same pixels, nothing before the
+title, the title in the left half, the end card later).

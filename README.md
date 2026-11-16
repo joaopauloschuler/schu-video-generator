@@ -646,7 +646,7 @@ my_video/
   through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
   [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
   [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
-  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`), from a score to a music video (`vidgen music plan`), checking a music video's motion (`vidgen motion check`).
+  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`), from a score to a music video (`vidgen music plan`), checking a music video's motion (`vidgen motion check`), opening titles and end cards for films (`vidgen/title-cards`).
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
@@ -1013,7 +1013,9 @@ remaining rendering tests. No test needs network or keys.
   `vidgen motion check` watches the render for black frames, flashes, flicker, popping, strobing,
   frozen stretches and jumps at cuts; the score's `choir` sings syllables (`la`, `na`, `da`,
   `mm-ah`, `ah-oh`), a soloist over the section and a whisper, a syllable per note
-  ([cookbook](docs/COOKBOOK-3D.md#9-building-blocks-for-music-videos)).
+  ([cookbook](docs/COOKBOOK-3D.md#9-building-blocks-for-music-videos)); an opening title and a
+  matching end card for films from `vidgen/title-cards`, laid out as Escapement's
+  ([cookbook](docs/COOKBOOK-3D.md#12-opening-titles-and-end-cards-for-films)).
 - **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
   `crossfade` (the scenes overlap, the video gets shorter by it), `fade_color` through a theme
   colour (`{type: fade_color, color: surface, duration: 1.2}`), `push` (the next scene slides in

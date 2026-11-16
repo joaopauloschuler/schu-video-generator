@@ -2159,6 +2159,11 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [x] Regression test (`test_a_d_opens_softly_without_a_hiss_above_the_voice`, fails on the old burst); the five demos and a before/after clip of `demo_syllables` 0–14 s re-rendered in `/home/claude/work/scratch/am363/demo/`
 - [ ] Not done: nobody has listened to the new demos yet
 
+### Step 364 — Opening titles and end cards for films (owner's request)
+- [x] COOKBOOK-3D section 12 "Opening titles and end cards for films" (asymmetry, restraint, quiet space, slow timing, a matching end card, when not to); pointer in `docs/COOKBOOK.md`; README lines
+- [x] `vidgen/title-cards` (`titleCard`, `endCard`, `update(t)`; `cardOptions` with did-you-mean, `cardAlpha`, `cardSettle`, `cardLayout`): HTML text over the page with Escapement's look and timing as defaults, 16:9 and 9:16, fit to the block, a soft dark gradient; CONFIG table, guide (web topic, `extensions/opening.js`), DESIGN §121.7
+- [x] Tests (`tests/test_web_title_cards.py`: Node, docs, one slow Chromium test); stills of Escapement's opening and end card and of a test page (16:9 title, 9:16 end card) in `/home/claude/work/scratch/am364/`; no example changed
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

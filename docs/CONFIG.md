@@ -7117,6 +7117,42 @@ Errors: a builder before `setStage` throws `vidgen/three-kit: call setStage({sce
 first`; an unknown polyhedron `vidgen/three-kit: no polyhedron "sphere" (octa, tetra, ico, dodeca,
 cube)`. Both stop the render with the scene, file and line.
 
+**Opening titles and end cards: `vidgen/title-cards`** (Step 364, DESIGN §121.7; craft notes:
+[COOKBOOK-3D section 12](COOKBOOK-3D.md#12-opening-titles-and-end-cards-for-films)). A film's
+opening title and a matching end card as HTML text over any `web` page (no three.js needed), laid
+out and timed as `examples/escapement`'s: the title block in the left or right third, a small
+title with wide letter spacing, a thin rule, one subtitle in small capitals, a soft dark gradient
+from that edge of the frame. `const card = await titleCard(ctx, {...})` (or `endCard`) in `load`,
+`card.update(t)` in `frame` (returns the opacity, 0–1; `card.element` is the card's `<div>`). The
+opacity and the letter spacing are functions of `t` alone. Sizes are in `k`: 1 % of a 16:9 frame's
+width (the height × 16/9 in a wider frame), 1.7 % of a portrait frame's width.
+
+| option | `titleCard` | `endCard` | meaning |
+|---|---|---|---|
+| `title` | required | required | the title (a non-empty string) |
+| `subtitle` | `""` | `""` | one line under the rule (small capitals unless `uppercase: false`) |
+| `side` | `"left"` | `"right"` | `"left"` / `"right"` third (a portrait frame: the lower part), `"top"`, `"bottom"` |
+| `align` | `"left"` | `"left"` | the lines' alignment |
+| `y` | by side | by side | the block's vertical centre, a fraction of the height (0.46 left, 0.45 right, 0.24 top, 0.7 bottom; portrait bottom 0.64) |
+| `start`, `fadeIn`, `hold`, `fadeOut` | `2`, `2`, `8`, `2` | `1`, `2.5`, `Infinity`, `0` | seconds on the clock `update(t)` gets; smooth fades; `hold: Infinity` holds to the end |
+| `size`, `tracking`, `settle` | `3.9`, `0.26`, `0.03` | `2.7`, `0.3`, `0.03` | the title's size in `k`, its letter spacing in em, how far the spacing opens from the fade in to the fade out (8 s after the fade in when held) |
+| `subSize`, `subTracking`, `uppercase` | `1.15`, `0.42`, `true` | same | the subtitle |
+| `font`, `subFont` | theme serif, theme body | same | font families (a family name; Georgia / sans-serif behind them) |
+| `color`, `subColor`, `accent`, `glow` | `#f3ede2`, `#aab4c8`, `#d9b46a`, `rgba(150,180,255,.35)` | `#f3ede2`, `#c9bda9`, `#d9b46a`, `rgba(255,200,120,.3)` | CSS colours: title, subtitle, the rule's gradient, the title's soft halo (`false`: none) |
+| `rule` | `true` | `true` | the thin rule (1 px per 720 px of height) |
+| `shade` | `0.45` | `0.45` | the dark gradient behind the block (0–1 at the frame's edge; `true` = 0.45, `false` = none) |
+| `id` | `"title-card"` | `"end-card"` | the card's `data-vidgen-id` (lint names it so; `min_font` is off for it) |
+| `link`, `linkFont`, `linkSize`, `linkColor` | — | `""`, theme mono, `1.22`, `#fff3df` | one line in monospace under the subtitle |
+| `lines`, `lineFont`, `lineSize`, `lineColor` | — | `[]`, the title's font, `1.5`, `#d8ccb8` | small italic lines (credits) under a gap; they wrap within the block |
+
+A title, subtitle or link wider than its side's block (40 % of the width on the left, 43.5 % on
+the right, the width less 8 % margins in a portrait frame) is set smaller until it fits. Also
+exported: `cardOptions(kind, options)` (the checked options with defaults), `cardAlpha(t,
+options)`, `cardSettle(t, options)`, `cardLayout(width, height, {side, align, y})`,
+`TITLE_DEFAULTS`, `END_DEFAULTS`. Errors stop the render with the reason: `vidgen/title-cards:
+titleCard: unknown option "fadein" (did you mean "fadeIn"?); known: ...`, `side must be one of
+"left", "right", "top", "bottom", got "centre"`, `title must be a non-empty string`.
+
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
 error or rejected promise at load, in a timer or callback, or in `frame`, and a page that is not
