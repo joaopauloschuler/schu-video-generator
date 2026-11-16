@@ -1,0 +1,140 @@
+# Signal Fire: an original 24-second cinematic cue for vidgen's own orchestra (no samples, no
+# SoundFont, no audio files), written to show the orchestral instruments and the expressive marks.
+#
+# 90 BPM in C minor: one bar = 2.667 s = 80 frames at 30 fps; three bars = 8 s, one scene each.
+# Form: embers 3 | gather 3 | fire 2 | end 1 = 9 bars (24 s), then the last chord rings.
+#   embers  a tam-tam from far away, low strings in tremolo, a hum opening to "ooh", soft timpani,
+#           and a solo violin's slurred phrase that slides up a sixth (glide) and dies away
+#   gather  the cellos turn to a spiccato ostinato under a hairpin, four horns swell from fp, the
+#           violins hold a slurred line, taikos enter; the last bar is a timpani roll and a snare roll
+#           growing into the hit, a cymbal swell and the low brass's swell ("braam")
+#   fire    the hit: taikos, bass drum, crash; the trumpet's slurred melody climbs C-Eb-G over the
+#           whole orchestra (fff), the choir on "aah"
+#   end     C major (the minor key's last chord turned major), tam-tam, everything dying away
+# The pictures (extensions/signal_fire.js) read every one of these tracks through ctx.music.
+version: 1
+title: Signal Fire
+description: An original 24 s cue in C minor at 90 BPM for strings, brass, choir and orchestral percussion - embers, a gathering ostinato, a roll into the hit, a trumpet over the full orchestra, and a C major end.
+key: C minor
+tempo: 90
+seed: 351
+loop: false
+sections:
+  - {name: embers, bars: 3, progression: "Cm Ab Fm"}
+  - {name: gather, bars: 3, progression: "Cm Ab G"}
+  - {name: fire, bars: 2, progression: "Cm Ab"}
+  - {name: end, bars: 1, progression: "C"}
+tracks:
+  # ----- strings ------------------------------------------------------------------------------
+  solo:
+    instrument: violins
+    only: [embers]
+    settings: {players: 1, vibrato: 20, vibrato_delay: 0.4}
+    reverb: {size: 3.5, mix: 0.32}
+    steps: "[p <] (G4 - - - Ab4 - G4 - | [glide=0.22] Eb5 - - - - - D5 - | [mp >] C5 - - - - - - -) [pp]"
+  violins:
+    instrument: violins
+    only: [gather, fire, end]
+    reverb: {size: 3.5, mix: 0.3}
+    sections:
+      gather: {steps: "[pp <] (C5 - - - - - - - | Eb5 - - - - - - - | D5 - - - - - - -) [f]"}
+      fire: {steps: "[ff] Eb5+G5 - - - - - - - | Eb5+C6 - - - - - - -"}
+      end: {steps: "[ff >] E5+G5 - - - - - - . [p]"}
+  cellos:
+    instrument: cellos
+    reverb: {size: 3.5, mix: 0.28}
+    sections:
+      embers: {steps: "[tremolo pp <] Eb3 - - - - - - - | C3 - - - - - - - | [mp] Ab2 - - - - - - -"}
+      gather: {steps: "[spiccato mp <] C3 C3 G3 C3 Eb3 C3 G3 C3 | Ab2 Ab2 Eb3 Ab2 C3 Ab2 Eb3 Ab2 | G2 G2 D3 G2 B2 G2 D3 G2 [f]"}
+      fire: {steps: "[sustain ff] C3 - - - - - - - | Eb3 - - - - - - -"}
+      end: {steps: "[ff >] E3 - - - - - - . [p]"}
+  basses:
+    instrument: double_basses
+    reverb: {size: 3.5, mix: 0.25}
+    sections:
+      embers: {steps: "[pp <] C2 - - - - - - - | Ab1 - - - - - - - | F1 - - - - - - - [mp]"}
+      gather: {steps: "[mp <] C2 - - - - - - - | Ab1 - - - - - - - | G1 - - - - - - - [f]"}
+      fire: {steps: "[ff] C2 - - - - - - - | Ab1 - - - - - - -"}
+      end: {steps: "[ff >] C2 - - - - - - . [p]"}
+  # ----- brass --------------------------------------------------------------------------------
+  horns:
+    instrument: horn
+    only: [gather, fire, end]
+    settings: {players: 4, attack: 0.14}
+    reverb: {size: 3.8, mix: 0.32, tone: 4500}
+    sections:
+      gather: {steps: "[fp <] C4 - - - - - - - | [mf] (Eb4 - - - - - C4 -) | [f <] D4 - - - - - - - [ff]"}
+      fire: {steps: "[ff] Eb4+G4 - - - - - - - | Eb4+Ab4 - - - - - - -"}
+      end: {steps: "[ff >] E4+G4 - - - - - - . [mp]"}
+  trumpet:
+    instrument: trumpet
+    only: [fire, end]
+    settings: {vibrato: 12, vibrato_delay: 0.35}
+    reverb: {size: 3.8, mix: 0.3, tone: 4500}
+    sections:
+      fire: {steps: "[f <] (G4 - - C5 - - Eb5 - | [glide=0.18] G5 - - - F5 - Eb5 -) [fff]"}
+      end: {steps: "[ff >] E5 - - - - - - . [mp]"}
+  low:
+    instrument: low_brass
+    only: [gather, fire, end]
+    settings: {tuba: 0.6, attack: 0.12}
+    reverb: {size: 3.8, mix: 0.3, tone: 4000}
+    sections:
+      gather: {steps: ". | . | [pp <] G1+D2 - - - - - - - [ff]"}
+      fire: {steps: "[ff] C2+G2 - - - - - - - | Ab1+Eb2 - - - - - - -"}
+      end: {steps: "[ff >] C2+G2 - - - - - - . [mp]"}
+  # ----- choir --------------------------------------------------------------------------------
+  choir:
+    instrument: choir
+    reverb: {size: 4.5, mix: 0.36, tone: 4500}
+    sections:
+      embers: {settings: {vowel: mm, morph: ooh, attack: 1.5}, steps: "[pp <] * - - - - - - - | * - - - - - - - | * - - - - - - - [p]"}
+      gather: {settings: {vowel: ooh}, steps: "[p <] * - - - - - - - | * - - - - - - - | * - - - - - - - [f]"}
+      fire: {settings: {vowel: aah, brightness: 0.7}, steps: "[ff] * - - - - - - - | * - - - - - - -"}
+      end: {settings: {vowel: aah, brightness: 0.7, ring: 1.5}, steps: "[ff >] * - - - - - - . [p]"}
+  # ----- percussion ---------------------------------------------------------------------------
+  timpani:
+    instrument: timpani
+    reverb: {size: 3.5, mix: 0.28}
+    sections:
+      embers: {steps: "[p] C3 . . . . . . . | Ab2 . . . . . . . | F2 . . . . . . ."}
+      gather: {settings: {mallet: 0.25}, steps: "[mp] C3 . . . . . . . | Ab2 . . . . . . . | [roll pp <] G2 - - - - - - - [ff]"}
+      fire: {steps: "[ff] C3 . . . G2 . . . | Ab2 . . . Eb3 . . ."}
+      end: {steps: "[ff] C3 . . . . . . ."}
+  taiko:
+    instrument: taiko
+    only: [gather, fire, end]
+    settings: {players: 4}
+    reverb: {size: 3.4, mix: 0.3, tone: 3000}
+    sections:
+      gather: {volume: -4, steps: "X... .... .... .... | X... .... .... .... | X... .... X... x.x."}
+      fire: {steps: "X..x ..x. X..x .x.. | X..x ..x. X.x. xxxx"}
+      end: {steps: "X... .... .... ...."}
+  bass_drum:
+    instrument: bass_drum
+    only: [fire, end]
+    steps: "x . . . . . . . | x . . . . . . ."
+  snares:
+    instrument: snare_drum
+    only: [gather]
+    settings: {players: 4}
+    steps: ". | . | [roll pp <] x - - - - - - - [ff]"
+  swell:
+    instrument: cymbal
+    only: [gather]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: ". | . | x - - - - - - -"
+  crash:
+    instrument: cymbal
+    only: [fire, end]
+    settings: {mallet: 0.8}
+    reverb: {size: 4.5, mix: 0.36}
+    steps: "x . . . . . . . | ."
+  gong:
+    instrument: tam_tam
+    only: [embers, end]
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      embers: {steps: "[pp] x . . . . . . . | . | ."}
+      end: {steps: "[f] x . . . . . . ."}

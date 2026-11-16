@@ -79,6 +79,16 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   a bed's template (`vidgen music template momentum`), check it in words and a spectrogram
   (`vidgen music check`); over MCP: `music_template`, `music_patches`, `music_render`,
   `music_check` ([reference](docs/CONFIG.md#project-pieces-score-files-in-a-video)).
+- **An orchestra for score files**: brass (`trumpet`, `horn`, `low_brass`), a drawbar `organ`,
+  bowed strings (`violins`, `violas`, `cellos`, `double_basses`: sustained, spiccato, tremolo,
+  pizzicato), orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`,
+  `snare_drum`, `cymbal`, `tam_tam`) and a `choir` on vowels, beside the synth drums, basses,
+  plucks, leads and pads; all synthesised, no samples ([every instrument in one
+  table](docs/COOKBOOK-MUSIC.md#13-every-instrument-at-a-glance)).
+- **Expressive notes**: dynamics (`[pp]` to `[fff]`), hairpins inside a held note or over a phrase,
+  `fp` and `sfz`, slurs with a glide, vibrato speed and delay, a setting per note
+  (`[pizzicato]`, a timpani `[roll]` into a `[hit]`), an instrument per section; a note outside an
+  instrument's range is reported ([cookbook](docs/COOKBOOK-MUSIC.md#11-making-it-expressive)).
 - **Royalty-free**: everything is generated, so it is free to use in your videos, also
   commercially, with no attribution.
 
@@ -149,7 +159,12 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     pushes in or flies to an object and follows it), `web` (a scene you write yourself as a web page
     in HTML, CSS and JavaScript, or a canvas or three.js script, screenshotted frame by frame in
     headless Chromium on the video's clock: CSS animations, timers and `requestAnimationFrame` follow
-    the narration, the theme comes as CSS variables, lint reads its text; `vidgen guide web`);
+    the narration, the theme comes as CSS variables, lint reads its text; `vidgen guide web`; with
+    `music_data` the page reads the video's music as `ctx.music`: the mix measured per frame and the
+    score's hits and notes, so pictures follow the score with no script of your own; three.js pages
+    get a ready-made film finish from the module `vidgen/three-finish`: depth of field, motion blur,
+    bloom, tone mapping, grade, vignette, grain; `vidgen still` draws one frame at an exact time
+    without rendering the scene);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -459,6 +474,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching schu-video-generator.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
   previews; `render`, `storyboard` and `lint` re-render only the scenes whose inputs changed.
+  Scenes drawn in a browser (`web`, `3d`) show a progress line while their frames are drawn, and
+  on a small disk `render: {intermediate: compact, keep_intermediates: false}` keeps their
+  intermediate frames clips about 4.6 times smaller or deletes them once used.
 - Windows, macOS and Linux; Python 3.10–3.13.
 
 ## For AI agents
@@ -479,7 +497,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
+`thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. It uses the official MCP Python SDK, which comes with a plain install.
 
@@ -709,10 +727,11 @@ narration.
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
-| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME \| --all-languages] [--no-audio] [--keep-going] [--max-scenes N] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--guide-passes [LIST]] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video; `--guide-passes` also draws the depth, outline and mask videos of every `3d` scene |
+| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME \| --all-languages] [--no-audio] [--keep-going] [--max-scenes N] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--guide-passes [LIST]] [--intermediate lossless\|compact] [--clean-intermediates] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video; `--guide-passes` also draws the depth, outline and mask videos of every `3d` scene; `--intermediate compact` / `--clean-intermediates` keep `web` and `3d` frames clips small or delete them once used |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N\|auto] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 | `vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions \| --no-captions] [--jobs N\|auto] [--output-dir DIR] [--json]` | `<output>_animatic.mp4`: the storyboard's stills held in time with the narration, with the video's audio and the subtitles drawn on; joined by ffmpeg in seconds when the stills are current (see [docs/CONFIG.md](docs/CONFIG.md#animatic-vidgen-animatic)) |
 | `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME \| --all-languages] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--readback] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`; `--readback`: also transcribe and flag unclear words); exit code 1 on errors |
+| `vidgen still [PROJECT] --scene ID (--at SECONDS \| --frame N \| --count N)... [--size final\|preview\|draft\|WxH] [--variant NAME] [--out FILE\|DIR] [--sheet FILE [--columns N]] [--exact] [--transparent] [--json]` | single frames (PNG) of a `web` scene's page at exact times without rendering the scene: the picture the render draws for that frame; several in one browser, a contact sheet on request (`exports/stills/`) |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
 | `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
 | `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
@@ -739,7 +758,11 @@ variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing
 `--keep-going` renders the remaining scenes after a failure; `--max-scenes N` renders at most N
 scenes and stops without joining when more are left (run it again to go on: every finished
 scene's render is kept, also after an interrupted run — a long final render in steps that each
-fit a time limit); `--jobs N` renders N scenes in
+fit a time limit); `--intermediate compact` keeps the frames `web` and `3d` scenes draw about 4.6
+times smaller (H.264 4:4:4 and a lossless alpha stream instead of lossless FFV1, about 26 MB per
+second at 720p for a WebGL page) and `--clean-intermediates` deletes each scene's frames clip once
+the scene is rendered (also `render:` in the config; the render warns when the disk may be too
+small and prints the build folder's size, see [docs/CONFIG.md](docs/CONFIG.md#intermediate-files-and-disk-render)); `--jobs N` renders N scenes in
 parallel (`--jobs auto`: as many as the available memory, 1.5 GB per job, and the CPU cores allow;
 it prints its choice, see [docs/CONFIG.md](docs/CONFIG.md#parallel-renders---jobs)); `--frames` also saves a PNG still of the last frame of every beat (`--frames-per-beat
 N`: N evenly spaced stills per beat) in `build/<final|preview>[_<variant>]/frames/<scene>/`,
@@ -931,6 +954,23 @@ my_video/
   written as web pages: an HTML and CSS page whose cards come in on narration beats, a canvas
   drawing of a rain gauge with its text declared to lint, and a three.js planet written by hand; 16:9
   and a 9:16 variant, about 50 s with Kokoro narration (no media committed).
+- [examples/three-finish](examples/three-finish/README.md) — "A still life in metal", one silent
+  6 s `web` scene finished with vidgen's module `vidgen/three-finish`: brass gears and metal spheres
+  in a baked studio, a focus pull, a fast gear in motion blur, bloom, ACES, a grade, vignette,
+  grain, FXAA (no media committed).
+- [examples/signal-fire](examples/signal-fire/README.md) — "Signal Fire", 27 s with no narration:
+  an original orchestral cue written with dynamics, hairpins and slurs (strings, horns, trumpet,
+  low brass, choir, timpani rolling into the hit, taikos, cymbals, tam-tam) and a three.js night of
+  standing stones around a fire that reads the score through `ctx.music` (embers on the cellos'
+  notes, a beam on the trumpet's pitch, flashes on the taikos), finished with `vidgen/three-finish`
+  (no media committed).
+- [examples/escapement](examples/escapement/README.md) — "Escapement", the published 3:11
+  clockwork music film, source only: an original 26-track score in D minor at 120 BPM and twelve
+  three.js `web` scenes of a watch movement in brass, rhodium, blued steel and ruby whose going
+  train turns at its real gear ratios and ticks on the beat (the beats read from the score through
+  `music_data`), an exploded view at the climax and one silent bar where everything stops; the
+  film's own depth of field, motion blur and finishing (no media committed; the final render takes
+  about 1 h 30 min to 2 h on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

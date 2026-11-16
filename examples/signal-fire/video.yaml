@@ -1,0 +1,46 @@
+# Signal Fire: a 27 s cinematic cue and the picture that follows it (Step 351's example).
+#   assets/music/signal_fire.yaml   an original cue for vidgen's orchestra: strings (a slurred solo
+#                                   violin with a glide, tremolo, a spiccato ostinato), horns, trumpet,
+#                                   low brass, choir, timpani (a roll into the hit), taikos, snares,
+#                                   cymbals and a tam-tam, written with dynamics, hairpins and slurs
+#   extensions/signal_fire.js       a three.js night: a ring of standing stones around a brazier; every
+#                                   track it reads comes from ctx.music (music_data), and the picture is
+#                                   finished by vidgen/three-finish (bloom, ACES, grade, vignette, grain,
+#                                   depth of field, a flash on the crash)
+#   extensions/web_cut.py           the web scene without its fade-out: the three scenes cut on bar lines
+# Needs Chromium, once: python -m playwright install chromium (Windows: py -m playwright install chromium)
+#
+#   vidgen validate examples/signal-fire
+#   vidgen music render examples/signal-fire/assets/music/signal_fire.yaml --out signal_fire.wav
+#   vidgen still examples/signal-fire --scene fire --at 0.5 --at 3 --at 6
+#   vidgen render examples/signal-fire --draft      # then --preview, then the final render
+#
+# No narration. Nothing generated is committed.
+title: "Signal Fire"
+output: signal_fire
+
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 640, height: 360, fps: 30}
+
+theme: {preset: dark_tech}
+transition: cut
+music: {source: signal_fire, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true}
+
+# One bar is 8/3 s at 90 BPM: each scene starts on a bar line, so ctx.music.t0 (the song time at
+# the scene's start: 0, 8, 16) is worked out by vidgen; the last scene holds while the chord rings.
+scenes:
+  - id: embers
+    type: web_cut
+    duration: 8
+    params: &page
+      script: extensions/signal_fire.js
+      music_data: {tracks: [solo, cellos, choir, timpani, taiko, horns, trumpet, low, crash, gong]}
+  - id: gather
+    type: web_cut
+    duration: 8
+    params: *page
+  - id: fire
+    type: web_cut
+    duration: 11
+    params: *page

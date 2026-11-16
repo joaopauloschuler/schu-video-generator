@@ -12,7 +12,7 @@ import difflib
 import math
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +21,8 @@ import yaml
 from vidgen.errors import VidgenError
 from vidgen.sfx import RATE
 from vidgen.studio.effects import EFFECTS, Curve, Duck, Echo, Gate, Reverb, is_off, parse_curve, parse_duck, parse_echo, parse_gate, parse_reverb
-from vidgen.studio.instruments import INSTRUMENTS, Instrument
-from vidgen.studio.patterns import Pattern, accent_steps, parse_accent, parse_steps
+from vidgen.studio.instruments import INSTRUMENTS, Instrument, Setting
+from vidgen.studio.patterns import DYNAMICS, Pattern, accent_steps, parse_accent, parse_steps
 from vidgen.studio.theory import Chord, Key, note_number, parse_chord, parse_key
 
 #: The score-file format this module reads (``version:``, optional).
@@ -33,6 +33,8 @@ SECTION_KEYS = ("name", "bars", "key", "progression", "chord_bars")
 #: instrument's settings and its effects (:data:`vidgen.studio.effects.EFFECTS`).
 PART_KEYS = ("steps", "accent", "octave", "transpose", "settings") + tuple(EFFECTS)
 TRACK_KEYS = ("instrument", "play", "rest", "only", "sections") + PART_KEYS
+#: A section's changes may also name another instrument of the track's sort (DESIGN.md §120.7).
+SECTION_PART_KEYS = ("instrument",) + PART_KEYS
 CHORD_KEYS = ("chord", "notes", "bass")
 MASTER_KEYS = ("lowpass", "highpass")
 TEMPO_RANGE = (40.0, 240.0)
@@ -73,7 +75,8 @@ class TrackPart:
     """What a track plays in one section (its settings with that section's changes).
     ``volume_db``: a constant volume (applied to each note); ``volume_curve``: a moving one
     (applied to the track's sound, ``volume_db`` then 0); the rest are its effects (``None``:
-    off)."""
+    off). ``instrument``: the instrument of this section when it is not the track's
+    (:meth:`Track.instrument_of`)."""
 
     steps: Pattern | None
     accent: tuple[int, ...] | None
@@ -91,6 +94,7 @@ class TrackPart:
     gate: Gate | None = None
     echo: Echo | None = None
     reverb: Reverb | None = None
+    instrument: Instrument | None = None
 
     @property
     def effects(self) -> list[str]:
@@ -108,6 +112,10 @@ class Track:
     instrument: Instrument
     play_chords: bool
     parts: Mapping[str, TrackPart]
+
+    def instrument_of(self, part: TrackPart) -> Instrument:
+        """The instrument that plays ``part``: the section's own, else the track's."""
+        return part.instrument or self.instrument
 
 
 @dataclass(frozen=True)
@@ -460,7 +468,12 @@ def _track(r: _Reader, name: str, spec: dict[str, Any], where: str, sections: li
             if isinstance(change, str) and change.strip() == "rest":
                 r.add(f"{where}.sections.{section.name}", f"to silence the track here, list the section in rest: (rest: [{section.name}])")
                 continue
-            part = _part(r, r.mapping(change, f"{where}.sections.{section.name}", PART_KEYS, "changes for the section"), f"{where}.sections.{section.name}", instrument, base)
+            here = f"{where}.sections.{section.name}"
+            changes = r.mapping(change, here, SECTION_PART_KEYS, "changes for the section")
+            other = _section_instrument(r, changes, here, instrument, play_chords)
+            if other is None:
+                continue
+            part = _part(r, changes, here, other, base, base_instrument=instrument)
             if part is None:
                 continue
         if not play_chords and part.steps is None:
@@ -490,12 +503,119 @@ def _check_lead_holds(r: _Reader, where: str, sections: list[Section], parts: Ma
                   f"'{before.name}' just before: start with a note or x")
 
 
-def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, base: TrackPart | None) -> TrackPart | None:
-    """A track's part from its settings (``base`` None) or a section's changes to ``base``."""
+def _section_instrument(r: _Reader, changes: dict[str, Any], where: str, instrument: Instrument, play_chords: bool) -> Instrument | None:
+    """The instrument a section's changes name (the track's when they name none): one of the
+    track's sort, so its steps can be played (``None`` after a problem)."""
+    if "instrument" not in changes:
+        return instrument
+    name = str(changes["instrument"])
+    other = INSTRUMENTS.get(name)
+    if other is None:
+        r.add(f"{where}.instrument", f"unknown instrument '{name}'{_close(name, list(INSTRUMENTS))} (instruments: {', '.join(INSTRUMENTS)})")
+        return None
+    if (other.kind == "drum") != (instrument.kind == "drum"):
+        sort = "has no pitch" if other.kind == "drum" else "plays notes"
+        r.add(f"{where}.instrument", f"{other.name} {sort} and the track's {instrument.name} {'plays notes' if other.kind == 'drum' else 'has no pitch'}: "
+              "a section can change to an instrument that reads the same steps; use a second track")
+        return None
+    if play_chords and other.kind != "pad":
+        pads = ", ".join(n for n, i in INSTRUMENTS.items() if i.kind == "pad")
+        r.add(f"{where}.instrument", f"{other.name} cannot hold chords and the track has play: chords ({pads} can)")
+        return None
+    return other
+
+
+#: The words a mark may hold besides an instrument's own: for the nearest known one in an error.
+_MARK_WORDS = tuple(DYNAMICS) + ("fp", "sfz", "default")
+
+
+def _marked(r: _Reader, steps: Pattern, where: str, instrument: Instrument, settings: Mapping[str, float]) -> Pattern | None:
+    """``steps`` with the setting items of their marks resolved for ``instrument`` (each note's
+    ``changes``: the settings in force that a mark set), and its slurs checked: the instrument
+    must be able to slur with the settings in force, and inside a slur only ``glide`` may
+    change. ``None`` after a problem."""
     count = len(r.problems)
+    state: dict[str, float] = {}
+    phrase: dict[str, float] = {}  # the settings (but glide) of the last attacked note: a slur's notes keep them
+    choices = {name: owner for owner, s in instrument.settings.items() for name in s.choices}
+    shared = {name for s in instrument.settings.values() for name in s.choices if sum(name in o.choices for o in instrument.settings.values()) > 1}
+    bars = []
+    for bar in steps:
+        out = []
+        for step in bar:
+            for item in step.marks:
+                name, _, value = item.partition("=")
+                if item == "default":
+                    state.clear()
+                elif "=" in item:
+                    if name not in instrument.settings:
+                        known = ", ".join(instrument.settings) or "none"
+                        r.add(where, f"[{item}]: {instrument.name} has no setting '{name}'{_close(name, list(instrument.settings))} (its settings: {known})")
+                        continue
+                    setting = instrument.settings[name]
+                    try:
+                        number: Any = float(value)
+                    except ValueError:
+                        number = value
+                    if isinstance(number, str) and not setting.choices and setting.read is None:
+                        r.add(where, f"[{item}]: expected a number from {setting.low:g} to {setting.high:g} for {name}, got '{value}'")
+                        continue
+                    found = _setting_value(r, setting, number, f"{where} [{item}]")
+                    if found is not None:
+                        state[name] = found
+                elif item in shared:
+                    owners = [owner for owner, s in instrument.settings.items() if item in s.choices]
+                    r.add(where, f"[{item}]: {instrument.name} has '{item}' in the settings {', '.join(owners)}: write which, e.g. [{owners[0]}={item}]")
+                elif item in choices:
+                    state[choices[item]] = float(instrument.settings[choices[item]].choices.index(item))
+                else:
+                    known = list(_MARK_WORDS) + list(choices)
+                    setting_hint = f" (a setting is written with its value: [{item}=...])" if item in instrument.settings else ""
+                    r.add(where, f"[{item}]: unknown mark{_close(item, known)}{setting_hint}; a mark holds a dynamic ({', '.join(DYNAMICS)}, dB like -6, "
+                          f"< and >, fp, sfz), a setting of {instrument.name} (name=value{'; or ' + ', '.join(choices) if choices else ''}) or default")
+            if step.sounds:
+                played = {**settings, **state}
+                kept = {k: v for k, v in played.items() if k != "glide"}
+                if not step.slur:
+                    phrase = kept
+                elif kept != phrase:
+                    r.add(where, "a mark changes a setting inside a slur: the slurred notes are one note, so only glide may change there; "
+                          "close the slur before the mark")
+                if step.slur and instrument.slurs is None:
+                    able = ", ".join(n for n, i in INSTRUMENTS.items() if i.slurs is not None)
+                    r.add(where, f"{instrument.name} cannot slur (the notes in parentheses): {able} can; write the notes without ( )")
+                elif step.slur and not instrument.slurs(played):
+                    r.add(where, f"{instrument.name} slurs bowed notes only: a slur needs stroke sustain or tremolo, not "
+                          f"{instrument.settings['stroke'].choices[int(played['stroke'])]}")
+            changes = tuple(sorted(state.items())) if step.sounds else ()
+            out.append(replace(step, changes=changes) if changes != step.changes else step)
+        bars.append(tuple(out))
+    return None if len(r.problems) > count else tuple(bars)
+
+
+def _setting_value(r: _Reader, setting: Setting, value: Any, where: str) -> float | None:
+    """An instrument setting's number: a name of its ``choices`` gives its index, a setting with
+    its own notation is read by its ``read``; else a number in its range."""
+    if setting.choices and isinstance(value, str):
+        if value in setting.choices:
+            return float(setting.choices.index(value))
+        r.add(where, f"unknown name '{value}'{_close(value, setting.choices)} (one of: {', '.join(setting.choices)})")
+        return None
+    if setting.read is not None:
+        return r.attempt(where, setting.read, value, where)
+    return r.number(value, where, setting.low, setting.high, integer=bool(setting.choices))
+
+
+def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, base: TrackPart | None,
+          base_instrument: Instrument | None = None) -> TrackPart | None:
+    """A track's part from its settings (``base`` None) or a section's changes to ``base``.
+    ``base_instrument``: the track's instrument when the section plays ``instrument`` instead
+    (then the settings start from ``instrument``'s defaults)."""
+    count = len(r.problems)
+    changed = base_instrument is not None and instrument is not base_instrument
     steps = base.steps if base else None
     if "steps" in spec:
-        steps = r.attempt(f"{where}.steps", parse_steps, spec["steps"], f"{where}.steps", True)
+        steps = r.attempt(f"{where}.steps", parse_steps, spec["steps"], f"{where}.steps", True, True)
         if steps is not None and instrument.kind == "drum" and any(s.pitched for bar in steps for s in bar):
             r.add(f"{where}.steps", f"{instrument.name} has no pitch: use x, X, o, '.' and '-' (no degrees, voicing notes, notes, '*' or ' / , octave marks)")
     accent = base.accent if base else None
@@ -531,17 +651,19 @@ def _part(r: _Reader, spec: dict[str, Any], where: str, instrument: Instrument, 
     if "spread" in spec:
         spread = r.number(spec["spread"], f"{where}.spread", 0, 1) or 0.0
     effects = _effects(r, spec, where, base)
-    settings = dict(base.settings) if base else {k: s.default for k, s in instrument.settings.items()}
+    settings = dict(base.settings) if base and not changed else {k: s.default for k, s in instrument.settings.items()}
     if "settings" in spec:
         given = r.mapping(spec["settings"], f"{where}.settings", list(instrument.settings), f"{instrument.name} settings")
         for k, v in given.items():
             s = instrument.settings[k]
-            value = r.number(v, f"{where}.settings.{k}", s.low, s.high)
+            value = _setting_value(r, s, v, f"{where}.settings.{k}")
             if value is not None:
                 settings[k] = value
+    if steps is not None and len(r.problems) == count and any(s.marks or s.slur or s.changes for bar in steps for s in bar):
+        steps = _marked(r, steps, f"{where}.steps" if "steps" in spec else where, instrument, settings)
     if len(r.problems) > count:
         return None
-    return TrackPart(steps, accent, octave, transpose, volume, pan, settings, spread, volume_curve, **effects)
+    return TrackPart(steps, accent, octave, transpose, volume, pan, settings, spread, volume_curve, **effects, instrument=instrument if changed else None)
 
 
 def _effects(r: _Reader, spec: dict[str, Any], where: str, base: TrackPart | None) -> dict[str, Any]:
@@ -588,6 +710,8 @@ def score_outline(score: MusicScore) -> dict[str, Any]:
             {
                 "name": t.name,
                 "instrument": t.instrument.name,
+                **({"instruments": {name: p.instrument.name for name, p in t.parts.items() if p.instrument is not None}}
+                   if any(p.instrument is not None for p in t.parts.values()) else {}),
                 "plays": "chords" if t.play_chords else "steps",
                 "sections": list(t.parts),
                 "effects": list(dict.fromkeys(e for p in t.parts.values() for e in p.effects)),

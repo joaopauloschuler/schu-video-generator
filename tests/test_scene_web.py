@@ -129,8 +129,11 @@ def test_the_clip_is_reused_until_the_file_changes(tmp_path: Path, monkeypatch: 
         def __enter__(self) -> Page:
             return self
         def __exit__(self, *_: Any) -> None: ...
-        def frame(self, n: int) -> np.ndarray:
+        def advance(self, n: int) -> None:
             drawn.append(n)
+        def screenshot(self, n: int) -> bytes:
+            return b"png"
+        def pixels(self, png: bytes) -> np.ndarray:
             return np.zeros((16, 16, 4), dtype=np.uint8)
 
     monkeypatch.setattr(web_clip, "WebPage", Page)
@@ -280,7 +283,10 @@ def _fake_page(drawn: list[str], loads: dict[str, str]) -> type:
         def __enter__(self) -> Any:
             return self
         def __exit__(self, *_: Any) -> None: ...
-        def frame(self, n: int) -> np.ndarray:
+        def advance(self, n: int) -> None: ...
+        def screenshot(self, n: int) -> bytes:
+            return b"png"
+        def pixels(self, png: bytes) -> np.ndarray:
             return np.zeros((16, 16, 4), dtype=np.uint8)
 
     return Page
@@ -546,8 +552,11 @@ def test_the_page_is_given_theme_data_beats_and_three(tmp_path: Path) -> None:
     assert state[1] == [["b1", 0, 0, None], ["b2", 1, 0.4, "b1"]]
     assert isinstance(state[2], str) and state[2].isdigit()
     assert state[3:6] == ["b2", "1", '"Source Serif 4", serif'] and state[6] is True
-    # the background is #F8F7F3 (red 248) until b2 starts at 0.4 s; the box fades to #1D4ED8 (red 29) in 0.4 s
-    assert reds[:5] == [248] * 5 and reds[8] == 29 and 29 < reds[6] < 248
+    # the background is #F8F7F3 (red 248) until b2 starts at 0.4 s; the box fades to #1D4ED8 (red 29) in 0.4 s. Frame 4
+    # (t = 0.4) is where the CSS transition starts: Chromium's compositor runs it and is sometimes one step ahead there
+    # (red 238 instead of 248 in about one run in three, on every step's code since Step 340; DESIGN §120.10, §120.12),
+    # so that frame may have begun to fade, but not by more than a step
+    assert reds[:4] == [248] * 4 and 225 <= reds[4] <= 248 and reds[8] == 29 and 29 < reds[6] < 248
     assert {"g.html", "g.css", "late.json", "__vidgen__/three/three.module.js", "__vidgen__/three/three.core.js",
             "__vidgen__/fonts/SourceSerif4/SourceSerif4-Regular.ttf"} <= set(loaded)
     with WebPage(tmp_path, WebEntry("script", "t.js"), scene_id="w", size=(64, 36), fps=10, frames=2, theme=theme) as page:
@@ -689,12 +698,12 @@ def test_the_clip_keeps_alpha_and_follows_the_shape(tmp_path: Path, monkeypatch:
 def test_frames_with_alpha_are_stored_with_alpha(tmp_path: Path) -> None:
     import av
 
-    from vidgen.browser.chromium import write_ffv1_clip
+    from vidgen.browser.frames_clip import write_frames_clip
 
     frame = np.zeros((6, 8, 4), dtype=np.uint8)
     frame[:, :4] = (255, 40, 0, 128)   # half transparent, straight alpha
-    write_ffv1_clip(tmp_path / "a.mkv", 5, (8, 6), [frame, frame], alpha=True)
-    write_ffv1_clip(tmp_path / "o.mkv", 5, (8, 6), [frame[..., :3]])
+    write_frames_clip(tmp_path / "a.mkv", 5, (8, 6), [frame, frame], alpha=True)
+    write_frames_clip(tmp_path / "o.mkv", 5, (8, 6), [frame[..., :3]])
     with av.open(str(tmp_path / "a.mkv")) as clip:
         assert clip.streams.video[0].codec_context.pix_fmt == "bgra"
         assert np.array_equal(next(clip.decode(video=0)).to_ndarray(format="rgba"), frame)

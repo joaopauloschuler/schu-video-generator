@@ -8,7 +8,7 @@ A project is a folder with one config file: `video.yaml` (or `video.yml` / `vide
 Unknown keys are an error everywhere except inside `params`, `theme.colors`, `theme.sizes` and
 the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are relative to the
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
-[format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
+[format](#format-and-preview), [intermediate files and disk](#intermediate-files-and-disk-render), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [characters](#characters-characters), [pronunciation](#pronunciation-pronunciation),
 [readback (speech to text)](#readback-vidgen-readback),
@@ -32,6 +32,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `draft` | 240 px on the shorter side, 8 fps | `vidgen render --draft`: `{width, height, fps}`, each optional; see [drafts](#drafts-vidgen-render---draft) |
+| `render` | `{intermediate: lossless, keep_intermediates: true}` | how `vidgen render` keeps the frames `web` and `3d` scenes draw: `intermediate: compact` (about 4.6 times smaller) and `keep_intermediates: false` (deleted once the scene is rendered); see [intermediate files and disk](#intermediate-files-and-disk-render) |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
 | `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices`, `sets` and `variants` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `sets` | `{}` | named `stage` sets (`name: {background, layers, props, marks, light, wind...}`) a stage scene uses with `set: NAME`; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
@@ -3896,8 +3897,9 @@ A track: `instrument` (below); `steps` (a string, or a list of strings played in
 each group starts, repeated over the bar); `octave` (where the chord's root sits, C4 middle C;
 default per instrument); `transpose` (semitones); `volume` (dB); `pan` (−1 to 1); `settings`
 (the instrument's); `rest: [sections]` or `only: [sections]`; `sections: {lift: {steps, accent,
-octave, transpose, volume, pan, settings, ...effects}}` changes for one section; and the effects
-below.
+octave, transpose, volume, pan, settings, instrument, ...effects}}` changes for one section
+(`instrument`: another instrument of the track's sort plays that section, starting from its own
+settings; see **Expressive notes** below); and the effects below.
 
 Steps: `|` separates bars and each bar is split into as many equal steps as it has symbols
 (16 = sixteenths in 4/4); the pattern repeats from each section's start. `x` a hit (a pitched
@@ -3911,6 +3913,8 @@ down), `v1`–`v9` the notes of the chord's voicing from the lowest (the written
 chord as `*` plays it; past the top it starts again an octave up; `'` / `,` too), notes like `E5`,
 `F#3`, `Bb4`; `x'` / `x,` the bass note an octave up / down; `+` plays notes together in one step
 (`v2+v3+v4`, `C4+E4+G4`); `!` / `?` after a hit accents / softens it. Spaces only help reading.
+A track's steps may also carry marks in square brackets (`[p <]`, `[ff]`, `[pizzicato]`,
+`[pitch=90]`) and slurs in parentheses (`(A4 - C5 -)`): see **Expressive notes** below.
 
 Instruments (settings in brackets; `vidgen music patches` lists defaults, ranges and what each
 does):
@@ -3921,8 +3925,232 @@ does):
 | noises | `riser` (low, high; swells over its held steps), `pulsar` (high, low, sweep, noise, tone: a pulsar's chirp), `static` (low, high, wander, fade: radio static for its held steps, `"x \| - \| - \| -"`) |
 | basses | `synth_bass` (decay, tone, ring), `analog_bass` (decay, tone, closed, snap, detune, ring), `sub` (decay, tone, second, third, ring) |
 | plucks and keys | `pluck` (+ bright), `fm_pluck` (+ index), `square_pluck`, `pizzicato`, `music_box`, `bell`, `piano` (decay, tone, ring: seconds a note sounds on after its held steps), `woodblock` (tone) |
-| leads | `soft_lead` (attack, vibrato, tone, ring: it sustains while held) |
+| leads | `soft_lead` (attack, vibrato, vibrato_speed, vibrato_delay, tone, ring: it sustains while held; glide: it slurs) |
+| brass | `trumpet` (a solo trumpet, E3–C6), `horn` (a French horn: round and dark, B1–F5), `low_brass` (a trombone section, E1–F4; `tuba`: a tuba an octave under it): attack (seconds to full level: 0.02–0.06 tongued, 0.15–0.4 soft, 1–4 a swell that opens), brightness (0 soft and dark to 1 blaring: the harmonics change, the level stays), vibrato (cents), vibrato_speed (5.3 Hz), vibrato_delay (0.28 s into a note), breath, ring (the release), players (1 a solo; more a section in unison, in stereo), detune (cents between the players), mute (trumpet, horn), glide (slurs), touch |
+| organ | `organ` (C1–C7): registration (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`), drawbars (`"00 8400 000"`: your own nine bars), tone, chiff, attack, chorus, detune, click, ring |
+| strings | `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5), `double_basses` (C1–G4), each a section (`players: 1` a solo): stroke (`sustain`, `spiccato`, `tremolo`, `pizzicato`), players, attack (sustain and tremolo: 0.03–0.06 firm, 0.1–0.3 smooth, 0.5 and more a swell), brightness (0 over the fingerboard: dark; 0.5 ordinary; 1 at the bridge: glassy), vibrato (cents), vibrato_speed (5.8 Hz), vibrato_delay (0.16 s into a note), accent (the bite of a stroke, 0–2), length (spiccato: seconds the bow is on the string), speed (tremolo: strokes a second), decay (how long short strokes ring), bow (rosin noise), mute (con sordino), detune (cents between the players), ring (the release), glide (slurs), touch |
+| percussion | played by note name: `timpani` (D2–A3; modes at the kettledrum's 1 : 1.5 : 2 : 2.44 : 2.9) and `toms` (concert toms, G1–C5): stroke (`hit`, `roll`), speed (roll: blows a second), mallet (0 soft felt to 1 hard wood: brightness, not level), decay, ring (seconds before a hand damps it), toms also drop (semitones the pitch falls after the blow) and shell. Played as drum steps: `taiko` (pitch 36–130 Hz, mallet, decay, drop, players, apart), `bass_drum` (a gran cassa: pitch 26–75 Hz, mallet, decay, players, apart), `frame_drum` (pitch 55–280 Hz, mallet, edge: 0 the middle to 1 the rim, decay, players, apart), `snare_drum` (stroke `hit` / `roll`, speed, pitch, mallet, snares, decay, players, apart), `cymbal` (a suspended cymbal: stroke `hit` / `swell`, speed, pitch: the size, mallet, decay), `tam_tam` (stroke `hit` / `swell`, speed, pitch, mallet, bloom, decay); every one also touch |
+| choir | `choir` (E2–C6; a choir pad, no words): vowel (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), voices (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`), singers (8; 1–16), attack, brightness (0 soft to 1 full voice), vibrato (cents), vibrato_speed (5.5 Hz), vibrato_delay (0.3 s), breath, detune, morph (the vowel a held note turns into), ring, glide (slurs), touch |
 | pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), sub_width (0 centred, the default; 1 its own phases on each side: wider, thinner in mono, as scores rendered before Step 186 and the `skyline` bed), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
+
+**Brass and organ** (Step 343; no samples: additive synthesis). Each sustains for as long as its
+steps hold it (`"A4 - - - . ."`), plays chords (`*`, `C4+E4+G4`) and sounds the same every time a
+track plays the same note. Their levels match the other instruments', so start at `volume: 0`.
+
+```yaml
+trumpet: {instrument: trumpet, steps: "D5 - - A4 D5 - F5 - | E5 - - - - - . .", reverb: {size: 3, mix: 0.3}}
+fanfare: {instrument: trumpet, settings: {attack: 0.02, brightness: 1.0, players: 3}, steps: "* . * * * - - ."}
+horns:   {instrument: horn, settings: {players: 4, attack: 0.14}, steps: "v2+v3 | -"}
+swell:   {instrument: low_brass, settings: {attack: 3, brightness: 1.0, tuba: 0.8}, steps: "x | - | . | ."}
+organ:   {instrument: organ, settings: {registration: principal}, steps: "* | -", reverb: {size: 5, mix: 0.4}}
+pedal:   {instrument: organ, octave: 1, settings: {drawbars: "86 8400 000"}, steps: "x | -"}
+```
+
+- **Brass gets brighter as it gets louder.** `brightness` sets how hard the note is blown; inside
+  a note the tone follows the level, so a note opens as it speaks and an `attack` of seconds is a
+  swell that starts dark. The pitch starts a little flat for about 50 ms, as lips do. `players`
+  above 1 is a section (a few cents and milliseconds apart, spread across the stereo field, as
+  loud as one player); `low_brass` is a section of 4 by default. For the heavy low note of film
+  trailers: `low_brass` with `{attack: 0.2, brightness: 1.0, tuba: 1.0, players: 8}` on
+  `"1+5 - - - - - . ."` in octave 2, or with a second added (`D2+Eb2+A2`) for a cluster.
+- **Organ registrations.** `cathedral` (the default): principals 16' 8' 4' with mixtures, the
+  big church organ; `principal`: 8' + 4', plain and singing; `flute`: a soft stopped flute;
+  `reed`: nasal and rich; `drawbar`: an electric organ's first three bars; `full`: an electric
+  organ with every bar out. `drawbars` sets the nine bars yourself, in the order 16' 5 1/3' 8' 4'
+  2 2/3' 2' 1 3/5' 1 1/3' 1', each 0 (off) to 8 (full), **in quotes** (`"00 8400 000"`; spaces
+  are free); the pipes stay the registration's kind. A note holds steadily and every note has
+  the same level. `chorus: 0.5` adds a second, detuned pipe to every rank (a slow beating);
+  `chiff: 0` removes the pipes' breathy start; `click` (default 0) is an electric organ's key
+  click. For a pedal, add a second organ track in octave 1 or 2 on the bass note (`x`).
+- A name is accepted where `music patches` lists names (`registration: flute`); the number from 0
+  works too.
+- Since Step 346 notes can be slurred (`(A4 - C5 -)`: no new attack) and dynamic marks change
+  the brightness as well as the level (**Expressive notes** below). Nobody has listened to
+  these instruments: they are judged by measurement (DESIGN §120.4).
+
+**Bowed strings** (Step 344; no samples: additive synthesis with the instrument's body in it).
+Four instruments, each a section by default, each with four strokes:
+
+```yaml
+violins: {instrument: violins, settings: {attack: 0.14}, steps: "A4 - - - D5 - E5 - | F5 - - - - - . .", reverb: {size: 3.5, mix: 0.35}}
+solo:    {instrument: cellos, settings: {players: 1, vibrato: 18}, steps: "D3 - - - A3 - - - | G3 - - - - - . ."}
+ost:     {instrument: cellos, settings: {stroke: spiccato}, steps: "1 5 8 1 5 8 5 3 1 5 8 1 5 8 5 3", accent: "3+3+2"}
+bed:     {instrument: violas, settings: {stroke: tremolo, brightness: 0.8}, steps: "* | - | - | -", volume: {from: -20, to: 0}}
+bass:    {instrument: double_basses, settings: {stroke: pizzicato}, steps: "x . . . x . . ."}
+```
+
+- **`stroke: sustain`** (the default) bows a note for as long as its steps hold it. `attack`
+  0.03–0.06 is a firm stroke with a bite, 0.1–0.3 smooth, 0.5 and more a swell. Notes that
+  follow each other without a rest overlap for `ring` seconds (0.25): write a line without
+  rests for a legato. Vibrato comes in after 0.16 s.
+- **`stroke: spiccato`** plays one short stroke per note whatever its length: the bow bites
+  (10–20 ms), stays `length` seconds (0.07; 0.15–0.25 is a staccato) and the string rings out.
+  Every stroke of a pitch is the same samples and every pitch is as loud, so sixteenths at
+  138 BPM and faster are even; shape the line with the track's `accent:` pattern and `volume`.
+  For very fast notes use `length: 0.05`.
+- **`stroke: tremolo`** is a held note of fast bow strokes (`speed`, 13 a second). A section's
+  players are not in step, so it shimmers: with `brightness: 0.8` and a `volume` curve it is the
+  tension bed of film scores.
+- **`stroke: pizzicato`** plucks. A note rings until its steps end (hold a bass note with
+  `"x - - -"` to let it ring), low notes longer than high ones. The older `pizzicato`
+  instrument is unchanged (five harmonics, the same decay at every pitch).
+- **`players`**: violins 6, violas 5, cellos 4, double basses 3 by default; 1 is a solo
+  instrument (mono), up to 12. A section is as loud as one player; its players are a few cents
+  (`detune`) and milliseconds apart, each with an instrument and a vibrato of its own, spread
+  from left to right. Seat the sections with `pan` (violins left, cellos and basses right).
+- **`brightness`** is where the bow touches: 0 over the fingerboard (dark, flute-like), 1 at the
+  bridge (glassy). **`mute: 1`** is con sordino. **`accent`** (0–2) is the bite of each stroke.
+- A `sections:` entry can change the stroke: `sections: {drop: {settings: {stroke: spiccato}}}`.
+- Since Step 346 sustained and tremolo notes can be slurred with a glide, strokes can change
+  note by note (`[spiccato]`), and dynamic marks change the bite and brightness (**Expressive
+  notes** below). Every stroke of a pitch at one dynamic is the same, and nobody has listened
+  to these instruments: they are judged by measurement (DESIGN §120.5).
+
+**Orchestral percussion** (Step 345; no samples: every drum is the sum of the modes its head or
+its metal has). The `kick` is a sine that glides from at most 160 Hz to at most 70 Hz; these
+are drums with overtones, a mallet and a pitch that can be chosen:
+
+```yaml
+timp:   {instrument: timpani, steps: "D2 . . . A2 . . . | D2 . A2 . D2 - - -"}             # by note name
+roll:   {instrument: timpani, settings: {stroke: roll, mallet: 0.2, ring: 0.3}, steps: "A2 | - | - | .", volume: [[0, -24], [3, 0]]}
+fill:   {instrument: toms, steps: "C4 . A3 . F3 . D3 . A2 A2 F2 . D2 . . ."}                # high to floor
+taiko:  {instrument: taiko, settings: {players: 6}, steps: "X..x ..x. X... x.x.", reverb: {size: 3.4, mix: 0.3}}
+bd:     {instrument: bass_drum, steps: "x | . | . | ."}
+frame:  {instrument: frame_drum, steps: "x..o ..x. o..x ..o."}
+snares: {instrument: snare_drum, settings: {stroke: roll, players: 4}, steps: "x | - | . | .", volume: [[0, -24], [2, 0]]}
+swell:  {instrument: cymbal, settings: {stroke: swell}, steps: ". | . | x | -"}             # grows until its steps end: put the hit there
+gong:   {instrument: tam_tam, steps: "x | . | . | ."}
+```
+
+- **`timpani` and `toms` are written as notes** (`D2`, `A2+D3`), not as `x` (on a pitched
+  instrument `x` is the chord's bass note). Timpani are made for D2–A3 and play a little
+  beyond; toms run from a floor tom (G1) to a high concert tom (C5). A note rings for its held
+  steps plus `ring` seconds and is then damped: `ring: 3` (the timpani's default) lets it ring
+  out, `ring: 0.15` is a damped note. Lower drums ring longer.
+- **`taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam` are drum tracks**
+  (`x`, `X` accented, `o` soft); their `pitch` is a setting in Hz (the metal's: a size, 1 the
+  normal one). Two drums of different pitch are two tracks, or one track whose `sections:`
+  change `pitch`.
+- **`mallet`** (0–1) is how hard the thing is that strikes: a soft mallet wakes the low modes
+  only, a hard one all of them and adds its knock. It changes the tone, not the level (a
+  very hard stick on a tom is 2–3 dB lower in its body). Soft and loud playing is `volume`,
+  `X` / `o` and `mallet` together: `{mallet: 0.15}` at `volume: -8` is a soft stroke.
+- **`stroke: roll`** (timpani, toms, snare drum) rolls for the held steps at a steady level;
+  a crescendo is a `volume` curve, and the hit it leads to is a second track (a setting such as
+  `stroke` belongs to a track's section, not to a single note).
+  **`stroke: swell`** (cymbal, tam-tam) grows by itself from nearly nothing to a full blow at
+  the end of its held steps and rings out after it: end it where the hit falls.
+- **`players`** (taiko, bass drum, frame drum, snare drum) makes an ensemble: drums tuned up
+  to 3 % apart, struck up to `apart` seconds apart, spread from left to right, together as
+  loud as one drum. `players: 6` with a hall reverb is the wall of drums of film scores.
+- **Levels**: a taiko or bass drum at `volume: 0` is as loud as the `kick` and the `boom`
+  (their loudest 0.4 s: −13.9 and −13.8 LUFS; `kick` −12.8, `boom` −13.9); timpani −14, toms −15
+  to −18, frame drum, snare drum, cymbal and tam-tam −17 to −18. A score that used the `kick`
+  at `volume: 3` as a taiko will want the `taiko` at about 4.
+- **What the older instruments do not cover** (measured): the `riser` is a band of noise that
+  sweeps upward and stops; it has no partials and no ring. `open_hat` lasts 90 ms at most,
+  `gated_snare` 0.27 s and has no roll. A cymbal swell, a crash, a tam-tam and a snare roll
+  therefore are instruments of their own.
+- Every blow at the same settings is the same samples (an ensemble too), and a drum is made
+  once per setting and pitch: a pattern of hundreds of hits costs about what the `kick` costs.
+  The first cymbal or tam-tam of a render takes about a second to make.
+- Limits: a real player's blows differ a little, these do not; a roll is the same blow
+  repeated; no rim shots, no brushes, no choked cymbal; nobody has listened to these
+  instruments: they are judged by measurement (DESIGN §120.6).
+
+**Choir** (Step 345; formant synthesis). `choir` holds a vowel: it is a choir *pad* (ooh, aah,
+a hum), and it sings no words. Expect the sound of a synthesised choir stop, not of a recorded
+choir.
+
+```yaml
+choir: {instrument: choir, settings: {vowel: aah}, steps: "* | - | - | -", reverb: {size: 4.5, mix: 0.36}}
+men:   {instrument: choir, octave: 3, settings: {vowel: ooh, voices: men}, steps: "1+5 - - - - - - -"}
+open:  {instrument: choir, settings: {vowel: mm, morph: aah, attack: 3}, steps: "D3+A3+D4+F4 | - | - | -", volume: {from: -14, to: 0}}
+```
+
+- **`vowel`**: `ooh` (dark and round, the default), `aah` (open, the fullest), `eeh` (as in
+  "bed"), `mm` (a hum), `oh`, `ee`. The vowel is five resonances (formants) of the mouth at
+  fixed frequencies, different for each kind of voice; they stay where they are when the pitch
+  moves.
+- **`voices`**: `mixed` (the default) gives every note to the kinds of voice that reach it
+  (basses up to about G3, tenors D3–E4, altos A3–C5, sopranos from E4, each fading out over four semitones beyond), so a chord from D2 to A5
+  is sung by a whole choir; `men`, `women`, or one kind (`basses`, `tenors`, `altos`,
+  `sopranos`) for every note. For four real parts use four tracks, one kind each.
+- **High notes**: above its first formant (an `ooh` above E4, an `aah` above G5) the mouth
+  opens and the vowels become alike, as they do with real sopranos. Above A5 every vowel is
+  nearly a pure tone.
+- **`singers`** (8) sing each note, each with a throat, tuning, vibrato and entry of its own,
+  spread from left to right; a section is as loud as one singer. `singers: 1` is one voice
+  and sounds plainly synthetic. **`attack`** 0.25 is sung, 1 and more a swell;
+  **`brightness`** 0 is soft and covered, 1 full voice; **`vibrato: 0`** with `detune: 5` is
+  a straight early-music tone; **`morph`** names the vowel a held note turns into.
+- Its level is that of the strings and the brass (a held note −15.5 to −17 LUFS), so it starts
+  at `volume: 0`; give it a hall (`reverb: {size: 4.5, mix: 0.36}`).
+- Limits: no words, no consonants (since Step 346 notes can be slurred: `(A3 - C4 -)`), the
+  singers of one kind share one table of formants (only their throat lengths differ), nothing
+  but breath above 5 kHz; nobody has listened to it: it is judged by measurement (DESIGN
+  §120.6).
+
+**Expressive notes** (Step 346; DESIGN §120.7). Marks in square brackets stand before a step
+in a track's `steps` and stay in force until another mark changes them (when the pattern
+repeats it starts again as written). A score without marks sounds exactly as before.
+
+```yaml
+trumpet: {instrument: trumpet, steps: "[p <] D4 - A4 - G4 - Bb4 - | [mf >] A4 - F4 - E4 - - - | [p] ."}
+swell:   {instrument: horn, settings: {players: 4}, steps: "[p <] D4 - - - [f >] - - - [p] ."}
+violin:  {instrument: violins, settings: {players: 1, vibrato: 20, vibrato_delay: 0.4}, steps: "(A4 - - C5 [glide=0.3] E5 - - -) D5 - . ."}
+cellos:  {instrument: cellos, steps: "[pizzicato] D3 . A2 . [spiccato f] D3 D3 F3 F3 | [sustain fp <] G3 - - - - - - - [ff]"}
+timpani: {instrument: timpani, settings: {mallet: 0.2}, steps: "[roll pp <] A2 - - - - - - - | [hit ff] D2 . . . . . . ."}
+taiko:   {instrument: taiko, steps: "[pitch=62] X . . x [pitch=100 mp] x x . . | [default ff] X . . . . . . ."}
+```
+
+| mark | what it does |
+|---|---|
+| `[ppp]` `[pp]` `[p]` `[mp]` `[mf]` `[f]` `[ff]` `[fff]` | the level from this step on: −20, −15, −10, −5, 0, +4, +7, +10 dB against an unmarked note (`mf`); on instruments with a response to dynamics also the tone (below) |
+| `[-6]`, `[+2.5]` | a level in dB (−40 to +12), with its sign |
+| `[p <]` ... `[f]`, `[f >]` ... `[p]` | a hairpin: the level moves in a straight line (in dB) from this step to the next dynamic, which must be louder for `<` and softer for `>`; over a held note it is a crescendo or diminuendo inside the note, over many notes one over the phrase. `[p<]` is the same; the mark that ends it may stand after the last step |
+| `[fp]` (`ffp`, `fpp`, `mfp` ...) | the note starts at the first level and falls to the second within 0.25 s; the second stays in force |
+| `[sfz]` | this note starts 7 dB over the level in force and comes back within 0.25 s |
+| `[name=value]` | one of the instrument's settings from this step on (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`, `[glide=0.3]`); a named value may stand alone when only one setting has it (`[pizzicato]`, `[roll]`, `[hit]`) |
+| `[default]` | every setting back to the track's (the section's) own |
+| `( ... )` | a slur: the notes inside after the first are not attacked again; the pitch glides to each in `glide` seconds (0.06; 0.15–0.4 a portamento), starting just before the note's step; vibrato, bow and breath go on |
+
+Several items share one mark: `[f stroke=spiccato]`. Every mistake names the mark, where it
+stands and the nearest word (`[spicato]: unknown mark; did you mean 'spiccato'?`).
+
+- **The tone follows the level** on the instruments `vidgen music patches` marks "dynamics change
+  its tone": brass gets brighter (its `brightness`), strings brighter with more bite (`brightness`
+  and `accent`), the choir fuller (`brightness`), the orchestral drums and metal are struck
+  harder (`mallet`, and the pitch `drop` of toms and taiko). The organ, the pads and the older
+  instruments change level only; a pad note takes the level at its start. Inside a held note
+  of a quarter second or more the level and the tone move smoothly (a cross-fade between the
+  note played at its softest and at its loudest level); shorter notes take the level at their
+  start.
+- **`touch`** (0 to 1; 0 by default so older scores do not change): how much `X`, `o`, `!`, `?`
+  and the `accent:` groups change the tone as well as the level; at 1 an accent bites as a
+  dynamic mark of the same level would.
+- **Marks compose** with `accent:`, `X` / `o`, `volume` (a number or a curve) and a duck that
+  follows its hits: each multiplies the level.
+- **Slurs** need single notes (no chord, `+`, `*` or rest inside) and an instrument that can slur:
+  `trumpet`, `horn`, `low_brass`, `violins`, `violas`, `cellos`, `double_basses` (with `stroke:
+  sustain` or `tremolo`), `choir` and `soft_lead`. Inside a slur only `glide` may change; dynamics
+  may. A slur is one note for a duck, an `accent:` group and the studio's step grid.
+- **Vibrato** has three settings on those instruments: `vibrato` (depth, cents), `vibrato_speed`
+  (Hz) and `vibrato_delay` (seconds into a note before it grows); in a section or choir each
+  player keeps its own speed and delay around them. Set them for the track, per section
+  (`sections: {lift: {settings: {vibrato_speed: 6}}}`) or per note (`[vibrato=30]`).
+- **An instrument per section**: `sections: {lift: {instrument: trumpet}}`. A note track can
+  change to another note instrument (a `play: chords` track to another pad), a drum track to
+  another drum; the section's settings start from the new instrument's defaults, the steps,
+  octave, volume and effects are the track's unless the section changes them.
+- **Range**: notes outside an instrument's written range are played and reported (`vidgen music
+  render` warnings, a `range` note in `vidgen music check`).
+- **Cost**: a note with a dynamic is made once per whole dB; a held note whose level moves is
+  made twice (its softest and its loudest tone). A crescendo over many short hits makes a new
+  blow per dB: 64 sixteenths of a six-player taiko under `[pp <] ... [ff]` took 5 s instead of
+  0.3 s on a 2-core machine.
+- Not offered: a glide between notes that are attacked anew, a slur through a chord, a hairpin
+  inside a pad note, words for the choir.
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):
@@ -3951,7 +4179,7 @@ hat: {instrument: hat, steps: "o.x. o.x. o.x. o.xo", spread: 0.3}
 | `spread` | 0 to 1 | odd steps this far right of `pan`, even steps as far left |
 | `width` | 0 to 2, or a curve | stereo width: 0 mono, 1 as it is, 2 extra wide |
 | `lowpass`, `highpass` | Hz, or a curve | gentle filters on the track; a curve is a filter sweep |
-| `duck` | `{to, depth, release, follow}` or a track name | side-chain ducking: dips by `depth` (0.45) at every hit of track `to` (or `beat`: every beat), back in `release` s (0.15); `follow: true` scales each dip by the hit's level (`o` half as deep, `X` 1.5 times; default `false`: every hit as deep, so a muted kick still pumps) |
+| `duck` | `{to, depth, release, follow}` or a track name | side-chain ducking: dips by `depth` (0.45) at every hit of track `to` (or `beat`: every beat), back in `release` s (0.15); `follow: true` scales each dip by the hit's level (`o` half as deep, `X` 1.5 times, and the dynamic mark at its start: `[p]` 10 dB less; default `false`: every hit as deep, so a muted kick still pumps) |
 | `gate` | `{steps, duty, floor}` or a pattern | open on the pattern's hits (`x` fully, `o` to 0.4, `-` longer) for `duty` (0.55) of the step, `floor` (0.08) between |
 | `echo` | `{delay, feedback, repeats, pingpong}` or `true` | echoes `delay` beats apart (0.75), each `feedback` (0.35) quieter, `repeats` (2), alternating sides (`pingpong: true`) |
 | `reverb` | `{size, mix, tone, predelay}` or `true` | a room: a tail of `size` s (1.8) at `mix` (0.2), low-passed at `tone` Hz (4000), after `predelay` s (0.02) |
@@ -4014,6 +4242,7 @@ Each line is `ok`, `note` or `FIX`:
 | key | share of the pitched tracks' sound on the key's notes, per section; and under each chord, each pitched track's share on the key's or the chord's notes (a track with at least 5 % of the pitched sound there) | under 75 % in a section; a track under 25 % under a chord (a line written against its chord: the advice names the track, the notes off it and the chord's notes) |
 | sections | a section named `lift` (`drop`, `chorus`, `climax`...) against the one before (the first section of a loop: the last); one named `build` (`rise`...) second half against first | a lift less than 0.5 dB louder and 1.5 dB brighter; a build rising less than 0.5 dB and brightening less than 1 dB; a note when a lift is 1 dB or more quieter than an earlier section and no brighter (a lift after a quiet break passes against the break but may not feel like the high point) |
 | narration | the demo: the voice's 300 Hz–3 kHz over the music's while it speaks | under 15 dB |
+| range | scores: notes outside an instrument's written range (the brass, strings, timpani, toms and choir have one; `music patches` shows it) | any (a note: they are played all the same; `vidgen music render` prints the same as a warning) |
 
 All 16 built-in beds and their templates pass with no notes. For a score, every track is also
 played on its own, so the report lists each track's share of the power, of the voice range, of
@@ -4115,7 +4344,8 @@ Ctrl+C in the terminal stops it.
   its bars. A track's volume bar and pan knob (drag, arrow keys, double-click: centre), its steps
   text (click it, type, Enter), **×** to delete it, **+ track** to add one (an instrument
   picker). The inspector: the instrument, sliders made from `vidgen music patches` (ranges,
-  units, hover help), octave, transpose and accent, effects as chips (echo, duck, gate, reverb,
+  units, hover help; a setting with named values, such as `stroke`, `registration`, `vowel`,
+  `voices` or `morph`, is a list of its names and is written by name), octave, transpose and accent, effects as chips (echo, duck, gate, reverb,
   filter curves), the track per section (plays / rests, its own changes) and a step grid that
   follows the steps text both ways. The score file is editable: type YAML and the controls
   follow; a problem is shown inline with the same did-you-mean message as the command line, and
@@ -6258,7 +6488,8 @@ children round). Usually the parent is a `group`, but any object may be one (a l
 scene description beside it (`<scene id>.json`: objects with their ids and parents, camera, lights,
 timeline with the camera's path). A later render reuses the clip while the description, the page,
 three.js and the Playwright version are unchanged; `--force` renders the scene again but still
-reuses the clip (delete the clip to draw it again).
+reuses the clip (delete the clip to draw it again). `render:` keeps it compact or deletes it once
+the scene is rendered ([intermediate files and disk](#intermediate-files-and-disk-render)).
 
 **Guide passes** (off by default). The same 3D picture can also be drawn three plainer ways, as
 videos beside the clip. They are meant for tools that need the *layout* of a scene rather than its
@@ -6418,6 +6649,7 @@ command, same `vidgen validate` warning).
 | `region` | `bleed` \| `body` | `bleed` | `bleed`: the page fills the whole frame, edge to edge; `body`: the page fills the safe area below the title (the whole safe area without a title), clear of overlays that reserve room (bottom captions) and, in a Short, of the parts the app covers. The page is laid out at that size: its viewport, `ctx.width` / `ctx.height` and `100vw` / `100vh` are the region's pixels, not the frame squeezed |
 | `design_width` | int (200–8192) | — | for a page built in fixed pixels: the window width it was designed for, in CSS pixels (`1280`). The page is laid out in a window that wide and as high as its region's shape gives, and drawn at the video's size at every quality (see below) |
 | `data` | mapping | `{}` | values for the page, read as `ctx.data` (`{teeth: 24, color: primary}`): text, numbers, `true` / `false`, `null`, lists and mappings (a YAML date or a number key is an error naming its place, e.g. `data.when`); theme colour names are not looked up for you (`ctx.theme.colors[ctx.data.color]`) |
+| `music_data` | bool \| mapping | `false` | the video's music for the page as `ctx.music` (Step 347, see "Music data" below): `true`, or `{bands: 16, tracks: [kick, hook], t0: 41.6}` (`bands` 1–64, log-spaced from 40 Hz to 12 kHz; `tracks`: only these score tracks' events, default all; `t0`: the song time at the scene's start, default worked out) |
 
 Give exactly one of `page` and `script`.
 
@@ -6555,6 +6787,7 @@ vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets
 | `theme` | `{preset, background, colors, palette, fonts, sizes}`: `colors` name → hex (`text`, `dim`, `accent`, `highlight`, `primary`, `secondary`, `tertiary`, `surface` and the project's own), `palette` a list of hex, `fonts` → family name for `sans`, `serif`, `mono` and every font role (`body`, `heading`, `quote`, `quote_mark`, `code` and the project's), `sizes` name → CSS pixels (`title` … `small` and the project's: text that size is as tall as vidgen's text of that size in this frame) |
 | `data` | the scene's `data:` (`{}` without one) |
 | `beats` | the scene's narration beats in order: `{id, index, start, end, text, words}`; `start` / `end` in seconds from the scene's start (when the beat's voice starts and ends; the next beat starts after the pause), `words` = `[{text, start, end}]` timed like the captions (the voice's stored timings, else estimated). A scene without narration: `[]` |
+| `music` | only with `music_data:`: the music helper (below) |
 
 **Theme as CSS variables.** vidgen puts a `<style id="vidgen-theme">` first in the page's
 `<head>` (before the page's own styles, which therefore win) with these custom properties on
@@ -6662,12 +6895,67 @@ which is not shipped with vidgen. …`. A copy in the project works (GSAP 3.15.1
 `dist/gsap.min.js` from a `<script src>`, with `gsap.ticker.lagSmoothing(0)` (without it a step
 over 0.5 s counts as 33 ms), or a paused timeline and `tl.time(t)` in `frame(t)`.
 
+**Finishing three.js scenes: `vidgen/three-finish`** (Step 350, DESIGN §120.11). vidgen's own ES
+module (MIT, vidgen's code; `data/web/modules/three-finish.js`, served as
+`/__vidgen__/modules/three-finish.js`) is imported by name through the same import map:
+`import {Finish} from "vidgen/three-finish"`. It imports only `three` and the shipped add-ons
+`Pass.js` (`FullScreenQuad`) and `UnrealBloomPass.js`. A page that does not import it is unchanged
+(the import map's extra entry is in no key); a page that imports it has the module in its loaded
+files, so an edit of the module draws its scenes again. No config key.
+
+`new Finish(renderer, scene, camera, ctx, options)`, then `finish.render(t)` in `frame` instead of
+`renderer.render`; `finish.warmUp(t)` in `load` (optional); `finish.set(options)` merges options
+from `frame`; `finish.dispose()`. The chain: the scene into a linear half-float target with a depth
+texture (at `renderScale`; motion blur averages `samples` drawings) → depth of field → bloom (in
+place) → fringe, exposure × filter × white balance, flash, vignette (linear) → tone mapping →
+saturation → encoding (sRGB, once) → contrast, lift, gamma, gain → fade → FXAA → grain → the
+canvas. three.js applies no tone mapping or colour-space conversion inside render targets, so the
+page's `renderer.toneMapping` and `outputColorSpace` play no part; with every effect off the chain
+draws what `renderer.render` draws within one level (a scene with fog differs: three.js mixes fog
+after the encoding when drawing to the canvas). The picture is opaque (alpha 1): give the scene a
+background.
+
+| option | default | values |
+|---|---|---|
+| `update` | `null` | `update(t)`: sets the scene to time `t`; needed for motion blur |
+| `renderScale` | `1` | 0.25–1: the scene drawn at that fraction of the frame, scaled up |
+| `bloom` | `{strength: 0.25, radius: 0.2, threshold: 1, scale: 0.5}` | `false`; a number (the strength); `threshold` on linear values (0–100), `radius` 0–1 (`UnrealBloomPass`'s), `scale` 0.05–1 of the frame |
+| `toneMapping` | `"aces"` | `"aces"`, `"agx"`, `"neutral"` (three.js' own curves), `"aces-narkowicz"` (the short fit the films used), `"none"` |
+| `exposure` | `1` | 0–64, a multiplier before tone mapping |
+| `encoding` | `"srgb"` | `"gamma2.2"`: `pow(c, 1/2.2)` (for a page ported from one that encoded so) |
+| `grade` | identity | `temperature`, `tint` (−1..1, before tone mapping, brightness kept), `saturation`, `contrast` (0–4), `lift`, `gamma`, `gain` (number or `[r, g, b]`; on the encoded picture: `gain × (c + lift × (1 − c))`, then `^(1/gamma)`), `filter` (number, `[r, g, b]`, a `THREE.Color` or a colour string; linear) |
+| `vignette` | `{amount: 0.3, inner: 0.3, outer: 1.2}` | a number (the amount) or the object; radii as fractions of the centre-to-corner distance |
+| `grain` | `0.02` | 0–0.5; seeded by the frame number (`round(t × fps)`), not `Math.random` |
+| `fringe` | `0` | 0–10: red and blue pulled apart towards the corners |
+| `antialias` | `"fxaa"` | `"none"` |
+| `fade` | `1` | 0 (black) to 1 |
+| `flash` | `{amount: 0, color: 1}` | light added before tone mapping |
+| `dof` | `false` | `{focus: 10, fStop: 2.8, unit: 1, blur: null, maxBlur: 10, quality: "medium"}`: `focus` a distance along the view, an `Object3D` or a `Vector3`; circle of confusion `K × |z − focus| / z` with `K` from a thin lens of the camera's focal length (`getFocalLength`, `getFilmHeight`) at `fStop`, scene units of `unit` metres, or `blur` = `K` in pixels at 720p; capped at `maxBlur` pixels at 720p; `quality` `low` (12 samples, half size), `medium` (20, half size), `high` (32, full size) |
+| `motionBlur` | `false` | `{samples: 5, shutter: 180}`: 1–64 sub-frames over `shutter` degrees (0–360) of a frame, centred on `t`, the one nearest `t` drawn last (its depth is the one depth of field uses); `update(t)` is called for each (and once more at `t` when no sample falls on it); `shutter: 0` or `samples: 1` draws once, exactly as without |
+
+Any option except `update` may be a function of `t`; it is called after the scene stands at `t`.
+A misspelt name or a value out of range is an `Error` thrown in the page (`vidgen/three-finish:
+unknown option "blom" (did you mean "bloom"?); known: …`), which stops the render with the
+scene, file and line. Helpers: `studioEnvironment(renderer, {preset, boxes, sky, ground, up, blur,
+intensity})` → a PMREM texture (`preset` `"studio"`, `"cool"`, `"soft"`; up to 8 `boxes` `{direction,
+across, size: [half-width, half-height], softness, gradient, color, intensity}`), `nebulaSky(renderer,
+{seed, size, deep, mid, bright, glow, density, stars, environment})` → `{background, environment}`
+(a half-float cube map; same seed, same sky), `surfaceFinish(kind, {size, strength, roughness,
+anisotropy})` → `{normalMap, roughnessMap}` (`brushed`, `geneva`, `perlage`, `circular`, `sunray`),
+`softShadows(renderer, light, {type: "pcf" | "vsm", radius, mapSize, blurSamples, bias,
+normalBias})`, `focusDistance(camera, target)`, `blurAtInfinity(camera, focus, fStop, unit,
+height)`, `shutterTimes(t, fps, samples, shutter)`, `resolveOptions(options, t)`. three.js 0.186
+has no `PCFSoftShadowMap` (it falls back to `PCFShadowMap` with a warning); `"pcf"` with `radius`
+2–4 is the recommendation, `"vsm"` cost +0.75 s a frame at a 2048 map on 2 cores. Costs per effect:
+DESIGN §120.11. `warmUp` uses `renderer.compile` and one drawing, not `compileAsync`, whose
+polling timer never fires while the clock stands still in `load`.
+
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
 error or rejected promise at load, in a timer or callback, or in `frame`, and a page that is not
 ready within 30 s (its load event never came, or a module never finished loading). A `load` that
 does not return within 30 s, or a frame (its timers, callbacks and `frame`) that does not return
-within 10 s, stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
+within 10 s (the page's first frame: 30 s), stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
 10 s: a loop that never ends or a promise that never settles …`; vidgen ends the page's process.
 
 **Cache** (DESIGN §118.10). The screenshots, with their transparency, are written to a lossless clip
@@ -6677,9 +6965,75 @@ was drawn (the page or script, styles, pictures, fonts, modules, fetched data, v
 first asked for on a later frame, and one asked for but missing). The clip is reused, and the
 scene not rendered again, while all of that is unchanged; an edit to any of those files, to the
 scene's `data:`, the theme or the narration renders that scene again (and only it). `vidgen render
---force` draws the frames again too. `vidgen storyboard` renders a `web` scene like every scene
+--force` draws the frames again too. The same holds for a scene of your own type that subclasses
+the `web` scene (`class WebCut(Web)` in `extensions/`; since Step 341, DESIGN §120.1: before it,
+an edit to such a scene's script was not noticed). `vidgen storyboard` renders a `web` scene like every scene
 (all of its frames at preview size; the clip is then reused by `vidgen render --preview` and
-`vidgen animatic`).
+`vidgen animatic`). The clip is large (a detailed WebGL page: about 26 MB per second of video at
+720p30): `render: {intermediate: compact}` keeps it about 4.6 times smaller and
+`keep_intermediates: false` deletes it once the scene is rendered; see
+[intermediate files and disk](#intermediate-files-and-disk-render).
+
+**Music data: `music_data`** (Step 347, DESIGN §120.8). A page that follows the music needs no
+script of its own to measure it: with `music_data: true` (or the mapping above) the page's `ctx`
+has `music`.
+
+*What is measured.* The music the video plays, mixed as the join mixes it (every `music:` cue and
+scene theme with its `start`, `section`, `loop`, `volume`, `fade_in` / `fade_out`, the scenes'
+`music:` levels and ducking; not the narration, effects or ambience), as a 16-bit file holds it,
+once per video frame over the whole video: a 4096-sample Hann window centred on the frame's time.
+`band(i)`: the mean power of band `i` in dB, 0 at its 20th percentile and 1 at its 99.5th; `level()`:
+the power from 25 Hz to 14 kHz, 0 at 36 dB under its 99.5th percentile; `low()`: 25–150 Hz, 0 at
+30 dB under; `onset()`: the mean rise of the log spectrum since the frame before, 1 at its 99.7th
+percentile. The percentiles are taken over the frames where music plays and is not silent. Then
+each value falls by at most a share per frame (bands 0.82, level 0.9, low 0.8, onset 0.7) and
+rises at once. These are the choices of the films "Parallel Space" and "Escapement", whose own
+scripts it replaces (their 16 bands, 40 Hz–12 kHz). A value is sent as one byte (0–255).
+
+*Score events.* When the cue playing at the scene's start is a score file (a project piece or a
+score bed), `ctx.music.score` has `tempo`, `time`, `beat` and `bar` (seconds), `seconds` (one
+pass), `loop`, `file`, `sections` (`{name, start, end}`) and `ctx.music.tracks` (name →
+`{kind: drum | note | pad | chords, instruments, count}`). Each track's events are read the way
+the synthesizer plays them (holds, ties into the next section, slurs, chords voiced as played,
+notes outside 20 Hz–12 kHz left out): `time`, `duration`, `end` (song seconds), `pitch` (MIDI, the
+first of a chord; `null` for a drum) and `pitches`, `track`, `instrument` (a section may change
+it), `kind` (`hit` or `note`), `dynamic` / `dynamicEnd` (dB of the dynamic mark at the start, with
+`fp` / `sfz`, and at the end; 0 unmarked), `gain` (1, 1.5 an accent, 0.5 soft), `strength`
+(`gain` × the mark), `stroke` (the instrument's `stroke` setting by name: `pizzicato`, `roll`...;
+`null` without one) and `slur` (a slurred note: not attacked again, a note of its own here). A
+`play: chords` track gives one note per chord held. A looping piece's events repeat for every pass
+the video plays.
+
+*Song time.* `ctx.music.t0` is the song time at the scene's start: the cue's `start` (and
+`section`), plus how far into the cue the scene starts; through a looping piece it counts on
+(`score.seconds` is one pass). `music_data: {t0: 41.6}` sets it instead. Where no cue plays at the
+scene's start, `t0` is the scene's video time and `source` is `null`.
+
+| `ctx.music.` | |
+|---|---|
+| `t0`, `now()`, `time(t)` | song time at the scene's start, of the frame drawn, at scene time `t` |
+| `band(i, T?)`, `bands(T?)`, `level(T?)`, `low(T?)`, `onset(T?)` | 0..1 at song time `T` (default: the frame drawn), between frames interpolated |
+| `bandCount`, `edges` | the bands and their `bandCount + 1` edges in Hz |
+| `hits(track?, T0?, T1?)`, `notes(track?, T0?, T1?)`, `events(track?, T0?, T1?)` | events starting in `[T0, T1)`; no track: every drum track (`hits`) / every other track (`notes`) / all |
+| `last(track, T?)`, `sounding(track, T?)` | the latest event started by `T` (or `null`); the events sounding at `T` |
+| `pulse(track, decay = 0.1, T?)` | the largest `strength × exp(-age / decay)` of the track's last 8 events (1 at a hit, falling) |
+| `section(T?)` | the score section playing at `T` |
+| `source`, `score`, `tracks` | the cue (`{kind, label, loop}`), the score's facts, the tracks (`null` / `{}` without a score) |
+| `fps`, `frames`, `first`, `from`, `to`, `start` | video frame rate and frames, the scene's first video frame, the frames sent, its start in seconds |
+
+An unknown track or band number is a JavaScript error naming the ones there are.
+
+*Size and cache.* The page is sent the measurements of its own frames and 5 s on each side (outside
+them it reads the nearest) and the score's events whole, as base64 bytes: for a 28 s scene of
+"Parallel Space" (16 bands) 112 KB with its 29 tracks, 54 KB with the 17 its script used (its own
+JSON file was 124 KB). The measurements are made once per video, frame rate and band count, from
+the music cache (`build/music/piece-*.npy`, rendered there first if missing, as the join does),
+and kept in `build/music/music-data-<key>.json`; its key (the music settings, the music files,
+the planned timeline, the narration files when the music ducks) is in the scene's render
+fingerprint and the page's clip key, so an edit to the score, a cue or a scene's length renders
+the scenes with `music_data` again; scenes without it are not affected. A video without music
+cannot use it (`vidgen validate`: `music_data: the video plays no music`). Music files other than
+score files (`.wav`, `.mp3`...) give the measurements only.
 
 **Lint reads the page** (DESIGN §118.12). At each still lint looks at (the beat ends; more with
 `vidgen storyboard --per-beat N` or a Short), vidgen asks the page what text it shows: every
@@ -6724,6 +7078,51 @@ export function layout(t, ctx) {
 }
 ```
 
+**Single frames: `vidgen still`** (Step 342, DESIGN §120.3). `vidgen still [PROJECT] --scene ID
+(--at SECONDS | --frame N | --count N)... [--size final|preview|draft|WxH] [--variant NAME]
+[--out FILE|DIR] [--sheet FILE [--columns N]] [--exact] [--transparent] [--json]` writes frames of
+a `web` scene's page as PNG files without rendering the scene. vidgen builds the scene as a render
+does and opens its page with the same theme, `data:`, beats, shape, size and frame rate, so a
+still is the picture the render's page clip (`build/<quality>/web/<scene>.mkv`) holds for that
+frame (compared pixel for pixel in `tests/test_web_still.py` and with eight frames of the film
+"Escapement" at 1280x720).
+
+| option | |
+|---|---|
+| `--scene ID` | the scene: type `web` or an extension type that subclasses `Web`; another type is an error naming `vidgen storyboard --scene ID` |
+| `--at SECONDS` | seconds from the scene's start (the page's `t`); the frame `round(t * fps)`, which is the frame the render shows then. Repeatable, and a list: `--at 1,2.5,4` |
+| `--frame N` | a frame number at the size's frame rate (0 is the first). Repeatable, and a list |
+| `--count N` | N stills spread evenly over the scene (the middle of each of N equal parts), after those of `--at` / `--frame` |
+| `--size` | `final` (default), `preview` or `draft`: that render's size and frame rate; `WIDTHxHEIGHT` (even numbers): a video frame of that size at the final frame rate, the theme's sizes scaled to it |
+| `--out` | a `.png` file (one still only) or a folder; default `<project>/exports/stills/`. Files in a folder are `<scene>_<seconds>s.png` (`gears_0012.500s.png`) |
+| `--sheet FILE` | also a contact sheet (PNG or JPEG, up to 1920 px wide) of the stills in the order asked, each labelled `scene  12.500 s  f375`; `--columns N` (1–12) sets the stills per row |
+| `--exact` | step the page through every frame before each still (see below) |
+| `--transparent` | keep the page's alpha; by default the page is laid over the video's background colour |
+
+- **Order.** Stills are drawn in the order asked, on one page while each is later than the one
+  before. The clock cannot go back: a still at or before the page's time opens a new page (the
+  load time again); the same frame asked twice is drawn once.
+- **A page that depends on the frames before it.** Without `--exact` the clock moves straight to
+  the frame's time: every timer due by then runs, then one round of animation-frame callbacks,
+  then `frame(t, ctx)`. A page that draws from the time alone gives the render's picture. A page
+  that keeps state from frame to frame (a `requestAnimationFrame` loop adding up, a canvas drawn
+  over itself; Motion, lottie-web or GSAP without `lagSmoothing(0)` playing by themselves, §118.15)
+  gives the picture it would show had the frames between not been drawn, and a later still on the
+  same page depends on the stills before it. `--exact` runs every frame from the page's time to
+  the still (no screenshots in between), as a render does. Not covered by `--exact`: a WebGL
+  canvas that is never cleared and relies on Chromium showing every frame.
+- **What a still is not.** The video's frame also has what vidgen draws: the title, overlays and
+  captions, the fade at the scene's end, and H.264. With `region: body` the still is the page's
+  box, not the whole frame.
+- **Nothing is rendered or cached**: no file under `build/<quality>/`, and with `--out` and
+  `--sheet` elsewhere nothing in the project folder (loading a project may write `build/fonts/`
+  and Python's `__pycache__` in `extensions/`, as every command does).
+- **Speed** (the film "Escapement", a three.js page with depth of field and motion blur, 2 cores):
+  the page is ready after about 9 s (plus about 3 s for vidgen to start); then 2.2 s per still at
+  1280x720, 0.5 s at 640x360 and 0.3 s at 320x180. `--exact` costs each stepped frame's drawing
+  time (about 0.4 s a frame at 640x360 there).
+- `--json`: see [`vidgen still --json`](#vidgen-still---json). Over MCP: the `still` tool.
+
 **Render cost.** Every frame is a screenshot of the whole page, so a `web` scene renders far slower
 than a built-in one, and the time grows with the number of frames and their size. Measured on a
 slow 1-CPU machine on two scenes of 20 s (a whole `vidgen render` of the scene, Chromium's start
@@ -6740,10 +7139,30 @@ a preview (final: 3 s cuts beside a preview of the same cut). The machine's spee
 times within an hour that day: trust the ratios more than the seconds. Work with
 [`vidgen render --draft`](#drafts-vidgen-render---draft) first; a page must scale to look right
 in one (sizes in `vw` / `vh` / `%` and the theme's size variables, or `design_width`). Lint and
-the storyboard never use a draft, so a draft causes no finding.
+the storyboard never use a draft, so a draft causes no finding. A long film of WebGL pages also
+needs disk for its frames clips (about 5 GB for 3 minutes at 720p, lossless): see
+[intermediate files and disk](#intermediate-files-and-disk-render).
 Drawing the frames alone at 1920x1080, 30 fps, measured for `examples/web` in Step 333 on the same
 machine on a faster day: an HTML + CSS page 453 ms per frame, a canvas script 325 ms, a three.js
 scene 550 ms. Keep `web` scenes short.
+
+**Speed, progress and warm-up** (Step 349; DESIGN §120.10). Each frame's screenshot is the PNG
+Playwright's `page.screenshot` gives, compressed quickly (`Page.captureScreenshot` with
+`optimizeForSpeed`: the same pixels, no change to any cache key), and the frames clip is decoded
+and encoded in a thread while the next frame is drawn. On 2 cores this made a detailed
+three.js film page 1.61 → 1.24–1.30 s a frame at 1280x720 (a 3 s scene 165 s → 135 s) and flat
+SVG pages about 20 % faster; most of what is left is the page's own WebGL work in software GL.
+While frames are drawn, `vidgen render` prints about every 10 s
+`[i/n] <scene>: web frames 120/482, 1.24 s a frame, about 7 min 29 s left`, and after the last a
+summary that splits a frame into the page's `frame(t, ctx)` and the drawing with the screenshot
+(and says how long the page took to become ready). The lines go to stdout, to stderr with
+`--json`, and so to the MCP `render` tool's progress; one job on a terminal shows the worker's
+own `progress: …` lines. A `3d` scene prints the same lines as `3d frames …` (since Step 351;
+its summary has no split: its page draws and reads its canvas in one call). The first frame a page draws may take 30 s (`frame(t, ctx)` 10 s after
+it): WebGL shaders are compiled then, so a page needs no warm-up in `load`.
+`performance.now()` stays on the video's clock (it stands still within a frame) and cannot time
+the page's code; the summary line does that. `--jobs 2` drew a two-scene WebGL test about 10 %
+faster than one job on 2 cores.
 
 **Cost of lint.** The reading is taken while the clip is drawn, after the screenshot of each frame a still
 will show (about 10–40 ms each), and kept beside the clip (`build/<quality>/web/<scene>.layout.json`,
@@ -15275,6 +15694,46 @@ theme tokens or variants. If `video.yaml` is invalid, `vidgen schema` still work
 when it is most useful): it uses the file's `extensions` and `theme` as far as they are valid
 and prints a warning. `--scene` with an unknown type is an error (exit code 1).
 
+## Intermediate files and disk (`render:`)
+
+A `web` or `3d` scene first draws its frames into a **frames clip**
+(`build/<quality>/web/<scene>.mkv`, `three_d/<scene>.mkv`), then plays it in the scene, whose own
+clip (`scenes/<scene>.mp4`, H.264 CRF 23) the join copies into the video. The frames clips are by
+far the largest files of a render: lossless FFV1 takes about 1 byte per pixel and frame for a
+detailed WebGL page (measured on a three.js film: 26–28 MB per second of video at 720p30, 58
+MB/s at 1080p30, so 4.7–5 GB for a 3-minute film), much less for a flat page (0.7 MB/s at 720p
+for text and shapes); the scene clips take 0.04–0.4 MB/s. Every other scene type writes no
+frames clip.
+
+```yaml
+render:
+  intermediate: compact        # lossless (default) | compact
+  keep_intermediates: false    # default true
+```
+
+| key | default | |
+|---|---|---|
+| `intermediate` | `lossless` | `compact`: the frames are kept as H.264 4:4:4 at CRF 12 plus, for a page, a lossless alpha stream in the same file: about 4.6 times smaller for a WebGL page (5.5–6 MB/s at 720p30, 12 MB/s at 1080p30), half for a flat page with transparency. One more lossy step before the scene's own encode: the frames clip measures 39–41 dB PSNR (SSIM 0.96–0.97) against the lossless frames, and the scene clip made from it is 0.04–0.24 dB further from the page than the one made from lossless frames (the scene clip's CRF 23 itself is 6–8 dB further). Command line: `vidgen render --intermediate compact` |
+| `keep_intermediates` | `true` | `false`: a scene's frames clip is deleted as soon as the scene is rendered (and every scene's after the join): at most `--jobs` of them exist at once. Kept: the record beside it (so an edit to the page's script or a file it loads still renders the scene again), the scene clips and the video. Cost: a scene rendered again for any reason (an edited title, timing or overlay, `--force`, `--frames` stills, a thumbnail without overlays) draws all its frames again. Command line: `vidgen render --clean-intermediates` |
+
+- **Reuse.** A lossless frames clip serves a compact render too; a compact one is drawn again
+  when a render asks for lossless. Changing either setting does not render a current scene again
+  (its scene clip is what the join needs); after a compact render, `vidgen render --force` remakes
+  the scenes from lossless frames. Clips drawn before this setting existed are lossless and stay
+  valid.
+- **Disk check.** Before it renders, `vidgen render` estimates the frames clips of the scenes it
+  will draw (their length × size × frame rate × 1 byte, or 0.22 compact; with
+  `keep_intermediates: false` only `--jobs` of them) and warns when the disk has less free
+  space, naming the settings that help and `--max-scenes N` (render in steps). The estimate
+  is for a detailed WebGL page: a flatter page needs far less.
+- **Report.** After the join it prints the build folder's size, the part in frames clips, the
+  free disk and what was deleted, e.g.
+  `build:     .../build/final 4 MB (frames clips 0 KB), 6.9 GB free; 36 MB of frames clips deleted (keep_intermediates: false)`
+  (`--json`: `disk`).
+- **A long WebGL film on a small disk**: `render: {intermediate: compact, keep_intermediates:
+  false}` keeps one or two scenes' frames at a time (a 16-second 720p scene: about 90 MB
+  compact, 420 MB lossless) instead of the whole film's; `--max-scenes N` still renders in steps.
+
 ## Parallel renders (`--jobs`)
 
 `vidgen render`, `storyboard`, `lint`, `thumbnail`, `slides` and `gallery` take `--jobs N`
@@ -16166,7 +16625,7 @@ default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` gi
 `narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `audio_check`
 (`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
 sound alone), `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
+`thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
 (`vidgen story draft`: `input_path` or `story_text`, `out`, `style`, `format`, `narrator`, `seed`,
 `force`), `shorts_suggest` (`vidgen shorts suggest`: `project`, `count`, `min_seconds`,
@@ -16230,7 +16689,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft`, `vidgen shorts suggest` and `vidgen animatic` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft`, `vidgen shorts suggest`, `vidgen animatic` and `vidgen still` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -16504,6 +16963,7 @@ difference between two palette colours).
 | `elapsed` | float | wall time of the command |
 | `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: schu-video-generator wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|score\|file\|composed), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
 | `chapters` | list | the chapters as written into the MP4 and the YouTube list (empty without chapters): `{title, number, scene, start, end, index, count, card, intro}` — `number` as written (`null`: none), `scene` the scene it starts at, `start` / `end` seconds in the video, `index` its position in this list (1-based) of `count`, `card` whether it starts with a `chapter` card, `intro` whether it is the chapter added at 0:00 before the first one; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
+| `disk` | object | the build folder after the join, in bytes: `{build, frames_clips, free, removed}` (its size, of it in `web` / `3d` frames clips, free on its disk, frames clips deleted in this run; [intermediate files and disk](#intermediate-files-and-disk-render)) |
 | `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
 
 `warnings` includes those printed by scene code during rendering (e.g. beats a scene never
@@ -16558,6 +17018,24 @@ files against each other); `ok` is false when any file or that check fails.
 
 Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
 on a failed scene are as for `vidgen render --json`.
+
+### `vidgen still --json`
+
+| key | type | |
+|---|---|---|
+| `scene` | str | the scene's id |
+| `type` | str | its scene type (`web` or a subclass type) |
+| `entry` | str | its `page:` or `script:` file |
+| `size` | str | `final`, `preview`, `draft` or `WxH` as asked |
+| `width`, `height` | int | the stills' size in px (the page's box; smaller than the frame with `region: body`) |
+| `fps`, `frames` | int | the frame rate and how many frames the render draws of the page |
+| `region` | str | `bleed` or `body` |
+| `exact`, `transparent` | bool | as asked |
+| `stills` | list | in the order asked: `{path, frame, time, seconds}` (`time` = `frame / fps`, seconds from the scene's start; `seconds`: how long drawing it took, a new page's load included) |
+| `sheet` | str \| null | the contact sheet |
+| `pages` | int | pages opened (1 when the stills were in increasing order) |
+| `load_seconds` | float | until the first page was ready |
+| `seconds` | float | wall time of the command |
 
 ### `vidgen animatic --json`
 

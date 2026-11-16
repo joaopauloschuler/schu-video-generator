@@ -3323,7 +3323,9 @@ the page, or to the script of a `script:`), and `ResizeObserver` /
 `IntersectionObserver` callbacks. Ordinary timer, `requestAnimationFrame`, CSS and Web Animations
 code was measured frame-exact. anime.js, Motion, D3, Chart.js and lottie-web ship with vidgen and
 were run under the clock (the table "Animation and chart libraries" below says how to drive
-each); any other library must be a file in the project (below: no internet).
+each); any other library must be a file in the project (below: no internet). Because
+`performance.now()` is the video's clock, it stands still inside a frame: you cannot time your
+own code with it. `vidgen render` tells you instead (below, "Render cost").
 
 **What the page is given**, `ctx`:
 
@@ -3337,6 +3339,7 @@ each); any other library must be a file in the project (below: no internet).
 | `data` | the scene's `data:` (`{}` without one) |
 | `beats` | `[{id, index, start, end, text, words: [{text, start, end}]}]`, seconds from the scene's start (`[]` without narration) |
 | `scene`, `frame`, `region` | the scene id, the video frame's `{width, height}`, `bleed` or `body` |
+| `music` | with `music_data:` only: the video's music ("Pictures that follow the music" below) |
 
 **The theme.** vidgen puts CSS variables on `:root` before your own styles: `var(--vidgen-text)`,
 `--vidgen-primary` (one per colour), `--vidgen-background`, `--vidgen-palette-0`…,
@@ -3369,6 +3372,59 @@ estimated from the word count, so the reveal moves a little when the voice arriv
 **Values from the YAML.** `params: {data: {moons: 3, label: "Moons", color: tertiary}}` is
 `ctx.data` (text, numbers, true / false, lists and mappings). A theme colour name in it is not
 looked up for you: `ctx.theme.colors[ctx.data.color]`.
+
+**Pictures that follow the music.** `music_data: true` in a scene's `params` gives the page
+`ctx.music`: the music the video plays (its `music:`: a score file, a bed or a music file, with
+its `start`, `loop`, `volume` and fades) measured at every video frame, and, when it is a score
+file, every track's hits and notes. No script of your own, no JSON beside the page: vidgen
+measures the music once (from the music it renders for the video anyway, kept in
+`build/music`), and an edit to the score draws the scene again.
+
+```yaml
+music: tidewater              # a score bed; or your piece (assets/music/*.yaml) or a music file
+scenes:
+  - id: drop
+    type: web
+    duration: 13.87
+    params: {script: extensions/space.js, music_data: true}   # or {bands: 32, tracks: [kick, hook]}
+```
+
+```js
+// extensions/space.js
+export function frame(t, ctx) {
+  const m = ctx.music;                     // every function reads the frame being drawn unless given a song time T
+  const glow = 0.3 + 0.7 * m.level();      // 0..1: the whole music's loudness
+  const thump = m.pulse("kick", 0.12);     // 1 at each kick, falling over 0.12 s (1.5 on an accent)
+  const lows = m.low(), air = m.band(m.bandCount - 1), hit = m.onset();
+  const note = m.last("hook");             // the hook's latest note: {time, duration, pitch, dynamic, stroke, slur...}
+  const hue = note ? (note.pitch % 12) / 12 : 0;
+  // m.hits("kick", T0, T1), m.notes("hook", T0, T1): the events starting in [T0, T1) (song seconds)
+}
+```
+
+- **Song time.** `ctx.music.t0` is the song time at the scene's start (seconds into the piece:
+  the music's `start:`, the scene's place in the video; through a loop's repeats it counts on),
+  so `T = t0 + t` and `ctx.music.now()` is the song time of the frame drawn. No `t0` by hand;
+  `music_data: {t0: 41.6}` sets one where you want another.
+- **Measured per frame** (each 0..1, normalised over the whole video and smoothed with a fast
+  rise and a slow fall): `band(i)` (`bandCount` bands, 16 by default, log-spaced from 40 Hz to
+  12 kHz, edges in `edges`; `bands()` all of them), `level()`, `low()` (under 150 Hz),
+  `onset()` (how much the sound grew since the frame before: drum hits, note starts). The page is
+  sent the scene's frames and 5 s on each side; further away it reads the nearest of them.
+- **From the score** (`ctx.music.score`: `tempo`, `bar`, `beat`, `sections`, `seconds`; `tracks`:
+  name → `{kind, instruments}`): `hits(track?, T0?, T1?)` (drum tracks), `notes(track?, T0?, T1?)`
+  (the others), `events(...)`, `last(track, T?)`, `sounding(track, T?)`, `pulse(track, decay?, T?)`,
+  `section(T?)`. An event has `time`, `duration`, `end`, `pitch` (MIDI; `pitches` for a chord),
+  `instrument`, `dynamic` (dB of its mark, 0 unmarked), `gain` (1.5 an accent, 0.5 soft),
+  `strength` (both together), `stroke` (`pizzicato`...), `slur`. A slurred note is a note of its
+  own with `slur: true`. `tracks: [kick, hook]` sends only those (a smaller page).
+- **Music that is not a score** (a music file, a bed made in code, composed music): the
+  measurements only; `ctx.music.score` is `null`. A scene where no music plays reads silence and
+  counts video time. A video without music cannot use `music_data` (`vidgen validate` says so).
+- The first render measures the music (a few seconds; the score is rendered first if the join
+  has not rendered it yet). `vidgen still` shows the frames with the same data.
+- A whole worked example: `examples/signal-fire` (an orchestral cue written with dynamics, hairpins
+  and slurs, and a three.js page finished with `vidgen/three-finish` that reads ten of its tracks).
 
 **three.js** comes with vidgen: `import * as THREE from "three"` in a `script:` or in a page's
 `<script type="module">` (with a chosen set of its add-ons, below):
@@ -3498,6 +3554,111 @@ shipped with vidgen …`. To use one anyway, copy that file from three.js 0.186.
 `three`, `examples/jsm/…`) into the project and import it by a relative path
 (`import {X} from "./lib/X.js"`); its `import … from "three"` keeps working.
 
+**Finishing three.js scenes: `vidgen/three-finish`.** A look like a film's — depth of field, motion
+blur, bloom on the highlights, a tone curve, a colour grade, vignette, grain, smoothed edges —
+comes ready-made with vidgen, as a module you import by name. It draws your scene into linear
+half-float pictures, finishes them and puts the result on the canvas encoded as sRGB once (leave
+`renderer.toneMapping` and `outputColorSpace` as they are; give the scene a background: the picture
+is opaque). Everything is a function of `t` and the options, so every render draws the same frames;
+the grain is seeded by the frame number.
+
+```js
+// extensions/finished.js: brushed and polished metal in a baked studio, finished
+import * as THREE from "three";
+import {Finish, focusDistance, studioEnvironment, surfaceFinish, softShadows} from "vidgen/three-finish";
+let finish, camera, wheel, ball;
+function update(t) {                       // the whole scene at time t, keeping no state
+  wheel.rotation.z = -t * 20;              // fast: motion blur smears it
+  camera.position.set(Math.sin(t * 0.2) * 4, 1.5, Math.cos(t * 0.2) * 4);
+  camera.lookAt(0, 0.4, 0);
+}
+export function load(ctx) {
+  const renderer = new THREE.WebGLRenderer({canvas: ctx.canvas});
+  renderer.setSize(ctx.width, ctx.height, false);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(ctx.theme.background);
+  scene.environment = studioEnvironment(renderer, {preset: "studio"});   // soft boxes for metal to reflect
+  camera = new THREE.PerspectiveCamera(35, ctx.width / ctx.height, 0.1, 50);
+  const brushed = surfaceFinish("brushed", {size: 256});
+  ball = new THREE.Mesh(new THREE.SphereGeometry(0.5, 48, 24),
+                        new THREE.MeshStandardMaterial({color: 0xc4c9cf, metalness: 1, roughness: 0.3, normalMap: brushed.normalMap}));
+  ball.position.set(-0.8, 0.5, 0.6);
+  wheel = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.08, 12, 6), new THREE.MeshStandardMaterial({color: 0xd9a441, metalness: 1, roughness: 0.25}));
+  wheel.position.set(0.9, 0.6, -0.8);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshStandardMaterial({color: 0x222326, roughness: 0.6}));
+  floor.rotation.x = -Math.PI / 2;
+  const key = new THREE.DirectionalLight(0xfff1e0, 1.5);
+  key.position.set(-3, 6, 3);
+  softShadows(renderer, key, {type: "pcf", radius: 2});
+  for (const m of [ball, wheel]) m.castShadow = true;
+  floor.receiveShadow = true;
+  scene.add(ball, wheel, floor, key);
+  finish = new Finish(renderer, scene, camera, ctx, {
+    update,                                                    // needed for motion blur
+    motionBlur: {samples: 5, shutter: 180},                    // 5 sub-frames: the scene drawn 5 times
+    dof: (t) => ({focus: focusDistance(camera, ball), fStop: 2.8, unit: 0.1}),   // 1 scene unit = 10 cm
+    grade: (t) => ({temperature: 0.2 - 0.1 * t, saturation: 1.05}),
+  });
+  finish.warmUp(0);                         // optional: shaders compiled here, not in frame 0
+}
+export function frame(t) {
+  finish.render(t);                         // instead of renderer.render: calls update(t) itself
+}
+```
+
+| option | default | what it does |
+|---|---|---|
+| `update` | none | `update(t)` sets the scene to time `t`; `render(t)` calls it (several times with motion blur) |
+| `bloom` | `{strength: 0.25, radius: 0.2, threshold: 1, scale: 0.5}` | glow on linear values above `threshold` only (a colour brighter than 1, a sharp highlight); `scale`: its size against the frame; `false` off |
+| `toneMapping`, `exposure` | `"aces"`, `1` | `"aces"`, `"agx"`, `"neutral"`, `"aces-narkowicz"` (the short ACES curve both films used), `"none"` |
+| `grade` | none | `temperature`, `tint` (−1..1), `saturation`, `contrast`, `lift`, `gamma`, `gain` (a number or `[r, g, b]`, on the encoded picture), `filter` (a linear colour multiplier) |
+| `vignette` | `0.3` | a number (amount) or `{amount, inner, outer}` |
+| `grain` | `0.02` | film grain, seeded by the frame number |
+| `fringe` | `0` | chromatic fringe towards the corners (try 0.3–1) |
+| `antialias` | `"fxaa"` | `"fxaa"` or `"none"` |
+| `dof` | off | `{focus, fStop, unit, maxBlur, quality}`: `focus` a distance, an object or a point; a thin lens of the camera's focal length (`camera.fov`, `filmGauge`) at `fStop`, scene units of `unit` metres; or `blur` (pixels at 720p far behind the focus) instead of `fStop`; `maxBlur` 10 px at 720p; `quality` `"low"`, `"medium"`, `"high"` |
+| `motionBlur` | off | `{samples, shutter}`: `update(t)` at `samples` times across `shutter` degrees of a frame (180 = half the frame time), centred on `t`, averaged; shutter 0 is exactly no motion blur |
+| `renderScale` | `1` | draw the scene smaller and scale it up (0.75: about half the shading cost) |
+| `fade`, `flash`, `encoding` | `1`, `0`, `"srgb"` | fade to black; `{amount, color}` added light; `"gamma2.2"` to match a page that encoded with `pow(c, 1/2.2)` |
+
+Any option may be a function of `t` (`dof: (t) => ({...})`); it is called after `update(t)`, so
+`focusDistance(camera, object)` follows a moving camera. `finish.set({...})` changes options from
+`frame` too. A misspelt or out-of-range option stops the render with the reason
+(`vidgen/three-finish: unknown option "blom" (did you mean "bloom"?)`).
+
+Helpers in the same module: `studioEnvironment(renderer, {preset: "studio" | "cool" | "soft",
+boxes, sky, ground, up, blur})` (soft boxes baked through PMREM for `scene.environment`),
+`nebulaSky(renderer, {seed, size, deep, mid, bright, density, stars, environment})` (a nebula and
+stars baked into a cube map for `scene.background`; the same seed, the same sky),
+`surfaceFinish("brushed" | "geneva" | "perlage" | "circular" | "sunray", {size, roughness})`
+(`{normalMap, roughnessMap}` for watch-like metal), `softShadows(renderer, light, {type, radius,
+mapSize})` and `focusDistance(camera, object)`.
+
+- **What it costs** (2 cores, software WebGL, 1280x720, a PBR still life whose plain
+  `renderer.render` takes about 0.47 s a frame): the chain with everything off +0.05 s; tone
+  mapping, grade and vignette, grain, FXAA, fringe about +0.01 s each; bloom +0.01 s at `scale:
+  0.25`, +0.03–0.07 s at 0.5, +0.13 s at 1; depth of field +0.07 s (`low`), +0.14 s (`medium`),
+  +0.6 s (`high`); motion blur costs a whole scene drawing per sample (×2: 0.91 s, ×4: 1.69 s, ×6:
+  2.58 s here); `renderScale: 0.75` saves about a third. A shadow-casting light is drawn again for
+  each sample too.
+- **Motion blur** needs a scene that is a function of `t`: `update(t)` must set everything from `t`
+  (no `+=` per call). Start with 3–5 samples and only on shots with fast motion; a `--draft` can
+  turn it off (`motionBlur: ctx.width < 640 ? false : {...}`).
+- **Soft shadows.** three.js 0.186 has no `PCFSoftShadowMap` (asking for it gives `PCFShadowMap`
+  and a console warning). `softShadows(renderer, light, {type: "pcf", radius: 2})` is the
+  recommendation: free here, soft edges up to a radius of about 4 texels (beyond that its 5
+  rotated samples show as a fine dither under the grain). `type: "vsm"` gives smooth wide
+  penumbrae but cost +0.75 s a frame at a 2048 map here, and every receiver also casts.
+- **Warm-up.** `finish.warmUp(t)` in `load` compiles the scene's and the chain's shaders and draws
+  once (the still life: frame 0 took 3.0 s instead of 8.5 s; `load` 8.7 s instead of 1.1 s). It
+  is optional (the first frame may take 30 s). three.js' `compileAsync` must not be awaited in
+  `load`: it polls with a timer, and time stands still there, so it never resolves.
+- **Fog** mixes in linear light in the chain but in sRGB with `renderer.render` to the canvas, so a
+  fogged scene looks slightly different once finished. Otherwise, with every effect off the
+  chain draws what `renderer.render` draws (within one level).
+- The whole worked example is `examples/three-finish` (`vidgen still` it at three moments); the
+  module's file is in the scene's cache key like every file the page loads.
+
 **Animation and chart libraries.** These ship with vidgen: import them by name, in a
 `<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's
 clock. "Plays by itself" means the library's own loop follows the video's time from the scene's
@@ -3616,6 +3777,41 @@ only by a page whose own `@font-face` names it (`src: url("../fonts/x.woff2")`).
 captions, a page's CSS and theme variable, the designed thumbnail; static `.ttf`, `.woff` and a
 variable `.ttf`); not tried on Windows or macOS.
 
+**Looking at single frames: `vidgen still`.** To see what the page shows at one moment, do not
+render the scene: `vidgen still . --scene gears --at 2.5` writes that frame as a PNG
+(`exports/stills/gears_0002.500s.png`) in a few seconds. It is the picture the render draws for
+that frame: the same page, clock, theme, `data:`, beats, size and frame rate (checked pixel for
+pixel against rendered clips).
+
+```
+vidgen still . --scene gears --at 2.5                         # one frame, final size
+vidgen still . --scene gears --at 0,4,8,12 --sheet look.png   # four frames in one browser + a contact sheet
+vidgen still . --scene gears --count 12 --size preview --sheet look.png --out /tmp/gears
+vidgen still . --scene gears --frame 75 --size 640x360 --out one.png
+```
+
+- `--at` counts **seconds from the scene's start** (the `t` your `frame(t, ctx)` gets), not the
+  video's time; `--frame N` is a frame number; `--count N` spreads N stills over the scene. Repeat
+  them or give lists (`--at 1,2.5,4`).
+- `--size final` (default) `| preview | draft | WIDTHxHEIGHT`: the page is laid out and drawn for
+  a video of that size. A smaller size is much faster for a WebGL page (a three.js film: 2.2 s per
+  still at 1280x720, 0.5 s at 640x360, 0.3 s at 320x180, after 9 s to load the page).
+- Give times **in increasing order**: they are drawn on one page. The clock only runs forward,
+  so an earlier time opens the page again (its load time once more).
+- The still is the page alone, over the video's background colour (`--transparent` keeps its
+  transparency): no title drawn by vidgen, no captions or overlays, no fade. With `region: body`
+  it has the size of the page's box.
+- **A page that keeps state.** By default the clock moves straight to the frame's time. That is
+  the render's picture when the page draws from the time alone (`frame(t, ctx)` computing
+  everything from `t`, CSS animations, the Web Animations API, anime.js, D3 transitions, GSAP with
+  `lagSmoothing(0)`). A page that adds something up from frame to frame (a simulation stepped in
+  `requestAnimationFrame`, a canvas drawn over itself, a counter; a D3 force simulation on its own timer; Motion,
+  lottie-web or plain GSAP playing by themselves) shows a still as if the frames before it had not been drawn. `--exact`
+  steps the page through every frame before the still, as the render does: the render's picture
+  again, at the cost of every frame's drawing time.
+- Works for `web` and for your own types that subclass it. For other scene types use
+  `vidgen storyboard --scene ID`. Over MCP: the `still` tool (returns the pictures).
+
 **The lint loop.** `vidgen lint` reads the page's text at each still (its box, its size as drawn,
 its colour and what is behind it) and checks it with the usual rules: `off_frame`, `text_overlap`,
 `min_font`, `contrast`, `safe_area` (also text under the captions, named so), plus `web_clipped`
@@ -3657,7 +3853,7 @@ the text (here the video's background, since the canvas is transparent).
 | `warning: scene 'x': refused https://… (a web scene cannot reach the internet; …)` | a CDN script or API: copy the file into the project |
 | `warning: scene 'x': the page asks Google Fonts for "…", but the internet is off during a render …` | a `<link>` to Google Fonts: put the font's file in `fonts/` and remove the link ("Using another font" above) |
 | `fonts/x.ttf: not a font file …` | a damaged or mislabelled file in `fonts/`: replace or remove it |
-| `scene 'x': frame(t=0.500) in extensions/x.js did not return within 10 s: a loop that never ends or a promise that never settles …` | an endless loop, or waiting for something that never comes (a timer in `load`: time stands still there) |
+| `scene 'x': frame(t=0.500) in extensions/x.js did not return within 10 s: a loop that never ends or a promise that never settles …` | an endless loop, or waiting for something that never comes (a timer in `load`: time stands still there). The first frame may take 30 s (shaders are compiled then) |
 | `scene 'x': extensions/x.html did not become ready within 30 s …` | the page's load event never came (a module that never finishes) |
 | `scenes[0].params.data: … data.when: 2026-01-01 is a date, not a JSON value` | quote dates in `data:` |
 | a white page | a `page:` with `background: white` of its own (or an old habit): leave the background out or use `var(--vidgen-background)` |
@@ -3685,8 +3881,39 @@ own speed changed up to 4 times within an hour on the day of these measurements,
 ratios more than the seconds. Work in this order: `vidgen render --draft` to see the whole video
 move (240 px on the shorter side at the video's shape: 240x426 at 9:16, 240x240 at 1:1;
 `draft: {width: 480, height: 270, fps: 12}` in the config for a larger one), `--preview` and
-`vidgen lint` when the timing is right, the final render once. Keep `web` scenes short (a few
+`vidgen lint` when the timing is right, the final render once. To look at one moment, `vidgen still` (above)
+draws single frames without rendering the scene. Keep `web` scenes short (a few
 beats each).
+
+- **Progress and where the time goes.** While a scene's frames are drawn, `vidgen render` prints
+  a line about every 10 s, and a summary after the last frame:
+
+  ```
+  [4/12] 04_escapement: web frames 120/482, 1.24 s a frame, about 7 min 29 s left
+  [4/12] 04_escapement: web frames 482/482 drawn in 9 min 58 s (the page ready in 8.0 s before), 1.24 s a frame (the page's frame(t, ctx) 0.02 s, drawing and the screenshot 1.22 s)
+  ```
+
+  "The page's frame(t, ctx)" is your JavaScript; "drawing and the screenshot" is the browser
+  painting the page — for WebGL the GL work your code asked for, done in software here (a
+  detailed three.js film page: about 1.1 s of its 1.24 s at 720p). To make a WebGL page faster,
+  draw less: fewer passes, a smaller bloom target, fewer motion-blur copies. With `--json` the
+  lines go to stderr, so the MCP `render` tool shows them as progress.
+- **No shader warm-up needed.** three.js compiles its shaders in the first frame it draws; that
+  frame may take 30 s (the others 10 s). Rendering a frame in `load` and reading a pixel back
+  only moves that time into `load`.
+- **Two scenes at once.** `--jobs 2` drew a two-scene WebGL test about 10 % faster than one job
+  on 2 cores (one scene's software GL already uses about 1.4 cores); `--jobs auto` decides by
+  memory.
+
+**Disk.** A `web` scene's frames are kept in a lossless clip until the scene plays them
+(`build/<quality>/web/<scene>.mkv`): a detailed WebGL page takes about 26 MB per second of video
+at 720p30 (5 GB for a 3-minute film), a flat page far less. `vidgen render` warns before it starts
+when the disk may be too small and prints the build folder's size after the join. For a long
+WebGL film on a small disk set `render: {intermediate: compact, keep_intermediates: false}` (or
+`vidgen render --intermediate compact --clean-intermediates`): the frames clips are about 4.6
+times smaller (one more lossy step, far below the final encode's) and each is deleted once its
+scene is rendered (a scene rendered again later draws its frames again). See CONFIG,
+"Intermediate files and disk".
 
 - **A draft needs a page that scales.** Its window is 426 CSS pixels wide: a page sized in `vw`,
   `vh`, `%` and `var(--vidgen-size-…)` looks the same as at 1080p, only smaller, and so does a
@@ -3700,6 +3927,8 @@ beats each).
   never replaces a preview. An unchanged scene is not drawn again: the frames are kept with every
   file the page loaded, and editing any of them (or its `data:`, the theme or the narration) draws
   that scene again.
+  This also holds for a scene of your own type that subclasses `Web` (for example a `web_cut`
+  without the fade-out).
 
 <!-- topic: particle-physics (also: particle, particle_physics, hep, higgs, standard-model, collider, feynman-diagrams) -->
 ## Particle physics: particles, collisions and discoveries
@@ -4091,6 +4320,60 @@ again only when the file changes). You cannot hear it, so work from measurements
    genre sketches (documentary, trance, synthwave, cosmic, cartoon): `docs/COOKBOOK-MUSIC.md`; a
    worked example with its log: `examples/gps-time-of-flight` (its piece is now the bed
    `time_of_flight`).
+   **Orchestral colours**: `trumpet`, `horn`, `low_brass` and `organ` are synthesised
+   instruments like the others (no samples); `low_brass` is a trombone section, and its `tuba`
+   setting adds a tuba underneath. Hold notes with `-`, as in `"A4 - - - . ."`. On brass two
+   settings shape the note: `brightness`, from 0 (soft and dark) to 1 (blaring), and `attack`
+   in seconds: 0.02 is tongued, 0.3 soft, 1 to 4 a swell that opens; `players: 4` makes a
+   section. The organ takes `registration: cathedral | principal | flute | reed | drawbar | full`
+   or your own `drawbars: "00 8400 000"` (in quotes) and wants a long `reverb`. Under a voice
+   keep brass soft, with `brightness` up to 0.4, and prefer the horn. Recipes:
+   `docs/COOKBOOK-MUSIC.md`, section 8.
+   **Bowed strings**: `violins`, `violas`, `cellos` and `double_basses` are sections (`players: 1`
+   makes a solo instrument). The setting `stroke` picks how they play. `stroke: sustain` bows
+   a note while its steps hold it; write a phrase without rests and the notes join.
+   `stroke: spiccato` plays one short stroke per note: use it for ostinatos in sixteenths, every
+   stroke is the same and equally loud (do not play a `pad` note by note for that, its level
+   changes from note to note). `stroke: tremolo` is a held note of fast strokes: with
+   `brightness: 0.8` and a rising `volume` curve a tension bed. `stroke: pizzicato` plucks; the
+   note rings until its steps end. `brightness`
+   0 is dark (over the fingerboard), 1 glassy (at the bridge); `mute: 1` veils; `attack` 0.5 and
+   more is a swell. A section of the piece can change the stroke:
+   `sections: {drop: {settings: {stroke: spiccato}}}`. Recipes: `docs/COOKBOOK-MUSIC.md`,
+   section 9.
+   **Orchestral percussion**: `timpani` and `toms` are written as notes (`"D2 . . . A2 . . ."`;
+   timpani D2–A3, toms from a floor tom G1 to a high tom C5), the big drums as drum steps:
+   `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, and the metal `cymbal` and `tam_tam`.
+   `players: 6` on the `taiko` in a hall is the wall of drums of film scores. `mallet`, from 0
+   (soft) to 1 (hard), sets the brightness of a blow; `pitch` in Hz tunes a big drum. `stroke: roll` (timpani,
+   toms, snare drum) rolls for the held steps; a roll growing into a hit is one track:
+   `"[roll pp <] A2 - - - - - - - | [hit ff] D2 . . ."` (see **Expression**). `stroke: swell` on `cymbal` or `tam_tam` grows by itself
+   until its held steps end: end it on the hit. Do not build drums from the `kick` any more:
+   it is one sine and stops at 160 Hz.
+   **Choir**: `choir` holds a vowel (`vowel: ooh | aah | eeh | mm | oh | ee`); it is a choir
+   pad and sings no words. `voices: mixed` gives each note to the kinds of voice that reach it;
+   `men`, `women`, `basses`, `tenors`, `altos`, `sopranos` choose. Hold chords
+   (`"* | - | - | -"`), give it a hall, and use `attack: 1` or more for a swell;
+   `{vowel: mm, morph: aah}` opens a held note from a hum. Recipes: `docs/COOKBOOK-MUSIC.md`,
+   section 10.
+   **Expression**: marks in square brackets stand before a step in a track's `steps` and last
+   until changed. Dynamics `[pp] [p] [mp] [mf] [f] [ff]` (or dB: `[-6]`; an unmarked note is
+   `mf`) change the level and, on brass, strings, choir and the orchestral drums, the tone:
+   louder is brighter and bites harder (the organ and the older instruments change level only).
+   A hairpin `[p <] ... [f]` or `[f >] ... [p]` moves the level from its step to the next
+   dynamic: over a held note it is a crescendo inside the note, over many notes a phrase
+   growing; a swell is `"[p <] A3 - - - [f >] - - - [p] ."`. `[fp]` starts loud and drops,
+   `[sfz]` stabs one note. A setting changes per note: `[pizzicato] D3 A2 [spiccato] D3 D3
+   [sustain] G3 - - -` on one cellos track, `[pitch=100] x` on a taiko, `[vibrato=0]`,
+   `[default]` back to the track's settings. Parentheses slur: `"(A4 - C5 - E5 - - -)"` is one
+   bow or breath whose pitch moves (brass, strings sustained or tremolo, choir, `soft_lead`);
+   `glide` sets the slide in seconds (0.06 clean, 0.2–0.4 a portamento, `[glide=0.3]` before one
+   note). `vibrato_speed` in Hz and `vibrato_delay` in seconds join `vibrato` on those instruments.
+   A section may play another instrument on the same track:
+   `sections: {lift: {instrument: trumpet}}`. A score without marks sounds exactly as before.
+   Notes outside an instrument's written range are reported by `vidgen music check` and
+   `render`. Recipes: `docs/COOKBOOK-MUSIC.md`, section 11; every instrument with its range
+   and main settings in one table: section 13; a cue using all of this: `examples/signal-fire`.
 5. **Use it** (`music: my_theme`), run `vidgen validate` (it reads the score) and `vidgen lint`
    (its `music_check` rule repeats the voice-range, highs, bass, steadiness, peaks and seam checks
    on the part of the piece the video plays). A piece keeps its own pace; to make its lift begin

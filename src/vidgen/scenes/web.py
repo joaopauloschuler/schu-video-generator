@@ -2,7 +2,8 @@
 Chromium at the render's frame rate and shown full-bleed (``region: bleed``) or in the body region
 under a title drawn by vidgen (``region: body``), under the overlays and captions.
 
-Before the scene plays, its frames are drawn into a lossless clip with alpha
+Before the scene plays, its frames are drawn into a lossless clip with alpha (compact with
+``render.intermediate: compact``, DESIGN.md §120.9)
 (``<render_dir>/web/<scene_id>.mkv``, with what it was drawn from beside it as ``.json``) at the
 size of the box the page fills, and reused while nothing that draws them changed; the clip is
 then a ``ClipMobject`` covering that box, so what the page leaves transparent shows the video's
@@ -70,6 +71,9 @@ class Web(NarratedScene):
         primary}``): text, numbers, true/false, null, lists and mappings; theme colour names are
         not resolved (the page looks them up in ``ctx.theme.colors``)."""
 
+        music_data: bool | WebMusicData = False
+        """The video's music for the page as ``ctx.music`` (DESIGN.md §120.8): ``true``, or ``{bands: 16, tracks: [kick, hook], t0: 41.6}``. Per video frame: spectrum bands, level, low end and onsets of the music the video plays; from a score file also every track's hits and notes in song time (``ctx.music.t0`` is the song time at the scene's start)."""
+
         design_width: int | None = None
         """For a page built in fixed pixels: the window width it was designed for, in CSS pixels (1280). The page is laid out in a window that wide (as high as its region's shape gives) and drawn at the video's size at every quality, so nothing in it needs rewriting; ``window.devicePixelRatio`` is output pixels per CSS pixel."""
 
@@ -97,8 +101,12 @@ class Web(NarratedScene):
 
     @classmethod
     def validate_project(cls, params: Any, project: Any) -> list[str]:
-        """The page or script file exists in the project folder and has the right suffix."""
-        return web_entry_problems(project.root, params)
+        """The page or script file exists in the project folder and has the right suffix; a
+        scene with ``music_data:`` is in a video that plays music."""
+        problems = web_entry_problems(project.root, params)
+        if getattr(params, "music_data", False) and not video_has_music(project.config):
+            problems.append("music_data: the video plays no music; add music: (a score file, a bed or a music file) or turn music_data off")
+        return problems
 
     def construct(self) -> None:
         title = self._title()
@@ -145,22 +153,37 @@ class Web(NarratedScene):
         area = self.safe_area
         return pixel_box(area.below(title, gap=0.45) if title is not None else area)
 
-    def _draw_view(self, box: Region) -> Path:
-        """The clip of the page's frames at the size of ``box`` (drawn now, or reused while its
-        inputs are unchanged); drawing it also reads the page's text at the stills' frames."""
+    def page_clip_args(self, box: Region | None = None) -> dict[str, Any]:
+        """What the page's frames are drawn from, as the arguments of ``make_web_clip``: the
+        project folder, the clip's folder, the size of ``box`` in pixels (default: the box the
+        scene gives its page, :meth:`_page_box`), the frame rate, how many frames, the theme,
+        the beats, the video's shape and, with ``music_data:``, ``music`` (§120.8). ``vidgen still`` draws single frames from the same
+        arguments (DESIGN.md §120.3)."""
+        if box is None:
+            box = self._page_box(self._title())
         spans, frames = clip_plan(self, SPARE_FRAMES)
         frame = (int(config.pixel_width), int(config.pixel_height))
         per_unit = frame[0] / self.frame_width
         size = (max(1, round(box.width * per_unit)), max(1, round(box.height * per_unit)))
         theme, beats = web_page_inputs(self, spans, web_page_viewport(size, self.params.design_width)[1])
-        self._clip_args: dict[str, Any] = {
+        music = self.params.music_data
+        extra: dict[str, Any] = {}
+        if music:
+            settings = music if isinstance(music, WebMusicData) else WebMusicData()
+            extra["music"] = web_scene_music(self.project, self.spec.id, int(config.frame_rate), settings)
+        return {**extra,
             "root": self.project.root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
             "params": self.params, "size": size, "fps": int(config.frame_rate), "frames": frames, "theme": theme,
             "beats": beats, "shape": web_page_shape(frame, self.params.region),
         }
+
+    def _draw_view(self, box: Region) -> Path:
+        """The clip of the page's frames at the size of ``box`` (drawn now, or reused while its
+        inputs are unchanged); drawing it also reads the page's text at the stills' frames."""
+        self._clip_args: dict[str, Any] = self.page_clip_args(box)
         self._still_frames = planned_still_frames(self)
         self._layouts: dict[int, dict[str, Any]] = {}
-        return make_web_clip(**self._clip_args, layout_frames=self._still_frames)
+        return make_web_clip(**self._clip_args, layout_frames=self._still_frames, intermediate=self.project.config.render.intermediate)
 
     def page_layout(self, frame: int) -> tuple[dict[str, Any], Mobject] | None:
         """What text the page shows at output frame ``frame`` (the clip's frame of that index) and

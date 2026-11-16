@@ -263,12 +263,14 @@ src/vidgen/
                           # shared through a Cloudflare quick tunnel, `generate host-test`; §115)
   generated_layer.py      # takes laid into a scene's frames under the overlays (§113.4; a render input)
   browser/                # Chromium shared by `3d` and `web` (§118.5): chromium.py (start / stop, missing-browser
-                          # check and validate warning, FFV1 clip writer), timing.py (clip_plan: frames to draw;
+                          # check and validate warning), frames_clip.py (the frames clip writer: lossless FFV1
+                          # or compact H.264 + alpha stream, §120.9), timing.py (clip_plan: frames to draw;
                           # planned_still_frames: the frames a capture takes stills of, §118.12)
   web/                    # `web` scenes (§118): entry.py (page / script checks, fingerprint), page.py (serving
                           # the project folder, errors, screenshots), clip.py (the cached clip), inputs.py (theme
                           # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10),
-                          # layout.py (the page's text as layout objects, for lint; §118.12)
+                          # layout.py (the page's text as layout objects, for lint; §118.12), still.py
+                          # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -278,7 +280,8 @@ src/vidgen/
                           # (`make_3d_clip`: drawn or reused), passes.py (guide passes: depth, outline,
                           # mask; §114.14)
   httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
-  render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
+  render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py, disk.py (frames clips:
+                          # disk estimate, warning, deleting, the build folder's size; §120.9),
                           # fingerprint.py (what a scene's render depends on, §14),
                           # jobs.py (`--jobs auto`: memory and cores, §70)
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
@@ -345,6 +348,7 @@ src/vidgen/
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
                           # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
+  data/web/modules/        # three-finish.js: vidgen's own module `vidgen/three-finish` for three.js web scenes (§120.11)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -2961,6 +2965,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   than 2 s ahead seeks to the key frame before `t`. Only the current frame (and its converted
   picture) is held. Conversion is FFmpeg's scaler (`VideoFrame.to_ndarray(width, height,
   format="rgba")`) to the decode size of the whole picture, then the crop is sliced out.
+  A file with a second video stream titled `alpha` (a compact frames clip, §120.9) is read by
+  a second reader on that stream at the same times, its `gray` picture becoming the alpha channel.
   `set_resolution(scale)` sets the decode size: the size shown × `scale` (focus / zoom), as far as
   the clip has pixels inside the crop, and never less than the size shown — so at magnification 1
   the decoded frame has exactly the on-screen size and the camera copies it pixel for pixel:
@@ -23250,7 +23256,8 @@ Opening: `goto(…, wait_until="load")`, then `wait_for_function`: an error was 
 (its load event never came or a module never finished loading; not answered: <404s and refused
 URLs>)`. Then `start(info)`; any error so far stops the render. Frame *n*: `frame(n / fps)`; an
 error stops the render; then `page.screenshot(type="png")` of the viewport, decoded and checked
-for size (`png_pixels`).
+for size (`png_pixels`). (Since Step 349 the same picture through `Page.captureScreenshot` with
+`optimizeForSpeed`, §120.10.)
 
 Error messages (`error_message`): `scene '<id>': JavaScript error in <file> line <n> <when>:
 <Error name>: <message>` with *when* `at load` or `in frame(t=0.500)`. The file and line come
@@ -23432,7 +23439,8 @@ for ids and noise, and a page cannot reach anything that needs secret numbers. N
 `crypto.subtle` keys.
 
 **Time limits** (`_TimeLimit` in `web/page.py`): `start` (fonts, pictures, videos, `load`) may take
-`LOAD_TIMEOUT_S` = 30 s, each frame (steps 1–6) `FRAME_TIMEOUT_S` = 10 s. Playwright's `evaluate`
+`LOAD_TIMEOUT_S` = 30 s, each frame (steps 1–6) `FRAME_TIMEOUT_S` = 10 s (the first frame a page
+draws `FIRST_FRAME_TIMEOUT_S` = 30 s since Step 349, §120.10). Playwright's `evaluate`
 has no timeout, and a promise that never settles is not bounded by CDP's `Runtime.evaluate`
 `timeout` (checked), so a timer thread ends the page's renderer processes (their ids from
 `SystemInfo.getProcessInfo` after the page opened; `os.kill`, `SIGTERM`, `TerminateProcess` on
@@ -23534,6 +23542,8 @@ the page stays in standards mode). The Python scene computes `theme` and `beats`
 - **`--force`**: `render_project` removes the records (`forget_web_clips`) of the `web` scenes it
   renders, so their frames are drawn again; without `--force` a re-render reuses an unchanged clip.
 - `3d` clips and keys are unchanged.
+- **Step 341:** all of this also holds for a scene of an extension type that subclasses `Web`
+  (`is_web_type`, §120.1); until then such a scene had no `web` part and its script was in no key.
 
 ### 118.11 A `web` scene fits with the rest of a video (Step 331)
 
@@ -24206,3 +24216,1215 @@ by the whole video.
   `.ttf`, with `.woff` and with the variable `.ttf`, and in a fallback font without the folder;
   both scenes are rendered again after each change of `fonts/` and reused after none. Not tried
   on Windows or macOS.
+
+## 120. What three music films asked of the generator (Phase AL, Steps 341–351)
+
+Three music films were made with vidgen as plain projects outside this repository: "Parallel
+Space" (two versions; three.js `web` scenes, a 29-track score, a hand-written script that gave
+the page the spectrum, the drum hits and the notes) and "Escapement" (clockwork in three.js with
+hand-written depth of field and motion blur). Their authors reported limits, and the owner asked
+(2026-11-14) for all of them to be built. One step each:
+
+| Step | What | Section |
+|---|---|---|
+| 341 | Fix: a scene of an extension type that subclasses `Web` was not rendered again when its script changed; a module waiting for several fetches sometimes never became ready | §120.1, §120.2 |
+| 342 | `vidgen still`: single frames of a `web` scene's page without rendering it | §120.3 |
+| 343 | Synth instruments: brass (`trumpet`, `horn`, `low_brass`) and a drawbar `organ` for score files | §120.4 |
+| 344 | Synth instruments: bowed strings (`violins`, `violas`, `cellos`, `double_basses`; sustained, spiccato, tremolo, pizzicato) | §120.5 |
+| 345 | Synth instruments: orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam`) and a `choir` | §120.6 |
+| 346 | Expressive notes in the score format: dynamic marks, hairpins, slurs with a glide, vibrato speed and delay, settings per note, an instrument per section, a range warning | §120.7 |
+| 347 | Built-in music data for `web` scenes: `music_data:` gives a page `ctx.music` | §120.8 |
+| 348 | Smaller intermediate files: `render.intermediate: compact`, `render.keep_intermediates: false`, the disk estimate and report of `vidgen render` | §120.9 |
+| 349 | Faster `web` rendering, measured first: a quicker PNG, the frames clip written beside the drawing, a progress line, the first frame's time limit | §120.10 |
+| 350 | Ready-made finishing for three.js `web` scenes: the module `vidgen/three-finish` (depth of field, motion blur, bloom, tone mapping, grade, vignette, grain, FXAA, studio and nebula bakers, surface finishes, soft shadows) | §120.11 |
+| 351 | Critical review with fixes, documents, an example (`examples/signal-fire`) | §120.12 |
+| 352 | "Escapement" as an example under `examples/` (owner's request, 2026-11-16): the published film's source, its music data from `music_data` | §120.13 |
+
+Rules of the phase: the films' scores must synthesize to the same audio as before each step, and
+stored cache keys are not invalidated without a written reason.
+
+### 120.1 A scene type that subclasses `Web` is a `web` scene for the cache (Step 341)
+
+- **The report.** In "Escapement", after an edit to `extensions/escapement.js`, `vidgen render .`
+  reused the old scene clips; only `--force --scene ID` rendered them again. The project's twelve
+  scenes are of an extension type: `extensions/webcut.py` holds `@scene("web_cut") class
+  WebCut(Web): outro = 0.0`, and each scene has `params: {script: extensions/escapement.js, data:
+  {...}}`; the script fetches `./escapement_audio.json`.
+- **Reproduced** in a scratch project of that layout (two `web_cut` scenes and one `web` scene on
+  one script that imports `./helper.js` and fetches `./x_audio.json`): after an edit to the
+  script, to the imported file or to the fetched file, `vidgen render .` rendered the `web` scene
+  and reused both `web_cut` scenes, at every quality and with `--jobs 2`.
+- **Cause.** The render fingerprint added a scene's `web` part (§118.10: the script's SHA-256 and
+  every file the page loaded) only `if spec.type == "web"`. A scene of another type name had no
+  such part, so nothing in its fingerprint named the script: `extensions` in the fingerprint
+  digests the `*.py` files of the extension folders only, and `assets` only `assets/`. The scene's
+  render was therefore "current" and its worker never ran, so the clip's own check
+  (`make_web_clip`, which does compare the script and the loaded files) was never reached. Step
+  330's claim held for the type `web` and for no subclass of it.
+- **Fix.** `vidgen.web.entry.is_web_type(name)`: true for `web` and for a registered type whose
+  class has the built-in `vidgen.scenes.web.Web` among its bases (told from the class's `__mro__`
+  by module and name, so nothing is imported). `fingerprint_inputs` uses it, and so does
+  `render_project` for `--force` (which removed the clip records of `web` scenes only: a forced
+  `web_cut` scene was rendered again but showed its stored frames). A type the registry does not
+  know (no project session active) counts only when it is `web` itself; then the fingerprint of a
+  subclass scene lacks the part and differs from the stored one, so the scene is rendered again
+  rather than wrongly reused. Every caller of `scene_fingerprint` in vidgen runs inside a
+  project session.
+- **Not a web type:** an extension scene that does not subclass `Web` and calls
+  `vidgen.api.make_web_clip` itself. Its script is in no fingerprint; it should subclass `Web`, or
+  keep its page under `assets/` (size and time are in every scene's fingerprint).
+- **Stored renders.** The fingerprint of a scene of a `Web` subclass now has the `web` part, so
+  each such scene is rendered once more after this step (reason: the stored renders may be stale,
+  which was the fault). Its frames clip (`build/<quality>/web/<scene>.mkv`) has its own key, which
+  did not change: the frames are reused when the script and loaded files are as recorded, and
+  drawn again when not. Scenes of type `web` and of every other type keep the same inputs.
+- **Checked, and already right** for the type `web` (and now for subclasses): files the script
+  imports and fetches; a file asked for and not found that is created later; a file recorded only
+  by the first render; an edit seen at one quality and then at the others (final, `--preview`,
+  `--draft`); `--jobs 2`. Tests: `tests/test_web_extension_cache.py`.
+
+### 120.2 Waiting for a page to become ready (Step 341)
+
+Found while reproducing §120.1. A `script:` module that awaited two fetches one after the other at
+its top level failed in about one run in three with `did not become ready within 30 s`.
+
+- **Cause.** `WebPage._open` waited with Playwright's `page.wait_for_function`. That looks once
+  and then looks again from inside the page, on `requestAnimationFrame` or on `setTimeout`. Both
+  are vidgen's clock (§118.8), which stands at 0 until frame 0, so the second look never came. A
+  module that had finished by the first look was fine (one fetch usually had); one still waiting
+  then was never seen to finish. Measured on a module with two awaited fetches, before: 6 of 14
+  opens failed with the default polling and 9 of 14 with `polling=50`; after: 0 of 14.
+- **Fix.** `WebPage._wait_until_ready` asks from Python (`page.evaluate`) every `READY_POLL_MS`
+  (20 ms) until `READY_TIMEOUT_MS`, and waits between two looks with `page.wait_for_timeout`,
+  which keeps Playwright answering the page's requests (`time.sleep` would not). The message of a
+  page that never becomes ready is unchanged up to its last part (`: not ready after 30000 ms`).
+- Frames, clip keys and the page's script are unchanged (`data/web/*.js` untouched).
+
+### 120.3 `vidgen still`: single frames of a `web` scene's page (Step 342)
+
+- **The report.** The films' authors had no way to see one full-size frame of a `web` scene at
+  an exact time without rendering its clip (Escapement: 2 s a frame, 480 frames a scene). Each
+  wrote a script that drove `vidgen.web.page.WebPage` itself, with a theme copied by hand, the
+  scene's `data:` typed again, several times in one browser session, several sizes and a contact
+  sheet.
+- **Existing commands looked at first.** `vidgen storyboard`, `vidgen lint` and `vidgen render
+  --frames` take stills from a scene's render (the whole clip is drawn; stills at beat ends).
+  `vidgen thumbnail --scene ID --at S` extracts a frame from the scene's rendered MP4 and writes
+  it as the video's thumbnail. None draws a frame without the render, so this is a new command;
+  it reuses `WebPage`, the scene class and `vidgen.sheets.load_font`.
+- **Command.** `vidgen still [PROJECT] --scene ID (--at SECONDS | --frame N | --count N)...
+  [--size final|preview|draft|WxH] [--variant NAME] [--out FILE|DIR] [--sheet FILE [--columns N]]
+  [--exact] [--transparent] [--json]` (`cli.cmd_still`, `vidgen.web.still.make_web_stills`).
+- **Same page setup as the render.** `still.page_setup` builds the scene as the render worker
+  does: the project loaded for the quality (`Project.load(draft=)`), its extensions activated,
+  Manim configured by `render.worker.configure_manim` (inside `manim.tempconfig`, with a
+  temporary media folder), the scene's class instantiated, not rendered. The scene then says what
+  its page is drawn from: `Web.page_clip_args(box=None)`, the arguments of `make_web_clip` (page
+  size from the scene's own `_title()` and `_page_box()`, frame rate, frame count from
+  `clip_plan`, theme and beats from `web_page_inputs`, the shape). `Web._draw_view` uses the same
+  method, so a render and a still cannot differ in these. `make_web_stills` opens one `WebPage`
+  with them and calls `page.frame(n)`.
+- **Time.** `--at t` is seconds from the scene's start (the page's `t`); the frame is
+  `round(t * fps)`, the frame whose picture the render shows at that time. `--frame N` names it
+  directly. Allowed: 0 to `frames - 1` (the frames the render draws, its spare frames included);
+  outside is an error naming the range. Video time is not accepted (see "Not done").
+- **Size.** `final`, `preview`, `draft`: that render's format. `WxH`: the project's `format`
+  replaced by that size at the final frame rate before the extensions are activated, so the
+  theme's sizes, the shape and the page box follow it (`FormatConfig`'s rule holds: even numbers).
+- **Order and state.** Stills are drawn in the order asked. One page serves while each frame is
+  later than the page's; otherwise the page is closed and a new one opened (the clock cannot run
+  back); a frame asked twice is drawn once. Default: `page.frame(n)` straight from the page's
+  frame (all timers due run, one round of animation-frame callbacks, then `frame(t, ctx)`,
+  `data/web/runtime.js`). For a page whose picture is a function of the time (§118.15's
+  "alone: yes" rows) this is the render's frame. For one that keeps state ("alone: no": Motion,
+  lottie-web autoplay, GSAP's own ticker, a D3 force simulation, a counter, a canvas drawn over
+  itself) it is the picture without the frames between, and it depends on the stills drawn before
+  it on the same page. `--exact` calls `page.advance(k)` for every frame from the page's to
+  `n - 1` first (no screenshots, as `web_page_layouts` does, §118.12), which is what the render
+  does apart from the screenshots. The default is the fast one because the films' pages are
+  functions of the time and a stepped still costs every frame's drawing time (0.4 s a frame at
+  640x360 on Escapement); the guide says when `--exact` is needed.
+- **What is written.** PNG files: `--out FILE.png` (one still) or a folder, default
+  `<project>/exports/stills/`, named `<scene>_<seconds, 8 wide, 3 decimals>s.png`. The page's
+  RGBA laid over the theme's background colour (RGB), or the RGBA itself with `--transparent`.
+  `--sheet FILE`: a grid up to 1920 px wide (`still.contact_sheet`), each still scaled down to
+  its column (never enlarged) with `scene  t s  fN` under it; columns `ceil(sqrt(n))` up to 6, or
+  `--columns`. Nothing under `build/<quality>/`: no clip, no record, no fingerprint is read or
+  written, so no cache key is touched.
+- **Errors** (`VidgenError`): an unknown scene with the closest id and the list of web scenes; a
+  scene of another type, naming `vidgen storyboard --scene ID --per-beat N` (drawing other types
+  needs their render: not cheap, not built); a time or frame outside the scene; no `--scene`; no
+  time at all; a bad `--size` (did-you-mean for a quality's name); `--out FILE.png` with several
+  stills.
+- **Proof.** `tests/test_web_still.py::test_stills_equal_the_frames_of_the_rendered_page_clip`
+  renders a small project and compares stills with the frames of `build/<quality>/web/<scene>.mkv`
+  (FFV1, lossless, with alpha) with `np.array_equal`: a `Web` subclass at final and preview size,
+  a page in `region: body` under a title (over the background), and a page that counts its
+  frames (`--exact` equal to the clip; without it the documented other picture). On the film:
+  eight stills of `04_escapement` at 1280x720 (`--transparent`, frames 0 to 420) are identical to
+  the frames of the film's own `build/final/web/04_escapement.mkv`.
+- **Measured** on Escapement (three.js, depth of field and motion blur by repeated drawing; 2
+  cores): vidgen starts in about 3 s, the page is ready after 8.4 to 9.5 s, then 2.17 s per still
+  at 1280x720 (8 stills, 30 s in all), 0.52 s at 640x360 (`preview`), 0.26 s at 320x180;
+  `--exact` at 640x360: 6.2 s for frame 15 (16 frames). A render of that scene draws 480 frames.
+- **MCP.** The `still` tool follows the command (`at` and `frame` as lists, `sheet: true` writes
+  `contact_sheet.png` in the stills' folder) and returns the pictures, the sheet first, paged like
+  the storyboard's. Paging draws the stills again (nothing is cached).
+- **JSON.** `vidgen still --json`: `scene, type, entry, size, width, height, fps, frames, region,
+  exact, transparent, stills: [{path, frame, time, seconds}], sheet, pages, load_seconds, seconds`.
+- **Interfaces.** `vidgen.scenes.web.Web.page_clip_args` (new method, used by `_draw_view`);
+  `vidgen.web.still` (internal module); `vidgen.api` unchanged.
+- **Not done.** A time on the video's clock (`--at` without `--scene`); stills of other scene
+  types; values of `data:` overridden from the command line; with `--exact`, a WebGL canvas that
+  is never cleared and relies on every frame being shown may still differ (no screenshot is taken
+  of the stepped frames); a still with vidgen's title, overlays and captions. Windows and macOS
+  not tried.
+
+### 120.4 Brass and organ for score files (Step 343)
+
+- **The report.** "Parallel Space v6" was asked to replace bell sounds with "trumpets, organs,
+  violins or even drums". The score synthesizer (§93) had none, so the film built a trumpet from
+  `soft_lead` (a fixed saw-like spectrum behind a low-pass), brass and horn from `saw_pad`
+  (PADsynth saws with a slow attack) and an organ from the `glass` pad (three harmonics). Missing:
+  a spectrum that changes with the level, the attack of lips, body resonances, organ ranks.
+- **Four instruments** of kind `note`, in two new families of the catalogue (`brass`, `organ`,
+  between `leads` and `pads`): `trumpet`, `horn`, `low_brass`, `organ`. No samples, no SoundFont,
+  numpy only. Modules: `studio/additive.py` (wave tables), `studio/brass.py`, `studio/organ.py`;
+  registered in `studio/instruments.py`.
+- **Additive synthesis through wave tables** (`additive.py`). A note's harmonics (all at or under
+  16 kHz, the last 2 kHz faded: `HIGHEST_PARTIAL`) are summed once by an inverse FFT into one
+  period (`wavetables`; at least 128 samples per period of the highest harmonic, so linear
+  interpolation errs by under −70 dB), and the note reads the table along its phase
+  (`read_tables`). A note with 390 harmonics (E1) costs per sample what one with 3 does, vibrato
+  and pitch slides are a changing phase step, and a spectrum that changes over the note is a
+  cross-fade between a few tables (`row`). Nothing above the Nyquist frequency is ever made, so
+  there is nothing to alias. `remembered` keeps the last 48 notes of up to 2 s (an ostinato
+  repeats few notes many times).
+- **Brass** (`brass.py`), one model with four bodies (`TRUMPET`, `HORN`, `TROMBONE`, `TUBA`: the
+  bell's cutoff 1250 / 480 / 620 / 300 Hz, two or three fixed formants, roll-off above the cutoff
+  when soft and when loud, cents of scoop):
+  - *The spectrum follows the level.* `spectrum(body, Hz, brightness)`: harmonic `h` is weaker by
+    `h ** -(1.2 * (1 - b))` (soft playing: nearly a sine), a high-pass at the cutoff (the tube
+    radiates little below it), a roll-off above `cutoff * 2 ** (0.5 * (b - 0.5))` whose power
+    falls from about 4.5 (soft) to 1.5 (loud), and the formants. A note cross-fades between 8
+    such spectra along `b(t) = brightness * level(t) ** 1.6`: the upper harmonics arrive after
+    the fundamental in the attack, a long attack is a swell that opens, the release darkens. The
+    held part is normalised to RMS 1 whatever the pitch and brightness, so `brightness` changes
+    the tone, not the level.
+  - *The lips.* The pitch starts `scoop` cents flat (trumpet 28, horn 36, trombone 22, tuba 18)
+    and reaches the note with a time constant of 35 ms; an attack of 0.12 s or less is "tongued"
+    and overshoots by up to a quarter for a tenth of a second; breath noise around twice the
+    cutoff, strongest in the first 50 ms; two slow random pitch drifts of about 1 cent.
+  - *Vibrato* 5.3 Hz, nothing before 0.28 s, full after a further 0.45 s (short notes have none).
+    Default 9 cents on the trumpet, 0 on horn and low brass (orchestral horns and trombones play
+    straight).
+  - *Sections* (`players` > 1): each player `detune` cents apart (permuted) plus up to 1.5 cents
+    of its own, entering up to 28 ms late, spread left to right (stereo; a solo is mono).
+    Players a few cents apart drift in and out of step slowly, so their plain sum is for a second
+    at a time up to 6 dB louder or much quieter than the players together, by chance per pitch:
+    measured before the fix, four horns differed by 9 dB from note to note in the first 0.3 s.
+    `levelled` (in `additive.py` since Step 344) therefore brings the sum's power, averaged over whole periods (50 ms or more), to
+    the sum of the players' powers (a gain of at most 8 dB either way). Choosing the players'
+    starting phases instead was tried and did not help beyond the first 50 ms.
+  - `low_brass` is a trombone section (4 players by default) with `tuba`: the level of a tuba an
+    octave lower (in unison under 27 Hz). With `attack` 1 to 4 and `brightness` 1 it is the low
+    swell of film scores; `attack` about 0.2, `tuba: 1`, 8 players and a second or a fifth added
+    is the heavy low note of trailers.
+  - Settings: `attack` (0.01–4 s), `brightness` (0–1), `vibrato` (0–40 cents), `breath` (0–4),
+    `ring` (the release, 0.03–2 s), `players`, `detune` (0–25 cents); trumpet and horn `mute`
+    (0–1: lows thinned, a peak near 2.2 kHz); low brass `tuba` (0–1.5). Written ranges (shown by
+    `music patches`, not enforced): trumpet E3–C6, horn B1–F5, low brass E1–F4.
+- **Organ** (`organ.py`). Nine ranks at the drawbar footages 16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5'
+  1 1/3' 1' (pitch ratios 0.5, 1.5, 1, 2, 3, 4, 5, 6, 8), each drawn 0 to 8 at 3 dB a step. A
+  rank above 6 kHz plays an octave lower (mixtures break back, a tonewheel organ folds), one under
+  27 Hz an octave higher; ranks that land on one pitch are one rank with their powers added.
+  - `registration` names the drawbars and the kind of pipe: `cathedral` (`608756045`, principals:
+    16' 8' 4' and mixtures, the default), `principal` (8' + 4'), `flute` (stopped flute: odd
+    harmonics), `reed` (many harmonics, a peak near 1.5 kHz), `drawbar` (`888000000`, sine ranks:
+    an electric organ), `full` (every bar out, sines). `drawbars` (nine digits in quotes,
+    `"00 8400 000"`) replaces the registration's bars and keeps its pipes.
+  - *Steady.* No decay; every pipe starts at the same point of its wave and the note is
+    normalised by the power of the partials as they add (ranks share partials: the 4' rank's
+    fundamental is the 8' rank's second harmonic), so a note has the same level and tone every
+    time, whatever the registration, plus 1 dB per octave towards the bass (measured: the same
+    loudness in LUFS from C1 to C7). An earlier version with two detuned pipes per rank beat by
+    3 to 9 dB inside a note; that is now the option `chorus` (a second pipe per rank 3 to 6 cents
+    away on the other side: a celeste). `detune` (default 0) puts the ranks a fraction of a cent
+    apart: slow shimmer, and the tone of a held note then drifts.
+  - *Speech.* A pipe reaches its level after `speech` periods (9 for principals, 7 flutes, 5
+    reeds; low pipes later; never under 10 ms, which is also the electric organ's), with a
+    "chiff": its octave (the stopped flute: its twelfth) sounding first, and 35 ms of wind noise.
+    The release is a raised cosine over `ring` (0.09 s). `click` (default 0) adds an electric
+    organ's key click.
+  - *Stereo.* A rank's pipe stands 0.2 to the left or right, alternating by semitone and by rank
+    (as pipes stand in a case), so a single note is near the middle and a chord is wide.
+- **Score format.** Settings were numbers only. `Setting` gained `choices` (names for the whole
+  numbers from 0: `registration: flute`, or `2`) and `read` (a setting with its own notation:
+  `drawbars`); `score_file._setting_value` reads them and reports an unknown name with the closest
+  one. Inside the score both are still numbers (`TrackPart.settings` is unchanged), so a section
+  can change them like any setting. An unquoted `drawbars: 008400000` is refused (YAML reads it
+  as another number). `Instrument` gained `seeded` (its `make` takes a seed text,
+  `studio:<score seed>:<track name>`: two tracks in unison are two players, while one track
+  plays the same note the same way every time) and `range`. `music patches --json` gained
+  `range` on these four instruments and `choices` on `registration`; other entries are unchanged.
+- **Levels.** One held note at default settings measures -16.4 LUFS (trumpet), -16.8 (horn),
+  -16.1 (low brass), -17.1 (organ), each note alone before the piece is brought to -28. The
+  existing instruments span -7.8 (`pad` chords) to -21 (`glass`, `sub`); `soft_lead` is -20.4,
+  piano chords -16, a `saw_pad` chord -10. The four sit at the level of piano chords: 3 to 4 dB
+  above `soft_lead` (brass carries more than a synth lead) and 6 dB under the saw pads, so a
+  score that replaces a `saw_pad` "brass" with `low_brass` raises it by about 6 dB. A chord is as
+  loud as one note (as for every `note` instrument), a section as loud as one player.
+- **Measured** (scratch scripts; tables in HANDOFF Step 343): attack to 90 % in 39 ms (trumpet
+  default), 14 ms (`attack: 0.02`), 258 ms (`attack: 0.3`); the eighth harmonic reaches half its
+  level 13 ms after the fundamental; spectral centroid at A4 from 655 Hz (`brightness: 0`) to
+  2059 Hz (1) at the same RMS; pitch 11 cents flat at 30 ms, within 1 cent at 100 ms; vibrato
+  under 1 cent before 0.3 s, ±10 cents after 1 s, 5.3 Hz; level across each range within 0.1 dB
+  RMS and 0.2 dB LUFS (solo and sections), the level inside a held note within 0.1 dB (organ,
+  solo brass) and 0.6 dB (sections); power between the harmonics at C6 and A6 under
+  −95 dB (no aliasing), no partial above 15.9 kHz; first sample 0, last under −140 dB; one note
+  costs 12 ms of CPU per second of sound (trumpet, horn), 37 ms (four trombones), 6 to 36 ms
+  (organ, by registration) against 7 ms for `soft_lead`.
+- **Existing scores are unchanged.** `_render_hits` passes the seed only to `seeded` instruments;
+  no existing instrument, default or cache key changed. Both film scores render to the same
+  bytes as on the code of Step 342 (SHA-256 in HANDOFF).
+- **Honest limits.** These are models, not recordings: no valve or slide noise, no slurs between
+  notes (each note has its own attack; Step 346 plans glide), no flutter-tongue, no falls; the
+  horn has no hand-stopping pitch change; the organ has no swell box, no tremulant and no
+  Leslie; a section's players do not differ in tone. Nobody has listened: the judgment is by
+  measurement and spectrograms, with demo files for the owner.
+
+### 120.5 Bowed strings for score files (Step 344)
+
+- **The report.** "Parallel Space v6" played its violins on the PADsynth `pad` note by note and
+  its short bow strokes on `soft_lead`. Its agent wrote: "single clean voices, not a section, may
+  read as a synth sequence rather than bowed strings", and "PADsynth pads fluctuate randomly in
+  level from note to note, so they are unusable for an even ostinato". Measured here on
+  sixteenths at 138 BPM: the `pad`'s notes differ by up to 8 dB, and the same note played again
+  by up to 4.3 dB (its wave is one long random loop, read from wherever the note falls).
+- **Four instruments** of kind `note` in a new catalogue family `strings` (between `organ` and
+  `pads`): `violins` (G3–C7, 6 players), `violas` (C3–E6, 5), `cellos` (C2–A5, 4),
+  `double_basses` (C1–G4, 3; not `basses`, which is the family of the synth basses). One model
+  (`studio/strings.py`), four bodies, and a setting `stroke` with the named values `sustain`,
+  `spiccato`, `tremolo`, `pizzicato` (a section of the piece can change it like any setting, so
+  one track bows a melody in one section and plays an ostinato in the next). `players: 1` is a
+  solo instrument (mono). The old `pizzicato` instrument is unchanged.
+- **The string.** `bowed(body, Hz, brightness)`: a bowed string moves like a sawtooth, harmonic
+  `h` at `1 / h`, for `brightness` 0.5. Towards 0 (the bow over the fingerboard, sul tasto) the
+  exponent grows to 2.1 and a corner falls from 3.2 kHz to 1 kHz (violin; lower for the larger
+  bodies); towards 1 (at the bridge, sul ponticello) the exponent falls to 0.3, the corner rises
+  and the fundamental thins (to 0.3 at 1). `plucked(...)`: a string pulled aside a sixth of the
+  way along (`|sin(pi h p)| / h`, a low-pass at about 2.4 kHz), nearer the bridge and harder for
+  more `brightness` and `accent`.
+- **The body** is what separates a string instrument from a saw wave behind a filter.
+  `response(body, Hz, player, mute)` is a curve in dB fixed in frequency: little under the air
+  resonance (violin 275 Hz, viola 225, cello 98, bass 60), three narrow air and plate
+  resonances (+4 to +5 dB), a broad "bridge hill" (2.7 kHz / 2.2 / 1.4 / 0.82, +5 to +7 dB), a dip
+  under it, a roll-off above 4.6 / 3.9 / 3.0 / 2.1 kHz, and 40 narrow resonances of ±5 dB
+  between them, drawn once per body **and per player** (every player of a section has another
+  piece of wood, the same one for every note). A harmonic's amplitude is the string's times the
+  body's at that harmonic's frequency, so every pitch has its own balance of harmonics.
+  `mute` (con sordino) takes the bridge hill away, adds a small hump under it and lowers the
+  highs by 9 dB.
+- **Vibrato moves the tone, not only the pitch.** A sustained note's wave tables are 5 rows: the
+  body sampled at 5 pitches across the vibrato's swing; the note reads between the rows along its
+  pitch. Each harmonic therefore rises and falls as it slides along the body's slopes (measured
+  at A4, 12 cents: 1 dB on the fundamental, 3.5 dB on harmonic 8, 5.4 dB on harmonic 10; without
+  vibrato 0.1 dB). The vibrato begins 0.16 s into a note and grows for 0.35 s (5.8 Hz for a
+  solo; each player of a section 5.2–6.4 Hz, 0.6–1.1 of the depth, its own delay and phase).
+- **The bow.** Rosin noise shaped by the body, in bursts once per period of the note, following
+  the players' level (3.5 % of the tone, twice that in a tremolo); a scratch of 12–24 ms where a
+  stroke begins when the `attack` is under 0.15 s (and always in a spiccato), with a short
+  overshoot; both scaled by `accent` (0–2) and `bow` (0–4). A sustained note starts and ends
+  with fewer upper harmonics (a cross-fade to a darker spectrum while its level is under the
+  full level); its release lasts `ring` seconds (0.25 by default), so notes that follow each
+  other without a rest overlap: the nearest thing to a legato until Step 346.
+- **Short strokes are made from time alone.** A spiccato's spectrum is a row of wave tables per
+  moment since the stroke began: the bite (brighter by `0.12 * accent`), the bow on the string
+  for `length` seconds (0.07; 0.15–0.25 is a staccato), then the string ringing on with every
+  harmonic dying at its own speed (the fundamental's time 55 ms for a violin at A4, longer for
+  lower notes and larger bodies, times `decay`; harmonic `h` faster by `1 + 0.12 (h - 1)`). A
+  pizzicato is the plucked spectrum ringing from the start (200 ms at A4 on a violin, 1.3 s at
+  E1 on a bass; harmonic `h` faster by `1 + 0.3 (h - 1)`), a pitch 10 cents sharp for 30 ms and
+  a thump of the body. Both ring until their steps end and are then damped over `ring`. Nothing
+  depends on chance at render time: the same pitch, length, settings and track give the same
+  samples (and `additive.remembered` makes each note of an ostinato once).
+- **A section that is even.** Each player is a few cents off (`detune`, 8), starts up to 30 ms
+  late in a sustained note, 6 ms in a spiccato, 12 ms in a pizzicato, and stands somewhere from
+  left to right. Three things keep the level steady:
+  1. A sustained note's slow swings are taken out by `additive.levelled` (moved there from
+     `brass.py`, unchanged), here on each side alone: without that the section leant up to 3 dB
+     to one side on some notes.
+  2. In a stroke of a tenth of a second the players' low harmonics stay as they began, adding
+     up at one pitch and cancelling at the next: the first version's notes were up to 2.5 dB
+     apart in loudness between a solo and a section at the same pitch. `_in_step` therefore
+     picks, per harmonic, of 16 random sets of the players' phases the one whose sum is nearest
+     the sum of the players' powers (`wavetables` gained an optional phase per harmonic), and
+     the energy of each side is then set to that of its players.
+  3. Every note is set to the same loudness, not the same RMS: `_loud` weighs the harmonics as
+     the loudness measure does (4 dB more above about 1.5 kHz), so a high violin note is not
+     louder than a low one.
+- **Tremolo.** The level of a held note follows fast bow strokes (`speed`, 13 a second): between
+  a floor and 1, the string ringing on between strokes (dips of 7 dB at `accent: 1`, 10 dB at 2),
+  the tone darker in the dips; each player of a section 10 % faster or slower and anywhere in
+  its stroke, so a section's dips are 4 to 5 dB and never in step: the tension bed of film
+  scores. As loud as the sustained note; a crescendo is a `volume` curve.
+- **Levels.** A held note measures −16.3 to −17.0 LUFS over every range, section or solo (brass:
+  −16.1 to −16.8). A spiccato ostinato in sixteenths is about 1 dB louder than held notes, a
+  pizzicato line 1 to 2 dB quieter.
+- **Measured** (scratch scripts; tables in HANDOFF Step 344): harmonic levels against the body
+  curve over 2 octaves correlate with r > 0.98 after each note's own offset; attack to 90 % in
+  21 ms (`attack: 0.03`), 73–80 ms (0.1), 370 ms (0.5); a section's spiccato reaches 90 % in 9–18 ms
+  (basses 21–24; a solo 6–9) and is 20 dB down after 120–260 ms; spiccato notes over each range within
+  1.0 dB (sd 0.2) in loudness, the same note identical; a section's level swings by 0.4–2 dB in
+  50 ms frames while single harmonics beat by 11–20 dB (solo: under 1 dB and 0.5–4 dB with
+  vibrato), the two sides correlate at 0.65–0.75; power between the harmonics at the top of each
+  range under −85 dB for a sustained note (−75 dB at C1), nothing above 16.3 kHz (−110 dB);
+  first sample 0, last under −160 dB; a section costs 50–65 ms of CPU per second of one
+  sustained note (solo 16–18; `soft_lead` 8–11), a fresh spiccato note 21–55 ms once, and 128
+  sixteenths render in 0.4–0.8 s.
+- **The old `pizzicato`** has five harmonics with fixed weights, the same decay at every pitch
+  (20 dB in 0.54 s from E1 to E6), no noise and no body; it stays as it is for existing scores.
+  The strings' pizzicato has 9 to 52 harmonics by pitch and rings 0.23 s (E6) to 1.9 s (E1).
+- **Existing scores are unchanged.** No existing instrument, default or cache key changed;
+  `brass.py` lost `_levelled` and `_smoothed` to `additive.py` (the same code). Both film scores
+  render to the same bytes as after Step 343 (SHA-256 in HANDOFF).
+- **Honest limits.** A model, not a recording, and nobody has listened. No slur or glide (each
+  note is bowed anew), no bow changes inside a long note, no open-string or position
+  differences, no harmonics, col legno or measured tremolo; every stroke of a pitch is the same
+  (even by design: a real section varies a little); an `accent:` pattern on the track changes a
+  stroke's level, not its bite (the bite is the setting `accent`; per-note loudness is
+  Step 346); the tone of the section is six instruments, not sixteen; notes outside the written
+  range are played without a warning.
+
+### 120.6 Orchestral percussion and a choir for score files (Step 345)
+
+- **The report.** "The `kick` tops out at 160→70 Hz, so higher toms and frame drums cannot be
+  made." Both films built their taiko, tom and frame drum from the `kick` (one sine gliding
+  down, a click) and their deep hits from the `boom` (one sine); "Escapement" called a
+  `supersaw` pad its choir. Measured first, what the older instruments cover: the `riser` is a
+  band of noise 0.35 octaves wide sweeping up and cut off at its end (no partials, no ring);
+  `open_hat` lasts 90 ms at any setting; `gated_snare` 0.27 s, with no roll; there is no crash.
+  So a cymbal swell, a tam-tam and a snare roll were built too.
+- **Nine instruments** in two new families of the catalogue, `percussion` and `choir` (after
+  `strings`, before `pads`), numpy only: `studio/percussion.py`, `studio/choir.py`.
+  - Kind `note`, played by note name, with a written range: `timpani` (D2–A3), `toms`
+    (G1–C5), `choir` (E2–C6).
+  - Kind `drum`, played as drum steps, pitch as a setting: `taiko`, `bass_drum`, `frame_drum`,
+    `snare_drum`, `cymbal`, `tam_tam`. They are drum tracks because that is how the films wrote
+    them (`"X... .... ..x. x.x."`); timpani and toms are note tracks because a part moves
+    between drums.
+- **A struck head** (`struck`, a `Head`): a sum of decaying sines at the head's mode
+  frequencies, which are not a harmonic series.
+  - *Modes.* A plain membrane's are the zeros of the Bessel functions: 1, 1.594, 2.136, 2.296,
+    2.653, 2.918, ... (`MEMBRANE`, 16 of them: toms, taiko, bass drum, frame drum, snare drum). A
+    kettledrum's air and kettle move the modes with a line across the head to 1 : 1.504 : 1.99 :
+    2.44 : 2.91 : 3.36 ... of the note (`KETTLE`, after Rossing's measurements), which is why a
+    timpano has a pitch; its modes without such a line (0.85, 1.68, 2.09, 2.66 times the note:
+    `KETTLE_DULL`) are there for 0.1 s as the thump of the blow.
+  - *Levels and decay.* Mode `m` has the level `m ** -falls` and rings `m ** -dies` as long
+    as the lowest (per head); the lowest falls by 60 dB in `seconds * (110 / Hz) ** by_pitch`,
+    so low drums ring longer. A kettledrum's note radiates best and dies before its fifth and
+    octave (`lasting`: 1, 1.25, 1.15, 0.9), so in the tail the fifth is as strong as the note.
+  - *The mallet* (`mallet`, 0–1) is a low-pass on the blow (timpani 160 Hz to 3 kHz, taiko
+    500 Hz to 4.2 kHz) and a tilt of the mode levels (`m ** -(falls * (1.5 - mallet))`), plus
+    its own knock: noise for a few milliseconds, level `0.05 + mallet ** 1.5`. The modes start
+    with alternating signs (a blow off the centre does not start them all the same way), the
+    whole blow fades in over 0.4 of the low-pass's period: the first sample is exactly 0.
+  - *The blow stretches the head*: every mode starts `drop` semitones sharp and settles with
+    a time constant of `0.045 + 4 / Hz` s (toms: the setting `drop`, 1; taiko 1.5; timpani
+    0.1–0.18 by mallet).
+  - *The shell* of a tom or the barrel of a taiko: two short modes at fixed multiples.
+    `edge` (frame drum) weakens the low modes, strengthens the upper ones and shortens the ring.
+  - *Loudness.* A blow is set to RMS 1 over its first 0.15 s, and lower when its peak would
+    pass 3.6 times that (a very short or very hard blow is turned down, not the others up).
+- **Made once.** `struck` is remembered per head, pitch and settings (48 blows); a note or a
+  drum hit is that array cut to its length and, if cut before it has died, damped over 70 ms
+  (`ring` on timpani and toms: 3 s lets a timpano ring out, 0.15 s is a damped note). A `note`
+  instrument's `make` gets the track's seed: each track's drum has modes up to 0.5 % off the
+  model's (two timpani tracks in unison are two drums); a `drum` instrument has no seed and is
+  the same in every track.
+- **Rolls** (`stroke: roll`: timpani, toms, snare drum) are a train of blows through the
+  drum's own ring: a convolution of the blow with impulses `speed` times a second, each up to
+  6 % early or late, the two hands 12 % apart in force. On a pitched drum every blow falls on a
+  whole number of the note's periods after the first: the first version struck at any moment,
+  and blows against the head's motion took 9 dB out of the level from one 50 ms frame to the
+  next (now 2–3 dB). A roll has 0.7 of a blow's level (a snare roll 0.42: its single blow is
+  over in 0.1 s) and is steady: a crescendo is a `volume` curve.
+- **Ensembles** (`players`): each player's drum up to 3 % higher or lower, up to `apart`
+  seconds late, up to 1.5 dB off, spread from left to right; the sum's energy is set to one
+  drum's (the first version was up to 2.6 dB louder by chance).
+- **The snare drum** is a short head (0.35 of the level) and its wires: noise of 0.9 to
+  about 6 kHz that dies in 0.16 s (`snares`, 0 takes them off).
+- **Metal** (`clanged`, a `Metal`): the lowest modes one by one as sines (cymbal 36 from
+  310 Hz to 2.6 kHz, tam-tam 44 from 58 to 900 Hz; fixed per instrument, evenly spread with a
+  random offset, so they are no harmonic series), above them 14 bands of noise up to 14 kHz made
+  from random spectra, each band with its own decay (`seconds * (1000 / Hz) ** faster`: the
+  highs die first). The tam-tam's upper partials are weak at the blow and arrive over the
+  first second (`bloom`): measured, the share of power above 1.5 kHz rises from −21 dB at the
+  blow to −7 dB after 1 s. `stroke: swell` is a roll of soft blows (growing by 24 dB) plus one
+  of harder blows (by 39 dB) until the held steps end; its loudest 0.4 s has the level of a
+  single blow and lies at their end. Stereo.
+- **The choir** (`choir.py`) is formant synthesis on the wave tables of §120.4.
+  - *The voice*: harmonic `h` at `h ** -2` (soft) to `h ** -1` (full voice; `brightness`).
+  - *The vowel*: five resonators one after another (a cascade, as in Klatt's synthesiser),
+    `F ** 2 / sqrt((F ** 2 - f ** 2) ** 2 + (B f) ** 2)`, with the formant frequencies and
+    bandwidths of sung vowels for basses, tenors, altos and sopranos from the Csound manual's
+    table (after IRCAM's CHANT): `aah` a, `eeh` e, `ee` i, `oh` o, `ooh` u. `mm` is a low first
+    formant (240–300 Hz), broad weak ones above and a further low-pass at 700 Hz.
+  - *Formants stay while the pitch moves*: a note's tables are five rows, the formants
+    sampled at five pitches across the singer's vibrato and drift, read along the pitch.
+  - *High notes* (`formants`): when the note is above the first formant, the first formant is
+    the note and its bandwidth grows in proportion; the second stays at least a third above
+    it. Measured for sopranos: at C5 an `ooh`'s fundamental is the strongest partial by 42 dB;
+    from G5 up `ooh` and `aah` are both a fundamental with every other partial 38 dB or more
+    under it.
+  - *A section* (`singers`, 8): each singer's formants 0.96–1.04 of the table's (another
+    throat), `detune` and ±2 cents of tuning, a scoop of 10–35 cents into the note, a wander of
+    a few cents, a vibrato of 4.8–6.2 Hz at 0.5–1.2 of the depth beginning after 0.2–0.6 s, an
+    entry up to 70 ms late with 0.8–1.3 of the `attack`, a place from left to right (the kinds
+    of voice mixed). Each side's slow level swings are taken out by `additive.levelled`.
+  - *Who sings* (`section`): `mixed`, `men` and `women` share a note out among the kinds of
+    voice that reach it (comfortable: basses E2–G3, tenors D3–E4, altos A3–C5, sopranos E4–E6,
+    fading over 4 semitones outside; middle C: 4 tenors and 4 altos), the nearest kind when
+    none does.
+  - *Breath*: noise through the vowel's formants (three times as broad), 3 % of the tone, more
+    in the first 0.15 s, 0.3 of that in a hum. *Morph*: the same phases read from the second
+    vowel's tables, cross-faded over the middle 70 % of the held time.
+  - Every note is set to equal loudness (`additive.loudness`, moved there from `strings.py`).
+- **Levels** (before the piece is brought to −28 LUFS; the loudest 0.4 s of one blow): `taiko`
+  −13.9 LUFS, `bass_drum` −13.8, `timpani` −14.5 to −13.7 over C2–C4, `toms` −18.1 to −15.4
+  over G1–C5, `frame_drum` −17.4, `snare_drum` −17.5, `cymbal` −17.8, `tam_tam` −17.0; for
+  comparison `kick` −12.8, `boom` −13.9, the kick as ps6's taiko −11.0 (and played there at
+  +3 dB). The choir's held notes: −17.0 to −15.5 LUFS over every range and vowel (strings −17.0
+  to −16.3). The new drums have higher peaks than the old ones at the same loudness (taiko
+  +0.7 dB, kick −2.5 dB): they have an attack.
+- **Measured** (scratch scripts; tables in HANDOFF Step 345): timpani partials at 1.500, 1.989,
+  2.446, 2.918 times the note at D2, A2, F3 and A3 (theory 1.504, 1.99, 2.44, 2.91), the note
+  itself within 1 cent; the main mode 20 dB down after 1.10 s at C2 and 0.58 s at C4 (toms
+  0.48 s at G1 to 0.18 s at C5, taiko 0.84 s, bass drum 1.54 s, frame drum 0.26 s); a tom with
+  `drop: 3` is 2.4 semitones sharp in its first 40 ms and on the note after 0.2 s; mallet 0.1
+  to 0.9 raises a timpano's centroid in the first 50 ms from 117 to 225 Hz at the same loudness
+  (toms: 147 to 224 Hz, 3.6 dB lower at mallet 1); rolls at 8, 11 and 16 blows a second
+  measure 8.0, 11.2 and 16.0; ensembles within 0.4 dB of one drum, the two sides correlating
+  at 0.70–0.88; nothing above 16 kHz (−120 dB or lower), first sample 0; a blow costs 8–90 ms
+  once (eight taikos 0.3 s, a cymbal 0.7 s, a tam-tam 1.2 s) and nothing after; 256 sixteenths through the renderer
+  take 0.6–1.3 s of CPU (the `kick`: 0.6 s) and repeat sample for sample. Choir: formants
+  measured on rendered notes within 8 % of the table (most within 3 %; a first formant under
+  the notes measured cannot be seen); a section's level
+  swings by 1–2 dB in 50 ms frames (4.5 dB at G4, where three kinds of voice share the note)
+  while single harmonics cancel completely at moments; one singer's pitch is steady within
+  3 cents from 0.1 to 0.5 s and swings ±16–20 cents after 1 s at 5.6 Hz; attack to 90 % in
+  79 ms (`attack: 0.08`), 224 ms (0.25), 837 ms (1); power between the harmonics −95 dB without
+  breath, −31 dB with it; 8 singers cost 80 ms of CPU per second of one note.
+- **Existing scores are unchanged.** No existing instrument, default or cache key changed
+  (`strings.py` lost `_loud` to `additive.loudness`, the same code). Both film scores render
+  to the same bytes as after Step 344 (SHA-256 in HANDOFF).
+- **Honest limits.** Nobody has listened. The choir is a pad of vowels: no words, no
+  consonants, no slur between notes; one table of formants per kind of voice; apart from
+  breath nothing above about 5 kHz (the five-resonator model stops there), so it is darker than
+  a recorded choir; a single voice sounds synthetic. The drums: every blow at the same settings
+  is identical (asked for; a player's blows differ), a roll repeats one blow, soft and loud
+  differ only by `mallet` and volume, a taiko's attack takes 10 ms to half its peak (the
+  `kick`: 2 ms) with a crack 24 dB under the body in the first 50 ms, the cymbal's lowest
+  partials are steady lines for seconds where a real cymbal's wander, and the tam-tam's bloom
+  is an envelope, not the mode coupling that causes it. No rim shot, brushes, choke or
+  flams. A `drum` instrument cannot change pitch within a track's section.
+
+### 120.7 Expressive notes in the score format (Step 346)
+
+- **The reports.** "No per-note velocity or crescendo within a note, no portamento, vibrato fixed
+  at 5 Hz." "One track cannot change instrument per section." And from Steps 343–345: "the
+  track's `accent:` pattern changes a stroke's level, not its bite", "a roll and the hit it leads
+  to are two tracks because `stroke` is a per-section setting", "a drum track's `pitch` is one
+  value per section", "a note outside the written range plays without a warning".
+- **The rule above all others**: a score that uses none of the new notation plays the same
+  samples as before. Every new setting has the old constant as its default, every new code path
+  is entered only by a mark, and the old path's arithmetic is not touched.
+- **The notation: marks in square brackets inside `steps`.** A mark stands before a step (a
+  note, a hit, a hold `-`, a rest) and holds one or more items separated by spaces:
+  `"[p] A4 - C5 - | [f stroke=spiccato] E5 E5 E5 E5"`. Everything a mark sets stays until
+  another mark changes it, as a dynamic in printed music does; when the pattern repeats it
+  starts again as written. Three kinds of item:
+  - *Dynamics*: `ppp pp p mp mf f ff fff` (−20, −15, −10, −5, 0, +4, +7, +10 dB against an
+    unmarked note, which is `mf`), or a number of dB with its sign (`[-6]`, `[+2.5]`).
+    `<` and `>` open a hairpin: the level moves in a straight line (in dB, over time) from this
+    step to the next dynamic mark, which says where it arrives: `"[p <] A4 - - - - - - - | [f] ."`
+    is a crescendo inside one held note, `"[pp <] C3 D3 E3 F3 | G3 A3 B3 C4 | [ff] D4"` one
+    over a phrase. Name and hairpin may be written together (`[p<]`). A mark may stand at the
+    very end of the steps to end a hairpin there. `fp` (also `ffp`, `fpp`, `mfp` …: a loud
+    name followed by a soft one) starts the note at the first level and drops to the second
+    within a quarter of a second; `sfz` starts 7 dB above the level in force and comes back.
+    A swell is two hairpins: `"[p <] A3 - - - [f >] - - - [p] ."`.
+  - *Settings*: `name=value` sets one of the instrument's settings from this step on
+    (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`); a named value may be
+    written alone when only one setting of the instrument has it (`[pizzicato]`, `[roll]`,
+    `[hit]`). `[default]` puts every setting back to the part's own. This is the one mechanism
+    for a strings line mixing strokes, a roll into a hit on one timpani track and a drum's
+    pitch per hit.
+  - Hairpins and `fp` need a dynamic mark with a level, a setting mark an instrument that has
+    the setting; every mistake names the mark, its place and the nearest known word.
+- **Slurs are parentheses**: `"(A4 - C5 - E5 - - -) . ."`. The notes after the first are not
+  attacked again: the phrase is one note whose pitch moves, with its vibrato, body and breath
+  going on. Each new pitch is reached by a glide of `glide` seconds (a setting of every
+  instrument that can slur; 0.06 by default: a clean legato; 0.15–0.4 is a portamento),
+  beginning before the new note's step and arriving just after it. Inside a slur only single
+  notes may stand (no chord, `+` or rest: an error), and of the settings only `glide` may
+  change. Instruments that slur: `trumpet`, `horn`, `low_brass`, the four strings (sustain
+  and tremolo), `choir`, `soft_lead`; on any other a slur is an error that lists them.
+  A glide between attacked notes is not offered.
+- **What a dynamic does.** It always changes the level. On an instrument with a response to
+  dynamics it also changes the tone (`Instrument.respond`, settings as played `dB` louder than
+  `mf`): brass `brightness` (the same curve its own attack follows), strings `brightness` and
+  `accent` (the bite), choir `brightness`, struck percussion `mallet` (and `drop` where the
+  head has one). The organ, the older instruments and the pads change level only. A level
+  that moves inside a note (a hairpin over a note of a quarter second or more, `fp`, `sfz`)
+  is a gain curve on the note and, for an instrument with a response, a cross-fade between
+  the note played at the softest and at the loudest level of the curve; both are the same
+  players in the same phases, so the cross-fade moves each harmonic's level and nothing
+  cancels. Shorter notes take the level at their start.
+- **`touch`** (a setting of the instruments with a response, 0 by default): how much an accent
+  or a soft note written the old way (`X`, `o`, `!`, `?`, the `accent:` groups) also changes
+  the tone: at 1 as a dynamic mark of the same level. It is 0 by default because existing
+  scores must not change.
+- **Vibrato**: `vibrato_speed` (Hz) and `vibrato_delay` (seconds before it begins) beside the
+  existing depth `vibrato`, on `trumpet`, `horn`, `low_brass`, the strings, `choir` and
+  `soft_lead`; the defaults are the constants used until now. In a section each player keeps
+  its own speed and delay around the setting. Per section through `settings:`, per note
+  through a mark.
+- **An instrument per section**: `sections: {lift: {instrument: horn}}` on a track. The
+  section's instrument must be of the track's sort (a drum for a drum, a pitched instrument
+  for a pitched one; a `play: chords` track stays with the pads); its settings start from the
+  new instrument's defaults (the track's `settings` belong to the track's instrument), the
+  rest of the part (steps, octave, volume, effects) is the track's.
+- **Range**: `vidgen music render`, `vidgen music check` and the studio's mix report the
+  notes outside an instrument's written range as a warning; they are played as before.
+- **What else reads the marks.** A duck with `follow: true` scales each dip by the dynamic at
+  the hit's start as well as by its accent. A slurred phrase is one event: one dip, one
+  `accent:` position. A pad note takes the dynamic at its start (no shape inside it). `vidgen
+  music render` names a section's instrument in its track line (`melody (horn; trumpet in
+  lift)`). The studio's step grid passes over marks and parentheses (it shows the steps, and
+  a cell's edit keeps the marks in the text); it does not show dynamics, hairpins or slurs.
+- **Cost.** A note at a whole-dB dynamic is one more entry in the note memory; a note whose
+  level moves is made twice. Many short hits under a long hairpin are the costly case (one
+  new blow per dB: 64 hits of a six-player taiko 5.1 s against 0.31 s plain).
+- **In the code.** `patterns.parse_steps` reads the marks and resolves the dynamics (each
+  `Step` gets the level at its start and end, `burst` for `fp` / `sfz`, `slur`, and its raw
+  setting items); `score_file` resolves the setting items against the instrument
+  (`Step.changes`); `render._events_and_last` gives every event its level segments and its
+  slurred notes; `render._render_hits` plays an event that carries none of this exactly as
+  before, and any other through `_expressive`. A slurred phrase is handed to the instrument
+  as `phrase` (`(start sample, semitones, glide samples)` per further note): one phase runs
+  through the phrase and each note's own wave tables are cross-faded on it
+  (`additive.phrase_tone`), the higher note's tables sounding during a glide so that no
+  harmonic passes 16 kHz. The note memory (`additive.remembered`) keys on the phrase; the
+  dynamics reach an instrument as settings, which it keys on already.
+
+### 120.8 Built-in music data for `web` scenes (Step 347)
+
+- **The report.** All three films gave their three.js pages the music through a hand-written
+  script run after every change to the score (`scripts/make_ps_audio.py` of "Parallel Space",
+  `scripts/make_audio.py` of "Escapement"): render the score to a WAV with `vidgen music
+  render`, measure it at 30 fps, read the score's tracks with `load_music_score`, write a
+  char-encoded JSON beside the script (ps6: 124 KB for 5,549 frames) that the page fetched; each
+  scene passed its place in the song by hand (`data: {t0: 41.6}`).
+- **The interface.** A `web` scene's param `music_data: false | true | {bands, tracks, t0}`
+  (`vidgen.web.music.MusicDataSettings`: `bands` 1–64, default 16; `tracks` a list of score
+  track names, default all; `t0` seconds). With it the page's `ctx` has `music`, built in the
+  page by vidgen's helper `data/web/music.js` from the data Python sends with `start(info)`. The
+  helper is a second init script, added only for such pages, which wraps
+  `window.__vidgen.start`: `runtime.js`, `clock.js` and `media.js` are unchanged, so
+  `engine_id()` and the clip keys of every other `web` scene stay as they were. Every function
+  takes an optional song time `T` (default `ctx.music.now()` = `t0 + performance.now() / 1000`,
+  vidgen's clock, so the frame drawn): `band(i)`, `bands()`, `level()`, `low()`, `onset()`;
+  `hits / notes / events(track?, T0?, T1?)`, `last(track)`, `sounding(track)`, `pulse(track,
+  decay)`, `section()`; `time(t)` maps scene time to song time. Naming follows the page's other
+  inputs (`ctx.theme`, `ctx.data`, `ctx.beats`); `T` is song time because the films wrote their
+  pictures as functions of the song time `T = t0 + t`.
+- **What is measured** (`analyse`). Decided: the music *the video plays*, not the score's own
+  render: `plan_music` + `plan_score` of `mix.py` on the planned timeline (`planned_timings`:
+  `VideoPlan`'s scene starts, durations and beats, in the shape of the join's timings), read
+  through `MusicTrack` (cue `start`, `section`, `loop`, `volume`, fades, the scenes' `music:`
+  levels, ducking, themes), so a page sees a fade or a quiet scene as it is heard; narration,
+  effects and ambience are left out. The mix is rounded as a 16-bit WAV holds it (`pcm16`) and
+  averaged to mono. Frame `f` of the whole video (plus 2 spare frames) is a 4096-sample Hann
+  window centred on sample `round(f * 48000 / fps)`; per frame: each band's mean power in dB
+  (`bands + 1` edges log-spaced 40 Hz–12 kHz; a band narrower than one FFT bin takes the bin
+  nearest its geometric centre: at 64 bands the lowest are), the power from 25 Hz to 14 kHz and
+  from 25 Hz to 150 Hz in dB, and the onset (the mean positive change of `log10(power + 1e-9)`
+  over 25 Hz–14 kHz since the frame before). Normalised over the frames where a cue plays and
+  the level is over −100 dB (`SILENT_DB`; digital silence is −120): a band 0 at its 20th and 1
+  at its 99.5th percentile, the level 0 at 36 dB under its 99.5th percentile, the low end 30 dB
+  under, the onset 1 at its 99.7th; then `released` (a value is at least `keep` of the one
+  before, mixed: 0.82, 0.9, 0.8, 0.7). These are the films' numbers; the silence rule is new
+  (the films had no silent frames: with all-silent music their formula gave a level of 1).
+- **Why 16-bit.** On the float mix the onset differed from the films' in most frames (mean
+  0.045, correlation 0.961 over ps6): a bin that is near silence in float has a log power that
+  jumps by tens of dB between frames, while in a 16-bit file the rounding noise holds it at about
+  −96 dB. Rounded as the WAV is, the onset matches (below).
+- **Score events** (`vidgen.studio.events.score_events`). Read the way `studio/render.py` plays
+  the score, with its own helpers (`_track_events`, `_Voicer`, `_Skipped`, `_slot_at`): holds,
+  notes tied into the next section, a loop's tail, accents (`ACCENT_GAIN`), chords voiced as
+  played (the voicer called in the renderer's order, slurred notes after their event), notes
+  outside 20 Hz–12 kHz left out, a section's own instrument. Per event: time, duration, pitches
+  (MIDI), instrument, dynamic at the start (with `burst`) and at the end, gain, the `stroke`
+  setting by name (`Setting.choices`) and `slur`. A slurred note (`_Event.slurred`) is its own
+  note with `slur: true`, from its step to the next slurred note or the event's end. `play:
+  chords` tracks give one note per chord held, merged as `_render_held_chords` merges them.
+  Nothing is synthesised (ps6's 29 tracks, 5,327 events: 0.6 s).
+- **Song time.** The cue playing at the scene's start (`music:` cues first, scene themes only
+  when there is none): `t0 = offset + (scene start − cue start)`, `offset` = the cue's `start`
+  plus its `section`'s start, taken modulo one pass for a looping piece (as `Source` does).
+  Through a loop's repeats song time counts on and the events are repeated for every pass the
+  cue plays (events before song time 0 are dropped). No cue at the scene's start: `t0` = the
+  scene's video time, `source` and `score` `null`. `music_data: {t0}` overrides it.
+- **Transfer.** The video's data (`video_music_data`) holds every frame; a page is sent its
+  scene's frames and `PAGE_MARGIN_SECONDS` = 5 s on each side (reading outside gives the edge
+  frame) and the score's events whole (a page counts hits from the start: "Escapement" does).
+  Series: one byte per value (0–255; the films used 64 levels), base64. Events per track as
+  columns of base64 typed arrays: start and duration in 48 kHz samples (`uint32`, exact), first
+  pitch (`uint8`), other pitches of chords as a sparse map, dynamics and gains (`float32`),
+  instrument, stroke, slur (`uint8`); a column with only default values is left out. ps6's
+  `05_heart` (28 s): 112 KB with all 29 tracks, 54 KB with the 17 tracks its script used (its
+  JSON: 124 KB). Decided against compressing: deflate gained 10–15 % on these bytes.
+- **Cache and keys.** `music_inputs` (cheap: no audio is read): the data version, vidgen's version
+  (a piece's render depends on it), the frame rate, every `music:` cue, `score:`, `soundfont`,
+  each scene's `music:` and beats' motifs, the files under `assets/music` and each cue's file
+  (score files by SHA-256, others by size and time), the planned timeline (scene starts,
+  durations, beat spans) and, when any music ducks, every narration MP3's size and time.
+  `music_data_key` adds the band count; the data is kept in
+  `build/music/music-data-<key>.json`. Rendering the music goes through `Source` with the join's
+  cache folder `build/music`, so a piece already rendered is read from `piece-<key>.npy` and one
+  not rendered yet is rendered and stored there (the join then reuses it). `render_project`
+  makes it in the parent process before the workers start (`prepare_music_data`), so two
+  workers never render the music at once; a worker (or `vidgen still`, lint) that finds no data
+  makes it itself. The render fingerprint's `web` part gets `music` (the key at the format's
+  frame rate) only for a scene with `music_data`; the clip inputs get `music: {data: SHA-256 of
+  what the page is sent, helper: SHA-256 of music.js}` only then. **No stored key changes**:
+  scenes without `music_data` have the same fingerprint and clip inputs as before (the
+  `vidgen_source` digest changes with every step). Old `music-data-*.json` files stay in
+  `build/music` like old piece renders.
+- **Checks.** `Web.validate_project`: `music_data` in a video without music (no cue, no theme)
+  is `music_data: the video plays no music; ...`; `tracks` naming a track the score lacks is a
+  `VidgenError` with did-you-mean; `tracks` where the scene's music is not a score file is an
+  error. In the page: an unknown track or band number throws, naming the ones there are.
+- **Equivalence with the films** (scratch: `/home/claude/work/scratch/al347/`; `tools/compare.py`).
+  Copies of ps6 and Escapement; their scores rendered once with `vidgen music render`'s code
+  (WAV SHA-256 equal to Step 346's), the films' own scripts run on the WAVs (ps6's output is
+  byte-identical to its shipped `ps_audio.json`; Escapement's shipped JSON is older than its
+  score and was made again), the samples given to each copy's music cache. ps6, 5,548 frames
+  at 30 fps, 16 bands: bands, level and low end within 0.016 of the film's (its quantisation
+  step is 1/63 = 0.016; mean 0.004), the onset too except in the last 0.73 s (frames
+  5526–5547: max 0.14), where the video's 1.5 s `fade_out` acts and the film's WAV had none;
+  Escapement the same (level, low end within 0.0099; onset off in the last 17 frames). Events:
+  every exported track of both films equal in count, time and length (1e-4 s), gains equal,
+  pitches equal (where the films wrote 0 for a chord degree, ours is the pitch played). Stills
+  (`vidgen still`, 1280x720) of a copy whose script reads `ctx.music` instead of the JSON (and
+  `ctx.music.t0` instead of `data.t0`): ps6 `05_heart` at 1, 9.5 and 20 s within 11 levels of
+  the original (PSNR 67–83 dB; the 64 levels of the films' JSON against 256); Escapement
+  `04_escapement` and `08_falter` at six times pixel-identical (its pictures read only events
+  and the mechanism's beats, which its copy builds from `ctx.music.events`).
+- **Public interface.** The `web` param `music_data` and the page's `ctx.music`. `vidgen.api`
+  gains three names, because built-in scenes import only `vidgen.api`
+  (`tests/test_builtin_scenes.py`): `WebMusicData` (= `vidgen.web.music.MusicDataSettings`),
+  `video_has_music(config)` and `web_scene_music(project, scene_id, fps, settings)` (what the
+  page is sent; pass it as `make_web_clip(..., music=)`).
+- **Measured.** The video's data: 4.7–5.4 s for a 3-minute film (FFT and percentiles; the
+  music read from the cache); a page's data for one scene: 0.6 s more (the score's events). A
+  scene without `music_data` costs nothing (one look at its params when the render starts).
+- **Not done.** No per-track audio analysis (the films did not ask; a track's events plus the
+  mix's bands served them). No measurement of the narration or effects. A cue starting inside a
+  scene gives that scene no song time (it reads the cue playing at its start). Ducking makes the
+  measurements dip under narration (as heard).
+
+### 120.9 Smaller intermediate files (Step 348)
+
+- **The report.** "Parallel Space v6" and "Escapement" (3 minutes at 1280x720, 30 fps) kept 4.7
+  and 4.9 GB of "lossless scene clips"; on a disk with about 1 GB free the ps6 agent rendered
+  one or two scenes at a time (`--max-scenes 2`) and deleted `build/final/web/*.mkv` by hand
+  between runs.
+- **Measured first: what a render keeps** (Escapement's build folder, and a copy with two of
+  its `web_cut` scenes, 3 s each from inside the film, plus a `bullets` slide, in
+  `/home/claude/work/scratch/al348/`):
+
+  | File | Format | Size | Needed again? |
+  |---|---|---|---|
+  | `web/<id>.mkv`, `three_d/<id>.mkv`: the **frames clip** a `web` / `3d` scene draws | FFV1 in Matroska, `bgra` (`3d`: `bgr0`), intra-only | WebGL film page: 26.2–28.3 MB/s at 720p30, 57.6 MB/s at 1080p30 (0.92–1.01 bytes per pixel and frame); a flat 2D page with text on a transparent background: 0.68 MB/s at 720p | only when the scene renders again for another reason than its page (title, timing, overlays, `--force`); the scene's render fingerprint reads the record beside it, not the clip |
+  | `web/<id>.json`, `.layout.json` | records | 4 KB | yes: fingerprint (files the page loaded), lint (page text) |
+  | `scenes/<id>.mp4`: the **scene clip** | H.264 `yuv420p` CRF 23 (Manim's encoder default; vidgen sets no options) | WebGL 720p 0.23–0.32 MB/s, 1080p 0.44 MB/s; the slide 0.04 MB/s | yes: the join copies it (stream copy); reused while the scene is current |
+  | `media/videos/<id>/partial/*.mp4` | Manim's partial movies | about the scene clip again | no (caching is off) |
+  | `padded/<id>.wav`, `padded/mix.wav` | PCM 48 kHz | 0.19 MB/s per scene, the mix again | rewritten by every join |
+  | `scenes/<id>.overlay.mov` | an alpha clip of moving overlays (only for a push / wipe) | small | by the join |
+  | `music/piece-*.npy` | the synthesized score | 141 MB for Escapement | yes (the score cache) |
+
+  So the 5 GB were the frames clips alone; the "scene clips" are already lossy and small, and
+  the joined video is a stream copy of them (checked: every decoded frame of the output equals
+  the scene clips' frames, MD5 per frame). Since a scene clip is CRF 23, the final picture is
+  already one lossy generation away from the page: against the lossless frames it measures
+  33.2–35.2 dB PSNR, SSIM 0.81–0.85 on the film's grainy frames.
+- **A smaller lossless setting: none for free.** On 90 frames of three Escapement scenes, PyAV
+  as the writer uses it: FFV1 as written (Golomb–Rice coder, level 1) 26.2–28.3 MB/s, 41–43 ms
+  per frame to encode, 34–42 ms to decode; level 3 with 4 slices the same size and time; the
+  range coder 9 % smaller (23.8 MB/s) but 50 % slower to encode and decode (62 / 64 ms), with
+  context model 1 10 % smaller at the same cost (at 1080p 52.5 MB/s against 57.6, 105 / 123 ms
+  against 62 / 71 ms); `bgr0` instead of `bgra` (no alpha plane) 1.7 % smaller; x264 lossless
+  (`libx264rgb -qp 0`) 43–49 MB/s, larger (the films' grain defeats inter prediction);
+  ProRes 4444 (not lossless) 39 MB/s. A 10 % gain for 50 % more coding time is not "free", so
+  the lossless clip stays exactly as it was: same codec and settings, the same coded packets
+  (checked on 20 film frames with alpha and on 10 noise frames with and without; the Matroska files' bytes differ between
+  any two writes because of their random UIDs, as before), the same cache keys.
+- **Opt-in compact frames: `render.intermediate: compact`** (`vidgen render --intermediate
+  compact`, MCP `render` `intermediate`). `vidgen.browser.frames_clip.write_frames_clip` (the
+  writer moved out of `browser/chromium.py`, where it was `write_ffv1_clip`) writes the picture as libx264 `yuv444p` CRF 12,
+  preset `veryfast` (4:4:4: no chroma subsampling on top of the scene clip's own), and, for
+  frames with alpha (every `web` clip), a lossless FFV1 `gray` alpha stream beside it in the
+  same Matroska file, titled `alpha`. `ClipReader` (`vidgen.clips`) reads such a file with a
+  second reader on that stream, at the same times, and puts its picture into the alpha channel,
+  so `ClipMobject` and everything above it are unchanged. A `3d` clip (opaque) is the picture
+  alone. Measured (same frames):
+
+  | | lossless FFV1 | compact |
+  |---|---|---|
+  | size, film WebGL page, 720p30 | 26.2–28.3 MB/s | 5.5–6.0 MB/s (4.6× smaller) |
+  | size, 1080p30 | 57.6 MB/s | 12.2 MB/s |
+  | size, flat 2D page with transparency, 720p | 0.68 MB/s | 0.35 MB/s (picture 0.05 + alpha 0.30) |
+  | alpha stream of an opaque page | — | 0.03 MB/s (720p), 0.06 (1080p) |
+  | encode / decode per 720p frame | 41–43 / 34–42 ms | 36–44 / 16–19 ms |
+  | frames clip vs the frames (PSNR, SSIM) | exact | 39.3–41.3 dB, 0.959–0.968 |
+  | scene clip vs the frames | 33.29 / 30.22 dB, SSIM 0.850 / 0.807 | 33.17 / 30.17 dB, SSIM 0.849 / 0.806 |
+  | scene clip vs the scene clip from lossless | — | 39.0 / 38.0 dB, SSIM 0.96 (the film); 47.6 dB, SSIM 0.9986 (flat page) |
+
+  (Scene clip rows: real renders of the copy's two film scenes, final and with `--intermediate
+  compact --force`; the frames compared are the lossless clip's. The same with `ffmpeg`
+  over 90 frames of three film scenes: final from lossless 33.21–35.18 dB, from compact CRF 12
+  32.97–35.10 dB, SSIM within ±0.002.) The trade-off: one more lossy generation before the scene
+  clip's CRF 23, which loses six to eight times more (in PSNR terms) than it does; the scene clip
+  made from compact frames differs from the one made from lossless frames by about what two CRF
+  23 encodes of the same picture differ by, and its distance to the page is 0.04–0.24 dB
+  larger. CRF 14–18 were measured too (4.4 to 2.2 MB/s, the final 0.1–0.3 dB further off); 12
+  was kept as the setting that is still "visually lossless" by the usual measure (SSIM 0.96+ on
+  grain, 52 dB PSNR on a flat page). Speed is equal (encoding the same, decoding twice as fast);
+  a frame of the film page costs about 1–2 s to draw, so neither matters.
+- **The cache.** The intermediate is not in the clip's key (so every existing clip, and the
+  layout readings keyed by it, stay valid). The record beside a compact clip says
+  `"intermediate": "compact"`; a record without it is lossless (all clips written before this
+  step). `clip_serves(stored, wanted)`: a lossless clip serves a render asking for either, a
+  compact one only `compact`; asking for lossless after a compact render draws the frames again
+  (`make_web_clip`, `make_3d_clip`). The scene's render fingerprint does not include the
+  setting: changing it does not render a current scene again (its scene clip is what the join
+  needs); to remake scenes from lossless frames after a compact render, use `--force`. The
+  command line's choice reaches each worker as `--intermediate` (the worker loads the config
+  from the file).
+- **Deleting what is no longer needed: `render.keep_intermediates: false`**
+  (`--clean-intermediates`, MCP `clean_intermediates`). After each scene renders (in the parent,
+  after `post_scene`), `disk.remove_frames_clips` deletes its frames clip (`web/<id>.mkv`,
+  `three_d/<id>.mkv`) and Manim's partial movies of that scene; after the join, every scene's
+  (clips left from earlier runs too). Kept: the records (the fingerprint still sees an edited
+  script or a fetched file: a test edits the script after a compact, cleaned render and the
+  scene renders again), the layout readings, the guide passes of `3d` scenes, the scene clips
+  and the joined video. The cost, honestly: a scene that renders again draws all its frames
+  again (for the film page 1–2 s a frame: 8 to 16 minutes for a 16-second scene at 720p), also
+  when only its title, timing or an overlay changed, with `--frames`, a frame thumbnail
+  without overlays (its own `_bare` folder) or `--guide-passes` on a reused `3d` scene. With
+  `--jobs N` at most N frames clips exist at once, so the peak is a scene or two, not the film.
+  This is what the ps6 agent did by hand, without `--max-scenes`.
+- **The disk, reported and checked.** Before the workers start, `vidgen render` estimates the
+  frames clips the scenes to render will write (`disk.expected_bytes`: scenes whose type draws
+  frames and whose clip is not kept already, at the full frame size, the scene's last rendered
+  length or its `duration` or its narration estimate, `BYTES_PER_PIXEL` 1.0 lossless / 0.22
+  compact: the film page's figures, an upper bound for flatter pages; with
+  `keep_intermediates: false` only the `jobs` largest) and logs a warning when the free disk
+  is smaller, naming compact, `--clean-intermediates` and `--max-scenes`. After the join it
+  prints `build:` with the build folder's size, the part in frames clips, the free disk and what
+  this run deleted (`--json`: `disk: {build, frames_clips, free, removed}` in bytes;
+  `RenderResult.disk`, `.removed`).
+- **Not done.** The scene clip's own quality (CRF 23, Manim's default) is untouched: it is not an
+  intermediate but the delivered picture (the join copies it); raising it would grow every
+  render and change every existing video. Lossless intermediates in fewer bytes would need a
+  codec PyAV does not ship or a slower FFV1 setting. The estimate does not know a page's
+  content, so flat pages are overestimated (by up to 40 times); the warning says "up to".
+
+### 120.10 Faster `web` rendering, measured first (Step 349)
+
+The films' authors reported: about 1.35 s a frame at 720p for "Escapement" (2 h 10 min for 5,730
+frames), "about 0.36 s per frame is fixed screenshot overhead", `--jobs 2` no faster than one job
+on two cores, about 14 s of Python import per scene worker, no progress line while the frames are
+drawn, shaders compiled on the first screenshot rather than in `load` (the film draws one frame
+in `load` and reads a pixel back), and `performance.now()` frozen during a frame.
+
+**Where a frame's time goes.** Measured with `/home/claude/work/scratch/al349/tools/bench.py`
+(outside the repository): it opens a scene's page as `vidgen still` does and draws frames 0 to
+N−1 once per way of taking the picture, timing each stage, with the CPU seconds of every process
+from `/proc`. Pages: (a) a copy of Escapement with two 3 s `web_cut` scenes from inside the film
+(`cathedral` at song time 72 s, `climax1` at 140 s); (b) `examples/web`'s `cycle` page (HTML,
+CSS, SVG, CSS animations, `region: body`, 1172x522 at 1280x720) and a page of SVG moved by
+`frame(t)` with text (`flat2`: `region: body` with alpha, and full frame with `design_width: 800`
+and an opaque background). 2 cores, one command at a time; the machine's speed varies by up to
+20 % within minutes (§118.18), so A/B runs were taken in turn.
+
+| per frame (mean of frames 1–9; frame 0 apart) | Escapement 1280x720 | Escapement 640x360 | `cycle` 1172x522 | `cycle` 586x261 |
+|---|---|---|---|---|
+| the page's `frame(t, ctx)` (timers, animation frames, the hook; GL commands queued) | 10–13 ms | 9 ms | 3–4 ms | 3 ms |
+| GL work done (SwiftShader), timed by a 1-pixel `gl.readPixels` before the screenshot | 1,093 ms | — | — | — |
+| the screenshot after that: compositing, PNG encode, transfer | 348 ms | — | — | — |
+| the screenshot as vidgen took it (GL work + the above) | 1,454–1,498 ms | 455 ms | 34–36 ms | 19–24 ms |
+| the same with `optimizeForSpeed` (the PNG compressed quickly) | 1,152 ms | 387 ms | 20 ms | 12–13 ms |
+| PNG size (default / quick) | 1,283 / 1,624 kB | 347 / 436 kB | 31 / 46 kB | 14 / 18 kB |
+| Python: PNG decode (Pillow) | 23–31 ms | 7 ms | 5–6 ms | 2 ms |
+| Python: FFV1 encode into the frames clip | 30–36 ms | 9 ms | 8–9 ms | 3–4 ms |
+| a frame in all (default / quick PNG) | 1,553–1,629 / 1,243 ms | 503 / 447 ms | 51–58 / 34–38 ms | 33 / 20–21 ms |
+
+CPU while Escapement's frames are drawn (8 frames, 12.4 s): the GPU process (SwiftShader) 17.1 s
+(1.37 cores), the browser process 2.4 s (the PNG encoding: 0.30 s a frame, the "fixed overhead"
+the film saw), Python 0.8 s, Playwright's driver 0.5 s, the renderer 0.2 s. With the quick PNG the
+browser process drops to about 0.3 s. Fixed costs per scene: `import vidgen.render.worker` 0.4 s,
+`vidgen.scenes` (every scene type) 2.6 s; under the profiler a draft worker spent 4.3 s importing
+in all (the 14 s of §118.18 were measured in a slow phase under the profiler). Chromium's start,
+the page's load and Escapement's `load(ctx)` (textures baked, shaders warmed up) 7.7–9.2 s.
+
+**Tried, and the result.**
+
+| idea | result | taken |
+|---|---|---|
+| `Page.captureScreenshot` PNG with `optimizeForSpeed` | same pixels (PNG is lossless; checked frame by frame), 0.30 s less per 720p film frame, 40 % less per frame on the flat page | **yes** (default) |
+| the same call without Playwright (`page.screenshot` → CDP directly) | Playwright's own work around it is 1–2 ms | as part of the above |
+| no `clip` | same speed | no (Playwright's clip kept, see below) |
+| WebP at quality 100 | lossless here (same pixels, alpha kept), 975 kB, slower: 1,616 ms | no |
+| JPEG at quality 100 | no alpha (PSNR 17 dB with it), 1,180 ms | no |
+| the WebGL canvas read back (`gl.readPixels` of the whole canvas through `page.evaluate`, base64) | 1,270 ms, and wrong: the drawing buffer is cleared once composited (`preserveDrawingBuffer: false`, PSNR 8.5 dB), and HTML over the canvas (the film's title and end cards) is not in it | no |
+| `Page.startScreencast` | frames come when the compositor draws (6 for 10 frames advanced on the flat page, 11 on the film's), not tied to vidgen's frames, and still PNG or JPEG encoded | no |
+| `HeadlessExperimental.beginFrame` | refused: "only supported if BeginFrameControl is enabled", which needs a target Playwright does not create | no |
+| `--disable-gpu-compositing`; `--use-angle=swiftshader-webgl` | 1,130 / 1,157 ms (no change); flags are in the clip key, so a change would have drawn every clip again | no |
+| decoding and encoding in a thread while the next frame is drawn | same pixels in the same order; flat pages 302 frames 11 → 10 s and 21 → 17 s; the film's page 1.26 → 1.24 s a frame (noise) | **yes** |
+| `--jobs 2` (two scenes of the film copy, whole render) | before this step 291 s → 241 s; after it 241 s → 216 s: 10–17 % here, not "no faster" (each worker is slower, 1.7–2.1 s a frame, both together faster); the GPU process of one worker already uses 1.4 of the 2 cores | unchanged (`--jobs auto` decides by memory) |
+| two pages in one browser, or a scene's frames split over two workers | the second half would have to step from frame 0 for pages that keep state, and stepping still runs the GL work (0.39 s a frame at 640x360, §120.3): no gain on 2 cores | no |
+| lazy imports in the worker | at most the 2.6 s of `vidgen.scenes` a scene (about 30 s of a 12-scene film); the registry imports every built-in scene to know the types | no (left for later) |
+
+**What changed.** `WebPage.screenshot(n)` sends `Page.captureScreenshot` on vidgen's own CDP
+session with what Playwright's `page.screenshot(type="png")` sends — `Page.getLayoutMetrics`'
+visual viewport for the clip (its place, scale and size, the size rounded as Playwright's
+`enclosingIntSize`), `captureBeyondViewport: false` — and `optimizeForSpeed: true`; around it,
+carets are hidden in every frame of the page and shown again as Playwright does
+(`inPagePrepareForScreenshots`: without it a focused input's caret is in the picture; a test
+shows it). Two things differ from Playwright's call and are handled: the device scale of a
+`design_width` page is an emulation of Playwright's CDP session, not of vidgen's, so the clip's
+scale is the visual viewport's times the device scale (without it the picture came out 800x450
+for a 1280x720 frame); and the time limit is vidgen's own (`_TimeLimit`, 30 s, as Playwright's
+screenshot timeout was). `WebPage.pixels(png)` decodes; `frame(n)` = `advance` + `screenshot` +
+`pixels` as before (`vidgen still` uses it). `make_web_clip` draws in the main thread and hands
+each PNG to `FramesClipWriter` (`browser/frames_clip.py`): `write_frames_clip` in a thread, at
+most two frames waiting; an error of either side stops both and leaves no clip or `.partial`.
+
+**Pixels: identical.** (1) The same page state taken both ways, every frame (the new screenshot
+first, then Playwright's): Escapement 1280x720 30 of 30, 640x360 60 of 60; the SVG page with
+alpha in a body region 92 of 92 at both sizes; the SVG page with `design_width` 92 of 92 at both
+sizes; a page with a focused input, text and alpha, at scale 1 and with `design_width`
+(`tests/test_web_speed.py`). (2) Whole frames clips of a forced render against the code before
+this step: Escapement final both scenes 92 of 92, preview 92 of 92; the SVG page in a body region
+92 of 92 (final) and 302 of 302 (preview). The `design_width` SVG page gave 90–91 of 92 and 299 of
+302 — but two renders with the old code differ the same way (frames 27 and 60, at most 6 levels
+in at most 5 pixels): the old path is not repeatable at a device scale other than 1, which is
+not this step's change. The `cycle` page (CSS transitions and animations) is not repeatable
+either: two Playwright screenshots of one page state differ in 4 to 9 of 92 frames (compositor
+animations move between two screenshots), recorded in the tasklist. **Cache keys:** unchanged
+(no page file, flag or input changed; `engine_id` is the same; the first render after the change
+reused every frames clip).
+
+**Speed after it** (whole scene workers, 92 frames at 1280x720, the film's `cathedral`, in
+turn): before 164.6 s and 166.2 s, after 138.2, 134.9 and 131.1 s (−18 %); the frames themselves
+1.61 s → 1.24–1.30 s each. Preview (640x360): 56.5 s → 51.8 s. The flat SVG pages (302 frames):
+24.9 / 23.0 s → 19.2 / 19.0 s and 37.1 / 34.0 s → 27.9 / 27.2 s. For the whole film at the
+reported 1.35 s a frame this is about 1.05–1.1 s a frame: about 1 h 45 min instead of 2 h 10 min
+with `--jobs 1` (not rendered; the two-scene copy suggests `--jobs 2` saves about 10 % more).
+
+**Progress while frames are drawn.** `FrameProgress` (`web/clip.py`) logs on the
+`vidgen.progress` logger at most every `PROGRESS_SECONDS` (10 s): `web frames 30/92, 1.24 s a
+frame, about 1 min 17 s left` (the rate and the time left from the frames after the first, which
+compiles the shaders), and after the last frame a summary: `web frames 92/92 drawn in 1 min 54 s
+(the page ready in 8.0 s before), 1.24 s a frame (the page's frame(t, ctx) 0.02 s, drawing and
+the screenshot 1.22 s)`. The worker prints these as `progress: …` lines (`PROGRESS_PREFIX`);
+`vidgen render` shows them as `[1/12] 04_escapement: web frames …` (`pipeline.progress_lines`,
+`_run_worker(on_progress=)`; in live mode, one job on a terminal, the worker's own lines show).
+They go where the render's other lines go: stdout, stderr with `--json`, so the MCP `render`
+tool reports them as progress. A failed worker's output tail leaves them out. `3d` scenes have no
+progress line (not asked).
+
+**Warming up shaders.** Measured on the film copy without its warm-up (the `composer.render()`
+and the 1-pixel `readPixels` in `load` removed): the page was ready in 1.5 s instead of 8 s, and
+frame 0's `frame(t, ctx)` took 4.5 s (three.js compiles and links the programs there and waits
+for them), then 1.4 s a frame as before. So the trick only moves the time; what it protects
+against is the frame time limit (10 s), which a page with more shaders on a slower machine could
+reach in frame 0. Now the first frame a page draws may take `FIRST_FRAME_TIMEOUT_S`
+(= `LOAD_TIMEOUT_S`, 30 s), later ones `FRAME_TIMEOUT_S` (10 s): a page needs no warm-up. vidgen
+does not draw frame 0 twice (a page that keeps state would change). The guide says so.
+
+**`performance.now()` stays on vidgen's clock** (§118.8): libraries animate from it (three.js'
+`Clock`, tweens), so a real clock would make the pictures depend on the machine's speed. It is
+not given a real-time twin either: a page that drew with it would no longer give the same frames.
+What the film wanted to know — how long a frame takes and where — is now in the summary line
+(the page's hook against drawing and the screenshot); the split inside the GL work is not
+visible from the page (the GL work is done by the GPU process after the hook returns).
+
+**Not done.** The WebGL work itself (1.1 s of the film's 1.24 s) is the page's: fewer passes or
+draws, or a smaller bloom, are the author's levers; a faster software GL (lavapipe through
+Vulkan) would change pixels and depend on the machine. Lazy imports (2.6 s a scene). Two pages
+or split scenes (above). Windows and macOS not tried (the CDP call is the one Playwright makes on
+every platform).
+
+### 120.11 Ready-made finishing for three.js `web` scenes: `vidgen/three-finish` (Step 350)
+
+**Why.** Both films wrote their finishing by hand. "Escapement" (`extensions/escapement.js`, about
+120 lines): a scene pass at 88 % size with a hand-written depth of field from the depth buffer
+(a 20-sample gather at half size, then a mix by the circle of confusion), `UnrealBloomPass` at a
+quarter size, a final pass (chromatic fringe, exposure, flash, vignette, the short ACES fit,
+saturation, lift, `pow(1/2.2)`, fade) and FXAA with grain seeded by the frame; motion blur by
+drawing the balance wheel's arms six times with transparent copies; a studio of soft boxes baked
+through PMREM; normal maps computed from height functions (Geneva stripes, perlage, graining,
+sunray). "Parallel Space" (`ps.js`): `UnrealBloomPass` at full size, one final pass (fringe,
+exposure, vignette, the ACES fit, saturation, a per-section grade, sRGB, grain), a nebula baked
+into a cube map. Their agents also reported that `PCFSoftShadowMap` is gone in the bundled
+three.js and that no depth-of-field pass ships among the add-ons.
+
+**What ships.** `src/vidgen/data/web/modules/three-finish.js` (about 640 lines, vidgen's own code
+under its MIT licence; its depth-of-field gather, FXAA, grain hash and soft-box shader follow what
+"Escapement" did, the nebula what "Parallel Space" did, both films being the owner's). Served
+from `/__vidgen__/modules/` (`web/loaded.py` `MODULES_FOLDER`, `VIDGEN_MODULES` = `{"vidgen/three-finish":
+"three-finish.js"}`; only listed files are served), named in the import map (`web/inputs.py`)
+as `vidgen/three-finish` — the first module of vidgen's own a page may import; the `vidgen/` prefix
+keeps such names apart from npm package names. Package data glob `data/web/modules/*`. It
+imports `three`, `three/addons/postprocessing/Pass.js` (`FullScreenQuad`) and
+`UnrealBloomPass.js` (both shipped since Step 334); no `Math.random`.
+
+**Cache keys.** The module is served like any file a page loads, so a page that imports it has
+`__vidgen__/modules/three-finish.js` with its SHA-256 in its loaded-files record (§118.10): the
+clip key and the render fingerprint follow the module, and its shaders are strings inside it. A
+page that does not import it: the import map gained one entry, but the import map is in no key
+(`engine_id` hashes `clock.js`, `media.js`, `runtime.js`, `canvas.html`, flags and versions), so
+no stored clip of any project is drawn again. `vidgen_source_digest` covers every `.js` under
+`data/web/` (changed, as with every step).
+
+**The chain** (`Finish.render(t)`): options resolved (functions of `t` called); the scene drawn
+into a half-float target with a depth texture at `renderScale` (three.js renders into a target
+in linear light: no tone mapping, no output conversion); with motion blur, `update(t_i)` and a
+drawing per sub-frame time `t_i = t + ((i + 0.5)/N − 0.5) × shutter/360/fps`, each added with
+weight 1/N (additive blending into a half-float target), the one nearest `t` drawn last (its
+depth is used), `update(t)` once more when no sample falls on `t`; options read again (so a
+focus that follows a moving camera is right); depth of field (gather at half or full size, mix
+into a frame-size target) or a copy when the scene was drawn smaller; `UnrealBloomPass` on that
+target in place; the grade pass (fringe, exposure × filter × white balance normalised to keep
+the luminance, flash, vignette in linear light; three.js' own `ACESFilmicToneMapping`,
+`AgXToneMapping`, `NeutralToneMapping` from `ShaderChunk.tonemapping_pars_fragment` with its
+exposure uniform made a constant, or the films' short fit; saturation; sRGB encoding; contrast,
+lift, gamma, gain on the encoded values; fade) into an 8-bit target; FXAA and grain to the
+canvas (the grade pass draws straight to the canvas when both are off). Every quad material has
+`toneMapped: false` and no colour-space chunk, so nothing is converted twice. Grain:
+`round(t × fps) % 4096` seeds two hashes of the pixel.
+
+**Checked** (scratch `/home/claude/work/scratch/al350/`, the example's page copied to `bench/`
+with a `plain` mode, `renderer.render` alone, and a `nofog` flag):
+
+- *One encoding*: with every effect off (tone mapping `none`, no bloom, vignette, grain, FXAA)
+  against `renderer.render` to the canvas, no fog: max 1 level, 0.3 % of pixels differ (the
+  half-float target's rounding). With the example's fog: up to 14 levels on the far table —
+  three.js mixes fog after `colorspace_fragment` when it draws to the canvas but in linear light
+  into a target; documented.
+- *Determinism*: `vidgen still` of the full example at 0.5 s and 5.5 s from two fresh pages:
+  identical PNGs; the test does the same at 160x90.
+- *Shutter 0*: `motionBlur: {samples: 6, shutter: 0}` against `motionBlur: false`: identical.
+- *Warm-up*: `compileAsync` polls with `setTimeout(…, 10)`, which never fires in `load` (the
+  clock stands at 0; §118.8), unless `KHR_parallel_shader_compile` reports everything ready at
+  once — so `warmUp` uses `renderer.compile` and one drawing plus a 1-pixel `readPixels`. On the
+  example: page ready 8.7 s and frame 0 3.0 s with it; 1.1 s and 8.5 s without (Step 349's
+  finding: it moves the time). Optional.
+
+**Cost per effect** (`tools/bench.py`: a fresh `WebPage` per configuration, as vidgen draws a
+scene, 1280x720, 30 fps, frames 2–9 averaged, advance + screenshot; 2 cores, SwiftShader; one
+run each, the machine's speed varies by about ±5 %, i.e. ±30 ms here):
+
+| what is drawn | ms a frame | the effect's cost |
+|---|---|---|
+| the scene with `renderer.render` (PBR, 5 spheres, 4 gears, a 2048 PCF shadow, fog) | 472 | — |
+| the chain, every effect off (scene target + grade pass) | 525–528 | +55 |
+| + tone mapping, grade, vignette (same pass) | 531 | +3 |
+| + FXAA (an 8-bit target and one more pass) | 539 | +11 |
+| + grain (the same pass as FXAA) | 539 | +12 |
+| + fringe 1 | 545 | +17 |
+| + bloom, `scale` 0.25 / 0.5 (default) / 1 | 531 / 556–592 / 654 | +4 / +29–67 / +126 |
+| + depth of field `low` / `medium` / `high` | 601 / 663 / 1131 | +73 / +136 / +604 |
+| + motion blur 2 / 4 / 6 samples | 912 / 1694 / 2576 | about +400 per sample (a scene drawing with its shadow map, plus a quad) |
+| `renderScale: 0.75` (chain off) | 362 | −31 % |
+| shadows: PCF radius 2 / PCF radius 6 / VSM radius 4, 8 blur samples (2048 map, chain off) | 525 / 528 / 1282 | VSM +757 |
+| the example as committed (everything, 6 samples) | 2955–3340 | — |
+| the same without `warmUp`: frame 0 | 8456 (with: 3010) | — |
+
+The finishing passes are cheap next to the scene; motion blur multiplies the scene's own cost
+(and its shadow map's) by the number of samples; `high` depth of field gathers at full size.
+
+**Depth of field**: `coc(z) = min(K |z − z_f| / z, maxBlur)` pixels, `K` from a thin lens:
+`(f² / (N (z_f − f))) / 2 / filmHeight × height` with `f` = `camera.getFocalLength()` (mm, from
+`fov` and `filmGauge`), `filmHeight` = `camera.getFilmHeight()`, `z_f` in mm through `unit` —
+the radius of the blur far behind the focus (the far limit of the thin-lens formula, which is also
+what "Escapement"'s `aperture` meant). `blur` gives `K` directly (pixels at 720p, scaled by the
+frame height). A sample counts where its own circle reaches the pixel; a nearer sample's circle
+counts in full (foreground bleeds over), a farther one only up to the pixel's own circle + 1
+(a blurred background does not bleed over a sharp edge); colours are capped at 24 before
+gathering (a tiny very bright highlight then shows the spiral of samples, as on the example's
+front sphere; a smaller cap would dull bokeh). Orthographic cameras: `blur` only.
+
+**Soft shadows.** three.js 0.186: `PCFSoftShadowMap` is mapped to `PCFShadowMap` with a warning;
+`PCFShadowMap` samples five hardware-compared taps on a Vogel disc of `shadow.radius` texels,
+rotated per pixel by interleaved gradient noise (deterministic); `VSMShadowMap` blurs the map
+(`blurSamples`). Stills of the example (`sheet_shadows*.png`): PCF radius 1–3 soft and clean,
+6 wider and faint with a fine dither (masked by the grain), VSM 4 and 10 smooth; VSM cost 0.76 s a
+frame more at 2048. `softShadows()` sets either; the recommendation is PCF, radius 2–4.
+
+**The film effect reproduced** (scratch `esc/`: a copy of three "Escapement" scenes,
+`01_winding`, `04_escapement`, `05_cathedral`, and the same scenes on `escapement_fin.js`, the
+film's script with its composer, scene pass, final pass, FXAA pass, finish function and PMREM
+code replaced by `Finish` options (`renderScale` 0.88, `aces-narkowicz`, `encoding: "gamma2.2"`,
+bloom at 0.25, `dof.blur` = the film's `aperture`, `maxBlur` = `maxR`, `filter` = its `gain`,
+`lift` its lift raised to 1/2.2, `fringe` = 0.26 × its `ca`, vignette inner 0.25 / outer 1.05) and
+`makeEnv` by `studioEnvironment` with the film's own boxes and `up: [0, 0, 1]`: 1,222 lines
+→ 1,096). `vidgen still` at 3 s and 10 s, 1280x720: PSNR 34.4 / 32.0 dB (`01_winding`), 29.1 /
+29.0 dB (`04_escapement`), 29.1 / 28.4 dB (`05_cathedral`); after a 5x5 box blur of both (the
+grain's seed is song time in the film, scene time here) 30.3–34.5 dB. Side by side
+(`esc_*.png`) the pictures match in framing, focus, bloom and colour; what differs is the shape of
+the vignette (the film's is an odd ellipse, stronger at the left and right edges), the fringe's
+falloff, and the lift (the film's lifted in linear light before the encoding, the module lifts
+the encoded picture; matching it at black over-lifts the mid-tones by a few levels). Without
+`encoding: "gamma2.2"` (sRGB, the lift converted to sRGB) at 3 s: `01_winding` 30.0 dB (its dark
+navy background is mostly lift, which sRGB's linear toe keeps darker), `04_escapement` 29.3,
+`05_cathedral` 28.0; with the film's lift values passed unconverted, 26.1–27.9 dB.
+
+**Not done.** A cheaper per-object motion blur (the film's transparent copies of one part) — it
+needs the page's own geometry and sorting, so it stays a page technique; SMAA (not shipped among
+the add-ons; FXAA is vidgen's own); a transparent output (the composer's alpha is not meaningful
+after bloom, §118.14); MSAA of the scene target; resizing after construction.
+
+### 120.12 Review of Steps 341–350, documents, an example (Step 351)
+
+Each step's diff was read again (`git show` of 01c7d64 … 857c33c) for faults, edge cases, names
+that differ between steps, Windows hazards, cache-key gaps, determinism and docs that contradict
+the code. What was found and what was decided:
+
+**Fixed.**
+
+- *The guide's web-topic test had failed since Step 347* (`tests/test_guide.py::
+  test_the_web_topics_code_runs_in_chromium`, `slow`). Cause: Step 347's code block in "Pictures
+  that follow the music" began with `export function frame` instead of a comment naming its file
+  (the test writes every block to the file its first line names), its YAML block is a mapping
+  (`music:` + `scenes:`) where the test expected a list of scenes, and the page needs `ctx.music`,
+  which the test did not give. The block now starts `// extensions/space.js` (as the YAML names
+  it); the test reads mapping blocks and gives a page whose scene has `music_data` the data of a
+  tiny score project (the piece's render seeded with silence, so nothing is synthesised). The
+  block is drawn in Chromium again (it was never run before).
+- *`test_the_page_is_given_theme_data_beats_and_three` was flaky* (failed one to two runs in three
+  since Step 340): its frame at the start of a CSS transition is sometimes one step into the fade
+  (red 238 instead of 248), the compositor's non-repeatable timing measured in §120.10. The test
+  now allows that one frame up to a step (225–248) and still checks the frames before it and the
+  end exactly; 6 of 6 runs passed.
+- *Named settings in `vidgen studio`* (`registration`, `stroke`, `vowel`, `voices`, `morph`) were
+  number sliders. The inspector (`studio_app/static/inspector.js`, `choiceHtml`) now shows a
+  setting that has `choices` in the catalogue as a list of its names; a choice writes the name
+  (`stroke: spiccato`), a number in the score is shown as its name, reset works as for sliders.
+  Test: `tests/test_studio_ui.py::test_a_setting_with_named_values_is_a_list_of_its_names`.
+  `drawbars` stays a number slider (left).
+- *`3d` scenes reuse Step 349's writer and progress line.* Their page reads its own canvas
+  (`toDataURL`), so Step 349's screenshot does not apply; what applies is the rest:
+  `three_d.browser.write_clip` now puts each frame's PNG (`PageRenderer.png`) into
+  `FramesClipWriter`, which decodes it (`PageRenderer.pixels`, the same `png_pixels` as before)
+  and encodes it in its thread while the next frame is drawn, and `FrameProgress(what="3d
+  frames")` logs `3d frames 30/90, …` lines and a summary (no split: the page draws and reads
+  in one call). `FrameProgress`, `PROGRESS_SECONDS`, `duration_text`, `seconds_text` moved from
+  `web/clip.py` to `browser/frames_clip.py` (still importable from `web.clip`). Pixel identity:
+  `tests/test_scene_3d.py::test_the_clip_holds_the_pages_frames_and_reports_progress` compares
+  every frame of the written clip with `PageRenderer.frame(n)` drawn one by one (equal), which is
+  what the old `write_clip` wrote. No key changed (the clip's key is the description and the
+  engine).
+- *Docs*: `docs/COOKBOOK-MUSIC.md` section 13, one table of every score instrument (family, kind,
+  written range or default octave, settings to reach for first, typical use) and contents for
+  sections 8–13; cross-links between cookbook section 12 and `docs/COOKBOOK-3D.md` section 8; the
+  README's feature list (the orchestra, expressive notes, `music_data`, `vidgen/three-finish`,
+  `vidgen still`, progress, intermediates) and example list; CONFIG (studio, `3d` progress);
+  the guide (pointers to the table and the example); CHANGELOG (the phase in one place).
+
+**Checked and right.** Instrument, setting and value names agree between the catalogue, CONFIG,
+the guide and the cookbooks (`double_basses`, `low_brass`, `tam_tam`, `stroke`, `vowel`,
+`voices`, `morph`, `registration`); the page API is `ctx.music.*` everywhere (JavaScript fields
+in camelCase: `dynamicEnd`; Python's events: `dynamic_end`); the module is `vidgen/three-finish`
+in code, import map, guide and cookbook; the CLI flags (`--intermediate`, `--clean-intermediates`
+for `keep_intermediates: false`, `still --at/--frame/--count`) match their docs. Errors seen
+while writing the example named the place and the fix (a slur over one note; an unknown track
+in `music_data.tracks` names the score's tracks). Windows: frames clips and stills are written
+through `.partial` files and `os.replace` with a message when the target is open elsewhere;
+deleting intermediates keeps a clip that cannot be deleted with a warning. Determinism: two
+fresh pages of the example give byte-identical stills (`fire` at 3 s, checked);
+`music.js` uses no clock but vidgen's.
+
+**Left** (in the tasklist): `vidgen still` keeps every drawn frame and the sheet's tiles in memory
+at full size; `load_music_score` refuses a `str` path with an `AttributeError` (the score loader
+was left untouched in this step, so the films' audio needs no new proof); `ctx.music.sounding`
+looks at every earlier event of its track per call and the functions without a track sort all
+events per call; the choir's range warning uses E2–C6 whatever `voices` says; `drawbars` is a
+number slider; `3d` guide passes draw without the writer thread; nothing of the phase was tried
+on Windows or macOS.
+
+**The example**, `examples/signal-fire` ("Signal Fire", 27 s, 1280x720 at 30 fps, no narration):
+an original cue in C minor at 90 BPM (`assets/music/signal_fire.yaml`, 9 bars = 24 s and the last
+chord's ring) for solo violin (slurred, a glide up a sixth, late vibrato), violins, cellos (tremolo,
+spiccato and sustain marked on one track), double basses, four horns (`[fp <]`), trumpet (a
+slurred melody under a hairpin to `fff`), low brass (a swell into the hit), choir (`mm` morphing
+to `ooh`, then `aah`), timpani (a roll growing into the hit on the same track), taikos, bass drum,
+snare roll, cymbal swell and crash, tam-tam; the end in C major. Three `web_cut` scenes (8, 8,
+11 s; the extension type of §120.1) on one script (`extensions/signal_fire.js`) with
+`music_data: {tracks: [...]}` (ten tracks); vidgen works out `t0` (0, 8, 16). The page: embers on
+the violin's and the cellos' notes, the sky on the choir, a ring of light on the timpani (a roll as
+bright as its hairpin has grown, from `dynamic` → `dynamicEnd`), the stones and shock rings on the
+taikos, a beam whose height is the trumpet's pitch (gliding on slurred notes), a flash
+(`Finish`'s `flash`) on the crash and the gong; the camera follows song time, never a hit.
+Finished with bloom (threshold 1.2: at 1 the fire and the rings veiled the whole frame, seen in
+stills), ACES, a grade from cool to warm, vignette, grain, FXAA and depth of field on the brazier.
+Measured: the score renders in 49 s; `vidgen music check`: −27.9 LUFS, key C minor (0.93), no
+range warning, "unsteady" (32 dB from the quiet start to the hit: right for a cue without
+narration); the page 0.45 s a frame at 1280x720 (0.72 s a still with the page's setup); the final
+render about 8 min, 568 MB of frames clips. Looked at: stills at ten moments (four rounds of
+changes to the light), frames of the MP4 at ten moments, and spectrograms of the WAV and of the
+MP4's sound (the glide at 2.7 s, the spiccato grid from 8 s, the hit at 16 s, the trumpet's slides,
+the C major end at 21.3 s). Test: `tests/test_signal_fire_example.py` (validates; the score's
+instruments, slurs, strokes and growing roll; the page's tracks exist). Nobody has listened.
+
+### 120.13 "Escapement" as an example (Step 352)
+
+The owner asked for the published film as an example, source only. `examples/escapement` holds
+`video.yaml`, the score (unchanged, byte for byte), `extensions/escapement.js`,
+`extensions/webcut.py`, a README and a `.gitignore`; no audio, video, stills, `build/` or
+`output/`.
+
+- **Music data: `music_data` replaced the film's exporter.** The film's `scripts/make_audio.py`
+  wrote `extensions/escapement_audio.json` (level, low end and onset per frame; the score's hits,
+  notes and the mechanism's beats); the page fetched it and took its song time from `data.t0`.
+  The example's scenes have `music_data: {tracks: [16 tracks]}` (one YAML anchor) and the page
+  builds the same arrays from `ctx.music.events` (`fromMusic`); `t0` is `ctx.music.t0`; the
+  mechanism's beats are made in the page from three named constants (`START_BAR`, `FALTER`,
+  `SILENT_BAR`), as the exporter made them. The page never read the level, low end or onset, so
+  they are left out. One difference had to be kept: the exporter rounded event times to a
+  thousandth of a sixteenth note, which moves the triplet strokes of the `three` track by 42 µs
+  (32 of its 48 strokes); with exact times `06_threefour` and `09_build` differed in a few pixels
+  near the hammers (PSNR 72.7–100.5 dB, at most 22 levels on 0.002 % of the pixels). The page
+  rounds the same way (`grid`), and stills of all twelve scenes at four times each (48 stills,
+  1280x720, `vidgen still`) are pixel-identical to the film's. The exporter wrote pitch 0 for
+  chord-degree notes (`twinkle`, `pend`), `ctx.music` the played pitch; the page does not draw
+  those pitches.
+- **Finishing: the film's own.** Step 350's port of three scenes to `vidgen/three-finish` came
+  within 28–34 dB PSNR, a visible change of the art, so the example keeps the film's composer,
+  passes and baked studio; the README names the module as an alternative.
+- **`webcut.py` kept**: vidgen has no setting for a `web` scene without its fade-out (`outro` is a
+  class attribute), so the four-line subclass stays, as in `examples/signal-fire`.
+- **`PLAN.md` folded into the README** ("How it was planned": the grid, the colour script, the
+  order of work); its tables were already in the README.
+- **Render cost** (2 cores, no GPU, after Step 349): 4 s of `05_cathedral` 1.23 s a frame, 4 s of
+  `10_climax1` 0.89 s a frame, about 20 s a scene besides; 5,730 frames: about 1 h 30 min to 2 h.
+  Lossless frames clips 218 MB for the 8 s, about 5 GB for the film.
+- **Test** (`tests/test_escapement_example.py`, validate only): the file list, the `.gitignore`,
+  validation, the scenes' song starts on bar lines, the score's SHA-256 (line ends normalised),
+  no range warnings, the event counts the exporter had, the page reads only `ctx.music` and every
+  track it is given exists.

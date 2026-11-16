@@ -16,7 +16,8 @@ With overlays, also what the planned timeline reads from every scene (``vidgen.v
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
-With a ``web`` scene (DESIGN.md §118.10): its page or script file and every file its page loaded
+With a ``web`` scene (DESIGN.md §118.10; also a scene of an extension type that subclasses
+``Web``, §120.1): its page or script file and every file its page loaded
 in the last render that drew its clip (contents; the record beside the clip lists them; the
 worker records the files as the page loaded them, :func:`drawn_fingerprint`), and the beats'
 stored alignments (``ctx.beats`` has word times).
@@ -219,11 +220,30 @@ def _web_inputs(project: Project, spec: SceneConfig) -> dict[str, Any]:
     from vidgen.web.loaded import current_loaded, recorded_loaded
 
     paths = [rel for record in _web_records(project, spec.id) for rel in recorded_loaded(record)]
-    return {
+    data = {
         **entry_digest(project.root, spec.params),
         "loaded": current_loaded(project.root, paths),
         "align": {beat.id: _stat(project.audio_dir / f"{beat.id}.align.json") for beat in spec.beats},
     }
+    music = _web_music(project, spec)
+    if music is not None:   # left out without music_data:, so other web scenes keep their fingerprints
+        data["music"] = music
+    return data
+
+
+def _web_music(project: Project, spec: SceneConfig) -> str | None:
+    """The key of the music data a ``web`` scene with ``music_data:`` is given (DESIGN.md
+    §120.8; the music's settings and files and the planned timeline, at the video's frame
+    rate, made without rendering any music), ``None`` without it or when the video plays none."""
+    from vidgen.web.music import has_music, music_data_key, scene_music_settings
+
+    try:
+        settings = scene_music_settings(spec.params)
+    except ValueError:
+        return None
+    if settings is None or not has_music(project.config):
+        return None
+    return music_data_key(project, project.config.format.fps, settings.bands)
 
 
 def drawn_fingerprint(inputs: dict[str, Any], project: Project, preview: bool, scene_id: str) -> str:
@@ -357,8 +377,11 @@ def fingerprint_inputs(project: Project, scene_id: str) -> dict[str, Any]:
         previous = project.config.scenes[index - 1]
         clip = previous.params.get("path")
         data["match_previous"] = [scene_fingerprint(project, previous.id), _stat(project.root / clip) if isinstance(clip, str) else None]
-    if spec.type == "web":
-        # the page or script file a web scene names and the files its page loaded (DESIGN.md §118.10)
+    from vidgen.web.entry import is_web_type
+
+    if is_web_type(spec.type):
+        # the page or script file a web scene names and the files its page loaded (DESIGN.md §118.10);
+        # also for an extension's scene type that subclasses Web (Step 341, §120.1)
         data["web"] = _web_inputs(project, spec)
     from vidgen.videogen.compose import scene_placements
 

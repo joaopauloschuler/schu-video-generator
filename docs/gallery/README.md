@@ -116,6 +116,8 @@ A whole particle-physics explainer, the Standard Model, gluon fusion through a t
 
 ## Pictures and media
 
+Whole films of `web` scenes: [Escapement](../../examples/escapement/README.md) (`examples/escapement`), a 3:11 clockwork music film in three.js whose watch movement ticks on the score's beat, and [Signal Fire](../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture.
+
 | type | preview | use it for |
 |---|---|---|
 | [`image`](image.md) | <a href="image.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/image-16x9.png"><img src="media/image-16x9.gif" height="180" alt="image at 16:9"></picture></a> <a href="image.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/image-9x16.png"><img src="media/image-9x16.gif" height="180" alt="image at 9:16"></picture></a> | a photo or illustration |

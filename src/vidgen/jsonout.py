@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from vidgen.lint import LintResult
     from vidgen.readback import ReadbackResult
     from vidgen.storyboard import StoryboardResult
+    from vidgen.web.still import StillResult
     from vidgen.cartoon.still import CharacterSheet
 
 #: Version of the JSON document shapes (not of schu-video-generator).
@@ -861,7 +862,8 @@ def render_document(
     elapsed: float,
     warnings: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
-    """The ``vidgen render --json`` document."""
+    """The ``vidgen render --json`` document (``disk``: bytes of the build folder, of its frames
+    clips, free on its disk and deleted in this run, DESIGN.md §120.9)."""
     timings = result.timings
     worker_warnings = [warning(message, scene) for scene, message in result.warnings]
     scenes = [
@@ -900,6 +902,9 @@ def render_document(
         mix=timings.get("mix"),
         chapters=timings.get("chapters", []),
         scenes=scenes,
+        disk=None if result.disk is None else {
+            "build": result.disk.total, "frames_clips": result.disk.frames_clips, "free": result.disk.free, "removed": result.removed,
+        },
     )
 
 
@@ -1159,6 +1164,19 @@ def schema_document(project: Project | None, schema: Mapping[str, Any], warnings
 
 
 # ----- storyboard --------------------------------------------------------------------------------
+
+
+def still_document(result: StillResult, elapsed: float) -> dict[str, Any]:
+    """The ``vidgen still --json`` document: the page's size and frame rate, and every still
+    written with its frame, its time (seconds from the scene's start) and the seconds drawing it took."""
+    return envelope(
+        "still", True,
+        scene=result.scene, type=result.type, entry=result.entry, size=result.size, width=result.width, height=result.height,
+        fps=result.fps, frames=result.frames, region=result.region, exact=result.exact, transparent=result.transparent,
+        stills=[{"path": _path(s.path), "frame": s.frame, "time": round(s.time, 6), "seconds": round(s.seconds, 3)} for s in result.stills],
+        sheet=_path(result.sheet) if result.sheet is not None else None,
+        pages=result.pages, load_seconds=round(result.load_seconds, 3), seconds=round(elapsed, 3),
+    )
 
 
 def storyboard_document(

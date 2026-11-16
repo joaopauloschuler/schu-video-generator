@@ -149,6 +149,20 @@ function sliderHtml(id, label, f, v, { written, help, resetTitle }) {
   </div>`;
 }
 
+// A setting with named values (`stroke`, `registration`, `vowel`...): a list of its names; the
+// score gets the name (`stroke: spiccato`), the score's number for it is shown as that name.
+function choiceHtml(id, label, f, v, { written, help, resetTitle }) {
+  const current = typeof v === "string" ? v : f.choices[Math.round(num(v) ? v : f.default)] ?? f.choices[0];
+  const helpText = `${help ? help + " · " : ""}${f.choices.join(", ")} · default ${f.choices[f.default] ?? f.default}`;
+  const options = f.choices.map((c) => `<option value="${escapeHtml(c)}"${c === current ? " selected" : ""}>${escapeHtml(c)}</option>`).join("");
+  return `<div class="slider-row${written ? " written" : ""}" data-help="${escapeHtml(helpText)}">
+    <label for="${id}">${escapeHtml(label)}</label>
+    <select class="field" id="${id}" data-choice="1">${options}</select>
+    <span class="unit"></span>
+    <button type="button" class="reset" data-reset="${id}" title="${escapeHtml(resetTitle || "back to the default")}" aria-label="Reset ${escapeHtml(label)}"${written ? "" : " hidden"}>↺</button>
+  </div>`;
+}
+
 function register(id, entry) {
   sliders.set(id, entry);
 }
@@ -246,6 +260,11 @@ function soundHtml(t) {
       commit: (x) => [[{ op: "set", path, value: x }], `${t.name}${ui.scope ? " in " + ui.scope : ""}: ${key} ${x}${f.unit ? " " + f.unit : ""}`],
       reset: () => [[{ op: "unset", path, keep: baseDepth() }], `${t.name}${ui.scope ? " in " + ui.scope : ""}: ${key} back to ${ui.scope ? "the track's" : "the default"}`],
     });
+    if (Array.isArray(f.choices)) {
+      const named = (x) => (typeof x === "string" ? x : f.choices[Math.round(x)] ?? x);
+      const resetTitle = ui.scope ? `back to the track's (${named(trackSetting(t, key, f.default))})` : `back to the default (${named(f.default)})`;
+      return choiceHtml(id, key, f, v, { written, help: f.words, resetTitle });
+    }
     const resetTitle = ui.scope ? `back to the track's (${withUnit(trackSetting(t, key, f.default), f.unit)})` : `back to the default (${withUnit(f.default, f.unit)})`;
     return sliderHtml(id, key, f, v, { written, help: f.words, resetTitle });
   });
@@ -657,6 +676,7 @@ function onChange(e) {
   const el = e.target;
   const t = current();
   if (!t) return;
+  if (el.dataset.choice && sliders.has(el.id)) return commitSlider(el.id, el.value, el);
   if (el.type === "range" && sliders.has(el.id)) {
     // one version per drag (the release), and keyboard steps a moment after the last one
     clearTimeout(timers.get(el.id));

@@ -4,8 +4,10 @@
 
 import { escapeHtml } from "./yaml_view.js";
 
-// The step symbols of vidgen.studio.patterns (one regex, tried at each position).
-const TOKEN = /(\|)|([A-G][#b]?\d[!?]?)|([1-9][',]*[!?]?)|(v[1-9][',]*[!?]?)|([xXo*.\-][',]*[!?]?)|(\+)|(\s+)/y;
+// The step symbols of vidgen.studio.patterns (one regex, tried at each position). Marks `[...]`
+// and slur parentheses (DESIGN.md §120.7) are passed over like spaces: the grid shows the steps
+// without them, and a cell's edit leaves them in the text.
+const TOKEN = /(\|)|([A-G][#b]?\d[!?]?)|([1-9][',]*[!?]?)|(v[1-9][',]*[!?]?)|([xXo*.\-][',]*[!?]?)|(\+)|(\s+|\[[^\[\]]*\]|[()])/y;
 
 // `text` as bars of cells {start, end, text}; {error, at} when a symbol is unknown.
 export function readSteps(text) {

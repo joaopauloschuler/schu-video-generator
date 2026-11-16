@@ -3788,6 +3788,15 @@ class ShortsConfig(_Strict):
     """Share of the frame's width at the left to keep clear."""
 
 
+class RenderConfig(_Strict):
+    """How `vidgen render` keeps what it makes on the way to the video (DESIGN.md §120.9)."""
+
+    intermediate: Literal["lossless", "compact"] = "lossless"
+    """How the frames a web or 3d scene draws are kept until the scene plays them (build/.../web/, three_d/): lossless (FFV1, about 1 byte per pixel and frame for a detailed WebGL page: 26 MB per second at 720p30) or compact (H.264 4:4:4 at CRF 12 with a lossless alpha stream, about 4.6 times smaller; one more lossy step before the scene's own H.264, which loses far more); a lossless clip serves a compact render, not the other way round; `vidgen render --intermediate`."""
+    keep_intermediates: bool = True
+    """false: delete a web or 3d scene's frames clip once the scene's own clip is written, and every scene's after the join (the scene clips, records and the joined video stay); the next render of a changed scene draws its frames again; `vidgen render --clean-intermediates`."""
+
+
 class VideoConfig(_Strict):
     """The whole ``video.yaml``."""
 
@@ -3803,6 +3812,8 @@ class VideoConfig(_Strict):
     """Resolution and frame rate of `vidgen render --preview`."""
     draft: DraftConfig | None = None
     """Resolution and frame rate of `vidgen render --draft` (fast drafts without decoration); default: 240 pixels on the shorter side at the format's shape, 8 fps."""
+    render: RenderConfig = Field(default_factory=RenderConfig)
+    """How a render keeps its intermediate files {intermediate: lossless | compact, keep_intermediates} (DESIGN.md §120.9)."""
     include: Annotated[str, Field(min_length=1)] | list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     """YAML / JSON files (relative to this file, e.g. cast.yaml or ../shared/sets.yaml) whose characters, voices and sets this config starts from; this config's own entries win (a character of the same name: its keys win)."""
     sets: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)

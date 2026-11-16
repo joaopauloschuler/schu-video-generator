@@ -5,7 +5,146 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–340)
+## Unreleased (Steps 193–352)
+
+### "Escapement" as an example (Step 352)
+
+- **`examples/escapement`**: the published 3:11 clockwork music film, source only (score,
+  `video.yaml`, one three.js module, the `web_cut` type, README). Its pictures now get the score
+  through `music_data` / `ctx.music` instead of the film's hand-written exporter and JSON file;
+  stills of all twelve scenes are pixel-identical to the film's, and the score is unchanged (its
+  render has the same SHA-256). The film's own finishing is kept. A full render takes about
+  1 h 30 min to 2 h on 2 cores; `vidgen still` and `--draft` for quick looks. Listed in the README
+  and the scene gallery ("Pictures and media"); `tests/test_escapement_example.py` (validate only).
+
+### Phase AL in one place: what three music films asked of the generator (Steps 341–351)
+
+Three music films made with vidgen ("Parallel Space", "Escapement") reported limits; Steps
+341–350 built all of them, Step 351 reviewed them. In short:
+
+- **Score files got an orchestra**: `trumpet`, `horn`, `low_brass`, `organ` (343); `violins`,
+  `violas`, `cellos`, `double_basses` with `stroke: sustain | spiccato | tremolo | pizzicato` (344);
+  `timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`, `snare_drum`, `cymbal`, `tam_tam`, `choir`
+  (345). One table of every instrument: `docs/COOKBOOK-MUSIC.md` section 13.
+- **Expressive notes** (346): dynamics `[pp]`–`[fff]`, hairpins, `fp` / `sfz`, slurs with a glide,
+  vibrato speed and delay, settings per note (`[pizzicato]`, `[roll]`), an instrument per section,
+  range warnings. Scores without marks play the same samples as before.
+- **Pictures that follow the music** (347): `music_data: true` on a `web` scene gives its page
+  `ctx.music` (the mix measured per frame, the score's hits and notes in song time); no script of
+  your own.
+- **Rendering `web` scenes**: an edit to the script of a scene whose type subclasses `Web` renders
+  it again (341); `vidgen still` draws single frames without rendering (342); `render.intermediate:
+  compact` and `keep_intermediates: false` for small disks (348); quicker screenshots and a
+  progress line (349); `vidgen/three-finish`, a ready-made finish for three.js pages (350).
+- **Step 351**: the guide's music code block runs in the test again; a flaky test made robust;
+  `vidgen studio` shows named settings (`stroke`, `registration`, `vowel`, `voices`, `morph`) as a
+  list of their names; `3d` scenes write their frames clip beside the drawing with a `3d frames`
+  progress line (same pixels); the cookbook's table of all instruments; a worked example,
+  [examples/signal-fire](examples/signal-fire/README.md): an original 24 s orchestral cue with
+  expressive marks and a three.js night scene that reads it through `ctx.music`, finished with
+  `vidgen/three-finish`. Review findings: DESIGN §120.12.
+
+### Finishing for three.js `web` scenes: `vidgen/three-finish` (Step 350)
+
+- **A ready-made finish** for a three.js page: `import {Finish} from "vidgen/three-finish"`, `new Finish(renderer, scene, camera, ctx, {...})`, `finish.render(t)` in `frame`. Depth of field from the depth buffer (a thin lens: focus distance, object or point, f-stop and scene units, or a blur in pixels; three quality levels), motion blur on the video's clock (the page's `update(t)` called at sub-frame times across a shutter angle and averaged; exactly no blur at shutter 0), bloom on highlights only, ACES / AgX / neutral tone mapping with exposure, a grade (temperature, tint, saturation, contrast, lift, gamma, gain, a linear filter; any option may be a function of time), vignette, chromatic fringe, film grain seeded by the frame, FXAA; one sRGB encoding (with every effect off it draws what `renderer.render` draws, within one level). Deterministic: two renders give the same frames.
+- **Helpers**: `studioEnvironment` (soft boxes baked through PMREM for metal), `nebulaSky` (a seeded nebula and stars baked into a cube map), `surfaceFinish` (brushed, Geneva stripes, perlage, circular graining, sunray normal and roughness maps), `softShadows` (three.js 0.186 has no `PCFSoftShadowMap`: PCF with a radius is recommended, VSM measured), `focusDistance`, `warmUp` (compiles the shaders in `load`; `compileAsync` would never resolve there).
+- **Cost** at 1280x720 on 2 cores (software WebGL): the passes add 0.01–0.14 s each to a 0.47 s scene; motion blur costs a whole scene drawing per sample (DESIGN §120.11 has the table). A page that does not import the module is unchanged; one that does has it in its cache keys.
+- A worked example, `examples/three-finish`; a copy of three "Escapement" scenes ported to the module came within 28–34 dB PSNR of the film's stills. Docs: the guide ("Finishing three.js scenes"), CONFIG (`web`), `docs/COOKBOOK-3D.md` section 8. Tests: `tests/test_web_three_finish.py`.
+
+
+### Faster `web` rendering, a progress line (Step 349)
+
+- **Faster frames, the same pixels.** A `web` scene's screenshot is now the PNG Playwright gives, compressed quickly (`Page.captureScreenshot` with `optimizeForSpeed`), and the frames clip is decoded and encoded while the next frame is drawn. On 2 cores: a detailed three.js film page 1.61 → 1.24–1.30 s a frame at 1280x720 (a 3 s scene 165 s → 135 s; the whole "Escapement" film estimated at about 1 h 45 min instead of 2 h 10 min), flat SVG pages about 20 % faster. The frames are identical to before (checked frame by frame on WebGL and SVG pages, at 720p and preview size, with alpha, in a body region and with `design_width`); no cache key changed, so nothing is drawn again.
+- **A progress line while frames are drawn**: `[4/12] 04_escapement: web frames 120/482, 1.24 s a frame, about 7 min 29 s left` about every 10 s, then a summary that splits a frame's time into the page's `frame(t, ctx)` and the drawing with the screenshot. Also on stderr with `--json`, so the MCP `render` tool reports it as progress.
+- **No shader warm-up needed**: the first frame a page draws may take 30 s (the others 10 s), so compiling three.js shaders there no longer risks the time limit.
+- Measured and not taken (DESIGN §120.10 has the table): WebP or JPEG screenshots, reading the WebGL canvas back, `Page.startScreencast`, `HeadlessExperimental.beginFrame`, other software-GL flags, two pages or split scenes, lazy imports. `--jobs 2` was about 10 % faster than one job on a two-scene WebGL test. `performance.now()` stays on the video's clock (documented).
+
+### Smaller intermediate files (Step 348)
+
+- **`render: {intermediate: compact}`** (`vidgen render --intermediate compact`, MCP `intermediate`) keeps the frames a `web` or `3d` scene draws as H.264 4:4:4 (CRF 12) with a lossless alpha stream instead of lossless FFV1: about 4.6 times smaller for a WebGL page (5.5–6 MB/s instead of 26–28 MB/s at 720p30). One more lossy step, measured: the scene clip ends 0.04–0.24 dB further from the page than when made from lossless frames. Lossless stays the default and is unchanged (no setting was smaller at the same speed).
+- **`render: {keep_intermediates: false}`** (`--clean-intermediates`, MCP `clean_intermediates`) deletes a scene's frames clip once the scene is rendered and every scene's after the join; edits are still noticed; a scene rendered again later draws its frames again.
+- **`vidgen render`** warns before it starts when the disk may be too small for the frames clips and prints the build folder's size after the join (`build:`; `--json`: `disk`).
+- Measured on the films' frames; details in DESIGN §120.9, docs in `docs/CONFIG.md` ("Intermediate files and disk").
+
+### Music data for `web` scenes (Step 347)
+
+- **`music_data: true`** on a `web` scene gives its page `ctx.music`: the video's music measured at every video frame (spectrum bands, level, low end, onsets; each 0..1) and, when the music is a score file, every track's drum hits and notes with pitch, instrument, dynamic, stroke and slur. No script of your own and no JSON beside the page; the song time of the scene's start is worked out (`ctx.music.t0`, `ctx.music.now()`).
+- Functions on the page: `band(i)`, `bands()`, `level()`, `low()`, `onset()`, `hits(track, T0, T1)`, `notes(...)`, `last(track)`, `sounding(track)`, `pulse(track, decay)`, `section()`. Options: `{bands: 32, tracks: [kick, hook], t0: 41.6}`.
+- It measures what the video plays (the cue's start, loop, volume, fades, scene levels), from the music the join renders anyway; made once and kept in `build/music`. An edit to the score draws the scenes that use it again; other scenes are not affected and keep their cache keys.
+- It replaces the films' own scripts: on "Parallel Space" and "Escapement" the same numbers within the films' own rounding, the same hits and notes, and stills of a page using `ctx.music` equal (or within 11 of 255 levels) to the original. Docs: `docs/CONFIG.md` ("Music data"), the guide ("Pictures that follow the music"), `docs/COOKBOOK-MUSIC.md` section 12. Tests: `tests/test_web_music.py`.
+
+### Expressive notes in score files (Step 346)
+
+- **Dynamics per note.** Marks in square brackets before a step in a track's `steps`: `[pp] [p] [mp] [mf] [f] [ff]` (also `ppp`, `fff`, or dB: `[-6]`), in force until changed; an unmarked note is `mf`. On brass, strings, the choir and the orchestral drums a dynamic changes the tone as well as the level: louder brass is brighter, louder strings brighter with more bite, a louder choir fuller, a louder drum struck harder. The organ, pads and older instruments change level only.
+- **Shapes.** Hairpins `[p <] ... [f]` and `[f >] ... [p]` move the level from their step to the next dynamic: inside one held note (a crescendo whose tone opens as it grows) or over a phrase. Swells, `[fp]` and `[sfz]`.
+- **Slurs and glides.** `(A4 - C5 - E5 - - -)` is one bow or breath: no new attack, the pitch glides in `glide` seconds (0.06 legato, 0.2–0.4 a portamento; `[glide=0.3]` for one note), the vibrato goes on. On `trumpet`, `horn`, `low_brass`, the strings (sustained, tremolo), `choir` and `soft_lead`.
+- **Vibrato** speed and delay: the settings `vibrato_speed` and `vibrato_delay` beside `vibrato`, per track, section or note.
+- **Settings per note** with the same marks: `[pizzicato] D3 [spiccato] D3 D3 [sustain] G3 - -` on one strings track, `[roll pp <] A2 - - - | [hit ff] D2` on one timpani track, `[pitch=100] x` on a taiko. `[default]` returns to the track's settings. `touch: 1` makes the old accents (`X`, `!`, `accent:`) bite too.
+- **An instrument per section**: `sections: {lift: {instrument: trumpet}}` on a track.
+- **Range warning**: notes outside an instrument's written range are reported by `vidgen music render` and `vidgen music check` (they still play).
+- A duck with `follow: true` follows the hits' dynamics. Every mistake in a mark is an error naming the mark and the nearest word.
+- Existing scores are unchanged: "Escapement", "Parallel Space" and twelve demo scores of Steps 343–345 render to the same bytes as before.
+- Measured, not listened to (DESIGN §120.7). Docs: `docs/CONFIG.md` ("Expressive notes"), `docs/COOKBOOK-MUSIC.md` section 11, the guide ("Expression"). Tests: `tests/test_studio_expression.py`.
+
+### Orchestral percussion and a choir for score files (Step 345)
+
+- Nine new instruments for score files, synthesised like the others (no samples, no SoundFont), in two new families of `vidgen music patches`, `percussion` and `choir`.
+- **Timpani and toms, played by note name.** `timpani` (written D2–A3) ring in a kettledrum's own overtones (1 : 1.5 : 2 : 2.44 : 2.9, not a harmonic series), lower drums longer. `toms` are concert toms from a floor tom (G1) to a high tom (C5); the pitch falls to the note after the blow (`drop`). Both take `stroke: roll`, a `mallet` from soft felt (0) to hard wood (1) and `ring` (how long a note sounds before it is damped). The `kick`, which films had used for toms, stops at 160 Hz.
+- **Big drums, played as drum steps.** `taiko` (a hard attack and a long low tail; `players: 6` is an ensemble spread from left to right), `bass_drum` (a concert bass drum), `frame_drum` (`edge` moves the stroke from the middle to the rim), `snare_drum` (`stroke: roll`, `players` for a line of drums). Each has a `pitch` in Hz.
+- **Metal.** `cymbal` (a suspended cymbal: a crash, or `stroke: swell`, a mallet roll that grows until its held steps end) and `tam_tam` (a gong whose highs arrive after the blow). The `riser`, `open_hat` and `gated_snare` do not cover these: a noise sweep without ring, 90 ms, and 0.27 s without a roll.
+- **`choir`** holds a vowel: `ooh`, `aah`, `eeh`, `mm`, `oh` or `ee`, by formant synthesis with the formants of basses, tenors, altos and sopranos. `voices: mixed` gives each note to the kinds of voice that reach it; `men`, `women` or one kind choose. 8 singers a note by default, each with its own tuning, vibrato and entry. `morph` turns a held note into another vowel. It is a choir pad: it sings no words and will not pass for a recorded choir.
+- Every blow at the same settings is the same samples, and a drum is made once per setting: 256 sixteenths cost about what the `kick` costs.
+- Levels: `taiko` and `bass_drum` are as loud as `kick` and `boom` at `volume: 0`; the choir is as loud as the strings and the brass.
+- Existing scores are unchanged: the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
+- Measured, not listened to (DESIGN §120.6). Demo files for listening were written outside the repository.
+- Docs: `docs/CONFIG.md` (score files: the instrument table, "Orchestral percussion", "Choir"), `docs/COOKBOOK-MUSIC.md` section 10, the guide ("Making music"). Tests: `tests/test_studio_percussion_choir.py`.
+
+### Bowed strings for score files: `violins`, `violas`, `cellos`, `double_basses` (Step 344)
+
+- Four new instruments for score files, synthesised like the others (no samples, no SoundFont): `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5) and `double_basses` (C1–G4). Each is a section by default (6, 5, 4 and 3 players, up to 12; `players: 1` is a solo instrument). `vidgen music patches` lists them in a new family, `strings`.
+- **Four strokes**, chosen by the setting `stroke`: `sustain` (bowed for as long as the steps hold the note; notes without a rest between them overlap into a legato), `spiccato` (one short stroke per note; `length: 0.15` and more is a staccato), `tremolo` (a held note of fast bow strokes, 13 a second by default) and `pizzicato` (plucked; it rings until its steps end, low notes longer). A section of the piece can change the stroke.
+- **Even ostinatos.** Every spiccato stroke of a pitch is the same samples, and all pitches are equally loud (within 1 dB over each range), so sixteenths at 138 BPM and faster are even. The `pad` played note by note, which the film "Parallel Space" had to use, differs by up to 8 dB from note to note.
+- **The instrument's body is in the tone**: resonances at fixed frequencies that do not move with the note, a different piece of wood for every player of a section, and a vibrato that moves each harmonic's level with the pitch. A section's players are a few cents and milliseconds apart with their own vibrato; its level is steady while its harmonics beat.
+- Settings: `attack` (0.02–4 s: a firm stroke, a smooth one, a swell), `brightness` (0 bowed over the fingerboard, dark; 1 at the bridge, glassy), `vibrato` (cents, delayed), `accent` (the bite of a stroke), `length`, `speed` (tremolo), `decay`, `bow` (rosin noise), `mute` (con sordino), `detune`, `ring`.
+- Their level is that of the brass (a held note about −16.6 LUFS before the piece is levelled). A score that used a `pad` as violins will want the new instrument about 8 dB up.
+- The existing `pizzicato` instrument is unchanged. Existing scores are unchanged: the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
+- Measured, not listened to: nobody has heard these instruments yet (DESIGN §120.5 has the measurements). Demo files for listening were written outside the repository.
+- Limits: no slur or glide between notes, every stroke of a pitch is the same, and the track's `accent:` pattern changes a stroke's level but not its bite.
+- Docs: `docs/CONFIG.md` (score files: the instrument table, "Bowed strings"), `docs/COOKBOOK-MUSIC.md` section 9, the guide ("Making music"). Tests: `tests/test_studio_strings.py`.
+
+
+### Brass and organ for score files: `trumpet`, `horn`, `low_brass`, `organ` (Step 343)
+
+- Four new instruments for score files (`vidgen music render`, `assets/music/NAME.yaml`), synthesised like the others (no samples, no SoundFont): `trumpet` (a solo trumpet, E3–C6), `horn` (a French horn, B1–F5), `low_brass` (a trombone section, E1–F4, with `tuba` a tuba an octave under it) and `organ` (a drawbar organ, C1–C7). `vidgen music patches` lists their settings under the new families `brass` and `organ`.
+- **Brass gets brighter as it gets louder.** `brightness` (0 soft and dark to 1 blaring) changes the harmonics and not the level; inside a note the tone follows the level, so a note opens as it speaks and a long `attack` (up to 4 s) is a swell that starts dark. The pitch starts a little flat, as lips do; vibrato begins 0.3 s into a note. `players` above 1 is a section in unison (a few cents and milliseconds apart, in stereo, as loud as one player); `mute` on trumpet and horn.
+- **Organ registrations by name**: `registration: cathedral` (principals 16' 8' 4' with mixtures, the default), `principal`, `flute`, `reed`, `drawbar`, `full`; or your own nine drawbars, `drawbars: "00 8400 000"` (in quotes). A note holds steadily and every note has the same level. Options: `chorus` (a second, detuned pipe per rank: a slow beating; off by default), `detune`, `chiff`, `click` (a key click; off by default), `tone`.
+- A setting can now have named values (`registration: flute`; the number works too). An unknown name is reported with the closest one.
+- Their levels match piano chords (a held note about −16.5 LUFS before the piece is levelled; `soft_lead` is −20.4, a `saw_pad` chord −10), so they start at `volume: 0`. A score that used a saw pad as brass will want the new instrument about 6 dB up.
+- A track plays the same note the same way every time; two tracks in unison are two players.
+- Measured, not listened to: nobody has heard these instruments yet. Attack, brightness, pitch at the start, vibrato, level across each range, aliasing at the top of the range, clicks and CPU time were measured (DESIGN §120.4), and spectrograms were looked at. Demo files for listening were written outside the repository.
+- Limits: no slur between notes (each note has its own attack), no valve noise, no flutter-tongue; the organ has no swell box, tremulant or Leslie. In `vidgen studio` the `drawbars` setting shows as a plain slider: type the digits in the score instead.
+- Existing scores are unchanged: no existing instrument, default or cache key was touched, and the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
+- Docs: `docs/CONFIG.md` (score files: the instrument table, "Brass and organ"), `docs/COOKBOOK-MUSIC.md` section 8, the guide ("Making music"). Tests: `tests/test_studio_brass_organ.py`.
+
+
+### `vidgen still`: one frame of a `web` scene at an exact time, without rendering it (Step 342)
+
+- New command: `vidgen still PROJECT --scene ID --at SECONDS` writes that frame of a `web` scene's page as a PNG (`exports/stills/<scene>_<seconds>s.png`, or `--out FILE|DIR`). It is the picture the render draws for that frame: vidgen builds the scene as a render does and opens the page with the same theme, `data:`, beats, size and frame rate. Compared pixel for pixel with rendered lossless page clips in a test, and with eight frames of the film "Escapement" at 1280x720.
+- `--at` is seconds from the scene's start and takes lists and repeats (`--at 0,4,8,12`); `--frame N` names a frame; `--count N` spreads N stills over the scene. Stills in increasing order are drawn on one page in one browser.
+- `--size final|preview|draft|WIDTHxHEIGHT` (default final); `--sheet FILE [--columns N]` adds a labelled contact sheet; `--transparent` keeps the page's alpha (default: over the video's background colour); `--json`.
+- A page that keeps state from frame to frame (a simulation stepped per frame, Motion or lottie-web playing by themselves) shows a still as if the frames before had not been drawn; `--exact` steps through every frame first, as a render does (slower).
+- Works for the type `web` and for extension types that subclass it; another scene type is an error naming `vidgen storyboard --scene ID`. Nothing is written under `build/<quality>/`.
+- Measured on "Escapement" (2 cores): page ready after about 9 s, then 2.2 s per still at 1280x720, 0.5 s at 640x360, 0.3 s at 320x180.
+- MCP: the `still` tool (returns the pictures). Guide: `vidgen guide web`, "Looking at single frames". DESIGN §120.3; tests `tests/test_web_still.py`.
+
+### Fixed: an edited script of a `web` scene of your own type was not rendered again (Step 341)
+
+- **Fixed:** a scene of an extension scene type that subclasses the `web` scene (for example `@scene("web_cut") class WebCut(Web): outro = 0.0`) was reused after an edit to its `script:` / `page:` file or to a file the page imports or fetches; only `vidgen render --force --scene ID` rendered it again. The render fingerprint looked at these files only for the type named `web`. It now does for every type whose class subclasses `Web`. Found in the music film "Escapement"; reproduced in a small project of the same layout before the fix.
+- After updating, each scene of such a type is rendered once more (its stored render may be out of date). Its frames are drawn again only if the script or a loaded file differs from what was recorded. Scenes of type `web` are not affected.
+- **Fixed:** `vidgen render --force` did not draw the frames of such a scene again when its files were unchanged.
+- **Fixed:** a `script:` module that awaits several `fetch()` calls one after the other at its top level failed in about one run in three with `did not become ready within 30 s` (6 of 14 opens of a module with two fetches; 0 of 14 after). vidgen looked once and then waited on a timer of the page, which is vidgen's own clock and stands still before the first frame.
+- Not covered: an extension scene type that does not subclass `Web` and calls `make_web_clip` itself. DESIGN §120.1, §120.2; tests `tests/test_web_extension_cache.py`.
+- This step opens Phase AL ("What three music films asked of the generator", Steps 341–351) in `tasklist.md` and DESIGN §120.
 
 ### A fast draft of a video with `web` scenes; the README names the six kinds of scene (Step 340)
 

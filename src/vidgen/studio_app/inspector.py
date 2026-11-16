@@ -47,12 +47,13 @@ def _slider(field: dict[str, Any], integer: bool) -> None:
 def studio_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
     """:func:`vidgen.studio.patch_catalog` for the page: every setting and effect field with a
     range gets its ``unit``, ``scale`` and ``integer`` (``music patches --json`` is unchanged).
-    Instrument settings are real numbers (the catalogue writes 2600.0 as 2600); an effect field
+    Instrument settings are real numbers (the catalogue writes 2600.0 as 2600), whole ones when
+    they have named values (the organ's ``registration``); an effect field
     is whole when its default is (echo ``repeats``), as the score checks it."""
     out = copy.deepcopy(dict(catalog))
     for instrument in out["instruments"]:
         for setting in instrument["settings"].values():
-            _slider(setting, False)
+            _slider(setting, "choices" in setting)
     for effect in out["effects"]:
         for field in effect["fields"].values():
             if field.get("low") is not None:
@@ -81,7 +82,7 @@ def _pitched(steps: Any) -> bool:
     from vidgen.studio.patterns import parse_steps
 
     try:
-        pattern = parse_steps(steps, "steps", True)
+        pattern = parse_steps(steps, "steps", True, True)
     except VidgenError:
         return False
     return any(s.pitched for bar in pattern for s in bar)

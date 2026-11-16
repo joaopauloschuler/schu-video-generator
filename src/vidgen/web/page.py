@@ -6,13 +6,15 @@ scene's page (or vidgen's bare canvas page that imports the scene's script), wai
 ready and returns frame ``n``: vidgen's clock moved to ``t = n / fps`` (the page's timers,
 animation-frame callbacks, animations and videos follow it; §118.8), the page's ``frame(t, ctx)``
 hook, then a screenshot of the whole viewport with its alpha (Chromium's default background is
-transparent, so what the page leaves transparent shows what vidgen draws behind it). An uncaught JavaScript error, at load or on a frame,
+transparent, so what the page leaves transparent shows what vidgen draws behind it; the PNG
+Playwright's screenshot gives, encoded faster, §120.10). An uncaught JavaScript error, at load or on a frame,
 is a :class:`VidgenError` naming the scene, the file and the line; so is a ``load`` or a frame that
 does not return within its time limit (vidgen then stops the page's renderer process).
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -22,6 +24,7 @@ import os
 import re
 import signal
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
@@ -69,10 +72,47 @@ CANVAS_PATH = "__vidgen__/canvas.html"
 WEB_ARGS: tuple[str, ...] = ("--hide-scrollbars", "--force-color-profile=srgb", "--disable-partial-raster")
 #: How long the page may take to become ready (milliseconds).
 READY_TIMEOUT_MS = 30_000
+#: Milliseconds between two looks at whether the page is ready.
+READY_POLL_MS = 20
 #: How long vidgen's start (fonts, pictures, videos, then the page's ``load(ctx)``) may take (seconds).
 LOAD_TIMEOUT_S = 30.0
 #: How long one frame (its timers, animation-frame callbacks and ``frame(t, ctx)``) may take (seconds).
 FRAME_TIMEOUT_S = 10.0
+#: How long the first frame a page draws may take (seconds): a WebGL page's shaders are compiled
+#: then, so a page needs no warm-up of its own (DESIGN.md §120.10).
+FIRST_FRAME_TIMEOUT_S = LOAD_TIMEOUT_S
+#: The screenshot (DESIGN.md §120.10): ``Page.captureScreenshot`` with what Playwright's
+#: ``page.screenshot(type="png")`` sends (the viewport at the visual viewport's place and scale) and
+#: ``optimizeForSpeed`` (Chromium's quicker PNG compression: the same pixels, larger files, about
+#: 0.3 s less per 1280x720 frame of a detailed page). Carets are hidden around it as Playwright
+#: hides them (its ``inPagePrepareForScreenshots``, in every frame of the page).
+_HIDE_CARETS = """() => {
+  const roots = [];
+  const collect = (root) => {
+    roots.push(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    do {
+      const node = walker.currentNode;
+      if (node instanceof Element && node.shadowRoot) collect(node.shadowRoot);
+    } while (walker.nextNode());
+  };
+  collect(document);
+  const kept = new Map();
+  for (const root of roots) {
+    root.querySelectorAll('input,textarea,[contenteditable]').forEach((element) => {
+      const style = element.style;
+      kept.set(element, { value: style.getPropertyValue('caret-color'), priority: style.getPropertyPriority('caret-color') });
+      element.style.setProperty('caret-color', 'transparent', 'important');
+    });
+  }
+  if (kept.size) window.__vidgenShownCarets = kept;
+}"""
+_SHOW_CARETS = """() => {
+  const kept = window.__vidgenShownCarets;
+  if (!kept) return;
+  delete window.__vidgenShownCarets;
+  for (const [element, caret] of kept) element.style.setProperty('caret-color', caret.value, caret.priority);
+}"""
 #: Chromium's default background behind the page: transparent (the screenshot keeps the alpha).
 TRANSPARENT = {"r": 0, "g": 0, "b": 0, "a": 0}
 #: The page's time zone and locale (``Date`` and ``Intl`` give the same text on every machine).
@@ -265,6 +305,17 @@ def renderer_pids(browser: Any) -> list[int]:
     return [int(p["id"]) for p in info.get("processInfo", []) if p.get("type") == "renderer"]
 
 
+def _in_every_frame(frames: list[Any], script: str) -> None:
+    """``script`` evaluated in each of a page's frames; a frame that fails (gone meanwhile) is
+    skipped, as Playwright skips it around its own screenshots."""
+    api = chromium.sync_api()
+    for frame in frames:
+        try:
+            frame.evaluate(script)
+        except api.Error:
+            pass
+
+
 class _TimeLimit:
     """Stops a page that does not return in time: after ``seconds`` a timer thread ends the
     renderer processes (the blocked Playwright call then fails); :attr:`expired` says so."""
@@ -303,15 +354,18 @@ class WebPage:
     a page filling a frame of ``size``), in ``ctx`` and as attributes of ``<html>`` (§118.11).
     ``design_width`` (§118.17): the page's window is that many CSS pixels wide (:attr:`viewport`)
     and drawn at the device scale :attr:`scale`, so the frames are still ``size``; without it the
-    window is ``size`` at scale 1.
+    window is ``size`` at scale 1. ``music`` (§120.8): the scene's music data
+    (:func:`vidgen.web.music.scene_music`), given to the page as ``ctx.music`` by vidgen's music
+    helper; ``None``: no helper, no ``ctx.music``.
     :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
     to its SHA-256, a missing project file to ``None`` (§118.10)."""
 
     def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
                  theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
                  beats: list[dict[str, Any]] | None = None, shape: dict[str, Any] | None = None,
-                 design_width: int | None = None) -> None:
+                 design_width: int | None = None, music: dict[str, Any] | None = None) -> None:
         self.root, self.entry, self.scene_id = root, entry, scene_id
+        self.music = music
         self.size, self.fps, self.frames = size, fps, frames
         self.design_width = design_width
         self.viewport, self.scale = page_viewport(size, design_width)
@@ -325,6 +379,9 @@ class WebPage:
         self.loaded: dict[str, str | None] = {}
         self._chromium: Chromium | None = None
         self._page: Any = None
+        self._cdp: Any = None
+        self._advanced = False
+        self._device_scale: float = 1
         self._limit = _TimeLimit([])
 
     # ----- serving -------------------------------------------------------------------------------
@@ -439,30 +496,49 @@ class WebPage:
     def _open(self, api: Any) -> None:
         width, height = self.viewport
         browser = self._chromium.browser  # type: ignore[union-attr]
-        context = browser.new_context(viewport={"width": width, "height": height},
-                                      device_scale_factor=1 if self.design_width is None else self.scale,
+        self._device_scale = 1 if self.design_width is None else self.scale
+        context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=self._device_scale,
                                       timezone_id=TIMEZONE, locale=LOCALE)
         context.add_init_script(script=init_script(self.scene_id))
+        if self.music is not None:   # ctx.music (DESIGN.md §120.8): only on pages of scenes with music_data
+            from vidgen.web.music import helper_source
+
+            context.add_init_script(script=helper_source())
         context.route("**/*", self._serve)
         self._page = page = context.new_page()
-        context.new_cdp_session(page).send("Emulation.setDefaultBackgroundColorOverride", {"color": TRANSPARENT})
+        self._cdp = context.new_cdp_session(page)
+        self._cdp.send("Emulation.setDefaultBackgroundColorOverride", {"color": TRANSPARENT})
         is_script = self.entry.kind == "script"
         try:
             page.goto(self._url(), wait_until="load", timeout=READY_TIMEOUT_MS)
-            page.wait_for_function(
-                "s => window.__vidgen.errors.length > 0 || (document.readyState === 'complete' && (!s || window.__vidgen.ready))",
-                arg=is_script, timeout=READY_TIMEOUT_MS,
-            )
-        except api.TimeoutError as exc:
+            self._wait_until_ready(is_script)
+        except (api.TimeoutError, TimeoutError) as exc:
             raise self._not_ready(exc) from None
         except api.Error as exc:
             raise VidgenError(f"scene '{self.scene_id}': {self.entry.posix} did not load: {first_line(exc)}") from None
         self._limit = _TimeLimit(renderer_pids(browser))
         info = {"scene": self.scene_id, "width": width, "height": height, "fps": self.fps,
                 "frames": self.frames, "duration": self.frames / self.fps, "theme": self.theme, "data": self.data,
-                "beats": self.beats, **self.shape}
+                "beats": self.beats, **self.shape, **({} if self.music is None else {"music": self.music})}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
+
+    def _wait_until_ready(self, is_script: bool) -> None:
+        """Wait until the page has loaded (and, for a ``script:``, its module has finished, with
+        every top-level ``await``) or has reported an error; :class:`TimeoutError` after
+        :data:`READY_TIMEOUT_MS`.
+
+        Asked from here every :data:`READY_POLL_MS`, not with Playwright's ``wait_for_function``:
+        that polls inside the page on ``requestAnimationFrame`` or ``setTimeout``, which are
+        vidgen's clock standing still at 0, so it looked once and a module still waiting for a
+        ``fetch`` at that moment was never looked at again (Step 341, DESIGN.md §120.2).
+        ``wait_for_timeout`` keeps Playwright answering the page's requests meanwhile."""
+        ready = "s => window.__vidgen.errors.length > 0 || (document.readyState === 'complete' && (!s || window.__vidgen.ready))"
+        end = time.monotonic() + READY_TIMEOUT_MS / 1000
+        while not self._page.evaluate(ready, is_script):
+            if time.monotonic() >= end:
+                raise TimeoutError(f"not ready after {READY_TIMEOUT_MS} ms")
+            self._page.wait_for_timeout(READY_POLL_MS)
 
     def _overrun(self, hook: str, seconds: float) -> VidgenError:
         extra = " (time stands still at 0 before frame 0, so a timer it waits for never fires)" if hook == "load(ctx)" else ""
@@ -488,10 +564,13 @@ class WebPage:
 
     def advance(self, n: int) -> None:
         """Move the clock and the page to frame ``n`` (``t = n / fps``) and run the page's
-        ``frame(t, ctx)`` hook (if any), without a screenshot."""
+        ``frame(t, ctx)`` hook (if any), without a screenshot. The first frame of a page may take
+        :data:`FIRST_FRAME_TIMEOUT_S`, every later one :data:`FRAME_TIMEOUT_S`."""
         t = n / self.fps
         when = f"in frame(t={t:.3f})"
-        errors = self._evaluate("n => window.__vidgen.frame(n)", n, when, f"frame(t={t:.3f})", FRAME_TIMEOUT_S)
+        seconds = FRAME_TIMEOUT_S if self._advanced else FIRST_FRAME_TIMEOUT_S
+        self._advanced = True
+        errors = self._evaluate("n => window.__vidgen.frame(n)", n, when, f"frame(t={t:.3f})", seconds)
         self._raise_first(errors, when)
 
     def layout(self, n: int) -> dict[str, Any]:
@@ -514,14 +593,38 @@ class WebPage:
 
     def frame(self, n: int) -> np.ndarray:
         """Frame ``n``: the clock and the page moved to ``t = n / fps``, the page's ``frame(t, ctx)``
-        hook (if any), then a screenshot."""
+        hook (if any), then a screenshot (:meth:`advance`, :meth:`screenshot`, :meth:`pixels`)."""
         self.advance(n)
+        return self.pixels(self.screenshot(n))
+
+    def screenshot(self, n: int) -> bytes:
+        """A PNG of the page as it is now (frame ``n``, for the error message), with its alpha:
+        the pixels of Playwright's ``page.screenshot(type="png")``, encoded faster (§120.10)."""
         t = n / self.fps
         api = chromium.sync_api()
+        frames = self._page.frames
         try:
-            png = self._page.screenshot(type="png", timeout=READY_TIMEOUT_MS)
+            with self._limit.running(READY_TIMEOUT_MS / 1000):
+                _in_every_frame(frames, _HIDE_CARETS)
+                try:
+                    viewport = self._cdp.send("Page.getLayoutMetrics")["visualViewport"]
+                    width, height = self.viewport
+                    # Playwright's device scale (design_width) is an override of its own CDP session, not of this one: given here
+                    clip = {"x": viewport["pageX"], "y": viewport["pageY"], "scale": viewport["scale"] * self._device_scale,
+                            "width": math.floor(width / viewport["scale"] + 1e-3), "height": math.floor(height / viewport["scale"] + 1e-3)}
+                    shot = self._cdp.send("Page.captureScreenshot", {"format": "png", "clip": clip, "captureBeyondViewport": False,
+                                                                      "optimizeForSpeed": True})
+                finally:
+                    _in_every_frame(frames, _SHOW_CARETS)
         except api.Error as exc:
+            if self._limit.expired:
+                raise VidgenError(f"scene '{self.scene_id}': no screenshot of {self.entry.posix} at t={t:.3f}: it did not come "
+                                  f"within {READY_TIMEOUT_MS / 1000:g} s; vidgen stopped the page") from None
             raise VidgenError(f"scene '{self.scene_id}': no screenshot of {self.entry.posix} at t={t:.3f}: {first_line(exc)}") from None
+        return base64.b64decode(shot["data"])
+
+    def pixels(self, png: bytes) -> np.ndarray:
+        """The RGBA pixels (H x W x 4, straight alpha) of a screenshot of this page, ``size`` big."""
         what = f"scene '{self.scene_id}': the page"
         if self.design_width is None:
             return png_pixels(png, self.size, what, alpha=True)
@@ -531,9 +634,9 @@ class WebPage:
         """Close Chromium and Playwright (safe to call twice)."""
         if self._chromium is not None:
             self._chromium.close()
-        self._chromium = self._page = None
+        self._chromium = self._page = self._cdp = None
 
 
-__all__ = ["CANVAS_PATH", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
+__all__ = ["CANVAS_PATH", "FIRST_FRAME_TIMEOUT_S", "FRAME_TIMEOUT_S", "LAYOUT_FILE", "LOAD_TIMEOUT_S", "READY_POLL_MS", "READY_TIMEOUT_MS", "TRANSPARENT", "WEB_ORIGIN", "WebPage", "byte_range", "canvas_page",
            "content_type", "engine_id", "error_location", "error_message", "fit_pixels", "google_font_families", "google_font_message", "init_script", "layout_digest", "layout_reader", "project_path", "random_seed",
            "renderer_pids", "runtime_digest", "script_base", "unshipped_addon_message"]

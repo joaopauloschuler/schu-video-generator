@@ -221,8 +221,15 @@ def default_steps(instrument: str, kind: str, time: tuple[int, int]) -> str | No
         "music_box": lambda b: "5385"[b % 4] + rest,
         "bell": lambda b: ("5" if b == 0 else ".") + rest,
         "woodblock": lambda b: "1" + rest,
+        "frame_drum": lambda b: "x" + rest,
+        "snare_drum": lambda b: ("x" if b % 2 else ".") + rest,
+        "choir": lambda b: ("*" if b == 0 else "-") + hold,
     }
-    return beat_cells(patterns.get(instrument, arpeggio))
+
+    def first_beat(b: int) -> str:  # a drum without a pattern of its own (taiko, bass drum, cymbal, tam-tam): one hit a bar
+        return ("x" if b == 0 else ".") + rest
+
+    return beat_cells(patterns.get(instrument, first_beat if kind == "drum" else arpeggio))
 
 
 def free_name(base: str, taken: set[str]) -> str:

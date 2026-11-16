@@ -19,7 +19,7 @@ from urllib.parse import quote
 from vidgen.fonts import BUILTIN_ROLES, BUNDLED_FAMILIES, ProjectFont
 from vidgen.scales import frame_orientation
 from vidgen.web.libs import LIB_FOLDER, NOT_SHIPPED, WEB_LIBS
-from vidgen.web.loaded import ADDONS_FOLDER, VIDGEN_PREFIX
+from vidgen.web.loaded import ADDONS_FOLDER, MODULES_FOLDER, VIDGEN_MODULES, VIDGEN_PREFIX
 
 #: The import map vidgen puts in a page: the bare specifier ``three`` is the bundled three.js,
 #: ``three/addons/...`` (and the older ``three/examples/jsm/...``) its shipped add-ons, whose own
@@ -33,6 +33,7 @@ IMPORT_MAP: dict[str, dict[str, str]] = {"imports": {
     "three/examples/jsm/": f"/{VIDGEN_PREFIX}three/{ADDONS_FOLDER}/",
     **{specifier: f"/{VIDGEN_PREFIX}{LIB_FOLDER}/{lib.package}/{lib.entry}" for lib in WEB_LIBS for specifier in lib.specifiers},
     **{package: f"/{VIDGEN_PREFIX}{LIB_FOLDER}/{package}/index.js" for package in NOT_SHIPPED},
+    **{name: f"/{VIDGEN_PREFIX}{MODULES_FOLDER}/{file}" for name, file in VIDGEN_MODULES.items()},
 }}
 #: The id of the ``<style>`` element holding the theme's custom properties and font faces.
 THEME_STYLE_ID = "vidgen-theme"

@@ -109,6 +109,11 @@ SECTION_NOTES: dict[str, str] = {
         "(`examples/mars-transfer`). Scale honesty, units, approximations to state and pacing: "
         "[the orbits cookbook](../COOKBOOK-ORBITS.md)."
     ),
+    "pictures and media": (
+        "Whole films of `web` scenes: [Escapement](../../examples/escapement/README.md) (`examples/escapement`), a 3:11 "
+        "clockwork music film in three.js whose watch movement ticks on the score's beat, and "
+        "[Signal Fire](../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture."
+    ),
     "particle physics": (
         "A whole particle-physics explainer, the Standard Model, gluon fusion through a top loop, the decay modes, a diphoton "
         "event, the invariant mass worked out, a simulated spectrum with its bump and fit and what five sigma means: "

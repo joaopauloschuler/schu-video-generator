@@ -146,11 +146,35 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
     from vidgen.studio import parse_music_score
 
     text = (ROOT / "docs" / "COOKBOOK-MUSIC.md").read_text(encoding="utf-8")
-    blocks = re.findall(r"```yaml\n(.*?)```", text, flags=re.S)
+    genres, brass = text.split("## 8. Brass and organ")
+    brass, strings = brass.split("## 9. Bowed strings")
+    strings, percussion = strings.split("## 10. Orchestral percussion and choir")
+    percussion, expressive = percussion.split("## 11. Making it expressive")
+    expressive, pictures = expressive.split("## 12. Pictures that follow the score")
+    blocks = re.findall(r"```yaml\n(.*?)```", genres, flags=re.S)
     assert len(blocks) == 5   # documentary, trance, synthwave, cosmic, cartoon
     for block in blocks:
         score = parse_music_score(yaml.safe_load(block), "COOKBOOK-MUSIC.md")
         assert score.loop and score.tracks
+    chorale, low_tracks = re.findall(r"```yaml\n(.*?)```", brass, flags=re.S)   # Step 343: a whole score, then two tracks
+    score = parse_music_score(yaml.safe_load(chorale), "COOKBOOK-MUSIC.md")
+    assert {t.instrument.name for t in score.tracks} == {"organ", "horn", "low_brass", "trumpet"}
+    parse_music_score({"key": "D minor", "tempo": 100, "bars": 4, "progression": "i VI", "tracks": yaml.safe_load(low_tracks)}, "COOKBOOK-MUSIC.md")
+    (engine,) = re.findall(r"```yaml\n(.*?)```", strings, flags=re.S)   # Step 344: a string section
+    score = parse_music_score(yaml.safe_load(engine), "COOKBOOK-MUSIC.md")
+    assert {t.instrument.name for t in score.tracks} == {"violins", "violas", "cellos", "double_basses"}
+    (hits,) = re.findall(r"```yaml\n(.*?)```", percussion, flags=re.S)   # Step 345: two rises into two hits
+    score = parse_music_score(yaml.safe_load(hits), "COOKBOOK-MUSIC.md")
+    assert {t.instrument.name for t in score.tracks} == {"choir", "timpani", "toms", "frame_drum", "snare_drum", "cymbal", "taiko", "bass_drum", "tam_tam"}
+    (marked,) = re.findall(r"```yaml\n(.*?)```", expressive, flags=re.S)   # Step 346: marks, slurs, a roll into a hit
+    score = parse_music_score(yaml.safe_load(marked), "COOKBOOK-MUSIC.md")
+    steps = [s for t in score.tracks for p in t.parts.values() for bar in p.steps or () for s in bar]
+    assert any(s.slur for s in steps) and any(s.changes for s in steps) and any(s.level != s.level_end for s in steps)
+    (video,) = re.findall(r"```yaml\n(.*?)```", pictures, flags=re.S)   # Step 347: a web scene with music data
+    from vidgen.scenes.web import Web
+
+    params = Web.Params.model_validate(yaml.safe_load(video)["scenes"][0]["params"])
+    assert params.music_data and params.music_data.tracks == ["kick", "taiko", "hook", "violins"]
     assert "examples/gps-time-of-flight/README.md" in text and "music/README.md" in text
     for doc in ("docs/COOKBOOK.md", "README.md", "AGENTS.md"):
         assert "COOKBOOK-MUSIC.md" in (ROOT / doc).read_text(encoding="utf-8"), doc

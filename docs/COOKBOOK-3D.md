@@ -122,3 +122,42 @@ model. The walkthrough, which pass to choose and the limits:
 | the arrow points at nothing at the start | give it `visible: false` with the object, `object_show` both |
 | everything moves at once | one camera move and one or two object actions per beat |
 | a depth pass with flat greys | the camera flies far in and out within the shot: split the shot, or set `depth_range` |
+
+## 8. Finishing three.js `web` scenes
+
+The `3d` type above is deliberately plain. A `web` scene with your own three.js (`vidgen guide
+web`) can look like a film, and the finishing both music films wrote by hand ships as a module:
+`import {Finish} from "vidgen/three-finish"` (reference: [CONFIG, `web`](CONFIG.md#web), "Finishing
+three.js scenes"; worked example: [`examples/three-finish`](../examples/three-finish/README.md)).
+
+- **Write the scene as a function of time.** Put everything that moves in one `update(t)` that
+  sets positions from `t` (no `+=`), give it to `Finish`, and call `finish.render(t)` in `frame`.
+  Motion blur calls it at sub-frame times; depth of field and the grade may be functions of `t`
+  too, read after the scene stands at `t`.
+- **Light metal first, finish second.** Metal is black without something to reflect:
+  `scene.environment = studioEnvironment(renderer)` (soft boxes, warm against cool), one key
+  light with `softShadows(renderer, key, {type: "pcf", radius: 2})`, and a surface from
+  `surfaceFinish("circular" | "brushed" | "geneva" | "perlage" | "sunray")`. Get it right with
+  every effect off (`bloom: false, dof: false, vignette: 0, grain: 0`), then add them.
+- **Bloom only what is brighter than white.** The default threshold is 1 in linear light: a
+  lamp's colour multiplied above 1 or a sharp highlight glows, a white wall does not. A bright
+  area that blooms veils the whole frame (the widest of its blurs spans most of it); lower
+  `strength` before you lower `threshold`.
+- **Depth of field in real units.** Say what a scene unit is (`unit: 0.1` = 10 cm) and pick an
+  f-stop as a photographer would; pull focus with `dof: (t) => ({focus: THREE.MathUtils.lerp(near,
+  far, ease(t))})` using `focusDistance(camera, object)`. `maxBlur` keeps a very near object from
+  smearing the frame.
+- **Spend motion blur where the motion is.** Each sample draws the whole scene again (about 0.4 s
+  a sample for the example at 720p on 2 cores). Use 3–6 samples on shots with something fast, none
+  on slow ones, none in `--draft` (`ctx.width < 640`).
+- **Check with stills.** `vidgen still PROJECT --scene ID --at …` at the moments that matter; a
+  copy of the scene with `data:` that switches one effect off shows what each one does.
+- **Porting a hand-written chain.** Map its passes to options (its tone curve: `"aces-narkowicz"`;
+  its `pow(1/2.2)`: `encoding: "gamma2.2"`; its scene scale: `renderScale`), then compare stills:
+  a copy of "Escapement" ported this way came within 28–34 dB PSNR of the film (DESIGN §120.11).
+- **Let the music drive it.** With `music_data` in the scene's params the page reads the score's
+  hits and notes and the measured mix as `ctx.music` (`vidgen guide web`, "Pictures that follow
+  the music"; [COOKBOOK-MUSIC.md, section 12](COOKBOOK-MUSIC.md#12-pictures-that-follow-the-score)).
+  Put light and colour on the hits and keep the camera on the form (sections), never on a beat.
+  Worked example: [`examples/signal-fire`](../examples/signal-fire/README.md), an orchestral cue
+  and a finished three.js night scene that follows it, track by track.
