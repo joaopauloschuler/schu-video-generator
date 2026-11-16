@@ -522,7 +522,7 @@ sampled, and tuned by measurement: nobody has listened yet.
 | `snare_drum` | drum steps | `pitch` 130–280 Hz (185) | march figures, `stroke: roll` into a hit |
 | `cymbal` | drum steps | `pitch` 0.6–1.6 (size) | a crash; `stroke: swell` grows into a hit |
 | `tam_tam` | drum steps | `pitch` 0.6–1.8 (size) | the dark gong on the last chord, a soft one at the start |
-| `choir` | notes and chords | E2–C6 | held vowels (`ooh aah eeh mm oh ee`): a pad of voices, no words |
+| `choir` | notes and chords | E2–C6 | held vowels (`ooh aah eeh mm oh ee`) and syllables (`la na ma da`, `mm-ah`, `ah-oh` ...), a soloist, a whisper: voices, no words |
 
 **Into a hit.** The bar before the hit: a snare roll and a timpani roll under `volume` curves,
 and a cymbal swell that ends on the hit. On the hit: taikos, a bass drum under them (it adds
@@ -639,6 +639,41 @@ Things that go wrong:
 - *The choir sounds like an organ*: more `singers` and `detune`, a longer `attack`, more
   reverb; a single held chord without movement is its weakest use.
 - *Sopranos above A5* have one vowel only (a real choir's too); write the vowel lower.
+- *Syllables that sound late*: a consonant takes 0.08–0.12 s before the vowel arrives (it
+  starts on the step). In a fast line use `la` or `na` (the softest) and fewer of them; a
+  syllable on every sixteenth is a stutter.
+- *A soloist lost in the choir*: give it its own track, `volume: 1` to `3`, and keep the
+  section on `ooh` or `mm` five dB under it; the soloist is brighter already.
+
+**Syllables, a soloist, a whisper** (Step 361). Still no words, but a line can now be sung
+rather than held. `syllable: la` (a track or section setting) or `[la]` before a note starts it
+with a soft consonant: `l` and `n` are the gentlest, `m` hums first, `d` has a small burst, the
+mark for articulated rhythm. Two-vowel syllables glide at `turn` (`ah-oh`, `oo-ah`, `mm-ah`: a
+hum that opens, as `morph` does but timed). A syllable stays in force until another mark, so
+`[la] C4 D4 [na] E4` sings la, la, na. In a slur only the first note gets the consonant; write a
+syllable inside the slur where the line should re-articulate without a new breath. A soloist
+(`soloist: true`, one voice, brighter, a wider and later vibrato, a scoop into each attacked
+note) sits over a section holding `ooh`. `whisper` turns tone into breath (0.3–0.6 breathy, 1 a
+whisper) at about the same loudness: whisper an opening, then mark `[whisper=0.4]` and
+`[whisper=0]` on the chords that follow. The default (`syllable: vowel`, no soloist, no
+whisper) is the choir above, unchanged.
+
+```yaml
+# 4 bars: men on "na la", women on "ooh", a soprano soloist; D minor, 72 BPM
+key: D minor
+tempo: 72
+loop: false
+sections:
+  - {name: verse, bars: 4, progression: "Dm Bb Gm A"}
+tracks:
+  men: {instrument: choir, settings: {voices: men}, octave: 3, steps: "[na] 1 - [la] 5 - [na] 8 - [la] 5 -"}
+  women: {instrument: choir, settings: {voices: women, vowel: ooh, syllable: mm-oo}, volume: -5, steps: "[whisper=0.6] * - - - - - - - | [whisper=0] * - - - - - - -"}
+  solo:
+    instrument: choir
+    settings: {voices: sopranos, soloist: true, vowel: aah}
+    volume: 1
+    steps: ". . . . . . . . | . . . . . . . . | [mp] D5 - - - [la] (Bb4 - C5 - | C#5 - - - [ah-oh] E5 - - -)"
+```
 
 ## 11. Making it expressive
 
@@ -654,6 +689,7 @@ with `vidgen music check ... --compare`.
 | `[fp]`, `[sfz]` | a loud start dropping to piano in 0.25 s; one note 7 dB over the level in force | every track |
 | `[spiccato]`, `[stroke=pizzicato]`, `[pitch=100]`, `[default]` | a setting from this step on; `[default]` returns to the track's | every instrument with settings |
 | `(A4 - C5 - E5 - - -)` | a slur: one bow or breath, the pitch gliding (`glide` seconds) | brass, strings (sustain, tremolo), `choir`, `soft_lead` |
+| `[la]`, `[mm-ah]`, `[syllable=na]`, `[whisper=0.5]`, `[vowel=ooh]` | what a choir sings from this note on; inside a slur a syllable or vowel only where written (section 10) | `choir` |
 | `vibrato_speed`, `vibrato_delay` | the vibrato's speed (Hz) and when it begins (s), beside its depth `vibrato` | the same instruments |
 | `sections: {lift: {instrument: trumpet}}` | the track plays another instrument in that section | a note track to a note instrument, a drum track to a drum |
 
@@ -850,7 +886,7 @@ a setting. ★: a dynamic mark changes the tone as well as the level; ◡: can s
 | percussion | `snare_drum` ★ | drum | `pitch` 130–280 Hz | `stroke` (`hit`, `roll`), `players`, `snares` | march figures, a roll into a hit |
 | percussion | `cymbal` ★ | drum | `pitch` 0.6–1.6 (size) | `stroke` (`hit`, `swell`), `mallet` | a crash; a swell that ends on the hit |
 | percussion | `tam_tam` ★ | drum | `pitch` 0.6–1.8 (size) | `stroke`, `bloom`, `mallet` | the dark gong on a last chord |
-| choir | `choir` ★◡ | note | E2–C6 | `vowel` (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), `voices`, `singers`, `morph`, `attack` | held vowels, a pad of voices (no words) |
+| choir | `choir` ★◡ | note | E2–C6 | `vowel` (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), `syllable` (`la`, `na`, `ma`, `da`, `mm-ah`, `ah-oh` ...), `voices`, `singers`, `soloist`, `whisper`, `morph`, `attack` | held vowels, a pad of voices; syllables, a soloist, a whispered texture (no words) |
 | pads | `pad`, `supersaw`, `saw_pad`, `glass` | pad | octave 3 (`glass` 5) | `tone`, `attack`, `release`, `detune`, `air`, `sub` | chords (`play: chords`), the bed under everything |
 
 Not in the table: `touch` (on every ★ instrument, 0 by default: how much the old accents `X`,

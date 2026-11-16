@@ -5,10 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–360
+## Steps 193–361
 
-### Music-video tools (Phase AM, Steps 358–360)
+### Music-video tools (Phase AM, Steps 358–361)
 
+- **More choir** (Step 361): `choir` sings syllables, still with no words. `syllable` (a track
+  or section setting, or per note: `[la]`, `[na]`, `[mm-ah]`, `[syllable=da]`) starts a note with
+  a soft consonant (`l`, `n`, `m`, `d`: `la lo loo le lee`, `na` …, `ma` …, `da` …) whose formants
+  move into the vowel, a nasal murmur with its antiformant for `m` and `n`, a closure and burst
+  for `d`; or glides between two vowels at `turn` (`ah-oh`, `oo-ah`, `oh-ah`, `ah-ee`, `mm-ah`,
+  `mm-oh`, `mm-oo`). In a slur only the first note gets the consonant unless a note's own mark
+  names a syllable or vowel (`syllable` and `vowel` may now change inside a slur). `soloist:
+  true`: one solo voice, brighter (the singer's formant near 3 kHz), its vibrato wider and later,
+  a scoop into each note, more breath. `whisper` (0 to 1) turns the tone into breath at about the
+  same loudness. Unknown syllables get the nearest name. A choir that uses none of this sounds
+  exactly as before (the film scores and the earlier choir demos render to the same bytes).
 - **`vidgen motion check FILE|PROJECT`** (Step 360): watches a rendered video for what stills
   cannot show, without rendering anything: a video file, a project's rendered video (scenes from
   its `timings.json`) or its scene clips in `build/` (`--source scenes`), decoded once at 160 px

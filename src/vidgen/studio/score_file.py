@@ -527,6 +527,9 @@ def _section_instrument(r: _Reader, changes: dict[str, Any], where: str, instrum
 
 #: The words a mark may hold besides an instrument's own: for the nearest known one in an error.
 _MARK_WORDS = tuple(DYNAMICS) + ("fp", "sfz", "default")
+#: The settings a mark may change inside a slur: the glide to the note, and what a choir sings
+#: on it (DESIGN.md §121.4).
+FREE_IN_SLUR = ("glide", "syllable", "vowel")
 
 
 def _marked(r: _Reader, steps: Pattern, where: str, instrument: Instrument, settings: Mapping[str, float]) -> Pattern | None:
@@ -536,7 +539,7 @@ def _marked(r: _Reader, steps: Pattern, where: str, instrument: Instrument, sett
     change. ``None`` after a problem."""
     count = len(r.problems)
     state: dict[str, float] = {}
-    phrase: dict[str, float] = {}  # the settings (but glide) of the last attacked note: a slur's notes keep them
+    phrase: dict[str, float] = {}  # the settings (but those free in a slur) of the last attacked note: a slur's notes keep them
     choices = {name: owner for owner, s in instrument.settings.items() for name in s.choices}
     shared = {name for s in instrument.settings.values() for name in s.choices if sum(name in o.choices for o in instrument.settings.values()) > 1}
     bars = []
@@ -575,11 +578,13 @@ def _marked(r: _Reader, steps: Pattern, where: str, instrument: Instrument, sett
                           f"< and >, fp, sfz), a setting of {instrument.name} (name=value{'; or ' + ', '.join(choices) if choices else ''}) or default")
             if step.sounds:
                 played = {**settings, **state}
-                kept = {k: v for k, v in played.items() if k != "glide"}
+                kept = {k: v for k, v in played.items() if k not in FREE_IN_SLUR}
                 if not step.slur:
                     phrase = kept
                 elif kept != phrase:
-                    r.add(where, "a mark changes a setting inside a slur: the slurred notes are one note, so only glide may change there; "
+                    free = [k for k in FREE_IN_SLUR if k in instrument.settings] or ["glide"]
+                    free_text = ", ".join(free[:-1]) + " and " + free[-1] if len(free) > 1 else free[0]
+                    r.add(where, f"a mark changes a setting inside a slur: the slurred notes are one note, so only {free_text} may change there; "
                           "close the slur before the mark")
                 if step.slur and instrument.slurs is None:
                     able = ", ".join(n for n, i in INSTRUMENTS.items() if i.slurs is not None)

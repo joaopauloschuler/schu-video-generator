@@ -40,7 +40,8 @@ from vidgen.music import (
 from vidgen.sfx import RATE, _band, _filtered, _lowpass, _tone
 from vidgen.studio.additive import Phrase, phrase_pitch, phrase_tone
 from vidgen.studio.brass import horn_note, low_brass_note, trumpet_note
-from vidgen.studio.choir import MORPHS, VOICES, VOWELS, choir_note
+from vidgen.studio.choir import MORPHS, VOICES, VOWELS
+from vidgen.studio.singing import SYLLABLES, choir_note, read_yes_no
 from vidgen.studio.organ import REGISTRATION_NAMES, REGISTRATIONS, organ_note, read_drawbars
 from vidgen.studio.percussion import (
     bass_drum_sound,
@@ -580,8 +581,9 @@ INSTRUMENTS: dict[str, Instrument] = {
                         mallet=(0.3, 0.0, 1.0, _MALLET),
                         bloom=(1.0, 0.0, 2.0, "how much the highs grow in after the blow (0: none, a dull gong; 2: a roaring one)"),
                         decay=(1.0, 0.2, 2.0, "how long it rings, times its natural time")), tam_tam_sound),
-        _orchestral("choir", "a choir holding a vowel (a choir pad: no words): `vowel` picks " + ", ".join(VOWELS) + "; `voices` who sings ("
-                    + ", ".join(VOICES) + "); hold chords with \"* | - | - | -\" in a hall", 0.125, 3, "E2", "C6",
+        _orchestral("choir", "a choir holding a vowel or singing syllables (no words): `vowel` picks " + ", ".join(VOWELS) + "; `syllable` a consonant "
+                    "into a vowel or two vowels (la, na, ma, da, mm-ah, ah-oh ...; also per note: [la]); `voices` who sings (" + ", ".join(VOICES)
+                    + "); `soloist: true` one solo voice; `whisper` breath instead of tone; hold chords with \"* | - | - | -\" in a hall", 0.125, 3, "E2", "C6",
                     _settings(
                         vowel=(0.0, 0.0, float(len(VOWELS) - 1), "the vowel held: ooh (dark, round), aah (open, full), eeh (brighter, as in \"bed\"), mm (a hum, "
                                "the mouth closed), oh, ee (thin and bright)", VOWELS),
@@ -601,6 +603,17 @@ INSTRUMENTS: dict[str, Instrument] = {
                         ring=(0.4, 0.05, 3.0, "seconds of the release after its held steps (notes that follow without a rest overlap)"),
                         glide=(0.08, 0.01, 1.0, _GLIDE),
                         touch=_TOUCH,
+                        syllable=(0.0, 0.0, float(len(SYLLABLES) - 1), "what each note sings: vowel (the `vowel` setting held, no consonant), a soft "
+                                  "consonant l, n, m or d into a vowel (la lo loo le lee, na ..., ma ..., da ...: a = aah, o = oh, oo = ooh, e = eeh, "
+                                  "ee = ee), or two vowels, the second from `turn` on (mm-ah mm-oh mm-oo ah-oh oo-ah oh-ah ah-ee); a consonant starts "
+                                  "the note at once (`attack` then shapes nothing); inside a slur only where a mark writes one", SYLLABLES),
+                        turn=(0.5, 0.1, 0.9, "two-vowel syllables: where in the note the second vowel takes over, as a share of the note (it glides "
+                              "over 0.15 s)"),
+                        soloist=(0.0, 0.0, 1.0, "true: one solo voice instead of the section (mono; `singers` ignored): brighter, with the singer's "
+                                 "formant near 3 kHz, a wider vibrato that comes later, a scoop up into each note and more breath; a track of its own "
+                                 "over a choir track", (), read_yes_no),
+                        whisper=(0.0, 0.0, 1.0, "breath instead of tone: 0 sung, 0.3-0.6 breathy, 1 an unvoiced whisper (noise through the vowel's "
+                                 "formants, about as loud as the voice)"),
                     ), choir_note, "choir", _choir_respond, _always),
         _pad("pad", "a warm, wide synthesizer-string pad (PADsynth), with an optional airy layer and sub", 0.3, 3, _WARM,
              _pad_settings(2600.0, 0.25, 18.0, 1.6)),

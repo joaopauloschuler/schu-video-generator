@@ -4449,12 +4449,17 @@ again only when the file changes). You cannot hear it, so work from measurements
    `"[roll pp <] A2 - - - - - - - | [hit ff] D2 . . ."` (see **Expression**). `stroke: swell` on `cymbal` or `tam_tam` grows by itself
    until its held steps end: end it on the hit. Do not build drums from the `kick` any more:
    it is one sine and stops at 160 Hz.
-   **Choir**: `choir` holds a vowel (`vowel: ooh | aah | eeh | mm | oh | ee`); it is a choir
-   pad and sings no words. `voices: mixed` gives each note to the kinds of voice that reach it;
-   `men`, `women`, `basses`, `tenors`, `altos`, `sopranos` choose. Hold chords
+   **Choir**: `choir` holds a vowel (`vowel: ooh | aah | eeh | mm | oh | ee`) or sings
+   syllables; it sings no words. `voices: mixed` gives each note to the kinds of voice that
+   reach it; `men`, `women`, `basses`, `tenors`, `altos`, `sopranos` choose. Hold chords
    (`"* | - | - | -"`), give it a hall, and use `attack: 1` or more for a swell;
-   `{vowel: mm, morph: aah}` opens a held note from a hum. Recipes: `docs/COOKBOOK-MUSIC.md`,
-   section 10.
+   `{vowel: mm, morph: aah}` opens a held note from a hum. `syllable: la` (or per note `[la]`,
+   `[na]`, `[ma]`, `[da]`, `[loo]`, `[mm-ah]`, `[ah-oh]`, `[oo-ah]` ...) starts each note with a
+   soft consonant or glides between two vowels at `turn`; in a slur only the first note gets
+   the consonant unless a note's own mark names one. `soloist: true` is one solo voice
+   (brighter, a wider and later vibrato, a scoop into each note): give it its own track over a
+   choir track. `whisper` from 0 to 1 turns the tone into breath. Recipes:
+   `docs/COOKBOOK-MUSIC.md`, section 10.
    **Expression**: marks in square brackets stand before a step in a track's `steps` and last
    until changed. Dynamics `[pp] [p] [mp] [mf] [f] [ff]` (or dB: `[-6]`; an unmarked note is
    `mf`) change the level and, on brass, strings, choir and the orchestral drums, the tone:

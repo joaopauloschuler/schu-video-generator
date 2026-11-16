@@ -163,9 +163,13 @@ def test_music_cookbook_sketches_are_valid_score_files_and_it_is_linked() -> Non
     (engine,) = re.findall(r"```yaml\n(.*?)```", strings, flags=re.S)   # Step 344: a string section
     score = parse_music_score(yaml.safe_load(engine), "COOKBOOK-MUSIC.md")
     assert {t.instrument.name for t in score.tracks} == {"violins", "violas", "cellos", "double_basses"}
-    (hits,) = re.findall(r"```yaml\n(.*?)```", percussion, flags=re.S)   # Step 345: two rises into two hits
+    hits, sung = re.findall(r"```yaml\n(.*?)```", percussion, flags=re.S)   # Step 345: two rises into two hits; Step 361: syllables, a soloist
     score = parse_music_score(yaml.safe_load(hits), "COOKBOOK-MUSIC.md")
     assert {t.instrument.name for t in score.tracks} == {"choir", "timpani", "toms", "frame_drum", "snare_drum", "cymbal", "taiko", "bass_drum", "tam_tam"}
+    score = parse_music_score(yaml.safe_load(sung), "COOKBOOK-MUSIC.md")
+    parts = {t.name: next(iter(t.parts.values())) for t in score.tracks}
+    assert parts["solo"].settings["soloist"] == 1 and any(s.slur for bar in parts["solo"].steps or () for s in bar)
+    assert any(dict(s.changes).get("syllable") for bar in parts["men"].steps or () for s in bar)
     (marked,) = re.findall(r"```yaml\n(.*?)```", expressive, flags=re.S)   # Step 346: marks, slurs, a roll into a hit
     score = parse_music_score(yaml.safe_load(marked), "COOKBOOK-MUSIC.md")
     steps = [s for t in score.tracks for p in t.parts.values() for bar in p.steps or () for s in bar]

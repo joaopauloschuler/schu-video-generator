@@ -9,6 +9,7 @@ import math
 import zlib
 from collections.abc import Callable, Mapping
 from functools import lru_cache
+from typing import Any
 
 import numpy as np
 
@@ -24,8 +25,10 @@ _SAMPLES_PER_CYCLE = 128
 _REMEMBERED_SAMPLES = 2 * RATE
 
 #: The further notes of a slurred phrase (DESIGN.md §120.7): per note its start in samples from
-#: the phrase's start, its pitch in semitones above the first note and its glide in samples.
-Phrase = tuple[tuple[int, float, int], ...]
+#: the phrase's start, its pitch in semitones above the first note and its glide in samples; a
+#: choir's note whose mark names a syllable or vowel has a fourth item, ``(syllable, vowel)``
+#: (DESIGN.md §121.4).
+Phrase = tuple[tuple[Any, ...], ...]
 #: Seconds over which one note's wave tables give way to the next's in a slurred phrase.
 _JOIN = 0.03
 #: The share of a glide that lies before the new note's step (the rest after it).
@@ -61,7 +64,7 @@ def _glides(n: int, phrase: Phrase, offset: int) -> list[tuple[int, int, float, 
     join = int(_JOIN * RATE)
     out: list[tuple[int, int, float, float]] = []
     earliest, before = join, 0.0
-    for start, semitones, glide in phrase:
+    for start, semitones, glide, *_ in phrase:
         first = min(max(start + offset - int(_GLIDE_EARLY * glide), earliest), max(n - 1, 0))
         last = min(first + max(glide, 1), n)
         out.append((first, last, before, semitones))

@@ -25444,7 +25444,7 @@ same things by hand. The owner chose four features (2026-11-16), one step each, 
 | 358 | A library of three.js building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`); the examples ported to it, their copies deleted | §121.1 |
 | 359 | A storyboard from the music: `vidgen music plan` (cut points, a colour per section, the events each scene reacts to, a draft project of `web_cut` scenes with starter pages) | §121.2 |
 | 360 | A "watch it" motion check: `vidgen motion check` (blank frames, flashes, flicker, popping, strobing, frozen stretches, jumps at cuts; a contact strip per finding) | §121.3 |
-| 361 | More choir: syllables, a soloist, a breathy texture, a syllable per note | |
+| 361 | More choir: syllables, a soloist, a whispered texture, a syllable per note | §121.4 |
 | 362 | Critical review with fixes; docs | |
 
 Rules of the phase: the films must look the same (stills compared before and after) and their
@@ -25713,3 +25713,104 @@ wheel, a frozen stretch split by a cut, a cut jump; threshold names; the score's
 time (tidewater looped from 50 s); the command on an encoded clip with its strip's frames
 checked; a slow test with a project's scene clips and its rendered video. `test_mcp.py` gains a
 slow `motion_check` call.
+
+### 121.4 More choir: syllables, a soloist, a whisper (Step 361)
+
+**The rule above all others.** The owner called the choir demo of Steps 345–346 "a true piece of
+art", so its sound may not move. The four new settings default to the old behaviour, and a note
+that uses none of them (`syllable: vowel`, `soloist: false`, `whisper: 0`, no slurred note naming
+a syllable or vowel) is made by Step 345's function itself (`choir.held_vowels`, the old
+`choir_note` renamed, not one line of arithmetic changed). The new path is a separate module
+(`studio/singing.py`), entered by `singing.choir_note` (the instrument's maker, remembered as
+before). Proved: the two film scores and the nine choir demo scores of Steps 345–346 render to
+the same bytes on the starting commit and after this step (HANDOFF Step 361).
+
+**Still synthesis, still no words.** The choir sings syllables of one soft consonant and one or
+two vowels; nothing is sampled, nothing spells a language.
+
+- **The mouth is a line of keys.** A key is a mouth shape at a sample: five formants (the
+  vowel table of §120.6, or a consonant's), optionally an antiformant and a low-pass, and the
+  voice's level there. Between two keys each sample is a cross-fade of the two keys' wave
+  tables, read on the singer's one phase (as `additive.phrase_tone` joins slurred notes), so a
+  move of the formants is a series of shapes 6 to 25 ms apart (`_STEPS` = 6 per move, a raised
+  cosine in time, formants in a straight line in Hz). A held vowel's key is read across the
+  singer's pitch swing (five rows, as before: vibrato carries harmonics across the formants);
+  the short keys of a consonant or a glide have one row. Each key is set to equal loudness
+  (`additive.loudness`), and the level is a curve through the keys.
+- **Consonants** (figures for a bass, scaled for the other voices by 1.06 / 1.14 / 1.2 and by the
+  singer's throat; the first formant follows a high note as in §120.6):
+
+  | | hold | level | during the hold | the move into the vowel |
+  |---|---|---|---|---|
+  | `l` | 50 ms | −6 dB | F1 330, F2 1150, F3 2650 Hz (narrow) | 60 ms from 330 / 1200 / 2650 |
+  | `m` | 70 ms | −9 dB | a nasal murmur: 270, 1350, 2250 Hz; antiformant 950 Hz; low-pass 1 kHz | 45 ms from 300 / 1000 / 2300 (bilabial: F2 low) |
+  | `n` | 60 ms | −9 dB | 270, 1250, 2450 Hz; antiformant 1.8 kHz; low-pass 1.3 kHz | 45 ms from 300 / 1700 / 2600 (alveolar: F2 high) |
+  | `d` | 35 ms | −23 dB | a closure: a voice bar (200 Hz, low-pass 350 Hz) | a burst (noise around 3.8 kHz, 0.45 octave, 4 ms decay), the voice back at −7 dB 2 ms later, then 40 ms from 250 / 1700 / 2650 |
+
+  A consonant begins its note at the step (12 ms entry; `attack` shapes only syllables
+  without one), so the vowel arrives 80–120 ms after the step. A section's singers enter
+  within 40 % of their usual spread on a consonant (at most 28 ms instead of 70).
+- **Two vowels** (`ah-oh`, `oo-ah`, `oh-ah`, `ah-ee`, and `mm-ah`, `mm-oh`, `mm-oo`: the hum of
+  §120.6 opening) glide over 0.15 s (at most 40 % of the note) centred at `turn` (0.5) of the
+  note. `morph` keeps its meaning for `syllable: vowel` (in the new path it is the same move as
+  keys) and is not sung with a syllable.
+- **Slurs.** A slurred phrase is one note (§120.7): its first note sings the syllable, the others
+  go on with its vowel. A note inside a slur whose own mark names a syllable or a vowel (or
+  `[default]`) carries `(syllable, vowel)` as a fourth item of its `Phrase` entry
+  (`render._sung`); the mouth then closes into its consonant (25 ms) or glides to its vowel
+  around its step. So `syllable` and `vowel` may change inside a slur (`score_file.FREE_IN_SLUR`
+  beside `glide`); every other setting still may not. Other instruments' phrases keep three items.
+- **The soloist** (`soloist: true`, read by `read_yes_no`: true/false, yes/no, on/off, 1/0): one
+  singer (mono; `singers` ignored), `brightness` + 0.15, the singer's formant (a resonance
+  added to the harmonics: 2.7 / 2.9 kHz, +9 dB for basses / tenors; 3.1 / 3.3 kHz, +6 dB for altos
+  / sopranos; 500–600 Hz wide), its vibrato 1.7 times `vibrato` with the depth breathing ±12 %,
+  beginning at 1.6 times `vibrato_delay` and growing over 0.6 s, a scoop of 35–55 cents up into
+  each attacked note (80 ms), and 1.6 times the breath. The choice of a setting over a `voices`
+  value: `voices` says who sings a note, the soloist is how many and how; `soloist` combines
+  with every `voices` value.
+- **Breath and whisper** in the new path come from one noise through a filter that follows the
+  keys (short-time Fourier transform, Hann frames of 1024 at a hop of 256; per frame the keys'
+  responses cross-faded): breath as in §120.6 (formants three times as broad, little under
+  900 Hz, more in the first 0.15 s, 0.3 of it through closed lips), whisper through the same
+  formants half as broad again from 250 Hz up. `whisper` w sets the tone to cos(πw/2) and the
+  whisper noise to 0.8 sin(πw/2) of the voice's level (power-follows as for breath, measured on
+  the voice before it is turned down), so the loudness stays within 1 dB from 0 to 1. A `d`
+  keeps its burst when whispered.
+- **Measured** (scratch scripts `/home/claude/work/scratch/am361/tools/`, tables
+  `measure-1.txt` … `measure-4.txt`; one voice, vibrato 0, unless said):
+  - Formant moves (tenor D3, 25 ms frames): `la` F1 207 Hz in the hold, 410 at 80 ms, 589 at
+    100 ms, 612 from 120 ms (aah); `na` F2 1175 Hz (murmur), 1769 at the release (60 ms), 1561 at
+    80, 1002 at 100; `ma` F2 1448 (murmur), 1005 at 80 ms, F1 211 → 555 → 606 at 80 / 100 / 120 ms;
+    `da` −41 dB (closure) at 20 ms, F2 2276 at 40 ms, 1216 at 60, 997 at 80; sopranos at D4 the
+    same with F1 on the note. Levels in the hold: `l` 5.7 dB, `m` / `n` 8.7 dB under the vowel.
+  - Antiformant (murmur 15–45 ms against the same note with the zero taken out): `m` −13.9 to
+    −14.8 dB at 950–1083 Hz, `n` −17.3 to −18.1 dB at 1.8–2.05 kHz (basses, tenors, altos);
+    10–19 dB under the harmonics two either side; in the vowel 0.0 dB.
+  - Vowel glides (F1 or F2, 10–90 %): `ah-oh` 0.960–1.050 s for a turn at 1.00 s (set 0.15 s,
+    raised cosine), `oo-ah` 0.955–1.030, `mm-ah` 0.945–1.040, `ah-ee` F2 0.970–1.060, `ah-oh`
+    turn 0.25 0.445–0.555; level before and after within 0.7 dB.
+  - Soloist (tenor A3, defaults): vibrato 5.49 Hz, depth 29.7 cents (one choir voice 16.0), half
+    its depth reached from 0.75 s (one voice 0.45 s); first 30 ms −30 cents (one voice −10);
+    with `vibrato: 25, vibrato_speed: 6` 6.01 Hz, 46 cents. Power in 2–4 kHz against all:
+    tenors −17.6 dB (one voice −26.3, section −27.9), basses −14.1 (−21.8), altos −34.3
+    (−39.5), sopranos −34.2 (−38.1). Breath between the harmonics −26.8 dB (one voice −30.8).
+  - Whisper (C4 aah, 8 singers): power between the harmonics against on them −23.0 / −11.5 /
+    −4.6 / +2.1 / +9.2 dB for 0 / 0.25 / 0.5 / 0.75 / 1 (+9 is pure noise for this measure);
+    loudness −16.1 → −17.0 LUFS; the soloist −15.8 → −16.8.
+  - Levels through the renderer (C4, one track): section `aah` −16.8 LUFS, `la` −16.8, `na`
+    −16.8, `da` −16.9, `ah-oh` −16.6, soloist −16.5, whispered −17.4; men C3 −16.6, soloist
+    −16.9.
+  - Clicks: power above 8 kHz in 1 ms frames at most −86 dB under the note's loudest
+    millisecond for `l`, `m`, `n`, glides and slurred syllables (the held vowel −132 dB; the
+    model has nothing there); the `d` burst −35 to −46 dB, as meant. First sample 0, last
+    under 1e-8.
+  - CPU (2 s note, C3, 8 singers): held vowel 77 ms per second of sound, `la` 82, `da` 85,
+    `ah-oh` 95, whisper 0.5 85, `la` whispered 90, 16 singers `la` 139; soloist 14 (one voice
+    13).
+- **Honest limits.** Nobody has listened. The consonant figures are textbook values for speech,
+  held a little longer; a real singer's `d` also has a voiced closure of varying length and a
+  real `l` a lateral antiformant (left out). A consonant starts on the step instead of before
+  it, so syllables sound a little late in fast lines. Keys cross-fade wave tables, which moves
+  each harmonic's level but is not a resonance sweeping continuously (steps of 6–25 ms, finer
+  than the 25 ms frames that measured them). The soloist is still one synthetic voice: brighter
+  and more alive, not a recorded singer. A whispered `m` or `n` is a quiet noise only.

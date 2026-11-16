@@ -3930,7 +3930,7 @@ does):
 | organ | `organ` (C1–C7): registration (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`), drawbars (`"00 8400 000"`: your own nine bars), tone, chiff, attack, chorus, detune, click, ring |
 | strings | `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5), `double_basses` (C1–G4), each a section (`players: 1` a solo): stroke (`sustain`, `spiccato`, `tremolo`, `pizzicato`), players, attack (sustain and tremolo: 0.03–0.06 firm, 0.1–0.3 smooth, 0.5 and more a swell), brightness (0 over the fingerboard: dark; 0.5 ordinary; 1 at the bridge: glassy), vibrato (cents), vibrato_speed (5.8 Hz), vibrato_delay (0.16 s into a note), accent (the bite of a stroke, 0–2), length (spiccato: seconds the bow is on the string), speed (tremolo: strokes a second), decay (how long short strokes ring), bow (rosin noise), mute (con sordino), detune (cents between the players), ring (the release), glide (slurs), touch |
 | percussion | played by note name: `timpani` (D2–A3; modes at the kettledrum's 1 : 1.5 : 2 : 2.44 : 2.9) and `toms` (concert toms, G1–C5): stroke (`hit`, `roll`), speed (roll: blows a second), mallet (0 soft felt to 1 hard wood: brightness, not level), decay, ring (seconds before a hand damps it), toms also drop (semitones the pitch falls after the blow) and shell. Played as drum steps: `taiko` (pitch 36–130 Hz, mallet, decay, drop, players, apart), `bass_drum` (a gran cassa: pitch 26–75 Hz, mallet, decay, players, apart), `frame_drum` (pitch 55–280 Hz, mallet, edge: 0 the middle to 1 the rim, decay, players, apart), `snare_drum` (stroke `hit` / `roll`, speed, pitch, mallet, snares, decay, players, apart), `cymbal` (a suspended cymbal: stroke `hit` / `swell`, speed, pitch: the size, mallet, decay), `tam_tam` (stroke `hit` / `swell`, speed, pitch, mallet, bloom, decay); every one also touch |
-| choir | `choir` (E2–C6; a choir pad, no words): vowel (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), voices (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`), singers (8; 1–16), attack, brightness (0 soft to 1 full voice), vibrato (cents), vibrato_speed (5.5 Hz), vibrato_delay (0.3 s), breath, detune, morph (the vowel a held note turns into), ring, glide (slurs), touch |
+| choir | `choir` (E2–C6; vowels and syllables, no words): vowel (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), voices (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`), singers (8; 1–16), attack, brightness (0 soft to 1 full voice), vibrato (cents), vibrato_speed (5.5 Hz), vibrato_delay (0.3 s), breath, detune, morph (the vowel a held note turns into), ring, glide (slurs), touch, syllable (`vowel`, `la` … `dee`, `mm-ah`, `ah-oh`, `oo-ah` …), turn (0.5), soloist (`false`/`true`), whisper (0–1) |
 | pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), sub_width (0 centred, the default; 1 its own phases on each side: wider, thinner in mono, as scores rendered before Step 186 and the `skyline` bed), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
 
 **Brass and organ** (Step 343; no samples: additive synthesis). Each sustains for as long as its
@@ -4086,10 +4086,39 @@ open:  {instrument: choir, settings: {vowel: mm, morph: aah, attack: 3}, steps: 
   a straight early-music tone; **`morph`** names the vowel a held note turns into.
 - Its level is that of the strings and the brass (a held note −15.5 to −17 LUFS), so it starts
   at `volume: 0`; give it a hall (`reverb: {size: 4.5, mix: 0.36}`).
-- Limits: no words, no consonants (since Step 346 notes can be slurred: `(A3 - C4 -)`), the
-  singers of one kind share one table of formants (only their throat lengths differ), nothing
-  but breath above 5 kHz; nobody has listened to it: it is judged by measurement (DESIGN
-  §120.6).
+- Limits: no words (since Step 346 notes can be slurred: `(A3 - C4 -)`; since Step 361 they
+  can sing syllables, below), the singers of one kind share one table of formants (only their
+  throat lengths differ), nothing but breath above 5 kHz; nobody has listened to it: it is
+  judged by measurement (DESIGN §120.6).
+
+**Syllables, a soloist, a whisper** (Step 361; DESIGN §121.4). Still synthesis, still no words.
+A choir that sets none of these four settings sounds exactly as before.
+
+```yaml
+men:   {instrument: choir, settings: {voices: men, syllable: la}, octave: 3, steps: "[na] 1 - [la] 5 - [na] 8 - [da] 5 -"}
+solo:  {instrument: choir, settings: {voices: sopranos, soloist: true, vowel: aah}, volume: 1,
+        steps: "[mp] A4 - - - [la] (D5 - - E5 | F5 - E5 - [ah-oh] D5 - - -)"}
+hush:  {instrument: choir, settings: {syllable: mm-ah, whisper: 1}, steps: "* - - - [whisper=0.4] * - - -"}
+```
+
+| setting | values | what it does |
+|---|---|---|
+| `syllable` | `vowel` (default), `la lo loo le lee`, `na no noo ne nee`, `ma mo moo me mee`, `da do doo de dee`, `mm-ah mm-oh mm-oo ah-oh oo-ah oh-ah ah-ee` | what each note sings: `vowel` holds the `vowel` setting (as before); a soft consonant into a vowel (a = aah, o = oh, oo = ooh, e = eeh, ee = ee): `l` (50 ms, the formants low, opening over 60 ms), `m` and `n` (a nasal murmur of 60–70 ms with its antiformant, 8 dB under the vowel), `d` (a closure, a burst, the formants moving from about 1.7 kHz); or two vowels, the second taking over at `turn` (a 0.15 s glide; `mm-` is a hum that opens). A consonant starts the note at once (`attack` then shapes nothing) and the vowel arrives 0.08–0.12 s after the step; a section's singers keep closer together on it |
+| `turn` | 0.5 (0.1–0.9) | two-vowel syllables: where in the note the second vowel takes over (a share of the note) |
+| `soloist` | `false` (default), `true` | one solo voice instead of the section (mono; `singers` is ignored): brighter, with the singer's formant near 3 kHz (+7 to +10 dB in 2–4 kHz for men, +4 to +5 for women), its vibrato 1.7 times as wide and 1.6 times as late, a scoop of 35–55 cents up into each attacked note, more breath. About as loud as a section; give it its own track and `volume: 1` to `3` over a choir track |
+| `whisper` | 0 (0–1) | breath instead of tone: 0.3–0.6 breathy, 1 an unvoiced whisper (noise through the vowel's formants and the consonants; a `d` keeps its burst); the loudness stays within 1 dB |
+
+- **Per note**: a mark names a syllable (`[la]`, `[mm-ah]`, `[syllable=na]`; `[vowel]` or
+  `[syllable=vowel]` goes back to the plain vowel), the whisper (`[whisper=0.5]`) or the vowel
+  (`[vowel=ooh]`; a bare `[aah]` is ambiguous with `morph`). A syllable stays in force until
+  another mark changes it. Unknown names get the nearest one (`[lah]`: did you mean 'la'?).
+- **In a slur** only the first note gets the syllable's consonant; the other notes go on with
+  its vowel unless a mark on that note names a syllable or vowel: `[la] (C4 - D4 - [na] E4 -)`
+  sings la on C4 and D4 and closes into an n on E4; `[vowel=ooh]` inside a slur glides to the
+  new vowel. Inside a slur `syllable` and `vowel` may change besides `glide`.
+- `morph` is sung when `syllable` is `vowel`; a syllable sings its own vowels.
+- Cost: a syllable or a whisper costs 5–25 % more than a held vowel (8 singers: 80–95 ms of CPU
+  per second of a note); a soloist 14 ms.
 
 **Expressive notes** (Step 346; DESIGN §120.7). Marks in square brackets stand before a step
 in a track's `steps` and stay in force until another mark changes them (when the pattern
@@ -4111,7 +4140,7 @@ taiko:   {instrument: taiko, steps: "[pitch=62] X . . x [pitch=100 mp] x x . . |
 | `[p <]` ... `[f]`, `[f >]` ... `[p]` | a hairpin: the level moves in a straight line (in dB) from this step to the next dynamic, which must be louder for `<` and softer for `>`; over a held note it is a crescendo or diminuendo inside the note, over many notes one over the phrase. `[p<]` is the same; the mark that ends it may stand after the last step |
 | `[fp]` (`ffp`, `fpp`, `mfp` ...) | the note starts at the first level and falls to the second within 0.25 s; the second stays in force |
 | `[sfz]` | this note starts 7 dB over the level in force and comes back within 0.25 s |
-| `[name=value]` | one of the instrument's settings from this step on (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`, `[glide=0.3]`); a named value may stand alone when only one setting has it (`[pizzicato]`, `[roll]`, `[hit]`) |
+| `[name=value]` | one of the instrument's settings from this step on (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`, `[glide=0.3]`); a named value may stand alone when only one setting has it (`[pizzicato]`, `[roll]`, `[hit]`, the choir's syllables `[la]`, `[mm-ah]`) |
 | `[default]` | every setting back to the track's (the section's) own |
 | `( ... )` | a slur: the notes inside after the first are not attacked again; the pitch glides to each in `glide` seconds (0.06; 0.15–0.4 a portamento), starting just before the note's step; vibrato, bow and breath go on |
 
@@ -4133,8 +4162,8 @@ stands and the nearest word (`[spicato]: unknown mark; did you mean 'spiccato'?`
   follows its hits: each multiplies the level.
 - **Slurs** need single notes (no chord, `+`, `*` or rest inside) and an instrument that can slur:
   `trumpet`, `horn`, `low_brass`, `violins`, `violas`, `cellos`, `double_basses` (with `stroke:
-  sustain` or `tremolo`), `choir` and `soft_lead`. Inside a slur only `glide` may change; dynamics
-  may. A slur is one note for a duck, an `accent:` group and the studio's step grid.
+  sustain` or `tremolo`), `choir` and `soft_lead`. Inside a slur only `glide` may change (on the
+  choir also `syllable` and `vowel`); dynamics may. A slur is one note for a duck, an `accent:` group and the studio's step grid.
 - **Vibrato** has three settings on those instruments: `vibrato` (depth, cents), `vibrato_speed`
   (Hz) and `vibrato_delay` (seconds into a note before it grows); in a section or choir each
   player keeps its own speed and delay around them. Set them for the track, per section
@@ -4150,7 +4179,7 @@ stands and the nearest word (`[spicato]: unknown mark; did you mean 'spiccato'?`
   blow per dB: 64 sixteenths of a six-player taiko under `[pp <] ... [ff]` took 5 s instead of
   0.3 s on a 2-core machine.
 - Not offered: a glide between notes that are attacked anew, a slur through a chord, a hairpin
-  inside a pad note, words for the choir.
+  inside a pad note, words for the choir (it sings syllables: Step 361, above).
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):

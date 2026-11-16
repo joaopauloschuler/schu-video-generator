@@ -21,6 +21,7 @@ import numpy as np
 from vidgen.music import _add_panned, _circular_add, _finish, _hz, _level_gain, _pad_wave, _tone_filter, _xfade_window
 from vidgen.sfx import RATE, _highpass, _lowpass
 from vidgen.studio import effects as fx
+from vidgen.studio.additive import Phrase
 from vidgen.studio.instruments import AIRY_HARMONICS, AIRY_WIDTH_CENTS, INSTRUMENTS, Instrument
 from vidgen.studio.patterns import ACCENT_GAIN, Pattern, Step, accent_steps
 from vidgen.studio.score_file import ChordSlot, MusicScore, Section, Track, TrackPart
@@ -376,7 +377,7 @@ def _render_hits(canvas_for: CanvasFor, score: MusicScore, track: Track, skipped
             n = int((held + settings.get("ring", 0.0)) * RATE)
             scale = level * event.gain / math.sqrt(len(pitches))
             seed = (f"studio:{score.seed}:{track.name}",) if instrument.seeded else ()
-            phrase = _phrase(section, part, event, voicer, pitches[0], settings)
+            phrase = _phrase(section, part, event, voicer, pitches[0], settings, instrument)
             for p in pitches:
                 if plain:
                     canvas.add(event.start, instrument.make(_hz(p), n, settings, *seed) * scale, pan)
@@ -388,16 +389,31 @@ def _render_hits(canvas_for: CanvasFor, score: MusicScore, track: Track, skipped
                 canvas.add(event.start, _expressive(instrument, settings, event, n, note) * scale, pan)
 
 
-def _phrase(section: Section, part: TrackPart, event: _Event, voicer: _Voicer, first: int, settings: Mapping[str, float]) -> tuple[tuple[int, float, int], ...]:
+def _phrase(section: Section, part: TrackPart, event: _Event, voicer: _Voicer, first: int, settings: Mapping[str, float],
+            instrument: Instrument) -> Phrase:
     """The slurred notes of ``event`` for its instrument (:data:`vidgen.studio.additive.Phrase`):
     each note's start, its pitch in semitones above the event's ``first`` pitch (a MIDI number)
-    and its glide (the ``glide`` setting in force at the note) in samples."""
+    and its glide (the ``glide`` setting in force at the note) in samples; for a choir, a
+    note's own syllable and vowel when its mark names one (DESIGN.md §121.4)."""
     out = []
     for start, step in event.slurred:
         slot = _slot_at(section, event.start + start) if section.chords else None
         glide = dict(step.changes).get("glide", settings.get("glide", 0.06))
-        out.append((start, float(voicer.pitches(step, slot, part)[0] - first), int(glide * RATE)))
+        out.append((start, float(voicer.pitches(step, slot, part)[0] - first), int(glide * RATE)) + _sung(instrument, part, step))
     return tuple(out)
+
+
+def _sung(instrument: Instrument, part: TrackPart, step: Step) -> tuple[tuple[float, float], ...]:
+    """``((syllable, vowel),)`` for a slurred choir note whose mark names its syllable or vowel
+    (or ``[default]``), else ``()``: the note sings on."""
+    names = ("syllable", "vowel")
+    if not all(name in instrument.settings for name in names):
+        return ()
+    words = set(names) | {"default"} | {c for name in names for c in instrument.settings[name].choices}
+    if not any(item.partition("=")[0] in words for item in step.marks):
+        return ()
+    played = {**part.settings, **dict(step.changes)}
+    return ((played["syllable"], played["vowel"]),)
 
 
 def _sub_note(slot: ChordSlot | None) -> int | None:

@@ -2143,7 +2143,10 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [ ] Not done: aliasing that looks like a slow or backwards turn (needs the scene's intended speed); scene themes (`score:`) not read for music events; no `--render` (render first); Windows / macOS not tried
 
 ### Step 361 — More choir
-- [ ] Syllables, a soloist voice, a whispered texture, a syllable per note; the existing choir byte-identical by default; demo clips
+- [x] `syllable` (vowel; la … dee with l, n, m, d onsets: formant moves, a nasal murmur with its antiformant, a closure and burst; two-vowel glides mm-ah, ah-oh, oo-ah … at `turn`), per note `[la]` / `[syllable=na]` with did-you-mean; in a slur a consonant only where written (`syllable` and `vowel` may change inside a slur) — `studio/singing.py`, DESIGN §121.4
+- [x] `soloist: true` (one voice: singer's formant, wider later vibrato, scoop, more breath) and `whisper` 0–1 (tone to breath at the same loudness)
+- [x] The existing choir byte-identical by default: both film scores (ps6 `9dca0ba9…`, escapement `271de0c6…`), the v7 example score and the nine choir demo scores of Steps 345–346 on the starting commit and after; measured (formant moves, antiformants, glide timing, vibrato, singer's formant, breath, levels, clicks, CPU), spectrograms looked at; demo WAV + M4A clips in `/home/claude/work/scratch/am361/demo/`; docs: CONFIG, guide, COOKBOOK-MUSIC sections 10, 11, 13
+- [ ] Not done: nobody has listened; consonants start on the step (not before it); only the consonants l, n, m and d; the studio has no control for syllables (marks are kept in the text); Windows / macOS not tried
 
 ### Step 362 — Review of Steps 358–361
 - [ ] Critical review with fixes; docs (guide, CONFIG, cookbooks, README feature list); tasklist leftovers

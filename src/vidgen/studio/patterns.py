@@ -39,7 +39,7 @@ DYNAMIC_RANGE = (-40.0, 12.0)
 _LEVEL_TEXT = r"ppp|pp|p|mp|mf|fff|ff|f|[+-]\d+(?:\.\d+)?"
 _DYNAMIC = re.compile(rf"(?P<level>{_LEVEL_TEXT})?(?P<hairpin>[<>])?")
 _FORTE_PIANO = re.compile(r"(?P<loud>fff|ff|f|mf)(?P<soft>ppp|pp|p|mp)")
-_SETTING_ITEM = re.compile(r"[a-z][a-z0-9_]*(=[^\s=\[\]]+)?")
+_SETTING_ITEM = re.compile(r"[a-z][a-z0-9_]*(?:-[a-z0-9_]+)*(=[^\s=\[\]]+)?")
 
 _TOKEN = re.compile(
     r"(?P<bar>\|)"
