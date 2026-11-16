@@ -964,6 +964,13 @@ my_video/
   standing stones around a fire that reads the score through `ctx.music` (embers on the cellos'
   notes, a beam on the trumpet's pitch, flashes on the taikos), finished with `vidgen/three-finish`
   (no media committed).
+- [examples/escapement](examples/escapement/README.md) — "Escapement", the published 3:11
+  clockwork music film, source only: an original 26-track score in D minor at 120 BPM and twelve
+  three.js `web` scenes of a watch movement in brass, rhodium, blued steel and ruby whose going
+  train turns at its real gear ratios and ticks on the beat (the beats read from the score through
+  `music_data`), an exploded view at the climax and one silent bar where everything stops; the
+  film's own depth of field, motion blur and finishing (no media committed; the final render takes
+  about 1 h 30 min to 2 h on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

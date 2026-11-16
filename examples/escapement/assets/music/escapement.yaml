@@ -1,0 +1,491 @@
+# Escapement: an original score for a clockwork film, played by vidgen's own synthesizer
+# (no samples, no SoundFont, no audio files).
+#
+# 120 BPM in D minor. One beat is exactly 15 video frames at 30 fps and one bar exactly 60 frames
+# (2 seconds), so the clock's tick IS the beat: tick on 1 and 3, tock on 2 and 4, two ticks a second.
+#
+# The theme (16 bars, two phrases) climbs by fourths: A-D-F-E, D-F-A-G, G-Bb-D-C, A-G-E-C#; the answer
+# falls home: D-E-F-A, G-F-D, Bb-D-G-F, E-C#-D. It is stated simply by a music box over the dial,
+# sung by a horn in the movement, played in full by brass among the great gears, heard far away among
+# the planets, and returns transformed at the climax: an octave higher, over C and D major instead of
+# the minor cadence. The same four-note cells played four times as fast (3+1+2+2 sixteenths) are the
+# plucked ostinato of the gear train: the gears are the theme in diminution.
+#
+# Form (bars of 4/4, 2 s each):
+#   winding 8 | dial 8 | movement 16 | cathedral 16 | orrery 12 | build 8 | climax 16 | coda 8 | end 2  = 94 bars, 188 s
+#   The tick is absent while the watch is wound (bars 0-3), drops out among the planets (bars 48-56),
+#   comes back faltering (bars 56-60: the times of those ticks are also the mechanism's beats in the
+#   pictures), and the last bar of the build (bar 67) is silent: time stops before the climax.
+version: 1
+title: Escapement
+description: A clock in D minor at 120 BPM - winding, a ticking pulse, a theme that climbs by fourths, an ostinato that is the theme four times as fast, great drums and bells, a silent bar, and a climax that resolves in D major.
+key: D minor
+tempo: 120
+seed: 11
+loop: false
+progression: "Dm Dm Bb Bb Gm Gm A A"
+chord_bars: 1
+master: {lowpass: 12000, highpass: 28}
+sections:
+  - {name: winding, bars: 8, progression: "Dm(add9) Dm(add9) Dm(add9) Dm(add9) Bb/D Bb/D Dm(add9) Dm(add9)"}
+  - {name: dial, bars: 8, progression: "Dm Dm Bbmaj7 Bbmaj7 Gm Gm Asus4 A"}
+  - {name: movement, bars: 16, progression: "Dm Dm Bb Bb Gm Gm Asus4 A"}
+  - {name: cathedral, bars: 16, progression: "Dm Dm Bb Bb Gm Gm Asus4 A Dm Dm Bb Bb Gm Gm A Dm"}
+  - {name: orrery, bars: 12, progression: "Bbmaj7 Bbmaj7 F/A F/A Gm7 Gm7 Dm(add9) Dm(add9) Bbmaj7 Bbmaj7 Asus4 Asus4"}
+  - {name: build, bars: 8, progression: "Dm/A Dm/A A A Dm/A Dm/A A A"}
+  - {name: climax, bars: 16, progression: "Dm Dm Bb Bb Gm Gm Asus4 A Dm Dm Bb Bb C C D D"}
+  - {name: coda, bars: 8, progression: "D D Gm/D Gm/D D D D D"}
+  - {name: end, bars: 2, progression: "D D"}                      # only the clock, while the last chord rings
+tracks:
+  # ------------------------------------------------------------------ the clock
+  tick:               # beats 1 and 3: the high click of the escapement
+    instrument: tick
+    settings: {tone: 4400}
+    steps: "X... .... X... ...."
+    pan: -0.12
+    volume: 21
+    reverb: {size: 1.0, mix: 0.16}
+    only: [winding, dial, movement, cathedral, orrery, build, climax, coda, end]
+    sections:
+      winding: {steps: ". | . | . | . | X... .... X... .... | X... .... X... .... | X... .... X... .... | X... .... X... ....", volume: {from: 15, to: 20}}
+      cathedral: {volume: 20}
+      orrery:         # silent among the planets, then faltering: late, later, almost stopped
+        steps: ". | . | . | . | . | . | . | . | X... .... X... .... | ...X .... .... .... | ..X. .... .... .... | .... .... X... ...."
+        volume: [[8, 20], [12, 17]]
+        reverb: {size: 2.6, mix: 0.4}
+      build:
+        steps: ["X... .... X... ....", "X... .... X... ....", "X... .... X... ....", "X... .... X... ....",
+                "X.o. .... X.o. ....", "X.o. .... X.o. ....", "X.o. ..o. X.o. ..o.", "."]
+        volume: {from: 20, to: 23}
+      climax: {steps: "X.o. ..o. X.o. ..o.", volume: 22}
+      coda: {volume: {from: 20, to: 18}}
+      end: {volume: {from: 20, to: 16}, reverb: {size: 2.2, mix: 0.3}}
+  tock:               # beats 2 and 4: a lower, woodier answer
+    instrument: woodblock
+    settings: {tone: 2200}
+    steps: ".... A5... .... A5..."
+    pan: 0.12
+    volume: 10
+    reverb: {size: 1.0, mix: 0.16}
+    only: [winding, dial, movement, cathedral, orrery, build, climax, coda, end]
+    sections:
+      winding: {steps: ". | . | . | . | .... A5... .... A5... | .... A5... .... A5... | .... A5... .... A5... | .... A5... .... A5...", volume: {from: 4, to: 9}}
+      cathedral: {volume: 9}
+      orrery:
+        steps: ". | . | . | . | . | . | . | . | .... A5... .... .A5.. | .... .... ..A5. .... | .... .... .... A5... | ."
+        volume: [[8, 9], [12, 6]]
+        reverb: {size: 2.6, mix: 0.4}
+      build:
+        steps: [".... A5... .... A5...", ".... A5... .... A5...", ".... A5... .... A5...", ".... A5... .... A5...",
+                ".... A5... .... A5...", ".... A5... .... A5...", ".... A5.A5. .... A5.A5.", "."]
+        volume: {from: 9, to: 12}
+      climax: {steps: ".... A5.A5. .... A5.A5.", volume: 11}
+      coda: {volume: {from: 9, to: 7}}
+      end: {volume: {from: 9, to: 5}, reverb: {size: 2.2, mix: 0.3}}
+  ratchet:            # winding the watch: bursts of sixteenth clicks, eight a second; each burst is a turn of the crown
+    instrument: snap
+    settings: {tone: 3000, decay: 0.006}
+    steps: "xxxxxxx......... | ..xxxxxxxx...... | xxxxxxxxx....... | ..xxxxxxxxxx.... | . | . | . | ."
+    spread: 0.15
+    pan: 0.25
+    volume: 5
+    reverb: {size: 0.8, mix: 0.12}
+    only: [winding, coda]
+    sections:
+      winding: {volume: [[0, 10], [1, 13], [4, 16]]}
+      coda: {steps: ". | . | . | . | . | . | . | .", volume: -40}
+  ratchet_lo:         # the body of each click
+    instrument: woodblock
+    settings: {tone: 1500}
+    steps: "D5D5D5D5D5D5D5......... | ..E5E5E5E5E5E5E5E5...... | F5F5F5F5F5F5F5F5F5....... | ..G5G5G5G5G5G5G5G5G5G5.... | . | . | . | ."
+    pan: 0.25
+    volume: -9
+    reverb: {size: 0.8, mix: 0.12}
+    only: [winding]
+    sections:
+      winding: {volume: [[0, -3], [1, 0], [4, 4]]}
+  # ------------------------------------------------------------------ drums
+  boom:
+    instrument: boom
+    settings: {low: 37, decay: 1.6}
+    steps: "x | . | . | . | . | . | . | ."
+    volume: 3
+    only: [winding, dial, movement, cathedral, orrery, climax, coda]
+    sections:
+      winding: {volume: 3}
+      dial: {volume: 0}
+      movement: {volume: 1}
+      cathedral: {volume: 4}
+      orrery: {steps: "x | . | . | . | . | . | . | . | . | . | . | .", volume: 1}
+      climax: {steps: "X | . | . | . | x | . | . | .", volume: 5}
+      coda: {steps: "x | . | . | . | x | . | . | .", volume: 2}
+  taiko:              # great low drums in a hall
+    instrument: kick
+    settings: {high: 104, low: 43, decay: 0.32, click: 0.14}
+    reverb: {size: 3.2, mix: 0.4, tone: 2600}
+    volume: 3
+    only: [movement, cathedral, build, climax, coda]
+    sections:
+      movement:
+        steps: ". | . | . | . | . | . | . | . | X... .... .... .... | . | . | . | X... .... .... .... | . | X... .... .... .... | .... .... x... x.x."
+        volume: [[8, -3], [16, 0]]
+      cathedral:
+        steps: ["X... .... .... ....", ".... .... .... x.x.", "X... .... .... ....", ".... .... x... x.x.",
+                "X... .... .... ....", ".... .... .... x.x.", "X... .... x... ....", ".... x... x.x. x.xx",
+                "X... .... ..x. ....", ".... .... x... x.x.", "X... .... ..x. ....", ".... .... x... x.x.",
+                "X... .... ..x. ....", ".... x... x... x.x.", "X... ..x. ..x. ..x.", "x.x. x.x. x.xx xxxx"]
+        volume: [[0, 2], [16, 4]]
+      build:
+        steps: ["x... .... .... ....", "x... .... .... ....", "x... .... x... ....", "x... .... x... ....",
+                "x... x... x... x...", "x... x... x... x.x.", "x.x. x.x. x.x. x.xx", "X... .... .... ...."]
+        volume: [[0, -4], [6, 1], [7, 4], [7.05, 2], [8, 2]]
+      climax:
+        steps: ["X... ..x. ..x. ....", ".... .... x... x.x.", "X... ..x. ..x. ....", ".... x... x.x. x.xx"]
+        volume: 4
+      coda: {steps: "X... .... .... .... | . | . | . | x... .... .... .... | . | . | .", volume: 1}
+  tom:                # a higher drum answering
+    instrument: kick
+    settings: {high: 150, low: 66, decay: 0.24, click: 0.2}
+    reverb: {size: 2.4, mix: 0.35, tone: 3000}
+    pan: 0.25
+    volume: 1
+    only: [cathedral, build, climax]
+    sections:
+      cathedral:
+        steps: [".", ".... .... x.x. ....", ".", ".... x... .x.x ....", ".", ".... .... x.x. ....", ".... x... .... x...", ".x.x .x.x .x.. ....",
+                ".... x... .... x...", ".... x... .x.x ....", ".... x... .... x...", ".... x... .x.x ....",
+                ".... x... .... x...", ".x.x .... .x.x ....", ".... x... x... .x.x", ".x.x .x.x .x.. ...."]
+        volume: [[0, -2], [16, 1]]
+      build:
+        steps: [".", ".", ".", ".... .... .... x.x.", ".... .... .... x.x.", "..x. ..x. ..x. ..x.", ".x.x .x.x .x.x .x..", "."]
+        volume: [[0, -3], [7, 2], [8, 2]]
+      climax: {steps: [".... x... .... x...", ".... x... .x.x ....", ".... x... .... x...", ".x.x .... .x.x ...."], volume: 1}
+  three:              # three against the clock's four: three even strokes a bar (12 steps), the gear with 36 teeth
+    instrument: woodblock
+    settings: {tone: 1800}
+    steps: "D5...D5...D5..."
+    pan: -0.3
+    volume: -2
+    reverb: {size: 1.8, mix: 0.25}
+    only: [cathedral, build]
+    sections:
+      cathedral: {steps: ". | . | . | . | . | . | . | . | D5...D5...D5... | D5...D5...D5... | D5...D5...D5... | D5...D5...D5... | D5...D5...D5... | D5...D5...D5... | E5...E5...E5... | D5...D5...D5...", volume: [[8, 4], [12, 8], [16, 10]]}
+      build: {steps: ["E5...E5...E5...", "E5...E5...E5...", "E5...E5...E5...", "E5...E5...E5...", "E5...E5...E5...", "E5...E5...E5...", "E5.E5.E5.E5.E5.E5.", "."], volume: {from: 8, to: 13}}
+  three_lo:           # ...and its weight, a low plucked string on the same three strokes
+    instrument: pizzicato
+    octave: 2
+    settings: {decay: 0.3, tone: 1400, ring: 0.3}
+    steps: "1...5...1..."
+    pan: -0.3
+    volume: 1
+    only: [cathedral, build]
+    sections:
+      cathedral: {steps: ". | . | . | . | . | . | . | . | 1...5...1... | 1...5...1... | 1...5...1... | 1...5...1... | 1...5...1... | 1...5...1... | 1...5...1... | 1...5...1...", volume: [[8, -3], [16, 2]]}
+      build: {steps: ["1...1...1...", "1...1...1...", "1...1...1...", "1...1...1...", "1...1...1...", "1...1...1...", "1.1.1.1.1.1.", "."], volume: {from: 0, to: 4}}
+  hat:                # a fine metallic sixteenth pulse at the climax: the train running
+    instrument: hat
+    settings: {decay: 0.014, tone: 7200}
+    steps: "o.xo o.xo o.xo o.xo"
+    spread: 0.35
+    volume: 14
+    only: [build, climax]
+    sections:
+      build: {steps: [".", ".", ".", ".", "..x. ..x. ..x. ..x.", "..x. ..x. ..x. ..x.", "o.xo o.xo o.xo o.xo", "."], volume: {from: 10, to: 15}}
+  # ------------------------------------------------------------------ bass and low swells
+  pend:               # the pendulum: one slow low note a bar, swinging root and fifth
+    instrument: sub
+    octave: 1
+    settings: {decay: 1.1, tone: 420, second: 0.25, ring: 0.5}
+    steps: "1 - - - - - - - - - - - . . . . | 1 - - - - - - - 5 - - - - - . ."
+    volume: 0
+    only: [winding, dial, movement, cathedral, orrery, build, climax, coda]
+    sections:
+      winding: {steps: "1 - - - - - - - - - - - - - . . | . | 1 - - - - - - - - - - - - - . . | . | 1 - - - - - - - - - - - - - . . | . | 1 - - - - - - - - - - - - - . . | .", volume: -2}
+      dial: {volume: -3}
+      movement: {volume: [[0, -3], [16, 0]]}
+      cathedral: {volume: 1}
+      orrery: {steps: "1 - - - - - - - - - - - - - . . | .", volume: -3}
+      build: {steps: ["1 - - - - - - - 1 - - - - - - -", "1 - - - - - - - 1 - - - - - - -", "1 - - - - - - - 1 - - - - - - -", "1 - - - - - - - 1 - - - - - - -",
+                      "1 - - - 1 - - - 1 - - - 1 - - -", "1 - - - 1 - - - 1 - - - 1 - - -", "1 - 1 - 1 - 1 - 1 - 1 - 1 - 1 -", "."], volume: {from: -1, to: 2}}
+      climax: {steps: "1 - - - - - 1 - - - 1 - - - . . | 1 - - - - - - - 5 - - - 1 - . .", volume: 2}
+      coda: {steps: "1 - - - - - - - - - - - - - . . | .", volume: {from: 0, to: -6}}
+  growl:              # a dark reedy bass on the pendulum's notes, from the great gears on
+    instrument: analog_bass
+    octave: 2
+    settings: {decay: 0.6, tone: 1500, closed: 240, snap: 0.25, detune: 10, ring: 0.3}
+    steps: "1 - - - - - - - - - - - . . . . | 1 - - - - - - - 5 - - - - - . ."
+    volume: -2
+    width: 0.5
+    only: [cathedral, build, climax]
+    sections:
+      cathedral: {volume: [[0, -5], [16, -1]]}
+      build: {steps: ["1 - - - - - - - 1 - - - - - - -", "1 - - - - - - - 1 - - - - - - -", "1 - - - - - - - 1 - - - - - - -", "1 - - - - - - - 1 - - - - - - -",
+                      "1 - - - 1 - - - 1 - - - 1 - - -", "1 - - - 1 - - - 1 - - - 1 - - -", "1 - 1 - 1 - 1 - 1 - 1 - 1 - 1 -", "."],
+              volume: {from: -5, to: 1}, settings: {decay: 0.4, tone: 2200, closed: 300, snap: 0.2, detune: 12, ring: 0.2}}
+      climax: {steps: "1 - - - - - 1 - - - 1 - - - . . | 1 - - - - - - - 5 - - - 1 - . .", volume: 0, settings: {decay: 0.5, tone: 2400, closed: 340, snap: 0.22, detune: 12, ring: 0.3}}
+  brass:              # low sustained swells: root, fifth and octave, each chord fading in slowly
+    instrument: saw_pad
+    octave: 2
+    settings: {tone: 1100, attack: 1.2, release: 1.2, detune: 16}
+    steps: "1+5+8 | -"
+    reverb: {size: 2.8, mix: 0.25}
+    width: 0.4
+    only: [winding, movement, cathedral, orrery, build, climax, coda]
+    sections:
+      winding: {steps: "1+5+8 | - | - | - | 1+5+8 | - | 1+5+8 | -", volume: [[0, -9], [2, -4], [8, -3]], lowpass: {from: 420, to: 900}}
+      movement: {volume: [[0, -12], [8, -6], [16, -1]], lowpass: [[0, 500], [16, 1500]]}
+      cathedral: {volume: [[0, -1], [16, 2]], lowpass: [[0, 1500], [16, 2400]], settings: {tone: 1600, attack: 0.7, release: 1.0, detune: 18}}
+      orrery: {volume: {from: -9, to: -6}, lowpass: 800}
+      build: {steps: ["1+5+8", "-", "1+5+8", "-", "1+5+8", "-", "1+5+8", "."], volume: [[0, -5], [7, 3], [8, 3]], lowpass: {from: 700, to: 3000}, settings: {tone: 1900, attack: 0.5, release: 0.25, detune: 18}}
+      climax: {volume: 3, lowpass: 2800, settings: {tone: 2000, attack: 0.35, release: 0.8, detune: 20}}
+      coda: {volume: [[0, -4], [5, -5], [8, -14]], lowpass: 900}
+  # ------------------------------------------------------------------ ostinati
+  ost:                # the low string ostinato: the going train (eighths, then sixteenths)
+    instrument: synth_bass
+    octave: 3
+    settings: {decay: 0.1, tone: 1300, ring: 0.03}
+    steps: "1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 ."
+    spread: 0.2
+    reverb: {size: 1.4, mix: 0.18}
+    only: [movement, cathedral, build, climax]
+    sections:
+      movement: {lowpass: [[0, 500], [8, 1400], [16, 3000]], volume: [[0, -8], [8, -2], [16, 1]],
+                 steps: ["1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 .", "1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 .", "1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 .", "1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 .",
+                         "1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 .", "1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 .", "1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 .", "1 . 1 . 5 . 1 . 8 . 1 . 5 . 1 .",
+                         "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1"]}
+      cathedral: {steps: "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1", lowpass: 2600, volume: -3}
+      build: {steps: ["1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1", "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1", "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1", "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1",
+                      "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1", "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1", "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1", "."],
+              lowpass: {from: 1200, to: 5000}, volume: {from: -6, to: 1}}
+      climax: {steps: "1 1 5 1 8 1 5 1 1 1 5 1 3' 1 5 1", lowpass: 4200, volume: -3}
+  cell:               # the theme four times as fast, plucked: 3+1+2+2 sixteenths a cell (the gear train's voice)
+    instrument: pizzicato
+    octave: 4
+    settings: {decay: 0.18, tone: 3000, ring: 0.3}
+    spread: 0.3
+    reverb: {size: 2.0, mix: 0.25}
+    volume: 0
+    only: [movement, cathedral, build, climax]
+    steps: &cellA
+      - "A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -"
+      - "A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -"
+      - "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -"
+      - "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -"
+      - "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -"
+      - "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -"
+      - "A4 - - G5 E5 - D5 - A4 - - G5 E5 - D5 -"
+      - "A4 - - G5 E5 - C#5 - A4 - - G5 E5 - C#5 -"
+    sections:
+      movement: {volume: [[0, -40], [3.9, -40], [4, -9], [16, 0]],
+                 steps: [".", ".", ".", ".",
+                         "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -", "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -",
+                         "A4 - - G5 E5 - D5 - A4 - - G5 E5 - D5 -", "A4 - - G5 E5 - C#5 - A4 - - G5 E5 - C#5 -",
+                         "A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -", "A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -",
+                         "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -", "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -",
+                         "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -", "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -",
+                         "A4 - - G5 E5 - D5 - A4 - - G5 E5 - D5 -", "A4 - - G5 E5 - C#5 - A4 - - G5 E5 - C#5 -"]}
+      cathedral: {volume: -4,
+                  steps: ["A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -", "A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -",
+                          "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -", "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -",
+                          "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -", "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -",
+                          "A4 - - G5 E5 - D5 - A4 - - G5 E5 - D5 -", "A4 - - G5 E5 - C#5 - A4 - - G5 E5 - C#5 -",
+                          "D5 - - E5 F5 - A5 - D5 - - E5 F5 - A5 -", "D5 - - E5 F5 - A5 - D5 - - E5 F5 - A5 -",
+                          "G5 - - F5 D5 - Bb4 - G5 - - F5 D5 - Bb4 -", "G5 - - F5 D5 - Bb4 - G5 - - F5 D5 - Bb4 -",
+                          "Bb4 - - D5 G5 - F5 - Bb4 - - D5 G5 - F5 -", "Bb4 - - D5 G5 - F5 - Bb4 - - D5 G5 - F5 -",
+                          "E5 - - C#5 A4 - C#5 - E5 - - C#5 A4 - C#5 -", "D5 - - A4 F5 - D5 - D5 - - A4 D5 - - -"]}
+      build: {volume: {from: -5, to: 3},
+              steps: ["A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -", "A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -",
+                      "A4 - - E5 C#5 - E5 - A4 - - E5 C#5 - E5 -", "A4 - - E5 C#5 - E5 - A4 - - E5 C#5 - E5 -",
+                      "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -", "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -",
+                      "E5 - - A5 C#6 - A5 - E5 - - A5 C#6 - A5 -", "."]}
+      climax: {octave: 4, transpose: 12, volume: -3,
+               steps: ["A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -", "A4 - - D5 F5 - E5 - A4 - - D5 F5 - E5 -",
+                       "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -", "D5 - - F5 A5 - G5 - D5 - - F5 A5 - G5 -",
+                       "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -", "G4 - - Bb4 D5 - C5 - G4 - - Bb4 D5 - C5 -",
+                       "A4 - - G5 E5 - D5 - A4 - - G5 E5 - D5 -", "A4 - - G5 E5 - C#5 - A4 - - G5 E5 - C#5 -",
+                       "D5 - - E5 F5 - A5 - D5 - - E5 F5 - A5 -", "D5 - - E5 F5 - A5 - D5 - - E5 F5 - A5 -",
+                       "G5 - - F5 D5 - Bb4 - G5 - - F5 D5 - Bb4 -", "G5 - - F5 D5 - Bb4 - G5 - - F5 D5 - Bb4 -",
+                       "E5 - - G5 C6 - Bb5 - E5 - - G5 C6 - Bb5 -", "E5 - - G5 C6 - Bb5 - E5 - - G5 C6 - Bb5 -",
+                       "A5 - - F#5 D5 - F#5 - A5 - - F#5 D5 - F#5 -", "A5 - - F#5 D6 - A5 - D6 - - - - - - -"]}
+  # ------------------------------------------------------------------ pads
+  pad:
+    instrument: pad
+    play: chords
+    settings: {tone: 2600, air: 0.4, sub: 0.45}
+    volume: -3
+    sections:
+      winding: {volume: [[0, -12], [1, -6], [8, -4]], lowpass: {from: 500, to: 2200}, width: 1.3, settings: {tone: 2200, air: 0.5, sub: 0.6, fade: 2.5}}
+      dial: {volume: -5, settings: {tone: 2200, air: 0.4, sub: 0.45, fade: 1.6}}
+      movement: {volume: {from: -7, to: -5}, settings: {tone: 2000, air: 0.35, sub: 0.4}}
+      cathedral: {volume: -6, settings: {tone: 2200, air: 0.3, sub: 0.35}}
+      orrery: {volume: [[0, -8], [8, -7], [12, -12]], width: 1.35, settings: {tone: 3400, air: 0.7, sub: 0.55, fade: 2.4}}
+      build: {volume: [[0, -8], [7, -5], [7.05, -60], [8, -60]], settings: {tone: 2400, air: 0.3, sub: 0.3, fade: 0.3}}
+      climax: {volume: -3, width: 1.4, settings: {tone: 3400, air: 0.5, sub: 0.45}}
+      coda: {volume: [[0, -3], [5, -3], [8, -12]], width: 1.3, settings: {tone: 3000, air: 0.7, sub: 0.6, fade: 2.6}}
+      end: {volume: {from: -12, to: -34}, width: 1.3, settings: {tone: 2400, air: 0.7, sub: 0.6, fade: 2.6}}
+  glass:
+    instrument: glass
+    play: chords
+    volume: 0
+    only: [winding, dial, orrery, climax, coda]
+    sections:
+      winding: {volume: {from: -8, to: 0}}
+      dial: {volume: 1}
+      orrery: {volume: [[0, 2], [8, 2], [12, -4]]}
+      climax: {volume: 1}
+      coda: {volume: {from: 4, to: -4}}
+  strings:            # a wall of strings: dark among the gears, opening through the build, wide open at the climax
+    instrument: supersaw
+    play: chords
+    settings: {tone: 5000, fade: 0.3, detune: 30}
+    only: [movement, cathedral, build, climax]
+    sections:
+      movement: {lowpass: [[0, 200], [8, 500], [16, 1700]], volume: [[0, -30], [8, -10], [16, 0]]}
+      cathedral: {lowpass: [[0, 1700], [8, 2400], [16, 3600]], volume: [[0, 1], [16, 3]], width: 1.3}
+      build: {lowpass: [[0, 900], [7, 7000], [8, 7000]], volume: [[0, -3], [7, 4], [7.05, -60], [8, -60]],
+              gate: {steps: "XxxX xxXx XxxX xxXx", duty: 0.6, floor: 0.12}}
+      climax: {lowpass: 9500, volume: 4.5, width: 1.55, settings: {tone: 6000, fade: 0.3, detune: 34}}
+  # ------------------------------------------------------------------ the theme
+  box:                # the theme stated simply on a music box (dial); far away among the planets; at the end in D major
+    instrument: music_box
+    settings: {decay: 1.4, tone: 5200, ring: 3.0}
+    reverb: {size: 3.6, mix: 0.35, tone: 5500}
+    echo: {delay: 1.5, feedback: 0.3, repeats: 2, pingpong: true}
+    spread: 0.2
+    volume: 3
+    only: [winding, dial, orrery, coda]
+    sections:
+      winding:        # the first cell, twice, as if remembered
+        steps: ". | . | . | . | . | A5 . . . . . . . . . . . D6 . . . | F6 . . . . . . . E6 . . . . . . . | ."
+        volume: -2
+      dial:
+        steps: &themeA
+          - "A4 - - - - - - - - - - - D5 - - - | F5 - - - - - - - E5 - - - - - - -"
+          - "D5 - - - - - - - - - - - F5 - - - | A5 - - - - - - - G5 - - - - - - -"
+          - "G5 - - - - - - - - - - - Bb5 - - - | D6 - - - - - - - C6 - - - - - - -"
+          - "A5 - - - - - - - - - - - G5 - - - | E5 - - - - - - - C#5 - - - - - - -"
+        transpose: 12
+        volume: 4
+      orrery:         # the climbing cell over Bb, F, Gm, D minor: the same shape under another sky
+        steps: "D5 . . . . . . . . . . . F5 . . . | A5 . . . . . . . G5 . . . . . . . | C5 . . . . . . . . . . . F5 . . . | A5 . . . . . . . G5 . . . . . . . | D5 . . . . . . . . . . . G5 . . . | Bb5 . . . . . . . A5 . . . . . . . | A5 . . . . . . . . . . . F5 . . . | E5 . . . . . . . D5 . . . . . . . | . | . | . | ."
+        transpose: 12
+        volume: 3
+      coda:           # the theme's first cells in D major, and the last word: A, F#, D
+        steps: "A4 . . . . . . . . . . . D5 . . . | F#5 . . . . . . . E5 . . . . . . . | D5 . . . . . . . . . . . G5 . . . | Bb5 . . . . . . . A5 . . . . . . . | A5 . . . . . . . . . . . F#5 . . . | D5 . . . . . . . . . . . . . . . | . | ."
+        transpose: 12
+        volume: {from: 4, to: 2}
+  horn:               # the theme sung in the tenor (movement, second half), then with the brass in full
+    instrument: saw_pad
+    octave: 4
+    settings: {tone: 1700, attack: 0.14, release: 0.7, detune: 12}
+    reverb: {size: 3.6, mix: 0.32, tone: 3200}
+    pan: -0.1
+    width: 0.7
+    only: [movement, cathedral, climax]
+    steps: *themeA
+    transpose: -12
+    sections:
+      movement:
+        steps: [". | .", ". | .", ". | .", ". | .",
+                "A4 - - - - - - - - - - - D5 - - - | F5 - - - - - - - E5 - - - - - - -",
+                "D5 - - - - - - - - - - - F5 - - - | A5 - - - - - - - G5 - - - - - - -",
+                "G5 - - - - - - - - - - - Bb5 - - - | D6 - - - - - - - C6 - - - - - - -",
+                "A5 - - - - - - - - - - - G5 - - - | E5 - - - - - - - C#5 - - - - - - -"]
+        volume: {from: -1, to: 2}
+      cathedral:
+        steps: &themeAB
+          - "A4 - - - - - - - - - - - D5 - - - | F5 - - - - - - - E5 - - - - - - -"
+          - "D5 - - - - - - - - - - - F5 - - - | A5 - - - - - - - G5 - - - - - - -"
+          - "G5 - - - - - - - - - - - Bb5 - - - | D6 - - - - - - - C6 - - - - - - -"
+          - "A5 - - - - - - - - - - - G5 - - - | E5 - - - - - - - C#5 - - - - - - -"
+          - "D5 - - - - - - - - - - - E5 - - - | F5 - - - - - - - A5 - - - - - - -"
+          - "G5 - - - - - - - - - - - F5 - - - | D5 - - - - - - - - - - - - - - -"
+          - "Bb4 - - - - - - - - - - - D5 - - - | G5 - - - - - - - F5 - - - - - - -"
+          - "E5 - - - - - - - - - - - C#5 - - - | D5 - - - - - - - - - - - . . . ."
+        volume: 3
+        settings: {tone: 2200, attack: 0.1, release: 0.6, detune: 14}
+      climax:
+        steps: &themeUp
+          - "A4 - - - - - - - - - - - D5 - - - | F5 - - - - - - - E5 - - - - - - -"
+          - "D5 - - - - - - - - - - - F5 - - - | A5 - - - - - - - G5 - - - - - - -"
+          - "G5 - - - - - - - - - - - Bb5 - - - | D6 - - - - - - - C6 - - - - - - -"
+          - "A5 - - - - - - - - - - - G5 - - - | E5 - - - - - - - C#5 - - - - - - -"
+          - "D5 - - - - - - - - - - - E5 - - - | F5 - - - - - - - A5 - - - - - - -"
+          - "G5 - - - - - - - - - - - F5 - - - | D5 - - - - - - - - - - - - - - -"
+          - "E5 - - - - - - - - - - - G5 - - - | C6 - - - - - - - Bb5 - - - - - - -"
+          - "A5 - - - - - - - - - - - F#5 - - - | D6 - - - - - - - - - - - - - - -"
+        volume: 3
+        settings: {tone: 2600, attack: 0.08, release: 0.6, detune: 16}
+  lead:               # a singing lead on the theme: among the great gears (second phrase) and at the climax
+    instrument: soft_lead
+    settings: {attack: 0.06, vibrato: 18, tone: 3600, ring: 0.5}
+    reverb: {size: 4.2, mix: 0.4, tone: 4500, predelay: 0.04}
+    echo: {delay: 1.5, feedback: 0.25, repeats: 2, pingpong: true}
+    only: [cathedral, climax]
+    steps: *themeAB
+    sections:
+      cathedral: {volume: [[0, -40], [7.9, -40], [8, 8], [16, 10]]}
+      climax: {steps: *themeUp, volume: 10, settings: {attack: 0.04, vibrato: 20, tone: 4200, ring: 0.5}}
+  choir:              # the theme an octave above in wide saws: only at the climax
+    instrument: supersaw
+    octave: 5
+    settings: {tone: 6000, attack: 0.03, release: 0.4, detune: 30}
+    width: 1.4
+    reverb: {size: 2.6, mix: 0.28}
+    only: [climax]
+    steps: *themeUp
+    transpose: 12
+    volume: 2
+  counter:            # a slow line in the cellos under the theme
+    instrument: saw_pad
+    octave: 3
+    settings: {tone: 1400, attack: 0.25, release: 0.9, detune: 12}
+    reverb: {size: 3.4, mix: 0.3, tone: 3000}
+    pan: 0.15
+    width: 0.6
+    only: [dial, movement, orrery, climax, coda]
+    steps: "D3 | F3 - E3 - | D3 | F3 - G3 - | G3 | Bb3 - A3 - | A3 | G3 - E3 -"
+    sections:
+      dial: {volume: {from: -8, to: -5}, settings: {tone: 1200, attack: 0.5, release: 1.4, detune: 12}}
+      movement: {volume: [[0, -6], [16, -2]]}
+      orrery: {steps: "F3 | - | A3 | C4 - A3 - | Bb3 | D4 - Bb3 - | A3 | F3 - E3 - | D3 | F3 | E3 | -", volume: -6, settings: {tone: 1500, attack: 0.5, release: 1.4, detune: 12}}
+      climax: {steps: "D3 | F3 - E3 - | D3 | F3 - G3 - | G3 | Bb3 - A3 - | A3 | G3 - E3 - | D3 | F3 - A3 - | Bb3 | D4 - Bb3 - | C4 | E4 - G4 - | F#4 | A4 - - -", volume: 0, settings: {tone: 2000, attack: 0.12, release: 0.7, detune: 16}}
+      coda: {steps: "F#3 | A3 | G3 | Bb3 | A3 | F#3 | D3 | -", volume: [[0, -4], [6, -5], [8, -14]], settings: {tone: 1300, attack: 0.5, release: 2.2, detune: 12}}
+  # ------------------------------------------------------------------ bells
+  chime:              # the hour struck: deep bell tones in a long hall
+    instrument: bell
+    octave: 4
+    settings: {decay: 2.2, tone: 3600, ring: 5.0}
+    reverb: {size: 6.0, mix: 0.45, tone: 4500}
+    volume: 4
+    only: [winding, cathedral, orrery, climax, coda]
+    sections:
+      winding: {steps: ". | . | . | . | . | . | . | .... .... D4+D5... ....", volume: 2}
+      cathedral: {steps: "D4+D5 | . | . | . | G3+G4 | . | A3+A4 | . | D4+D5 | . | Bb3+Bb4 | . | G3+G4 | . | A3+A4 | D4+D5", volume: 4}
+      orrery: {steps: "Bb3+F4 | . | . | . | G3+D4 | . | . | . | . | . | . | .", volume: 1}
+      climax: {steps: "D4+D5 | . | Bb3+Bb4 | . | G3+G4 | . | A3+A4 | . | D4+D5 | . | Bb3+Bb4 | . | C4+C5 | . | D4+D5+A5 | D4+D5+F#5", volume: 5}
+      coda: {steps: ". | . | . | . | D4+A4 | D4+A4 | D4+A4 | D4+A4+F#5", volume: {from: 4, to: 3}}
+  twinkle:            # music-box glints on chord tones: jewels catching the light
+    instrument: music_box
+    octave: 6
+    settings: {decay: 0.8, tone: 6000, ring: 2.5}
+    steps: ["5 . . . . . . . . . . 8 . . . .", ". . . . . . 3 . . . . . . . . .", ". . 8 . . . . . . . . . 5 . . .", ". . . . . . . . 3 . . . . . 8 ."]
+    spread: 0.6
+    reverb: {size: 4.0, mix: 0.4, tone: 6000}
+    echo: {delay: 0.75, feedback: 0.45, repeats: 4, pingpong: true}
+    volume: -1
+    only: [dial, orrery, coda]
+    sections:
+      dial: {volume: -4}
+      orrery: {volume: [[0, 0], [8, 0], [12, -8]]}
+      coda: {volume: {from: -1, to: -8}}
+  # ------------------------------------------------------------------ noises
+  riser:
+    instrument: riser
+    settings: {low: 300, high: 6000}
+    only: [movement, cathedral, build]
+    volume: 4
+    sections:
+      movement: {steps: ". | . | . | . | . | . | . | . | . | . | . | . | . | . | x | -", volume: 3}
+      cathedral: {steps: ". | . | . | . | . | . | . | . | . | . | . | . | . | . | x | -", volume: 2, settings: {low: 200, high: 3000}}
+      build: {steps: ". | . | . | x | - | - | - | .", volume: 8}

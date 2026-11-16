@@ -5,7 +5,17 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–351)
+## Unreleased (Steps 193–352)
+
+### "Escapement" as an example (Step 352)
+
+- **`examples/escapement`**: the published 3:11 clockwork music film, source only (score,
+  `video.yaml`, one three.js module, the `web_cut` type, README). Its pictures now get the score
+  through `music_data` / `ctx.music` instead of the film's hand-written exporter and JSON file;
+  stills of all twelve scenes are pixel-identical to the film's, and the score is unchanged (its
+  render has the same SHA-256). The film's own finishing is kept. A full render takes about
+  1 h 30 min to 2 h on 2 cores; `vidgen still` and `--draft` for quick looks. Listed in the README
+  and the scene gallery ("Pictures and media"); `tests/test_escapement_example.py` (validate only).
 
 ### Phase AL in one place: what three music films asked of the generator (Steps 341–351)
 

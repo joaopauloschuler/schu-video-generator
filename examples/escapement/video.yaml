@@ -1,0 +1,66 @@
+# Escapement: a clockwork music video.
+# Music: assets/music/escapement.yaml (120 BPM, D minor; one bar = 60 frames at 30 fps), played by vidgen's own
+# synthesizer. Form: winding 8 | dial 8 | movement 16 | cathedral 16 | orrery 12 | build 8 | climax 16 | coda 8 |
+# end 2 = 94 bars (188 s) plus 3 s for the last chord.
+# Pictures: one three.js module (extensions/escapement.js) in twelve web scenes that each start on a bar line;
+# data.mode picks the shot. `music_data` hands the page the score's hits and notes (ctx.music), and
+# ctx.music.t0 is the scene's place in the song in seconds, worked out by vidgen from the scene durations.
+# Hits pulse the light, never the camera.
+# Render: vidgen render .   (look first: vidgen still . --scene 04_escapement --at 7.27, or vidgen render --draft .)
+title: "Escapement"
+output: escapement
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 640, height: 360, fps: 30}
+theme: {preset: bold_neon}
+transition: cut
+music: {source: escapement, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 192k}
+scenes:
+  - id: 01_winding
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: &music {tracks: [tick, tock, ratchet, boom, taiko, tom, three, hat, chime, box, horn, lead, cell, twinkle, pend, counter]}, data: {mode: winding}}
+  - id: 02_dial
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: dial}}
+  - id: 03_through
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: through}}
+  - id: 04_escapement
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: escapement}}
+  - id: 05_cathedral
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: cathedral}}
+  - id: 06_threefour
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: threefour}}
+  - id: 07_orrery
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: orrery}}
+  - id: 08_falter
+    type: web_cut
+    duration: 8
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: falter}}
+  - id: 09_build
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: build}}
+  - id: 10_climax1
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: climax1}}
+  - id: 11_climax2
+    type: web_cut
+    duration: 16
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: climax2}}
+  - id: 12_coda
+    type: web_cut
+    duration: 23
+    params: {script: extensions/escapement.js, music_data: *music, data: {mode: coda}}

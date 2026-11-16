@@ -24238,7 +24238,7 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | 349 | Faster `web` rendering, measured first: a quicker PNG, the frames clip written beside the drawing, a progress line, the first frame's time limit | §120.10 |
 | 350 | Ready-made finishing for three.js `web` scenes: the module `vidgen/three-finish` (depth of field, motion blur, bloom, tone mapping, grade, vignette, grain, FXAA, studio and nebula bakers, surface finishes, soft shadows) | §120.11 |
 | 351 | Critical review with fixes, documents, an example (`examples/signal-fire`) | §120.12 |
-| 352 | "Escapement" as an example under `examples/` (owner's request, 2026-11-16) | later |
+| 352 | "Escapement" as an example under `examples/` (owner's request, 2026-11-16): the published film's source, its music data from `music_data` | §120.13 |
 
 Rules of the phase: the films' scores must synthesize to the same audio as before each step, and
 stored cache keys are not invalidated without a written reason.
@@ -25391,3 +25391,40 @@ changes to the light), frames of the MP4 at ten moments, and spectrograms of the
 MP4's sound (the glide at 2.7 s, the spiccato grid from 8 s, the hit at 16 s, the trumpet's slides,
 the C major end at 21.3 s). Test: `tests/test_signal_fire_example.py` (validates; the score's
 instruments, slurs, strokes and growing roll; the page's tracks exist). Nobody has listened.
+
+### 120.13 "Escapement" as an example (Step 352)
+
+The owner asked for the published film as an example, source only. `examples/escapement` holds
+`video.yaml`, the score (unchanged, byte for byte), `extensions/escapement.js`,
+`extensions/webcut.py`, a README and a `.gitignore`; no audio, video, stills, `build/` or
+`output/`.
+
+- **Music data: `music_data` replaced the film's exporter.** The film's `scripts/make_audio.py`
+  wrote `extensions/escapement_audio.json` (level, low end and onset per frame; the score's hits,
+  notes and the mechanism's beats); the page fetched it and took its song time from `data.t0`.
+  The example's scenes have `music_data: {tracks: [16 tracks]}` (one YAML anchor) and the page
+  builds the same arrays from `ctx.music.events` (`fromMusic`); `t0` is `ctx.music.t0`; the
+  mechanism's beats are made in the page from three named constants (`START_BAR`, `FALTER`,
+  `SILENT_BAR`), as the exporter made them. The page never read the level, low end or onset, so
+  they are left out. One difference had to be kept: the exporter rounded event times to a
+  thousandth of a sixteenth note, which moves the triplet strokes of the `three` track by 42 µs
+  (32 of its 48 strokes); with exact times `06_threefour` and `09_build` differed in a few pixels
+  near the hammers (PSNR 72.7–100.5 dB, at most 22 levels on 0.002 % of the pixels). The page
+  rounds the same way (`grid`), and stills of all twelve scenes at four times each (48 stills,
+  1280x720, `vidgen still`) are pixel-identical to the film's. The exporter wrote pitch 0 for
+  chord-degree notes (`twinkle`, `pend`), `ctx.music` the played pitch; the page does not draw
+  those pitches.
+- **Finishing: the film's own.** Step 350's port of three scenes to `vidgen/three-finish` came
+  within 28–34 dB PSNR, a visible change of the art, so the example keeps the film's composer,
+  passes and baked studio; the README names the module as an alternative.
+- **`webcut.py` kept**: vidgen has no setting for a `web` scene without its fade-out (`outro` is a
+  class attribute), so the four-line subclass stays, as in `examples/signal-fire`.
+- **`PLAN.md` folded into the README** ("How it was planned": the grid, the colour script, the
+  order of work); its tables were already in the README.
+- **Render cost** (2 cores, no GPU, after Step 349): 4 s of `05_cathedral` 1.23 s a frame, 4 s of
+  `10_climax1` 0.89 s a frame, about 20 s a scene besides; 5,730 frames: about 1 h 30 min to 2 h.
+  Lossless frames clips 218 MB for the 8 s, about 5 GB for the film.
+- **Test** (`tests/test_escapement_example.py`, validate only): the file list, the `.gitignore`,
+  validation, the scenes' song starts on bar lines, the score's SHA-256 (line ends normalised),
+  no range warnings, the event counts the exporter had, the page reads only `ctx.music` and every
+  track it is given exists.
