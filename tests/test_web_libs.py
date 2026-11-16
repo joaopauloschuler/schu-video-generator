@@ -61,7 +61,7 @@ def test_every_library_has_its_licence_and_a_notice() -> None:
 
 def test_the_import_map_names_every_library() -> None:
     imports = IMPORT_MAP["imports"]
-    assert {name: url for name, url in imports.items() if not name.startswith("three")} == {
+    assert {name: url for name, url in imports.items() if not name.startswith(("three", "vidgen/"))} == {
         "animejs": "/__vidgen__/libs/animejs/anime.esm.min.js",
         "motion": "/__vidgen__/libs/motion/index.js",
         "d3": "/__vidgen__/libs/d3/index.js",

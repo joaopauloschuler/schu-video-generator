@@ -2084,7 +2084,10 @@ with demo files for the owner to listen to.
 - [x] A progress line while frames are drawn; if no safe gain exists, the measurements reported and nothing forced — done: `web frames N/M, s a frame, time left` every 10 s and a summary (CLI, `--json` stderr, MCP progress); the first frame may take 30 s (no shader warm-up needed); `performance.now()` stays on vidgen's clock (documented)
 
 ### Step 350 — Ready-made finishing for three.js `web` scenes
-- [ ] A shipped helper module (an import-map name): depth of field, motion blur (sub-frames accumulated on vidgen's clock), and the films' finishing chain (bloom on highlights, tone mapping, grade, vignette, grain, FXAA); deterministic, documented, with an example page
+- [x] A shipped helper module (an import-map name): depth of field, motion blur (sub-frames accumulated on vidgen's clock), and the films' finishing chain (bloom on highlights, tone mapping, grade, vignette, grain, FXAA); deterministic, documented, with an example page — done: `vidgen/three-finish` (`data/web/modules/three-finish.js`, DESIGN §120.11) with `Finish` (all of these plus fringe, fade, flash, `renderScale`, options as functions of `t`, checked with a did-you-mean), `studioEnvironment`, `nebulaSky`, `surfaceFinish`, `softShadows`, `focusDistance`, `warmUp`; `examples/three-finish`
+- [x] Measured at 720p on 2 cores (cost per effect in DESIGN §120.11); one encoding proved (all off = `renderer.render` within 1 level); two fresh pages identical; shutter 0 = no blur; three "Escapement" scenes ported to the module: PSNR 28.4–34.4 dB against the film's stills (`/home/claude/work/scratch/al350/esc_*.png`)
+- [x] Docs: the guide ("Finishing three.js scenes"), CONFIG (`web`), `docs/COOKBOOK-3D.md` section 8, README example list, CHANGELOG; tests `tests/test_web_three_finish.py` (6 + 2 slow)
+- [ ] Not done: a cheaper per-object motion blur (stays a page technique), SMAA, a transparent output, MSAA of the scene target; `nebulaSky` and the `geneva` / `perlage` / `sunray` finishes only drawn in one quick check (`/home/claude/work/scratch/al350/helpers/`), not in a film; Windows and macOS not tried
 
 ### Step 351 — Critical review of Steps 341–350
 - [ ] Review with fixes; `vidgen guide` topics, CONFIG, a cookbook for the music instruments with a table of ranges and settings, the README's feature list

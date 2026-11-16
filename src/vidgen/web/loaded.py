@@ -45,6 +45,11 @@ THREE_ADDONS: tuple[str, ...] = (
     "utils/BufferGeometryUtils.js", "utils/SkeletonUtils.js",
 )
 FONT_SUFFIXES: tuple[str, ...] = (".ttf", ".otf")
+#: The folder of vidgen's own ES modules for pages after ``__vidgen__/`` (``data/web/modules/``).
+MODULES_FOLDER = "modules"
+#: vidgen's own modules a page may import, by import name -> file in :data:`MODULES_FOLDER`
+#: (``vidgen/three-finish``: finishing for three.js scenes, DESIGN.md §120.11).
+VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js"}
 
 
 def vidgen_file(rel: str) -> Path | None:
@@ -57,6 +62,8 @@ def vidgen_file(rel: str) -> Path | None:
         return _DATA_DIR / "three" / ADDONS_FOLDER / addon
     if folder == LIB_FOLDER:
         return lib_file(name)
+    if folder == MODULES_FOLDER and name in VIDGEN_MODULES.values():
+        return _DATA_DIR / "web" / MODULES_FOLDER / name
     if folder == "fonts" and Path(name).suffix.lower() in FONT_SUFFIXES:
         path = inside(_DATA_DIR / "fonts", name)
         return path if path is not None and path.is_file() else None
@@ -125,5 +132,5 @@ def recorded_loaded(path: Path) -> dict[str, str | None]:
     return {str(k): v for k, v in loaded.items()} if isinstance(loaded, dict) else {}
 
 
-__all__ = ["ADDONS_FOLDER", "FONT_SUFFIXES", "THREE_ADDONS", "THREE_FILES", "THREE_VERSION", "VIDGEN_PREFIX", "current_loaded",
+__all__ = ["ADDONS_FOLDER", "FONT_SUFFIXES", "MODULES_FOLDER", "VIDGEN_MODULES", "THREE_ADDONS", "THREE_FILES", "THREE_VERSION", "VIDGEN_PREFIX", "current_loaded",
            "file_sha", "read_record", "record_path", "recorded_loaded", "served_file", "unshipped_addon", "unshipped_lib", "vidgen_file"]

@@ -218,7 +218,7 @@ def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
     if missing_dependency() is not None:
         pytest.skip("no Chromium")
     files = web_topic_files()
-    assert set(files) == {"extensions/hello.html", "extensions/orbit.js", "extensions/cube.js", "extensions/studio.js",
+    assert set(files) == {"extensions/hello.html", "extensions/orbit.js", "extensions/cube.js", "extensions/studio.js", "extensions/finished.js",
                           "extensions/fragment.js"}
     for rel, body in files.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)

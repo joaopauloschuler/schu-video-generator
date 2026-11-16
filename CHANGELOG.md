@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–349)
+## Unreleased (Steps 193–350)
+
+### Finishing for three.js `web` scenes: `vidgen/three-finish` (Step 350)
+
+- **A ready-made finish** for a three.js page: `import {Finish} from "vidgen/three-finish"`, `new Finish(renderer, scene, camera, ctx, {...})`, `finish.render(t)` in `frame`. Depth of field from the depth buffer (a thin lens: focus distance, object or point, f-stop and scene units, or a blur in pixels; three quality levels), motion blur on the video's clock (the page's `update(t)` called at sub-frame times across a shutter angle and averaged; exactly no blur at shutter 0), bloom on highlights only, ACES / AgX / neutral tone mapping with exposure, a grade (temperature, tint, saturation, contrast, lift, gamma, gain, a linear filter; any option may be a function of time), vignette, chromatic fringe, film grain seeded by the frame, FXAA; one sRGB encoding (with every effect off it draws what `renderer.render` draws, within one level). Deterministic: two renders give the same frames.
+- **Helpers**: `studioEnvironment` (soft boxes baked through PMREM for metal), `nebulaSky` (a seeded nebula and stars baked into a cube map), `surfaceFinish` (brushed, Geneva stripes, perlage, circular graining, sunray normal and roughness maps), `softShadows` (three.js 0.186 has no `PCFSoftShadowMap`: PCF with a radius is recommended, VSM measured), `focusDistance`, `warmUp` (compiles the shaders in `load`; `compileAsync` would never resolve there).
+- **Cost** at 1280x720 on 2 cores (software WebGL): the passes add 0.01–0.14 s each to a 0.47 s scene; motion blur costs a whole scene drawing per sample (DESIGN §120.11 has the table). A page that does not import the module is unchanged; one that does has it in its cache keys.
+- A worked example, `examples/three-finish`; a copy of three "Escapement" scenes ported to the module came within 28–34 dB PSNR of the film's stills. Docs: the guide ("Finishing three.js scenes"), CONFIG (`web`), `docs/COOKBOOK-3D.md` section 8. Tests: `tests/test_web_three_finish.py`.
+
 
 ### Faster `web` rendering, a progress line (Step 349)
 

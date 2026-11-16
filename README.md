@@ -936,6 +936,10 @@ my_video/
   written as web pages: an HTML and CSS page whose cards come in on narration beats, a canvas
   drawing of a rain gauge with its text declared to lint, and a three.js planet written by hand; 16:9
   and a 9:16 variant, about 50 s with Kokoro narration (no media committed).
+- [examples/three-finish](examples/three-finish/README.md) — "A still life in metal", one silent
+  6 s `web` scene finished with vidgen's module `vidgen/three-finish`: brass gears and metal spheres
+  in a baked studio, a focus pull, a fast gear in motion blur, bloom, ACES, a grade, vignette,
+  grain, FXAA (no media committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

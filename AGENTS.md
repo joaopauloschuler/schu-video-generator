@@ -3551,6 +3551,111 @@ shipped with vidgen …`. To use one anyway, copy that file from three.js 0.186.
 `three`, `examples/jsm/…`) into the project and import it by a relative path
 (`import {X} from "./lib/X.js"`); its `import … from "three"` keeps working.
 
+**Finishing three.js scenes: `vidgen/three-finish`.** A look like a film's — depth of field, motion
+blur, bloom on the highlights, a tone curve, a colour grade, vignette, grain, smoothed edges —
+comes ready-made with vidgen, as a module you import by name. It draws your scene into linear
+half-float pictures, finishes them and puts the result on the canvas encoded as sRGB once (leave
+`renderer.toneMapping` and `outputColorSpace` as they are; give the scene a background: the picture
+is opaque). Everything is a function of `t` and the options, so every render draws the same frames;
+the grain is seeded by the frame number.
+
+```js
+// extensions/finished.js: brushed and polished metal in a baked studio, finished
+import * as THREE from "three";
+import {Finish, focusDistance, studioEnvironment, surfaceFinish, softShadows} from "vidgen/three-finish";
+let finish, camera, wheel, ball;
+function update(t) {                       // the whole scene at time t, keeping no state
+  wheel.rotation.z = -t * 20;              // fast: motion blur smears it
+  camera.position.set(Math.sin(t * 0.2) * 4, 1.5, Math.cos(t * 0.2) * 4);
+  camera.lookAt(0, 0.4, 0);
+}
+export function load(ctx) {
+  const renderer = new THREE.WebGLRenderer({canvas: ctx.canvas});
+  renderer.setSize(ctx.width, ctx.height, false);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(ctx.theme.background);
+  scene.environment = studioEnvironment(renderer, {preset: "studio"});   // soft boxes for metal to reflect
+  camera = new THREE.PerspectiveCamera(35, ctx.width / ctx.height, 0.1, 50);
+  const brushed = surfaceFinish("brushed", {size: 256});
+  ball = new THREE.Mesh(new THREE.SphereGeometry(0.5, 48, 24),
+                        new THREE.MeshStandardMaterial({color: 0xc4c9cf, metalness: 1, roughness: 0.3, normalMap: brushed.normalMap}));
+  ball.position.set(-0.8, 0.5, 0.6);
+  wheel = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.08, 12, 6), new THREE.MeshStandardMaterial({color: 0xd9a441, metalness: 1, roughness: 0.25}));
+  wheel.position.set(0.9, 0.6, -0.8);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshStandardMaterial({color: 0x222326, roughness: 0.6}));
+  floor.rotation.x = -Math.PI / 2;
+  const key = new THREE.DirectionalLight(0xfff1e0, 1.5);
+  key.position.set(-3, 6, 3);
+  softShadows(renderer, key, {type: "pcf", radius: 2});
+  for (const m of [ball, wheel]) m.castShadow = true;
+  floor.receiveShadow = true;
+  scene.add(ball, wheel, floor, key);
+  finish = new Finish(renderer, scene, camera, ctx, {
+    update,                                                    // needed for motion blur
+    motionBlur: {samples: 5, shutter: 180},                    // 5 sub-frames: the scene drawn 5 times
+    dof: (t) => ({focus: focusDistance(camera, ball), fStop: 2.8, unit: 0.1}),   // 1 scene unit = 10 cm
+    grade: (t) => ({temperature: 0.2 - 0.1 * t, saturation: 1.05}),
+  });
+  finish.warmUp(0);                         // optional: shaders compiled here, not in frame 0
+}
+export function frame(t) {
+  finish.render(t);                         // instead of renderer.render: calls update(t) itself
+}
+```
+
+| option | default | what it does |
+|---|---|---|
+| `update` | none | `update(t)` sets the scene to time `t`; `render(t)` calls it (several times with motion blur) |
+| `bloom` | `{strength: 0.25, radius: 0.2, threshold: 1, scale: 0.5}` | glow on linear values above `threshold` only (a colour brighter than 1, a sharp highlight); `scale`: its size against the frame; `false` off |
+| `toneMapping`, `exposure` | `"aces"`, `1` | `"aces"`, `"agx"`, `"neutral"`, `"aces-narkowicz"` (the short ACES curve both films used), `"none"` |
+| `grade` | none | `temperature`, `tint` (−1..1), `saturation`, `contrast`, `lift`, `gamma`, `gain` (a number or `[r, g, b]`, on the encoded picture), `filter` (a linear colour multiplier) |
+| `vignette` | `0.3` | a number (amount) or `{amount, inner, outer}` |
+| `grain` | `0.02` | film grain, seeded by the frame number |
+| `fringe` | `0` | chromatic fringe towards the corners (try 0.3–1) |
+| `antialias` | `"fxaa"` | `"fxaa"` or `"none"` |
+| `dof` | off | `{focus, fStop, unit, maxBlur, quality}`: `focus` a distance, an object or a point; a thin lens of the camera's focal length (`camera.fov`, `filmGauge`) at `fStop`, scene units of `unit` metres; or `blur` (pixels at 720p far behind the focus) instead of `fStop`; `maxBlur` 10 px at 720p; `quality` `"low"`, `"medium"`, `"high"` |
+| `motionBlur` | off | `{samples, shutter}`: `update(t)` at `samples` times across `shutter` degrees of a frame (180 = half the frame time), centred on `t`, averaged; shutter 0 is exactly no motion blur |
+| `renderScale` | `1` | draw the scene smaller and scale it up (0.75: about half the shading cost) |
+| `fade`, `flash`, `encoding` | `1`, `0`, `"srgb"` | fade to black; `{amount, color}` added light; `"gamma2.2"` to match a page that encoded with `pow(c, 1/2.2)` |
+
+Any option may be a function of `t` (`dof: (t) => ({...})`); it is called after `update(t)`, so
+`focusDistance(camera, object)` follows a moving camera. `finish.set({...})` changes options from
+`frame` too. A misspelt or out-of-range option stops the render with the reason
+(`vidgen/three-finish: unknown option "blom" (did you mean "bloom"?)`).
+
+Helpers in the same module: `studioEnvironment(renderer, {preset: "studio" | "cool" | "soft",
+boxes, sky, ground, up, blur})` (soft boxes baked through PMREM for `scene.environment`),
+`nebulaSky(renderer, {seed, size, deep, mid, bright, density, stars, environment})` (a nebula and
+stars baked into a cube map for `scene.background`; the same seed, the same sky),
+`surfaceFinish("brushed" | "geneva" | "perlage" | "circular" | "sunray", {size, roughness})`
+(`{normalMap, roughnessMap}` for watch-like metal), `softShadows(renderer, light, {type, radius,
+mapSize})` and `focusDistance(camera, object)`.
+
+- **What it costs** (2 cores, software WebGL, 1280x720, a PBR still life whose plain
+  `renderer.render` takes about 0.47 s a frame): the chain with everything off +0.05 s; tone
+  mapping, grade and vignette, grain, FXAA, fringe about +0.01 s each; bloom +0.01 s at `scale:
+  0.25`, +0.03–0.07 s at 0.5, +0.13 s at 1; depth of field +0.07 s (`low`), +0.14 s (`medium`),
+  +0.6 s (`high`); motion blur costs a whole scene drawing per sample (×2: 0.91 s, ×4: 1.69 s, ×6:
+  2.58 s here); `renderScale: 0.75` saves about a third. A shadow-casting light is drawn again for
+  each sample too.
+- **Motion blur** needs a scene that is a function of `t`: `update(t)` must set everything from `t`
+  (no `+=` per call). Start with 3–5 samples and only on shots with fast motion; a `--draft` can
+  turn it off (`motionBlur: ctx.width < 640 ? false : {...}`).
+- **Soft shadows.** three.js 0.186 has no `PCFSoftShadowMap` (asking for it gives `PCFShadowMap`
+  and a console warning). `softShadows(renderer, light, {type: "pcf", radius: 2})` is the
+  recommendation: free here, soft edges up to a radius of about 4 texels (beyond that its 5
+  rotated samples show as a fine dither under the grain). `type: "vsm"` gives smooth wide
+  penumbrae but cost +0.75 s a frame at a 2048 map here, and every receiver also casts.
+- **Warm-up.** `finish.warmUp(t)` in `load` compiles the scene's and the chain's shaders and draws
+  once (the still life: frame 0 took 3.0 s instead of 8.5 s; `load` 8.7 s instead of 1.1 s). It
+  is optional (the first frame may take 30 s). three.js' `compileAsync` must not be awaited in
+  `load`: it polls with a timer, and time stands still there, so it never resolves.
+- **Fog** mixes in linear light in the chain but in sRGB with `renderer.render` to the canvas, so a
+  fogged scene looks slightly different once finished. Otherwise, with every effect off the
+  chain draws what `renderer.render` draws (within one level).
+- The whole worked example is `examples/three-finish` (`vidgen still` it at three moments); the
+  module's file is in the scene's cache key like every file the page loads.
+
 **Animation and chart libraries.** These ship with vidgen: import them by name, in a
 `<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's
 clock. "Plays by itself" means the library's own loop follows the video's time from the scene's

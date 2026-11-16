@@ -6894,6 +6894,61 @@ which is not shipped with vidgen. …`. A copy in the project works (GSAP 3.15.1
 `dist/gsap.min.js` from a `<script src>`, with `gsap.ticker.lagSmoothing(0)` (without it a step
 over 0.5 s counts as 33 ms), or a paused timeline and `tl.time(t)` in `frame(t)`.
 
+**Finishing three.js scenes: `vidgen/three-finish`** (Step 350, DESIGN §120.11). vidgen's own ES
+module (MIT, vidgen's code; `data/web/modules/three-finish.js`, served as
+`/__vidgen__/modules/three-finish.js`) is imported by name through the same import map:
+`import {Finish} from "vidgen/three-finish"`. It imports only `three` and the shipped add-ons
+`Pass.js` (`FullScreenQuad`) and `UnrealBloomPass.js`. A page that does not import it is unchanged
+(the import map's extra entry is in no key); a page that imports it has the module in its loaded
+files, so an edit of the module draws its scenes again. No config key.
+
+`new Finish(renderer, scene, camera, ctx, options)`, then `finish.render(t)` in `frame` instead of
+`renderer.render`; `finish.warmUp(t)` in `load` (optional); `finish.set(options)` merges options
+from `frame`; `finish.dispose()`. The chain: the scene into a linear half-float target with a depth
+texture (at `renderScale`; motion blur averages `samples` drawings) → depth of field → bloom (in
+place) → fringe, exposure × filter × white balance, flash, vignette (linear) → tone mapping →
+saturation → encoding (sRGB, once) → contrast, lift, gamma, gain → fade → FXAA → grain → the
+canvas. three.js applies no tone mapping or colour-space conversion inside render targets, so the
+page's `renderer.toneMapping` and `outputColorSpace` play no part; with every effect off the chain
+draws what `renderer.render` draws within one level (a scene with fog differs: three.js mixes fog
+after the encoding when drawing to the canvas). The picture is opaque (alpha 1): give the scene a
+background.
+
+| option | default | values |
+|---|---|---|
+| `update` | `null` | `update(t)`: sets the scene to time `t`; needed for motion blur |
+| `renderScale` | `1` | 0.25–1: the scene drawn at that fraction of the frame, scaled up |
+| `bloom` | `{strength: 0.25, radius: 0.2, threshold: 1, scale: 0.5}` | `false`; a number (the strength); `threshold` on linear values (0–100), `radius` 0–1 (`UnrealBloomPass`'s), `scale` 0.05–1 of the frame |
+| `toneMapping` | `"aces"` | `"aces"`, `"agx"`, `"neutral"` (three.js' own curves), `"aces-narkowicz"` (the short fit the films used), `"none"` |
+| `exposure` | `1` | 0–64, a multiplier before tone mapping |
+| `encoding` | `"srgb"` | `"gamma2.2"`: `pow(c, 1/2.2)` (for a page ported from one that encoded so) |
+| `grade` | identity | `temperature`, `tint` (−1..1, before tone mapping, brightness kept), `saturation`, `contrast` (0–4), `lift`, `gamma`, `gain` (number or `[r, g, b]`; on the encoded picture: `gain × (c + lift × (1 − c))`, then `^(1/gamma)`), `filter` (number, `[r, g, b]`, a `THREE.Color` or a colour string; linear) |
+| `vignette` | `{amount: 0.3, inner: 0.3, outer: 1.2}` | a number (the amount) or the object; radii as fractions of the centre-to-corner distance |
+| `grain` | `0.02` | 0–0.5; seeded by the frame number (`round(t × fps)`), not `Math.random` |
+| `fringe` | `0` | 0–10: red and blue pulled apart towards the corners |
+| `antialias` | `"fxaa"` | `"none"` |
+| `fade` | `1` | 0 (black) to 1 |
+| `flash` | `{amount: 0, color: 1}` | light added before tone mapping |
+| `dof` | `false` | `{focus: 10, fStop: 2.8, unit: 1, blur: null, maxBlur: 10, quality: "medium"}`: `focus` a distance along the view, an `Object3D` or a `Vector3`; circle of confusion `K × |z − focus| / z` with `K` from a thin lens of the camera's focal length (`getFocalLength`, `getFilmHeight`) at `fStop`, scene units of `unit` metres, or `blur` = `K` in pixels at 720p; capped at `maxBlur` pixels at 720p; `quality` `low` (12 samples, half size), `medium` (20, half size), `high` (32, full size) |
+| `motionBlur` | `false` | `{samples: 5, shutter: 180}`: 1–64 sub-frames over `shutter` degrees (0–360) of a frame, centred on `t`, the one nearest `t` drawn last (its depth is the one depth of field uses); `update(t)` is called for each (and once more at `t` when no sample falls on it); `shutter: 0` or `samples: 1` draws once, exactly as without |
+
+Any option except `update` may be a function of `t`; it is called after the scene stands at `t`.
+A misspelt name or a value out of range is an `Error` thrown in the page (`vidgen/three-finish:
+unknown option "blom" (did you mean "bloom"?); known: …`), which stops the render with the
+scene, file and line. Helpers: `studioEnvironment(renderer, {preset, boxes, sky, ground, up, blur,
+intensity})` → a PMREM texture (`preset` `"studio"`, `"cool"`, `"soft"`; up to 8 `boxes` `{direction,
+across, size: [half-width, half-height], softness, gradient, color, intensity}`), `nebulaSky(renderer,
+{seed, size, deep, mid, bright, glow, density, stars, environment})` → `{background, environment}`
+(a half-float cube map; same seed, same sky), `surfaceFinish(kind, {size, strength, roughness,
+anisotropy})` → `{normalMap, roughnessMap}` (`brushed`, `geneva`, `perlage`, `circular`, `sunray`),
+`softShadows(renderer, light, {type: "pcf" | "vsm", radius, mapSize, blurSamples, bias,
+normalBias})`, `focusDistance(camera, target)`, `blurAtInfinity(camera, focus, fStop, unit,
+height)`, `shutterTimes(t, fps, samples, shutter)`, `resolveOptions(options, t)`. three.js 0.186
+has no `PCFSoftShadowMap` (it falls back to `PCFShadowMap` with a warning); `"pcf"` with `radius`
+2–4 is the recommendation, `"vsm"` cost +0.75 s a frame at a 2048 map on 2 cores. Costs per effect:
+DESIGN §120.11. `warmUp` uses `renderer.compile` and one drawing, not `compileAsync`, whose
+polling timer never fires while the clock stands still in `load`.
+
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
 error or rejected promise at load, in a timer or callback, or in `frame`, and a page that is not

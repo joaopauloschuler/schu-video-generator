@@ -348,6 +348,7 @@ src/vidgen/
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
                           # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
+  data/web/modules/        # three-finish.js: vidgen's own module `vidgen/three-finish` for three.js web scenes (§120.11)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -24235,7 +24236,7 @@ hand-written depth of field and motion blur). Their authors reported limits, and
 | 347 | Built-in music data for `web` scenes: `music_data:` gives a page `ctx.music` | §120.8 |
 | 348 | Smaller intermediate files: `render.intermediate: compact`, `render.keep_intermediates: false`, the disk estimate and report of `vidgen render` | §120.9 |
 | 349 | Faster `web` rendering, measured first: a quicker PNG, the frames clip written beside the drawing, a progress line, the first frame's time limit | §120.10 |
-| 350 | Ready-made finishing for three.js `web` scenes | later |
+| 350 | Ready-made finishing for three.js `web` scenes: the module `vidgen/three-finish` (depth of field, motion blur, bloom, tone mapping, grade, vignette, grain, FXAA, studio and nebula bakers, surface finishes, soft shadows) | §120.11 |
 | 351 | Critical review, documents, an example | later |
 | 352 | "Escapement" as an example under `examples/` (owner's request, 2026-11-16) | later |
 
@@ -25168,3 +25169,133 @@ draws, or a smaller bloom, are the author's levers; a faster software GL (lavapi
 Vulkan) would change pixels and depend on the machine. Lazy imports (2.6 s a scene). Two pages
 or split scenes (above). Windows and macOS not tried (the CDP call is the one Playwright makes on
 every platform).
+
+### 120.11 Ready-made finishing for three.js `web` scenes: `vidgen/three-finish` (Step 350)
+
+**Why.** Both films wrote their finishing by hand. "Escapement" (`extensions/escapement.js`, about
+120 lines): a scene pass at 88 % size with a hand-written depth of field from the depth buffer
+(a 20-sample gather at half size, then a mix by the circle of confusion), `UnrealBloomPass` at a
+quarter size, a final pass (chromatic fringe, exposure, flash, vignette, the short ACES fit,
+saturation, lift, `pow(1/2.2)`, fade) and FXAA with grain seeded by the frame; motion blur by
+drawing the balance wheel's arms six times with transparent copies; a studio of soft boxes baked
+through PMREM; normal maps computed from height functions (Geneva stripes, perlage, graining,
+sunray). "Parallel Space" (`ps.js`): `UnrealBloomPass` at full size, one final pass (fringe,
+exposure, vignette, the ACES fit, saturation, a per-section grade, sRGB, grain), a nebula baked
+into a cube map. Their agents also reported that `PCFSoftShadowMap` is gone in the bundled
+three.js and that no depth-of-field pass ships among the add-ons.
+
+**What ships.** `src/vidgen/data/web/modules/three-finish.js` (about 640 lines, vidgen's own code
+under its MIT licence; its depth-of-field gather, FXAA, grain hash and soft-box shader follow what
+"Escapement" did, the nebula what "Parallel Space" did, both films being the owner's). Served
+from `/__vidgen__/modules/` (`web/loaded.py` `MODULES_FOLDER`, `VIDGEN_MODULES` = `{"vidgen/three-finish":
+"three-finish.js"}`; only listed files are served), named in the import map (`web/inputs.py`)
+as `vidgen/three-finish` — the first module of vidgen's own a page may import; the `vidgen/` prefix
+keeps such names apart from npm package names. Package data glob `data/web/modules/*`. It
+imports `three`, `three/addons/postprocessing/Pass.js` (`FullScreenQuad`) and
+`UnrealBloomPass.js` (both shipped since Step 334); no `Math.random`.
+
+**Cache keys.** The module is served like any file a page loads, so a page that imports it has
+`__vidgen__/modules/three-finish.js` with its SHA-256 in its loaded-files record (§118.10): the
+clip key and the render fingerprint follow the module, and its shaders are strings inside it. A
+page that does not import it: the import map gained one entry, but the import map is in no key
+(`engine_id` hashes `clock.js`, `media.js`, `runtime.js`, `canvas.html`, flags and versions), so
+no stored clip of any project is drawn again. `vidgen_source_digest` covers every `.js` under
+`data/web/` (changed, as with every step).
+
+**The chain** (`Finish.render(t)`): options resolved (functions of `t` called); the scene drawn
+into a half-float target with a depth texture at `renderScale` (three.js renders into a target
+in linear light: no tone mapping, no output conversion); with motion blur, `update(t_i)` and a
+drawing per sub-frame time `t_i = t + ((i + 0.5)/N − 0.5) × shutter/360/fps`, each added with
+weight 1/N (additive blending into a half-float target), the one nearest `t` drawn last (its
+depth is used), `update(t)` once more when no sample falls on `t`; options read again (so a
+focus that follows a moving camera is right); depth of field (gather at half or full size, mix
+into a frame-size target) or a copy when the scene was drawn smaller; `UnrealBloomPass` on that
+target in place; the grade pass (fringe, exposure × filter × white balance normalised to keep
+the luminance, flash, vignette in linear light; three.js' own `ACESFilmicToneMapping`,
+`AgXToneMapping`, `NeutralToneMapping` from `ShaderChunk.tonemapping_pars_fragment` with its
+exposure uniform made a constant, or the films' short fit; saturation; sRGB encoding; contrast,
+lift, gamma, gain on the encoded values; fade) into an 8-bit target; FXAA and grain to the
+canvas (the grade pass draws straight to the canvas when both are off). Every quad material has
+`toneMapped: false` and no colour-space chunk, so nothing is converted twice. Grain:
+`round(t × fps) % 4096` seeds two hashes of the pixel.
+
+**Checked** (scratch `/home/claude/work/scratch/al350/`, the example's page copied to `bench/`
+with a `plain` mode, `renderer.render` alone, and a `nofog` flag):
+
+- *One encoding*: with every effect off (tone mapping `none`, no bloom, vignette, grain, FXAA)
+  against `renderer.render` to the canvas, no fog: max 1 level, 0.3 % of pixels differ (the
+  half-float target's rounding). With the example's fog: up to 14 levels on the far table —
+  three.js mixes fog after `colorspace_fragment` when it draws to the canvas but in linear light
+  into a target; documented.
+- *Determinism*: `vidgen still` of the full example at 0.5 s and 5.5 s from two fresh pages:
+  identical PNGs; the test does the same at 160x90.
+- *Shutter 0*: `motionBlur: {samples: 6, shutter: 0}` against `motionBlur: false`: identical.
+- *Warm-up*: `compileAsync` polls with `setTimeout(…, 10)`, which never fires in `load` (the
+  clock stands at 0; §118.8), unless `KHR_parallel_shader_compile` reports everything ready at
+  once — so `warmUp` uses `renderer.compile` and one drawing plus a 1-pixel `readPixels`. On the
+  example: page ready 8.7 s and frame 0 3.0 s with it; 1.1 s and 8.5 s without (Step 349's
+  finding: it moves the time). Optional.
+
+**Cost per effect** (`tools/bench.py`: a fresh `WebPage` per configuration, as vidgen draws a
+scene, 1280x720, 30 fps, frames 2–9 averaged, advance + screenshot; 2 cores, SwiftShader; one
+run each, the machine's speed varies by about ±5 %, i.e. ±30 ms here):
+
+| what is drawn | ms a frame | the effect's cost |
+|---|---|---|
+| the scene with `renderer.render` (PBR, 5 spheres, 4 gears, a 2048 PCF shadow, fog) | 472 | — |
+| the chain, every effect off (scene target + grade pass) | 525–528 | +55 |
+| + tone mapping, grade, vignette (same pass) | 531 | +3 |
+| + FXAA (an 8-bit target and one more pass) | 539 | +11 |
+| + grain (the same pass as FXAA) | 539 | +12 |
+| + fringe 1 | 545 | +17 |
+| + bloom, `scale` 0.25 / 0.5 (default) / 1 | 531 / 556–592 / 654 | +4 / +29–67 / +126 |
+| + depth of field `low` / `medium` / `high` | 601 / 663 / 1131 | +73 / +136 / +604 |
+| + motion blur 2 / 4 / 6 samples | 912 / 1694 / 2576 | about +400 per sample (a scene drawing with its shadow map, plus a quad) |
+| `renderScale: 0.75` (chain off) | 362 | −31 % |
+| shadows: PCF radius 2 / PCF radius 6 / VSM radius 4, 8 blur samples (2048 map, chain off) | 525 / 528 / 1282 | VSM +757 |
+| the example as committed (everything, 6 samples) | 2955–3340 | — |
+| the same without `warmUp`: frame 0 | 8456 (with: 3010) | — |
+
+The finishing passes are cheap next to the scene; motion blur multiplies the scene's own cost
+(and its shadow map's) by the number of samples; `high` depth of field gathers at full size.
+
+**Depth of field**: `coc(z) = min(K |z − z_f| / z, maxBlur)` pixels, `K` from a thin lens:
+`(f² / (N (z_f − f))) / 2 / filmHeight × height` with `f` = `camera.getFocalLength()` (mm, from
+`fov` and `filmGauge`), `filmHeight` = `camera.getFilmHeight()`, `z_f` in mm through `unit` —
+the radius of the blur far behind the focus (the far limit of the thin-lens formula, which is also
+what "Escapement"'s `aperture` meant). `blur` gives `K` directly (pixels at 720p, scaled by the
+frame height). A sample counts where its own circle reaches the pixel; a nearer sample's circle
+counts in full (foreground bleeds over), a farther one only up to the pixel's own circle + 1
+(a blurred background does not bleed over a sharp edge); colours are capped at 24 before
+gathering (a tiny very bright highlight then shows the spiral of samples, as on the example's
+front sphere; a smaller cap would dull bokeh). Orthographic cameras: `blur` only.
+
+**Soft shadows.** three.js 0.186: `PCFSoftShadowMap` is mapped to `PCFShadowMap` with a warning;
+`PCFShadowMap` samples five hardware-compared taps on a Vogel disc of `shadow.radius` texels,
+rotated per pixel by interleaved gradient noise (deterministic); `VSMShadowMap` blurs the map
+(`blurSamples`). Stills of the example (`sheet_shadows*.png`): PCF radius 1–3 soft and clean,
+6 wider and faint with a fine dither (masked by the grain), VSM 4 and 10 smooth; VSM cost 0.76 s a
+frame more at 2048. `softShadows()` sets either; the recommendation is PCF, radius 2–4.
+
+**The film effect reproduced** (scratch `esc/`: a copy of three "Escapement" scenes,
+`01_winding`, `04_escapement`, `05_cathedral`, and the same scenes on `escapement_fin.js`, the
+film's script with its composer, scene pass, final pass, FXAA pass, finish function and PMREM
+code replaced by `Finish` options (`renderScale` 0.88, `aces-narkowicz`, `encoding: "gamma2.2"`,
+bloom at 0.25, `dof.blur` = the film's `aperture`, `maxBlur` = `maxR`, `filter` = its `gain`,
+`lift` its lift raised to 1/2.2, `fringe` = 0.26 × its `ca`, vignette inner 0.25 / outer 1.05) and
+`makeEnv` by `studioEnvironment` with the film's own boxes and `up: [0, 0, 1]`: 1,222 lines
+→ 1,096). `vidgen still` at 3 s and 10 s, 1280x720: PSNR 34.4 / 32.0 dB (`01_winding`), 29.1 /
+29.0 dB (`04_escapement`), 29.1 / 28.4 dB (`05_cathedral`); after a 5x5 box blur of both (the
+grain's seed is song time in the film, scene time here) 30.3–34.5 dB. Side by side
+(`esc_*.png`) the pictures match in framing, focus, bloom and colour; what differs is the shape of
+the vignette (the film's is an odd ellipse, stronger at the left and right edges), the fringe's
+falloff, and the lift (the film's lifted in linear light before the encoding, the module lifts
+the encoded picture; matching it at black over-lifts the mid-tones by a few levels). Without
+`encoding: "gamma2.2"` (sRGB, the lift converted to sRGB) at 3 s: `01_winding` 30.0 dB (its dark
+navy background is mostly lift, which sRGB's linear toe keeps darker), `04_escapement` 29.3,
+`05_cathedral` 28.0; with the film's lift values passed unconverted, 26.1–27.9 dB.
+
+**Not done.** A cheaper per-object motion blur (the film's transparent copies of one part) — it
+needs the page's own geometry and sorting, so it stays a page technique; SMAA (not shipped among
+the add-ons; FXAA is vidgen's own); a transparent output (the composer's alpha is not meaningful
+after bloom, §118.14); MSAA of the scene target; resizing after construction.

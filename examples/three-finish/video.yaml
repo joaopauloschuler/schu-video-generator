@@ -1,0 +1,28 @@
+# Finishing a three.js scene with vidgen's own module "vidgen/three-finish" (`vidgen guide web`,
+# "Finishing three.js scenes"; README.md has the stills and the cost of each effect).
+#   still_life  script: brass gears and metal spheres on slate under a baked studio of soft boxes,
+#               one soft-shadowed key light; the focus pulled from the front sphere to the gears
+#               at the back; the small gear in front spins and is blurred by motion blur (6
+#               sub-frames across a 180-degree shutter); bloom on the lamp and the highlights,
+#               ACES, a grade that cools over the shot, vignette, film grain, FXAA
+# Needs Chromium, once: python -m playwright install chromium (Windows: py -m playwright install chromium)
+#
+#   vidgen validate examples/three-finish
+#   vidgen still examples/three-finish --scene still_life --at 0.5 --at 3 --at 5.5
+#   vidgen render examples/three-finish --draft      # then --preview, then the final render
+#
+# No narration and no music: a silent 6 s shot. Nothing generated is committed.
+title: "A still life in metal"
+output: three_finish
+
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 640, height: 360, fps: 30}
+
+theme: {preset: dark_tech}
+transition: cut
+
+scenes:
+  - id: still_life
+    type: web
+    duration: 6
+    params: {script: extensions/still_life.js}
