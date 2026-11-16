@@ -838,7 +838,7 @@ my_video/
   split into parts by element ids (`vidgen character sprout examples/svg_character --png`), on a
   `stage` with a generated character.
 - [examples/cartoon](examples/cartoon) — "The Box Kite", a 54-second cartoon with two original
-  characters voiced by Kokoro (no audio committed): marks, depth, a wide stage with `follow`,
+  characters voiced by Kokoro: marks, depth, a wide stage with `follow`,
   close-ups, reactions and pauses (`vidgen character-sheet --all examples/cartoon`,
   `vidgen storyboard examples/cartoon`, `vidgen lint examples/cartoon`: no findings).
 - [examples/screenplay](examples/screenplay) — "The Humming Box", a screenplay with three original
@@ -856,28 +856,27 @@ my_video/
   ground and under the tree with a rain sound bed, puddles, light from day to storm grey to night
   with stars, an overlap, an interruption, a comic sting and a pull-back, composed music
   (`playful`, `tense` for the storm, `sleepy` at night, a pause before the last line); about
-  94 s with Kokoro narration (no audio committed).
+  94 s with Kokoro narration.
 - [examples/cartoon-muffin-mystery](examples/cartoon-muffin-mystery) — "The Muffin Mystery", an
   indoor cartoon from its screenplay (`muffin_mystery.md`) after hand editing: a title card and an
   iris in, a furnished room with a door (entering and leaving through it), a dog character in an
   armchair, effect symbols (hearts, Zs, an exclamation mark, sweat), a run, a jump, walking towards
   the camera behind and in front of the furniture, a close-up in the front view, evening fading to
-  night, an iris out on the dog and an end card; about 70 s with Kokoro narration (no audio
-  committed).
+  night, an iris out on the dog and an end card; about 70 s with Kokoro narration.
 - [examples/cartoon-rainbow-ride](examples/cartoon-rainbow-ride) — "The Rainbow Ride", a cartoon
   from its screenplay (`rainbow_ride.md`) after hand editing: a robot on wheels in a party hat
   watering an apple tree (an apple falls on its head: dizzy), a fox riding a bicycle, birds, a
   passing storm with lightning, thunder and a rainbow, then an owl's cottage with a burning
   fireplace, a steaming kettle, a running clock, a knock at the door, a gift opened (blushing) and a
   lamp switched on at nightfall; birdsong, rain, fire and room-tone beds, the `cartoon` music bed;
-  about 94 s with Kokoro narration (no audio committed).
+  about 94 s with Kokoro narration.
 - [examples/platform-story](examples/platform-story) — "Nutmeg and the Moon Picnic", a platform
   story on three levels written as small maps: a little mouse skips along collecting coins,
   climbs a ladder to a plank for a golden key, jumps over gaps, opens a locked garden gate, asks a
   grumpy snail nicely to let her pass, catches stars in mid-air and hops up the clouds to her
   granny's picnic; the camera follows her, close-ups for the dialogue, the automatic jump, coin
   and door sounds, the `cartoon` music bed and a 9:16 variant with `character_size: large`;
-  about 2:50 at preview (no audio committed).
+  about 2:50 at preview.
 - [examples/iso-story](examples/iso-story) — "Hazel and the Lamp by the Bridge", an isometric
   story in a village by a stream and in a room: a little rabbit sees that the lamp by the bridge
   is dark on a rainy evening while her friend is still across the stream, fetches the lamp key
@@ -885,14 +884,14 @@ my_video/
   and gives the key back the next morning, when the rain has made her flower bed bloom; walks
   along routes, a meeting, a door, close-ups and two-shots, name tags in the wide views,
   morning, evening rain and night, footsteps, birdsong, rain and crickets, the `cartoon` music
-  bed and a 9:16 variant; about 3:00 with Kokoro narration (no audio committed).
+  bed and a 9:16 variant; about 3:00 with Kokoro narration.
 - [examples/iso-web-page](examples/iso-web-page) — "What happens when you open a web page", a
   tech explainer in isometric diagrams: the browser asks DNS for the address, the request
   crosses to a load balancer and one of two app servers, which asks the cache before the
   database; each block grows in on the word that names it, packets run along the connectors, the
   camera focuses on a cache miss (the database takes 40 ms) and then a hit, and the browser's
   rendering steps (DOM, styles, layout, paint) are pulled apart as a stack; terms in their
-  colours, karaoke captions, a 9:16 variant; about 2:00 with Kokoro narration (no audio committed).
+  colours, karaoke captions, a 9:16 variant; about 2:00 with Kokoro narration.
 - [examples/gradient-descent](examples/gradient-descent) — "Gradient descent, one step at a
   time", a maths-and-code explainer: a dot tracing a loss curve with its tangent and a live
   gradient label, the update rule with its symbols in the concepts' colours, the first steps as
@@ -900,76 +899,73 @@ my_video/
   gradient as a vector at a right angle to the dashed contour line, a loop morphing into a loop
   with a tolerance, a Python session beside the code, and a loss chart changing with the
   learning rate (the axis rescales as it diverges); actions on spoken words and karaoke captions
-  in the concepts' colours, a 9:16 variant; about 3:00 with Kokoro narration (no audio committed).
+  in the concepts' colours, a 9:16 variant; about 3:00 with Kokoro narration.
 - [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
   an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
   points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven
   with a pointer line, crosses to the other side (the content slides over) and walks off; lines
   said with feeling (`emotion:`), composed music in the `curious` mood; about 66 s with Kokoro
-  narration (no audio committed).
+  narration.
 - [examples/gps-time-of-flight](examples/gps-time-of-flight/README.md) — "How GPS finds you", a
   one-minute science explainer whose music is an original score file an AI author made from the
   `momentum` template in nine checked steps, now the built-in bed `music: time_of_flight`; the
-  README has the iteration log and the piece's check report; about 89 s with Kokoro narration (no
-  audio committed).
+  README has the iteration log and the piece's check report; about 89 s with Kokoro narration.
 - [examples/gene-to-secreted-protein](examples/gene-to-secreted-protein/README.md) — "From gene to
   secreted protein", a university-level cell-biology explainer following α1-antitrypsin from its
   gene to the blood: a zoom from the tissue into the nucleus, transcription, capping, splicing,
   polyadenylation and export up close, translation, SRP targeting to Sec61, N-glycosylation and
   calnexin in the ER, the route through the Golgi to secretion across the whole cell, an
   exocytosis close-up and the IL-6–STAT3 pathway that raises its synthesis; references, karaoke
-  captions, the `discovery` bed, a 9:16 variant; about 3:34 with Kokoro narration (no audio committed).
+  captions, the `discovery` bed, a 9:16 variant; about 3:34 with Kokoro narration.
 - [examples/cystic-fibrosis](examples/cystic-fibrosis/README.md) — "Cystic fibrosis: from a family
   to a diagnosis", a university-level medical-genetics explainer: a pedigree in NSGC symbols with
   the modes of inheritance tested (only autosomal recessive fits), obligate carriers, a Punnett
   square of two carriers, the brother's carrier probability 2/3 and the risk 1/150 for his child,
   *CFTR* at 7q31.2, c.1521_1523del p.(Phe508del) on the real coding sequence, an NGS carrier test
   and the carrier frequency from Hardy–Weinberg; references, karaoke captions, a 9:16 variant;
-  about 4:12 with Kokoro narration (no audio committed).
+  about 4:12 with Kokoro narration.
 - [examples/radioactive-decay](examples/radioactive-decay/README.md) — "Half-life: how radioactive
   decay keeps time", a physics explainer with plots and calculations: a Monte Carlo of 1000 and 20
   nuclei growing beside the exponential law, counts with √N error bars on a log axis and an
   exponential fit with its band and residuals, the half-life worked out from the fitted decay
   constant with its uncertainty, and carbon-14 dating; seeded data from `make_data.py`, a 9:16
-  variant; about 2:52 with Kokoro narration (no audio committed).
+  variant; about 2:52 with Kokoro narration.
 - [examples/mars-transfer](examples/mars-transfer/README.md) — "How to get to Mars", an orbital
   mechanics explainer: why a rocket cannot fly straight there (a radial burn bent by the Sun's
   gravity), the Hohmann transfer with Δv₁ 2.94 and Δv₂ 2.65 km/s, 259 days and Mars 44° ahead at
   departure, the transfer time and phase angle worked out, the 3.59 km/s departure burn from low
   Earth orbit (the Oberth effect), and the Earth and Mars on 28 October 2026 from JPL's elements
-  with the next window and opposition; a 9:16 variant; about 3:43 with Kokoro narration (no audio
-  committed).
+  with the next window and opposition; a 9:16 variant; about 3:43 with Kokoro narration.
 - [examples/higgs-discovery](examples/higgs-discovery/README.md) — "How the Higgs boson was
   found", a particle-physics explainer: the Standard Model with the Higgs boson's couplings, gluon
   fusion through a top-quark loop, the predicted decay modes, H → γγ through top and W loops, a
   simulated diphoton event in a schematic detector, the photons' invariant mass worked out
   (125 GeV), a simulated spectrum with its bump, fit and local significance, four leptons, what
   five sigma means, and the announcement of 4 July 2012; a 9:16 variant; about 3:49 with Kokoro
-  narration (no audio committed).
+  narration.
 - [examples/3d-short](examples/3d-short/video.yaml) — "Two friends and a ball", a 9:16 Short of
   about 15 s in one `3d` scene: shapes, two stand-ins who walk and turn to each other, a ball that
   appears, rolls and glows, four camera moves on spoken words, karaoke captions, and its guide
-  passes (depth, outline, mask) (no media committed).
+  passes (depth, outline, mask).
 - [examples/web](examples/web/README.md) — "Where rain comes from", three short `web` scenes
   written as web pages: an HTML and CSS page whose cards come in on narration beats, a canvas
   drawing of a rain gauge with its text declared to lint, and a three.js planet written by hand; 16:9
-  and a 9:16 variant, about 50 s with Kokoro narration (no media committed).
+  and a 9:16 variant, about 50 s with Kokoro narration.
 - [examples/three-finish](examples/three-finish/README.md) — "A still life in metal", one silent
   6 s `web` scene finished with vidgen's module `vidgen/three-finish`: brass gears and metal spheres
   in a baked studio, a focus pull, a fast gear in motion blur, bloom, ACES, a grade, vignette,
-  grain, FXAA (no media committed).
+  grain, FXAA.
 - [examples/signal-fire](examples/signal-fire/README.md) — "Signal Fire", 27 s with no narration:
   an original orchestral cue written with dynamics, hairpins and slurs (strings, horns, trumpet,
   low brass, choir, timpani rolling into the hit, taikos, cymbals, tam-tam) and a three.js night of
   standing stones around a fire that reads the score through `ctx.music` (embers on the cellos'
-  notes, a beam on the trumpet's pitch, flashes on the taikos), finished with `vidgen/three-finish`
-  (no media committed).
+  notes, a beam on the trumpet's pitch, flashes on the taikos), finished with `vidgen/three-finish`.
 - [examples/escapement](examples/escapement/README.md) — "Escapement", the published 3:11
   clockwork music film, source only: an original 26-track score in D minor at 120 BPM and twelve
   three.js `web` scenes of a watch movement in brass, rhodium, blued steel and ruby whose going
   train turns at its real gear ratios and ticks on the beat (the beats read from the score through
   `music_data`), an exploded view at the climax and one silent bar where everything stops; the
-  film's own depth of field, motion blur and finishing (no media committed; the final render takes
+  film's own depth of field, motion blur and finishing (the final render takes
   about 1 h 30 min to 2 h on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
