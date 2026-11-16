@@ -25433,7 +25433,7 @@ The owner asked for the published film as an example, source only. `examples/esc
   no range warnings, the event counts the exporter had, the page reads only `ctx.music` and every
   track it is given exists.
 
-## 121. Music-video tools (Phase AM, Steps 358–362)
+## 121. Music-video tools (Phase AM, Steps 358–363)
 
 Three music films were made as `web` scenes and are now examples (`examples/parallel-space`,
 `examples/escapement`, `examples/signal-fire`; with `examples/three-finish`). Each rebuilt the
@@ -25446,6 +25446,7 @@ same things by hand. The owner chose four features (2026-11-16), one step each, 
 | 360 | A "watch it" motion check: `vidgen motion check` (blank frames, flashes, flicker, popping, strobing, frozen stretches, jumps at cuts; a contact strip per finding) | §121.3 |
 | 361 | More choir: syllables, a soloist, a whispered texture, a syllable per note | §121.4 |
 | 362 | Critical review with fixes; docs | §121.5 |
+| 363 | The owner heard a "sht" at every `d`: its burst made soft | §121.6 |
 
 Rules of the phase: the films must look the same (stills compared before and after) and their
 scores synthesize to the same audio; nothing is rendered that a still or a test can show.
@@ -25745,7 +25746,7 @@ two vowels; nothing is sampled, nothing spells a language.
   | `l` | 50 ms | −6 dB | F1 330, F2 1150, F3 2650 Hz (narrow) | 60 ms from 330 / 1200 / 2650 |
   | `m` | 70 ms | −9 dB | a nasal murmur: 270, 1350, 2250 Hz; antiformant 950 Hz; low-pass 1 kHz | 45 ms from 300 / 1000 / 2300 (bilabial: F2 low) |
   | `n` | 60 ms | −9 dB | 270, 1250, 2450 Hz; antiformant 1.8 kHz; low-pass 1.3 kHz | 45 ms from 300 / 1700 / 2600 (alveolar: F2 high) |
-  | `d` | 35 ms | −23 dB | a closure: a voice bar (200 Hz, low-pass 350 Hz) | a burst (noise around 3.8 kHz, 0.45 octave, 4 ms decay), the voice back at −7 dB 2 ms later, then 40 ms from 250 / 1700 / 2650 |
+  | `d` | 35 ms | −23 dB | a closure: a voice bar (200 Hz, low-pass 350 Hz) | a soft burst (noise around 2.4 kHz, 0.25 octave, little above 3.4 kHz, 1.5 ms rise, 3 ms decay; Step 363, §121.6), the voice back at −7 dB 2 ms later, then 40 ms from 250 / 1700 / 2650 |
 
   A consonant begins its note at the step (12 ms entry; `attack` shapes only syllables
   without one), so the vowel arrives 80–120 ms after the step. A section's singers enter
@@ -25802,8 +25803,8 @@ two vowels; nothing is sampled, nothing spells a language.
     −16.9.
   - Clicks: power above 8 kHz in 1 ms frames at most −86 dB under the note's loudest
     millisecond for `l`, `m`, `n`, glides and slurred syllables (the held vowel −132 dB; the
-    model has nothing there); the `d` burst −35 to −46 dB, as meant. First sample 0, last
-    under 1e-8.
+    model has nothing there); the `d` burst −35 to −46 dB, as meant (too loud: heard as "sht",
+    made soft in Step 363, §121.6). First sample 0, last under 1e-8.
   - CPU (2 s note, C3, 8 singers): held vowel 77 ms per second of sound, `la` 82, `da` 85,
     `ah-oh` 95, whisper 0.5 85, `la` whispered 90, 16 singers `la` 139; soloist 14 (one voice
     13).
@@ -25864,4 +25865,54 @@ Looked at and left:
   examples' scenes once.
 - Determinism: the plan's seeds come from the scene id (a sum of character codes, not Python's
   salted `hash()`); the starters and the kit draw seeded numbers only (`rng`, `hash`).
+
+### 121.6 The `d` without its "sht" (Step 363)
+
+**Heard.** The owner, listening to Step 361's demos: "a sound that resembles 'sht'" at 2, 4.5
+and 12.5 s of `demo_syllables` and in the other demos. Those are the `da`, `de` and the tenors'
+`da`; a search of every demo WAV for sudden 5–12 kHz energy finds a jump of +40 to +59 dB at each
+`d` (eight in `demo_syllables`, two in `demo_men`, three in `demo_whisper`, four smaller ones,
++19 to +24 dB, under the cellos of `demo_cue`) and nothing else that is not a note (the
+`demo_soloist` hits are harmonics gliding; it has no `d`). The WAVs have it, so the AAC encoder
+does not make it. Step 345–346's choir demos have none: the old held-vowel path has no
+consonants.
+
+**Cause.** The `d`'s burst (`singing._singer`): white noise around 3.8 kHz, 0.45 octave wide
+(standard deviation) with nothing to stop it below 16 kHz, at 0.35 of the voice. A voice of this
+model has almost nothing above 3.5–4 kHz, so the burst
+stood alone up to 12 kHz: 22–26 dB under the note's loudest 10 ms above 5 kHz (a `la` −91 dB),
++45 to +59 dB over the voice above 4.5 kHz at that moment. Each of a section's singers bursts on
+its own (within 28 ms of each other), so eight bursts made a 30–40 ms hiss, and the hall's
+reverb carried it on for a second: "sh", then the voice cut back in after the closure: "t".
+Confirmed by the same phrase with only the burst taken out (the same random numbers drawn): the
+two renders differ only at the `d`s, and with no burst the 5–12 kHz level at the `d` falls to the
+vowel's.
+
+**Fix.** The burst lies inside the voice: noise around 2.4 kHz (× 1.06 / 1.14 / 1.2 for tenors,
+altos, sopranos, and the singer's throat), 0.25 octave, a low-pass at 3.4 kHz (scaled the same),
+a rise of 1.5 ms instead of 0.5 and a decay of 3 ms instead of 4, at 0.1 of the voice instead of
+0.35. The closure, the voice's return and the formants' move from the alveolar locus (F2 from
+1.7 kHz) are unchanged: the `d` is heard from those, as a voiced stop is. The burst draws the
+same random numbers as before, so every note without a `d` is the same to the sample
+(`demo_soloist` renders to the same bytes as in Step 361), and a plain choir note never reaches
+this code (Escapement's score and the nine choir demo scores of Steps 345–346 render to the same
+bytes on 2c758af and after).
+
+**Measured** (scratch `/home/claude/work/scratch/am363/`, `measure-demos.txt`):
+
+- One note per voice (8 singers, defaults, 0.25 s + ring): loudest 10 ms above 5 kHz against the
+  note's loudest 10 ms, before → after: `da` basses −24.6 → −71.1 dB, tenors −23.7 → −77.5,
+  altos −22.7 → −74.8, sopranos −24.3 → −71.3 (`la` −91.1 / −91.6 / −80.6 / −70.9; what is left
+  at the `d` comes from the voice's 2 ms return, not the burst). Whispered sopranos: `da` −24.2 →
+  −55.1, the whisper itself (`la`) −55.0.
+- The burst alone (a render minus the same without it), in the 10 ms around its peak, against
+  the voice there: above 4.5 kHz +45 to +59 dB → −1 to −23 dB; 1.5–4.5 kHz +7 to +22 dB → −10 to
+  +7 dB (a soft tick within the voice's own band); 29–34 dB under the vowel in all.
+- The demos, at each `d`: the jump of 5–12 kHz in 5 ms frames against the 250 ms before, +40 to
+  +59 dB → +3.7 to +10 dB (`demo_cue`: +19 to +24 → +3 to +6); 5–12 kHz against the whole band in
+  the same frame −16 to −27 dB → −68 to −73 dB (whispered −50 to −66, the whisper's own noise;
+  `demo_cue` −43 to −47, its cellos and timpani). Spectrograms: `png/before_after.png`.
+- Test: `tests/test_studio_singing.py::test_a_d_opens_softly_without_a_hiss_above_the_voice`
+  (basses and sopranos; `la`, `da`, `de` under −50 dB above 5 kHz, a whispered `da` no louder
+  there than a whispered `la`); it fails on the Step 361 burst (−24.6 dB).
 

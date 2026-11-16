@@ -5,10 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–362
+## Steps 193–363
 
-### Music-video tools (Phase AM, Steps 358–362)
+### Music-video tools (Phase AM, Steps 358–363)
 
+- **The choir's `d` without a "sht"** (Step 363): a `d` (`da`, `de` …) opened with a hiss up to
+  12 kHz that the hall's reverb carried on ("sht"). Its burst is now a soft tick inside the
+  voice's own band (around 2.4 kHz, little above 3.4 kHz, a third of the level); the `d` is heard
+  from its closure and the voice opening into the vowel. Notes without a `d`, and every choir
+  that uses no syllable, soloist or whisper, sound exactly as before.
 - **Review fixes** (Step 362): `vidgen/music-time`'s `melody` no longer dims the light for a frame
   at each note of a legato line (a note's attack rises from the level the note before has; in
   `examples/parallel-space` the `hook`'s light in `heart` and `afterglow` stays steady across its

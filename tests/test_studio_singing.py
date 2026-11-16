@@ -143,8 +143,27 @@ def test_l_and_d_move_the_formants_as_they_open() -> None:
     stop = _note(D3, 0.4, syllable="da", voices="tenors", singers=1, vibrato=0, breath=0)
     closure = 10 * math.log10(float(np.mean(stop[int(0.005 * RATE) : int(0.03 * RATE)] ** 2)))
     vowel = 10 * math.log10(float(np.mean(stop[int(0.25 * RATE) : int(0.4 * RATE)] ** 2)))
-    assert closure < vowel - 15 and _share(stop, 0.034, 0.045, 3000, 6000) > _share(stop, 0.25, 0.4, 3000, 6000) + 15  # a closure, then a burst
+    assert closure < vowel - 15 and _share(stop, 0.034, 0.045, 1500, 4000) > _share(stop, 0.25, 0.4, 1500, 4000) + 3  # a closure, then a soft burst
     assert _strongest(_harmonics(stop, D3, 0.04, 0.06), D3, 1300, 2500) > 1500  # the second formant starts high (the alveolar locus)
+
+
+def _hiss(y: np.ndarray) -> float:
+    """dB of the loudest 10 ms of a note above 5 kHz against its loudest 10 ms in all (onset,
+    consonant, vowel and release alike)."""
+    m = _mono(y)
+    frames = m[np.arange(480)[None, :] + 240 * np.arange((len(m) - 480) // 240)[:, None]] * np.hanning(480)
+    power = np.abs(np.fft.rfft(frames, axis=1)) ** 2
+    return 10 * math.log10(power[:, np.fft.rfftfreq(480, 1 / RATE) >= 5000].sum(axis=1).max() / power.sum(axis=1).max())
+
+
+@pytest.mark.parametrize(("voices", "freq"), [("basses", D3), ("sopranos", 2 * D3)])
+def test_a_d_opens_softly_without_a_hiss_above_the_voice(voices: str, freq: float) -> None:
+    # Step 363: the d's burst was noise up to 12 kHz over a voice with little above 4 kHz,
+    # 22-26 dB under the note in this measure, heard as "sht" (a 2-3 s hiss in a hall's reverb).
+    for syllable in ("la", "da", "de"):
+        assert _hiss(_note(freq, 0.25, syllable=syllable, voices=voices)) < -50, syllable
+    whispered = [_hiss(_note(freq, 0.25, syllable=syllable, voices=voices, whisper=1)) for syllable in ("la", "da")]
+    assert whispered[1] < whispered[0] + 3  # whispered, a d is no louder up there than the whisper itself
 
 
 def test_two_vowels_glide_at_turn_and_keep_the_level() -> None:

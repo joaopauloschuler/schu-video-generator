@@ -87,12 +87,14 @@ CONSONANTS: dict[str, Consonant] = {
     "l": Consonant(0.05, 0.06, 0.5, ((330, 70), (1150, 140), (2650, 200)), (330, 1200, 2650)),
     "m": Consonant(0.07, 0.045, 0.35, ((270, 80), (1350, 300), (2250, 350)), (300, 1000, 2300), (950, 160), 1000.0),
     "n": Consonant(0.06, 0.045, 0.35, ((270, 80), (1250, 300), (2450, 350)), (300, 1700, 2600), (1800, 220), 1300.0),
-    "d": Consonant(0.035, 0.04, 0.07, ((200, 60), (1200, 400), (2500, 500)), (250, 1700, 2650), None, 350.0, 0.35),
+    "d": Consonant(0.035, 0.04, 0.07, ((200, 60), (1200, 400), (2500, 500)), (250, 1700, 2650), None, 350.0, 0.1),
 }
 #: A consonant's formants per kind of voice against a bass's (shorter throats, higher formants).
 _SCALE = {"basses": 1.0, "tenors": 1.06, "altos": 1.14, "sopranos": 1.2}
-#: Where a d's burst lies (Hz, for a bass) and how wide it is (octaves).
-_BURST_HZ, _BURST_WIDTH = 3800.0, 0.45
+#: A d's burst: where it lies (Hz, for a bass), how wide it is (octaves), the corner above which
+#: little of it is left (Hz, for a bass), and the seconds it takes to rise and to decay.
+_BURST_HZ, _BURST_WIDTH, _BURST_TOP = 2400.0, 0.25, 3400.0
+_BURST_RISE, _BURST_DECAY = 0.0015, 0.003
 #: Seconds two vowels take to glide into each other (at most 40 % of the note), and the steps of a move.
 _VOWEL_GLIDE, _STEPS = 0.15, 6
 #: A stop opens: seconds from its closure to the voice's level after the burst (``_OPENED``).
@@ -372,8 +374,9 @@ def _singer(kind: str, freq: float, n: int, held: int, s: Mapping[str, float], o
     for at in bursts(keys):
         size = min(int(0.02 * RATE), n - at)
         if size > 8:
-            noise = band_noise(rng, size, _BURST_HZ * _SCALE[kind] * throat, _BURST_WIDTH)
-            burst[at : at + size] += CONSONANTS["d"].burst * noise * np.exp(-np.arange(size) / (0.004 * RATE)) * raised_cosine(size, int(0.0005 * RATE))
+            scale = _SCALE[kind] * throat
+            noise = band_noise(rng, size, _BURST_HZ * scale, _BURST_WIDTH, _BURST_TOP * scale)
+            burst[at : at + size] += CONSONANTS["d"].burst * noise * np.exp(-np.arange(size) / (_BURST_DECAY * RATE)) * raised_cosine(size, int(_BURST_RISE * RATE))
     return tone * level, burst
 
 

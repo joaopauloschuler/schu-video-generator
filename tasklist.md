@@ -2153,6 +2153,12 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [x] Docs: the guide's `tidewater` example reads `melody` (no `hook` there); `web/music.py` docstring; `morph` with a syllable documented in the setting; README Features "Music videos" item and no "no install" notes; CHANGELOG without "measured, not listened to"; COOKBOOK-3D 9 and 11, COOKBOOK-MUSIC 12, `docs/COOKBOOK.md` index, CONFIG (`melody` row, MCP tool list)
 - [ ] Left: `morph` with a syllable is a documented no-op, not an error; the PS `afterglow` scene's `melody` fix is the same code as `heart`'s but no still was taken there; Windows / macOS not tried
 
+### Step 363 — The choir's `d` without its "sht" (owner's bug report)
+- [x] Measured first: a +40 to +59 dB jump of 5–12 kHz at every `d` of the Step 361 demos (in the WAVs), nothing else; the cause the `d`'s burst (noise around 3.8 kHz up to 12 kHz, over a voice with little above 4 kHz; eight singers and the hall's reverb); confirmed by the same phrase without it — DESIGN §121.6
+- [x] The burst inside the voice (2.4 kHz, 0.25 octave, low-pass 3.4 kHz, softer rise, 0.1 instead of 0.35): above 5 kHz at the `d` −24 → −71 to −78 dB under the note; the same random numbers, so notes without a `d` are unchanged (`demo_soloist` identical); Escapement `271de0c6…` and the nine Step 345–346 choir demo scores identical on 2c758af and after
+- [x] Regression test (`test_a_d_opens_softly_without_a_hiss_above_the_voice`, fails on the old burst); the five demos and a before/after clip of `demo_syllables` 0–14 s re-rendered in `/home/claude/work/scratch/am363/demo/`
+- [ ] Not done: nobody has listened to the new demos yet
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)
