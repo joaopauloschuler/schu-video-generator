@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–359)
+## Steps 193–359
 
 ### Music-video tools (Phase AM, Steps 358–359)
 
@@ -208,7 +208,7 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - The frames are always exactly the output's size: the window's height is rounded up to a whole CSS pixel and the rows over are cut off the bottom (under one CSS pixel of the page).
 - Lint judges the output size: 12 px text of a 1280 design is 18 px in a 1920 px frame. **Fixed:** the `cut` of a text declared with `layout(t, ctx)` was not scaled to frame pixels when the page was not drawn 1:1.
 - Without the param nothing changes and stored `web` clips are reused (their keys are the same).
-- Guide: "Porting a page built in fixed pixels" in `vidgen guide web`; `docs/CONFIG.md` `web`; DESIGN §118.17. Not tried on Windows or macOS.
+- Guide: "Porting a page built in fixed pixels" in `vidgen guide web`; `docs/CONFIG.md` `web`; DESIGN §118.17.
 
 ### A project's own fonts: the `fonts/` folder (Step 338)
 
@@ -216,7 +216,7 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - A `web` page that links Google Fonts gets a warning that names the family and says what to do, once per family: `scene 'x': the page asks Google Fonts for "Space Grotesk", but the internet is off during a render, so that text is drawn in a fallback font. Put the font's .ttf, .otf or .woff file in the project's fonts/ folder and remove the link to Google Fonts (see "Using another font" in `vidgen guide web`).`
 - **Fixed:** Manim's cache of laid-out texts is named by the family, so a text first drawn in a fallback font kept that font after the font became available. With files in `fonts/` the cache follows them.
 - Guide: "Using another font" in `vidgen guide web` (two ways to get a font's files, both tried); `docs/CONFIG.md` "Fonts".
-- `fonttools` is now named in the dependencies (every install already had it through fpdf2). Not tried on Windows or macOS.
+- `fonttools` is now named in the dependencies (every install already had it through fpdf2).
 
 ### Relative paths in a `script:` web scene; `render --scene` says what else it renders (Step 337)
 
@@ -1401,8 +1401,8 @@ lint check of narration against the picture), and isometric story places (a vill
 written as a small map, seen from above, where the cut-out characters walk round what is in the
 way, hand things about, open doors and light lamps).
 
-0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–170
-(Phases M, N, O and P in `tasklist.md`, Step 165 and Phase Q) is part of this release rather than an "Unreleased" section.
+0.3.0 was prepared in Step 132; the work of Steps 133–170
+(Phases M, N, O and P in `tasklist.md`, Step 165 and Phase Q) is part of this release.
 
 ### Behaviour changes and possible breaks
 

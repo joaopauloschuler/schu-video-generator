@@ -140,349 +140,6 @@ Under the hood, schu-video-generator voices the beats with ElevenLabs (or a TTS 
 [Manim](https://www.manim.community/), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slide deck).
 
-## Features
-
-- **Config-only videos** with twenty-eight built-in scene types, in landscape and vertical
-  formats (one config renders both):
-  - text and structure: `title`, `chapter` (section divider), `bullets`, `icon_grid`,
-    `comparison` (A vs B), `table`, `timeline`, `quote`, `text_card`, `end_card`;
-  - flows: `diagram` (alias `flowchart`; laid out automatically from `edges: ["a -> b: label"]`,
-    and `layered_layout` is there for project scenes), `process` (a token travelling through a
-    pipeline), `network` (a neural network with forward-pass pulses);
-  - data: `bar_chart`, `line_chart` (both can change their values between beats: bars re-sort, lines
-    morph, the axis rescales, a cursor sweeps a line), `scatter`, `histogram`, `pie` (and donut), `heatmap` (colour
-    scales from the theme), `stat` (a counting number with a comparison), `map` (countries step by
-    step, choropleths, pins and flight-path arcs; Natural Earth data bundled);
-  - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified
-    insets, a spotlight; in a browser, window or phone frame; a caption), `video_clip` (B-roll, screen
-    recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration),
-    `3d` (simple 3D drawn by three.js in headless Chromium: shapes, labels, groups and character
-    stand-ins under one light that move, turn, appear, glow and walk on words, a camera that orbits,
-    pushes in or flies to an object and follows it), `web` (a scene you write yourself as a web page
-    in HTML, CSS and JavaScript, or a canvas or three.js script, screenshotted frame by frame in
-    headless Chromium on the video's clock: CSS animations, timers and `requestAnimationFrame` follow
-    the narration, the theme comes as CSS variables, lint reads its text; `vidgen guide web`; with
-    `music_data` the page reads the video's music as `ctx.music`: the mix measured per frame and the
-    score's hits and notes, so pictures follow the score with no script of your own; three.js pages
-    get a ready-made film finish from the module `vidgen/three-finish`: depth of field, motion blur,
-    bloom, tone mapping, grade, vignette, grain; `vidgen still` draws one frame at an exact time
-    without rendering the scene; `vidgen music plan` reads a score and drafts a music video of `web`
-    scenes cut on its bar lines, a colour per section and a starter page per scene that follows the
-    score's drums, melodies and pads);
-  - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
-    notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
-    and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
-    braces, angle arcs and dimension lines), `number_line` (points, intervals, jumps such as +3), `code`, `code_morph` (one version of the code morphing into the next: schu-video-generator diffs
-    them), `code_walkthrough` (a long file scrolling to the lines each beat explains),
-    `terminal` (commands typed at a prompt and the output you write appearing, beside the code);
-  - cartoons: `stage` (the video's `characters:` on a set: a picture, a generated picture or a
-    gradient, a ground line, marks and depth, or a room with furniture, windows and doors;
-    characters (people or animals) walk, run, walk towards the camera and face it, sit, lean,
-    pick up, give and throw props; effect symbols over heads, motion effects, shots, light, wind
-    and rain, voice sounds like `[laugh]`, overlapping lines, and automatic directing with
-    `auto_direct`), `card` (title cards, opened and closed with an iris).
-
-  See them all in the **[scene gallery](docs/gallery/README.md)**: every type at 16:9 and 9:16,
-  with a GIF, its YAML, params and targets (`vidgen gallery` makes it, also for a project's own
-  types).
-- **Made for AI authors**: [AGENTS.md](AGENTS.md), also built in as `vidgen guide`, tells an
-  agent how to make a good video with schu-video-generator (see [For AI agents](#for-ai-agents)); `vidgen mcp`
-  gives an agent's client every command as an MCP tool, storyboards returned as images
-  ([Use from an AI agent via MCP](#use-from-an-ai-agent-via-mcp)).
-- **From an outline to a draft**: `vidgen plan outline.md` turns a Markdown outline or a
-  plain-text script into a draft project (no AI involved): headings become scenes and chapters,
-  prose becomes beats of 6–15 words, lists / tables / code / maths / images / quotes / `A -> B`
-  chains / numbers pick their scene types, and every scene says why (`# plan:`) and what to check
-  (`# TODO:`) ([example](examples/plan)).
-- **From a screenplay to a cartoon**: `vidgen screenplay story.md` turns `# Scene:` headings,
-  `NAME (manner): lines`, narrator paragraphs and `[stage directions]` into `stage` scenes with
-  generated characters, a voice each and automatic directing ([example](examples/screenplay));
-  `vidgen cast --random 4` writes a cast of original characters chosen to differ clearly
-  (silhouette, colours, accessories, voice), and `vidgen lint` warns when two look alike.
-- **Cartoon series**: `include: [../shared/cast.yaml, ../shared/sets.yaml]` shares characters,
-  voices and named stage sets between episodes; a scene's `set: meadow` starts from the set and
-  overrides what it needs ([example](examples/cartoon_series)).
-- **Ready-made sets and drawing styles**: `set: city_street` (or `park`, `beach`, `forest`,
-  `snowy_hills`, `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`) gives a stage a built-in
-  set with props, light, ambience and marks for two characters and every seat
-  ([docs](docs/CONFIG.md#ready-made-sets-set-city_street)); `drawing: {outline: bold, shading: soft, texture:
-  storybook}` changes how the whole video is drawn ([docs](docs/CONFIG.md#drawing-style-drawing)).
-- **Platform stories**: a stage's `level:` is a side view written as a small ASCII map (ground,
-  planks, clouds, ladders, gaps, coins, stars); `walk_to` and `jump: pip, to: cloud` are planned
-  on the tiles and checked by `vidgen validate`, a key opens a locked gate, a grumpy snail steps
-  aside when asked nicely, the camera follows the hero, `character_size: large` for Shorts
-  ([docs](docs/CONFIG.md#platform-levels-level), [example](examples/platform-story)).
-- **Isometric story places**: a stage's `iso:` is a village or a room seen from above at an
-  angle, written as a small ASCII map with ready-made houses, trees, lamps, wells, bridges and
-  furniture; the cut-out characters walk round what is in the way (`walk_to: hazel, to: well`,
-  `meet`, `after:`), hand small things about, open doors, light lamps and make flowers bloom;
-  shots and `follow` make them large, name tags show who speaks in wide views, evening, night
-  and rain set the mood, footsteps follow the ground ([docs](docs/CONFIG.md#isometric-places-iso),
-  [example](examples/iso-story)). For science fiction and magic: a `portal` that tears open,
-  crackles and seals ([docs](docs/CONFIG.md#portals-portal)) and `hologram` characters
-  ([docs](docs/CONFIG.md#holograms-hologram)); for a city at night neon `tower`s with crawling
-  screens, hover-pod `traffic` and glowing rain ([docs](docs/CONFIG.md#isometric-places-iso)),
-  `echo` characters (other selves overlapping the present) and a `hud` overlay (an implant's
-  alerts, heart monitor and scanner over the frame, its texts keeping off faces); a cartoon
-  `kiss`, holographic `equations` and `timelines`, a handheld `scanner`, a glowing `pendant`, a
-  `medal`, sliding doors and a shimmering `haze`, neon strip lights along a room's walls
-  (`wall_lights`) and `wavy` hair.
-- **Isometric diagrams**: `iso_diagram` draws architecture and data flow as blocks in the same
-  view (servers, databases, flat platforms, stacks of layers, group plates, connectors along a
-  grid) with flat, readable labels, fitted to 16:9 and 9:16; blocks grow in on the word that names
-  them, dots and packets flow along connectors, a stack's layers pull apart, the camera focuses on
-  a part, labels and values change in place ([docs](docs/CONFIG.md#iso_diagram),
-  [example](examples/iso-web-page)).
-- **Cell biology at university level**: `cell` draws a cell in physical scale (animal, plant or
-  bacterium; organelles, membranes, the cytoskeleton, molecules) and zooms from the tissue to one
-  ribosome with a scale bar; `molecule` shows molecules in nm (DNA, receptors, channels, pumps, ATP
-  synthase) with transport, gating and action potentials, and every step of gene expression up
-  close; `pathway` lays out signalling SBGN-style with signals, inhibitors, knockouts and drugs;
-  `cell_cycle` and `metabolism` draw the cycle, mitosis, meiosis, glycolysis, the citric acid
-  cycle and the respiratory chain. Places, directions, names and counts are checked
-  (`vidgen validate`, the `science_*` lint rules) and scenes carry references
-  ([docs](docs/CONFIG.md#cell), [cookbook](docs/COOKBOOK-CELL-BIOLOGY.md),
-  [gallery](docs/gallery/README.md#cell-biology), [example](examples/gene-to-secreted-protein/README.md)).
-- **Genetics** (Phase V): nine scene types that compute what they show, checked by `vidgen
-  validate` and the `genetics_*` lint rules, in standard notation (NSGC, ISCN, HGVS, HGNC)
-  ([cookbook](docs/COOKBOOK-GENETICS.md), [example](examples/cystic-fibrosis/README.md): cystic
-  fibrosis from a family's pedigree to the variant, a carrier test and the population). `cross` works a cross out exactly — gametes, a Punnett
-  square or a branch diagram, genotype and phenotype ratios (9 : 3 : 3 : 1, 9 : 3 : 4, a lethal
-  2 : 1, X-linked crosses by sex, linked genes with their recombinants) and a chi-square test — in
-  standard notation with phenotype pictures ([docs](docs/CONFIG.md#cross),
-  [gallery](docs/gallery/README.md#genetics)); `pedigree` draws a family chart in NSGC symbols and
-  works out which modes of inheritance fit (each excluded one with its reason), the obligate
-  carriers, carrier probabilities and the risk for a child ([docs](docs/CONFIG.md#pedigree));
-  `linkage_map` shows crossing over and works two- and three-point test crosses into a map in
-  centimorgans (gene order, interference; Haldane / Kosambi) ([docs](docs/CONFIG.md#linkage_map));
-  `karyotype` reads ISCN notation (47,XX,+21; t(9;22)(q34;q11.2)) into a G-banded karyogram or
-  animated structural edits ([docs](docs/CONFIG.md#karyotype)); `cell_cycle` meiosis shows
-  non-disjunction and its aneuploid gametes. Molecular genetics: `mutation` applies a variant to a
-  real coding sequence and works out its protein change with the genetic code, in HGVS notation
-  checked against the sequence (c.20A>T p.(Glu7Val), c.1521_1523del p.(Phe508del), c.35del
-  p.(Gly12Valfs*2), splice sites) ([docs](docs/CONFIG.md#mutation)); `crispr` shows Cas9 with its
-  guide — the PAM, the R-loop, the blunt cut 3 bp away, and NHEJ or HDR with the repaired allele's
-  change ([docs](docs/CONFIG.md#crispr)); `dna_lab` plays PCR, an agarose gel, Sanger sequencing or
-  NGS reads with a variant call ([docs](docs/CONFIG.md#dna_lab)). Population genetics: `population`
-  works Hardy–Weinberg out exactly (carriers from an incidence: 1/2500 → 1 in 25.5; a chi-square
-  test of HWE) and runs seeded drift, selection, migration, bottleneck and founder simulations
-  ([docs](docs/CONFIG.md#population)); `gwas` draws a Manhattan plot with the 5 × 10⁻⁸ line, a QQ
-  plot with λ_GC and a regional plot coloured by LD, from your CSV or a synthetic study labelled as
-  such ([docs](docs/CONFIG.md#gwas)).
-- **Science charts and worked calculations** (Phase W): `plot` draws data and models on scientific
-  axes — log, symlog, reversed and broken axes with units, 10ⁿ and SI prefixes, error bars with
-  their meaning (SD, SEM, 95 % CI, √N), fits (linear to Gaussian, Breit–Wigner, custom
-  expressions) with parameters ± errors, R², χ²/ν, confidence bands and residual panels,
-  histograms with fitted distributions, and simulations (ODEs, random walks, events) that grow
-  while you narrate ([docs](docs/CONFIG.md#plot)); `calculation` works a formula out step by step
-  with units and significant figures — the values put in with their units, exact fractions,
-  conversions, chains of results ([docs](docs/CONFIG.md#calculation)). The `calc_*` and `plot_*`
-  lint rules compare the numbers said with the numbers computed
-  ([cookbook](docs/COOKBOOK-SCIENCE-CHARTS.md), [gallery](docs/gallery/README.md#science-charts),
-  [example](examples/radioactive-decay/README.md): radioactive decay, a fit and the half-life,
-  carbon-14 dating).
-- **Orbital mechanics** (Phase X): `orbit` draws planets, moons and spacecraft on Kepler orbits
-  moving in correct timing (equal areas emerge from the physics), with honest scale ("sizes not to
-  scale", a true-scale inset, a log view), Kepler's laws (foci, equal-area sectors, vis-viva
-  arrows, Newton's cannonball), burns and Hohmann / bi-elliptic / phasing transfers with their Δv,
-  transfer time, phase angle and launch windows, gravity assists by patched conics, the restricted
-  three-body problem (Lagrange points, Trojans in the rotating frame, the figure-eight,
-  resonances, tides as a schematic) and the Solar System on any date 1800–2050 from JPL's
-  approximate elements, with the next opposition or conjunction ([docs](docs/CONFIG.md#orbit)).
-  The `orbit_*` lint rules check periods, speeds, Δv, transfer times, distances, dates and scale
-  claims against the scene's model ([cookbook](docs/COOKBOOK-ORBITS.md),
-  [gallery](docs/gallery/README.md#orbital-mechanics), [example](examples/mars-transfer/README.md):
-  how to get to Mars).
-- **Particle physics** (Phase Y): the Standard Model chart (PDG 2024 masses, charges, spins;
-  antiparticles; which bosons couple to what), Feynman diagrams in proper notation with every
-  vertex checked against the Standard Model (trees and one-loop H → γγ, gg → H), relativistic
-  kinematics as momentum arrows in the rest frame and the lab, event displays in a schematic
-  detector (tracks bending with R = p_T / 0.3 B, showers, muons, missing p_T), simulated
-  invariant-mass spectra filling with a resonance, a peak fit and the local significance, decay
-  chains with lifetimes and branching ratios ([docs](docs/CONFIG.md#standard_model)). Twelve
-  lint rules (`particle_mass`, `conservation_claim`, `feynman_boson`, `significance_claim`…)
-  check masses, charges, spins, lifetimes, branching ratios, conservation claims, bosons,
-  detector signatures and significance claims against the model
-  ([cookbook](docs/COOKBOOK-PARTICLES.md), [gallery](docs/gallery/README.md#particle-physics),
-  [example](examples/higgs-discovery/README.md): how the Higgs boson was found).
-- **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
-  morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
-  colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
-  chart and caption), code that morphs between versions, a terminal typing commands, function
-  plots and plane geometry, number lines, charts whose values change between beats, and a lint
-  rule for narration that names a label before it is on screen
-  ([docs](docs/CONFIG.md#actions-on-a-spoken-word), [example](examples/gradient-descent)).
-- **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
-  scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
-  mouth follows the narration; it points at items, reacts, walks to the other side, enters and
-  leaves, by hand or with `auto_direct` ([docs](docs/CONFIG.md#a-host-beside-any-scene-host),
-  [example](examples/host-explainer)).
-- **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
-  look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
-  `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
-  `standard`, `large`; vertical video gets `large` automatically); `vidgen list-themes
-  --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
-- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with schu-video-generator (no install);
-  presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
-- **Icons**: 200 built-in line icons (Lucide, ISC) in eight categories
-  ([catalogue](docs/ICONS.md)), searchable by concept, recoloured by the
-  theme and crisp at any size; used from config by `bullets` items, `title`, `chapter`, `stat`,
-  `comparison`, `timeline`, `diagram`, `process`, `end_card` and the `icon_grid` scene; `vidgen list-icons --search chart --sheet icons.png` finds and shows them;
-  a project adds or replaces icons with SVGs in `assets/icons/`.
-- **Beat actions**: a beat can point at parts of its scene while it is spoken —
-  `- highlight: "bar:4K"`, `- dim: item1`, `- reveal: item4` (with `until:` a later beat to undo),
-  `- zoom: "term:2ab"` (camera in and back out), `- transform: step1` + `into: step3`,
-  `- callout: "point:sparse@8"` + `kind: arrow`, `label: Lowest loss` (a box, circle, arrow,
-  label, spotlight or magnifier on a target or at coordinates of the frame, for the beat) — on
-  every built-in scene type, timed inside the beat ([reference](docs/CONFIG.md#beat-actions)).
-- **Overlays**: a video-level `overlays:` list draws lower thirds (`- {type: lower_third, scene:
-  intro, at: 1.5, name: Ada Lovelace}`), a watermark (logo, icon or text in a corner), a progress
-  bar and a chapter indicator ("2 · Results") over the scenes, fixed to the screen through camera
-  moves and fades and seamless across cuts; per scene on/off or overridden
-  ([reference](docs/CONFIG.md#overlays)). Chapters come from `chapter` cards or a scene's
-  `chapter:` key ([chapters](docs/CONFIG.md#chapters)).
-- **Chapters in the outputs**: `vidgen render` writes the chapters into the MP4 (players list
-  them and jump to them) with tags (`metadata: {artist, comment, ...}`; title from `title`), and
-  `<output>_chapters.txt`, the `0:00 Intro` / `1:05 Results` list for a YouTube description; an
-  "Intro" chapter covers the opening before the first chapter (`chapters: {intro: false}` starts
-  the first chapter at 0:00 instead), and `validate` / `render` warn when YouTube would ignore the
-  list (fewer than 3 chapters, one shorter than 10 s)
-  ([reference](docs/CONFIG.md#chapters-in-the-outputs-chapters-metadata)).
-- **Thumbnail and shareable parts**: `thumbnail: {title, subtitle, icon}` draws a designed
-  1280x720 card (1080x1920 for a vertical variant) in the theme — one big bold title sized to
-  stay legible at YouTube's 320x180 — or `thumbnail: {scene, beat, at, overlays: false}` takes a
-  frame of a scene; written by every `vidgen render` (or `vidgen thumbnail`) as
-  `<output>_thumbnail.png` (+ a JPEG under 2 MB), with the small size to look at and checks of
-  text size and contrast ([reference](docs/CONFIG.md#thumbnail-thumbnail-vidgen-thumbnail)).
-  `vidgen export gif --scene ID --max-mb 5` turns a scene (or `--from` / `--to`) into a palette
-  GIF within a size budget, `vidgen export clip` into an MP4 (stream-copied when it can be)
-  ([reference](docs/CONFIG.md#export-gif-and-clip-vidgen-export)).
-- **Slides**: `vidgen slides` turns the video into one self-contained HTML deck — a slide per
-  beat (its fully built frame; `--mode scene` for one per scene), the narration as speaker notes,
-  keyboard / click / swipe navigation, an overview by chapter, fullscreen, and with `--audio` a
-  narrated play mode ([reference](docs/CONFIG.md#slides-vidgen-slides)). `--format pdf` writes
-  a PDF instead: a slide per page, or with `--notes` notes pages (slide, narration, page
-  numbers), an optional title page, bookmarks by chapter and the `metadata:` as document
-  properties ([reference](docs/CONFIG.md#pdf-deck---format-pdf)).
-- **Burned-in captions**: `- {type: captions}` puts the narration into the picture, cut at
-  phrase boundaries like the SRT, with the scenes laid out clear of it; `style: karaoke` shows a
-  few big words at a time with the spoken one highlighted, for vertical / social videos. Word
-  times are estimated from the audio, or exact with `voice: {timestamps: true}` (ElevenLabs
-  character timings) ([reference](docs/CONFIG.md#captions)).
-- **Shorts cut from a longer video**: a variant's `cut:` keeps chosen scenes and beats (their
-  audio reused), re-stages them for 9:16 by beat id, adds a hook caption over the first seconds
-  and an end card; `shorts: true` keeps captions, the hook and a HUD's meters out of the phone app's buttons and
-  lints the Shorts safe area and the 60 s limit
-  ([reference](docs/CONFIG.md#cuts-and-shorts-cut-shorts)).
-- **Pronunciation dictionary**: `pronunciation: {K-Phi-3: kay fye three}` (plain, case-insensitive
-  or regex entries, or a separate file) changes only what the voice is sent; subtitles and
-  captions keep the written words, timed by the spoken ones. Only beats whose spoken text changes
-  are re-voiced, and `vidgen tts --dry-run` shows what they will say
-  ([reference](docs/CONFIG.md#pronunciation-pronunciation)).
-- **Readback check**: `vidgen readback` transcribes the narration MP3s with speech to text
-  (faster-whisper locally, or ElevenLabs) and compares them with the beat
-  texts: a word error rate per beat, the words expected and heard ("K-Phi-3" said "kay fye three",
-  heard "kay five three"), and a suggested fix — a pronunciation entry for a term misheard in
-  several beats, regenerating a beat that lost words. It also lists single words to listen to
-  (heard with low confidence or after an odd pause), with their time in the video and a fix.
-  Transcripts are cached; `vidgen lint`'s `readback` rule reports the beats above the threshold,
-  and `vidgen lint --readback` the words (rule `unclear_speech`) ([reference](docs/CONFIG.md#readback-vidgen-readback)).
-- **Generated images**: an `image` scene can take `generate: {prompt, negative, style, aspect,
-  seed}` instead of a file. `vidgen imagegen` makes the missing pictures once with the OpenAI
-  Images API (`OPENAI_API_KEY`, the default) or any image model on OpenRouter
-  (`imagegen: {provider: openrouter, model: ...}`, `OPENROUTER_API_KEY`); `--dry-run` shows the
-  prompts and an estimated cost with its basis (OpenRouter's current prices, looked up), and stores
-  them in `assets/generated/` with a JSON note of how each was made — commit them like audio.
-  Until then renders show a placeholder card with the prompt, so the video can be laid out first;
-  a project `imagegen.style` keeps the pictures alike, and `vidgen validate` warns when a prompt
-  asks for text in the picture ([reference](docs/CONFIG.md#generated-images-imagegen-vidgen-imagegen)).
-- **Other languages**: a variant with `language: pt-BR` and `translations: translations/pt.yaml`
-  is the same video in Portuguese. `vidgen translate-template --variant pt` lists every beat text
-  and on-screen text (titles, bullets, labels, table cells, chapter titles, the thumbnail...)
-  with its source and a hash; fill in the translations, and re-running it keeps them, marks the
-  ones whose source changed and follows texts that moved. Untranslated texts show the source and
-  `vidgen validate` lists them. Captions and the SRT break lines by the language's rules, the
-  speed lint uses its rate, ElevenLabs gets its `language_code` where the model takes one, the
-  MP4 its audio language tag, and translated beats get their own `audio/<variant>/`
-  ([reference](docs/CONFIG.md#languages-and-translations)). Cartoons are dubbed: `dub: {pt:
-  pm_alex}` on a voice, or a Kokoro voice of the language and the same kind chosen for you, with
-  lip sync from each language's audio; `--all-languages` on `tts`, `render` and `lint` does every
-  language in one command ([dubbing](docs/CONFIG.md#dubbing-dub---all-languages)).
-- **Multiple voices**: `voices: {ana: {voice_id: ..., label: "Dr. Ana"}}` plus `voice: ana` on a
-  scene or a beat for interviews and dialogue; each named voice inherits the base `voice:`, only
-  its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
-  (`--voice ana` voices one speaker), and `subtitles: {speakers: name}` / captions `speakers:`
-  name or colour the speakers ([reference](docs/CONFIG.md#multiple-voices-voices)).
-- **Narration providers**: ElevenLabs stays the default; optionally, `voice: {provider:
-  openrouter, model: ..., voice: ...}` voices the video with one of OpenRouter's TTS models
-  (Kokoro, Voxtral, Gemini TTS, ...; `OPENROUTER_API_KEY`, priced per character, estimated by
-  `vidgen tts --dry-run`), or `voice: {provider: kokoro, voice: af_heart}` voices it on your own
-  computer with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) — free, offline after a
-  one-time 330 MB download, English word timings for karaoke captions (Python 3.10-3.12).
-  One TTS provider per video — named voices change the
-  voice, not the provider — and a variant may switch the whole video to another one
-  ([reference](docs/CONFIG.md#narration-providers)).
-- **Lines with feeling**: `emotion: excited` (or `sad`, `whisper`, `doubtful`... 13 in all, or
-  your own speed, pitch, loudness and pauses) on a beat or a voice; Kokoro changes how the line
-  is spoken, ElevenLabs and OpenRouter get tags, settings or instructions
-  ([reference](docs/CONFIG.md#voices-with-feeling-emotion)).
-- **Voice effects**: `effect: robot` (or `hall`, `echo`, `radio`, `otherworldly`...) on a speaker's
-  voice for robots, ship computers, phone calls and beings from another world, with any provider
-  ([reference](docs/CONFIG.md#voice-effects-effect)).
-- **Sound effects**: thirty-six synthesised sounds (whoosh, swoosh, pop, click, tick, typing,
-  riser, chime, success, error, thud; footsteps on five surfaces, door knocks, creaks and locks,
-  coins, vehicles, thunder, voice sounds and music stings for cartoons; free to use in your videos,
-  including commercially; no attribution needed; [listen](docs/music/README.md#sound-effects))
-  or your own `assets/sfx/NAME.wav`, placed as a beat
-  action (`- sfx: whoosh` with `at`, `gain`, `align: end`, `params: {pitch: 3}`), in a scene's
-  `sfx:` list (seconds, silent scenes too) or with `self.sfx("pop")` in scene code; mixed
-  sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
-  reveals, highlights, callouts, zooms and chapter cards. `vidgen list-sfx` describes every sound
-  in words and `--render-dir` writes them out to listen to ([reference](docs/CONFIG.md#sound-effects-sfx)).
-- **Background music**: `music: calm` — one of seventeen generated beds (`calm` pad,
-  `pulse` soft arpeggio at 96 BPM, `bright` uplifting at 120 BPM, `cartoon` playful pizzicato
-  at 128 BPM, `lullaby` music box in 3/4 at 64 BPM, five documentary beds with a soft kick
-  and synth bass: `discovery`, `breakthrough` (tension, then a reveal), `enigma` (mysterious),
-  `momentum` (driving), `lab` (modern tech), and four energetic electronic beds: `ascent` and
-  `horizon` (uplifting trance that builds and lifts), `beacon` (a pulsar-like ticking beacon:
-  space, science), `neon` (synthwave night drive), and three written as score files: `tidewater`
-  (steady and hopeful, a bell melody in its lift), `skyline` (a pumping supersaw build and
-  lift) and `time_of_flight` (a curious tech-documentary loop, an AI author's piece); seamless loops; free to use in your videos, including commercially; no attribution
-  needed; [listen](docs/music/README.md)) or
-  your own file, looped with a cross-faded seam, faded in and out, changed per scene range (a
-  list of cues with `from` / `to`) or muted per scene (`music: false`); ducked 12 dB under the
-  narration only (not under the sound effects). A video with music is normalised to −16 LUFS
-  (EBU R128) with a −1.5 dBTP true-peak limiter (`audio: {normalize, target_lufs, true_peak}`;
-  narration-only videos keep their level unless `normalize: true`); `vidgen render` reports the
-  measured loudness and `vidgen list-music` describes the beds in words ([reference](docs/CONFIG.md#background-music-music)).
-  `music: {compose: {mood: calm}}` composes original music in one of eight
-  moods (calm, focused, curious, upbeat for explainers; playful, sleepy, tense, triumphant for
-  cartoons), played with real instruments ([reference](docs/CONFIG.md#composed-music-compose)):
-  composed for the video's timings, every scene change on a bar line, a mood per scene
-  (`music: {mood: tense}`), swells on reveals, a pause before a punchline and a closing cadence
-  ([follows the video](docs/CONFIG.md#music-that-follows-the-video)). Without the extra the mood's
-  bed plays and `vidgen validate` says so.
-- **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
-  `crossfade` (the scenes overlap, the video gets shorter by it), `fade_color` through a theme
-  colour (`{type: fade_color, color: surface, duration: 1.2}`), `push` (the next scene slides in
-  and pushes the previous one out) or `wipe` (`{type: wipe, direction: up, soft: true}`). A
-  transition never covers narration (the scene before is held a little longer if needed);
-  subtitles, captions, chapters, overlays, effects and music all follow the overlapped timeline,
-  and overlays are neither doubled in a crossfade nor moved by a push or wipe
-  ([reference](docs/CONFIG.md#transitions-transition)).
-- **Continuity (match cuts)**: `carry: ["title -> heading"]` on a scene starts it with the scene
-  before's title exactly where it ended, then glides it into its own heading (also icons and any
-  other target), so the cut between them does not show
-  ([reference](docs/CONFIG.md#continuity-carrying-objects-into-the-next-scene-carry)).
-- **Extensible per video**: a project can add its own scene types, beat actions, overlays,
-  helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching schu-video-generator.
-- **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
-  previews; `render`, `storyboard` and `lint` re-render only the scenes whose inputs changed.
-  Scenes drawn in a browser (`web`, `3d`) show a progress line while their frames are drawn, and
-  on a small disk `render: {intermediate: compact, keep_intermediates: false}` keeps their
-  intermediate frames clips about 4.6 times smaller or deletes them once used.
-- Windows, macOS and Linux; Python 3.10–3.13.
-
 ## For AI agents
 
 schu-video-generator is meant to be driven by AI agents. An agent making a video should read
@@ -1048,6 +705,349 @@ slow ones (the render sweeps over every scene type, the end-to-end renders, and 
 about 0.4 s: hours on one CPU), and `-m "slow or not slow"` runs everything; `-n auto` runs them
 in parallel on every CPU (pytest-xdist, in the `dev` extra). `-m "not render"` also skips the
 remaining rendering tests. No test needs network or keys.
+
+## Features
+
+- **Config-only videos** with twenty-eight built-in scene types, in landscape and vertical
+  formats (one config renders both):
+  - text and structure: `title`, `chapter` (section divider), `bullets`, `icon_grid`,
+    `comparison` (A vs B), `table`, `timeline`, `quote`, `text_card`, `end_card`;
+  - flows: `diagram` (alias `flowchart`; laid out automatically from `edges: ["a -> b: label"]`,
+    and `layered_layout` is there for project scenes), `process` (a token travelling through a
+    pipeline), `network` (a neural network with forward-pass pulses);
+  - data: `bar_chart`, `line_chart` (both can change their values between beats: bars re-sort, lines
+    morph, the axis rescales, a cursor sweeps a line), `scatter`, `histogram`, `pie` (and donut), `heatmap` (colour
+    scales from the theme), `stat` (a counting number with a comparison), `map` (countries step by
+    step, choropleths, pins and flight-path arcs; Natural Earth data bundled);
+  - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified
+    insets, a spotlight; in a browser, window or phone frame; a caption), `video_clip` (B-roll, screen
+    recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration),
+    `3d` (simple 3D drawn by three.js in headless Chromium: shapes, labels, groups and character
+    stand-ins under one light that move, turn, appear, glow and walk on words, a camera that orbits,
+    pushes in or flies to an object and follows it), `web` (a scene you write yourself as a web page
+    in HTML, CSS and JavaScript, or a canvas or three.js script, screenshotted frame by frame in
+    headless Chromium on the video's clock: CSS animations, timers and `requestAnimationFrame` follow
+    the narration, the theme comes as CSS variables, lint reads its text; `vidgen guide web`; with
+    `music_data` the page reads the video's music as `ctx.music`: the mix measured per frame and the
+    score's hits and notes, so pictures follow the score with no script of your own; three.js pages
+    get a ready-made film finish from the module `vidgen/three-finish`: depth of field, motion blur,
+    bloom, tone mapping, grade, vignette, grain; `vidgen still` draws one frame at an exact time
+    without rendering the scene; `vidgen music plan` reads a score and drafts a music video of `web`
+    scenes cut on its bar lines, a colour per section and a starter page per scene that follows the
+    score's drums, melodies and pads);
+  - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
+    notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
+    and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
+    braces, angle arcs and dimension lines), `number_line` (points, intervals, jumps such as +3), `code`, `code_morph` (one version of the code morphing into the next: schu-video-generator diffs
+    them), `code_walkthrough` (a long file scrolling to the lines each beat explains),
+    `terminal` (commands typed at a prompt and the output you write appearing, beside the code);
+  - cartoons: `stage` (the video's `characters:` on a set: a picture, a generated picture or a
+    gradient, a ground line, marks and depth, or a room with furniture, windows and doors;
+    characters (people or animals) walk, run, walk towards the camera and face it, sit, lean,
+    pick up, give and throw props; effect symbols over heads, motion effects, shots, light, wind
+    and rain, voice sounds like `[laugh]`, overlapping lines, and automatic directing with
+    `auto_direct`), `card` (title cards, opened and closed with an iris).
+
+  See them all in the **[scene gallery](docs/gallery/README.md)**: every type at 16:9 and 9:16,
+  with a GIF, its YAML, params and targets (`vidgen gallery` makes it, also for a project's own
+  types).
+- **Made for AI authors**: [AGENTS.md](AGENTS.md), also built in as `vidgen guide`, tells an
+  agent how to make a good video with schu-video-generator (see [For AI agents](#for-ai-agents)); `vidgen mcp`
+  gives an agent's client every command as an MCP tool, storyboards returned as images
+  ([Use from an AI agent via MCP](#use-from-an-ai-agent-via-mcp)).
+- **From an outline to a draft**: `vidgen plan outline.md` turns a Markdown outline or a
+  plain-text script into a draft project (no AI involved): headings become scenes and chapters,
+  prose becomes beats of 6–15 words, lists / tables / code / maths / images / quotes / `A -> B`
+  chains / numbers pick their scene types, and every scene says why (`# plan:`) and what to check
+  (`# TODO:`) ([example](examples/plan)).
+- **From a screenplay to a cartoon**: `vidgen screenplay story.md` turns `# Scene:` headings,
+  `NAME (manner): lines`, narrator paragraphs and `[stage directions]` into `stage` scenes with
+  generated characters, a voice each and automatic directing ([example](examples/screenplay));
+  `vidgen cast --random 4` writes a cast of original characters chosen to differ clearly
+  (silhouette, colours, accessories, voice), and `vidgen lint` warns when two look alike.
+- **Cartoon series**: `include: [../shared/cast.yaml, ../shared/sets.yaml]` shares characters,
+  voices and named stage sets between episodes; a scene's `set: meadow` starts from the set and
+  overrides what it needs ([example](examples/cartoon_series)).
+- **Ready-made sets and drawing styles**: `set: city_street` (or `park`, `beach`, `forest`,
+  `snowy_hills`, `classroom`, `kitchen`, `shop`, `living_room`, `bedroom`) gives a stage a built-in
+  set with props, light, ambience and marks for two characters and every seat
+  ([docs](docs/CONFIG.md#ready-made-sets-set-city_street)); `drawing: {outline: bold, shading: soft, texture:
+  storybook}` changes how the whole video is drawn ([docs](docs/CONFIG.md#drawing-style-drawing)).
+- **Platform stories**: a stage's `level:` is a side view written as a small ASCII map (ground,
+  planks, clouds, ladders, gaps, coins, stars); `walk_to` and `jump: pip, to: cloud` are planned
+  on the tiles and checked by `vidgen validate`, a key opens a locked gate, a grumpy snail steps
+  aside when asked nicely, the camera follows the hero, `character_size: large` for Shorts
+  ([docs](docs/CONFIG.md#platform-levels-level), [example](examples/platform-story)).
+- **Isometric story places**: a stage's `iso:` is a village or a room seen from above at an
+  angle, written as a small ASCII map with ready-made houses, trees, lamps, wells, bridges and
+  furniture; the cut-out characters walk round what is in the way (`walk_to: hazel, to: well`,
+  `meet`, `after:`), hand small things about, open doors, light lamps and make flowers bloom;
+  shots and `follow` make them large, name tags show who speaks in wide views, evening, night
+  and rain set the mood, footsteps follow the ground ([docs](docs/CONFIG.md#isometric-places-iso),
+  [example](examples/iso-story)). For science fiction and magic: a `portal` that tears open,
+  crackles and seals ([docs](docs/CONFIG.md#portals-portal)) and `hologram` characters
+  ([docs](docs/CONFIG.md#holograms-hologram)); for a city at night neon `tower`s with crawling
+  screens, hover-pod `traffic` and glowing rain ([docs](docs/CONFIG.md#isometric-places-iso)),
+  `echo` characters (other selves overlapping the present) and a `hud` overlay (an implant's
+  alerts, heart monitor and scanner over the frame, its texts keeping off faces); a cartoon
+  `kiss`, holographic `equations` and `timelines`, a handheld `scanner`, a glowing `pendant`, a
+  `medal`, sliding doors and a shimmering `haze`, neon strip lights along a room's walls
+  (`wall_lights`) and `wavy` hair.
+- **Isometric diagrams**: `iso_diagram` draws architecture and data flow as blocks in the same
+  view (servers, databases, flat platforms, stacks of layers, group plates, connectors along a
+  grid) with flat, readable labels, fitted to 16:9 and 9:16; blocks grow in on the word that names
+  them, dots and packets flow along connectors, a stack's layers pull apart, the camera focuses on
+  a part, labels and values change in place ([docs](docs/CONFIG.md#iso_diagram),
+  [example](examples/iso-web-page)).
+- **Cell biology at university level**: `cell` draws a cell in physical scale (animal, plant or
+  bacterium; organelles, membranes, the cytoskeleton, molecules) and zooms from the tissue to one
+  ribosome with a scale bar; `molecule` shows molecules in nm (DNA, receptors, channels, pumps, ATP
+  synthase) with transport, gating and action potentials, and every step of gene expression up
+  close; `pathway` lays out signalling SBGN-style with signals, inhibitors, knockouts and drugs;
+  `cell_cycle` and `metabolism` draw the cycle, mitosis, meiosis, glycolysis, the citric acid
+  cycle and the respiratory chain. Places, directions, names and counts are checked
+  (`vidgen validate`, the `science_*` lint rules) and scenes carry references
+  ([docs](docs/CONFIG.md#cell), [cookbook](docs/COOKBOOK-CELL-BIOLOGY.md),
+  [gallery](docs/gallery/README.md#cell-biology), [example](examples/gene-to-secreted-protein/README.md)).
+- **Genetics** (Phase V): nine scene types that compute what they show, checked by `vidgen
+  validate` and the `genetics_*` lint rules, in standard notation (NSGC, ISCN, HGVS, HGNC)
+  ([cookbook](docs/COOKBOOK-GENETICS.md), [example](examples/cystic-fibrosis/README.md): cystic
+  fibrosis from a family's pedigree to the variant, a carrier test and the population). `cross` works a cross out exactly — gametes, a Punnett
+  square or a branch diagram, genotype and phenotype ratios (9 : 3 : 3 : 1, 9 : 3 : 4, a lethal
+  2 : 1, X-linked crosses by sex, linked genes with their recombinants) and a chi-square test — in
+  standard notation with phenotype pictures ([docs](docs/CONFIG.md#cross),
+  [gallery](docs/gallery/README.md#genetics)); `pedigree` draws a family chart in NSGC symbols and
+  works out which modes of inheritance fit (each excluded one with its reason), the obligate
+  carriers, carrier probabilities and the risk for a child ([docs](docs/CONFIG.md#pedigree));
+  `linkage_map` shows crossing over and works two- and three-point test crosses into a map in
+  centimorgans (gene order, interference; Haldane / Kosambi) ([docs](docs/CONFIG.md#linkage_map));
+  `karyotype` reads ISCN notation (47,XX,+21; t(9;22)(q34;q11.2)) into a G-banded karyogram or
+  animated structural edits ([docs](docs/CONFIG.md#karyotype)); `cell_cycle` meiosis shows
+  non-disjunction and its aneuploid gametes. Molecular genetics: `mutation` applies a variant to a
+  real coding sequence and works out its protein change with the genetic code, in HGVS notation
+  checked against the sequence (c.20A>T p.(Glu7Val), c.1521_1523del p.(Phe508del), c.35del
+  p.(Gly12Valfs*2), splice sites) ([docs](docs/CONFIG.md#mutation)); `crispr` shows Cas9 with its
+  guide — the PAM, the R-loop, the blunt cut 3 bp away, and NHEJ or HDR with the repaired allele's
+  change ([docs](docs/CONFIG.md#crispr)); `dna_lab` plays PCR, an agarose gel, Sanger sequencing or
+  NGS reads with a variant call ([docs](docs/CONFIG.md#dna_lab)). Population genetics: `population`
+  works Hardy–Weinberg out exactly (carriers from an incidence: 1/2500 → 1 in 25.5; a chi-square
+  test of HWE) and runs seeded drift, selection, migration, bottleneck and founder simulations
+  ([docs](docs/CONFIG.md#population)); `gwas` draws a Manhattan plot with the 5 × 10⁻⁸ line, a QQ
+  plot with λ_GC and a regional plot coloured by LD, from your CSV or a synthetic study labelled as
+  such ([docs](docs/CONFIG.md#gwas)).
+- **Science charts and worked calculations** (Phase W): `plot` draws data and models on scientific
+  axes — log, symlog, reversed and broken axes with units, 10ⁿ and SI prefixes, error bars with
+  their meaning (SD, SEM, 95 % CI, √N), fits (linear to Gaussian, Breit–Wigner, custom
+  expressions) with parameters ± errors, R², χ²/ν, confidence bands and residual panels,
+  histograms with fitted distributions, and simulations (ODEs, random walks, events) that grow
+  while you narrate ([docs](docs/CONFIG.md#plot)); `calculation` works a formula out step by step
+  with units and significant figures — the values put in with their units, exact fractions,
+  conversions, chains of results ([docs](docs/CONFIG.md#calculation)). The `calc_*` and `plot_*`
+  lint rules compare the numbers said with the numbers computed
+  ([cookbook](docs/COOKBOOK-SCIENCE-CHARTS.md), [gallery](docs/gallery/README.md#science-charts),
+  [example](examples/radioactive-decay/README.md): radioactive decay, a fit and the half-life,
+  carbon-14 dating).
+- **Orbital mechanics** (Phase X): `orbit` draws planets, moons and spacecraft on Kepler orbits
+  moving in correct timing (equal areas emerge from the physics), with honest scale ("sizes not to
+  scale", a true-scale inset, a log view), Kepler's laws (foci, equal-area sectors, vis-viva
+  arrows, Newton's cannonball), burns and Hohmann / bi-elliptic / phasing transfers with their Δv,
+  transfer time, phase angle and launch windows, gravity assists by patched conics, the restricted
+  three-body problem (Lagrange points, Trojans in the rotating frame, the figure-eight,
+  resonances, tides as a schematic) and the Solar System on any date 1800–2050 from JPL's
+  approximate elements, with the next opposition or conjunction ([docs](docs/CONFIG.md#orbit)).
+  The `orbit_*` lint rules check periods, speeds, Δv, transfer times, distances, dates and scale
+  claims against the scene's model ([cookbook](docs/COOKBOOK-ORBITS.md),
+  [gallery](docs/gallery/README.md#orbital-mechanics), [example](examples/mars-transfer/README.md):
+  how to get to Mars).
+- **Particle physics** (Phase Y): the Standard Model chart (PDG 2024 masses, charges, spins;
+  antiparticles; which bosons couple to what), Feynman diagrams in proper notation with every
+  vertex checked against the Standard Model (trees and one-loop H → γγ, gg → H), relativistic
+  kinematics as momentum arrows in the rest frame and the lab, event displays in a schematic
+  detector (tracks bending with R = p_T / 0.3 B, showers, muons, missing p_T), simulated
+  invariant-mass spectra filling with a resonance, a peak fit and the local significance, decay
+  chains with lifetimes and branching ratios ([docs](docs/CONFIG.md#standard_model)). Twelve
+  lint rules (`particle_mass`, `conservation_claim`, `feynman_boson`, `significance_claim`…)
+  check masses, charges, spins, lifetimes, branching ratios, conservation claims, bosons,
+  detector signatures and significance claims against the model
+  ([cookbook](docs/COOKBOOK-PARTICLES.md), [gallery](docs/gallery/README.md#particle-physics),
+  [example](examples/higgs-discovery/README.md): how the Higgs boson was found).
+- **Presentation toolkit**: actions on a spoken word (`at: "@gradient"`: a callout, a reveal, a
+  morph or a moving dot lands as the narrator says the word, before and after `vidgen tts`), one
+  colour per concept (`terms: {loss: primary, gradient: secondary}` in every text, equation,
+  chart and caption), code that morphs between versions, a terminal typing commands, function
+  plots and plane geometry, number lines, charts whose values change between beats, and a lint
+  rule for narration that names a label before it is on screen
+  ([docs](docs/CONFIG.md#actions-on-a-spoken-word), [example](examples/gradient-descent)).
+- **A cartoon host for explainers**: `host: dot` stands a character beside the content of every
+  scene (bullets, charts, code...; below it in 9:16); the scenes lay out in the room left, and its
+  mouth follows the narration; it points at items, reacts, walks to the other side, enters and
+  leaves, by hand or with `auto_direct` ([docs](docs/CONFIG.md#a-host-beside-any-scene-host),
+  [example](examples/host-explainer)).
+- **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
+  look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
+  `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
+  `standard`, `large`; vertical video gets `large` automatically); `vidgen list-themes
+  --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
+- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with schu-video-generator (no install);
+  presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
+- **Icons**: 200 built-in line icons (Lucide, ISC) in eight categories
+  ([catalogue](docs/ICONS.md)), searchable by concept, recoloured by the
+  theme and crisp at any size; used from config by `bullets` items, `title`, `chapter`, `stat`,
+  `comparison`, `timeline`, `diagram`, `process`, `end_card` and the `icon_grid` scene; `vidgen list-icons --search chart --sheet icons.png` finds and shows them;
+  a project adds or replaces icons with SVGs in `assets/icons/`.
+- **Beat actions**: a beat can point at parts of its scene while it is spoken —
+  `- highlight: "bar:4K"`, `- dim: item1`, `- reveal: item4` (with `until:` a later beat to undo),
+  `- zoom: "term:2ab"` (camera in and back out), `- transform: step1` + `into: step3`,
+  `- callout: "point:sparse@8"` + `kind: arrow`, `label: Lowest loss` (a box, circle, arrow,
+  label, spotlight or magnifier on a target or at coordinates of the frame, for the beat) — on
+  every built-in scene type, timed inside the beat ([reference](docs/CONFIG.md#beat-actions)).
+- **Overlays**: a video-level `overlays:` list draws lower thirds (`- {type: lower_third, scene:
+  intro, at: 1.5, name: Ada Lovelace}`), a watermark (logo, icon or text in a corner), a progress
+  bar and a chapter indicator ("2 · Results") over the scenes, fixed to the screen through camera
+  moves and fades and seamless across cuts; per scene on/off or overridden
+  ([reference](docs/CONFIG.md#overlays)). Chapters come from `chapter` cards or a scene's
+  `chapter:` key ([chapters](docs/CONFIG.md#chapters)).
+- **Chapters in the outputs**: `vidgen render` writes the chapters into the MP4 (players list
+  them and jump to them) with tags (`metadata: {artist, comment, ...}`; title from `title`), and
+  `<output>_chapters.txt`, the `0:00 Intro` / `1:05 Results` list for a YouTube description; an
+  "Intro" chapter covers the opening before the first chapter (`chapters: {intro: false}` starts
+  the first chapter at 0:00 instead), and `validate` / `render` warn when YouTube would ignore the
+  list (fewer than 3 chapters, one shorter than 10 s)
+  ([reference](docs/CONFIG.md#chapters-in-the-outputs-chapters-metadata)).
+- **Thumbnail and shareable parts**: `thumbnail: {title, subtitle, icon}` draws a designed
+  1280x720 card (1080x1920 for a vertical variant) in the theme — one big bold title sized to
+  stay legible at YouTube's 320x180 — or `thumbnail: {scene, beat, at, overlays: false}` takes a
+  frame of a scene; written by every `vidgen render` (or `vidgen thumbnail`) as
+  `<output>_thumbnail.png` (+ a JPEG under 2 MB), with the small size to look at and checks of
+  text size and contrast ([reference](docs/CONFIG.md#thumbnail-thumbnail-vidgen-thumbnail)).
+  `vidgen export gif --scene ID --max-mb 5` turns a scene (or `--from` / `--to`) into a palette
+  GIF within a size budget, `vidgen export clip` into an MP4 (stream-copied when it can be)
+  ([reference](docs/CONFIG.md#export-gif-and-clip-vidgen-export)).
+- **Slides**: `vidgen slides` turns the video into one self-contained HTML deck — a slide per
+  beat (its fully built frame; `--mode scene` for one per scene), the narration as speaker notes,
+  keyboard / click / swipe navigation, an overview by chapter, fullscreen, and with `--audio` a
+  narrated play mode ([reference](docs/CONFIG.md#slides-vidgen-slides)). `--format pdf` writes
+  a PDF instead: a slide per page, or with `--notes` notes pages (slide, narration, page
+  numbers), an optional title page, bookmarks by chapter and the `metadata:` as document
+  properties ([reference](docs/CONFIG.md#pdf-deck---format-pdf)).
+- **Burned-in captions**: `- {type: captions}` puts the narration into the picture, cut at
+  phrase boundaries like the SRT, with the scenes laid out clear of it; `style: karaoke` shows a
+  few big words at a time with the spoken one highlighted, for vertical / social videos. Word
+  times are estimated from the audio, or exact with `voice: {timestamps: true}` (ElevenLabs
+  character timings) ([reference](docs/CONFIG.md#captions)).
+- **Shorts cut from a longer video**: a variant's `cut:` keeps chosen scenes and beats (their
+  audio reused), re-stages them for 9:16 by beat id, adds a hook caption over the first seconds
+  and an end card; `shorts: true` keeps captions, the hook and a HUD's meters out of the phone app's buttons and
+  lints the Shorts safe area and the 60 s limit
+  ([reference](docs/CONFIG.md#cuts-and-shorts-cut-shorts)).
+- **Pronunciation dictionary**: `pronunciation: {K-Phi-3: kay fye three}` (plain, case-insensitive
+  or regex entries, or a separate file) changes only what the voice is sent; subtitles and
+  captions keep the written words, timed by the spoken ones. Only beats whose spoken text changes
+  are re-voiced, and `vidgen tts --dry-run` shows what they will say
+  ([reference](docs/CONFIG.md#pronunciation-pronunciation)).
+- **Readback check**: `vidgen readback` transcribes the narration MP3s with speech to text
+  (faster-whisper locally, or ElevenLabs) and compares them with the beat
+  texts: a word error rate per beat, the words expected and heard ("K-Phi-3" said "kay fye three",
+  heard "kay five three"), and a suggested fix — a pronunciation entry for a term misheard in
+  several beats, regenerating a beat that lost words. It also lists single words to listen to
+  (heard with low confidence or after an odd pause), with their time in the video and a fix.
+  Transcripts are cached; `vidgen lint`'s `readback` rule reports the beats above the threshold,
+  and `vidgen lint --readback` the words (rule `unclear_speech`) ([reference](docs/CONFIG.md#readback-vidgen-readback)).
+- **Generated images**: an `image` scene can take `generate: {prompt, negative, style, aspect,
+  seed}` instead of a file. `vidgen imagegen` makes the missing pictures once with the OpenAI
+  Images API (`OPENAI_API_KEY`, the default) or any image model on OpenRouter
+  (`imagegen: {provider: openrouter, model: ...}`, `OPENROUTER_API_KEY`); `--dry-run` shows the
+  prompts and an estimated cost with its basis (OpenRouter's current prices, looked up), and stores
+  them in `assets/generated/` with a JSON note of how each was made — commit them like audio.
+  Until then renders show a placeholder card with the prompt, so the video can be laid out first;
+  a project `imagegen.style` keeps the pictures alike, and `vidgen validate` warns when a prompt
+  asks for text in the picture ([reference](docs/CONFIG.md#generated-images-imagegen-vidgen-imagegen)).
+- **Other languages**: a variant with `language: pt-BR` and `translations: translations/pt.yaml`
+  is the same video in Portuguese. `vidgen translate-template --variant pt` lists every beat text
+  and on-screen text (titles, bullets, labels, table cells, chapter titles, the thumbnail...)
+  with its source and a hash; fill in the translations, and re-running it keeps them, marks the
+  ones whose source changed and follows texts that moved. Untranslated texts show the source and
+  `vidgen validate` lists them. Captions and the SRT break lines by the language's rules, the
+  speed lint uses its rate, ElevenLabs gets its `language_code` where the model takes one, the
+  MP4 its audio language tag, and translated beats get their own `audio/<variant>/`
+  ([reference](docs/CONFIG.md#languages-and-translations)). Cartoons are dubbed: `dub: {pt:
+  pm_alex}` on a voice, or a Kokoro voice of the language and the same kind chosen for you, with
+  lip sync from each language's audio; `--all-languages` on `tts`, `render` and `lint` does every
+  language in one command ([dubbing](docs/CONFIG.md#dubbing-dub---all-languages)).
+- **Multiple voices**: `voices: {ana: {voice_id: ..., label: "Dr. Ana"}}` plus `voice: ana` on a
+  scene or a beat for interviews and dialogue; each named voice inherits the base `voice:`, only
+  its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
+  (`--voice ana` voices one speaker), and `subtitles: {speakers: name}` / captions `speakers:`
+  name or colour the speakers ([reference](docs/CONFIG.md#multiple-voices-voices)).
+- **Narration providers**: ElevenLabs stays the default; optionally, `voice: {provider:
+  openrouter, model: ..., voice: ...}` voices the video with one of OpenRouter's TTS models
+  (Kokoro, Voxtral, Gemini TTS, ...; `OPENROUTER_API_KEY`, priced per character, estimated by
+  `vidgen tts --dry-run`), or `voice: {provider: kokoro, voice: af_heart}` voices it on your own
+  computer with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) — free, offline after a
+  one-time 330 MB download, English word timings for karaoke captions (Python 3.10-3.12).
+  One TTS provider per video — named voices change the
+  voice, not the provider — and a variant may switch the whole video to another one
+  ([reference](docs/CONFIG.md#narration-providers)).
+- **Lines with feeling**: `emotion: excited` (or `sad`, `whisper`, `doubtful`... 13 in all, or
+  your own speed, pitch, loudness and pauses) on a beat or a voice; Kokoro changes how the line
+  is spoken, ElevenLabs and OpenRouter get tags, settings or instructions
+  ([reference](docs/CONFIG.md#voices-with-feeling-emotion)).
+- **Voice effects**: `effect: robot` (or `hall`, `echo`, `radio`, `otherworldly`...) on a speaker's
+  voice for robots, ship computers, phone calls and beings from another world, with any provider
+  ([reference](docs/CONFIG.md#voice-effects-effect)).
+- **Sound effects**: thirty-six synthesised sounds (whoosh, swoosh, pop, click, tick, typing,
+  riser, chime, success, error, thud; footsteps on five surfaces, door knocks, creaks and locks,
+  coins, vehicles, thunder, voice sounds and music stings for cartoons; free to use in your videos,
+  including commercially; no attribution needed; [listen](docs/music/README.md#sound-effects))
+  or your own `assets/sfx/NAME.wav`, placed as a beat
+  action (`- sfx: whoosh` with `at`, `gain`, `align: end`, `params: {pitch: 3}`), in a scene's
+  `sfx:` list (seconds, silent scenes too) or with `self.sfx("pop")` in scene code; mixed
+  sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
+  reveals, highlights, callouts, zooms and chapter cards. `vidgen list-sfx` describes every sound
+  in words and `--render-dir` writes them out to listen to ([reference](docs/CONFIG.md#sound-effects-sfx)).
+- **Background music**: `music: calm` — one of seventeen generated beds (`calm` pad,
+  `pulse` soft arpeggio at 96 BPM, `bright` uplifting at 120 BPM, `cartoon` playful pizzicato
+  at 128 BPM, `lullaby` music box in 3/4 at 64 BPM, five documentary beds with a soft kick
+  and synth bass: `discovery`, `breakthrough` (tension, then a reveal), `enigma` (mysterious),
+  `momentum` (driving), `lab` (modern tech), and four energetic electronic beds: `ascent` and
+  `horizon` (uplifting trance that builds and lifts), `beacon` (a pulsar-like ticking beacon:
+  space, science), `neon` (synthwave night drive), and three written as score files: `tidewater`
+  (steady and hopeful, a bell melody in its lift), `skyline` (a pumping supersaw build and
+  lift) and `time_of_flight` (a curious tech-documentary loop, an AI author's piece); seamless loops; free to use in your videos, including commercially; no attribution
+  needed; [listen](docs/music/README.md)) or
+  your own file, looped with a cross-faded seam, faded in and out, changed per scene range (a
+  list of cues with `from` / `to`) or muted per scene (`music: false`); ducked 12 dB under the
+  narration only (not under the sound effects). A video with music is normalised to −16 LUFS
+  (EBU R128) with a −1.5 dBTP true-peak limiter (`audio: {normalize, target_lufs, true_peak}`;
+  narration-only videos keep their level unless `normalize: true`); `vidgen render` reports the
+  measured loudness and `vidgen list-music` describes the beds in words ([reference](docs/CONFIG.md#background-music-music)).
+  `music: {compose: {mood: calm}}` composes original music in one of eight
+  moods (calm, focused, curious, upbeat for explainers; playful, sleepy, tense, triumphant for
+  cartoons), played with real instruments ([reference](docs/CONFIG.md#composed-music-compose)):
+  composed for the video's timings, every scene change on a bar line, a mood per scene
+  (`music: {mood: tense}`), swells on reveals, a pause before a punchline and a closing cadence
+  ([follows the video](docs/CONFIG.md#music-that-follows-the-video)). Without the extra the mood's
+  bed plays and `vidgen validate` says so.
+- **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
+  `crossfade` (the scenes overlap, the video gets shorter by it), `fade_color` through a theme
+  colour (`{type: fade_color, color: surface, duration: 1.2}`), `push` (the next scene slides in
+  and pushes the previous one out) or `wipe` (`{type: wipe, direction: up, soft: true}`). A
+  transition never covers narration (the scene before is held a little longer if needed);
+  subtitles, captions, chapters, overlays, effects and music all follow the overlapped timeline,
+  and overlays are neither doubled in a crossfade nor moved by a push or wipe
+  ([reference](docs/CONFIG.md#transitions-transition)).
+- **Continuity (match cuts)**: `carry: ["title -> heading"]` on a scene starts it with the scene
+  before's title exactly where it ended, then glides it into its own heading (also icons and any
+  other target), so the cut between them does not show
+  ([reference](docs/CONFIG.md#continuity-carrying-objects-into-the-next-scene-carry)).
+- **Extensible per video**: a project can add its own scene types, beat actions, overlays,
+  helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching schu-video-generator.
+- **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
+  previews; `render`, `storyboard` and `lint` re-render only the scenes whose inputs changed.
+  Scenes drawn in a browser (`web`, `3d`) show a progress line while their frames are drawn, and
+  on a small disk `render: {intermediate: compact, keep_intermediates: false}` keeps their
+  intermediate frames clips about 4.6 times smaller or deletes them once used.
+- Windows, macOS and Linux; Python 3.10–3.13.
 
 ## Troubleshooting
 
