@@ -2109,6 +2109,9 @@ with demo files for the owner to listen to.
 - [x] Copy the source of `/home/claude/work/ps7` (v7: video.yaml, the score, `ps.js`, `ps_audio.json`, `webcut.py`, `scripts/make_ps_audio.py`, .gitignore; not `night_drive.yaml`, build or output) into `examples/parallel-space/` as is (no port to `music_data`); README for visitors; README example list entry and gallery note; `tests/test_parallel_space_example.py` (validate only) — done, no rendering
 - [ ] Not done: nothing rendered from the example (no still, draft or final; the render time is the earlier measurement of the film); Windows and macOS not tried
 
+### Step 356 — Videos on YouTube in the gallery (owner's request, 2026-11-16)
+- [x] A "Videos on YouTube" section at the end of `docs/gallery/README.md`, written by `write_index` from `YOUTUBE_VIDEOS` in `src/vidgen/gallery.py` (title, link, channel; two videos); a README line pointing to it; a test that the committed index ends with it — done, nothing rendered
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

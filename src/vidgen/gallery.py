@@ -130,6 +130,30 @@ SECTION_FOOTERS: dict[str, str] = {
     "orbital mechanics": "`vidgen guide orbits` · [the orbits cookbook](../COOKBOOK-ORBITS.md)",
     "particle physics": "`vidgen guide particle-physics` · [the particle-physics cookbook](../COOKBOOK-PARTICLES.md)",
 }
+#: Videos made with schu-video-generator and published on YouTube, listed at the end of the index.
+YOUTUBE_VIDEOS: list[dict[str, str]] = [
+    {
+        "title": "How to create this AI music video in the video description",
+        "url": "https://youtu.be/J8gljBhqtTo",
+        "channel": "Artificial Intelligence Video Art",
+    },
+    {
+        "title": "How to create long cartoon videos with AI? I will teach you!",
+        "url": "https://youtu.be/tjqrvbYNbGE",
+        "channel": "Artificial Intelligence with Python",
+    },
+]
+
+
+def youtube_lines() -> list[str]:
+    """The index's "Videos on YouTube" section: one Markdown link per video, with its channel."""
+    if not YOUTUBE_VIDEOS:
+        return []
+    lines = ["## Videos on YouTube", "", "Videos made with schu-video-generator:", ""]
+    lines += [f"- [{v['title']}]({v['url']}) ({v['channel']})" for v in YOUTUBE_VIDEOS]
+    return [*lines, ""]
+
+
 DEFAULT_FOOTER = "`vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`"
 
 _FENCE = re.compile(r"```(\w*)\n(.*?)```", re.S)
@@ -829,6 +853,7 @@ def write_index(
             lines += [SECTION_NOTES[group], ""]
         first = {(True, False): "type", (True, True): "type or showcase", (False, True): "showcase"}[(group in type_groups, group in with_showcases)]
         lines += [f"| {first} | preview | use it for |", "|---|---|---|", *rows, ""]
+    lines += youtube_lines()
     path = output / "README.md"
     write_text_atomic(path, "\n".join(lines))
     return path

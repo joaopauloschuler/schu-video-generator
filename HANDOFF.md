@@ -27098,3 +27098,15 @@ project), repo work is generic.
 - **Tests**: `tests/test_parallel_space_example.py` (3, default run, 2.6 s: source only + `.gitignore`, `validate_all` passes (it does not synthesize), eleven `web_cut` scenes starting on bar lines with `t0` matching, 104 bars + 4.6 s, the score's hash, 30 tracks, no range warnings, the page fetches `ps_audio.json` and the file covers every frame); ran it, `tests/test_docs.py`, `tests/test_gallery.py`.
 - **Not verified**: nothing was rendered from the example folder (no still, no draft, no final, no music render); Windows and macOS.
 - **How to test**: `python -m pytest -q tests/test_parallel_space_example.py`; by hand `vidgen still examples/parallel-space --scene 03_groove1 --at 7 --out /tmp/x.png` (synthesizes the score first, about 9 min).
+
+## Step 356 — Videos on YouTube in the gallery
+
+- **Why**: the owner asked (2026-11-16) for a gallery section listing YouTube videos made with schu-video-generator, starting with two.
+- **Built**: `src/vidgen/gallery.py` — `YOUTUBE_VIDEOS` (a list of `{title, url, channel}`) and `youtube_lines()`, which `write_index` appends after the last group: `## Videos on YouTube`, one line "Videos made with schu-video-generator:", then `- [title](url) (channel)` per video. Plain links only; no thumbnails or embeds. The two videos: "How to create this AI music video in the video description" (https://youtu.be/J8gljBhqtTo, Artificial Intelligence Video Art) and "How to create long cartoon videos with AI? I will teach you!" (https://youtu.be/tjqrvbYNbGE, Artificial Intelligence with Python).
+- **Index by hand**: `docs/gallery/README.md` has the section appended exactly as `write_index` writes it (`vidgen gallery` not run). README: one line after the gallery strip pointing to `docs/gallery/README.md#videos-on-youtube`.
+- **Adding a video**: append an entry to `YOUTUBE_VIDEOS` and the same line to the end of `docs/gallery/README.md` (or run `vidgen gallery`).
+- **Files**: `src/vidgen/gallery.py`, `docs/gallery/README.md`, `README.md`, `tests/test_gallery.py`, `CHANGELOG.md`, `tasklist.md`, `HANDOFF.md`.
+- **Public interface**: none (module constants only).
+- **Tests**: new `test_committed_gallery_ends_with_the_youtube_videos` (the committed index ends with `youtube_lines()`); ran `tests/test_gallery.py` and `tests/test_docs.py` (default run).
+- **Not verified**: nothing rendered; the links were not opened (no network).
+- **How to test**: `python -m pytest -q tests/test_gallery.py tests/test_docs.py`.

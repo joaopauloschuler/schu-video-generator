@@ -55,6 +55,8 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   <a href="docs/gallery/code_morph.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/code_morph-16x9.png"><img src="docs/gallery/media/code_morph-16x9.gif" width="200" alt="Code morphing: a recursive function gains a cache decorator"></picture></a>
 </p>
 
+Videos made with schu-video-generator are listed in the gallery's [Videos on YouTube](docs/gallery/README.md#videos-on-youtube).
+
 **Music and sound.** schu-video-generator makes its own soundtrack; [listen to every bed and sound](docs/music/README.md)
 (clips and spectrograms).
 

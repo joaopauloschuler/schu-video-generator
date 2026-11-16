@@ -378,3 +378,11 @@ def test_gallery_renders_a_few_types(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert "rendered 0 sample(s), 1 reused" in printed
     assert {p.name: p.read_bytes() for p in (out / "media").iterdir()} == first
     assert {p.name: p.read_bytes() for p in out.glob("*.md")} == pages
+
+
+def test_committed_gallery_ends_with_the_youtube_videos() -> None:
+    index = (DOCS / "README.md").read_text(encoding="utf-8")
+    section = "\n".join(gallery.youtube_lines())
+    assert index.endswith("|\n\n" + section), "docs/gallery/README.md: write the YouTube section as write_index does"
+    for video in gallery.YOUTUBE_VIDEOS:
+        assert f"[{video['title']}]({video['url']}) ({video['channel']})" in section

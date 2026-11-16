@@ -5,7 +5,11 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–355)
+## Unreleased (Steps 193–356)
+
+### Gallery (Step 356)
+
+- The scene gallery ends with "Videos on YouTube": links to videos made with schu-video-generator (`YOUTUBE_VIDEOS` in `src/vidgen/gallery.py`); the README points to it.
 
 ### "Parallel Space" as an example (Step 355)
 
