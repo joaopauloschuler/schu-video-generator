@@ -38,7 +38,7 @@ JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
     "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts", "audio",
-    "generate",
+    "generate", "motion",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -1033,6 +1033,32 @@ def _loudness_line(mix: dict[str, Any], limiter: bool = False) -> str:
     return level + peak + (f" ({'; '.join(notes)})" if notes else "")
 
 
+def cmd_motion(args: argparse.Namespace) -> CommandResult:
+    """``vidgen motion check FILE|PROJECT``: watch a rendered video at low resolution for blank
+    frames, flashes, flicker, pops, strobing, frozen stretches and jumps at cuts, with a contact
+    strip per finding (DESIGN.md §121.3); nothing is rendered."""
+    from vidgen import motion_check
+
+    target = Path(args.target)
+    thresholds = motion_check.Thresholds().with_overrides(args.threshold)
+    if target.is_dir() or target.name in CONFIG_NAMES:
+        project = Project.load(target, variant=args.variant, output_dir=args.output_dir, draft=args.draft)
+        preview = args.preview or args.draft
+        source = motion_check.project_source(project, preview, args.source)
+        out = Path(args.out) if args.out else project.render_dir(preview) / "motion"
+    else:
+        if args.source == "scenes" or args.variant or args.preview or args.draft:
+            raise VidgenError(f"motion check {target}: --source scenes, --variant, --preview and --draft are for a project folder, not a video file")
+        source = motion_check.file_source(target)
+        out = Path(args.out) if args.out else Path(f"{target.stem}_motion")
+    report = motion_check.run_check(source, thresholds, None if args.no_strips else out)
+    failed = report.fails(args.fail_on)
+    if args.json:
+        return jsonout.envelope("motion", not failed, action="check", **motion_check.report_json(report))
+    print(motion_check.report_text(report))
+    return 1 if failed else 0
+
+
 def cmd_storyboard(args: argparse.Namespace) -> CommandResult:
     """Render what is needed with frame stills and write contact sheets (PNG) of the video."""
     from vidgen.storyboard import make_storyboard
@@ -1681,6 +1707,8 @@ def cmd_music(args: argparse.Namespace) -> CommandResult:
         return _music_template(args)
     if args.action == "check":
         return _music_check(args)
+    if args.action == "plan":
+        return _music_plan(args)
     settings: dict[str, Any] = {}
     setting, root = None, Path.cwd()
     if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
@@ -1914,6 +1942,42 @@ def _music_check(args: argparse.Namespace) -> CommandResult:
     print(f"demo under narration: {', '.join(str(d) for d in demos)} ({narration}; listen to choose)")
     print(f"checked in {seconds_taken:.1f} s")
     return 0
+
+
+def _music_plan(args: argparse.Namespace) -> CommandResult:
+    """``vidgen music plan SCORE [--out DIR] [--force]``: a music video's scenes proposed from a
+    score file (cuts on bar lines, a colour per section, the tracks each scene follows); with
+    ``--out`` a draft project of ``web_cut`` scenes with a starter page each (DESIGN.md §121.2)."""
+    from vidgen.music_pieces import music_source
+    from vidgen.music_video_plan import plan_dict, plan_music_video, plan_text, write_music_video
+
+    if args.project == ".":
+        raise VidgenError("music plan: give the score file, e.g. vidgen music plan assets/music/my_theme.yaml (or a project piece's or a score bed's name)")
+    kind, found = music_source(args.project, Path.cwd())
+    if kind == "bed":
+        raise VidgenError(f"music plan: the bed {args.project} is not a score file; write its score-file template and plan that: "
+                          f"vidgen music template {args.project} --out {args.project}.yaml")
+    if found is None or found.suffix.lower() not in (".yaml", ".yml"):
+        raise VidgenError(f"music plan: {args.project} is not a score file (.yaml): the plan reads a score's sections, tracks and notes")
+    plan = plan_music_video(found, max_seconds=args.max_scene, min_seconds=args.min_scene)
+    draft = write_music_video(plan, Path(args.out), force=args.force) if args.out else None
+    problems: list[str] = []
+    if draft is not None:
+        project = Project.load(draft.config)
+        problems, _ = validate_all(project, keep_going=True)
+    if args.json:
+        return jsonout.music_plan_document(plan_dict(plan), draft, [str(p) for p in problems])
+    print(plan_text(plan))
+    if draft is None:
+        print(f"draft it: vidgen music plan {args.project} --out my_video   (video.yaml, the score, a starter page per scene)")
+        return 0
+    print(f"{'created' if draft.created else 'wrote'} {draft.config} ({len(plan.scenes)} web_cut scenes)")
+    for rel in draft.files:
+        print(f"  {rel}")
+    for problem in problems:
+        print(f"problem: {problem}", file=sys.stderr)
+    print(f"next: vidgen still {draft.root} --scene {plan.scenes[0].id} --at 2 --size 640x360, edit the pages, then vidgen render {draft.root} --draft")
+    return 1 if problems else 0
 
 
 def _music_page(args: argparse.Namespace) -> CommandResult:
@@ -2511,22 +2575,24 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "music",
         help="music tools: preview writes a composed piece in a mood as WAV and .mid; render plays a score file; "
-        "check says how a score or audio file will sit under narration; "
+        "check says how a score or audio file will sit under narration; plan proposes a music video's scenes from a score; "
         "patches describes the score files' instruments and effects; template writes a built-in bed as a score file; page writes the Listen page",
     )
     p.add_argument(
-        "action", choices=["preview", "render", "check", "patches", "template", "page"],
+        "action", choices=["preview", "render", "check", "plan", "patches", "template", "page"],
         help="preview: compose the project's compose: music (or --mood) and write it; render: play a score file (YAML) to a WAV or MP3; "
         "check: a report in words (loudness, peaks, tempo, loop seam, voice range, bass, highs, sections, key) with advice, "
         "a spectrogram PNG and a demo MP3 under narration; "
+        "plan: a music video's scenes from a score file (cuts on bar lines, a colour per section, the tracks each scene follows), "
+        "with --out a draft project of web scenes with a starter page each; "
         "patches: every score-file instrument, setting and effect in words; "
         "template: list the built-in beds' score-file templates, or write one (vidgen music template momentum --out my_theme.yaml); "
         "page: write the Listen page (a clip and spectrogram of every bed, the sound effects, ambience and composed moods; default --out docs/music)",
     )
     p.add_argument(
         "project", nargs="?", default=".",
-        help="preview: project dir or config file (default: .); render: the score file; check: a score file or an audio file "
-        "(render and check: or a project piece's name, assets/music/NAME.yaml here, or a built-in bed's); template: the bed (none: list them)",
+        help="preview: project dir or config file (default: .); render and plan: the score file; check: a score file or an audio file "
+        "(render, plan and check: or a project piece's name, assets/music/NAME.yaml here, or a built-in bed's); template: the bed (none: list them)",
     )
     p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
     p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
@@ -2537,11 +2603,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", metavar="PATH",
         help="preview: folder for <mood>-seed<N>.wav and .mid (default: .); render: the .wav or .mp3 (default: <score>.wav here); "
         "check: the folder for <name>-check.png and <name>-demo.mp3 (default: .); "
-        "template: the .yaml to write (default: <bed>.yaml here); page: the page's folder (default: docs/music)",
+        "template: the .yaml to write (default: <bed>.yaml here); page: the page's folder (default: docs/music); "
+        "plan: the folder of the draft project to write (default: only print the plan)",
     )
+    p.add_argument("--max-scene", type=float, default=16.0, metavar="SECONDS", help="plan: split a section longer than this on a phrase line (default: 16)")
+    p.add_argument("--min-scene", type=float, default=5.0, metavar="SECONDS", help="plan: join a section shorter than this to the one before (default: 5)")
     p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with schu-video-generator)")
     p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file (or a piece's or bed's name): a side-by-side table and a two-row spectrogram")
-    p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists")
+    p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists; plan: write the draft into a folder that is not empty")
     p.add_argument("--no-composed", dest="composed", action="store_false", help="page: leave out the composed moods' clips")
     p.set_defaults(func=cmd_music)
 
@@ -2722,6 +2791,28 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--draft", action="store_true", help="a project's draft render")
     output_dir_arg(p)
     p.set_defaults(func=cmd_audio)
+
+    p = sub.add_parser(
+        "motion",
+        help="motion check: watch a rendered video (a file or a project's render) at low resolution for blank or black frames, "
+        "one-frame flashes, flicker, popping, strobing, frozen stretches and jumps at cuts; a contact strip PNG per finding",
+    )
+    p.add_argument("action", choices=["check"], help="check: decode the video at 160 px wide and report each fault with its time, frame, scene and severity")
+    p.add_argument("target", nargs="?", default=".", help="a video file (mp4, mov, webm...), or a project dir or config file: its rendered video, "
+                   "else its rendered scene clips (default: .)")
+    p.add_argument("--source", choices=["auto", "video", "scenes"], default="auto",
+                   help="a project's rendered video, or its scene clips in build/ (auto: the video if rendered, else the clips; nothing is rendered)")
+    p.add_argument("--variant", metavar="NAME", help="a project's variant (its render)")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--preview", action="store_true", help="a project's preview render")
+    quality.add_argument("--draft", action="store_true", help="a project's draft render")
+    output_dir_arg(p)
+    p.add_argument("--out", metavar="DIR", help="folder for the contact strips (default: build/<quality>/motion in a project, <video>_motion here for a file)")
+    p.add_argument("--no-strips", action="store_true", help="only the report, no contact strips")
+    p.add_argument("--threshold", action="append", default=[], metavar="NAME=VALUE",
+                   help="change a threshold, e.g. flash=0.12 or frozen_seconds=3 (repeatable; docs/CONFIG.md lists them)")
+    p.add_argument("--fail-on", choices=["error", "warning", "info", "never"], default="error", help="lowest severity that makes the exit code 1 (default: error)")
+    p.set_defaults(func=cmd_motion)
 
     p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")
     project_arg(p)

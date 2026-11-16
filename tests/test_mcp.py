@@ -207,7 +207,7 @@ TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview", "story_draft", "shorts_suggest",
-    "music_template", "music_patches", "music_render", "music_check", "audio_check",
+    "music_template", "music_patches", "music_render", "music_check", "music_plan", "audio_check", "motion_check",
     "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
     "generate_plan", "generate_run", "generate_status", "generate_takes", "generate_pick", "generate_host_test", "still",
 }
@@ -400,6 +400,47 @@ def test_server_music_tools(tmp_path: Path) -> None:
         assert doc["command"] == "audio" and doc["measured"]["integrated_lufs"] == pytest.approx(-28, abs=0.7)
         assert doc["checks"][0]["preset"] == "broadcast" and doc["ok"] is False   # -28 LUFS misses -23
         assert "outside the folder" in error_text(await client.call_tool("audio_check", {"target": "../x.mp3"}))
+
+    run_session(tmp_path, body)
+
+
+@pytest.mark.slow
+def test_server_motion_check_returns_the_strips(tmp_path: Path) -> None:
+    """Step 360: motion_check watches a video file under the root and returns its strips as pictures."""
+    import subprocess
+
+    import numpy as np
+
+    frames = np.full((40, 48, 64, 3), 120, np.uint8)
+    frames[:, :, :, 0] = np.arange(40, dtype=np.uint8)[:, None, None] * 3  # changing a little every frame
+    frames[:, :, :, 1] = np.arange(64, dtype=np.uint8)[None, None, :] * 3  # not a flat picture
+    frames[20:23] = 0  # three black frames
+    command = [shutil.which("ffmpeg") or "ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "64x48", "-r", "30",
+               "-i", "-", "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv444p", str(tmp_path / "clip.mp4")]
+    subprocess.run(command, input=frames.tobytes(), check=True, capture_output=True)
+
+    async def body(client: Any) -> None:
+        result = await client.call_tool("motion_check", {"target": "clip.mp4", "images": 1})
+        doc = doc_of(result)
+        assert doc["command"] == "motion" and doc["ok"] is True and doc["counts"]["error"] == 1  # fail_on never: the strips come back
+        assert [c.type for c in result.content] == ["text", "image"]
+        assert Path(doc["findings"][0]["strip"]).parent == (tmp_path / "build" / "mcp" / "motion").resolve()
+        assert "outside the folder" in error_text(await client.call_tool("motion_check", {"target": "../x.mp4"}))
+
+    run_session(tmp_path, body)
+
+
+@pytest.mark.slow
+def test_server_music_plan_drafts_a_music_video(tmp_path: Path) -> None:
+    """Step 362: music_plan proposes the scenes of a score bed and writes a draft under the root."""
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("music_plan", {"score": "tidewater"}))
+        assert doc["ok"] is True and doc["action"] == "plan" and doc["scenes"] and doc["draft"] is None
+        doc = doc_of(await client.call_tool("music_plan", {"score": "tidewater", "out": "mv", "max_scene": 12}))
+        assert Path(doc["draft"]["config"]) == (tmp_path / "mv" / "video.yaml").resolve() and not doc["draft"]["problems"]
+        assert "already exists" in error_text(await client.call_tool("music_plan", {"score": "tidewater", "out": "mv"}))
+        assert "outside the folder" in error_text(await client.call_tool("music_plan", {"score": "tidewater", "out": "../mv"}))
 
     run_session(tmp_path, body)
 

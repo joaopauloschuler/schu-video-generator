@@ -116,7 +116,7 @@ A whole particle-physics explainer, the Standard Model, gluon fusion through a t
 
 ## Pictures and media
 
-Whole films of `web` scenes: [Escapement](../../examples/escapement/README.md) (`examples/escapement`), a 3:11 clockwork music film in three.js whose watch movement ticks on the score's beat, and [Signal Fire](../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture.
+Whole films of `web` scenes: [Escapement](../../examples/escapement/README.md) (`examples/escapement`), a 3:11 clockwork music film in three.js whose watch movement ticks on the score's beat, [Parallel Space](../../examples/parallel-space/README.md) (`examples/parallel-space`), a 3:05 trance and choir film of a flight through parallel realities, and [Signal Fire](../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture.
 
 | type | preview | use it for |
 |---|---|---|
@@ -162,3 +162,11 @@ A whole isometric story, a village by a stream, a room, rain and a lamp at night
 | [Lighting the lamp](iso_lamp.md) | <a href="iso_lamp.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/iso_lamp-16x9.png"><img src="media/iso_lamp-16x9.gif" height="180" alt="iso_lamp at 16:9"></picture></a> <a href="iso_lamp.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/iso_lamp-9x16.png"><img src="media/iso_lamp-9x16.gif" height="180" alt="iso_lamp at 9:16"></picture></a> | night on an isometric place: a lamp lit, a speaker's name tag |
 | [First snow](iso_snow.md) | <a href="iso_snow.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/iso_snow-16x9.png"><img src="media/iso_snow-16x9.gif" height="180" alt="iso_snow at 16:9"></picture></a> <a href="iso_snow.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/iso_snow-9x16.png"><img src="media/iso_snow-9x16.gif" height="180" alt="iso_snow at 9:16"></picture></a> | snow settling on an isometric village: the ground, roofs and trees turn white |
 | [The night shift](iso_lab.md) | <a href="iso_lab.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/iso_lab-16x9.png"><img src="media/iso_lab-16x9.gif" height="180" alt="iso_lab at 16:9"></picture></a> <a href="iso_lab.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/iso_lab-9x16.png"><img src="media/iso_lab-9x16.gif" height="180" alt="iso_lab at 9:16"></picture></a> | a lab at night: a hologram materialises, screens and blinking racks, shutters, a rift with a starry sky inside |
+
+## Videos on YouTube
+
+Videos made with schu-video-generator:
+
+[![How to create this AI music video in the video description](https://img.youtube.com/vi/J8gljBhqtTo/hqdefault.jpg)](https://youtu.be/J8gljBhqtTo)
+
+[![How to create long cartoon videos with AI? I will teach you!](https://img.youtube.com/vi/tjqrvbYNbGE/hqdefault.jpg)](https://youtu.be/tjqrvbYNbGE)

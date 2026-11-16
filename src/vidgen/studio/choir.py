@@ -1,5 +1,6 @@
 """A choir for score files (DESIGN.md §120.6): sections of singers holding a vowel, by formant
-synthesis. It is a choir *pad*: ooh, aah, eeh, a hum. It sings no words.
+synthesis. Here the held vowels: ooh, aah, eeh, a hum (syllables, a soloist and a whisper are
+:mod:`vidgen.studio.singing`'s). It sings no words.
 
 - **The voice**: the vocal folds give every harmonic of the note, each weaker than the one
   before (the softer the singing, the faster they fall).
@@ -33,7 +34,6 @@ from vidgen.studio.additive import (
     phrase_tone,
     raised_cosine,
     read_tables,
-    remembered,
     seeded,
     smoothed,
     wavetables,
@@ -220,10 +220,10 @@ def _breath(kinds: list[str], freq: float, n: int, s: Mapping[str, float], power
     return hummed * _BREATH * s["breath"] * noise * np.sqrt(np.maximum(power, 0.0)) * (1 + 1.5 * np.exp(-t / 0.15)) * raised_cosine(n, int(0.005 * RATE))
 
 
-@remembered
-def choir_note(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
-    """A choir note of ``n`` samples (its last ``ring`` seconds are the release): stereo
-    ``(n, 2)`` for a section, mono for one singer. A section's slow level swings are taken out
+def held_vowels(freq: float, n: int, s: Mapping[str, float], seed: str, phrase: Phrase = ()) -> np.ndarray:
+    """A choir note of ``n`` samples (its last ``ring`` seconds are the release) holding its
+    vowel (the choir of Step 345; :func:`vidgen.studio.singing.choir_note` adds syllables, a
+    soloist and a whisper): stereo ``(n, 2)`` for a section, mono for one singer. A section's slow level swings are taken out
     on each side (:func:`~vidgen.studio.additive.levelled`). ``phrase``: the notes slurred to it
     (:data:`~vidgen.studio.additive.Phrase`; the singers who began the phrase sing all of it).
     The same ``seed``, pitch, length, settings and phrase give the same samples."""

@@ -3386,7 +3386,7 @@ scenes:
   - id: drop
     type: web
     duration: 13.87
-    params: {script: extensions/space.js, music_data: true}   # or {bands: 32, tracks: [kick, hook]}
+    params: {script: extensions/space.js, music_data: true}   # or {bands: 32, tracks: [kick, melody]}
 ```
 
 ```js
@@ -3396,9 +3396,9 @@ export function frame(t, ctx) {
   const glow = 0.3 + 0.7 * m.level();      // 0..1: the whole music's loudness
   const thump = m.pulse("kick", 0.12);     // 1 at each kick, falling over 0.12 s (1.5 on an accent)
   const lows = m.low(), air = m.band(m.bandCount - 1), hit = m.onset();
-  const note = m.last("hook");             // the hook's latest note: {time, duration, pitch, dynamic, stroke, slur...}
+  const note = m.last("melody");           // the melody's latest note: {time, duration, pitch, dynamic, stroke, slur...}
   const hue = note ? (note.pitch % 12) / 12 : 0;
-  // m.hits("kick", T0, T1), m.notes("hook", T0, T1): the events starting in [T0, T1) (song seconds)
+  // m.hits("kick", T0, T1), m.notes("melody", T0, T1): the events starting in [T0, T1) (song seconds)
 }
 ```
 
@@ -3417,7 +3417,7 @@ export function frame(t, ctx) {
   `section(T?)`. An event has `time`, `duration`, `end`, `pitch` (MIDI; `pitches` for a chord),
   `instrument`, `dynamic` (dB of its mark, 0 unmarked), `gain` (1.5 an accent, 0.5 soft),
   `strength` (both together), `stroke` (`pizzicato`...), `slur`. A slurred note is a note of its
-  own with `slur: true`. `tracks: [kick, hook]` sends only those (a smaller page).
+  own with `slur: true`. `tracks: [kick, melody]` sends only those (a smaller page).
 - **Music that is not a score** (a music file, a bed made in code, composed music): the
   measurements only; `ctx.music.score` is `null`. A scene where no music plays reads silence and
   counts video time. A video without music cannot use `music_data` (`vidgen validate` says so).
@@ -3658,6 +3658,142 @@ mapSize})` and `focusDistance(camera, object)`.
   chain draws what `renderer.render` draws (within one level).
 - The whole worked example is `examples/three-finish` (`vidgen still` it at three moments); the
   module's file is in the scene's cache key like every file the page loads.
+
+**Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit`.** Two more modules
+you import by name. `vidgen/music-time` reads the music: the score's tracks as arrays
+(`trackArrays(ctx.music, ...)`), a drum's light (`hitEnvelope`), a note's glint or level
+(`noteEnvelope`, `noteLevel`), the melody's gliding pitch (`melody`), how strongly a track sounds
+(`signalLevel`), bar lengths (`barClock`, `count`), seeded numbers (`rng`, `hash`), easing and
+camera keyframes (`smoothstep`, `smootherstep`, `keyframes`, `glide`). `vidgen/three-kit` draws
+light on black: glowing strokes (`Glow`), glass crystals, a tesseract, a nebula sky lit from
+inside (`SkyDome`), portals onto another sky, star fields you fly through, flares, shock rings from
+hits, the melody as a ribbon, the spectrum as rays, tunnels, a corridor, great rings, swarms, dust,
+and `aimCamera`. They are the parts the example films wrote by hand (`examples/parallel-space` is
+built from them).
+
+```yaml
+music: tidewater                 # a score bed with tracks kick and melody; or your own score
+scenes:
+  - id: drift
+    type: web
+    duration: 12
+    params: {script: extensions/kit.js, music_data: {tracks: [kick, melody]}}
+```
+
+```js
+// extensions/kit.js: a tesseract in a nebula; the kick lights it, every note of the melody leaves a glint
+import * as THREE from "three";
+import {trackArrays, hitEnvelope, smootherstep} from "vidgen/music-time";
+import {setStage, color, SkyDome, Glow, makeTesseract, updateTesseract, tesseractAngles,
+        makeStarField, updateStarField, updateGlints, aimCamera} from "vidgen/three-kit";
+import {Finish} from "vidgen/three-finish";
+const ICE = color(0x9fdcff), GOLD = color(0xffd166);
+let M, song, camera, sky, tes, stars, glints, finish;
+function update(t) {                       // everything from song time T: no state, so cuts do not show
+  const T = M.time(t), kick = hitEnvelope(song.hits.kick, T, 0.12);
+  aimCamera(Math.sin(T * 0.1) * 3, 1, 20 - 6 * smootherstep(t / 10), 0, 0, 0, 0.05 * Math.sin(T * 0.2), 50);
+  sky.turn(T); sky.follow(camera);
+  sky.colors(color(0x010308), color(0x06203a), color(0x2a7fa0), 0.4 + 0.3 * M.level(T));
+  updateStarField(stars, T, 4 * T);
+  updateTesseract(tes, tesseractAngles(T * 0.4), ICE, 1.2 + 2 * kick);       // the kick: brighter, never bigger
+  updateGlints(glints, song.notes.melody, T, {c: GOLD, life: 3, place: (i, pitch) => [(i % 5 - 2) * 3, (pitch - 69) * 0.4, -4]});
+}
+export function load(ctx) {
+  M = ctx.music;
+  song = trackArrays(M, {hits: ["kick"], notes: ["melody"]});
+  const renderer = new THREE.WebGLRenderer({canvas: ctx.canvas});
+  renderer.setSize(ctx.width, ctx.height, false);
+  const scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(50, ctx.width / ctx.height, 0.3, 4000);
+  setStage({renderer, scene, camera, width: ctx.width, height: ctx.height});   // before any builder
+  sky = new SkyDome(3);                                   // baked once from its seed
+  stars = makeStarField(600, [10, 200], 400, 11);
+  tes = makeTesseract({world: 0.05}); tes.scale.setScalar(2.5);
+  glints = new Glow(60, {px: 1.6, halo: 1.6, haloGain: 0.5});   // 5 segments a glint, 12 glints
+  finish = new Finish(renderer, scene, camera, ctx, {update, bloom: {strength: 0.6, radius: 0.5, threshold: 0.9}});
+}
+export function frame(t) {
+  finish.render(t);
+}
+```
+
+- **Light, not size.** Hits change brightness (`lightCrystal(c, kick)`, a `Glow`'s `tint`, a
+  flare's intensity); the camera and the sizes follow the form, never a beat.
+- **The stage.** `setStage` comes first in `load`; every builder adds to its scene (or `parent`).
+  A `Glow`'s widths are in 720p pixels (`px`) or scene units (`world`) and scale with the frame.
+- **Arrays or events.** The envelope functions read `trackArrays`' `{t, g}` / `{t, d, p}`;
+  `signalLevel(ctx.music, track, T)` and `eventLevel(e, T)` read `ctx.music`'s events (with
+  dynamics and hairpins). `ctx.music.pulse` and `last` stay available too.
+- Every name and its options: `docs/CONFIG.md`, "Building blocks for music videos". A whole
+  film built on them: `examples/parallel-space`; smaller uses: `examples/escapement` (envelopes,
+  keyframes, dust) and `examples/signal-fire` (`signalLevel`).
+
+**Opening titles and end cards: `vidgen/title-cards`.** A film watched from the start (a music
+video, a short film) can open as a cinema film does: the picture comes up from black and a small
+title sits beside its subject for a few bars, then fades before the first cut; the end card
+mirrors it on the other side. The module gives both as HTML text over the page, laid out and
+timed as `examples/escapement`'s (its `01_winding` and `12_coda`):
+
+```js
+// extensions/opening.js: a title on the left third, its subject (here a lit disc) on the right
+import {titleCard} from "vidgen/title-cards";
+let card;
+export async function load(ctx) {
+  document.body.style.background = "#05060a";
+  card = await titleCard(ctx, {title: "TIDEWATER", subtitle: "a film in four tides"});   // in at 2 s, out by 14 s
+}
+export function frame(t, ctx) {
+  const c = ctx.canvas.getContext("2d"), r = 0.3 * ctx.height;
+  c.clearRect(0, 0, ctx.width, ctx.height);
+  const g = c.createRadialGradient(0.7 * ctx.width - r / 3, 0.4 * ctx.height, 0, 0.7 * ctx.width, 0.5 * ctx.height, r);
+  g.addColorStop(0, "#f0c987"); g.addColorStop(1, "#3a2a14");
+  c.fillStyle = g; c.beginPath(); c.arc(0.7 * ctx.width, 0.5 * ctx.height, r, 0, 2 * Math.PI); c.fill();
+  card.update(t);                         // the card's opacity from t alone
+}
+```
+
+- **The rules** (COOKBOOK-3D section 12): the title in the left or right third and the subject on
+  the other side; small type, wide spacing, a thin rule, one quiet subtitle, nothing else (no web
+  address in the opening); dark, calm space behind the text (a soft gradient is on by default:
+  `shade`); fade in over the first bars, hold, fade out before the first cut. The end card
+  (`await endCard(ctx, {title, subtitle, link, lines: [...], start})`) uses the same type, smaller,
+  on the other side, with the credits small; it holds to the end.
+- **Not for Shorts or quick explainers**: their frame 1 moves. In a portrait frame the cards go
+  to the lower part (`side: "top"` for the upper).
+- Options (`side`, `start`, `fadeIn`, `hold`, `fadeOut`, `size`, `tracking`, `font`, `color`,
+  `accent`, `shade`, ...): `docs/CONFIG.md`, "Opening titles and end cards". A misspelt option
+  stops the render with a "did you mean".
+
+**From a score to a music video: `vidgen music plan`.** Before writing pages for a song, let
+vidgen read its score: `vidgen music plan assets/music/my_song.yaml` prints a role per section
+(intro, verse, build, drop, climax, breakdown, outro) and why, the scenes cut on bar lines (a
+section over 16 s split on a phrase line where the material changes, one under 5 s joined to the
+one before), drops, breaths and silent bars, a colour per scene (cool at the start, warm at the
+peak) and the tracks each scene follows (low drums pulse the light, accents send rings, melodies
+leave glints, pads set the glow). `--out my_video` writes and validates a draft: `video.yaml`
+with the score as `music:`, a `web_cut` scene per cut (the `web` scene without its fade-out, in
+`extensions/web_cut.py`) whose `duration` is whole frames between two bar lines, `music_data`
+with its tracks, `data:` with its plan, and a starter page per scene (`extensions/<id>.js`, one
+look per role, on the kit above: `reactions(ctx.music, ctx.data.react)`, `colourScript`, `orbit`,
+`flyThrough`). Look at a still of each scene, then make the pages your own; keep each scene on
+bar lines when you join or split them. `--json` gives the plan as data. The plan reads notes,
+not sound or words: check its roles against what you hear described (`vidgen music check`).
+Over MCP: `music_plan` (`score`, `out`).
+
+**Watching the result: `vidgen motion check`.** Stills cannot show what happens between frames.
+After a render (`--draft` first), `vidgen motion check . --draft --json` decodes the video at
+160 px wide (no render; a minute in about 10 s) and lists, with time, frame, scene and
+severity: `blank` (black or flat frames entered abruptly inside a scene: a frame that failed to
+draw, e.g. a NaN in a shader; **error**), `flash` (one or two frames much brighter or darker than
+both neighbours), `flicker` (the light going up and down every frame or two), `pop` (a region
+shown for one or two frames), `strobe` (a pattern turning about half its repeat a frame),
+`frozen` (no visible change for 1.5 s or more) and `cut_jump` (a big change of brightness across
+a cut). Flashes, pops and pulses on the score's drum hits and note starts are info: a reaction to
+the music, not a fault. Each finding has a contact strip PNG (`build/<quality>/motion/`, the
+finding's frames framed in red): open the errors' and warnings' strips, then `vidgen still` the
+scene at that time to find the cause. Without a whole render, `--source scenes` reads the scene
+clips in `build/`. Thresholds: `--threshold NAME=VALUE` (`docs/CONFIG.md`, "Motion check"); MCP
+`motion_check` returns the strips as pictures.
 
 **Animation and chart libraries.** These ship with vidgen: import them by name, in a
 `<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's
@@ -4350,12 +4486,17 @@ again only when the file changes). You cannot hear it, so work from measurements
    `"[roll pp <] A2 - - - - - - - | [hit ff] D2 . . ."` (see **Expression**). `stroke: swell` on `cymbal` or `tam_tam` grows by itself
    until its held steps end: end it on the hit. Do not build drums from the `kick` any more:
    it is one sine and stops at 160 Hz.
-   **Choir**: `choir` holds a vowel (`vowel: ooh | aah | eeh | mm | oh | ee`); it is a choir
-   pad and sings no words. `voices: mixed` gives each note to the kinds of voice that reach it;
-   `men`, `women`, `basses`, `tenors`, `altos`, `sopranos` choose. Hold chords
+   **Choir**: `choir` holds a vowel (`vowel: ooh | aah | eeh | mm | oh | ee`) or sings
+   syllables; it sings no words. `voices: mixed` gives each note to the kinds of voice that
+   reach it; `men`, `women`, `basses`, `tenors`, `altos`, `sopranos` choose. Hold chords
    (`"* | - | - | -"`), give it a hall, and use `attack: 1` or more for a swell;
-   `{vowel: mm, morph: aah}` opens a held note from a hum. Recipes: `docs/COOKBOOK-MUSIC.md`,
-   section 10.
+   `{vowel: mm, morph: aah}` opens a held note from a hum. `syllable: la` (or per note `[la]`,
+   `[na]`, `[ma]`, `[da]`, `[loo]`, `[mm-ah]`, `[ah-oh]`, `[oo-ah]` ...) starts each note with a
+   soft consonant or glides between two vowels at `turn`; in a slur only the first note gets
+   the consonant unless a note's own mark names one. `soloist: true` is one solo voice
+   (brighter, a wider and later vibrato, a scoop into each note): give it its own track over a
+   choir track. `whisper` from 0 to 1 turns the tone into breath. Recipes:
+   `docs/COOKBOOK-MUSIC.md`, section 10.
    **Expression**: marks in square brackets stand before a step in a track's `steps` and last
    until changed. Dynamics `[pp] [p] [mp] [mf] [f] [ff]` (or dB: `[-6]`; an unmarked note is
    `mf`) change the level and, on brass, strings, choir and the orchestral drums, the tone:

@@ -113,7 +113,7 @@ The pictures never hear the track. Every scene has `music_data` in `video.yaml`,
 the score and hands the page `ctx.music`: the times of the ticks, drums, winding clicks, bells and
 every note of the theme's voices, and the scene's place in the song (`ctx.music.t0`, worked out
 from the scene durations). `escapement.js` (`fromMusic`) turns them into the arrays it draws
-from, and builds the mechanism's beats: one every quarter note from bar 4, the score's own tick
+from (`trackArrays` of vidgen's `vidgen/music-time`, which also gives the drums' envelopes), and builds the mechanism's beats: one every quarter note from bar 4, the score's own tick
 and tock in the faltering bars 56–60, nothing inside the silent bar 67 (`START_BAR`, `FALTER`,
 `SILENT_BAR` at the top of the music block). Edit the score and the pictures follow at the next
 render; nothing else needs to be run.
@@ -149,6 +149,11 @@ durations in `video.yaml` and the bar numbers in `escapement.js`.
   [examples/three-finish](../three-finish/README.md)). A port of three of these scenes to it
   looked close but not the same (28–34 dB PSNR: the vignette's shape, the fringe, the grade's
   lift), so the example keeps the film's own code and renders the published film.
+- The small shared pieces — easing, seeded numbers, the camera's keyframes, the score's events as
+  arrays and their envelopes, the drifting dust — come from vidgen's modules `vidgen/music-time`
+  and `vidgen/three-kit`; stills of every scene at three moments are pixel-identical to the
+  film's own code. The watch, the studio and the finishing stay in `escapement.js`: moving them
+  to the shared modules would change the picture.
 - The music's theme climbs by fourths (A–D–F–E, D–F–A–G, G–B♭–D–C, A–G–E–C♯); the plucked
   ostinato of the gear train is the same cells four times as fast.
 

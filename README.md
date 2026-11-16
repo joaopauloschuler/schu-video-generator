@@ -55,6 +55,8 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
   <a href="docs/gallery/code_morph.md"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/gallery/media/code_morph-16x9.png"><img src="docs/gallery/media/code_morph-16x9.gif" width="200" alt="Code morphing: a recursive function gains a cache decorator"></picture></a>
 </p>
 
+Videos made with schu-video-generator are listed in the gallery's [Videos on YouTube](docs/gallery/README.md#videos-on-youtube).
+
 **Music and sound.** schu-video-generator makes its own soundtrack; [listen to every bed and sound](docs/music/README.md)
 (clips and spectrograms).
 
@@ -82,8 +84,8 @@ More from the [scene gallery](docs/gallery/README.md), where every scene type pl
 - **An orchestra for score files**: brass (`trumpet`, `horn`, `low_brass`), a drawbar `organ`,
   bowed strings (`violins`, `violas`, `cellos`, `double_basses`: sustained, spiccato, tremolo,
   pizzicato), orchestral percussion (`timpani`, `toms`, `taiko`, `bass_drum`, `frame_drum`,
-  `snare_drum`, `cymbal`, `tam_tam`) and a `choir` on vowels, beside the synth drums, basses,
-  plucks, leads and pads; all synthesised, no samples ([every instrument in one
+  `snare_drum`, `cymbal`, `tam_tam`) and a `choir` on vowels and syllables (`la`, `na`, `mm-ah`...)
+  with a soloist and a whisper, beside the synth drums, basses, plucks, leads and pads; all synthesised, no samples ([every instrument in one
   table](docs/COOKBOOK-MUSIC.md#13-every-instrument-at-a-glance)).
 - **Expressive notes**: dynamics (`[pp]` to `[fff]`), hairpins inside a held note or over a phrase,
   `fp` and `sfz`, slurs with a glide, vibrato speed and delay, a setting per note
@@ -138,6 +140,550 @@ Under the hood, schu-video-generator voices the beats with ElevenLabs (or a TTS 
 [Manim](https://www.manim.community/), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slide deck).
 
+## For AI agents
+
+schu-video-generator is meant to be driven by AI agents. An agent making a video should read
+**[AGENTS.md](AGENTS.md)** first — or run `vidgen guide` (the same guide, shipped with schu-video-generator;
+`vidgen guide --list` for its topics, `vidgen guide scenes` for one, `--json` for programs). It
+covers the working loop (write → `validate --json` → `storyboard`, and look at the PNGs → `lint
+--json` → fix → `tts --dry-run` → `tts` → `render`), pacing and on-screen text rules, a scene-type
+chooser with a snippet per type, visual design, beat actions and audio with restraint, good vs bad
+examples, outputs and the fixes for common validate / lint messages. (`CLAUDE.md` is for agents
+working on schu-video-generator's own code.) Starting from an outline, `vidgen plan outline.md --json` writes a
+draft project to refine: its `# TODO:` comments list what to check first.
+
+### Use from an AI agent via MCP
+
+`vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
+Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
+`init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
+`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `music_plan`, `audio_check`, `motion_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
+back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
+video. It uses the official MCP Python SDK.
+
+Claude Desktop (`claude_desktop_config.json`; on Windows give the full path of `vidgen.exe` in
+the venv's `Scripts` folder if `vidgen` is not on the PATH):
+
+```json
+{
+  "mcpServers": {
+    "schu-video-generator": {
+      "command": "vidgen",
+      "args": ["mcp", "--root", "C:\\Users\\me\\videos"]
+    }
+  }
+}
+```
+
+Claude Code: `claude mcp add schu-video-generator -- vidgen mcp --root /home/me/videos` (or the same
+`mcpServers` entry in the project's `.mcp.json`).
+
+- **One folder**: the tools read and write only inside `--root` (default: the folder the server
+  starts in); a path outside it, also through `..` or a link, is refused — in tool arguments and
+  in the files a project's `video.yaml` names (pictures, clips, code files, extensions...).
+- **No surprise bills**: `tts` and `imagegen` are dry runs unless called with `dry_run: false`
+  **and** `confirm_cost: true` (and `readback` with a paid speech-to-text provider needs
+  `confirm_cost: true`); the dry run says what it would cost. API keys come from the server's
+  environment (set `ELEVENLABS_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` where the client starts it, e.g. an
+  `"env"` entry) and are never returned.
+- **Robust**: every call runs the CLI in a fresh process (`vidgen <command> --json`), reports its
+  progress lines, and stops it when the call is cancelled; renders run one at a time.
+- Resources: the guide (`vidgen://guide`, `vidgen://guide/<topic>`) and the JSON Schema
+  (`vidgen://schema`). Reference: [docs/CONFIG.md](docs/CONFIG.md#mcp-server-vidgen-mcp).
+
+## Install
+
+Upgrading an environment that installed this project before it was renamed (as `vidgen`): run
+`pip uninstall vidgen` once, then install as below (the `vidgen` command is unchanged).
+An unrelated project on PyPI is also named `vidgen` and also installs a top-level `vidgen`
+package, so do not install both in the same environment.
+
+**ffmpeg**: version 4.4 or newer (tested with 4.4, 5.1, 6.1, 7.0, 7.1 and 8.1). Older ones lack
+filters the join uses (`xfade` for crossfades, pushes and wipes; `amix=normalize` for sound
+effects); schu-video-generator names the version in its error when an older ffmpeg fails. (Copies of
+schu-video-generator from before the fix failed crossfades, pushes and wipes on ffmpeg 7.0 /
+7.1, e.g. Debian 13's, with "frame rate 1/0 is invalid": update rather than install another
+ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
+
+### Windows
+
+1. **Python 3.10–3.13** from [python.org](https://www.python.org/downloads/) (tick "Add
+   python.exe to PATH").
+2. **ffmpeg**: `winget install ffmpeg`, then open a new terminal (`ffmpeg -version` must work).
+3. **schu-video-generator** (in PowerShell, from a copy of this repository; it installs the
+   `vidgen` command):
+   ```
+   cd video-generator
+   py -m venv .venv
+   .venv\Scripts\Activate.ps1          # cmd.exe: .venv\Scripts\activate.bat
+   pip install .                       # or `pip install -e ".[dev]"` to work on schu-video-generator itself
+   vidgen --version
+   ```
+   This installs every Python package schu-video-generator uses: Manim, pydantic, PyYAML, PyAV, Kokoro
+   with PyTorch (Python 3.10–3.12), Playwright, symusic, faster-whisper, fpdf2 and the MCP SDK
+   (pre-built wheels).
+4. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
+   a new terminal. schu-video-generator reads the key only from this variable and never writes it anywhere.
+   With `voice: {provider: openrouter, model: ..., voice: ...}` narration goes through OpenRouter
+   instead and needs the **OpenRouter API key** of step 6 (`OPENROUTER_API_KEY`), not this one.
+5. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
+   [MiKTeX](https://miktex.org/download) (it includes `dvisvgm`; allow it to install missing
+   packages on the fly) and open a new terminal.
+6. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
+   `setx OPENAI_API_KEY your_key`, or, with `imagegen: {provider: openrouter, model: ...}`, an
+   **OpenRouter API key** (from <https://openrouter.ai/keys>), `setx OPENROUTER_API_KEY your_key`;
+   then open a new terminal. Each is read only from its variable, never written anywhere. The
+   same OpenRouter key voices the narration with `voice: {provider: openrouter, ...}`.
+7. Optional, for free local narration (`voice: {provider: kokoro}`): use **Python 3.10–3.12** for
+   the virtual environment (`py -3.12 -m venv .venv`), because the `kokoro` package does not
+   support 3.13 yet. The first `vidgen tts` downloads the model from Hugging Face
+   (`kokoro-v1_0.pth`, 327 MB, plus ~0.5 MB per voice) into `%USERPROFILE%\.cache\huggingface\hub`
+   (set `HF_HOME` to move it). If `vidgen tts` says espeak-ng cannot be loaded, reinstall
+   schu-video-generator. Japanese voices are not available.
+8. Optional, for composed music played with real instruments: the GeneralUser GS 2.0.3 SoundFont
+   (32.3 MB, free for commercial use) is downloaded on first use into
+   `%LOCALAPPDATA%\vidgen\soundfonts`; `vidgen soundfont fetch` downloads it now, and
+   `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
+   Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
+   by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
+9. Optional, only for `3d` and `web` scenes: the headless Chromium browser,
+   `py -m playwright install chromium` (~150 MB, once).
+10. Optional, for `vidgen readback` with local speech to text: the first run downloads the Whisper
+    model from the Hugging Face Hub (~500 MB for `small`).
+
+If PowerShell refuses to run `Activate.ps1`, run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
+step by step, follow [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md).
+
+### Linux (Ubuntu / Debian)
+
+```bash
+# 1. System packages: Python, ffmpeg, git, and the Cairo/Pango libraries Manim builds against
+sudo apt update
+sudo apt install python3 python3-venv python3-dev git ffmpeg \
+    build-essential pkg-config libcairo2-dev libpango1.0-dev
+
+# 2. Get the code and install it in a virtual environment (installs the `vidgen` command)
+git clone https://github.com/joaopauloschuler/schu-video-generator.git
+cd schu-video-generator
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .                  # brings every Python package schu-video-generator uses
+
+# 3. Check it works: render the bundled example as a quick preview
+vidgen --version
+vidgen render examples/minimal --preview      # -> examples/minimal/output/minimal_preview.mp4
+
+# 4. Optional: LaTeX, only for the `equation` and `equation_derivation` scene types
+sudo apt install texlive texlive-latex-extra dvisvgm
+
+# 5. Optional: API keys (add to ~/.bashrc to keep them)
+export ELEVENLABS_API_KEY=your_key            # narration (vidgen tts)
+export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen, default provider)
+export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter and/or voice.provider: openrouter
+
+# 6. Optional: free local narration with Kokoro (voice.provider: kokoro); Python 3.10-3.12 only
+sudo apt install espeak-ng                    # only if vidgen tts says espeak-ng cannot be loaded
+
+# 7. Optional: composed music; the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
+vidgen soundfont fetch                        # or let the first composed render download it
+
+# 8. Optional: 3d and web scenes (headless Chromium through Playwright)
+python -m playwright install chromium         # add --with-deps if Chromium's system libraries are missing
+```
+
+Other distributions need the same pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
+`sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
+terminal needs `source .venv/bin/activate` again before running `vidgen`.
+(macOS keeps the SoundFont in `~/Library/Caches/vidgen`).
+
+**Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (on 3.13 it is left out: use
+`python3.12 -m venv .venv`). PyPI's Linux PyTorch brings the CUDA libraries along, so the plain
+install downloads about 3.3 GB (about 3 GB of it PyTorch, `triton` and the `nvidia-*` packages); with
+an NVIDIA GPU, `voice: {device: cuda}` uses them. The first `vidgen tts` downloads the model from Hugging Face (`kokoro-v1_0.pth`,
+327 MB, plus ~0.5 MB per voice) into `~/.cache/huggingface/hub` (`HF_HOME` moves it) and, for
+English, spaCy's `en_core_web_sm` (13 MB, with pip); later runs need no network. If `vidgen tts`
+says espeak-ng cannot be loaded, `sudo apt install espeak-ng`. Japanese voices are not available.
+
+### macOS
+
+`brew install python ffmpeg pkg-config cairo pango`, then the same steps 2–5 as Linux (LaTeX:
+[MacTeX](https://www.tug.org/mactex/)).
+
+## Quick start
+
+```
+vidgen init my_video            # scaffold video.yaml, extensions/, assets/, .gitignore
+                                # (or: vidgen plan outline.md -o my_video  -> a draft from your outline)
+cd my_video
+vidgen validate                 # check config, scene types, params, assets and audio status
+vidgen render --preview         # 854x480 check, timed from word counts -> output/my_video_preview.mp4
+vidgen storyboard               # contact sheets of every beat -> build/preview/storyboard/*.png
+vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
+vidgen tts --dry-run            # what would be sent to the TTS (pronunciation applied), how many characters (OpenRouter: est. cost)
+vidgen tts                      # generate narration MP3s (only new/changed beats)
+vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words
+vidgen imagegen --dry-run       # pictures of generate: params still to make, their prompts and estimated cost
+vidgen render                   # final render -> output/my_video.mp4 + .srt (+ my_video_chapters.txt with chapters)
+vidgen thumbnail                # output/my_video_thumbnail.png (also written by render with a thumbnail: section)
+vidgen export gif --scene intro # exports/my_video_intro.gif
+vidgen slides --final --audio   # exports/my_video_slides.html: the video as a narrated slide deck
+vidgen slides --final --format pdf --notes   # exports/my_video_notes.pdf: slides with the narration
+```
+
+Edit `video.yaml` (reference: [docs/CONFIG.md](docs/CONFIG.md)) and repeat. Until audio exists,
+beats are timed from their word count, so you can lay out the whole video before paying for
+narration.
+
+## Commands
+
+| command | |
+|---|---|
+| `vidgen init DIR [--example minimal] [--json]` | create a new project (DIR must not exist or be empty) |
+| `vidgen mcp [--root DIR]` | the MCP server (stdio) giving an AI agent's client these commands as tools, inside DIR only (also `vidgen-mcp`) |
+| `vidgen plan INPUT [--output DIR\|FILE] [--title TEXT] [--format 16:9\|9:16] [--preset NAME] [--language TAG] [--force] [--json]` | a draft project from a Markdown outline or a plain-text script (deterministic, no AI): scenes chosen from its headings and cues, narration cut into beats, on-screen texts compressed, a `# plan:` reason and `# TODO:`s per scene; prints scenes, estimated length and TODO count, and validates the draft |
+| `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents ([AGENTS.md](AGENTS.md)): all of it, one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
+| `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant, including variants that do not load), estimated length, audio status, generated pictures |
+| `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
+| `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
+| `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
+| `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
+| `vidgen list-pronunciation [PROJECT] [--json]` | schu-video-generator's built-in pronunciation entries per TTS engine and language (Kokoro American English: `epoch`, `README`, `JSON`, ...); in a project, the lists its voices use, what the project replaces or removes and the beats each entry changes |
+| `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood), the project's pieces (score files in `assets/music`: key, tempo, length, title, description) and its `assets/music` audio files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
+| `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to |
+| `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with schu-video-generator's own instruments and writes a WAV or MP3; also takes a project piece's or a built-in bed's name ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
+| `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
+| `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
+| `vidgen music plan SCORE.yaml\|NAME [--out DIR] [--force] [--max-scene S] [--min-scene S] [--json]` | proposes a music video's scenes from a score file without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro), cuts on bar lines (long sections split on a phrase line where the material changes), drops, breaths and silent bars, a colour per scene and the tracks each scene follows (drums pulse the light, melodies leave glints, pads set the glow); `--out` writes and validates a draft project of `web_cut` scenes with a starter page each ([CONFIG](docs/CONFIG.md#a-music-video-from-a-score-vidgen-music-plan)) |
+| `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
+| `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
+| `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when symusic and the SoundFont are there |
+| `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
+| `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
+| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
+| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
+| `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
+| `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
+| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME \| --all-languages] [--no-audio] [--keep-going] [--max-scenes N] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--guide-passes [LIST]] [--intermediate lossless\|compact] [--clean-intermediates] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video; `--guide-passes` also draws the depth, outline and mask videos of every `3d` scene; `--intermediate compact` / `--clean-intermediates` keep `web` and `3d` frames clips small or delete them once used |
+| `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N\|auto] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
+| `vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions \| --no-captions] [--jobs N\|auto] [--output-dir DIR] [--json]` | `<output>_animatic.mp4`: the storyboard's stills held in time with the narration, with the video's audio and the subtitles drawn on; joined by ffmpeg in seconds when the stills are current (see [docs/CONFIG.md](docs/CONFIG.md#animatic-vidgen-animatic)) |
+| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME \| --all-languages] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--readback] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`; `--readback`: also transcribe and flag unclear words); exit code 1 on errors |
+| `vidgen still [PROJECT] --scene ID (--at SECONDS \| --frame N \| --count N)... [--size final\|preview\|draft\|WxH] [--variant NAME] [--out FILE\|DIR] [--sheet FILE [--columns N]] [--exact] [--transparent] [--json]` | single frames (PNG) of a `web` scene's page at exact times without rendering the scene: the picture the render draws for that frame; several in one browser, a contact sheet on request (`exports/stills/`) |
+| `vidgen motion check [FILE\|PROJECT] [--source auto\|video\|scenes] [--variant NAME] [--preview \| --draft] [--out DIR] [--no-strips] [--threshold NAME=VALUE ...] [--fail-on SEVERITY] [--json]` | watches a rendered video (a file, a project's render, or its scene clips) at 160 px wide without rendering anything: black or blank frames inside a scene, one- and two-frame flashes and drop-outs, flicker, popping regions, strobing, frozen stretches and brightness jumps at cuts, with time, frame, scene and severity (pulses on the score's hits and notes are info) and a contact strip PNG per finding ([CONFIG](docs/CONFIG.md#motion-check-vidgen-motion-check)) |
+| `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
+| `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
+| `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
+| `vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right\|left]` | print a character of `characters:` (its `look:` and colours); `--png` writes one still of it (default `exports/character_<name>.png`) |
+| `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]` | every pose, expression and mouth shape of a character on one PNG (`exports/character_sheet_<name>.png`); no NAME: one sheet per character |
+| `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks, reactions, gestures and close-ups `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
+| `vidgen screenplay INPUT [--out DIR\|FILE] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]` | a cartoon project from a screenplay (no AI): one `stage` scene per `# Scene:` heading (`set:` line: background or a room, props and furniture, marks), a `card` per `# Card:` heading, one beat per `NAME (manner): line` or narrator paragraph, `[stage directions]` mapped to walks, entrances, exits, jumps, looks, gestures and effect symbols (others kept as `# TODO:`), generated looks (well contrasted; `--species`: animals) and voices for undeclared characters (`--cast`: include a series' cast and sets), `auto_direct: true`; validates the project |
+| `vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider P] [--json]` | write N original characters that differ clearly (silhouette, colours, accessories, voice kind and voice) as an include file (`cast.yaml`) for `include:` or `vidgen screenplay --cast`; the same seed gives the same cast |
+| `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N\|auto] [--force] [--output-dir DIR] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter) |
+
+`PROJECT` is a project folder or its config file (default: the current folder).
+`render` and `thumbnail` write the MP4, SRT, chapter list and thumbnail into `<project>/output/`
+(`output_dir:` in `video.yaml`, relative to the project folder, or `--output-dir DIR`, relative
+to the current directory, puts them elsewhere; `export` and `slides` read them from there with
+the same flag); `build/` and `exports/` do not move.
+`render` renders only the scenes whose render is missing or out of date (their config, audio,
+assets, extensions or schu-video-generator changed: the same check as `storyboard`), so a render after a
+storyboard of the same format just joins. Options: `--force` renders every scene again;
+`--preview` uses the `preview` resolution; `--draft` makes a fast draft (about 8 fps, 240p, no
+idle motion, wind, shadows, particles or light grade, every timing and position kept;
+`<output>_draft.mp4` from `build/draft/`, see [docs/CONFIG.md](docs/CONFIG.md#drafts-vidgen-render---draft)); `--scene ID` re-renders only those
+scenes and re-joins with the existing renders of the others; `--variant NAME` applies a named
+variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing is unchanged);
+`--keep-going` renders the remaining scenes after a failure; `--max-scenes N` renders at most N
+scenes and stops without joining when more are left (run it again to go on: every finished
+scene's render is kept, also after an interrupted run — a long final render in steps that each
+fit a time limit); `--intermediate compact` keeps the frames `web` and `3d` scenes draw about 4.6
+times smaller (H.264 4:4:4 and a lossless alpha stream instead of lossless FFV1, about 26 MB per
+second at 720p for a WebGL page) and `--clean-intermediates` deletes each scene's frames clip once
+the scene is rendered (also `render:` in the config; the render warns when the disk may be too
+small and prints the build folder's size, see [docs/CONFIG.md](docs/CONFIG.md#intermediate-files-and-disk-render)); `--jobs N` renders N scenes in
+parallel (`--jobs auto`: as many as the available memory, 1.5 GB per job, and the CPU cores allow;
+it prints its choice, see [docs/CONFIG.md](docs/CONFIG.md#parallel-renders---jobs)); `--frames` also saves a PNG still of the last frame of every beat (`--frames-per-beat
+N`: N evenly spaced stills per beat) in `build/<final|preview>[_<variant>]/frames/<scene>/`,
+with an `index.json` (beat, time, path) — a way to look at a render without playing it, see
+[docs/CONFIG.md](docs/CONFIG.md#frame-stills-vidgen-render---frames) — and, for the same frames,
+`build/.../layout/<scene>.json`: every visible text/shape/image with its pixel box, font size in
+px, colours and opacity ([layout dump](docs/CONFIG.md#layout-dump-buildlayoutscenejson)). Errors are printed as `error: ...` with exit code 1.
+`--json` prints one machine-readable JSON document on stdout instead (problems with their
+config location, scene types with params/defaults/docs, output paths and per-scene durations;
+errors too, with a non-zero exit code) — for scripts and AI agents. The shapes are documented
+in [docs/CONFIG.md](docs/CONFIG.md#json-output---json).
+`vidgen storyboard` writes contact sheets to `build/<preview|final>[_<variant>]/storyboard/`:
+`video-<page>.png` (the whole video, split into pages of bounded size) and
+`scenes/<scene>-<page>.png` (one scene, larger stills); each still is labelled `beat @ time`
+with the beat's narration under it. It renders (preview format by default, with stills) only
+the scenes whose stills are missing or out of date, so after `vidgen render --preview --frames`
+or an earlier storyboard it is quick; see
+[docs/CONFIG.md](docs/CONFIG.md#storyboard-vidgen-storyboard).
+`vidgen lint` checks the same stills and each scene's activity over time
+(`build/.../activity/<scene>.json`: beat timings, every `play`, a per-frame change signal),
+rendering only what is missing or stale like the storyboard, and prints one line per problem
+with the still to look at; thresholds and
+severities are set in an optional `lint:` section, findings a scene means to have are skipped
+with its `lint_ignore`; see [docs/CONFIG.md](docs/CONFIG.md#lint-vidgen-lint).
+`vidgen schema > video.schema.json` writes a JSON Schema (draft 2020-12) that editors and
+agents can check `video.yaml` against before running `vidgen validate`; see
+[docs/CONFIG.md](docs/CONFIG.md#json-schema-vidgen-schema).
+
+## Project layout
+
+```
+my_video/
+  video.yaml          # the config
+  extensions/         # optional: your own scene types, helpers, hooks (*.py)
+  assets/             # images, code files, ... referenced from params
+    icons/            # optional: your own icons <name>.svg (+ icons.json with tags)
+  translations/       # optional: translation files of language variants (vidgen translate-template)
+  audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
+  build/              # intermediate render files, --frames stills + layout, storyboards (safe to delete)
+  exports/            # vidgen export: GIFs and clips; vidgen slides: HTML and PDF decks
+  output/             # the deliverables (output_dir: or --output-dir moves them):
+                      #   my_video.mp4 .srt _chapters.txt _thumbnail.png, my_video_preview.mp4 ...
+```
+
+## Examples and docs
+
+- [examples/minimal](examples/minimal) — the core built-in scene types (title, bullets, icon
+  grid, charts, image, quote, equation, code, cards) and beat actions, no Python:
+  `vidgen render examples/minimal --preview [--variant vertical]`; burned-in captions with
+  `--variant subtitled`, 9:16 karaoke captions with `--variant social`, a partly translated
+  Brazilian Portuguese version with `--variant pt` (`examples/minimal/translations/pt.yaml`),
+  narration through OpenRouter with `--variant openrouter` (`vidgen tts examples/minimal
+  --dry-run --variant openrouter` shows the model, voices and estimated cost).
+- [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
+  comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
+  screenshot, video clip, equation derivation, code walkthrough), overlays (a watermark, a
+  lower third, a progress bar, a chapter indicator), sound effects, a ducked music bed,
+  transitions (crossfades, colour fades, a push, a wipe), two carried objects, four chapters
+  (in the MP4 and `gallery_preview_chapters.txt`) and a designed thumbnail:
+  `vidgen storyboard examples/gallery [--variant vertical]`, `vidgen render examples/gallery --preview`,
+  `vidgen thumbnail examples/gallery`, `vidgen export gif examples/gallery --preview --scene share`,
+  `vidgen slides examples/gallery` (an HTML deck with an overview by chapter),
+  `vidgen slides examples/gallery --format pdf --notes` (a PDF with notes pages and chapter bookmarks).
+- [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
+  custom scene type with a helper module, a project icon, a vertical variant and a hook.
+- [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
+  live in its `extensions/` folder (narration MP3s included, so it renders without a key).
+- [examples/plan](examples/plan) — `outline.md`, a 2½-minute explainer outline, and the draft
+  `video.yaml` that `vidgen plan examples/plan/outline.md -o examples/plan/video.yaml --force`
+  writes from it (unedited: 19 scenes with chapters, no `vidgen lint` findings; the `# TODO:`s
+  are what an author still has to do).
+- [examples/svg_character](examples/svg_character) — a cartoon character drawn from an SVG file
+  split into parts by element ids (`vidgen character sprout examples/svg_character --png`), on a
+  `stage` with a generated character.
+- [examples/cartoon](examples/cartoon) — "The Box Kite", a 54-second cartoon with two original
+  characters voiced by Kokoro: marks, depth, a wide stage with `follow`,
+  close-ups, reactions and pauses (`vidgen character-sheet --all examples/cartoon`,
+  `vidgen storyboard examples/cartoon`, `vidgen lint examples/cartoon`: no findings).
+- [examples/screenplay](examples/screenplay) — "The Humming Box", a screenplay with three original
+  characters (`humming_box.md`); `vidgen screenplay examples/screenplay/humming_box.md --out
+  humming_box` makes a 53-second, two-scene cartoon project from it that validates and lints clean.
+- [examples/cartoon_series](examples/cartoon_series) — two short episodes of "Nib and Olla" that
+  include one shared cast (`shared/cast.yaml`) and two sets (`shared/sets.yaml`), each episode
+  overriding the light, a prop or a character for itself; both validate and lint clean.
+- [examples/cartoon-music-box](examples/cartoon-music-box) — "The Humming Box" after hand editing: automatic
+  directing, shots, sitting, a prop picked up and given, sunset to night, wind, a laugh and a
+  gasp, an overlap and an interruption, speaker-coloured captions, background music; about 58 s.
+- [examples/cartoon-rain-check](examples/cartoon-rain-check) — "Rain Check", a weather cartoon from
+  its screenplay (`rain_check.md`) after hand editing: a picnic basket, a napkin handed over and
+  blown away, an umbrella opened too late and lost to a gust, visible wind, rain that stops at the
+  ground and under the tree with a rain sound bed, puddles, light from day to storm grey to night
+  with stars, an overlap, an interruption, a comic sting and a pull-back, composed music
+  (`playful`, `tense` for the storm, `sleepy` at night, a pause before the last line); about
+  94 s with Kokoro narration.
+- [examples/cartoon-muffin-mystery](examples/cartoon-muffin-mystery) — "The Muffin Mystery", an
+  indoor cartoon from its screenplay (`muffin_mystery.md`) after hand editing: a title card and an
+  iris in, a furnished room with a door (entering and leaving through it), a dog character in an
+  armchair, effect symbols (hearts, Zs, an exclamation mark, sweat), a run, a jump, walking towards
+  the camera behind and in front of the furniture, a close-up in the front view, evening fading to
+  night, an iris out on the dog and an end card; about 70 s with Kokoro narration.
+- [examples/cartoon-rainbow-ride](examples/cartoon-rainbow-ride) — "The Rainbow Ride", a cartoon
+  from its screenplay (`rainbow_ride.md`) after hand editing: a robot on wheels in a party hat
+  watering an apple tree (an apple falls on its head: dizzy), a fox riding a bicycle, birds, a
+  passing storm with lightning, thunder and a rainbow, then an owl's cottage with a burning
+  fireplace, a steaming kettle, a running clock, a knock at the door, a gift opened (blushing) and a
+  lamp switched on at nightfall; birdsong, rain, fire and room-tone beds, the `cartoon` music bed;
+  about 94 s with Kokoro narration.
+- [examples/platform-story](examples/platform-story) — "Nutmeg and the Moon Picnic", a platform
+  story on three levels written as small maps: a little mouse skips along collecting coins,
+  climbs a ladder to a plank for a golden key, jumps over gaps, opens a locked garden gate, asks a
+  grumpy snail nicely to let her pass, catches stars in mid-air and hops up the clouds to her
+  granny's picnic; the camera follows her, close-ups for the dialogue, the automatic jump, coin
+  and door sounds, the `cartoon` music bed and a 9:16 variant with `character_size: large`;
+  about 2:50 at preview.
+- [examples/iso-story](examples/iso-story) — "Hazel and the Lamp by the Bridge", an isometric
+  story in a village by a stream and in a room: a little rabbit sees that the lamp by the bridge
+  is dark on a rainy evening while her friend is still across the stream, fetches the lamp key
+  from the old bear who keeps it (he has a cold), lights the lamp so her friend finds the bridge,
+  and gives the key back the next morning, when the rain has made her flower bed bloom; walks
+  along routes, a meeting, a door, close-ups and two-shots, name tags in the wide views,
+  morning, evening rain and night, footsteps, birdsong, rain and crickets, the `cartoon` music
+  bed and a 9:16 variant; about 3:00 with Kokoro narration.
+- [examples/iso-web-page](examples/iso-web-page) — "What happens when you open a web page", a
+  tech explainer in isometric diagrams: the browser asks DNS for the address, the request
+  crosses to a load balancer and one of two app servers, which asks the cache before the
+  database; each block grows in on the word that names it, packets run along the connectors, the
+  camera focuses on a cache miss (the database takes 40 ms) and then a hit, and the browser's
+  rendering steps (DOM, styles, layout, paint) are pulled apart as a stack; terms in their
+  colours, karaoke captions, a 9:16 variant; about 2:00 with Kokoro narration.
+- [examples/gradient-descent](examples/gradient-descent) — "Gradient descent, one step at a
+  time", a maths-and-code explainer: a dot tracing a loss curve with its tangent and a live
+  gradient label, the update rule with its symbols in the concepts' colours, the first steps as
+  jumps on a number line, the signed area under the gradient equal to the change in loss, the
+  gradient as a vector at a right angle to the dashed contour line, a loop morphing into a loop
+  with a tolerance, a Python session beside the code, and a loss chart changing with the
+  learning rate (the axis rescales as it diverges); actions on spoken words and karaoke captions
+  in the concepts' colours, a 9:16 variant; about 3:00 with Kokoro narration.
+- [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
+  an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
+  points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven
+  with a pointer line, crosses to the other side (the content slides over) and walks off; lines
+  said with feeling (`emotion:`), composed music in the `curious` mood; about 66 s with Kokoro
+  narration.
+- [examples/gps-time-of-flight](examples/gps-time-of-flight/README.md) — "How GPS finds you", a
+  one-minute science explainer whose music is an original score file an AI author made from the
+  `momentum` template in nine checked steps, now the built-in bed `music: time_of_flight`; the
+  README has the iteration log and the piece's check report; about 89 s with Kokoro narration.
+- [examples/gene-to-secreted-protein](examples/gene-to-secreted-protein/README.md) — "From gene to
+  secreted protein", a university-level cell-biology explainer following α1-antitrypsin from its
+  gene to the blood: a zoom from the tissue into the nucleus, transcription, capping, splicing,
+  polyadenylation and export up close, translation, SRP targeting to Sec61, N-glycosylation and
+  calnexin in the ER, the route through the Golgi to secretion across the whole cell, an
+  exocytosis close-up and the IL-6–STAT3 pathway that raises its synthesis; references, karaoke
+  captions, the `discovery` bed, a 9:16 variant; about 3:34 with Kokoro narration.
+- [examples/cystic-fibrosis](examples/cystic-fibrosis/README.md) — "Cystic fibrosis: from a family
+  to a diagnosis", a university-level medical-genetics explainer: a pedigree in NSGC symbols with
+  the modes of inheritance tested (only autosomal recessive fits), obligate carriers, a Punnett
+  square of two carriers, the brother's carrier probability 2/3 and the risk 1/150 for his child,
+  *CFTR* at 7q31.2, c.1521_1523del p.(Phe508del) on the real coding sequence, an NGS carrier test
+  and the carrier frequency from Hardy–Weinberg; references, karaoke captions, a 9:16 variant;
+  about 4:12 with Kokoro narration.
+- [examples/radioactive-decay](examples/radioactive-decay/README.md) — "Half-life: how radioactive
+  decay keeps time", a physics explainer with plots and calculations: a Monte Carlo of 1000 and 20
+  nuclei growing beside the exponential law, counts with √N error bars on a log axis and an
+  exponential fit with its band and residuals, the half-life worked out from the fitted decay
+  constant with its uncertainty, and carbon-14 dating; seeded data from `make_data.py`, a 9:16
+  variant; about 2:52 with Kokoro narration.
+- [examples/mars-transfer](examples/mars-transfer/README.md) — "How to get to Mars", an orbital
+  mechanics explainer: why a rocket cannot fly straight there (a radial burn bent by the Sun's
+  gravity), the Hohmann transfer with Δv₁ 2.94 and Δv₂ 2.65 km/s, 259 days and Mars 44° ahead at
+  departure, the transfer time and phase angle worked out, the 3.59 km/s departure burn from low
+  Earth orbit (the Oberth effect), and the Earth and Mars on 28 October 2026 from JPL's elements
+  with the next window and opposition; a 9:16 variant; about 3:43 with Kokoro narration.
+- [examples/higgs-discovery](examples/higgs-discovery/README.md) — "How the Higgs boson was
+  found", a particle-physics explainer: the Standard Model with the Higgs boson's couplings, gluon
+  fusion through a top-quark loop, the predicted decay modes, H → γγ through top and W loops, a
+  simulated diphoton event in a schematic detector, the photons' invariant mass worked out
+  (125 GeV), a simulated spectrum with its bump, fit and local significance, four leptons, what
+  five sigma means, and the announcement of 4 July 2012; a 9:16 variant; about 3:49 with Kokoro
+  narration.
+- [examples/3d-short](examples/3d-short/video.yaml) — "Two friends and a ball", a 9:16 Short of
+  about 15 s in one `3d` scene: shapes, two stand-ins who walk and turn to each other, a ball that
+  appears, rolls and glows, four camera moves on spoken words, karaoke captions, and its guide
+  passes (depth, outline, mask).
+- [examples/web](examples/web/README.md) — "Where rain comes from", three short `web` scenes
+  written as web pages: an HTML and CSS page whose cards come in on narration beats, a canvas
+  drawing of a rain gauge with its text declared to lint, and a three.js planet written by hand; 16:9
+  and a 9:16 variant, about 50 s with Kokoro narration.
+- [examples/three-finish](examples/three-finish/README.md) — "A still life in metal", one silent
+  6 s `web` scene finished with vidgen's module `vidgen/three-finish`: brass gears and metal spheres
+  in a baked studio, a focus pull, a fast gear in motion blur, bloom, ACES, a grade, vignette,
+  grain, FXAA.
+- [examples/signal-fire](examples/signal-fire/README.md) — "Signal Fire", 27 s with no narration:
+  an original orchestral cue written with dynamics, hairpins and slurs (strings, horns, trumpet,
+  low brass, choir, timpani rolling into the hit, taikos, cymbals, tam-tam) and a three.js night of
+  standing stones around a fire that reads the score through `ctx.music` (embers on the cellos'
+  notes, a beam on the trumpet's pitch, flashes on the taikos), finished with `vidgen/three-finish`.
+- [examples/escapement](examples/escapement/README.md) — "Escapement", the published 3:11
+  clockwork music film, source only: an original 26-track score in D minor at 120 BPM and twelve
+  three.js `web` scenes of a watch movement in brass, rhodium, blued steel and ruby whose going
+  train turns at its real gear ratios and ticks on the beat (the beats read from the score through
+  `music_data`), an exploded view at the climax and one silent bar where everything stops; the
+  film's own depth of field, motion blur and finishing (the final render takes
+  about 1 h 30 min to 2 h on 2 cores, `vidgen still` and `--draft` for quick looks).
+- [examples/parallel-space](examples/parallel-space/README.md) — "Parallel Space", a 3:05
+  music film, source only: an original hybrid cinematic / trance score at 138.46 BPM in F# minor
+  for vidgen's own synthesizer (men's choir, strings, horn, organ, synth drums and supersaws) and
+  eleven three.js `web` scenes of a flight through space and parallel realities, among them a
+  mirror corridor of nine receding copies of the flight, composed from vidgen's building blocks
+  `vidgen/three-kit` and `vidgen/music-time`, with an opening title and an end card from
+  `vidgen/title-cards`; the pictures follow the music through `music_data`
+  (the final render takes
+  about 1 h on 2 cores, `vidgen still` and `--draft` for quick looks).
+- [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
+  stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
+- [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
+- [docs/COOKBOOK.md](docs/COOKBOOK.md) — craft notes from real videos (hooks, pacing, sound, QA);
+  [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
+  YouTube Short about code: layout, phone-readable code, narration, checks;
+  [docs/COOKBOOK-MUSIC.md](docs/COOKBOOK-MUSIC.md) — writing music as score files: room for the
+  voice, builds and lifts, loops, check and compare, genre sketches; the orchestral instruments
+  (brass, organ, strings, percussion, choir), expressive notes, music data for web pages, the instrument table;
+  [docs/COOKBOOK-CELL-BIOLOGY.md](docs/COOKBOOK-CELL-BIOLOGY.md) — cell-biology lectures and
+  research explainers: choosing the scene, accuracy, labelling, zooming, pacing, references;
+  [docs/COOKBOOK-GENETICS.md](docs/COOKBOOK-GENETICS.md) — genetics lectures and medical genetics:
+  NSGC / ISCN / HGVS / HGNC notation, exact numbers, reading a pedigree aloud, a counselling tone,
+  common mistakes and the lint rules that catch them;
+  [docs/COOKBOOK-SCIENCE-CHARTS.md](docs/COOKBOOK-SCIENCE-CHARTS.md) — scientific plots and worked
+  calculations: plot or chart, honest axes, error-bar meanings, fits and their uncertainties, units
+  and significant figures, pacing a calculation, common mistakes and the lint rules that catch them;
+  [docs/COOKBOOK-ORBITS.md](docs/COOKBOOK-ORBITS.md) — orbital mechanics videos: choosing what to
+  show, scale honesty, units and Δv, the approximations to state, pacing, common mistakes and the
+  lint rules that catch them;
+  [docs/COOKBOOK-PARTICLES.md](docs/COOKBOOK-PARTICLES.md) — particle-physics videos: planning a
+  discovery story, choosing the scene, natural units (GeV vs GeV/c²), simulated data and schematic
+  detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
+  mistakes and the lint rules that catch them;
+  [docs/COOKBOOK-AUDIO.md](docs/COOKBOOK-AUDIO.md) — audiobooks and podcasts without pictures:
+  loudness presets and targets, formats, pacing, voices, checking a file;
+  [docs/COOKBOOK-AUDIODRAMA.md](docs/COOKBOOK-AUDIODRAMA.md) — dramatized audiobooks: structure,
+  casting, rooms and stereo, score and sound design, the drama checks, a file per chapter;
+  [docs/COOKBOOK-GENERATED-VIDEO.md](docs/COOKBOOK-GENERATED-VIDEO.md) — shots made by video models
+  through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
+  [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
+  [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
+  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes, finishing three.js `web` scenes with `vidgen/three-finish`, building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`), from a score to a music video (`vidgen music plan`), checking a music video's motion (`vidgen motion check`), opening titles and end cards for films (`vidgen/title-cards`).
+- [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
+  layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
+- [DESIGN.md](DESIGN.md) — architecture and internal contracts.
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each release (0.3.0: cartoons, Kokoro and
+  OpenRouter narration, `output/`, `--jobs auto`), behaviour changes first.
+- [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md) — a short checklist to try a release on Windows
+  (install with the extras, a cartoon preview, fonts, MiKTeX, Kokoro) and what to report back.
+
+## Your content and third-party services
+
+- The MIT licence covers the software, not the videos you make with it or the files you add.
+- Use only images, clips, screenshots, music and quotes you own or have permission to use
+  (screenshots of other products may also show their trademarks).
+- Narration from ElevenLabs and pictures from OpenAI are subject to those providers' terms (for
+  example, plan limits on commercial use; cloning a voice requires the speaker's consent).
+  Pictures made through OpenRouter are subject to OpenRouter's terms and to those of the model's
+  provider (Black Forest Labs, ByteDance, Google, OpenAI, Recraft, ...); check the model's page
+  for commercial use. The same holds for narration voiced through OpenRouter (Mistral, Kokoro,
+  Google, ElevenLabs, Microsoft, ...).
+- The built-in fonts (SIL Open Font License), Lucide icons (ISC), Natural Earth map data (public
+  domain), sound effects and music beds may be used in your videos, including commercially. No
+  attribution is required in a video (the OFL and ISC notices apply to redistributing the files
+  themselves; Natural Earth asks for none, though "Made with Natural Earth" is appreciated).
+  So may composed music played with the default GeneralUser GS SoundFont (no attribution
+  required; suggested credit in step 12 of the Windows install). Details:
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Working on schu-video-generator
+
+`pip install -e ".[dev]"`, then `python -m pytest -q` runs the default set: every test except
+those marked `slow` (about 3–4 minutes on one CPU). `python -m pytest -q -m slow` runs only the
+slow ones (the render sweeps over every scene type, the end-to-end renders, and every test over
+about 0.4 s: hours on one CPU), and `-m "slow or not slow"` runs everything; `-n auto` runs them
+in parallel on every CPU (pytest-xdist, in the `dev` extra). `-m "not render"` also skips the
+remaining rendering tests. No test needs network or keys.
+
 ## Features
 
 - **Config-only videos** with twenty-eight built-in scene types, in landscape and vertical
@@ -164,7 +710,10 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
     score's hits and notes, so pictures follow the score with no script of your own; three.js pages
     get a ready-made film finish from the module `vidgen/three-finish`: depth of field, motion blur,
     bloom, tone mapping, grade, vignette, grain; `vidgen still` draws one frame at an exact time
-    without rendering the scene);
+    without rendering the scene; `vidgen music plan` reads a score and drafts a music video of `web`
+    scenes cut on its bar lines, a colour per section and a starter page per scene that follows the
+    score's drums, melodies and pads; `vidgen motion check` watches the rendered video for black
+    frames, one-frame flashes, flicker, popping, strobing, frozen stretches and jumps at cuts);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,
@@ -318,7 +867,7 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
   `standard`, `large`; vertical video gets `large` automatically); `vidgen list-themes
   --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
-- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with schu-video-generator (no install);
+- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with schu-video-generator;
   presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
 - **Icons**: 200 built-in line icons (Lucide, ISC) in eight categories
   ([catalogue](docs/ICONS.md)), searchable by concept, recoloured by the
@@ -456,8 +1005,18 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   cartoons), played with real instruments ([reference](docs/CONFIG.md#composed-music-compose)):
   composed for the video's timings, every scene change on a bar line, a mood per scene
   (`music: {mood: tense}`), swells on reveals, a pause before a punchline and a closing cadence
-  ([follows the video](docs/CONFIG.md#music-that-follows-the-video)). Without the extra the mood's
-  bed plays and `vidgen validate` says so.
+  ([follows the video](docs/CONFIG.md#music-that-follows-the-video)).
+- **Music videos**: three.js `web` pages built from `vidgen/three-kit` (glowing lines, crystals,
+  a tesseract, nebula skies, star fields, tunnels, rings, ribbons, dust, camera paths) and
+  `vidgen/music-time` (song time and bars, the score's hits and notes as envelopes, a colour script,
+  reactions: a kick pulses the light, a note leaves a glint); `vidgen music plan` reads a score file
+  and drafts the video (cuts on its bar lines, a colour per section, a starter page per scene);
+  `vidgen motion check` watches the render for black frames, flashes, flicker, popping, strobing,
+  frozen stretches and jumps at cuts; the score's `choir` sings syllables (`la`, `na`, `da`,
+  `mm-ah`, `ah-oh`), a soloist over the section and a whisper, a syllable per note
+  ([cookbook](docs/COOKBOOK-3D.md#9-building-blocks-for-music-videos)); an opening title and a
+  matching end card for films from `vidgen/title-cards`, laid out as Escapement's
+  ([cookbook](docs/COOKBOOK-3D.md#12-opening-titles-and-end-cards-for-films)).
 - **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
   `crossfade` (the scenes overlap, the video gets shorter by it), `fade_color` through a theme
   colour (`{type: fade_color, color: surface, duration: 1.2}`), `push` (the next scene slides in
@@ -478,566 +1037,6 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   on a small disk `render: {intermediate: compact, keep_intermediates: false}` keeps their
   intermediate frames clips about 4.6 times smaller or deletes them once used.
 - Windows, macOS and Linux; Python 3.10–3.13.
-
-## For AI agents
-
-schu-video-generator is meant to be driven by AI agents. An agent making a video should read
-**[AGENTS.md](AGENTS.md)** first — or run `vidgen guide` (the same guide, shipped with schu-video-generator;
-`vidgen guide --list` for its topics, `vidgen guide scenes` for one, `--json` for programs). It
-covers the working loop (write → `validate --json` → `storyboard`, and look at the PNGs → `lint
---json` → fix → `tts --dry-run` → `tts` → `render`), pacing and on-screen text rules, a scene-type
-chooser with a snippet per type, visual design, beat actions and audio with restraint, good vs bad
-examples, outputs and the fixes for common validate / lint messages. (`CLAUDE.md` is for agents
-working on schu-video-generator's own code.) Starting from an outline, `vidgen plan outline.md --json` writes a
-draft project to refine: its `# TODO:` comments list what to check first.
-
-### Use from an AI agent via MCP
-
-`vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
-Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
-`init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `audio_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
-back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
-video. It uses the official MCP Python SDK, which comes with a plain install.
-
-Claude Desktop (`claude_desktop_config.json`; on Windows give the full path of `vidgen.exe` in
-the venv's `Scripts` folder if `vidgen` is not on the PATH):
-
-```json
-{
-  "mcpServers": {
-    "schu-video-generator": {
-      "command": "vidgen",
-      "args": ["mcp", "--root", "C:\\Users\\me\\videos"]
-    }
-  }
-}
-```
-
-Claude Code: `claude mcp add schu-video-generator -- vidgen mcp --root /home/me/videos` (or the same
-`mcpServers` entry in the project's `.mcp.json`).
-
-- **One folder**: the tools read and write only inside `--root` (default: the folder the server
-  starts in); a path outside it, also through `..` or a link, is refused — in tool arguments and
-  in the files a project's `video.yaml` names (pictures, clips, code files, extensions...).
-- **No surprise bills**: `tts` and `imagegen` are dry runs unless called with `dry_run: false`
-  **and** `confirm_cost: true` (and `readback` with a paid speech-to-text provider needs
-  `confirm_cost: true`); the dry run says what it would cost. API keys come from the server's
-  environment (set `ELEVENLABS_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` where the client starts it, e.g. an
-  `"env"` entry) and are never returned.
-- **Robust**: every call runs the CLI in a fresh process (`vidgen <command> --json`), reports its
-  progress lines, and stops it when the call is cancelled; renders run one at a time.
-- Resources: the guide (`vidgen://guide`, `vidgen://guide/<topic>`) and the JSON Schema
-  (`vidgen://schema`). Reference: [docs/CONFIG.md](docs/CONFIG.md#mcp-server-vidgen-mcp).
-
-## Install
-
-Upgrading an environment that installed this project before it was renamed (as `vidgen`): run
-`pip uninstall vidgen` once, then install as below (the `vidgen` command is unchanged).
-An unrelated project on PyPI is also named `vidgen` and also installs a top-level `vidgen`
-package, so do not install both in the same environment.
-
-**ffmpeg**: version 4.4 or newer (tested with 4.4, 5.1, 6.1, 7.0, 7.1 and 8.1). Older ones lack
-filters the join uses (`xfade` for crossfades, pushes and wipes; `amix=normalize` for sound
-effects); schu-video-generator names the version in its error when an older ffmpeg fails. (Copies of
-schu-video-generator from before the fix failed crossfades, pushes and wipes on ffmpeg 7.0 /
-7.1, e.g. Debian 13's, with "frame rate 1/0 is invalid": update rather than install another
-ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
-
-### Windows
-
-1. **Python 3.10–3.13** from [python.org](https://www.python.org/downloads/) (tick "Add
-   python.exe to PATH").
-2. **ffmpeg**: `winget install ffmpeg`, then open a new terminal (`ffmpeg -version` must work).
-3. **schu-video-generator** (in PowerShell, from a copy of this repository; it installs the
-   `vidgen` command):
-   ```
-   cd video-generator
-   py -m venv .venv
-   .venv\Scripts\Activate.ps1          # cmd.exe: .venv\Scripts\activate.bat
-   pip install .                       # or `pip install -e ".[dev]"` to work on schu-video-generator itself
-   vidgen --version
-   ```
-   This installs every Python package schu-video-generator uses: Manim, pydantic, PyYAML, PyAV, Kokoro
-   with PyTorch (Python 3.10–3.12), Playwright, symusic, faster-whisper, fpdf2 and the MCP SDK
-   (pre-built wheels; no compiler needed). You never install a Python package yourself.
-4. **Fonts**: nothing to install. schu-video-generator bundles Inter (sans), Source Serif 4 (serif) and
-   JetBrains Mono NL (code), all SIL Open Font License (see `THIRD_PARTY_NOTICES.md`). Any
-   installed font works too, e.g. `theme: {font: Segoe UI}`.
-5. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
-   a new terminal. schu-video-generator reads the key only from this variable and never writes it anywhere.
-   With `voice: {provider: openrouter, model: ..., voice: ...}` narration goes through OpenRouter
-   instead and needs the **OpenRouter API key** of step 9 (`OPENROUTER_API_KEY`), not this one.
-6. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
-   [MiKTeX](https://miktex.org/download) (it includes `dvisvgm`; allow it to install missing
-   packages on the fly) and open a new terminal.
-7. PDF slide decks (`vidgen slides --format pdf`): nothing to install.
-8. `vidgen readback` with local speech to text: nothing to install (faster-whisper's first run
-   downloads the Whisper model from the Hugging Face Hub, ~500 MB
-   for `small`).
-9. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
-   `setx OPENAI_API_KEY your_key`, or, with `imagegen: {provider: openrouter, model: ...}`, an
-   **OpenRouter API key** (from <https://openrouter.ai/keys>), `setx OPENROUTER_API_KEY your_key`;
-   then open a new terminal. Each is read only from its variable, never written anywhere. The
-   same OpenRouter key voices the narration with `voice: {provider: openrouter, ...}`.
-10. `vidgen mcp` (the MCP server for AI agents): nothing to install.
-11. Free local narration (`voice: {provider: kokoro}`): nothing more to install — PyTorch
-    (Windows wheels from PyPI are CPU-only, ~250 MB), the `kokoro` package and its phonemizer come
-    with the plain install. **Python 3.10–3.12**: the `kokoro` package declares no support for 3.13
-    yet, so make this virtual environment with `py -3.12 -m venv .venv` (on 3.13 it is left out
-    and `vidgen tts` says so). No API key. The first `vidgen tts` downloads
-    the model from Hugging Face (`kokoro-v1_0.pth`, 327 MB, plus ~0.5 MB per voice) into
-    `%USERPROFILE%\.cache\huggingface\hub` (set `HF_HOME` to move it), and for English voices
-    spaCy's small English model (13 MB, installed with pip); after that it works offline.
-    **espeak-ng** (Kokoro's pronunciation for Spanish, French, Hindi, Italian and Portuguese, and
-    for English words missing from its dictionary) comes inside the `espeakng-loader` wheel, and
-    kokoro loads that copy: nothing else to install. If `vidgen tts` says espeak-ng cannot be
-    loaded, reinstall schu-video-generator; installing espeak-ng itself (`espeak-ng.msi` from <https://github.com/espeak-ng/espeak-ng/releases>) only
-    helps older kokoro / misaki versions, which find it through the environment variable
-    `PHONEMIZER_ESPEAK_LIBRARY=C:\Program Files\eSpeak NG\libespeak-ng.dll`. Japanese voices are not
-    available: `pyopenjtalk` has no pre-built release and would need a C++ compiler, so use
-    another voice provider for Japanese.
-12. Composed music (music written as notes and played with real instruments, Phase N): symusic
-    0.5.9 comes with the plain install. The SoundFont it plays with,
-    GeneralUser GS 2.0.3 (32.3 MB, free for commercial use), is downloaded on first use into
-    `%LOCALAPPDATA%\vidgen\soundfonts` and checked against its SHA-256; `vidgen soundfont fetch`
-    downloads it now, `soundfont: PATH` in `video.yaml` uses your own `.sf2` / `.sf3` instead.
-    Suggested credit (not required): "Music rendered with the GeneralUser GS SoundFont
-    by S. Christian Collins (https://www.schristiancollins.com/generaluser)."
-13. Optional, only for `3d` and `web` scenes (headless Chromium, Phases AI and AK): the plain install
-    brings Playwright; `py -m playwright install chromium` downloads the browser (~150 MB, once).
-    three.js itself ships with schu-video-generator (the core and a chosen set of add-ons for `web`
-    scenes: glTF loading, environment lighting, bloom, HTML labels, thick lines, rounded boxes, SVG
-    shapes, orbit controls), and so do anime.js, Motion, D3, Chart.js and lottie-web for `web`
-    scenes; nothing is fetched while rendering.
-
-If PowerShell refuses to run `Activate.ps1`, run
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. To check a new release on Windows
-step by step, follow [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md).
-
-### Linux (Ubuntu / Debian)
-
-```bash
-# 1. System packages: Python, ffmpeg, git, and the Cairo/Pango libraries Manim builds against
-sudo apt update
-sudo apt install python3 python3-venv python3-dev git ffmpeg \
-    build-essential pkg-config libcairo2-dev libpango1.0-dev
-
-# 2. Get the code and install it in a virtual environment (installs the `vidgen` command)
-git clone https://github.com/joaopauloschuler/schu-video-generator.git
-cd schu-video-generator
-python3 -m venv .venv
-source .venv/bin/activate
-pip install .                  # brings every Python package schu-video-generator uses
-
-# 3. Check it works: render the bundled example as a quick preview
-vidgen --version
-vidgen render examples/minimal --preview      # -> examples/minimal/output/minimal_preview.mp4
-
-# 4. Optional: LaTeX, only for the `equation` and `equation_derivation` scene types
-sudo apt install texlive texlive-latex-extra dvisvgm
-
-# 5. Optional: API keys (add to ~/.bashrc to keep them)
-export ELEVENLABS_API_KEY=your_key            # narration (vidgen tts)
-export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen, default provider)
-export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter and/or voice.provider: openrouter
-
-# 6. Optional: free local narration with Kokoro (voice.provider: kokoro); Python 3.10-3.12 only
-sudo apt install espeak-ng                    # optional fallback: kokoro uses the copy bundled in espeakng-loader
-
-# 7. Optional: composed music; the GeneralUser GS SoundFont (32.3 MB) goes to ~/.cache/vidgen
-vidgen soundfont fetch                        # or let the first composed render download it
-
-# 8. Optional: 3d and web scenes (headless Chromium through Playwright)
-python -m playwright install chromium         # add --with-deps if Chromium's system libraries are missing
-```
-
-Fonts are bundled, so there is nothing to install for them. Other distributions need the same
-pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
-`sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
-terminal needs `source .venv/bin/activate` again before running `vidgen`.
-(macOS keeps the SoundFont in `~/Library/Caches/vidgen`).
-
-**Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (on 3.13 it is left out: use
-`python3.12 -m venv .venv`). PyPI's Linux PyTorch brings the CUDA libraries along, so the plain
-install downloads about 3.3 GB (about 3 GB of it PyTorch, `triton` and the `nvidia-*` packages); with
-an NVIDIA GPU, `voice: {device: cuda}` uses them. The first `vidgen tts` downloads the model from Hugging Face (`kokoro-v1_0.pth`,
-327 MB, plus ~0.5 MB per voice) into `~/.cache/huggingface/hub` (`HF_HOME` moves it) and, for
-English, spaCy's `en_core_web_sm` (13 MB, with pip); later runs need no network. espeak-ng comes
-bundled in the `espeakng-loader` wheel; `sudo apt install espeak-ng` does no harm and is the
-fallback named by schu-video-generator's error if the bundled library cannot be loaded. Japanese
-voices are not available (`pyopenjtalk` needs a C++ compiler); Chinese voices come with the plain install.
-
-### macOS
-
-`brew install python ffmpeg pkg-config cairo pango`, then the same steps 2–5 as Linux (LaTeX:
-[MacTeX](https://www.tug.org/mactex/)).
-
-## Quick start
-
-```
-vidgen init my_video            # scaffold video.yaml, extensions/, assets/, .gitignore
-                                # (or: vidgen plan outline.md -o my_video  -> a draft from your outline)
-cd my_video
-vidgen validate                 # check config, scene types, params, assets and audio status
-vidgen render --preview         # 854x480 check, timed from word counts -> output/my_video_preview.mp4
-vidgen storyboard               # contact sheets of every beat -> build/preview/storyboard/*.png
-vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
-vidgen tts --dry-run            # what would be sent to the TTS (pronunciation applied), how many characters (OpenRouter: est. cost)
-vidgen tts                      # generate narration MP3s (only new/changed beats)
-vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words
-vidgen imagegen --dry-run       # pictures of generate: params still to make, their prompts and estimated cost
-vidgen render                   # final render -> output/my_video.mp4 + .srt (+ my_video_chapters.txt with chapters)
-vidgen thumbnail                # output/my_video_thumbnail.png (also written by render with a thumbnail: section)
-vidgen export gif --scene intro # exports/my_video_intro.gif
-vidgen slides --final --audio   # exports/my_video_slides.html: the video as a narrated slide deck
-vidgen slides --final --format pdf --notes   # exports/my_video_notes.pdf: slides with the narration
-```
-
-Edit `video.yaml` (reference: [docs/CONFIG.md](docs/CONFIG.md)) and repeat. Until audio exists,
-beats are timed from their word count, so you can lay out the whole video before paying for
-narration.
-
-## Commands
-
-| command | |
-|---|---|
-| `vidgen init DIR [--example minimal] [--json]` | create a new project (DIR must not exist or be empty) |
-| `vidgen mcp [--root DIR]` | the MCP server (stdio) giving an AI agent's client these commands as tools, inside DIR only (also `vidgen-mcp`) |
-| `vidgen plan INPUT [--output DIR\|FILE] [--title TEXT] [--format 16:9\|9:16] [--preset NAME] [--language TAG] [--force] [--json]` | a draft project from a Markdown outline or a plain-text script (deterministic, no AI): scenes chosen from its headings and cues, narration cut into beats, on-screen texts compressed, a `# plan:` reason and `# TODO:`s per scene; prints scenes, estimated length and TODO count, and validates the draft |
-| `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents ([AGENTS.md](AGENTS.md)): all of it, one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
-| `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant, including variants that do not load), estimated length, audio status, generated pictures |
-| `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
-| `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
-| `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
-| `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
-| `vidgen list-pronunciation [PROJECT] [--json]` | schu-video-generator's built-in pronunciation entries per TTS engine and language (Kokoro American English: `epoch`, `README`, `JSON`, ...); in a project, the lists its voices use, what the project replaces or removes and the beats each entry changes |
-| `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood), the project's pieces (score files in `assets/music`: key, tempo, length, title, description) and its `assets/music` audio files; `--render-dir` writes one loop of each bed as WAV; then the moods and instrument names of composed music (`music: {compose: ...}`) |
-| `vidgen music preview [PROJECT] [--mood M] [--seed S] [--bars N] [--key K] [--tempo T] [--out DIR] [--json]` | composes the project's `compose:` music (or a mood) and writes it as WAV and `.mid` to listen to |
-| `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with schu-video-generator's own instruments and writes a WAV or MP3; also takes a project piece's or a built-in bed's name ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
-| `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
-| `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
-| `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
-| `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
-| `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when symusic and the SoundFont are there |
-| `vidgen soundfont fetch\|info [PROJECT] [--force]` | the SoundFont composed music is played with: `fetch` downloads GeneralUser GS 2.0.3 into vidgen's cache (SHA-256 checked; `--force` again), `info` shows its path, size, hash, licence and the suggested credit (or the project's `soundfont:` file) |
-| `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
-| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME \| --all-languages] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
-| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
-| `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
-| `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
-| `vidgen render [PROJECT] [--preview\|--draft] [--scene ID ...] [--variant NAME \| --all-languages] [--no-audio] [--keep-going] [--max-scenes N] [--jobs N\|auto] [--frames] [--frames-per-beat N] [--force] [--guide-passes [LIST]] [--intermediate lossless\|compact] [--clean-intermediates] [--output-dir DIR] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video; `--guide-passes` also draws the depth, outline and mask videos of every `3d` scene; `--intermediate compact` / `--clean-intermediates` keep `web` and `3d` frames clips small or delete them once used |
-| `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N\|auto] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
-| `vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions \| --no-captions] [--jobs N\|auto] [--output-dir DIR] [--json]` | `<output>_animatic.mp4`: the storyboard's stills held in time with the narration, with the video's audio and the subtitles drawn on; joined by ffmpeg in seconds when the stills are current (see [docs/CONFIG.md](docs/CONFIG.md#animatic-vidgen-animatic)) |
-| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME \| --all-languages] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--readback] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`; `--readback`: also transcribe and flag unclear words); exit code 1 on errors |
-| `vidgen still [PROJECT] --scene ID (--at SECONDS \| --frame N \| --count N)... [--size final\|preview\|draft\|WxH] [--variant NAME] [--out FILE\|DIR] [--sheet FILE [--columns N]] [--exact] [--transparent] [--json]` | single frames (PNG) of a `web` scene's page at exact times without rendering the scene: the picture the render draws for that frame; several in one browser, a contact sheet on request (`exports/stills/`) |
-| `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
-| `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
-| `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
-| `vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right\|left]` | print a character of `characters:` (its `look:` and colours); `--png` writes one still of it (default `exports/character_<name>.png`) |
-| `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]` | every pose, expression and mouth shape of a character on one PNG (`exports/character_sheet_<name>.png`); no NAME: one sheet per character |
-| `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks, reactions, gestures and close-ups `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
-| `vidgen screenplay INPUT [--out DIR\|FILE] [--cast FILE] [--species NAME ...] [--seed S] [--force] [--json]` | a cartoon project from a screenplay (no AI): one `stage` scene per `# Scene:` heading (`set:` line: background or a room, props and furniture, marks), a `card` per `# Card:` heading, one beat per `NAME (manner): line` or narrator paragraph, `[stage directions]` mapped to walks, entrances, exits, jumps, looks, gestures and effect symbols (others kept as `# TODO:`), generated looks (well contrasted; `--species`: animals) and voices for undeclared characters (`--cast`: include a series' cast and sets), `auto_direct: true`; validates the project |
-| `vidgen cast --random N [--seed S] [--species NAME ...] [--out FILE] [--provider P] [--json]` | write N original characters that differ clearly (silhouette, colours, accessories, voice kind and voice) as an include file (`cast.yaml`) for `include:` or `vidgen screenplay --cast`; the same seed gives the same cast |
-| `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N\|auto] [--force] [--output-dir DIR] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter) |
-
-`PROJECT` is a project folder or its config file (default: the current folder).
-`render` and `thumbnail` write the MP4, SRT, chapter list and thumbnail into `<project>/output/`
-(`output_dir:` in `video.yaml`, relative to the project folder, or `--output-dir DIR`, relative
-to the current directory, puts them elsewhere; `export` and `slides` read them from there with
-the same flag); `build/` and `exports/` do not move.
-`render` renders only the scenes whose render is missing or out of date (their config, audio,
-assets, extensions or schu-video-generator changed: the same check as `storyboard`), so a render after a
-storyboard of the same format just joins. Options: `--force` renders every scene again;
-`--preview` uses the `preview` resolution; `--draft` makes a fast draft (about 8 fps, 240p, no
-idle motion, wind, shadows, particles or light grade, every timing and position kept;
-`<output>_draft.mp4` from `build/draft/`, see [docs/CONFIG.md](docs/CONFIG.md#drafts-vidgen-render---draft)); `--scene ID` re-renders only those
-scenes and re-joins with the existing renders of the others; `--variant NAME` applies a named
-variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing is unchanged);
-`--keep-going` renders the remaining scenes after a failure; `--max-scenes N` renders at most N
-scenes and stops without joining when more are left (run it again to go on: every finished
-scene's render is kept, also after an interrupted run — a long final render in steps that each
-fit a time limit); `--intermediate compact` keeps the frames `web` and `3d` scenes draw about 4.6
-times smaller (H.264 4:4:4 and a lossless alpha stream instead of lossless FFV1, about 26 MB per
-second at 720p for a WebGL page) and `--clean-intermediates` deletes each scene's frames clip once
-the scene is rendered (also `render:` in the config; the render warns when the disk may be too
-small and prints the build folder's size, see [docs/CONFIG.md](docs/CONFIG.md#intermediate-files-and-disk-render)); `--jobs N` renders N scenes in
-parallel (`--jobs auto`: as many as the available memory, 1.5 GB per job, and the CPU cores allow;
-it prints its choice, see [docs/CONFIG.md](docs/CONFIG.md#parallel-renders---jobs)); `--frames` also saves a PNG still of the last frame of every beat (`--frames-per-beat
-N`: N evenly spaced stills per beat) in `build/<final|preview>[_<variant>]/frames/<scene>/`,
-with an `index.json` (beat, time, path) — a way to look at a render without playing it, see
-[docs/CONFIG.md](docs/CONFIG.md#frame-stills-vidgen-render---frames) — and, for the same frames,
-`build/.../layout/<scene>.json`: every visible text/shape/image with its pixel box, font size in
-px, colours and opacity ([layout dump](docs/CONFIG.md#layout-dump-buildlayoutscenejson)). Errors are printed as `error: ...` with exit code 1.
-`--json` prints one machine-readable JSON document on stdout instead (problems with their
-config location, scene types with params/defaults/docs, output paths and per-scene durations;
-errors too, with a non-zero exit code) — for scripts and AI agents. The shapes are documented
-in [docs/CONFIG.md](docs/CONFIG.md#json-output---json).
-`vidgen storyboard` writes contact sheets to `build/<preview|final>[_<variant>]/storyboard/`:
-`video-<page>.png` (the whole video, split into pages of bounded size) and
-`scenes/<scene>-<page>.png` (one scene, larger stills); each still is labelled `beat @ time`
-with the beat's narration under it. It renders (preview format by default, with stills) only
-the scenes whose stills are missing or out of date, so after `vidgen render --preview --frames`
-or an earlier storyboard it is quick; see
-[docs/CONFIG.md](docs/CONFIG.md#storyboard-vidgen-storyboard).
-`vidgen lint` checks the same stills and each scene's activity over time
-(`build/.../activity/<scene>.json`: beat timings, every `play`, a per-frame change signal),
-rendering only what is missing or stale like the storyboard, and prints one line per problem
-with the still to look at; thresholds and
-severities are set in an optional `lint:` section, findings a scene means to have are skipped
-with its `lint_ignore`; see [docs/CONFIG.md](docs/CONFIG.md#lint-vidgen-lint).
-`vidgen schema > video.schema.json` writes a JSON Schema (draft 2020-12) that editors and
-agents can check `video.yaml` against before running `vidgen validate`; see
-[docs/CONFIG.md](docs/CONFIG.md#json-schema-vidgen-schema).
-
-## Project layout
-
-```
-my_video/
-  video.yaml          # the config
-  extensions/         # optional: your own scene types, helpers, hooks (*.py)
-  assets/             # images, code files, ... referenced from params
-    icons/            # optional: your own icons <name>.svg (+ icons.json with tags)
-  translations/       # optional: translation files of language variants (vidgen translate-template)
-  audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
-  build/              # intermediate render files, --frames stills + layout, storyboards (safe to delete)
-  exports/            # vidgen export: GIFs and clips; vidgen slides: HTML and PDF decks
-  output/             # the deliverables (output_dir: or --output-dir moves them):
-                      #   my_video.mp4 .srt _chapters.txt _thumbnail.png, my_video_preview.mp4 ...
-```
-
-## Examples and docs
-
-- [examples/minimal](examples/minimal) — the core built-in scene types (title, bullets, icon
-  grid, charts, image, quote, equation, code, cards) and beat actions, no Python:
-  `vidgen render examples/minimal --preview [--variant vertical]`; burned-in captions with
-  `--variant subtitled`, 9:16 karaoke captions with `--variant social`, a partly translated
-  Brazilian Portuguese version with `--variant pt` (`examples/minimal/translations/pt.yaml`),
-  narration through OpenRouter with `--variant openrouter` (`vidgen tts examples/minimal
-  --dry-run --variant openrouter` shows the model, voices and estimated cost).
-- [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
-  comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
-  screenshot, video clip, equation derivation, code walkthrough), overlays (a watermark, a
-  lower third, a progress bar, a chapter indicator), sound effects, a ducked music bed,
-  transitions (crossfades, colour fades, a push, a wipe), two carried objects, four chapters
-  (in the MP4 and `gallery_preview_chapters.txt`) and a designed thumbnail:
-  `vidgen storyboard examples/gallery [--variant vertical]`, `vidgen render examples/gallery --preview`,
-  `vidgen thumbnail examples/gallery`, `vidgen export gif examples/gallery --preview --scene share`,
-  `vidgen slides examples/gallery` (an HTML deck with an overview by chapter),
-  `vidgen slides examples/gallery --format pdf --notes` (a PDF with notes pages and chapter bookmarks).
-- [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
-  custom scene type with a helper module, a project icon, a vertical variant and a hook.
-- [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
-  live in its `extensions/` folder (narration MP3s included, so it renders without a key).
-- [examples/plan](examples/plan) — `outline.md`, a 2½-minute explainer outline, and the draft
-  `video.yaml` that `vidgen plan examples/plan/outline.md -o examples/plan/video.yaml --force`
-  writes from it (unedited: 19 scenes with chapters, no `vidgen lint` findings; the `# TODO:`s
-  are what an author still has to do).
-- [examples/svg_character](examples/svg_character) — a cartoon character drawn from an SVG file
-  split into parts by element ids (`vidgen character sprout examples/svg_character --png`), on a
-  `stage` with a generated character.
-- [examples/cartoon](examples/cartoon) — "The Box Kite", a 54-second cartoon with two original
-  characters voiced by Kokoro (no audio committed): marks, depth, a wide stage with `follow`,
-  close-ups, reactions and pauses (`vidgen character-sheet --all examples/cartoon`,
-  `vidgen storyboard examples/cartoon`, `vidgen lint examples/cartoon`: no findings).
-- [examples/screenplay](examples/screenplay) — "The Humming Box", a screenplay with three original
-  characters (`humming_box.md`); `vidgen screenplay examples/screenplay/humming_box.md --out
-  humming_box` makes a 53-second, two-scene cartoon project from it that validates and lints clean.
-- [examples/cartoon_series](examples/cartoon_series) — two short episodes of "Nib and Olla" that
-  include one shared cast (`shared/cast.yaml`) and two sets (`shared/sets.yaml`), each episode
-  overriding the light, a prop or a character for itself; both validate and lint clean.
-- [examples/cartoon-music-box](examples/cartoon-music-box) — "The Humming Box" after hand editing: automatic
-  directing, shots, sitting, a prop picked up and given, sunset to night, wind, a laugh and a
-  gasp, an overlap and an interruption, speaker-coloured captions, background music; about 58 s.
-- [examples/cartoon-rain-check](examples/cartoon-rain-check) — "Rain Check", a weather cartoon from
-  its screenplay (`rain_check.md`) after hand editing: a picnic basket, a napkin handed over and
-  blown away, an umbrella opened too late and lost to a gust, visible wind, rain that stops at the
-  ground and under the tree with a rain sound bed, puddles, light from day to storm grey to night
-  with stars, an overlap, an interruption, a comic sting and a pull-back, composed music
-  (`playful`, `tense` for the storm, `sleepy` at night, a pause before the last line); about
-  94 s with Kokoro narration (no audio committed).
-- [examples/cartoon-muffin-mystery](examples/cartoon-muffin-mystery) — "The Muffin Mystery", an
-  indoor cartoon from its screenplay (`muffin_mystery.md`) after hand editing: a title card and an
-  iris in, a furnished room with a door (entering and leaving through it), a dog character in an
-  armchair, effect symbols (hearts, Zs, an exclamation mark, sweat), a run, a jump, walking towards
-  the camera behind and in front of the furniture, a close-up in the front view, evening fading to
-  night, an iris out on the dog and an end card; about 70 s with Kokoro narration (no audio
-  committed).
-- [examples/cartoon-rainbow-ride](examples/cartoon-rainbow-ride) — "The Rainbow Ride", a cartoon
-  from its screenplay (`rainbow_ride.md`) after hand editing: a robot on wheels in a party hat
-  watering an apple tree (an apple falls on its head: dizzy), a fox riding a bicycle, birds, a
-  passing storm with lightning, thunder and a rainbow, then an owl's cottage with a burning
-  fireplace, a steaming kettle, a running clock, a knock at the door, a gift opened (blushing) and a
-  lamp switched on at nightfall; birdsong, rain, fire and room-tone beds, the `cartoon` music bed;
-  about 94 s with Kokoro narration (no audio committed).
-- [examples/platform-story](examples/platform-story) — "Nutmeg and the Moon Picnic", a platform
-  story on three levels written as small maps: a little mouse skips along collecting coins,
-  climbs a ladder to a plank for a golden key, jumps over gaps, opens a locked garden gate, asks a
-  grumpy snail nicely to let her pass, catches stars in mid-air and hops up the clouds to her
-  granny's picnic; the camera follows her, close-ups for the dialogue, the automatic jump, coin
-  and door sounds, the `cartoon` music bed and a 9:16 variant with `character_size: large`;
-  about 2:50 at preview (no audio committed).
-- [examples/iso-story](examples/iso-story) — "Hazel and the Lamp by the Bridge", an isometric
-  story in a village by a stream and in a room: a little rabbit sees that the lamp by the bridge
-  is dark on a rainy evening while her friend is still across the stream, fetches the lamp key
-  from the old bear who keeps it (he has a cold), lights the lamp so her friend finds the bridge,
-  and gives the key back the next morning, when the rain has made her flower bed bloom; walks
-  along routes, a meeting, a door, close-ups and two-shots, name tags in the wide views,
-  morning, evening rain and night, footsteps, birdsong, rain and crickets, the `cartoon` music
-  bed and a 9:16 variant; about 3:00 with Kokoro narration (no audio committed).
-- [examples/iso-web-page](examples/iso-web-page) — "What happens when you open a web page", a
-  tech explainer in isometric diagrams: the browser asks DNS for the address, the request
-  crosses to a load balancer and one of two app servers, which asks the cache before the
-  database; each block grows in on the word that names it, packets run along the connectors, the
-  camera focuses on a cache miss (the database takes 40 ms) and then a hit, and the browser's
-  rendering steps (DOM, styles, layout, paint) are pulled apart as a stack; terms in their
-  colours, karaoke captions, a 9:16 variant; about 2:00 with Kokoro narration (no audio committed).
-- [examples/gradient-descent](examples/gradient-descent) — "Gradient descent, one step at a
-  time", a maths-and-code explainer: a dot tracing a loss curve with its tangent and a live
-  gradient label, the update rule with its symbols in the concepts' colours, the first steps as
-  jumps on a number line, the signed area under the gradient equal to the change in loss, the
-  gradient as a vector at a right angle to the dashed contour line, a loop morphing into a loop
-  with a tolerance, a Python session beside the code, and a loss chart changing with the
-  learning rate (the axis rescales as it diverges); actions on spoken words and karaoke captions
-  in the concepts' colours, a 9:16 variant; about 3:00 with Kokoro narration (no audio committed).
-- [examples/host-explainer](examples/host-explainer) — "Why Bread Rises", an explainer presented by
-  an original mouse host beside bullets, a bar chart, a process and a text card: it walks in,
-  points at each new item and bar and cheers as the dough rises (`auto_direct`), points at the oven
-  with a pointer line, crosses to the other side (the content slides over) and walks off; lines
-  said with feeling (`emotion:`), composed music in the `curious` mood; about 66 s with Kokoro
-  narration (no audio committed).
-- [examples/gps-time-of-flight](examples/gps-time-of-flight/README.md) — "How GPS finds you", a
-  one-minute science explainer whose music is an original score file an AI author made from the
-  `momentum` template in nine checked steps, now the built-in bed `music: time_of_flight`; the
-  README has the iteration log and the piece's check report; about 89 s with Kokoro narration (no
-  audio committed).
-- [examples/gene-to-secreted-protein](examples/gene-to-secreted-protein/README.md) — "From gene to
-  secreted protein", a university-level cell-biology explainer following α1-antitrypsin from its
-  gene to the blood: a zoom from the tissue into the nucleus, transcription, capping, splicing,
-  polyadenylation and export up close, translation, SRP targeting to Sec61, N-glycosylation and
-  calnexin in the ER, the route through the Golgi to secretion across the whole cell, an
-  exocytosis close-up and the IL-6–STAT3 pathway that raises its synthesis; references, karaoke
-  captions, the `discovery` bed, a 9:16 variant; about 3:34 with Kokoro narration (no audio committed).
-- [examples/cystic-fibrosis](examples/cystic-fibrosis/README.md) — "Cystic fibrosis: from a family
-  to a diagnosis", a university-level medical-genetics explainer: a pedigree in NSGC symbols with
-  the modes of inheritance tested (only autosomal recessive fits), obligate carriers, a Punnett
-  square of two carriers, the brother's carrier probability 2/3 and the risk 1/150 for his child,
-  *CFTR* at 7q31.2, c.1521_1523del p.(Phe508del) on the real coding sequence, an NGS carrier test
-  and the carrier frequency from Hardy–Weinberg; references, karaoke captions, a 9:16 variant;
-  about 4:12 with Kokoro narration (no audio committed).
-- [examples/radioactive-decay](examples/radioactive-decay/README.md) — "Half-life: how radioactive
-  decay keeps time", a physics explainer with plots and calculations: a Monte Carlo of 1000 and 20
-  nuclei growing beside the exponential law, counts with √N error bars on a log axis and an
-  exponential fit with its band and residuals, the half-life worked out from the fitted decay
-  constant with its uncertainty, and carbon-14 dating; seeded data from `make_data.py`, a 9:16
-  variant; about 2:52 with Kokoro narration (no audio committed).
-- [examples/mars-transfer](examples/mars-transfer/README.md) — "How to get to Mars", an orbital
-  mechanics explainer: why a rocket cannot fly straight there (a radial burn bent by the Sun's
-  gravity), the Hohmann transfer with Δv₁ 2.94 and Δv₂ 2.65 km/s, 259 days and Mars 44° ahead at
-  departure, the transfer time and phase angle worked out, the 3.59 km/s departure burn from low
-  Earth orbit (the Oberth effect), and the Earth and Mars on 28 October 2026 from JPL's elements
-  with the next window and opposition; a 9:16 variant; about 3:43 with Kokoro narration (no audio
-  committed).
-- [examples/higgs-discovery](examples/higgs-discovery/README.md) — "How the Higgs boson was
-  found", a particle-physics explainer: the Standard Model with the Higgs boson's couplings, gluon
-  fusion through a top-quark loop, the predicted decay modes, H → γγ through top and W loops, a
-  simulated diphoton event in a schematic detector, the photons' invariant mass worked out
-  (125 GeV), a simulated spectrum with its bump, fit and local significance, four leptons, what
-  five sigma means, and the announcement of 4 July 2012; a 9:16 variant; about 3:49 with Kokoro
-  narration (no audio committed).
-- [examples/3d-short](examples/3d-short/video.yaml) — "Two friends and a ball", a 9:16 Short of
-  about 15 s in one `3d` scene: shapes, two stand-ins who walk and turn to each other, a ball that
-  appears, rolls and glows, four camera moves on spoken words, karaoke captions, and its guide
-  passes (depth, outline, mask) (no media committed).
-- [examples/web](examples/web/README.md) — "Where rain comes from", three short `web` scenes
-  written as web pages: an HTML and CSS page whose cards come in on narration beats, a canvas
-  drawing of a rain gauge with its text declared to lint, and a three.js planet written by hand; 16:9
-  and a 9:16 variant, about 50 s with Kokoro narration (no media committed).
-- [examples/three-finish](examples/three-finish/README.md) — "A still life in metal", one silent
-  6 s `web` scene finished with vidgen's module `vidgen/three-finish`: brass gears and metal spheres
-  in a baked studio, a focus pull, a fast gear in motion blur, bloom, ACES, a grade, vignette,
-  grain, FXAA (no media committed).
-- [examples/signal-fire](examples/signal-fire/README.md) — "Signal Fire", 27 s with no narration:
-  an original orchestral cue written with dynamics, hairpins and slurs (strings, horns, trumpet,
-  low brass, choir, timpani rolling into the hit, taikos, cymbals, tam-tam) and a three.js night of
-  standing stones around a fire that reads the score through `ctx.music` (embers on the cellos'
-  notes, a beam on the trumpet's pitch, flashes on the taikos), finished with `vidgen/three-finish`
-  (no media committed).
-- [examples/escapement](examples/escapement/README.md) — "Escapement", the published 3:11
-  clockwork music film, source only: an original 26-track score in D minor at 120 BPM and twelve
-  three.js `web` scenes of a watch movement in brass, rhodium, blued steel and ruby whose going
-  train turns at its real gear ratios and ticks on the beat (the beats read from the score through
-  `music_data`), an exploded view at the climax and one silent bar where everything stops; the
-  film's own depth of field, motion blur and finishing (no media committed; the final render takes
-  about 1 h 30 min to 2 h on 2 cores, `vidgen still` and `--draft` for quick looks).
-- [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
-  stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
-- [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
-- [docs/COOKBOOK.md](docs/COOKBOOK.md) — craft notes from real videos (hooks, pacing, sound, QA);
-  [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
-  YouTube Short about code: layout, phone-readable code, narration, checks;
-  [docs/COOKBOOK-MUSIC.md](docs/COOKBOOK-MUSIC.md) — writing music as score files: room for the
-  voice, builds and lifts, loops, check and compare, genre sketches;
-  [docs/COOKBOOK-CELL-BIOLOGY.md](docs/COOKBOOK-CELL-BIOLOGY.md) — cell-biology lectures and
-  research explainers: choosing the scene, accuracy, labelling, zooming, pacing, references;
-  [docs/COOKBOOK-GENETICS.md](docs/COOKBOOK-GENETICS.md) — genetics lectures and medical genetics:
-  NSGC / ISCN / HGVS / HGNC notation, exact numbers, reading a pedigree aloud, a counselling tone,
-  common mistakes and the lint rules that catch them;
-  [docs/COOKBOOK-SCIENCE-CHARTS.md](docs/COOKBOOK-SCIENCE-CHARTS.md) — scientific plots and worked
-  calculations: plot or chart, honest axes, error-bar meanings, fits and their uncertainties, units
-  and significant figures, pacing a calculation, common mistakes and the lint rules that catch them;
-  [docs/COOKBOOK-ORBITS.md](docs/COOKBOOK-ORBITS.md) — orbital mechanics videos: choosing what to
-  show, scale honesty, units and Δv, the approximations to state, pacing, common mistakes and the
-  lint rules that catch them;
-  [docs/COOKBOOK-PARTICLES.md](docs/COOKBOOK-PARTICLES.md) — particle-physics videos: planning a
-  discovery story, choosing the scene, natural units (GeV vs GeV/c²), simulated data and schematic
-  detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
-  mistakes and the lint rules that catch them;
-  [docs/COOKBOOK-AUDIO.md](docs/COOKBOOK-AUDIO.md) — audiobooks and podcasts without pictures:
-  loudness presets and targets, formats, pacing, voices, checking a file;
-  [docs/COOKBOOK-AUDIODRAMA.md](docs/COOKBOOK-AUDIODRAMA.md) — dramatized audiobooks: structure,
-  casting, rooms and stereo, score and sound design, the drama checks, a file per chapter;
-  [docs/COOKBOOK-GENERATED-VIDEO.md](docs/COOKBOOK-GENERATED-VIDEO.md) — shots made by video models
-  through OpenRouter: when it is worth it, cost control, privacy (no Zero Data Retention), takes and QA;
-  [docs/COOKBOOK-DIRECTING-YOUR-AI.md](docs/COOKBOOK-DIRECTING-YOUR-AI.md) — the instructions a person gives an AI to direct such a film, card by card, with what to check each time;
-  [docs/COOKBOOK-3D.md](docs/COOKBOOK-3D.md) — simple 3D scenes: setting up, building a set, the camera
-  in 16:9 and 9:16, stand-ins that walk and face each other, guide passes, checks, common mistakes.
-- [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
-  layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
-- [DESIGN.md](DESIGN.md) — architecture and internal contracts.
-- [CHANGELOG.md](CHANGELOG.md) — what changed in each release (0.3.0: cartoons, Kokoro and
-  OpenRouter narration, `output/`, `--jobs auto`), behaviour changes first.
-- [docs/WINDOWS-CHECK.md](docs/WINDOWS-CHECK.md) — a short checklist to try a release on Windows
-  (install with the extras, a cartoon preview, fonts, MiKTeX, Kokoro) and what to report back.
-
-## Your content and third-party services
-
-- The MIT licence covers the software, not the videos you make with it or the files you add.
-- Use only images, clips, screenshots, music and quotes you own or have permission to use
-  (screenshots of other products may also show their trademarks).
-- Narration from ElevenLabs and pictures from OpenAI are subject to those providers' terms (for
-  example, plan limits on commercial use; cloning a voice requires the speaker's consent).
-  Pictures made through OpenRouter are subject to OpenRouter's terms and to those of the model's
-  provider (Black Forest Labs, ByteDance, Google, OpenAI, Recraft, ...); check the model's page
-  for commercial use. The same holds for narration voiced through OpenRouter (Mistral, Kokoro,
-  Google, ElevenLabs, Microsoft, ...).
-- The built-in fonts (SIL Open Font License), Lucide icons (ISC), Natural Earth map data (public
-  domain), sound effects and music beds may be used in your videos, including commercially. No
-  attribution is required in a video (the OFL and ISC notices apply to redistributing the files
-  themselves; Natural Earth asks for none, though "Made with Natural Earth" is appreciated).
-  So may composed music played with the default GeneralUser GS SoundFont (no attribution
-  required; suggested credit in step 12 of the Windows install). Details:
-  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Working on schu-video-generator
-
-`pip install -e ".[dev]"`, then `python -m pytest -q` runs the default set: every test except
-those marked `slow` (about 3–4 minutes on one CPU). `python -m pytest -q -m slow` runs only the
-slow ones (the render sweeps over every scene type, the end-to-end renders, and every test over
-about 0.4 s: hours on one CPU), and `-m "slow or not slow"` runs everything; `-n auto` runs them
-in parallel on every CPU (pytest-xdist, in the `dev` extra). `-m "not render"` also skips the
-remaining rendering tests. No test needs network or keys.
 
 ## Troubleshooting
 

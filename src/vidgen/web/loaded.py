@@ -48,8 +48,11 @@ FONT_SUFFIXES: tuple[str, ...] = (".ttf", ".otf")
 #: The folder of vidgen's own ES modules for pages after ``__vidgen__/`` (``data/web/modules/``).
 MODULES_FOLDER = "modules"
 #: vidgen's own modules a page may import, by import name -> file in :data:`MODULES_FOLDER`
-#: (``vidgen/three-finish``: finishing for three.js scenes, DESIGN.md §120.11).
-VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js"}
+#: (``vidgen/three-finish``: finishing for three.js scenes, DESIGN.md §120.11; ``vidgen/music-time``
+#: and ``vidgen/three-kit``: building blocks for music videos, DESIGN.md §121.1; ``vidgen/title-cards``:
+#: an opening title and an end card for films, DESIGN.md §121.7).
+VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
+                                  "vidgen/title-cards": "title-cards.js"}
 
 
 def vidgen_file(rel: str) -> Path | None:

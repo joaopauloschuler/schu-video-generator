@@ -206,7 +206,7 @@ def web_topic_files() -> dict[str, str]:
 
 def _guide_music(root: Path, settings: Any) -> dict[str, Any]:
     """``ctx.music`` for the web topic's music example: a 2 s video playing a score with the
-    tracks the example reads (``kick``, ``hook``), its render seeded into the music cache with
+    tracks the examples read (``kick``, ``hook``, ``melody``), its render seeded into the music cache with
     silence (the page reads the events; nothing is synthesised)."""
     import numpy as np
 
@@ -215,7 +215,8 @@ def _guide_music(root: Path, settings: Any) -> dict[str, Any]:
 
     root.mkdir(parents=True)
     score = {"tempo": 120, "key": "A minor", "progression": "i", "sections": [{"name": "a", "bars": 1}],
-             "tracks": {"kick": {"instrument": "kick", "steps": "x . x ."}, "hook": {"instrument": "soft_lead", "steps": "A4 C5 E5 -"}}}
+             "tracks": {"kick": {"instrument": "kick", "steps": "x . x ."}, "hook": {"instrument": "soft_lead", "steps": "A4 C5 E5 -"},
+                        "melody": {"instrument": "soft_lead", "steps": "E5 - A4 C5"}}}
     (root / "assets" / "music").mkdir(parents=True)
     tune = root / "assets" / "music" / "tune.yaml"
     tune.write_text(yaml.safe_dump(score, sort_keys=False), encoding="utf-8")
@@ -245,7 +246,7 @@ def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
         pytest.skip("no Chromium")
     files = web_topic_files()
     assert set(files) == {"extensions/hello.html", "extensions/orbit.js", "extensions/cube.js", "extensions/studio.js", "extensions/finished.js",
-                          "extensions/space.js", "extensions/fragment.js"}
+                          "extensions/space.js", "extensions/kit.js", "extensions/opening.js", "extensions/fragment.js"}
     for rel, body in files.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(body, encoding="utf-8")
@@ -264,7 +265,7 @@ def test_the_web_topics_code_runs_in_chromium(tmp_path: Path) -> None:
         params = {"script" if rel.endswith(".js") else "page": rel, "data": scene["params"].get("data", {})}
         args = {"size": (160, 90), "fps": 10, "frames": 10, "theme": theme, "beats": beats(scene)}
         if scene["params"].get("music_data"):
-            args["music"] = _guide_music(tmp_path / "music", scene["params"]["music_data"])
+            args["music"] = _guide_music(tmp_path / "music" / Path(rel).stem, scene["params"]["music_data"])
         clip = make_web_clip(tmp_path, tmp_path / "web", Path(rel).stem, params, **args, layout_frames=[9])
         assert clip.stat().st_size > 0, rel
         reading = web_page_layouts(tmp_path, tmp_path / "web", Path(rel).stem, params, **args, at=[9])[9]

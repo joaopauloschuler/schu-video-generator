@@ -3930,7 +3930,7 @@ does):
 | organ | `organ` (C1–C7): registration (`cathedral`, `principal`, `flute`, `reed`, `drawbar`, `full`), drawbars (`"00 8400 000"`: your own nine bars), tone, chiff, attack, chorus, detune, click, ring |
 | strings | `violins` (G3–C7), `violas` (C3–E6), `cellos` (C2–A5), `double_basses` (C1–G4), each a section (`players: 1` a solo): stroke (`sustain`, `spiccato`, `tremolo`, `pizzicato`), players, attack (sustain and tremolo: 0.03–0.06 firm, 0.1–0.3 smooth, 0.5 and more a swell), brightness (0 over the fingerboard: dark; 0.5 ordinary; 1 at the bridge: glassy), vibrato (cents), vibrato_speed (5.8 Hz), vibrato_delay (0.16 s into a note), accent (the bite of a stroke, 0–2), length (spiccato: seconds the bow is on the string), speed (tremolo: strokes a second), decay (how long short strokes ring), bow (rosin noise), mute (con sordino), detune (cents between the players), ring (the release), glide (slurs), touch |
 | percussion | played by note name: `timpani` (D2–A3; modes at the kettledrum's 1 : 1.5 : 2 : 2.44 : 2.9) and `toms` (concert toms, G1–C5): stroke (`hit`, `roll`), speed (roll: blows a second), mallet (0 soft felt to 1 hard wood: brightness, not level), decay, ring (seconds before a hand damps it), toms also drop (semitones the pitch falls after the blow) and shell. Played as drum steps: `taiko` (pitch 36–130 Hz, mallet, decay, drop, players, apart), `bass_drum` (a gran cassa: pitch 26–75 Hz, mallet, decay, players, apart), `frame_drum` (pitch 55–280 Hz, mallet, edge: 0 the middle to 1 the rim, decay, players, apart), `snare_drum` (stroke `hit` / `roll`, speed, pitch, mallet, snares, decay, players, apart), `cymbal` (a suspended cymbal: stroke `hit` / `swell`, speed, pitch: the size, mallet, decay), `tam_tam` (stroke `hit` / `swell`, speed, pitch, mallet, bloom, decay); every one also touch |
-| choir | `choir` (E2–C6; a choir pad, no words): vowel (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), voices (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`), singers (8; 1–16), attack, brightness (0 soft to 1 full voice), vibrato (cents), vibrato_speed (5.5 Hz), vibrato_delay (0.3 s), breath, detune, morph (the vowel a held note turns into), ring, glide (slurs), touch |
+| choir | `choir` (E2–C6; vowels and syllables, no words): vowel (`ooh`, `aah`, `eeh`, `mm`, `oh`, `ee`), voices (`mixed`, `men`, `women`, `basses`, `tenors`, `altos`, `sopranos`), singers (8; 1–16), attack, brightness (0 soft to 1 full voice), vibrato (cents), vibrato_speed (5.5 Hz), vibrato_delay (0.3 s), breath, detune, morph (the vowel a held note turns into), ring, glide (slurs), touch, syllable (`vowel`, `la` … `dee`, `mm-ah`, `ah-oh`, `oo-ah` …), turn (0.5), soloist (`false`/`true`), whisper (0–1) |
 | pads | `pad`, `supersaw`, `saw_pad` (softer synthwave saws), `glass` (a high, wide shimmer): tone, air, swell (bars over which the airy layer swells in and out, from the piece's start; 0 steady), sub (on the written bass, else the chord's bass in octave 2; centred), sub_width (0 centred, the default; 1 its own phases on each side: wider, thinner in mono, as scores rendered before Step 186 and the `skyline` bed), attack, release, detune (cents of spread), fade (seconds between chords for `play: chords`) |
 
 **Brass and organ** (Step 343; no samples: additive synthesis). Each sustains for as long as its
@@ -4086,10 +4086,39 @@ open:  {instrument: choir, settings: {vowel: mm, morph: aah, attack: 3}, steps: 
   a straight early-music tone; **`morph`** names the vowel a held note turns into.
 - Its level is that of the strings and the brass (a held note −15.5 to −17 LUFS), so it starts
   at `volume: 0`; give it a hall (`reverb: {size: 4.5, mix: 0.36}`).
-- Limits: no words, no consonants (since Step 346 notes can be slurred: `(A3 - C4 -)`), the
-  singers of one kind share one table of formants (only their throat lengths differ), nothing
-  but breath above 5 kHz; nobody has listened to it: it is judged by measurement (DESIGN
-  §120.6).
+- Limits: no words (since Step 346 notes can be slurred: `(A3 - C4 -)`; since Step 361 they
+  can sing syllables, below), the singers of one kind share one table of formants (only their
+  throat lengths differ), nothing but breath above 5 kHz; nobody has listened to it: it is
+  judged by measurement (DESIGN §120.6).
+
+**Syllables, a soloist, a whisper** (Step 361; DESIGN §121.4). Still synthesis, still no words.
+A choir that sets none of these four settings sounds exactly as before.
+
+```yaml
+men:   {instrument: choir, settings: {voices: men, syllable: la}, octave: 3, steps: "[na] 1 - [la] 5 - [na] 8 - [da] 5 -"}
+solo:  {instrument: choir, settings: {voices: sopranos, soloist: true, vowel: aah}, volume: 1,
+        steps: "[mp] A4 - - - [la] (D5 - - E5 | F5 - E5 - [ah-oh] D5 - - -)"}
+hush:  {instrument: choir, settings: {syllable: mm-ah, whisper: 1}, steps: "* - - - [whisper=0.4] * - - -"}
+```
+
+| setting | values | what it does |
+|---|---|---|
+| `syllable` | `vowel` (default), `la lo loo le lee`, `na no noo ne nee`, `ma mo moo me mee`, `da do doo de dee`, `mm-ah mm-oh mm-oo ah-oh oo-ah oh-ah ah-ee` | what each note sings: `vowel` holds the `vowel` setting (as before); a soft consonant into a vowel (a = aah, o = oh, oo = ooh, e = eeh, ee = ee): `l` (50 ms, the formants low, opening over 60 ms), `m` and `n` (a nasal murmur of 60–70 ms with its antiformant, 8 dB under the vowel), `d` (a closure, a burst, the formants moving from about 1.7 kHz); or two vowels, the second taking over at `turn` (a 0.15 s glide; `mm-` is a hum that opens). A consonant starts the note at once (`attack` then shapes nothing) and the vowel arrives 0.08–0.12 s after the step; a section's singers keep closer together on it |
+| `turn` | 0.5 (0.1–0.9) | two-vowel syllables: where in the note the second vowel takes over (a share of the note) |
+| `soloist` | `false` (default), `true` | one solo voice instead of the section (mono; `singers` is ignored): brighter, with the singer's formant near 3 kHz (+7 to +10 dB in 2–4 kHz for men, +4 to +5 for women), its vibrato 1.7 times as wide and 1.6 times as late, a scoop of 35–55 cents up into each attacked note, more breath. About as loud as a section; give it its own track and `volume: 1` to `3` over a choir track |
+| `whisper` | 0 (0–1) | breath instead of tone: 0.3–0.6 breathy, 1 an unvoiced whisper (noise through the vowel's formants and the consonants; a `d` keeps its burst); the loudness stays within 1 dB |
+
+- **Per note**: a mark names a syllable (`[la]`, `[mm-ah]`, `[syllable=na]`; `[vowel]` or
+  `[syllable=vowel]` goes back to the plain vowel), the whisper (`[whisper=0.5]`) or the vowel
+  (`[vowel=ooh]`; a bare `[aah]` is ambiguous with `morph`). A syllable stays in force until
+  another mark changes it. Unknown names get the nearest one (`[lah]`: did you mean 'la'?).
+- **In a slur** only the first note gets the syllable's consonant; the other notes go on with
+  its vowel unless a mark on that note names a syllable or vowel: `[la] (C4 - D4 - [na] E4 -)`
+  sings la on C4 and D4 and closes into an n on E4; `[vowel=ooh]` inside a slur glides to the
+  new vowel. Inside a slur `syllable` and `vowel` may change besides `glide`.
+- `morph` is sung when `syllable` is `vowel`; a syllable sings its own vowels.
+- Cost: a syllable or a whisper costs 5–25 % more than a held vowel (8 singers: 80–95 ms of CPU
+  per second of a note); a soloist 14 ms.
 
 **Expressive notes** (Step 346; DESIGN §120.7). Marks in square brackets stand before a step
 in a track's `steps` and stay in force until another mark changes them (when the pattern
@@ -4111,7 +4140,7 @@ taiko:   {instrument: taiko, steps: "[pitch=62] X . . x [pitch=100 mp] x x . . |
 | `[p <]` ... `[f]`, `[f >]` ... `[p]` | a hairpin: the level moves in a straight line (in dB) from this step to the next dynamic, which must be louder for `<` and softer for `>`; over a held note it is a crescendo or diminuendo inside the note, over many notes one over the phrase. `[p<]` is the same; the mark that ends it may stand after the last step |
 | `[fp]` (`ffp`, `fpp`, `mfp` ...) | the note starts at the first level and falls to the second within 0.25 s; the second stays in force |
 | `[sfz]` | this note starts 7 dB over the level in force and comes back within 0.25 s |
-| `[name=value]` | one of the instrument's settings from this step on (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`, `[glide=0.3]`); a named value may stand alone when only one setting has it (`[pizzicato]`, `[roll]`, `[hit]`) |
+| `[name=value]` | one of the instrument's settings from this step on (`[stroke=pizzicato]`, `[mallet=0.9]`, `[pitch=90]`, `[vibrato=0]`, `[glide=0.3]`); a named value may stand alone when only one setting has it (`[pizzicato]`, `[roll]`, `[hit]`, the choir's syllables `[la]`, `[mm-ah]`) |
 | `[default]` | every setting back to the track's (the section's) own |
 | `( ... )` | a slur: the notes inside after the first are not attacked again; the pitch glides to each in `glide` seconds (0.06; 0.15–0.4 a portamento), starting just before the note's step; vibrato, bow and breath go on |
 
@@ -4133,8 +4162,8 @@ stands and the nearest word (`[spicato]: unknown mark; did you mean 'spiccato'?`
   follows its hits: each multiplies the level.
 - **Slurs** need single notes (no chord, `+`, `*` or rest inside) and an instrument that can slur:
   `trumpet`, `horn`, `low_brass`, `violins`, `violas`, `cellos`, `double_basses` (with `stroke:
-  sustain` or `tremolo`), `choir` and `soft_lead`. Inside a slur only `glide` may change; dynamics
-  may. A slur is one note for a duck, an `accent:` group and the studio's step grid.
+  sustain` or `tremolo`), `choir` and `soft_lead`. Inside a slur only `glide` may change (on the
+  choir also `syllable` and `vowel`); dynamics may. A slur is one note for a duck, an `accent:` group and the studio's step grid.
 - **Vibrato** has three settings on those instruments: `vibrato` (depth, cents), `vibrato_speed`
   (Hz) and `vibrato_delay` (seconds into a note before it grows); in a section or choir each
   player keeps its own speed and delay around them. Set them for the track, per section
@@ -4150,7 +4179,7 @@ stands and the nearest word (`[spicato]: unknown mark; did you mean 'spiccato'?`
   blow per dB: 64 sixteenths of a six-player taiko under `[pp <] ... [ff]` took 5 s instead of
   0.3 s on a 2-core machine.
 - Not offered: a glide between notes that are attacked anew, a slur through a chord, a hairpin
-  inside a pad note, words for the choir.
+  inside a pad note, words for the choir (it sings syllables: Step 361, above).
 
 Effects and movement, on a track or in its `sections:` changes (`none` switches one off in a
 section):
@@ -4263,6 +4292,84 @@ video's −16 LUFS. The spectrogram (30 Hz–16 kHz, the same level scale for ev
 sections and the voice range's edges, with a lane under it showing each bar's voice-range level
 against the limit (red above). `--compare OTHER` checks a second score or audio file, prints a
 side-by-side table and draws both on one time scale (`<name>-vs-<other>.png`).
+
+#### A music video from a score (`vidgen music plan`)
+
+```bash
+vidgen music plan assets/music/my_song.yaml                 # the plan in words: sections, cuts, colours, reactions
+vidgen music plan my_song --json                            # the same as one JSON document
+vidgen music plan my_song --out my_video                    # and a draft project to start from
+vidgen music plan my_song --out my_video --max-scene 12 --min-scene 4 --force
+```
+
+`vidgen music plan SCORE [--out DIR] [--force] [--max-scene SECONDS] [--min-scene SECONDS]
+[--json]` (Step 359, DESIGN §121.2) reads a score file (a path, a project piece's name or a score
+bed's: `tidewater`, `skyline`, `time_of_flight`; another bed: write its template first) without
+playing it, and proposes the scenes of a music video, each starting on a bar line:
+
+- **Roles.** Every section gets one of `intro`, `verse`, `build`, `drop`, `climax`, `breakdown`,
+  `outro`: from its name when the name says it (`intro`, `dawn`, `prelude`; `verse`, `groove`;
+  `build`, `rise`, `riser`, `pre`; `drop`, `chorus`; `climax`, `peak`; `break`, `bridge`,
+  `interlude`; `outro`, `coda`, `end`, `ending`; also as a part of the name, `verse_b`), else from
+  its **energy**: per bar, half a point for each track that sounds and up to half a point for how
+  many notes and hits each starts (eight or more: the half point), scaled to the piece's busiest
+  bar; a section's energy is its bars' mean. First and under 0.6: intro; last and under 0.75:
+  outro; 0.9 or more: climax; rising (second half 0.15 above the first, or a `riser` in it) into a
+  fuller section: build; 0.2 above the one before and 0.7 or more: drop; 0.25 under the one
+  before: breakdown; else verse. The printout gives the reason.
+- **Cuts.** A scene per section; a section longer than `--max-scene` (default 16 s) is cut on a
+  phrase line (every 4 bars from its start) where the material changes most — tracks that come in
+  or leave over the phrases on either side, the progression starting again, a big change of
+  energy, a bar with few new notes just before — preferring the middle, both parts at least
+  `--min-scene`; again while a part is too long. A section of 16 bars or more that fits is still
+  cut in two (8 bars or more each) when the material changes clearly there. A section shorter than
+  `--min-scene` (default 5 s) is joined to the scene before. Each scene lasts whole frames from
+  bar line to bar line at 30 fps (`round(end · 30) − round(start · 30)` frames), so no error adds
+  up; the last scene of a one-pass score holds 3 s more for the last chord (a loop: none).
+- **Moments** (listed under their scene): `drop` (a bar 0.25 above the mean of the two before and
+  0.55 or more; one per three bars), `breath` (a bar with at most a quarter of its neighbours' new
+  notes, both of them with four or more), `silent` (nothing sounds), `riser` (a `riser` hit).
+- **A colour per scene**, the colour script: a hue, saturation and lightness per role (intro
+  blue, verse teal, build violet, drop magenta, climax orange, breakdown indigo, outro pale blue),
+  more saturated and brighter with the scene's energy, turned 8° towards blue in a minor, dorian or
+  phrygian key and towards gold in the others; `base`, `accent` (the hue turned 160°, for glints
+  and rings) and `deep` (the background), as `#rrggbb`.
+- **Reactions**: the tracks each scene follows, from the instruments that play in it: low drums
+  (`kick`, `boom`, `taiko`, `bass_drum`, `frame_drum`, `pulsar`, `timpani`, `toms`) **pulse** the
+  brightness (at most two, the busiest); accents (`clap`, the snares, `cymbal`, `tam_tam`,
+  `open_hat`, `snap`; at most four a bar) send **rings** (one, nearest one a bar); a pitched line at
+  or above G3 with at most eight notes a bar leaves **glints** (two, the highest); pads, `play:
+  chords` tracks and held notes (a median of two beats or more) set the **glow** (one, pads and
+  voices first). Hats, ticks, noise and risers are left out (too dense to follow).
+
+`--out DIR` writes a draft project in the folder (new or empty; a folder with files in it only
+with `--force`) and validates it (problems are printed, exit 1):
+
+- `video.yaml`: 1280x720 at 30 fps, `transition: cut`, `music:` the score from its start (no fade
+  in, 1.5 s fade out, no ducking), a header with the form, and one `web_cut` scene per cut with
+  its `duration`, `params.script` (`extensions/<id>.js`), `music_data: {tracks: [...]}` (the
+  tracks it follows) and `data:` its plan: `role`, `look`, `seed`, `energy`, `bar` (s), `start` /
+  `end` (song seconds of its first and after its last bar), `until` (its end with the tail),
+  `colours`, `grade` (three-finish's `temperature` and `saturation` for the role), `react`
+  (`{pulse, ring, glint, glow}`), `drops` (song seconds), and `script` (the colour script: every
+  scene's `{at, role, base, accent, deep}`, written once with a YAML anchor);
+- the score under `assets/music/` (unless it is in the folder already, then it is used there);
+- `extensions/web_cut.py`: the `web` scene without its 0.5 s fade-out, so the scenes cut straight
+  into each other on the bar line (`web` has no option for it; the example films do the same);
+- `extensions/<id>.js`: a starter page per scene, the look of its role, built on
+  `vidgen/three-kit`, `vidgen/music-time` and `vidgen/three-finish`, reading everything from
+  `ctx.data`: `intro` **drift** (a slow flight through a nebula and stars), `verse` **orbit** (a
+  tesseract the camera circles in a shell of stars), `build` **tunnel** (a tunnel of rings on the
+  beat, faster to the end), `drop` **swarm** (crystals around a flare, rings from the accents),
+  `climax` **rings** (great rings, a crystal field, the spectrum as rays), `breakdown` **dust** (one
+  crystal in drifting dust), `outro` **ribbon** (the melody as a ribbon of light, the camera
+  drawing back, fading out over the tail). Two scenes of one role get other seeds, turns and
+  colours. Every page draws from song time alone; pulses change light, never the camera or a size.
+
+The plan does not listen: a piece whose sections are named but whose energy says otherwise gets
+the name's role. Edit the draft as any project: change the pages, join or move scenes (keep each
+duration a whole number of frames between bar lines), then `vidgen still DIR --scene ID --at 2
+--size 640x360` and `vidgen render DIR --draft`.
 
 #### Project pieces: score files in a video
 
@@ -6949,6 +7056,102 @@ has no `PCFSoftShadowMap` (it falls back to `PCFShadowMap` with a warning); `"pc
 2–4 is the recommendation, `"vsm"` cost +0.75 s a frame at a 2048 map on 2 cores. Costs per effect:
 DESIGN §120.11. `warmUp` uses `renderer.compile` and one drawing, not `compileAsync`, whose
 polling timer never fires while the clock stands still in `load`.
+
+**Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit`** (Step 358,
+DESIGN §121.1). Two more of vidgen's own ES modules (MIT; `data/web/modules/music-time.js` and
+`three-kit.js`, served as `/__vidgen__/modules/<file>`), imported by name like
+`vidgen/three-finish`. `vidgen/music-time` is plain JavaScript (no three.js, no DOM);
+`vidgen/three-kit` imports `three` and `vidgen/music-time`. A page that imports neither is
+unchanged; one that does has them in its loaded files (its cache key). No config key. They hold
+what the example films (`examples/parallel-space`, `escapement`, `signal-fire`) had each written
+by hand; those films now import them.
+
+`vidgen/music-time`:
+
+| name | what it is |
+|---|---|
+| `clamp(x, a=0, b=1)`, `mix(a, b, u)`, `smoothstep(a, b, x)` (cubic), `smootherstep(u)` (quintic, clamped), `easeOutCubic(u)`, `dbToGain(db)` | shaping |
+| `rng(seed)` | a generator of numbers in [0, 1) from an integer seed (mulberry32) |
+| `hash(i, k=0)` | a number in [0, 1) for the pair (i, k), without state |
+| `keyframes([[t, x, y, …], …], t)`, `glide(a, b, u)` | a point through eased keyframes; one smooth move from point a to point b |
+| `barClock(bar, beats=4)` → `{bar, beat, sixteenth}`, `count(T, length)` | lengths of a bar; how many whole lengths have passed at T (`Math.floor(T / length + 1e-6)`) |
+| `trackArrays(ctx.music, {hits, notes, grid})` | `{hits: {name: {t, g}}, notes: {name: {t, d, p}}}`: the tracks' times, gains, lengths and pitches as sorted `Float32Array`s; `hits`/`notes` a list of track names or `{name: [tracks]}` to gather several; `grid` (seconds) rounds times to 1/1000 of it |
+| `lastIndex(times, T)` | the last index at or before T (10 µs tolerance), −1 before the first |
+| `hitEnvelope(track, T, decay)` | a drum's light: each of its last three hits its gain (at most 1.25) falling by `exp(−age / decay)`, the largest; 0 for a missing track |
+| `hitCount(track, T)`, `hitAge(track, T)` | hits so far; seconds since the last (1e9 before the first) |
+| `noteAt(track, T)` → `{i, p, age, d}` or `null`, `noteEnvelope(track, T, decay)`, `noteLevel(track, T, attack=0.05, release=0.5)` | the note playing or played last; a glint on each note; a held note's level |
+| `melody(track, T, glide=0.07)` → `[pitch, level]` | the pitch gliding from the note before (when it ended under 0.4 s earlier); the level as `noteLevel` with a 0.05 s attack that rises from the level the note before has at the new note's start (a legato line keeps its light) and a 0.45 s release |
+| `eventLevel(event, T)`, `signalLevel(ctx.music, track, T, release=0.6)` | on `ctx.music`'s events: an event's level through its hairpin times its accent; how strongly a track sounds (its loudest event of the last 12 s still sounding, faded over `release`) |
+| `orbit(T, {centre, radius=20, height=3, speed=0.05, phase=0, bob=0})` → `[x, y, z, lx, ly, lz]` | the camera circling `centre` at `speed` radians a second, its height swinging by `bob` (Step 359); spread into `aimCamera(...orbit(T, …))` |
+| `pathPoint(points, u)`, `flyThrough(points, u, ahead=0.05)` → `[x, y, z, lx, ly, lz]` | a smooth path through every point (Catmull-Rom, u from 0 to 1, the ends continued); a flight along it looking `ahead` further on |
+| `colourScript(stops, glide=0)` → `(T) => stop` | the stop in force at T of `[{at, base: "#rrggbb", …}]` (as `vidgen music plan` writes `data.script`), its colours as numbers `0xrrggbb`; with `glide` they ease into the next stop's over the seconds before it |
+| `reactions(ctx.music, react, {decay=0.18, release=1.2, drops=[], flash=0.5})` | what a drafted page follows (`react` = `{pulse, ring, glint, glow}` track names): `{song, pulse(T), glow(T), drop(T), ring, glints}`: the strongest pulse envelope, the loudest glow track (the measured `level` without one), a flash after each drop, the ring track's hits and the glint tracks' notes |
+
+`vidgen/three-kit` (call `setStage({renderer, scene, camera, width, height})` once in `load`;
+builders add to the stage's scene unless given `parent`; `inPortal: true` draws a thing only
+inside a portal's window and needs `new THREE.WebGLRenderer({…, stencil: true})`):
+
+| name | what it is |
+|---|---|
+| `Glow(max, {px, world, max, halo, haloGain, fog, depthTest, order, inPortal, parent})` | up to `max` glowing segments in one draw (a quad per segment, a core and a halo, added to the frame): `seg(i, ax, ay, az, bx, by, bz)`, `dot(i, x, y, z)`, `col(i, color, m, width)`, `rgb`, `hide(i)`, `tint(color, m)`, `count(n)`, `flush()`; `Glow.from(flatArray, options)`. Widths in 720p pixels (`px`, the least) or scene units (`world`); segments are cut at the near plane |
+| `color(hex, m=1)`, `mixColor(a, b, u, m=1)`, `WARM_WHITE` | colours (new objects) |
+| `circleSegments(n, r, z=0, rot=0)`, `portalOnly(material)` | a circle as segments; a material drawn only through a portal |
+| `POLYHEDRA`, `polyhedronGeometry(kind)`, `polyhedronEdges(kind)`, `glassMaterial(color, base, rim, inPortal)`, `makeCrystal(kind, lineColor, faceColor, {base, rim, px, world, fog, gain, inPortal, parent})`, `lightCrystal(crystal, k, dim)` | `octa`, `tetra`, `ico`, `dodeca`, `cube`; glass faces with bright rims and glowing edges; `lightCrystal` brightens towards white by k (a kick), never changes the size |
+| `TESSERACT_VERTICES`, `TESSERACT_EDGES`, `project4(v, angles, dist=3.1)`, `tesseractAngles(T, extra=0)`, `makeTesseract(options)`, `updateTesseract(tes, angles, color, gain=1.6, nodeGain=2.5)` | a hypercube turned in six planes and projected |
+| `SkyDome(seed, {size, parent})`: `turn(T, k)`, `colors(deep, thin, dense, gain)`, `light(n, dir, color, m, pow)`, `follow(camera)` | a nebula with stars baked once into a half-float cube map (640 px faces for a frame 600 px tall or more, else 256) and coloured and lit every frame |
+| `makePortal(radius, sky, {fog, parent})`, `lightPortal(portal, ringColor, m, rimColor, rimM, windowGain)`, `lightDial(portal, color, base, step, e, n=48)` | a ring whose window shows another `SkyDome` and marks the stencil; a dial of 48 marks lit like a clock |
+| `wrapZ(z0, dist, depth, camZ, near)`, `makeStarField(n, rad, depth, seed, {px, world, fog, tints, inPortal})`, `updateStarField(stars, T, dist, streak, camZ, gain, near)`, `makeStarShell(n, r0, r1, seed, {px, tints, flat, inPortal})` | stars along the flight axis (−z) that wrap, twinkle, fade in and stretch with speed; a still shell of stars around a centre |
+| `makeFlare(size, {streak, rays, depthTest, order, inPortal, parent})`, `setFlare(flare, color, intensity, rot, scale)` | a light: glow, a horizontal streak, slow rays, facing the camera |
+| `makeShockRings(n, seg)`, `updateShockRings(rings, hitsTrack, T, color, {at, r0, r1, life, gain, face, only})` | a ring growing and fading from each of the last n hits |
+| `updateGlints(glow, notesTrack, T, {n, life, rise, c, size, gain, place})` | a four-pointed star for each recent note at `place(index, pitch)` (a `Glow` of 5n segments) |
+| `makeRibbon(n, options)`, `updateRibbon(glow, notesTrack, T, span, pos, colorA, colorB, gain, tau, glide)` | `span` seconds of a melody drawn as a line placed by `pos(time, pitch, age, out)` |
+| `makeSpectrumRays(parent, options)`, `updateSpectrumRays(glow, band, r0, len, colorA, colorB, gain)` | 96 rays: 16 bands, mirrored, three times round; `band(b)` gives band b now (e.g. `(b) => ctx.music.band(b)`) |
+| `updateTunnel(glow, T, per, zOf, far, rad, look)` | polygons flying past, one every `per` s; `look(index, time)` → `[color, gain, sides]` |
+| `makeLattice(N, spacing, radius, {world, twist, inPortal})`, `updateLattice(lattice, T, dist, camZ, color, cellGain, strut)` | a twisting corridor of hexagons and struts, wrapped along the flight axis |
+| `makeRingStructure({radii, inPortal})`, `updateRingStructure(rings, T, color, gain, spin)` | great rings with scale marks turning about one centre |
+| `makeCrystalField(n, rad, depth, seed, palette, options)`, `updateCrystalField(field, T, dist, k, band, camZ, gain, near)`, `makeCrystalSwarm(n, rad, seed, palette, options)`, `updateCrystalSwarm(swarm, T, k, band, gain, spread)` | crystals along the flight axis or on slow orbits; every other one lit by k, the rest by their band |
+| `softDotTexture(size=128, [radius, alpha])`, `makeDustCloud(n, box, size, seed)`, `updateDustCloud(dust, T, color, amount, drift)` | a soft round point; motes drifting in a box `[w, h, d, cx, cy, cz]` |
+| `aimCamera(x, y, z, lx, ly, lz, roll=0, fov=55)` | the stage's camera placed, aimed and rolled |
+
+Errors: a builder before `setStage` throws `vidgen/three-kit: call setStage({scene, ...}) in load
+first`; an unknown polyhedron `vidgen/three-kit: no polyhedron "sphere" (octa, tetra, ico, dodeca,
+cube)`. Both stop the render with the scene, file and line.
+
+**Opening titles and end cards: `vidgen/title-cards`** (Step 364, DESIGN §121.7; craft notes:
+[COOKBOOK-3D section 12](COOKBOOK-3D.md#12-opening-titles-and-end-cards-for-films)). A film's
+opening title and a matching end card as HTML text over any `web` page (no three.js needed), laid
+out and timed as `examples/escapement`'s: the title block in the left or right third, a small
+title with wide letter spacing, a thin rule, one subtitle in small capitals, a soft dark gradient
+from that edge of the frame. `const card = await titleCard(ctx, {...})` (or `endCard`) in `load`,
+`card.update(t)` in `frame` (returns the opacity, 0–1; `card.element` is the card's `<div>`). The
+opacity and the letter spacing are functions of `t` alone. Sizes are in `k`: 1 % of a 16:9 frame's
+width (the height × 16/9 in a wider frame), 1.7 % of a portrait frame's width.
+
+| option | `titleCard` | `endCard` | meaning |
+|---|---|---|---|
+| `title` | required | required | the title (a non-empty string) |
+| `subtitle` | `""` | `""` | one line under the rule (small capitals unless `uppercase: false`) |
+| `side` | `"left"` | `"right"` | `"left"` / `"right"` third (a portrait frame: the lower part), `"top"`, `"bottom"` |
+| `align` | `"left"` | `"left"` | the lines' alignment |
+| `y` | by side | by side | the block's vertical centre, a fraction of the height (0.46 left, 0.45 right, 0.24 top, 0.7 bottom; portrait bottom 0.64) |
+| `start`, `fadeIn`, `hold`, `fadeOut` | `2`, `2`, `8`, `2` | `1`, `2.5`, `Infinity`, `0` | seconds on the clock `update(t)` gets; smooth fades; `hold: Infinity` holds to the end |
+| `size`, `tracking`, `settle` | `3.9`, `0.26`, `0.03` | `2.7`, `0.3`, `0.03` | the title's size in `k`, its letter spacing in em, how far the spacing opens from the fade in to the fade out (8 s after the fade in when held) |
+| `subSize`, `subTracking`, `uppercase` | `1.15`, `0.42`, `true` | same | the subtitle |
+| `font`, `subFont` | theme serif, theme body | same | font families (a family name; Georgia / sans-serif behind them) |
+| `color`, `subColor`, `accent`, `glow` | `#f3ede2`, `#aab4c8`, `#d9b46a`, `rgba(150,180,255,.35)` | `#f3ede2`, `#c9bda9`, `#d9b46a`, `rgba(255,200,120,.3)` | CSS colours: title, subtitle, the rule's gradient, the title's soft halo (`false`: none) |
+| `rule` | `true` | `true` | the thin rule (1 px per 720 px of height) |
+| `shade` | `0.45` | `0.45` | the dark gradient behind the block (0–1 at the frame's edge; `true` = 0.45, `false` = none) |
+| `id` | `"title-card"` | `"end-card"` | the card's `data-vidgen-id` (lint names it so; `min_font` is off for it) |
+| `link`, `linkFont`, `linkSize`, `linkColor` | — | `""`, theme mono, `1.22`, `#fff3df` | one line in monospace under the subtitle |
+| `lines`, `lineFont`, `lineSize`, `lineColor` | — | `[]`, the title's font, `1.5`, `#d8ccb8` | small italic lines (credits) under a gap; they wrap within the block |
+
+A title, subtitle or link wider than its side's block (40 % of the width on the left, 43.5 % on
+the right, the width less 8 % margins in a portrait frame) is set smaller until it fits. Also
+exported: `cardOptions(kind, options)` (the checked options with defaults), `cardAlpha(t,
+options)`, `cardSettle(t, options)`, `cardLayout(width, height, {side, align, y})`,
+`TITLE_DEFAULTS`, `END_DEFAULTS`. Errors stop the render with the reason: `vidgen/title-cards:
+titleCard: unknown option "fadein" (did you mean "fadeIn"?); known: ...`, `side must be one of
+"left", "right", "top", "bottom", got "centre"`, `title must be a non-empty string`.
 
 **Errors** stop the render with the scene, file and line: a missing or misnamed file (also
 reported by `vidgen validate` at `scenes[i].params.page` / `.script`), an uncaught JavaScript
@@ -16437,6 +16640,88 @@ scene's `status`: `rendered` or `reused`). So `vidgen render --preview` after a 
 lint of the preview only joins the video, and keeps their stills. `--force` renders every scene
 again; `--scene ID` renders those scenes whatever their state.
 
+## Motion check (`vidgen motion check`)
+
+```bash
+vidgen motion check                          # this project's rendered video (else its scene clips in build/)
+vidgen motion check output/my_video.mp4      # any video file
+vidgen motion check . --draft --source scenes --threshold flash=0.12 --fail-on warning --json
+```
+
+`vidgen motion check [FILE|PROJECT] [--source auto|video|scenes] [--variant NAME] [--preview |
+--draft] [--output-dir DIR] [--out DIR] [--no-strips] [--threshold NAME=VALUE ...] [--fail-on
+error|warning|info|never] [--json]` (Step 360, DESIGN §121.3) watches a rendered video for what a
+still cannot show: frames that fail to draw, one-frame flashes, flicker, things popping in and
+out, strobing, frozen stretches and jumps at cuts. It renders nothing.
+
+- **What it watches.** A video file; or a project's rendered video (`output/<name>.mp4`, the
+  `_preview` / `_draft` one with `--preview` / `--draft`) with its scenes from the render's
+  `timings.json`; or, when that video is missing (or with `--source scenes`), the scene clips in
+  `build/<quality>/scenes/` one after the other (cut to cut: no transitions or overlays). Nothing
+  rendered: the message names the `vidgen render` command.
+- **How.** ffmpeg decodes the video once at 160 px wide (area scaling) and pipes the raw frames;
+  each frame is reduced to its mean luma and spread, colour means, a 16-bin luma histogram and
+  10 x 10 px block means with each block's change from 1, 2 and 3 frames before, then dropped (about
+  1 KB a frame). Parallel Space and Escapement (3 min at 1280x720 each) take about 25 s on 2 cores.
+- **The score's events.** In a project whose `music:` plays a score file (a project piece or a
+  score bed), every drum hit and note start of its drum and melodic tracks (not pads or chords) is
+  placed in video time (the cue's scenes, `start`, `section`, loop). A flash, pop or flicker that
+  falls on them (0.5 frame before to `beat_frames` after) is a reaction to the music: info, not a
+  warning. Scene themes (`score:`) are not read.
+
+| check | severity | what it reports |
+|---|---|---|
+| `blank` | error inside a scene; info at a cut or after a fade | near-uniform frames (luma spread under `blank_std`: black, white, one flat colour) entered or left by a step of `blank_jump` or more: a frame that failed to draw (Parallel Space v7: 20 black frames from a NaN in a shader). A uniform stretch reached by a fade is info when it lasts `dark_seconds`; one at the very start or end of the video is not reported |
+| `flash` | warning; info on a hit or note | one or two frames at least `flash` brighter (flash) or darker (drop-out) than the frame before, the next one back within `flash_revert` of the step |
+| `flicker` | warning; info when beat-locked | the luma going up and down (steps of `flicker`, or `flicker_block` in `flicker_blocks` blocks or more) on `flicker_share` of the frames of a `flicker_window`-frame window; when `beat_share` of its peaks fall on the score's events: beat-locked pulses (info). A kick's pulse that decays over a few frames is neither |
+| `pop` | warning; info when small (under `pop_blocks` blocks) or on hits | blocks that change by `pop` and come back within `pop_revert` of it one or two frames later, while the blocks around them stay still (three in four under `pop_quiet`, none changing by `pop`: else it is something moving); over `pop_area` of the frame it is a flash. The strip marks the place with a yellow box |
+| `strobe` | warning | `strobe_blocks` blocks or more alternating between two pictures (a change of `strobe`, and two frames back almost the same) on `strobe_share` of a second's frames, the region's brightness staying: a wheel or pattern moving about half its repeat a frame |
+| `frozen` | info | frames without visible change (mean change under `frozen`; at 160 px a small slow change, such as thin text fading in, counts as none) for `frozen_seconds` or longer inside a scene (a title held on purpose, or a page whose clock stopped) |
+| `cut_jump` | info | a luma step of `cut_luma` or a histogram distance of `cut_hist` across a cut (a scene start, or a clip's start) |
+
+Findings of one kind closer than `group_seconds` are one finding. The aliasing of a rotation that
+lands near a whole repeat a frame (it seems to turn slowly or backwards) is not found: it looks
+like slow motion in the pixels, and only the scene knows the intended speed.
+
+**Thresholds** (luma and changes are 0..1, 1 = black to white; `--threshold NAME=VALUE`, repeatable):
+
+| name | default | | name | default |
+|---|---|---|---|---|
+| `width` | 160 | | `pop` | 0.12 |
+| `blank_std` | 0.012 | | `pop_revert` | 0.35 |
+| `blank_jump` | 0.06 | | `pop_quiet` | 0.04 |
+| `dark_seconds` | 1.0 | | `pop_area` | 0.5 |
+| `flash` | 0.08 | | `pop_blocks` | 2 |
+| `flash_revert` | 0.35 | | `strobe` | 0.06 |
+| `flicker` | 0.02 | | `strobe_blocks` | 4 |
+| `flicker_block` | 0.05 | | `strobe_share` | 0.5 |
+| `flicker_blocks` | 3 | | `frozen` | 0.0015 |
+| `flicker_window` | 12 | | `frozen_seconds` | 1.5 |
+| `flicker_share` | 0.6 | | `cut_luma` | 0.2 |
+| `beat_frames` | 1.5 | | `cut_hist` | 0.8 |
+| `beat_share` | 0.7 | | `group_seconds` | 0.5 |
+| `strip_width` | 240 | | `max_strips` | 40 |
+
+**Output.** A line per finding, most severe first, then by time:
+
+```text
+output/parallel_space_v7.mp4: 5546 frames at 30 fps (184.9 s), watched at 160x90 in 24.4 s
+  scenes: 11
+  music events: 5093 hits and notes of parallel_space
+warning   104.93 s  frame   3148 06_build  flash: 1-frame flash: luma 0.45 -> 0.55 -> 0.48
+        strip: build/final/motion/01_flash_0104.93s.png
+info       80.60 s  frame   2418 05_heart  flash: 1-frame drop-out on a hit or note of the score: luma 0.46 -> 0.38 -> 0.44
+...
+0 error(s), 1 warning(s), 21 info
+```
+
+and a **contact strip** per finding (`NN_<kind>_<seconds>s.png`, the `max_strips` most severe;
+`--no-strips`: none) in `--out` (default `build/<quality>/motion/` in a project, `<video>_motion/`
+in the current folder for a file; old strips there are replaced): two frames before, the
+finding's frames (the first two and last two of a long one) framed in red, two after, each 240 px
+wide and labelled with its frame and time. Exit code 1 when a finding is at `--fail-on` or worse
+(default `error`).
+
 ## Animatic (`vidgen animatic`)
 
 `vidgen animatic [PROJECT]` writes `<output>[_<variant>]_animatic.mp4` into the
@@ -16622,8 +16907,12 @@ back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`,
 `out`), `music_template` (`bed`, `out` default `assets/music/<bed>.yaml`, `force`; no `bed`: the
 list), `music_patches`, `music_render` (`score`: a path or a project piece's or bed's name, `out`
 default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` given the same way,
-`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `audio_check`
-(`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
+`narration`, `out` default `build/mcp/music`, `images`: returns the spectrogram as a picture), `music_plan`
+(`vidgen music plan`: `score` given as for `music_render`, `out` the draft's folder (none: the plan only), `force`,
+`max_scene`, `min_scene`), `audio_check`
+(`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `motion_check` (`vidgen motion check`: `target`, `source`,
+`variant`, `preview`, `draft`, `threshold`, `fail_on` default `never`, `out` default `build/mcp/motion` for a file, `images`,
+`image_offset`: returns the contact strips as pictures), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
 sound alone), `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
@@ -16926,6 +17215,18 @@ difference between two palette colours).
 | `template` | object | when one was written: its entry of `templates` |
 | `path` | str | when one was written: the file |
 
+`vidgen music plan --json` ([A music video from a score](#a-music-video-from-a-score-vidgen-music-plan)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `plan` |
+| `score`, `title`, `key`, `mode`, `tempo`, `time`, `bar_seconds`, `bars`, `loop`, `seconds`, `tail`, `fps` | | the score's facts; `tail` the seconds the last scene holds after the last bar |
+| `sections` | list | `{name, role, first_bar, bars, energy, why}` (bars count from 1) |
+| `scenes` | list | `{id, section, role, look, first_bar, bars, start, end, duration, frames, energy, colours, react, enters, leaves, why, moments}`: `start` / `end` song seconds (`end` with the tail on the last), `colours` `{base, accent, deep}`, `react` `{pulse, ring, glint, glow}` track names, `enters` / `leaves` the tracks that come in or stop against the scene before |
+| `moments` | list | `{kind, bar, time, note}`: `drop`, `breath`, `silent`, `riser` |
+| `tracks` | object | every track that plays → its reaction (`pulse`, `ring`, `glint`, `glow`) or null |
+| `draft` | object | with `--out`: `{root, config, created, files, problems}`, else null; `ok` is false when the draft has problems |
+
 `vidgen music page --json` ([Listen page](#listen-page-vidgen-music-page)):
 
 | key | type | |
@@ -17000,6 +17301,27 @@ and the files', and `files` lists `{file, title, start, end, check, stereo}`.
 fails, or with `--mono` the mono check. A project split into chapter files adds `files` (`{file,
 measured, checks}` each; `file` / `measured` / `checks` are the first's) and `files_check` (the
 files against each other); `ok` is false when any file or that check fails.
+
+### `vidgen motion --json`
+
+`vidgen motion check FILE|PROJECT --json` ([Motion check](#motion-check-vidgen-motion-check)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `check` |
+| `source`, `files` | str, list | what was watched (the video, or the project with `(scene clips)`) and the files decoded |
+| `fps`, `frames`, `duration` | number | the video's frame rate, frames decoded and their seconds |
+| `size` | list | `[width, height]` it was watched at |
+| `seconds` | number | how long the check took |
+| `scenes` | list | `{id, start, end}` (seconds; empty for a plain file) |
+| `hits`, `hit_source` | int, str | how many hits and notes of the score were placed, and the score (`null`: none) |
+| `notes` | list | what could not be read (old `timings.json`, scenes not rendered, a score that failed) |
+| `counts` | object | `{error, warning, info}` |
+| `findings` | list | `{kind, severity, frame, end_frame, time, end_time, scene, message, value, strip, box}`: frames of the whole video (`end_frame` included; `end_time` after it), `value` the number that tripped the check, `strip` the PNG (`null` past `max_strips` or with `--no-strips`), `box` where in the frame (`[x0, y0, x1, y1]` shares) for pops and strobing |
+| `out` | str | the strips' folder (`null` with `--no-strips`) |
+| `thresholds` | object | every threshold as used |
+
+`ok` is false when a finding is at `--fail-on` or worse (default `error`).
 
 ### `vidgen storyboard --json`
 

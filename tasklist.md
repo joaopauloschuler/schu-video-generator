@@ -2099,6 +2099,75 @@ with demo files for the owner to listen to.
 - [x] Copy the source of `/home/claude/work/escapement` (video.yaml, score, extensions, scripts, README, PLAN, .gitignore; no generated audio, video, stills, build or output) into `examples/escapement/`, adapted to Step 347's built-in music data and Step 350's finishing helper where that simplifies it without changing the picture beyond trivial differences (proved with `vidgen still` comparisons); README with the render time and a `--draft` hint; an entry in the gallery / README example list; a validate-only test (no render in tests). After Step 351's review, or before it if 351 wants to review it — done: `examples/escapement` (video.yaml, the score unchanged, `escapement.js`, `webcut.py`, README, `.gitignore`); `music_data` replaced `scripts/make_audio.py` and `escapement_audio.json` (48 stills of all 12 scenes pixel-identical to the film's; the exporter's rounding of event times kept in the page); the film's own finishing kept (`vidgen/three-finish` was 28–34 dB off; named in the README); `webcut.py` kept (no built-in); PLAN folded into the README; score render SHA-256 `271de0c6…4dc8` as before, no range warnings; README list and gallery note; `tests/test_escapement_example.py` (DESIGN §120.13)
 - [ ] Not done: the whole film was not rendered from the example (render time estimated from 8 s rendered at final quality); `--draft` checked with one still only; Windows and macOS not tried
 
+### Step 353 — README example list without the 'no media/audio committed' notes
+- [x] README example list without the 'no media/audio committed' notes
+
+### Step 354 — Docs catch up with Phase AL
+- [x] README and `docs/COOKBOOK.md` describe `docs/COOKBOOK-MUSIC.md` with its sections 8–13 (orchestral instruments, expressive notes, music data for web pages, the instrument table) and `docs/COOKBOOK-3D.md` with its section 8 (`vidgen/three-finish`); `docs/WINDOWS-CHECK.md` step 7 (`vidgen still`, `--intermediate compact --clean-intermediates`, the progress line, `music_data`, `vidgen music render` / `check` of the Signal Fire score, an optional `--draft` of Escapement) and an honest time estimate; CLAUDE.md's commit trailers name the current session
+
+### Step 355 — Parallel Space as an example (owner's request, 2026-11-16)
+- [x] Copy the source of `/home/claude/work/ps7` (v7: video.yaml, the score, `ps.js`, `ps_audio.json`, `webcut.py`, `scripts/make_ps_audio.py`, .gitignore; not `night_drive.yaml`, build or output) into `examples/parallel-space/` as is (no port to `music_data`); README for visitors; README example list entry and gallery note; `tests/test_parallel_space_example.py` (validate only) — done, no rendering
+- [ ] Not done: nothing rendered from the example (no still, draft or final; the render time is the earlier measurement of the film); Windows and macOS not tried
+
+### Step 356 — Videos on YouTube in the gallery (owner's request, 2026-11-16)
+- [x] A "Videos on YouTube" section at the end of `docs/gallery/README.md`, written by `write_index` from `YOUTUBE_VIDEOS` in `src/vidgen/gallery.py` (title, link, channel; two videos); a README line pointing to it; a test that the committed index ends with it — done, nothing rendered
+
+### Step 357 — YouTube thumbnails in the gallery (owner's request, 2026-11-16)
+- [x] Each entry of "Videos on YouTube" is a clickable thumbnail `[![title](https://img.youtube.com/vi/<id>/hqdefault.jpg)](https://youtu.be/<id>)` followed by the title and channel (one paragraph each, no image files in the repository); `youtube_id()` derives the id from `youtu.be/<id>` or `youtube.com/watch?v=<id>` and raises a clear error otherwise; committed index updated by hand; tests — done, nothing rendered
+
+## Phase AM — Music-video tools (owner's request, 2026-11-16)
+
+Three music films became examples (`examples/parallel-space`, `escapement`, `signal-fire`, with
+`three-finish`); each rebuilt the same things by hand. Four features and a review (DESIGN §121).
+
+### Step 358 — A library of three.js building blocks for music videos
+- [x] `vidgen/music-time` (song time, bars, the score's events as arrays, reactions, seeded numbers, easing, keyframes) and `vidgen/three-kit` (glowing strokes, crystals, tesseract, nebula sky, portals, star fields, flares, shock rings, glints, ribbons, spectrum rays, tunnels, corridor, rings, swarms, dust, camera aim) on the import map; CONFIG, guide, COOKBOOK-3D section 9, DESIGN §121.1; Node and Chromium tests
+- [x] Examples ported with pixel-identical `vidgen still` stills (89 compared): `parallel-space` (`ps.js` 1,313 → 799 lines), `escapement` (only the pieces that stay identical: 1,238 → 1,187), `signal-fire` (220 → 200), `three-finish` (114 → 114)
+- [x] Parallel Space reads `music_data`: `scripts/make_ps_audio.py` and `ps_audio.json` deleted (hits and notes equal; bands and level measured from the mix: 6 of 36 stills identical, the rest 53.5–85 dB PSNR)
+- [x] ~~Not built~~ Built in Step 359 for its starter pages: a colour script (`colourScript`), orbit / fly-through camera paths (`orbit`, `pathPoint`, `flyThrough`)
+- [ ] Not done: no film rendered (stills only); Windows and macOS not tried
+
+### Step 358.1 — Gallery YouTube section: thumbnails only (owner's request)
+- [x] `youtube_lines()` writes one clickable thumbnail per paragraph (title as alt text); title/channel lines and `YOUTUBE_VIDEOS`' `channel` field removed; `docs/gallery/README.md` and `tests/test_gallery.py` updated — done, nothing rendered
+
+### Step 359 — A storyboard from the music
+- [x] `vidgen music plan SCORE [--out DIR] [--force] [--max-scene S] [--min-scene S] [--json]`: roles per section (name or energy), cuts on bar lines (long sections split on the phrase line where the material changes, short ones joined; whole frames), drops / breaths / silent bars / risers, a colour script, the tracks each scene follows (pulse, ring, glint, glow); printout and `--json` — DESIGN §121.2
+- [x] `--out`: a validated draft project: `video.yaml` (`music:` the score, `web_cut` scenes with `music_data` and their plan in `data:`), `extensions/web_cut.py`, a starter page per scene (seven looks, `data/web/starters/`, on three-kit / music-time / three-finish); `vidgen/music-time` gains `orbit`, `pathPoint`, `flyThrough`, `colourScript`, `reactions` (the Step 358 leftovers)
+- [x] The film scores' plans against their real cuts: `escapement` and `signal-fire` the same, `parallel-space` every cut plus two (DESIGN §121.2 table); docs: CONFIG, README, guide, COOKBOOK-3D section 10, COOKBOOK-MUSIC pointer, CHANGELOG
+- [ ] Not done: no draft rendered (stills of the seven looks at 480x270 from a 22 s synthetic score only); ~~no MCP tool for the plan~~ (Step 362: `music_plan`); Windows / macOS not tried
+
+### Step 360 — A "watch it" motion check
+- [x] `vidgen motion check FILE|PROJECT [--source auto|video|scenes] [--preview|--draft] [--variant] [--out DIR] [--no-strips] [--threshold NAME=VALUE] [--fail-on] [--json]` (beside `vidgen audio check`): one ffmpeg decode at 160 px, per-frame luma / colour / histogram / 10 px block changes; blank frames (error inside a scene), flashes and drop-outs, flicker (beat-locked: info), pops (a still ring around them), strobing (period-2 alternation), frozen stretches, jumps at cuts; the score's hits and notes in video time mark reactions to the music as info — DESIGN §121.3
+- [x] A contact strip PNG per finding; thresholds in CONFIG "Motion check"; MCP `motion_check`; guide, COOKBOOK-3D section 11, README
+- [x] Tested on synthetic frames and tiny encoded clips; run on the finished films (read-only): Parallel Space v7 0 errors, 1 warning, 21 info; Escapement 0 errors, 0 warnings, 17 info (tuned: note starts count as music events, one-block pops are info)
+- [ ] Not done: aliasing that looks like a slow or backwards turn (needs the scene's intended speed); scene themes (`score:`) not read for music events; no `--render` (render first); Windows / macOS not tried
+
+### Step 361 — More choir
+- [x] `syllable` (vowel; la … dee with l, n, m, d onsets: formant moves, a nasal murmur with its antiformant, a closure and burst; two-vowel glides mm-ah, ah-oh, oo-ah … at `turn`), per note `[la]` / `[syllable=na]` with did-you-mean; in a slur a consonant only where written (`syllable` and `vowel` may change inside a slur) — `studio/singing.py`, DESIGN §121.4
+- [x] `soloist: true` (one voice: singer's formant, wider later vibrato, scoop, more breath) and `whisper` 0–1 (tone to breath at the same loudness)
+- [x] The existing choir byte-identical by default: both film scores (ps6 `9dca0ba9…`, escapement `271de0c6…`), the v7 example score and the nine choir demo scores of Steps 345–346 on the starting commit and after; measured (formant moves, antiformants, glide timing, vibrato, singer's formant, breath, levels, clicks, CPU), spectrograms looked at; demo WAV + M4A clips in `/home/claude/work/scratch/am361/demo/`; docs: CONFIG, guide, COOKBOOK-MUSIC sections 10, 11, 13
+- [ ] Not done: nobody has listened; consonants start on the step (not before it); only the consonants l, n, m and d; the studio has no control for syllables (marks are kept in the text); Windows / macOS not tried
+
+### Step 362 — Review of Steps 358–361
+- [x] Critical review with fixes (DESIGN §121.5): `melody`'s one-frame dip on each legato note fixed in `vidgen/music-time` (proved by 320x180 stills of PS `05_heart`); `range_warnings` crash on notes above MIDI 127 of instruments without a written range (the five failing slow `test_studio_stems.py` tests since Step 346) fixed; `vidgen motion check`'s ffmpeg stderr to a file (no pipe deadlock); MCP `music_plan` added (Step 359's leftover)
+- [x] Docs: the guide's `tidewater` example reads `melody` (no `hook` there); `web/music.py` docstring; `morph` with a syllable documented in the setting; README Features "Music videos" item and no "no install" notes; CHANGELOG without "measured, not listened to"; COOKBOOK-3D 9 and 11, COOKBOOK-MUSIC 12, `docs/COOKBOOK.md` index, CONFIG (`melody` row, MCP tool list)
+- [ ] Left: `morph` with a syllable is a documented no-op, not an error; the PS `afterglow` scene's `melody` fix is the same code as `heart`'s but no still was taken there; Windows / macOS not tried
+
+### Step 363 — The choir's `d` without its "sht" (owner's bug report)
+- [x] Measured first: a +40 to +59 dB jump of 5–12 kHz at every `d` of the Step 361 demos (in the WAVs), nothing else; the cause the `d`'s burst (noise around 3.8 kHz up to 12 kHz, over a voice with little above 4 kHz; eight singers and the hall's reverb); confirmed by the same phrase without it — DESIGN §121.6
+- [x] The burst inside the voice (2.4 kHz, 0.25 octave, low-pass 3.4 kHz, softer rise, 0.1 instead of 0.35): above 5 kHz at the `d` −24 → −71 to −78 dB under the note; the same random numbers, so notes without a `d` are unchanged (`demo_soloist` identical); Escapement `271de0c6…` and the nine Step 345–346 choir demo scores identical on 2c758af and after
+- [x] Regression test (`test_a_d_opens_softly_without_a_hiss_above_the_voice`, fails on the old burst); the five demos and a before/after clip of `demo_syllables` 0–14 s re-rendered in `/home/claude/work/scratch/am363/demo/`
+- [ ] Not done: nobody has listened to the new demos yet
+
+### Step 364 — Opening titles and end cards for films (owner's request)
+- [x] COOKBOOK-3D section 12 "Opening titles and end cards for films" (asymmetry, restraint, quiet space, slow timing, a matching end card, when not to); pointer in `docs/COOKBOOK.md`; README lines
+- [x] `vidgen/title-cards` (`titleCard`, `endCard`, `update(t)`; `cardOptions` with did-you-mean, `cardAlpha`, `cardSettle`, `cardLayout`): HTML text over the page with Escapement's look and timing as defaults, 16:9 and 9:16, fit to the block, a soft dark gradient; CONFIG table, guide (web topic, `extensions/opening.js`), DESIGN §121.7
+- [x] Tests (`tests/test_web_title_cards.py`: Node, docs, one slow Chromium test); stills of Escapement's opening and end card and of a test page (16:9 title, 9:16 end card) in `/home/claude/work/scratch/am364/`; no example changed
+
+### Step 365 — Parallel Space v8 in the example (owner approved v8)
+- [x] `examples/parallel-space` updated to v8 from `/home/claude/work/ps8` (`video.yaml`, the score, `extensions/ps.js`; `.gitignore` and `webcut.py` unchanged): opening title and end card via `vidgen/title-cards`, the score's silent parts, output `parallel_space_v8`
+- [x] Example README for visitors (the opening and end card, the silent parts, render cost 0.5–1.0 s a frame); README example entry; `tests/test_parallel_space_example.py` (v8 score SHA-256, `vidgen/title-cards`, output name)
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

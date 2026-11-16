@@ -1,7 +1,8 @@
 # Windows check for 0.3.0
 
 schu-video-generator 0.3.0 was built and tested on Linux only. This checklist tests it on Windows in about
-30 minutes, plus the Kokoro download. Run the steps in PowerShell from a copy of the
+an hour, plus the Kokoro and Chromium downloads (steps 1–6 about 30 minutes, step 7 about
+30 more on a fast machine; its optional `--draft` of `examples/escapement` adds 15 to 30). Run the steps in PowerShell from a copy of the
 repository. Write down what each step prints, especially anything marked **report**.
 There is no `vidgen doctor` command: the steps below do that job.
 
@@ -90,11 +91,54 @@ vidgen render examples/cartoon --preview --jobs auto
 - Long paths: copy an example into a deeply nested folder, more than 200 characters in all, and
   run `vidgen render <it> --preview`. **Report** any "path too long" error.
 
+## 7. Web scenes, stills and the orchestra (Phase AL)
+
+These steps need Chromium once: `py -m playwright install chromium` (about 150 MB). Nothing
+here needs narration.
+
+```
+vidgen still examples/three-finish --scene still_life --at 1 --at 3 --size preview
+vidgen render examples/three-finish --preview --intermediate compact --clean-intermediates
+```
+
+- `vidgen still` writes PNGs to `examples/three-finish/exports/stills/`. **Report**: whether
+  they open and show a lit still life (not black); any message about a file that is open
+  elsewhere.
+- During the render, `web frames N/M, ... s a frame, about ... left` progress lines should
+  appear about every 10 s. **Report**: whether they do, and the summary line after the last
+  frame.
+- `--clean-intermediates` deletes the frames clip under `examples/three-finish/build/preview/web/`
+  once the scene is rendered. On Windows a file that is still open cannot be deleted: vidgen then
+  keeps that clip and prints a warning instead of failing. **Report**: whether the render
+  finished; any warning about a clip it could not delete (copy its text); whether
+  `build\preview\web\` is empty afterwards; whether
+  `examples/three-finish/output/` has an MP4 that plays.
+
+```
+vidgen music render examples/signal-fire/assets/music/signal_fire.yaml --out signal_fire.wav
+vidgen music check examples/signal-fire/assets/music/signal_fire.yaml
+vidgen render examples/signal-fire --draft --jobs auto
+```
+
+- The score uses the new orchestral instruments (solo violin, cellos, horns, trumpet, choir,
+  timpani, taikos, tam-tam); the render takes about a minute. **Report**: how long it took; any
+  range warning; whether `signal_fire.wav` plays, with strings, brass, choir and drums, and
+  ends on a major chord. Do not commit it.
+- `vidgen music check` writes `signal_fire-check.png` and `signal_fire-demo.mp3` in the
+  current folder. **Report**: its first lines (loudness, peaks) and whether both files open.
+  Its "unsteady" note about the quiet start is expected.
+- Every scene of the project has `music_data:` (the page reads the score through `ctx.music`). **Report**:
+  whether the draft finished, and whether in
+  `examples/signal-fire/output/` the embers, the sky and the flashes move with the music.
+- Optional: `vidgen render examples/escapement --draft --jobs auto` (a 3:11 film; it first
+  synthesizes the score, about 5 minutes). **Report**: the total time and whether the
+  ticking stays in time with the picture.
+
 ## What to send back
 
 One message with the following:
 
 - Windows version, Python version(s), ffmpeg version, MiKTeX yes or no.
-- For each step 1–6: OK, or the exact error text, with the command that failed.
-- The `jobs:` lines from steps 2 and 5, and the machine's RAM and CPU core count.
+- For each step 1–7: OK, or the exact error text, with the command that failed.
+- The `jobs:` lines from steps 2, 5 and 7, and the machine's RAM and CPU core count.
 - One or two stills or short notes on anything that looked or sounded wrong in the videos.

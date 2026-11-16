@@ -111,7 +111,9 @@ SECTION_NOTES: dict[str, str] = {
     ),
     "pictures and media": (
         "Whole films of `web` scenes: [Escapement](../../examples/escapement/README.md) (`examples/escapement`), a 3:11 "
-        "clockwork music film in three.js whose watch movement ticks on the score's beat, and "
+        "clockwork music film in three.js whose watch movement ticks on the score's beat, "
+        "[Parallel Space](../../examples/parallel-space/README.md) (`examples/parallel-space`), a 3:05 trance and "
+        "choir film of a flight through parallel realities, and "
         "[Signal Fire](../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture."
     ),
     "particle physics": (
@@ -128,6 +130,48 @@ SECTION_FOOTERS: dict[str, str] = {
     "orbital mechanics": "`vidgen guide orbits` · [the orbits cookbook](../COOKBOOK-ORBITS.md)",
     "particle physics": "`vidgen guide particle-physics` · [the particle-physics cookbook](../COOKBOOK-PARTICLES.md)",
 }
+#: Videos made with schu-video-generator and published on YouTube, listed at the end of the index.
+YOUTUBE_VIDEOS: list[dict[str, str]] = [
+    {
+        "title": "How to create this AI music video in the video description",
+        "url": "https://youtu.be/J8gljBhqtTo",
+    },
+    {
+        "title": "How to create long cartoon videos with AI? I will teach you!",
+        "url": "https://youtu.be/tjqrvbYNbGE",
+    },
+]
+
+
+_YOUTUBE_ID = re.compile(
+    r"https://(?:youtu\.be/|(?:www\.)?youtube\.com/watch\?(?:[^#]*&)?v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])"
+)
+
+
+def youtube_id(url: str) -> str:
+    """The video id of a ``https://youtu.be/<id>`` or ``https://www.youtube.com/watch?v=<id>`` link."""
+    match = _YOUTUBE_ID.match(url)
+    if match is None:
+        raise VidgenError(
+            f"not a YouTube video link: {url!r} (expected https://youtu.be/<id> or https://www.youtube.com/watch?v=<id>)"
+        )
+    return match.group(1)
+
+
+def youtube_lines() -> list[str]:
+    """The index's "Videos on YouTube" section: one clickable thumbnail per video, its title as the alt text.
+
+    The thumbnail is YouTube's own (``img.youtube.com``), so no image is kept in the repository.
+    """
+    if not YOUTUBE_VIDEOS:
+        return []
+    lines = ["## Videos on YouTube", "", "Videos made with schu-video-generator:", ""]
+    for v in YOUTUBE_VIDEOS:
+        vid = youtube_id(v["url"])
+        lines += [f"[![{v['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)](https://youtu.be/{vid})", ""]
+    return lines
+
+
 DEFAULT_FOOTER = "`vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`"
 
 _FENCE = re.compile(r"```(\w*)\n(.*?)```", re.S)
@@ -827,6 +871,7 @@ def write_index(
             lines += [SECTION_NOTES[group], ""]
         first = {(True, False): "type", (True, True): "type or showcase", (False, True): "showcase"}[(group in type_groups, group in with_showcases)]
         lines += [f"| {first} | preview | use it for |", "|---|---|---|", *rows, ""]
+    lines += youtube_lines()
     path = output / "README.md"
     write_text_atomic(path, "\n".join(lines))
     return path

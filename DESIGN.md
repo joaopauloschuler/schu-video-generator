@@ -195,6 +195,7 @@ src/vidgen/
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
+  motion_check.py         # `vidgen motion check`: a rendered video watched at 160 px for blank frames, flashes, flicker, pops, strobing, frozen stretches, jumps at cuts; contact strips (§121.3)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
                           # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
@@ -299,6 +300,7 @@ src/vidgen/
   music.py                # background music: generated beds, music files and composed music as looping sources (§48, §82, §83; no manim)
   music_pieces.py         # project pieces: score files in assets/music played like beds, rendered at the join and cached (§93.10)
   composer.py             # composed music from a mood: moods, instruments, chords, phrases, melody, accompaniment (§83; pure, seeded, no manim)
+  music_video_plan.py     # `vidgen music plan`: a music video's scenes from a score file (roles, cuts on bar lines, moments, colours, reactions) and its draft project (§121.2)
   musicfit.py             # composed music that follows the video: bar lines at scene changes, per-scene moods, swells, pauses, cadence, stings (§84)
   score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
   soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
@@ -348,7 +350,10 @@ src/vidgen/
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
                           # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
-  data/web/modules/        # three-finish.js: vidgen's own module `vidgen/three-finish` for three.js web scenes (§120.11)
+  data/web/modules/        # vidgen's own modules for web scenes: three-finish.js `vidgen/three-finish` (§120.11); music-time.js
+                          # `vidgen/music-time` and three-kit.js `vidgen/three-kit`: building blocks for music videos (§121.1);
+                          # title-cards.js `vidgen/title-cards`: an opening title and an end card for films (§121.7)
+  data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
@@ -25428,3 +25433,551 @@ The owner asked for the published film as an example, source only. `examples/esc
   validation, the scenes' song starts on bar lines, the score's SHA-256 (line ends normalised),
   no range warnings, the event counts the exporter had, the page reads only `ctx.music` and every
   track it is given exists.
+
+## 121. Music-video tools (Phase AM, Steps 358–364)
+
+Three music films were made as `web` scenes and are now examples (`examples/parallel-space`,
+`examples/escapement`, `examples/signal-fire`; with `examples/three-finish`). Each rebuilt the
+same things by hand. The owner chose four features (2026-11-16), one step each, and a review:
+
+| Step | What | Section |
+|---|---|---|
+| 358 | A library of three.js building blocks for music videos (`vidgen/three-kit`, `vidgen/music-time`); the examples ported to it, their copies deleted | §121.1 |
+| 359 | A storyboard from the music: `vidgen music plan` (cut points, a colour per section, the events each scene reacts to, a draft project of `web_cut` scenes with starter pages) | §121.2 |
+| 360 | A "watch it" motion check: `vidgen motion check` (blank frames, flashes, flicker, popping, strobing, frozen stretches, jumps at cuts; a contact strip per finding) | §121.3 |
+| 361 | More choir: syllables, a soloist, a whispered texture, a syllable per note | §121.4 |
+| 362 | Critical review with fixes; docs | §121.5 |
+| 363 | The owner heard a "sht" at every `d`: its burst made soft | §121.6 |
+| 364 | Escapement's opening title and end card for every film: `vidgen/title-cards`, COOKBOOK-3D section 12 | §121.7 |
+
+Rules of the phase: the films must look the same (stills compared before and after) and their
+scores synthesize to the same audio; nothing is rendered that a still or a test can show.
+
+### 121.1 Building blocks for music videos: `vidgen/music-time` and `vidgen/three-kit` (Step 358)
+
+**What the films shared.** Read side by side, the four example scripts repeated: easing and
+clamping (`clamp`, `mix`, a cubic and a quintic ease: all four), a sine hash (Parallel Space,
+Escapement), a seeded generator (Parallel Space), the score's hits and notes as sorted arrays
+with a binary search and a drum envelope (Parallel Space, Escapement: identical functions), a
+track's level through its hairpins (Signal Fire), keyframed camera moves (Escapement), a soft
+round dot texture (Escapement's dust, Signal Fire's embers: the same canvas gradient with other
+stops). Parallel Space alone held the light-on-black kit the owner listed (glowing strokes,
+crystals, tesseract, nebula sky, portals, star fields, flares, shock rings, ribbons, spectrum rays,
+tunnels, corridor, rings, swarms), written as reusable functions with one film's globals.
+
+**Two modules, on the import map beside `vidgen/three-finish`** (`web/loaded.py`
+`VIDGEN_MODULES`; files in `data/web/modules/`, already package data):
+
+- `vidgen/music-time` (117 lines, plain JavaScript, no imports): shaping (`clamp`, `mix`,
+  `smoothstep`, `smootherstep`, `easeOutCubic`, `dbToGain`), seeded numbers (`rng` = mulberry32,
+  `hash`), moves (`keyframes`, `glide`), bars (`barClock`, `count`), the score's events as arrays
+  (`trackArrays(ctx.music, {hits, notes, grid})` → `{t, g}` / `{t, d, p}` `Float32Array`s;
+  `lastIndex`) and reactions (`hitEnvelope`, `hitCount`, `hitAge`, `noteAt`, `noteEnvelope`,
+  `noteLevel`, `melody` on arrays; `eventLevel`, `signalLevel` on `ctx.music`'s events). Separate
+  from three.js so it can serve a Canvas or SVG page, and so its functions run in Node in tests.
+- `vidgen/three-kit` (609 lines; imports `three` and `vidgen/music-time`): `setStage`, `Glow`,
+  colours, polyhedra and crystals, `SkyDome`, portals, the tesseract, star fields and shells,
+  flares, shock rings, glints, ribbons, spectrum rays, tunnels, the lattice, the ring structure,
+  crystal fields and swarms, dust, `aimCamera` (CONFIG `web` lists every name).
+
+Decisions:
+
+- **The code moved, not rewritten.** Each function keeps its film's arithmetic and GLSL
+  (whitespace included), so the films' pictures stay identical; the renames are only of names
+  (`sstep` → `smoothstep`, `makeStars` → `makeStarField`, `env(name)` → `hitEnvelope(track)`).
+- **A stage, set once.** The kit's builders need the scene to add to, the renderer to bake a sky,
+  the camera that flares and rings face, and the frame's size for line widths (shared uniforms
+  `uRes`, `uK = height / 720`). `setStage({renderer, scene, camera, width, height})` sets them
+  for the page (one page = one module instance); a builder called before it throws a named error.
+- **`make…` / `update…` pairs** (`makeStarField` / `updateStarField`): a builder runs in `load`, its
+  update in `frame` from song time, keeping no state between frames. `make` avoids a page's
+  natural variable names (`const flare = flare(…)` was the first bug of the port).
+- **Arrays for the reactions.** Envelopes read `{t, g}` / `{t, d, p}` arrays, not `ctx.music`'s
+  event objects: both films drew from such arrays, a binary search over a `Float32Array` is cheap
+  per frame, and the arrays round as the films' exporters did (`grid`: times to 1/1000 of a
+  sixteenth, which Escapement's hammers need to stay identical, §120.13). `signalLevel` and
+  `eventLevel` read event objects because they need the dynamics.
+- **Callbacks where a film read its own data**: the spectrum, fields and swarms take `band(b)`,
+  the tunnel `look(index, time)` → `[colour, gain, sides]`, so they work with `ctx.music.band` or
+  anything else.
+- **Left in the films** (moving them would change a picture or serve one film only): Parallel
+  Space's composer and grade pass, its sun, mirror corridor, fold, title cards and clock dials;
+  Escapement's watch, studio (its own soft boxes; three-finish's `studioEnvironment` differs),
+  finishing chain, `setCam` (it rolls with `rotateZ`, not the up vector), glint sprites;
+  Signal Fire's sky dome, stones and its own hash (`sin(n·127.1 + 311.7)`, not
+  `sin(i·127.1 + k·311.7 + 0.5)`: it would move every stone); the still life's gears.
+- **Not built** from the owner's list, for want of a film that uses it: a sections → colour script
+  helper and orbit / fly-through camera paths beyond `keyframes`, `glide` and `aimCamera` (Step
+  359's storyboard writes pages that will use them; that step adds them with a user). Studio
+  environments exist already (`studioEnvironment` in `vidgen/three-finish`).
+- **Cache keys.** No existing key moves for pages that do not import the modules (the import map
+  is in no key). A page that imports them has them in its loaded-files record, so in its clip key
+  and fingerprint: the four examples' scenes render again once (their scripts changed anyway).
+
+**The examples ported**, proved with `vidgen still` before (HEAD 274177f) and after, 640x360 at
+three times per scene and 1280x720 at one or two (89 stills; `/home/claude/work/scratch/am358/`):
+
+| example | script lines before → after | removed besides | stills |
+|---|---|---|---|
+| `parallel-space` | `ps.js` 1,313 → 799 | `scripts/make_ps_audio.py` (190 lines), `extensions/ps_audio.json` (124 KB); dead `flux`, `lowE`, `gateEnv`, `boomFlash` | 36 of 36 identical on the kit with the old data file; then with `music_data`, see below |
+| `escapement` | `escapement.js` 1,238 → 1,187 | — | 38 of 38 identical |
+| `signal-fire` | `signal_fire.js` 220 → 200 | — | 11 of 11 identical |
+| `three-finish` | `still_life.js` 114 → 114 (its ease replaced by an import) | — | 4 of 4 identical |
+
+**Parallel Space reads `ctx.music`.** Its `music_data` sends 16 tracks (`trumpet` and `violins`
+gathered as the film's `call`); `trackArrays` with `grid: S16` gives every hit time and gain and
+every note time and length equal to `ps_audio.json`'s (checked as float32 for all 15 arrays:
+1,023 hits, 609 notes). Pitches differ only for 15 chord-degree notes of `call` in the coda
+(the file wrote 0), which the coda places by time, not pitch. The level and the 16 bands are
+measured from the video's mix with 256 steps (the file: from the score's WAV, 64 steps), so the
+stills differ slightly: 6 of 36 identical (the dawn and the coda read no bands), the rest 53.5–85
+dB PSNR, mostly one or two levels; the most at the tips of the sun's spectrum rays (up to 89
+levels on a few pixels, `07_drop1` at 1.5 s). Side by side (before | after | difference × 10):
+`side2/ps/`. That is above the phase's 45 dB bar, so the script and the JSON were deleted.
+
+### 121.2 A storyboard from the music: `vidgen music plan` (Step 359)
+
+**The name.** `vidgen plan` already drafts a project from an outline, `vidgen storyboard` draws
+contact sheets of a rendered project; the new command is a music tool that reads a score file and
+drafts a project, so it is `vidgen music plan SCORE` beside `music render`, `check` and
+`template`, with their `--out`, `--force` and `--json` (the brief's `--write DIR` is `--out DIR`,
+as `music template --out` writes its file). Without `--out` it only prints.
+
+**Reading the score, not the sound.** The plan runs on `vidgen.studio.events.score_events`
+(Step 347): every note and hit with its track, instrument, time, length and pitch, as the renderer
+plays them. Nothing is synthesized, so a plan takes milliseconds (Parallel Space: 0.2 s with the
+import). Per bar it keeps the tracks that sound, how many events start per track, and the chord;
+its **energy** is half a point per sounding track plus up to half a point per track for its
+onsets (8 or more a bar: the half point), scaled to the busiest bar. Counting tracks and capping
+onsets keeps a hi-hat's 16 hits a bar from outweighing an orchestra coming in.
+
+**Roles** (`intro`, `verse`, `build`, `drop`, `climax`, `breakdown`, `outro`) come from the
+section's name when a word of it says so (split on `_` and digits: `heart2`, `verse_b`), else
+from energy against the piece and the neighbours (CONFIG lists the thresholds). Names win because
+the author named the form; the words are generic (`dawn`, `coda`, `bridge`), not the films'
+own (`winding`, `orrery`), so the films test the energy rules too.
+
+**Cuts.** A scene per section, then: a section longer than `--max-scene` (16 s) is split on a
+phrase line (every 4 bars from the section's start) chosen by a change score — the Jaccard
+distance between the tracks sounding in the phrases before and after, +0.25 when the progression
+starts again there, +0.5 × the energy step, +0.2 after a bar with few onsets — plus a pull to the
+middle; recursively. A 16-bar-or-longer section that fits is still split (into parts of 8 bars or
+more) when the change score reaches 0.45: "a 16-bar section into 2 × 8 when the material
+changes", and never an 8-bar section into two 4-bar flashes. A section under `--min-scene` (5 s)
+joins the scene before (the films' `end` bars ride on their coda). 16 s is the films' own
+longest scene but two (Escapement's 8 bars at 120 BPM; Parallel Space kept two 16-bar scenes of
+27.7 s, which the plan splits).
+
+**Durations on bar lines in whole frames.** A scene's frames are `round(end · fps) −
+round(start · fps)`, so the plan's frame count for each bar line is the rounded song time and no
+rounding error accumulates (Tidewater's 2.222 s bars give 267, 266, 267 frames); the scene plan
+(`VideoPlan`) rounds `duration · fps` back to the same count, and `ctx.music.t0` is within half a
+frame of the bar line. The last scene of a one-pass score holds 3 s for the last chord (the films
+used 3 to 4.6 s); a loop gets none.
+
+**Moments** are listed, not cut on: a cut on every drop would cut mid-phrase. The starter pages
+flash on the drops (`drop(T)` into three-finish's `flash`).
+
+**Colour script.** A role's hue, saturation and lightness (intro 205°, verse 185°, build 280°,
+drop 325°, climax 32°, breakdown 250°, outro 220° pale), scaled by the scene's energy (saturation
+×0.75–1, lightness ×0.88–1) and turned 8° towards 230° (blue) in minor, dorian and phrygian keys,
+towards 45° (gold) in the others. `accent` is the hue + 160° (glints and rings stand out),
+`deep` a near-black of the hue (the sky). Written as `#rrggbb` per scene and, once, as the whole
+script with a YAML anchor, so a page that spans two sections (a coda with its end) can follow it.
+
+**Reactions** by instrument: the brief's mapping (kick → brightness, melody → glints, pads →
+glow) plus accents → rings. A track's reaction comes from the instrument it plays in that scene
+(a section can change it, §120.7); hats, ticks, noise and risers are left out as too dense or not
+a line. Limits per scene: two pulses, one ring, two glints, one glow; `music_data.tracks` lists
+just those, keeping the page's data small.
+
+**The draft.** `video.yaml` (header with the form, `transition: cut`, the music cue as the films
+write it), `extensions/web_cut.py` and a page per scene. The `web` scene has no option to drop
+its 0.5 s fade-out (`outro` is a class attribute), so the draft writes the same five-line
+extension the three films carry rather than adding a param in this step. The score is copied to
+`assets/music/` (a cue's source must be under the project) unless it is in the folder already.
+The draft is validated before the command returns (exit 1 with the problems).
+
+**Starter pages** (`data/web/starters/*.js`, 48–53 lines each, copied verbatim; everything
+scene-specific is in `ctx.data`): one look per role from the kit, so consecutive sections look
+different and two scenes of one role differ by seed, turning direction and colour. Library
+additions they needed (the two Step 358 left for this step), in `vidgen/music-time` (plain
+numbers, testable in Node): `orbit(T, …)` and `pathPoint` / `flyThrough(points, u, ahead)` (a
+Catmull-Rom path through every point, its ends continued) for the camera, `colourScript(stops,
+glide)` for the colour script, and `reactions(ctx.music, react, {drops})` for the four reactions
+and the drop flash. The first looks were too bright at 320x180 (three-finish's bloom on a 80-px
+buffer over 26 crystals' edges and 96 rays): the starters use bloom 0.5 / radius 0.35 /
+threshold 1.0 at half scale, and the climax's rays and flare were toned down; stills at 480x270:
+`/home/claude/work/scratch/am359/looks_sheet.png`.
+
+**The three film scores against their real cuts** (bars from 1; `|` a cut):
+
+| film | real scenes (first bar, length) | the plan | role / look per planned scene |
+|---|---|---|---|
+| Signal Fire (90 BPM, 2.667 s bars) | embers 1 (8 s) \| gather 4 (8 s) \| fire 7 (11 s) | the same: 1 \| 4 \| 7 (`end`, 1 bar, joined; 3 s tail) | intro/drift, drop/swarm, climax/rings |
+| Escapement (120 BPM, 2 s bars) | winding 1 \| dial 9 \| through 17 \| escapement 25 \| cathedral 33 \| threefour 41 \| orrery 49 \| falter 57 (8 s) \| build 61 \| climax1 69 \| climax2 77 \| coda 85 (23 s) | the same 12 cuts: movement, cathedral and climax split 8 \| 8 (over 16 s), orrery 8 \| 4 (the falter: its change score is highest at bar 57), `end` joined to the coda (20 s + 3 s) | intro/drift, verse/orbit, build/tunnel ×2, drop/swarm ×2, breakdown/dust ×2, build/tunnel, climax/rings ×2, outro/ribbon |
+| Parallel Space (138.46 BPM, 1.733 s bars) | dawn 1 \| pulse 9 (16 bars) \| groove1 25 \| groove2 33 \| heart 41 (16 bars: heart + heart2) \| build 57 \| drop1 65 \| drop2 73 \| climax 81 \| afterglow 89 \| coda 97 (18.47 s) | 13 scenes: every real cut and two more, at bar 17 (the 16-bar `pulse` is 27.7 s) and 49 (`heart2` is its own section); coda 16.87 s (3 s tail, the film 4.6 s) | intro/drift, build/tunnel ×2, verse/orbit ×2, breakdown/dust, build/tunnel ×2, drop/swarm ×2, climax/rings, breakdown/dust, outro/ribbon |
+
+Roles that differ from the films' intent: Parallel Space's `pulse` is a build by energy (rising
+into the fuller `groove`), its `heart2` a build (a riser, `groove`-level energy after the sparse
+`heart`); Escapement's `cathedral` a drop and `orrery` a breakdown; Signal Fire's `gather` a drop
+(the brass and taikos come in). They are what the notes say; the author keeps or renames.
+
+**Tests** (`tests/test_music_video_plan.py`): roles, cuts, frames, splits for length and for
+material, joins, moments, reactions and colours on a small synthetic score; the starters' imports;
+the printout and `--json`; user errors; a written draft validated (no render); the three films'
+plans against their `video.yaml` cuts; one `slow` test drawing one still of a drafted page at
+160x90. `tests/test_web_music_video_kit.py` tests the four music-time additions in Node.
+
+### 121.3 A "watch it" motion check: `vidgen motion check` (Step 360)
+
+**The name.** `vidgen lint` checks stills it renders itself; `vidgen audio check FILE|PROJECT`
+measures a rendered file. The new check reads a rendered video, so it follows `audio check`:
+`vidgen motion check FILE|PROJECT` (a group with one action, room for more), with `audio
+check`'s `--variant`, `--preview` / `--draft`, `--output-dir` and `--json`, and `lint`'s
+`--fail-on`. It never renders: a project with no render gets the `vidgen render` command to run.
+
+**What is watched.** A file; a project's rendered video, with its scenes from the render's
+`timings.json` (start and duration per scene, so a crossfade's frames belong to the scene that
+starts in it); or, when that is missing or with `--source scenes`, the scene clips of
+`build/<quality>/scenes/` one after the other (each clip a scene; the comparisons across a clip's
+start see a cut). The clips miss what the join adds (transitions, overlays) but exist before the
+join, and after a `--scene` re-render.
+
+**One decode, small numbers.** ffmpeg scales to 160 px wide with the area filter and pipes raw
+RGB (no PyAV decode loop: ffmpeg's decoder threads and scaler run beside Python). Per frame: luma
+mean and standard deviation (Rec. 709), RGB means, a 16-bin luma histogram, 10 x 10 px block
+means, and each block's mean absolute change from 1, 2 and 3 frames before (three frames kept);
+the frame is then dropped. Blocks are float16: about 1 KB a frame, 6 MB for the 3-minute films,
+110 MB for an hour at 30 fps. The strips decode again only the frames they show (ffmpeg seeks 1 s
+before the first and selects by frame number: exact frames, checked by a test).
+
+**The checks and why each looks the way it does** (thresholds and defaults: CONFIG "Motion check"):
+
+- **Blank** = luma spread under 3/255 (black, white, a flat colour). What makes it a fault is how
+  it starts or ends: the v7 bug went from a bright frame to black in one frame. A fade into black
+  is a choice (info when long), a cut to black is a choice (info), a video that starts or ends on
+  black is normal (not reported).
+- **Flash / drop-out**: one or two frames whose luma steps away by `flash` and comes back. A
+  kick's light pulse rises in one frame and decays over several, so it does not come back within
+  two frames and is not a flash; the films' `hitEnvelope` pulses pass unreported.
+- **Flicker**: direction reversals of the luma (frame or block) on 60 % of a 12-frame window; a
+  pulse every beat reverses at most twice per beat (a beat is 13 frames at 138 BPM), flicker every
+  frame. Local flicker whose region keeps its brightness while its blocks swap light and dark is
+  left to strobe.
+- **Beat-locked or not.** Music films pulse on purpose. In a project, the hits and note starts of
+  the score files its `music:` cues play are placed in video time with `score_events` (Step 347:
+  no synthesis), with the cue's `start`, `section` and loop; a flash, pop or flicker that starts on
+  them (½ frame before to 1.5 frames after, the frame a page's reaction to an event first shows)
+  is info. Notes count, not only drums: the films react to melodies too (Parallel Space's
+  `05_heart` dips its light on `hook` notes, some of them slurred). Pads and chords are left out
+  (held, they would mark most frames).
+- **Pop**: blocks that change by 0.12 and are back within 35 % of the change one or two frames
+  later, while the ring of blocks around them stays still. The ring is what separates a pop from
+  motion: an object that moves leaves the block it was in, so a neighbour changes too. A one-block
+  pop (80 px at 1280) is info: on the films they were all glints on gears and crystals.
+- **Strobe**: blocks whose change from the frame before is large while the frame two back is
+  almost the same, on half of a second's frames: the period-2 aliasing of a pattern moving half
+  its repeat a frame. Aliasing near a whole repeat a frame looks like a slow or reversed turn and
+  cannot be told from intended slow motion without the scene's own speed, so it is not found.
+- **Frozen**: mean change under 0.0015 for 1.5 s inside a scene (split at cuts); info, since a
+  title can be held. At 160 px thin text fading in counts as no change (Escapement's opening).
+- **Cut jump**: a luma step of 0.2 or a histogram distance of 0.8 across a scene start; info (a
+  cut from a dark build into a bright drop is often the point). A cut to or from a blank frame is
+  left to `blank`.
+
+Findings of one kind within 0.5 s merge (a burst of pops is one line). The checks run in an order
+that keeps one cause one finding: blank, flash, flicker, strobe, pop (a pop is not looked for
+inside a flash, flicker, strobe or within two frames of a cut).
+
+**Output.** Text (a line per finding, errors first), `--json` (`motion` document), and a contact
+strip per finding: two frames before, the finding's frames (first two and last two of a long one)
+framed in red, two after, 240 px each, a yellow box where a pop or strobe is. Old strips in the
+folder are replaced. Exit 1 at `--fail-on` (default `error`). MCP `motion_check` defaults
+`fail_on` to `never`, because the server returns pictures only with `ok` true.
+
+**The finished films** (read-only; 1280x720, 30 fps; about 25 s each on 2 cores, peak memory 139 MB):
+
+| film | errors | warnings | info |
+|---|---|---|---|
+| Parallel Space v7 (`ps7/output/parallel_space_v7.mp4`) | 0 (the NaN black frames were fixed) | 1: a one-frame flash in `06_build` at 104.93 s, two frames after a hit (a tunnel ring passing the camera) | 21: 7 cut jumps, 11 flashes / dips on hits and notes (5 one-frame dips on `hook` notes in `05_heart`), 1 one-block glint, 2 held frames in the coda |
+| Escapement (`escapement/output/escapement.mp4`) | 0 | 0 | 17: 7 cut jumps, 6 one-block glints (2 on hits), 4 still stretches (the opening while the title fades in, the ending) |
+
+Tuning on them: the first run gave Parallel Space 7 warnings and Escapement 4. The `05_heart` dips
+fall on `hook` notes, some slurred: note starts (slurred too) joined the drum hits. The one-block
+pops were specular glints: `pop_blocks` 2 made them info. The scene clips of Parallel Space
+(`--source scenes`) give the same findings a frame later at the cuts (the clips' rounding).
+
+**Tests** (`tests/test_motion_check.py`): the checks on synthetic numpy frames (80 x 40, no
+ffmpeg): clean motion, black frames inside / at a cut / at the ends, a fade to black, flashes and
+drop-outs with and without a hit, flicker vs beat-locked flicker vs decaying kick pulses, local
+flicker, pops of one and two frames, a small pop, a moving square that is not a pop, a strobing
+wheel, a frozen stretch split by a cut, a cut jump; threshold names; the score's events in video
+time (tidewater looped from 50 s); the command on an encoded clip with its strip's frames
+checked; a slow test with a project's scene clips and its rendered video. `test_mcp.py` gains a
+slow `motion_check` call.
+
+### 121.4 More choir: syllables, a soloist, a whisper (Step 361)
+
+**The rule above all others.** The owner called the choir demo of Steps 345–346 "a true piece of
+art", so its sound may not move. The four new settings default to the old behaviour, and a note
+that uses none of them (`syllable: vowel`, `soloist: false`, `whisper: 0`, no slurred note naming
+a syllable or vowel) is made by Step 345's function itself (`choir.held_vowels`, the old
+`choir_note` renamed, not one line of arithmetic changed). The new path is a separate module
+(`studio/singing.py`), entered by `singing.choir_note` (the instrument's maker, remembered as
+before). Proved: the two film scores and the nine choir demo scores of Steps 345–346 render to
+the same bytes on the starting commit and after this step (HANDOFF Step 361).
+
+**Still synthesis, still no words.** The choir sings syllables of one soft consonant and one or
+two vowels; nothing is sampled, nothing spells a language.
+
+- **The mouth is a line of keys.** A key is a mouth shape at a sample: five formants (the
+  vowel table of §120.6, or a consonant's), optionally an antiformant and a low-pass, and the
+  voice's level there. Between two keys each sample is a cross-fade of the two keys' wave
+  tables, read on the singer's one phase (as `additive.phrase_tone` joins slurred notes), so a
+  move of the formants is a series of shapes 6 to 25 ms apart (`_STEPS` = 6 per move, a raised
+  cosine in time, formants in a straight line in Hz). A held vowel's key is read across the
+  singer's pitch swing (five rows, as before: vibrato carries harmonics across the formants);
+  the short keys of a consonant or a glide have one row. Each key is set to equal loudness
+  (`additive.loudness`), and the level is a curve through the keys.
+- **Consonants** (figures for a bass, scaled for the other voices by 1.06 / 1.14 / 1.2 and by the
+  singer's throat; the first formant follows a high note as in §120.6):
+
+  | | hold | level | during the hold | the move into the vowel |
+  |---|---|---|---|---|
+  | `l` | 50 ms | −6 dB | F1 330, F2 1150, F3 2650 Hz (narrow) | 60 ms from 330 / 1200 / 2650 |
+  | `m` | 70 ms | −9 dB | a nasal murmur: 270, 1350, 2250 Hz; antiformant 950 Hz; low-pass 1 kHz | 45 ms from 300 / 1000 / 2300 (bilabial: F2 low) |
+  | `n` | 60 ms | −9 dB | 270, 1250, 2450 Hz; antiformant 1.8 kHz; low-pass 1.3 kHz | 45 ms from 300 / 1700 / 2600 (alveolar: F2 high) |
+  | `d` | 35 ms | −23 dB | a closure: a voice bar (200 Hz, low-pass 350 Hz) | a soft burst (noise around 2.4 kHz, 0.25 octave, little above 3.4 kHz, 1.5 ms rise, 3 ms decay; Step 363, §121.6), the voice back at −7 dB 2 ms later, then 40 ms from 250 / 1700 / 2650 |
+
+  A consonant begins its note at the step (12 ms entry; `attack` shapes only syllables
+  without one), so the vowel arrives 80–120 ms after the step. A section's singers enter
+  within 40 % of their usual spread on a consonant (at most 28 ms instead of 70).
+- **Two vowels** (`ah-oh`, `oo-ah`, `oh-ah`, `ah-ee`, and `mm-ah`, `mm-oh`, `mm-oo`: the hum of
+  §120.6 opening) glide over 0.15 s (at most 40 % of the note) centred at `turn` (0.5) of the
+  note. `morph` keeps its meaning for `syllable: vowel` (in the new path it is the same move as
+  keys) and is not sung with a syllable.
+- **Slurs.** A slurred phrase is one note (§120.7): its first note sings the syllable, the others
+  go on with its vowel. A note inside a slur whose own mark names a syllable or a vowel (or
+  `[default]`) carries `(syllable, vowel)` as a fourth item of its `Phrase` entry
+  (`render._sung`); the mouth then closes into its consonant (25 ms) or glides to its vowel
+  around its step. So `syllable` and `vowel` may change inside a slur (`score_file.FREE_IN_SLUR`
+  beside `glide`); every other setting still may not. Other instruments' phrases keep three items.
+- **The soloist** (`soloist: true`, read by `read_yes_no`: true/false, yes/no, on/off, 1/0): one
+  singer (mono; `singers` ignored), `brightness` + 0.15, the singer's formant (a resonance
+  added to the harmonics: 2.7 / 2.9 kHz, +9 dB for basses / tenors; 3.1 / 3.3 kHz, +6 dB for altos
+  / sopranos; 500–600 Hz wide), its vibrato 1.7 times `vibrato` with the depth breathing ±12 %,
+  beginning at 1.6 times `vibrato_delay` and growing over 0.6 s, a scoop of 35–55 cents up into
+  each attacked note (80 ms), and 1.6 times the breath. The choice of a setting over a `voices`
+  value: `voices` says who sings a note, the soloist is how many and how; `soloist` combines
+  with every `voices` value.
+- **Breath and whisper** in the new path come from one noise through a filter that follows the
+  keys (short-time Fourier transform, Hann frames of 1024 at a hop of 256; per frame the keys'
+  responses cross-faded): breath as in §120.6 (formants three times as broad, little under
+  900 Hz, more in the first 0.15 s, 0.3 of it through closed lips), whisper through the same
+  formants half as broad again from 250 Hz up. `whisper` w sets the tone to cos(πw/2) and the
+  whisper noise to 0.8 sin(πw/2) of the voice's level (power-follows as for breath, measured on
+  the voice before it is turned down), so the loudness stays within 1 dB from 0 to 1. A `d`
+  keeps its burst when whispered.
+- **Measured** (scratch scripts `/home/claude/work/scratch/am361/tools/`, tables
+  `measure-1.txt` … `measure-4.txt`; one voice, vibrato 0, unless said):
+  - Formant moves (tenor D3, 25 ms frames): `la` F1 207 Hz in the hold, 410 at 80 ms, 589 at
+    100 ms, 612 from 120 ms (aah); `na` F2 1175 Hz (murmur), 1769 at the release (60 ms), 1561 at
+    80, 1002 at 100; `ma` F2 1448 (murmur), 1005 at 80 ms, F1 211 → 555 → 606 at 80 / 100 / 120 ms;
+    `da` −41 dB (closure) at 20 ms, F2 2276 at 40 ms, 1216 at 60, 997 at 80; sopranos at D4 the
+    same with F1 on the note. Levels in the hold: `l` 5.7 dB, `m` / `n` 8.7 dB under the vowel.
+  - Antiformant (murmur 15–45 ms against the same note with the zero taken out): `m` −13.9 to
+    −14.8 dB at 950–1083 Hz, `n` −17.3 to −18.1 dB at 1.8–2.05 kHz (basses, tenors, altos);
+    10–19 dB under the harmonics two either side; in the vowel 0.0 dB.
+  - Vowel glides (F1 or F2, 10–90 %): `ah-oh` 0.960–1.050 s for a turn at 1.00 s (set 0.15 s,
+    raised cosine), `oo-ah` 0.955–1.030, `mm-ah` 0.945–1.040, `ah-ee` F2 0.970–1.060, `ah-oh`
+    turn 0.25 0.445–0.555; level before and after within 0.7 dB.
+  - Soloist (tenor A3, defaults): vibrato 5.49 Hz, depth 29.7 cents (one choir voice 16.0), half
+    its depth reached from 0.75 s (one voice 0.45 s); first 30 ms −30 cents (one voice −10);
+    with `vibrato: 25, vibrato_speed: 6` 6.01 Hz, 46 cents. Power in 2–4 kHz against all:
+    tenors −17.6 dB (one voice −26.3, section −27.9), basses −14.1 (−21.8), altos −34.3
+    (−39.5), sopranos −34.2 (−38.1). Breath between the harmonics −26.8 dB (one voice −30.8).
+  - Whisper (C4 aah, 8 singers): power between the harmonics against on them −23.0 / −11.5 /
+    −4.6 / +2.1 / +9.2 dB for 0 / 0.25 / 0.5 / 0.75 / 1 (+9 is pure noise for this measure);
+    loudness −16.1 → −17.0 LUFS; the soloist −15.8 → −16.8.
+  - Levels through the renderer (C4, one track): section `aah` −16.8 LUFS, `la` −16.8, `na`
+    −16.8, `da` −16.9, `ah-oh` −16.6, soloist −16.5, whispered −17.4; men C3 −16.6, soloist
+    −16.9.
+  - Clicks: power above 8 kHz in 1 ms frames at most −86 dB under the note's loudest
+    millisecond for `l`, `m`, `n`, glides and slurred syllables (the held vowel −132 dB; the
+    model has nothing there); the `d` burst −35 to −46 dB, as meant (too loud: heard as "sht",
+    made soft in Step 363, §121.6). First sample 0, last under 1e-8.
+  - CPU (2 s note, C3, 8 singers): held vowel 77 ms per second of sound, `la` 82, `da` 85,
+    `ah-oh` 95, whisper 0.5 85, `la` whispered 90, 16 singers `la` 139; soloist 14 (one voice
+    13).
+- **Honest limits.** Nobody has listened. The consonant figures are textbook values for speech,
+  held a little longer; a real singer's `d` also has a voiced closure of varying length and a
+  real `l` a lateral antiformant (left out). A consonant starts on the step instead of before
+  it, so syllables sound a little late in fast lines. Keys cross-fade wave tables, which moves
+  each harmonic's level but is not a resonance sweeping continuously (steps of 6–25 ms, finer
+  than the 25 ms frames that measured them). The soloist is still one synthetic voice: brighter
+  and more alive, not a recorded singer. A whispered `m` or `n` is a quiet noise only.
+
+### 121.5 Review of Steps 358–361 (Step 362)
+
+Fixed:
+
+- **`melody` dimmed the light on every legato note.** `vidgen/music-time`'s `melody(track, T)`
+  restarted each note's level at 0 with a 0.05 s attack, so a frame that fell just after a note
+  start of a line held without a gap was up to 25 % darker than its neighbours (the one-frame
+  dips `vidgen motion check` listed on the `hook` notes of Parallel Space's `05_heart`; luma
+  0.54 → 0.41 → 0.50 in a 320x180 still at 11.23 / 11.27 / 11.30 s). The attack now rises from the
+  level the note before has at the new note's start (held: 1; released: its 0.45 s decay); a
+  first note, or one after a long rest, rises from 0 or nearly so as before. Only frames within
+  0.05 s of a note start change (and the ribbon `updateRibbon`, which samples the melody over
+  9 s, loses its darker gap at each note: 38–40 dB PSNR elsewhere in `05_heart`). After: the
+  same frames read 0.552 / 0.552 / 0.554, and 12.93–13.07 s (two dips before: 0.465, 0.561)
+  0.612–0.618. `noteLevel` keeps starting each note from 0 (a swell per note, as the films use
+  it). Escapement, Signal Fire and Three Finish do not call `melody`.
+- **The range warning crashed on a note above MIDI 127 of an instrument without a written
+  range** (`studio/render.py` `range_warnings`: `assert written is not None`): a `bell` at
+  `octave: 8, transpose: 36` stopped `render_music_score(score, warnings)`. Only instruments with
+  a written range are checked now (the 20 Hz–12 kHz limit still reports the others). This was
+  the cause of the five slow `tests/test_studio_stems.py` failures since Step 346; they pass. No
+  sample changes (the function builds strings); the Escapement score renders to `271de0c6…4dc8`
+  as before.
+- **`vidgen motion check` could hang on a damaged file**: ffmpeg's stderr went to a pipe that
+  was read only after the frames, so more than a pipe's worth of decode errors (4 KB on Windows)
+  would block both programs. It goes to a temporary file now.
+- **No MCP tool for `vidgen music plan`**: `music_plan` (`score` given as `music_render`'s,
+  `out`, `force`, `max_scene`, `min_scene`) runs the command and returns its document.
+- **Docs**: the guide's `music_data` example asked `tidewater` for a `hook` track it does not
+  have (now `melody`); `web/music.py`'s docstring named the deleted `make_ps_audio.py`;
+  `morph` is ignored with a syllable (now said in the setting's own description, as CONFIG
+  already said); the README's Features list has a "Music videos" item naming the kit, the plan,
+  the motion check and the choir's syllables, soloist and whisper; the install sections and
+  Features no longer say what does not need installing; CHANGELOG lines that only said the
+  instruments were "measured, not listened to" are gone; COOKBOOK-3D section 9 says Parallel
+  Space's stills are 53.5 dB+ (not identical) after its move to `music_data`, COOKBOOK-MUSIC
+  section 12 points to COOKBOOK-3D section 11.
+
+Looked at and left:
+
+- `morph` with a syllable stays a documented no-op rather than an error: a track may set
+  `morph` and a note mark switch to a syllable later; an error there would need cross-setting
+  checks per note that the score reader does not have.
+- Cache keys: `vidgen/music-time` and `vidgen/three-kit` are served files recorded in a page's
+  loaded files (three-kit imports music-time, so both are recorded), as `vidgen/three-finish`
+  is; a page that imports neither keeps its key. This step's `music-time.js` change re-keys the
+  examples' scenes once.
+- Determinism: the plan's seeds come from the scene id (a sum of character codes, not Python's
+  salted `hash()`); the starters and the kit draw seeded numbers only (`rng`, `hash`).
+
+### 121.6 The `d` without its "sht" (Step 363)
+
+**Heard.** The owner, listening to Step 361's demos: "a sound that resembles 'sht'" at 2, 4.5
+and 12.5 s of `demo_syllables` and in the other demos. Those are the `da`, `de` and the tenors'
+`da`; a search of every demo WAV for sudden 5–12 kHz energy finds a jump of +40 to +59 dB at each
+`d` (eight in `demo_syllables`, two in `demo_men`, three in `demo_whisper`, four smaller ones,
++19 to +24 dB, under the cellos of `demo_cue`) and nothing else that is not a note (the
+`demo_soloist` hits are harmonics gliding; it has no `d`). The WAVs have it, so the AAC encoder
+does not make it. Step 345–346's choir demos have none: the old held-vowel path has no
+consonants.
+
+**Cause.** The `d`'s burst (`singing._singer`): white noise around 3.8 kHz, 0.45 octave wide
+(standard deviation) with nothing to stop it below 16 kHz, at 0.35 of the voice. A voice of this
+model has almost nothing above 3.5–4 kHz, so the burst
+stood alone up to 12 kHz: 22–26 dB under the note's loudest 10 ms above 5 kHz (a `la` −91 dB),
++45 to +59 dB over the voice above 4.5 kHz at that moment. Each of a section's singers bursts on
+its own (within 28 ms of each other), so eight bursts made a 30–40 ms hiss, and the hall's
+reverb carried it on for a second: "sh", then the voice cut back in after the closure: "t".
+Confirmed by the same phrase with only the burst taken out (the same random numbers drawn): the
+two renders differ only at the `d`s, and with no burst the 5–12 kHz level at the `d` falls to the
+vowel's.
+
+**Fix.** The burst lies inside the voice: noise around 2.4 kHz (× 1.06 / 1.14 / 1.2 for tenors,
+altos, sopranos, and the singer's throat), 0.25 octave, a low-pass at 3.4 kHz (scaled the same),
+a rise of 1.5 ms instead of 0.5 and a decay of 3 ms instead of 4, at 0.1 of the voice instead of
+0.35. The closure, the voice's return and the formants' move from the alveolar locus (F2 from
+1.7 kHz) are unchanged: the `d` is heard from those, as a voiced stop is. The burst draws the
+same random numbers as before, so every note without a `d` is the same to the sample
+(`demo_soloist` renders to the same bytes as in Step 361), and a plain choir note never reaches
+this code (Escapement's score and the nine choir demo scores of Steps 345–346 render to the same
+bytes on 2c758af and after).
+
+**Measured** (scratch `/home/claude/work/scratch/am363/`, `measure-demos.txt`):
+
+- One note per voice (8 singers, defaults, 0.25 s + ring): loudest 10 ms above 5 kHz against the
+  note's loudest 10 ms, before → after: `da` basses −24.6 → −71.1 dB, tenors −23.7 → −77.5,
+  altos −22.7 → −74.8, sopranos −24.3 → −71.3 (`la` −91.1 / −91.6 / −80.6 / −70.9; what is left
+  at the `d` comes from the voice's 2 ms return, not the burst). Whispered sopranos: `da` −24.2 →
+  −55.1, the whisper itself (`la`) −55.0.
+- The burst alone (a render minus the same without it), in the 10 ms around its peak, against
+  the voice there: above 4.5 kHz +45 to +59 dB → −1 to −23 dB; 1.5–4.5 kHz +7 to +22 dB → −10 to
+  +7 dB (a soft tick within the voice's own band); 29–34 dB under the vowel in all.
+- The demos, at each `d`: the jump of 5–12 kHz in 5 ms frames against the 250 ms before, +40 to
+  +59 dB → +3.7 to +10 dB (`demo_cue`: +19 to +24 → +3 to +6); 5–12 kHz against the whole band in
+  the same frame −16 to −27 dB → −68 to −73 dB (whispered −50 to −66, the whisper's own noise;
+  `demo_cue` −43 to −47, its cellos and timpani). Spectrograms: `png/before_after.png`.
+- Test: `tests/test_studio_singing.py::test_a_d_opens_softly_without_a_hiss_above_the_voice`
+  (basses and sopranos; `la`, `da`, `de` under −50 dB above 5 kHz, a whispered `da` no louder
+  there than a whispered `la`); it fails on the Step 361 burst (−24.6 dB).
+
+### 121.7 Opening titles and end cards for films: `vidgen/title-cards` (Step 364)
+
+**Why.** The owner finds Escapement's opening (`01_winding`: "ESCAPEMENT", a rule and a subtitle
+in the left third, the watch on the right) and its end card (`12_coda`: the same type on the
+right, the watch on the left, "made with schu-video-generator", the link and two italic lines)
+very professional and wants that feeling available to every film.
+
+**What Escapement does** (`examples/escapement/extensions/escapement.js`, `makeText` and the two
+modes): HTML `<div>`s over the WebGL canvas, sized in `vw`/`vh`: title 3.9vw (end 2.7vw) in the
+theme's serif, weight 500, letter spacing 0.26em (end 0.3em) with a soft coloured `text-shadow`;
+a 1 px rule 9vw long, a gradient from gold `#d9b46a` to nothing; the subtitle 1.15vw in the theme's
+body font, upper case, spacing 0.42em, grey-blue (end warm grey); the end card's link in the
+monospace and two italic serif lines. The opening fades in over bars 1.2–2.2 and out over bars
+6.2–7.2 of an 8-bar, 16 s scene, while the spacing opens 0.26 → 0.29em; the end card fades in
+over bars 4–5.4 of the coda and goes with the picture's fade. Card `display: none` while hidden.
+
+**The module** (`data/web/modules/title-cards.js`, 230 lines, no imports, on the import map as
+`vidgen/title-cards` beside the three music-video modules; HTML and CSS, so it serves any `web`
+page, three.js or not): `titleCard(ctx, options)` and `endCard(ctx, options)` are async (they
+wait for the fonts, then measure), return `{element, options, layout, update(t)}`; `update(t)`
+sets the opacity (`cardAlpha`: smoothstep in over `fadeIn` from `start`, hold, smoothstep out;
+`hold: Infinity` holds to the end) and the spacing (`cardSettle`: from the fade in to the end of
+the fade out, or 8 s when held) and returns the opacity. Pure helpers `cardOptions`, `cardAlpha`,
+`cardSettle`, `cardLayout` are exported for tests (Node) and pages.
+
+Decisions:
+
+- **Escapement's numbers are the defaults**, translated from `vw`/`vh` to a unit `k` and a flex
+  column with gaps measured from its stills: title → rule 0.75 × the title's size, rule →
+  subtitle 1.7k, then 1.65k, the end card's lines 4.1k below with line height 1.65. The opening's
+  cool colours and the end card's warm ones are both kept (title / end defaults). Default timing:
+  2 + 2 + 8 + 2 s (in by 4 s, gone by 14 s of a 16 s opening); end card 1 s, 2.5 s fade, held. A
+  still of a test page at 640x360 puts the title, rule and subtitle within 3 px of Escapement's.
+- **The size unit.** `k` = 1 % of the width of a 16:9 frame, or of the height × 16/9 when the frame
+  is wider (21:9 does not grow the type), and 1.7 % of the width in a portrait frame (1.45 %
+  looked too small at 360x640). A line wider than its block is set smaller once, measured after the
+  fonts load (with the spacing at its widest), so a long title fits; italic lines wrap instead.
+- **Placement.** Landscape `left`: x 5.5 %, block 40 % wide, centred at 46 % of the height (the
+  opening's); `right`: x 51 %, 43.5 % wide, 45 % (the end card's). A portrait frame has no third
+  beside a subject, so `left` / `right` go to the lower part (centre at 64 %: above where Shorts
+  put their own text), aligned by `align`; `top` centres at 24 %. Margins 8 % of the width in
+  portrait, 5.5 % in landscape.
+- **The shade.** Not in Escapement (its studio is black there) but asked for: a linear gradient
+  from the block's edge of the frame, `shade` (0.45) black at the edge, 55 % of it at 32 %, none
+  at 62 % (55 % for top / bottom), fading with the card. On a flat near-black picture it shows
+  one-level 8-bit steps (measured: 2 → 5 over 400 px); grain hides them.
+- **Lint.** The cards are page text with `data-vidgen-id` `title-card` / `end-card`, so lint
+  checks them, with `data-vidgen-lint="off:min_font"`: a 1.15k subtitle has a cap height near 1.4 %
+  of the short side, under `min_font`'s 1.8 % error on purpose (Escapement opted out of every
+  rule). Hidden cards are `display: none`, so lint skips them.
+- **No link rule in the docs.** The cookbook says no web address belongs in the opening; where a
+  project link goes on an end card is left to the examples (owner's rule). `endCard` has a neutral
+  `link` line.
+- **Examples unchanged** in this step (Parallel Space v8 will use the module next); Escapement
+  keeps its own `makeText`.
+
+**Proof** (scratch `/home/claude/work/scratch/am364/`): `vidgen still` of Escapement `01_winding`
+at 8 s and `12_coda` at 14 s (640x360, `stills_esc/`), and of a test page (`demo/`, a lit
+torus knot) with `titleCard` at 7 s (640x360) and `endCard` at 9 s (360x640, portrait), in
+`demo/stills/`. Tests: `tests/test_web_title_cards.py` (served by name, no imports; options with
+did-you-mean; timing and layout in 16:9, 21:9 and 9:16 in Node; the docs; one slow Chromium test
+drawing a page with both cards twice at 320x180 and 180x320: same pixels, nothing before the
+title, the title in the left half, the end card later).

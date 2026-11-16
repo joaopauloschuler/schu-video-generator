@@ -1,0 +1,66 @@
+# Parallel Space (v8): v7 with an opening title and an end card from vidgen/title-cards (the light in the right
+# third under the title, in the left third under the end card) and a tenor soloist on the hook in heart and heart2.
+# v7 was the cinematic hybrid of Night Drive. v7 is v6 with its high synth leads replaced by a men's
+# choir (the dawn call, the hook, its low body), real strings, horns and organ, all an octave or two lower, and
+# with a new third scene (03_groove1: the mirror corridor); the other pictures are the same.
+# Music: assets/music/parallel_space.yaml (138.46 BPM, F# minor; one bar = 52 frames at 30 fps), played by
+# vidgen's own synthesizer. Form: dawn 8 | pulse 16 | groove 16 | heart 16 | build 8 | drop 16 | climax 8 |
+# afterglow 8 | coda 8 = 104 bars (180.27 s) plus 4.6 s for the last chord to ring out.
+# Pictures: one three.js module (extensions/ps.js, built on vidgen/three-kit and vidgen/music-time) in eleven
+# web scenes of 8 or 16 bars, so every scene starts on a bar. `music_data` gives the page the score's hits and
+# notes and the mix measured per frame (ctx.music; ctx.music.t0 is the scene's place in the song). No city,
+# no land: space, parallel universes and geometric forms. The kick pulses the brightness of objects, never the zoom.
+title: "Parallel Space"
+output: parallel_space_v8
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 640, height: 360, fps: 30}
+theme: {preset: bold_neon}
+transition: cut
+render: {intermediate: compact, keep_intermediates: false}     # small disk: compact frame clips, deleted once a scene is done
+music: {source: parallel_space, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 192k}
+scenes:
+  - id: 01_dawn
+    type: web_cut
+    duration: 13.8666667
+    params: {script: extensions/ps.js, music_data: &music {tracks: [kick, taiko, tom, boom, clap, snare, crash, tick, roll, frame, hook, lead, trumpet, violins, horn, swell]}, data: {mode: dawn}}
+  - id: 02_pulse
+    type: web_cut
+    duration: 27.7333333
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: pulse}}
+  - id: 03_groove1
+    type: web_cut
+    duration: 13.8666667
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: groove1}}
+  - id: 04_groove2
+    type: web_cut
+    duration: 13.8666667
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: groove2}}
+  - id: 05_heart
+    type: web_cut
+    duration: 27.7333333
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: heart}}
+  - id: 06_build
+    type: web_cut
+    duration: 13.8666667
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: build}}
+  - id: 07_drop1
+    type: web_cut
+    duration: 13.8666667
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: drop1}}
+  - id: 08_drop2
+    type: web_cut
+    duration: 13.8666667
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: drop2}}
+  - id: 09_climax
+    type: web_cut
+    duration: 13.8666667
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: climax}}
+  - id: 10_afterglow
+    type: web_cut
+    duration: 13.8666667
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: afterglow}}
+  - id: 11_coda
+    type: web_cut
+    duration: 18.4666667
+    params: {script: extensions/ps.js, music_data: *music, data: {mode: coda}}

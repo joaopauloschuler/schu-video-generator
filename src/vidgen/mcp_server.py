@@ -74,7 +74,8 @@ scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_i
 poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats, `still` single frames of a web \
 scene's page at exact times without rendering it; \
 `music_template` / `music_patches` / `music_render` / `music_check` write and check original music as score files \
-(assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe). A person shaping music in \
+(assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe), `music_plan` a music \
+video's storyboard and draft from one, `motion_check` watches a rendered video for flicker and black frames. A person shaping music in \
 `vidgen studio` may hand you a session with listening notes: `studio_sessions` -> `studio_read` -> `studio_check` -> \
 `studio_propose` (one line per note; `studio_variations` gives four variations to start from). Every \
 tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
@@ -706,6 +707,22 @@ def build_server(root: Path) -> Any:
         picture = (doc.get("files") or {}).get("spectrogram")
         return answer(doc, [Path(picture)] if picture and images else [])
 
+    @tool("A music video's storyboard from a score file (nothing synthesised): cuts on bar lines (a scene per section, "
+          "long ones split on phrase lines, short ones joined), a colour per section, the moments (drops, breaths, risers) "
+          "and the tracks each scene should react to. out=DIR also writes a draft project there: video.yaml of web_cut "
+          "scenes on those bars, the score, a starter page per scene on vidgen/three-kit and vidgen/music-time (validated).", writes)
+    async def music_plan(
+        ctx: Context,
+        score: Annotated[str, Field(description="the score file, relative to the root (e.g. assets/music/my_theme.yaml), or a project "
+                                                "piece's name (my_theme) or a score bed's (tidewater)")],
+        out: Annotated[str | None, Field(description="folder for the draft project, relative to the root (none: the plan only)")] = None,
+        force: Annotated[bool, Field(description="overwrite the draft's files if they exist")] = False,
+        max_scene: Annotated[float, Field(gt=0, description="split a section longer than this many seconds on a phrase line")] = 16.0,
+        min_scene: Annotated[float, Field(gt=0, description="join a section shorter than this many seconds to the one before")] = 5.0,
+    ) -> Any:
+        options = {"out": str(where(out, "out")) if out else None, "force": force, "max-scene": max_scene, "min-scene": min_scene}
+        return answer(await call(ctx, args_of(["music"], ["plan", piece(score, "score")], options)))
+
     @tool("Measure an audio file, or a project's audio-only render (render with audio_only=true), for agents that cannot "
           "listen: loudness (LUFS), true and sample peak, RMS, noise floor, room tone head and tail, pass / fail per "
           "loudness preset (podcast, audiobook / ACX, broadcast / EBU R128, drama: loudness range, even dialogue, music under the "
@@ -720,6 +737,33 @@ def build_server(root: Path) -> Any:
     ) -> Any:
         options = {"preset": preset, "variant": variant, "preview": preview}
         return answer(await call(ctx, args_of(["audio"], ["check", str(where(target, "target"))], options)))
+
+    @tool("Watch a rendered video for motion faults, for agents that cannot watch it: decodes it at 160 px wide (no render) "
+          "and reports black or blank frames inside a scene, one- or two-frame flashes and drop-outs, flicker, popping regions, "
+          "strobing, frozen stretches and brightness jumps at cuts, each with time, frame, scene and severity (pulses on the "
+          "score's hits and notes are info). Returns the findings' contact strips as pictures (the finding's frames framed in red).", writes)
+    async def motion_check(
+        ctx: Context,
+        target: Annotated[str, Field(description="a video file or a project folder (its rendered video, else its scene clips), relative to the root")] = ".",
+        source: Annotated[Literal["auto", "video", "scenes"], Field(description="a project's rendered video or its scene clips (auto: the video if rendered)")] = "auto",
+        variant: Variant = None,
+        preview: Annotated[bool, Field(description="a project's preview render")] = False,
+        draft: Annotated[bool, Field(description="a project's draft render")] = False,
+        threshold: Annotated[list[str] | None, Field(description="NAME=VALUE changes, e.g. flash=0.12 (docs/CONFIG.md lists them)")] = None,
+        fail_on: Annotated[Literal["error", "warning", "info", "never"], Field(
+            description="lowest severity that makes ok false (default never: the strips come back whatever is found)")] = "never",
+        images: Images = DEFAULT_IMAGES,
+        out: Annotated[str | None, Field(description="folder for the strips, relative to the root (default: build/<quality>/motion "
+                                                     "in a project, build/mcp/motion for a video file)")] = None,
+        image_offset: Offset = 0,
+    ) -> Any:
+        path = where(target, "target")
+        video_file = path.is_file() and path.suffix.lower() not in (".yaml", ".yml")
+        strips = where(out, "out") if out else where(str(WORK_DIR / "motion"), "out") if video_file else None
+        options = {"source": source, "variant": variant, "preview": preview, "draft": draft, "threshold": threshold, "fail-on": fail_on,
+                   "out": str(strips) if strips else None}
+        doc = await call(ctx, args_of(["motion"], ["check", str(path)], options), heavy=True)
+        return paged(doc, [Path(f["strip"]) for f in doc.get("findings", []) if f.get("strip")], image_offset, images)
 
     # ----- outputs ---------------------------------------------------------------------------------
 

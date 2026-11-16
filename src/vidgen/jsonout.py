@@ -834,6 +834,17 @@ def music_template_document(
     return envelope("music", True, warnings, action="template", templates=[dict(t) for t in catalog], **extra)
 
 
+def music_plan_document(plan: Mapping[str, Any], draft: Any = None, problems: Iterable[str] = (), warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen music plan --json`` document: the plan (``plan`` from
+    :func:`vidgen.music_video_plan.plan_dict`) and, with ``--out``, the draft written
+    (``draft`` a :class:`vidgen.music_video_plan.DraftResult`) and its validation problems."""
+    problems = list(problems)
+    extra: dict[str, Any] = {"draft": None}
+    if draft is not None:
+        extra["draft"] = {"root": _path(draft.root), "config": _path(draft.config), "created": draft.created, "files": list(draft.files), "problems": problems}
+    return envelope("music", not problems, warnings, action="plan", **dict(plan), **extra)
+
+
 def listen_page_document(result: Any, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The ``vidgen music page --json`` document (``result`` a ``vidgen.listen.ListenResult``):
     the page, its clips and spectrograms, their size, and whether composed clips were made."""

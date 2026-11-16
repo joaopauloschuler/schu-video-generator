@@ -5,8 +5,8 @@
   ``music:`` cue and scene theme with its ``start``, ``loop``, ``volume``, fades, scene levels and
   ducking, as the join mixes it; no narration, effects or ambience): ``bands`` spectrum bands
   (log-spaced from 40 Hz to 12 kHz), the overall level, the level under 150 Hz and the onset
-  strength, each normalised to 0..1 and smoothed with a fast attack and a slow release, the way
-  the music films "Parallel Space" and "Escapement" did it (their ``make_ps_audio.py``).
+  strength, each normalised to 0..1 and smoothed with a fast attack and a slow release (the
+  measure the music films "Parallel Space" and "Escapement" once made with a script of their own).
 - **Score events** of the score the scene's music cue plays (a project piece or a score bed):
   every track's drum hits and notes (:func:`vidgen.studio.events.score_events`), in song time.
 

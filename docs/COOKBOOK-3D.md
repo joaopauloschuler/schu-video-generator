@@ -112,6 +112,8 @@ model. The walkthrough, which pass to choose and the limits:
   (an object the beat is about is mostly outside the frame) and `three_d_hidden` (mostly behind a
   nearer one) — estimates from spheres, so a tall stand-in counts a little larger than it is.
 - The 3D frames are cached: a caption or title change re-renders the scene but reuses the clip.
+- `vidgen motion check` watches the rendered video for what stills miss: black frames, one-frame
+  flashes, flicker, popping, strobing (section 11).
 
 ## 7. Common mistakes
 
@@ -161,3 +163,200 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   Put light and colour on the hits and keep the camera on the form (sections), never on a beat.
   Worked example: [`examples/signal-fire`](../examples/signal-fire/README.md), an orchestral cue
   and a finished three.js night scene that follows it, track by track.
+
+## 9. Building blocks for music videos
+
+Three music films were drawn as `web` scenes and each wrote the same parts by hand. Those parts
+ship as two modules (reference: [CONFIG, `web`](CONFIG.md#web), "Building blocks for music
+videos"; `vidgen guide web` has a page built from them): `vidgen/music-time` reads the music (the
+score's tracks as arrays, envelopes of hits and notes, the melody's pitch, bar lengths, seeded
+numbers, easing, keyframes) and `vidgen/three-kit` draws light on black (glowing strokes, glass
+crystals, a tesseract, a nebula sky, portals, star fields, flares, shock rings, the melody's
+ribbon, the spectrum's rays, tunnels, a corridor, great rings, swarms, dust). The worked example
+is [`examples/parallel-space`](../examples/parallel-space/README.md): every scene of the film is
+composed from them in `ps.js`.
+
+- **One script, one song time.** All scenes of a film can share one script that picks its set
+  from `data.mode`; each draws from `T = ctx.music.time(t)` alone, so a cut between two scenes on
+  a bar line is invisible and scenes render in any order.
+- **Hits are light.** `hitEnvelope(song.hits.kick, T, 0.1)` into `lightCrystal`, a `Glow`'s
+  `tint`, a flare's intensity or `updateTesseract`'s gain; a camera that moves on a beat, or a
+  shape that grows on it, looks like a fault. Notes leave glints (`updateGlints`), the melody a
+  ribbon (`updateRibbon`), the spectrum rays (`updateSpectrumRays`).
+- **Line widths are pixels.** A `Glow` keeps a width in 720p pixels (`px`) at any size of frame,
+  and grows with nearness only with `world`; it is cut at the camera's near plane, so a segment
+  that passes the camera does not sweep through the frame.
+- **Bloom makes them glow.** The strokes add light; finish with `vidgen/three-finish` (`bloom`
+  with a threshold under 1) or your own composer, as `examples/parallel-space` does.
+- **Seeds, not `Math.random`.** `makeStarField(n, …, seed)`, `rng(seed)` and `hash(i, k)` give the
+  same picture every render; change a seed to try another sky.
+- **Porting your own film to them.** Move a piece only when stills stay the same: `vidgen still`
+  before and after at a few times per scene and compare the PNGs. `examples/parallel-space`,
+  `examples/escapement` and `examples/signal-fire` were ported this way with pixel-identical
+  stills (Parallel Space then moved to `music_data`, whose spectrum is measured from the mix:
+  53.5 dB PSNR or closer); what would have changed a picture (Escapement's watch, studio and
+  finishing) stayed in the film's script.
+- **A line of notes keeps its light.** `melody(track, T)` starts each note's 0.05 s attack from
+  the level the note before has at that moment, so a legato line does not dim for a frame on
+  every note; `noteLevel` starts each note from 0 (a swell per note), `noteEnvelope` from 1 (a glint).
+
+## 10. From a score to a music video
+
+The example films were cut by hand: their authors read the score, found the sections, split the
+long ones, chose a colour and a set for each and the tracks each set answers. `vidgen music plan`
+does that first pass from the score file itself (reference: [CONFIG, "A music video from a
+score"](CONFIG.md#a-music-video-from-a-score-vidgen-music-plan)), without playing it:
+
+```bash
+vidgen music plan assets/music/my_song.yaml                 # read the plan first
+vidgen music plan assets/music/my_song.yaml --out my_video  # then draft the project
+vidgen still my_video --scene 05_drop --at 2 --size 640x360
+```
+
+```text
+scenes (12, cut on bar lines; durations at 30 fps):
+  01_winding         0.00 s  bars 1-8      16.00 s  intro     drift  #477bba / #d88d78
+                    reacts to brightness pulse: boom; glints: box, tock; glow level: brass
+  ...
+  08_orrery_2      112.00 s  bars 57-60     8.00 s  breakdown dust   #4845a5 / #d5ba7c
+                    breath at bar 60 (118.00 s): 3 new notes between 9 and 42
+                    why: longer than 16 s: split at bar 57 (change 0.41)
+```
+
+- **Read the plan before the draft.** Each section's role says why (its name, or its energy
+  against its neighbours); each cut says why (a whole section, too long, the material changes).
+  A section named `drop` that is quiet is still called a drop: rename it or change the role in
+  the draft's `data`.
+- **The cuts are the film's grid.** Every scene lasts whole frames from one bar line to the next,
+  and every page draws from song time (`ctx.music.time(t)`), so the cut between two scenes falls
+  on the beat and nothing jumps. Join or split scenes on bar lines only (a 16-bar section of a
+  120 BPM song: two scenes of 16 s); keep scenes under about 16 s, or give a long one a camera
+  move that changes the view.
+- **One look per role, then make it yours.** The draft gives each role a starter page (a nebula
+  flight for the intro, a tesseract for a verse, a tunnel for a build, a crystal swarm for a drop,
+  rings and rays for the climax, dust for a break, a ribbon for the end), coloured from the colour
+  script: cool and sparse at the start, warm and saturated at the peak, calm at the end. The
+  pages are short and use the kit's parts; replace a set, keep its `update(t)` drawing from `T`.
+- **Reactions are light.** `reactions(ctx.music, data.react)` gives `pulse(T)` (the kick's light),
+  `glow(T)` (the pad), the glints' notes and the rings' hits; the starters feed them to
+  brightness, glints and rings, never to the camera or a size.
+- **What it does not know.** The plan reads notes, not sound: a track made loud by its mix, a
+  lyric, a story. Watch a still per scene (`vidgen still --count 3`), then a `--draft` render.
+
+For the three film scores the plan is close to what their authors cut: `escapement` and
+`signal-fire` exactly (12 and 3 scenes on the same bars), `parallel-space` with two more cuts (it
+splits the 16-bar `pulse` and keeps `heart` and `heart2` apart, where the film shows 16-bar
+scenes); DESIGN §121.2 has the tables.
+
+
+## 11. Checking a music video
+
+A still shows one frame; a music video goes wrong between frames: a shader that returns NaN for
+a moment draws black frames (Parallel Space v7 had 20 of them), an envelope that restarts at zero
+dips the light for one frame, a spinning wheel strobes. Watching three minutes for that is slow and
+easy to miss. `vidgen motion check` watches for you (reference: [CONFIG, "Motion
+check"](CONFIG.md#motion-check-vidgen-motion-check)):
+
+```bash
+vidgen render my_video --draft                   # or the final render you are about to publish
+vidgen motion check my_video --draft             # its rendered video, about 10 s a minute
+vidgen motion check output/my_video.mp4          # any file
+```
+
+- **Read the errors first.** `blank` inside a scene is a frame that failed to draw: open the
+  strip, find the scene and time, then `vidgen still my_video --scene ID --at SECONDS` to see the
+  page at that moment, and look for a division by zero, a `normalize` of a zero vector or a
+  `pow` of a negative number in the shaders.
+- **Warnings are worth a look.** A one-frame `flash` or drop-out that does not fall on a hit or
+  note is often a camera passing through an object, a value jumping on a section boundary or a
+  reaction without its attack; `flicker` is something oscillating every frame or two (a value
+  that changes sign, two layers fighting at one depth); `pop` a part shown for one or two frames;
+  `strobe` a pattern turning about half its repeat a frame (slow it, or blur it).
+- **Info is the music doing its job.** Flashes, pops and pulses that start on the score's drum
+  hits and note starts are listed as info (a pulse that rises on the kick and decays over a few
+  frames is not reported at all). A light that drops for one frame on every note of a line is
+  still worth a look in the strip: an envelope that starts at 0 dims the picture on each note.
+  `frozen` is a held title, or a page whose clock stopped; `cut_jump` a hard change of brightness
+  across a cut, deliberate or not.
+- **Before the final render**, check the scene clips you have: `--source scenes` reads the clips
+  in `build/` (cut to cut) when the whole video is not rendered yet.
+
+On the two finished example films: Parallel Space v7 (fixed) has no blank frames; one warning (a
+tunnel ring passing the camera brightens one frame in `06_build`) and 21 infos (seven cuts with
+jumps in brightness, eleven flashes and dips on notes and hits, among them one-frame dips on the
+`hook` notes in `05_heart`, a small glint, two held frames in the coda; the dips came from the
+kit's `melody` restarting each note's light at 0, fixed since: a still on such a note keeps the
+light of the frames around it); Escapement has none above
+info (seven cut jumps, small glints in its gears, the still opening on the watch while the title
+fades in, and the held ending).
+
+## 12. Opening titles and end cards for films
+
+A film can open the way a cinema film does: the picture comes up from black, and for a few bars a
+small title sits beside its subject before the film begins; at the end the same type comes back
+on the other side. `examples/escapement` does this (its first scene, `01_winding`, and its last,
+`12_coda`). The rules it follows:
+
+- **Asymmetry.** The title block sits in the left or the right third of the frame; the subject
+  (the watch, the object, the landscape) fills the other side. Never centred on the subject, never
+  over it. The end card mirrors the opening: if the title was on the left with the subject on the
+  right, the end card is on the right with the subject on the left.
+- **Restraint.** A small title (about 4 % of the frame's width) with wide letter spacing, a thin
+  rule under it, one quiet subtitle in small capitals. Nothing else on screen: no logo, no
+  credits, no web address in the opening, no animation of the letters beyond a slow opening of
+  their spacing.
+- **Quiet space behind the text.** Dark, calm negative space: the subject is lit, the side the text
+  is on is not. Where the picture is busy there, a soft dark gradient from that edge of the frame
+  calms it (on by default in the ready-made card below).
+- **Slow timing.** Let the picture start alone for a bar or so; fade the title in over the next
+  bars, let it settle while the subject settles, hold it, and fade it out before the first cut
+  (Escapement: in over bars 2–3, held, out over bars 7–8 of an 8-bar opening).
+- **A matching end card.** The same typeface, colours and layout, a little smaller, on the other
+  side: the title, the rule, a subtitle, and the credits small (a line or two in italics). Hold it
+  to the end and let it fade with the picture.
+- **When not to.** Shorts and quick explainers start moving on frame 1: a viewer scrolling past
+  decides in the first second, and a title card there is a second of nothing. Keep a title card for
+  films watched from the start (a music video, a short film, a long explainer's chapter opening),
+  and say the title in the first moving shot otherwise.
+
+**The ready-made card: `vidgen/title-cards`.** A module you import by name gives both cards as
+HTML text over the page (crisp at every size, not drawn by WebGL), laid out as Escapement's, with
+its timing and colours as defaults (reference: [CONFIG, `web`](CONFIG.md#web), "Opening titles and
+end cards"):
+
+```js
+// extensions/film.js: the opening scene (data.mode "opening") and the last ("ending") of one script
+import {titleCard, endCard} from "vidgen/title-cards";
+let card;
+export async function load(ctx) {
+  // ... the three.js scene, its subject on the right in the opening, on the left at the end ...
+  card = ctx.data.mode === "opening"
+    ? await titleCard(ctx, {title: "TIDEWATER", subtitle: "a film in four tides"})            // left; in at 2 s, out by 14 s
+    : await endCard(ctx, {title: "TIDEWATER", subtitle: "music and pictures by ...", start: 8,  // right; holds to the end
+        lines: ["The score is played by vidgen's own synthesizer."]});
+}
+export function frame(t, ctx) {
+  card.update(t);              // its opacity from t alone (fade in, hold, fade out)
+  // ... draw the scene at t ...
+}
+```
+
+- **Time.** `start`, `fadeIn`, `hold`, `fadeOut` in the seconds `frame(t)` gets (defaults: 2, 2,
+  8, 2 for the title, so it is gone by 14 s of a 16 s opening; the end card fades in over 2.5 s
+  from 1 s and holds to the end). On a 120 BPM song a bar is 2 s: put `start` and the fades on bar
+  lines. Pass song time instead if you give `start` in song time.
+- **Place.** `side: "left"` (the title's default) or `"right"` (the end card's); in a portrait
+  frame both go to the lower part (`"top"` for the upper), left- or right-aligned by `align`. Sizes
+  follow the frame (1 % of a 16:9 frame's width, 1.7 % of a portrait frame's), a title too wide for
+  its side is set smaller until it fits, and the margins keep the text off the frame's edges.
+- **Look.** `font` (the theme's serif), `subFont` (the theme's body font), `color`, `subColor`,
+  `accent` (the rule), `glow` (a soft halo, `false` for none), `size`, `tracking` and `settle`
+  (how far the spacing opens while the card shows), `rule`, `shade` (the gradient's strength,
+  `false` for none), and on the end card `link` (one line in the theme's monospace) and `lines`.
+  A misspelt option stops the render with the reason (`unknown option "fadein" (did you mean
+  "fadeIn"?)`).
+- **Lint.** The cards are real text, so `vidgen lint` reads them (by `data-vidgen-id`
+  `title-card` / `end-card`); `min_font` is off for them, since the small subtitle is meant.
+- **Shade on a flat background.** On an even, very dark picture the gradient can show 8-bit steps
+  one level apart; a little grain (three-finish's `grain`) hides them, or set `shade: false` where
+  the picture is already dark there.

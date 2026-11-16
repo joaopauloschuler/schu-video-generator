@@ -5,7 +5,105 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Unreleased (Steps 193–352)
+## Steps 193–365
+
+### Music-video tools (Phase AM, Steps 358–365)
+
+- **Parallel Space v8** (Step 365): `examples/parallel-space` is now the version the owner
+  approved. An opening title and an end card from `vidgen/title-cards` (the light in the right
+  third under the title, in the left third under the end card, which carries the credit and the
+  project's link); in the opening and the breakdown the far choir line, the tenor soloist and the
+  humming choir, the organ's flute stop, the horns, the brass-like swell and the swelling violas
+  are silent, their notes kept so the pictures still follow them; output `parallel_space_v8`.
+
+- **Opening titles and end cards for films** (Step 364): `vidgen/title-cards`, a module for any
+  `web` page: `await titleCard(ctx, {title, subtitle})` and `await endCard(ctx, {title, subtitle,
+  link, lines})`, then `card.update(t)` in `frame`. The look of Escapement's opening and end card:
+  a small title with wide letter spacing in the left or right third, a thin rule, one subtitle in
+  small capitals, a soft dark gradient behind the block; fades in over the first bars, holds and
+  fades out before the first cut (the end card holds to the end). Sized to the frame in 16:9 and
+  9:16 (in a portrait frame the block sits in the lower part), a too-long title set smaller to fit,
+  options checked with a "did you mean". COOKBOOK-3D section 12, "Opening titles and end cards
+  for films", gives the rules (asymmetry, restraint, quiet space, slow timing, a matching end
+  card, and when not to use a title card).
+- **The choir's `d` without a "sht"** (Step 363): a `d` (`da`, `de` …) opened with a hiss up to
+  12 kHz that the hall's reverb carried on ("sht"). Its burst is now a soft tick inside the
+  voice's own band (around 2.4 kHz, little above 3.4 kHz, a third of the level); the `d` is heard
+  from its closure and the voice opening into the vowel. Notes without a `d`, and every choir
+  that uses no syllable, soloist or whisper, sound exactly as before.
+- **Review fixes** (Step 362): `vidgen/music-time`'s `melody` no longer dims the light for a frame
+  at each note of a legato line (a note's attack rises from the level the note before has; in
+  `examples/parallel-space` the `hook`'s light in `heart` and `afterglow` stays steady across its
+  notes). A note above MIDI 127 on an instrument without a written range (e.g. a `bell` with
+  `octave: 8`) no longer stops a render that collects warnings. `vidgen motion check` cannot hang
+  on a file that makes ffmpeg print many errors. MCP tool `music_plan` (`vidgen music plan`). The
+  guide's music-data example reads `tidewater`'s `melody` track (it has no `hook`); the choir's
+  `morph` says it works with `syllable: vowel` only; README Features gains "Music videos".
+
+- **More choir** (Step 361): `choir` sings syllables, still with no words. `syllable` (a track
+  or section setting, or per note: `[la]`, `[na]`, `[mm-ah]`, `[syllable=da]`) starts a note with
+  a soft consonant (`l`, `n`, `m`, `d`: `la lo loo le lee`, `na` …, `ma` …, `da` …) whose formants
+  move into the vowel, a nasal murmur with its antiformant for `m` and `n`, a closure and burst
+  for `d`; or glides between two vowels at `turn` (`ah-oh`, `oo-ah`, `oh-ah`, `ah-ee`, `mm-ah`,
+  `mm-oh`, `mm-oo`). In a slur only the first note gets the consonant unless a note's own mark
+  names a syllable or vowel (`syllable` and `vowel` may now change inside a slur). `soloist:
+  true`: one solo voice, brighter (the singer's formant near 3 kHz), its vibrato wider and later,
+  a scoop into each note, more breath. `whisper` (0 to 1) turns the tone into breath at about the
+  same loudness. Unknown syllables get the nearest name. A choir that uses none of this sounds
+  exactly as before (the film scores and the earlier choir demos render to the same bytes).
+- **`vidgen motion check FILE|PROJECT`** (Step 360): watches a rendered video for what stills
+  cannot show, without rendering anything: a video file, a project's rendered video (scenes from
+  its `timings.json`) or its scene clips in `build/` (`--source scenes`), decoded once at 160 px
+  wide. Reports, with time, frame, scene and severity: black or blank frames inside a scene
+  (error), one- and two-frame flashes and drop-outs, flicker, regions popping in and out for a
+  frame or two, strobing, frozen stretches and brightness jumps at cuts; flashes, pops and pulses
+  on the score's drum hits and note starts are info. A contact strip PNG per finding, `--json`,
+  `--threshold NAME=VALUE`, `--fail-on`; MCP tool `motion_check` returns the strips. On the
+  finished films: Parallel Space v7 has no blank frames and one warning, Escapement none.
+- **`vidgen music plan SCORE`** (Step 359): a music video's scenes proposed from a score file,
+  without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro;
+  from its name or its energy), scenes cut on bar lines (a section over 16 s split on the phrase
+  line where the material changes most, one under 5 s joined to the one before; `--max-scene`,
+  `--min-scene`), drops, breaths, silent bars and risers, a colour per scene from a colour script
+  (cool → warm → calm, tinted by the key's mode) and the tracks each scene follows (low drums
+  pulse the light, accents send rings, melodies leave glints, pads set the glow); `--json`.
+  `--out DIR` writes and validates a draft project: `video.yaml` with the score as `music:`, a
+  `web_cut` scene per cut (whole frames between bar lines, `music_data`, its plan in `data:`),
+  `extensions/web_cut.py`, and a starter page per scene, one look per role, built on the kit
+  (`docs/CONFIG.md`, "A music video from a score"; COOKBOOK-3D section 10). For the film scores
+  the plan cuts `escapement` and `signal-fire` exactly where the films cut, and `parallel-space`
+  at every film cut plus two.
+- `vidgen/music-time` gains camera paths (`orbit`, `pathPoint`, `flyThrough`), a colour script
+  (`colourScript`) and `reactions` (a drafted page's pulse, glow, drop flash, rings and glints).
+
+- **Building blocks for music videos**: two of vidgen's own modules for `web` scenes, imported by
+  name like `vidgen/three-finish`. `vidgen/music-time`: the score's tracks as arrays
+  (`trackArrays`), drum and note envelopes, the melody's gliding pitch, a track's level through
+  its hairpins, bar lengths, seeded numbers, easing, camera keyframes. `vidgen/three-kit`: glowing
+  strokes, glass crystals, a tesseract, a nebula sky, portals, star fields, flares, shock rings,
+  note glints, the melody as a ribbon, spectrum rays, tunnels, a corridor, great rings, swarms,
+  dust, a camera aim (`docs/CONFIG.md`, `web`; `vidgen guide web`; COOKBOOK-3D section 9).
+- The examples use them instead of their own copies, with pixel-identical stills:
+  `examples/parallel-space` (`ps.js` 1,313 → 799 lines), `examples/escapement` (1,238 → 1,187),
+  `examples/signal-fire` (220 → 200), `examples/three-finish`. Parallel Space now reads the music
+  through `music_data`; its `ps_audio.json` and `scripts/make_ps_audio.py` are gone (the same hits
+  and notes; spectrum and level measured from the mix: stills 53.5 dB PSNR or closer).
+
+### Gallery (Steps 356–358.1)
+
+- Step 358.1: the gallery's "Videos on YouTube" section shows only the clickable thumbnails (the title is the alt text); the title/channel lines and the `channel` field are gone.
+- Step 357: each YouTube video in the gallery shows its clickable thumbnail (YouTube's own `img.youtube.com` image, nothing stored in the repository), then its title and channel; `gallery.youtube_id()` reads the id from `youtu.be/<id>` and `youtube.com/watch?v=<id>` links.
+- The scene gallery ends with "Videos on YouTube": links to videos made with schu-video-generator (`YOUTUBE_VIDEOS` in `src/vidgen/gallery.py`); the README points to it.
+
+### "Parallel Space" as an example (Step 355)
+
+- **`examples/parallel-space`**: the 3:05 trance and choir music film "Parallel Space" (v7), source only (score unchanged, `video.yaml`, one three.js module, its audio data file and the script that rebuilds it, the `web_cut` type, README). Listed in the README and the scene gallery ("Pictures and media"); `tests/test_parallel_space_example.py` (validate only).
+
+### Docs (Step 354)
+
+- The music and 3D cookbooks' descriptions (README, `docs/COOKBOOK.md`) name their Phase AL
+  sections; `docs/WINDOWS-CHECK.md` has a step 7 for web stills, compact intermediates and their
+  deletion, the progress line, music data and the orchestral score.
 
 ### "Escapement" as an example (Step 352)
 
@@ -84,7 +182,7 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - **Range warning**: notes outside an instrument's written range are reported by `vidgen music render` and `vidgen music check` (they still play).
 - A duck with `follow: true` follows the hits' dynamics. Every mistake in a mark is an error naming the mark and the nearest word.
 - Existing scores are unchanged: "Escapement", "Parallel Space" and twelve demo scores of Steps 343–345 render to the same bytes as before.
-- Measured, not listened to (DESIGN §120.7). Docs: `docs/CONFIG.md` ("Expressive notes"), `docs/COOKBOOK-MUSIC.md` section 11, the guide ("Expression"). Tests: `tests/test_studio_expression.py`.
+- Docs: `docs/CONFIG.md` ("Expressive notes"), `docs/COOKBOOK-MUSIC.md` section 11, the guide ("Expression"). Tests: `tests/test_studio_expression.py`.
 
 ### Orchestral percussion and a choir for score files (Step 345)
 
@@ -96,7 +194,6 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - Every blow at the same settings is the same samples, and a drum is made once per setting: 256 sixteenths cost about what the `kick` costs.
 - Levels: `taiko` and `bass_drum` are as loud as `kick` and `boom` at `volume: 0`; the choir is as loud as the strings and the brass.
 - Existing scores are unchanged: the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
-- Measured, not listened to (DESIGN §120.6). Demo files for listening were written outside the repository.
 - Docs: `docs/CONFIG.md` (score files: the instrument table, "Orchestral percussion", "Choir"), `docs/COOKBOOK-MUSIC.md` section 10, the guide ("Making music"). Tests: `tests/test_studio_percussion_choir.py`.
 
 ### Bowed strings for score files: `violins`, `violas`, `cellos`, `double_basses` (Step 344)
@@ -108,7 +205,6 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - Settings: `attack` (0.02–4 s: a firm stroke, a smooth one, a swell), `brightness` (0 bowed over the fingerboard, dark; 1 at the bridge, glassy), `vibrato` (cents, delayed), `accent` (the bite of a stroke), `length`, `speed` (tremolo), `decay`, `bow` (rosin noise), `mute` (con sordino), `detune`, `ring`.
 - Their level is that of the brass (a held note about −16.6 LUFS before the piece is levelled). A score that used a `pad` as violins will want the new instrument about 8 dB up.
 - The existing `pizzicato` instrument is unchanged. Existing scores are unchanged: the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
-- Measured, not listened to: nobody has heard these instruments yet (DESIGN §120.5 has the measurements). Demo files for listening were written outside the repository.
 - Limits: no slur or glide between notes, every stroke of a pitch is the same, and the track's `accent:` pattern changes a stroke's level but not its bite.
 - Docs: `docs/CONFIG.md` (score files: the instrument table, "Bowed strings"), `docs/COOKBOOK-MUSIC.md` section 9, the guide ("Making music"). Tests: `tests/test_studio_strings.py`.
 
@@ -121,7 +217,6 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - A setting can now have named values (`registration: flute`; the number works too). An unknown name is reported with the closest one.
 - Their levels match piano chords (a held note about −16.5 LUFS before the piece is levelled; `soft_lead` is −20.4, a `saw_pad` chord −10), so they start at `volume: 0`. A score that used a saw pad as brass will want the new instrument about 6 dB up.
 - A track plays the same note the same way every time; two tracks in unison are two players.
-- Measured, not listened to: nobody has heard these instruments yet. Attack, brightness, pitch at the start, vibrato, level across each range, aliasing at the top of the range, clicks and CPU time were measured (DESIGN §120.4), and spectrograms were looked at. Demo files for listening were written outside the repository.
 - Limits: no slur between notes (each note has its own attack), no valve noise, no flutter-tongue; the organ has no swell box, tremulant or Leslie. In `vidgen studio` the `drawbars` setting shows as a plain slider: type the digits in the score instead.
 - Existing scores are unchanged: no existing instrument, default or cache key was touched, and the scores of the films "Escapement" and "Parallel Space" render to the same bytes as before.
 - Docs: `docs/CONFIG.md` (score files: the instrument table, "Brass and organ"), `docs/COOKBOOK-MUSIC.md` section 8, the guide ("Making music"). Tests: `tests/test_studio_brass_organ.py`.
@@ -161,7 +256,7 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - The frames are always exactly the output's size: the window's height is rounded up to a whole CSS pixel and the rows over are cut off the bottom (under one CSS pixel of the page).
 - Lint judges the output size: 12 px text of a 1280 design is 18 px in a 1920 px frame. **Fixed:** the `cut` of a text declared with `layout(t, ctx)` was not scaled to frame pixels when the page was not drawn 1:1.
 - Without the param nothing changes and stored `web` clips are reused (their keys are the same).
-- Guide: "Porting a page built in fixed pixels" in `vidgen guide web`; `docs/CONFIG.md` `web`; DESIGN §118.17. Not tried on Windows or macOS.
+- Guide: "Porting a page built in fixed pixels" in `vidgen guide web`; `docs/CONFIG.md` `web`; DESIGN §118.17.
 
 ### A project's own fonts: the `fonts/` folder (Step 338)
 
@@ -169,7 +264,7 @@ Three music films made with vidgen ("Parallel Space", "Escapement") reported lim
 - A `web` page that links Google Fonts gets a warning that names the family and says what to do, once per family: `scene 'x': the page asks Google Fonts for "Space Grotesk", but the internet is off during a render, so that text is drawn in a fallback font. Put the font's .ttf, .otf or .woff file in the project's fonts/ folder and remove the link to Google Fonts (see "Using another font" in `vidgen guide web`).`
 - **Fixed:** Manim's cache of laid-out texts is named by the family, so a text first drawn in a fallback font kept that font after the font became available. With files in `fonts/` the cache follows them.
 - Guide: "Using another font" in `vidgen guide web` (two ways to get a font's files, both tried); `docs/CONFIG.md` "Fonts".
-- `fonttools` is now named in the dependencies (every install already had it through fpdf2). Not tried on Windows or macOS.
+- `fonttools` is now named in the dependencies (every install already had it through fpdf2).
 
 ### Relative paths in a `script:` web scene; `render --scene` says what else it renders (Step 337)
 
@@ -1354,8 +1449,8 @@ lint check of narration against the picture), and isometric story places (a vill
 written as a small map, seen from above, where the cut-out characters walk round what is in the
 way, hand things about, open doors and light lamps).
 
-0.3.0 was prepared in Step 132 but never tagged or published, so the work of Steps 133–170
-(Phases M, N, O and P in `tasklist.md`, Step 165 and Phase Q) is part of this release rather than an "Unreleased" section.
+0.3.0 was prepared in Step 132; the work of Steps 133–170
+(Phases M, N, O and P in `tasklist.md`, Step 165 and Phase Q) is part of this release.
 
 ### Behaviour changes and possible breaks
 
