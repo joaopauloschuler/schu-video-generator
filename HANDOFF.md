@@ -27110,3 +27110,14 @@ project), repo work is generic.
 - **Tests**: new `test_committed_gallery_ends_with_the_youtube_videos` (the committed index ends with `youtube_lines()`); ran `tests/test_gallery.py` and `tests/test_docs.py` (default run).
 - **Not verified**: nothing rendered; the links were not opened (no network).
 - **How to test**: `python -m pytest -q tests/test_gallery.py tests/test_docs.py`.
+
+## Step 357 — YouTube thumbnails in the gallery
+
+- **Why**: the owner asked (2026-11-16) for the "Videos on YouTube" entries to show a clickable thumbnail, the usual GitHub README way, with no image files in the repository.
+- **Built**: `src/vidgen/gallery.py` — `youtube_id(url)` takes the 11-character id from `https://youtu.be/<id>` or `https://(www.)youtube.com/watch?v=<id>` (extra query parameters allowed) and raises `VidgenError("not a YouTube video link: ...")` otherwise. `youtube_lines()` now writes, per video, two paragraphs: `[![title](https://img.youtube.com/vi/<id>/hqdefault.jpg)](https://youtu.be/<id>)` and `**[title](https://youtu.be/<id>)** · channel`. Layout chosen: one per paragraph (no HTML table); `hqdefault.jpg` is 480x360, so it shows at a modest size on GitHub.
+- **Index by hand**: the section at the end of `docs/gallery/README.md` replaced with exactly what `youtube_lines()` returns (`vidgen gallery` not run).
+- **Files**: `src/vidgen/gallery.py`, `docs/gallery/README.md`, `tests/test_gallery.py`, `CHANGELOG.md`, `tasklist.md`, `HANDOFF.md`.
+- **Public interface**: `vidgen.gallery.youtube_id(url) -> str` (new).
+- **Tests**: `test_committed_gallery_ends_with_the_youtube_videos` now checks the thumbnail link and the title/channel line; new `test_youtube_id_reads_short_and_watch_links` (both forms, a `?t=` suffix, an extra parameter before `v=`, three bad links). Ran `tests/test_gallery.py` and `tests/test_docs.py` (default run): 90 passed.
+- **Not verified**: nothing rendered; the thumbnails and links were not opened (no network), and the GitHub rendering was not looked at.
+- **How to test**: `python -m pytest -q tests/test_gallery.py tests/test_docs.py`.

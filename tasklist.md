@@ -2112,6 +2112,9 @@ with demo files for the owner to listen to.
 ### Step 356 — Videos on YouTube in the gallery (owner's request, 2026-11-16)
 - [x] A "Videos on YouTube" section at the end of `docs/gallery/README.md`, written by `write_index` from `YOUTUBE_VIDEOS` in `src/vidgen/gallery.py` (title, link, channel; two videos); a README line pointing to it; a test that the committed index ends with it — done, nothing rendered
 
+### Step 357 — YouTube thumbnails in the gallery (owner's request, 2026-11-16)
+- [x] Each entry of "Videos on YouTube" is a clickable thumbnail `[![title](https://img.youtube.com/vi/<id>/hqdefault.jpg)](https://youtu.be/<id>)` followed by the title and channel (one paragraph each, no image files in the repository); `youtube_id()` derives the id from `youtu.be/<id>` or `youtube.com/watch?v=<id>` and raises a clear error otherwise; committed index updated by hand; tests — done, nothing rendered
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

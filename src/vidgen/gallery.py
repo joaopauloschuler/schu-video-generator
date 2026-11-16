@@ -145,13 +145,39 @@ YOUTUBE_VIDEOS: list[dict[str, str]] = [
 ]
 
 
+_YOUTUBE_ID = re.compile(
+    r"https://(?:youtu\.be/|(?:www\.)?youtube\.com/watch\?(?:[^#]*&)?v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])"
+)
+
+
+def youtube_id(url: str) -> str:
+    """The video id of a ``https://youtu.be/<id>`` or ``https://www.youtube.com/watch?v=<id>`` link."""
+    match = _YOUTUBE_ID.match(url)
+    if match is None:
+        raise VidgenError(
+            f"not a YouTube video link: {url!r} (expected https://youtu.be/<id> or https://www.youtube.com/watch?v=<id>)"
+        )
+    return match.group(1)
+
+
 def youtube_lines() -> list[str]:
-    """The index's "Videos on YouTube" section: one Markdown link per video, with its channel."""
+    """The index's "Videos on YouTube" section: per video, a clickable thumbnail, then its title and channel.
+
+    The thumbnail is YouTube's own (``img.youtube.com``), so no image is kept in the repository.
+    """
     if not YOUTUBE_VIDEOS:
         return []
     lines = ["## Videos on YouTube", "", "Videos made with schu-video-generator:", ""]
-    lines += [f"- [{v['title']}]({v['url']}) ({v['channel']})" for v in YOUTUBE_VIDEOS]
-    return [*lines, ""]
+    for v in YOUTUBE_VIDEOS:
+        vid = youtube_id(v["url"])
+        link = f"https://youtu.be/{vid}"
+        lines += [
+            f"[![{v['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)]({link})",
+            "",
+            f"**[{v['title']}]({link})** · {v['channel']}",
+            "",
+        ]
+    return lines
 
 
 DEFAULT_FOOTER = "`vidgen guide cartoons` · `vidgen guide iso` · `vidgen guide platform`"

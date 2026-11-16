@@ -385,4 +385,17 @@ def test_committed_gallery_ends_with_the_youtube_videos() -> None:
     section = "\n".join(gallery.youtube_lines())
     assert index.endswith("|\n\n" + section), "docs/gallery/README.md: write the YouTube section as write_index does"
     for video in gallery.YOUTUBE_VIDEOS:
-        assert f"[{video['title']}]({video['url']}) ({video['channel']})" in section
+        vid = gallery.youtube_id(video["url"])
+        thumb = f"[![{video['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)](https://youtu.be/{vid})"
+        assert thumb in section
+        assert f"**[{video['title']}](https://youtu.be/{vid})** · {video['channel']}" in section
+
+
+def test_youtube_id_reads_short_and_watch_links() -> None:
+    assert gallery.youtube_id("https://youtu.be/J8gljBhqtTo") == "J8gljBhqtTo"
+    assert gallery.youtube_id("https://youtu.be/J8gljBhqtTo?t=30") == "J8gljBhqtTo"
+    assert gallery.youtube_id("https://www.youtube.com/watch?v=tjqrvbYNbGE") == "tjqrvbYNbGE"
+    assert gallery.youtube_id("https://youtube.com/watch?feature=share&v=tjqrvbYNbGE") == "tjqrvbYNbGE"
+    for bad in ("https://vimeo.com/123", "https://youtu.be/short", "https://www.youtube.com/watch?x=1"):
+        with pytest.raises(VidgenError, match="not a YouTube video link"):
+            gallery.youtube_id(bad)
