@@ -2131,6 +2131,34 @@ def cmd_soundfont(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_cache(args: argparse.Namespace) -> int:
+    """``info``: what vidgen's cache folder holds, the baked maps of web pages first (DESIGN.md
+    §123.2); ``clear``: remove the baked maps (pages bake them again when they need them)."""
+    from vidgen.render.disk import size_text
+    from vidgen.soundfont import cache_dir
+    from vidgen.web.baked import FOLDER, LIMIT_ENV, BakedStore, baked_dir, limit_bytes
+
+    limit = limit_bytes()
+    store = BakedStore(baked_dir(), limit)
+    if args.action == "clear":
+        was = store.clear()
+        print(f"removed {was.entries} baked map{'s' if was.entries != 1 else ''} ({size_text(was.bytes)}) from {was.folder}")
+        return 0
+    used = store.usage()
+    state = f"off ({LIMIT_ENV}=0)" if limit == 0 else f"limit {size_text(limit)} ({LIMIT_ENV}), least recently used removed first"
+    print(f"vidgen's cache folder: {cache_dir()}")
+    print(f"    baked maps: {used.entries} ({size_text(used.bytes)}), {state}; `vidgen cache clear` removes them")
+    for folder in sorted(p for p in (cache_dir().iterdir() if cache_dir().is_dir() else []) if p.is_dir() and p.name != FOLDER):
+        size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+        print(f"    {folder.name}/: {size_text(size)} (kept by {CACHE_OWNERS.get(folder.name, 'another command')})")
+    return 0
+
+
+#: Who keeps the other folders of vidgen's cache folder (``vidgen cache info`` names them).
+CACHE_OWNERS: dict[str, str] = {"soundfonts": "`vidgen soundfont`", "studio": "`vidgen studio`; `--clean` removes old renders",
+                                "openrouter": "`vidgen generate models`: the list of video models"}
+
+
 def cmd_generate(args: argparse.Namespace) -> CommandResult:
     """Generated video (DESIGN.md §113): ``models`` lists OpenRouter's video models (public list,
     cached; works offline from the cache); ``ledger`` shows a project's spending and budget."""
@@ -2719,6 +2747,11 @@ def build_parser() -> argparse.ArgumentParser:
     project_arg(p)
     p.add_argument("--force", action="store_true", help="fetch: download it again even if the cached file is there")
     p.set_defaults(func=cmd_soundfont)
+
+    p = sub.add_parser("cache", help="vidgen's cache folder: info shows what it holds (the baked maps of web pages, with their limit), clear removes the baked maps")
+    p.add_argument("action", nargs="?", choices=["info", "clear"], default="info",
+                   help="info (the default): the cache folder, the baked maps' count, size and limit, the other folders; clear: remove the baked maps")
+    p.set_defaults(func=cmd_cache)
 
     p = sub.add_parser("tts", help="generate narration audio (ElevenLabs, or OpenRouter with voice.provider: openrouter)")
     project_arg(p)

@@ -140,6 +140,12 @@ def clip_frame_index(grey: float) -> int:
 
 
 @pytest.fixture(autouse=True)
+def _no_baked_maps_in_the_real_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pages drawn by tests keep no baked maps (DESIGN.md §123.2) unless a test gives its own store: the user's cache folder stays untouched."""
+    monkeypatch.setenv("VIDGEN_BAKED_CACHE_MB", "0")
+
+
+@pytest.fixture(autouse=True)
 def _no_sweep_of_the_real_temp_folder(monkeypatch: pytest.MonkeyPatch) -> None:
     """A test never deletes real ``vidgen-share-*`` folders: tests of the sweep pass their own folder or run in a subprocess."""
     from vidgen.videogen import host_guard

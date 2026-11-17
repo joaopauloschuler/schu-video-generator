@@ -224,10 +224,14 @@ Measured on 2 cores in headless Chromium with software GL (SwiftShader), 1280x72
 the screenshot and the encoder (about 0.2 s a frame at 720p). Budget a film by adding its shots:
 a 60 s film at 30 fps is 1,800 frames, so 0.5 s a frame is 15 minutes, 1.2 s a frame 36 minutes.
 
+The last column is the page's first opening, which bakes the maps; vidgen keeps them (the
+[cache of baked maps](CONFIG.md#baked-maps-vidgen-cache)), so a later page with the same sky or
+world opens faster: "warm" below is measured with the maps already in the cache (Step 380).
+
 | shot | s / frame | to open the page |
 |---|---|---|
-| the sky alone (stars and Milky Way) | 0.24–0.30 | 5–6 s (the cube map's bake; 2 s at 640x360) |
-| a world filling the frame / a close limb | 0.47–0.59 | 2.5–4 s a world (maps 512); 1024: 9–14 s; 2048: 30 s or more |
+| the sky alone (stars and Milky Way) | 0.24–0.30 | 5–6 s (the cube map's bake; 2 s at 640x360); warm 3.5 s |
+| a world filling the frame / a close limb | 0.47–0.59 | 2.5–4 s a world (maps 512); 1024: 9–14 s; 2048: 30 s or more; warm 2048: 6.3 s |
 | a ringed giant | 0.47 | 2.5 s |
 | a sun as a disc / a sunrise over a limb | 0.38–0.43 | 8–9 s with the world |
 | a craft a third of the frame high / filling it | 0.38–0.43 / 0.6–0.9 | 1.5 s for the first craft |
@@ -238,12 +242,13 @@ a 60 s film at 30 fps is 1,800 frames, so 0.5 s a frame is 15 minutes, 1.2 s a f
 | an asteroid field / a belt round a world | 0.30–0.33 | |
 | a comet | 0.23–0.25 | |
 | an aurora on an Earth-like world | 0.48–0.59 | |
-| `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s |
+| `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 
 Motion blur (`finish: {motion_blur: 3}`) multiplies a frame by its samples; depth of field adds
 about a tenth. A page opens once per render chunk (and per `vidgen still`); a page may take 90 s
-to open (a 2048 map takes 30 s on 2 cores).
+to open (a 2048 map takes 30 s on 2 cores; the first page that bakes it about 10 s more, to keep
+it; later pages 6 s).
 
 ## 5. The checks to run
 
@@ -282,7 +287,7 @@ to open (a 2048 map takes 30 s on 2 cores).
 | `the camera turns 16.7 degrees in one step: a jump in the move` | two moves meet badly or a move starts at a kink | give `cut: true`, or start the next move where the last one ends |
 | `camera[2] (follow) does not start where camera[1] (arc) leaves the camera at 4.00 s (the camera jumps ...` (the page stops) | two moves hand over without a cut | `cut: true`, or start the second move where the first ends |
 | stars like small crosses, thin rings broken into dots | FXAA in a finish of your own | `finish: {antialias: none}` (the `space` default) |
-| `did not return within 90 s` at load | very large maps (`size: 2048` on several worlds) | `size: 1024`, or fewer worlds in the scene |
+| `did not return within 90 s` at load | very large maps (`size: 2048` on several worlds) | `size: 1024`, or fewer worlds in the scene (a world already in the cache of baked maps loads in about 6 s) |
 | a globe that strobes | it turns too far a frame under the speed-up | `spin: locked` or `spin: 30` (seconds a turn) |
 
 ## 7. Where the numbers come from

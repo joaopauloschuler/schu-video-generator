@@ -55,7 +55,7 @@ def test_the_modules_are_served_by_their_import_names() -> None:
         assert vidgen_file(f"modules/{file}") == MODULES / file
         assert len(current_loaded(Path("."), [f"__vidgen__/modules/{file}"])[f"__vidgen__/modules/{file}"] or "") == 64
     source = MODULE.read_text(encoding="utf-8")
-    assert STATIC_IMPORT.findall(source) == ["three", "vidgen/music-time", "vidgen/space-scale", "vidgen/space-sky-stars"]
+    assert STATIC_IMPORT.findall(source) == ["three", "vidgen/music-time", "vidgen/space-scale", "vidgen/baked", "vidgen/space-sky-stars"]
     assert "Math.random" not in source and "Date.now" not in source and "performance.now" not in source
     assert MODULE not in INIT_FILES and "space-sky" not in engine_id()
 
@@ -147,7 +147,7 @@ def _run_in_node(tmp_path: Path, body: str, data: object = None) -> list:
     (three / "package.json").write_text(json.dumps({"name": "three", "type": "module", "exports": {".": "./three.module.js"}}), encoding="utf-8")
     ours = tmp_path / "node_modules" / "vidgen"
     ours.mkdir()
-    names = ("music-time", "space-scale", "space-sky", "space-sky-stars")
+    names = ("music-time", "baked", "space-scale", "space-sky", "space-sky-stars")
     for name in names:
         (ours / f"{name}.js").symlink_to(MODULES / f"{name}.js")
     (ours / "package.json").write_text(json.dumps({"name": "vidgen", "type": "module", "exports": {f"./{n}": f"./{n}.js" for n in names}}), encoding="utf-8")

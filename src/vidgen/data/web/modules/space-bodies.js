@@ -25,6 +25,7 @@
 // No real maps: every surface is an invented lookalike in character and colour.
 import * as THREE from "three";
 import {rng} from "vidgen/music-time";
+import {baked} from "vidgen/baked";
 
 export const VERSION = 1;
 const RAD = Math.PI / 180, TAU = Math.PI * 2;
@@ -818,13 +819,21 @@ function lineTexture(rows, depth, mipmaps) {
   return t;
 }
 
-// the two maps of a body: {A, B} cube render targets with mipmaps
+// the two maps of a body: {A, B} cube render targets with mipmaps, baked once (kept between pages by
+// vidgen/baked: the type, the size and the bake's inputs are all the bake reads of the options)
 function bakeBody(renderer, o, inputs) {
   const kind = KINDS[o.type], size = o.size;
   const float = renderer.extensions.has("EXT_color_buffer_float") && renderer.extensions.has("OES_texture_float_linear");
-  const data = (n) => new THREE.WebGLCubeRenderTarget(n, {type: float ? THREE.FloatType : THREE.HalfFloatType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: false});
   const map = () => new THREE.WebGLCubeRenderTarget(size, {type: THREE.UnsignedByteType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearMipmapLinearFilter, generateMipmaps: false, depthBuffer: false});
-  const K = [0, 1, 2].map(() => data(Math.min(COARSE_SIZE, size))), fields = data(size), A = map(), B = kind.features.relief || kind.features.clouds ? map() : null;
+  const [A, B] = baked(renderer, "space-bodies/surface", {type: o.type, size, float, inputs}, {
+    targets: () => [map(), kind.features.relief || kind.features.clouds ? map() : null],
+    draw: ([A, B]) => drawBody(renderer, kind, size, float, inputs, A, B),
+  });
+  return {A, B};
+}
+function drawBody(renderer, kind, size, float, inputs, A, B) {
+  const data = (n) => new THREE.WebGLCubeRenderTarget(n, {type: float ? THREE.FloatType : THREE.HalfFloatType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: false});
+  const K = [0, 1, 2].map(() => data(Math.min(COARSE_SIZE, size))), fields = data(size);
   const ramp = inputs.ramp ? lineTexture(inputs.ramp, 1, false) : null;
   const face = {uRight: {value: new THREE.Vector3()}, uUp: {value: new THREE.Vector3()}, uFwd: {value: new THREE.Vector3()}, uSize: {value: size},
     uOff: {value: new THREE.Vector3(...inputs.offset)}, uP: {value: inputs.numbers}, uC: {value: inputs.colors.map((c) => new THREE.Vector3(...c))}, uS: {value: inputs.spots.map((s) => new THREE.Vector4(...s))},
@@ -860,7 +869,6 @@ function bakeBody(renderer, o, inputs) {
   renderer.setRenderTarget(target, active, level);
   renderer.xr.enabled = xr; renderer.autoClear = autoClear;
   for (const x of [coarse, first, paintA, paintB, geometry, fields, ramp, ...K]) if (x) x.dispose();
-  return {A, B};
 }
 
 // ---------- drawing ----------

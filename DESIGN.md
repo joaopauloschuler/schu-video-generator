@@ -274,7 +274,8 @@ src/vidgen/
                           # layout.py (the page's text as layout objects, for lint; §118.12), still.py
                           # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8), parts.py
                           # (`vidgen parts`: the parts files read, the contact sheet drawn, §122.5), space_names.py
-                          # (the space modules' names and options read from their source, §122.12)
+                          # (the space modules' names and options read from their source, §122.12), baked.py
+                          # (the cache of baked maps: key, store, limit; §123.2)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -365,7 +366,8 @@ src/vidgen/
                           # space scene (§122.8); space-phenomena.js `vidgen/space-phenomena`: black hole, wormhole, warp,
                           # asteroids, comet, aurora (§122.9); space-craft.js `vidgen/space-craft`: the spacecraft kit (§122.10);
                           # space-camera.js `vidgen/space-camera`: camera moves for space scenes (§122.11); space-scene.js
-                          # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12)
+                          # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12); baked.js
+                          # `vidgen/baked`: pictures baked once and kept between pages in vidgen's cache (§123.2)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -28157,3 +28159,108 @@ its own for scenes drawn in a web page.
   without rendering; the tiny render test checks `web_index`. Not changed: which types
   `vidgen validate` warns about when Chromium is missing (`browser.chromium.BROWSER_SCENE_TYPES`,
   `3d` and `web`; `space` scenes are not in it).
+
+### 123.2 The cache of baked maps (Step 380)
+
+- **Why.** Pages bake pictures before their first frame: a planet's two surface cube maps
+  (`vidgen/space-bodies`, §122.7: about 30 s for `size: 2048` on 2 cores in software GL) and the
+  sky's cube map (`vidgen/space-sky`, §122.6: 4.5 s of the 5.6 s a 1024 sky takes). Every page is
+  new (each `web` / `space` scene, each `vidgen still`, draft and render, each parallel job), so
+  the same map was baked again every time. Later steps of Phase AO bake more (the air's lookup
+  tables, Step 381; terrain, 384; a giant ship's detail maps, 389).
+- **Every bake in the modules** (read at Step 380). Cached: `space-bodies` (the maps A and B,
+  RGBA 8-bit cube maps with mipmaps; the coarse and field cubes are intermediate and not kept)
+  and `space-sky` (the cube, RGBA half float with mipmaps). Not cached: the CPU-made textures of
+  `space-light` (a corona of six 256 faces), `space-phenomena` (a 256 noise texture, lanes, a
+  heat ramp, a disc), `space-craft` (256 tiling panel maps, made once per page and shared) and
+  the ring profile (1024 texels) — each costs well under a second; `space-sky`'s stars (69,000 from
+  the seed, 0.55 s, CPU arrays), its `background` and `environment` (drawn from the sky on first
+  use) and `space-craft`'s reflection cubes (drawn from the scene round the craft: they depend on
+  the scene, so they have no key); `three-kit`'s and `three-finish`'s nebula and studio bakes
+  (small; changing those modules would change the key of every 3d-kit page).
+- **One helper, `vidgen/baked`** (`data/web/modules/baked.js`, on the import map):
+  `baked(renderer, name, inputs, {targets, draw})` returns the render targets `targets()` makes
+  (2D or cube, RGBA, unsigned byte / half float / float; `null` for one not needed), filled by
+  `draw(targets)` or from the cache. Synchronous, so `planet()` and `spaceSky()` stay
+  synchronous. `inputs` is every input that changes the pixels besides what vidgen adds: the
+  bodies pass `{type, size, float, inputs: bakeInputs(o)}` (all the bake reads), the sky
+  `{size, seed, color, band, milkyWay, dust, limit, density, galaxies, nebulae}`. A later bake
+  (Steps 381, 384, 389) calls it the same way; a project's script may too, with a version of its
+  own bake code in `inputs`. Also exported, pure and tested in Node: `inflate`, `halfBits`,
+  `joinPlanes`, `layout`.
+- **The key** (`web/baked.py` `bake_key`): SHA-256 of canonical JSON (sorted keys) of `name`,
+  `inputs`, the parts' layout (target, face, width, height, type, bytes), the GL renderer
+  (`RENDERER`, `VERSION`, shading language, the sorted extension list), `vidgen/baked`'s
+  `VERSION`, `code_digest()` (every file in `data/web/modules/` and the bundled three.js: any
+  change of vidgen's page code is a new key), `engine_id()` (vidgen's page files, Chromium's
+  flags, time zone, locale, the Playwright version that pins Chromium and SwiftShader) and
+  `STORE_VERSION`. Values cross as JSON (a number keeps all its bits; `-0` and `0` are one key).
+- **How the bytes travel.** The page asks with a synchronous `XMLHttpRequest` to vidgen's own
+  origin, `POST __vidgen__/baked/lookup` (`WebPage._serve_baked`; never a loaded file, so no
+  scene's key sees it). *Miss*: the page draws, reads level 0 of each face back (`readPixels`; a
+  half-float target read as float and made half again by `halfBits`, exact for every half),
+  keeps the bytes as Blobs in `globalThis.__vidgenBaked` and says `POST <key>/ready`; when the
+  hook returns, `WebPage._store_baked` reads each Blob with CDP `IO.resolveBlob` / `IO.read`
+  (36 MB/s here; a request body through Playwright's route was 6 MB/s) into a staged folder and
+  commits it. *Hit*: `GET <key>/<n>` per face, answered with `route.fulfill(path=...)`; the page
+  inflates (raw deflate, `inflate`), joins the planes of a float type (`joinPlanes`), uploads
+  with `texSubImage2D` into the target's own texture and, when the bake had mipmaps, calls
+  `generateMipmap` — the call three.js makes after a bake, on the same bytes. A part that does
+  not arrive or does not inflate: the page says `POST <key>/damaged` (vidgen removes the entry),
+  bakes and stores it anew. Off, or anywhere but vidgen's pages (Node, a browser): `draw` runs.
+- **The store** (`BakedStore`): `<cache folder>/baked/<key>/` (`VIDGEN_CACHE_DIR`, else
+  `~/.cache/vidgen`, `%LOCALAPPDATA%\vidgen`, `~/Library/Caches/vidgen`), one file per face
+  (`<n>.z`: zlib level 1 raw deflate; a half float's or float's bytes split into byte planes
+  first, a third smaller) and `meta.json` (sizes, stored sizes, SHA-256 of each file, the page's
+  `meta`: which targets had mipmaps). Written into `baked/.staging/` and renamed into place: two
+  pages or render jobs baking one map at once both bake, the second rename finds the folder and
+  drops its copy, and no reader ever sees half an entry. Before a hit vidgen checks every file
+  against its hash (about 0.1 s for a 2048 planet's 50 MB); a damaged entry is removed and baked again.
+  **Limit** 2000 MB by default (`VIDGEN_BAKED_CACHE_MB`; counted on disk, after compression);
+  after each store the least recently used entries go (a hit touches `meta.json`); an entry is
+  not stored when it is larger than the limit or would leave under 500 MB free on the disk;
+  staged copies left by stopped pages go after an hour. **Off**: `VIDGEN_BAKED_CACHE_MB=0` (an
+  environment variable like `VIDGEN_CACHE_DIR`: the cache serves every command that opens a page,
+  not one project). **Commands**: `vidgen cache` / `vidgen cache info` (the cache folder, the
+  baked maps' count, size and limit, the other folders and who keeps them) and
+  `vidgen cache clear` (removes the baked maps only; the SoundFont, studio sessions and model
+  list stay). Before Step 380 vidgen had no cache command.
+- **Same pixels.** Proved with `vidgen still` at 320x180 (PNG bytes compared, cache off vs cold
+  vs warm): a 512, a 2048 and a moon-like planet, the seeded and the real sky, `examples/outbound`
+  scenes `01_dawn` and `02_depart`, and the default sky at 1280x720 — all byte-identical. The
+  slow test draws a planet, a sky and a float target of the page's own off, cold, warm, with a
+  damaged entry and switched off by the environment: the same pixels and floats every time.
+- **Measured** (2 cores, SwiftShader; "page ready" of `vidgen still`, off / cold / warm):
+
+  | Page | Off | Cold (bake + store) | Warm |
+  |---|---|---|---|
+  | Earth-like world, `size: 2048` (201 MB of maps, 50 MB stored) | 30.5 s (bake 29.7 s) | 40.0 s | 7.1 s (6.3 s) |
+  | Earth-like world, default size (256 at 320x180) | 1.9 s | 2.1 s | 1.1 s |
+  | Moon-like world, default size (256 at 320x180) | 2.1 s | 2.4 s | 1.2 s |
+  | Default sky at 1280x720 (cube 1024, 50 MB half float, 22 MB stored) | 6.4 s (sky 5.6 s) | 9.9 s | 4.5 s (sky 3.5 s) |
+  | Default sky at 320x180 (cube 512) | 2.8 s | 3.8 s | 2.3 s |
+  | `examples/outbound` `02_depart` at 320x180 (Earth 1024, sky, ship) | 13.7 s | 17.5 s | 7.6 s |
+
+  Warm, the 2048 planet's time is the bytes crossing from vidgen to the page (sync requests
+  through Playwright's route: about 16–19 MB/s) and inflating them (60–150 MB/s in V8); the
+  sky's 3.5 s include its 0.55 s of stars and its shaders. Memory: a part (one face) at a time
+  in the page and in Python, the Blobs of one bake in the page until vidgen reads them (201 MB
+  for a 2048 planet, 50 MB for a 1024 sky).
+- **Cache keys of scenes.** No scene's key depends on the cache (the requests are not loaded
+  files, the setting is not in any key). But `space-bodies.js` and `space-sky.js` changed and a
+  page importing them now also loads `baked.js`, so every scene whose page imports either module
+  (every `space` scene, the outbound example, a `web` page using them) draws its frames clip once
+  more after Step 380 — unavoidable, as the modules must call the cache — with the same pixels.
+  Other pages (three-finish, three-kit, music films without these modules, `3d`) keep their keys.
+- **Tests** (`tests/test_web_baked.py`): the module and its imports; the limit from the
+  environment; the key changes with each input, the engine and the code digest, not with key
+  order; part sizes checked; an entry stored whole and read back (planes, deflate); damaged
+  (flipped, cut, unreadable record) entries removed; two pages storing one key (the second
+  loses); least-recently-used eviction and stale staged copies; `vidgen cache` and
+  `vidgen cache clear`; `WebPage`'s answers to every request (status, lookup miss and hit, part,
+  ready, unknown paths, off, a full disk or limit), never in `loaded`; in Node: `inflate` of
+  Python's raw deflate at levels 0, 1, 6, 9, damaged streams refused, every half survives
+  `halfBits`, `joinPlanes`, `layout`, no vidgen means a bake; `slow`, in Chromium: the pixels off /
+  cold / warm, a damaged part (hash) and an unusable part (inflate) baked again, the cache off.
+  `tests/conftest.py` sets `VIDGEN_BAKED_CACHE_MB=0` for every test: no test writes the user's
+  cache folder unless it passes its own store.

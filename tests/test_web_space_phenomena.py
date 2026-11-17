@@ -69,7 +69,7 @@ def _run_in_node(tmp_path: Path, body: str) -> list:
     (three / "package.json").write_text(json.dumps({"name": "three", "type": "module", "exports": {".": "./three.module.js"}}), encoding="utf-8")
     ours = tmp_path / "node_modules" / "vidgen"
     ours.mkdir()
-    names = ("music-time", "space-scale", "space-sky", "space-sky-stars", "space-phenomena")
+    names = ("music-time", "baked", "space-scale", "space-sky", "space-sky-stars", "space-phenomena")
     for name in names:
         (ours / f"{name}.js").symlink_to(MODULES / f"{name}.js")
     (ours / "package.json").write_text(json.dumps({"name": "vidgen", "type": "module", "exports": {f"./{n}": f"./{n}.js" for n in names}}), encoding="utf-8")

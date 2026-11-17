@@ -3278,7 +3278,9 @@ A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on
   space scene per cut (a world by the scene's colour, a move by its role, sunrise on a section start).
 - **Cost** (2 cores, software GL, 720p): a world through the finish about 0.3 to 0.5 s a frame, a craft filling the
   frame up to 0.9 s, a black hole filling the frame about 1 s, each page 3 to 9 s to open (bakes its maps). Render
-  `--draft` first.
+  `--draft` first. vidgen keeps the baked maps of worlds and skies in its cache folder, so a later page with the
+  same world or sky (another scene, still or render) opens faster with the same pixels: `02_depart` of
+  `examples/outbound` 13.7 s, then 7.6 s (`vidgen cache` shows and clears it; `VIDGEN_BAKED_CACHE_MB=0` is off).
 
 <!-- topic: three-d (also: 3d, threejs, three.js, 3d-scenes, stand-ins, standins, guide-passes) -->
 ## 3D: simple scenes with shapes and stand-ins
@@ -3637,7 +3639,9 @@ const update = (t) => { space.update(t, view(t)); saturn.update(t); };
   `body.problems()`; choose `spin: "locked"` or `spin: 40` (seconds of film per turn) and say so
   in the film's notes; the default is the true turning.
 - A body takes 2 to 4 s to make and 0.05 to 0.2 s a frame at 720p; `size: 1024` for a close-up
-  (about 10 s to make), `size: 256` for bodies that stay small. No landing: close to the ground
+  (about 10 s to make; `size: 2048` about 30 s, then 6 s on later pages from vidgen's cache of
+  baked maps), `size: 256` for bodies that stay small. A bake of your own can use that cache too:
+  `baked(renderer, name, inputs, {targets, draw})` from `vidgen/baked` (CONFIG.md, "Baked maps"). No landing: close to the ground
   the surface is soft. Reference: CONFIG.md `web`, "Planets, moons and rings".
 
 **Suns and light: `vidgen/space-light`.** Do not light a space scene by hand, and do not draw a

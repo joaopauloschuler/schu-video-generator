@@ -7449,7 +7449,8 @@ const finish = new Finish(renderer, scene, camera, ctx, {antialias: "none"});   
   sprites: 0.25–0.4 s a frame at 720p when a third of the frame high, about 1.1 s when it fills
   the frame; lower `clouds` to trade smoothness for time.
 - **Cost** (2 cores, software GL, 720p): 5–6 s to make the sky once (2 s for a frame under 600 px
-  tall), then about 0.1 s a frame. **No shimmer**: stars are spots at least 0.62 px wide placed to
+  tall), then about 0.1 s a frame; with its cube map in the [cache of baked maps](#baked-maps-vidgen-cache)
+  (any later page with the same sky) 3.5 s. **No shimmer**: stars are spots at least 0.62 px wide placed to
   a fraction of a pixel; slow pans measure 0.015–0.022 on `vidgen motion check`'s shimmer scale
   (warning from 0.2). In a small frame (a draft, a tile) the stars are dimmed, as in a photograph
   scaled down.
@@ -7869,8 +7870,10 @@ const update = (t) => { space.update(t, view(t)); saturn.update(t); };
   (the depth is written per pixel). With `vidgen/space-scale` use its `split` (default) or
   `single` depth, not a logarithmic depth buffer.
 - **Cost** (2 cores, software GL, 720p): a body takes 2.2 to 4 s to make (maps of 512; 1.4 s at
-  256, about 9.5 s at 1024), then 0.05 to 0.2 s a frame (a close limb over half the frame 0.2 s;
-  rings filling the frame 0.3 s).
+  256, about 9.5 s at 1024, about 30 s at 2048), then 0.05 to 0.2 s a frame (a close limb over half
+  the frame 0.2 s; rings filling the frame 0.3 s). The maps are baked once and kept in the
+  [cache of baked maps](#baked-maps-vidgen-cache): a later page with the same world loads them
+  (a 2048 world in 6.3 s instead of 30 s; a 256 one in 0.2–0.3 s instead of 1–1.2 s).
 - **Limits.** No landing (a texel is 20 km on an Earth-sized world at 512); the limb is a smooth
   circle; no eclipse shadows of moons; a body under 1.5 px of radius is one steady spot with the
   disc's light. An orthographic camera is not supported.
@@ -16641,6 +16644,44 @@ render:
 - **A long WebGL film on a small disk**: `render: {intermediate: compact, keep_intermediates:
   false}` keeps one or two scenes' frames at a time (a 16-second 720p scene: about 90 MB
   compact, 420 MB lossless) instead of the whole film's; `--max-scenes N` still renders in steps.
+
+## Baked maps (`vidgen cache`)
+
+Pages bake some pictures before their first frame: a world's surface maps (`vidgen/space-bodies`;
+about 30 s for `size: 2048`) and the sky's cube map (`vidgen/space-sky`; 4.5 s at 720p). vidgen
+keeps what was baked in its cache folder and gives it to the next page that bakes the same thing
+(another scene, `vidgen still`, a draft, a render, a parallel job, another project): the pictures
+are the same bit for bit, only faster. Nothing to configure; nothing in `video.yaml`.
+
+| Page (2 cores, software GL; "page ready" of `vidgen still`) | Without the cache | First page (bakes and stores) | Later pages |
+|---|---|---|---|
+| A world of `size: 2048` | 30.5 s | 40.0 s | 7.1 s |
+| The default sky at 1280x720 | 6.4 s | 9.9 s | 4.5 s |
+| `examples/outbound`, scene `02_depart`, at 320x180 | 13.7 s | 17.5 s | 7.6 s |
+
+- **Where**: `baked/` in vidgen's cache folder (`VIDGEN_CACHE_DIR`, else `%LOCALAPPDATA%\vidgen`
+  on Windows, `~/Library/Caches/vidgen` on macOS, `~/.cache/vidgen` on Linux), one folder per
+  map, compressed (a 2048 world: 50 MB; a 1024 sky: 22 MB).
+- **Size**: at most 2000 MB; above that the maps used least recently are removed. An environment
+  variable sets the limit in MB: `VIDGEN_BAKED_CACHE_MB=500`; `VIDGEN_BAKED_CACHE_MB=0` switches
+  the cache off (every page bakes, as before Step 380). A map is not kept when it would leave
+  under 500 MB free on the disk.
+- **Commands**: `vidgen cache` (or `vidgen cache info`) shows the cache folder, the baked maps'
+  count, size and limit, and the other folders in it (the SoundFont, studio sessions, the model
+  list); `vidgen cache clear` removes the baked maps (the next pages bake them again).
+- **Keys**: a map is found again only when everything it was made from is the same: its options
+  (seed, type, size, colours...), vidgen's page modules and three.js (a new vidgen version bakes
+  anew), Chromium and its GL. The cache is in no scene's cache key: switching it off or clearing
+  it renders nothing again.
+- **Safe**: a map is written whole and then put in place, so two scenes or render jobs baking the
+  same map at once both work (one copy is kept); each file is checked against its SHA-256 before
+  use, and a damaged or missing one is baked again, never an error.
+- **In your own script**: `import {baked} from "vidgen/baked"` keeps a bake of yours the same way:
+  `const [map] = baked(renderer, "my-sky", {version: 1, seed, size}, {targets: () => [new
+  THREE.WebGLCubeRenderTarget(size, {type: THREE.HalfFloatType})], draw: ([map]) => { ... }})`.
+  `targets()` makes RGBA render targets (2D or cube; 8-bit, half float or float), `draw` fills
+  them (mipmaps included); the inputs must name everything the pixels depend on, a version of
+  your bake code among them (DESIGN §123.2).
 
 ## Parallel renders (`--jobs`)
 

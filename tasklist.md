@@ -2252,7 +2252,7 @@ bodies or compressed distances stated); an algorithmic sky by default, a real on
 - [ ] `follow` on a radial flight (after an escape burn) rolls and loses the world; no view keeps the world behind the craft — Outbound's departure shows it
 - [ ] `spiralGalaxy` arms thin and sparse; the seed-4 sky's straight dark edge in one place; the Moon's hard-edged maria under planet-shine — seen in stills, not looked into
 - [ ] No ground below a world map's texel (a close limb is soft at 512; 1024 costs 8 s more to open) and no local surface patch for a zoom to the ground (Steps 368, 371)
-- [ ] The world maps are baked by every page (each `vidgen still` and render chunk): a cache between pages needs a page-to-vidgen channel for about 50 MB a 1024 world — the limit was raised instead
+- [x] The world maps are baked by every page (each `vidgen still` and render chunk): a cache between pages needs a page-to-vidgen channel for about 50 MB a 1024 world — the limit was raised instead (done in Step 380: the cache of baked maps, DESIGN §123.2)
 - [ ] `vidgen motion check`: crawl of stars that keep their light while stepping whole pixels, and shimmer of under half the stars, are not found; a fly-through of point stars is not judged for shimmer (Step 378 chose no false warnings)
 - [ ] Ordinary meshes partly hide the glare (craft by balls; an asteroid field's instanced rocks do not); rocks cast no shadows on each other, a world's shadow does not fall on a belt or on rings; planet-shine is one unshadowed light — each a measured cost not yet paid
 - [ ] A plume's depth is its cone's; shadow maps are one 2048 map over a craft's box; a craft's reflections are baked once a shot — for craft filling the frame for long
@@ -2274,7 +2274,7 @@ forests), parametrized space plane parts, giant ships kilometres long, a separat
 scenes, a cache for baked maps and the owner's seven orchestral Shorts as examples (DESIGN §123).
 
 - [x] Step 379 — A separate gallery for web scenes: `docs/gallery/web/` (20 MB) for the types drawn in headless Chromium (`NarratedScene.drawn_in_browser`: `3d`, `web`, `space`), linked both ways; the main gallery back to 16.5 MB; the YouTube section stays in the main one (DESIGN §123.1)
-- [ ] Step 380 — A cache for baked maps (planet surface maps, sky cube maps): keyed by every input, deterministic, bounded, cleared by the cache commands, pixel-identical with and without it
+- [x] Step 380 — A cache for baked maps (planet surface maps, sky cube maps): keyed by every input, deterministic, bounded, cleared by the cache commands, pixel-identical with and without it (`vidgen/baked` + `web/baked.py`: sync requests on the page's own origin, Blobs read back over CDP, compressed entries in `<cache folder>/baked/`, 2000 MB LRU, `VIDGEN_BAKED_CACHE_MB`, `vidgen cache [info|clear]`; a 2048 world 30 s → 7 s, Outbound `02_depart` 13.7 s → 7.6 s; DESIGN §123.2)
 - [ ] Step 381 — The sky from inside an atmosphere: Rayleigh + Mie scattering, day, sunset, twilight, aerial perspective, Earth-like and Mars-like presets, continuous with the limb glow seen from orbit
 - [ ] Step 382 — Ocean: waves at several scales from a seed, sun glitter, sky reflection, foam, the curved horizon; right from 50 m and from 20 km
 - [ ] Step 383 — Cloud decks and gas giant atmospheres: layered decks, towers, lightning on `ctx.music`, a gas giant with no ground; cost measured, cheap variants

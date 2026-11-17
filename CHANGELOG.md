@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–379
+## Steps 193–380
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -14,6 +14,14 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   the [scene gallery](docs/gallery/README.md), which keeps the videos on YouTube. `vidgen gallery`
   puts every type drawn in headless Chromium there, a new one included; `--json` names the web
   index (`web_index`) and says which entries are in it; the MCP server serves its pages too.
+- **A cache for baked maps** (Step 380): the surface maps of worlds (`vidgen/space-bodies`) and
+  the sky's cube map (`vidgen/space-sky`) are baked once and kept in vidgen's cache folder; later
+  pages (scenes, stills, drafts, renders, parallel jobs) load them with the same pixels, bit for
+  bit: a world of `size: 2048` opens in 7 s instead of 30 s, Outbound's `02_depart` in 7.6 s
+  instead of 13.7 s. Limited to 2000 MB (least recently used removed first),
+  `VIDGEN_BAKED_CACHE_MB` sets the limit (`0`: off), `vidgen cache` shows it and `vidgen cache
+  clear` empties it. `vidgen/baked` gives a page's own bake the same cache
+  ([CONFIG](docs/CONFIG.md#baked-maps-vidgen-cache)).
 
 ### Space scenes (Phase AN, Steps 367–378)
 
