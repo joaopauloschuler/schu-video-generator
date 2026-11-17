@@ -71,7 +71,7 @@ def test_the_import_map_names_every_library() -> None:
         "gsap": "/__vidgen__/libs/gsap/index.js",
     }
     for name, url in imports.items():
-        if name.startswith("three") or name in NOT_SHIPPED:
+        if name.startswith("three") or name in NOT_SHIPPED or name.endswith("/"):  # a folder prefix (vidgen/parts/)
             continue
         assert vidgen_file(url.removeprefix("/__vidgen__/")).is_file(), name
 

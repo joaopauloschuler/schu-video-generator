@@ -154,3 +154,87 @@ config and the narration, not the stills, so they are quick.
   beats:
     - text: "From low Earth orbit the burn is about three point six kilometres per second."
 ```
+
+## 8. Orbits in a three.js `web` scene
+
+For films of space shots written in `video.yaml` alone (a `space` scene: worlds, craft on these
+orbits, a sky, camera moves; a recipe per shot and what each costs), see
+[COOKBOOK-SPACE.md](COOKBOOK-SPACE.md). This section is for pages written in code.
+
+A `web` scene with `orbit_data:` gets the same model as `ctx.orbits` (Step 367; keys and the
+accessor in [CONFIG.md](CONFIG.md#web), "Orbit data"): every body's position and velocity for
+every frame, in metres from the central body, in the mean ecliptic and equinox of J2000 (z up;
+`yUp` turns it into three.js's y-up), each planet's and moon's rotation (period, tilt, pole,
+prime meridian), each orbit as a polyline and a ship's burns. The numbers are the ones the flat
+`orbit` scene draws, to the last bit; the page only chooses how to show them.
+
+**No code at all: the `space` scene** (Step 376; [CONFIG.md](CONFIG.md#space), `vidgen guide
+space-scenes`). Its `orbits:` takes the same words, and `bodies`, `craft` and `camera` name the
+data's bodies: `craft: [{name: Ship, kind: ship}]` flies the transfer's `Ship` with its burns,
+`camera: {move: follow, subject: Ship, view: chase}` goes with it, and a date puts the Sun where
+it really is that day. `scale: {mode: enlarged, enlarge: 50}` is said on screen in this
+cookbook's words; `vidgen lint` (`orbit_scale`) catches narration that calls it "to scale", and
+`space_scene` a globe that turns too fast under the speed-up. Write the bullets below by hand only
+for what the YAML cannot say (`script:`, or `vidgen space-page` to take the page over).
+
+- **True by default.** The positions are true; a page that enlarges the bodies or compresses the
+  distances says so on screen, as the flat scene does ("sizes not to scale").
+- **Draw them with `vidgen/space-scale`** (Step 368; CONFIG `web`, "Astronomical scales"):
+  `new SpaceView(ctx, {renderer, scene, camera, mode})` places every body camera-relative in
+  double precision each frame and draws in depth slices, so a ship 400 km above the Earth and the
+  Moon behind it neither jitter nor fight. Modes: `true`; `enlarged` (radii times a stated factor);
+  `log` (the flat scene's `radial: log`, the same mapping and r0). `space.note().text` is the
+  honest caption in the flat scene's words.
+- **The bodies themselves** (Step 371; CONFIG `web`, "Planets, moons and rings"):
+  `planet(renderer, "Earth", {space})` from `vidgen/space-bodies` draws the body of the orbit
+  data called Earth as an Earth-like world at its true size, pole and turning, lit from where the
+  data's Sun is; call `body.update(t)` after `space.update(t, view)`. Under a large speed-up read
+  `body.problems()` and choose `spin: "locked"` or a stated rate.
+- **The Sun and the light** (Step 372; CONFIG `web`, "Suns and light"): `star(renderer, "Sun",
+  {space})` from `vidgen/space-light` is the data's Sun at its true size and place (from the
+  Earth 4.5 px in radius through a 40° lens at 720p: a brilliant point with its glare), and
+  `spaceLight({scene, camera, sun, bodies, sky})` lights every body from where the Sun is, with
+  planet-shine, eclipses on request and `falloff: 2` for the true light with distance; call
+  `light.update(t)` after `space.update` and the bodies' `update`.
+- **A spacecraft on its orbit** (Step 374; CONFIG `web`, "Spacecraft"): a body of `orbit_data`
+  (a `transfer`'s ship, a body with `burns`) is flown by `craft("ship").fly(space, {body:
+  "Ship", attitude: "prograde"})` from `vidgen/space-craft`; `ship.update(t)` after
+  `space.update` puts the nose along the velocity and, round each burn of the data, along the
+  burn's change of velocity with the engines on for `burn.seconds` (2) centred on it: the model's
+  burn is an instant, the film's a short stretch (a convention). `craft.burns` lists the
+  stretches in scene seconds for a camera cut or a label. From far away give `marker: 3` so the
+  ship stays a visible point on its path (a stated choice), and draw the path with
+  `space.path("Ship")`; for a close-up give `orbit_data` more `path_samples`, since the line is
+  a polyline and the craft flies the true curve.
+- **The camera on an orbit** (Step 375; CONFIG `web`, "Camera moves for space scenes"):
+  `const cam = spaceCamera({space, camera})` from `vidgen/space-camera`, then each frame
+  `cam.apply(t, cam.follow(t, {subject: ship, view: "chase"}))` goes with a flown craft (forward
+  is its velocity, up is away from the world it goes round), `cam.pass(t, {subject: ship, over:
+  [0, 4]})` lets it pass the camera, `cam.reveal(t, {behind: "Earth", of: "Moon", at: 4})` times
+  a moonrise over the Earth's limb, and `cam.zoom(t, {stops: [{subject: "Earth", distance:
+  {radii: 4}}, {subject: "Earth", distance: 2.4e9, hold: 1}, {subject: "Sun", distance:
+  3.2e12}]})` backs away by powers of ten from a world to its moon's orbit to the planets (draw
+  the orbits with `space.path(name, {kind: "conic"})`: at true scale the bodies are points).
+- **A comet on its orbit** (Step 373; CONFIG `web`, "Phenomena"): with `orbit_data` holding
+  `{preset: halley}`, `comet(renderer, {space, body: "Halley"})` from `vidgen/space-phenomena`
+  stands where the data puts the comet; `comet.update(t)` points its ion tail away from the
+  data's Sun, bends its dust tail behind its motion and grows both as (1 AU / distance)². One
+  unit of the comet is `unit` metres (2e9 by default): head and tails are drawn at a stated
+  size, not to scale; say so in the film's notes.
+- **The real sky behind them** (Step 370; CONFIG `web`, "The sky of a space scene"):
+  `spaceSky(renderer, {stars: "real"})` from `vidgen/space-sky` is in the same frame as
+  `ctx.orbits`, so a dated scene has the right stars behind its planets (the Earth in June stands
+  in front of Sagittarius seen from the Sun's side). The shipped star file is a hand-written list of
+  221 well-known bright stars at approximate places (written from memory); fainter stars are
+  seeded. The Bright Star Catalogue is not shipped (no formal licence): download it yourself and
+  convert it with `tools/make_star_catalogue.py` for every naked-eye star.
+- **Which plane.** In 3D an orbit's inclination needs its reference plane: the planets and the
+  Moon's preset are measured from the ecliptic, `iss`, `geo` and the Galilean moons from their
+  planet's equator (an ISS-like orbit is 51.6° to the Earth's equator, up to 75° to the
+  ecliptic). `planes: {Ship: ecliptic}` changes a body's. The flat scene draws each orbit seen
+  from above its own reference plane.
+- **What stays in a plane.** A `flyby` (the planet's frame), the restricted three-body `system`,
+  the figure-eight and the cannonball are planar models; a `transfer` is between orbits in one
+  plane (any plane: since Step 367 the launch window is measured in that plane).
+- **Say the approximations.** `ctx.orbits.approximations` lists them in words (two-body orbits,
+  JPL's approximate elements on the date, impulsive burns, patched conics).

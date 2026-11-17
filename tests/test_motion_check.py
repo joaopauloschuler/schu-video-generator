@@ -181,6 +181,167 @@ def test_a_brightness_jump_at_a_cut_is_info() -> None:
     assert check(frames, cuts=(45,), th=mc.Thresholds(cut_luma=0.5, cut_hist=2.1)) == []
 
 
+# ----- dark pictures (Step 369): the finer picture of dark frames --------------------------------------
+
+DW, DH = 4 * W, 4 * H  # the finer picture; the 160 px one is its 4 x 4 area mean (80 x 40, as above)
+
+
+def sky(t: int, drift: float = 0.3, n: int = 300, seed: int = 1, flux: np.ndarray | None = None) -> np.ndarray:
+    """A finer picture (DH x DW, 0..1) of point stars, each spread over 2 x 2 pixels by its
+    sub-pixel place (anti-aliased: its light stays the same as it drifts ``drift`` px a frame)."""
+    r = np.random.default_rng(seed)
+    x, y, b = (r.uniform(2, DW - 3, n) + drift * t) % (DW - 3), r.uniform(2, DH - 3, n), r.uniform(0.3, 0.9, n)
+    b = b * flux if flux is not None else b
+    img = np.zeros((DH, DW), np.float32)
+    x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int)
+    fx, fy = x - x0, y - y0
+    for dy, wy in ((0, 1 - fy), (1, fy)):
+        for dx, wx in ((0, 1 - fx), (1, fx)):
+            np.add.at(img, (y0 + dy, x0 + dx), b * wy * wx)
+    return img
+
+
+def disc(img: np.ndarray, cx: float, cy: float, r: float, value: float = 0.6) -> np.ndarray:
+    y, x = np.mgrid[0:DH, 0:DW]
+    out = img.copy()
+    out[(x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 < r * r] = value
+    return out
+
+
+def pair(fine: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """``(160 px frame, finer)`` as ffmpeg pipes them: uint8 RGB, the small one the area mean."""
+    grey = np.clip(fine, 0, 1)
+    small = grey.reshape(H, 4, W, 4).sum(axis=3).sum(axis=1) / 16
+    return tuple(np.repeat((np.clip(g * 255, 0, 255).astype(np.uint8))[..., None], 3, axis=2) for g in (small, grey))  # type: ignore[return-value]
+
+
+def lit(t: int) -> np.ndarray:
+    return np.repeat(np.repeat(scene(t).mean(axis=2), 4, axis=0), 4, axis=1)
+
+
+def check_fine(frames: list[np.ndarray] | mc.Features, cuts: tuple[int, ...] = (), th: mc.Thresholds = TH, subject: tuple[str, ...] = (),
+               plain: bool = False) -> list[mc.Finding]:
+    """The findings of finer pictures (grey, 0..1; or their measured features) as one video;
+    ``plain``: the 160 px frames only (before Step 369)."""
+    feats = frames if isinstance(frames, mc.Features) else mc.measure([iter([pair(f)[0] if plain else pair(f) for f in frames])], th)
+    edges = [0, *cuts, feats.count]
+    scenes = [mc.SceneSpan(f"s{k}", a, b) for k, (a, b) in enumerate(zip(edges, edges[1:]))]
+    return mc.find_faults(feats, mc.Source("test", [mc.Segment(Path("x.mp4"))], FPS, scenes), th, subject)
+
+
+def test_a_star_field_is_not_blank_and_black_frames_in_it_are() -> None:
+    frames = [lit(t) if t < 30 or t >= 90 else np.zeros((DH, DW), np.float32) if 60 <= t < 65 else sky(t) for t in range(120)]
+    before = check_fine(frames, cuts=(30, 90), plain=True)  # at 160 px the stars are a uniform black: a blank shot
+    assert ("blank", "info", 30) in kinds(before) and "60 black frames at a cut" in before[0].message
+    found = check_fine(frames, cuts=(30, 90))
+    assert kinds(found) == [("blank", "error", 60), ("cut_jump", "info", 30), ("cut_jump", "info", 90)]
+    assert found[0].message.startswith("5 black frames inside the scene (entered from a star field of") and found[0].end == 64
+    feats = mc.measure([iter([pair(sky(0))])])
+    assert feats.detail[0] and feats.stars[0] >= 250 and feats.subject[0] == 0 and feats.spread[0] < TH.blank_std
+
+
+def test_a_slow_drift_of_stars_is_not_frozen_and_held_stars_are() -> None:
+    drift = [lit(t) for t in range(5)] + [disc(sky(t, drift=0.1), 160, 80, 20) for t in range(50)] + [lit(t) for t in range(5)]
+    assert [(f.kind, f.frame) for f in check_fine(drift, plain=True)] == [("frozen", 5)]  # 1/40 px a frame at 160 px: no change
+    assert [f for f in check_fine(drift) if f.kind == "frozen"] == []
+    held = [lit(t) for t in range(5)] + [disc(sky(0), 160, 80, 20)] * 50 + [lit(t) for t in range(5)]
+    assert [(f.kind, f.frame, f.end) for f in check_fine(held) if f.kind == "frozen"] == [("frozen", 5, 54)]
+
+
+def test_a_subject_that_vanishes_for_a_few_frames_is_an_error() -> None:
+    frames = mc.measure([iter([pair(sky(t) if 30 <= t < 33 else disc(sky(t), 160 + t, 80, 20)) for t in range(60)])])
+    (found,) = check_fine(frames)
+    assert (found.kind, found.severity, found.frame, found.end) == ("blank", "error", 30, 32)
+    assert found.message.startswith("3 frames of stars only inside the scene: a subject over 2.")
+    assert check_fine(frames, cuts=(30, 33)) == []  # cut to a shot of the stars and back
+
+
+def test_a_disc_clipped_to_white_is_over_exposed() -> None:
+    frames = [disc(sky(t), 160 + t, 80, 30, 1.0) for t in range(60)]
+    (found,) = check_fine(frames)
+    assert (found.kind, found.severity, found.frame, found.end) == ("clipped", "warning", 0, 59) and "5.5% of a dark frame" in found.message
+    assert check_fine([disc(sky(t), 160 + t, 80, 10, 1.0) for t in range(60)]) == []
+
+
+def test_stars_that_jump_in_brightness_shimmer_and_twinkling_does_not() -> None:
+    r = np.random.default_rng(7)
+    aliased = [sky(t, flux=r.choice([0.35, 1.0], 300)) for t in range(40)]  # each star's light from frame to frame
+    (found,) = check_fine(aliased)
+    assert (found.kind, found.severity) == ("shimmer", "warning") and found.frame <= 2 and found.end >= 37
+    phase = np.random.default_rng(3).uniform(0, 6.3, 300)
+    twinkle = [sky(t, flux=0.75 + 0.25 * np.sin(2 * np.pi * 1.5 * t / FPS + phase)) for t in range(40)]
+    assert check_fine(twinkle) == []
+    fast = [sky(t, drift=3.0) for t in range(40)]  # 3 px a frame is still found again
+    assert check_fine(fast) == []
+
+
+def _zoom(t: int, n: int = 600, seed: int = 2) -> np.ndarray:
+    """Stars flying out from the middle (a fly-through, a warp): each its own way, 4 % farther a frame,
+    drawn as short streaks along their motion (anti-aliased, the same light every frame)."""
+    r = np.random.default_rng(seed)
+    ang, rad, b = r.uniform(0, 2 * np.pi, n), r.uniform(4, 0.5 * DW, n), r.uniform(0.3, 0.9, n)
+    rad = 4 + (rad - 4) * 1.04 ** (t % 25) % (0.5 * DW)
+    img = np.zeros((DH, DW), np.float32)
+    for k in range(6):  # a streak of 6 samples, 1.5 px apart
+        x, y = DW / 2 + (rad - 1.5 * k) * np.cos(ang), DH / 2 + (rad - 1.5 * k) * np.sin(ang)
+        ok = (x >= 0) & (x < DW - 1) & (y >= 0) & (y < DH - 1)
+        x0, y0, fx, fy = np.floor(x[ok]).astype(int), np.floor(y[ok]).astype(int), x[ok] % 1, y[ok] % 1
+        for dy, wy in ((0, 1 - fy), (1, fy)):
+            for dx, wx in ((0, 1 - fx), (1, fx)):
+                np.add.at(img, (y0 + dy, x0 + dx), b[ok] * wy * wx / 2)
+    return img
+
+
+def test_a_pan_and_a_warp_are_not_shimmer_and_aliasing_in_a_pan_is() -> None:
+    """Step 378: stars are followed across a pan (the shift most bright stars share is taken out), and
+    streaks flying out each their own way are not point stars that shimmer (Steps 373, 375, 376: false
+    warnings on a fly-by's pan, a warp and an 8 fps draft)."""
+    pan = [sky(t, drift=12.0) for t in range(40)]  # 12 px a frame: three times the 4 px a star is looked for in
+    assert check_fine(pan) == []
+    r = np.random.default_rng(7)
+    aliased = [sky(t, drift=12.0, flux=r.choice([0.35, 1.0], 300)) for t in range(40)]
+    assert [f.kind for f in check_fine(aliased)] == ["shimmer"]
+    assert check_fine([_zoom(t) for t in range(40)]) == []
+
+
+def test_a_dark_gradient_in_flat_steps_is_banding() -> None:
+    x = np.arange(DW, dtype=np.float32)
+    ramp = np.where(x < DW / 2, 0.0, (4 + 26 * (x - DW / 2) / (DW / 2)) / 255)  # 26 codes over 160 px: steps of 6 px
+    steps = np.round(ramp * 255) / 255
+    frames = [np.tile(steps, (DH, 1)) for _ in range(40)]
+    found = [f for f in check_fine(frames) if f.kind == "banding"]
+    assert [(f.severity, f.frame, f.end) for f in found] == [("info", 0, 39)] and "dark gradient in flat steps" in found[0].message
+    noise = np.random.default_rng(0)
+    grain = [np.tile(ramp, (DH, 1)) + noise.uniform(-3, 3, (DH, DW)).astype(np.float32) / 255 for _ in range(40)]
+    assert [f for f in check_fine(grain) if f.kind == "banding"] == []
+
+
+def test_a_nearly_empty_frame_is_info() -> None:
+    tiny = [disc(np.zeros((DH, DW), np.float32), 100 + t, 80, 4, 0.8) for t in range(60)]
+    (found,) = check_fine(tiny)
+    assert (found.kind, found.severity, found.frame, found.end) == ("empty", "info", 0, 59) and "nearly empty for 2.0 s" in found.message
+
+
+def test_a_subject_lost_in_the_dark_where_one_is_expected() -> None:
+    frames = mc.measure([iter([pair(disc(sky(t), 160 + t, 80, 20)) for t in range(30)] + [pair(sky(t)) for t in range(30, 90)])])
+    assert check_fine(frames, cuts=(30,)) == []  # a shot of stars: nothing is expected in it
+    (lost,) = check_fine(frames, cuts=(30,), subject=("s1",))
+    assert (lost.kind, lost.severity, lost.frame, lost.end, lost.scene) == ("lost", "warning", 30, 89, "s1")
+    assert lost.message.startswith("subject lost in the dark for 2.0 s: only stars (about")
+    assert kinds(check_fine(frames, cuts=(30,), subject=("all",))) == [("lost", "warning", 30)]
+    source = mc.Source("test", [mc.Segment(Path("x.mp4"))], FPS, [mc.SceneSpan("orbit", 0, 30), mc.SceneSpan("flyby", 30, 90)])
+    with pytest.raises(VidgenError, match="--subject flyb: no such scene \\(did you mean 'flyby'\\?\\)"):
+        mc.run_check(source, TH, None, ["flyb"])
+
+
+def test_the_new_thresholds_are_documented_and_turn_off() -> None:
+    assert TH.detail_width == 640 and TH.with_overrides(["detail_width=0"]).detail_width == 0
+    frames = [lit(t) if t < 30 or t >= 90 else sky(t) for t in range(120)]
+    items = [pair(f) for f in frames]
+    feats = mc.measure([iter([i[0] for i in items])])
+    assert not feats.detail.any() and np.isnan(feats.stars).all()  # no finer picture: as before Step 369
+
+
 # ----- thresholds, events ----------------------------------------------------------------------------
 
 
@@ -249,6 +410,27 @@ def test_the_command_reports_a_file_with_strips(tmp_path: Path, capsys: pytest.C
     assert cli.main(["motion", "check", str(video), "--no-strips", "--fail-on", "never"]) == 0
     out = capsys.readouterr().out
     assert "error       1.00 s  frame     30  blank: 6 black frames inside the scene" in out and "strip:" not in out
+
+
+@pytest.mark.slow
+def test_the_finer_picture_comes_from_the_same_decode(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    video = tmp_path / "stars.mp4"
+    command = [shutil.which("ffmpeg") or "ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{DW}x{DH}",
+               "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18", "-pix_fmt", "yuv420p", str(video)]
+    frames = [disc(sky(t), 160, 80, 20) if t < 8 else sky(t) for t in range(40)]
+    subprocess.run(command, input=b"".join(pair(f)[1].tobytes() for f in frames), check=True, capture_output=True)
+    plain = list(mc.decode_frames(video, 160))
+    both = list(mc.decode_frames(video, 160, detail=640))
+    assert len(plain) == len(both) == 40 and all(np.array_equal(a, b[0]) for a, b in zip(plain, both))  # the 160 px bytes unchanged
+    assert plain[0].shape == (80, 160, 3) and both[0][1].shape == (DH, DW, 3)  # finer = the video's own 320 px
+    assert all(isinstance(f, np.ndarray) for f in mc.decode_frames(video, 160, detail=160))  # not finer: none
+    assert cli.main(["motion", "check", str(video), "--no-strips", "--json", "--subject", "all", "--fail-on", "never"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["dark_frames"] == 40 and doc["detail_size"] == [DW, DH] and doc["subject"] == ["all"]
+    assert doc["thresholds"]["detail_width"] == 640 and [(f["kind"], f["frame"]) for f in doc["findings"]] == [("lost", 8)]
+    assert cli.main(["motion", "check", str(video), "--subject", "orbit"]) == 1
+    said = capsys.readouterr()
+    assert "--subject orbit: no such scene; this video has no scenes: use all" in said.out + said.err
 
 
 @pytest.mark.slow

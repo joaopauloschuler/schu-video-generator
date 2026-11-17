@@ -157,7 +157,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 `vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `music_plan`, `audio_check`, `motion_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `music_plan`, `audio_check`, `motion_check`, `parts`, `space_page`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. It uses the official MCP Python SDK.
@@ -355,7 +355,7 @@ narration.
 | `vidgen music render SCORE.yaml [--out FILE.wav\|FILE.mp3] [--json]` | plays a score file (music written in YAML: key, tempo, sections, chords, tracks of step patterns, effects such as filter sweeps, ducking, gates, echo and reverb) with schu-video-generator's own instruments and writes a WAV or MP3; also takes a project piece's or a built-in bed's name ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music patches [--json]` | describes every score-file instrument, setting and effect in words ([CONFIG](docs/CONFIG.md#score-files-vidgen-music-render)) |
 | `vidgen music check SCORE.yaml\|AUDIO\|NAME [--narration FILE] [--compare OTHER] [--out DIR] [--json]` | says how a piece will sit under narration — loudness and steadiness, peaks, tempo, loop seam, voice range, bass, highs, key (also chord by chord), whether the lift lifts — with advice naming the score keys to change, a spectrogram PNG and a demo MP3 under a narration sample; `--compare` puts two versions side by side ([CONFIG](docs/CONFIG.md#checking-a-piece-vidgen-music-check)) |
-| `vidgen music plan SCORE.yaml\|NAME [--out DIR] [--force] [--max-scene S] [--min-scene S] [--json]` | proposes a music video's scenes from a score file without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro), cuts on bar lines (long sections split on a phrase line where the material changes), drops, breaths and silent bars, a colour per scene and the tracks each scene follows (drums pulse the light, melodies leave glints, pads set the glow); `--out` writes and validates a draft project of `web_cut` scenes with a starter page each ([CONFIG](docs/CONFIG.md#a-music-video-from-a-score-vidgen-music-plan)) |
+| `vidgen music plan SCORE.yaml\|NAME [--out DIR] [--force] [--max-scene S] [--min-scene S] [--style web\|space] [--seed N] [--json]` | proposes a music video's scenes from a score file without playing it: a role per section (intro, verse, build, drop, climax, breakdown, outro), cuts on bar lines (long sections split on a phrase line where the material changes), drops, breaths and silent bars, a colour per scene and the tracks each scene follows (drums pulse the light, melodies leave glints, pads set the glow); `--out` writes and validates a draft project of `web_cut` scenes with a starter page each, or with `--style space` of `space` scenes written in YAML alone (a world by the scene's colour, a camera move by its role, sunrise on a section start) ([CONFIG](docs/CONFIG.md#a-music-video-from-a-score-vidgen-music-plan)) |
 | `vidgen music template [BED] [--out FILE.yaml] [--force] [--json]` | lists the built-in beds' score-file templates, or writes one: a close, commented re-creation of the bed to start a piece from ([CONFIG](docs/CONFIG.md#templates-of-the-built-in-beds-vidgen-music-template)) |
 | `vidgen studio [PROJECT] [--port N] [--no-browser] [--clean]` | a local music workstation in the browser (127.0.0.1 only): edit a built-in bed as a score, listen, check, A/B versions, variations, listening notes answered by an agent over MCP, export or save to `assets/music/`; `--clean` removes old renders ([CONFIG](docs/CONFIG.md#music-studio-vidgen-studio)) |
 | `vidgen music page [--out DIR] [--no-composed] [--json]` | writes the Listen page (default `docs/music`, [this repository's](docs/music/README.md)): a 15 s MP3 and a spectrogram of every bed, clips of all the sound effects and ambience beds, and two composed moods when symusic and the SoundFont are there |
@@ -370,7 +370,9 @@ narration.
 | `vidgen animatic [PROJECT] [--variant NAME] [--no-audio] [--captions \| --no-captions] [--jobs N\|auto] [--output-dir DIR] [--json]` | `<output>_animatic.mp4`: the storyboard's stills held in time with the narration, with the video's audio and the subtitles drawn on; joined by ffmpeg in seconds when the stills are current (see [docs/CONFIG.md](docs/CONFIG.md#animatic-vidgen-animatic)) |
 | `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME \| --all-languages] [--preview \| --final] [--fail-on SEVERITY] [--jobs N\|auto] [--force] [--readback] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`; `--readback`: also transcribe and flag unclear words); exit code 1 on errors |
 | `vidgen still [PROJECT] --scene ID (--at SECONDS \| --frame N \| --count N)... [--size final\|preview\|draft\|WxH] [--variant NAME] [--out FILE\|DIR] [--sheet FILE [--columns N]] [--exact] [--transparent] [--json]` | single frames (PNG) of a `web` scene's page at exact times without rendering the scene: the picture the render draws for that frame; several in one browser, a contact sheet on request (`exports/stills/`) |
-| `vidgen motion check [FILE\|PROJECT] [--source auto\|video\|scenes] [--variant NAME] [--preview \| --draft] [--out DIR] [--no-strips] [--threshold NAME=VALUE ...] [--fail-on SEVERITY] [--json]` | watches a rendered video (a file, a project's render, or its scene clips) at 160 px wide without rendering anything: black or blank frames inside a scene, one- and two-frame flashes and drop-outs, flicker, popping regions, strobing, frozen stretches and brightness jumps at cuts, with time, frame, scene and severity (pulses on the score's hits and notes are info) and a contact strip PNG per finding ([CONFIG](docs/CONFIG.md#motion-check-vidgen-motion-check)) |
+| `vidgen motion check [FILE\|PROJECT] [--source auto\|video\|scenes] [--variant NAME] [--preview \| --draft] [--out DIR] [--no-strips] [--threshold NAME=VALUE ...] [--subject SCENE ...] [--fail-on SEVERITY] [--json]` | watches a rendered video (a file, a project's render, or its scene clips) at 160 px wide without rendering anything: black or blank frames inside a scene, one- and two-frame flashes and drop-outs, flicker, popping regions, strobing, frozen stretches and brightness jumps at cuts, with time, frame, scene and severity (pulses on the score's hits and notes are info) and a contact strip PNG per finding; dark (space) frames also at 640 px: star fields are not blank, over-exposed discs, shimmering stars, banding, empty frames, a subject lost in the dark ([CONFIG](docs/CONFIG.md#motion-check-vidgen-motion-check)) |
+| `vidgen parts [NAME ...] [--kind KIND] [--list] [--out FILE] [--size WxH] [--columns N] [--time-limit S] [--json]` | a labelled contact sheet (PNG) of the ready-made three.js parts for `web` scenes, each tile with its name and the one line that uses it, drawn in one browser; `--list` names them without drawing ([CONFIG](docs/CONFIG.md#ready-made-parts-vidgen-parts)) |
+| `vidgen space-page [PROJECT] --scene ID [--out FILE] [--force] [--json]` | writes the page a `space` scene draws as a `web` scene's script (`extensions/<id>.js`) and prints the `web` scene that replaces it: the same picture, to go on in code ([CONFIG](docs/CONFIG.md#space)) |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N\|auto] [--output-dir DIR] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
 | `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
 | `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N\|auto] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
@@ -615,6 +617,13 @@ my_video/
   `vidgen/title-cards`; the pictures follow the music through `music_data`
   (the final render takes
   about 1 h on 2 cores, `vidgen still` and `--draft` for quick looks).
+- [examples/outbound](examples/outbound/README.md) — "Outbound", a 58 s space film, source only,
+  written with the `space` scene type and no JavaScript: a sunrise over an Earth-like world landing
+  on a bar line, a ship whose departure burn and fly-by of a ringed giant come from the orbit
+  mathematics, a jump to warp and a black hole, with an opening title and an end card and an
+  original orchestral score in D minor at 75 BPM (strings, horns, low brass, men's choir, timpani
+  and taikos) that the pictures follow through `music_data` (the final render is estimated at
+  35 to 45 min on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
@@ -635,6 +644,11 @@ my_video/
   [docs/COOKBOOK-ORBITS.md](docs/COOKBOOK-ORBITS.md) — orbital mechanics videos: choosing what to
   show, scale honesty, units and Δv, the approximations to state, pacing, common mistakes and the
   lint rules that catch them;
+  [docs/COOKBOOK-SPACE.md](docs/COOKBOOK-SPACE.md) — space films with the `space` scene: choosing
+  what to show, honest scale and exposure, a recipe per shot (a sunrise over a limb, a ringed
+  world as a crescent, a craft on a real transfer with its burn on the beat, a fly-by, a
+  powers-of-ten zoom, a black hole, a comet, a warp cut), the cost of each shot, the checks, common
+  mistakes and their messages;
   [docs/COOKBOOK-PARTICLES.md](docs/COOKBOOK-PARTICLES.md) — particle-physics videos: planning a
   discovery story, choosing the scene, natural units (GeV vs GeV/c²), simulated data and schematic
   detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
@@ -714,6 +728,14 @@ remaining rendering tests. No test needs network or keys.
     scenes cut on its bar lines, a colour per section and a starter page per scene that follows the
     score's drums, melodies and pads; `vidgen motion check` watches the rendered video for black
     frames, one-frame flashes, flicker, popping, strobing, frozen stretches and jumps at cuts);
+    `space` (a space scene written in YAML alone, no JavaScript: a sky from a seed or the real bright
+    stars, a sun, ready-made worlds with rings and air or worlds of your own, invented spacecraft
+    flying a real transfer with its burns, a black hole, a jump to warp, camera moves one after
+    another in seconds or bars of the score, reactions to the music, an opening title and an end
+    card; positions and timing true from the orbit data, enlarging stated on screen; every key
+    checked with did-you-mean; `vidgen space-page` writes it out as a `web` scene to go on in code;
+    `vidgen music plan --style space` drafts a whole space film from a score; `vidgen guide space-scenes`;
+    a recipe per shot and what each costs in [the space cookbook](docs/COOKBOOK-SPACE.md));
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,

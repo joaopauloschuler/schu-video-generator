@@ -50,9 +50,23 @@ MODULES_FOLDER = "modules"
 #: vidgen's own modules a page may import, by import name -> file in :data:`MODULES_FOLDER`
 #: (``vidgen/three-finish``: finishing for three.js scenes, DESIGN.md §120.11; ``vidgen/music-time``
 #: and ``vidgen/three-kit``: building blocks for music videos, DESIGN.md §121.1; ``vidgen/title-cards``:
-#: an opening title and an end card for films, DESIGN.md §121.7).
+#: an opening title and an end card for films, DESIGN.md §121.7; ``vidgen/space-scale``: astronomical
+#: scales in three.js, floating origin and depth slices, DESIGN.md §122.4; ``vidgen/parts``: the registry
+#: of ready-made parts, DESIGN.md §122.5; ``vidgen/space-sky``: the sky of a space scene, and
+#: ``vidgen/space-sky-stars``, the star file its real sky reads, DESIGN.md §122.6; ``vidgen/space-bodies``:
+#: planets, moons and rings from a seed, DESIGN.md §122.7; ``vidgen/space-craft``: the spacecraft kit, DESIGN.md §122.10;
+#: ``vidgen/space-camera``: camera moves for space scenes, DESIGN.md §122.11; ``vidgen/space-scene``: what the page of a
+#: declarative ``space`` scene needs besides the parts, DESIGN.md §122.12).
 VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
-                                  "vidgen/title-cards": "title-cards.js"}
+                                  "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js", "vidgen/parts": "parts.js",
+                                  "vidgen/space-sky": "space-sky.js", "vidgen/space-sky-stars": "space-sky-stars.js",
+                                  "vidgen/space-bodies": "space-bodies.js", "vidgen/space-light": "space-light.js",
+                                  "vidgen/space-phenomena": "space-phenomena.js", "vidgen/space-craft": "space-craft.js",
+                                  "vidgen/space-camera": "space-camera.js",
+                                  "vidgen/space-scene": "space-scene.js"}
+#: The folder of the parts files after ``__vidgen__/`` (``data/web/parts/<module>.js``: each module's
+#: ready-made parts for the registry ``vidgen/parts``; imported as ``vidgen/parts/<module>.js``).
+PARTS_FOLDER = "parts"
 
 
 def vidgen_file(rel: str) -> Path | None:
@@ -67,6 +81,9 @@ def vidgen_file(rel: str) -> Path | None:
         return lib_file(name)
     if folder == MODULES_FOLDER and name in VIDGEN_MODULES.values():
         return _DATA_DIR / "web" / MODULES_FOLDER / name
+    if folder == PARTS_FOLDER and "/" not in name and name.endswith(".js"):
+        path = inside(_DATA_DIR / "web" / PARTS_FOLDER, name)
+        return path if path is not None and path.is_file() else None
     if folder == "fonts" and Path(name).suffix.lower() in FONT_SUFFIXES:
         path = inside(_DATA_DIR / "fonts", name)
         return path if path is not None and path.is_file() else None
@@ -135,5 +152,5 @@ def recorded_loaded(path: Path) -> dict[str, str | None]:
     return {str(k): v for k, v in loaded.items()} if isinstance(loaded, dict) else {}
 
 
-__all__ = ["ADDONS_FOLDER", "FONT_SUFFIXES", "MODULES_FOLDER", "VIDGEN_MODULES", "THREE_ADDONS", "THREE_FILES", "THREE_VERSION", "VIDGEN_PREFIX", "current_loaded",
+__all__ = ["ADDONS_FOLDER", "FONT_SUFFIXES", "MODULES_FOLDER", "PARTS_FOLDER", "VIDGEN_MODULES", "THREE_ADDONS", "THREE_FILES", "THREE_VERSION", "VIDGEN_PREFIX", "current_loaded",
            "file_sha", "read_record", "record_path", "recorded_loaded", "served_file", "unshipped_addon", "unshipped_lib", "vidgen_file"]

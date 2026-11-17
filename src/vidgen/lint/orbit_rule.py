@@ -379,6 +379,18 @@ def orbit_issues(project: Project, scene_id: str, rules: LintRules) -> list[Scie
 
     found = facts(project)
     is_orbit = spec.type == "orbit"
+    if spec.type == "space":   # a space scene with orbit data keeps to scale what its scale: says (DESIGN.md §122.12)
+        from vidgen.lint.space_rule import space_picture
+
+        space = space_picture(spec)
+        if space is not None and "orbit_scale" in on:
+            for beat, text, where in _texts(spec):
+                for sentence in qa.statements(text):
+                    message = oa.scale_claims(sentence, space)
+                    if message is not None:
+                        said = f"{where} '{qa.quote(sentence)}'" if where else f'"{qa.quote(sentence)}"'
+                        add("orbit_scale", f"{said} claims scale, but {message}", beat)
+        return out
     params = _params(spec) if is_orbit else None
     own = found.get(scene_id, []) if is_orbit else []
     has_own_numbers = spec.type == "calculation" or spec.type == "plot" and bool(spec.params.get("fits"))

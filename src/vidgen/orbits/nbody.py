@@ -44,6 +44,9 @@ class NBodyRun:
     step: float | None
     angular: np.ndarray | None = None
     angular_scale: float = 0.0
+    #: The angular momentum's x and y parts at each output (``(N, 2)``; Step 367): zero in a
+    #: system in the x-y plane, so that :attr:`angular_drift` checks the whole vector.
+    angular_xy: np.ndarray | None = None
 
     @property
     def drift(self) -> float:
@@ -57,10 +60,14 @@ class NBodyRun:
 
     @property
     def angular_drift(self) -> float:
-        """The largest relative change of the angular momentum (Step 232; 0 when not recorded)."""
+        """The largest relative change of the angular momentum vector (Step 232; its x and y parts
+        too since Step 367; 0 when not recorded)."""
         if self.angular is None or self._l_scale() == 0:
             return 0.0
-        return float(np.max(np.abs(self.angular - self.angular[0]))) / self._l_scale()
+        change = np.abs(self.angular - self.angular[0])
+        if self.angular_xy is not None:
+            change = np.sqrt(change**2 + np.sum((self.angular_xy - self.angular_xy[0]) ** 2, axis=-1))
+        return float(np.max(change)) / self._l_scale()
 
     def angular_error(self, k: int) -> float:
         """(L − L₀)/|L₀| at output ``k`` (|L₀| replaced as in :attr:`angular_drift`; 0 when not recorded)."""
@@ -173,8 +180,9 @@ def simulate(system: System, span: float, *, method: str = "leapfrog", step: flo
     pos = xs.reshape(len(times), n, 3).transpose(1, 0, 2) * length
     vel = us.reshape(len(times), n, 3).transpose(1, 0, 2) * unit_v
     energy = _energy(gm, pos, vel)
-    angular, scale = _angular(gm, pos, vel)
-    return NBodyRun(names, np.asarray(times) * unit_t, pos - pos[0], vel - vel[0], energy, method, None if h is None else h * unit_t, angular, scale)
+    angular, scale, angular_xy = _angular(gm, pos, vel)
+    return NBodyRun(names, np.asarray(times) * unit_t, pos - pos[0], vel - vel[0], energy, method, None if h is None else h * unit_t, angular, scale,
+                    angular_xy)
 
 
 def _relative_drift(e: np.ndarray) -> float:
@@ -182,11 +190,11 @@ def _relative_drift(e: np.ndarray) -> float:
     return float(np.max(np.abs(e - e[0])) / scale) if scale > 0 else 0.0
 
 
-def _angular(gm: np.ndarray, pos: np.ndarray, vel: np.ndarray) -> tuple[np.ndarray, float]:
+def _angular(gm: np.ndarray, pos: np.ndarray, vel: np.ndarray) -> tuple[np.ndarray, float, np.ndarray]:
     """The conserved angular momentum's z part at each output — Σ GMᵢ (rᵢ × vᵢ) in the
     barycentre with more than one massive body, else the test particles' specific r × v about
-    the central body added up (Step 232) — and its natural size at the start, Σ |rᵢ| |vᵢ| with
-    the same weights."""
+    the central body added up (Step 232) — its natural size at the start, Σ |rᵢ| |vᵢ| with
+    the same weights, and its x and y parts at each output (Step 367)."""
     massive = np.flatnonzero(gm > 0)
     if len(massive) > 1:
         w, r, v = gm, pos, vel
@@ -194,8 +202,10 @@ def _angular(gm: np.ndarray, pos: np.ndarray, vel: np.ndarray) -> tuple[np.ndarr
         c = massive[0]
         w, r, v = np.where(np.arange(len(gm)) == c, 0.0, 1.0), pos - pos[c], vel - vel[c]
     lz = np.einsum("i,it->t", w, r[:, :, 0] * v[:, :, 1] - r[:, :, 1] * v[:, :, 0])
+    lx = np.einsum("i,it->t", w, r[:, :, 1] * v[:, :, 2] - r[:, :, 2] * v[:, :, 1])
+    ly = np.einsum("i,it->t", w, r[:, :, 2] * v[:, :, 0] - r[:, :, 0] * v[:, :, 2])
     scale = float(np.sum(w * np.linalg.norm(r[:, 0], axis=-1) * np.linalg.norm(v[:, 0], axis=-1)))
-    return lz, scale
+    return lz, scale, np.stack([lx, ly], axis=-1)
 
 
 def _energy(gm: np.ndarray, pos: np.ndarray, vel: np.ndarray) -> np.ndarray:

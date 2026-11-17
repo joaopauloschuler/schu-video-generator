@@ -187,13 +187,16 @@ def test_the_web_topic_covers_web_scenes() -> None:
 def web_topic_files() -> dict[str, str]:
     """The files the web topic's code blocks write (a block starting with a comment naming
     ``extensions/<file>``; ``in extensions/<file>`` adds to that file; ``in frame(t, ctx)`` is the
-    body of a ``frame`` hook, written as ``extensions/fragment.js``)."""
+    body of a ``frame`` hook, written as ``extensions/fragment.js``; a ``// sketch`` block is parts of a
+    page, not a file)."""
     files: dict[str, str] = {}
     for lang, body in FENCE.findall(topic_text("web")):
         if lang not in ("html", "js"):
             continue
         first = body.splitlines()[0]
         name = re.search(r"extensions/[\w.-]+", first)
+        if first.startswith("// sketch"):   # parts of a page shown together (the space modules), not a file
+            continue
         if first.startswith("// in frame(t, ctx)"):
             files["extensions/fragment.js"] = f"export function frame(t, ctx) {{\n{body}}}\n"
         elif first.startswith("// in extensions/") and name:

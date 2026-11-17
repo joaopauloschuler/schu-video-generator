@@ -20,6 +20,7 @@
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
 #   vidgen storyboard examples/gallery --scene crate               # 3D shapes and a camera move (needs Chromium)
+#   vidgen still examples/gallery --scene rings --at 2 --size 640x360  # a space scene: Saturn from a three-quarter view to a crescent (needs Chromium)
 #   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
 #   vidgen list-music examples/gallery --render-dir build/music  # the music beds (this video: calm, ducked) as WAVs
 #   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour,
@@ -356,6 +357,17 @@ scenes:
     beats:
       - text: "Far from the Sun the comet crawls."
       - text: "Near the Sun it sweeps round in a few weeks."
+
+  - id: rings
+    type: space           # a space scene written in YAML alone: a sky, a sun, a ready-made world, a camera move (needs Chromium)
+    params:
+      sky: {seed: 4, look: rich}
+      sun: {direction: [1, -0.3, 0.25]}
+      bodies: [{name: Saturn}]
+      camera: {move: arc, subject: Saturn, phase: [three-quarter, crescent], distance: {radii: 6}, lens: wide-normal}
+    beats:
+      - text: "Seen with the Sun behind us, the rings are bright."
+      - text: "Round the planet, the Sun goes behind it: a thin crescent."
 
   - id: particles
     type: standard_model  # the Standard Model chart: quarks, leptons, gauge bosons, Higgs; PDG 2024 masses, charges, spins

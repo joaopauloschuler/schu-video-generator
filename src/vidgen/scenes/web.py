@@ -15,6 +15,8 @@ from typing import Any, Literal
 
 from vidgen.api import *
 
+from .orbit_data import OrbitData
+
 #: Extra frames drawn after the planned end (the last one holds if the scene runs longer).
 SPARE_FRAMES = 2
 
@@ -73,6 +75,9 @@ class Web(NarratedScene):
 
         music_data: bool | WebMusicData = False
         """The video's music for the page as ``ctx.music`` (DESIGN.md §120.8): ``true``, or ``{bands: 16, tracks: [kick, hook], t0: 41.6}``. Per video frame: spectrum bands, level, low end and onsets of the music the video plays; from a score file also every track's hits and notes in song time (``ctx.music.t0`` is the song time at the scene's start)."""
+
+        orbit_data: OrbitData | None = None
+        """Bodies on their orbits for the page as ``ctx.orbits`` (DESIGN.md §122.3), in the orbit scene's words: ``{bodies: [{preset: earth}, {preset: mars}], span: '1 yr', date: '2026-11-17'}``, or a transfer, a flyby, a system. Per frame of the scene: each body's position and velocity (m, m/s; the ecliptic and equinox of J2000, origin the central body), its rotation (quaternion, prime meridian) for the Sun, the planets, the Moon and the Galilean moons, its path and orbit as polylines, a ship's burns."""
 
         design_width: int | None = None
         """For a page built in fixed pixels: the window width it was designed for, in CSS pixels (1280). The page is laid out in a window that wide (as high as its region's shape gives) and drawn at the video's size at every quality, so nothing in it needs rewriting; ``window.devicePixelRatio`` is output pixels per CSS pixel."""
@@ -157,7 +162,7 @@ class Web(NarratedScene):
         """What the page's frames are drawn from, as the arguments of ``make_web_clip``: the
         project folder, the clip's folder, the size of ``box`` in pixels (default: the box the
         scene gives its page, :meth:`_page_box`), the frame rate, how many frames, the theme,
-        the beats, the video's shape and, with ``music_data:``, ``music`` (§120.8). ``vidgen still`` draws single frames from the same
+        the beats, the video's shape and, with ``music_data:``, ``music`` (§120.8), with ``orbit_data:``, ``orbits`` (§122.3). ``vidgen still`` draws single frames from the same
         arguments (DESIGN.md §120.3)."""
         if box is None:
             box = self._page_box(self._title())
@@ -171,6 +176,8 @@ class Web(NarratedScene):
         if music:
             settings = music if isinstance(music, WebMusicData) else WebMusicData()
             extra["music"] = web_scene_music(self.project, self.spec.id, int(config.frame_rate), settings)
+        if self.params.orbit_data is not None:
+            extra["orbits"] = web_scene_orbits(self.project, self.params.orbit_data, int(config.frame_rate), frames, frames - SPARE_FRAMES)
         return {**extra,
             "root": self.project.root, "folder": self.project.render_dir(self.is_preview) / "web", "scene_id": self.spec.id,
             "params": self.params, "size": size, "fps": int(config.frame_rate), "frames": frames, "theme": theme,

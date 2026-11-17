@@ -16,6 +16,9 @@ ISCN, HGVS notation, exact numbers, a counselling tone), see
 (honest axes, error bars, fits and their uncertainties, units and significant figures), see
 [COOKBOOK-SCIENCE-CHARTS.md](COOKBOOK-SCIENCE-CHARTS.md); for orbital mechanics (scale honesty,
 units and Δv, approximations to state, pacing an orbit), see [COOKBOOK-ORBITS.md](COOKBOOK-ORBITS.md);
+for space films written in `video.yaml` alone (a sky, worlds, craft on real orbits, a black hole,
+camera moves on bar lines: honest scale and exposure, a recipe per shot, the cost of each), see
+[COOKBOOK-SPACE.md](COOKBOOK-SPACE.md);
 for particle physics (natural units, simulated data, sources, local significance and p-values),
 see [COOKBOOK-PARTICLES.md](COOKBOOK-PARTICLES.md); for isometric cartoons (map sizes that fill the
 frame in 16:9 and 9:16), see [COOKBOOK-ISO-CARTOONS.md](COOKBOOK-ISO-CARTOONS.md); for audio

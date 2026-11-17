@@ -7,7 +7,8 @@ units (:mod:`.values`), systems of bodies moved by Kepler's laws and the video's
 (:mod:`.laws`), burns and transfers (:mod:`.manoeuvres`), gravity assists (:mod:`.flyby`), the
 restricted three-body problem (:mod:`.threebody`) and many bodies — the figure-eight, binaries,
 resonances, tides (:mod:`.manybody`), and the planets on a date from JPL's approximate elements
-with conjunctions and oppositions (:mod:`.ephemeris`). The ``orbit``
+with conjunctions and oppositions (:mod:`.ephemeris`), and how the Sun, the planets, the Moon and
+the Galilean moons turn (:mod:`.rotation`, Step 367). The ``orbit``
 scene type draws them. Exported by ``vidgen.api`` as the module ``orbits``."""
 
 from .bodies import ALIASES as PRESET_ALIASES, BODIES, GM_EARTH, GM_SUN, ORBITS, R_EARTH, SIDEREAL_DAY, Body, OrbitPreset, body_preset, orbit_preset, preset_key
@@ -122,8 +123,12 @@ from .ephemeris import (
     valid_range,
 )
 from .values import AU, DAY, G, YEAR, length_unit, speedup_text, time_unit, value_si
+from .rotation import ROTATIONS, RotationModel, rotation_model
 
 __all__ = [
+    "ROTATIONS",
+    "RotationModel",
+    "rotation_model",
     "EVENTS",
     "J2000",
     "PLANETS",

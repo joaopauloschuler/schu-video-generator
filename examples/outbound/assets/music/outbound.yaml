@@ -1,0 +1,205 @@
+# Outbound: an original 58-second cinematic cue for vidgen's own orchestra (no samples, no
+# SoundFont, no audio files), written for the film in this folder.
+#
+# 75 BPM in D minor: one beat = 0.8 s = 24 frames at 30 fps, one bar = 3.2 s = 96 frames.
+# Form: dawn 3 | light 2 | depart 3 | rings 3 | jump 1 | horizon 4 | end 2 = 18 bars (57.6 s).
+#   dawn     a far tam-tam, low strings on D and A, men humming; in the third bar a timpani roll,
+#            a cymbal swell and a low brass swell grow into ...
+#   light    ... the arrival on B flat major (bar 3: the sunrise): four horns start the theme
+#   depart   a spiccato pulse in the cellos; the taikos and the low brass mark the burn (bar 6)
+#   rings    the theme again, wider: violins with the horns, men's voices on "oh"
+#   jump     one bar on A major: rolls and a swell (the jump to warp)
+#   horizon  the climax in D minor: everything, men's voices on "aah" (the black hole)
+#   end      D major, a tam-tam, dying away
+# The theme is four horns in unison (D4 up a fifth to A4, down by step); nothing plays above D5.
+# The pictures read taiko, hit, crash, swell and roll through ctx.music (music_data).
+version: 1
+title: Outbound
+description: An original 58 s cue in D minor at 75 BPM for strings, horns, low brass, men's choir and orchestral percussion - a dark dawn, an arrival in B flat, a pulse, a wide theme, a roll into a D minor climax and a D major end.
+key: D minor
+tempo: 75
+seed: 377
+loop: false
+master: {lowpass: 11000, highpass: 28}
+sections:
+  - {name: dawn, bars: 3, progression: "Dm Dm Dm"}
+  - {name: light, bars: 2, progression: "Bb F"}
+  - {name: depart, bars: 3, progression: "Gm Dm C"}
+  - {name: rings, bars: 3, progression: "Bb F C"}
+  - {name: jump, bars: 1, progression: "A"}
+  - {name: horizon, bars: 4, progression: "Dm Bb Gm A"}
+  - {name: end, bars: 2, progression: "D D"}
+tracks:
+  # ----- strings ------------------------------------------------------------------------------
+  basses:
+    instrument: double_basses
+    volume: -3
+    pan: 0.25
+    reverb: {size: 3.8, mix: 0.25, tone: 3500}
+    sections:
+      dawn: {volume: 0, steps: "[p <] D2 - - - - - - - | - - - - - - - - | - - - - - - - - [mp]"}
+      light: {steps: "[mf] Bb1 - - - - - - - | F2 - - - - - - -"}
+      depart: {steps: "[mp] G1 - - - - - - - | [mp] D2 - - - - - - - | [mp <] C2 - - - - - - - [mf]"}
+      rings: {steps: "[f] Bb1 - - - - - - - | F2 - - - - - - - | [f <] C2 - - - - - - - [ff]"}
+      jump: {steps: "[mf <] A1 - - - - - - - [ff]"}
+      horizon: {steps: "[ff] D2 - - - - - - - | Bb1 - - - - - - - | G1 - - - - - - - | A1 - - - - - - -"}
+      end: {steps: "[ff >] D2 - - - - - - - | - - - - - . . . [pp]"}
+  cellos:
+    instrument: cellos
+    pan: 0.3
+    reverb: {size: 3.8, mix: 0.28, tone: 4500}
+    sections:
+      dawn: {volume: 3, settings: {stroke: tremolo, brightness: 0.4}, steps: "[pp <] A2 - - - - - - - | - - - - - - - - | - - - - - - - - [mp]"}
+      light: {settings: {attack: 0.12}, steps: "[mf] F3 - - - - - - - | F3 - - - - - - -"}
+      depart: {settings: {stroke: spiccato, length: 0.12, brightness: 0.4}, steps: "[mf <] G2 D3 G3 D3 Bb3 D3 G3 D3 | [f] D2 A2 D3 A2 F3 A2 D3 A2 | [f <] C2 G2 C3 G2 E3 G2 C3 G2 [ff]"}
+      rings: {settings: {stroke: spiccato, length: 0.12, brightness: 0.45}, steps: "[f] Bb2 F3 Bb3 F3 D4 F3 Bb3 F3 | F2 C3 F3 C3 A3 C3 F3 C3 | [f <] C2 G2 C3 G2 E3 G2 C3 G2 [ff]"}
+      jump: {settings: {stroke: tremolo, brightness: 0.7}, steps: "[mp <] E3 - - - - - - - [ff]"}
+      horizon: {settings: {stroke: spiccato, length: 0.12, brightness: 0.55}, steps: "[ff] D2 A2 D3 A2 F3 A2 D3 A2 | Bb2 F3 Bb3 F3 D4 F3 Bb3 F3 | G2 D3 G3 D3 Bb3 D3 G3 D3 | A2 E3 A3 E3 C#4 E3 A3 E3"}
+      end: {settings: {attack: 0.1}, steps: "[ff >] A2+F#3 - - - - - - - | - - - - - . . . [pp]"}
+  violas:
+    instrument: violas
+    only: [light, depart, rings, jump, horizon, end]
+    pan: 0.1
+    settings: {attack: 0.16, brightness: 0.35, vibrato: 10}
+    reverb: {size: 3.8, mix: 0.3, tone: 4500}
+    sections:
+      light: {steps: "[mp] Bb3+D4 - - - - - - - | A3+C4 - - - - - - -"}
+      depart: {steps: "[mp] Bb3+D4 - - - - - - - | A3+D4 - - - - - - - | [mp <] G3+C4 - - - - - - - [mf]"}
+      rings: {steps: "[mf] Bb3+F4 - - - - - - - | A3+F4 - - - - - - - | [mf <] G3+E4 - - - - - - - [f]"}
+      jump: {settings: {stroke: tremolo, brightness: 0.7}, steps: "[mp <] A3+C#4 - - - - - - - [ff]"}
+      horizon: {steps: "[ff] F3+D4 - - - - - - - | F3+D4 - - - - - - - | G3+D4 - - - - - - - | E3+C#4 - - - - - - -"}
+      end: {steps: "[ff >] F#3+D4 - - - - - - - | - - - - - . . . [pp]"}
+  violins:
+    instrument: violins
+    only: [rings, jump, horizon, end]
+    pan: -0.3
+    settings: {attack: 0.14, brightness: 0.4, vibrato: 12}
+    reverb: {size: 3.8, mix: 0.32, tone: 4500}
+    sections:
+      rings: {steps: "[mf] D4 - - - A4 - - - | G4 - - - F4 - A4 - | [mf <] G4 - - - C5 - - - [f]"}
+      jump: {settings: {stroke: tremolo, brightness: 0.7}, steps: "[mp <] C#5 - - - - - - - [ff]"}
+      horizon: {steps: "[ff] A4 - - - D5 - - - | C5 - - - Bb4 - F4 - | G4 - - - Bb4 - - - | A4 - - - - - - -"}
+      end: {steps: "[ff >] A4+D5 - - - - - - - | - - - - - . . . [pp]"}
+  # ----- brass --------------------------------------------------------------------------------
+  horns:
+    instrument: horn
+    only: [light, depart, rings, jump, horizon, end]
+    pan: -0.15
+    settings: {players: 4, attack: 0.16, brightness: 0.4}
+    reverb: {size: 4.0, mix: 0.32, tone: 4000}
+    sections:
+      light: {steps: "[f] D4 - - - A4 - - - | G4 - - - F4 - C4 -"}
+      depart: {steps: "[mf] D4 - - - Bb4 - - - | A4 - - - - - F4 - | [mf <] G4 - - - E4 - G4 - [f]"}
+      rings: {steps: "[f] D4 - - - A4 - - - | G4 - - - F4 - A4 - | [f <] G4 - - - C5 - - - [ff]"}
+      jump: {steps: "[mf <] E4+A4 - - - - - - - [ff]"}
+      horizon: {settings: {brightness: 0.6}, steps: "[ff] A4 - - - D5 - - - | C5 - - - Bb4 - F4 - | G4 - - - Bb4 - - - | A4 - - - - - - -"}
+      end: {steps: "[ff >] F#4+A4 - - - - - - - | - - - - - . . . [pp]"}
+  hit:
+    instrument: low_brass
+    only: [light, depart, rings, horizon, end]
+    settings: {tuba: 0.6, attack: 0.14}
+    reverb: {size: 4.0, mix: 0.3, tone: 3500}
+    sections:
+      light: {steps: "[mf] Bb1+F2 - - - - - - - | [mp] F2+C3 - - - - - . ."}
+      depart: {steps: ". | [mf] D2+A2 - - - - - . . | [mp <] C2+G2 - - - - - - - [mf]"}
+      rings: {steps: "[f] Bb1+F2 - - - - - - - | F2+C3 - - - - - - - | [f <] C2+G2 - - - - - - - [ff]"}
+      horizon: {settings: {brightness: 0.9, tuba: 0.8}, steps: "[ff] D2+A2 - - - - - - - | Bb1+F2 - - - - - - - | G1+D2 - - - - - - - | A1+E2 - - - - - - -"}
+      end: {steps: "[ff >] D2+A2 - - - - - - - | - - - - - . . . [pp]"}
+  swell:
+    instrument: low_brass
+    only: [dawn, jump]
+    settings: {attack: 3.0, brightness: 1.0, tuba: 0.8, players: 6, ring: 0.3}
+    reverb: {size: 4.5, mix: 0.36, tone: 3500}
+    sections:
+      dawn: {steps: ". | . | [mf] D2+A2 - - - - - - -"}
+      jump: {steps: "[f] A1+E2 - - - - - - -"}
+  # ----- choir (men) --------------------------------------------------------------------------
+  choir:
+    instrument: choir
+    only: [dawn, light, rings, jump, horizon, end]
+    settings: {voices: men, singers: 10, vibrato: 10}
+    reverb: {size: 4.5, mix: 0.38, tone: 4000}
+    sections:
+      dawn: {volume: 3, settings: {vowel: mm, attack: 2.0, brightness: 0.3}, steps: "[pp <] D3+A3 - - - - - - - | - - - - - - - - | - - - - - - - - [mp]"}
+      light: {settings: {vowel: ooh, attack: 0.3, brightness: 0.35}, steps: "[mp] D3+F3+Bb3 - - - - - - - | C3+F3+A3 - - - - - - -"}
+      rings: {settings: {vowel: oh, attack: 0.3, brightness: 0.45}, steps: "[mf] D3+F3+Bb3 - - - - - - - | C3+F3+A3 - - - - - - - | [mf <] C3+E3+G3 - - - - - - - [f]"}
+      jump: {settings: {vowel: oh, morph: aah, attack: 0.3, brightness: 0.5}, steps: "[mf <] C#3+E3+A3 - - - - - - - [ff]"}
+      horizon: {settings: {vowel: aah, attack: 0.15, brightness: 0.6}, steps: "[ff] D3+F3+A3 - - - - - - - | D3+F3+Bb3 - - - - - - - | D3+G3+Bb3 - - - - - - - | C#3+E3+A3 - - - - - - -"}
+      end: {settings: {vowel: aah, morph: oh, attack: 0.15, brightness: 0.55, ring: 1.5}, steps: "[ff >] D3+F#3+A3 - - - - - - - | - - - - - . . . [pp]"}
+  # ----- percussion ---------------------------------------------------------------------------
+  timpani:
+    instrument: timpani
+    only: [light, depart, rings, horizon, end]
+    reverb: {size: 3.6, mix: 0.28}
+    sections:
+      light: {steps: "[f] Bb2 . . . . . . . | [mf] F2 . . . . . . ."}
+      depart: {steps: "[mp] G2 . . . . . . . | [f] D2 . . . A2 . . . | [mf] C3 . . . G2 . C3 ."}
+      rings: {steps: "[f] Bb2 . . . . . F2 . | F2 . . . . . C3 . | C3 . . . G2 . C3 C3"}
+      horizon: {steps: "[ff] D2 . . D2 . . A2 . | Bb2 . . Bb2 . . F2 . | G2 . . G2 . . D3 . | A2 . . A2 . A2 A2 A2"}
+      end: {steps: "[ff] D2 . . . . . . . | ."}
+  roll:
+    instrument: timpani
+    only: [dawn, jump]
+    settings: {stroke: roll, mallet: 0.2, ring: 0.3}
+    reverb: {size: 3.6, mix: 0.28}
+    sections:
+      dawn: {steps: ". | . | [pp <] A2 - - - - - - - [f]"}
+      jump: {steps: "[p <] A2 - - - - - - - [ff]"}
+  taiko:
+    instrument: taiko
+    only: [light, depart, rings, horizon, end]
+    settings: {players: 6}
+    reverb: {size: 3.6, mix: 0.3, tone: 3000}
+    sections:
+      light: {volume: -3, steps: "X... .... .... .... | x... .... .... ...."}
+      depart: {volume: -2, steps: "o... .... o... .... | X... .... x... .... | x... ..x. x... x.x."}
+      rings: {volume: -1, steps: "X... .... x... ..x. | X... .... x... ..x. | X... ..x. x... x.xx"}
+      horizon: {steps: "X..x ..x. X... x.x. | X..x ..x. X... x.x. | X..x ..x. X... x.x. | X..x ..x. X.x. xxxx"}
+      end: {steps: "X... .... .... .... | ."}
+  bass_drum:
+    instrument: bass_drum
+    only: [light, depart, rings, horizon, end]
+    sections:
+      light: {steps: "x . . . . . . . | ."}
+      depart: {steps: ". | x . . . . . . . | ."}
+      rings: {steps: "x . . . . . . . | . | ."}
+      horizon: {steps: "x . . . . . . . | . | x . . . . . . . | ."}
+      end: {steps: "x . . . . . . . | ."}
+  pulse:
+    instrument: frame_drum
+    only: [depart, rings]
+    settings: {pitch: 85, mallet: 0.3}
+    reverb: {size: 3.0, mix: 0.25, tone: 3000}
+    sections:
+      depart: {volume: -9, steps: "x..o ..x. o..x ..o."}
+      rings: {volume: -6, steps: "x..o ..x. o..x ..o."}
+  snares:
+    instrument: snare_drum
+    only: [jump]
+    settings: {players: 4}
+    reverb: {size: 3.6, mix: 0.3}
+    steps: "[roll pp <] x - - - - - - - [ff]"
+  rise:
+    instrument: cymbal
+    only: [dawn, jump]
+    settings: {stroke: swell}
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      dawn: {volume: -6, steps: ". | . | x - - - - - - -"}
+      jump: {steps: "x - - - - - - -"}
+  crash:
+    instrument: cymbal
+    only: [light, horizon, end]
+    settings: {mallet: 0.6}
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      light: {volume: -8, steps: "x . . . . . . . | ."}
+      horizon: {steps: "x . . . . . . . | . | . | ."}
+      end: {volume: -3, steps: "x . . . . . . . | ."}
+  gong:
+    instrument: tam_tam
+    only: [dawn, end]
+    reverb: {size: 4.5, mix: 0.36}
+    sections:
+      dawn: {steps: "[pp] x . . . . . . . | . | ."}
+      end: {steps: "[f] x . . . . . . . | ."}

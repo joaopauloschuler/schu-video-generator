@@ -1201,6 +1201,7 @@ LINT_RULES: tuple[str, ...] = (
     "three_d_off_frame",
     "three_d_hidden",
     "web_clipped",
+    "space_scene",
 )
 RuleName = Literal[
     "off_frame",
@@ -1289,6 +1290,7 @@ RuleName = Literal[
     "three_d_off_frame",
     "three_d_hidden",
     "web_clipped",
+    "space_scene",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -1679,6 +1681,13 @@ class OrbitScaleRule(RuleConfig):
     """``orbit_scale``: a picture called "to scale" (true scale, real sizes) that is not: bodies drawn enlarged, a log view, the sizes picture's distances, the tides schematic (DESIGN.md §98.8)."""
 
 
+class SpaceSceneRule(RuleConfig):
+    """``space_scene``: what a ``space`` scene's params show before anything is drawn: a world that turns more than ``degrees`` a frame under the orbit data's speed-up or its own spin (it strobes), an enlarged body that covers another, worlds standing inside each other (DESIGN.md §122.12)."""
+
+    degrees: float = Field(default=12.0, gt=0, le=180)
+    """The largest turn of a globe in one frame before it is reported (12: five days a second at 30 fps, as vidgen/space-bodies' own check)."""
+
+
 class OrbitConservedRule(RuleConfig):
     """``orbit_conserved``: an n-body orbit run whose energy, angular momentum or Jacobi constant drifts (or a figure-eight that does not close) by more than tolerance: the motion shows the integrator's error; a smaller step, or leapfrog (DESIGN.md §98.8)."""
 
@@ -2060,6 +2069,8 @@ class LintRules(_Strict):
     """In a 3d scene, an object the beat is about mostly hidden behind nearer objects (default: warning)."""
     web_clipped: WebClippedRule = Field(default_factory=WebClippedRule)
     """In a web scene, page text cut by its container (overflow: hidden) or by the page's box (default: error)."""
+    space_scene: SpaceSceneRule = Field(default_factory=SpaceSceneRule)
+    """A space scene's globe turning too fast under its speed-up, an enlarged body covering another, worlds inside each other (default: warning)."""
 
 
 class LintConfig(_Strict):

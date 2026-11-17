@@ -9,7 +9,9 @@ what moves where, who walks up to whom — not for realism. The author guide has
 [`examples/3d-short`](../examples/3d-short/video.yaml): a 9:16 Short of about 15 s with shapes, two
 stand-ins who walk and turn to each other, a ball that appears, rolls and glows, four camera moves
 on spoken words, karaoke captions, and its guide passes. The
-[scene gallery](gallery/3d.md) shows the type.
+[scene gallery](gallery/3d.md) shows the type. Space films (worlds, craft, a black hole, camera
+moves on orbits, written in `video.yaml` alone) have their own cookbook:
+[COOKBOOK-SPACE.md](COOKBOOK-SPACE.md).
 
 ## 1. Setting up
 
@@ -163,6 +165,68 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   Put light and colour on the hits and keep the camera on the form (sections), never on a beat.
   Worked example: [`examples/signal-fire`](../examples/signal-fire/README.md), an orchestral cue
   and a finished three.js night scene that follows it, track by track.
+- **Space at real scale.** Planets millions of metres apart and a ship of 100 m do not fit one
+  depth range or float32 world coordinates. Place them with `vidgen/space-scale` (CONFIG `web`,
+  "Astronomical scales"): `update: (t) => space.update(t, view(t))` for `Finish`; three.js's
+  units are then metres (`dof.unit` stays 1). When the focus is far away (a planet behind a near
+  ship), give the same focus as `dofFocus`. Bloom and motion blur need nothing more.
+- **A planet in it.** `const p = planet(renderer, "saturn"); scene.add(p.object)` from
+  `vidgen/space-bodies` (CONFIG `web`, "Planets, moons and rings"), then `p.update(t, {sun})` in
+  `Finish`'s `update`: surfaces from a seed, air with a blue limb and a red terminator, rings
+  with shadows both ways. three.js lights do not light it (give the sun's direction); it writes
+  its own depth, so depth of field and bloom work; give `Finish` `antialias: "none"` (its edge
+  is already smooth, and FXAA breaks thin rings into dots). Look first: `vidgen parts --kind body`.
+- **A sun and its light.** `const sun = star(renderer, "sun", {direction})` and `const light =
+  spaceLight({scene, camera, sun, bodies, sky})` from `vidgen/space-light` (CONFIG `web`, "Suns
+  and light"); call `sun.update(t)` and `light.update(t)` last in `Finish`'s `update`. The star
+  is linear light well above white where it is small, so three-finish's bloom makes it glow
+  (default bloom is enough; a hot star close up tints a wide part of the frame, lower
+  `bloom.strength` if it does). Ordinary meshes (`MeshStandardMaterial`) are lit by
+  `light.directional`; `environment: true` adds the sky's reflections; `shadows: {size}` (with
+  `renderer`) gives hard shadows round `at`. The default exposure `"film"` keeps stars beside a
+  day side by convention; `"camera"` and `"auto"` are the honest ones.
+- **Phenomena.** `blackHole(renderer, {sky})`, `wormhole(renderer, {sky, other})`,
+  `warp(renderer, {seconds, fps: ctx.fps})`, `asteroids(renderer, {light})`, `comet(renderer)`
+  and `aurora(world)` from `vidgen/space-phenomena` (CONFIG `web`, "Phenomena"); call each one's
+  `update` in `Finish`'s `update`. The black hole's disc is linear light over white near its
+  inner edge: a bloom of strength 0.35, radius 0.6 gives it its glow without washing the frame
+  (the stills of Step 373 use it). A hole that fills the frame costs 0.75 to 0.9 s a frame at
+  720p in software GL: budget it like a second scene. The hole draws after the sky and before
+  everything else, so a ship in front of it covers it. Look first: `vidgen parts --kind
+  phenomenon`.
+- **Spacecraft.** `craft("probe", {seed})` (or `satellite`, `station`, `ship`, `lander`, `tug`)
+  from `vidgen/space-craft` (CONFIG `web`, "Spacecraft") is a finished craft in metres:
+  `craft.update(t, {sun, camera, height: ctx.height})` each frame. Three things make it hold up
+  beside a planet: the light's shadows (`spaceLight({..., at: craft.object, shadows:
+  craft.shadows})`), an environment for the metal (`scene.environment =
+  craftEnvironment(renderer, scene, {at: craft.object}).texture`, made once after the worlds
+  stand) and a bloom that lets the foil's glints and the plumes glow (strength 0.3, radius 0.5,
+  threshold 1: the stills of Step 374 use it). `craft.shade(sun)` hides the sun's glare behind
+  it. A close-up of foil wants the sun from the side, so that single facets catch it and the
+  parts' shadows cross the bus. Look first: `vidgen parts --kind craft`.
+- **Space with no code first.** A [`space`](CONFIG.md#space) scene names the same parts in YAML
+  (`sky`, `sun`, `bodies`, `craft`, `phenomena`, `camera` moves one after another, `finish` with
+  no FXAA, `music` reactions) and writes the page for you; start there, and take the page over with
+  `script:` or `vidgen space-page` when a shot needs code (`vidgen guide space-scenes`).
+- **The camera in space.** `spaceCamera({space, camera})` from `vidgen/space-camera` (CONFIG
+  `web`, "Camera moves for space scenes") has the moves by name, each a function of time: `flyBy`,
+  `pass`, `arc` (a phase by name: `cam.arc(t, {subject: "Saturn", phase: {limb: 0.1}})` is a
+  crescent with the sun just off the limb), `arrive`, `reveal` (a sunrise whose first light is on
+  a bar line), `follow` (seven views of a craft) and `zoom` (powers of ten). What makes them look
+  shot rather than computed: the subject on a third, not in the middle (`place`); the horizon of
+  the world you fly over level (`level`); a speed that eases (`ease`) and a camera that lingers
+  at the closest pass (`linger`); a slow sway on a locked shot (`drift`); a long lens from far
+  back when a world should loom behind a craft (`view: "horizon"`, `loomLens`), a wide one when
+  the craft passes the camera. Run `cam.check(view, {from, to})` before a render: it names a
+  camera inside a world or a subject lost from the frame. Look first: `vidgen parts --kind
+  camera`.
+- **A sky behind it.** `scene.add(spaceSky(renderer, {seed}).object)` from `vidgen/space-sky`
+  (CONFIG `web`, "The sky of a space scene") is a sky like a photograph from space: thousands of
+  stars with the real sky's spread of brightness, the Milky Way with its dust, optional nebulae and
+  galaxies, or the real bright stars with `{stars: "real"}`. Give `Finish` `antialias: "none"` in a
+  shot of stars (FXAA makes crosses of them); keep `bloom` at its default so only the few bright
+  stars glow; a lit planet in the frame will outshine the sky unless you lower the light or raise
+  `sky.set({brightness})`, and say which. Aim with `camera.lookAt(sky.direction("center"))`.
 
 ## 9. Building blocks for music videos
 
@@ -174,7 +238,9 @@ numbers, easing, keyframes) and `vidgen/three-kit` draws light on black (glowing
 crystals, a tesseract, a nebula sky, portals, star fields, flares, shock rings, the melody's
 ribbon, the spectrum's rays, tunnels, a corridor, great rings, swarms, dust). The worked example
 is [`examples/parallel-space`](../examples/parallel-space/README.md): every scene of the film is
-composed from them in `ps.js`.
+composed from them in `ps.js`. To see them all before you choose, `vidgen parts` draws every
+ready-made part on one contact sheet, each with the line that uses it (`vidgen parts --list`
+without drawing; [CONFIG, "Ready-made parts"](CONFIG.md#ready-made-parts-vidgen-parts)).
 
 - **One script, one song time.** All scenes of a film can share one script that picks its set
   from `data.mode`; each draws from `T = ctx.music.time(t)` alone, so a cut between two scenes on
@@ -280,6 +346,11 @@ vidgen motion check output/my_video.mp4          # any file
   across a cut, deliberate or not.
 - **Before the final render**, check the scene clips you have: `--source scenes` reads the clips
   in `build/` (cut to cut) when the whole video is not rendered yet.
+- **Dark pictures** (space, night): a star field or a thin crescent on black is not a blank frame
+  (dark frames are also looked at 640 px wide), and black frames inside a star field are still an
+  error. Look at `shimmer` (stars flickering as they move: draw them soft and at least 2 px wide),
+  `clipped` (a sun or planet burnt to flat white) and `banding` (a dark glow in steps); give
+  `--subject SCENE` for the shots where a planet or ship must stay in view (`lost`).
 
 On the two finished example films: Parallel Space v7 (fixed) has no blank frames; one warning (a
 tunnel ring passing the camera brightens one frame in `06_build`) and 21 infos (seven cuts with
@@ -287,8 +358,8 @@ jumps in brightness, eleven flashes and dips on notes and hits, among them one-f
 `hook` notes in `05_heart`, a small glint, two held frames in the coda; the dips came from the
 kit's `melody` restarting each note's light at 0, fixed since: a still on such a note keeps the
 light of the frames around it); Escapement has none above
-info (seven cut jumps, small glints in its gears, the still opening on the watch while the title
-fades in, and the held ending).
+info (seven cut jumps and small glints in its gears; its opening and ending, once listed as
+frozen, change at 640 px: the title fades in and the watch turns).
 
 ## 12. Opening titles and end cards for films
 

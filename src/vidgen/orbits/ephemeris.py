@@ -332,6 +332,20 @@ def events_between(kind: str, observer: str, target: str, start: float, end: flo
         jd = ev.jd + 1.0   # past the root: the bisection leaves ev.jd up to 1e-5 d before it (the same event again)
 
 
+
+
+def flyby_axes(planet: str, jd: float) -> np.ndarray:
+    """The flyby frame's axes in the ecliptic J2000 frame, as rows: x along the planet's motion round the
+    Sun on ``jd`` (JPL's approximate elements), z its orbit's north, y = z × x (the Sun's side). A vector of
+    the ecliptic frame is ``flyby_axes(...) @ v`` in the flyby frame."""
+    r = heliocentric(planet, jd)
+    v = heliocentric(planet, jd + 0.5) - heliocentric(planet, jd - 0.5)
+    x = v / np.linalg.norm(v)
+    z = np.cross(r, v)
+    z /= np.linalg.norm(z)
+    return np.array([x, np.cross(z, x), z])
+
+
 __all__ = ["CENTURY", "EVENTS", "J2000", "PLANETS", "SOURCE", "TABLE1", "VALID_FROM", "VALID_TO", "Event", "MeanElements", "calendar", "check_valid",
-           "date_text", "distance", "elongation", "event_kind_check", "events_between", "heliocentric", "julian_date", "longitude", "mean_elements",
+           "date_text", "distance", "elongation", "event_kind_check", "events_between", "flyby_axes", "heliocentric", "julian_date", "longitude", "mean_elements",
            "next_event", "parse_date", "planet_key", "planet_synodic_period", "sidereal_period", "valid_range"]

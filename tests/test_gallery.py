@@ -30,8 +30,10 @@ DOCS = ROOT / "docs" / "gallery"
 #: data types (mass_spectrum, decay_chain, branching, branching_pie; 0.10–0.33 MB each) took the
 #: gallery to 15.4 MB; the rest is room for Step 243's showcase and one more entry; ENTRY_MAX and the
 #: GIF cap are unchanged. Step 243: the `higgs_diphoton` showcase (0.32 MB) took it to 15.7 MB, within
-#: the budget.
-BUDGET = 16_500_000
+#: the budget. Step 378: 16.5 → 17 MB for Phase AN's `space` entry (0.31 MB: a star field under a
+#: moving camera, its GIFs held to gallery.CLIP_NOISY_MAX_BYTES and its stills to gallery.STILL_MAX_BYTES);
+#: ENTRY_MAX and the GIF cap are unchanged.
+BUDGET = 17_000_000
 #: What one entry may weigh: its two GIFs (each at most gallery.CLIP_MAX_BYTES), two stills and its
 #: page. The heaviest entries before Step 216 weighed 0.33 MB (cross, cell, rainy_evening).
 ENTRY_MAX = 360_000
@@ -43,9 +45,14 @@ def builtin_gallery() -> list[gallery.GalleryType]:
         return gallery.gallery_types(None)
 
 
+#: Built-in types whose gallery entry is still to be rendered, with the step that renders it
+#: (tasklist.md); none now (``space`` got its entry in Step 378).
+GALLERY_PENDING: dict[str, str] = {}
+
+
 def committed_gallery() -> list[gallery.GalleryType]:
-    """The types the committed docs/gallery shows (every built-in)."""
-    return builtin_gallery()
+    """The types the committed docs/gallery shows (every built-in but those of :data:`GALLERY_PENDING`)."""
+    return [t for t in builtin_gallery() if t.name not in GALLERY_PENDING]
 
 
 @pytest.mark.slow
@@ -389,6 +396,17 @@ def test_committed_gallery_ends_with_the_youtube_videos() -> None:
         thumb = f"[![{video['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)](https://youtu.be/{vid})"
         assert thumb in section
     assert "**[" not in section and " · " not in section, "the YouTube section shows only the thumbnails"
+    shorts = section.split("\n### Shorts\n\n", 1)[1].strip()
+    expected = [
+        f'<a href="{s["url"]}"><img src="https://img.youtube.com/vi/{gallery.youtube_id(s["url"])}/hqdefault.jpg" height="180" alt="{s["title"]}"></a>'
+        for s in gallery.YOUTUBE_SHORTS
+    ]
+    assert shorts == " ".join(expected), "the Shorts are one row of linked thumbnails, nothing else"
+    assert [s["url"] for s in gallery.YOUTUBE_SHORTS] == [
+        f"https://www.youtube.com/shorts/{vid}"
+        for vid in ("gLsKCVGfdz4", "cEob9Rqooqo", "8EZThIyJKOQ", "nSDKRQBD6V4", "VIaxZaXD56Y", "y1zxGYL9OOE",
+                    "TSMGYvusLXA", "CrLAV33RlIU", "78nKM7xIsRE")
+    ]
 
 
 def test_youtube_id_reads_short_and_watch_links() -> None:
@@ -396,6 +414,25 @@ def test_youtube_id_reads_short_and_watch_links() -> None:
     assert gallery.youtube_id("https://youtu.be/J8gljBhqtTo?t=30") == "J8gljBhqtTo"
     assert gallery.youtube_id("https://www.youtube.com/watch?v=tjqrvbYNbGE") == "tjqrvbYNbGE"
     assert gallery.youtube_id("https://youtube.com/watch?feature=share&v=tjqrvbYNbGE") == "tjqrvbYNbGE"
-    for bad in ("https://vimeo.com/123", "https://youtu.be/short", "https://www.youtube.com/watch?x=1"):
+    assert gallery.youtube_id("https://www.youtube.com/shorts/gLsKCVGfdz4") == "gLsKCVGfdz4"
+    assert gallery.youtube_id("https://youtube.com/shorts/y1zxGYL9OOE?feature=share") == "y1zxGYL9OOE"
+    for bad in ("https://vimeo.com/123", "https://youtu.be/short", "https://www.youtube.com/watch?x=1", "https://www.youtube.com/shorts/short"):
         with pytest.raises(VidgenError, match="not a YouTube video link"):
             gallery.youtube_id(bad)
+
+
+def test_a_still_of_fine_noise_gets_fewer_colours(tmp_path: Path) -> None:
+    """Step 378: a star field's still is saved with a smaller palette until it weighs at most
+    gallery.STILL_MAX_BYTES; a flat picture keeps its 256 colours."""
+    import numpy as np
+
+    rng = np.random.default_rng(1)
+    noise = (rng.random((360, 640, 3)) ** 6 * 255).astype("uint8")
+    flat = np.zeros((360, 640, 3), "uint8")
+    flat[:, :, 0] = np.linspace(0, 255, 640, dtype="uint8")[None, :]
+    for name, pixels in (("noise", noise), ("flat", flat)):
+        Image.fromarray(pixels).save(tmp_path / f"{name}.png")
+        gallery._save_still(tmp_path / f"{name}.png", tmp_path / f"{name}-out.png")
+    with Image.open(tmp_path / "noise-out.png") as a, Image.open(tmp_path / "flat-out.png") as b:
+        assert len(a.getcolors(256) or []) <= 64 and len(b.getcolors(256) or []) > 200
+    assert (tmp_path / "flat-out.png").stat().st_size <= gallery.STILL_MAX_BYTES

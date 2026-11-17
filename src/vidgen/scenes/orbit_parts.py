@@ -627,7 +627,7 @@ class OrbitModel:
 
 def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, orbit_count: float | None, dynamics: str, method: str,
                   step: str | None, follow: str | None, cannon: OrbitCannon | None = None, transfer: OrbitTransfer | None = None,
-                  flyby: OrbitFlyby | None = None, many: Any = None, sky: Any = None) -> OrbitModel:
+                  flyby: OrbitFlyby | None = None, many: Any = None, sky: Any = None, check_dates: bool = True) -> OrbitModel:
     """Everything an ``orbit`` scene computes before drawing, checked (``VidgenError`` with the
     reason): the system, the span (``span``, or ``orbit_count`` periods of the first body —
     default one; with only a cannon, the longest closed shot's period; with a transfer, until a
@@ -710,13 +710,19 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
             raise VidgenError(f"orbits: bodies[1] '{first}' is on an open orbit (e = {o.elements.e:g}, a {o.elements.kind}): it has no period; "
                               "give span: '200 d' (a time) instead")
         seconds = (orbit_count if orbit_count is not None else 1.0) * period
-    if info_sky is not None and info_sky.jd0 is not None:
+    if info_sky is not None and info_sky.jd0 is not None and check_dates:
         orbits.check_valid(info_sky.jd0, info_sky.jd0 + seconds / orbits.DAY, where="span")
-    late = [(name, b) for name, b in OrbitModel(system, seconds, None, None, {}).burns() if b.time > seconds]
+    every = OrbitModel(system, seconds, None, None, {}).burns()
+    late = [(name, b) for name, b in every if b.time > seconds]
+    if info is not None and len(late) < len(every):
+        late = []   # a transfer's departure inside the span, the rest after it: a shot of the departure alone
     if late:
         name, b = late[0]
-        what = f"the transfer's burn at {_time(b.time)}" if info is not None else f"{name}'s burn at {_time(b.time)}"
-        raise VidgenError(f"{what} comes after the scene's span ({_time(seconds)}); make the span longer or leave it out")
+        if info is not None:
+            raise VidgenError(f"the transfer's first burn at {_time(b.time)} comes after the scene's span ({_time(seconds)}): make the span longer, "
+                              f"leave it out, or give transfer.depart a time inside it ('{max(1, int(seconds / 60 / 5))} min'); a span that ends before the "
+                              "later burns shows the departure alone")
+        raise VidgenError(f"{name}'s burn at {_time(b.time)} comes after the scene's span ({_time(seconds)}); make the span longer or leave it out")
     names = [system.central.name, *system.names]
     if follow is not None and follow not in names:
         raise VidgenError(f"follow: no body '{follow}' (bodies: {', '.join(names)})" + did_you_mean(follow, names))
@@ -800,12 +806,17 @@ class AssistInfo:
 
 
 def lead_angle(system: Any, ship: str, target: str, t: float) -> float:
-    """The angle (rad, in (−π, π]) the target leads the ship by at ``t``, in the ship's direction of motion."""
+    """The angle (rad, in (−π, π]) the target leads the ship by at ``t``, in the ship's direction
+    of motion, measured in the ship's orbital plane (Step 367: an inclined plane too)."""
     o = system.orbiter(ship)
     r_s, v_s = o.states(t)
     r_t = system.orbiter(target).positions(t)
-    sense = 1.0 if np.cross(r_s, v_s)[2] >= 0 else -1.0
-    ang = sense * (math.atan2(r_t[1], r_t[0]) - math.atan2(r_s[1], r_s[0]))
+    h = np.cross(r_s, v_s)
+    if h[0] == 0 and h[1] == 0:   # the reference plane: the x-y angles, as before Step 367
+        sense = 1.0 if h[2] >= 0 else -1.0
+        ang = sense * (math.atan2(r_t[1], r_t[0]) - math.atan2(r_s[1], r_s[0]))
+    else:
+        ang = math.atan2(float(np.cross(r_s, r_t) @ h) / float(np.linalg.norm(h)), float(r_s @ r_t))
     out = (ang + math.pi) % (2 * math.pi) - math.pi
     return math.pi if out == -math.pi else out
 

@@ -79,7 +79,12 @@ class Body:
 @dataclass(frozen=True)
 class OrbitPreset:
     """A preset orbiting body: the body, the preset of the body it goes around, and its orbit's
-    elements there (SI; angles in radians; ``mean_anomaly`` at the epoch)."""
+    elements there (SI; angles in radians; ``mean_anomaly`` at the epoch). ``plane`` (Step 367):
+    what ``i``, ``raan`` and ``argp`` are measured from — ``ecliptic`` (the mean ecliptic and
+    equinox of J2000: the planets, the Moon, Halley) or ``equator`` (the equator of the body it
+    goes around: the ISS-like and geostationary orbits, the Galilean moons). The ``orbit`` scene
+    draws every orbit seen from above its own reference plane and does not turn one into the
+    other; the ``web`` scenes' orbit data does (DESIGN.md §122.1)."""
 
     key: str
     body: Body
@@ -92,6 +97,7 @@ class OrbitPreset:
     mean_anomaly: float = 0.0
     source: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
+    plane: str = "ecliptic"
 
 
 _DE440 = "JPL DE440 (GM); IAU WGCCRE 2015 (radius)"
@@ -130,7 +136,7 @@ def _galilean(key: str) -> OrbitPreset:
     period = GALILEAN_PERIODS[key] * 86_400.0
     a = (mu * period**2 / (4 * math.pi**2)) ** (1 / 3)
     return OrbitPreset(key, body, "jupiter", a, 0.0, mean_anomaly=math.radians(GALILEAN_PHASES[key]),
-                       source="sidereal period (published mean value); circular, equatorial; phase set for the Laplace angle 180°")
+                       source="sidereal period (published mean value); circular, equatorial; phase set for the Laplace angle 180°", plane="equator")
 
 _JPL = "JPL approximate planetary elements, Table 1 (J2000; valid 1800–2050)"
 
@@ -151,9 +157,9 @@ ORBITS: dict[str, OrbitPreset] = {
         *[planet_preset(k, *TABLE1[k][0]) for k in TABLE1],
         OrbitPreset("moon", BODIES["moon"], "earth", 384_400e3, 0.0549, math.radians(5.145), source="mean distance and eccentricity; i to the ecliptic"),
         OrbitPreset("iss", Body("ISS", 0.0, 0.0, "", "an ISS-like orbit"), "earth", R_EARTH + 420e3, 0.0, math.radians(51.64),
-                    source="ISS-like: circular, 420 km altitude, i = 51.64°"),
+                    source="ISS-like: circular, 420 km altitude, i = 51.64°", plane="equator"),
         OrbitPreset("geo", Body("GEO satellite", 0.0, 0.0, "", "geostationary"), "earth", (GM_EARTH * SIDEREAL_DAY**2 / (4 * math.pi**2)) ** (1 / 3), 0.0,
-                    source="geostationary: period one sidereal day"),
+                    source="geostationary: period one sidereal day", plane="equator"),
         OrbitPreset("halley", Body("Halley", 0.0, 0.0, "", "1P/Halley"), "sun", 17.834 * AU, 0.96714, math.radians(162.26), math.radians(58.42),
                     math.radians(111.33), source="1P/Halley, 1986 osculating elements (rounded; for illustration)"),
         *[_galilean(k) for k in GALILEAN_PERIODS],

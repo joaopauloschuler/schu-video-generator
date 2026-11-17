@@ -5,9 +5,215 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–365
+## Steps 193–378
 
-### Music-video tools (Phase AM, Steps 358–365)
+### Space scenes (Phase AN, Steps 367–378)
+
+- **The phase's review** (Step 378): the cookbook [docs/COOKBOOK-SPACE.md](docs/COOKBOOK-SPACE.md)
+  (what to show, honest scale and exposure, a recipe per shot with its `video.yaml`, the cost of
+  each shot on 2 cores, the checks, common mistakes and their messages, where the numbers come
+  from). Through a long lens the sky stays sharp points over a smooth glow (no soft blobs or
+  streaks behind a craft). The page warns of a craft in a world's shadow or seen from its unlit
+  side, and `follow` takes `side: sun`. A burn shown for seconds of a sped-up scene keeps its
+  direction in the flight's own axes. `vidgen motion check` follows stars across a pan and leaves
+  a warp's streaks out: no `shimmer` warnings on fly-bys, warps or 8 fps drafts (two new
+  thresholds, `shimmer_reach` and `shimmer_point`). A fly-by's planet pole and sun stand as they
+  are on the date; a `transfer` scene may end before its second burn (the departure alone); a dated
+  orbit-data speed-up is no longer refused at `vidgen validate`; a camera may name a body nothing
+  draws (a comet's). A page may take 90 s to open (2048 world maps). The crewed ship's tanks are
+  wrapped in foil. The `space` type in the scene gallery; MCP tool `space_page`. Outbound: a sharper
+  world under the departure, the fly-by's true sun and rings, a nearer black hole on the hit, a
+  larger end card. The star catalogue: vidgen ships a hand-written list of 221 bright stars; the
+  Bright Star Catalogue (no formal licence) is converted by `tools/make_star_catalogue.py` for a
+  user who downloads it.
+- **An example space film** (Step 377): `examples/outbound`, "Outbound", 58 s at 1280x720, source
+  only: five `space` scenes written in `video.yaml` with no JavaScript, cut on the bar lines of an
+  original score for vidgen's synthesizer (D minor, 75 BPM, one bar = 96 frames; strings, four horns,
+  low brass, a men's choir, timpani, taikos). A sunrise over an Earth-like world on bar 4; a ship's
+  7.28 km/s departure burn on bar 7 (the Hohmann transfer to Saturn, from the orbit mathematics) and
+  its escape hyperbola; a fly-by of a ringed giant at the transfer's arrival speed; a jump to warp; a
+  black hole fly-by as the climax; an opening title and an end card. Its README has the form table,
+  what is true and what was chosen, the estimated render time and how to change it. Fixed on the way:
+  a world of a `space` scene's orbit data can now be a camera move's subject (`arc` round the planet a
+  craft flies past); before, the page stopped with "arc.subject must be ...". The pages of `space`
+  scenes with `orbits:` and `bodies:` gain one line, so such scenes are drawn again.
+
+- **Space scenes without code** (Step 376): the new scene type `space`, written in `video.yaml`
+  alone. Name a sky (from a seed, or the real bright stars), a sun, worlds (`{name: Saturn}` is
+  a ringed giant; `type: ocean` with a seed is a world of your own), craft, phenomena and camera
+  moves, and vidgen writes the three.js page from the ready-made space parts and draws it like a
+  `web` scene: `vidgen still`, `--draft`, the cache. With `orbits:` (the `orbit` scene's words)
+  the worlds and craft are the orbit data's bodies, a craft flies a real transfer with its burns,
+  and the Sun stands where it really is on the date; `scale:` enlarges bodies or compresses
+  distances and says so on screen. Camera moves follow one another in seconds or in bars of the
+  score (`over: ['bar 9', 'bar 13']`); a move that does not start where the last one left the
+  camera stops the render unless it says `cut: true`. `music:` pulses the sun's glare, the sky,
+  a black hole or a warp on a track's hits and drives a craft's throttle and lights (never the
+  camera); `title:` and `end_card:` add Escapement's cards; `finish:` has no FXAA by default.
+  Every key is checked by `vidgen validate` with the closest word, the names and options read
+  from the space modules themselves; `vidgen lint` warns of a globe that turns too fast under the
+  speed-up, an enlarged body covering another, and "to scale" said of an enlarged scene; the page
+  prints what only it can know (a subject under 3 px, the camera inside a world). `script:` adds
+  your own code with every object by name, and `vidgen space-page` writes the page out as a
+  `web` scene to go on in code (the same picture). `vidgen music plan SCORE --style space` drafts
+  a whole space film from a score: a world chosen by each scene's colour, a camera move by its
+  role, sunrise on a section start, moves on bar lines. `vidgen guide space-scenes`.
+- **Camera moves for space scenes** (Step 375): the new module `vidgen/space-camera`.
+  `spaceCamera({space, camera})` gives the moves by name, each a function of time, so a cut on a
+  bar line and motion blur are safe: `flyBy` (approach, the closest pass at a stated distance
+  and side, recede, with an optional bank), `pass` (a craft passes the camera), `arc` (a world
+  at a phase by name: `cam.arc(t, {subject: "Saturn", phase: {limb: 0.1}})` is a crescent with
+  the sun just off the limb), `arrive` (from far out to a low orbit over a level limb), `reveal`
+  (the sun, a moon or a craft comes out over a world's limb, the first light exactly at a given
+  time), `follow` (seven views of a craft, among them a long lens that makes the world's limb
+  loom behind it) and `zoom` (powers of ten: every second multiplies the distance by a constant,
+  with landing points to rest on). The subject sits on a third, the horizon of the world below is
+  level, speeds ease. Lenses by focal length, `loomLens` for the long-lens shot, `cam.check`
+  that says in sentences when a camera is inside a world or a subject is lost, a match cut on a
+  disc, a cut on a flash, the warp as a cut. Five framings on the contact sheet: `vidgen parts
+  --kind camera`.
+- **Path lines show in close-ups** (Step 375): a line of `space.path` in `vidgen/space-scale` was
+  not drawn near the camera, and lost the part of an orbit nearest the camera at the frame's
+  edge. Both are fixed.
+- **A spacecraft kit** (Step 374): the new module `vidgen/space-craft`. `craft("probe", {seed})`
+  gives a finished craft in one line: a deep-space probe, a communications satellite, a modular
+  station (with a turning ring habitat on request), a crewed ship, a lander and a cargo tug, all
+  invented designs in metres, another design of the kind for every seed and the same craft for
+  the same seed; `fleet(kind, {count, seed})` a formation of them. The same parts are there for
+  a craft of your own (`craftKit`: hull sections, tanks, trusses, solar wings, radiators,
+  dishes, antennas, booms, instruments, docking ports, a cupola, an airlock, engines,
+  thrusters, landing legs, a ring habitat, cargo boxes, lights), joined at named points with
+  `attach` and `around`. Surfaces are computed, not pictures: gold, silver and black foil that
+  crinkles, white paint and bare aluminium with panel lines and rivets, black tiles, solar
+  cells with their grid, windows lit from inside. `craft.update(t, {sun})` turns the wings to
+  the sun, points gimballed dishes, blinks the lights by the clock and fires the engines
+  (`throttle`): plumes that widen into the vacuum (chemical, hydrogen, ion; shock diamonds only
+  for an engine in air). `craft.fly(space, {body})` flies a body of `orbit_data` with a stated
+  attitude (prograde, retrograde, radial, nadir, to the sun, to a target, or a list of them
+  with eased turns) and shows each burn of the data as a short stretch of thrust with the nose
+  along it. `craft.shade(sun)` lets a craft hide the sun's glare; `craftEnvironment` gives its
+  metal the sky and the planet to mirror; far away a craft is a steady point of light that
+  flashes when a panel mirrors the sun. `vidgen parts --kind craft` and the new `--kind
+  craft-part` show 31 tiles. Measured at 720p in software GL: a craft in a wide shot 0.05 to
+  0.15 s a frame, filling the frame 0.3 to 0.6 s.
+  Fixed on the way: `vidgen/space-scale` drew no shadows when the scene had a sky.
+- **Phenomena for space scenes** (Step 373): the new module `vidgen/space-phenomena`.
+  `blackHole(renderer, {sky})` is a non-rotating black hole whose light paths are worked out for
+  every pixel: a shadow of the true size, the sky bent round it (an Einstein ring before the
+  Milky Way, stars brighter near it and seen a second time on the far side), a disc of gas whose
+  far side stands over and under the shadow, brighter where it comes toward the camera,
+  white-hot inside and red outside, turning faster inside. `wormhole(renderer, {sky, other})` is
+  a ball that shows another sky, and `passage(camera, progress)` flies through its tunnel of
+  bent light. `warp(renderer)` stretches stars into streaks for a jump driven by a progress from
+  0 to 1 (a flash, a tunnel, brightness pulses from the music; the lens is never zoomed).
+  `asteroids(renderer)` is a field of thousands of seeded, tumbling rocks to fly through or a
+  belt round a world, `asteroid()` one rock for a close-up. `comet(renderer)` has a dust tail
+  and an ion tail that point away from the sun and, with `orbit_data`, grow as the comet nears
+  it. `aurora(world)` lights the polar oval of a world's night side. Every phenomenon has a
+  `quality` and a measured cost a frame (CONFIG `web`, "Phenomena"; on the sheet of
+  `vidgen parts --kind phenomenon`, 12 parts). What is physics and what is a painter's choice
+  is stated in the reference.
+- **Suns and the light of a space scene** (Step 372): the new module `vidgen/space-light`.
+  `star(renderer, "sun")` is a star you can look at: cells that boil in place, a limb that darkens
+  and reddens, spots and faculae from a seed, a corona with streamers, loops of gas at the limb;
+  five ready-made kinds by temperature (`red-dwarf`, `orange`, `sun`, `white`, `blue-giant`) or
+  your own. Small in the frame (`{direction}` for a sun in the sky, or the Sun of `ctx.orbits`
+  with `{space}`) it is a brilliant point with a soft glow, thin diffraction spikes fixed to the
+  frame and faint round lens ghosts. `spaceLight({scene, camera, sun, bodies, sky})` lights the
+  whole scene from one place each frame: every body's sun, planet-shine and ring-shine on night
+  sides, a directional light for ordinary meshes, optional eclipse shadows (`eclipses: true`: a
+  moon's shadow on its world, a world's copper shadow on its moon), no ambient light. The glare
+  knows the bodies in front of the sun: at sunrise over a world's limb it starts as a red spark
+  and grows, with nothing read back from the picture. Exposure is a stated choice: `"film"` (the
+  default, a convention: stars beside a day side, planet-shine lifted), `"camera"` (honest: one
+  exposure `ev`; the stars are 20 stops under a sunlit ground) and `"auto"` (honest: the exposure
+  follows what is in the frame, with no state between frames). `falloff: 2` gives the true
+  inverse-square sunlight; the default 0 lights every world alike. 15 parts on `vidgen parts
+  --kind light`. `vidgen/space-scale` now draws objects marked `userData.overlay` once, over
+  everything, after its depth slices; `vidgen/space-bodies` gained the eclipse test in its shader
+  (off unless `spaceLight` asks). A star takes 0.6 s to make and 0.15 to 0.4 s a frame at 720p
+  in software GL.
+- **Planets, moons and rings in one line** (Step 371): `planet(renderer, "earth")` from the new
+  module `vidgen/space-bodies` puts a world into a three.js `web` scene whose surface is generated
+  from a seed: seven types (`rocky` with craters, maria and rays; `icy` with long cracks;
+  `desert` with canyons, volcanoes and polar caps; `ocean` with continents, sun glint, clouds in
+  weather systems, ice caps and faint city lights; `lava`; `gas` with belts, zones, stirred edges
+  and storms; `ice-giant`), each with options and palettes, and 21 ready-made worlds: lookalikes
+  of the Solar System's bodies from Mercury to Neptune, the Moon, the Galilean moons and Titan (in
+  character and colour, not maps of them) and seven invented ones. Air is a thin shell with a blue
+  limb, a red terminator and a lit rim when the sun is behind; airless bodies show crater shadows
+  at the terminator. Rings (`rings: {...}`) have provinces, gaps and ringlets, shadow the globe
+  and are shadowed by it, glow in their thin parts when seen from the unlit side and stay clean at
+  grazing angles. With `orbit_data`, `planet(renderer, "Saturn", {space})` places, sizes, tilts,
+  turns and lights the body from `ctx.orbits`; `body.problems()` warns when a speed-up makes a
+  globe turn so far a frame that it flickers, and `spin: "locked"` or `spin: seconds` are the
+  stated ways out. A body is sharp from a close limb down to a single steady point. A body takes
+  2 to 4 s to make and 0.05 to 0.2 s a frame at 720p in software GL. 33 new tiles on
+  `vidgen parts` (`vidgen parts --kind body`).
+- **A sky for space scenes in one line** (Step 370): `spaceSky(renderer, {seed})` from the new
+  module `vidgen/space-sky` draws a sky like a photograph taken from space behind a three.js `web`
+  scene: about 69,000 stars in the real sky's numbers per magnitude, with pale colours by
+  temperature and a small glare on the brightest; the Milky Way with a warm bulge, star clouds and
+  a dust rift; on request emission, reflection and dark nebulae and far galaxies. `look: "rich"` or
+  `"sparse"`, `density`, `brightness`, `color`, the band's place and more are options. Stars do not
+  shimmer when the camera turns slowly (0.015 to 0.022 on `vidgen motion check`'s scale, where the
+  warning starts at 0.2). The sky is made once (5 to 6 s at 720p in software GL) and then costs
+  about 0.1 s a frame; `sky.environment` lets metal reflect it. `{stars: "real"}` puts the true
+  bright stars at their places with the Milky Way where it is, in the frame of `ctx.orbits`, so a
+  dated scene has the right constellations behind its planets; the shipped star file holds 221
+  well-known bright stars at approximate places, fainter stars are seeded, and
+  `tools/make_star_catalogue.py` converts the Yale Bright Star Catalogue into the same file.
+  `spiralGalaxy()` is a galaxy of particles that a camera can fly past. Eleven new tiles on
+  `vidgen parts` (`vidgen parts 'space-sky*' spiral-galaxy`). With `vidgen/three-finish`, use
+  `antialias: "none"` for star fields: FXAA turns small stars into crosses.
+- **`vidgen motion check` understands dark pictures** (Step 369): dark frames are also looked at
+  640 px wide, so a star field or a thin crescent on black is no longer taken for a blank frame
+  and a slow drift of the stars is no longer "frozen", while black frames that break into a star
+  field, or a planet that vanishes for a few frames, are reported as errors. New findings: an
+  over-exposed sun or planet (`clipped`), stars that shimmer as they move (`shimmer`, a common
+  fault of small point stars), a dark glow drawn in steps (`banding`), a nearly empty frame
+  (`empty`) and, for the scenes named with `--subject`, a subject lost in the dark (`lost`).
+  Escapement's opening and ending are no longer listed as frozen: their title fades in and the
+  watch turns.
+- **`vidgen parts`** (Step 369): a labelled contact sheet of the ready-made three.js parts for
+  `web` scenes (skies, crystals, a tesseract, portals, rings, a corridor, tunnels, flares, shock
+  rings, glints, ribbons, spectrum rays, dust, a studio environment), each tile with the one line
+  that uses it, drawn in one browser in about 12 s; `--list` names them without drawing; `--kind`,
+  names and patterns choose; one part gets one large tile. The parts live in a registry,
+  `vidgen/parts`, that a page can build them from by name; the space parts of the coming steps join
+  it. Over MCP: `parts`.
+- **Planets, moons and a ship at their real sizes and distances in three.js** (Step 368):
+  `vidgen/space-scale` places what `ctx.orbits` gives camera-relative in double precision every
+  frame and draws in depth slices, so a 100 m ship 400 km above the Earth, the Moon behind it and a
+  box 3 m from the camera neither jitter nor z-fight, with `vidgen/three-finish`'s bloom, motion
+  blur and depth of field. Three stated scale modes, true (the default), bodies enlarged by a
+  stated factor, and distances compressed as the `orbit` scene's `radial: log`, each with its
+  honest caption in the `orbit` scene's words ("sizes not to scale"). One camera can travel from
+  2 m above the Earth to beyond Neptune in a single shot.
+- **Orbits on a three.js page** (Step 367): a `web` scene with `orbit_data:` gets `ctx.orbits`,
+  the planets, moons and spacecraft of the `orbit` scene (same keys: `bodies`, `span` or
+  `speedup`, `date`, `transfer`, `flyby`, `dynamics`, `system`) computed by vidgen for every frame:
+  positions and velocities in metres from the central body in the ecliptic of J2000, each body's
+  orbit and path as polylines, a ship's burns, and how each body turns (an orientation and its
+  prime meridian per frame). `vidgen still` and the render show the same numbers, to the last
+  digit.
+- **How the Sun, the planets, the Moon and the Galilean moons turn**: rotation period, axial
+  tilt, north pole and radii from the IAU's cartographic report, with their sources; a tidally
+  locked moon faces its planet.
+- **Transfers in an inclined plane** now leave at the right moment: between two orbits sharing a
+  tilted plane the launch window was measured on the flat projection, and the ship arrived up to
+  10,000 km from its target. Orbits in the plane of the picture are unchanged.
+- **The n-body check of the angular momentum** covers the whole vector, not only its part about
+  the picture's axis (flat systems give the same values as before).
+
+### Music-video tools (Phase AM, Steps 358–366)
+
+- **Strings without a breath in slow, soft notes** (Step 366): a soft held note of the strings
+  (low `brightness`, a soft dynamic, or a slow `attack` that swells in) had its bow's rosin hiss
+  standing over the dark tone in the highs, a breathy "fo" with the note's envelope (Parallel
+  Space's `swell`). The hiss now stays under the tone's own highs, as in an ordinary note: about
+  21 dB less in such notes. Spiccato, pizzicato and notes held at ordinary or bright bow sound as
+  before (their releases a hair less hiss); scores with held string notes change a little.
 
 - **Parallel Space v8** (Step 365): `examples/parallel-space` is now the version the owner
   approved. An opening title and an end card from `vidgen/title-cards` (the light in the right
@@ -89,8 +295,10 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   through `music_data`; its `ps_audio.json` and `scripts/make_ps_audio.py` are gone (the same hits
   and notes; spectrum and level measured from the mix: stills 53.5 dB PSNR or closer).
 
-### Gallery (Steps 356–358.1)
+### Gallery (Steps 356–358.1, 371.1, 377.1)
 
+- Step 377.1: three more YouTube Shorts after the six under "Shorts" (`YOUTUBE_SHORTS`), nine thumbnails in the row.
+- Step 371.1: six YouTube Shorts under "Shorts" in the gallery's "Videos on YouTube": one row of clickable thumbnails (180 px high, as the gallery's previews), each linking to its `youtube.com/shorts/<id>` page (`YOUTUBE_SHORTS` in `src/vidgen/gallery.py`); `gallery.youtube_id()` also reads `youtube.com/shorts/<id>` links.
 - Step 358.1: the gallery's "Videos on YouTube" section shows only the clickable thumbnails (the title is the alt text); the title/channel lines and the `channel` field are gone.
 - Step 357: each YouTube video in the gallery shows its clickable thumbnail (YouTube's own `img.youtube.com` image, nothing stored in the repository), then its title and channel; `gallery.youtube_id()` reads the id from `youtu.be/<id>` and `youtube.com/watch?v=<id>` links.
 - The scene gallery ends with "Videos on YouTube": links to videos made with schu-video-generator (`YOUTUBE_VIDEOS` in `src/vidgen/gallery.py`); the README points to it.

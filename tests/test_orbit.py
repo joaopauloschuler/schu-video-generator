@@ -347,7 +347,7 @@ def test_burns_and_flyby_resolve() -> None:
         ({**LEO_GEO, "transfer": {"ship": "Sat", "to": "6678.1 km"}}, "already on that orbit"),
         ({**LEO_GEO, "bodies": [{"name": "Sat", "altitude": "300 km", "e": 0.1}]}, "e = 0.1.*starts from a circular orbit"),
         ({**LEO_GEO, "bodies": [{"name": "Sat", "altitude": "300 km", "burns": [{"prograde": "1 km/s"}]}]}, "has burns of its own"),
-        ({**LEO_GEO, "transfer": {"ship": "Sat", "to": "42164 km"}, "span": "2 h"}, r"burn at 5.275 h comes after the scene's span \(120 min\)"),
+        ({**LEO_GEO, "transfer": {"ship": "Sat", "to": "42164 km", "depart": "3 h"}, "span": "2 h"}, r"first burn at 180 min comes after the scene's span \(120 min\).*transfer.depart"),
         ({"central": "earth", "bodies": [{"name": "S", "altitude": "300 km", "burns": [{"at": "10 min", "retrograde": "1 km/s"}]}], "span": "2 h"},
          r"burns\[1\]: the orbit after it has its periapsis .* would hit Earth"),
         ({"central": "earth", "bodies": [{"name": "S", "altitude": "300 km", "burns": [{"prograde": "-1 km/s"}]}], "span": "2 h"}, "use the opposite direction"),

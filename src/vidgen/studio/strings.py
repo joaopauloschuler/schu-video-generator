@@ -178,17 +178,20 @@ def _cents(n: int, s: Mapping[str, float], rng: np.random.Generator, offset: int
 
 
 def _held_player(body: Body, freq: float, n: int, held: int, s: Mapping[str, float], player: int, offset: int, alone: bool,
-                 rng: np.random.Generator, phrase: Phrase = ()) -> np.ndarray:
+                 rng: np.random.Generator, phrase: Phrase = ()) -> tuple[np.ndarray, np.ndarray]:
     """One player's sustained or tremolo note at ``freq`` Hz (the player's own tuning): mono, the
     held part as loud (:func:`~vidgen.studio.additive.loudness`) whatever the pitch and settings.
     ``phrase``: the further notes it is slurred to: the bow stays on the string, the pitch glides
-    to each, and every note is the body's answer to its own pitch."""
+    to each, and every note is the body's answer to its own pitch. Also returns the share of the
+    full tone per sample (the rest is the darker tone of a bow not yet, or no longer, biting;
+    a tremolo's strokes left out), which the bow's noise follows (:func:`_rosin_room`)."""
     tremolo = int(s["stroke"]) == _TREMOLO
     t = np.arange(n) / RATE
     shape = raised_cosine(n, int(s["attack"] * RATE), offset) * (1 - raised_cosine(n, n - held, held))
     bite = s["accent"] * float(np.clip(1 - s["attack"] / _BITTEN, 0.0, 1.0))
     level = shape * (1 + 0.25 * bite * np.exp(-np.maximum(t - offset / RATE, 0.0) / 0.07))
     loudness = 1.0
+    bitten = np.where(shape < 0.995, np.maximum(shape, 0.0) ** 0.8, 1.0)
     if tremolo:
         strokes = _strokes(n, s, rng, alone)
         shape = shape * strokes
@@ -218,7 +221,7 @@ def _held_player(body: Body, freq: float, n: int, held: int, s: Mapping[str, flo
         return tone
 
     tone = voiced(0.0, 0, n) if not phrase else phrase_tone(n, phrase, offset, voiced)
-    return tone * level / loudness
+    return tone * level / loudness, bitten
 
 
 # ----- short strokes -------------------------------------------------------------------------------
@@ -299,13 +302,57 @@ def _through_body(body: Body, noise: np.ndarray, mute: float, low: float, high: 
     return out / max(float(np.sqrt(np.mean(out**2))), 1e-12)
 
 
+@lru_cache(maxsize=16)
+def _hiss_bands(name: str, mute: float) -> tuple[np.ndarray, np.ndarray]:
+    """The octave bands of the rosin hiss (from half the bridge hill to above 12 kHz, edges in
+    Hz) and the share of its RMS in each."""
+    body = _BODIES[name]
+    edges = body.formants[-1][0] / 2 * 2.0 ** np.arange(6)
+    edges = edges[: int(np.searchsorted(edges, 12000.0)) + 1]
+    freqs = np.linspace(20.0, 24000.0, 8192)
+    octaves, db = _body_curve(name, mute)
+    power = (10 ** (np.interp(np.log2(freqs), octaves, db) / 20) / np.sqrt(1 + (edges[0] / freqs) ** 4) / np.sqrt(1 + (freqs / 12000.0) ** 4)) ** 2
+    shares = [math.sqrt(float(power[(freqs >= low) & (freqs < high)].sum() / power.sum())) for low, high in zip(edges[:-1], edges[1:])]
+    return edges, np.array(shares)
+
+
+def _rosin_room(body: Body, freq: float, s: Mapping[str, float], bitten: np.ndarray) -> np.ndarray:
+    """How much of the rosin hiss a held note lets through, per sample, 0 to 1 (DESIGN.md §121.8).
+    The hiss lies in the highs, where a dark tone (``brightness`` under 0.5, or the darker tone
+    of a bow not yet biting, ``bitten`` under 1) has little: there it stood alone, a breath. In
+    every octave band above half the bridge hill it may stand out of the tone no more than it
+    does in an ordinary note (``brightness`` 0.5, or the note's own if brighter) at full bow, so
+    at full bow and ``brightness`` 0.5 or more nothing changes."""
+    edges, shares = _hiss_bands(body.name, s["mute"])
+    number, _ = _partials(freq)
+    hz = freq * number
+    gain = _gain(body, hz, 0, s)
+    bands = [(hz >= low) & (hz < high) for low, high in zip(edges[:-1], edges[1:])]
+
+    def spectrum(brightness: float) -> np.ndarray:
+        string = bowed(body, freq, brightness) * gain
+        return string / _loud(string, freq)
+
+    def standing(amplitudes: np.ndarray) -> float:
+        """The hiss against the tone in the band where it stands out most (amplitude ratio)."""
+        total = math.sqrt(float(np.sum(amplitudes**2)))
+        return max(share * total / max(math.sqrt(float(np.sum(amplitudes[band] ** 2))), 1e-9) for share, band in zip(shares, bands))
+
+    full, dark = spectrum(s["brightness"]), spectrum(max(s["brightness"] - 0.3, 0.0))
+    allowed = max(standing(spectrum(0.5)), standing(full) if s["brightness"] >= 0.5 else 0.0)
+    grid = np.linspace(0.0, 1.0, 21)
+    room = [min(1.0, allowed / standing(w * full + (1 - w) * dark)) for w in grid]
+    return np.interp(bitten, grid, room)
+
+
 def _bow_noise(body: Body, freq: float, n: int, s: Mapping[str, float], power: np.ndarray, start: np.ndarray, rng: np.random.Generator,
-               phrase: Phrase = ()) -> np.ndarray:
+               phrase: Phrase = (), bitten: np.ndarray | None = None) -> np.ndarray:
     """The noise of a note: rosin hiss while the bow is on the string, in step with the string
     (a burst each period) and following the players' level (``power``, per sample); a scratch
     where a stroke begins; for a pizzicato the thump of the finger leaving the string instead.
     ``start``: 0 before the note's first player starts, rising to 1 within 2 ms. ``phrase``: the
-    notes slurred to it (the bursts follow the pitch)."""
+    notes slurred to it (the bursts follow the pitch). ``bitten``: a held note's share of the
+    full tone per sample; the hiss stays within the tone's own highs (:func:`_rosin_room`)."""
     stroke = int(s["stroke"])
     t = np.arange(n) / RATE
     hill = body.formants[-1][0]
@@ -316,7 +363,10 @@ def _bow_noise(body: Body, freq: float, n: int, s: Mapping[str, float], power: n
     angle = 2 * np.pi * freq * t if not phrase else 2 * np.pi * phase_cycles(freq * 2 ** (phrase_pitch(n, phrase) / 12), n)
     pulse = (0.5 + 0.5 * np.cos(angle)) ** 3 / 0.56  # RMS 1
     bite = s["accent"] * (1.0 if stroke == _SPICCATO else float(np.clip(1 - s["attack"] / _BITTEN, 0.0, 1.0)))
-    level = _ROSIN * (2.0 if stroke == _TREMOLO else 1.0) * np.sqrt(np.maximum(power, 0.0)) * pulse + _SCRATCH * bite * start * np.exp(-t / (0.012 * body.slow))
+    rosin = _ROSIN * (2.0 if stroke == _TREMOLO else 1.0) * np.sqrt(np.maximum(power, 0.0)) * pulse
+    if bitten is not None:
+        rosin = rosin * _rosin_room(body, freq, s, bitten)
+    level = rosin + _SCRATCH * bite * start * np.exp(-t / (0.012 * body.slow))
     return s["bow"] * hiss * level * start * start[::-1]
 
 
@@ -354,10 +404,12 @@ def string_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: s
         phases -= np.arange(1, count + 1) * (tuned * (0.02 - late / RATE))[:, None]
         notes = [_short_player(body, float(tuned[k]), n, held, s, *rings[k], phases[k], int(late[k])) for k in range(players)]
     elif players == 1:
-        mono = _held_player(body, float(tuned[0]), n, held, s, 0, 0, True, rng, phrase)
-        return mono + _bow_noise(body, freq, n, s, smoothed(mono**2, int(RATE / freq) + 1), start, rng, phrase)
+        mono, bitten = _held_player(body, float(tuned[0]), n, held, s, 0, 0, True, rng, phrase)
+        return mono + _bow_noise(body, freq, n, s, smoothed(mono**2, int(RATE / freq) + 1), start, rng, phrase, bitten)
     else:
-        notes = [_held_player(body, float(tuned[k]), n, held, s, k, int(late[k]), False, rng, phrase) for k in range(players)]
+        played = [_held_player(body, float(tuned[k]), n, held, s, k, int(late[k]), False, rng, phrase) for k in range(players)]
+        notes = [mono for mono, _ in played]
+        bitten = np.mean([share for _, share in played], axis=0)
     out = np.zeros((n, 2))
     sides_power = np.zeros((n, 2))
     for k, mono in enumerate(notes):
@@ -371,7 +423,7 @@ def string_note(body: Body, freq: float, n: int, s: Mapping[str, float], seed: s
         for side in range(2):  # each side on its own, so the section does not lean left on one note and right on the next
             out[:, side : side + 1] = levelled(out[:, side : side + 1], 0.5 * sides_power[:, side], freq)
         power = smoothed(0.5 * sides_power.sum(axis=1), int(RATE / freq) + 1)
-    return out + np.stack([_bow_noise(body, freq, n, s, power, start, rng, phrase) for _ in range(2)], axis=1)
+    return out + np.stack([_bow_noise(body, freq, n, s, power, start, rng, phrase, None if short else bitten) for _ in range(2)], axis=1)
 
 
 def _contact(n: int, s: Mapping[str, float]) -> np.ndarray:
