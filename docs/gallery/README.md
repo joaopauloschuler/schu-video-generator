@@ -170,3 +170,7 @@ Videos made with schu-video-generator:
 [![How to create this AI music video in the video description](https://img.youtube.com/vi/J8gljBhqtTo/hqdefault.jpg)](https://youtu.be/J8gljBhqtTo)
 
 [![How to create long cartoon videos with AI? I will teach you!](https://img.youtube.com/vi/tjqrvbYNbGE/hqdefault.jpg)](https://youtu.be/tjqrvbYNbGE)
+
+### Shorts
+
+<a href="https://www.youtube.com/shorts/gLsKCVGfdz4"><img src="https://img.youtube.com/vi/gLsKCVGfdz4/hqdefault.jpg" height="180" alt="eclipse"></a> <a href="https://www.youtube.com/shorts/cEob9Rqooqo"><img src="https://img.youtube.com/vi/cEob9Rqooqo/hqdefault.jpg" height="180" alt="YouTube Short 2"></a> <a href="https://www.youtube.com/shorts/8EZThIyJKOQ"><img src="https://img.youtube.com/vi/8EZThIyJKOQ/hqdefault.jpg" height="180" alt="YouTube Short 3"></a> <a href="https://www.youtube.com/shorts/nSDKRQBD6V4"><img src="https://img.youtube.com/vi/nSDKRQBD6V4/hqdefault.jpg" height="180" alt="YouTube Short 4"></a> <a href="https://www.youtube.com/shorts/VIaxZaXD56Y"><img src="https://img.youtube.com/vi/VIaxZaXD56Y/hqdefault.jpg" height="180" alt="YouTube Short 5"></a> <a href="https://www.youtube.com/shorts/y1zxGYL9OOE"><img src="https://img.youtube.com/vi/y1zxGYL9OOE/hqdefault.jpg" height="180" alt="YouTube Short 6"></a>

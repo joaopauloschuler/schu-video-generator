@@ -22,6 +22,7 @@ on the time or the machine, so regenerating with the same schu-video-generator g
 
 from __future__ import annotations
 
+import html
 import io
 import json
 import logging
@@ -141,34 +142,54 @@ YOUTUBE_VIDEOS: list[dict[str, str]] = [
         "url": "https://youtu.be/tjqrvbYNbGE",
     },
 ]
+#: YouTube Shorts made with schu-video-generator, shown as a row of thumbnails under the videos.
+YOUTUBE_SHORTS: list[dict[str, str]] = [
+    {"title": "eclipse", "url": "https://www.youtube.com/shorts/gLsKCVGfdz4"},
+    {"title": "YouTube Short 2", "url": "https://www.youtube.com/shorts/cEob9Rqooqo"},
+    {"title": "YouTube Short 3", "url": "https://www.youtube.com/shorts/8EZThIyJKOQ"},
+    {"title": "YouTube Short 4", "url": "https://www.youtube.com/shorts/nSDKRQBD6V4"},
+    {"title": "YouTube Short 5", "url": "https://www.youtube.com/shorts/VIaxZaXD56Y"},
+    {"title": "YouTube Short 6", "url": "https://www.youtube.com/shorts/y1zxGYL9OOE"},
+]
 
 
 _YOUTUBE_ID = re.compile(
-    r"https://(?:youtu\.be/|(?:www\.)?youtube\.com/watch\?(?:[^#]*&)?v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])"
+    r"https://(?:youtu\.be/|(?:www\.)?youtube\.com/(?:watch\?(?:[^#]*&)?v=|shorts/))([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])"
 )
 
 
 def youtube_id(url: str) -> str:
-    """The video id of a ``https://youtu.be/<id>`` or ``https://www.youtube.com/watch?v=<id>`` link."""
+    """The video id of a ``https://youtu.be/<id>``, ``https://www.youtube.com/watch?v=<id>`` or
+    ``https://www.youtube.com/shorts/<id>`` link."""
     match = _YOUTUBE_ID.match(url)
     if match is None:
         raise VidgenError(
-            f"not a YouTube video link: {url!r} (expected https://youtu.be/<id> or https://www.youtube.com/watch?v=<id>)"
+            f"not a YouTube video link: {url!r} (expected https://youtu.be/<id>, https://www.youtube.com/watch?v=<id>"
+            " or https://www.youtube.com/shorts/<id>)"
         )
     return match.group(1)
 
 
 def youtube_lines() -> list[str]:
-    """The index's "Videos on YouTube" section: one clickable thumbnail per video, its title as the alt text.
+    """The index's "Videos on YouTube" section: one clickable thumbnail per video, its title as the alt text,
+    then "Shorts": the Shorts' thumbnails side by side in one paragraph (180 px high, as the gallery's previews),
+    each linking to its Shorts page.
 
     The thumbnail is YouTube's own (``img.youtube.com``), so no image is kept in the repository.
     """
-    if not YOUTUBE_VIDEOS:
+    if not YOUTUBE_VIDEOS and not YOUTUBE_SHORTS:
         return []
     lines = ["## Videos on YouTube", "", "Videos made with schu-video-generator:", ""]
     for v in YOUTUBE_VIDEOS:
         vid = youtube_id(v["url"])
         lines += [f"[![{v['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)](https://youtu.be/{vid})", ""]
+    if YOUTUBE_SHORTS:
+        thumbs = [
+            f'<a href="{html.escape(v["url"])}"><img src="https://img.youtube.com/vi/{youtube_id(v["url"])}/hqdefault.jpg"'
+            f' height="180" alt="{html.escape(v["title"])}"></a>'
+            for v in YOUTUBE_SHORTS
+        ]
+        lines += ["### Shorts", "", " ".join(thumbs), ""]
     return lines
 
 

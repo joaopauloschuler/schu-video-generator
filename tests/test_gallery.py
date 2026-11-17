@@ -389,6 +389,16 @@ def test_committed_gallery_ends_with_the_youtube_videos() -> None:
         thumb = f"[![{video['title']}](https://img.youtube.com/vi/{vid}/hqdefault.jpg)](https://youtu.be/{vid})"
         assert thumb in section
     assert "**[" not in section and " · " not in section, "the YouTube section shows only the thumbnails"
+    shorts = section.split("\n### Shorts\n\n", 1)[1].strip()
+    expected = [
+        f'<a href="{s["url"]}"><img src="https://img.youtube.com/vi/{gallery.youtube_id(s["url"])}/hqdefault.jpg" height="180" alt="{s["title"]}"></a>'
+        for s in gallery.YOUTUBE_SHORTS
+    ]
+    assert shorts == " ".join(expected), "the Shorts are one row of linked thumbnails, nothing else"
+    assert [s["url"] for s in gallery.YOUTUBE_SHORTS] == [
+        f"https://www.youtube.com/shorts/{vid}"
+        for vid in ("gLsKCVGfdz4", "cEob9Rqooqo", "8EZThIyJKOQ", "nSDKRQBD6V4", "VIaxZaXD56Y", "y1zxGYL9OOE")
+    ]
 
 
 def test_youtube_id_reads_short_and_watch_links() -> None:
@@ -396,6 +406,8 @@ def test_youtube_id_reads_short_and_watch_links() -> None:
     assert gallery.youtube_id("https://youtu.be/J8gljBhqtTo?t=30") == "J8gljBhqtTo"
     assert gallery.youtube_id("https://www.youtube.com/watch?v=tjqrvbYNbGE") == "tjqrvbYNbGE"
     assert gallery.youtube_id("https://youtube.com/watch?feature=share&v=tjqrvbYNbGE") == "tjqrvbYNbGE"
-    for bad in ("https://vimeo.com/123", "https://youtu.be/short", "https://www.youtube.com/watch?x=1"):
+    assert gallery.youtube_id("https://www.youtube.com/shorts/gLsKCVGfdz4") == "gLsKCVGfdz4"
+    assert gallery.youtube_id("https://youtube.com/shorts/y1zxGYL9OOE?feature=share") == "y1zxGYL9OOE"
+    for bad in ("https://vimeo.com/123", "https://youtu.be/short", "https://www.youtube.com/watch?x=1", "https://www.youtube.com/shorts/short"):
         with pytest.raises(VidgenError, match="not a YouTube video link"):
             gallery.youtube_id(bad)

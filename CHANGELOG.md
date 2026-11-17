@@ -171,8 +171,9 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   through `music_data`; its `ps_audio.json` and `scripts/make_ps_audio.py` are gone (the same hits
   and notes; spectrum and level measured from the mix: stills 53.5 dB PSNR or closer).
 
-### Gallery (Steps 356–358.1)
+### Gallery (Steps 356–358.1, 371.1)
 
+- Step 371.1: six YouTube Shorts under "Shorts" in the gallery's "Videos on YouTube": one row of clickable thumbnails (180 px high, as the gallery's previews), each linking to its `youtube.com/shorts/<id>` page (`YOUTUBE_SHORTS` in `src/vidgen/gallery.py`); `gallery.youtube_id()` also reads `youtube.com/shorts/<id>` links.
 - Step 358.1: the gallery's "Videos on YouTube" section shows only the clickable thumbnails (the title is the alt text); the title/channel lines and the `channel` field are gone.
 - Step 357: each YouTube video in the gallery shows its clickable thumbnail (YouTube's own `img.youtube.com` image, nothing stored in the repository), then its title and channel; `gallery.youtube_id()` reads the id from `youtu.be/<id>` and `youtube.com/watch?v=<id>` links.
 - The scene gallery ends with "Videos on YouTube": links to videos made with schu-video-generator (`YOUTUBE_VIDEOS` in `src/vidgen/gallery.py`); the README points to it.
