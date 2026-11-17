@@ -26067,7 +26067,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 374 | The spacecraft kit: parts in metres with points to join them at, six invented ready-made craft from a seed, foil, plating and solar cells computed from numbers, plumes, attitude modes and burns of `ctx.orbits`, the sun's glare hidden, a point of light far away (`vidgen/space-craft`) | §122.10 |
 | 375 | Camera moves for space scenes as functions of time: fly-by, pass, arc at a chosen phase, arrival, reveal from behind a limb timed to the second, craft views, powers-of-ten zoom, lenses, checks in sentences, cuts (`vidgen/space-camera`); path lines near the camera fixed in `vidgen/space-scale` | §122.11 |
 | 376 | Space scenes without code: the `space` scene written in `video.yaml` alone (sky, sun, worlds, orbits and scale, light, craft, phenomena, camera moves in seconds or bars, finish, music, cards), its words checked in Python from the modules' own lists, the page written from them and drawn as a `web` scene, `script:` and `vidgen space-page` to go on in code, `vidgen music plan --style space`, lint `space_scene` | §122.12 |
-| 377 | Example film | |
+| 377 | The example film `examples/outbound`: five `space` scenes on the bar lines of an original score; a world of the orbit data as a camera subject fixed | §122.13 |
 | 378 | Critical review, COOKBOOK-SPACE | |
 
 ### 122.1 The third dimension of the orbit model (Step 367)
@@ -27927,3 +27927,81 @@ in Node (bars, the join error, cuts, order, checks as notes, reactions); validat
 `vidgen space-page` (text, JSON, errors); the lint (fast globe, enlarged cover, "to scale", worlds
 inside each other, a calm scene clean); the music plan (deterministic, seed, validates, no
 extensions). `slow`: a space scene drawn in Chromium at 160x90 (9 s).
+
+### 122.13 The example film: `examples/outbound` (Step 377)
+
+"Outbound" shows how little a space film needs: `video.yaml` (five `space` scenes, no `script:`),
+one score file and a README. 1280x720, 30 fps, 18 bars at 75 BPM = 57.6 s.
+
+**Bars and frames.** 75 BPM makes a beat 24 frames and a bar 96 frames (3.2 s), so scene lengths
+(16, 9.6, 9.6, 3.2 and 19.2 s) are whole frames and every cut is a bar line (`fade: false`). Times
+inside a scene are written in bars of the song counted from 1 (`at: 'bar 4'`, `over: ['bar 9',
+'bar 10']`); the end card's `start` is seconds of its scene (12.8 = four bars).
+
+| Bars | Scene | Parts | What is timed to the music |
+|---|---|---|---|
+| 1–5 | `01_dawn` | sky, Earth-like world, the default sun, `reveal`, `title` | first light on bar 4 (`air: 0.1`); `pulse: Sun` on the taikos |
+| 6–8 | `02_depart` | `orbits:` (an orbit 2,000 km up, a burn, a date, 150×), craft `ship`, `follow` with a view of its own | the burn at "8 min" = 3.2 s = bar 7 |
+| 9–11 | `03_rings` | `orbits:` with `flyby`, Saturn, craft, `arc` then `follow` after `cut: true` | the cut on bar 10 |
+| 12 | `04_jump` | a free craft with `throttle`, `warp`, chase view | `glow: Jump` on the timpani roll |
+| 13–18 | `05_horizon` | `black-hole`, `fly-by` (`before: 3`, `after: 6`: closest a third of the way in), `end_card` | `pulse: Hole` on the taikos; the card on bar 17 |
+
+**True and chosen.** The burn's size is computed, not picked: `orbits.hohmann` from the Earth's to
+Saturn's orbit gives 10.289 km/s over the Earth's speed at departure and 5.443 km/s under Saturn's
+at arrival; from a circular orbit at 2,000 km, √(v∞² + 2μ/r) − √(μ/r) = 7.280 km/s (the example's
+test recomputes both). After the burn the ship is on the hyperbola the orbit model gives. The
+fly-by is the model's hyperbola with that arrival speed. Chosen and said so in the README: where on
+the orbit the burn happens (for the light and bar 7), the sun's direction in the fly-by scene, the
+jump and the black hole.
+
+**Light.** Every shot was checked for a lit subject (Step 376's chase view was nearly black). The
+departure starts 17° past the dawn line with the sun ahead of and above the ship and is seen from
+above and ahead, so the camera looks at lit surfaces with the day side behind them; the fly-by's
+sun stands 18° from the direction of the closest pass, so the camera on the side away from the
+planet has it behind; the jump has its sun behind and above the chase camera.
+
+**Why `follow` has a view of its own.** With the default `lock: velocity`, a named view loses the
+world once the flight turns radial (after an escape burn, on a hyperbola's arms): "up" is the part
+of "away from the world" square to the flight. A direction with a large share of up and some of
+forward (`[0.4, 1.0, 0.7]`) keeps the world behind the craft through the burn and after it. On the
+fly-by the world is in the frame only near the pass, hence `reach: 1.6` (the smallest allowed) and
+the establishing `arc` before the cut.
+
+**The fix.** `space_page.py` did not enter a world of the orbit data in `S.subjects`, so a move with
+such a world as its subject stopped the page at load. It now writes `S.subjects["Saturn"] =
+"Saturn";` (a body's name is a subject for the rig on a `SpaceView`). Pages of scenes with
+`orbits:` and `bodies:` change by that line (their clips are drawn again).
+
+**The score** (`assets/music/outbound.yaml`, 17 tracks): dawn 3 | light 2 | depart 3 | rings 3 |
+jump 1 | horizon 4 | end 2. One theme for four horns in unison (D4 up to A4, down by step), no
+note above D5, a men's choir (`mm`, `ooh`, `oh`, `aah`), no solo voice, no organ, no bells.
+Measured on the rendered score (48 kHz, before the film's normalisation of +14 dB to −14 LUFS):
+
+| Section | Loudness (LUFS, approx.) | Peak (dBFS) | L/R correlation | Share under 250 Hz |
+|---|---|---|---|---|
+| dawn | −39.3 | −23.5 | 0.69 | 83 % |
+| light | −32.0 | −19.3 | 0.64 | 48 % |
+| depart | −33.0 | −17.2 | 0.67 | 59 % |
+| rings | −28.0 | −15.5 | 0.67 | 43 % |
+| jump | −28.6 | −14.1 | 0.62 | 34 % |
+| horizon | −24.0 | −13.1 | 0.66 | 33 % |
+| end | −31.1 | −14.8 | 0.60 | 36 % |
+
+Whole piece: true peak −13.1 dBTP at −28 LUFS (so about +0.9 dBTP of room is needed at −14: the
+film's limiter holds −1.5 dBTP; the draft's mix measured −14.1 LUFS, −1.9 dBTP); summed to mono the
+level falls by 0.8 to 1.0 dB; the 2–5 kHz band is 14 dB under the whole in the climax and 11 dB in
+the jump (the snare roll and cymbal). The low share is high in the quiet sections by design (basses,
+low brass and a men's choir carry them); nobody has listened.
+
+**Measured pictures** (2 cores, software GL). Single frames at 1280x720 with `vidgen still`: dawn
+1.0 s, departure 1.1 to 1.6, rings 0.7 to 1.6, jump 1.0, black hole 1.0 to 1.7; pages ready in 8 to
+14 s. The film was not rendered at full size: 1,728 frames are estimated at 35 to 45 minutes. One
+draft (426x240, 8 fps): 2 min 58 s; `vidgen motion check --draft --subject all`: 0 errors, 4
+warnings (stars shimmer at 8 fps in three scenes; the warp's entry flash), 1 info, nothing lost or
+blank.
+
+**Tests**: `tests/test_outbound_example.py` (4, no render): the folder is source only and
+validates; five `space` scenes without `script`, each starting on a bar line, 18 bars in all, the
+sunrise on bar 4, the title without a link, the end card's credit and link; the burn and the
+fly-by speed recomputed with `orbits.hohmann`; the score's hash, 17 tracks, no range warnings, the
+tracks the scenes name. `tests/test_space_scene.py` checks the subject line of the fix.

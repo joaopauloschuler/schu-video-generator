@@ -5,9 +5,21 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–376
+## Steps 193–377
 
-### Space scenes (Phase AN, Steps 367–376)
+### Space scenes (Phase AN, Steps 367–377)
+
+- **An example space film** (Step 377): `examples/outbound`, "Outbound", 58 s at 1280x720, source
+  only: five `space` scenes written in `video.yaml` with no JavaScript, cut on the bar lines of an
+  original score for vidgen's synthesizer (D minor, 75 BPM, one bar = 96 frames; strings, four horns,
+  low brass, a men's choir, timpani, taikos). A sunrise over an Earth-like world on bar 4; a ship's
+  7.28 km/s departure burn on bar 7 (the Hohmann transfer to Saturn, from the orbit mathematics) and
+  its escape hyperbola; a fly-by of a ringed giant at the transfer's arrival speed; a jump to warp; a
+  black hole fly-by as the climax; an opening title and an end card. Its README has the form table,
+  what is true and what was chosen, the estimated render time and how to change it. Fixed on the way:
+  a world of a `space` scene's orbit data can now be a camera move's subject (`arc` round the planet a
+  craft flies past); before, the page stopped with "arc.subject must be ...". The pages of `space`
+  scenes with `orbits:` and `bodies:` gain one line, so such scenes are drawn again.
 
 - **Space scenes without code** (Step 376): the new scene type `space`, written in `video.yaml`
   alone. Name a sky (from a seed, or the real bright stars), a sun, worlds (`{name: Saturn}` is

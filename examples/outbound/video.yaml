@@ -1,0 +1,102 @@
+# Outbound: a 58 s music film made of five `space` scenes, with no JavaScript at all.
+# Music: assets/music/outbound.yaml (75 BPM, D minor; one beat = 24 frames, one bar = 96 frames = 3.2 s at 30 fps),
+# played by vidgen's own synthesizer. Form, in bars of the song counted from 1:
+#   dawn 1-3 | light 4-5 | depart 6-8 | rings 9-11 | jump 12 | horizon 13-16 | end 17-18
+# Every scene starts on a bar line (`fade: false`: a straight cut), and the times inside a scene are
+# written in bars too ('bar 4'): `music_data` gives the page the score, so vidgen knows where each bar is.
+#
+#   vidgen validate .
+#   vidgen still . --scene 05_horizon --at 6.4        # one frame at full size
+#   vidgen render --draft .                           # the whole film, small and fast
+#   vidgen render .                                   # output/outbound.mp4
+title: "Outbound"
+output: outbound
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 640, height: 360, fps: 30}
+theme: {preset: dark_tech}
+transition: cut
+render: {intermediate: compact, keep_intermediates: false}     # small disk: compact frame clips, deleted once a scene is done
+music: {source: outbound, volume: 0, start: 0, loop: false, fade_in: 0, fade_out: 1.5, duck: false}
+audio: {normalize: true, target_lufs: -14, true_peak: -1.5, bitrate: 192k}
+scenes:
+  # Bars 1-5. The night side of an Earth-like world from 446 km. The camera rides round it so that the sun's
+  # first light comes over the limb exactly on bar 4, where the music arrives in B flat major.
+  - id: 01_dawn
+    type: space
+    duration: 16
+    params:
+      fade: false
+      music_data: &music {tracks: [taiko, roll]}
+      sky: &sky {seed: 7, look: rich}
+      bodies: [{name: Earth}]
+      camera: {move: reveal, behind: Earth, at: 'bar 4', rate: 1.0, air: 0.1, lens: wide-normal}
+      music: [{track: taiko, pulse: Sun, amount: 0.5, decay: 0.6}]          # the taikos pulse the sun's glare
+      title: {title: "Outbound", subtitle: "from first light to the edge of light", start: 0.8, fade_in: 1.6, hold: 4.2, fade_out: 1.6}
+
+  # Bars 6-8. Orbit data: a ship on a circular orbit 2,000 km up, 150 times faster than life. On bar 7
+  # (8 minutes in) it burns 7.28 km/s prograde: the departure burn of a Hohmann transfer to Saturn. The ship
+  # leaves on the escape hyperbola the orbit mathematics gives, and the world falls away behind it.
+  - id: 02_depart
+    type: space
+    duration: 9.6
+    params:
+      fade: false
+      music_data: *music
+      sky: *sky
+      orbits:
+        central: earth
+        date: "2027-03-21"                # the Sun is where it really is that day
+        speedup: 150
+        bodies: [{name: Ship, altitude: 2000 km, nu: -73, burns: [{at: "8 min", prograde: "7.280 km/s"}]}]
+      bodies: [{name: Earth}]
+      craft: [{name: Ship, kind: ship, seed: 1, burn: {seconds: 2.4, turn: 1.5}}]
+      camera: {move: follow, subject: Ship, view: {direction: [0.4, 1.0, 0.7], distance: 3.4, place: [-0.1, 0.05], lens: wide-normal}}
+      music: [{track: taiko, pulse: Ship, amount: 0.8, decay: 0.4}]         # ... and the ship's lights
+
+  # Bars 9-11. A ringed giant: one bar round it from afar, then a cut to the ship on a real fly-by: a
+  # hyperbola with the Hohmann transfer's arrival speed (5.44 km/s), 110,000 km over the cloud tops.
+  - id: 03_rings
+    type: space
+    duration: 9.6
+    params:
+      fade: false
+      music_data: *music
+      sky: *sky
+      sun: {direction: [-0.34, 0.94, 0.3]}                                  # chosen for the light on the pass
+      orbits:
+        central: saturn
+        date: "2033-04-08"
+        flyby: {v_inf: "5.44 km/s", altitude: "110000 km", angle: 100, side: behind, name: Ship, reach: 1.6}
+      bodies: [{name: Saturn}]
+      craft: [{name: Ship, kind: ship, seed: 1, burn: false}]
+      camera:
+        - {move: arc, subject: Saturn, phase: [half, three-quarter], distance: {radii: 8}, lens: normal, over: ['bar 9', 'bar 10']}
+        - {move: follow, subject: Ship, over: ['bar 10', 'bar 12'], cut: true, view: {direction: [0.3, 1.0, 0.3], distance: 4.5, place: [-0.25, -0.1], lens: wide}}
+
+  # Bar 12. The jump: engines on, the stars stretch into streaks; the warp grows with the timpani roll.
+  - id: 04_jump
+    type: space
+    duration: 3.2
+    params:
+      fade: false
+      music_data: *music
+      sky: *sky
+      sun: {direction: [0.35, -0.8, 0.5]}
+      craft: [{name: Ship, kind: ship, seed: 1, at: [0, 0, 0], velocity: [0, 20000, 0], throttle: 1}]
+      phenomena: [{kind: warp, name: Jump}]
+      camera: {move: follow, subject: Ship, view: chase}
+      music: [{track: roll, glow: Jump, amount: 0.6}]
+
+  # Bars 13-18. The climax: a fly-by of a black hole, closest on bar 15; its disc pulses with the taikos.
+  # The hole recedes into the left third, and the end card comes up on the right on bar 17 (D major).
+  - id: 05_horizon
+    type: space
+    duration: 19.2
+    params:
+      fade: false
+      music_data: *music
+      sky: *sky
+      phenomena: [{kind: black-hole, name: Hole, size: 10 km, tilt: 12}]
+      camera: {move: fly-by, subject: Hole, closest: {radii: 20}, before: 3, after: 6, side: left, lens: wide-normal}
+      music: [{track: taiko, pulse: Hole, amount: 0.35, decay: 0.25}]
+      end_card: {title: "Outbound", lines: ["made with schu-video-generator"], link: "https://github.com/joaopauloschuler/schu-video-generator", start: 12.8, fade_in: 2.0}

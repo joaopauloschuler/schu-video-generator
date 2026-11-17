@@ -7988,7 +7988,9 @@ unless `fade: false`. Needs Chromium as the [`web`](#web) scene does. Positions 
 true by default; enlarging bodies or compressing distances is a stated choice (`scale:`), said on
 screen. Every key is checked by `vidgen validate` in Python, with the closest word: the names of
 worlds, craft kinds, moves, phases, lenses, views, sky looks and star kinds, and every option a
-section passes on to a module, are read from the modules themselves.
+section passes on to a module, are read from the modules themselves. A whole film written this way:
+[examples/outbound](../examples/outbound/README.md) (five `space` scenes cut on bar lines, a sunrise
+timed in bars, a burn and a fly-by from `orbits:`, a warp, a black hole, title and end card).
 
 ```yaml
 - id: rings

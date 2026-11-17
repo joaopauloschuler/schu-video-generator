@@ -617,6 +617,13 @@ my_video/
   `vidgen/title-cards`; the pictures follow the music through `music_data`
   (the final render takes
   about 1 h on 2 cores, `vidgen still` and `--draft` for quick looks).
+- [examples/outbound](examples/outbound/README.md) — "Outbound", a 58 s space film, source only,
+  written with the `space` scene type and no JavaScript: a sunrise over an Earth-like world landing
+  on a bar line, a ship whose departure burn and fly-by of a ringed giant come from the orbit
+  mathematics, a jump to warp and a black hole, with an opening title and an end card and an
+  original orchestral score in D minor at 75 BPM (strings, horns, low brass, men's choir, timpani
+  and taikos) that the pictures follow through `music_data` (the final render is estimated at
+  35 to 45 min on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

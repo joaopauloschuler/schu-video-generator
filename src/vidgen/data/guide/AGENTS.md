@@ -3211,6 +3211,7 @@ a `web` scene (`vidgen still`, `--draft`, the cache). Positions and timing are t
 stated choice. Every key is checked by `vidgen validate` with the closest word. The full list of
 keys: `docs/CONFIG.md` (`space`); the craft of good space shots: `docs/COOKBOOK-SPACE.md` in the
 schu-video-generator repository (written in the phase's review).
+A whole film to copy from: `examples/outbound` (58 s, five `space` scenes cut on bar lines, a score).
 
 ```yaml
 - id: rings                     # a world standing free: sizes in metres or with units, z up

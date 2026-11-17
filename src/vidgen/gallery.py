@@ -115,7 +115,9 @@ SECTION_NOTES: dict[str, str] = {
         "clockwork music film in three.js whose watch movement ticks on the score's beat, "
         "[Parallel Space](../../examples/parallel-space/README.md) (`examples/parallel-space`), a 3:05 trance and "
         "choir film of a flight through parallel realities, and "
-        "[Signal Fire](../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture."
+        "[Signal Fire](../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture. "
+        "A film of `space` scenes written in YAML alone: [Outbound](../../examples/outbound/README.md) (`examples/outbound`), "
+        "58 s from a sunrise over a world, past a ringed giant, to a black hole, with an orchestral score."
     ),
     "particle physics": (
         "A whole particle-physics explainer, the Standard Model, gluon fusion through a top loop, the decay modes, a diphoton "

@@ -185,6 +185,9 @@ def test_the_page_is_stable_and_written_from_the_params(space: Any) -> None:
     orbit = page(space, TRANSFER)
     assert 'planet(renderer, "earth", {space, body: "Earth"})' in orbit and 'S.craft["Ship"].fly(space, {"body": "Ship", "attitude": "prograde", "burn": {"seconds": 0.6, "turn": 0.4}})' in orbit
     assert "direction: yUp([0.0455" in orbit   # the Sun from the Earth on 19 June 2026: ecliptic longitude about 87 degrees
+    assert 'S.subjects["Earth"] = "Earth";' in orbit   # Step 377: a world of the orbit data is a subject of the camera (an arc round it)
+    arc = page(space, {**TRANSFER, "camera": {"move": "arc", "subject": "Earth", "distance": {"radii": 5}}})
+    assert 'S.cam.arc(t, {"distance": {"radii": 5}, "subject": S.subjects["Earth"]' in arc
     hole = page(space, HOLE)
     assert "P.blackHole(renderer, {" in hole and '"tilt": 12' in hole and "cut: true" in hole and "P.warp(renderer" in hole
 

@@ -170,6 +170,7 @@ class _Page:
             ref = f"S.bodies[{json.dumps(b.name)}]"
             if self.orbit:
                 self.out(f"{ref} = planet(renderer, {js(what)}, {{{pairs(opts)}space, body: {js(b.name)}}});")
+                self.out(f"S.subjects[{json.dumps(b.name)}] = {js(b.name)};")
             else:
                 at = [length(v, f"bodies {b.name}.at") for v in (b.at or [0, 0, 0])]
                 radius = b.radius_m()
