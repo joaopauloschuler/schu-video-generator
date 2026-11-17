@@ -168,6 +168,13 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   "Astronomical scales"): `update: (t) => space.update(t, view(t))` for `Finish`; three.js's
   units are then metres (`dof.unit` stays 1). When the focus is far away (a planet behind a near
   ship), give the same focus as `dofFocus`. Bloom and motion blur need nothing more.
+- **A sky behind it.** `scene.add(spaceSky(renderer, {seed}).object)` from `vidgen/space-sky`
+  (CONFIG `web`, "The sky of a space scene") is a sky like a photograph from space: thousands of
+  stars with the real sky's spread of brightness, the Milky Way with its dust, optional nebulae and
+  galaxies, or the real bright stars with `{stars: "real"}`. Give `Finish` `antialias: "none"` in a
+  shot of stars (FXAA makes crosses of them); keep `bloom` at its default so only the few bright
+  stars glow; a lit planet in the frame will outshine the sky unless you lower the light or raise
+  `sky.set({brightness})`, and say which. Aim with `camera.lookAt(sky.direction("center"))`.
 
 ## 9. Building blocks for music videos
 

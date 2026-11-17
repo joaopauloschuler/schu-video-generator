@@ -355,7 +355,9 @@ src/vidgen/
   data/web/modules/        # vidgen's own modules for web scenes: three-finish.js `vidgen/three-finish` (§120.11); music-time.js
                           # `vidgen/music-time` and three-kit.js `vidgen/three-kit`: building blocks for music videos (§121.1);
                           # title-cards.js `vidgen/title-cards`: an opening title and an end card for films (§121.7);
-                          # space-scale.js `vidgen/space-scale` (§122.4); parts.js `vidgen/parts`: the registry of ready-made parts (§122.5)
+                          # space-scale.js `vidgen/space-scale` (§122.4); parts.js `vidgen/parts`: the registry of ready-made parts (§122.5);
+                          # space-sky.js `vidgen/space-sky`: the sky of a space scene, and space-sky-stars.js, its star file,
+                          # written by tools/make_star_catalogue.py (§122.6)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -26050,7 +26052,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 367 | The orbit bridge: the third dimension audited and fixed, rotation data for the Sun, planets, Moon and Galilean moons, `orbit_data:` → `ctx.orbits` | §122.1–122.3 |
 | 368 | Scale: floating origin, depth, three scale modes and their honest labels (`vidgen/space-scale`) | §122.4 |
 | 369 | Checks for dark pictures in `vidgen motion check`; a registry of ready-made parts (`vidgen/parts`) and its contact sheet (`vidgen parts`) | §122.5 |
-| 370 | The sky (algorithmic, real) | |
+| 370 | The sky: from a seed (default) or the real bright stars, the Milky Way, nebulae, galaxies (`vidgen/space-sky`) | §122.6 |
 | 371 | Planets, moons and rings | |
 | 372 | Suns and light | |
 | 373 | Phenomena | |
@@ -26476,3 +26478,179 @@ same with and without the finer picture; the command's JSON; `--subject` errors)
 JSON descriptions and their errors, choosing, `--list`, the registry in Node; 1 `slow`: every part
 at 96 x 54 in Chromium, none black, the time limit, the command's JSON). `tests/test_mcp.py`:
 `parts` in the tool list and a slow call.
+
+### 122.6 The sky: `vidgen/space-sky` (Step 370)
+
+A sky that looks like a photograph taken from space, in one line:
+`const sky = spaceSky(renderer, {seed}); scene.add(sky.object)`, or `{stars: "real"}`. The module
+`data/web/modules/space-sky.js` (import name `vidgen/space-sky`, in `VIDGEN_MODULES`; imports
+`three`, `rng` of `vidgen/music-time`, `yUp` of `vidgen/space-scale` and its star file
+`vidgen/space-sky-stars`). The Step 358 kit's `SkyDome`, `nebulaSky`, `makeStarField` and
+`makeStarShell` stay what they are, a coloured nebula and glowing strokes for music videos (their
+stars are hash cells of one size and six fixed tints); nothing of theirs fitted a sky with
+magnitudes, so this is a module of its own and their files are unchanged.
+
+**Two layers, both made once.**
+
+- **Stars down to magnitude `limit` (8.5) are GL points**, about 69,000 over the whole sky, each a
+  round spot drawn where it projects, to a fraction of a pixel: a gaussian of sigma 0.75 px at
+  720p (scaled with the frame's height, never under `MIN_SIGMA` 0.62 px) plus a halo
+  0.14 / (1 + r² / (2 sigma)²)^1.5 that only bright stars show. A spot that wide keeps its summed
+  light as it slides between pixels: this, not the cube map, is what stops shimmer. The few stars
+  whose middle is brighter than 1.2 (magnitude 2.3 and brighter: 67 of a seeded sky) are instanced quads, since
+  their halo is wider than a GL point may be. Instanced quads for every star cost 11 µs a star in
+  SwiftShader (0.78 s a frame for 69,000); points 0.5 µs.
+- **Everything fainter is baked into a cube map** (half float, mipmaps, 1024 px a face for a frame
+  600 px tall or more, else 512; `size`): the Milky Way, a carpet of faint stars (one to a cell of
+  three grids, a spot 1.5 texels wide, thick where the band is bright), nebulae and painted
+  galaxies. The bake draws each face with a full-screen quad whose fragment computes its direction
+  as OpenGL addresses a cube map, so the sky's own shader reads it by direction with no mirror, and
+  three.js reads the same texture right as `scene.background`. Nebulae and galaxies are separate
+  passes over only the texels they can touch (`faceWindow`, a scissor): in SwiftShader a branch
+  costs as much as its body, and five galaxies in one shader doubled the bake.
+
+**Star counts and light.** `STAR_COUNTS`: the whole sky's stars brighter than a magnitude (0: 4,
+1: 15, 2: 48, 3: 171, 4: 513, 5: 1,602, 6: 4,800, 7: 14,000, 8: 41,000, 9: 117,000), a straight
+line in log N between rows. A seeded sky takes the ranks evenly spread (so every seed has its
+Sirius and its 41,000 stars to magnitude 8), gathers them toward the band the more the fainter
+(none at magnitude 1, seven times the pole's density at 8.5 in the plane toward the centre), and
+adds four to seven open clusters near the band. Colour: B−V drawn from five groups (22 % near
+−0.12, 25 % near 0.12, 18 % near 0.48, 27 % near 1.05, 8 % near 1.55) → temperature (Ballesteros)
+→ a black body's colour in linear sRGB (Kim's fit of the Planckian locus), 0.7 of the way from
+white: 6.5 % of the stars end with one channel over twice another. A star's middle pixel:
+magnitude 2.5 is white (1.0 linear); to magnitude 4 each magnitude is 10^(−0.4 × 0.85) of the one
+before, fainter ones 10^(−0.4 × `contrast`) with `contrast` 0.8 (the true ratio would be 1): a
+photograph's stretch. Magnitude 8.5 lands at 0.011, above the toe of three-finish's ACES curve,
+which turns everything under 0.002 into black; above 4.0 the light grows with the square root
+(Sirius 5.8), so the brightest stars glare a little through three-finish's bloom and do not
+flood. In a frame under 595 px tall the spot cannot shrink further, so its light is thinned by
+(natural sigma / 0.62)^1.2, as scaling a photograph down dims its stars: without it a 320x180
+tile was crowded with snow.
+
+**The band.** In a galactic frame (centre, pole): a disc sech²(b / h) with h from 3.6° (anticentre)
+to 6.6° (centre) around a midline that wanders, 0.3 to 1 as bright from the anticentre to the
+centre, times two octaves of star clouds; a bulge (two gaussians, sigma 8.6° × 5.7° and 19° × 8.6°) in a
+warmer colour (1.0, 0.80, 0.54) than the disc's (0.74, 0.85, 1.0); a faint halo. Dust is a
+continuous optical depth, not a threshold: a rift along a wandering midline, 0.8° wide at the
+anticentre and 2° at the centre, times fractal noise of three scales, plus threads that leave it;
+light is multiplied by exp(−τ × (0.78, 1.0, 1.34)), so thin dust is brown and thick dust black,
+and the edges come from the light the dust swallows. A noise 5 texels wide stands for the grain
+of unresolved stars. The first version thresholded the dust and looked like clouds at night.
+
+**Nebulae and galaxies** (`nebulae`, `galaxies`: a number for seeded ones, or a list; at most 12
+each). Emission: deep red wisps (0.80, 0.07, 0.11), pink where dense, a pale core, dark lanes
+across. Reflection: smooth blue. Dark: multiplies what is behind. Painted galaxies: spiral
+(logarithmic arms, a warm bulge, blue arms with pink knots, dust on the arms' inner edge, any
+tilt), elliptical, irregular. `at` is a world direction or `{l, b}` degrees along and above the
+band. A 6° galaxy is 68 texels across: fine in the background, soft through a long lens
+(`size: 2048`: 20 s to bake, about 270 MB).
+
+**`spiralGalaxy(options)`** is the galaxy for the foreground: a `THREE.Group` (disc in its x–z
+plane) of 1,600 soft additive sprites (gas and bulge), about 550 dark sprites (dust ahead of the arms),
+and 40,000 star points whose light falls with the square of the distance. It can be flown past
+and seen edge-on (a dark lane across the bulge). Its faint sprites add up in linear light, so it
+needs a tone-mapped chain.
+
+**The real sky** (`stars: "real"`). Right ascension and declination (J2000) are turned about x by
+the obliquity 23.4392911° into the J2000 ecliptic frame of `ctx.orbits` and then to three.js's y
+up exactly as `vidgen/space-scale` turns positions (`skyDirection` = `yUp(equatorialToEcliptic)`),
+so the sky agrees with the planets: the galactic centre comes out at ecliptic longitude 266.84°,
+latitude −5.54°, and on 19 June the line from the Sun through the Earth points 5.6° from it
+(tested against `make_orbit_data`). The band uses the real galactic frame (north pole 192.85948°,
++27.12825°; centre 266.40499°, −28.93617°); its clouds and dust are the algorithm's, not a map
+of the real ones. The two Magellanic Clouds and the Andromeda galaxy are painted where they are.
+Stars come from the star file; stars fainter than the file is complete to are seeded, so the
+star counts stay right.
+
+**The star file** `data/web/modules/space-sky-stars.js` is an ES module whose default export is
+one JSON object (JavaScript imports it, Python reads it): `{"catalog", "approximate", "epoch",
+"complete_to", "columns", "stars"}`, rows `[ra_deg, dec_deg, v_mag, b_minus_v]` or `[..., "Name"]`,
+degrees to 0.001, magnitudes to 0.01. `tools/make_star_catalogue.py` writes it: `--fixture` from
+its own table of 221 well-known stars written down from memory (marked `"approximate": true`,
+`complete_to` 2.5), or from the Yale Bright Star Catalogue's fixed-width file given by path
+(positions in bytes 76–90, V in 103–107, B−V in 110–114; entries without a position left out; a
+line that does not fit stops it; fewer than 8,000 stars is refused; the fixture's names are
+carried to the nearest catalogue star). The shipped file is the fixture: the real sky's stars
+brighter than magnitude 2.5 are at their places to the fixture's accuracy, and fainter ones are
+seeded. The file's two properties `catalog` and `approximate` are on `sky.info`. Nothing is
+downloaded by vidgen.
+
+**Drawing.** `sky.object` is a group of the cube (a box around the camera), the points and the
+quads: `frustumCulled = false`, `renderOrder` −1000 to −998, no depth test or write, positions
+from the view's rotation only, so it follows any camera without a call and `vidgen/space-scale`
+draws it in its sky pass. Values are linear light. Drawn into a render target (three-finish) it
+writes them as they are, with about one display code of noise added where the picture is dark
+(three-finish quantises to 8 bits before its grain). Drawn straight to the canvas it applies
+three.js's ACES curve and the sRGB encoding itself and dithers by one code, and each star is the
+step from the sky under it to the sky plus the star after the curve, so both ways look alike
+(`display` overrides the choice). `sky.background` is the whole sky, stars included, in one cube
+texture (stars 0.7 texels wide); `sky.environment` a PMREM of a 256 px copy for reflections;
+both are made on first use. `sky.direction(name)`: `"center"`, `"anticenter"`, `"pole"`,
+`"nebula N"`, `"galaxy N"`, a named star, or `{l, b}`. Disposing the sky's material frees the
+cube maps (the contact sheet's page does that).
+
+**Measured** (2 cores, headless Chromium, SwiftShader; 1280x720, cube 1024 unless said):
+
+| what | time |
+|---|---|
+| making the sky (shaders, the six faces, the first frame) | 5.3–5.7 s; 2.0 s for a 640x360 frame (cube 512); 20 s at `size: 2048` |
+| the same with 4 nebulae or 4 galaxies | the same (each is a scissored pass) |
+| a frame straight to the canvas: the cube alone / with 69,000 stars | 0.05–0.07 s / 0.10 s |
+| a frame through three-finish (bloom, grain, no FXAA) | 0.30 s, of which the sky is 0.10 s |
+| `vidgen still` of a sky scene, 1280x720 | 1.0–1.4 s a still after 6 s to open |
+| a render at 640x360 | 0.11 s a frame to the canvas, 0.15 s through three-finish |
+| `spiralGalaxy` a third of the frame high / filling it (through three-finish) | 0.25–0.4 s / 1.1 s more a frame |
+| eleven parts on `vidgen parts`' sheet at 320x180 | 29 s (2.5 s a tile) |
+
+**No shimmer: proved.** Four pans of 1.5 s at 640x360 and 30 fps through a 40° lens, measured
+with Step 369's check (`motion_check.measure`, median of the judged frames; the warning starts
+at 0.2; its reference clips: a still field 0, a smooth drift 0.013, point-sampled stars 0.38):
+
+| pan | drawn | shimmer |
+|---|---|---|
+| 0.5° a second (0.15 px a frame) | three-finish, `antialias: "none"` | 0.016 |
+| 0.5° a second | three-finish with FXAA (its default) | 0.022 |
+| 0.5° a second | straight to the canvas | 0.015 |
+| 3° a second (0.9 px a frame) | three-finish, `antialias: "none"` | 0.022 |
+
+`vidgen motion check` on the clip: no `shimmer`, `banding` or `clipped` finding.
+
+**With three-finish.** Bloom at its defaults (0.25 above 1.0) touches only stars brighter than
+magnitude 2.5, a small glow; grain and ACES leave the faint stars (they were placed above the
+toe). **FXAA does not suit stars**: on a spot off the pixel grid its edge direction is arbitrary
+and it smears the star into a small cross and dims it (still under the shimmer threshold, but
+plainly worse in a still). three-finish was not changed (its bytes are in the keys of the pages
+that import it): use `antialias: "none"` for star fields. A star-safe anti-aliasing in
+three-finish is left to the review step.
+
+**Decisions.** Points and a cube map instead of a cube map alone: a cube map sharp enough for
+stars at 720p needs 2048 px faces (270 MB) and still softens them under any lens longer than
+40°; points are sharp at every lens and size. The sky as an object rather than only
+`scene.background`: the points need a draw of their own, and space-scale already treats
+unculled objects as sky. One static import of the star file (9 KB now, about 250 KB for a
+9,100-star catalogue) rather than an awaited one, so the one line stays one line. Looks
+(`natural`, `rich`, `sparse`) are option sets, overridden by the page's own options. Presets on
+the contact sheet (`data/web/parts/space-sky.js`): `space-sky`, `space-sky-core`,
+`space-sky-rich`, `space-sky-sparse`, `space-sky-emission-nebula`,
+`space-sky-reflection-nebula`, `space-sky-dark-nebula`, `space-sky-galaxies`, `space-sky-real`,
+`spiral-galaxy`, and (kind environment) `space-sky-environment`; the skies return
+`{finish: false}` so the sheet's FXAA does not touch them.
+
+**Not done.** The real band's clouds and rift are not the real ones (no map of the Milky Way is
+shipped). No proper motion, planets or Sun in the sky (the bodies are Step 371/372's). Dust does
+not dim the point stars in front of it. The cube map softens under long lenses unless `size` is
+raised. `spiralGalaxy` is drawn in one fixed order (glow, stars, dust), right from most sides
+but not a sorted volume. An orthographic camera is not supported (directions need a perspective).
+
+**Tests.** `tests/test_web_space_sky.py`: the modules served by name and what they import; the
+star file equal to the converter's fixture output; the converter on lines built in the
+catalogue's layout (positions, a missing B−V, an entry without a position, a bad line, a `.gz`,
+too few stars); the parts; in Node: the frames (the equinox, the ecliptic's pole, the galactic
+centre's ecliptic place, Sagittarius' stars within 11° of the centre, galactic latitudes of
+Deneb, Betelgeuse, Acrux, Arcturus, the Earth in June against `make_orbit_data`), the counts and
+their inverse, the light per magnitude, colours, seeded stars (the same for a seed, the counts
+per magnitude, gathered toward the band), options and their errors with a did-you-mean, the
+faces' windows, the particle galaxy; `slow`: in Chromium the same frames twice, another seed
+another sky, black between the stars away from the band, Sirius at the middle of the frame for
+the real sky, the background cube and the environment. Stills:
+`/home/claude/work/scratch/an370/stills/`.

@@ -172,6 +172,11 @@ prime meridian), each orbit as a polyline and a ship's burns. The numbers are th
   Moon behind it neither jitter nor fight. Modes: `true`; `enlarged` (radii times a stated factor);
   `log` (the flat scene's `radial: log`, the same mapping and r0). `space.note().text` is the
   honest caption in the flat scene's words.
+- **The real sky behind them** (Step 370; CONFIG `web`, "The sky of a space scene"):
+  `spaceSky(renderer, {stars: "real"})` from `vidgen/space-sky` is in the same frame as
+  `ctx.orbits`, so a dated scene has the right stars behind its planets (the Earth in June stands
+  in front of Sagittarius seen from the Sun's side). The shipped star file holds the 221 brightest
+  stars at approximate places; fainter stars are seeded.
 - **Which plane.** In 3D an orbit's inclination needs its reference plane: the planets and the
   Moon's preset are measured from the ecliptic, `iss`, `geo` and the Galilean moons from their
   planet's equator (an ISS-like orbit is 51.6° to the Earth's equator, up to 75° to the

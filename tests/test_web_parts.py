@@ -78,7 +78,7 @@ def test_parts_are_chosen_by_name_pattern_and_kind() -> None:
 def test_the_list_needs_no_browser(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["parts", "--list", "--kind", "sky"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("sky:\n  nebula-dome ") and "vidgen/three-kit: const sky = new SkyDome(seed)" in out and "structure:" not in out
+    assert out.startswith("sky:\n  space-sky ") and "\n  nebula-dome " in out and "vidgen/three-kit: const sky = new SkyDome(seed)" in out and "structure:" not in out
     assert cli.main(["parts", "tesseract", "--list", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert (doc["command"], doc["action"], [p["name"] for p in doc["parts"]]) == ("parts", "list", ["tesseract"])

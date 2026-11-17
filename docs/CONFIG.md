@@ -7374,6 +7374,69 @@ export function layout(t, ctx) {
 }
 ```
 
+**The sky of a space scene: `vidgen/space-sky`** (Step 370, DESIGN §122.6). A sky that looks like
+a photograph taken from space: stars with the real sky's numbers per magnitude and pale colours by
+temperature, the Milky Way with its bulge and dust, and on request nebulae and galaxies; from a
+seed (the default) or with the real bright stars. `import {spaceSky, spiralGalaxy} from
+"vidgen/space-sky"`.
+
+```js
+const sky = spaceSky(renderer, {seed: 7});            // or {stars: "real"}, {look: "rich"}, {nebulae: 3, galaxies: 2}
+scene.add(sky.object);                                // all round the camera, behind everything; nothing to update
+camera.lookAt(sky.direction("center"));               // also "anticenter", "pole", "nebula 1", "galaxy 1", "Vega", {l: 30, b: 5}
+scene.environment = sky.environment;                  // reflections on metal (made on first use)
+const finish = new Finish(renderer, scene, camera, ctx, {antialias: "none"});   // FXAA turns small stars into crosses
+```
+
+| option | default | meaning |
+|---|---|---|
+| `seed` | `1` | a whole number: the stars, the band's place and its clouds |
+| `stars` | `"seed"` | `"real"`: the bright stars of the star file at their true places, the band where it is, the Magellanic Clouds and the Andromeda galaxy; stars fainter than the file is complete to are seeded |
+| `look` | `"natural"` | `"rich"` (1.5 × the stars, a brighter band, 5 nebulae, 2 galaxies) or `"sparse"` (0.3 × the stars, a fifth of the band, 5 small galaxies); your own options win over a look's |
+| `density` | `1` | times the real sky's number of stars (0–4) |
+| `brightness` | `1` | gain of the whole sky (also `sky.set({brightness})`, live) |
+| `color` | `1` | how much colour stars and band keep (0: white; 0–2) |
+| `limit` | `8.5` | the faintest magnitude drawn as a separate star (to 9.5); fainter ones are in the cube map |
+| `starSize`, `glare` | `1`, `1` | the width of a star's spot (0.75 px at 720p times this) and the halo of the bright ones |
+| `contrast` | `0.8` | how fast stars fainter than magnitude 4 dim per magnitude (1: the true ratio; lower shows more faint stars) |
+| `milkyWay`, `dust` | `1`, `1` | the band's brightness (0 or `false`: none) and the depth of its dust |
+| `center`, `pole` | from the seed | world directions `[x, y, z]` of the band's centre and of its pole (seeded sky only) |
+| `nebulae` | `0` | a number (seeded, on the band), or a list of `{kind: "emission" \| "reflection" \| "dark", at, size, strength, seed, color, angle, stretch}` (`size` in degrees; at most 12) |
+| `galaxies` | `0` | a number (seeded, away from the band), or a list of `{kind: "spiral" \| "elliptical" \| "irregular", at, size, tilt, angle, strength, seed, arms}` (at most 12) |
+| `size` | by the frame | the cube map's faces in pixels: 1024 for a frame 600 px tall or more, else 512; 2048 for a lens under about 30° (20 s to make, about 270 MB) |
+| `display` | `"auto"` | `"auto"`: drawn straight to the canvas the sky applies the ACES curve and sRGB itself, into a render target (three-finish) it writes linear light; `true` / `false` force one |
+
+- **Directions.** `at` is a world direction `[x, y, z]` or `{l, b}`: degrees along the band from its
+  centre and above it. World directions are three.js's with the ecliptic's north at +y: the frame
+  `vidgen/space-scale` puts `ctx.orbits` in, so the real sky agrees with the planets (from the
+  Earth in June the galactic centre and Sagittarius lie opposite the Sun). `sky.object.quaternion`
+  turns a seeded sky; `sky.direction()` follows it.
+- **`sky.background`** is the whole sky as one cube texture for `scene.background` (its stars are
+  softer than `sky.object`'s points); **`sky.environment`** a PMREM for `scene.environment`;
+  **`sky.info`** `{stars, mode, catalog, approximate, catalogStars, completeTo, size, nebulae,
+  galaxies}`; **`sky.dispose()`**.
+- **The real sky's star file** is `vidgen/space-sky-stars`: the shipped one holds 221 well-known
+  bright stars written down from memory (`sky.info.approximate` is `true`; complete to magnitude
+  2.5), so constellations' main stars are right and their fainter stars are seeded. Its clouds and
+  dust are the algorithm's, at the real galactic plane and centre. `tools/make_star_catalogue.py
+  PATH/bsc5.dat` writes the same file from the Yale Bright Star Catalogue (about 9,100 stars to
+  magnitude 6.5) when you have its file; `--fixture` writes the shipped one again.
+- **`spiralGalaxy({seed, radius, arms, wind, stars, clouds, dust, bulge, thickness, brightness,
+  color})`** returns `{object, set({brightness}), dispose()}`: a galaxy of particles (disc in its
+  own x–z plane, `radius` scene units) to stand in the scene and be flown past. Draw it through
+  `vidgen/three-finish` (its sprites add up in linear light). Defaults 40,000 stars and 1,600
+  sprites: 0.25–0.4 s a frame at 720p when a third of the frame high, about 1.1 s when it fills
+  the frame; lower `clouds` to trade smoothness for time.
+- **Cost** (2 cores, software GL, 720p): 5–6 s to make the sky once (2 s for a frame under 600 px
+  tall), then about 0.1 s a frame. **No shimmer**: stars are spots at least 0.62 px wide placed to
+  a fraction of a pixel; slow pans measure 0.015–0.022 on `vidgen motion check`'s shimmer scale
+  (warning from 0.2). In a small frame (a draft, a tile) the stars are dimmed, as in a photograph
+  scaled down.
+- **Errors**: an unknown option, look, kind or name stops with the closest one
+  (`unknown option "desity" (did you mean "density"?)`); `center` / `pole` with the real sky; more
+  than 12 nebulae or galaxies. An orthographic camera is not supported (the sky needs a perspective).
+- On the contact sheet: `vidgen parts 'space-sky*' spiral-galaxy`.
+
 **Ready-made parts: `vidgen/parts` and `vidgen parts`** (Step 369, DESIGN §122.5). The
 registry of ready-made three.js parts (skies, structures, effects, environments; space bodies,
 lights, craft and phenomena as Phase AN adds them), each with the one line that uses it;
@@ -16880,7 +16943,8 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   a plain render. A progress line per part; `--time-limit` (default 300 s) stops after the part
   that passes it (the first is always drawn) and the sheet's title names the parts left out.
   Measured: 20 parts at 320x180 in 12 s (page ready 0.7 s; 0.25 to 0.75 s a part, the studio
-  environment 4.3 s: its soft boxes are baked with PMREM in software GL).
+  environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
+  `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky).
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

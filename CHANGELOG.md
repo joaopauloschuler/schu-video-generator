@@ -5,10 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–369
+## Steps 193–370
 
-### Space scenes (Phase AN, Steps 367–369)
+### Space scenes (Phase AN, Steps 367–370)
 
+- **A sky for space scenes in one line** (Step 370): `spaceSky(renderer, {seed})` from the new
+  module `vidgen/space-sky` draws a sky like a photograph taken from space behind a three.js `web`
+  scene: about 69,000 stars in the real sky's numbers per magnitude, with pale colours by
+  temperature and a small glare on the brightest; the Milky Way with a warm bulge, star clouds and
+  a dust rift; on request emission, reflection and dark nebulae and far galaxies. `look: "rich"` or
+  `"sparse"`, `density`, `brightness`, `color`, the band's place and more are options. Stars do not
+  shimmer when the camera turns slowly (0.015 to 0.022 on `vidgen motion check`'s scale, where the
+  warning starts at 0.2). The sky is made once (5 to 6 s at 720p in software GL) and then costs
+  about 0.1 s a frame; `sky.environment` lets metal reflect it. `{stars: "real"}` puts the true
+  bright stars at their places with the Milky Way where it is, in the frame of `ctx.orbits`, so a
+  dated scene has the right constellations behind its planets; the shipped star file holds 221
+  well-known bright stars at approximate places, fainter stars are seeded, and
+  `tools/make_star_catalogue.py` converts the Yale Bright Star Catalogue into the same file.
+  `spiralGalaxy()` is a galaxy of particles that a camera can fly past. Eleven new tiles on
+  `vidgen parts` (`vidgen parts 'space-sky*' spiral-galaxy`). With `vidgen/three-finish`, use
+  `antialias: "none"` for star fields: FXAA turns small stars into crosses.
 - **`vidgen motion check` understands dark pictures** (Step 369): dark frames are also looked at
   640 px wide, so a star field or a thin crescent on black is no longer taken for a blank frame
   and a slow drift of the stars is no longer "frozen", while black frames that break into a star

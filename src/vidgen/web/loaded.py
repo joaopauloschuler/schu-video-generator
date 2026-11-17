@@ -52,9 +52,11 @@ MODULES_FOLDER = "modules"
 #: and ``vidgen/three-kit``: building blocks for music videos, DESIGN.md §121.1; ``vidgen/title-cards``:
 #: an opening title and an end card for films, DESIGN.md §121.7; ``vidgen/space-scale``: astronomical
 #: scales in three.js, floating origin and depth slices, DESIGN.md §122.4; ``vidgen/parts``: the registry
-#: of ready-made parts, DESIGN.md §122.5).
+#: of ready-made parts, DESIGN.md §122.5; ``vidgen/space-sky``: the sky of a space scene, and
+#: ``vidgen/space-sky-stars``, the star file its real sky reads, DESIGN.md §122.6).
 VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
-                                  "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js", "vidgen/parts": "parts.js"}
+                                  "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js", "vidgen/parts": "parts.js",
+                                  "vidgen/space-sky": "space-sky.js", "vidgen/space-sky-stars": "space-sky-stars.js"}
 #: The folder of the parts files after ``__vidgen__/`` (``data/web/parts/<module>.js``: each module's
 #: ready-made parts for the registry ``vidgen/parts``; imported as ``vidgen/parts/<module>.js``).
 PARTS_FOLDER = "parts"

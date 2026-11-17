@@ -3487,9 +3487,33 @@ export function frame(t) {
   enlarged 50×; distances to scale"; `log`: "distances compressed (log) · sizes not to scale").
 - At true scale a whole system is sub-pixel: `space.pixels("Earth")` says how big a body is drawn.
   `space.problems()` warns when an enlarged planet swallows its moon.
-- Skies: `scene.background`, or a mesh with `frustumCulled = false`. With three-finish's depth of
+- Skies: `vidgen/space-sky` (below), `scene.background`, or a mesh with `frustumCulled = false`. With three-finish's depth of
   field focused far away, give `dofFocus` the same focus. Reference: CONFIG.md `web`,
   "Astronomical scales".
+
+**The sky of a space scene: `vidgen/space-sky`.** Do not scatter points for stars yourself (they
+shimmer when the camera turns, and equal white dots look like salt). One line gives a sky like a
+photograph from space: stars in the real sky's numbers per magnitude with pale colours, the Milky
+Way with its bulge and dust, baked once.
+
+```js
+import {spaceSky} from "vidgen/space-sky";
+const sky = spaceSky(renderer, {seed: 7});            // or {stars: "real"}: the true bright stars, the band where it is
+scene.add(sky.object);                                // all round the camera; nothing to update per frame
+camera.lookAt(sky.direction("center"));               // the band's centre; "pole", "nebula 1", "Vega" (real sky), {l: 30, b: 5}
+```
+
+- Options: `look: "rich" | "sparse"`, `density`, `brightness`, `color`, `milkyWay`, `dust`,
+  `center` / `pole` (where the band lies), `nebulae` and `galaxies` (a number, or a list such as
+  `[{kind: "emission", at: {l: 20, b: 3}, size: 7}]`; `at` is a world direction or degrees along
+  and above the band). `spiralGalaxy({seed, radius})` is a galaxy of particles to fly past.
+- With `vidgen/three-finish` give `antialias: "none"`: FXAA turns small stars into crosses. Bloom
+  and grain are fine. `scene.environment = sky.environment` lets metal reflect the sky.
+- The real sky is in the frame of `ctx.orbits` (with `vidgen/space-scale`): from the Earth in June
+  the galactic centre lies opposite the Sun. Its star file holds the 221 brightest stars
+  (approximate places; `sky.info.approximate`), fainter stars are seeded.
+- It takes 5–6 s to make at 720p, then about 0.1 s a frame. Look first: `vidgen parts
+  'space-sky*'`. Reference: CONFIG.md `web`, "The sky of a space scene".
 
 **Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
 ready-made three.js part (skies, structures, effects, environments; more space parts as they are
