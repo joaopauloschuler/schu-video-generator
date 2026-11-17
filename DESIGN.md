@@ -360,7 +360,8 @@ src/vidgen/
                           # written by tools/make_star_catalogue.py (§122.6); space-bodies.js `vidgen/space-bodies`: planets,
                           # moons and rings from a seed (§122.7); space-light.js `vidgen/space-light`: stars and the light of a
                           # space scene (§122.8); space-phenomena.js `vidgen/space-phenomena`: black hole, wormhole, warp,
-                          # asteroids, comet, aurora (§122.9); space-craft.js `vidgen/space-craft`: the spacecraft kit (§122.10)
+                          # asteroids, comet, aurora (§122.9); space-craft.js `vidgen/space-craft`: the spacecraft kit (§122.10);
+                          # space-camera.js `vidgen/space-camera`: camera moves for space scenes (§122.11)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -26060,7 +26061,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 372 | Suns and light: stars by temperature, the far sun's glare, one object for a scene's light (planet-shine, ring-shine, eclipses), exposure modes (`vidgen/space-light`) | §122.8 |
 | 373 | Phenomena: a black hole that bends the sky, a wormhole, a jump to warp, asteroid fields and belts, comets, an aurora; their measured costs (`vidgen/space-phenomena`) | §122.9 |
 | 374 | The spacecraft kit: parts in metres with points to join them at, six invented ready-made craft from a seed, foil, plating and solar cells computed from numbers, plumes, attitude modes and burns of `ctx.orbits`, the sun's glare hidden, a point of light far away (`vidgen/space-craft`) | §122.10 |
-| 375 | Space camera moves | |
+| 375 | Camera moves for space scenes as functions of time: fly-by, pass, arc at a chosen phase, arrival, reveal from behind a limb timed to the second, craft views, powers-of-ten zoom, lenses, checks in sentences, cuts (`vidgen/space-camera`); path lines near the camera fixed in `vidgen/space-scale` | §122.11 |
 | 376 | Space scenes without code (`video.yaml`) | |
 | 377 | Example film | |
 | 378 | Critical review, COOKBOOK-SPACE | |
@@ -26312,6 +26313,20 @@ space.path("Moon", {kind: "conic"});      // a line exact every frame
   errors with did-you-mean; `slow`: the ship and Earth–Moon pages in Chromium, `split` against
   `single`, twice. Stills: `/home/claude/work/scratch/an368/stills/`.
 
+**Path lines near the camera (Step 375).** Step 374 found that a `space.path` line vanished in
+close shots. Two causes, both in `update` / `_intervals`, both fixed: (1) a line's `nearest` is
+its distance from the camera, but a depth slice begins at a depth along the view, which at the
+frame's corner is smaller (distance × cos of the half field of view each way): the part of a
+line nearest the camera and off the middle was cut by the slice's near plane (the Moon's orbit
+seen from 2.4 × 10⁹ m lost a sixth of its ellipse). The line's interval now begins at `nearest ×
+0.999 × cx × cy`. (2) Software GL draws nothing of a segment far longer than its distance from
+the camera (a 10 km chord 800 m away). `nearCuts(a, b, d, spare)` gives the shares at which
+such a segment (over four times as long as its distance) is cut: the point nearest the camera
+and points d, 2 d, 4 d, ... to both sides, at most 48 a segment and `PATH_SPARE` (96) a line and
+frame; the line's buffer has that many spare points and a draw range. The pieces lie on the
+same straight segment, so the picture is the same line. Pages importing `vidgen/space-scale`
+are drawn again (its bytes changed; no released film imports it).
+
 ### 122.5 Checks for dark pictures; ready-made parts and their contact sheet (Step 369)
 
 **What fired wrongly on space pictures.** Synthetic clips (1280x720, 3 s, encoded as vidgen does:
@@ -26406,7 +26421,7 @@ frozen (grain over 4/255 is change).
 imports only `three`) keeps the parts by name: `definePart(info, make)`, `parts({kind, name})`,
 `part(name)` (did-you-mean), `buildPart(name, stage, options, seed)`, `defaultStage(width,
 height)` (black background, a 40° camera at (0, 0.8, 6) looking at the origin, a warm key light,
-a faint fill), `KINDS` (`sky`, `body`, `light`, `craft`, `craft-part` (Step 374), `phenomenon`, `structure`, `effect`,
+a faint fill), `KINDS` (`sky`, `body`, `light`, `craft`, `craft-part` (Step 374), `phenomenon`, `camera` (Step 375), `structure`, `effect`,
 `environment`: the sheet's order). `info` is `{name, kind, module, label, use, options, seed,
 at}`: `module` the import that has the code, `use` the one line a page writes, `options` the
 defaults `make` reads (colours as `"#rrggbb"` strings), `at` the time the sheet shows. `make(stage)`
@@ -27605,3 +27620,157 @@ probe's gold foil before a black sky, the same frame twice, shadows that only da
 environment changing the metal, an amber plume and a blue beam that only add light and
 flicker by the clock, the glare hidden behind a tug and not without `shade`, and shadows
 inside `vidgen/space-scale`'s slices. Stills: `/home/claude/work/scratch/an374/stills/`.
+
+### 122.11 Camera moves for space scenes: `vidgen/space-camera` (Step 375)
+
+A space shot is made by where the camera stands relative to the sun, how close it passes, and
+when a light breaks over an edge; writing that as raw positions is slow and easy to get wrong.
+The module `data/web/modules/space-camera.js` (import name `vidgen/space-camera`; it imports
+only shaping functions of `vidgen/music-time`, no three.js, so all of it runs in Node) gives
+the moves a cinematographer names, each as a function of time.
+
+```js
+import {spaceCamera} from "vidgen/space-camera";
+const cam = spaceCamera({space, camera});                   // on a SpaceView; or {camera, up: [0, 1, 0], sun, bodies}
+const view = (t) => cam.arc(t, {subject: "Saturn", phase: {limb: 0.1}, distance: {radii: 7}});   // a crescent, the sun just off the limb
+const update = (t) => { cam.apply(t, view(t)); saturn.update(t); sun.update(t); light.update(t); };   // Finish's update: motion blur works
+```
+
+**Shots.** A move returns a shot: `{from, right, up, forward, fov, aspect, focus, subject,
+...}`, float64 arrays in the frame of its subjects (the orbit data's with a `SpaceView`: z
+north; three.js's without one: y up). `cam.apply(t, shot)` sets the camera's field of view and
+hands the shot to `space.update(t, {from: {offset}, quaternion})`, so the camera's place is
+subtracted from every body in double precision (§122.4), or sets a plain three.js camera.
+`shot.focus` is the subject's distance along the view (three-finish's `dof.focus`, `SpaceView`'s
+`dofFocus`). Nothing is kept between calls: the same time gives the same shot in any order
+(tested), so scenes render in any order, a cut between two scenes on one clock shows one move,
+and three-finish's motion blur calls the move at its sub-frame times.
+
+**Time.** `progress` (0..1), or `over: [start, end]` in seconds of `time` (default t). An
+author gives bar lines with the existing helpers: `over: [8 * bar, 12 * bar]`, `time:
+ctx.music.time(t)`. `eased(u, ease)` blends an even speed (0: for a cut into and out of
+motion) with the quintic ease (1: starts and ends at rest); the moves default to 0.4 to 0.6.
+
+**Subjects.** A body's name (with a `SpaceView`), `[x, y, z]`, `{at, radius, name}` (`at` may
+be a function of t), `{body, offset}`, a world / star / craft of the space modules (a flown
+craft is its `flight.body`), a three.js object, or a function of t. A distance is metres from
+the subject's middle, `{radii: k}` or `{altitude: m}`. The sun: the rig's `sun` (a direction, a
+subject, a star of `vidgen/space-light`: its three.js direction is turned into the data's
+frame) or the data's `"Sun"`.
+
+**Composition.** `shotAt(eye, target, {up, fov, aspect, place, roll})` puts the target at
+`place` (`[x, y]`, −1..1, x right, y up) with the camera's right square to `up` (a level
+horizon), exactly: with a = x tan(fov/2) aspect and b = y tan(fov/2), the pitch is asin(n sin E
+/ √(1 + b²)) − atan b (E the target's height over the level, n = √(1 + a² + b²)) and the
+heading is turned by atan(a / (cos θ − b sin θ)). No move puts its subject in the middle by
+default except the zoom (its axis must be the middle, or everything slides). `level: body`
+levels a world's horizon (up is away from its middle); fly-bys and craft views do so by
+themselves for the world a subject of the orbit data flies close over (within three radii).
+
+**The moves.**
+
+| Move | What it does | Defaults that carry the look |
+|---|---|---|
+| `flyBy(t, {subject, closest, side, along, before, after, linger, place, roll, track})` | a straight line past the subject in the subject's own frame, the closest pass at `closest` on `side` (`left`, `right`, `above`, `below`, `sunlit`, `dark`, a vector); the subject glides from one side of the frame to the third it leaves by | `linger` 0.6: between an even speed along the line (0: the bearing whips round at the pass) and an even turning of the bearing (1: fast in, slow at the pass, fast out); `before`, `after` 6 closest distances; `roll` a bank that peaks at the pass |
+| `pass(t, {subject, ...})` | the craft passes the camera: a fly-by against the craft's velocity | a 16 mm lens (it holds the world's limb under the craft), the craft in the upper frame, `closest` 2.5 radii; `track: false` locks the frame |
+| `arc(t, {subject, phase, around, distance, place})` | the camera at a phase angle (sun, subject, camera): a name of `PHASES` (`front` 0, `gibbous` 35, `three-quarter` 55, `half` 90, `crescent` 135, `thin-crescent` 158, `backlit` 180), degrees, or `{limb: k}`: the sun k subject radii off the limb (phase 180° − (1 + k) asin(R / d)); pairs move through the move | the subject on the third away from the sun's side; without progress one held frame |
+| `arrive(t, {subject, from, altitude, sweep, plane, sunAhead, horizon, tilt})` | from 14 radii, the world small at (0.3, 0.12), round it by `sweep` 110° down to 0.07 radii (446 km over the Earth); the height above the ground falls by a constant factor per unit of eased progress; the camera tilts from the world's middle up to the flight's direction | the limb at `horizon` −0.42 with the camera's right along the orbit's axis (level); `sunAhead` 140 (day side) or 9 (a sunrise at the end) |
+| `reveal(t, {behind, of, at, rate, distance, plane, horizon, place, air, follow})` | rides round the world `behind` so that `of` (the sun; a moon, a craft, a ringed world) comes out over its limb | first light exactly at `at`; `rate` 1°/s; the limb at −0.4, the light at x 0.18 |
+| `follow(t, {subject, view, lock, distance, around, target, drift, push})` | stands in the craft's frame: `lock: "velocity"` (forward the flight, up away from the world), `"craft"` (its own axes), `"stars"` | `VIEWS`: `chase`, `lead`, `three-quarter`, `side`, `shoulder` (toward `target`), `small` (6 % of the frame over the world), `horizon` (a 300 mm lens along the line that grazes the limb behind the craft); `drift` 1: `breathe` |
+| `zoom(t, {stops, rate, over, hold, ease, direction})` | powers of ten: the distance is multiplied by `rate` (√10) every second through landing points `{subject, distance, hold}` | the middle glides between subjects by a smoothstep of the distance's share of the leg; rests ease in and out over 0.6 s |
+
+**Reveal: the timing.** The camera is at angle θ from the point opposite the subject, on a
+circle of radius r round the world (radius R), in the plane that holds the subject's direction
+and is square to `plane` (default `up`: the ride of an equatorial orbit). A far sun's upper edge
+meets the limb when θ = asin(R / r) − σ (σ its angular radius, 0.2665°); the camera is at θ*
++ `rate` × (time − `at`). For a subject at a finite distance θ* is found by bisection (60
+steps) for where the subject is at `at`. Measured against Step 372's glare on the Earth-like
+world from 446 km, `at: 4`, 0.5°/s: the disc is wholly covered a frame before 4 s (covered
+0.9998), 0.995 at 4.000 s, 0.985 a frame after: the geometry is on time. The glare's light is
+held back by the air at grazing height: its red share is 0.1 % when the sun's edge is 0.10° over
+the hard limb and 2 % at 0.25°. `air` (degrees) adds that to the limb, so `air: 0.1` puts the
+first glimmer on the time; `airMargin(radius, distance, height)` gives the angle of a scale
+height (0.196° there).
+
+**The zoom.** `zoomPlan(distances, {rate | seconds, hold, ease})` lays out legs and rests;
+`zoomAt(plan, time)` gives `{distance, power, leg, share, resting, speed}`. On a leg the
+logarithm of the distance is the integral of a speed that rises as a smoothstep over `ease`
+seconds at an eased end and is constant between (closed form), so in the middle of a leg d(t +
+1) / d(t) is exactly `rate` (tested), a leg lasts ln(d₁/d₀) / ln(rate) + ease/2 per eased end,
+and `over` solves for the rate. Between two landing points the middle is A₀ + (A₁ − A₀)
+smoothstep((d − d₀) / (d₁ − d₀)): linear in the distance, not its logarithm, so the middle moves
+in step with the scale and the camera leaves and reaches each landing point along `direction`
+with no kink. `direction` defaults to 40° off `up`: over a world on the side away from it (a
+craft is never behind its world), else toward the first subject's sunlit side. Limit: closer
+than `GROUND_SHARE` (10⁻³) of a world's radius above its ground a sphere is no ground (§122.4);
+`problems` says so. One camera of `vidgen/space-scale` was drawn from 130 m off a ship to 2.6 ×
+10⁹ m and from 4 Earth radii to 3.2 × 10¹² m.
+
+**Lenses.** `LENSES` by name (`ultra-wide` 16 mm, `wide` 24, `wide-normal` 35, `normal` 50,
+`portrait` 85, `long` 135, `tele` 300, `long-tele` 600): the vertical field of view of a 36 ×
+24 mm frame, 2 atan(12 / mm) (50 mm: 27.0°). `frameShare(radius, distance, fov)`,
+`distanceFor(radius, share, fov)`. `loomLens({craft, world, gap, craftShare, worldShare})`
+solves the classic long-lens shot: the lens and the distance at which a craft fills
+`craftShare` of the frame's height and the world `gap` behind it `worldShare`; it also returns
+the world's share with a 24 mm lens at the same craft size (a 15 m craft at 0.2 before the
+Earth 40,000 km behind it at 1.2: a 15.3° lens (89 mm) from 558 m; with 24 mm the Earth is
+0.32).
+
+**Checks.** `cam.problems(t, shot, {subject, box, minPixels, height, ground})` returns
+sentences: the camera inside a world or within `GROUND_SHARE` of its ground; the subject behind
+the camera, outside the frame or its `box` (a subject larger than the frame counts while any of
+its disc is in it), under `minPixels` (3) in radius, or hidden behind a world. `cam.check(move,
+{from, to, steps})` samples a whole move: the same, a path that goes through a world between
+two samples, and a jump (a turn over 8 times the move's median, over 3°, and over 3 times both
+neighbours: a whip pan is not a jump).
+
+**Cuts.** `discOf(shot, at, radius)` and `matchDisc(disc, radius, fov)` → `{distance, place}`: a
+match cut on a disc (a planet to the next shot's sun or porthole, equal in place and size;
+tested to 10⁻⁹). `flashCut(time, cut, {amount, rise, fall})`: three-finish's `flash` amount,
+one curve across a cut on a bar line. `warpCut(time, cut, {seconds, split})`: the progress for
+Step 373's `warpAt`, the cut falling at `split` of the jump. Each is one curve read by both
+scenes from their own time.
+
+**Parts** (`data/web/parts/space-camera.js`, the new kind `camera`, 5): `camera-three-quarter`,
+`camera-crescent`, `camera-fly-by`, `camera-arrival`, `camera-sunrise`: each a move at its key
+moment in a plain three.js scene (the rig without a `SpaceView`). The craft views are shown in
+the guide's words and the step's stills, not as tiles (a tile with a `SpaceView` would leave its
+wrapper on the sheet's shared renderer).
+
+**Measured** (2 cores, SwiftShader). The rig's arithmetic is not measurable beside a frame's
+drawing (a move is some hundred float operations; the reveal of a moon 60 bisection steps).
+Three clips at 640x360, 30 fps: a fly-by of the Earth-like world with a bank and 3-sample motion
+blur (3.6 s), a chase of the ship at 900 km with a push-in (3.6 s; 0.32 s a frame), a zoom from
+130 m off the ship to 4.5 Earth radii (4 s); 11.2 s rendered in 177 s. `vidgen motion check`: 0
+errors, 2 warnings, 2 info: `shimmer` on the fly-by's stars while the camera pans (the same
+warnings without motion blur: the sky's stars at 360 lines, not the move), and the scenes' own
+fades at the cuts. The five tiles: 22 s. In Node: step-to-step change of the camera's speed
+under 5 % of its peak for every move at 400 steps; the subject within its stated place to 10⁻⁹.
+
+**Decisions.** A shot is plain data and the rig holds no state, so a move can be tested in Node
+and called at any time. No three.js import: `apply` only sets fields of the camera it is
+given. The existing `orbit` / `flyThrough` of `vidgen/music-time` stay for music videos' own
+spaces; the space moves need the sun's direction, radii and double precision, so they are
+built on `vidgen/space-scale` and reuse only the shaping functions. The fly-by is a straight
+line in the subject's frame (a true hyperbola belongs to the orbit data: follow a body of a
+`flyby` with `follow`). `sunAhead` is measured from the limb, the thing in the frame. The
+arrival's default is the day side (the first strip, over the night side, showed a black disc
+for six seconds).
+
+**Limits.** With a 300 mm lens the sky of `vidgen/space-sky` is its cube map enlarged (soft
+streaks). A path line of the orbit data is a polyline: at 256 `path_samples` over nine hours a
+craft is up to 14 km off its line in a close-up (give more samples). `follow` with `lock:
+"velocity"` follows the flight, not the craft's turn before a burn. The reveal's `air` is a
+number the author gives, not read from the world. The zoom's default direction can look at a
+world's night side when no sun is known. A subject given as a three.js object is read by its
+`position` (a top-level object).
+
+**Tests**: `tests/test_web_space_camera.py`: 8 default tests (1 s; Node for six): served by its
+import name with one import; the parts; shots, lenses, `loomLens`, the cuts and errors with a
+did-you-mean; every move a function of its time, continuous, its subject in the frame, the
+camera outside the world; the moves' numbers (phase, the sun 0.15 radii off the limb, the
+arrival's level limb at `horizon`, first light at `at` for the sun and a moon, the views, the
+pass); the zoom's constant ratio, rests and `over`, and every sentence of the checks; the rig on
+a stand-in `SpaceView` (float64 `from`, the data-frame quaternion, a flown craft, the held frames
+after the data's end) and on a plain camera; `nearCuts` of `vidgen/space-scale`. One `slow`
+Chromium test draws the five framings (20 s). Stills: `/home/claude/work/scratch/an375/stills/`.

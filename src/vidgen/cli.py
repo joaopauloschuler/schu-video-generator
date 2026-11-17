@@ -2910,7 +2910,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("parts", help="a labelled contact sheet (PNG) of the ready-made three.js parts (skies, bodies, structures, effects...) "
                        "with the line that uses each, so you can choose by looking; --list names them without drawing")
     p.add_argument("names", nargs="*", metavar="NAME", help="only these parts (a name or a pattern such as 'star-*'); one part gets one large tile")
-    p.add_argument("--kind", metavar="KIND", help="only parts of this kind (sky, body, light, craft, craft-part, phenomenon, structure, effect, environment)")
+    p.add_argument("--kind", metavar="KIND", help="only parts of this kind (sky, body, light, craft, craft-part, phenomenon, camera, structure, effect, environment)")
     p.add_argument("--list", action="store_true", help="print the parts (name, what it is, the import and the line that uses it); nothing drawn")
     p.add_argument("--out", "-o", metavar="FILE", help="the sheet (.png or .jpg; default: parts_sheet.png here)")
     p.add_argument("--size", metavar="WxH", help="one tile's size (default 320x180; 960x540 for a single part)")

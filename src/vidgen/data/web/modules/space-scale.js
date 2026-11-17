@@ -105,6 +105,21 @@ export function segmentDistance(a, b) {
   return norm(add(a, scale(d, u)));
 }
 
+/** The most points a path line gains near the camera in one frame (see nearCuts). */
+export const PATH_SPARE = 96;
+/** Where to cut the segment a-b (camera-relative) that passes the camera at distance `d` and is over four
+ * times as long: the shares u (0..1, rising) of the point nearest the camera and of points d, 2 d, 4 d, ...
+ * to both sides of it, at most `spare`. A straight piece drawn as shorter ones is the same line; a piece
+ * far longer than its distance from the camera is not drawn at all by software GL (Step 374's finding). */
+export function nearCuts(a, b, d, spare = PATH_SPARE) {
+  const s = sub(b, a), L = norm(s);
+  if (!(L > 4 * d) || spare <= 0) return [];
+  const u0 = Math.min(1, Math.max(0, -(a[0] * s[0] + a[1] * s[1] + a[2] * s[2]) / (L * L))), step = Math.max(d, L * 1e-6) / L, out = [];
+  if (u0 > 0 && u0 < 1) out.push(u0);
+  for (let j = step; out.length < Math.min(spare, 48) && (u0 - j > 0 || u0 + j < 1); j *= 2) { if (u0 - j > 0) out.push(u0 - j); if (u0 + j < 1 && out.length < Math.min(spare, 48)) out.push(u0 + j); }
+  return out.sort((x, y) => x - y);
+}
+
 /** Cubic Hermite between two frames' positions p0, p1 and velocities v0, v1, dt simulated seconds apart, at
  * u in [0, 1] (u = 0 gives p0 exactly). Motion blur's sub-frame times fall between frames. */
 export function hermite(p0, v0, p1, v1, dt, u) {
@@ -259,7 +274,7 @@ export class SpaceView {
     if (!raw || !raw.length) throw fail(`path: ${name} has no ${kind} in the orbit data`);
     const parent = options.parent ?? this.orbits.bodies[name].parent ?? null;
     const n = raw.length / 3, geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(raw.length), 3));
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(raw.length + 3 * PATH_SPARE), 3));
     const material = new THREE.LineBasicMaterial({color: options.color ?? 0x8899aa, transparent: (options.opacity ?? 1) < 1, opacity: options.opacity ?? 1});
     const line = new THREE.Line(geometry, material);
     line.frustumCulled = true;
@@ -346,14 +361,21 @@ export class SpaceView {
     }
     for (const p of this.paths) {
       const origin = p.parent ? this.position(p.parent, t) : [0, 0, 0], a = p.line.geometry.attributes.position.array;
-      let nearest = Infinity, prev = null;
+      let nearest = Infinity, prev = null, k = 0, spare = PATH_SPARE;
+      const put = (w) => { a[3 * k] = w[0]; a[3 * k + 1] = w[2]; a[3 * k + 2] = -w[1]; k++; };
       for (let i = 0; i < p.n; i++) {
         const w = sub(this.map(add(origin, [p.raw[3 * i], p.raw[3 * i + 1], p.raw[3 * i + 2]])), eye);
-        a[3 * i] = w[0]; a[3 * i + 1] = w[2]; a[3 * i + 2] = -w[1];
-        nearest = Math.min(nearest, prev ? segmentDistance(prev, w) : norm(w));
+        if (prev) {
+          const d = segmentDistance(prev, w);
+          nearest = Math.min(nearest, d);
+          for (const u of nearCuts(prev, w, d, spare)) { put(add(prev, scale(sub(w, prev), u))); spare--; }
+        } else nearest = norm(w);
+        put(w);
         prev = w;
       }
       p.line.userData.nearest = nearest;   // how near the camera the line comes (for the depth slices)
+      p.line.geometry.setDrawRange(0, k);
+      for (const end = k - 1, total = p.n + PATH_SPARE; k < total; k++) { a[3 * k] = a[3 * end]; a[3 * k + 1] = a[3 * end + 1]; a[3 * k + 2] = a[3 * end + 2]; }   // unused points: on the last one, for the bounds
       p.line.geometry.attributes.position.needsUpdate = true;
       p.line.geometry.computeBoundingSphere();
     }
@@ -400,7 +422,8 @@ export class SpaceView {
       const c = tmp.copy(sphere.center).applyMatrix4(cam.matrixWorldInverse), r = sphere.radius, z = -c.z;
       if (z + r <= 0) continue;                                                     // behind the camera
       if ((Math.abs(c.x) - z * tanX) * cx > r || (Math.abs(c.y) - z * tanY) * cy > r) continue;   // beside the frame
-      const inside = o.userData.nearest !== undefined ? Math.max(this.near, o.userData.nearest * 0.999) : this._surface(o);
+      // (a line's `nearest` is a distance: at the frame's corner its depth along the view is that times cx * cy at least)
+      const inside = o.userData.nearest !== undefined ? Math.max(this.near, o.userData.nearest * 0.999 * cx * cy) : this._surface(o);
       out.push([z - r > this.near ? z - r : inside, z + r]);                        // inside its bounding sphere: how near it comes
     }
     return out;

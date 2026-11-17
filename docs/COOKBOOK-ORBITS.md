@@ -191,8 +191,17 @@ prime meridian), each orbit as a polyline and a ship's burns. The numbers are th
   burn is an instant, the film's a short stretch (a convention). `craft.burns` lists the
   stretches in scene seconds for a camera cut or a label. From far away give `marker: 3` so the
   ship stays a visible point on its path (a stated choice), and draw the path with
-  `space.path("Ship")`; close to the camera the path line is not drawn (software GL drops a
-  segment much longer than its distance).
+  `space.path("Ship")`; for a close-up give `orbit_data` more `path_samples`, since the line is
+  a polyline and the craft flies the true curve.
+- **The camera on an orbit** (Step 375; CONFIG `web`, "Camera moves for space scenes"):
+  `const cam = spaceCamera({space, camera})` from `vidgen/space-camera`, then each frame
+  `cam.apply(t, cam.follow(t, {subject: ship, view: "chase"}))` goes with a flown craft (forward
+  is its velocity, up is away from the world it goes round), `cam.pass(t, {subject: ship, over:
+  [0, 4]})` lets it pass the camera, `cam.reveal(t, {behind: "Earth", of: "Moon", at: 4})` times
+  a moonrise over the Earth's limb, and `cam.zoom(t, {stops: [{subject: "Earth", distance:
+  {radii: 4}}, {subject: "Earth", distance: 2.4e9, hold: 1}, {subject: "Sun", distance:
+  3.2e12}]})` backs away by powers of ten from a world to its moon's orbit to the planets (draw
+  the orbits with `space.path(name, {kind: "conic"})`: at true scale the bodies are points).
 - **A comet on its orbit** (Step 373; CONFIG `web`, "Phenomena"): with `orbit_data` holding
   `{preset: halley}`, `comet(renderer, {space, body: "Halley"})` from `vidgen/space-phenomena`
   stands where the data puts the comet; `comet.update(t)` points its ion tail away from the

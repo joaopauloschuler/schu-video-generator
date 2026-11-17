@@ -5,10 +5,27 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–374
+## Steps 193–375
 
-### Space scenes (Phase AN, Steps 367–374)
+### Space scenes (Phase AN, Steps 367–375)
 
+- **Camera moves for space scenes** (Step 375): the new module `vidgen/space-camera`.
+  `spaceCamera({space, camera})` gives the moves by name, each a function of time, so a cut on a
+  bar line and motion blur are safe: `flyBy` (approach, the closest pass at a stated distance
+  and side, recede, with an optional bank), `pass` (a craft passes the camera), `arc` (a world
+  at a phase by name: `cam.arc(t, {subject: "Saturn", phase: {limb: 0.1}})` is a crescent with
+  the sun just off the limb), `arrive` (from far out to a low orbit over a level limb), `reveal`
+  (the sun, a moon or a craft comes out over a world's limb, the first light exactly at a given
+  time), `follow` (seven views of a craft, among them a long lens that makes the world's limb
+  loom behind it) and `zoom` (powers of ten: every second multiplies the distance by a constant,
+  with landing points to rest on). The subject sits on a third, the horizon of the world below is
+  level, speeds ease. Lenses by focal length, `loomLens` for the long-lens shot, `cam.check`
+  that says in sentences when a camera is inside a world or a subject is lost, a match cut on a
+  disc, a cut on a flash, the warp as a cut. Five framings on the contact sheet: `vidgen parts
+  --kind camera`.
+- **Path lines show in close-ups** (Step 375): a line of `space.path` in `vidgen/space-scale` was
+  not drawn near the camera, and lost the part of an orbit nearest the camera at the frame's
+  edge. Both are fixed.
 - **A spacecraft kit** (Step 374): the new module `vidgen/space-craft`. `craft("probe", {seed})`
   gives a finished craft in one line: a deep-space probe, a communications satellite, a modular
   station (with a turning ring habitat on request), a crewed ship, a lander and a cargo tug, all

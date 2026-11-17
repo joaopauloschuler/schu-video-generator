@@ -7313,7 +7313,7 @@ caption.textContent = space.note().text;  // "sizes not to scale · bodies enlar
 | `space.` | |
 |---|---|
 | `add(object, {body \| at, offset, size, spin})` | place an object every frame: at a body (`body: "Mars"`) or at `at` (`[x, y, z]` m in the data's frame, or a function of t), moved by `offset` (m of the drawing); `size: "body"` (radius 1; the default for a body with a radius) or metres per unit (default 1); `spin` (default with rotation data): turned with the body (local +y its north pole, +x its prime meridian) |
-| `path(name, {kind, color, opacity, parent})` | a `THREE.Line` along the body's `path` (default) or `conic` |
+| `path(name, {kind, color, opacity, parent})` | a `THREE.Line` along the body's `path` (default) or `conic`; near the camera its long pieces are drawn as shorter ones (Step 375), so it shows in a close-up too |
 | `update(t, {from, to, up, quaternion})` | set the camera and every object for scene time t. A point is a body's name, `[x, y, z]` m of the data (compressed in `log`), `{body, at, offset}` (offset in metres of the drawing) or a function of t; `up` default the ecliptic's north `[0, 0, 1]`; `quaternion` (`[x, y, z, w]`, data frame) instead of `to` |
 | `position(name, t?)`, `at(name, t?)`, `map(p)` | a body's true position (float64 m; between frames a Hermite of the two frames, for motion blur), where it is drawn, where a point is drawn |
 | `radius(name)`, `factor(name)`, `pixels(name)` | the radius drawn (m), its factor, its radius on screen (px; under 1 at true scale is honest) |
@@ -7707,11 +7707,82 @@ function frame(t) { space.update(t, view); earth.update(t); ship.update(t); sun.
   in a wide shot 0.05 to 0.15 s, filling the frame 0.3 to 0.6 s (0.3 s of it the reflections,
   0.1 s the shadows), five engines filling the frame 0.65 s more; making the first craft 1.5 s,
   each later one about 0.1 s.
-- **Limits.** A path line of `space.path` is not drawn close to the camera in software GL (a
-  segment much longer than its distance): show a craft's path from afar. The environment is
+- **Limits.** A path line of `space.path` is a polyline of the data's `path_samples` (256): in
+  a close-up of a craft give more samples, or the craft is beside its line. The environment is
   still for a shot. A part standing inside a plume can hide it from some angles. Thin struts
   shimmer a little at middle distances without motion blur.
 - Look first: `vidgen parts --kind craft` and `vidgen parts --kind craft-part`.
+
+**Camera moves for space scenes: `vidgen/space-camera`** (Step 375, DESIGN §122.11). The moves a
+cinematographer names, each a function of time: nothing is kept between frames, so scenes render
+in any order, a cut on a bar line shows one move, and `vidgen/three-finish`'s motion blur works.
+`import {spaceCamera} from "vidgen/space-camera"`.
+
+```js
+const cam = spaceCamera({space, camera});                    // on a SpaceView: subjects are names of ctx.orbits
+const view = (t) => cam.arc(t, {subject: "Saturn", phase: "crescent", distance: {radii: 7}});
+const update = (t) => { cam.apply(t, view(t)); saturn.update(t); sun.update(t); light.update(t); };   // the camera first
+// a plain three.js scene: spaceCamera({camera, sun: [1, 0.2, -1], bodies: [earth]}); subjects are objects or {at, radius}
+```
+
+- **The rig**: `spaceCamera({space, camera, up, sun, sunRadius, lens, aspect, height, bodies})`.
+  With `space` the frame is the orbit data's (`up` `[0, 0, 1]`), the sun is the data's `"Sun"`
+  unless `sun` is given (a direction towards it, a subject, a star of `vidgen/space-light`), and
+  the worlds to avoid are the data's; without it the frame is three.js's (`up` `[0, 1, 0]`) and
+  `bodies` lists the worlds. `cam.apply(t, shot)` places the camera (through `space.update`, in
+  double precision) and sets its field of view; `shot.focus` is the subject's distance for
+  three-finish's `dof.focus` (and `SpaceView`'s `dofFocus`).
+- **Words every move takes**: `progress` (0..1) or `over: [start, end]` in seconds of `time`
+  (default t; give `time: ctx.music.time(t)` and `over: [8 * bar, 12 * bar]` for bar lines);
+  `lens` (a name: `ultra-wide` 16 mm, `wide` 24, `wide-normal` 35, `normal` 50, `portrait` 85,
+  `long` 135, `tele` 300, `long-tele` 600; millimetres; or `{fov: degrees}`); `place` (`[x,
+  y]`, −1..1: where the subject sits; a third is 1/3; `[[x, y], [x, y]]` glides); `roll`
+  (degrees); `up` or `level: body` (that world's horizon level); `ease` (0 an even speed, 1 from
+  rest to rest). A subject is a body's name, `[x, y, z]`, `{at, radius, name}` (`at` may be a
+  function of t), `{body, offset}`, a world / star / craft of the space modules, a three.js
+  object, or a function of t. A distance is metres from the subject's middle, `{radii: k}` or
+  `{altitude: metres}`.
+
+| Move | Options (defaults) | The picture |
+|---|---|---|
+| `cam.flyBy(t, {...})` | `subject`, `closest` (`{radii: 3}`), `side` (`"left"`; `right`, `above`, `below`, `sunlit`, `dark`, a vector), `along` (against the subject's velocity, else across the sun's line; `prograde`, `retrograde`, `sunward`, `antisun`, a vector), `before`, `after` (6, 6 closest distances), `linger` (0.6), `ease` (0.4), `roll` (a bank that peaks at the pass), `track` (`false`: a locked-off frame as at `lockAt` 0.3), `around` (the world whose horizon is level) | approach, the closest pass at the stated distance and side, recede; the subject glides from one side of the frame to the third it leaves by |
+| `cam.pass(t, {...})` | flyBy's, with a 16 mm lens, `closest` `{radii: 2.5}`, `before` 10, `after` 7, `linger` 0.5 | the craft comes up from ahead, passes the camera and flies on, the world's limb level under it |
+| `cam.arc(t, {...})` | `subject`, `phase` (`"three-quarter"`; `front`, `gibbous`, `half`, `crescent`, `thin-crescent`, `backlit`, degrees, `{limb: k}`: the sun k radii off the limb), `around` (0: the sun to the left; 90 over the top; 180 to the right), `distance` (`{radii: 5}`); each may be `[from, to]` | the subject at the chosen phase on the third away from the sun; without `progress` one held frame |
+| `cam.arrive(t, {...})` | `subject`, `from` (`{radii: 14}`), `altitude` (0.07 radii), `sweep` (110°), `plane`, `sunAhead` (140: day side; 9: a sunrise at the end), `horizon` (−0.42), `tilt` (`[0.3, 0.92]`) | from far out with the world small and off the middle, sweeping in to a low orbit: the limb across the bottom, level |
+| `cam.reveal(t, {...})` | `behind`, `of` (the sun), `at` (0: seconds of `time`), `rate` (1°/s round the world), `distance` (`{altitude: 0.07 radii}`), `plane`, `horizon` (−0.4), `place` (x 0.18), `air` (0°), `margin`, `follow` (0) | the sun, a moon, a craft or a ringed world comes out over a world's limb; first light exactly at `at`; the shot adds `elevation`, `seen`, `first` |
+| `cam.follow(t, {...})` | `subject`, `view` (`"chase"`; `lead`, `three-quarter`, `side`, `shoulder` with `target`, `small`, `horizon`; or `{direction: [right, up, forward], distance, place, lens, size}`), `lock` (`"velocity"`; `craft`, `stars`), `distance` (metres, `{radii}`, `{share}`), `around`, `drift` (1; 0 locked), `seed`, `push` (with `over`: the end's distance as a share) | the camera goes with a craft: behind it, ahead, close from the front quarter, in profile, over its shoulder toward its target, small against the world, or with the limb looming behind it through a 300 mm lens |
+| `cam.zoom(t, {...})` | `stops: [{subject, distance, hold}, ...]`, `rate` (√10 a second) or `over`, `hold`, `ease` (0.6 s), `start`, `direction` | powers of ten: every second multiplies the distance by one constant, with landing points to rest on; the shot adds `distance`, `power` (log10 m), `leg`, `resting`, `speed` |
+| `cam.look(t, {from, to, place})` | `place` (`[-1/3, 1/6]`) | the plainest shot: look from one subject at another, composed |
+
+- **A sunrise on the bar.** `cam.reveal(t, {behind: "Earth", at: 4 * bar, time: T, rate: 0.5})`:
+  the sun's upper edge meets the limb exactly at `at`. A world's air holds grazing light back:
+  on the Earth-like world from a 446 km orbit the glare's first 0.1 % shows when the sun's edge
+  is 0.1° over the hard limb and 2 % at 0.25°; `air: 0.1` puts the first glimmer on the time
+  (`airMargin(radius, distance, height)` gives the angle of a scale height: 0.196° there).
+- **A long lens makes a world loom.** A lens does not bring things nearer, it narrows the view:
+  from farther back with a longer lens a craft keeps its size while the world behind it grows.
+  `loomLens({craft, world, gap, craftShare, worldShare})` gives `{fov, mm, distance, wide}`: the
+  lens and the camera's distance for the sizes you ask (shares of the frame's height), and the
+  world's share a 24 mm lens would give at the same craft size. `frameShare(radius, distance,
+  fov)`, `distanceFor(radius, share, fov)`, `lens(name)`.
+- **Checks in sentences.** `cam.problems(t, shot, {subject, box, minPixels})` → `["the camera is
+  inside Earth (…)", "Ship is 1.2 px in radius, under 3: …", "Moon is hidden behind Earth"]`;
+  `cam.check((t) => view(t), {from: 0, to: 8, steps: 48})` samples a whole move and adds "the
+  camera's path goes through Earth" and "a jump in the move". Closer than a thousandth of a
+  world's radius above its ground the check says that a sphere is no ground.
+- **Cuts**: `cam.disc(shot, "Earth")` with `matchDisc(disc, radius, fov)` → `{distance,
+  place}` for the next shot (a match cut on a disc: a planet to the next shot's sun or porthole);
+  `flashCut(time, cut, {amount, rise, fall})` for `Finish`'s `flash` (a cut on a flash of the
+  sun's glare); `warpCut(time, cut, {seconds, split})` → the progress for `warpAt` / `warp.update`
+  of `vidgen/space-phenomena`. Give both scenes the same `cut` (a bar line) and their own time.
+- Also exported: `shotAt`, `screenOf`, `discOf`, `discPixels`, `quaternionOfShot`, `eased`,
+  `progressOf`, `flyByTravel`, `phaseDirection`, `limbPhase`, `breathe`, `zoomPlan`, `zoomAt`,
+  `LENSES`, `PHASES`, `VIEWS`, `SUN_RADIUS`, `GROUND_SHARE`, `MIN_PIXELS`, `VERSION`. Mistakes
+  stop the render with a did-you-mean: `vidgen/space-camera: no phase "cresent" (did you mean
+  "crescent"?)`.
+- Limits: with a 300 mm lens the sky is its cube map enlarged (soft); the fly-by's line is
+  straight (follow a body of the data for a true hyperbola); a subject given as a three.js
+  object is read by its `position`. Look first: `vidgen parts --kind camera`.
 
 **Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a
 seed, or a ready-made one, in one line; every surface is generated (no maps or images).
@@ -17286,7 +17357,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
 
 - **Choosing.** `NAME` is a part's name or a pattern (`star-*`, `*ring*`; an unknown name is an
   error with the closest one); `--kind` one of `sky`, `body`, `light`, `craft`, `craft-part`, `phenomenon`,
-  `structure`, `effect`, `environment` (a kind without parts yet says so).
+  `camera`, `structure`, `effect`, `environment` (a kind without parts yet says so).
 - **Drawing.** One Chromium, one page (`data/web/parts-sheet.js`): frame n builds part n in a scene
   of its own with the registry's default camera and light, sets it to the part's time `at` and
   draws it through `vidgen/three-finish` (ACES, a little bloom, no grain) unless the part asks for
@@ -17296,7 +17367,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

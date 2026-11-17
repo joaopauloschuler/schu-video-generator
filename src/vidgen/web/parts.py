@@ -36,7 +36,7 @@ REGISTRY_FILE = DATA_DIR / "modules" / "parts.js"
 #: The page that draws the sheet.
 SHEET_SCRIPT = DATA_DIR / "parts-sheet.js"
 #: The kinds of parts in the sheet's order (``KINDS`` of ``vidgen/parts``; a test keeps them equal).
-KINDS: tuple[str, ...] = ("sky", "body", "light", "craft", "craft-part", "phenomenon", "structure", "effect", "environment")
+KINDS: tuple[str, ...] = ("sky", "body", "light", "craft", "craft-part", "phenomenon", "camera", "structure", "effect", "environment")
 REQUIRED: tuple[str, ...] = ("name", "kind", "module", "label", "use")
 OPTIONAL: dict[str, Any] = {"options": {}, "seed": 1, "at": 2}
 #: A tile's size by default (pixels), and the one large tile of a single part.

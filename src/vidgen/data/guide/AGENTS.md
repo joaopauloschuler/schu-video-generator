@@ -3638,10 +3638,53 @@ probe.update(t, {sun, camera, height: ctx.height});       // wings to the sun, l
   for a lander near the ground.
 - Budget (720p, software GL): a craft in a wide shot 0.05 to 0.15 s a frame, filling the frame
   0.3 to 0.6 s, engines filling the frame up to 0.65 s more.
-- A path line (`space.path`) is not drawn close to the camera: show a craft's path from afar
-  (there `marker: 3` keeps the craft a visible point).
+- A path line (`space.path`) in a close-up wants more `path_samples` in `orbit_data` (the line
+  is a polyline); from afar `marker: 3` keeps the craft a visible point.
 - Look first: `vidgen parts --kind craft` and `--kind craft-part`. Reference: CONFIG.md `web`,
   "Spacecraft".
+
+**Camera moves in space: `vidgen/space-camera`.** Do not write camera positions by hand: name
+the move. Every move is a function of time (same time, same frame; cuts and motion blur are
+safe) and never puts the subject in the dead middle unless you ask.
+
+```js
+import {spaceCamera} from "vidgen/space-camera";
+const cam = spaceCamera({space, camera});                 // on a SpaceView; subjects are bodies of orbit_data
+const view = (t) => cam.arc(t, {subject: "Earth", phase: {limb: 0.12}, distance: {radii: 5}});   // a crescent, the sun just off the limb
+// each frame, first of all: cam.apply(t, view(t)); then the worlds, the craft, the sun, the light
+```
+
+- The moves: `cam.flyBy(t, {subject, over: [0, 8], closest: {radii: 2.4}, side: "left"})`;
+  `cam.arc` (`phase`: `front`, `three-quarter`, `half`, `crescent`, `backlit`, degrees, or
+  `{limb: k}`; `[from, to]` with `over` moves); `cam.arrive(t, {subject, over, lens: "wide"})`
+  (from far out to a low orbit over a level limb; `sunAhead: 9` ends at a sunrise);
+  `cam.reveal(t, {behind: "Earth", at: 4 * bar, rate: 0.5, air: 0.1})` (a sunrise whose first
+  light is on the bar; `of: "Moon"` for a moonrise); `cam.follow(t, {subject: ship, view:
+  "chase"})` (`lead`, `three-quarter`, `side`, `shoulder` with `target`, `small`, `horizon`: the
+  limb looming behind the craft through a long lens); `cam.pass(t, {subject: ship, over})` (the
+  craft passes the camera); `cam.zoom(t, {stops: [{subject: ship, distance: 130}, {subject:
+  "Earth", distance: {radii: 4.5}, hold: 1}, {subject: "Earth", distance: 2.6e9}]})` (powers of
+  ten: every second multiplies the distance by √10).
+- Timing: `over: [start, end]` in seconds; on the music's clock give `time: T` with `over: [8 *
+  bar, 12 * bar]`. `ease: 0` when you cut into a move that is already going.
+- Framing: `place: [x, y]` (−1..1; a third is 1/3), `lens: "wide" | "normal" | "long" | "tele"`
+  (or millimetres), `level: "Earth"` for that world's horizon. A long lens from farther back
+  makes the world loom behind a craft: `loomLens({craft, world, gap, craftShare, worldShare})`
+  gives the lens and the distance.
+- Check before you render: `cam.check(view, {from: 0, to: 8})` returns sentences (the camera
+  inside a world, the subject out of the frame or under 3 px, a path through a world, a jump);
+  an empty list is good. Throw them as an error while you develop.
+- Depth of field: a shot's `focus` is the subject's distance: `dof: (t) => ({focus:
+  view(t).focus, fStop: 2.8})` in `Finish`, with `dofFocus: (t) => view(t).focus` on the
+  `SpaceView`.
+- Cuts that suit space, both scenes reading one curve: a match cut on a disc (`cam.disc(shot,
+  "Earth")` → `matchDisc(disc, radius, fov)` → `{distance, place}` for the next shot), a cut on
+  a flash (`flash: (t) => ({amount: flashCut(T, cutTime)})`), a warp (`warp.update(t, {progress:
+  warpCut(T, cutTime)})`).
+- Without orbit data: `spaceCamera({camera, sun: [1, 0.2, -1], bodies: [earth]})`; subjects are
+  the objects (`subject: earth`) or `{at: [x, y, z], radius}`.
+- Look first: `vidgen parts --kind camera`. Reference: CONFIG.md `web`, "Camera moves for space
+  scenes".
 
 **Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
 ready-made three.js part (skies, structures, effects, environments; more space parts as they are

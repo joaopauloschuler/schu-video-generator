@@ -54,12 +54,14 @@ MODULES_FOLDER = "modules"
 #: scales in three.js, floating origin and depth slices, DESIGN.md §122.4; ``vidgen/parts``: the registry
 #: of ready-made parts, DESIGN.md §122.5; ``vidgen/space-sky``: the sky of a space scene, and
 #: ``vidgen/space-sky-stars``, the star file its real sky reads, DESIGN.md §122.6; ``vidgen/space-bodies``:
-#: planets, moons and rings from a seed, DESIGN.md §122.7; ``vidgen/space-craft``: the spacecraft kit, DESIGN.md §122.10).
+#: planets, moons and rings from a seed, DESIGN.md §122.7; ``vidgen/space-craft``: the spacecraft kit, DESIGN.md §122.10;
+#: ``vidgen/space-camera``: camera moves for space scenes, DESIGN.md §122.11).
 VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
                                   "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js", "vidgen/parts": "parts.js",
                                   "vidgen/space-sky": "space-sky.js", "vidgen/space-sky-stars": "space-sky-stars.js",
                                   "vidgen/space-bodies": "space-bodies.js", "vidgen/space-light": "space-light.js",
-                                  "vidgen/space-phenomena": "space-phenomena.js", "vidgen/space-craft": "space-craft.js"}
+                                  "vidgen/space-phenomena": "space-phenomena.js", "vidgen/space-craft": "space-craft.js",
+                                  "vidgen/space-camera": "space-camera.js"}
 #: The folder of the parts files after ``__vidgen__/`` (``data/web/parts/<module>.js``: each module's
 #: ready-made parts for the registry ``vidgen/parts``; imported as ``vidgen/parts/<module>.js``).
 PARTS_FOLDER = "parts"

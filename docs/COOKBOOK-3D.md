@@ -202,6 +202,18 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   threshold 1: the stills of Step 374 use it). `craft.shade(sun)` hides the sun's glare behind
   it. A close-up of foil wants the sun from the side, so that single facets catch it and the
   parts' shadows cross the bus. Look first: `vidgen parts --kind craft`.
+- **The camera in space.** `spaceCamera({space, camera})` from `vidgen/space-camera` (CONFIG
+  `web`, "Camera moves for space scenes") has the moves by name, each a function of time: `flyBy`,
+  `pass`, `arc` (a phase by name: `cam.arc(t, {subject: "Saturn", phase: {limb: 0.1}})` is a
+  crescent with the sun just off the limb), `arrive`, `reveal` (a sunrise whose first light is on
+  a bar line), `follow` (seven views of a craft) and `zoom` (powers of ten). What makes them look
+  shot rather than computed: the subject on a third, not in the middle (`place`); the horizon of
+  the world you fly over level (`level`); a speed that eases (`ease`) and a camera that lingers
+  at the closest pass (`linger`); a slow sway on a locked shot (`drift`); a long lens from far
+  back when a world should loom behind a craft (`view: "horizon"`, `loomLens`), a wide one when
+  the craft passes the camera. Run `cam.check(view, {from, to})` before a render: it names a
+  camera inside a world or a subject lost from the frame. Look first: `vidgen parts --kind
+  camera`.
 - **A sky behind it.** `scene.add(spaceSky(renderer, {seed}).object)` from `vidgen/space-sky`
   (CONFIG `web`, "The sky of a space scene") is a sky like a photograph from space: thousands of
   stars with the real sky's spread of brightness, the Milky Way with its dust, optional nebulae and
