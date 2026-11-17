@@ -360,7 +360,7 @@ src/vidgen/
                           # written by tools/make_star_catalogue.py (§122.6); space-bodies.js `vidgen/space-bodies`: planets,
                           # moons and rings from a seed (§122.7); space-light.js `vidgen/space-light`: stars and the light of a
                           # space scene (§122.8); space-phenomena.js `vidgen/space-phenomena`: black hole, wormhole, warp,
-                          # asteroids, comet, aurora (§122.9)
+                          # asteroids, comet, aurora (§122.9); space-craft.js `vidgen/space-craft`: the spacecraft kit (§122.10)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -26059,7 +26059,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 371 | Planets, moons and rings from a seed: seven surface types, air, rings, 21 ready-made worlds (`vidgen/space-bodies`) | §122.7 |
 | 372 | Suns and light: stars by temperature, the far sun's glare, one object for a scene's light (planet-shine, ring-shine, eclipses), exposure modes (`vidgen/space-light`) | §122.8 |
 | 373 | Phenomena: a black hole that bends the sky, a wormhole, a jump to warp, asteroid fields and belts, comets, an aurora; their measured costs (`vidgen/space-phenomena`) | §122.9 |
-| 374 | Spacecraft kit | |
+| 374 | The spacecraft kit: parts in metres with points to join them at, six invented ready-made craft from a seed, foil, plating and solar cells computed from numbers, plumes, attitude modes and burns of `ctx.orbits`, the sun's glare hidden, a point of light far away (`vidgen/space-craft`) | §122.10 |
 | 375 | Space camera moves | |
 | 376 | Space scenes without code (`video.yaml`) | |
 | 377 | Example film | |
@@ -26278,7 +26278,8 @@ space.path("Moon", {kind: "conic"});      // a line exact every frame
   separate stretches get slices of their own unless together they span at most `join` (3); at
   most `maxSlices` (8). Objects with `userData.overlay` (a lens's glare, §122.8) are left out of
   the intervals and drawn once after the last slice, over everything. Drawn far to near, the depth buffer cleared between, `scene.background`,
-  the clear and the shadow maps on the first pass only. A sky (`scene.background`, or objects with
+  the clear on the first pass only, the shadow maps in the first pass that draws the world (Step 374: in the sky's pass
+  everything that casts a shadow is hidden, so a scene with a sky had no shadows). A sky (`scene.background`, or objects with
   `frustumCulled = false`) is drawn first with near and far of its own. three-finish's depth of
   field reads the last slice's depth with the camera's near and far, right for a focus in the
   nearest slice; `dofFocus` (metres, an object or a function of t) draws the depth again from
@@ -26405,7 +26406,7 @@ frozen (grain over 4/255 is change).
 imports only `three`) keeps the parts by name: `definePart(info, make)`, `parts({kind, name})`,
 `part(name)` (did-you-mean), `buildPart(name, stage, options, seed)`, `defaultStage(width,
 height)` (black background, a 40° camera at (0, 0.8, 6) looking at the origin, a warm key light,
-a faint fill), `KINDS` (`sky`, `body`, `light`, `craft`, `phenomenon`, `structure`, `effect`,
+a faint fill), `KINDS` (`sky`, `body`, `light`, `craft`, `craft-part` (Step 374), `phenomenon`, `structure`, `effect`,
 `environment`: the sheet's order). `info` is `{name, kind, module, label, use, options, seed,
 at}`: `module` the import that has the code, `use` the one line a page writes, `options` the
 defaults `make` reads (colours as `"#rrggbb"` strings), `at` the time the sheet shows. `make(stage)`
@@ -27356,3 +27357,251 @@ identical outside it; a wormhole's other sky, a camera in the throat and out on 
 a jump at rest and in the tunnel; rocks as meshes, the same twice; a comet's tails on the side
 away from the sun, one blue, one yellowish, the dust behind the motion; an aurora's green on
 the night side. Stills: `/home/claude/work/scratch/an373/stills/`.
+
+### 122.10 The spacecraft kit: `vidgen/space-craft` (Step 374)
+
+The owner called this step essential: generated ships look cheap beside good planets unless
+their surfaces, their light and their small parts are right. The module
+`data/web/modules/space-craft.js` (import name `vidgen/space-craft`; it imports `three`, three's
+`BufferGeometryUtils` add-on and `rng` of `vidgen/music-time`) gives a ready-made craft in one
+line, the parts they are made of, and the motion of a craft that follows `ctx.orbits`.
+
+```js
+import {craft, craftKit, attach, around, fleet, craftEnvironment} from "vidgen/space-craft";
+const probe = craft("probe", {seed: 7});                    // a ready-made craft; another design for every seed
+scene.add(probe.object);                                    // metres: +z the nose, +y the top, engines fire toward -z
+const light = spaceLight({scene, camera, renderer, sun, bodies: [earth], sky, at: probe.object, shadows: probe.shadows});
+probe.shade(sun);                                           // the craft hides the sun's glare
+scene.environment = craftEnvironment(renderer, scene, {at: probe.object}).texture;   // metal mirrors the sky and the planet
+function frame(t) { earth.update(t); probe.update(t, {sun, camera, height: ctx.height}); sun.update(t); light.update(t); finish.render(t); }
+const ship = craft("ship", {seed: 2}).fly(space, {body: "Ship", attitude: "prograde", burn: {seconds: 2}});   // from orbit_data
+```
+
+**Design.** Everything is computed: no image, no model file. The six ready-made craft are
+invented designs with believable sizes (no real or film spacecraft, no markings, flags or
+names). A craft is built from parts in metres, each a `THREE.Group` with named points; `attach`
+joins a part's point to another's, `around` repeats a part round a hull. When a craft is
+finished, its meshes are merged to one per surface (and one set per part that moves: a wing
+that tracks the sun, a dish on its gimbal, a ring habitat, a deployable panel), so a craft of
+30,000 to 85,000 triangles is 30 to 80 draws, most of them its plumes and lights.
+
+**Surfaces** (`SKINS`; all `MeshStandardMaterial`, so they take the scene's sun, planet-shine,
+shadows and environment). Their maps are numbers worked out once for all craft (about 1 s):
+
+- *Foil* (`foil`, `foil-silver`, `foil-black`; `foilMaps`): a crumpled sheet at four scales
+  (4, 11, 29 and 71 cells across 1.1 m): at each scale the height is the lowest (or highest) of
+  slightly bowed facets, one for every scattered point, so creases are sharp, straight and of
+  every length; a slow billow over all. Creases are duller; each large facet has its own gloss
+  (roughness 0.3 to 0.9) and tone. Metalness 0.9: the sunlit side is gold, single facets
+  sparkle, the shadow side mirrors the planet. (The first try, the cells of scattered points each
+  tilted its own way, looked like stained glass: flat polygons of one size.)
+- *Plating* (`paint`, `accent`, `aluminium`, `radiator`, `dish`, and `tiles` as a brick grid;
+  `platingMaps`): panels from a seeded splitting of a square, each a little pillowed and of its
+  own tone and gloss, grooves, rivets along the grooves, a few specks where dust has hit, a
+  faint cloud of grime. White paint is 0.65 of white, so a sunlit hull keeps its panel lines.
+- *Solar cells* (`cells`; `cellMaps`): dark blue cells of 15 cm with cut corners, thin
+  collecting lines, two bus bars, the pale sheet between them; glossy, a bluish sheen.
+- *Glass and windows*: `glass` mirrors the environment; `window` is lit from inside (a warm
+  light, `WINDOW_LIGHT`: 1.25 of white, so it glows a little without a blob).
+- The sun's own mirror image on a surface is held at `GLARE.value` (5) times a white surface: a
+  flat panel at the mirror angle is a glint that blooms, not a white hole (the first stills had
+  whole faces burnt out: a roughness of 0.3 gives a mirror image of the sun over 100).
+
+**Parts** (`craftKit({seed, accent, foil, detail, wear, lit})` → `CraftKit`): `hull` (cylinder,
+taper, cone, nose, sphere, box, prism; ring frames, windows, handrails, small boxes and
+conduits, an accent band), `tank` (sphere, capsule; straps), `tankCluster`, `truss`
+(longerons, a frame every bay, a diagonal on every face, a node at every joint), `solarWing`
+(cells, a ribbed back, frames, hinges, a yoke; `deploy`, `deployable`, `track`), `radiator`
+(pipes on both faces), `dish` (a true parabola r²/4f with a rim, ribs, a feed on three struts,
+a two-axis gimbal), `antenna` (whip, helix, horn, omni, patch), `boom` (a tube with collars or
+a lattice), `instrument` (camera, spectrometer, magnetometer, tracker, platform), `powerUnit`
+(a finned radioisotope unit), `dockingPort`, `cupola`, `airlock`, `engine` (chamber, a bell of
+a bell curve with cooling channels, hoops, a manifold, feed pipes, pumps, gimbal struts; an
+ion engine with a glowing grid), `thrusters` (a block of four), `leg` (a two-stage strut, side
+struts, a dished pad, a ladder), `ringHabitat` (turning; default 0.3 g at its rim),
+`container`, `light`. A part's points: `fore`, `aft`, `port`, `starboard`, `zenith`, `nadir`
+on a hull, `mount`, `tip`, `top`, `dock`, `feed`, `exit` where they make sense, and
+`{angle, along, out}` anywhere on the side of a hull, truss, boom or tank cluster. `detail:
+"far"` makes the same design with fewer sides and without rails, rivet heads and small boxes
+(a third to a quarter of the triangles): for fleets and the distance.
+
+**Ready-made craft** (`craft(kind, {seed, ...})`, `CRAFT`; sizes for a sense of scale):
+
+| Kind | What | Size | Triangles near / far (seed 1) |
+|---|---|---|---|
+| `probe` | foil bus, fixed high-gain dish (the nose: point it with attitude `"target"`), power units on a lattice boom, a magnetometer boom, a scan platform, a tank and an engine | bus 2 m, dish 2.7 to 3.7 m, 11 to 17 m between the booms' tips | 28,562 / 8,458 |
+| `satellite` | foil box bus, two tracking wings, reflectors on arms, feed horns, an engine | bus 2 × 2 × 3 m, 16 to 28 m across the wings | 27,844 / 8,458 |
+| `station` | modules round a node, a cupola, an airlock, a truss with tracking wings and radiators, docking ports; `ring: true`: a turning ring habitat | modules 4.2 m across, 25 m long, the truss 46 to 64 m | 68,814 / 18,508 |
+| `ship` | windowed habitat with a docking nose, a truss spine with propellant tanks and radiators, a ring of 3 to 5 engines; `ring: true` | 42 to 58 m long, habitat 5 to 6 m across | 83,754 / 21,000 |
+| `lander` | (nose up) foil descent stage on four legs, tanks, one engine, an ascent cabin | 7 to 9 m across the pads, 5 to 6 m tall | 29,406 / 9,150 |
+| `tug` | crew pod, truss spine with rows of cargo boxes, a tank cluster, two engines | 19 to 32 m long | 44,004 / 13,130 |
+
+A seed changes proportions, the number of tanks, panels, engines and power units, the
+antennas, a tank's skin, the foil's tone and the accent colour; the same seed is always the
+same craft (tested: the same vertices), at both details. `fleet(kind, {count, seed})` makes
+`count` craft with seeds seed, seed + 1, ... at the `"far"` detail in a loose seeded formation.
+
+**Light.** One hard sun and planet-shine come from `spaceLight` (§122.8): `at: craft.object`,
+`shadows: craft.shadows` (a box of the craft's size; 2048 px). The craft's own shadows (a
+dish's rim and struts across the dish, a truss on a module) cost 0.05 to 0.1 s a frame
+(measured below). With shadows off, a shading baked into the vertices' colours remains
+(`occlusion`, 0.55): how much of the open sky each vertex loses to the other parts, worked out
+from the balls below (it darkens the joints; it does not know where the sun is).
+**Reflections** matter most for metal: `craftEnvironment(renderer, scene, {at})` draws the
+scene once as seen from the craft (sky, worlds; craft, stars and glare left out: the sun is a
+light, not a reflection) into a 128 px cube and blurs it for every roughness (PMREM): 0.1 s,
+made once, `update()` to draw it again after the craft or the worlds have moved far. The foil in
+the sun's shadow then shows the planet. It is not drawn every frame: a reflection does not
+follow a world that crosses the sky within a shot. `paintedEnvironment(renderer, {worlds,
+sky})` is the same without a scene (soft discs; a contact sheet, deep space).
+
+**Engines.** A plume is light summed along the view ray through an exhaust that widens into
+the vacuum (`PLUMES`): a narrow white-hot core that fades within a few exit radii and a faint
+flare of the kind's colour whose width grows with the distance (brightness per volume falling
+as 1 / width²). The convention: in vacuum there are no shock diamonds; `air` (an engine firing
+in air, a lander near the ground) is a narrow jet with them. `chemical` amber, `vacuum` (a
+hydrogen engine) pale blue and wide, `ion` a narrow blue beam from a glowing grid, `rcs` a
+short white puff. Ten samples a ray, crowded where the ray passes nearest the axis (evenly
+spaced samples drew the core as a row of blobs). `throttle` 0..1 scales light and length;
+`flicker(t, i)` is a sum of fixed sines (±10 %); the bell's inside glows, hottest at the throat.
+A plume is drawn on its bounding cone's far side with the depth test: a part of the craft
+standing inside the plume hides it wrongly from some angles (a lander's legs: slight).
+
+**Motion: a function of t.** `craft.update(t, {...})` sets everything from t and what it is
+given; nothing is kept between frames.
+
+- *Attitude* (`ATTITUDES`; the nose is +z, the top +y): `prograde`, `retrograde` (the nose
+  along or against the velocity relative to the body it orbits, the top away from that body),
+  `radial`, `nadir` (the belly to the body, the nose forward: a station), `sun` (`axis`,
+  default the top, to the sun), `target` (`axis`, default the nose, to a body: a probe's dish to
+  the Earth), `thrust` (the nose along a burn), `inertial` (`forward`, `up`). A list `[{mode},
+  {at, turn, mode}, ...]` turns from `at` over `turn` seconds (default 3), eased at both ends
+  (a spherical interpolation with smootherstep); each mode is worked out for t itself, so the
+  attitude is a pure function (`attitudeAt`).
+- *A burn of `ctx.orbits`* is an instant (§122.3). `fly(space, {body, burn: {seconds, turn}})`
+  shows it as `seconds` (2) of thrust centred on that instant (a stated convention): the craft
+  turns its nose along the burn's change of velocity during the `turn` seconds before, the
+  engines fire exactly from `at − seconds / 2` to `at + seconds / 2` (0.25 s up, 0.4 s down),
+  and it turns back. The plume therefore points against the thrust. Attitude thrusters puff
+  at the start and the end of every turn.
+- *Wings* turn about their length to face the sun (`trackAngle`); *gimballed dishes* point at
+  `target` (`aimAngles`, held within 100° of their rest direction); a *ring habitat* turns at
+  its rate × t; *lights* blink by the clock (`blink`: steady port red and starboard green, a
+  white strobe of two flashes every 1.6 s, a beacon once a second, a slow pulse).
+- *Music*: `throttle`, `rcs` and `lights` take a number or a function of t, so
+  `ship.update(t, {throttle: (t) => level(t), rcs: kick(t), lights: (t, i) => 0.4 + pulse(t)})`
+  follows `ctx.music` through `vidgen/music-time`.
+
+**Hiding the sun.** Step 372's glare is hidden by balls. A finished craft carries its own:
+`craft.occluders`, a few balls in every solid part's box (not in trusses, booms and antennas:
+they are mostly holes), children of the parts, so they follow a wing that turns.
+`craft.shade(star)` adds them to `star.occluders`. A tug before the sun: the glare's share goes
+from 1 to 0 as the boxes cover the disc (still 10). Thin panels seen edge-on hide a little too
+much (a ball is as thick as it is wide), and a lattice hides nothing. The instanced rocks of
+Step 373's fields still do not hide the glare.
+
+**Small in the frame.** Under 4.5 px of radius a point of light fades in, and under 1.6 px
+the meshes are hidden: the point is a gaussian 0.7 px wide (never smaller, so it does not
+flicker between pixels) that keeps the craft's light, plus a flash when a flat face (a wing, a
+dish, a face of a box or prism bus) mirrors the sun to the camera (`GLINT`: cos^500 of the
+angle between the face and the half-way direction; it rises and falls over about ten frames
+for a craft turning at 1 rad/s). It needs `camera` and `height` (the frame's, in pixels).
+`marker` (default 0) is a stated choice like "sizes not to scale": the least light the point
+shows at any distance, for a ship that must be seen on its path from 70,000 km (still 11).
+
+**Measured** (2 cores, SwiftShader, 1280x720, through `vidgen/three-finish` with a bloom, the
+sky, an Earth-like world and a far sun: 0.29 s a frame without a craft; spread about ±0.05 s):
+
+| Shot | s a frame | without shadows |
+|---|---|---|
+| probe filling the frame (hero still) | 0.82 | 0.74 |
+| satellite, whole | 0.43 | |
+| station, whole / a third of the frame high / the same at `"far"` | 0.71 / 0.38 / 0.35 | 0.66 |
+| ship, whole / a third of the frame high / the same at `"far"` | 0.60 / 0.41 / 0.34 | 0.53 |
+| lander, whole | 0.65 | |
+| tug filling the frame (the worst case: plating over every pixel) | 0.88 | 0.82 |
+| six ships (`fleet`, `"far"`, 124,000 triangles, throttle 0.6) | 0.57 | |
+| ship from behind, five engines at full throttle filling the frame | 1.25 (0.58 with the engines off) | |
+
+Making a craft: 1.3 to 1.6 s for the first on a page (1 s of it the maps), 0.05 to 0.15 s for
+every later one; the environment 0.1 s. What a frame-filling craft's time goes to (the tug):
+the environment's reflections 0.3 s, the maps 0.3 s, shadows 0.2 s, the lighting itself
+0.05 s; the triangles hardly count. Anisotropic filtering at 4 cost 0.18 s more than at 1; it
+is 2. So: a craft in a wide shot costs 0.05 to 0.15 s, a close-up 0.3 to 0.6 s, as much as a
+world; `scene.environment = null` or `shadows: false` buy 0.3 and 0.1 s back when a shot must be
+cheap. One clip (640x360, 30 fps, 6.2 s: a tug in a nadir attitude turning to a plane-change
+burn of `orbit_data`, burning, turning back; then a far satellite as a point with a flash and a
+station with blinking lights; 85 s to render): `vidgen motion check` 0 errors, 0 warnings, 1
+info (the scene's own fade at the cut).
+
+**Found on the way.** `vidgen/space-scale` drew no shadows at all when a sky was in the scene:
+shadow maps were updated in the sky's pass, where everything that casts one is hidden. Fixed
+there (`_draw`: the shadow maps are drawn in the first pass that draws the world); its pages
+are drawn again. three's cube camera has a field of view of −90°, which the worlds of
+`vidgen/space-bodies` read as a negative pixel size (the world became a blurred spot in the
+environment): `craftEnvironment` sets the faces' angle to 90 without touching their projection.
+A path line of `SpaceView.path` vanishes near the camera in software GL when one of its
+segments is much longer than its distance (a 52 km chord passing 300 m from the camera, the
+ends far outside the frame, is not drawn at all): a craft's path can be shown from afar, not
+in a close-up; recorded for Step 378.
+
+**Parts** (`data/web/parts/space-craft.js`): kind `craft` (10): `craft-probe`,
+`craft-satellite`, `craft-station`, `craft-station-ring`, `craft-ship`, `craft-ship-burn`,
+`craft-lander`, `craft-tug`, `craft-fleet`, `craft-seeds`; the new kind `craft-part` (21):
+`part-hulls`, `part-tanks`, `part-truss`, `part-solar-wing`, `part-solar-wing-folding`,
+`part-radiator`, `part-dish`, `part-antennas`, `part-instruments`, `part-docking`,
+`part-engine`, `part-thrusters-leg`, `part-ring-habitat`, `part-cargo-lights`, `surface-foil`,
+`surface-plating`, `surface-cells-glass`, `plume-chemical`, `plume-vacuum`, `plume-ion`,
+`plume-air`. The 31 tiles take 50 s.
+
+**Public interface.** `craft(kind, options)` → `Craft` (`object`, `update(t, {sun, target,
+velocity, radial, thrust, attitude, throttle, rcs, lights, camera, height, deploy, spin})`,
+`fly(space, {body, attitude, burn, target, sun, parent, camera, height, throttle, marker})`,
+`shade(star)`, `occluders`, `shadows`, `size`, `info`, `engines`, `thrusters`, `lights`,
+`wings`, `dishes`, `burns`, `state`, `materials`, `glint`, `dispose()`; options: the kit's, the
+kind's own (`CRAFT[kind].options`), `occlusion`, `camera`, `height`, `sun`, `target`, `lights`,
+`marker`, `name`). `craftKit(options)` → `CraftKit` (the parts above, `craft(root, {fore})`,
+`materials`, `bins()`). `attach(parent, at, child, mount, {roll, gap})`, `around(parent, make,
+{count, angle, span, along, out, mount, roll, gap})`, `mirror`, `pointOf`. `fleet(kind,
+options)` → `{object, craft, update, dispose}`. `craftEnvironment(renderer, scene, {at, size,
+hide, near, far})` → `{texture, update(), dispose()}`; `paintedEnvironment(renderer, {sky,
+worlds, size})`. Pure helpers (tested in Node): `attitudeQuaternion`, `attitudeAt`,
+`burnWindows`, `throttleAt`, `burnWeight`, `trackAngle`, `aimAngles`, `blink`, `flicker`,
+`foilMaps`, `platingMaps`, `cellMaps`; constants `CRAFT`, `SKINS`, `ACCENTS`, `FOILS`,
+`HULL_SHAPES`, `DETAILS`, `PLUMES`, `LIGHTS`, `ATTITUDES`, `WINDOW_LIGHT`, `GLARE`, `GLINT`,
+`VERSION`. A misspelt option, kind, surface or point stops with the closest known one.
+
+**Earlier modules.** `vidgen/space-scale` (the shadow fix above: its bytes changed, so pages
+that import it are drawn again; no released film does) and `vidgen/parts` with
+`vidgen/web/parts.py` (the kind `craft-part`; no page imports the registry). `web/loaded.py`
+gained the import name. Nothing shipped before Phase AN changed; no cache key of an existing
+page changes (the import map is in no key; `engine_id` and `runtime.js` are untouched).
+
+**Limits.** The designs are six; a craft is rigid apart from its wings, dishes, ring and
+deployable panels (no arm, no opening hatch, no stage that separates, no legs that fold). The
+maps are the same for every craft (a seed changes shapes and colours). Close enough to see
+single texels (under about 2 mm a pixel) the foil's creases soften. Shadows are one 2048 px
+map over the craft's box: on a 60 m station a shadow's edge has steps of 3 cm, visible in a
+close-up of a detail. The baked shading is coarse on large flat faces (it lives in the
+vertices). A plume is not lit by the sun, casts no light on the craft beyond its bell, and its
+depth is its cone's. The environment is still for a shot. The probe's dish is fixed to the bus
+(the craft points it); landing legs do not touch a ground: there is no ground yet (§122.4).
+No anti-aliasing of thin struts beyond the picture's own (space scenes run three-finish
+without FXAA for the stars' sake): at middle distances a truss shimmers a little in motion
+unless the shot has motion blur.
+
+**Tests** (`tests/test_web_space_craft.py`): served by its import name with its three
+imports; the 31 parts and their kinds; in Node: parts join at their points, every attitude
+mode points where it says, a turn is eased and the same for the same t, burns become
+stretches of thrust (the data's axes turned to three's), throttle and turn weights, wing and
+dish angles, blinking by the clock, the maps are the same twice and differ by seed; `slow`:
+every craft builds, the same seed the same vertices, another seed others, `"far"` under 45 %
+of the triangles with the same size and accent, a ring's turning, a fleet's seeds, eight
+mistakes named; wings facing the sun, a dish its target, plumes only under throttle, a craft
+flown from orbit data (the nose along the velocity, along the burn before it starts, the
+plume only inside the stretch, back after), a far craft hidden behind a steady point with a
+flash that rises and falls over several frames, `shade` adding the balls once; in Chromium a
+probe's gold foil before a black sky, the same frame twice, shadows that only darken, the
+environment changing the metal, an amber plume and a blue beam that only add light and
+flicker by the clock, the glare hidden behind a tug and not without `shade`, and shadows
+inside `vidgen/space-scale`'s slices. Stills: `/home/claude/work/scratch/an374/stills/`.

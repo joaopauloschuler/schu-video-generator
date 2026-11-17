@@ -7616,6 +7616,103 @@ const update = (t) => {
 - Limits: hole and wormhole bend only the sky; no rotating hole; a comet's tail pointing
   straight at the camera thins away; a field's rocks do not hide the sun's glare.
 
+**Spacecraft: `vidgen/space-craft`** (Step 374, DESIGN §122.10). Ready-made craft from a seed,
+the parts they are made of, and the motion of a craft that follows `ctx.orbits`: invented
+designs, every surface computed (foil that crinkles, plating with panel lines and rivets, solar
+cells, lit windows).
+`import {craft, craftKit, attach, around, fleet, craftEnvironment, paintedEnvironment} from "vidgen/space-craft"`.
+
+```js
+const probe = craft("probe", {seed: 7});                    // probe | satellite | station | ship | lander | tug
+scene.add(probe.object);                                    // metres; +z the nose, +y the top, engines fire toward -z
+const light = spaceLight({scene, camera, renderer, sun, bodies: [earth], sky, at: probe.object, shadows: probe.shadows});
+probe.shade(sun);                                           // the craft hides the sun's glare
+scene.environment = craftEnvironment(renderer, scene, {at: probe.object}).texture;   // after the worlds stand: metal mirrors them
+function frame(t) { earth.update(t); probe.update(t, {sun, camera, height: ctx.height}); sun.update(t); light.update(t); finish.render(t); }
+// from orbit_data: the craft is the body "Ship"; it turns its nose along each burn, fires for 2 s round it, turns back
+const ship = craft("ship", {seed: 2}).fly(space, {body: "Ship", attitude: "prograde", burn: {seconds: 2, turn: 3}});
+function frame(t) { space.update(t, view); earth.update(t); ship.update(t); sun.update(t); light.update(t); finish.render(t); }
+```
+
+| Craft | What | Size | Own options |
+|---|---|---|---|
+| `probe` | foil bus, fixed high-gain dish (the nose), power units on a boom, a magnetometer boom, a scan platform | dish 2.7 to 3.7 m, 11 to 17 m between the booms' tips | `sides`, `dish`, `power` |
+| `satellite` | foil box bus, two wings that track the sun, reflectors on arms, feed horns | 16 to 28 m across the wings | `panels`, `dishes` |
+| `station` | modules round a node, cupola, airlock, a truss with wings and radiators, docking ports | modules 4.2 m across, the truss 46 to 64 m | `labs`, `wings`, `span`, `ring` (a turning ring habitat), `ringRadius` |
+| `ship` | windowed habitat, truss spine with propellant tanks and radiators, 3 to 5 engines | 42 to 58 m long | `engines`, `engine` (`vacuum`, `chemical`, `ion`), `spine`, `ring` |
+| `lander` | (nose up) foil descent stage on four legs, one engine, an ascent cabin | 7 to 9 m across the pads | `legs`, `engine` (`air` near the ground) |
+| `tug` | crew pod, truss spine with rows of cargo boxes, tank cluster, two engines | 19 to 32 m long | `rows`, `engine` |
+
+- **`craft(kind, options)`**: `seed` (1; another design of the kind for every seed, the same
+  seed always the same craft), `detail` (`"near"`, or `"far"`: a third of the triangles, for a
+  fleet or the distance), `accent` (a colour; default by the seed), `foil` (`gold`, `amber`,
+  `pale`), `wear` (0 to 2: how deep the panel lines), `lit` (0.6: the share of windows lit),
+  `occlusion` (0.55: shading baked into the joints, what remains of self-shadowing when the
+  light's `shadows` are off), `camera`, `height`, `sun`, `target`, `lights`, `marker`, and the
+  kind's own options. `fleet(kind, {count: 5, seed, spacing})` → `{object, craft, update(t,
+  options)}`: `count` craft with seeds seed, seed + 1, ... at the `"far"` detail in a loose
+  formation; `kind` may be a list of kinds taken in turn.
+- **`craft.update(t, options)`** sets the craft for scene time t (a function of t and its
+  options; nothing is kept between frames): `sun` and `target` (a direction `[x, y, z]`, an
+  object standing there, the `star`, or the `spaceLight`): the wings turn to the sun, gimballed
+  dishes to the target; `attitude` with `velocity`, `radial`, `thrust` (directions) for a craft
+  not flown from `ctx.orbits`; `throttle` (0 to 1, a list per engine, or a function of t),
+  `rcs` (the attitude thrusters' puffs: 0 to 1 or a function of (t, quad, nozzle)), `lights`
+  (0 to 1 or a function of (t, i), multiplying each light's own blinking): give these from
+  `ctx.music` (`throttle: (t) => level(t)`, `rcs: kick(t)`); `deploy` (0 to 1, for wings made
+  `deployable`); `camera` and `height` (the frame's, in pixels): under a few pixels the craft
+  becomes a steady point of light with a flash when a flat face mirrors the sun.
+- **Attitude** (the nose is +z, the top +y): `"prograde"`, `"retrograde"` (the nose along or
+  against the velocity relative to the body it orbits, the top away from that body),
+  `"radial"`, `"nadir"` (the belly to the body, the nose forward: a station), `{mode: "sun",
+  axis: "y"}` (an axis to the sun), `{mode: "target", axis: "z"}` (an axis, default the nose,
+  to the target: a probe's dish to the Earth), `"thrust"`, `{mode: "inertial", forward, up}`.
+  A list turns between them: `[{mode: "nadir"}, {at: 4, turn: 3, mode: "target"}]` (from 4 s,
+  over 3 s, eased).
+- **`craft.fly(space, options)`** flies a body of `orbit_data` through a `SpaceView`: `body`,
+  `attitude` (default `"prograde"`), `burn` (`{seconds: 2, turn: 3, attitude: "thrust"}`, or
+  `false`), `target` (a body's name), `sun` (default the data's Sun; else pass `sun` to
+  `update`), `parent` (the body the velocity is measured against; default the data's),
+  `marker`. A burn of the orbit model is an instant; it is shown as `seconds` of thrust centred
+  on it (a convention): the nose is along the burn's change of velocity `turn` seconds before,
+  the engines fire exactly through that stretch, the craft turns back after. `craft.burns`
+  lists the stretches (`start`, `end`, `at`, `direction`, `magnitude`, `label`).
+- **The light.** Give `spaceLight` the craft: `at: craft.object` and `shadows: craft.shadows`
+  (the craft's own shadows: 0.05 to 0.1 s a frame). `craft.shade(sun)` lets it hide the sun's
+  glare (balls along its solid parts; a lattice hides nothing). `craftEnvironment(renderer,
+  scene, {at: craft.object})` draws what is round the craft once (0.1 s) for the metal to
+  mirror: call it after the worlds stand where the shot shows them, `env.update()` when they
+  have moved far; `paintedEnvironment(renderer, {worlds: [{direction, angle, color}], sky})` is
+  the same without a scene. Without an environment metal is black wherever the sun is not
+  mirrored.
+- **`marker`** (0): the least light a far craft's point shows at any distance, a stated choice
+  like "sizes not to scale" (a ship that must be seen on its path from 70,000 km: `marker: 3`).
+- **A craft of your own.** `const kit = craftKit({seed})`; parts: `kit.hull({shape, radius,
+  length, skin, windows, rails, greebles, bands, stripe})` (`shape`: cylinder, taper, cone, nose,
+  sphere, box, prism), `tank`, `tankCluster`, `truss`, `solarWing({panels, size, deployable})`,
+  `radiator`, `dish({diameter, gimbal})`, `antenna({kind})`, `boom({length, lattice})`,
+  `instrument({kind})`, `powerUnit`, `dockingPort`, `cupola`, `airlock`, `engine({exit, kind})`,
+  `thrusters`, `leg`, `ringHabitat({radius, gravity})`, `container`, `light({kind})`.
+  `attach(parent, at, child, mount = "mount", {roll, gap})` joins the child's point to the
+  parent's, facing away from it: `at` is a point's name (`fore`, `aft`, `port`, `starboard`,
+  `zenith`, `nadir`, `tip`, ...) or `{angle, along, out}` on a hull's side; `around(parent,
+  make, {count, angle, along})` repeats round the axis. `kit.craft(root)` finishes it (the
+  root's `fore` becomes the nose). Surfaces (`skin`): `paint`, `accent`, `aluminium`, `foil`,
+  `foil-silver`, `foil-black`, `tiles`, `cells`, `radiator`, `dish`, `dark`, `steel`, `glass`,
+  `window`.
+- **Engines** (`kind`): `chemical` (amber), `vacuum` (a hydrogen engine: pale blue, wide),
+  `ion` (a narrow blue beam), `air` (a jet with shock diamonds: only for an engine firing in
+  air). In vacuum a plume widens and has no diamonds: the kit's convention.
+- **Cost** (720p, software GL, on top of sky, a world and finishing at 0.29 s a frame): a craft
+  in a wide shot 0.05 to 0.15 s, filling the frame 0.3 to 0.6 s (0.3 s of it the reflections,
+  0.1 s the shadows), five engines filling the frame 0.65 s more; making the first craft 1.5 s,
+  each later one about 0.1 s.
+- **Limits.** A path line of `space.path` is not drawn close to the camera in software GL (a
+  segment much longer than its distance): show a craft's path from afar. The environment is
+  still for a shot. A part standing inside a plume can hide it from some angles. Thin struts
+  shimmer a little at middle distances without motion blur.
+- Look first: `vidgen parts --kind craft` and `vidgen parts --kind craft-part`.
+
 **Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a
 seed, or a ready-made one, in one line; every surface is generated (no maps or images).
 `import {planet} from "vidgen/space-bodies"`.
@@ -17188,7 +17285,7 @@ for `web` scenes on one labelled contact sheet so you can choose by looking: a t
 its name, its kind, what it is and the one line that uses it (blue, in the module it names).
 
 - **Choosing.** `NAME` is a part's name or a pattern (`star-*`, `*ring*`; an unknown name is an
-  error with the closest one); `--kind` one of `sky`, `body`, `light`, `craft`, `phenomenon`,
+  error with the closest one); `--kind` one of `sky`, `body`, `light`, `craft`, `craft-part`, `phenomenon`,
   `structure`, `effect`, `environment` (a kind without parts yet says so).
 - **Drawing.** One Chromium, one page (`data/web/parts-sheet.js`): frame n builds part n in a scene
   of its own with the registry's default camera and light, sets it to the part's time `at` and
@@ -17199,7 +17296,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

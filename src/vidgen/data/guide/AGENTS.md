@@ -3602,6 +3602,47 @@ const tail = comet(renderer);                             // tail.update(t, {sun
   comets and belts. Look first: `vidgen parts --kind phenomenon`. Reference: CONFIG.md `web`,
   "Phenomena".
 
+**Spacecraft: `vidgen/space-craft`.** Do not build a ship from grey boxes and cylinders: take a
+ready-made craft, or the kit's parts. Every craft is an invented design in metres with foil,
+plating, solar cells, windows, lights and engines.
+
+```js
+import {craft, fleet, craftEnvironment} from "vidgen/space-craft";
+const probe = craft("probe", {seed: 7});                  // probe | satellite | station | ship | lander | tug
+scene.add(probe.object);                                  // +z the nose, +y the top; another seed, another design
+const light = spaceLight({scene, camera, renderer, sun, bodies: [earth], sky, at: probe.object, shadows: probe.shadows});
+probe.shade(sun);                                         // the craft hides the sun's glare
+scene.environment = craftEnvironment(renderer, scene, {at: probe.object}).texture;   // metal mirrors sky and planet
+// each frame, before light.update(t):
+probe.update(t, {sun, camera, height: ctx.height});       // wings to the sun, lights blink, far away a point of light
+```
+
+- With `orbit_data`: `craft("ship").fly(space, {body: "Ship", attitude: "prograde"})`, then
+  `ship.update(t)` after `space.update`. The craft turns its nose along each burn of the data,
+  fires its engines for 2 s round it (`burn: {seconds, turn}`) and turns back. Attitudes:
+  `prograde`, `retrograde`, `radial`, `nadir` (a station), `sun`, `target` (with `target:
+  "Earth"`: a probe's dish to the Earth), or a list with times: `[{mode: "nadir"}, {at: 4,
+  turn: 3, mode: "target"}]`.
+- Without orbit data: `ship.update(t, {throttle: 1})` (0 to 1, or a function of t: follow the
+  music's level), `rcs` for the small thrusters (a kick), `lights` for the lamps.
+- Always set `scene.environment` (above) and the light's `shadows`: without the environment
+  metal and foil are black where the sun is not mirrored; without shadows a craft looks flat.
+- A fleet: `const ships = fleet("ship", {count: 5, seed: 3}); scene.add(ships.object);
+  ships.update(t, {sun})`. For a craft far away or many of them use `detail: "far"`.
+- A craft of your own: `const kit = craftKit({seed})`, parts such as `kit.hull({shape:
+  "prism", sides: 8, skin: "foil"})`, `kit.dish({diameter: 3})`, `kit.solarWing({panels: 3})`,
+  `kit.engine({kind: "chemical"})`; join them with `attach(parent, "fore", child)` or
+  `attach(parent, {angle: 90, along: 0.5}, child)`, repeat with `around(parent, () =>
+  kit.thrusters(), {count: 4})`, finish with `kit.craft(root)`.
+- Engines in vacuum widen and have no shock diamonds (`chemical`, `vacuum`, `ion`); `air` is
+  for a lander near the ground.
+- Budget (720p, software GL): a craft in a wide shot 0.05 to 0.15 s a frame, filling the frame
+  0.3 to 0.6 s, engines filling the frame up to 0.65 s more.
+- A path line (`space.path`) is not drawn close to the camera: show a craft's path from afar
+  (there `marker: 3` keeps the craft a visible point).
+- Look first: `vidgen parts --kind craft` and `--kind craft-part`. Reference: CONFIG.md `web`,
+  "Spacecraft".
+
 **Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
 ready-made three.js part (skies, structures, effects, environments; more space parts as they are
 added) drawn in one browser, each tile labelled with its name and the one line that uses it.

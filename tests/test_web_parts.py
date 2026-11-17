@@ -68,7 +68,7 @@ def test_parts_are_chosen_by_name_pattern_and_kind() -> None:
     with pytest.raises(VidgenError, match="--kind skyy: no such kind \\(did you mean 'sky'\\?\\)"):
         P.select_parts(found, kind="skyy")
     with pytest.raises(VidgenError, match="--kind craft: no part of that kind yet"):
-        P.select_parts(found, kind="craft")
+        P.select_parts([p for p in found if p.kind != "craft"], kind="craft")
     assert P.parse_tile(None, False) == (320, 180) and P.parse_tile(None, True) == (960, 540) and P.parse_tile("640x360", True) == (640, 360)
     for bad in ("640", "641x360", "40x40"):
         with pytest.raises(VidgenError, match="--size"):

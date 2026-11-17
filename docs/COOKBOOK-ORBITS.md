@@ -183,6 +183,16 @@ prime meridian), each orbit as a polyline and a ship's burns. The numbers are th
   `spaceLight({scene, camera, sun, bodies, sky})` lights every body from where the Sun is, with
   planet-shine, eclipses on request and `falloff: 2` for the true light with distance; call
   `light.update(t)` after `space.update` and the bodies' `update`.
+- **A spacecraft on its orbit** (Step 374; CONFIG `web`, "Spacecraft"): a body of `orbit_data`
+  (a `transfer`'s ship, a body with `burns`) is flown by `craft("ship").fly(space, {body:
+  "Ship", attitude: "prograde"})` from `vidgen/space-craft`; `ship.update(t)` after
+  `space.update` puts the nose along the velocity and, round each burn of the data, along the
+  burn's change of velocity with the engines on for `burn.seconds` (2) centred on it: the model's
+  burn is an instant, the film's a short stretch (a convention). `craft.burns` lists the
+  stretches in scene seconds for a camera cut or a label. From far away give `marker: 3` so the
+  ship stays a visible point on its path (a stated choice), and draw the path with
+  `space.path("Ship")`; close to the camera the path line is not drawn (software GL drops a
+  segment much longer than its distance).
 - **A comet on its orbit** (Step 373; CONFIG `web`, "Phenomena"): with `orbit_data` holding
   `{preset: halley}`, `comet(renderer, {space, body: "Halley"})` from `vidgen/space-phenomena`
   stands where the data puts the comet; `comet.update(t)` points its ion tail away from the

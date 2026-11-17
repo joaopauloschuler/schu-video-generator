@@ -192,6 +192,16 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   720p in software GL: budget it like a second scene. The hole draws after the sky and before
   everything else, so a ship in front of it covers it. Look first: `vidgen parts --kind
   phenomenon`.
+- **Spacecraft.** `craft("probe", {seed})` (or `satellite`, `station`, `ship`, `lander`, `tug`)
+  from `vidgen/space-craft` (CONFIG `web`, "Spacecraft") is a finished craft in metres:
+  `craft.update(t, {sun, camera, height: ctx.height})` each frame. Three things make it hold up
+  beside a planet: the light's shadows (`spaceLight({..., at: craft.object, shadows:
+  craft.shadows})`), an environment for the metal (`scene.environment =
+  craftEnvironment(renderer, scene, {at: craft.object}).texture`, made once after the worlds
+  stand) and a bloom that lets the foil's glints and the plumes glow (strength 0.3, radius 0.5,
+  threshold 1: the stills of Step 374 use it). `craft.shade(sun)` hides the sun's glare behind
+  it. A close-up of foil wants the sun from the side, so that single facets catch it and the
+  parts' shadows cross the bus. Look first: `vidgen parts --kind craft`.
 - **A sky behind it.** `scene.add(spaceSky(renderer, {seed}).object)` from `vidgen/space-sky`
   (CONFIG `web`, "The sky of a space scene") is a sky like a photograph from space: thousands of
   stars with the real sky's spread of brightness, the Milky Way with its dust, optional nebulae and

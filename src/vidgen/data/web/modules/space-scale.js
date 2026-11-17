@@ -432,8 +432,9 @@ export class SpaceView {
   }
 
   // the scene: the sky (objects with frustumCulled = false) first with near and far of its own, then the
-  // depth slices from the farthest, the depth buffer cleared before each; background, clearing and shadow
-  // maps only on the first pass
+  // depth slices from the farthest, the depth buffer cleared before each; background and clearing only on
+  // the first pass, shadow maps on the first pass that draws the world (in the sky's pass everything that
+  // casts a shadow is hidden)
   _draw() {
     const r = this.renderer, scene = this.scene, cam = this.camera;
     scene.updateMatrixWorld(); cam.updateMatrixWorld();
@@ -449,14 +450,19 @@ export class SpaceView {
     const slices = iv.length ? depthSlices(iv, {ratio: this.ratio, join: this.join, maxSlices: this.maxSlices, near: this.near}) : [];
     this.slices = slices;
     const background = scene.background, autoClear = r.autoClear, shadows = r.shadowMap.autoUpdate;
-    let hidden = [], passes = 0;
+    let hidden = [], passes = 0, shadowed = false;
     const hide = (list) => { for (const o of hidden) o.visible = true; hidden = list; for (const o of list) o.visible = false; };
-    const next = () => { if (passes++ === 0) return; scene.background = null; r.autoClear = false; r.shadowMap.autoUpdate = false; r.clearDepth(); };
+    const next = (world = false) => {
+      r.shadowMap.autoUpdate = shadows && world && !shadowed;
+      if (world) shadowed = true;
+      if (passes++ === 0) return;
+      scene.background = null; r.autoClear = false; r.clearDepth();
+    };
     try {
       if (sky.length) { hide([...world, ...overlay]); next(); this._pass(...this._fit(this._intervals(sky))); }
       hide([...sky, ...overlay]);
-      for (const [n, f] of slices) { next(); this._pass(n, f); }
-      if (passes === 0) { next(); this._pass(this.near, this.near * 1e6); }
+      for (const [n, f] of slices) { next(true); this._pass(n, f); }
+      if (passes === 0) { next(true); this._pass(this.near, this.near * 1e6); }
       if (overlay.length) { hide([...sky, ...world]); next(); this._render(scene, cam); }
       if (this.dofFocus !== null && slices.length) this._dofDepth(slices);
     } finally {

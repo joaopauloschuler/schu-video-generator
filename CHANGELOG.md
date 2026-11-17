@@ -5,10 +5,32 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–373
+## Steps 193–374
 
-### Space scenes (Phase AN, Steps 367–373)
+### Space scenes (Phase AN, Steps 367–374)
 
+- **A spacecraft kit** (Step 374): the new module `vidgen/space-craft`. `craft("probe", {seed})`
+  gives a finished craft in one line: a deep-space probe, a communications satellite, a modular
+  station (with a turning ring habitat on request), a crewed ship, a lander and a cargo tug, all
+  invented designs in metres, another design of the kind for every seed and the same craft for
+  the same seed; `fleet(kind, {count, seed})` a formation of them. The same parts are there for
+  a craft of your own (`craftKit`: hull sections, tanks, trusses, solar wings, radiators,
+  dishes, antennas, booms, instruments, docking ports, a cupola, an airlock, engines,
+  thrusters, landing legs, a ring habitat, cargo boxes, lights), joined at named points with
+  `attach` and `around`. Surfaces are computed, not pictures: gold, silver and black foil that
+  crinkles, white paint and bare aluminium with panel lines and rivets, black tiles, solar
+  cells with their grid, windows lit from inside. `craft.update(t, {sun})` turns the wings to
+  the sun, points gimballed dishes, blinks the lights by the clock and fires the engines
+  (`throttle`): plumes that widen into the vacuum (chemical, hydrogen, ion; shock diamonds only
+  for an engine in air). `craft.fly(space, {body})` flies a body of `orbit_data` with a stated
+  attitude (prograde, retrograde, radial, nadir, to the sun, to a target, or a list of them
+  with eased turns) and shows each burn of the data as a short stretch of thrust with the nose
+  along it. `craft.shade(sun)` lets a craft hide the sun's glare; `craftEnvironment` gives its
+  metal the sky and the planet to mirror; far away a craft is a steady point of light that
+  flashes when a panel mirrors the sun. `vidgen parts --kind craft` and the new `--kind
+  craft-part` show 31 tiles. Measured at 720p in software GL: a craft in a wide shot 0.05 to
+  0.15 s a frame, filling the frame 0.3 to 0.6 s.
+  Fixed on the way: `vidgen/space-scale` drew no shadows when the scene had a sky.
 - **Phenomena for space scenes** (Step 373): the new module `vidgen/space-phenomena`.
   `blackHole(renderer, {sky})` is a non-rotating black hole whose light paths are worked out for
   every pixel: a shadow of the true size, the sky bent round it (an Einstein ring before the
