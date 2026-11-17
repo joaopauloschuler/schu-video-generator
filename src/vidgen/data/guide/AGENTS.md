@@ -3466,6 +3466,31 @@ export function frame(t, ctx) {
 - `planes: {Ship: ecliptic}` when a body around a planet is measured from the ecliptic, not the
   planet's equator (the default for `iss`, `geo` and bodies of your own around a planet).
 
+**Astronomical scales: `vidgen/space-scale`.** Do not put metres from the Sun into three.js
+yourself (float32 jitters by kilometres there; one near/far range makes a ship and a planet fight).
+`SpaceView` places everything camera-relative in double precision each frame and draws in depth
+slices; it works with `vidgen/three-finish`.
+
+```js
+import {SpaceView} from "vidgen/space-scale";
+const space = new SpaceView(ctx, {renderer, scene, camera});          // mode "true"; or mode: "enlarged", enlarge: 50; or mode: "log"
+space.add(new THREE.Mesh(new THREE.SphereGeometry(1, 128, 64), earthMaterial), {body: "Earth"});   // radius 1 -> the Earth's
+space.add(shipGroup, {body: "Ship"});                                 // built in metres
+space.path("Ship");                                                   // its path as a line
+export function frame(t) {
+  space.update(t, {from: {body: "Ship", offset: [-200, 0, 50]}, to: "Ship"});   // offsets in metres, ecliptic axes (z north)
+  renderer.render(scene, camera);
+}
+```
+
+- Show `space.note().text` on screen when the mode is not `true` ("sizes not to scale · bodies
+  enlarged 50×; distances to scale"; `log`: "distances compressed (log) · sizes not to scale").
+- At true scale a whole system is sub-pixel: `space.pixels("Earth")` says how big a body is drawn.
+  `space.problems()` warns when an enlarged planet swallows its moon.
+- Skies: `scene.background`, or a mesh with `frustumCulled = false`. With three-finish's depth of
+  field focused far away, give `dofFocus` the same focus. Reference: CONFIG.md `web`,
+  "Astronomical scales".
+
 **three.js** comes with vidgen: `import * as THREE from "three"` in a `script:` or in a page's
 `<script type="module">` (with a chosen set of its add-ons, below):
 

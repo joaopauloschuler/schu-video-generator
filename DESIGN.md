@@ -26042,7 +26042,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | Step | What | Section |
 |---|---|---|
 | 367 | The orbit bridge: the third dimension audited and fixed, rotation data for the Sun, planets, Moon and Galilean moons, `orbit_data:` → `ctx.orbits` | §122.1–122.3 |
-| 368 | Scale: floating origin, depth, three scale modes and their honest labels | |
+| 368 | Scale: floating origin, depth, three scale modes and their honest labels (`vidgen/space-scale`) | §122.4 |
 | 369 | Checks for dark pictures; a contact sheet of ready-made parts | |
 | 370 | The sky (algorithmic, real) | |
 | 371 | Planets, moons and rings | |
@@ -26203,3 +26203,99 @@ keys, given to the page by a helper script.
   Step 371: `quaternion` (or `pole` and `spin`) and `radii`. Step 374: `position`, `velocity`,
   `burns`, `time`. Step 376: `OrbitData` is a pydantic model that a declarative space scene can
   hold as it is; `yUp` / `yUpQuaternion` give three.js's axes.
+
+### 122.4 Scale: `vidgen/space-scale` (Step 368)
+
+Real astronomical numbers break a naive three.js page: a float32 cannot hold "1.5 × 10¹¹ m plus
+10 m" (its step there is about 16 km), a depth buffer of one near and far plane cannot hold a 100 m
+ship and a planet 4 × 10⁸ m behind it, and a shader that works in world coordinates
+(`cameraPosition - worldPosition`, as atmospheres and glows do) loses everything. The module
+`data/web/modules/space-scale.js` (import name `vidgen/space-scale`, in `VIDGEN_MODULES`; imports
+only `three`) makes `ctx.orbits` drawable: "give me the orbit data, a camera and a mode; I place
+everything each frame".
+
+```js
+const space = new SpaceView(ctx, {renderer, scene, camera, mode: "true"});   // or "enlarged" + enlarge, or "log"
+space.add(earthMesh, {body: "Earth"});    // radius 1: drawn at the Earth's radius (times its factor)
+space.add(shipGroup, {body: "Ship"});     // no radius in the data: built in metres
+space.path("Moon", {kind: "conic"});      // a line exact every frame
+// frame(t): space.update(t, {from: {body: "Ship", offset: [-200, 0, 50]}, to: "Ship"}); renderer.render(scene, camera);
+// a caption: space.note().text           // "" | "sizes not to scale · bodies enlarged 50×; distances to scale" | ...
+```
+
+- **Floating origin.** Every position stays float64 in the data's frame (m, ecliptic J2000, from
+  the central body) until the camera's position is subtracted in JavaScript's doubles; three.js's
+  camera stands at its origin and gets the difference (turned to y up). Positions are the data's
+  own on each frame; between frames (three-finish's motion blur calls `update` at sub-frame
+  times) a cubic Hermite of the two frames' positions and velocities (exactly the data at the
+  frame; for the Earth over 1.5 days, within 1 km where a straight line is 10,000 km off). Paths
+  and orbits (`path(name)`) are rebuilt camera-relative each frame (≤ 4,096 points). Measured: a
+  ship 400 km above the Earth, the Earth 1 AU from the Sun: the ship's three.js position equals the
+  camera offset to under 1 mm once float32; made float32 before the subtraction it is kilometres
+  off. In Chromium, a shader striping by world distance and the ship's own path line: the naive
+  page loses the ship and scrambles the line from frame to frame; this one is steady (the ship's
+  silhouette changes by 5 of 484 pixels between consecutive frames of `vidgen still`, the
+  light and the horizon moving).
+- **Depth: measured** in headless Chromium (SwiftShader, WebGL 2, 24-bit depth; `EXT_clip_control`
+  is there but three-finish's depth texture is 24-bit integer, so a reversed float depth would mean
+  changing three-finish, which would change the keys of its pages: not done). The test: a red ball
+  under a green shell a little higher (any red showing is z-fighting), a blue box in front.
+  Red pixels per 320×180 frame:
+
+  | case | one fixed range (0.1 m–10⁹ m) | one range fitted per frame (`single`) | logarithmic depth (`log`) | depth slices (`split`) |
+  |---|---|---|---|---|
+  | ship 400 km up, shell 20 km | 458–9,689 | 0 | 0 | 0 |
+  | ship 400 km up, shell 100 m | — | 203–1,180 | 0–1 | 0–2 |
+  | Earth + Moon from 10⁸ m beyond the Moon, a 4 cm box 3 m away, shell 100 m | — | 44–69 | 4–13 | 0–1 |
+  | the same, shell transparent (opacity 0.5) | — | 58 pure red, 3 colours on the disc | — | 0, one even colour |
+
+  Seconds per frame at 1280×720 (lit 256-segment spheres, screenshot included, two runs): fixed
+  0.14–0.20, `single` 0.13–0.20, `log` 0.15–0.21, `split` 0.18–0.19. With three-finish (depth of
+  field, bloom, motion blur of 5 samples), the ship: `single` 0.85, `log` 0.91, `split` 1.04,
+  `split` + `dofFocus` 1.15. Depth of field: `log` writes a depth three-finish reads as
+  perspective (the Moon in focus came out blurred, its edge 5 px wide); `split` with `dofFocus`
+  reads right (focus 3 m: the box sharp, the Moon's edge 5 px; focus 10⁸ m: the Moon's edge 1 px,
+  the box blurred). **`split` is the default**: correct, every material as it is (a
+  `ShaderMaterial` needs no `logdepthbuf` chunks), three-finish's chain unchanged; `log` (renderer
+  made with `logarithmicDepthBuffer: true`) and `single` remain choices.
+- **How `split` works.** It replaces the renderer's `render` for its own scene and camera (so
+  three-finish's calls, sub-frames included, go through it; `dispose()` gives it back). Each call:
+  the view-depth interval of every visible mesh, line, point cloud and sprite in the frame (its
+  bounding sphere; inside one, the distance to its round body's surface, or a path's nearest
+  segment); overlapping intervals make one stretch; a stretch spanning more than `ratio` (default
+  10⁴; 10⁵ let a 100 m shell fight) is cut into equal ratios (overlapping by 10⁻⁴: no seam);
+  separate stretches get slices of their own unless together they span at most `join` (3); at
+  most `maxSlices` (8). Drawn far to near, the depth buffer cleared between, `scene.background`,
+  the clear and the shadow maps on the first pass only. A sky (`scene.background`, or objects with
+  `frustumCulled = false`) is drawn first with near and far of its own. three-finish's depth of
+  field reads the last slice's depth with the camera's near and far, right for a focus in the
+  nearest slice; `dofFocus` (metres, an object or a function of t) draws the depth again from
+  focus / 10⁵ to the farthest thing, nearer things at depth 0. Slices seen: ship 2, Earth and Moon
+  with the box 3, Sun to Neptune from above 1, the zoom below 1–5.
+- **Scale modes and their notes.** `true` (default; `enlarge` other than 1 is refused), `enlarged`
+  (radii times `enlarge`: a number or `{default, <body>: factor}`, a factor other than 1 required;
+  distances true), `log` (positions r → AU · log10(1 + r / r0) along the same direction, r0 a third
+  of the smallest periapsis around the central body: the flat `orbit` scene's `radial: log`,
+  `LOG_R0_SHARE` and `log_r0`; tested equal to `OrbitSky._radial` to 10⁻¹²; in 3D r is the whole
+  distance, the flat scene's x–y one, equal for orbits in the plane; a moon collapses onto its
+  planet as in the flat view). `scaleNote(mode, {enlarge, words})` / `space.note()` give
+  `{lines, text}` in the flat scene's words: nothing for `true`; "sizes not to scale" and "bodies
+  enlarged 50×; distances to scale" (per body: "1000× (Sun 10×)"); "distances compressed (log)",
+  "sizes not to scale" and the factor. The flat scene's notes are not translated (only its labels
+  are), so neither are these; `words` replaces them for another language. The modes are the names
+  `vidgen.orbits.accuracy.PICTURES` uses for narration claims about scale. `problems()` lists an
+  enlarged body covering another's centre (the Earth at 60× reaches past the Moon); `pixels(name)`
+  the radius on screen (Sun to Neptune at true scale from 32 AU: the Earth 0.0003 px).
+- **Powers of ten** (for Step 375): one camera moves continuously from 2 m above the Earth to
+  1.3 × 10¹³ m in one scene (`vidgen still`, 8 times): near plane and slices follow, no fighting.
+  What does not work yet: a sphere mesh is no ground (a 512 × 256 sphere's facets lie up to 120 m
+  under the true surface, a 64 × 32 one's 7.7 km; the horizon from 400 km shows their kinks) and a
+  unit sphere scaled to the Earth keeps its vertices to about 0.4 m, so closer than a few metres
+  a surface needs a local patch (Step 371 / 375); at true scale a system seen whole has every
+  body under a pixel (honest; `pixels` says so; a marker is the page's choice).
+- **Tests.** `tests/test_web_space_scale.py`: served by name only, imports only `three`; in Node
+  on orbit data made by Python (the page's own `orbits.js` builds `ctx.orbits`): the log view and
+  r0 equal the flat scene's, double-precision placement (above), Hermite, the slices, the notes,
+  errors with did-you-mean; `slow`: the ship and Earth–Moon pages in Chromium, `split` against
+  `single`, twice. Stills: `/home/claude/work/scratch/an368/stills/`.
+

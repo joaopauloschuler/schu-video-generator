@@ -166,6 +166,12 @@ prime meridian), each orbit as a polyline and a ship's burns. The numbers are th
 
 - **True by default.** The positions are true; a page that enlarges the bodies or compresses the
   distances says so on screen, as the flat scene does ("sizes not to scale").
+- **Draw them with `vidgen/space-scale`** (Step 368; CONFIG `web`, "Astronomical scales"):
+  `new SpaceView(ctx, {renderer, scene, camera, mode})` places every body camera-relative in
+  double precision each frame and draws in depth slices, so a ship 400 km above the Earth and the
+  Moon behind it neither jitter nor fight. Modes: `true`; `enlarged` (radii times a stated factor);
+  `log` (the flat scene's `radial: log`, the same mapping and r0). `space.note().text` is the
+  honest caption in the flat scene's words.
 - **Which plane.** In 3D an orbit's inclination needs its reference plane: the planets and the
   Moon's preset are measured from the ecliptic, `iss`, `geo` and the Galilean moons from their
   planet's equator (an ISS-like orbit is 51.6° to the Earth's equator, up to 75° to the

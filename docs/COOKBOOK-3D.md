@@ -163,6 +163,11 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   Put light and colour on the hits and keep the camera on the form (sections), never on a beat.
   Worked example: [`examples/signal-fire`](../examples/signal-fire/README.md), an orchestral cue
   and a finished three.js night scene that follows it, track by track.
+- **Space at real scale.** Planets millions of metres apart and a ship of 100 m do not fit one
+  depth range or float32 world coordinates. Place them with `vidgen/space-scale` (CONFIG `web`,
+  "Astronomical scales"): `update: (t) => space.update(t, view(t))` for `Finish`; three.js's
+  units are then metres (`dof.unit` stays 1). When the focus is far away (a planet behind a near
+  ship), give the same focus as `dofFocus`. Bloom and motion blur need nothing more.
 
 ## 9. Building blocks for music videos
 

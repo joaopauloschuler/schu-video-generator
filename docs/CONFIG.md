@@ -7284,6 +7284,53 @@ the settings, the frame rate and frames, vidgen's version and its orbit code); t
 holds its SHA-256, so a change of the bodies draws the frames again. A 60 s scene of the eight
 planets and the Moon at 30 fps sends about 2.3 MB.
 
+**Astronomical scales: `vidgen/space-scale`** (Step 368, DESIGN §122.4). Draws `ctx.orbits` in
+three.js without jitter or z-fighting: a 100 m ship, the planet 400 km under it and the Moon behind
+both in one frame. `import {SpaceView, scaleNote} from "vidgen/space-scale"`.
+
+```js
+const space = new SpaceView(ctx, {renderer, scene, camera, mode: "enlarged", enlarge: {default: 50, Moon: 20}});
+space.add(earth, {body: "Earth"});        // a mesh of radius 1, drawn at the body's radius times its factor
+space.add(ship, {body: "Ship"});          // a body without a radius: the object is in metres
+space.path("Moon", {kind: "conic"});      // the orbit as a line, exact every frame
+export function frame(t) {
+  space.update(t, {from: {body: "Ship", offset: [-220, 0, 60]}, to: "Earth"});
+  renderer.render(scene, camera);         // or three-finish's finish.render(t) with update: (t) => space.update(t, view(t))
+}
+caption.textContent = space.note().text;  // "sizes not to scale · bodies enlarged 50× (Moon 20×); distances to scale"
+```
+
+| `new SpaceView(ctx, {...})` | default | |
+|---|---|---|
+| `renderer`, `scene`, `camera` | — | the page's (a `PerspectiveCamera`); three.js's units are metres |
+| `mode` | `"true"` | `true` (sizes and distances true), `enlarged` (radii times `enlarge`, distances true), `log` (distances compressed as the `orbit` scene's `radial: log`: r → AU · log10(1 + r / r0), r0 a third of the smallest periapsis around the central body) |
+| `enlarge` | `1` | a factor, or `{default, <body>: factor}`; refused in mode `true`, required in `enlarged` |
+| `depth` | `"split"` | `split` (depth slices drawn far to near), `log` (a renderer made with `logarithmicDepthBuffer: true`), `single` (one fitted near and far) |
+| `ratio`, `join`, `maxSlices`, `near` | `1e4`, `3`, `8`, `0.01` | the most one slice spans (far / near); separate things share a slice when together they span at most `join`; slices at most; the nearest a slice begins (m) |
+| `dofFocus` | — | three-finish's `dof.focus` (m, an object or a function of t) when depth of field focuses beyond the nearest things |
+| `orbits`, `r0` | `ctx.orbits`, from the data | other orbit data; the log view's r0 (m) |
+
+| `space.` | |
+|---|---|
+| `add(object, {body \| at, offset, size, spin})` | place an object every frame: at a body (`body: "Mars"`) or at `at` (`[x, y, z]` m in the data's frame, or a function of t), moved by `offset` (m of the drawing); `size: "body"` (radius 1; the default for a body with a radius) or metres per unit (default 1); `spin` (default with rotation data): turned with the body (local +y its north pole, +x its prime meridian) |
+| `path(name, {kind, color, opacity, parent})` | a `THREE.Line` along the body's `path` (default) or `conic` |
+| `update(t, {from, to, up, quaternion})` | set the camera and every object for scene time t. A point is a body's name, `[x, y, z]` m of the data (compressed in `log`), `{body, at, offset}` (offset in metres of the drawing) or a function of t; `up` default the ecliptic's north `[0, 0, 1]`; `quaternion` (`[x, y, z, w]`, data frame) instead of `to` |
+| `position(name, t?)`, `at(name, t?)`, `map(p)` | a body's true position (float64 m; between frames a Hermite of the two frames, for motion blur), where it is drawn, where a point is drawn |
+| `radius(name)`, `factor(name)`, `pixels(name)` | the radius drawn (m), its factor, its radius on screen (px; under 1 at true scale is honest) |
+| `note(words?)`, `problems()` | the honest note `{lines, text}`; what would mislead (an enlarged body covering another's centre) |
+| `slices`, `dispose()` | the depth slices of the last render `[[near, far], ...]`; give the renderer its own `render` back |
+
+Exported helpers: `scaleNote(mode, {enlarge, words})` (the notes in the `orbit` scene's words:
+"sizes not to scale", "distances compressed (log)"; `words: {sizes, distances, enlarged,
+logSizes}` replaces them, `{factors}` where the factor goes), `compress(p, r0)`, `logR0(orbits)`,
+`depthSlices(intervals, {ratio, join, maxSlices, near})`, `hermite`, `yUp`, `AU`, `MODES`,
+`DEPTHS`, `NOTES`. How it works: every position stays float64 until the camera's position is
+subtracted, then three.js's camera stands at its origin; `split` replaces the renderer's `render`
+for this scene and camera, so three-finish's chain (bloom, motion blur, depth of field) works
+unchanged. A sky is `scene.background` or objects with `frustumCulled = false` (drawn first,
+behind everything). Mistakes stop the render with a did-you-mean: `vidgen/space-scale: no body
+"Mon" (did you mean "Moon"?)`.
+
 **Lint reads the page** (DESIGN §118.12). At each still lint looks at (the beat ends; more with
 `vidgen storyboard --per-beat N` or a Short), vidgen asks the page what text it shows: every
 element that holds visible text (with its inline children: `<p>Hello <b>you</b></p>` is one text)

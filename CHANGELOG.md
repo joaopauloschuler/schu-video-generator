@@ -5,10 +5,18 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–367
+## Steps 193–368
 
-### Space scenes (Phase AN, Step 367)
+### Space scenes (Phase AN, Steps 367–368)
 
+- **Planets, moons and a ship at their real sizes and distances in three.js** (Step 368):
+  `vidgen/space-scale` places what `ctx.orbits` gives camera-relative in double precision every
+  frame and draws in depth slices, so a 100 m ship 400 km above the Earth, the Moon behind it and a
+  box 3 m from the camera neither jitter nor z-fight, with `vidgen/three-finish`'s bloom, motion
+  blur and depth of field. Three stated scale modes, true (the default), bodies enlarged by a
+  stated factor, and distances compressed as the `orbit` scene's `radial: log`, each with its
+  honest caption in the `orbit` scene's words ("sizes not to scale"). One camera can travel from
+  2 m above the Earth to beyond Neptune in a single shot.
 - **Orbits on a three.js page** (Step 367): a `web` scene with `orbit_data:` gets `ctx.orbits`,
   the planets, moons and spacecraft of the `orbit` scene (same keys: `bodies`, `span` or
   `speedup`, `date`, `transfer`, `flyby`, `dynamics`, `system`) computed by vidgen for every frame:

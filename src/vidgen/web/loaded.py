@@ -50,9 +50,10 @@ MODULES_FOLDER = "modules"
 #: vidgen's own modules a page may import, by import name -> file in :data:`MODULES_FOLDER`
 #: (``vidgen/three-finish``: finishing for three.js scenes, DESIGN.md §120.11; ``vidgen/music-time``
 #: and ``vidgen/three-kit``: building blocks for music videos, DESIGN.md §121.1; ``vidgen/title-cards``:
-#: an opening title and an end card for films, DESIGN.md §121.7).
+#: an opening title and an end card for films, DESIGN.md §121.7; ``vidgen/space-scale``: astronomical
+#: scales in three.js, floating origin and depth slices, DESIGN.md §122.4).
 VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
-                                  "vidgen/title-cards": "title-cards.js"}
+                                  "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js"}
 
 
 def vidgen_file(rel: str) -> Path | None:
