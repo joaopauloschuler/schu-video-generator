@@ -26068,7 +26068,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 375 | Camera moves for space scenes as functions of time: fly-by, pass, arc at a chosen phase, arrival, reveal from behind a limb timed to the second, craft views, powers-of-ten zoom, lenses, checks in sentences, cuts (`vidgen/space-camera`); path lines near the camera fixed in `vidgen/space-scale` | §122.11 |
 | 376 | Space scenes without code: the `space` scene written in `video.yaml` alone (sky, sun, worlds, orbits and scale, light, craft, phenomena, camera moves in seconds or bars, finish, music, cards), its words checked in Python from the modules' own lists, the page written from them and drawn as a `web` scene, `script:` and `vidgen space-page` to go on in code, `vidgen music plan --style space`, lint `space_scene` | §122.12 |
 | 377 | The example film `examples/outbound`: five `space` scenes on the bar lines of an original score; a world of the orbit data as a camera subject fixed | §122.13 |
-| 378 | Critical review, COOKBOOK-SPACE | |
+| 378 | Critical review with fixes (a long lens's sky, an unlit craft said, burns steered under a speed-up, `shimmer` that follows a pan, a fly-by's frame, a transfer's departure alone, dated speed-ups, the `space` gallery entry, MCP `space_page`), `docs/COOKBOOK-SPACE.md` | §122.14 |
 
 ### 122.1 The third dimension of the orbit model (Step 367)
 
@@ -28007,3 +28007,93 @@ validates; five `space` scenes without `script`, each starting on a bar line, 18
 sunrise on bar 4, the title without a link, the end card's credit and link; the burn and the
 fly-by speed recomputed with `orbits.hohmann`; the score's hash, 17 tracks, no range warnings, the
 tracks the scenes name. `tests/test_space_scene.py` checks the subject line of the fix.
+
+### 122.14 Review of Phase AN (Step 378)
+
+The code of Steps 367–377 was read again with the faults the coordinator collected from the stills
+(`an378-review-notes.md` in the step's scratch folder). What was found, what changed, and why.
+
+**Fixed (with tests).**
+
+- **A long lens's sky** (`vidgen/space-sky`, `VERSION` 2). Under a 300 mm lens a texel of the 1024
+  cube spans 14 px: the faint stars baked into the cube became soft blobs and the band's clouds
+  (noise squeezed across the band, so long along it) vertical streaks behind a craft. The sky's
+  shader measures a texel in pixels (`fwidth` of the view direction) and past `LENS_PIXELS` 2.5
+  reads the cube at level `LENS_SOFT` × log2(texels / 2.5) (1.5): at 1280x720 a normal or wider lens
+  reads level 0 as before, a portrait lens about 1, a 300 mm lens 3.7 (1.1° texels: a smooth glow);
+  the stars are points and stay sharp. Same light (a level is the mean). A larger cube chosen by
+  lens was not taken: 2048 costs 20 s and 270 MB and still blurs at 300 mm.
+- **An unlit subject said** (`vidgen/space-camera`). Step 376's demo (b), a black ship on stars,
+  was honest: the ship was in the Earth's shadow from 0.6 s. `problems()` (so `checkMoves`, every
+  frame of each move) now says when a craft (not a world: a crescent is meant) is in a world's
+  shadow (the shadow's cylinder) or seen from its unlit side (phase over `UNLIT_PHASE` 150°), with
+  what to do. `follow` takes `side` (`left`, `right`, `sun`: the view's right component turned to
+  the sun's side of the flight). The default side was not changed (it would change shots already
+  liked, and does not help in a shadow).
+- **Burns under a speed-up** (`vidgen/space-craft`). A burn shown for `seconds` and turned to over
+  `turn` seconds of the scene pointed along the burn's instant's fixed Δv, so at 6000× the nose
+  pointed along the burn from half an orbit away. The turn and the burn now keep the Δv's parts in
+  the flight's own axes (along the velocity, out from the parent, across the plane) at their
+  instant (`_thrustAt`): a prograde burn stays prograde. The orbit keeps its exact impulsive Δv;
+  seconds and turn stay scene seconds (a stated choice: visible at any speed-up).
+- **`shimmer` warnings** (`motion_check`). Evidence: 16 lossless frames (`vidgen still --frame`)
+  of a fly-by's pan at 640x360: the stars moved 12–30 px a frame; the meter, which looks for a
+  star within 4 px, compared unrelated stars (median "shimmer" 0.44); followed with the pan's
+  shift, the same stars' light changed by 6–13 %. A warp's streaks (2,200 peaks a frame) gave 0.21.
+  The check was wrong, not the sky. `_shared_shift` takes the shift most of the 300 brightest
+  stars share between frames (a vote of their displacements within `shimmer_reach` 48 px) out
+  before looking; only point stars count (`shimmer_point`: 60 % of the light within 3 px lies
+  within 1 px); a frame is judged only when most stars are found again as stars there. The pan now
+  measures 0.06–0.13 and the warp is not judged. On Outbound's 8 fps draft the three `shimmer`
+  warnings are gone (the warp's own flash stays: it is the effect). An 8 fps draft needs no rule of
+  its own: its pans are followed like any pan. Synthetic tests: a 12 px pan is quiet, aliasing in
+  that pan is found, streaks flying out are quiet.
+- **A fly-by's frame** (`orbit_data`, `ORBIT_DATA_VERSION` 2; `orbits.ephemeris.flyby_axes`). The
+  fly-by's positions are in the planet's frame (x along its motion round the Sun), but its pole
+  (its rings) and the space scene's default sun were in the ecliptic frame. Both are now turned
+  into the fly-by's frame from the planet's motion on the date (JPL's elements): the Sun stands on
+  +y (Saturn in 2033: [−0.004, 1, 0]), the rings tilted to it as they are that day. Outbound's
+  `03_rings` drops its hand-set sun.
+- **A transfer's departure alone** (`orbit_parts`). A scene whose span ends between the two burns
+  was refused; it now shows the departure (refused only when the first burn is late, with
+  `transfer.depart` named as the way out). The flat `orbit` scene accepts the same.
+- **Dated speed-ups** (`orbit_data`). `OrbitData`'s validation built the model over its default
+  span (one period of the first body) and refused Halley's comet on 1986-02-09 at 200,000× ("the
+  scene ends on 2061"). With a speed-up the stand-in span's dates are not checked
+  (`check_dates`); the data made for the scene's length is.
+- **The space page** (`scenes/space_page.py`, `space.py`). A camera naming a body of the orbit data
+  that nothing draws (a comet's body) had no subject (the page stopped); it is now one. Lengths in
+  a move's options (`zoom` stops) are checked at `vidgen validate`, a number YAML reads as text
+  (`2.6e9`) is metres, and a value the checks let through is the scene's `VidgenError`, not a
+  traceback. `build/space/<id>.js` is written to a temporary file and moved into place (a render
+  of `--jobs` may be serving it).
+- **Page load** (`web/page.py`): `LOAD_TIMEOUT_S` 30 → 90 s. A 2048 world map takes 30.4 s to bake
+  on 2 cores (measured), 1024 7.8 s, 512 1.0 s (Earth-like; a cratered moon 1024 13.6 s).
+- **The crewed ship's tanks** (`vidgen/space-craft`): foil (gold twice as often as silver), never
+  plain white paint, which read flat (an374 still 05). The station was looked at again and left:
+  panel lines, windows, shadows and foil already break it up.
+- **The `space` gallery entry** and `gallery.py`: a star field under a moving camera changes every
+  pixel every frame, so its GIF and stills were three times an entry's share. A still heavier than
+  `STILL_MAX_BYTES` (80 kB) is saved with fewer colours (64, 32, 16), a GIF that needs fewer colours
+  is held to `CLIP_NOISY_MAX_BYTES` (95 kB); no existing entry reaches either. The guide's sample
+  says `finish: {grain: 0}`. Entry 0.31 MB; budget 16.5 → 17 MB.
+- **MCP** `space_page` (`scene`, `project`, `out`, `force`); `vidgen space-page --out` stays in the
+  project folder.
+
+**Decided and documented.** Burn seconds stay scene seconds (above). The bake is not cached between
+pages: a cache needs a channel from the page to vidgen for 50 MB a 1024 world, keyed by GPU and
+module, and the bake is a few per cent of a render chunk; the load limit was raised instead. The
+star catalogue: the owner's decision is in §122.6 and every doc. FXAA stays off in space scenes by
+the `space` scene's default; three-finish was not changed (it would re-key the earlier films'
+pages).
+
+**Left** (tasklist, Phase AN leftovers): a spiral galaxy from YAML (tried: it has no turn or
+exposure of its own; the one still was edge-on and burnt out), the kit's own parts, a wormhole
+passage and flash, warp and match cuts from YAML; the follow view that keeps a world behind a
+craft on a radial flight (Outbound's departure rolls); the other leftovers of Steps 368–375.
+
+**Cache keys.** Pages importing `vidgen/space-sky`, `vidgen/space-camera` or `vidgen/space-craft`
+draw again (their bytes changed; no released film uses them), as do scenes with `orbit_data`
+(`ORBIT_DATA_VERSION` 2 and the orbit code's digest). No module shipped before Phase AN changed
+(three-finish, three-kit, music-time, title-cards); the earlier films' pages and score audio keep
+their keys (the scene fingerprint of `vidgen storyboard`, which holds vidgen's whole source, changes with any step).

@@ -9,7 +9,9 @@ what moves where, who walks up to whom — not for realism. The author guide has
 [`examples/3d-short`](../examples/3d-short/video.yaml): a 9:16 Short of about 15 s with shapes, two
 stand-ins who walk and turn to each other, a ball that appears, rolls and glows, four camera moves
 on spoken words, karaoke captions, and its guide passes. The
-[scene gallery](gallery/3d.md) shows the type.
+[scene gallery](gallery/3d.md) shows the type. Space films (worlds, craft, a black hole, camera
+moves on orbits, written in `video.yaml` alone) have their own cookbook:
+[COOKBOOK-SPACE.md](COOKBOOK-SPACE.md).
 
 ## 1. Setting up
 

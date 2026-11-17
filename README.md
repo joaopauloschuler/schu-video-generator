@@ -157,7 +157,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 `vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
-`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `music_plan`, `audio_check`, `motion_check`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`list_music`, `music_preview`, `music_template`, `music_patches`, `music_render`, `music_check`, `music_plan`, `audio_check`, `motion_check`, `parts`, `space_page`, `storyboard`, `animatic`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`, `cast`, and `studio_sessions` / `studio_read` / `studio_check` / `studio_variations` / `studio_propose` (answer the listening notes a person pins in `vidgen studio`) — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. It uses the official MCP Python SDK.
@@ -644,6 +644,11 @@ my_video/
   [docs/COOKBOOK-ORBITS.md](docs/COOKBOOK-ORBITS.md) — orbital mechanics videos: choosing what to
   show, scale honesty, units and Δv, the approximations to state, pacing, common mistakes and the
   lint rules that catch them;
+  [docs/COOKBOOK-SPACE.md](docs/COOKBOOK-SPACE.md) — space films with the `space` scene: choosing
+  what to show, honest scale and exposure, a recipe per shot (a sunrise over a limb, a ringed
+  world as a crescent, a craft on a real transfer with its burn on the beat, a fly-by, a
+  powers-of-ten zoom, a black hole, a comet, a warp cut), the cost of each shot, the checks, common
+  mistakes and their messages;
   [docs/COOKBOOK-PARTICLES.md](docs/COOKBOOK-PARTICLES.md) — particle-physics videos: planning a
   discovery story, choosing the scene, natural units (GeV vs GeV/c²), simulated data and schematic
   detectors, PDG and theory sources, local significance and what a p-value means, pacing, common
@@ -729,7 +734,8 @@ remaining rendering tests. No test needs network or keys.
     another in seconds or bars of the score, reactions to the music, an opening title and an end
     card; positions and timing true from the orbit data, enlarging stated on screen; every key
     checked with did-you-mean; `vidgen space-page` writes it out as a `web` scene to go on in code;
-    `vidgen music plan --style space` drafts a whole space film from a score; `vidgen guide space-scenes`);
+    `vidgen music plan --style space` drafts a whole space film from a score; `vidgen guide space-scenes`;
+    a recipe per shot and what each costs in [the space cookbook](docs/COOKBOOK-SPACE.md));
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `function_plot` (f(x) written as maths: curves, a dot tracing a curve with its tangent
     and a live value, the area under a curve growing; points, vectors added tip to tail and scaled,

@@ -157,6 +157,10 @@ config and the narration, not the stills, so they are quick.
 
 ## 8. Orbits in a three.js `web` scene
 
+For films of space shots written in `video.yaml` alone (a `space` scene: worlds, craft on these
+orbits, a sky, camera moves; a recipe per shot and what each costs), see
+[COOKBOOK-SPACE.md](COOKBOOK-SPACE.md). This section is for pages written in code.
+
 A `web` scene with `orbit_data:` gets the same model as `ctx.orbits` (Step 367; keys and the
 accessor in [CONFIG.md](CONFIG.md#web), "Orbit data"): every body's position and velocity for
 every frame, in metres from the central body, in the mean ecliptic and equinox of J2000 (z up;

@@ -5,10 +5,27 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–377
+## Steps 193–378
 
-### Space scenes (Phase AN, Steps 367–377)
+### Space scenes (Phase AN, Steps 367–378)
 
+- **The phase's review** (Step 378): the cookbook [docs/COOKBOOK-SPACE.md](docs/COOKBOOK-SPACE.md)
+  (what to show, honest scale and exposure, a recipe per shot with its `video.yaml`, the cost of
+  each shot on 2 cores, the checks, common mistakes and their messages, where the numbers come
+  from). Through a long lens the sky stays sharp points over a smooth glow (no soft blobs or
+  streaks behind a craft). The page warns of a craft in a world's shadow or seen from its unlit
+  side, and `follow` takes `side: sun`. A burn shown for seconds of a sped-up scene keeps its
+  direction in the flight's own axes. `vidgen motion check` follows stars across a pan and leaves
+  a warp's streaks out: no `shimmer` warnings on fly-bys, warps or 8 fps drafts (two new
+  thresholds, `shimmer_reach` and `shimmer_point`). A fly-by's planet pole and sun stand as they
+  are on the date; a `transfer` scene may end before its second burn (the departure alone); a dated
+  orbit-data speed-up is no longer refused at `vidgen validate`; a camera may name a body nothing
+  draws (a comet's). A page may take 90 s to open (2048 world maps). The crewed ship's tanks are
+  wrapped in foil. The `space` type in the scene gallery; MCP tool `space_page`. Outbound: a sharper
+  world under the departure, the fly-by's true sun and rings, a nearer black hole on the hit, a
+  larger end card. The star catalogue: vidgen ships a hand-written list of 221 bright stars; the
+  Bright Star Catalogue (no formal licence) is converted by `tools/make_star_catalogue.py` for a
+  user who downloads it.
 - **An example space film** (Step 377): `examples/outbound`, "Outbound", 58 s at 1280x720, source
   only: five `space` scenes written in `video.yaml` with no JavaScript, cut on the bar lines of an
   original score for vidgen's synthesizer (D minor, 75 BPM, one bar = 96 frames; strings, four horns,
