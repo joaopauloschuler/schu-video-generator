@@ -402,7 +402,8 @@ def test_committed_gallery_ends_with_the_youtube_videos() -> None:
     assert shorts == " ".join(expected), "the Shorts are one row of linked thumbnails, nothing else"
     assert [s["url"] for s in gallery.YOUTUBE_SHORTS] == [
         f"https://www.youtube.com/shorts/{vid}"
-        for vid in ("gLsKCVGfdz4", "cEob9Rqooqo", "8EZThIyJKOQ", "nSDKRQBD6V4", "VIaxZaXD56Y", "y1zxGYL9OOE")
+        for vid in ("gLsKCVGfdz4", "cEob9Rqooqo", "8EZThIyJKOQ", "nSDKRQBD6V4", "VIaxZaXD56Y", "y1zxGYL9OOE",
+                    "TSMGYvusLXA", "CrLAV33RlIU", "78nKM7xIsRE")
     ]
 
 

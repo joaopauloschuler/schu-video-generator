@@ -152,6 +152,9 @@ YOUTUBE_SHORTS: list[dict[str, str]] = [
     {"title": "YouTube Short 4", "url": "https://www.youtube.com/shorts/nSDKRQBD6V4"},
     {"title": "YouTube Short 5", "url": "https://www.youtube.com/shorts/VIaxZaXD56Y"},
     {"title": "YouTube Short 6", "url": "https://www.youtube.com/shorts/y1zxGYL9OOE"},
+    {"title": "YouTube Short 7", "url": "https://www.youtube.com/shorts/TSMGYvusLXA"},
+    {"title": "YouTube Short 8", "url": "https://www.youtube.com/shorts/CrLAV33RlIU"},
+    {"title": "YouTube Short 9", "url": "https://www.youtube.com/shorts/78nKM7xIsRE"},
 ]
 
 

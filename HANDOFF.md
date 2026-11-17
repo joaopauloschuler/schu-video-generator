@@ -27423,3 +27423,14 @@ project), repo work is generic.
 - **Gaps / TODO for Step 378.** Listed in tasklist "Step 377", Open (1)–(9).
 - **Not verified.** The film at full size and at 30 fps (only stills and one 8 fps draft); the cuts and the reactions in motion at full rate; the sunrise's timing to the frame in this scene (Step 375 measured the move; here it was seen on stills at 9.5, 10.0 and 11.0 s); the score by ear (nobody has listened); the draft's sound is the score one small rebalance before the final one (the final score was measured alone, not in a new draft); `--jobs`; the README's "change it" variants (`world: azure`, `world: tempest`, other `kind`s) were not drawn; Windows / macOS; a real GPU.
 - **How to test.** `python -m pytest -q tests/test_outbound_example.py tests/test_space_scene.py` (one at a time). By hand: `vidgen validate examples/outbound`; `vidgen still examples/outbound --scene 03_rings --at 6 --size 640x360`; `vidgen render --draft examples/outbound`. Stills, the draft, the score as m4a and their README: `/home/claude/work/scratch/an377/stills/`.
+
+## Step 377.1 — Three more YouTube Shorts in the gallery
+
+- **Why** (owner, 2026-11-17): add three more Shorts to the gallery's "Videos on YouTube", after the six of Step 371.1, in this order: TSMGYvusLXA, CrLAV33RlIU, 78nKM7xIsRE.
+- **Built**: three entries appended to `YOUTUBE_SHORTS` in `src/vidgen/gallery.py` (no code change); the "### Shorts" paragraph at the end of `docs/gallery/README.md` rewritten to exactly the paragraph `youtube_lines()` returns (nine thumbnails, same markup as Step 371.1; `vidgen gallery` not run).
+- **Titles**: one WebFetch each of YouTube's oEmbed; all three replies were the first Short's ("eclipse", `thumbnail_url` naming gLsKCVGfdz4), as in Step 371.1, so no other way was tried: alt text "YouTube Short 7", "YouTube Short 8", "YouTube Short 9". To set them, edit the titles in `YOUTUBE_SHORTS` and the same `alt` attributes at the end of `docs/gallery/README.md`.
+- **Files**: `src/vidgen/gallery.py`, `docs/gallery/README.md`, `tests/test_gallery.py`, `CHANGELOG.md`, `tasklist.md`, `HANDOFF.md`.
+- **Public interface**: none changed (`YOUTUBE_SHORTS` has nine entries).
+- **Tests**: `test_committed_gallery_ends_with_the_youtube_videos` lists the nine ids in the owner's order. `tests/test_gallery.py`: 11 passed; `tests/test_docs.py`: 79 passed (default runs, capped, one at a time).
+- **Not verified**: nothing rendered; the thumbnails were not downloaded or looked at, and the GitHub rendering was not seen.
+- **How to test**: `python -m pytest -q tests/test_gallery.py tests/test_docs.py`.
