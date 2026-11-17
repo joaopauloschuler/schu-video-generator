@@ -168,6 +168,12 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   "Astronomical scales"): `update: (t) => space.update(t, view(t))` for `Finish`; three.js's
   units are then metres (`dof.unit` stays 1). When the focus is far away (a planet behind a near
   ship), give the same focus as `dofFocus`. Bloom and motion blur need nothing more.
+- **A planet in it.** `const p = planet(renderer, "saturn"); scene.add(p.object)` from
+  `vidgen/space-bodies` (CONFIG `web`, "Planets, moons and rings"), then `p.update(t, {sun})` in
+  `Finish`'s `update`: surfaces from a seed, air with a blue limb and a red terminator, rings
+  with shadows both ways. three.js lights do not light it (give the sun's direction); it writes
+  its own depth, so depth of field and bloom work; give `Finish` `antialias: "none"` (its edge
+  is already smooth, and FXAA breaks thin rings into dots). Look first: `vidgen parts --kind body`.
 - **A sky behind it.** `scene.add(spaceSky(renderer, {seed}).object)` from `vidgen/space-sky`
   (CONFIG `web`, "The sky of a space scene") is a sky like a photograph from space: thousands of
   stars with the real sky's spread of brightness, the Milky Way with its dust, optional nebulae and

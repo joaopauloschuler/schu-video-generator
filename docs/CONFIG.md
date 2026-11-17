@@ -7437,6 +7437,80 @@ const finish = new Finish(renderer, scene, camera, ctx, {antialias: "none"});   
   than 12 nebulae or galaxies. An orthographic camera is not supported (the sky needs a perspective).
 - On the contact sheet: `vidgen parts 'space-sky*' spiral-galaxy`.
 
+**Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a
+seed, or a ready-made one, in one line; every surface is generated (no maps or images).
+`import {planet} from "vidgen/space-bodies"`.
+
+```js
+const earth = planet(renderer, "earth");                    // a ready-made world ...
+const world = planet(renderer, {type: "ocean", seed: 7, land: 0.4, rings: {seed: 2}});   // ... or your own
+scene.add(earth.object);                                    // radius 1: scale and place it like any object
+earth.update(t, {sun: [3, 1, 2]});                          // every frame: turning, drifting clouds and bands; where the sun is
+// with orbit_data: placed, sized, tilted, turned and lit from ctx.orbits through vidgen/space-scale
+const saturn = planet(renderer, "Saturn", {space});         // space = new SpaceView(ctx, {renderer, scene, camera})
+const update = (t) => { space.update(t, view(t)); saturn.update(t); };
+```
+
+- **Ready-made worlds** (`PRESETS`): `mercury`, `venus`, `earth`, `moon`, `mars`, `jupiter`,
+  `saturn` (rings), `uranus` (thin rings), `neptune`, `io`, `europa`, `ganymede`, `callisto`,
+  `titan`: lookalikes in character and colour, with each body's tilt and flattening, not maps of
+  the real surfaces; and invented ones: `ember`, `boreas`, `ochre`, `tempest`, `verdant`,
+  `cinder`, `azure`. Any option below may be given over a world's own: `planet(renderer, "mars",
+  {seed: 4, caps: 0})`.
+- **Types and their options** (numbers from 0; 1 is the usual strength):
+
+  | `type` | Options (defaults) | `palette` |
+  |---|---|---|
+  | `rocky` | `craters` 1, `maria` 0.3 (share of dark plains), `rays` 1, `patches` 0, `relief` 1 | `moon`, `mercury`, `callisto`, `cinder` |
+  | `icy` | `cracks` 1, `dark` 0.3, `craters` 0.4, `relief` 1 | `europa`, `ganymede`, `glacier`, `snow` |
+  | `desert` | `dark` 0.35, `caps` 1, `craters` 0.6, `canyons` 1, `volcanoes` 1, `relief` 1 | `mars`, `ochre`, `slate` |
+  | `ocean` | `land` 0.3 (share of land), `mountains` 1, `ice` 1, `wet` 0, `clouds` 0.5, `cloudDrift` 0 (degrees a second), `lights` 0.3 (city lights; 0 for none), `relief` 1 | `earth`, `verdant`, `rust` |
+  | `lava` | `heat` 0.5, `style` `"crust"` or `"sulphur"`, `vents` 1, `glow` 1, `relief` 1 | `ember`, `io` |
+  | `gas` | `bands` 17, `contrast` 1, `turbulence` 1, `storms` 6 (white ovals), `spot` 1 (the great storm; 0 for none), `drift` 0 (degrees a second: the bands move at different speeds), `polar` 0.6 | `jupiter`, `saturn`, `venus`, `titan`, `tempest`, `copper` |
+  | `ice-giant` | the same, calmer: `bands` 7, `contrast` 0.3, `turbulence` 0.5, `storms` 2, `spot` 0, `polar` 0.35 | `uranus`, `neptune`, `azure`, `jade` |
+
+  A `palette` may also be colours of your own in the shape of one of the type's (see `PALETTES`
+  and the module).
+- **Every type**: `seed`; `size` (the baked maps: 256, 512, 1024 or 2048; by default 512 for a
+  720p frame and 1024 from 900 px of height; use 1024 for close-ups, 256 for bodies that stay
+  small); `quality` (`"fast"`, `"standard"`, `"fine"`: how finely the air's light is summed);
+  `light` (1: a white ground facing the sun is white before tone mapping); `tilt` (degrees; the
+  north pole leans toward +x); `oblateness`; `spin` (below).
+- **Air**: `air: false`, a name (`earth`, `mars`, `venus`, `titan`, `giant`, `ice`, `thin`,
+  `smoke`), or `{like: "earth", density: 2, height: 0.003, ...}` (`rayleigh`, `haze`, `absorb`:
+  zenith optical depths for red, green, blue; `height`: the scale height as a share of the
+  radius; `forward`, `twilight`, `glow`). Ocean, desert and giant worlds have air by default; the
+  scale heights are the bodies' real ones, so from far away the air is a thin line (raise
+  `height` for a deeper glow: an artistic choice).
+- **Rings**: `rings: true` or `{seed, style: "broad" | "narrow", inner: 1.25, outer: 2.3, color,
+  opacity: 1, gaps: 7, dust: 0.25}` (radii in body radii). They shadow the globe, the globe
+  shadows them, and from their unlit side the thin parts glow. On a ready-made world
+  `rings: {gaps: 3}` changes that and keeps the rest; `rings: false` removes them.
+- **Turning.** With orbit data the default is the body's own turning (`spin: "true"`). Under a
+  large speed-up that flickers (a year a minute turns the Earth 73° a frame): `body.problems()`
+  returns a sentence when a body turns more than 12° a frame (`body.turnPerFrame()` gives the
+  degrees). Then choose and state `spin: "locked"` (the pole stays true, no turning) or `spin: 40`
+  (one turn in 40 s of film; negative turns backwards). Without orbit data `spin` is seconds per
+  turn (default: none).
+- **The sun.** `body.update(t, {sun: direction})` or `body.setSun(direction, {color, intensity})`
+  (a direction in the scene's axes, toward the sun). With orbit data that contains the Sun the
+  direction is set by `update(t)`. three.js lights do not light a body. `body.fill = {direction,
+  color}` is a second, weak light (black by default).
+- **With `vidgen/three-finish`** give `antialias: "none"`: a body draws its own smooth edge, and
+  FXAA breaks thin rings into dots at small sizes. Depth of field, bloom and motion blur work
+  (the depth is written per pixel). With `vidgen/space-scale` use its `split` (default) or
+  `single` depth, not a logarithmic depth buffer.
+- **Cost** (2 cores, software GL, 720p): a body takes 2.2 to 4 s to make (maps of 512; 1.4 s at
+  256, about 9.5 s at 1024), then 0.05 to 0.2 s a frame (a close limb over half the frame 0.2 s;
+  rings filling the frame 0.3 s).
+- **Limits.** No landing (a texel is 20 km on an Earth-sized world at 512); the limb is a smooth
+  circle; no eclipse shadows of moons; a body under 1.5 px of radius is one steady spot with the
+  disc's light. An orthographic camera is not supported.
+- **Errors** name the closest word: `no ready-made world "satrun" (did you mean "saturn"?)`,
+  unknown options, palettes, airs, a `spin` that is none of the three kinds, `space` without
+  orbit data, a body name the orbit data does not have.
+- On the contact sheet: `vidgen parts --kind body` (33 tiles), or `vidgen parts 'world-*'`.
+
 **Ready-made parts: `vidgen/parts` and `vidgen parts`** (Step 369, DESIGN §122.5). The
 registry of ready-made three.js parts (skies, structures, effects, environments; space bodies,
 lights, craft and phenomena as Phase AN adds them), each with the one line that uses it;
@@ -16944,7 +17018,8 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   that passes it (the first is always drawn) and the sheet's title names the parts left out.
   Measured: 20 parts at 320x180 in 12 s (page ready 0.7 s; 0.25 to 0.75 s a part, the studio
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
-  `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky).
+  `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
+  33 to 43 s (about 1 s a part).
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

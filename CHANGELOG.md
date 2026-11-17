@@ -5,10 +5,27 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–370
+## Steps 193–371
 
-### Space scenes (Phase AN, Steps 367–370)
+### Space scenes (Phase AN, Steps 367–371)
 
+- **Planets, moons and rings in one line** (Step 371): `planet(renderer, "earth")` from the new
+  module `vidgen/space-bodies` puts a world into a three.js `web` scene whose surface is generated
+  from a seed: seven types (`rocky` with craters, maria and rays; `icy` with long cracks;
+  `desert` with canyons, volcanoes and polar caps; `ocean` with continents, sun glint, clouds in
+  weather systems, ice caps and faint city lights; `lava`; `gas` with belts, zones, stirred edges
+  and storms; `ice-giant`), each with options and palettes, and 21 ready-made worlds: lookalikes
+  of the Solar System's bodies from Mercury to Neptune, the Moon, the Galilean moons and Titan (in
+  character and colour, not maps of them) and seven invented ones. Air is a thin shell with a blue
+  limb, a red terminator and a lit rim when the sun is behind; airless bodies show crater shadows
+  at the terminator. Rings (`rings: {...}`) have provinces, gaps and ringlets, shadow the globe
+  and are shadowed by it, glow in their thin parts when seen from the unlit side and stay clean at
+  grazing angles. With `orbit_data`, `planet(renderer, "Saturn", {space})` places, sizes, tilts,
+  turns and lights the body from `ctx.orbits`; `body.problems()` warns when a speed-up makes a
+  globe turn so far a frame that it flickers, and `spin: "locked"` or `spin: seconds` are the
+  stated ways out. A body is sharp from a close limb down to a single steady point. A body takes
+  2 to 4 s to make and 0.05 to 0.2 s a frame at 720p in software GL. 33 new tiles on
+  `vidgen parts` (`vidgen parts --kind body`).
 - **A sky for space scenes in one line** (Step 370): `spaceSky(renderer, {seed})` from the new
   module `vidgen/space-sky` draws a sky like a photograph taken from space behind a three.js `web`
   scene: about 69,000 stars in the real sky's numbers per magnitude, with pale colours by

@@ -357,7 +357,8 @@ src/vidgen/
                           # title-cards.js `vidgen/title-cards`: an opening title and an end card for films (§121.7);
                           # space-scale.js `vidgen/space-scale` (§122.4); parts.js `vidgen/parts`: the registry of ready-made parts (§122.5);
                           # space-sky.js `vidgen/space-sky`: the sky of a space scene, and space-sky-stars.js, its star file,
-                          # written by tools/make_star_catalogue.py (§122.6)
+                          # written by tools/make_star_catalogue.py (§122.6); space-bodies.js `vidgen/space-bodies`: planets,
+                          # moons and rings from a seed (§122.7)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -26053,7 +26054,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 368 | Scale: floating origin, depth, three scale modes and their honest labels (`vidgen/space-scale`) | §122.4 |
 | 369 | Checks for dark pictures in `vidgen motion check`; a registry of ready-made parts (`vidgen/parts`) and its contact sheet (`vidgen parts`) | §122.5 |
 | 370 | The sky: from a seed (default) or the real bright stars, the Milky Way, nebulae, galaxies (`vidgen/space-sky`) | §122.6 |
-| 371 | Planets, moons and rings | |
+| 371 | Planets, moons and rings from a seed: seven surface types, air, rings, 21 ready-made worlds (`vidgen/space-bodies`) | §122.7 |
 | 372 | Suns and light | |
 | 373 | Phenomena | |
 | 374 | Spacecraft kit | |
@@ -26654,3 +26655,204 @@ faces' windows, the particle galaxy; `slow`: in Chromium the same frames twice, 
 another sky, black between the stars away from the band, Sirius at the middle of the frame for
 the real sky, the background cube and the environment. Stills:
 `/home/claude/work/scratch/an370/stills/`.
+
+### 122.7 Planets, moons and rings: `vidgen/space-bodies` (Step 371)
+
+A planet in one line: `const earth = planet(renderer, "earth"); scene.add(earth.object);
+earth.update(t, {sun})`; with orbit data `planet(renderer, "Saturn", {space})` places, sizes,
+tilts, turns and lights it. The module `data/web/modules/space-bodies.js` (import name
+`vidgen/space-bodies`, in `VIDGEN_MODULES`; imports `three` and `rng` of `vidgen/music-time`
+only). Nothing like it existed: the Step 358 kit has no bodies, the scratch pages of Steps 368 and
+370 used a plain `MeshStandardMaterial` sphere. No existing module's bytes changed; no real map,
+texture or image is used or imitated: every surface is generated.
+
+**How a body is drawn.** One mesh (a sphere of 48 × 24 segments, drawn from its back faces, a
+little larger than the body and its air) whose fragment shader works every pixel out from the
+view ray in the body's own axes:
+
+- *The limb is exact.* The ray meets the unit sphere analytically; the edge is anti-aliased by
+  the distance of the ray from the limb in pixels, so a body needs no FXAA or multisampling and
+  the limb is round however close the camera is. An oblate body (`oblateness`) is the same
+  sphere in a mesh scaled along the pole; normals go through the inverse transpose.
+- *Depth is written per pixel* (`gl_FragDepth`: the surface point, or the tangent point for
+  pixels of air only), so the body hides and is hidden correctly although the mesh is a shell,
+  works in each depth slice of `vidgen/space-scale` (`split`, `single`), and
+  `vidgen/three-finish`'s depth of field reads it. Not for a logarithmic depth buffer (stated in
+  the module's header). The material is see-through (premultiplied alpha: edge and air) and
+  writes depth; three.js draws it after opaque things.
+- *The surface* comes from two cube maps baked once (below): A = albedo (stored as its square
+  root) and one channel that is gloss above ½ (water) and glow below ½ (city lights, lava);
+  B = the relief's push on the normal in the body's axes (zero is exactly code 128, so a smooth
+  sea has no 8-bit facets) and one channel that is the cloud deck (worlds with clouds) or the
+  height (worlds with relief shadows). Cube maps have no pole pinch and no date-line seam.
+- *Light.* One hard sun (`body.sun`, a direction; `setSun(direction, {color, intensity})`).
+  Lambert's law mixed with Lommel-Seeliger's for dusty ground (`regolith` 0.6 rocky, 0.5 icy,
+  0.35 desert, 0.3 lava): a full moon is a flat disc, not a ball. Relief shadows: two looks
+  along the ground toward the sun in the height channel (is the ground there higher than the
+  sun's ray?), which gives craters their long shadows at the terminator for two texture reads.
+  Water: one wide microfacet lobe (roughness 0.2) with Fresnel, and the sky mirrored at grazing
+  angles. Clouds: lit above half the air (less red at the terminator than the ground), darker
+  where higher cloud stands sunward (the same extra read gives the deck's shadow on the ground).
+  City lights only on the night side and under clear sky, weak by default (`lights` 0.3).
+  A second, weak light is there for Step 372 (`body.fill = {direction, color}`, planet-shine and
+  ring-shine): black by default, nothing computes it yet.
+- *The air* is a shell of gas thinning exponentially with height (`height`: the scale height as
+  a share of the radius, the body's real value in the presets: 0.0014 for the Earth-like world),
+  with a zenith optical depth per colour for gas (`rayleigh`), haze (`haze`, a forward-throwing
+  Henyey-Greenstein lobe) and absorption (`absorb`). The optical depth between a point and space
+  along any direction is Chapman's function in Schüler's closed approximation, with its branch for
+  directions under the horizon (twice the tangent path less the upward one), so the sun's light
+  reddens through the long paths at the terminator and the planet's shadow falls on the air by
+  itself. Along the view ray the scattered light is summed in `STEPS` slabs (`quality`: `fast` 2,
+  `standard` 4, `fine` 8); each slab's share is the exact difference of the transmittances at its
+  ends, so thick air (Venus-like, Titan-like) saturates instead of blowing out, and the same sum
+  gives the blue line outside the limb, the haze on the disc toward the limb, the orange light at
+  the terminator and the bright ring of a backlit world. A little second-hand light (`twilight`)
+  and a faint night glow (`glow`) keep a rim on the night side. Not ray marching: ten evaluations
+  of the closed form per pixel at `standard`. A shell thinner than a pixel is drawn 0.7 px deep
+  with its density reduced (power 0.4 of the ratio), so the limb does not flicker when the body
+  is small.
+- *Small bodies.* The maps have mipmaps (no sparkle). Under a radius of 2.5 px the disc fades
+  into one gaussian spot (sigma at least 0.62 px, as the sky's stars) that holds the whole
+  disc's light: mean albedo × ⅔ × the Lambert phase function × the disc's area; from 1.5 px down
+  only the spot is drawn. Measured in the test: a body of radius 0.6 px gives 2.2 to 6.5 times
+  the light of one of 0.3 px (4 expected; 8-bit rounding of faint values), and moving it by a
+  third of a pixel changes its light by less than 30 %.
+- *Two ways out*, as the sky: into a render target (three-finish) linear light, a white ground
+  facing the sun = `light` (1); straight to the canvas the body applies ACES and sRGB itself and
+  dithers.
+
+**Rings** are found the same way: a flat slab (never thinner than three pixels on screen) in
+whose pixels the view ray meets the ring plane; the radial profile is a 1024 × 1 texture with
+mipmaps (colour and optical depth, from `ringProfile(seed, {style, gaps, color, opacity})`: a
+`broad` sheet in provinces with a main gap, ringlets and narrow gaps, or a few `narrow` rings),
+read at the level of the pixel's footprint along the radius, clipped to the ring's width, so a
+grazing view averages the ringlets instead of aliasing them (still 13: one degree from edge-on, no
+moiré, no broken line; exactly edge-on the rings vanish, as a sheet without thickness does). Light:
+single scattering in a thin layer of grains (Chandrasekhar's reflection and transmission), times
+3.0 / 1.8 for the multiple scattering left out: bright from the sunlit side, and from the far side
+the thin parts glow while the dense ones are dark; a back-scattering phase function with a
+forward lobe for the dusty thin parts (`dust`). The globe's shadow on the rings is the ray-sphere
+test toward the sun (in the oblate globe's own scaled space), with a penumbra that widens with
+distance; the rings' shadow on the globe is the profile read where the sun's ray from the ground
+crosses the ring plane. Order: the far half is drawn before the globe and the near half after
+it (three meshes at one place, drawn in the order they were made); the globe's written depth hides
+what is behind it.
+
+**The bake** (`bakeBody`): three passes of a full-screen shader per cube face. (1) *coarse*:
+slow fields (domain warps, climate, the air wound round weather systems or storms) on three
+128-pixel float cubes; (2) *fields*: vec4(height, three fields of the type) at full size in a
+float cube (32-bit, so the relief has no terraces; half float where the extension is missing);
+(3) *paint*: the slope from neighbouring heights, colour, gloss or glow → A, and the normal's
+push and clouds or height → B, with mipmaps. Noise is hashed gradient noise whose gradients are
+the cube's eight diagonals (the dot product is three sign flips: measured 1.4 times as fast as
+random gradients in SwiftShader), octaves chosen from the map size. Placed things come from the
+seed in JavaScript (`bakeInputs`): 28 large craters (the five youngest with rays), 12 weather
+systems, 12 storms, 26 cracks, volcanoes, canyon arcs, vents. Small craters are a lattice of
+cells on the sphere, one size class per octave, each cell holding at most one bowl with a rim.
+
+**Types** (`TYPES`; options are numbers from 0, 1 the default strength unless said):
+
+| Type | What | Options (defaults) | Palettes |
+|---|---|---|---|
+| `rocky` | airless, cratered: highlands, maria (also flooding the largest basins), craters of every size, rays | `craters` 1, `maria` 0.3 (share of the globe), `rays` 1, `patches` 0, `relief` 1 | `moon`, `mercury`, `callisto`, `cinder` |
+| `icy` | bright ice, long cracks in pieces (lineae), a web of fine fractures, stained broken plains, few craters | `cracks` 1, `dark` 0.3, `craters` 0.4, `relief` 1 | `europa`, `ganymede`, `glacier`, `snow` |
+| `desert` | two dusts and dark ground, a low smooth half, shield volcanoes, canyons, craters, polar caps; thin dusty air | `dark` 0.35, `caps` 1, `craters` 0.6, `canyons` 1, `volcanoes` 1, `relief` 1 | `mars`, `ochre`, `slate` |
+| `ocean` | seas (deep, shallow, glint), continents with mountain chains, climate (desert, grass, forest, tundra, snow, sea ice), clouds with weather systems, air, city lights | `land` 0.3, `mountains` 1, `ice` 1, `wet` 0, `clouds` 0.5, `cloudDrift` 0 (degrees a second), `lights` 0.3, `relief` 1 | `earth`, `verdant`, `rust` |
+| `lava` | a dark crust in plates glowing where it parts, seas of lava where hottest; `style: "sulphur"`: pale plains, dark vents, red fallout | `heat` 0.5, `style` `"crust"`, `vents` 1, `glow` 1, `relief` 1 | `ember`, `io` |
+| `gas` | belts and zones (`bandRamp`), stirred where they meet, streaks, a great storm, white ovals, polar haze; flattened with `oblateness` | `bands` 17, `contrast` 1, `turbulence` 1, `storms` 6, `spot` 1, `drift` 0 (degrees a second), `polar` 0.6 | `jupiter`, `saturn`, `venus`, `titan`, `tempest`, `copper` |
+| `ice-giant` | the same shaders, smooth: faint bands, haze, a dark storm | `bands` 7, `contrast` 0.3, `turbulence` 0.5, `storms` 2, `spot` 0, `drift` 0, `polar` 0.35 | `uranus`, `neptune`, `azure`, `jade` |
+
+Every type also takes `seed`, `size` (the maps' faces: 256, 512, 1024, 2048; default by the
+frame's height: 512 from 300 px, 1024 from 900 px), `quality`, `light`, `palette` (a name or
+colours shaped like one), `tilt` (degrees, the pole leans toward +x), `spin`, `oblateness`, `air`
+(`false`, a name of `AIRS`: `earth`, `mars`, `venus`, `titan`, `giant`, `ice`, `thin`, `smoke`, or
+`{like, density, rayleigh, haze, absorb, height, forward, twilight, glow}`), `rings` (`true` or
+`{seed, style, inner, outer, color, opacity, gaps, dust}`; radii in body radii). A wrong key,
+name or value is an error with a did-you-mean. `drift` moves a giant's bands at different speeds
+without ever winding the map up: two copies of the map are turned by a wind that varies with
+latitude, half a cycle one way and back, and cross-faded (flow mapping); a function of t.
+
+**Ready-made worlds** (`PRESETS`, 21): `mercury`, `venus`, `earth`, `moon`, `mars`, `jupiter`,
+`saturn` (rings), `uranus` (narrow rings, on its side), `neptune`, `io`, `europa`, `ganymede`,
+`callisto`, `titan`, and invented ones: `ember` (lava, smoke), `boreas` (blue ice, thin rings),
+`ochre` (desert), `tempest` (violet giant, rings), `verdant` (wet ocean world), `cinder` (dark red
+rock), `azure` (blue ice giant, pale rings). The Solar System's are lookalikes in character and
+colour with each body's tilt and flattening; nothing is where it is on the real body.
+
+**With `ctx.orbits`.** `planet(renderer, "Saturn", {space})` finds the body of the orbit data by
+name (or by its preset key; `{body: "name"}` says which), adds itself to the `SpaceView` (unit
+radius → the data's radius, times the view's enlargement), and `update(t)` sets the pole and the
+turning from the data's quaternion and the sun's direction from the body the data calls the Sun
+(without one: `update(t, {sun})` or `setSun`). `{orbits: ctx.orbits}` without a `SpaceView` gives
+turning and sun only.
+
+**Turning under a speed-up** (Step 367's warning). The default is honest: `spin: "true"`, the
+data's own turning. A year a minute turns the Earth 73° a frame, which flickers; so
+`body.problems()` says so in words when a body turns more than 12° a frame
+(`body.turnPerFrame()`), and two stated choices replace the turning while the pole stays true:
+`spin: "locked"` (no turning) and `spin: seconds` (one turn in so many seconds of film, negative
+backwards: an artistic rate, to be said in the film's notes). Without orbit data `spin` is seconds
+per turn, or none.
+
+**Measured** (2 cores, SwiftShader, 1280 × 720; maps 512 unless said; bake = making the body and
+its first frame, shaders compiled):
+
+| Case | Bake | A frame, the body alone | With sky and three-finish (0.39 s without a body) |
+|---|---|---|---|
+| Earth-like, full disc (radius 265 px) | 2.4–3.3 s | 0.12 s (`fast` 0.09; no air 0.05) | |
+| Earth-like, close limb (over half the frame) | 3.3 s (`size: 1024`: 9.5 s) | 0.18–0.21 s (`fast` 0.16) | 0.59 s |
+| Ringed giant, whole | 2.2–2.4 s | 0.06–0.08 s | 0.47 s |
+| Ringed giant, rings filling the frame | 2.5 s | 0.30 s | |
+| Moon-like | 3.8–4.0 s | 0.05–0.06 s | |
+| Mars-like | 3.8 s | 0.12 s | |
+| Europa-like 3.7 s, lava 2.7 s, Jupiter-like 2.3 s, Neptune-like 2.4 s | | 0.05–0.10 s | |
+| Earth-like at `size: 256` | 1.4 s | | |
+
+A typical shot adds 0.1 to 0.2 s a frame. The bake is paid once per page (every `vidgen still`,
+every chunk of a render); six bodies in one scene baked in 15 s. `size: 1024` costs four times
+the texels (9.5 s) and is for close-ups and 1080p; the 33 tiles of the contact sheet take 33–43 s.
+Exposure with default settings (`light` 1, three-finish exposure 1, sky brightness 1): a day side's
+middle sits at 0.4–0.5 of white after ACES and its brightest clouds near 0.8 (measured on the
+stills; only the core of a sun glint reaches white), and the stars and the Milky Way of
+`vidgen/space-sky` stay visible beside it, which is a film's convention, not a camera's truth (a
+camera exposed for a sunlit planet sees no stars); Step 372's exposure helpers are to state that
+choice. `vidgen motion check` on a 2 s clip of small drifting, turning bodies (a ringed giant
+24 px across, an Earth 67 px, a moon 5 px, a point of radius 0.7 px; 640 × 360): no findings (no shimmer,
+banding or clipping).
+
+**Found on the way.** `gl.readPixels` with the wrong type on a float target does not wait for the
+GPU, so bake stages must be timed with `gl.finish()`. A draw of an empty scene to make the mipmaps
+clears the cube's last face unless `autoClear` is off (a wedge of the globe was black from behind:
+tested now from three sides). three-finish's FXAA breaks thin rings at a small size into dots (the
+parts are drawn straight to the canvas; `antialias: "none"` is right for bodies as for stars).
+Drawn to the canvas, light without coverage (a sub-pixel spot, the air outside the limb) must be
+tone-mapped as it is, not divided by its alpha.
+
+**Parts** (`data/web/parts/space-bodies.js`, kind `body`, 33): `body-rocky`, `body-icy`,
+`body-desert`, `body-ocean`, `body-lava`, `body-gas`, `body-ice-giant`; `world-<name>` for each
+of the 21 ready-made worlds; `rings-broad`, `rings-narrow`, `rings-far-side`; `body-crescent`;
+`body-limb`.
+
+**Public interface.** `planet(renderer, what, extra)` → `Body`: `object`, `update(t, {sun})`,
+`setSun`, `sun`, `fill`, `problems(t)`, `turnPerFrame(t)`, `options`, `rings`, `uniforms`,
+`material`, `dispose()`. Pure helpers (tested in Node): `resolveOptions`, `bakeInputs`,
+`bandRamp`, `ringProfile`, `levelFor`, `sizeFor`, `phaseLight`, `spotSigma`, `pointShare`,
+`onGlobe`, `linearColor`; constants `TYPES`, `PALETTES`, `PRESETS`, `AIRS`, `QUALITIES`,
+`AIR_STEPS`, `RING_STYLES`, `VERSION`.
+
+**Limits.** No landing: the maps are one texel per 20 km on an Earth at 512 (10 km at 1024), so a
+close limb is soft ground under sharp air, and the last kilometres are out of scope (§122.4's
+note). Relief is shading and two shadow looks, not displaced ground: the limb is always a smooth
+circle. Clouds are one flat deck. The air's sum is single scattering with a correction; thick air
+is a look, not a simulation. Rings have no thickness, no spokes, and do not light the globe
+(Step 372's ring-shine). A moon's shadow on a planet (eclipses) is not drawn. Several ringed
+bodies overlapping on screen within one depth slice sort by their centres. An orthographic
+camera is not supported.
+
+**Tests** (`tests/test_web_space_bodies.py`): served by its import name with only its two
+imports; the 33 parts; in Node every world's options, the errors with their did-you-mean, bands,
+rings and placed things from a seed; `slow`: in Chromium the disc's size and roundness from three
+sides, a seed is a world, day and night, air outside the limb only with air, rings lit and
+shadowing, the sub-pixel spot's light, and a body of `ctx.orbits` placed, sized, lit and
+reporting its turning. Stills: `/home/claude/work/scratch/an371/stills/`.

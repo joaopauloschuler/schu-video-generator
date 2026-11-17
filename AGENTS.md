@@ -3515,6 +3515,35 @@ camera.lookAt(sky.direction("center"));               // the band's centre; "pol
 - It takes 5–6 s to make at 720p, then about 0.1 s a frame. Look first: `vidgen parts
   'space-sky*'`. Reference: CONFIG.md `web`, "The sky of a space scene".
 
+**Planets, moons and rings: `vidgen/space-bodies`.** Do not texture a sphere yourself (a lit
+`MeshStandardMaterial` ball looks like plastic, and three.js has no air, rings or crater
+shadows). One line gives a world; every surface is generated from a seed.
+
+```js
+import {planet} from "vidgen/space-bodies";
+const earth = planet(renderer, "earth");              // or "saturn", "moon", "mars", "europa", ... or {type: "gas", seed: 3}
+scene.add(earth.object);                              // radius 1; position and scale it as any object
+earth.update(t, {sun: [3, 1, 2]});                    // every frame; the direction toward the sun
+// with orbit_data and vidgen/space-scale: placed, sized, tilted, turned, lit by the data
+const saturn = planet(renderer, "Saturn", {space});
+const update = (t) => { space.update(t, view(t)); saturn.update(t); };
+```
+
+- Ready-made: `mercury venus earth moon mars jupiter saturn uranus neptune io europa ganymede
+  callisto titan` (lookalikes, not maps of the real bodies) and invented `ember boreas ochre
+  tempest verdant cinder azure`. Types for your own: `rocky`, `icy`, `desert`, `ocean`, `lava`,
+  `gas`, `ice-giant`, each with a few options and palettes (CONFIG.md lists them), `air`
+  (`false`, a name, or `{like, density}`), `rings` (`true` or `{style, inner, outer, gaps}`).
+- Look first: `vidgen parts --kind body`.
+- three.js lights do not light a body: give the sun's direction. With three-finish give
+  `antialias: "none"`.
+- Under a big speed-up a planet turns many degrees a frame and flickers: read
+  `body.problems()`; choose `spin: "locked"` or `spin: 40` (seconds of film per turn) and say so
+  in the film's notes; the default is the true turning.
+- A body takes 2 to 4 s to make and 0.05 to 0.2 s a frame at 720p; `size: 1024` for a close-up
+  (about 10 s to make), `size: 256` for bodies that stay small. No landing: close to the ground
+  the surface is soft. Reference: CONFIG.md `web`, "Planets, moons and rings".
+
 **Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
 ready-made three.js part (skies, structures, effects, environments; more space parts as they are
 added) drawn in one browser, each tile labelled with its name and the one line that uses it.

@@ -172,6 +172,11 @@ prime meridian), each orbit as a polyline and a ship's burns. The numbers are th
   Moon behind it neither jitter nor fight. Modes: `true`; `enlarged` (radii times a stated factor);
   `log` (the flat scene's `radial: log`, the same mapping and r0). `space.note().text` is the
   honest caption in the flat scene's words.
+- **The bodies themselves** (Step 371; CONFIG `web`, "Planets, moons and rings"):
+  `planet(renderer, "Earth", {space})` from `vidgen/space-bodies` draws the body of the orbit
+  data called Earth as an Earth-like world at its true size, pole and turning, lit from where the
+  data's Sun is; call `body.update(t)` after `space.update(t, view)`. Under a large speed-up read
+  `body.problems()` and choose `spin: "locked"` or a stated rate.
 - **The real sky behind them** (Step 370; CONFIG `web`, "The sky of a space scene"):
   `spaceSky(renderer, {stars: "real"})` from `vidgen/space-sky` is in the same frame as
   `ctx.orbits`, so a dated scene has the right stars behind its planets (the Earth in June stands
