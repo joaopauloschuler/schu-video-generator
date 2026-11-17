@@ -5,8 +5,9 @@ Two sources, one output format:
 
 * ``python tools/make_star_catalogue.py --fixture`` writes the stars of :data:`FIXTURE` below:
   well-known bright stars written down from memory, **approximate** (not checked against a
-  catalogue). This is the file the repository ships until a catalogue is approved.
-* ``python tools/make_star_catalogue.py PATH/TO/bsc5.dat`` converts the Yale Bright Star
+  catalogue). This is the file the repository ships: the Bright Star Catalogue has no formal licence
+  and is not shipped (the owner's decision, 2026-11-17).
+* ``python tools/make_star_catalogue.py PATH/TO/bsc5.dat`` converts, for a user who downloaded it, the Yale Bright Star
   Catalogue, 5th revised edition (Hoffleit and Warren 1991; CDS catalogue V/50, file ``catalog``,
   also distributed as ``bsc5.dat``; a ``.gz`` of either is read too): fixed-width lines, J2000
   positions in bytes 76-90, V in 103-107, B-V in 110-114 (:data:`BSC5_COLUMNS`). Entries without

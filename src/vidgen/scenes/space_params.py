@@ -74,7 +74,8 @@ def one_of(value: str, choices: list[str] | tuple[str, ...], what: str) -> str:
 
 
 def length(value: Any, where: str) -> float:
-    """A length in metres: a number (metres) or text with a unit ('58232 km', '1.2 AU')."""
+    """A length in metres: a number (metres) or text with a unit ('58232 km', '1.2 AU'); a number YAML
+    read as text ('2.6e9': YAML 1.1 wants '2.6e+9') is metres too."""
     if isinstance(value, bool):
         raise ValueError(f"{where}: {value!r} is not a length (metres, or text with a unit: '6371 km')")
     if isinstance(value, (int, float)):
@@ -82,9 +83,28 @@ def length(value: Any, where: str) -> float:
             raise ValueError(f"{where}: {value} is not a finite length")
         return float(value)
     try:
+        number = float(value) if isinstance(value, str) else None
+    except ValueError:
+        number = None
+    if number is not None:
+        return length(number, where)
+    try:
         return orbits.value_si(value, "length", where)
     except VidgenError as error:
         raise ValueError(str(error)) from None
+
+
+#: The options of camera moves that are lengths (metres, or text with a unit), at any depth.
+LENGTH_KEYS = ("distance", "closest", "altitude")
+
+
+def move_lengths(value: Any, where: str) -> Any:
+    """``value`` (a move's options) with its lengths (:data:`LENGTH_KEYS`) written as text turned into metres."""
+    if isinstance(value, dict):
+        return {k: (length(v, f"{where}.{k}") if k in LENGTH_KEYS and isinstance(v, str) else move_lengths(v, f"{where}.{k}")) for k, v in value.items()}
+    if isinstance(value, list):
+        return [move_lengths(v, where) for v in value]
+    return value
 
 
 def point(value: Any, where: str) -> list[float]:
@@ -543,6 +563,7 @@ class MoveSpec(Open):
             if not uses_bars(a) and not uses_bars(b) and not b > a:  # type: ignore[operator]
                 raise ValueError(f"camera {self.move}.over: the end must come after the start, got {self.over}")
         extra = self.options()
+        move_lengths(extra, f"camera {self.move}")
         if "at" in extra:
             scene_time(extra["at"], f"camera {self.move}.at")
         return self
@@ -672,6 +693,6 @@ class CardSpec(Open):
         return out
 
 
-__all__ = ["BAR", "DEFAULT_RADIUS", "PHENOMENA", "REACTIONS", "SUBJECT_KEYS", "BodySpec", "CardSpec", "CraftSpec",
+__all__ = ["BAR", "DEFAULT_RADIUS", "LENGTH_KEYS", "PHENOMENA", "REACTIONS", "SUBJECT_KEYS", "BodySpec", "CardSpec", "CraftSpec",
            "FinishSpec", "LightSpec", "MoveSpec", "OrbitData", "PhenomenonSpec", "ReactionSpec", "ScaleSpec", "SkySpec", "SunSpec",
-           "camel", "direction", "length", "module_options", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]
+           "camel", "direction", "length", "module_options", "move_lengths", "names", "one_of", "point", "real_radius", "scene_time", "snake", "uses_bars"]

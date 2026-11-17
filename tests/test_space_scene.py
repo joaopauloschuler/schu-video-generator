@@ -192,6 +192,18 @@ def test_the_page_is_stable_and_written_from_the_params(space: Any) -> None:
     assert "P.blackHole(renderer, {" in hole and '"tilt": 12' in hole and "cut: true" in hole and "P.warp(renderer" in hole
 
 
+def test_review_fixes_of_the_page(space: Any) -> None:
+    """Step 378: a camera that names a body of the orbit data nothing draws (a comet's body) has it as a subject;
+    a length YAML read as text ('2.6e9') is metres; a length without a unit inside a move is refused at validation."""
+    comet = {"orbits": {"central": "sun", "date": "1986-02-09", "speedup": 200000, "bodies": [{"preset": "halley", "name": "Halley", "nu": -60}]},
+             "phenomena": [{"kind": "comet", "name": "Tail", "body": "Halley"}], "camera": {"move": "arc", "subject": "Halley", "phase": "half", "distance": "2e9"}}
+    text = page(space, comet)            # the dated speed-up is not refused on the stand-in span of one period (76 years)
+    assert 'S.subjects["Halley"] = "Halley";' in text and '"distance": 2000000000,' in text
+    assert 'S.subjects["Earth"] = "Earth";   // a body' not in page(space, TRANSFER)   # drawn worlds are subjects already
+    words = problem(space, {**RINGS, "camera": {"move": "zoom", "stops": [{"subject": "Saturn", "distance": "2 parsnips"}, {"subject": "Saturn", "distance": 1e9}]}})
+    assert "unknown unit 'parsnips'" in words and "camera.0" in words          # at validation, not a traceback at render
+
+
 @pytest.mark.parametrize("path,value", [
     (("seed",), 2), (("sky", "seed"), 5), (("sky", "look"), "sparse"), (("sun", "direction"), [1, 0, 0]), (("sun", "glare"), 0.5),
     (("bodies", 0, "seed"), 3), (("bodies", 0, "rings"), False), (("bodies", 1, "at", 0), "1300000 km"), (("light", "exposure"), "camera"),

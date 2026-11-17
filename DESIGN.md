@@ -26597,7 +26597,9 @@ line that does not fit stops it; fewer than 8,000 stars is refused; the fixture'
 carried to the nearest catalogue star). The shipped file is the fixture: the real sky's stars
 brighter than magnitude 2.5 are at their places to the fixture's accuracy, and fainter ones are
 seeded. The file's two properties `catalog` and `approximate` are on `sky.info`. Nothing is
-downloaded by vidgen.
+downloaded by vidgen. The owner's decision (2026-11-17): the Bright Star Catalogue is not shipped
+(it has no formal licence); the hand-written list is what vidgen ships, and the converter stays so
+that a user who downloads the catalogue can convert it.
 
 **Drawing.** `sky.object` is a group of the cube (a box around the camera), the points and the
 quads: `frustumCulled = false`, `renderOrder` −1000 to −998, no depth test or write, positions

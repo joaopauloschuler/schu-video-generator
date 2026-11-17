@@ -627,7 +627,7 @@ class OrbitModel:
 
 def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, orbit_count: float | None, dynamics: str, method: str,
                   step: str | None, follow: str | None, cannon: OrbitCannon | None = None, transfer: OrbitTransfer | None = None,
-                  flyby: OrbitFlyby | None = None, many: Any = None, sky: Any = None) -> OrbitModel:
+                  flyby: OrbitFlyby | None = None, many: Any = None, sky: Any = None, check_dates: bool = True) -> OrbitModel:
     """Everything an ``orbit`` scene computes before drawing, checked (``VidgenError`` with the
     reason): the system, the span (``span``, or ``orbit_count`` periods of the first body —
     default one; with only a cannon, the longest closed shot's period; with a transfer, until a
@@ -710,7 +710,7 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
             raise VidgenError(f"orbits: bodies[1] '{first}' is on an open orbit (e = {o.elements.e:g}, a {o.elements.kind}): it has no period; "
                               "give span: '200 d' (a time) instead")
         seconds = (orbit_count if orbit_count is not None else 1.0) * period
-    if info_sky is not None and info_sky.jd0 is not None:
+    if info_sky is not None and info_sky.jd0 is not None and check_dates:
         orbits.check_valid(info_sky.jd0, info_sky.jd0 + seconds / orbits.DAY, where="span")
     every = OrbitModel(system, seconds, None, None, {}).burns()
     late = [(name, b) for name, b in every if b.time > seconds]

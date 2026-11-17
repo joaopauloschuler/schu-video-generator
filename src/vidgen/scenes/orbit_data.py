@@ -82,22 +82,25 @@ class OrbitData(SceneParams):
         if self.method != "leapfrog" and self.dynamics != "nbody" and self.system is None:
             raise ValueError("method is the n-body integrator; it needs dynamics: nbody")
         try:
-            model = self.model(None)
+            # with a speed-up the span is known only with the scene's length (the data is made with it, and
+            # its dates checked then): here the default span is a stand-in, its end date not checked
+            model = self.model(None, check_dates=self.speedup is None)
             self.body_planes(model)
         except VidgenError as error:
             raise ValueError(str(error)) from None
         return self
 
-    def model(self, span_seconds: float | None) -> Any:
+    def model(self, span_seconds: float | None, check_dates: bool = True) -> Any:
         """The resolved ``orbit`` model (:class:`~vidgen.scenes.orbit_parts.OrbitModel`); with
-        ``span_seconds`` (the speed-up's span) that span, else the settings' own."""
+        ``span_seconds`` (the speed-up's span) that span, else the settings' own. ``check_dates``
+        False: the span's end may lie outside the ephemeris' years (a check without the real span)."""
         fields = self.model_fields_set
         many = ManySpec(self.system, "central" in fields, "dynamics" in fields, method_given="method" in fields) if self.system is not None else None
         span = f"{span_seconds!r} s" if span_seconds is not None else self.span
         orbit_count = None if span_seconds is not None else self.orbits
         return resolve_model(self.central, self.bodies, span=span, orbit_count=orbit_count, dynamics=self.dynamics, method=self.method,
                              step=self.step, follow=None, transfer=self.transfer, flyby=self.flyby, many=many,
-                             sky=SkySpec(self.date) if self.date is not None else None)
+                             sky=SkySpec(self.date) if self.date is not None else None, check_dates=check_dates)
 
     def body_planes(self, model: Any) -> dict[str, str]:
         """Each orbiter's plane (``equator`` or ``ecliptic``; ``as_written`` for an n-body run or a

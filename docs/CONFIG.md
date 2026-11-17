@@ -7437,9 +7437,10 @@ const finish = new Finish(renderer, scene, camera, ctx, {antialias: "none"});   
 - **The real sky's star file** is `vidgen/space-sky-stars`: the shipped one holds 221 well-known
   bright stars written down from memory (`sky.info.approximate` is `true`; complete to magnitude
   2.5), so constellations' main stars are right and their fainter stars are seeded. Its clouds and
-  dust are the algorithm's, at the real galactic plane and centre. `tools/make_star_catalogue.py
-  PATH/bsc5.dat` writes the same file from the Yale Bright Star Catalogue (about 9,100 stars to
-  magnitude 6.5) when you have its file; `--fixture` writes the shipped one again.
+  dust are the algorithm's, at the real galactic plane and centre. vidgen does not ship the Yale
+  Bright Star Catalogue (it has no formal licence); if you download it yourself (CDS catalogue
+  V/50, `catalog.gz`), `tools/make_star_catalogue.py PATH/catalog.gz` writes the same file from it
+  (about 9,100 stars to magnitude 6.5) in a source checkout; `--fixture` writes the shipped one again.
 - **`spiralGalaxy({seed, radius, arms, wind, stars, clouds, dust, bulge, thickness, brightness,
   color})`** returns `{object, set({brightness}), dispose()}`: a galaxy of particles (disc in its
   own x–z plane, `radius` scene units) to stand in the scene and be flown past. Draw it through

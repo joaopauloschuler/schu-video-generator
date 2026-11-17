@@ -3597,8 +3597,10 @@ camera.lookAt(sky.direction("center"));               // the band's centre; "pol
 - With `vidgen/three-finish` give `antialias: "none"`: FXAA turns small stars into crosses. Bloom
   and grain are fine. `scene.environment = sky.environment` lets metal reflect the sky.
 - The real sky is in the frame of `ctx.orbits` (with `vidgen/space-scale`): from the Earth in June
-  the galactic centre lies opposite the Sun. Its star file holds the 221 brightest stars
-  (approximate places; `sky.info.approximate`), fainter stars are seeded.
+  the galactic centre lies opposite the Sun. Its star file is a hand-written list of 221
+  well-known bright stars (approximate places, from memory; `sky.info.approximate`), fainter stars
+  are seeded. The Bright Star Catalogue is not shipped (no formal licence); downloaded by you, it
+  converts with `tools/make_star_catalogue.py`.
 - It takes 5–6 s to make at 720p, then about 0.1 s a frame. Look first: `vidgen parts
   'space-sky*'`. Reference: CONFIG.md `web`, "The sky of a space scene".
 

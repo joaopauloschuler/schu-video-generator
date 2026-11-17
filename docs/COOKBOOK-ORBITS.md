@@ -220,8 +220,10 @@ for what the YAML cannot say (`script:`, or `vidgen space-page` to take the page
 - **The real sky behind them** (Step 370; CONFIG `web`, "The sky of a space scene"):
   `spaceSky(renderer, {stars: "real"})` from `vidgen/space-sky` is in the same frame as
   `ctx.orbits`, so a dated scene has the right stars behind its planets (the Earth in June stands
-  in front of Sagittarius seen from the Sun's side). The shipped star file holds the 221 brightest
-  stars at approximate places; fainter stars are seeded.
+  in front of Sagittarius seen from the Sun's side). The shipped star file is a hand-written list of
+  221 well-known bright stars at approximate places (written from memory); fainter stars are
+  seeded. The Bright Star Catalogue is not shipped (no formal licence): download it yourself and
+  convert it with `tools/make_star_catalogue.py` for every naked-eye star.
 - **Which plane.** In 3D an orbit's inclination needs its reference plane: the planets and the
   Moon's preset are measured from the ecliptic, `iss`, `geo` and the Galilean moons from their
   planet's equator (an ISS-like orbit is 51.6° to the Earth's equator, up to 75° to the

@@ -14,7 +14,7 @@ from typing import Any
 
 from vidgen.api import *
 
-from .space_params import length, module_options, names, scene_time, uses_bars
+from .space_params import length, module_options, move_lengths, names, scene_time, uses_bars
 
 #: Version of what the generator writes (in the page's first line, so it is in the clip's key).
 PAGE_VERSION = 1
@@ -23,7 +23,6 @@ DEFAULT_SUN = (1.0, 0.25, 0.35)
 #: JS names of the camera moves.
 MOVE_CALLS = {"arc": "arc", "fly-by": "flyBy", "pass": "pass", "arrive": "arrive", "reveal": "reveal", "follow": "follow", "zoom": "zoom", "look": "look"}
 #: Option keys of the moves that hold a length (metres or text with a unit).
-LENGTH_KEYS = ("distance", "closest", "altitude")
 #: Default horizon radius of a black hole, throat of a wormhole, scale of a rock or a comet (m) when no size is given.
 DEFAULT_SIZES = {"black-hole": 1.0e4, "wormhole": 1.0e3, "asteroid": 2.0e3, "comet": 1.0e8}
 
@@ -69,15 +68,6 @@ def when(value: Any) -> Any:
     return Ref(f"T({js(value)})") if uses_bars(value) else float(value)
 
 
-def _lengths(value: Any, where: str) -> Any:
-    """Lengths written with units inside a move's options, in metres (``distance``, ``closest``, ``altitude``)."""
-    if isinstance(value, dict):
-        return {k: (length(v, f"{where}.{k}") if k in LENGTH_KEYS and isinstance(v, str) else _lengths(v, f"{where}.{k}")) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_lengths(v, where) for v in value]
-    return value
-
-
 def sun_direction(params: Any) -> list[float] | None:
     """Where the sun is from the middle of a scene with orbits but without the Sun in its data: the real
     direction on the date for orbits around a planet (or the Moon: the Earth's), from JPL's approximate
@@ -101,7 +91,7 @@ def orbit_names(params: Any) -> tuple[list[str], str | None]:
     """The bodies of the scene's orbit data (the central body first) and the name of its Sun, if any."""
     if params.orbits is None:
         return [], None
-    system = params.orbits.model(None).system
+    system = params.orbits.model(None, check_dates=params.orbits.speedup is None).system
     names = [system.central.name, *system.names]
     names = list(dict.fromkeys(names))
     return names, next((n for n in names if n.lower() == "sun"), None)
@@ -109,7 +99,10 @@ def orbit_names(params: Any) -> tuple[list[str], str | None]:
 
 def page_source(params: Any, scene_id: str) -> str:
     """The page's JavaScript for a ``space`` scene's (checked) params."""
-    return _Page(params, scene_id).source()
+    try:
+        return _Page(params, scene_id).source()
+    except ValueError as error:   # a value the checks let through: said as the scene's error, not a traceback
+        raise VidgenError(f"space scene '{scene_id}': {error}") from None
 
 
 class _Page:
@@ -265,6 +258,15 @@ class _Page:
             elif k == "comet":
                 self.out(f"S.subjects[{key}] = {js(ph.body)};")
 
+    def orbit_subjects(self) -> None:
+        """A body of the orbit data that the camera names but nothing draws (a comet's body, a moon too far to see) as a subject."""
+        if not self.orbit:
+            return
+        drawn = {b.name for b in self.p.bodies} | {c.name for c in self.p.craft} | {ph.name for ph in self.p.phenomena}
+        for name in dict.fromkeys(n for m in self.p.camera for _, n in m.named()):
+            if name in self.names and name not in drawn:
+                self.out(f"S.subjects[{json.dumps(name)}] = {js(name)};   // a body of the orbit data")
+
     def light(self) -> None:
         l = self.p.light
         opts = {"exposure": l.exposure, "ev": l.ev, "falloff": l.falloff, "eclipses": l.eclipses, "shine": l.shine, "ambient": l.ambient,
@@ -285,7 +287,7 @@ class _Page:
         self.out("S.moves = [")
         moves = self.p.camera
         for k, m in enumerate(moves):
-            opts = _lengths(m.options(), f"camera {m.move}")
+            opts = move_lengths(m.options(), f"camera {m.move}")
             for key, value in list(opts.items()):
                 if key in ("behind", "of", "target", "around", "level", "from", "to") and isinstance(value, str):
                     opts[key] = subject(value)
@@ -417,6 +419,7 @@ class _Page:
             o()
         self.light()
         self.phenomena()
+        self.orbit_subjects()
         self.moves()
         self.reactions()
         if p.script:

@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from vidgen import extensions, orbits
+from vidgen.errors import VidgenError
 from vidgen.orbits import rotation as rot
 from vidgen.project import Project
 from vidgen.scenes import orbit_data as od
@@ -171,6 +172,16 @@ def test_a_span_that_ends_before_the_second_burn_shows_the_departure_alone() -> 
     assert all(b["frame"] is None for b in burns[1:]) or len(burns) == 1
     with pytest.raises(ValueError, match=r"first burn at .* comes after the scene's span .* give transfer.depart a time inside it"):
         _data({**leo, "transfer": {"ship": "Ship", "to": "Far"}, "span": "10 min"})
+
+
+def test_a_dated_speedup_is_checked_with_its_own_span() -> None:
+    """Step 378: with a speed-up the validation's default span (one period of Halley's comet: 76 years) is a
+    stand-in; its end date is not refused, while the data made for the scene's length is checked."""
+    settings = {"central": "sun", "date": "1986-02-09", "speedup": 200000, "bodies": [{"preset": "halley", "name": "Halley", "nu": -60}]}
+    s, data = _data(settings, fps=10, frames=82, scene_frames=80)       # 8 s: 18.5 days of 1986
+    assert data["date"].startswith("1986-02-09")
+    with pytest.raises(VidgenError, match="outside 1800-2050"):
+        _data({**settings, "speedup": 2e9}, fps=10, frames=82, scene_frames=80)     # 8 s: 500 years
 
 
 def test_a_flyby_probe_is_a_body_in_the_planets_frame() -> None:
