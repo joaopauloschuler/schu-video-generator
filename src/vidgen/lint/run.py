@@ -238,6 +238,10 @@ def _timing_findings(
 
     if any(n in names and getattr(lint.rules, n).severity != "off" for n in ORBIT_RULES):
         ctx.science = ctx.science + orbit_issues(project, scene_id, lint.rules)
+    if "space_scene" in names and lint.rules.space_scene.severity != "off":
+        from vidgen.lint.space_rule import space_issues
+
+        ctx.science = ctx.science + space_issues(project, scene_id, lint.rules)
     from vidgen.lint.particle_rule import PARTICLE_RULES, particle_issues
 
     if any(n in names and getattr(lint.rules, n).severity != "off" for n in PARTICLE_RULES):

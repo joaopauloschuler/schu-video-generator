@@ -5,10 +5,30 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–375
+## Steps 193–376
 
-### Space scenes (Phase AN, Steps 367–375)
+### Space scenes (Phase AN, Steps 367–376)
 
+- **Space scenes without code** (Step 376): the new scene type `space`, written in `video.yaml`
+  alone. Name a sky (from a seed, or the real bright stars), a sun, worlds (`{name: Saturn}` is
+  a ringed giant; `type: ocean` with a seed is a world of your own), craft, phenomena and camera
+  moves, and vidgen writes the three.js page from the ready-made space parts and draws it like a
+  `web` scene: `vidgen still`, `--draft`, the cache. With `orbits:` (the `orbit` scene's words)
+  the worlds and craft are the orbit data's bodies, a craft flies a real transfer with its burns,
+  and the Sun stands where it really is on the date; `scale:` enlarges bodies or compresses
+  distances and says so on screen. Camera moves follow one another in seconds or in bars of the
+  score (`over: ['bar 9', 'bar 13']`); a move that does not start where the last one left the
+  camera stops the render unless it says `cut: true`. `music:` pulses the sun's glare, the sky,
+  a black hole or a warp on a track's hits and drives a craft's throttle and lights (never the
+  camera); `title:` and `end_card:` add Escapement's cards; `finish:` has no FXAA by default.
+  Every key is checked by `vidgen validate` with the closest word, the names and options read
+  from the space modules themselves; `vidgen lint` warns of a globe that turns too fast under the
+  speed-up, an enlarged body covering another, and "to scale" said of an enlarged scene; the page
+  prints what only it can know (a subject under 3 px, the camera inside a world). `script:` adds
+  your own code with every object by name, and `vidgen space-page` writes the page out as a
+  `web` scene to go on in code (the same picture). `vidgen music plan SCORE --style space` drafts
+  a whole space film from a score: a world chosen by each scene's colour, a camera move by its
+  role, sunrise on a section start, moves on bar lines. `vidgen guide space-scenes`.
 - **Camera moves for space scenes** (Step 375): the new module `vidgen/space-camera`.
   `spaceCamera({space, camera})` gives the moves by name, each a function of time, so a cut on a
   bar line and motion blur are safe: `flyBy` (approach, the closest pass at a stated distance

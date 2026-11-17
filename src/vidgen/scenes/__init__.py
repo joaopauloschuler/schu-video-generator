@@ -115,6 +115,7 @@ from vidgen.scenes import (  # noqa: F401
     sitting,
     screenshot,
     sfx_action,
+    space,
     stage,
     standard_model,
     standard_model_actions,

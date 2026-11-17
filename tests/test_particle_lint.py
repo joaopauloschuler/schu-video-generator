@@ -49,8 +49,8 @@ def _found(project: Project, scene_id: str) -> list[tuple[str, str]]:
 
 
 def test_rules_are_registered_last_with_their_defaults() -> None:
-    # the rules of Steps 249, 252, 294 (Shorts, generated footage), 300 (3d) and 332 (web) come after them
-    later = ("shorts_safe_area", "overlay_face", "shorts_length", "generated_footage", "three_d_off_frame", "three_d_hidden", "web_clipped")
+    # the rules of Steps 249, 252, 294 (Shorts, generated footage), 300 (3d), 332 (web) and 376 (space) come after them
+    later = ("shorts_safe_area", "overlay_face", "shorts_length", "generated_footage", "three_d_off_frame", "three_d_hidden", "web_clipped", "space_scene")
     assert list(LINT_RULES[-len(PARTICLE_RULES) - len(later):-len(later)]) == list(PARTICLE_RULES)
     assert list(LINT_RULES[-len(later):]) == list(later)
     assert all(RULES[n].scope == "scene" for n in PARTICLE_RULES)

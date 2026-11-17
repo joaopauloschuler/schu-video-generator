@@ -1177,6 +1177,11 @@ def schema_document(project: Project | None, schema: Mapping[str, Any], warnings
 # ----- storyboard --------------------------------------------------------------------------------
 
 
+def space_page_document(scene: str, page: Path, web_scene: Mapping[str, Any]) -> dict[str, Any]:
+    """The ``vidgen space-page --json`` document: the scene, the page written, and the ``web`` scene that replaces it."""
+    return envelope("space-page", True, scene=scene, page=_path(page), web_scene=dict(web_scene))
+
+
 def still_document(result: StillResult, elapsed: float) -> dict[str, Any]:
     """The ``vidgen still --json`` document: the page's size and frame rate, and every still
     written with its frame, its time (seconds from the scene's start) and the seconds drawing it took."""

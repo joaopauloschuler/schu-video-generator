@@ -43,9 +43,14 @@ def builtin_gallery() -> list[gallery.GalleryType]:
         return gallery.gallery_types(None)
 
 
+#: Built-in types whose gallery entry is still to be rendered, with the step that renders it
+#: (tasklist.md): ``space`` (Step 376) gets its entry in Step 378, the phase's review.
+GALLERY_PENDING = {"space": "Step 378"}
+
+
 def committed_gallery() -> list[gallery.GalleryType]:
-    """The types the committed docs/gallery shows (every built-in)."""
-    return builtin_gallery()
+    """The types the committed docs/gallery shows (every built-in but those of :data:`GALLERY_PENDING`)."""
+    return [t for t in builtin_gallery() if t.name not in GALLERY_PENDING]
 
 
 @pytest.mark.slow

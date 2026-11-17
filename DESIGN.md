@@ -273,7 +273,8 @@ src/vidgen/
                           # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10),
                           # layout.py (the page's text as layout objects, for lint; §118.12), still.py
                           # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8), parts.py
-                          # (`vidgen parts`: the parts files read, the contact sheet drawn, §122.5)
+                          # (`vidgen parts`: the parts files read, the contact sheet drawn, §122.5), space_names.py
+                          # (the space modules' names and options read from their source, §122.12)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -303,6 +304,7 @@ src/vidgen/
   music_pieces.py         # project pieces: score files in assets/music played like beds, rendered at the join and cached (§93.10)
   composer.py             # composed music from a mood: moods, instruments, chords, phrases, melody, accompaniment (§83; pure, seeded, no manim)
   music_video_plan.py     # `vidgen music plan`: a music video's scenes from a score file (roles, cuts on bar lines, moments, colours, reactions) and its draft project (§121.2)
+  music_space_plan.py     # `vidgen music plan --style space`: the plan's cuts as `space` scenes (a world by colour, a move by role) (§122.12)
   musicfit.py             # composed music that follows the video: bar lines at scene changes, per-scene moods, swells, pauses, cadence, stings (§84)
   score.py                # composed music as notes: Score / Part / Note / Section, beats to seconds, key signatures, .mid export (§82; no manim)
   soundfont.py            # the SoundFont of composed music: GeneralUser GS download, size / SHA-256 check, cache folder, soundfont: (§81; no manim)
@@ -312,7 +314,8 @@ src/vidgen/
   transitions.py          # scene transitions: effective transition, frame math, colour fade and irises (§69.45), voice track, xfade names (§49-50; no manim)
   carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
-  scenes/                 # built-in scene library (registered like extensions; actions.py:
+  scenes/                 # built-in scene library (space.py, space_params.py, space_page.py: the `space` scene, its words and
+                          # the page written from them, §122.12; registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
                           # pan/follow, §69.7;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
@@ -361,7 +364,8 @@ src/vidgen/
                           # moons and rings from a seed (§122.7); space-light.js `vidgen/space-light`: stars and the light of a
                           # space scene (§122.8); space-phenomena.js `vidgen/space-phenomena`: black hole, wormhole, warp,
                           # asteroids, comet, aurora (§122.9); space-craft.js `vidgen/space-craft`: the spacecraft kit (§122.10);
-                          # space-camera.js `vidgen/space-camera`: camera moves for space scenes (§122.11)
+                          # space-camera.js `vidgen/space-camera`: camera moves for space scenes (§122.11); space-scene.js
+                          # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -26062,7 +26066,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 373 | Phenomena: a black hole that bends the sky, a wormhole, a jump to warp, asteroid fields and belts, comets, an aurora; their measured costs (`vidgen/space-phenomena`) | §122.9 |
 | 374 | The spacecraft kit: parts in metres with points to join them at, six invented ready-made craft from a seed, foil, plating and solar cells computed from numbers, plumes, attitude modes and burns of `ctx.orbits`, the sun's glare hidden, a point of light far away (`vidgen/space-craft`) | §122.10 |
 | 375 | Camera moves for space scenes as functions of time: fly-by, pass, arc at a chosen phase, arrival, reveal from behind a limb timed to the second, craft views, powers-of-ten zoom, lenses, checks in sentences, cuts (`vidgen/space-camera`); path lines near the camera fixed in `vidgen/space-scale` | §122.11 |
-| 376 | Space scenes without code (`video.yaml`) | |
+| 376 | Space scenes without code: the `space` scene written in `video.yaml` alone (sky, sun, worlds, orbits and scale, light, craft, phenomena, camera moves in seconds or bars, finish, music, cards), its words checked in Python from the modules' own lists, the page written from them and drawn as a `web` scene, `script:` and `vidgen space-page` to go on in code, `vidgen music plan --style space`, lint `space_scene` | §122.12 |
 | 377 | Example film | |
 | 378 | Critical review, COOKBOOK-SPACE | |
 
@@ -27774,3 +27778,152 @@ pass); the zoom's constant ratio, rests and `over`, and every sentence of the ch
 a stand-in `SpaceView` (float64 `from`, the data-frame quaternion, a flown craft, the held frames
 after the data's end) and on a plain camera; `nearCuts` of `vidgen/space-scale`. One `slow`
 Chromium test draws the five framings (20 s). Stills: `/home/claude/work/scratch/an375/stills/`.
+
+### 122.12 Space scenes without code: the `space` scene (Step 376)
+
+The front for everything of Steps 367–375: a built-in scene type `space` that an author or an
+agent writes in `video.yaml` alone. The name fits the types that say what they show (`orbit`,
+`map`, `molecule`) and clashes with nothing (the orbit guide topic's alias `space` stays; the new
+topic is `space-scenes`).
+
+**How it is built.** `Space` subclasses `Web` (`scenes/space.py`), so everything that treats a
+`web` scene's page treats it the same (`is_web_type`: the render fingerprint's loaded files,
+`vidgen still`, `--jobs`, `--draft`, `vidgen motion check`, the clip cache). Its params are the
+vocabulary below; `page_clip_args` writes the page from them (`scenes/space_page.py`,
+`page_source(params, scene_id)`) to `build/space/<id>.js` (rewritten only when its text changes)
+and hands `make_web_clip` the params of a `script:` scene: `{script: build/space/<id>.js, data:
+{...data, scene_seconds}}`, with `music` / `orbits` exactly as a `web` scene with `music_data` /
+`orbit_data`. So the clip's key holds the page's SHA-256 (every param that changes the picture
+changes the page: tested param by param), `ctx.data`, the orbit and music data; nothing else
+changes for other scenes. `scene_seconds` is the scene's own length (frames less the fade and the
+two spare frames), the end of a single move. No heading is drawn by vidgen (`title:` is the
+page's card); `fade: false` (`outro_seconds`, as `video_clip`'s) cuts without the 0.5 s fade,
+which the music plan's drafts use, so no `space_cut` extension is needed.
+
+**The page is plain code.** Generated, not interpreted: each sky, star, world, craft, phenomenon
+and move is a line calling the module's own function with its options as a JSON literal (floats
+written exactly), so the page reads like a hand-written one and `vidgen space-page` can hand it
+over. It keeps everything in one exported object `S` (by name: `S.bodies.Saturn`, `S.craft.Ship`,
+`S.phenomena.Hole`, `S.subjects`, `S.cam`, `S.moves`, `S.view`, `S.step`, `S.finish`); `S.step(t)`
+sets everything to scene time t (the camera first, then reactions, phenomena, worlds, sun, craft,
+light: a function of t alone; three-finish calls it at sub-frame times), `frame(t)` draws through
+three-finish. It imports only shipped modules and one new helper, `vidgen/space-scene`
+(`data/web/modules/space-scene.js`, no three.js): `sceneTime` (seconds or `{bar, beat}` of the
+song → scene seconds, from `ctx.music.score` and `ctx.music.t0`), `moveTrack` (moves one after
+another, the join check), `checkMoves` (vidgen/space-camera's `check` on every frame of every
+move, as notes), `reaction` (a track's hits, notes or level as a function of t, built on
+`vidgen/music-time`), `freeSubject` (a thing standing without orbit data, for the camera),
+`pageNote`. No shipped module before it changed (bytes of three-kit, three-finish, music-time,
+title-cards and the space modules untouched); only the import map gained a name.
+
+**Two kinds of scene.** With `orbits:` (the `orbit_data` vocabulary, `OrbitData` as it is) every
+world and craft is a body of the data placed by `vidgen/space-scale`'s `SpaceView` (`planet(...,
+{space, body})`, `craft(...).fly(space, {body})`), `scale:` chooses `true` / `enlarged` / `log`
+and, when not true, the page says `space.note()` in a corner (`note: false` leaves it to the
+narration). Without orbits, things stand where `at:` says (metres or lengths with units, the
+data's axes: z up) and are added to the same `SpaceView` (`space.add(object, {at, size})`), so
+depth slices and the floating origin work at any scale (a 10 km black hole and a 60,000 km
+world in one frame). The camera rig is `spaceCamera({space, sun, bodies})`; a free thing is a
+`freeSubject` ({at(t), radius}), a craft that flies the data is its `Craft` (follow can lock to
+it). The sun: the data's Sun when it has one, else a sun far away (`star({direction})`) whose
+default direction, for orbit data around a planet (or the Moon), is where the Sun really is on
+the date (−heliocentric position of the planet, JPL's approximate elements; held for the scene:
+the Earth's moves about 1° a day), else `[1, 0.25, 0.35]` with a note.
+
+**The vocabulary** (CONFIG "`space`" has every key): `seed`, `sky`, `sun`, `orbits`, `scale`,
+`bodies`, `light`, `craft`, `phenomena`, `camera`, `finish`, `music`, `music_data`, `title`,
+`end_card`, `script`, `data`, `fade`. Each section has a few keys of its own (names, where, what
+it is) and takes the options of the module it drives as they are, in snake_case or the module's
+camelCase (`milky_way` → `milkyWay`). Values that name a thing of the module accept `_` for `-`
+(`three_quarter`). Two words were chosen against YAML: a reaction's key is `track:` and an
+aurora's `world:`, because `on:` is the boolean true in YAML 1.1 (PyYAML read `{on: kick}` as
+`{true: kick}`: found on the first music plan draft).
+
+**One source of truth.** `vidgen/web/space_names.py` reads the modules' own constants from their
+shipped source (a small reader of JS literals: names or quoted keys, method shorthand, `...SPREAD`
+of another constant of the file, nested objects, strings, comments): worlds (`PRESETS`), surface
+types and each type's options (`KINDS[*].defaults` + `COMMON`), airs, ring keys, sky options and
+looks, nebula and galaxy kinds, star kinds and options, light options, exposures, each phenomenon's
+`*_DEFAULTS`, craft kinds with their own options, the kit's and craft's options, attitudes,
+details, every move's option list (its `known("<move> options", options, [...])` call; `pass`
+takes `flyBy`'s and `side`), phases, lenses, views, three-finish's options and groups, and the
+title cards'. A test compares camera and title-card lists with what Node imports. So a world or an
+option added to a module is known to `vidgen validate` with nothing copied.
+
+**Checks.** At `vidgen validate` (pydantic, did-you-mean): every key and name; what goes with
+orbits (a world or craft is a body of the data; no `at`, `radius` or `tilt` there; `fly:` needs
+orbits); unique names; the camera's moves in order, not overlapping, each with `over` when there
+are several, subjects known; times in bars only with `music_data`; reaction targets (the Sun's
+glare, the sky, a black hole's disc, a warp, a craft's lights / throttle / rcs; a world is
+refused: it reflects the sun; never the camera); the script file. In `vidgen lint`: the new rule
+`space_scene` (`lint/space_rule.py`, warning; `degrees` 12): a globe turning more than 12° a frame
+(from the orbit data's first two frames and the rotation periods, or a stated `spin`), an enlarged
+body reaching past another's middle, free worlds inside each other; and `orbit_scale` now reads a
+space scene's `scale:` (narration saying "to scale" while bodies are enlarged or distances logged).
+When the page loads it leaves what only it can know in `globalThis.__vidgenNotes`, which
+`WebPage` reads after `load` and logs as warnings (`scene 'x': camera[1] (fly-by): at 0.00 s: Hole
+is 2.5 px in radius, under 3 ...`), in `vidgen still` and when a clip is drawn (a channel any page
+may use; nothing in a key changes). A move that does not start where the one before left the
+camera (1 % of the distance, 1°, 0.5° of field of view) stops the page with both names unless it
+says `cut: true`: a jump is never drawn by accident. `checkMoves` samples every frame: at 25 steps
+a chase under a speed-up of 6000 was reported as flying through the Earth (a chord between two far
+samples).
+
+**Music.** `music_data` as on a `web` scene (kept explicit: the render fingerprint and the music
+data's preparation read it from the raw params). Reactions `{track, pulse | glow | glint: THING,
+as, amount, decay}`: pulse = `hitEnvelope` of the track's hits, glint = `noteEnvelope` of its
+notes, glow = `signalLevel` (or `ctx.music.level` for `track: level`); brightness becomes
+`base × (1 + amount × v)`, a craft's throttle `min(1, amount × v)` and lights `1 + amount × v`.
+Bars: `over: ['bar 9', 'bar 13 beat 3']`, bars and beats counted from 1 as the plan prints them,
+in song time, so a move stays on the music however the film is cut.
+
+**Escape hatches.** `script:` (a module of the project, imported by absolute URL): `setup(S)` once
+after everything is built (it may add objects, replace `S.view` or a world), `frame(t, S)` at the
+end of each `S.step`. `vidgen space-page PROJECT --scene ID [--out] [--force] [--json]` writes the
+page as `extensions/<id>.js` (its first two lines say it is the author's now) and prints the
+`web` scene that replaces it (`script`, `data: {scene_seconds}`, `orbit_data`, `music_data`): a
+still of the space scene and of that web scene are identical, pixel for pixel (checked on demo
+(a)). The command sits beside `vidgen still` as a command of its own; `vidgen music plan`'s
+starter pages are a different thing (pages to edit from the start).
+
+**`vidgen music plan --style space`** (`music_space_plan.py`; the default `--style web` output is
+byte-identical to before: the three examples' drafts diffed against the starting commit's module).
+The plan is the same; each cut becomes a `space` scene by rules, deterministic from the score and
+`--seed`: role → move (quiet: arc to a crescent, the first quiet scene a sunrise whose first light
+is on the first section start inside it, else its last phrase line; build: arrive; verse: a chase
+of a craft passing the world; drop / climax: fly-by, pass or warp, never two warps running); the
+scene's base colour → a family (gold, red, violet, blue, green, pale by hue and saturation) → a
+ready-made world of those colours; one sky seed for the film, its look by role; the plan's grade;
+the pulse track pulses the sun (or the warp), glow and glint drive the craft. `fade: false`, the
+move over the scene's bars, an opening title and an end card. For pass and chase, `around:` the
+world (a free scene has no parent to level on: without it the first draft's pass did not show
+Jupiter). The three film scores give 12, 13 and 3 scenes that validate.
+
+**Measured** (2 cores, SwiftShader; `vidgen still`, a frame after the first): (a) Saturn and a
+moon through the finish, 1280x720, 1.0 s a frame (480x270: 0.2 s), page ready 12 s at 720p
+(5 s at 480x270: the maps' bake); (b) a ship on its transfer with Earth, 0.7 s (page 13 s); (c) a
+black hole filling the frame, 1.8 s (page 8 s); a still includes the PNG. `--draft` of (c)
+(426x240, 8 fps, 6 s): 21 s for the scene; `vidgen motion check`: 0 errors, 2 warnings (stars
+shimmer at 8 fps; the warp's own entry flash). Writing the page: a few ms (the reader of the
+module constants runs once a process, about 0.1 s).
+
+**Found on the way.** Step 374's burn is shown for `seconds` of the scene and turned to over
+`turn` seconds, not scaled by the speed-up: at 6000× a 3 s turn is half an orbit, and the ship
+points along a burn while it is on the other side of the Earth (demo (b) gives `burn: {seconds:
+0.6, turn: 0.4}`); for Step 378. The black hole, the warp and the asteroid field work through
+`SpaceView` (placed camera-relative; drawn: (c)).
+
+**Not reached from YAML yet** (the modules have them; `script:` or `vidgen space-page`): the kit's
+own parts (`craftKit`, `attach`), a wormhole passage, `spiralGalaxy` in the foreground, a belt
+round a world of the orbit data at a size of its own, a comet's scale with orbit data (taken as
+`size`, default 1e8 m, not looked at), `flashCut` / `warpCut` / `matchDisc`, `craftEnvironment`
+updates, the sun's `occluders` beyond craft, `light.directional` tuning.
+
+**Tests** (`tests/test_space_scene.py`, 63 default, about 4 s; Node for three): the JS-literal
+reader; the names against the modules and Node; the demos validate; 33 mistakes each named with
+the closest word; what goes with orbits; the page stable and its contents; 16 params each
+changing the page; exact floats; only shipped imports; `node --check` of four pages; the helpers
+in Node (bars, the join error, cuts, order, checks as notes, reactions); validate of `script:`;
+`vidgen space-page` (text, JSON, errors); the lint (fast globe, enlarged cover, "to scale", worlds
+inside each other, a calm scene clean); the music plan (deterministic, seed, validates, no
+extensions). `slow`: a space scene drawn in Chromium at 160x90 (9 s).

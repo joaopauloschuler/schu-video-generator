@@ -415,6 +415,7 @@ project's own scene types, in its theme).
 | footage, a screen recording | `video_clip` | `path`, `steps`, `trim`, `fit_duration`, `region`, `mute`, `fade: false` (hard cut), `match_previous` (no flash where a take continues the one before) |
 | simple 3D: shapes, labels and character stand-ins seen by a camera that stands still or moves on words (orbit, push in, fly to an object), objects that move, turn, appear, glow and walk on words, groups that move together | `3d` | `title`, `objects` (id, shape: box, sphere, cylinder, cone, torus, plane, arrow, label, group, standin; size, color, position, rotation in degrees, spin in degrees per second, parent, text, to, visible, name, voice, screen_size), `floor`, `camera` (position, look_at: a point or an object id, fov), `light` (ambient, sun, sun_from, color), `background`, `guide_passes` (depth / outline / mask videos of the 3D picture beside its clip, off by default; true or all for all three, or one name, a comma list such as depth,mask or a list, read like the render option --guide-passes), `depth_range`; the actions camera_orbit, camera_dolly, camera_fly_to, camera_look_at, camera_move, object_move, object_path, object_rotate, object_spin, object_scale, object_show, object_hide, object_highlight, object_walk, object_face |
 | a picture or animation no built-in draws, written yourself in HTML, CSS and JavaScript: a bespoke layout, CSS or SVG animation, a canvas drawing, your own three.js scene (`vidgen guide web`) | `web` | `page` (an HTML file of the project: any HTML, CSS, JavaScript) or `script` (a JavaScript module drawn on one canvas), `region` (bleed, body), `title`, `data` (values for the page); CSS animations, requestAnimationFrame, timers and the page's frame hook all follow the video's time; no internet while rendering |
+| space with no code: a sky, a sun, planets with rings and air, craft on a real transfer, a black hole, a jump to warp, camera moves on bar lines; true positions and timing from orbit data (`vidgen guide space-scenes`) | `space` | `sky`, `sun`, `bodies` (name, world or type, at, radius), `orbits` (the orbit scene's words), `scale`, `light`, `craft` (kind, fly), `phenomena` (kind), `camera` (move, subject, over in seconds or bars, cut), `finish`, `music` (track, pulse / glow / glint), `title`, `end_card`, `script` (your code) |
 | a quotation | `quote` | `text`, `author`, `source` |
 | a formula that transforms | `equation` | `latex`, `terms`, `caption` |
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
@@ -1691,6 +1692,14 @@ Pictures, screenshots, clips and simple 3D (the 3D craft: `vidgen guide 3d`):
   type: web
   params: {page: extensions/gears.html, region: body, title: "Two gears"}   # or script: extensions/gears.js (one canvas)
   beats: [{text: "Two gears turn together."}]
+- id: rings
+  type: space          # no code: the page is written for you (see the space-scenes topic of the guide)
+  params:
+    sky: {seed: 4, look: rich}
+    sun: {direction: [1, -0.3, 0.25]}
+    bodies: [{name: Saturn}]
+    camera: {move: arc, subject: Saturn, phase: [three-quarter, crescent], distance: {radii: 6}}
+  beats: [{text: "Round the planet, the Sun goes behind it: a thin crescent."}]
 - id: saying
   type: quote
   params: {text: "Simplicity is prerequisite for reliability.", author: "Edsger W. Dijkstra"}
@@ -3121,6 +3130,9 @@ repository; a whole example: `examples/mars-transfer` ("How to get to Mars": why
 the Hohmann transfer, the transfer time worked out, the departure burn from low Earth orbit, the
 Earth and Mars on a real date; 16:9 and 9:16).
 
+For a three.js space scene of the same orbits (worlds, craft, sky, a moving camera) with no code,
+see the `space` scene: `vidgen guide space-scenes`.
+
 **Choosing a view.** The planets for a year or a comet's ellipse → bodies with `span` / `orbits`;
 Kepler's laws → `geometry`, `sectors`, `velocity`; why orbits are falling → `cannonball`; a
 manoeuvre → `burns` or `transfer` (hohmann, bielliptic, phasing); a gravity assist → `flyby` (the
@@ -3189,6 +3201,79 @@ Run `vidgen lint` in 16:9 and 9:16.
     - text: "A prograde burn of two point nine four kilometres per second starts the transfer."
       actions: [{burn: "burn:1", at: "@burn"}]
 ```
+
+<!-- topic: space-scenes (also: space-scene, space-yaml, declarative-space, planets, spacecraft) -->
+## Space scenes without code: the `space` scene
+
+A `space` scene is written in `video.yaml` alone: name a sky, a sun, worlds, craft, phenomena and
+camera moves, and vidgen writes the three.js page from its ready-made space parts and draws it as
+a `web` scene (`vidgen still`, `--draft`, the cache). Positions and timing are true; enlarging is a
+stated choice. Every key is checked by `vidgen validate` with the closest word. The full list of
+keys: `docs/CONFIG.md` (`space`); the craft of good space shots: `docs/COOKBOOK-SPACE.md` in the
+schu-video-generator repository (written in the phase's review).
+
+```yaml
+- id: rings                     # a world standing free: sizes in metres or with units, z up
+  type: space
+  duration: 8
+  params:
+    sky: {seed: 4, look: rich}
+    sun: {direction: [1, -0.3, 0.25]}
+    bodies:
+      - {name: Saturn}                                          # a ready-made world: its name is enough
+      - {name: Titan, world: titan, at: ["1200000 km", "300000 km", "40000 km"]}
+    camera: {move: arc, subject: Saturn, phase: [three-quarter, crescent], distance: {radii: 6}, lens: wide-normal}
+- id: transfer                  # orbit data: the craft flies a real Hohmann transfer with its burns
+  type: space
+  duration: 6
+  params:
+    orbits:
+      central: earth
+      date: "2026-06-19"        # the Sun is where it really is that day
+      speedup: 6000
+      bodies: [{name: Ship, altitude: 900 km}, {preset: geo, name: Geo, nu: 0}]
+      transfer: {ship: Ship, to: Geo}
+    bodies: [{name: Earth}]
+    craft: [{name: Ship, kind: ship, seed: 2, burn: {seconds: 0.6, turn: 0.4}}]
+    camera: {move: follow, subject: Ship, view: chase, push: 0.8}
+- id: horizon                   # a black hole fly-by, then a cut into a jump to warp
+  type: space
+  duration: 6
+  params:
+    phenomena:
+      - {kind: black-hole, name: Hole, size: 10 km, tilt: 12}
+      - {kind: warp, over: [3.5, 6]}
+    camera:
+      - {move: fly-by, subject: Hole, over: [0, 3.5], closest: {radii: 26}, side: left}
+      - {move: look, from: [0, "-2000 km", 0], to: [0, "-3000 km", "50 km"], over: [3.5, 6], cut: true}
+```
+
+- **Worlds**: a ready-made one by name (`earth`, `mars`, `saturn`, `moon`, `europa`, `titan`, invented `tempest`,
+  `ochre`, `azure`, `verdant`...; `vidgen parts --kind body` shows them) or `type:` (`rocky`, `icy`, `desert`,
+  `ocean`, `lava`, `gas`, `ice-giant`) with `seed`, `rings`, `air`. With `orbits:` a world shows the data's body of
+  its name; without, give `at` and (for your own) `radius`.
+- **Craft**: `kind` `probe`, `satellite`, `station`, `ship`, `lander`, `tug` (invented designs, another per `seed`),
+  `fly:` a body of the orbit data (its burns are shown as thrust); a fleet with `fleet: 5`.
+- **Camera**: moves one after another, each with `over: [start, end]` in seconds of the scene or bars of the song
+  (`['bar 9', 'bar 13']`, with `music_data: true`). `arc` (round a subject to a phase: `crescent`...), `fly-by`,
+  `pass` (a craft passes the camera), `arrive`, `reveal` (sunrise over a limb: `behind: Earth, at: 'bar 17'`),
+  `follow` (`view: chase`, `lead`, `side`, `shoulder`...), `zoom` (powers of ten: `stops`), `look`. A move that
+  does not start where the one before left the camera stops the render unless it says `cut: true`.
+- **Music**: `music: [{track: kick, pulse: Sun}, {track: pad, glow: Ship}]`: pulses of brightness and glints, a
+  craft's throttle; never the camera. Worlds do not pulse.
+- **Finish**: no FXAA by default (it breaks stars and thin rings); `depth_of_field: true` focuses on the move's
+  subject; `motion_blur: 3` costs three times a frame.
+- **Look before you render**: `vidgen still . --scene rings --at 4 --size 640x360`. The page prints as warnings
+  what only it can know (a subject under 3 px, the camera inside a world, a jump in a move); `vidgen lint` reports
+  a globe turning too fast under the speed-up, an enlarged body covering another, and "to scale" said of an
+  enlarged scene.
+- **More than the YAML can say**: `script: extensions/more.js` (its `setup(S)` and `frame(t, S)` get every object
+  by name), or `vidgen space-page . --scene rings` to write the page out as a `web` scene and go on in code.
+- **A whole film from a score**: `vidgen music plan assets/music/song.yaml --style space --out my_film` drafts a
+  space scene per cut (a world by the scene's colour, a move by its role, sunrise on a section start).
+- **Cost** (2 cores, software GL, 720p): a world through the finish about 0.3 to 0.5 s a frame, a craft filling the
+  frame up to 0.9 s, a black hole filling the frame about 1 s, each page 3 to 9 s to open (bakes its maps). Render
+  `--draft` first.
 
 <!-- topic: three-d (also: 3d, threejs, three.js, 3d-scenes, stand-ins, standins, guide-passes) -->
 ## 3D: simple scenes with shapes and stand-ins
@@ -5334,6 +5419,7 @@ install; `vidgen validate` warns when it is missing.
 | `three_d_off_frame` | in a `3d` scene, an object the beat is about (its actions name it, or a stand-in says the line) is mostly outside the frame | `camera_fly_to` / `camera_look_at` it, or move it into view |
 | `three_d_hidden` | in a `3d` scene, an object the beat is about is mostly hidden behind a nearer one | `camera_orbit` round it, or move one of them |
 | `web_clipped` (error) | in a `web` scene, page text cut by its own box or an ancestor's (`overflow: hidden`), or by the page's box (`region: body`) | shorter or smaller text, a box that grows; `data-vidgen-lint="off"` on text cut on purpose |
+| `space_scene` (warning) | in a `space` scene, a globe turning too fast under the orbit data's speed-up, an enlarged body covering another, worlds placed inside each other | `spin: locked` or a stated spin in seconds, a smaller speedup; a smaller enlarge factor for that body; move a world (`at`) |
 | `concept_colors` | the `terms:` colours: more than 5, too faint on the background, or a term coloured otherwise by a scene setting | fewer colours (related terms may share one), a readable theme token, or leave the scene's colour setting out |
 | `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

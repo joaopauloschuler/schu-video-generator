@@ -202,6 +202,10 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   threshold 1: the stills of Step 374 use it). `craft.shade(sun)` hides the sun's glare behind
   it. A close-up of foil wants the sun from the side, so that single facets catch it and the
   parts' shadows cross the bus. Look first: `vidgen parts --kind craft`.
+- **Space with no code first.** A [`space`](CONFIG.md#space) scene names the same parts in YAML
+  (`sky`, `sun`, `bodies`, `craft`, `phenomena`, `camera` moves one after another, `finish` with
+  no FXAA, `music` reactions) and writes the page for you; start there, and take the page over with
+  `script:` or `vidgen space-page` when a shot needs code (`vidgen guide space-scenes`).
 - **The camera in space.** `spaceCamera({space, camera})` from `vidgen/space-camera` (CONFIG
   `web`, "Camera moves for space scenes") has the moves by name, each a function of time: `flyBy`,
   `pass`, `arc` (a phase by name: `cam.arc(t, {subject: "Saturn", phase: {limb: 0.1}})` is a

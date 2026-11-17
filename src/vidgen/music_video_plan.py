@@ -656,12 +656,10 @@ class DraftResult:
     created: bool
 
 
-def write_music_video(plan: MusicPlan, output: Path, *, force: bool = False) -> DraftResult:
-    """Write ``plan`` as a draft project in the folder ``output`` (created; an existing folder
-    that is not empty only with ``force``): ``video.yaml``, the score under ``assets/music/``
-    (unless it is in the folder already), ``extensions/web_cut.py`` and a page per scene."""
-    from vidgen.fileio import write_text_atomic
-
+def place_score(plan: MusicPlan, output: Path, *, force: bool = False) -> tuple[str, list[str], bool]:
+    """Make the draft's folder ``output`` (an existing folder that is not empty only with ``force``) and put
+    the score in it (under ``assets/music/`` unless it is in the folder already): ``(the score's path in the
+    project, the files written, whether the folder was new or empty)``."""
     if output.exists() and not output.is_dir():
         raise VidgenError(f"music plan: --out {output} exists and is not a folder")
     created = not output.exists() or not any(output.iterdir())
@@ -678,6 +676,16 @@ def write_music_video(plan: MusicPlan, output: Path, *, force: bool = False) -> 
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(score, target)
         files.append(source)
+    return source, files, created
+
+
+def write_music_video(plan: MusicPlan, output: Path, *, force: bool = False) -> DraftResult:
+    """Write ``plan`` as a draft project in the folder ``output`` (created; an existing folder
+    that is not empty only with ``force``): ``video.yaml``, the score under ``assets/music/``
+    (unless it is in the folder already), ``extensions/web_cut.py`` and a page per scene."""
+    from vidgen.fileio import write_text_atomic
+
+    source, files, created = place_score(plan, output, force=force)
     ext = output / "extensions"
     ext.mkdir(exist_ok=True)
     write_text_atomic(ext / "web_cut.py", WEB_CUT)
@@ -695,5 +703,5 @@ def write_music_video(plan: MusicPlan, output: Path, *, force: bool = False) -> 
 
 __all__ = [
     "LOOK_WORDS", "REACTIONS", "ROLES", "DraftResult", "MusicPlan", "SceneCut", "SectionPlan", "plan_dict", "plan_from_score",
-    "plan_music_video", "plan_text", "plan_yaml", "role_colours", "starter_page", "write_music_video",
+    "place_score", "plan_music_video", "plan_text", "plan_yaml", "role_colours", "starter_page", "write_music_video",
 ]

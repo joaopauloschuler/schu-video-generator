@@ -164,6 +164,15 @@ every frame, in metres from the central body, in the mean ecliptic and equinox o
 prime meridian), each orbit as a polyline and a ship's burns. The numbers are the ones the flat
 `orbit` scene draws, to the last bit; the page only chooses how to show them.
 
+**No code at all: the `space` scene** (Step 376; [CONFIG.md](CONFIG.md#space), `vidgen guide
+space-scenes`). Its `orbits:` takes the same words, and `bodies`, `craft` and `camera` name the
+data's bodies: `craft: [{name: Ship, kind: ship}]` flies the transfer's `Ship` with its burns,
+`camera: {move: follow, subject: Ship, view: chase}` goes with it, and a date puts the Sun where
+it really is that day. `scale: {mode: enlarged, enlarge: 50}` is said on screen in this
+cookbook's words; `vidgen lint` (`orbit_scale`) catches narration that calls it "to scale", and
+`space_scene` a globe that turns too fast under the speed-up. Write the bullets below by hand only
+for what the YAML cannot say (`script:`, or `vidgen space-page` to take the page over).
+
 - **True by default.** The positions are true; a page that enlarges the bodies or compresses the
   distances says so on screen, as the flat scene does ("sizes not to scale").
 - **Draw them with `vidgen/space-scale`** (Step 368; CONFIG `web`, "Astronomical scales"):

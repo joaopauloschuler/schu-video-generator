@@ -38,7 +38,7 @@ JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
     "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts", "audio",
-    "generate", "motion", "parts",
+    "generate", "motion", "parts", "space-page",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -1188,6 +1188,46 @@ def cmd_still(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_space_page(args: argparse.Namespace) -> CommandResult:
+    """``vidgen space-page``: write the page a ``space`` scene draws as a ``web`` scene's script, to go on
+    in code, and print the ``web`` scene to put in its place (DESIGN.md §122.12)."""
+    import yaml
+
+    from vidgen import extensions
+    from vidgen.cellworld import did_you_mean
+    from vidgen.scenes.space import Space, written_out
+
+    if args.scene is None:
+        raise VidgenError("which scene? give --scene ID (a space scene of the project)")
+    project = Project.load(args.project)
+    known = [s.id for s in project.config.scenes]
+    if args.scene not in known:
+        raise VidgenError(f"unknown scene '{args.scene}'{did_you_mean(args.scene, known)} (space scenes: "
+                          f"{', '.join(s.id for s in project.config.scenes if s.type == 'space') or 'none'})")
+    spec = project.scene(args.scene)
+    if spec.type != "space":
+        raise VidgenError(f"scene '{args.scene}' is a {spec.type} scene: vidgen space-page writes out the page of a space scene")
+    with extensions.project_session(project):
+        params = Space.Params.model_validate(spec.params)
+    rel = args.out or f"extensions/{spec.id}.js"
+    target = project.root / rel
+    if target.exists() and not args.force:
+        raise VidgenError(f"{rel} exists already (use --force to write over it)")
+    outro = Space.outro_seconds(spec.params)
+    seconds = spec.duration - outro if spec.duration else None
+    source, web = written_out(params, spec.id, Path(rel).as_posix(), seconds)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(source, encoding="utf-8")
+    scene = {"id": spec.id, "type": "web", **({"duration": spec.duration} if spec.duration else {}), "params": web}
+    text = yaml.safe_dump([scene], sort_keys=False, allow_unicode=True, width=120)
+    if args.json:
+        return jsonout.space_page_document(spec.id, target, scene)
+    print(f"wrote {target} ({len(source.splitlines())} lines): the page of space scene '{spec.id}', yours to edit")
+    print("put this web scene in its place in video.yaml (it draws the same picture" + (", with the web scene's 0.5 s fade-out" if outro == 0 else "") + "):")
+    print(text.rstrip())
+    return 0
+
+
 def cmd_parts(args: argparse.Namespace) -> CommandResult:
     """``vidgen parts``: a labelled contact sheet of the ready-made three.js parts, or with
     ``--list`` their names and the line that uses each (DESIGN.md §122.5)."""
@@ -1991,7 +2031,14 @@ def _music_plan(args: argparse.Namespace) -> CommandResult:
     if found is None or found.suffix.lower() not in (".yaml", ".yml"):
         raise VidgenError(f"music plan: {args.project} is not a score file (.yaml): the plan reads a score's sections, tracks and notes")
     plan = plan_music_video(found, max_seconds=args.max_scene, min_seconds=args.min_scene)
-    draft = write_music_video(plan, Path(args.out), force=args.force) if args.out else None
+    space = args.style == "space"
+    seed = args.seed if args.seed is not None else 1
+    if space:
+        from vidgen.music_space_plan import space_plan_text, write_space_video
+
+        draft = write_space_video(plan, Path(args.out), force=args.force, seed=seed) if args.out else None
+    else:
+        draft = write_music_video(plan, Path(args.out), force=args.force) if args.out else None
     problems: list[str] = []
     if draft is not None:
         project = Project.load(draft.config)
@@ -1999,15 +2046,20 @@ def _music_plan(args: argparse.Namespace) -> CommandResult:
     if args.json:
         return jsonout.music_plan_document(plan_dict(plan), draft, [str(p) for p in problems])
     print(plan_text(plan))
+    if space:
+        print(space_plan_text(plan, seed))
     if draft is None:
-        print(f"draft it: vidgen music plan {args.project} --out my_video   (video.yaml, the score, a starter page per scene)")
+        if space:
+            print(f"draft it: vidgen music plan {args.project} --style space --out my_film   (video.yaml with a space scene per cut, the score)")
+        else:
+            print(f"draft it: vidgen music plan {args.project} --out my_video   (video.yaml, the score, a starter page per scene)")
         return 0
-    print(f"{'created' if draft.created else 'wrote'} {draft.config} ({len(plan.scenes)} web_cut scenes)")
+    print(f"{'created' if draft.created else 'wrote'} {draft.config} ({len(plan.scenes)} {'space' if space else 'web_cut'} scenes)")
     for rel in draft.files:
         print(f"  {rel}")
     for problem in problems:
         print(f"problem: {problem}", file=sys.stderr)
-    print(f"next: vidgen still {draft.root} --scene {plan.scenes[0].id} --at 2 --size 640x360, edit the pages, then vidgen render {draft.root} --draft")
+    print(f"next: vidgen still {draft.root} --scene {plan.scenes[0].id} --at 2 --size 640x360, edit the {'scenes' if space else 'pages'}, then vidgen render {draft.root} --draft")
     return 1 if problems else 0
 
 
@@ -2626,7 +2678,7 @@ def build_parser() -> argparse.ArgumentParser:
         "(render, plan and check: or a project piece's name, assets/music/NAME.yaml here, or a built-in bed's); template: the bed (none: list them)",
     )
     p.add_argument("--mood", metavar="NAME", help="the mood (calm, focused, curious, upbeat, playful, sleepy, tense, triumphant; vidgen list-music)")
-    p.add_argument("--seed", type=int, metavar="N", help="another seed gives another piece in the mood")
+    p.add_argument("--seed", type=int, metavar="N", help="preview: another seed gives another piece in the mood; plan --style space: other worlds and moves (default 1)")
     p.add_argument("--bars", type=int, metavar="N", help="length in bars, a multiple of 4 (default: the mood's)")
     p.add_argument("--key", metavar="KEY", help="e.g. E, 'Eb major', 'F# minor' (default: the mood's)")
     p.add_argument("--tempo", type=float, metavar="BPM", help="quarter notes per minute (default: the mood's)")
@@ -2639,6 +2691,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--max-scene", type=float, default=16.0, metavar="SECONDS", help="plan: split a section longer than this on a phrase line (default: 16)")
     p.add_argument("--min-scene", type=float, default=5.0, metavar="SECONDS", help="plan: join a section shorter than this to the one before (default: 5)")
+    p.add_argument("--style", choices=["web", "space"], default="web",
+                   help="plan: web (default): web_cut scenes with a starter page each; space: space scenes written in YAML alone "
+                   "(a world by the scene's colour, a camera move by its role, sunrise on a section start; --seed picks among the choices)")
     p.add_argument("--narration", metavar="FILE", help="check: the demo's voice (an audio file; default: a 20 s narration sample shipped with schu-video-generator)")
     p.add_argument("--compare", metavar="OTHER", help="check: a second score or audio file (or a piece's or bed's name): a side-by-side table and a two-row spectrogram")
     p.add_argument("--force", action="store_true", help="template: overwrite the --out file if it exists; plan: write the draft into a folder that is not empty")
@@ -2906,6 +2961,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--transparent", action="store_true", help="keep the page's transparency (default: the page over the video's background colour)")
     json_arg(p)
     p.set_defaults(func=cmd_still)
+
+    p = sub.add_parser("space-page", help="write the page a space scene draws as a web scene's script (extensions/<id>.js) to go on in code, "
+                       "and print the web scene that replaces it")
+    project_arg(p)
+    p.add_argument("--scene", metavar="ID", help="the space scene")
+    p.add_argument("--out", "-o", metavar="FILE", help="where the script goes, in the project folder (default: extensions/<scene>.js)")
+    p.add_argument("--force", action="store_true", help="write over the file if it exists")
+    p.set_defaults(func=cmd_space_page)
 
     p = sub.add_parser("parts", help="a labelled contact sheet (PNG) of the ready-made three.js parts (skies, bodies, structures, effects...) "
                        "with the line that uses each, so you can choose by looking; --list names them without drawing")

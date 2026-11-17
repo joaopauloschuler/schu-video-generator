@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["3d", "bar_chart", "branching", "branching_pie", "bullets", "calculation", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "decay_chain", "detector", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "feynman", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "kinematics", "line_chart", "linkage_map", "map", "mass_spectrum", "metabolism", "molecule", "mutation", "network", "number_line", "orbit", "pathway", "pedigree", "pie", "plot", "population", "process", "quote", "scatter", "screenshot", "stage", "standard_model", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip", "web"]
+BUILTINS = ["3d", "bar_chart", "branching", "branching_pie", "bullets", "calculation", "card", "cell", "cell_cycle", "chapter", "code", "code_morph", "code_walkthrough", "comparison", "crispr", "cross", "decay_chain", "detector", "diagram", "dna_lab", "end_card", "equation", "equation_derivation", "feynman", "flowchart", "function_plot", "gwas", "heatmap", "histogram", "icon_grid", "image", "iso_diagram", "karyotype", "kinematics", "line_chart", "linkage_map", "map", "mass_spectrum", "metabolism", "molecule", "mutation", "network", "number_line", "orbit", "pathway", "pedigree", "pie", "plot", "population", "process", "quote", "scatter", "screenshot", "space", "stage", "standard_model", "stat", "table", "terminal", "text_card", "timeline", "title", "video_clip", "web"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -39,6 +39,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
                    "steps": [{"box": [0.1, 0.1, 0.4, 0.3], "label": "Box"}, {"callouts": [{"arrow": [0.7, 0.6], "label": "Arrow"}], "focus": True}]},
     "3d": {"title": "Box", "objects": [{"id": "crate", "size": [1.5, 1.5, 1.5], "spin": [0, 30, 0]}]},
     "web": {"page": "extensions/page.html"},
+    "space": {"bodies": [{"name": "Saturn"}], "camera": {"move": "arc", "subject": "Saturn", "phase": "crescent"}},
     "quote": {"text": "“To be or not to be.”", "author": "Someone", "source": "Somewhere"},
     "equation": {"latex": ["x^2", "x \\cdot x"], "caption": "Square"},
     "equation_derivation": {"title": "Solve", "colors": {"x": "accent"}, "terms": ["3"],
@@ -370,9 +371,10 @@ def expected_duration(scene: Any) -> float:
     return sum(scene.beat_duration(i) + scene.pad for i in range(len(scene.beats))) + scene.outro
 
 
-#: The built-ins the shared render covers: ``3d`` has its own render tests (tests/test_scene_3d.py);
-#: ``web`` renders here (Chromium) from the small page the fixture writes.
-RENDERED_BUILTINS = [name for name in BUILTINS if name != "3d"]
+#: The built-ins the shared render covers: ``3d`` has its own render tests (tests/test_scene_3d.py),
+#: ``space`` its own Chromium test (tests/test_space_scene.py); ``web`` renders here (Chromium) from
+#: the small page the fixture writes.
+RENDERED_BUILTINS = [name for name in BUILTINS if name not in ("3d", "space")]
 
 
 @pytest.fixture(scope="module")

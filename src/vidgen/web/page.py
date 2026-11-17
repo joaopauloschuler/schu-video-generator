@@ -379,6 +379,8 @@ class WebPage:
         self.missing: list[str] = []
         self.unshipped: list[str] = []
         self.unshipped_libs: list[str] = []
+        #: Sentences the page left for vidgen's log at load (``globalThis.__vidgenNotes``: a space scene's checks, DESIGN.md §122.12).
+        self.notes: list[str] = []
         self.loaded: dict[str, str | None] = {}
         self._chromium: Chromium | None = None
         self._page: Any = None
@@ -530,6 +532,9 @@ class WebPage:
                 **({} if self.orbits is None else {"orbits": self.orbits})}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
+        self.notes = [str(n) for n in self._page.evaluate("() => Array.isArray(globalThis.__vidgenNotes) ? globalThis.__vidgenNotes.map(String) : []")]
+        for note in self.notes:
+            log.warning("scene '%s': %s", self.scene_id, note)
 
     def _wait_until_ready(self, is_script: bool) -> None:
         """Wait until the page has loaded (and, for a ``script:``, its module has finished, with

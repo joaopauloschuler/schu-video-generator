@@ -4300,10 +4300,11 @@ vidgen music plan assets/music/my_song.yaml                 # the plan in words:
 vidgen music plan my_song --json                            # the same as one JSON document
 vidgen music plan my_song --out my_video                    # and a draft project to start from
 vidgen music plan my_song --out my_video --max-scene 12 --min-scene 4 --force
+vidgen music plan my_song --style space --out my_film     # a draft space film: a space scene per cut, no code
 ```
 
 `vidgen music plan SCORE [--out DIR] [--force] [--max-scene SECONDS] [--min-scene SECONDS]
-[--json]` (Step 359, DESIGN §121.2) reads a score file (a path, a project piece's name or a score
+[--style web|space] [--seed N] [--json]` (Step 359, DESIGN §121.2) reads a score file (a path, a project piece's name or a score
 bed's: `tidewater`, `skyline`, `time_of_flight`; another bed: write its template first) without
 playing it, and proposes the scenes of a music video, each starting on a bar line:
 
@@ -4370,6 +4371,22 @@ The plan does not listen: a piece whose sections are named but whose energy says
 the name's role. Edit the draft as any project: change the pages, join or move scenes (keep each
 duration a whole number of frames between bar lines), then `vidgen still DIR --scene ID --at 2
 --size 640x360` and `vidgen render DIR --draft`.
+
+**A draft space film: `--style space`** (Step 376, DESIGN §122.12). The same plan (sections, cuts,
+colours, reactions), with a [`space`](#space) scene per cut instead of a `web_cut` scene and a
+starter page: no code at all. Each choice is a rule, deterministic from the score and `--seed`
+(default 1): the scene's **role** picks the camera move (quiet: a slow arc round a world to its
+crescent, or in the first quiet scene a sunrise over its limb whose first light lands on the bar
+line where a section starts, else on the scene's last phrase line; build: an arrival; verse: a chase
+view of a craft passing the world; drop and climax: a fly-by, a craft passing the camera, or a jump
+to warp, never two warps running); the scene's **colour** picks the world (a ready-made one whose
+colours are near that hue: gold, red, violet, blue, green or pale), the sky is one seed for the film
+with its look by energy (sparse, natural, rich with nebulae), the grade is the role's; the scene's
+**pulse** track pulses the sun's glare (or the warp), its glow and glint tracks drive the craft's
+throttle and lights. Every move runs over the scene's bars (`over: ['bar 9', 'bar 13']`), every
+scene has `fade: false`, the first an opening title and the last an end card. The draft is
+validated as it is written; `vidgen still DIR --scene ID --at 2 --size 640x360` before rendering.
+Without `--style`, the draft is the `web_cut` one, unchanged.
 
 #### Project pieces: score files in a video
 
@@ -7163,6 +7180,8 @@ does not return within 30 s, or a frame (its timers, callbacks and `frame`) that
 within 10 s (the page's first frame: 30 s), stops the render with `scene '<id>': frame(t=0.500) in <file> did not return within
 10 s: a loop that never ends or a promise that never settles …`; vidgen ends the page's process.
 
+**Warnings from the page** (Step 376). A page may leave sentences for vidgen's log in the array `globalThis.__vidgenNotes` during `load`; vidgen prints each as a warning (`scene 'x': ...`) once the page has loaded, in `vidgen still` and when the clip is drawn (not when a stored clip is reused). The [`space`](#space) scene's page reports its camera's and bodies' checks this way; `pageNote(text)` of `vidgen/space-scene` adds one. Nothing about the clip or its key changes.
+
 **Cache** (DESIGN §118.10). The screenshots, with their transparency, are written to a lossless clip
 `build/<quality>/web/<scene>.mkv` with `<scene>.json` beside it: what it was drawn from (the size,
 frame rate, length, theme, `data`, beats, the video's shape and the region, vidgen's clock) and every file the page loaded while it
@@ -7956,6 +7975,94 @@ that was not read (another `--per-beat`, a clip drawn before Step 332), vidgen o
 more and steps it frame by frame without screenshots up to the last frame it needs (a page's state
 can depend on every frame before: `requestAnimationFrame` loops, a canvas drawn over itself):
 about 2–3 s to start Chromium plus 15–25 ms per frame stepped, against 70–100 ms per frame drawn.
+
+### `space`
+
+**A space scene written in YAML alone** (Step 376, DESIGN §122.12): a sky, a sun, worlds, craft,
+phenomena and camera moves, from the ready-made parts of Phase AN, with no JavaScript. vidgen writes
+the page from the params (`build/space/<id>.js`) and draws it exactly as a [`web`](#web) scene: the
+same clip and cache (the page's bytes are in the clip's key, so any change of a param draws the
+scene again), `vidgen still`, `--draft`, `--jobs` and `vidgen motion check`. Full frame, no title
+drawn by vidgen (`title:` is the page's opening card); the scene fades out over its last 0.5 s
+unless `fade: false`. Needs Chromium as the [`web`](#web) scene does. Positions and timing are
+true by default; enlarging bodies or compressing distances is a stated choice (`scale:`), said on
+screen. Every key is checked by `vidgen validate` in Python, with the closest word: the names of
+worlds, craft kinds, moves, phases, lenses, views, sky looks and star kinds, and every option a
+section passes on to a module, are read from the modules themselves.
+
+```yaml
+- id: rings
+  type: space
+  duration: 8
+  params:
+    sky: {seed: 4, look: rich}
+    sun: {direction: [1, -0.3, 0.25]}
+    bodies:
+      - {name: Saturn}                                    # a ready-made world: its name is enough
+      - {name: Titan, world: titan, at: ["1200000 km", "300000 km", "40000 km"]}
+    camera: {move: arc, subject: Saturn, phase: [three-quarter, crescent], distance: {radii: 6}, lens: wide-normal}
+```
+
+| param | type | default | meaning |
+|---|---|---|---|
+| `seed` | int | `1` | the scene's seed: the sky's and the worlds' and craft's when they give none |
+| `sky` | mapping \| str \| bool | `{seed, look: natural}` | the sky ([`vidgen/space-sky`](#web)): `{seed, look: natural \| rich \| sparse, stars: seed \| real, nebulae, galaxies}` and any of its options (`milky_way`, `density`, `brightness`, `glare`, `dust`, `limit`, `contrast`, `size`...); `real` (the shipped bright stars at their places), a look (`rich`), or `false` |
+| `sun` | mapping \| str | `{kind: sun}` | the sun ([`vidgen/space-light`](#web)): `kind` (`sun`, `red-dwarf`, `orange`, `white`, `blue-giant`) or `temperature`, `seed`, and where: `direction` ([x, y, z] towards it, a sun far away; default: with `orbits:` around a planet on a date, where the Sun really is that day, the Sun of the data when it has one, else `[1, 0.25, 0.35]`), or `at` + `radius` (a star in the scene, a subject named `Sun`); and its options (`glare`, `spikes`, `flare`, `corona`, `spots`...) |
+| `orbits` | mapping | — | bodies on their orbits, in the [`orbit`](#orbit) scene's words, as a `web` scene's `orbit_data` (keys `central`, `bodies`, `span` / `orbits` / `speedup`, `date`, `dynamics`, `transfer`, `flyby`, `system`, `planes`, `path_samples`): the worlds and craft are then the data's bodies, at their true places and times |
+| `scale` | mapping \| str \| number | true | with `orbits`: `true`, `{mode: enlarged, enlarge: 50}` (or `{default: 50, Sun: 5}`; a number alone is `enlarged` by it), or `log` (distances compressed as `radial: log`); `note: false` leaves the on-screen note ("sizes not to scale · bodies enlarged 50×; distances to scale") to the narration |
+| `bodies` | list | `[]` | worlds ([`vidgen/space-bodies`](#web)), each `{name, world or type, seed, rings, air, spin, tilt, at, radius}` and the options of its surface type (`clouds`, `land`, `bands`, `storms`, `craters`, `palette`, `oblateness`, `quality`, `size`...). `world`: a ready-made world (`earth`, `saturn`, `moon`, `tempest`, `ochre`... 21 of them; default the name's); `type`: a world of your own (`rocky`, `icy`, `desert`, `ocean`, `lava`, `gas`, `ice-giant`); `rings`: `true`, `false` or `{inner, outer, style, gaps, color, opacity, dust, seed}`; `air`: `false`, a kind or `{like, density, height}`; `spin`: `true` (the data's turning), `locked`, or seconds for a turn. With `orbits` the name is a body of the data; without, `at` ([x, y, z] lengths, default the middle) and `radius` (default the real body's for a lookalike, else 6,000 km) |
+| `light` | mapping | `{exposure: film}` | the light: `exposure` (`film`, a film's convention; `camera`, honest, with `ev`; `auto`, honest, metered), `ev`, `falloff` (0, or 2 for the inverse-square law), `eclipses`, `shadows` (the craft's), `shine` (planet-shine), `ambient`, and its other options (`ring_shine`, `reference`, `auto`...) |
+| `craft` | list | `[]` | craft ([`vidgen/space-craft`](#web)), each `{name, kind, seed, detail, fly, attitude, burn, target, throttle, rcs, lights, marker, at, velocity, fleet, spacing}` and the kit's and its kind's options (`accent`, `foil`, `wear`, `lit`, `panels`, `engines`, `ring`...). `kind`: `probe`, `satellite`, `station`, `ship`, `lander`, `tug` (a list of kinds with `fleet: N` for a fleet); `fly`: the body of the orbit data it flies (default its name), with its burns shown as `burn: {seconds: 2, turn: 3}` of thrust (`false`: none); without orbits `at` and `velocity` (m/s) |
+| `phenomena` | list | `[]` | [`vidgen/space-phenomena`](#web), each `{kind, name, at, size, ...}` and its kind's options: `black-hole` (`size` the horizon's radius, default 10 km; `disc`, `inner`, `outer`, `tilt`, `quality`...), `wormhole` (`size` the throat; `other`: the sky beyond), `warp` (`over: [start, end]`, default the scene), `asteroids` (a field round the camera, metres; `layout: belt` with `around: WORLD`), `asteroid` (one rock), `comet` (`body:` of the orbit data, or `at`), `aurora` (`world:` a world of `bodies`) |
+| `camera` | list \| mapping | — | the camera's moves ([`vidgen/space-camera`](#web)), one after another: each `{move, subject, over, lens, cut}` and the move's own options (`phase`, `distance`, `closest`, `side`, `view`, `push`, `behind`, `of`, `at`, `rate`, `stops`, `place`, `roll`, `level`...). `move`: `arc`, `fly-by`, `pass`, `arrive`, `reveal`, `follow`, `zoom`, `look`; `subject` and the other names (`behind`, `of`, `target`, `around`, zoom `stops`) are bodies, craft or phenomena by name; `over: [start, end]`: seconds of the scene, or places in the song (`'bar 9'`, `'bar 13 beat 3'`, with `music_data`); one move takes the whole scene; with several each gives `over` |
+| `finish` | mapping \| bool | `{bloom: 0.3, grain: 0.02, vignette: 0.3, antialias: none}` | [`vidgen/three-finish`](#web): `bloom`, `grain`, `vignette`, `grade` (`{temperature, saturation, ...}`), `motion_blur` (samples), `depth_of_field` (`true` or `{f_stop, max_blur, quality}`: focused on the move's subject every frame), `antialias` (`none`: FXAA breaks stars and thin rings), and its other options; `false` draws straight to the canvas |
+| `music` | list | `[]` | reactions to the score, each `{track, pulse \| glow \| glint: THING, as, amount, decay}` (see below); needs `music_data` |
+| `music_data` | bool \| mapping | `false` | the video's music on the page (`ctx.music`), as on a `web` scene: needed by `music:` and by times in bars |
+| `title` | str \| mapping | — | an opening title ([`vidgen/title-cards`](#web)): text, or `{title, subtitle, side, start, hold, fade_in, fade_out, size, ...}` |
+| `end_card` | mapping | — | an end card: `{title, subtitle, lines, link, side, start, ...}` |
+| `script` | path | — | your code: a JavaScript module of the project; `setup(S)` runs once after the scene is built, `frame(t, S)` every frame after the scene stands at `t` (`S`: `renderer`, `scene`, `camera`, `space`, `sky`, `sun`, `light`, `bodies`, `craft`, `phenomena`, `subjects`, `cam`, `moves`, `view`, `step`, `finish`, `ctx` by name; replace `S.view` to change the camera) |
+| `data` | mapping | `{}` | values for your script, as `ctx.data` |
+| `fade` | bool | `true` | `false`: no 0.5 s fade-out (scenes on bar lines cut straight into each other) |
+
+**Lengths and axes.** A length is metres or text with a unit (`'58232 km'`, `'1.2 AU'`). Positions
+are the orbit data's axes, also without orbits: x and y in the plane, z up. A distance of a move
+is metres, `{radii: k}` of its subject or `{altitude: '400 km'}`.
+
+**Moves one after another.** Move k is the camera from its `over` start until the next move
+starts (before its own start, the first move holds its first shot; after its end, a move holds its
+last). Where a move takes over without `cut: true`, both shots at that time must meet (the camera's
+place within 1 % of its distance, its direction within 1°, its lens within 0.5°): otherwise the
+page stops with the two moves and how far apart they are. `vidgen validate` checks the order, that
+moves do not overlap, the names and the options.
+
+**Music** (`music:`; never the camera): `{track: kick, pulse: Sun}` (a brightness pulse on each hit:
+the Sun's glare, the `sky`, a black hole's disc, a warp's intensity; a craft's lights),
+`{track: pad, glow: Ship}` (a level that follows how strongly the track sounds: a craft's throttle),
+`{track: hook, glint: Ship}` (a glint on each note: a craft's lights); `track: level` follows the
+measured level of the video's music; `as: lights | throttle | rcs` chooses what a craft does;
+`amount` (0.6), `decay` (0.18 s). Worlds are not pulsed (they reflect the sun).
+
+**Checks.** At `vidgen validate`: every key and name (did you mean), what goes with orbits (a
+world or craft names a body of the data, no `at` there) and what without (`fly:` needs orbits),
+the camera's order, times in bars with `music_data`, reaction targets. In `vidgen lint` the
+[`space_scene`](#lint-vidgen-lint) rule: a globe turning more than 12° a frame under the speed-up, an enlarged body
+covering another, worlds inside each other; and `orbit_scale`: narration saying "to scale" while
+the scene enlarges bodies or compresses distances. When the page is drawn (`vidgen still`, the
+render) it prints as warnings what only it can know: a subject under 3 px, the camera inside a
+world or so near its ground that a sphere is no ground, a subject behind a world, a turn of the
+camera in one step (vidgen/space-camera's `check`, every frame of each move), a globe turning too
+fast (vidgen/space-bodies), an enlarged body covering another (vidgen/space-scale).
+
+**Going on in code: `vidgen space-page [PROJECT] --scene ID [--out FILE] [--force] [--json]`**
+writes the page this scene draws as a `web` scene's script (default `extensions/<id>.js`) and
+prints the `web` scene that replaces it (`script`, `data: {scene_seconds}`, `orbit_data`,
+`music_data`): the same picture (a still of each is the same, pixel for pixel), now yours to edit.
+
+**Not reached yet from YAML** (the modules have them; use `script:` or `vidgen space-page`): the
+spacecraft kit's own parts (`craftKit`, `attach`), a wormhole passage, a spiral galaxy in the
+foreground, an asteroid belt round a world of the orbit data at a size of its own, a comet's
+orbit-data scale, `craftEnvironment` updates, flash and warp cuts (`flashCut`, `warpCut`) and match
+cuts across scenes, sky `set` beyond brightness.
 
 ### `quote`
 
@@ -16834,7 +16941,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `orbit_transfer` | warning | a transfer time ("the trip to Mars takes about 180 days" for 259 d), the phase angle the target must lead by at departure ("forty-four degrees"; without "leave", "launch", "window" also the lead at the start), the synodic period or time between launch windows ("every 26 months" fits 780 d) and the wait for the window |
 | `orbit_distance` | warning | a distance, altitude, radius or diameter against the scene's bodies and orbits ("the Moon is 384,000 km away" fits 363,000–406,000 km; "the ISS orbits 420 km up"), a Lagrange point's distance from either primary ("L2 is 15 million km away" for 1.51 million km), the distance of two planets at the scene's `event`, a ratio of radii ("Jupiter is eleven times as wide as the Earth") |
 | `orbit_date` | warning | in any scene, the date of an opposition or a conjunction (inferior, superior) of a planet seen from the Earth that JPL's approximate elements (Table 1, 1800–2050) do not give: a day more than `days` (3) from the computed event, a month or year without one ("Mars was at opposition in 2021"); a month alone ("in mid October") against an orbit scene's `event` |
-| `orbit_scale` | warning | a picture called "to scale" (true scale, real sizes) that is not: an orbit scene whose bodies are drawn enlarged, when the sentence speaks of sizes ("everything is drawn to scale"; "at true scale the inner planets crowd the Sun" speaks of distances and is fine); a `radial: log` view; the `sizes` picture said to show distances; the tides schematic |
+| `orbit_scale` | warning | a picture called "to scale" (true scale, real sizes) that is not: an orbit scene whose bodies are drawn enlarged, when the sentence speaks of sizes ("everything is drawn to scale"; "at true scale the inner planets crowd the Sun" speaks of distances and is fine); a `radial: log` view; the `sizes` picture said to show distances; the tides schematic; a [`space`](#space) scene with `orbits:` and `scale: enlarged` or `log` |
 | `orbit_conserved` | warning | an orbit scene's n-body run (`dynamics: nbody`, `system`) whose total energy or angular momentum drifts by more than `tolerance` (0.01, relative) over the run, a body's Jacobi constant in the restricted problem, or a figure-eight that misses its start: the motion shows the integrator's error. Fix: a smaller `step` with leapfrog, or `method: leapfrog` (whatever the panel shows: `Orbit.diagnostics`) |
 | `orbit_crash` | warning | what validation lets through: a periapsis (or one after a burn) inside the atmosphere of the Earth (the Kármán line, 100 km) or Mars (the entry interface, about 125 km), a flyby through the air without `flyby.atmosphere`, bodies of an n-body run passing within their radii (the run treats them as points). Fix: raise the periapsis, or say it is a re-entry or aerobraking pass |
 | `particle_mass` | warning | a particle's mass said or shown differently from PDG 2024 ("the Z weighs about 91 GeV" and "a top quark is 173 GeV" fit; "the W weighs 91 GeV" gets "that is the Z boson's mass: did you mean the Z boson?"; "105.7 GeV" for the muon "a prefix mixed up?"), in eV, eV/c² or kg; quark masses within 30 % (MS-bar or pole: the scheme); a mass for the photon, gluon or above the neutrino limit. The claim needs a mass word ("mass", "weighs", "heavy") or "X is N GeV"; an energy ("a 45 GeV electron", "each photon carries 62.6 GeV"), a difference ("11 GeV heavier") or an invariant mass of several particles is not a mass claim; `tolerance` (0.05) for "about" |
@@ -16856,6 +16963,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `three_d_off_frame` | warning | in a `3d` scene, an object the beat is about (an object or camera action of the beat names it, or a stand-in whose `voice` says the line) is at least `max_off` (0.5) outside the frame, or behind the camera, at a beat-end or mid-beat still. Fix: `camera_fly_to` / `camera_look_at` it, or move it into view |
 | `three_d_hidden` | warning | in a `3d` scene, an object the beat is about is at least `max_hidden` (0.7) covered by nearer objects (estimated from the objects' spheres; floors, labels, arrows and its own group do not count). Fix: `camera_orbit` round, or move one of them |
 | `web_clipped` | error | in a [`web`](#web) scene, page text cut by more than `tolerance` (of the shorter side) by its own box or an ancestor's with `overflow` other than `visible` (named in the message: `cut by its box card (overflow: hidden) at the right`), or by the page's box where the page does not reach the frame's edge (`region: body`; at the frame's edge it is `off_frame`'s). `off_frame` and `safe_area` leave such text to this rule. Fix: shorter or smaller text, a box that grows; `data-vidgen-lint="off"` on text cut on purpose |
+| `space_scene` | warning | in a [`space`](#space) scene, what its params show before anything is drawn: a world whose globe turns more than `degrees` (12) a frame under the orbit data's speed-up or its own `spin` (it strobes; fix: `spin: locked`, a stated `spin` in seconds, or a smaller speedup), a body drawn enlarged that reaches past another's middle (it covers it; fix: a smaller factor for it), free-standing worlds placed inside each other. What only the page can know (a subject under 3 px, the camera inside a world, a jump between moves) is printed when the page is drawn; narration calling an enlarged or log scene "to scale" is `orbit_scale`'s |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -16950,6 +17058,7 @@ lint:
     three_d_off_frame: {max_off: 0.5}       # share of a 3d object (the beat is about) outside the frame
     three_d_hidden: {max_hidden: 0.7}       # share of it covered by nearer objects
     web_clipped: {tolerance: 0.004}        # page text cut by its box (overflow) or the page's box
+    space_scene: {degrees: 12}              # a space scene's globe turning more than this a frame; enlarged bodies covering others
 ```
 
 **Scientific accuracy** (the `science_*` rules, for the [cell-biology scenes](#cell) and any
@@ -17654,7 +17763,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft`, `vidgen shorts suggest`, `vidgen animatic` and `vidgen still` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct`, `vidgen screenplay`, `vidgen story draft`, `vidgen shorts suggest`, `vidgen animatic`, `vidgen still` and `vidgen space-page` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -18050,6 +18159,14 @@ on a failed scene are as for `vidgen render --json`.
 | `pages` | int | pages opened (1 when the stills were in increasing order) |
 | `load_seconds` | float | until the first page was ready |
 | `seconds` | float | wall time of the command |
+
+### `vidgen space-page --json`
+
+| key | type | |
+|---|---|---|
+| `scene` | str | the space scene's id |
+| `page` | str | the script written |
+| `web_scene` | mapping | the `web` scene that replaces it: `{id, type: web, duration, params: {script, data, orbit_data, music_data}}` |
 
 ### `vidgen animatic --json`
 
