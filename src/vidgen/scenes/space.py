@@ -6,6 +6,7 @@ and the shipped space modules and draws it exactly as a ``web`` scene (the same 
 own, and ``vidgen space-page`` writes the page out to go on in code.
 """
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -139,7 +140,15 @@ class Space(Web):
         path = self.project.root.joinpath(*PAGE_FOLDER, f"{self.spec.id}.js")
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.is_file() or path.read_text(encoding="utf-8") != source:
-            path.write_bytes(source.encode("utf-8"))
+            # whole or not at all: another render (--jobs) may be serving the page this moment
+            data, tmp = source.encode("utf-8"), path.with_name(f".{path.name}.{os.getpid()}.partial")
+            tmp.write_bytes(data)
+            try:
+                os.replace(tmp, path)
+            except PermissionError:   # Windows: open in another render, which wrote these same bytes
+                tmp.unlink(missing_ok=True)
+                if not (path.is_file() and path.read_bytes() == data):
+                    raise
         return path
 
     def page_clip_args(self, box: Region | None = None) -> dict[str, Any]:

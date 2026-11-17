@@ -1458,7 +1458,7 @@ const DESIGNS = {
     if (o.ring ?? r() < 0.3) last = attach(hab, "aft", kit.ringHabitat({radius: range(r, 10, 13), tube: 1.5}), "fore");
     const neck = attach(last, "aft", kit.hull({shape: "taper", radius: 1.25, radius2: R * 0.95, length: 2.2, skin: "aluminium", greebles: 0.5}), "fore");
     const L = o.spine ?? range(r, 24, 34), spine = attach(neck, "aft", kit.truss({length: L, width: 1.7}), "fore");
-    const rows = whole(r, 2, 3), tr = range(r, 1.2, 1.5), tl = Math.min(L / rows * 0.78, range(r, 6, 8)), tskin = pick(r, ["foil", "paint", "foil-silver"]);
+    const rows = whole(r, 2, 3), tr = range(r, 1.2, 1.5), tl = Math.min(L / rows * 0.78, range(r, 6, 8)), tskin = pick(r, ["foil", "foil-silver", "foil"]);   // wrapped: plain white tanks read flat (Step 378)
     for (let k = 0; k < rows; k++) around(spine, () => kit.tank({shape: "capsule", radius: tr, length: tl, skin: tskin}), {count: 4, angle: 0, along: (k + 0.5) / rows * 0.84 + 0.14, gap: 0.12});
     for (const a of [90, 270]) attach(spine, {angle: a, along: 0.07}, kit.radiator({panels: whole(r, 2, 3), size: [3.6, 2.6], yoke: 0.6}), "mount", {roll: 90});
     for (const a of [0, 180]) attach(neck, {angle: a, along: 0.5}, kit.solarWing({panels: 2, size: [2.4, 2.1], yoke: 1.6}));

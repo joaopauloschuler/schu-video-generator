@@ -38,8 +38,9 @@ counted from 1, as in `video.yaml`.
   the ship burns was chosen for the light and the music (bar 7), not for the direction to Saturn.
 - **The fly-by** (`03_rings`). A real hyperbola past Saturn at the speed that transfer arrives
   with (5.44 km/s far from the planet), 110,000 km over the cloud tops, about 3,000 times faster
-  than life. The planet's size, flattening, tilt and turning are Saturn's. The sun's direction in
-  this scene was set by hand so that the pass is over the day side.
+  than life. The planet's size, flattening, tilt and turning are Saturn's, and the Sun and the
+  rings' tilt stand as they really are on 8 April 2033 (the fly-by's frame turns with Saturn's
+  motion round the Sun).
 - **The sunrise** (`01_dawn`). The camera's ride is worked out so that the sun's upper edge meets
   the limb at bar 4; `air: 0.1` allows a tenth of a degree for the air that holds the first
   light back.
