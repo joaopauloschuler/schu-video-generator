@@ -3544,6 +3544,33 @@ const update = (t) => { space.update(t, view(t)); saturn.update(t); };
   (about 10 s to make), `size: 256` for bodies that stay small. No landing: close to the ground
   the surface is soft. Reference: CONFIG.md `web`, "Planets, moons and rings".
 
+**Suns and light: `vidgen/space-light`.** Do not light a space scene by hand, and do not draw a
+sun as a glowing ball with a sprite flare. One line gives a star, one object lights everything.
+
+```js
+import {star, spaceLight} from "vidgen/space-light";
+const sun = star(renderer, "sun", {direction: [1, 0.2, -1]});   // a far sun in the sky; or star(renderer, "Sun", {space}) with orbit_data
+scene.add(sun.object);                                           // close up: star(renderer, "red-dwarf"), radius 1, place it yourself
+const light = spaceLight({scene, camera, sun, bodies: [earth, moon], sky});
+const update = (t) => { earth.update(t); moon.update(t); sun.update(t); light.update(t); };   // light.update last
+```
+
+- Stars: `red-dwarf orange sun white blue-giant`, or `{temperature, seed}`. Small in the frame a
+  star is a brilliant point with thin spikes and faint lens ghosts (`spikes: 0`, `flare: 0` turn
+  them off); large, it shows boiling cells, spots, a corona and loops.
+- Sunrise over a limb works by itself: the bodies given to `spaceLight` hide and redden the glare.
+- `spaceLight` gives each body its sun, lights its night side with planet-shine from the nearest
+  lit world (`shine: 0` for none) and ring-shine, sets `light.directional` for ordinary meshes
+  (a spacecraft), and with `eclipses: true` draws a moon's shadow on its world and the world's on
+  its moon. No ambient light by default.
+- Exposure, and what to say in the film's notes: `"film"` (the default) is a convention, not what
+  a camera sees: stars stay beside a sunlit world and planet-shine is lifted. `exposure: "camera",
+  ev: 0` is honest (no stars beside a day side); `exposure: "auto"` is honest and adapts to what
+  is in the frame. Do not caption a `film` picture as a photograph.
+- `falloff: 0` (default) lights every world alike, an artistic choice; `falloff: 2` is the true
+  inverse-square light (Neptune 900 times dimmer than the Earth).
+- Look first: `vidgen parts --kind light`. Reference: CONFIG.md `web`, "Suns and light".
+
 **Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
 ready-made three.js part (skies, structures, effects, environments; more space parts as they are
 added) drawn in one browser, each tile labelled with its name and the one line that uses it.

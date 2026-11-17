@@ -7437,6 +7437,70 @@ const finish = new Finish(renderer, scene, camera, ctx, {antialias: "none"});   
   than 12 nebulae or galaxies. An orthographic camera is not supported (the sky needs a perspective).
 - On the contact sheet: `vidgen parts 'space-sky*' spiral-galaxy`.
 
+**Suns and light: `vidgen/space-light`** (Step 372, DESIGN §122.8). A star to look at, the far
+sun's glare, and one object that lights a whole space scene.
+`import {star, spaceLight} from "vidgen/space-light"`.
+
+```js
+const sun = star(renderer, "sun");                          // a ready-made star, or {temperature: 9000, seed: 4}
+scene.add(sun.object);                                      // radius 1: place and scale it like any object ...
+const sun = star(renderer, "sun", {direction: [1, 0.2, -1]});   // ... or a far sun in the sky, 0.53 degrees wide ...
+const sun = star(renderer, "Sun", {space});                 // ... or the Sun of ctx.orbits through vidgen/space-scale
+const light = spaceLight({scene, camera, sun, bodies: [earth, moon], sky});   // sun: a star, an Object3D or a direction
+const update = (t) => { space.update(t, view(t)); earth.update(t); moon.update(t); sun.update(t); light.update(t); };   // light last
+```
+
+- **Stars** (`STARS`): `red-dwarf` (3,200 K), `orange` (4,600 K), `sun` (5,772 K), `white`
+  (8,500 K), `blue-giant` (22,000 K), or options of your own (`{like: "orange", spots: 2}`).
+  Close up: cells that boil in place (a function of t; nothing scrolls), a limb that darkens and
+  reddens, spots and faculae from the seed, a corona with streamers over `reach` radii, loops of
+  gas at the limb. Options: `temperature`, `seed`, `light` (1.2: the disc's middle), `saturation`,
+  `granulation`, `cells`, `boil`, `spots` (0–12), `spotSize`, `faculae`, `limb`, `corona`, `reach`
+  (6), `streamers`, `prominences` (0–8), `spin` (seconds a turn), `tilt`, `quality` (`standard`,
+  `fast`), and for the far sun `glare` (1; 0 for none), `spikes` (6; 0, 4, 6 or 8), `spikeAngle`
+  (15°), `spikeLength`, `flare` (0.5: the lens ghosts; 0 for none), `direction`, `angularRadius`
+  (degrees; 0.2665).
+- **Near or far by itself.** Under about 30 px of radius (at 720p) the star is a brilliant point:
+  a soft glow, thin diffraction spikes fixed to the frame, and faint round lens ghosts on the
+  line through the frame's middle; from 140 px up only the surface and the corona are drawn. The
+  glare is drawn last, over everything.
+- **Sunrise over a limb.** The glare knows the bodies before the sun (`spaceLight` tells it, or
+  set `sun.occluders = [earth]`): it shrinks to the sliver that is left, reddens through the
+  body's air and sits on the limb, with no read-back. `sun.seen` after a draw: `{fraction: [r, g,
+  b], offset, covered, pixels, inFrame}`.
+- **`spaceLight` options**: `scene`, `camera`, `sun`, `bodies` (worlds of `vidgen/space-bodies`),
+  `sky` (the sky of `vidgen/space-sky`: needed for honest exposures and `environment`), `renderer`
+  (for `shadows`), `at` (an Object3D: where the light for ordinary meshes is worked out; default
+  the camera), `color`, `shine` (1: planet-shine; 0 off), `ringShine` (1), `eclipses` (`false`),
+  `falloff` (0), `reference`, `exposure` (`"film"`), `ev` (0), `auto` (`{evMax, day, dark}`),
+  `ambient` (0), `environment` (`false`), `shadows` (`false`, `true` or `{size, mapSize, bias}`),
+  `sunSize` (degrees: the angular radius of a sun given as a direction).
+- **What `light.update(t)` sets**: every body's sun (direction, colour, strength); `body.fill`
+  (planet-shine from the nearest lit world, or ring-shine from its own rings); with `eclipses:
+  true` other bodies' shadows on the bodies (a soft disc test: dark middle, penumbra, a copper
+  light in the shadow of a world with air; about 0.03 s a frame more at 720p);
+  `light.directional`, a `THREE.DirectionalLight` for ordinary meshes (a craft behind a world is
+  in its shadow), and `light.fill`, a second one for planet-shine. No ambient light unless
+  `ambient` is given. `light.state` holds what was set (`ev`, each body's `intensity`, `shine`,
+  `honest`).
+- **Sunlight with distance.** `falloff: 0` (the default, an artistic choice): every world is lit
+  as if the shot were exposed for it. `falloff: 2` is the inverse-square law from `reference` (a
+  distance in the scene's units or a body; default the first body).
+- **Exposure: which mode is honest.**
+
+  | `exposure` | Honest? | The picture |
+  |---|---|---|
+  | `"film"` (default) | no: a film's convention | stars beside a sunlit world; planet-shine lifted so it shows (the Earth's on the Moon is drawn at 0.05 of sunlight, honestly 0.00005) |
+  | `"camera"` | yes | one exposure `ev` (stops over a sunlit ground's; a number or a function of t): at `ev: 0` the day side is right and there are no stars; at `ev: 20` the stars are as the sky draws them and the day side is burnt out |
+  | `"auto"` | yes | `camera` with `ev` worked out from what is in the frame at t (how much of it is sunlit ground, planet-shine, the sun); nothing is kept between frames, so scenes may render in any order |
+
+- Costs at 720p in software GL: a star 0.6 s to make, then 0.15 to 0.4 s a frame (the larger
+  the disc, the more); a far sun 0.03 s a frame. With `vidgen/three-finish` give `antialias:
+  "none"` as for the sky. Look first: `vidgen parts --kind light`.
+- Limits: the glare is hidden by bodies of `vidgen/space-bodies`, not by ordinary meshes;
+  planet-shine is one light per body; a star's surface is a film's look (in an honest exposure a
+  sun in the frame is white).
+
 **Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a
 seed, or a ready-made one, in one line; every surface is generated (no maps or images).
 `import {planet} from "vidgen/space-bodies"`.
@@ -17019,7 +17083,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   Measured: 20 parts at 320x180 in 12 s (page ready 0.7 s; 0.25 to 0.75 s a part, the studio
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
-  33 to 43 s (about 1 s a part).
+  33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

@@ -177,6 +177,12 @@ prime meridian), each orbit as a polyline and a ship's burns. The numbers are th
   data called Earth as an Earth-like world at its true size, pole and turning, lit from where the
   data's Sun is; call `body.update(t)` after `space.update(t, view)`. Under a large speed-up read
   `body.problems()` and choose `spin: "locked"` or a stated rate.
+- **The Sun and the light** (Step 372; CONFIG `web`, "Suns and light"): `star(renderer, "Sun",
+  {space})` from `vidgen/space-light` is the data's Sun at its true size and place (from the
+  Earth 4.5 px in radius through a 40° lens at 720p: a brilliant point with its glare), and
+  `spaceLight({scene, camera, sun, bodies, sky})` lights every body from where the Sun is, with
+  planet-shine, eclipses on request and `falloff: 2` for the true light with distance; call
+  `light.update(t)` after `space.update` and the bodies' `update`.
 - **The real sky behind them** (Step 370; CONFIG `web`, "The sky of a space scene"):
   `spaceSky(renderer, {stars: "real"})` from `vidgen/space-sky` is in the same frame as
   `ctx.orbits`, so a dated scene has the right stars behind its planets (the Earth in June stands

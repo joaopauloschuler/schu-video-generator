@@ -358,7 +358,8 @@ src/vidgen/
                           # space-scale.js `vidgen/space-scale` (§122.4); parts.js `vidgen/parts`: the registry of ready-made parts (§122.5);
                           # space-sky.js `vidgen/space-sky`: the sky of a space scene, and space-sky-stars.js, its star file,
                           # written by tools/make_star_catalogue.py (§122.6); space-bodies.js `vidgen/space-bodies`: planets,
-                          # moons and rings from a seed (§122.7)
+                          # moons and rings from a seed (§122.7); space-light.js `vidgen/space-light`: stars and the light of a
+                          # space scene (§122.8)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -26055,7 +26056,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 369 | Checks for dark pictures in `vidgen motion check`; a registry of ready-made parts (`vidgen/parts`) and its contact sheet (`vidgen parts`) | §122.5 |
 | 370 | The sky: from a seed (default) or the real bright stars, the Milky Way, nebulae, galaxies (`vidgen/space-sky`) | §122.6 |
 | 371 | Planets, moons and rings from a seed: seven surface types, air, rings, 21 ready-made worlds (`vidgen/space-bodies`) | §122.7 |
-| 372 | Suns and light | |
+| 372 | Suns and light: stars by temperature, the far sun's glare, one object for a scene's light (planet-shine, ring-shine, eclipses), exposure modes (`vidgen/space-light`) | §122.8 |
 | 373 | Phenomena | |
 | 374 | Spacecraft kit | |
 | 375 | Space camera moves | |
@@ -26274,7 +26275,8 @@ space.path("Moon", {kind: "conic"});      // a line exact every frame
   segment); overlapping intervals make one stretch; a stretch spanning more than `ratio` (default
   10⁴; 10⁵ let a 100 m shell fight) is cut into equal ratios (overlapping by 10⁻⁴: no seam);
   separate stretches get slices of their own unless together they span at most `join` (3); at
-  most `maxSlices` (8). Drawn far to near, the depth buffer cleared between, `scene.background`,
+  most `maxSlices` (8). Objects with `userData.overlay` (a lens's glare, §122.8) are left out of
+  the intervals and drawn once after the last slice, over everything. Drawn far to near, the depth buffer cleared between, `scene.background`,
   the clear and the shadow maps on the first pass only. A sky (`scene.background`, or objects with
   `frustumCulled = false`) is drawn first with near and far of its own. three-finish's depth of
   field reads the last slice's depth with the camera's near and far, right for a focus in the
@@ -26694,8 +26696,9 @@ view ray in the body's own axes:
   angles. Clouds: lit above half the air (less red at the terminator than the ground), darker
   where higher cloud stands sunward (the same extra read gives the deck's shadow on the ground).
   City lights only on the night side and under clear sky, weak by default (`lights` 0.3).
-  A second, weak light is there for Step 372 (`body.fill = {direction, color}`, planet-shine and
-  ring-shine): black by default, nothing computes it yet.
+  A second, weak light (`body.fill = {direction, color}`) is black by default; `spaceLight` of
+  `vidgen/space-light` sets it (planet-shine and ring-shine, §122.8), and other bodies' shadows
+  (the `ECLIPSE` block, compiled only when it asks).
 - *The air* is a shell of gas thinning exponentially with height (`height`: the scale height as
   a share of the radius, the body's real value in the presets: 0.0014 for the Earth-like world),
   with a zenith optical depth per colour for gas (`rayleigh`), haze (`haze`, a forward-throwing
@@ -26845,8 +26848,8 @@ of the 21 ready-made worlds; `rings-broad`, `rings-narrow`, `rings-far-side`; `b
 close limb is soft ground under sharp air, and the last kilometres are out of scope (§122.4's
 note). Relief is shading and two shadow looks, not displaced ground: the limb is always a smooth
 circle. Clouds are one flat deck. The air's sum is single scattering with a correction; thick air
-is a look, not a simulation. Rings have no thickness, no spokes, and do not light the globe
-(Step 372's ring-shine). A moon's shadow on a planet (eclipses) is not drawn. Several ringed
+is a look, not a simulation. Rings have no thickness and no spokes. Ring-shine, planet-shine
+and eclipse shadows come from `vidgen/space-light` (§122.8), not from the body alone. Several ringed
 bodies overlapping on screen within one depth slice sort by their centres. An orthographic
 camera is not supported.
 
@@ -26856,3 +26859,222 @@ rings and placed things from a seed; `slow`: in Chromium the disc's size and rou
 sides, a seed is a world, day and night, air outside the limb only with air, rings lit and
 shadowing, the sub-pixel spot's light, and a body of `ctx.orbits` placed, sized, lit and
 reporting its turning. Stills: `/home/claude/work/scratch/an371/stills/`.
+
+### 122.8 Suns and light: `vidgen/space-light` (Step 372)
+
+A star in one line (`const sun = star(renderer, "sun"); scene.add(sun.object); sun.update(t)`) and
+the light of a whole space scene in one object (`const light = spaceLight({scene, camera, sun,
+bodies, sky}); light.update(t)`). The module `data/web/modules/space-light.js` (import name
+`vidgen/space-light`, in `VIDGEN_MODULES`; imports `three`, `rng` of `vidgen/music-time` and
+`blackbody` of `vidgen/space-sky`). Nothing like it existed: the Step 358 kit's `flare` is a
+sprite for music hits, and Step 371 left three hooks (`setSun(direction, {color, intensity})`,
+`light`, `body.fill`) that nothing computed.
+
+**A star close up** is two shells drawn from their back faces round one place, in the order they
+were made, each pixel worked out from the view ray as a body's is (§122.7):
+
+- *The globe* (a shell as high as the tallest loop): the exact anti-aliased
+  limb and the depth per pixel. **Cells that boil in place**: the nearest and second nearest of
+  points that each circle slowly about their own place in a lattice (8 candidates a pixel), so
+  every cell changes shape where it stands and nothing scrolls; the lane between two cells is the
+  difference of the two distances, soft and widest where three meet; a slower field (gradient
+  noise whose gradients turn with time, or the map's with `quality: "fast"`) makes regions
+  brighter and dimmer, and the star's map pushes the lattice about so cells are larger here and
+  smaller there. Cells smaller than about two pixels are left out (a small star does not sparkle).
+  A function of t alone. **Limb**: I = μ^(0.3, 0.55, 0.95) per colour for a cool star (the limb
+  darkens and reddens); a hot star's is drawn the other way (1.0, 0.66, 0.3): a white-hot middle,
+  a blue limb. **Spots** from the seed (`starSpots`: two belts of latitude, 60 % in pairs along
+  a parallel; umbra 0.16, penumbra 0.6 of the surface, the edge bent by the cells) and
+  **faculae**, a bright net round spots and over active ground that shows only toward the limb.
+  Darker is redder (brightness^(0.8, 1.0, 1.3)). **Loops** at the limb (`starLoops`): circles of
+  0.05 to 0.16 radii standing in a plane through the foot; where the view ray crosses that
+  plane, the distance from the circle gives a glow with wisps along the arc; behind the globe
+  they are hidden, before it nearly lost; a thin red rim of low gas hugs the limb.
+- *The corona* (a shell of `reach` 6 radii, additive, no depth written): everything is a function
+  of where the ray passes nearest the star. The angle round the disc reads a cube map made once
+  in JavaScript (`coronaFaces`: 256 px faces, gradient noise; R the great streamers, gathered
+  over the belts of activity, G finer structure, B thin rays, A active ground for the globe), so
+  streamers are rays in any lens; a streamer narrows to a stalk (its share to the power
+  1 + 2.6 ln b), leans a little as it leaves, and falls as b^−3 where it is strong and b^−4.6
+  between; a bright ring b^−11 hugs the limb. Pearl white with a little of the star's colour.
+  The first version read the map by the nearest point's 3D direction: in a close-up the rays
+  turned into clouds (the direction changes along a radius in a perspective view).
+
+**Colour and character by temperature** (`STARS`; `starTint` is a black body's colour, three times
+as far from white by default: a film's sun is yellower than the real one, which is white):
+
+| Star | K | Character |
+|---|---|---|
+| `red-dwarf` | 3,200 | large cells (16 across a radius), 3 great spots, a dark red limb, 3 loops |
+| `orange` | 4,600 | 6 spots, cells 24 |
+| `sun` | 5,772 | cells 32, 5 spots, faculae, 4 loops |
+| `white` | 8,500 | nearly smooth, no spots or loops, brilliant (light 2.0) |
+| `blue-giant` | 22,000 | smooth, white-hot with a blue limb (light 2.3), a wide pale halo, few streamers |
+
+Options (`STAR_DEFAULTS`): `temperature`, `seed`, `light` (the middle of the disc; 1.2: under ACES
+the surface shows), `saturation`, `granulation`, `cells`, `boil` (rate), `spots`, `spotSize`,
+`faculae`, `limb`, `corona`, `reach`, `streamers`, `prominences`, `spin` (seconds a turn; 0),
+`tilt`, `glare`, `spikes` (0, 4, 6, 8), `spikeAngle`, `spikeLength`, `flare`, `quality` (`fast`:
+one noise less), `direction`, `angularRadius`, `display`; `{like: "red-dwarf", ...}` starts from a
+ready-made one. A wrong name or value is an error with a did-you-mean.
+
+**Three places for a star.** As an object (radius 1, placed and scaled by the page); as the Sun
+of `ctx.orbits` (`star(renderer, "Sun", {space})`: the `SpaceView` places and sizes it, the data
+gives its pole); or **in the sky** (`{direction, angularRadius}`, default 0.2665°, the Sun from
+1 AU): its meshes are moved round the camera before each draw, are not culled (so
+`vidgen/space-scale` draws them in its sky pass) and write the far depth, so every body covers
+them.
+
+**A far sun: the glare.** Under 30 px of radius (at 720p; fading to none at 140 px, where the
+surface is the picture) the star is a brilliant point drawn by one more mesh, last and over
+everything, in the frame's own axes (a lens does not turn with the world, so spikes neither
+rotate nor flicker): a core (a gaussian never under 0.62 px, as the sky's stars), three halos
+(2.6, 16 and 90 px wide at 720p), `spikes` thin lines at `spikeAngle` (a gaussian across, never
+thinner than 0.62 px with its light kept: thinner lines broke into dots at 320x180;
+1 / (1 + (r / 42 px)²) along, four slightly different lengths), and six **lens ghosts** on the
+line from the sun through the frame's middle (round soft patches and two soft rings, cool tints,
+2 % of white at `flare` 1; a warm tint read as dirt on the dark, and there are no hexagons). The
+glare leaves with the sun (gone a third of a frame outside). Into a linear picture it adds;
+straight to the canvas it is laid on as a screen (source × (1 − destination)) after the star's
+own ACES curve.
+
+**What hides the sun** (`sunVisibility`, `star.visibility(camera)`): no read-back and no state.
+The sun's disc is 96 fixed points (a sunflower); each ray's nearest distance to every body
+between the eye and the sun (`star.occluders`, set by `spaceLight`) gives a soft step as wide as
+the point's own share of the disc, times the air's transmission exp(−ext × the tangent column)
+with the same Chapman column as the bodies' shader. The mean over the points is the glare's
+light per colour; the light-weighted mean position is where the glare sits. So a sun setting
+behind a world with air dims, reddens (blue goes first), shrinks to the sliver that is left and
+slides along the limb: stills 02 and 03, and the clip. Measured on 200 steps of a limb crossing
+the disc: no step over 2 % of the light. Rays are straight (the air's bending, which flattens a
+real sunset seen from orbit, is left out).
+
+**`spaceLight(options)`** → `SpaceLight`; `update(t)` after the bodies, the star and the camera
+stand at t. Each call (no state between calls):
+
+1. *Every body's sun*: the direction from the body to the star (the star's place in the scene:
+   camera-relative positions of `vidgen/space-scale` work as they are), or one direction for all
+   (a star in the sky, or `sun: [x, y, z]`); `body.setSun(direction, {color, intensity})` with
+   the star's light colour (`sunlightColor`: white for a sun-like star, 0.7 of the way to the
+   black body's colour relative to the Sun's for another).
+2. *Sunlight with distance*: `falloff` 0 by default, **an artistic default, stated**: every world
+   is lit as if the shot were exposed for it, so Neptune is not black. `falloff: 2` is the
+   inverse-square law from `reference` (a distance, a body, default the first body): Neptune then
+   gets 1/900 of the Earth's light, and `exposure: "auto"` opens up by itself.
+3. *A second, weak light* (`body.fill`): the strongest of **planet-shine** from another body
+   (`planetShine`: (2/3) × albedo × (radius / distance)² × the Lambert phase function, never over
+   the albedo; the source's mean colour read once from the smallest level of its baked map, mixed
+   with its clouds' colour; from the lit side of the source rather than its middle) and
+   **ring-shine** from the body's own rings (`ringShine`: 0.125 × opacity × |sin of the sun's
+   height over the rings|, from the lit face over the night side; a flat estimate). Honest values
+   are tiny (the full Earth on the Moon: 5.5 × 10⁻⁵ of sunlight). In `film` they are drawn by a
+   stated convention, `filmShine`: 0.236 × honest^0.158 (the Earth on the Moon → 0.05, a low
+   orbit's ground-shine 0.18 → 0.18, fading out under a full Moon's light on the Earth), times
+   `shine` / `ringShine`. One light a body: two sources are not added.
+4. *Eclipses* (`eclipses: true`): see below.
+5. *Ordinary meshes*: `light.directional`, a `THREE.DirectionalLight` (π × the sunlight, so a
+   white `MeshStandardMaterial` facing the sun is as bright as a body's white ground), at `at`
+   (an object, default the camera), its colour times what `sunVisibility` leaves of the sun there
+   (a craft in a planet's shadow is dark, at the shadow's edge red); `light.fill`, a second
+   directional light for planet-shine; `shadows: {size}` gives the first a shadow box round `at`;
+   `ambient` 0; `environment: true` sets `scene.environment = sky.environment`.
+
+**Eclipse shadows.** A soft disc test in the bodies' own shader: `vidgen/space-bodies` gained an
+`ECLIPSE` block (compiled only when `spaceLight` sets the define): for up to 4 bodies between
+this one and the sun (their middles in this body's axes and radii), s the distance along the
+sun's direction and d across it, w = s × tan(the sun's angular radius): the share of the sun
+hidden is min(1, r²/w²) × (1 − smoothstep(|r − w|, r + w, d)), a dark middle and a penumbra as
+wide as the geometry says (a moon smaller than the sun's disc hides only r²/w² of it). The
+sunlight on ground, clouds and air is multiplied by it. A body with air leaves a copper light in
+its shadow (film: 0.085, 0.022, 0.007 of sunlight; honest: 3 × 10⁻⁴). Cost at 720p, a full-disc
+Earth with sky and three-finish: 0.29 s → 0.32 s a frame; opt-in because it recompiles the
+bodies' shaders. Not done: shadows on rings, the bending of light, more than 4 bodies.
+
+**Exposure.** A sunlit ground is about a million times brighter than the sky that
+`vidgen/space-sky` draws (its look is a long exposure: about ISO 3200, f/2.8, 20 s against the
+"sunny 16" rule's ISO 100, f/16, 1/100 s: 20 stops, `SKY_STOPS`).
+
+| `exposure` | Honest? | What it does |
+|---|---|---|
+| `"film"` (default) | **no: a convention** | nothing is changed: the stars stay beside a day side, planet-shine is lifted by `filmShine`, city lights are as bright as Step 371 drew them |
+| `"camera"` | **yes** | one exposure `ev` (stops over a sunlit ground's; a number or a function of t) for everything: sunlit things × 2^ev, the sky × 2^(ev − 20), city lights × 2^(ev − 10) (`LIGHTS_STOPS`), planet-shine as faint as it is. `ev: 0`: the day side as in film, no stars. `ev: 20`: the stars as the sky draws them, the day side burnt out |
+| `"auto"` | **yes** | `camera` with `ev` chosen from what is in the frame at t |
+
+A light is held at `BURN` (32) times white: the picture is white long before, and half floats
+stay finite. **The automatic exposure is a pure function of the scene at t** (scenes render in
+any order and in parallel, so nothing may be carried from the frame before): a grid of 32 × 18
+view rays, each soft at a body's edge, measures the share of the frame covered by each body's
+sunlit ground and by its planet-shine-lit night; each is an entry {the stops it wants, its
+share}; a star in the frame counts as a twentieth of it times what shows. `autoExposure` starts
+at `evMax` (20: nothing lit, the stars' exposure) and lets every entry pull the exposure to its
+own, the brightest last, by smoothstep(log share) from `dark` (2 × 10⁻⁴ of the frame) to `day`
+(0.02), as a meter reading the whole frame lets a thin crescent burn out to show the dark side.
+It changes smoothly because the geometry does (measured: 100 steps of a shrinking lit share, no
+step over 0.8 stops); a cut changes it at once, as a new shot would.
+
+**Measured** (2 cores, SwiftShader, 1280 × 720; with the sky and three-finish unless said, where
+the sky and three-finish alone take 0.24 s a frame):
+
+| Shot | Making it | A frame |
+|---|---|---|
+| a star, disc 180 px in radius, corona | 0.6 s (the corona's map in JavaScript, shaders) | 0.38–0.41 s; alone to the canvas 0.17 s |
+| a star close up (the disc two thirds of the frame) | the same | 0.54–0.58 s; alone 0.39 s, `quality: "fast"` 0.32 s |
+| a far sun in the sky (glare, spikes, ghosts) | the same | 0.24–0.27 s (the glare adds about 0.03 s) |
+| sunrise over the Earth-like world's limb | 8–9 s with the world (maps of 512) | 0.38–0.43 s (the world's close limb is most of it) |
+| a moon with planet-shine and its world | 10 s (two bodies) | 0.27–0.31 s |
+| `eclipses: true` on a full-disc world | | + 0.03 s |
+| `spaceLight.update` (96 rays to the sun, 576 view rays in `auto`) | | under 1 ms in JavaScript |
+| the 15 parts on `vidgen parts` at 320x180 | | 31 s (0.5 s a star, 2–3 s a tile with a sky or a world) |
+
+**Steady in motion.** One clip (640 × 360, 30 fps): the sun rising 1° over the limb in 2 s, then
+1.5 s of the surface close up. `vidgen motion check`: 0 errors, 0 warnings (one info: the web
+scene's own fade at the cut). The glare's light grows frame by frame without a step back (mean
+luma of its region 6.1 → 32.5 over 44 frames; steps −0.02 to +1.6 codes, the negative ones grain
+before the sun shows). The surface: its mean stays within 0.1 code while it boils (196.6–196.7),
+0.1–0.7 codes of change a frame, 2.2 codes over 20 frames.
+
+**Changes to earlier Phase AN modules** (no released film depends on them; pages importing them
+are drawn again): `space-bodies.js` gained the `ECLIPSE` block (three multiplications by a
+vec3 that is 1 without the define; no other change); `space-scale.js` draws objects with
+`userData.overlay` once, after its last depth slice and over everything, and leaves them out of
+its depth intervals (a glare drawn with the far slice would be covered by every nearer world).
+
+**Parts** (`data/web/parts/space-light.js`, kind `light`, 15): `sun-yellow`, `sun-red-dwarf`,
+`sun-orange`, `sun-white`, `sun-blue-giant`, `sun-far`, `sunrise-limb`, `sunrise-diamond`,
+`planet-shine`, `eclipse-shadow`, `eclipse-moon`, `exposure-film`, `exposure-camera`,
+`exposure-camera-stars`, `exposure-auto` (each exposure tile says in its label whether it is
+honest).
+
+**Public interface.** `star(renderer, what, extra)` → `Star`: `object`, `update(t)`, `direction`,
+`occluders`, `gain`, `seen`, `visibility(camera)`, `pixels(camera, height)`, `glare`, `corona`,
+`mesh`, `options`, `tint`, `lightColor`, `dispose()`. `spaceLight(options)` → `SpaceLight`:
+`update(t)`, `directional`, `fill`, `ambient`, `state` (`{exposure, ev, gains, bodies: [{sun,
+intensity, shine, honest, source}], light}`), `albedos`, `dispose()`. Pure helpers (tested in
+Node): `resolveStar`, `starTint`, `sunlightColor`, `starSpots`, `starLoops`, `coronaFaces`,
+`sunVisibility`, `tangentColumn`, `phaseLight`, `planetShine`, `ringShine`, `filmShine`,
+`sunlight`, `exposureGains`, `autoExposure`, `pointShare`, `glareShare`; constants `STARS`,
+`STAR_DEFAULTS`, `LIGHT_DEFAULTS`, `EXPOSURES`, `QUALITIES`, `AU`, `SUN_ANGULAR_RADIUS`,
+`SKY_STOPS`, `LIGHTS_STOPS`, `BURN`, `VERSION`.
+
+**Limits.** A star's surface is a film's look, not a filtered photograph: in an honest exposure
+a sun in the frame is white whatever its temperature. Cells are a lattice's (one size class);
+spots have no fibrils; a loop seen edge-on thins away; the corona is a function of the angle
+round the disc, not a volume. Planet-shine is one directional light per body with no shadow and
+no phase across the source's disc; ring-shine is a flat estimate; neither is added to the other.
+The glare knows the bodies of `vidgen/space-bodies` (round, with or without air), not ordinary
+meshes: a spacecraft does not hide the sun's glare. The automatic exposure does not see the sky,
+city lights or ordinary meshes. An orthographic camera is not supported.
+
+**Tests** (`tests/test_web_space_light.py`): served by its import name with its three imports;
+the 15 parts and which say "honest"; in Node: the stars' options and errors, colours by
+temperature, spots, loops and the corona's map from a seed, the sun's visibility (free, hidden,
+half, smooth over 200 steps, red through air), planet-shine, ring-shine, the film convention,
+sunlight with distance, the exposure gains, the automatic exposure, and `spaceLight` on stand-in
+bodies (film, `shine: 0`, `camera` at 3 and 20 stops, `ev` as a function, `auto`, a placed sun
+with and without falloff, a craft in a world's shadow and at its red edge, errors, `dispose`);
+`slow`: in Chromium a star's disc, limb and corona, the same frame twice, boiling without a
+change of its light, a hot and a cool star, a far sun's glare and spikes, a moon hiding it
+wholly and by half, planet-shine against none, an eclipse's shadow, film against an honest
+exposure, the automatic exposure opening, and the Sun of `ctx.orbits` through
+`vidgen/space-scale` with its glare over the night side. Stills:
+`/home/claude/work/scratch/an372/stills/`.

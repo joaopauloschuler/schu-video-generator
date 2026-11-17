@@ -900,6 +900,10 @@ uniform vec4 uShadow;         // two reaches towards the sun (radians), the map'
 uniform vec4 uFlow;           // the winds' greatest shear (radians), bands, the cycle's phase
 uniform vec4 uAir;            // scale height (radii), top (scale heights), forward share g, twilight
 uniform vec4 uRings;          // inner, outer radius; the profile's length; opacity
+#ifdef ECLIPSE
+uniform vec4 uEclipse[ECLIPSE];      // other bodies towards the sun: middle (this body's axes and radii), radius
+uniform vec4 uEclipseAir[ECLIPSE];   // the light their air bends into their shadow; the tangent of the sun's angular radius
+#endif
 vec3 turnY(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(c * p.x + s * p.z, p.y, c * p.z - s * p.x); }
 #ifdef AIR
 // the air between a point (X its distance from the centre and h its height, in scale heights) and space
@@ -946,7 +950,17 @@ void main() {
   float o2 = textureCube(uB, normalize(p + toSun * uShadow.y)).a - B.a - uShadow.y * rise;
   shade = 1.0 - smoothstep(0.0, uShadow.w, max(o1, o2));
 #endif
-  vec3 sunAtGround = uLight, sky = vec3(0.0);
+  vec3 sunAtGround = uLight, sky = vec3(0.0), ecl = vec3(1.0);
+#ifdef ECLIPSE
+  // other bodies' shadows (vidgen/space-light sets them): how much of the sun's disc each hides from here, a soft disc test
+  for (int i = 0; i < ECLIPSE; i++) {
+    vec3 c = uEclipse[i].xyz - p;
+    float s = dot(c, uSunO), d = length(c - uSunO * s), r = uEclipse[i].w, w = max(s, 0.0) * uEclipseAir[i].w + 1e-5;
+    float hid = min(1.0, r * r / (w * w)) * (1.0 - smoothstep(abs(r - w), r + w, d)) * step(0.0, s);
+    ecl *= mix(vec3(1.0), uEclipseAir[i].rgb, hid);
+  }
+  sunAtGround *= ecl;
+#endif
 #ifdef RINGS
   // the rings' shadow: where the sun's ray from here crosses their plane
   vec3 pu = p * uOb, su = normalize(uSunO * uOb);
@@ -958,7 +972,7 @@ void main() {
 #ifdef AIR
   float X0 = 1.0 / uAir.x;
   vec3 airSun = exp(-uExt * column(X0, 0.0, mu));
-  sky = uBetaR / uExt * (1.0 - exp(-uExt * 1.5)) * smoothstep(-0.25, 0.35, mu) * uAir.w * 0.35;   // the sky's own light on the ground
+  sky = ecl * uBetaR / uExt * (1.0 - exp(-uExt * 1.5)) * smoothstep(-0.25, 0.35, mu) * uAir.w * 0.35;   // the sky's own light on the ground
   sunAtGround *= airSun;
 #endif
 #ifdef CLOUDS
@@ -987,7 +1001,7 @@ void main() {
   float mc = max(mu, 0.0);
   vec3 cloudLight = sunAtGround * mc * (0.30 + 0.70 * sqrt(mc)) * relief;
 #ifdef AIR
-  cloudLight = mix(cloudLight, uLight * sqrt(airSun) * max(mu + 0.02, 0.0) * relief, 0.5) + uLight * sky * 1.3;   // the tops stand above half the air: less red than the ground
+  cloudLight = mix(cloudLight, uLight * ecl * sqrt(airSun) * max(mu + 0.02, 0.0) * relief, 0.5) + uLight * sky * 1.3;   // the tops stand above half the air: less red than the ground
 #endif
   S = mix(S, uCloudColor * (0.72 + 0.28 * cloud) * cloudLight + uFill * max(dot(nW, uFillW), 0.0), thick);
 #endif
@@ -1010,7 +1024,7 @@ void main() {
     x = ro + rd * tmid; r = length(x);
     float cs = column(r * X0, max(r - 1.0, 0.0) * X0, dot(x, uSunO) / r);
     vec3 Ts = exp(-uExt * cs) + uAir.w * 0.2 * exp(-uExt * cs * 0.12) * smoothstep(-0.35, 0.1, dot(x, uSunO) / r);   // the sun through the air, and the air's own second-hand light
-    scat += (T - Tn) * (phase * Ts * uLight + uAirGlow);
+    scat += (T - Tn) * (phase * Ts * uLight * ecl + uAirGlow);
     T = Tn;
   }
   scat *= inAir; through = mix(vec3(1.0), T, inAir);

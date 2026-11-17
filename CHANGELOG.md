@@ -5,10 +5,30 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–371
+## Steps 193–372
 
-### Space scenes (Phase AN, Steps 367–371)
+### Space scenes (Phase AN, Steps 367–372)
 
+- **Suns and the light of a space scene** (Step 372): the new module `vidgen/space-light`.
+  `star(renderer, "sun")` is a star you can look at: cells that boil in place, a limb that darkens
+  and reddens, spots and faculae from a seed, a corona with streamers, loops of gas at the limb;
+  five ready-made kinds by temperature (`red-dwarf`, `orange`, `sun`, `white`, `blue-giant`) or
+  your own. Small in the frame (`{direction}` for a sun in the sky, or the Sun of `ctx.orbits`
+  with `{space}`) it is a brilliant point with a soft glow, thin diffraction spikes fixed to the
+  frame and faint round lens ghosts. `spaceLight({scene, camera, sun, bodies, sky})` lights the
+  whole scene from one place each frame: every body's sun, planet-shine and ring-shine on night
+  sides, a directional light for ordinary meshes, optional eclipse shadows (`eclipses: true`: a
+  moon's shadow on its world, a world's copper shadow on its moon), no ambient light. The glare
+  knows the bodies in front of the sun: at sunrise over a world's limb it starts as a red spark
+  and grows, with nothing read back from the picture. Exposure is a stated choice: `"film"` (the
+  default, a convention: stars beside a day side, planet-shine lifted), `"camera"` (honest: one
+  exposure `ev`; the stars are 20 stops under a sunlit ground) and `"auto"` (honest: the exposure
+  follows what is in the frame, with no state between frames). `falloff: 2` gives the true
+  inverse-square sunlight; the default 0 lights every world alike. 15 parts on `vidgen parts
+  --kind light`. `vidgen/space-scale` now draws objects marked `userData.overlay` once, over
+  everything, after its depth slices; `vidgen/space-bodies` gained the eclipse test in its shader
+  (off unless `spaceLight` asks). A star takes 0.6 s to make and 0.15 to 0.4 s a frame at 720p
+  in software GL.
 - **Planets, moons and rings in one line** (Step 371): `planet(renderer, "earth")` from the new
   module `vidgen/space-bodies` puts a world into a three.js `web` scene whose surface is generated
   from a seed: seven types (`rocky` with craters, maria and rays; `icy` with long cracks;

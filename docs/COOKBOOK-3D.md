@@ -174,6 +174,15 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   with shadows both ways. three.js lights do not light it (give the sun's direction); it writes
   its own depth, so depth of field and bloom work; give `Finish` `antialias: "none"` (its edge
   is already smooth, and FXAA breaks thin rings into dots). Look first: `vidgen parts --kind body`.
+- **A sun and its light.** `const sun = star(renderer, "sun", {direction})` and `const light =
+  spaceLight({scene, camera, sun, bodies, sky})` from `vidgen/space-light` (CONFIG `web`, "Suns
+  and light"); call `sun.update(t)` and `light.update(t)` last in `Finish`'s `update`. The star
+  is linear light well above white where it is small, so three-finish's bloom makes it glow
+  (default bloom is enough; a hot star close up tints a wide part of the frame, lower
+  `bloom.strength` if it does). Ordinary meshes (`MeshStandardMaterial`) are lit by
+  `light.directional`; `environment: true` adds the sky's reflections; `shadows: {size}` (with
+  `renderer`) gives hard shadows round `at`. The default exposure `"film"` keeps stars beside a
+  day side by convention; `"camera"` and `"auto"` are the honest ones.
 - **A sky behind it.** `scene.add(spaceSky(renderer, {seed}).object)` from `vidgen/space-sky`
   (CONFIG `web`, "The sky of a space scene") is a sky like a photograph from space: thousands of
   stars with the real sky's spread of brightness, the Milky Way with its dust, optional nebulae and

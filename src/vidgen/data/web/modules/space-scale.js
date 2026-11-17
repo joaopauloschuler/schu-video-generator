@@ -437,13 +437,14 @@ export class SpaceView {
   _draw() {
     const r = this.renderer, scene = this.scene, cam = this.camera;
     scene.updateMatrixWorld(); cam.updateMatrixWorld();
-    const all = this._drawables();
+    const drawn = this._drawables(), all = drawn.filter((o) => !o.userData.overlay);
     if (this.depth !== "split") {
       const [n, f] = this._fit(this._intervals(all));
       this.slices = [[n, f]];
       return this._pass(n, f);
     }
-    const sky = all.filter((o) => !o.frustumCulled), world = all.filter((o) => o.frustumCulled);
+    // overlays (userData.overlay: a lens's glare) are drawn once, over everything, after the last slice
+    const sky = all.filter((o) => !o.frustumCulled), world = all.filter((o) => o.frustumCulled), overlay = drawn.filter((o) => o.userData.overlay);
     const iv = this._intervals(world);
     const slices = iv.length ? depthSlices(iv, {ratio: this.ratio, join: this.join, maxSlices: this.maxSlices, near: this.near}) : [];
     this.slices = slices;
@@ -452,9 +453,11 @@ export class SpaceView {
     const hide = (list) => { for (const o of hidden) o.visible = true; hidden = list; for (const o of list) o.visible = false; };
     const next = () => { if (passes++ === 0) return; scene.background = null; r.autoClear = false; r.shadowMap.autoUpdate = false; r.clearDepth(); };
     try {
-      if (sky.length) { hide(world); next(); this._pass(...this._fit(this._intervals(sky))); hide(sky); }
+      if (sky.length) { hide([...world, ...overlay]); next(); this._pass(...this._fit(this._intervals(sky))); }
+      hide([...sky, ...overlay]);
       for (const [n, f] of slices) { next(); this._pass(n, f); }
       if (passes === 0) { next(); this._pass(this.near, this.near * 1e6); }
+      if (overlay.length) { hide([...sky, ...world]); next(); this._render(scene, cam); }
       if (this.dofFocus !== null && slices.length) this._dofDepth(slices);
     } finally {
       hide([]);
