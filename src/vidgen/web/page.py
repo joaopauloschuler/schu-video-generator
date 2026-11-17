@@ -356,16 +356,19 @@ class WebPage:
     and drawn at the device scale :attr:`scale`, so the frames are still ``size``; without it the
     window is ``size`` at scale 1. ``music`` (§120.8): the scene's music data
     (:func:`vidgen.web.music.scene_music`), given to the page as ``ctx.music`` by vidgen's music
-    helper; ``None``: no helper, no ``ctx.music``.
+    helper; ``None``: no helper, no ``ctx.music``. ``orbits`` (§122.3): the scene's orbit data
+    (:func:`vidgen.scenes.orbit_data.scene_orbit_data`), given as ``ctx.orbits`` by vidgen's orbit
+    helper; ``None``: no helper, no ``ctx.orbits``.
     :attr:`loaded` maps every file served so far (project path, or ``__vidgen__/...``)
     to its SHA-256, a missing project file to ``None`` (§118.10)."""
 
     def __init__(self, root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, int], fps: int, frames: int,
                  theme: dict[str, Any] | None = None, data: dict[str, Any] | None = None,
                  beats: list[dict[str, Any]] | None = None, shape: dict[str, Any] | None = None,
-                 design_width: int | None = None, music: dict[str, Any] | None = None) -> None:
+                 design_width: int | None = None, music: dict[str, Any] | None = None, orbits: dict[str, Any] | None = None) -> None:
         self.root, self.entry, self.scene_id = root, entry, scene_id
         self.music = music
+        self.orbits = orbits
         self.size, self.fps, self.frames = size, fps, frames
         self.design_width = design_width
         self.viewport, self.scale = page_viewport(size, design_width)
@@ -504,6 +507,10 @@ class WebPage:
             from vidgen.web.music import helper_source
 
             context.add_init_script(script=helper_source())
+        if self.orbits is not None:   # ctx.orbits (DESIGN.md §122.3): only on pages of scenes with orbit_data
+            from vidgen.web.orbits import helper_source as orbit_helper
+
+            context.add_init_script(script=orbit_helper())
         context.route("**/*", self._serve)
         self._page = page = context.new_page()
         self._cdp = context.new_cdp_session(page)
@@ -519,7 +526,8 @@ class WebPage:
         self._limit = _TimeLimit(renderer_pids(browser))
         info = {"scene": self.scene_id, "width": width, "height": height, "fps": self.fps,
                 "frames": self.frames, "duration": self.frames / self.fps, "theme": self.theme, "data": self.data,
-                "beats": self.beats, **self.shape, **({} if self.music is None else {"music": self.music})}
+                "beats": self.beats, **self.shape, **({} if self.music is None else {"music": self.music}),
+                **({} if self.orbits is None else {"orbits": self.orbits})}
         errors = self._evaluate("info => window.__vidgen.start(info)", info, "at load", "load(ctx)", LOAD_TIMEOUT_S)
         self._raise_first(errors, "at load")
 

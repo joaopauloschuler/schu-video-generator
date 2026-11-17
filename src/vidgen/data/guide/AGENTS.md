@@ -3340,6 +3340,7 @@ own code with it. `vidgen render` tells you instead (below, "Render cost").
 | `beats` | `[{id, index, start, end, text, words: [{text, start, end}]}]`, seconds from the scene's start (`[]` without narration) |
 | `scene`, `frame`, `region` | the scene id, the video frame's `{width, height}`, `bleed` or `body` |
 | `music` | with `music_data:` only: the video's music ("Pictures that follow the music" below) |
+| `orbits` | with `orbit_data:` only: planets, moons and spacecraft on their orbits ("Orbits on a page" below) |
 
 **The theme.** vidgen puts CSS variables on `:root` before your own styles: `var(--vidgen-text)`,
 `--vidgen-primary` (one per colour), `--vidgen-background`, `--vidgen-palette-0`…,
@@ -3425,6 +3426,45 @@ export function frame(t, ctx) {
   has not rendered it yet). `vidgen still` shows the frames with the same data.
 - A whole worked example: `examples/signal-fire` (an orchestral cue written with dynamics, hairpins
   and slurs, and a three.js page finished with `vidgen/three-finish` that reads ten of its tracks).
+
+**Orbits on a page.** `orbit_data:` in a scene's `params` gives the page `ctx.orbits`: the bodies
+of the `orbit` scene (same keys: `central`, `bodies`, `span` / `orbits` / `speedup`, `date`,
+`transfer`, `flyby`, `dynamics`, `system`) computed by vidgen for every frame. Do not write orbits
+in JavaScript.
+
+```yaml
+- id: to_mars
+  type: web
+  duration: 12
+  params:
+    script: extensions/space.js
+    orbit_data:
+      bodies:
+        - {preset: earth, e: 0, i: 0, raan: 0, argp: 0}
+        - {preset: mars, e: 0, i: 0, raan: 0, argp: 0, nu: 95}
+        - {name: Ship, alongside: Earth}
+      transfer: {ship: Ship, to: Mars}     # or date: "2026-11-17" and span: "1 yr" for the planets on a day
+```
+
+```js
+export function frame(t, ctx) {
+  const o = ctx.orbits;                       // metres, m/s, seconds, radians; the frame drawn unless given t
+  const p = o.yUp(o.position('Ship'));        // [x, y, z] from the Sun in the ecliptic (z up) -> three.js (y up)
+  const v = o.velocity('Ship');               // point the ship along it
+  const q = o.quaternion('Earth');            // the Earth's tilt and spin ([x, y, z, w]; o.yUpQuaternion for three.js)
+  const burn = o.burns('Ship').find((b) => b.frame === o.index());   // a burn starts on this frame
+}
+```
+
+- Positions are true (metres from the central body); enlarging bodies or compressing distances is
+  your page's choice: say it on screen ("sizes not to scale"). `o.approximations` lists what the
+  model simplifies, in words a caption can use.
+- Rotation (period, axial tilt, pole, radii, with sources) for the Sun, the planets, the Moon and
+  the Galilean moons: `o.bodies.Earth.rotation`; a tidally locked moon faces its planet.
+- `o.path(name)` and `o.conic(name)` are polylines relative to the body's parent: the path over
+  the scene and the orbit at the start.
+- `planes: {Ship: ecliptic}` when a body around a planet is measured from the ecliptic, not the
+  planet's equator (the default for `iss`, `geo` and bodies of your own around a planet).
 
 **three.js** comes with vidgen: `import * as THREE from "three"` in a `script:` or in a page's
 `<script type="module">` (with a chosen set of its add-ons, below):

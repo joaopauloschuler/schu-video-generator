@@ -26030,3 +26030,176 @@ byte-identical (`271de0c6…4dc8`, rendered after the change). No test holds an 
 those scores (theirs hash the score file, unchanged). Tests: `tests/test_studio_strings.py`
 `test_a_slow_soft_swell_has_no_breath_above_its_tone` (fails on the old hiss) and
 `test_an_ordinary_note_keeps_its_rosin_at_full_bow`.
+
+## 122. Space scenes (Phase AN, Steps 367–378)
+
+The owner wants agents to make space scenes easily (2026-11-17): three.js `web` scenes built from
+ready-made parts, on the orbit model of Phase X (§98) instead of motion written in JavaScript.
+Owner's decisions: positions and timing are **true by default** (enlarged bodies or compressed
+distances are explicit, stated choices); the sky is algorithmic from a seed by default, a real
+star catalogue as an option; the spacecraft kit is its own step.
+
+| Step | What | Section |
+|---|---|---|
+| 367 | The orbit bridge: the third dimension audited and fixed, rotation data for the Sun, planets, Moon and Galilean moons, `orbit_data:` → `ctx.orbits` | §122.1–122.3 |
+| 368 | Scale: floating origin, depth, three scale modes and their honest labels | |
+| 369 | Checks for dark pictures; a contact sheet of ready-made parts | |
+| 370 | The sky (algorithmic, real) | |
+| 371 | Planets, moons and rings | |
+| 372 | Suns and light | |
+| 373 | Phenomena | |
+| 374 | Spacecraft kit | |
+| 375 | Space camera moves | |
+| 376 | Space scenes without code (`video.yaml`) | |
+| 377 | Example film | |
+| 378 | Critical review, COOKBOOK-SPACE | |
+
+### 122.1 The third dimension of the orbit model (Step 367)
+
+Read module by module and measured (`tests/test_orbit_rotation.py`; the audit script of the step
+in `/home/claude/work/scratch/an367/tools/audit.py`).
+
+| part | 3D? | measured / note |
+|---|---|---|
+| `kepler.py` | — | anomalies only (scalars) |
+| `elements.py`: elements ↔ state, motion, conic | yes | perifocal → reference frame R₃(−Ω) R₁(−i) R₃(−ω), checked term by term; `from_state` handles equatorial (Ω = 0), circular (ω = 0) and retrograde-equatorial (i = 180°) orbits; 2,000 random ellipses and hyperbolas with i in {0, 90°, 180°, random}: state → elements → state agrees to 4 × 10⁻¹³ (relative) at three times |
+| `manoeuvres.py`: burns, trajectories | yes | the local frame (prograde, radial, normal) is 3D; a 1 km/s normal burn at 7.55 km/s tilts the plane by atan(1/7.55) to 10⁻¹⁴ rad |
+| transfers (`orbit_parts._transfer`) | one plane, any plane | circular coplanar orbits (refused otherwise). **Fixed:** the lead angle was measured between the x–y projections (`atan2(y, x)` and the sign of h_z), so between orbits in a common inclined plane the launch window was wrong: the ship missed its target by 221 km at i = 30°, 1,377 km at 60°, 10,125 km at 89° (Earth, 400 → 2,000 km). Now measured in the ship's plane, atan2((r_s × r_t)·ĥ, r_s·r_t): misses under 1 m at 0°, 30°, 60°, 89°, 150°. In the reference plane (h_x = h_y = 0) the old arithmetic is kept bit for bit |
+| `flyby.py`, the `flyby` param | **2D** | a gravity assist in the planet's frame, v∞ and the planet's velocity in the x–y plane (`gravity_assist` refuses z); the planet's real direction of motion is not used (x is it by definition) |
+| `nbody.py` | yes | the integration is 3D. **Fixed:** the angular-momentum check (`angular_drift`, the lint's `orbit_conserved`) looked at L_z only; it now takes the whole vector (`NBodyRun.angular_xy` holds L_x, L_y). In a flat system they are exactly 0 (z stays exactly 0), so every existing value is unchanged; the panel's signed ΔL/L stays L_z |
+| `threebody.py`, `system:` | **2D** | the circular restricted problem in its plane: Lagrange points, zero-velocity curves, `near` / `shift` / `drift` [x, y], the rotating view turns about z |
+| `manybody.py` | **2D** | the figure-eight, binaries, resonances (angles in x–y), the tidal schematic |
+| `laws.py` (cannonball) | **2D** | Newton's cannon in the x–y plane |
+| `ephemeris.py` | yes | heliocentric ecliptic J2000 positions with z; events by ecliptic longitude (as defined) |
+| dated presets | yes, approximate | the planets start on Table 1's elements of the date and then move on two-body orbits (μ = GM☉ + GM), not along Table 1's rates: after a year the model differs from Table 1 by 5,746 km for the Earth (7.9″ seen from the Sun), 16,500 km for Mars (15″), 13,974 km for Jupiter (3.7″), 105,960 km for Neptune (4.9″), within the table's own accuracy (arcseconds to arcminutes) |
+| the `orbit` scene's picture | 2D by design | every orbit seen from above its reference plane (x, y); `normal` burns show only their projection (documented on the param) |
+
+**Reference planes.** The presets measure i, Ω, ω from two planes: the planets, the Moon and
+Halley from the ecliptic of J2000; `iss`, `geo` and the Galilean moons from their planet's
+equator. The model used each set as written in one frame, which is right for the flat picture of
+one planet's satellites but not in 3D (an ISS-like orbit would lie 51.6° to the ecliptic, a
+geostationary one in the ecliptic). `OrbitPreset.plane` (`ecliptic` / `equator`) now says which;
+the flat `orbit` scene is unchanged (it draws each orbit from above its own plane), the `web`
+orbit data turns equatorial orbits into the ecliptic (§122.3). In a flat Earth-centred scene with
+`iss` and `moon` the two planes still mix (the Moon's i is to the ecliptic): left as it is, the top
+view hides it.
+
+**Unchanged outputs.** The resolved models of every `orbit` scene of `examples/gallery` and
+`examples/mars-transfer` (positions and velocities of every body at 64 times, transfer departure,
+arrival, phase and miss, the diagnostics) were dumped on the starting commit and after the step:
+identical.
+
+### 122.2 Body rotation data (Step 367)
+
+`vidgen.orbits.rotation`: the IAU WGCCRE model of each body — the north pole's right ascension
+α₀ and declination δ₀ (ICRF, degrees: constant + rate × T Julian centuries) and the prime
+meridian's angle W (degrees: constant + rate × d days from J2000.0 TDB), with periodic terms —
+and the radii. **Sources:** the IAU WGCCRE report 2015 (Archinal et al. 2018), the 2009 report
+(Archinal et al. 2011) for Mars, Saturn and Neptune, NASA's planetary fact sheets for the
+published periods and tilts. Written from memory of those documents (no network): **for the owner
+to check** (`RotationModel.check`; the Sun, Venus and the Earth are the ones I am sure of).
+
+| body | pole α₀, δ₀ (°) | W (°, per day) | period (formula; published) | tilt (computed; published) | radii (km) | left out / unsure |
+|---|---|---|---|---|---|---|
+| Sun | 286.13, 63.87 | 84.176 + 14.1844000 d | 25.380 d; 25.38 d | 7.252° to the ecliptic; 7.25° | 695,700 | Carrington rate; the surface turns faster at the equator |
+| Mercury | 281.0103 − 0.0328T, 61.4155 − 0.0049T | 329.5988 + 6.1385108 d | 1407.51 h; 1407.6 h | 0.034°; 0.034° | 2440.53, 2438.26 | libration terms (≤ 0.01°) |
+| Venus | 272.76, 67.16 | 160.20 − 1.4813688 d | −5832.44 h; −5832.5 h | 177.36°; 177.4° | 6051.8 | — |
+| Earth | 0.00 − 0.641T, 90.00 − 0.557T | 190.147 + 360.9856235 d | 23.9345 h; 23.9345 h | 23.439°; 23.44° | 6378.1366, 6356.7519 | approximate model: no ΔT, so W is about 0.3° off the real Earth |
+| Moon | 269.9949 + 0.0031T − 3.8787 sin E1 − 0.1204 sin E2, 66.5392 + 0.0130T + 1.5419 cos E1 + 0.0239 cos E2 | 38.3213 + 13.17635815 d − 1.4 × 10⁻¹² d² + 3.5610 sin E1 + 0.1208 sin E2 | 27.3217 d; 655.7 h | equator 1.543° to the ecliptic; 1.54° | 1737.4 | E3–E13 (each under 0.1°) |
+| Mars | 317.68143 − 0.1061T, 52.88650 − 0.0609T | 176.630 + 350.89198226 d | 24.6230 h; 24.6229 h | 25.192°; 25.19° | 3396.19, 3376.20 | the 2015 periodic terms |
+| Jupiter | 268.056595 − 0.006499T, 64.495303 + 0.002413T | 284.95 + 870.5360000 d (System III) | 9.92492 h; 9.9250 h | 3.120°; 3.13° | 71,492, 66,854 | pole terms under 0.001° |
+| Saturn | 40.589 − 0.036T, 83.537 − 0.004T | 38.90 + 810.7939024 d (System III) | 10.6562 h; 10.656 h | 26.730°; 26.73° | 60,268, 54,364 | the interior period is uncertain by minutes |
+| Uranus | 257.311, −15.175 | 203.81 − 501.1600928 d | −17.24 h; −17.24 h | 97.770°; 97.77° | 25,559, 24,973 | — |
+| Neptune | 299.36 + 0.70 sin N, 43.46 − 0.51 cos N | 253.18 + 536.3128492 d − 0.48 sin N | 16.11 h; 16.11 h | 28.318°; 28.32° | 24,764, 24,341 | **unsure**: the 2015 report may use another W (about 15.97 h) |
+| Io, Europa, Ganymede, Callisto | 268.05, 268.08, 268.20, 268.72 (− 0.009T); 64.50, 64.51, 64.57, 64.83 (+ 0.003T); with J3–J8 terms | 200.39 + 203.4889538 d, 36.022 + 101.3747235 d, 44.064 + 50.3176081 d, 259.51 + 21.5710715 d | equal to the presets' orbital periods to 10⁻⁶ | poles within 0.05°, 0.47°, 0.20°, 0.20° of Jupiter's | 1829.4 × 1819.4 × 1815.7, 1562.6 × 1560.3 × 1559.5, 2631.2, 2410.3 | — |
+
+The checks are tests: each period from the formula against the published one (2 × 10⁻⁴), each
+planet's tilt computed from its pole and Table 1's orbit normal against the fact sheet (0.05°),
+the Sun's 7.25°, the Moon's 1.54° (Cassini's laws), the Galilean moons' periods against
+`GALILEAN_PERIODS`. Directions are turned from ICRF into the mean ecliptic and equinox of J2000 by
+ε = 84,381.448″ (the frame bias of 0.02″ ignored). A body's frame: x towards its prime meridian, z
+its IAU north pole (Venus and Uranus turn backwards about it); `frame(jd)` = E · R₃(α₀ + 90°)
+R₁(90° − δ₀) R₃(W). `equator_frame` (x the ecliptic's ascending node on the body's equator — the
+equinox for the Earth —, z the pole) turns orbits measured from an equator into the ecliptic.
+Pluto, Ceres and other moons have no rotation data yet; a body of the author's own has none
+(open: a `spin` for bodies of one's own, Step 371).
+
+### 122.3 Orbit data for `web` scenes: `orbit_data:` → `ctx.orbits` (Step 367)
+
+Built the way `music_data` is (§120.8): declared in the scene, computed in Python, cached, in the
+keys, given to the page by a helper script.
+
+- **The interface.** A `web` scene's param `orbit_data:` (`vidgen.scenes.orbit_data.OrbitData`)
+  takes the `orbit` scene's own models and words — `central`, `bodies` (`OrbitBody`: presets,
+  elements, state vectors, `around`, `alongside`, `burns`; its drawing keys accepted and unused),
+  `span` / `orbits`, `dynamics` / `method` / `step`, `transfer`, `flyby`, `system`, `date` — plus
+  `speedup` (simulated seconds per scene second, instead of a span), `planes` and
+  `path_samples`. Labels (`label` of bodies, the central body, burns) are translatable as in the
+  `orbit` scene and reach the page as `label`. They are resolved by the same `resolve_model`, so a mistake reads as in the
+  `orbit` scene (`vidgen validate`: `scenes[1].params.orbit_data: ...`, with did-you-mean).
+- **Time base.** Frame n of the scene (vidgen's clock: scene time t = n / fps) shows simulated
+  time `span × min(n, N) / N`, N the scene's own frames (its beats or duration and its fade-out;
+  the clip's 2 spare frames hold the end): one constant speed-up from the first frame, as
+  `Playback` without its entrance. t = 0 is the `date` (default J2000.0 TT: the planet presets'
+  own epoch, so the default places the planets where they were then). `time`, `jd` and `index`
+  give it to the page.
+- **Units and frame.** SI: m, m/s, s, rad. The mean ecliptic and equinox of J2000 (x the equinox,
+  z the ecliptic's north pole), origin the central body; a `flyby` stays in the planet's frame
+  (`frame: flyby`). Each orbit's plane: `planes` per body, default the preset's `plane`; a body of
+  one's own around a planet or moon with rotation data its equator, around the Sun the ecliptic;
+  `alongside` the other body's. An `equator` orbit's position and velocity relative to its parent
+  are turned by `equator_frame` of the parent at the start's date (the pole is held for the scene:
+  the Earth's moves by less than 1′ a year), then the chain of parents is added up as `System.position`
+  does. With `dynamics: nbody` or a `flyby` every body stays as written (`as_written`; asking for
+  `equator` is refused); a transfer between bodies in different planes is refused.
+- **Rotation.** For each body with rotation data, per frame a quaternion (x, y, z, w; w ≥ 0) of its
+  frame and W (rad). A tidally locked moon (the Moon, the Galilean moons) orbiting a body of the
+  data faces it: x is the direction to its parent projected on its equator (the IAU puts the
+  mean sub-planet point at longitude 0), because the model places these moons by phase, not on the
+  date, and the IAU formula's meridian would not face the planet; W is then measured from the
+  same node as the IAU's. A geostationary satellite stays over one longitude of the turning Earth
+  to 10⁻³° over a day (test).
+- **What a body carries.** `name`, `key` (the preset), `parent` (the central body's name for its
+  direct satellites), `label`, `color` (a theme token), `gm`, `radius`, `plane`, `rotation`
+  (period, retrograde, synchronous, faces_parent, pole and spin axis as unit vectors, the pole's
+  α₀ δ₀, the tilt computed against its orbit's normal at the start or, for the Sun, the
+  ecliptic's, the published tilt, radii, source, note), `orbit` at the start in the data's frame
+  (a, e, i, raan, argp, nu, period, kind), `burns` (number, time, the first frame at or after it,
+  Δv in the data's frame, its prograde / radial / normal parts, size, direction, label), and the
+  base64 float64 series `position`, `velocity` (frames × 3), `quaternion` (frames × 4), `spin`,
+  `path` (`path_samples` points over the span, relative to the parent) and `conic` (the orbit at
+  the start, 361 points). The data also names its `approximations` in words (two-body orbits or
+  n-body, Table 1 on the date or J2000, the Galilean phases, impulsive burns, patched conics,
+  rotation models).
+- **A spacecraft** is a body: on a `transfer` or with `burns` its position and velocity follow its
+  Kepler arcs through the impulsive burns; a `flyby` probe is a body of the planet's frame. Step
+  374 reads `position` and `velocity` per frame (attitude along the velocity, or along a burn's
+  `dv` from its `frame`), `time` for the time base.
+- **Precision and agreement.** float64 from Python to the page (base64 little-endian), read
+  without interpolation from the frame the time falls on. Tests: the positions and velocities equal
+  `OrbitModel.position` / `velocity` at the frame times bit for bit (presets on a date, a transfer,
+  a flyby, an n-body run), equal the flat `orbit` scene's model, and the planets' first positions
+  equal `ephemeris.heliocentric` on the date (10⁻⁶ relative); a Chromium page reads
+  `ctx.orbits.position / velocity / quaternion / spin / time` at three frames and gets exactly the
+  Python values (`tests/test_orbit_data.py::test_the_page_receives_the_numbers_python_computed`).
+  `vidgen still` of a small project drew the transfer from `ctx.orbits` (the ship's x at frame 35:
+  −0.941639 AU on the page, −0.94163906 AU in the cached data).
+- **Cache and keys.** `vidgen.web.orbits.scene_orbit_data` (in `vidgen.api` as
+  `web_scene_orbits`, the one name this step adds there; the maker `make_orbit_data` stays in the
+  built-in scene module `vidgen/scenes/orbit_data.py`, which imports only `vidgen.api`) keeps the
+  data in `build/orbits/orbit-data-<key>.json`; the key holds the data version,
+  vidgen's version, the SHA-256 of the orbit code (`vidgen/orbits/`, `orbit_parts`, `orbit_sky`,
+  `orbit_systems`, `orbit_data`), the settings, the frame rate, the frames drawn and the scene's
+  own. The render fingerprint already holds the params, the beats' audio and vidgen's source, so
+  nothing is added there. The clip inputs get `orbits: {data: SHA-256 of what the page is sent,
+  helper: SHA-256 of orbits.js}` only for a scene with `orbit_data`; the helper is an init script
+  added only on those pages (like `music.js`): `runtime.js` and `engine_id()` are unchanged, so no
+  other clip key changes. Deterministic: the same settings give the same JSON (test).
+- **Measured.** The eight planets and the Moon on a date, 1,802 frames (60 s at 30 fps): made in
+  0.13 s, 2.3 MB of JSON (float64 base64: about 125 bytes per body per frame with rotation). A page
+  of a transfer: ready in 0.7 s at 320×180.
+- **For the later steps.** Step 368 (scale, floating origin): float64 metres from the central
+  body; a page subtracts the camera's position in float64 before handing float32 to three.js.
+  Step 371: `quaternion` (or `pole` and `spin`) and `radii`. Step 374: `position`, `velocity`,
+  `burns`, `time`. Step 376: `OrbitData` is a pydantic model that a declarative space scene can
+  hold as it is; `yUp` / `yUpQuaternion` give three.js's axes.

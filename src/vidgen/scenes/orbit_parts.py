@@ -800,12 +800,17 @@ class AssistInfo:
 
 
 def lead_angle(system: Any, ship: str, target: str, t: float) -> float:
-    """The angle (rad, in (−π, π]) the target leads the ship by at ``t``, in the ship's direction of motion."""
+    """The angle (rad, in (−π, π]) the target leads the ship by at ``t``, in the ship's direction
+    of motion, measured in the ship's orbital plane (Step 367: an inclined plane too)."""
     o = system.orbiter(ship)
     r_s, v_s = o.states(t)
     r_t = system.orbiter(target).positions(t)
-    sense = 1.0 if np.cross(r_s, v_s)[2] >= 0 else -1.0
-    ang = sense * (math.atan2(r_t[1], r_t[0]) - math.atan2(r_s[1], r_s[0]))
+    h = np.cross(r_s, v_s)
+    if h[0] == 0 and h[1] == 0:   # the reference plane: the x-y angles, as before Step 367
+        sense = 1.0 if h[2] >= 0 else -1.0
+        ang = sense * (math.atan2(r_t[1], r_t[0]) - math.atan2(r_s[1], r_s[0]))
+    else:
+        ang = math.atan2(float(np.cross(r_s, r_t) @ h) / float(np.linalg.norm(h)), float(r_s @ r_t))
     out = (ang + math.pi) % (2 * math.pi) - math.pi
     return math.pi if out == -math.pi else out
 

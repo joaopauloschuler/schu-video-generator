@@ -377,7 +377,9 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
         }
     ],
     "title": [{"title": "T:title T:hl", "subtitle": "T:sub", "kicker": "T:kicker", "authors": ["T:a"], "highlight": "T:hl"}],
-    "web": [{"page": "extensions/page.html"}],
+    "web": [{"page": "extensions/page.html"},
+            {"page": "extensions/page.html", "orbit_data": {"central": {"preset": "earth", "label": "T:earth"}, "bodies": [
+                {"name": "Ship", "altitude": "400 km", "label": "T:ship", "burns": [{"at": "10 min", "prograde": "0.1 km/s", "label": "T:burn"}]}]}}],
     "3d": [{"title": "T:title", "objects": [{"id": "crate"}, {"id": "tag", "shape": "label", "text": "T:text"}, {"id": "ana", "shape": "standin", "name": "T:name"}]}],
     "video_clip": [{"path": "x.mp4", "title": "T:title", "caption": "T:caption", "steps": [[{"box": BOX, "label": "T:c"}]]}],
 }

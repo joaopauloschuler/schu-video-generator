@@ -679,6 +679,7 @@ from vidgen.web.inputs import page_shape as web_page_shape  # noqa: E402
 from vidgen.web.inputs import page_viewport as web_page_viewport  # noqa: E402
 from vidgen.web.inputs import scene_page_inputs as web_page_inputs  # noqa: E402
 from vidgen.web.music import MusicDataSettings as WebMusicData, has_music as video_has_music, scene_music as web_scene_music  # noqa: E402
+from vidgen.web.orbits import scene_orbit_data as web_scene_orbits  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
 from vidgen.shorts_suggest import Suggestions, TimedBeat, Window as ShortsWindow, shorts_yaml, suggest_shorts, timed_beats, write_suggestions  # noqa: E402
@@ -1006,6 +1007,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "WebMusicData",
     "video_has_music",
     "web_scene_music",
+    "web_scene_orbits",
     "clip_plan",
     "make_guide_passes",
     "GUIDE_PASSES",

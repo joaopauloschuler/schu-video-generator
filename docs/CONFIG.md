@@ -6757,6 +6757,7 @@ command, same `vidgen validate` warning).
 | `design_width` | int (200–8192) | — | for a page built in fixed pixels: the window width it was designed for, in CSS pixels (`1280`). The page is laid out in a window that wide and as high as its region's shape gives, and drawn at the video's size at every quality (see below) |
 | `data` | mapping | `{}` | values for the page, read as `ctx.data` (`{teeth: 24, color: primary}`): text, numbers, `true` / `false`, `null`, lists and mappings (a YAML date or a number key is an error naming its place, e.g. `data.when`); theme colour names are not looked up for you (`ctx.theme.colors[ctx.data.color]`) |
 | `music_data` | bool \| mapping | `false` | the video's music for the page as `ctx.music` (Step 347, see "Music data" below): `true`, or `{bands: 16, tracks: [kick, hook], t0: 41.6}` (`bands` 1–64, log-spaced from 40 Hz to 12 kHz; `tracks`: only these score tracks' events, default all; `t0`: the song time at the scene's start, default worked out) |
+| `orbit_data` | mapping | — | bodies on their orbits for the page as `ctx.orbits` (Step 367, see "Orbit data" below), in the `orbit` scene's words: `{bodies: [{preset: earth}, {preset: mars}], span: '1 yr', date: '2026-11-17'}`; keys `central`, `bodies`, `span` / `orbits` / `speedup`, `date`, `dynamics`, `method`, `step`, `transfer`, `flyby`, `system`, `planes`, `path_samples` |
 
 Give exactly one of `page` and `script`.
 
@@ -6895,6 +6896,7 @@ vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets
 | `data` | the scene's `data:` (`{}` without one) |
 | `beats` | the scene's narration beats in order: `{id, index, start, end, text, words}`; `start` / `end` in seconds from the scene's start (when the beat's voice starts and ends; the next beat starts after the pause), `words` = `[{text, start, end}]` timed like the captions (the voice's stored timings, else estimated). A scene without narration: `[]` |
 | `music` | only with `music_data:`: the music helper (below) |
+| `orbits` | only with `orbit_data:`: the orbit helper (below) |
 
 **Theme as CSS variables.** vidgen puts a `<style id="vidgen-theme">` first in the page's
 `<head>` (before the page's own styles, which therefore win) with these custom properties on
@@ -7237,6 +7239,50 @@ fingerprint and the page's clip key, so an edit to the score, a cue or a scene's
 the scenes with `music_data` again; scenes without it are not affected. A video without music
 cannot use it (`vidgen validate`: `music_data: the video plays no music`). Music files other than
 score files (`.wav`, `.mp3`...) give the measurements only.
+
+**Orbit data: `orbit_data`** (Step 367, DESIGN §122.3). A three.js page that shows planets,
+moons or a spacecraft gets their motion from vidgen's orbit model instead of writing it in
+JavaScript: with `orbit_data:` the page's `ctx` has `orbits`, the numbers Python computed for
+every frame of the scene.
+
+*The bodies* are written as in the [`orbit`](#orbit) scene: `central` (default `sun`), `bodies`
+(presets, elements, a position and velocity, `around`, `alongside`, `burns`; the drawing keys
+such as `trail` or `sectors` are accepted and do nothing here), `dynamics` (`kepler` or `nbody`
+with `method` and `step`), `transfer`, `flyby`, `system` and `date` (1800–2050: the planet
+presets on that day; default J2000.0, the presets' own epoch). Time: `span` (simulated time from
+the first frame to the scene's end, `'1 yr'`), `orbits` (periods of the first body; default 1) or
+`speedup` (simulated seconds per second, `86400`); one constant speed-up, then held on the frames
+after the scene's end. `planes: {ISS: equator}` says what a body's `i`, `raan` and `argp` are
+measured from: `equator` (the equator of the body it orbits; the default for `iss`, `geo`, the
+Galilean moons and bodies of your own around a planet or moon) or `ecliptic` (the default for
+bodies around the Sun and the Moon's preset). `path_samples` (default 256, 2–4096): points of
+each body's path.
+
+*Units and frame.* Metres, metres per second, seconds, radians. Positions and velocities are in
+the mean ecliptic and equinox of J2000 (x towards the equinox, z towards the ecliptic's north
+pole), origin the central body (`ctx.orbits.frame` is `ecliptic_j2000`); a `flyby` is in the
+planet's frame (`flyby`: x along the planet's motion, the pass in the x–y plane). three.js is
+y-up: `yUp([x, y, z])` gives `[x, z, -y]`.
+
+| `ctx.orbits.` | |
+|---|---|
+| `position(name, t?)`, `velocity(name, t?)` | `[x, y, z]` of the body at scene time `t` (default: the frame drawn), from the central body |
+| `relative(name, to, t?)` | `name`'s position minus `to`'s |
+| `quaternion(name, t?)`, `spin(name, t?)` | the body's orientation (`[x, y, z, w]`: its own x towards its prime meridian, z its north pole) and its prime meridian's angle W (rad); `null` without rotation data |
+| `path(name)`, `conic(name)` | `[[x, y, z], ...]` relative to the body's parent: its path over the scene, its orbit at the start (closed for an ellipse) |
+| `burns(name)` | a ship's burns: `{number, time, frame, dv, components, magnitude, direction, label}` (`dv` in the frame, m/s; `frame` the first frame at or after it) |
+| `time(t?)`, `jd(t?)`, `index(t?)` | simulated seconds since the first frame, the Julian date, the frame read |
+| `bodies[name]` | `{name, key, parent, label, color, gm, radius, plane, rotation, orbit, burns}`: `rotation` = `{period, retrograde, synchronous, faces_parent, pole, pole_radec, spin_axis, obliquity, obliquity_published, radii, mean_radius, source, note}` (s, unit vectors, degrees for the tilts and the pole's right ascension and declination, m); `orbit` = `{a, e, i, raan, argp, nu, period, kind}` at the start |
+| `names`, `frame`, `frameText`, `units`, `fps`, `frames`, `sceneFrames`, `seconds`, `span`, `speedup`, `jd0`, `date`, `dynamics`, `approximations` | the data's facts; `approximations` in words a caption can use |
+| `series(name)`, `yUp(v)`, `yUpQuaternion(q)` | the raw `Float64Array`s; the y-up conversions |
+
+Each value is the one of the frame the time falls on (`round(t × fps)`), never interpolated, so
+the page shows exactly what Python computed. Rotation data (period, tilt, pole, radii, with
+sources) is known for the Sun, the planets, the Moon and the Galilean moons; a tidally locked moon
+faces its planet. The data is made once and kept in `build/orbits/orbit-data-<key>.json` (the key:
+the settings, the frame rate and frames, vidgen's version and its orbit code); the page's clip key
+holds its SHA-256, so a change of the bodies draws the frames again. A 60 s scene of the eight
+planets and the Moon at 30 fps sends about 2.3 MB.
 
 **Lint reads the page** (DESIGN §118.12). At each still lint looks at (the beat ends; more with
 `vidgen storyboard --per-beat N` or a Short), vidgen asks the page what text it shows: every

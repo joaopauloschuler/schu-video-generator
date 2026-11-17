@@ -2173,6 +2173,53 @@ Three music films became examples (`examples/parallel-space`, `escapement`, `sig
 - [x] Fix: `_rosin_room` keeps a held note's hiss, octave band by octave band, under the tone as in an ordinary note at full bow; spiccato and pizzicato the same samples; Escapement byte-identical (`271de0c6…4dc8`); the parallel-space and signal-fire scores change a little (hashes in DESIGN §121.8)
 - [x] Regression tests (`test_a_slow_soft_swell_has_no_breath_above_its_tone`, fails on the old hiss; `test_an_ordinary_note_keeps_its_rosin_at_full_bow`); the seven Step 344 demos and two `swell` clips before / after in `/home/claude/work/scratch/am366/demo/`; docs: DESIGN §120.5, §121.8, COOKBOOK-MUSIC (`bow`), CHANGELOG
 
+
+## Phase AN — Space scenes (owner's request, 2026-11-17)
+
+Agents make space scenes easily: three.js `web` scenes from ready-made parts, on the orbit model
+of Phase X (no orbit mathematics in JavaScript). Positions and timing true by default (enlarged
+bodies or compressed distances stated); an algorithmic sky by default, a real one as an option
+(DESIGN §122).
+
+### Step 367 — The orbit bridge
+- [x] The third dimension audited module by module (DESIGN §122.1): elements, burns, n-body and the ephemeris carry it; flyby, the restricted three-body problem, the figure-eight, resonances, tides and the cannonball are planar (written down). Fixed: a transfer between orbits in a common inclined plane measured its launch window on the x–y projection (221 km off at 30°, 10,125 km at 89°; now under 1 m); the n-body angular-momentum check covers the whole vector. Presets name their reference plane (`ecliptic` / `equator`); the flat `orbit` scene's models of the examples are identical before and after
+- [x] Rotation data (`vidgen.orbits.rotation`, DESIGN §122.2): pole, prime meridian, period, tilt and radii of the Sun, the planets, the Moon and the Galilean moons from the IAU WGCCRE reports, sources and left-out terms named; periods and tilts tested against the published values
+- [x] `orbit_data:` on `web` scenes → `ctx.orbits` (DESIGN §122.3): per frame on vidgen's clock each body's position and velocity (m, m/s, ecliptic J2000), rotation (quaternion, prime meridian; locked moons face their planet), path and orbit polylines, a ship's burns; cached in `build/orbits/`, in the clip key only for such scenes; the page receives the Python values bit for bit (Chromium test, one `vidgen still`)
+- [ ] Open: the rotation values are from memory of the IAU reports, for the owner to check (Neptune's W above all); no rotation for Pluto, other moons or bodies of one's own; the flyby is still planar and not placed at the planet's real velocity; dated planets move on two-body orbits after the date (arcseconds from Table 1 in a year); no film rendered; Windows / macOS not tried
+
+### Step 368 — Scale
+- [ ] A shipped JS module for astronomical scales in three.js: floating origin / camera-relative positions, depth handling (logarithmic depth or split passes, measured in headless software GL, compatible with `vidgen/three-finish`), three scale modes (true, enlarged bodies, compressed distances) and a helper with the honest label; tiny `vidgen still` tests (Earth+Moon at true scale, a 100 m ship 400 km above a planet, Sun to Neptune)
+
+### Step 369 — Checks for dark pictures
+- [ ] `vidgen motion check` does not report a space shot as black or blank (stars, subject area and contrast, over-exposed discs, a subject lost in the dark, a too-empty frame; thresholds documented, synthetic tests); a `vidgen` command printing a labelled contact sheet of ready-made parts (a registry later steps add to)
+
+### Step 370 — The sky
+- [ ] Algorithmic sky from a seed (default): stars with realistic magnitudes and colours, a Milky Way band with dust lanes, optional galaxies and nebulae, baked once to a cube map; a real sky from a public-domain catalogue (download only after the owner approves: file, URL, licence and size reported first; a hand-written fixture until then)
+
+### Step 371 — Planets, moons and rings
+- [ ] Procedural surfaces from a seed (rocky / cratered, icy, desert, ocean world, gas giant with bands and storms), atmosphere limb glow, clouds, night side with terminator and city lights, ring systems with gaps and shadows, spin and tilt from Step 367's data; presets inspired by the Solar System's bodies
+
+### Step 372 — Suns and light
+- [ ] A star to look at (granulation, limb darkening, corona, prominences, tasteful spikes / flare, colour by temperature); space lighting (one hard sun, no ambient by default, planet-shine and ring-shine), exposure helpers stated as honest or artistic
+
+### Step 373 — Phenomena
+- [ ] Black hole with bent light and an accretion disc, wormhole, warp streaks, seeded asteroid fields, comets with dust and ion tails, aurora if cheap; seconds per frame measured first, cheaper variants, costs documented
+
+### Step 374 — Spacecraft kit
+- [ ] Parts (hull sections, tanks, trusses, panels, radiators, dishes, antennas, docking ports, engine bells, legs) and invented ready-made craft (satellite, probe, station, crewed ship, lander); close-up surfaces; plumes and thruster puffs following `ctx.music` or a burn; a craft on a Step 367 path with correct attitude; fleets from a seed
+
+### Step 375 — Space camera moves
+- [ ] On Step 358's rigs: fly-by, orbit insertion, reveal from behind a limb, follow / chase and pass, powers-of-ten zoom (with Step 368), bar-locked and cut-safe
+
+### Step 376 — Scenes without code
+- [ ] A declarative space scene in `video.yaml` (bodies, sky, light, craft, phenomena, scale mode, camera move, finishing, reactions to music) making a working `web` scene with no JS, an escape hatch to code; `vidgen music plan` can propose space scenes; validation with did-you-mean; guide topic
+
+### Step 377 — Example film
+- [ ] A short (≤ 60 s) bar-locked example under `examples/` using the parts, with a small original score; source only; checked with stills and one draft; README for visitors
+
+### Step 378 — Critical review
+- [ ] Review of 367–377 with fixes; `docs/COOKBOOK-SPACE.md` (linked from the main cookbook), guide, CONFIG, README feature list, gallery entry; tasklist leftovers
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

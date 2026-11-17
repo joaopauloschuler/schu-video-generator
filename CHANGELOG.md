@@ -5,7 +5,25 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–366
+## Steps 193–367
+
+### Space scenes (Phase AN, Step 367)
+
+- **Orbits on a three.js page** (Step 367): a `web` scene with `orbit_data:` gets `ctx.orbits`,
+  the planets, moons and spacecraft of the `orbit` scene (same keys: `bodies`, `span` or
+  `speedup`, `date`, `transfer`, `flyby`, `dynamics`, `system`) computed by vidgen for every frame:
+  positions and velocities in metres from the central body in the ecliptic of J2000, each body's
+  orbit and path as polylines, a ship's burns, and how each body turns (an orientation and its
+  prime meridian per frame). `vidgen still` and the render show the same numbers, to the last
+  digit.
+- **How the Sun, the planets, the Moon and the Galilean moons turn**: rotation period, axial
+  tilt, north pole and radii from the IAU's cartographic report, with their sources; a tidally
+  locked moon faces its planet.
+- **Transfers in an inclined plane** now leave at the right moment: between two orbits sharing a
+  tilted plane the launch window was measured on the flat projection, and the ship arrived up to
+  10,000 km from its target. Orbits in the plane of the picture are unchanged.
+- **The n-body check of the angular momentum** covers the whole vector, not only its part about
+  the picture's axis (flat systems give the same values as before).
 
 ### Music-video tools (Phase AM, Steps 358–366)
 

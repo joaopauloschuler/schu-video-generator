@@ -154,3 +154,25 @@ config and the narration, not the stills, so they are quick.
   beats:
     - text: "From low Earth orbit the burn is about three point six kilometres per second."
 ```
+
+## 8. Orbits in a three.js `web` scene
+
+A `web` scene with `orbit_data:` gets the same model as `ctx.orbits` (Step 367; keys and the
+accessor in [CONFIG.md](CONFIG.md#web), "Orbit data"): every body's position and velocity for
+every frame, in metres from the central body, in the mean ecliptic and equinox of J2000 (z up;
+`yUp` turns it into three.js's y-up), each planet's and moon's rotation (period, tilt, pole,
+prime meridian), each orbit as a polyline and a ship's burns. The numbers are the ones the flat
+`orbit` scene draws, to the last bit; the page only chooses how to show them.
+
+- **True by default.** The positions are true; a page that enlarges the bodies or compresses the
+  distances says so on screen, as the flat scene does ("sizes not to scale").
+- **Which plane.** In 3D an orbit's inclination needs its reference plane: the planets and the
+  Moon's preset are measured from the ecliptic, `iss`, `geo` and the Galilean moons from their
+  planet's equator (an ISS-like orbit is 51.6° to the Earth's equator, up to 75° to the
+  ecliptic). `planes: {Ship: ecliptic}` changes a body's. The flat scene draws each orbit seen
+  from above its own reference plane.
+- **What stays in a plane.** A `flyby` (the planet's frame), the restricted three-body `system`,
+  the figure-eight and the cannonball are planar models; a `transfer` is between orbits in one
+  plane (any plane: since Step 367 the launch window is measured in that plane).
+- **Say the approximations.** `ctx.orbits.approximations` lists them in words (two-body orbits,
+  JPL's approximate elements on the date, impulsive burns, patched conics).

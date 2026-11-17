@@ -377,7 +377,7 @@ class Orbit(OrbitSky, OrbitMany, OrbitManoeuvres, OrbitOverlays, NarratedScene):
             if e0:
                 out["energy_drift"] = float(np.max(np.abs(np.asarray(run.energy) - e0))) / abs(e0)
             if run.angular is not None:
-                out["angular_drift"] = max(abs(float(run.angular_error(k))) for k in range(len(run.times)))
+                out["angular_drift"] = run.angular_drift   # the whole vector (Step 367): its z part in a flat system
         info = model.many
         if info is not None:
             for name, series in (getattr(info, "jacobi", None) or {}).items():
