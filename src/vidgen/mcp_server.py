@@ -1217,8 +1217,10 @@ def _add_resources(server: Any, policy: RootPolicy) -> None:
     )
     gallery = policy.root / "docs" / "gallery"
     if gallery.is_dir():
-        for page in sorted(gallery.glob("*.md")):
-            name = "index" if page.name == "README.md" else page.stem
+        # the web gallery's pages (docs/gallery/web, DESIGN.md §123.1) under their own names, its index as web-index
+        pages = [(p, "index" if p.name == "README.md" else p.stem) for p in sorted(gallery.glob("*.md"))]
+        pages += [(p, "web-index" if p.name == "README.md" else p.stem) for p in sorted((gallery / "web").glob("*.md"))]
+        for page, name in pages:
             text_resource(
                 f"vidgen://gallery/{name}", f"gallery-{name}", f"Scene gallery page: {name}", "text/markdown", _file_reader(page)
             )

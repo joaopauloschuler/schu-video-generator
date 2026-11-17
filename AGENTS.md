@@ -367,7 +367,8 @@ variants:
 
 Pick by **what the viewer should understand**, not by what the data looks like. To see what
 each type looks like at 16:9 and 9:16, open the scene gallery (`docs/gallery/README.md` in the
-schu-video-generator repository: a still, a GIF, the YAML, params and targets per type) or make it yourself:
+schu-video-generator repository: a still, a GIF, the YAML, params and targets per type; the types drawn
+in a web page, `3d`, `web` and `space`, in `docs/gallery/web/README.md`) or make it yourself:
 `vidgen gallery --output gallery --types pie,map` (any folder; in a project it also renders the
 project's own scene types, in its theme).
 

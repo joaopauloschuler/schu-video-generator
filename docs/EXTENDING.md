@@ -419,7 +419,9 @@ away, given to someone not next to the giver, a seat taken, a walk of a characte
   the video's [host](CONFIG.md#a-host-beside-any-scene-host) (a cartoon character beside the
   content, `self.host`) take, so lay out in it, not on the frame's centre. A scene type that
   fills the frame itself (a full-frame design, its own characters) sets the class attribute
-  `takes_host = False` (as `stage` and `card` do); it then gets no host.
+  `takes_host = False` (as `stage` and `card` do); it then gets no host. A type that draws its
+  frames with a web page in headless Chromium sets `drawn_in_browser = True` (`web` and `3d` do,
+  and their subclasses inherit it): `vidgen gallery` shows it in the web gallery (`web/`).
 - `self.region(name)` (or `region(name, area=None)`; `area` is a `Region` or another region's
   name, e.g. `region("left", "body")`) — named parts of the safe area:
 

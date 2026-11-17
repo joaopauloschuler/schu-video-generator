@@ -41,6 +41,7 @@ class Scene3D(NarratedScene):
 
     outro = 0.5
     target_patterns = ("view", "title")
+    drawn_in_browser = True
     #: The camera actions work on this type (``scene_3d_actions``).
     three_d_actions = True
 

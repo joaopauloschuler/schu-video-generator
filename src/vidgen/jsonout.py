@@ -631,13 +631,14 @@ def guide_document(
 
 
 def gallery_document(project: Project | None, result: GalleryResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The ``vidgen gallery --json`` document: the folder, its index and every scene type with
-    its page, stills and clips (by format)."""
+    """The ``vidgen gallery --json`` document: the folder, its index (and the web gallery's) and
+    every scene type with its gallery (``web``), page, stills and clips (by format)."""
     types = [
         {
             "name": t.name,
             "alias_of": t.alias_of,
             "sample": None if t.sample is None else t.sample.origin,
+            "web": t.web,
             "page": None if t.page is None else _path(t.page),
             "stills": {fmt: _path(p) for fmt, p in t.stills.items()},
             "clips": {fmt: _path(p) for fmt, p in t.clips.items()},
@@ -649,6 +650,7 @@ def gallery_document(project: Project | None, result: GalleryResult, elapsed: fl
             "name": s.name,
             "section": s.showcase.section,
             "title": s.showcase.title,
+            "web": s.web,
             "page": None if s.page is None else _path(s.page),
             "stills": {fmt: _path(p) for fmt, p in s.stills.items()},
             "clips": {fmt: _path(p) for fmt, p in s.clips.items()},
@@ -663,6 +665,7 @@ def gallery_document(project: Project | None, result: GalleryResult, elapsed: fl
         project=None if project is None else _path(project.root),
         output=_path(result.output),
         index=_path(result.index),
+        web_index=None if result.web_index is None else _path(result.web_index),
         work=_path(result.work),
         formats=result.formats,
         rendered=result.rendered,

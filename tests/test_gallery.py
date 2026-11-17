@@ -4,7 +4,9 @@ samples, and the command renders a few types at a tiny size."""
 
 from __future__ import annotations
 
+import functools
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -32,17 +34,37 @@ DOCS = ROOT / "docs" / "gallery"
 #: GIF cap are unchanged. Step 243: the `higgs_diphoton` showcase (0.32 MB) took it to 15.7 MB, within
 #: the budget. Step 378: 16.5 → 17 MB for Phase AN's `space` entry (0.31 MB: a star field under a
 #: moving camera, its GIFs held to gallery.CLIP_NOISY_MAX_BYTES and its stills to gallery.STILL_MAX_BYTES);
-#: ENTRY_MAX and the GIF cap are unchanged.
-BUDGET = 17_000_000
+#: ENTRY_MAX and the GIF cap are unchanged. Step 379 (DESIGN §123.1): the entries of types drawn in
+#: headless Chromium (`3d`, `web`, `space`: 0.6 MB) moved to the web gallery, docs/gallery/web, with
+#: a budget of its own (WEB_BUDGET); the main gallery (16.1 MB without web/) is back to 16.5 MB.
+BUDGET = 16_500_000
+#: The web gallery (docs/gallery/web, Step 379) and what it may weigh: 0.6 MB at Step 379, room for
+#: the web entries of Phase AO and after, each held to ENTRY_MAX as the main gallery's.
+WEB_DOCS = DOCS / gallery.WEB_FOLDER
+WEB_BUDGET = 20_000_000
 #: What one entry may weigh: its two GIFs (each at most gallery.CLIP_MAX_BYTES), two stills and its
 #: page. The heaviest entries before Step 216 weighed 0.33 MB (cross, cell, rainy_evening).
 ENTRY_MAX = 360_000
 
 
+@functools.cache
 def builtin_gallery() -> list[gallery.GalleryType]:
     with registry.isolated():
         extensions.load_builtins()
         return gallery.gallery_types(None)
+
+
+@functools.cache
+def web_showcases() -> frozenset[str]:
+    """The showcases of the web gallery (none at Step 379)."""
+    with registry.isolated():
+        extensions.load_builtins()
+        return frozenset(s.name for s in gallery.SHOWCASES if gallery.is_web_showcase(s))
+
+
+def folder_of(web: bool) -> Path:
+    """The committed gallery an entry is in."""
+    return WEB_DOCS if web else DOCS
 
 
 #: Built-in types whose gallery entry is still to be rendered, with the step that renders it
@@ -230,16 +252,17 @@ def test_cli_usage_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
 
 @pytest.mark.slow
 def test_committed_gallery_lists_every_type_with_current_samples() -> None:
-    index = (DOCS / "README.md").read_text(encoding="utf-8")
     for t in committed_gallery():
-        assert f"`{t.name}`" in index, f"docs/gallery/README.md misses {t.name}: run `vidgen gallery`"
+        folder = folder_of(t.web)
+        index = (folder / "README.md").read_text(encoding="utf-8")
+        assert f"`{t.name}`" in index, f"{folder}/README.md misses {t.name}: run `vidgen gallery`"
         if t.alias_of is not None:
             continue
         assert t.sample is not None
-        page = (DOCS / f"{t.name}.md").read_text(encoding="utf-8")
+        page = (folder / f"{t.name}.md").read_text(encoding="utf-8")
         assert t.sample.yaml.rstrip() in page, f"docs/gallery/{t.name}.md shows an old sample: run `vidgen gallery --types {t.name}`"
         for fmt in gallery.FORMATS:
-            still = DOCS / "media" / gallery.media_name(t.name, fmt, ".png")
+            still = folder / "media" / gallery.media_name(t.name, fmt, ".png")
             assert still.is_file(), still
             with Image.open(still) as image:
                 assert image.size == gallery.FORMATS[fmt]
@@ -252,6 +275,7 @@ def test_committed_gallery_has_every_showcase() -> None:
     assert "## 2D cartoons" in index and "## Isometric cartoons" in index and "| type | stills |" not in index
     assert index.index("## 2D cartoons") < index.index("[`stage`](stage.md)") < index.index("## Isometric cartoons")
     assert "../../examples/iso-story/video.yaml" in index and (ROOT / "examples" / "iso-story" / "video.yaml").is_file()
+    assert not web_showcases()   # every showcase is in the main gallery (Step 379)
     for showcase in gallery.SHOWCASES:
         page = (DOCS / f"{showcase.name}.md").read_text(encoding="utf-8")
         assert showcase.text().rstrip() in page, f"docs/gallery/{showcase.name}.md is old: run `vidgen gallery --types {showcase.name}`"
@@ -284,7 +308,7 @@ def test_committed_gallery_has_every_showcase() -> None:
 
 @pytest.mark.slow
 def test_committed_gifs_are_light_and_open_on_their_end() -> None:
-    gifs = sorted((DOCS / "media").glob("*.gif"))
+    gifs = sorted((DOCS / "media").glob("*.gif")) + sorted((WEB_DOCS / "media").glob("*.gif"))
     assert len(gifs) == 2 * (len([t for t in committed_gallery() if t.alias_of is None]) + len(gallery.SHOWCASES))
     for gif in gifs:
         assert gif.stat().st_size <= gallery.CLIP_MAX_BYTES, gif.name
@@ -298,7 +322,7 @@ def test_committed_gifs_are_light_and_open_on_their_end() -> None:
 def test_committed_stills_are_palette_pngs(tmp_path: Path) -> None:
     """Step 210: stills are saved with a 256-colour palette (about 40 % of the RGB PNG), which
     made room in the budget for the cell-biology showcases."""
-    for still in (DOCS / "media").glob("*-*x*.png"):
+    for still in [*(DOCS / "media").glob("*-*x*.png"), *(WEB_DOCS / "media").glob("*-*x*.png")]:
         with Image.open(still) as image:
             assert image.mode == "P", still.name
     source = tmp_path / "rgb.png"
@@ -309,20 +333,108 @@ def test_committed_stills_are_palette_pngs(tmp_path: Path) -> None:
 
 
 def test_committed_gallery_is_within_its_size_budget() -> None:
-    files = [p for p in DOCS.rglob("*") if p.is_file()]
-    total = sum(p.stat().st_size for p in files)
-    assert total < BUDGET, f"docs/gallery is {total / 1e6:.1f} MB (budget {BUDGET / 1e6:g} MB)"
-    assert {p.suffix for p in files} <= {".md", ".png", ".gif"}
+    """The main gallery (docs/gallery without web/) and the web gallery each within its budget."""
+    web = [p for p in WEB_DOCS.rglob("*") if p.is_file()]
+    main = [p for p in DOCS.rglob("*") if p.is_file() and WEB_DOCS not in p.parents]
+    for files, budget, name in ((main, BUDGET, "docs/gallery (without web/)"), (web, WEB_BUDGET, "docs/gallery/web")):
+        total = sum(p.stat().st_size for p in files)
+        assert total < budget, f"{name} is {total / 1e6:.1f} MB (budget {budget / 1e6:g} MB)"
+        assert {p.suffix for p in files} <= {".md", ".png", ".gif"}
 
 
 def test_every_gallery_entry_is_within_its_share() -> None:
     """Step 216: the budget grows by entries, so each entry (a type or a showcase: its GIFs,
     stills and page) is held to ENTRY_MAX."""
-    names = [t.name for t in committed_gallery() if t.alias_of is None] + [s.name for s in gallery.SHOWCASES]
-    for name in names:
-        parts = [DOCS / f"{name}.md"] + [DOCS / "media" / gallery.media_name(name, fmt, ext) for fmt in gallery.FORMATS for ext in (".png", ".gif")]
+    web = web_showcases()
+    names = [(t.name, t.web) for t in committed_gallery() if t.alias_of is None] + [(s.name, s.name in web) for s in gallery.SHOWCASES]
+    for name, in_web in names:
+        folder = folder_of(in_web)
+        parts = [folder / f"{name}.md"] + [folder / "media" / gallery.media_name(name, fmt, ext) for fmt in gallery.FORMATS for ext in (".png", ".gif")]
         size = sum(p.stat().st_size for p in parts)
         assert size <= ENTRY_MAX, f"the gallery entry {name} weighs {size / 1e3:.0f} kB (at most {ENTRY_MAX / 1e3:.0f} kB)"
+
+
+# ----- the two galleries (Step 379) -------------------------------------------------------------
+
+#: Links in a gallery file: Markdown ``](target)`` and HTML ``href`` / ``src`` / ``srcset``.
+_LINK = re.compile(r'\]\(([^)\s]+)\)|(?:href|src|srcset)="([^"]+)"')
+#: The page an index row links its first cell to.
+_ROW = re.compile(r"^\| \[[^\]]+\]\(([^)]+)\.md\) \|", re.M)
+
+
+def test_web_entries_are_the_types_drawn_in_chromium() -> None:
+    """DESIGN §123.1: an entry is in the web gallery when its scene class is drawn by a web page in
+    headless Chromium (``drawn_in_browser``: ``web``, ``3d`` and their subclasses such as ``space``)."""
+    from vidgen.scenes.scene_3d import Scene3D
+    from vidgen.scenes.space import Space
+    from vidgen.scenes.web import Web
+
+    assert Web.drawn_in_browser and Scene3D.drawn_in_browser and Space.drawn_in_browser
+    assert {t.name for t in builtin_gallery() if t.web} == {"3d", "web", "space"}
+    with registry.isolated():
+        extensions.load_builtins()
+        assert gallery.is_web_type("space") and not gallery.is_web_type("pie") and not gallery.is_web_type("nope")
+
+
+def test_each_index_lists_exactly_its_entries() -> None:
+    types = committed_gallery()
+    web = web_showcases()
+    for in_web in (False, True):
+        index = (folder_of(in_web) / "README.md").read_text(encoding="utf-8")
+        expected = {t.name for t in types if t.web == in_web and t.alias_of is None and t.sample is not None}
+        expected |= {s.name for s in gallery.SHOWCASES if (s.name in web) == in_web}
+        assert set(_ROW.findall(index)) == expected, folder_of(in_web)
+        pages = {p.stem for p in folder_of(in_web).glob("*.md")} - {"README"}
+        assert pages == expected, f"{folder_of(in_web)}: pages without an index row, or rows without a page"
+
+
+def test_the_two_indexes_link_each_other() -> None:
+    main = (DOCS / "README.md").read_text(encoding="utf-8")
+    web = (WEB_DOCS / "README.md").read_text(encoding="utf-8")
+    assert "[web scene gallery](web/README.md)" in main and "(`3d`, `web`, `space`)" in main
+    assert "[scene gallery](../README.md)" in web and web.startswith("# Web scene gallery\n")
+    assert "## Videos on YouTube" in main and "youtube" not in web.lower()   # the YouTube section stays in the main gallery
+    assert "examples/outbound/README.md" in web and "examples/outbound/README.md" not in main
+    for page in WEB_DOCS.glob("*.md"):
+        if page.name != "README.md":
+            assert "[All web scenes](README.md) · [All scene types](../README.md)" in page.read_text(encoding="utf-8"), page.name
+
+
+def test_no_broken_relative_links_in_either_gallery() -> None:
+    for page in [*DOCS.glob("*.md"), *WEB_DOCS.glob("*.md")]:
+        for groups in _LINK.findall(page.read_text(encoding="utf-8")):
+            target = (groups[0] or groups[1]).split("#")[0]
+            if not target or "://" in target or target.startswith("mailto:"):
+                continue
+            assert (page.parent / target).exists(), f"{page.relative_to(ROOT)} links {target}, which is not there"
+
+
+def test_entries_are_written_into_their_gallery(tmp_path: Path) -> None:
+    """write_index / write_showcase_page / _remove_other_copy without rendering: a web entry's row,
+    page and media are under web/, links between the galleries go up or down one folder."""
+    sample = gallery.Sample("pie", {"id": "x", "type": "pie"}, "- id: x\n  type: pie\n", "data", "guide")
+    types = [gallery.GalleryType("pie", None, sample), gallery.GalleryType("web", None, sample, web=True)]
+    uses = {"pie": "parts", "web": "a page"}
+    for name, folder in (("pie", tmp_path), ("web", tmp_path / "web")):
+        (folder / "media").mkdir(parents=True, exist_ok=True)
+        (folder / f"{name}.md").write_text("x", encoding="utf-8")
+        for fmt in gallery.FORMATS:
+            (folder / "media" / gallery.media_name(name, fmt, ".png")).write_bytes(b"png")
+    main = gallery.write_index(types, tmp_path, list(gallery.FORMATS), uses).read_text(encoding="utf-8")
+    web = gallery.write_index(types, tmp_path, list(gallery.FORMATS), uses, web=True).read_text(encoding="utf-8")
+    assert _ROW.findall(main) == ["pie"] and _ROW.findall(web) == ["web"]
+    assert "[web scene gallery](web/README.md)" in main and "[scene gallery](../README.md)" in web
+    alone = gallery.write_index(types[:1], tmp_path, list(gallery.FORMATS), uses).read_text(encoding="utf-8")
+    assert "web/README.md" not in alone   # no web entry: no link to a web gallery
+    assert gallery.page_link("web", True, False) == "web/web.md" and gallery.page_link("pie", False, True) == "../pie.md"
+    assert gallery.page_link("pie", False, False) == "pie.md"
+    assert gallery.relink_for_web("[a](../COOKBOOK.md) [b](pie.md)") == "[a](../../COOKBOOK.md) [b](pie.md)"
+    # an entry that moved: its old page and media in the other gallery go
+    (tmp_path / "web.md").write_text("old", encoding="utf-8")
+    (tmp_path / "media" / gallery.media_name("web", "16:9", ".gif")).write_bytes(b"gif")
+    gallery._remove_other_copy("web", tmp_path, True)
+    assert not (tmp_path / "web.md").exists() and not (tmp_path / "media" / "web-16x9.gif").exists()
+    assert (tmp_path / "web" / "web.md").is_file() and (tmp_path / "pie.md").is_file()
 
 
 def test_readme_strip_links_the_gallery() -> None:
@@ -372,6 +484,10 @@ def test_gallery_renders_a_few_types(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert "[`stat`](stat.md)" in index and "same type as [`diagram`](diagram.md)" in index
     assert "| `pie` | not rendered here yet (`vidgen gallery --types pie`) |" in index
     assert "| A cut-away room | not rendered here yet (`vidgen gallery --types iso_room`) |" in index
+    assert Path(doc["web_index"]) == (out / "web" / "README.md").resolve() and types["space"]["web"] and not types["stat"]["web"]
+    web_index = (out / "web" / "README.md").read_text(encoding="utf-8")
+    assert "| `space` | not rendered here yet (`vidgen gallery --types space`) |" in web_index and "`stat`" not in web_index
+    assert "[web scene gallery](web/README.md)" in index and "`space`" not in index.split("## Text and structure")[1]
     assert '<picture><source media="(prefers-reduced-motion: reduce)" srcset="media/stat-9x16.png">' in index
     page = (out / "diagram.md").read_text(encoding="utf-8")
     assert "type: diagram" in page and "Also available as `flowchart`" in page and "## Targets" in page and "`node:<id>`" in page

@@ -49,6 +49,7 @@ class Web(NarratedScene):
 
     outro = 0.5
     target_patterns = ("view", "title")
+    drawn_in_browser = True
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:

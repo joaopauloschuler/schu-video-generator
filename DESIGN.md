@@ -389,6 +389,7 @@ docs/
   EXTENDING.md            # how to write project extensions
   ICONS.md                # icon catalogue, generated from the manifest by tools/vendor_icons.py (§23)
   gallery/                # scene gallery written by `vidgen gallery`: README.md, <type>.md, media/ (§60)
+    web/                  # the web gallery: types drawn in headless Chromium, README.md, <type>.md, media/ (§123.1)
 AGENTS.md                 # the author guide for agents *using* vidgen (copy of data/guide/AGENTS.md, §59)
 DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, icons §22, world map §39)
 ```
@@ -4713,6 +4714,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
     the same spots one clearance further out.
 
 ## 60.1 Animated previews and showcases (Step 182)
+
+Since Step 379 the types drawn in a web page have a gallery of their own, `docs/gallery/web` (§123.1).
 
 - **Previews in the index.** Each cell of `docs/gallery/README.md` shows the scene's GIFs (16:9
   and 9:16, 180 px high), each its own link to the page, each in a `<picture>` whose
@@ -23783,7 +23786,7 @@ variant, the Step 330 and 331 demos.
 - **Gallery:** the guide's `scenes` snippet names `extensions/gears.html`; `gallery.sample_asset`
   maps a `web` snippet's page or script (`WEB_SUFFIXES`) to `data/gallery/web/<name>` and
   `_copy_files` copies it into the work project (`_is_web_entry`), so `vidgen gallery --types web`
-  renders the entry (`docs/gallery/web.md`).
+  renders the entry (`docs/gallery/web.md`; since Step 379 `docs/gallery/web/web.md`, §123.1).
 - **Measured** (1 CPU, drawing the frames only through `make_web_clip`, Chromium start included,
   1920x1080 at 30 fps; HANDOFF Step 333): `cycle` (HTML + CSS page, 1760x668, 582 frames) 453 ms per
   frame = 13.6 s per second of video; `rain` (canvas, 1760x660, 460 frames) 325 ms = 9.7 s; `globe`
@@ -28097,3 +28100,60 @@ draw again (their bytes changed; no released film uses them), as do scenes with 
 (`ORBIT_DATA_VERSION` 2 and the orbit code's digest). No module shipped before Phase AN changed
 (three-finish, three-kit, music-time, title-cards); the earlier films' pages and score audio keep
 their keys (the scene fingerprint of `vidgen storyboard`, which holds vidgen's whole source, changes with any step).
+
+## 123. Air, planes and giant ships (Phase AO, Steps 379–394)
+
+Phase AO (owner's request, 2026-11-17) adds flight inside atmospheres (the sky from inside, ocean,
+cloud decks and gas giants, terrain; no forests), parametrized space plane parts and giant ships,
+a cache for baked maps and the owner's orchestral Shorts as examples. It starts with a gallery of
+its own for scenes drawn in a web page.
+
+### 123.1 Two galleries: the main one and the web gallery (Step 379)
+
+- **Why.** The entries of types drawn by a web page are the heaviest (a star field under a
+  moving camera changes every pixel of every frame) and Phase AO adds more of them; the main
+  gallery's budget had already been raised to 17 MB for `space` (Step 378). Decision (owner): a
+  second gallery, `docs/gallery/web/`, with a budget of its own (20 MB); the main gallery back to
+  16.5 MB (16.1 MB without `web/` at Step 379); the two indexes link to each other; the "Videos on
+  YouTube" section (videos and Shorts) stays at the end of the main index, unchanged.
+- **The rule** (a property of the type, not a list of names): an entry is a web entry when its
+  scene class is drawn by a web page in headless Chromium. `NarratedScene.drawn_in_browser`
+  (a `ClassVar[bool]`, default `False`) says so; `web` (`scenes/web.py`) and `3d`
+  (`scenes/scene_3d.py`) set it, and every subclass inherits it: `space` (a `Web`) and any later
+  type built on `Web` (a straight-cut scene type of the music films, Step 394) land in the web
+  gallery with no further work; a project's own type sets it the same way. `gallery.is_web_type`
+  reads it from the registry, `GalleryType.web` carries it (an alias has its class's), a showcase
+  is a web entry when one of its scenes is (`is_web_showcase`; none at Step 379). The music films
+  (`examples/escapement`, `parallel-space`, `signal-fire`, `outbound`) are not gallery entries;
+  the line naming them under "Pictures and media" moved to the web index (`WEB_SECTION_NOTES`,
+  links one folder deeper), with links to the 3D and space cookbooks.
+- **Layout.** A web entry's page is `web/<name>.md`, its media `web/media/<name>-16x9|9x16.png|gif`
+  (`gallery_folder`); the page, the stills and the GIFs are written exactly as before (same sizes,
+  palettes, caps, `ENTRY_MAX`), only their folder differs, and the page's last line reads "[All
+  web scenes](README.md) · [All scene types](../README.md)". `write_index(..., web=True)` writes
+  `web/README.md` ("# Web scene gallery", the same table per guide group, no YouTube section);
+  the main index lists the other entries and, when the web gallery has any, one line naming the
+  web types and linking `web/README.md`. A showcase's links to the types it shows go to either
+  gallery (`page_link`), its footer one folder deeper in the web gallery (`relink_for_web`). When
+  an entry is written, its page and media in the other gallery are removed (`_remove_other_copy`),
+  so a type that becomes a web type moves on the next `vidgen gallery --types <name>`. A
+  project's gallery splits the same way (`<output>/web/` only when it has a web type).
+- **Elsewhere.** `vidgen gallery` prints the web index too; `--json` gains `web_index` and `web`
+  per type and showcase; the MCP server serves the web gallery's pages as `vidgen://gallery/<type>`
+  (names are unique across the two) and its index as `vidgen://gallery/web-index`.
+  `.gitignore` lets `docs/gallery/web/media/` in.
+- **Moved, not regenerated** (Step 379): the 12 media files of `3d`, `web` and `space` were moved
+  with `git mv`; the generator writes them from the same renders with the same code, only into
+  `web/media/`, so they are byte-identical to what it would write. The three pages and both
+  indexes were rewritten by `write_page` / `write_index` from the committed media (no render):
+  `3d.md` and `space.md` differ only in the last line; `web.md` also picked up the `web` type's
+  current description and params (`design_width`, `music_data`, `orbit_data`), which had changed
+  since its entry was made (its YAML, which the tests compare, had not). A main page written the
+  same way (`pie.md`, `stat.md`) came out byte-identical.
+- **Tests** (`tests/test_gallery.py`): `BUDGET` 16.5 MB for `docs/gallery` without `web/`,
+  `WEB_BUDGET` 20 MB for `web/`, `ENTRY_MAX` per entry in either; each index lists exactly its
+  entries and its folder holds exactly their pages; the two link each other; no relative link in
+  any page of either gallery is broken; the rule (`{3d, web, space}`); writing into two galleries
+  without rendering; the tiny render test checks `web_index`. Not changed: which types
+  `vidgen validate` warns about when Chromium is missing (`browser.chromium.BROWSER_SCENE_TYPES`,
+  `3d` and `web`; `space` scenes are not in it).

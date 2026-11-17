@@ -5,7 +5,15 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–378
+## Steps 193–379
+
+### Air, planes and giant ships (Phase AO, Steps 379–394)
+
+- **A gallery for web scenes** (Step 379): the scene types drawn by a web page (`3d`, `web`,
+  `space`) have their own [web scene gallery](docs/gallery/web/README.md), linked both ways with
+  the [scene gallery](docs/gallery/README.md), which keeps the videos on YouTube. `vidgen gallery`
+  puts every type drawn in headless Chromium there, a new one included; `--json` names the web
+  index (`web_index`) and says which entries are in it; the MCP server serves its pages too.
 
 ### Space scenes (Phase AN, Steps 367–378)
 

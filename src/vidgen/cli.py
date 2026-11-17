@@ -2475,6 +2475,8 @@ def cmd_gallery(args: argparse.Namespace) -> CommandResult:
     reused = f", {len(result.reused)} reused" if result.reused else ""
     print(f"rendered {len(result.rendered)} sample(s){reused}")
     print(f"gallery: {result.index} ({result.bytes / 1e6:.1f} MB in {result.output})")
+    if result.web_index is not None:
+        print(f"web gallery: {result.web_index}")
     for t in result.types:
         if t.page is not None:
             print(f"  {t.name}: {t.page.name}, {len(t.stills)} still(s), {len(t.clips)} clip(s)")

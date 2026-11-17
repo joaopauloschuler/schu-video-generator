@@ -18,6 +18,11 @@ its last beat's end; its clip is the scene's render as a palette GIF.
 with its stills), ``<type>.md`` (what it is for, stills, clips, the YAML, params, targets,
 beats) and ``media/<type>-16x9.png|gif``, ``media/<type>-9x16.png|gif``. Nothing in them depends
 on the time or the machine, so regenerating with the same schu-video-generator gives the same files.
+
+**Two galleries** (DESIGN.md §123.1): the entries of types drawn by a web page in headless
+Chromium (``NarratedScene.drawn_in_browser``: ``web``, ``3d``, ``space``) and the showcases using
+one go to ``web/`` (its own ``README.md``, pages and ``media/``); the indexes link each other and
+the YouTube section ends the main one.
 """
 
 from __future__ import annotations
@@ -118,15 +123,6 @@ SECTION_NOTES: dict[str, str] = {
         "(`examples/mars-transfer`). Scale honesty, units, approximations to state and pacing: "
         "[the orbits cookbook](../COOKBOOK-ORBITS.md)."
     ),
-    "pictures and media": (
-        "Whole films of `web` scenes: [Escapement](../../examples/escapement/README.md) (`examples/escapement`), a 3:11 "
-        "clockwork music film in three.js whose watch movement ticks on the score's beat, "
-        "[Parallel Space](../../examples/parallel-space/README.md) (`examples/parallel-space`), a 3:05 trance and "
-        "choir film of a flight through parallel realities, and "
-        "[Signal Fire](../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture. "
-        "A film of `space` scenes written in YAML alone: [Outbound](../../examples/outbound/README.md) (`examples/outbound`), "
-        "58 s from a sunrise over a world, past a ringed giant, to a black hole, with an orchestral score."
-    ),
     "particle physics": (
         "A whole particle-physics explainer, the Standard Model, gluon fusion through a top loop, the decay modes, a diphoton "
         "event, the invariant mass worked out, a simulated spectrum with its bump and fit and what five sigma means: "
@@ -134,6 +130,23 @@ SECTION_NOTES: dict[str, str] = {
         "simulated data, sources, significance and pacing: [the particle-physics cookbook](../COOKBOOK-PARTICLES.md)."
     ),
 }
+#: The web gallery's section notes (links relative to ``docs/gallery/web``), as SECTION_NOTES for the main one.
+WEB_SECTION_NOTES: dict[str, str] = {
+    "pictures and media": (
+        "Whole films of `web` scenes: [Escapement](../../../examples/escapement/README.md) (`examples/escapement`), a 3:11 "
+        "clockwork music film in three.js whose watch movement ticks on the score's beat, "
+        "[Parallel Space](../../../examples/parallel-space/README.md) (`examples/parallel-space`), a 3:05 trance and "
+        "choir film of a flight through parallel realities, and "
+        "[Signal Fire](../../../examples/signal-fire/README.md) (`examples/signal-fire`), a 27 s orchestral cue with its picture. "
+        "A film of `space` scenes written in YAML alone: [Outbound](../../../examples/outbound/README.md) (`examples/outbound`), "
+        "58 s from a sunrise over a world, past a ringed giant, to a black hole, with an orchestral score. "
+        "How to make them: [the 3D cookbook](../../COOKBOOK-3D.md) and [the space cookbook](../../COOKBOOK-SPACE.md)."
+    ),
+}
+#: The web gallery's folder under the gallery's output (DESIGN.md §123.1): the entries of types drawn
+#: in headless Chromium (``NarratedScene.drawn_in_browser``: ``web``, ``3d``, ``space``) and the
+#: showcases using one, with an index of their own.
+WEB_FOLDER = "web"
 #: The last line of a showcase's page, by section: where to read more.
 SECTION_FOOTERS: dict[str, str] = {
     "cell biology": "`vidgen guide scenes` · [the cell-biology cookbook](../COOKBOOK-CELL-BIOLOGY.md)",
@@ -230,12 +243,14 @@ class Sample:
 @dataclass
 class GalleryType:
     """One scene type of the gallery: ``name``; ``alias_of`` (the name it is rendered under) or
-    ``None``; the ``sample`` (``None``: none found, not rendered); the written ``page`` and
+    ``None``; the ``sample`` (``None``: none found, not rendered); ``web``: in the web gallery (its
+    class is drawn in headless Chromium, :func:`is_web_type`); the written ``page`` and
     ``stills`` / ``clips`` by format."""
 
     name: str
     alias_of: str | None
     sample: Sample | None
+    web: bool = False
     page: Path | None = None
     stills: dict[str, Path] = field(default_factory=dict)
     clips: dict[str, Path] = field(default_factory=dict)
@@ -301,10 +316,11 @@ SHOWCASES: tuple[Showcase, ...] = (
 
 @dataclass
 class GalleryShowcase:
-    """A showcase in a gallery run: the ``showcase``, its written ``page`` and ``stills`` /
-    ``clips`` by format."""
+    """A showcase in a gallery run: the ``showcase``, ``web`` (in the web gallery: one of its scene
+    types is, :func:`is_web_showcase`), its written ``page`` and ``stills`` / ``clips`` by format."""
 
     showcase: Showcase
+    web: bool = False
     page: Path | None = None
     stills: dict[str, Path] = field(default_factory=dict)
     clips: dict[str, Path] = field(default_factory=dict)
@@ -317,9 +333,10 @@ class GalleryShowcase:
 @dataclass
 class GalleryResult:
     """What :func:`make_gallery` did: the folder and its index, the work project, the formats,
-    every type (index order) and showcase, the samples rendered / reused as ``"<name>
-    (<format>)"``, the gallery's own ``warnings`` (types without a sample) and the render
-    workers' warnings ``(sample, message)`` (already printed while rendering)."""
+    every type (index order) and showcase, the web gallery's index (``None``: no web entry), the
+    samples rendered / reused as ``"<name> (<format>)"``, the gallery's own ``warnings`` (types
+    without a sample) and the render workers' warnings ``(sample, message)`` (already printed while
+    rendering)."""
 
     output: Path
     index: Path
@@ -327,6 +344,7 @@ class GalleryResult:
     formats: list[str]
     types: list[GalleryType]
     showcases: list[GalleryShowcase] = field(default_factory=list)
+    web_index: Path | None = None
     rendered: list[str] = field(default_factory=list)
     reused: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -334,8 +352,48 @@ class GalleryResult:
 
     @property
     def bytes(self) -> int:
-        """Total size of the files in the output folder."""
+        """Total size of the files in the output folder (the web gallery's included)."""
         return sum(p.stat().st_size for p in self.output.rglob("*") if p.is_file())
+
+
+# ----- the two galleries -----------------------------------------------------------------------
+
+
+def is_web_type(name: str) -> bool:
+    """Whether scene type ``name`` (the current registry) is drawn by a web page in headless
+    Chromium (``NarratedScene.drawn_in_browser``): its entry goes to the web gallery."""
+    from vidgen import registry
+
+    entry = registry.find(name)
+    return entry is not None and bool(getattr(entry.cls, "drawn_in_browser", False))
+
+
+def is_web_showcase(showcase: Showcase) -> bool:
+    """Whether a showcase goes to the web gallery: one of its scenes is of a web type."""
+    return any(is_web_type(scene["type"]) for scene in showcase.config()["scenes"])
+
+
+def gallery_folder(output: Path, web: bool) -> Path:
+    """The folder an entry's page and ``media/`` go in: ``output`` or, for a web entry,
+    ``output/web`` (:data:`WEB_FOLDER`)."""
+    return output / WEB_FOLDER if web else output
+
+
+def page_link(name: str, web: bool, from_web: bool) -> str:
+    """The relative link to entry ``name``'s page (in the web gallery if ``web``) from a page of
+    the web gallery (``from_web``) or of the main one."""
+    if web == from_web:
+        return f"{name}.md"
+    return f"{WEB_FOLDER}/{name}.md" if web else f"../{name}.md"
+
+
+_UP_LINK = re.compile(r"\]\(\.\./")
+
+
+def relink_for_web(text: str) -> str:
+    """Markdown written for a page of the main gallery (links ``](../...)``) as it reads from the
+    web gallery, one folder deeper."""
+    return _UP_LINK.sub("](../../", text)
 
 
 # ----- samples ---------------------------------------------------------------------------------
@@ -464,8 +522,9 @@ def gallery_types(project: Project | None) -> list[GalleryType]:
     canonical: dict[type, str] = {}
     types: list[GalleryType] = []
     for entry in entries:
+        web = bool(getattr(entry.cls, "drawn_in_browser", False))   # as is_web_type, for this entry
         if entry.cls in canonical:
-            types.append(GalleryType(entry.name, canonical[entry.cls], None))
+            types.append(GalleryType(entry.name, canonical[entry.cls], None, web))
             continue
         canonical[entry.cls] = entry.name
         names = [e.name for e in entries if e.cls is entry.cls]
@@ -477,7 +536,7 @@ def gallery_types(project: Project | None) -> list[GalleryType]:
         if sample is not None and sample.type != entry.name:  # the snippet of another name of it
             text = sample.yaml.replace(f"type: {sample.type}", f"type: {entry.name}")
             sample = Sample(entry.name, {**sample.config, "type": entry.name}, text, sample.group, sample.origin, sample.characters)
-        types.append(GalleryType(entry.name, None, sample))
+        types.append(GalleryType(entry.name, None, sample, web))
     groups = list(dict.fromkeys(s.group for s in guide.values()))
     order = {g: i for i, g in enumerate(groups)}
     guide_order = {name: i for i, name in enumerate(guide)}
@@ -699,10 +758,10 @@ def _render_format(
     result.reused.extend(f"{sid} ({fmt})" for sid in ids if sid not in runs.rendered)
     result.render_warnings.extend((f"{sid} ({fmt})", message) for sid, message in runs.warnings)
     ffmpeg = ff.find_ffmpeg() if clips else ""
-    media = output / "media"
     for entry in entries:
         if entry.name not in ids:
             continue
+        media = gallery_folder(output, entry.web) / "media"
         index_file = scene_frames_dir(project, True, entry.name) / "index.json"
         index = json.loads(index_file.read_text(encoding="utf-8")) if index_file.is_file() else {}
         if not index.get("frames"):
@@ -782,7 +841,7 @@ def _previews(name: str, output: Path, formats: list[str]) -> str:
 
 
 def write_page(t: GalleryType, output: Path, formats: list[str], uses: dict[str, str], aliases: list[str]) -> Path:
-    """Write ``<output>/<type>.md``."""
+    """Write ``<output>/<type>.md`` (a web type's: ``<output>/web/<type>.md``)."""
     from vidgen import registry
     from vidgen.describe import scene_doc
 
@@ -797,6 +856,7 @@ def write_page(t: GalleryType, output: Path, formats: list[str], uses: dict[str,
     if aliases:
         lines += [f"Also available as {', '.join(f'`{a}`' for a in aliases)} (the same type).", ""]
     origin = "the author guide (`vidgen guide scenes`)" if t.sample.origin == "guide" else f"`{t.sample.origin}`"
+    output = gallery_folder(output, t.web)
     shown = [f for f in formats if (output / "media" / media_name(t.name, f, ".png")).is_file()]
     if shown:
         lines += [f"Last beat, {' and '.join(shown)}:", "", _images(t.name, shown, 300), ""]
@@ -813,7 +873,8 @@ def write_page(t: GalleryType, output: Path, formats: list[str], uses: dict[str,
     targets = list(entry.cls.target_patterns)
     lines += ["## Targets", "", ", ".join(f"`{p}`" for p in targets) if targets else "None.", ""]
     lines += ["## Beats", "", entry.cls.beat_count_text() or "Any number.", ""]
-    lines += ["[All scene types](README.md) · `vidgen list-scenes` · `vidgen schema --scene " + t.name + "`", ""]
+    index = "[All web scenes](README.md) · [All scene types](../README.md)" if t.web else "[All scene types](README.md)"
+    lines += [f"{index} · `vidgen list-scenes` · `vidgen schema --scene {t.name}`", ""]
     path = output / f"{t.name}.md"
     write_text_atomic(path, "\n".join(lines))
     return path
@@ -829,10 +890,12 @@ def _use_from_doc(type_name: str) -> str:
     return doc.split(". ")[0].rstrip(".") if doc else ""
 
 
-def write_showcase_page(showcase: Showcase, output: Path, formats: list[str]) -> Path:
-    """Write ``<output>/<showcase>.md``: what it is for, the scene playing, its stills, the YAML."""
+def write_showcase_page(showcase: Showcase, output: Path, formats: list[str], web: bool = False) -> Path:
+    """Write ``<output>/<showcase>.md`` (``web``: ``<output>/web/<showcase>.md``): what it is for,
+    the scene playing, its stills, the YAML; the scene types it shows linked in either gallery."""
     used = list(dict.fromkeys(scene["type"] for scene in showcase.config()["scenes"]))
-    links = ", ".join(f"[`{name}`]({name}.md)" for name in used)
+    links = ", ".join(f"[`{name}`]({page_link(name, is_web_type(name), web)})" for name in used)
+    output = gallery_folder(output, web)
     lines = [
         f"# {showcase.title}",
         "",
@@ -851,7 +914,11 @@ def write_showcase_page(showcase: Showcase, output: Path, formats: list[str]) ->
     if shown:
         lines += ["Last beat:", "", _images(showcase.name, shown, 300), ""]
     lines += ["## YAML", "", "```yaml", showcase.text().rstrip(), "```", ""]
-    lines += [f"[All scene types and showcases](README.md) · {SECTION_FOOTERS.get(showcase.section, DEFAULT_FOOTER)}", ""]
+    footer = SECTION_FOOTERS.get(showcase.section, DEFAULT_FOOTER)
+    if web:
+        lines += [f"[All web scenes](README.md) · [All scene types](../README.md) · {relink_for_web(footer)}", ""]
+    else:
+        lines += [f"[All scene types and showcases](README.md) · {footer}", ""]
     path = output / f"{showcase.name}.md"
     write_text_atomic(path, "\n".join(lines))
     return path
@@ -877,42 +944,76 @@ def _showcase_row(showcase: Showcase, output: Path, formats: list[str]) -> str:
 
 
 def write_index(
-    types: list[GalleryType], output: Path, formats: list[str], uses: dict[str, str], showcases: list[Showcase] | tuple[Showcase, ...] = ()
+    types: list[GalleryType], output: Path, formats: list[str], uses: dict[str, str],
+    showcases: list[Showcase] | tuple[Showcase, ...] = (), web_showcases: frozenset[str] | set[str] = frozenset(), web: bool = False,
 ) -> Path:
-    """Write ``<output>/README.md``: every type by group with its previews, each group's
-    showcases after its types (a showcase section that is no group after the groups)."""
+    """Write ``<output>/README.md`` (``web``: the web gallery's, ``<output>/web/README.md``): its
+    types by group with their previews, each group's showcases after its types (a showcase section
+    that is no group after the groups). A type is in the web gallery when ``GalleryType.web``, a
+    showcase when its name is in ``web_showcases``; the two indexes link to each other (the main
+    one only when the web gallery has an entry) and the main one ends with the YouTube section."""
+    folder = gallery_folder(output, web)
+    web_types = [t.name for t in types if t.web]
+    has_web = bool(web_types) or any(s.name in web_showcases for s in showcases)
+    types = [t for t in types if t.web == web]
+    showcases = [s for s in showcases if (s.name in web_showcases) == web]
     sections: dict[str, list[str]] = {}
     by_name = {t.name: t for t in types}
     for t in types:
         base = by_name.get(t.alias_of) if t.alias_of else t
         group = base.sample.group if base is not None and base.sample is not None else "other"
-        sections.setdefault(group, []).append(_type_row(t, output, formats, uses))
+        sections.setdefault(group, []).append(_type_row(t, folder, formats, uses))
     type_groups = set(sections)
     for showcase in showcases:
-        sections.setdefault(showcase.section, []).append(_showcase_row(showcase, output, formats))
+        sections.setdefault(showcase.section, []).append(_showcase_row(showcase, folder, formats))
     with_showcases = {s.section for s in showcases}
-    lines = [
-        "# Scene gallery",
-        "",
-        "<!-- Generated by `vidgen gallery`; do not edit. -->",
-        "",
-        "Every schu-video-generator scene type, rendered from its sample in the author guide (`AGENTS.md`,",
-        "`vidgen guide scenes`). The previews are animated: each GIF plays the scene at 16:9 and",
-        "9:16 and holds its last beat (viewers who ask for reduced motion see that still instead).",
-        "Each page has the YAML, the params, the action targets and the stills. The cell-biology and",
-        "cartoon sections end with showcases, small scenes written for the gallery, each a whole `video.yaml`.",
-        "Regenerate with `vidgen gallery`.",
-        "",
-    ]
+    if web:
+        lines = [
+            "# Web scene gallery",
+            "",
+            "<!-- Generated by `vidgen gallery`; do not edit. -->",
+            "",
+            "The scene types drawn by a web page in headless Chromium (HTML, CSS, JavaScript, three.js), rendered",
+            "from their samples in the author guide (`AGENTS.md`, `vidgen guide scenes`) like every other type in",
+            "the [scene gallery](../README.md). The previews are animated: each GIF plays the scene at 16:9 and",
+            "9:16 and holds its last beat (viewers who ask for reduced motion see that still instead).",
+            "Each page has the YAML, the params, the action targets and the stills.",
+            "Regenerate with `vidgen gallery`.",
+            "",
+        ]
+        notes = WEB_SECTION_NOTES
+    else:
+        lines = [
+            "# Scene gallery",
+            "",
+            "<!-- Generated by `vidgen gallery`; do not edit. -->",
+            "",
+            "Every schu-video-generator scene type, rendered from its sample in the author guide (`AGENTS.md`,",
+            "`vidgen guide scenes`). The previews are animated: each GIF plays the scene at 16:9 and",
+            "9:16 and holds its last beat (viewers who ask for reduced motion see that still instead).",
+            "Each page has the YAML, the params, the action targets and the stills. The cell-biology and",
+            "cartoon sections end with showcases, small scenes written for the gallery, each a whole `video.yaml`.",
+            "Regenerate with `vidgen gallery`.",
+            "",
+        ]
+        if has_web:
+            shown = f" ({', '.join(f'`{n}`' for n in web_types)})" if web_types else ""
+            lines += [
+                f"The types drawn by a web page in headless Chromium{shown} and the films made of them have a gallery",
+                f"of their own: the [web scene gallery]({WEB_FOLDER}/README.md).",
+                "",
+            ]
+        notes = SECTION_NOTES
     for group, rows in sections.items():
         title = GROUP_TITLES.get(group, group)
         lines += [f"## {title[:1].upper()}{title[1:]}", ""]
-        if group in SECTION_NOTES:
-            lines += [SECTION_NOTES[group], ""]
+        if group in notes:
+            lines += [notes[group], ""]
         first = {(True, False): "type", (True, True): "type or showcase", (False, True): "showcase"}[(group in type_groups, group in with_showcases)]
         lines += [f"| {first} | preview | use it for |", "|---|---|---|", *rows, ""]
-    lines += youtube_lines()
-    path = output / "README.md"
+    if not web:
+        lines += youtube_lines()
+    path = folder / "README.md"
     write_text_atomic(path, "\n".join(lines))
     return path
 
@@ -942,6 +1043,7 @@ def make_gallery(
         raise VidgenError(f"unknown format '{unknown[0]}'; formats: {', '.join(FORMATS)}")
     if jobs < 1:
         raise VidgenError("--jobs must be at least 1")
+    web_showcases: frozenset[str] = frozenset()
     if project is not None:
         with extensions.project_session(project):
             types = gallery_types(project)
@@ -951,6 +1053,7 @@ def make_gallery(
             extensions.load_builtins()
             types = gallery_types(None)
             names = rendered_names(types, only)
+            web_showcases = frozenset(s.name for s in SHOWCASES if is_web_showcase(s))
     # the showcases belong to the built-in gallery, not to a project's
     showcases = [] if project is not None else rendered_showcases(only)
     if not names and not showcases:
@@ -963,7 +1066,8 @@ def make_gallery(
     write_text_atomic(work / "video.yaml", yaml.safe_dump(config, sort_keys=False, allow_unicode=True))
     _copy_files(types, project, work)
     output.mkdir(parents=True, exist_ok=True)
-    result = GalleryResult(output, output / "README.md", work, list(formats), types, [GalleryShowcase(s) for s in showcases])
+    result = GalleryResult(output, output / "README.md", work, list(formats), types,
+                           [GalleryShowcase(s, s.name in web_showcases) for s in showcases])
     for t in types:
         if t.sample is None and t.alias_of is None:
             result.warnings.append(f"scene type {t.name} has no sample; use it in a scene of video.yaml to show it")
@@ -983,7 +1087,20 @@ def make_gallery(
             if t.name in names:
                 aliases = [a.name for a in types if a.alias_of == t.name]
                 t.page = write_page(t, output, list(FORMATS), uses, aliases)
+                _remove_other_copy(t.name, output, t.web)
         for entry in result.showcases:
-            entry.page = write_showcase_page(entry.showcase, output, list(FORMATS))
-        write_index(types, output, list(FORMATS), uses, SHOWCASES if project is None else ())
+            entry.page = write_showcase_page(entry.showcase, output, list(FORMATS), entry.web)
+            _remove_other_copy(entry.name, output, entry.web)
+        listed = SHOWCASES if project is None else ()
+        write_index(types, output, list(FORMATS), uses, listed, web_showcases)
+        if any(t.web for t in types) or web_showcases:
+            result.web_index = write_index(types, output, list(FORMATS), uses, listed, web_showcases, web=True)
     return result
+
+
+def _remove_other_copy(name: str, output: Path, web: bool) -> None:
+    """Remove entry ``name``'s page and media from the gallery it is not in (an entry written
+    there before it moved, DESIGN.md §123.1), so it is in one gallery only."""
+    other = gallery_folder(output, not web)
+    for path in [other / f"{name}.md", *(other / "media" / media_name(name, f, x) for f in FORMATS for x in (".png", ".gif"))]:
+        remove_file(path)

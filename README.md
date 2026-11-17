@@ -12,7 +12,7 @@ generated from code, free to use.** [Listen](docs/music/README.md) ·
 - **[3D scenes](docs/COOKBOOK-3D.md):** plain shapes, labels and stand-in figures under one light, with a camera that moves on the narration's words, all described in the project file.
 - **[2D cartoon](docs/gallery/README.md#2d-cartoons):** characters that walk, talk and act on a stage.
 - **[Isometric cartoon](docs/gallery/README.md#isometric-cartoons):** the same characters in a village or a room seen from above at an angle, with rain, snow and time of day.
-- **[Web scenes](docs/gallery/web.md):** a page you write in HTML, CSS and JavaScript, with three.js, D3 and Chart.js included.
+- **[Web scenes](docs/gallery/web/README.md):** a page you write in HTML, CSS and JavaScript, with three.js, D3 and Chart.js included.
 - **[Video-model scenes](docs/COOKBOOK-GENERATED-VIDEO.md):** shots made by a paid AI video model from a 3D guide video, a starting picture and reference pictures of the characters.
 
 schu-video-generator is a tool that an AI agent (Claude, or any LLM-based agent with a shell or
@@ -625,7 +625,8 @@ my_video/
   and taikos) that the pictures follow through `music_data` (the final render is estimated at
   35 to 45 min on 2 cores, `vidgen still` and `--draft` for quick looks).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
-  stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
+  stills, a GIF each) with its YAML, params and targets, the types drawn in a web page (`3d`,
+  `web`, `space`) in the [web scene gallery](docs/gallery/web/README.md); regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
 - [docs/COOKBOOK.md](docs/COOKBOOK.md) — craft notes from real videos (hooks, pacing, sound, QA);
   [docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md](docs/COOKBOOK-YOUTUBE-SHORT-FOR-CODING.md) — a
@@ -749,9 +750,9 @@ remaining rendering tests. No test needs network or keys.
     and rain, voice sounds like `[laugh]`, overlapping lines, and automatic directing with
     `auto_direct`), `card` (title cards, opened and closed with an iris).
 
-  See them all in the **[scene gallery](docs/gallery/README.md)**: every type at 16:9 and 9:16,
-  with a GIF, its YAML, params and targets (`vidgen gallery` makes it, also for a project's own
-  types).
+  See them all in the **[scene gallery](docs/gallery/README.md)** and the
+  **[web scene gallery](docs/gallery/web/README.md)**: every type at 16:9 and 9:16, with a GIF,
+  its YAML, params and targets (`vidgen gallery` makes them, also for a project's own types).
 - **Made for AI authors**: [AGENTS.md](AGENTS.md), also built in as `vidgen guide`, tells an
   agent how to make a good video with schu-video-generator (see [For AI agents](#for-ai-agents)); `vidgen mcp`
   gives an agent's client every command as an MCP tool, storyboards returned as images

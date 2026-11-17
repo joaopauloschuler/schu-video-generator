@@ -429,6 +429,10 @@ class NarratedScene(MovingCameraScene):
     #: Whether the video's ``drawing:`` style (DESIGN.md §79) draws every stroke of scenes of this
     #: type and lays its texture over them; ``stage`` sets it. On other scenes it draws the host only.
     uses_drawing_style: ClassVar[bool] = False
+    #: Whether scenes of this type are drawn by a web page in headless Chromium (DESIGN.md §123.1):
+    #: ``web`` and ``3d`` set it, so do their subclasses (``space``); ``vidgen gallery`` puts such
+    #: types in its web gallery (``docs/gallery/web``).
+    drawn_in_browser: ClassVar[bool] = False
 
     def drawing_settings(self) -> list[Any]:
         """The ``drawing:`` settings of this scene, later ones winning key by key: the video's

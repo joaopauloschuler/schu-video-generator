@@ -17599,6 +17599,12 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
   over 150 KB is made again at 5, then 4 fps. The index shows each GIF in a `<picture>` whose
   still replaces it for viewers who ask for reduced motion. Nothing in the files depends on the
   time or the machine: the same schu-video-generator writes the same files.
+- **The web gallery** (DESIGN.md §123.1): the types drawn by a web page in headless Chromium
+  (`web`, `3d`, `space`, and any type whose class sets `drawn_in_browser = True`) and the
+  showcases using one have a gallery of their own, `web/` in the gallery folder (`web/README.md`,
+  `web/<type>.md`, `web/media/`), with the same pages and previews; the two indexes link to each
+  other and the videos on YouTube stay at the end of the main one. An entry written into the
+  other gallery before is removed from there when it is written.
 
 | option | |
 |---|---|
@@ -17611,8 +17617,9 @@ Files: the captioned stills, the audio tracks and ffmpeg's lists in
 | `--force` | render the samples again even if their stills are current |
 | `--json` | print the gallery's files (below) |
 
-The repository's gallery is committed (stills and GIFs, about 8.6 MB with the showcases; a test
-keeps it under 10 MB and every GIF under 150 KB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
+The repository's gallery is committed (stills and GIFs, about 16.1 MB with the showcases, and
+0.6 MB in the web gallery; tests keep them under 16.5 MB and 20 MB, every entry under 360 KB and
+every GIF under 150 KB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
 or a guide snippet, look at the stills, and commit `docs/gallery`.
 
 ## Drafting from an outline (`vidgen plan`)
@@ -17777,7 +17784,7 @@ render workers it started (the process group on macOS / Linux, the process tree 
 **Resources**: `vidgen://guide` (the author guide) and `vidgen://guide/<topic>` (one topic each),
 `vidgen://schema` (the JSON Schema of the root project's `video.yaml`, else of the built-ins) and,
 when the root has a `docs/gallery` folder (the schu-video-generator repository), `vidgen://gallery/index` and
-`vidgen://gallery/<type>`.
+`vidgen://gallery/<type>` (the web gallery's pages too, its index as `vidgen://gallery/web-index`).
 
 ## JSON output (`--json`)
 
@@ -18350,12 +18357,13 @@ The [scene gallery](#scene-gallery-vidgen-gallery) written by `vidgen gallery`.
 |---|---|---|
 | `project` | str \| null | the project whose own types are shown (`null`: built-ins only) |
 | `output`, `index`, `work` | str | the gallery folder, its `README.md`, the work project rendered in |
+| `web_index` | str \| null | the web gallery's `web/README.md` (`null`: no type or showcase drawn in a web page) |
 | `formats` | list | the formats rendered (`16:9`, `9:16`) |
 | `rendered`, `reused` | list | samples (and showcases) rendered by this run and current ones reused, as `"<name> (<format>)"` |
-| `bytes` | int | the size of the gallery folder |
+| `bytes` | int | the size of the gallery folder (the web gallery's included) |
 | `elapsed` | float | seconds |
-| `types` | list | every registered type, in index order: `{name, alias_of, sample, page, stills, clips}`; `alias_of` names the type it is another name of (`null` otherwise), `sample` is `guide`, the project's config file name or `null` (none), `page` the type's page written by this run (else `null`), `stills` / `clips` the files written by this run by format |
-| `showcases` | list | the showcases this run rendered (none for a project): `{name, section, title, page, stills, clips}` |
+| `types` | list | every registered type, in index order: `{name, alias_of, sample, web, page, stills, clips}`; `web` is true for a type in the web gallery, `alias_of` names the type it is another name of (`null` otherwise), `sample` is `guide`, the project's config file name or `null` (none), `page` the type's page written by this run (else `null`), `stills` / `clips` the files written by this run by format |
+| `showcases` | list | the showcases this run rendered (none for a project): `{name, section, title, web, page, stills, clips}` |
 
 `warnings`: a type with no sample, and the render warnings of the samples (`scene` is then
 `"<type> (<format>)"`). An unknown `--types` name or format is an error (`ok` false).

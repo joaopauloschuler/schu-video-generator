@@ -7,8 +7,8 @@ cookbook is about choosing what to show, keeping the picture honest, what each s
 how to check it before a render. The full list of keys is in [CONFIG.md](CONFIG.md#space), the
 short form in the author guide (`vidgen guide space-scenes`), a whole film to copy from in
 [examples/outbound](../examples/outbound/README.md) (58 s, five scenes cut on bar lines, an
-original score). Orbits as diagrams (the flat `orbit` scene, Δv, launch windows, the units to say)
-are in [COOKBOOK-ORBITS.md](COOKBOOK-ORBITS.md); three.js pages of your own, finishing and music
+original score), the scene playing in the [web scene gallery](gallery/web/space.md). Orbits as
+diagrams (the flat `orbit` scene, Δv, launch windows, the units to say) are in [COOKBOOK-ORBITS.md](COOKBOOK-ORBITS.md); three.js pages of your own, finishing and music
 videos in [COOKBOOK-3D.md](COOKBOOK-3D.md).
 
 Contents: [1. Choose what to show](#1-choose-what-to-show) ·

@@ -2267,6 +2267,29 @@ bodies or compressed distances stated); an algorithmic sky by default, a real on
 - [ ] `music:` track names are checked against `music_data.tracks`, not the score file; page warnings print only when a clip is drawn (not when a stored clip is reused)
 - [ ] Outbound was never rendered at full size and nobody has listened to its score; no space film has run on Windows or macOS or a real GPU
 
+## Phase AO — Air, planes and giant ships (owner's request, 2026-11-17)
+
+Flight inside atmospheres (the sky from inside, ocean, cloud decks and gas giants, terrain; no
+forests), parametrized space plane parts, giant ships kilometres long, a separate gallery for web
+scenes, a cache for baked maps and the owner's seven orchestral Shorts as examples (DESIGN §123).
+
+- [x] Step 379 — A separate gallery for web scenes: `docs/gallery/web/` (20 MB) for the types drawn in headless Chromium (`NarratedScene.drawn_in_browser`: `3d`, `web`, `space`), linked both ways; the main gallery back to 16.5 MB; the YouTube section stays in the main one (DESIGN §123.1)
+- [ ] Step 380 — A cache for baked maps (planet surface maps, sky cube maps): keyed by every input, deterministic, bounded, cleared by the cache commands, pixel-identical with and without it
+- [ ] Step 381 — The sky from inside an atmosphere: Rayleigh + Mie scattering, day, sunset, twilight, aerial perspective, Earth-like and Mars-like presets, continuous with the limb glow seen from orbit
+- [ ] Step 382 — Ocean: waves at several scales from a seed, sun glitter, sky reflection, foam, the curved horizon; right from 50 m and from 20 km
+- [ ] Step 383 — Cloud decks and gas giant atmospheres: layered decks, towers, lightning on `ctx.music`, a gas giant with no ground; cost measured, cheap variants
+- [ ] Step 384 — Terrain with relief: seeded mountains, canyons, dunes, Mars-like desert; detail near the camera without popping; agrees with the planet seen from orbit; a height lookup; no vegetation
+- [ ] Step 385 — Flight paths: waypoints and manoeuvres to position, velocity and attitude per frame (never below ground), a descent from an orbit state, a JS accessor
+- [ ] Step 386 — Space plane parts: parametrized body, wing presets, tails, pods, control surfaces, windows, bay doors, gear; ready-made invented planes; `craft.fly` on a flight path
+- [ ] Step 387 — Re-entry and flight effects: re-entry glow and plasma trail, contrails, exhaust in air, shock and condensation; strength from speed and height; cost measured
+- [ ] Step 388 — Giant ship hulls: our own silhouette families for ships 0.5–10 km long, parameters and seed, clean large forms
+- [ ] Step 389 — Giant ship detail and sense of size: detail baked to maps (cached), engines on `ctx.music`, shots that prove size, a fleet from a seed
+- [ ] Step 390 — Camera moves in air and beside giant ships: low passes, a climb through a deck, chase and fly-past, a pass along a hull, a reveal; bar-locked, never below ground
+- [ ] Step 391 — Orbit to ground in one shot: a continuous descent from orbit through the air to low altitude, with what is true and what cheats stated
+- [ ] Step 392 — Reach from `video.yaml`: the new parts in the `space` scene type without code (keys, did-you-mean, `vidgen space-page`, `vidgen parts`, guide, `music plan --style space`) and cheap Phase AN leftovers
+- [ ] Step 393 — Critical review of 379–392 with fixes; cookbook recipes, guide, CONFIG, README, web gallery entries, leftovers
+- [ ] Step 394 — Orchestral shorts as examples: `examples/orchestral-shorts/`, one shared scene module and one straight-cut scene type, picture and sound proven unchanged, each linked to its Short
+
 ---
 
 ## Ideas for future phases (discussed with the owner, not planned yet)

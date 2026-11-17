@@ -655,3 +655,24 @@ def test_server_character_sheet_returns_the_sheets(tmp_path: Path) -> None:
         assert "unknown character" in error_text(await client.call_tool("character_sheet", {"project": "cast", "name": "nobody"}))
 
     run_session(tmp_path, body)
+
+
+def test_gallery_resources_include_the_web_gallery(tmp_path: Path) -> None:
+    """Step 379: the web gallery's pages (docs/gallery/web) are resources under their own names,
+    its index as ``vidgen://gallery/web-index``."""
+    from vidgen.mcp_server import _add_resources
+
+    web = tmp_path / "docs" / "gallery" / "web"
+    web.mkdir(parents=True)
+    for page in (web.parent / "README.md", web.parent / "pie.md", web / "README.md", web / "space.md"):
+        page.write_text(f"# {page.stem}", encoding="utf-8")
+    readers: dict[str, Callable[[], Any]] = {}
+
+    class Server:
+        def resource(self, uri: str, **_: Any) -> Callable[[Callable[[], Any]], None]:
+            return lambda read: readers.__setitem__(uri, read)
+
+    _add_resources(Server(), RootPolicy.at(tmp_path))
+    gallery = {uri for uri in readers if uri.startswith("vidgen://gallery/")}
+    assert gallery == {f"vidgen://gallery/{n}" for n in ("index", "pie", "web-index", "space")}
+    assert readers["vidgen://gallery/space"]() == "# space" and readers["vidgen://gallery/web-index"]() == "# README"
