@@ -81,7 +81,8 @@ def _lengths(value: Any, where: str) -> Any:
 def sun_direction(params: Any) -> list[float] | None:
     """Where the sun is from the middle of a scene with orbits but without the Sun in its data: the real
     direction on the date for orbits around a planet (or the Moon: the Earth's), from JPL's approximate
-    elements; None when it cannot be known (the page then uses the default and says so)."""
+    elements, in the data's frame (a flyby's turns with the planet's motion: :func:`vidgen.orbits.ephemeris.flyby_axes`); None
+    when it cannot be known (the page then uses the default and says so)."""
     data = params.orbits
     central = data.central if isinstance(data.central, str) else getattr(data.central, "preset", None) or getattr(data.central, "name", None)
     key = str(central or "").strip().lower()
@@ -90,6 +91,8 @@ def sun_direction(params: Any) -> list[float] | None:
         return None
     jd = orbits.ephemeris.julian_date(data.date) if data.date is not None else 2451545.0
     r = orbits.ephemeris.heliocentric(key, jd)
+    if data.flyby is not None:   # the flyby's own frame: x along the planet's motion, z its orbit's north
+        r = orbits.ephemeris.flyby_axes(key, jd) @ r
     n = math.sqrt(sum(float(x) ** 2 for x in r))
     return [round(-float(x) / n, 12) for x in r]
 

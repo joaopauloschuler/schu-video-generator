@@ -147,7 +147,7 @@ def test_every_move_is_a_smooth_function_of_time_in_node(tmp_path: Path) -> None
           const jump = Math.max(...steps.slice(1).map((v, i) => Math.abs(v - steps[i]))) / Math.max(...steps, 1e-300);
           const sub = shots.map((s) => C.screenOf(s, s.subject.at)), unit = Math.max(...shots.map((s) => Math.abs(C.len(s.forward) - 1) + Math.abs(C.dot(s.forward, s.up)) + Math.abs(C.dot(s.right, s.up))));
           out.push({name, again, jump, turn: Math.max(...turns), x: [Math.min(...sub.map((p) => p.x)), Math.max(...sub.map((p) => p.x))], y: [Math.min(...sub.map((p) => p.y)), Math.max(...sub.map((p) => p.y))],
-            nearest: Math.min(...shots.map((s) => C.len(s.from))) / R, unit, ends: [steps[0], steps[n / 2], steps[n - 1]], check: cam.check(move, {steps: 60})});
+            nearest: Math.min(...shots.map((s) => C.len(s.from))) / R, unit, ends: [steps[0], steps[n / 2], steps[n - 1]], check: cam.check(move, {steps: 60}).filter((c) => !c.includes("unlit side"))});   // the fixture's sun is not chosen for the light
         }
     """)
     by = {g["name"]: g for g in got}
@@ -184,7 +184,7 @@ def test_the_moves_numbers_in_node(tmp_path: Path) -> None:
           return [deg(toM, toW) - Math.asin(R / C.len(toW)) * 180 / Math.PI + Math.asin(moon.radius / C.len(toM)) * 180 / Math.PI, r.seen, C.screenOf(r, m).x, C.dot(r.right, C.unit(r.from))]; };
         out.push({sun: [el(4.9), el(5), el(5.1), el(7)], air: el(5, {air: 0.1})[0], bars: cam.reveal(0, {behind: W, at: 12, time: 12, rate: 0.5}).elevation, moon: [mr(4.5), mr(5), mr(5.5)], airMargin: C.airMargin(R, R + 4.46e5)});
         // follow: every view frames the craft; locked to the flight; it breathes and closes in
-        const views = Object.keys(C.VIEWS).map((v) => { const f = cam.follow(2, {subject: ship, around: W, view: v, target: moon, drift: 0}), p = C.screenOf(f, ship.at(2)); return [v, p.x, p.y, p.inFrame, C.frameShare(15, f.distance, f.fov), cam.problems(2, f).length]; });
+        const views = Object.keys(C.VIEWS).map((v) => { const f = cam.follow(2, {subject: ship, around: W, view: v, target: moon, drift: 0}), p = C.screenOf(f, ship.at(2)); return [v, p.x, p.y, p.inFrame, C.frameShare(15, f.distance, f.fov), cam.problems(2, f).filter((c) => !c.includes("unlit side")).length]; });
         const f0 = cam.follow(2, {subject: ship, around: W, drift: 0}), vel = C.unit(C.sub(ship.at(2.001), ship.at(1.999))), hz = cam.follow(2, {subject: ship, around: W, view: "horizon", drift: 0});
         const tangent = (() => { const toShip = C.unit(C.sub(ship.at(2), hz.from)), toW = C.sub(W.at, hz.from); return deg(toShip, toW) - Math.asin(R / C.len(toW)) * 180 / Math.PI; })();
         out.push({views, forward: C.dot(f0.frame.forward, vel), behind: C.dot(C.sub(f0.from, ship.at(2)), vel) < 0, above: C.len(f0.from) > C.len(ship.at(2)), tangent,
@@ -302,6 +302,29 @@ def test_a_path_line_is_cut_short_near_the_camera_in_node(tmp_path: Path) -> Non
     assert 0 < cut["on"] <= 48 and cut["capped"] <= 5
     source = (MODULES / "space-scale.js").read_text(encoding="utf-8")
     assert "o.userData.nearest * 0.999 * cx * cy" in source                      # a line's nearest distance is not its depth at the frame's corner
+
+
+def test_follow_rides_on_the_sunlit_side_and_says_when_the_craft_is_unlit_in_node(tmp_path: Path) -> None:
+    """Step 378: ``follow`` takes ``side`` ("left", "right", "sun"); ``problems`` says when the camera sees a craft's
+    unlit side or the craft is in a world's shadow (demo (b) of Step 376 was a black ship on stars)."""
+    got = _run_in_node(tmp_path, """
+        const sideOf = (sun, side) => { const cam = C.spaceCamera({up: [0, 0, 1], sun, aspect: 16 / 9, bodies: [W]}), s = cam.follow(0.5, {subject: ship, view: "chase", around: W, drift: 0, side});
+          const f = s.frame, rel = C.sub(s.from, ship.at(0.5)); return {right: C.dot(rel, C.cross(f.forward, f.up)), problems: cam.problems(0.5, s)}; };
+        const toRight = (() => { const cam = C.spaceCamera({up: [0, 0, 1], sun: SUN, bodies: [W]}), s = cam.follow(0.5, {subject: ship, view: "chase", around: W, drift: 0}); return C.cross(s.frame.forward, s.frame.up); })();
+        out.push({plain: sideOf([0, 0, 1], undefined).right, left: sideOf([0, 0, 1], "left").right, sunRight: sideOf(toRight, "sun").right, sunLeft: sideOf(C.scale(toRight, -1), "sun").right});
+        // the ship at (7.2e6, ~0, 0): the sun along -x puts it in the world's shadow; the sun ahead of a chase camera hides its lit side
+        const behind = C.spaceCamera({up: [0, 0, 1], sun: [-1, 0, 0], bodies: [W]}), sb = behind.follow(0.5, {subject: ship, view: "chase", around: W, drift: 0});
+        const ahead = C.spaceCamera({up: [0, 0, 1], sun: C.scale(sb.forward, 1), bodies: [W]}), sa = ahead.follow(0.5, {subject: ship, view: "chase", around: W, drift: 0});
+        const lit = C.spaceCamera({up: [0, 0, 1], sun: C.scale(sb.forward, -1), bodies: [W]}), sl = lit.follow(0.5, {subject: ship, view: "chase", around: W, drift: 0});
+        out.push({shadow: behind.problems(0.5, sb), ahead: ahead.problems(0.5, sa), lit: lit.problems(0.5, sl), world: lit.problems(0.5, lit.arc(0, {subject: W, phase: "thin-crescent", distance: {radii: 4}})),
+          bad: err(() => lit.follow(0.5, {subject: ship, view: "chase", around: W, side: "up"}))});
+    """)
+    sides, unlit = got
+    assert sides["plain"] > 0 and sides["left"] < 0 and sides["sunRight"] > 0 and sides["sunLeft"] < 0
+    assert sides["left"] == pytest.approx(-sides["plain"])
+    assert any("in World's shadow" in p for p in unlit["shadow"]) and any("unlit side of Ship" in p and 'side: "sun"' in p for p in unlit["ahead"])
+    assert not any("unlit" in p or "shadow" in p for p in unlit["lit"]) and not any("unlit" in p for p in unlit["world"])   # a world's crescent is meant
+    assert 'follow side must be "left", "right" or "sun", got "up"' in unlit["bad"]
 
 
 @pytest.mark.slow

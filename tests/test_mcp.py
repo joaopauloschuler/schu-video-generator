@@ -209,7 +209,7 @@ TOOLS = {
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview", "story_draft", "shorts_suggest",
     "music_template", "music_patches", "music_render", "music_check", "music_plan", "audio_check", "motion_check",
     "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
-    "generate_plan", "generate_run", "generate_status", "generate_takes", "generate_pick", "generate_host_test", "still", "parts",
+    "generate_plan", "generate_run", "generate_status", "generate_takes", "generate_pick", "generate_host_test", "still", "parts", "space_page",
 }
 
 
@@ -458,6 +458,22 @@ def test_server_music_plan_drafts_a_music_video(tmp_path: Path) -> None:
         assert Path(doc["draft"]["config"]) == (tmp_path / "mv" / "video.yaml").resolve() and not doc["draft"]["problems"]
         assert "already exists" in error_text(await client.call_tool("music_plan", {"score": "tidewater", "out": "mv"}))
         assert "outside the folder" in error_text(await client.call_tool("music_plan", {"score": "tidewater", "out": "../mv"}))
+
+    run_session(tmp_path, body)
+
+
+@pytest.mark.slow
+def test_server_space_page_writes_a_space_scene_out_as_code(tmp_path: Path) -> None:
+    """Step 378: space_page writes the page of a space scene as a web scene's script, inside the project only."""
+    config = {"title": "Space", "format": {"width": 320, "height": 180, "fps": 10},
+              "scenes": [{"id": "rings", "type": "space", "duration": 2, "params": {"bodies": [{"name": "Saturn"}], "camera": {"move": "arc", "subject": "Saturn"}}}]}
+    (tmp_path / "video.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("space_page", {"scene": "rings"}))
+        assert doc["ok"] is True and (tmp_path / "extensions" / "rings.js").is_file()
+        assert "exists already" in error_text(await client.call_tool("space_page", {"scene": "rings"}))
+        assert "in the project folder" in error_text(await client.call_tool("space_page", {"scene": "rings", "out": "../x.js"}))
 
     run_session(tmp_path, body)
 

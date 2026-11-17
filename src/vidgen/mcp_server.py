@@ -76,7 +76,7 @@ scene's page at exact times without rendering it; \
 `music_template` / `music_patches` / `music_render` / `music_check` write and check original music as score files \
 (assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe), `music_plan` a music \
 video's storyboard and draft from one, `motion_check` watches a rendered video for flicker and black frames (and, in dark \
-space pictures, over-exposed discs, shimmering stars and banding), `parts` shows the ready-made three.js parts on a contact sheet. A person shaping music in \
+space pictures, over-exposed discs, shimmering stars and banding), `parts` shows the ready-made three.js parts on a contact sheet, `space_page` writes a space scene's page out as code. A person shaping music in \
 `vidgen studio` may hand you a session with listening notes: `studio_sessions` -> `studio_read` -> `studio_check` -> \
 `studio_propose` (one line per note; `studio_variations` gives four variations to start from). Every \
 tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
@@ -641,6 +641,19 @@ def build_server(root: Path) -> Any:
         options = {"kind": kind, "list": not sheet, "out": None if not sheet else str(out), "size": size if sheet else None, "columns": columns if sheet else None}
         doc = await call(ctx, args_of(["parts"], list(names or []), options), heavy=sheet)
         return paged(doc, [Path(doc["sheet"])] if doc.get("sheet") else [], 0, images if sheet else 0)
+
+    @tool("Write the page a space scene (type space: a sky, worlds, craft, phenomena and camera moves in YAML) draws as a web "
+          "scene's three.js script, to go on in code: the file (default extensions/<scene>.js) and the web scene to put in its "
+          "place in video.yaml (the same picture).", writes)
+    async def space_page(
+        ctx: Context,
+        scene: Annotated[str, Field(description="the space scene's id")],
+        project: OptionalProject = None,
+        out: Annotated[str | None, Field(description="the script's file, relative to the project folder (default extensions/<scene>.js)")] = None,
+        force: Annotated[bool, Field(description="write over the file if it exists")] = False,
+    ) -> Any:
+        options = {"scene": scene, "out": out, "force": force}
+        return answer(await call(ctx, args_of(["space-page"], [str(where(project))] if project else [], options)))
 
     @tool("Sound effects (built-in and the project's assets/sfx) with what they sound like and their params.", read_only)
     async def list_sfx(ctx: Context, project: OptionalProject = None) -> Any:

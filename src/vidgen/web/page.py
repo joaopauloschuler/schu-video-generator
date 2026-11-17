@@ -74,8 +74,9 @@ WEB_ARGS: tuple[str, ...] = ("--hide-scrollbars", "--force-color-profile=srgb", 
 READY_TIMEOUT_MS = 30_000
 #: Milliseconds between two looks at whether the page is ready.
 READY_POLL_MS = 20
-#: How long vidgen's start (fonts, pictures, videos, then the page's ``load(ctx)``) may take (seconds).
-LOAD_TIMEOUT_S = 30.0
+#: How long vidgen's start (fonts, pictures, videos, then the page's ``load(ctx)``) may take (seconds):
+#: generous, since a space scene bakes its worlds' maps there (an Earth-like world's 2048 maps took 30 s on 2 cores, a cratered one's longer).
+LOAD_TIMEOUT_S = 90.0
 #: How long one frame (its timers, animation-frame callbacks and ``frame(t, ctx)``) may take (seconds).
 FRAME_TIMEOUT_S = 10.0
 #: How long the first frame a page draws may take (seconds): a WebGL page's shaders are compiled

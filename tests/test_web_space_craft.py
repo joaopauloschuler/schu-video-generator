@@ -178,6 +178,14 @@ def test_a_craft_follows_the_sun_a_burn_and_the_distance(tmp_path: Path) -> None
         const tug = C.craft("tug", {seed: 1, detail: "far"}).fly(space, {body: "Ship", attitude: "prograde", burn: {seconds: 2, turn: 2}});
         const nose = (t) => { tug.update(t, {sun}); return V(0, 0, 1).applyQuaternion(tug.object.quaternion).toArray().map(r4).concat([tug.engines[0].plume.visible, tug.state.turning]); };
         out.push({added, windows: tug.burns, coast: nose(-1), turning: nose(-0.1), ready: nose(1.9), burning: nose(3), again: nose(3), off: nose(4.2), back: nose(7)});
+        // Step 378: on a fast circular orbit (a quarter turn every 2 s) a prograde burn shown for 2 s stays prograde: the nose
+        // follows the velocity of each moment, not the fixed line of the burn's instant
+        const w = Math.PI / 4, circle = {names: ["Earth", "Ship"], fps: 30, bodies: {Earth: {parent: null}, Ship: {parent: "Earth"}},
+          position: (n, t) => (n === "Ship" ? [7e6 * Math.cos(w * t), 7e6 * Math.sin(w * t), 0] : [0, 0, 0]), velocity: (n, t) => (n === "Ship" ? [-7e6 * w * Math.sin(w * t), 7e6 * w * Math.cos(w * t), 0] : [0, 0, 0]),
+          burns: () => [{frame: 90, dv: [-Math.sin(3 * w) * 300, Math.cos(3 * w) * 300, 0], magnitude: 300, label: "prograde"}]};
+        const fast = C.craft("tug", {seed: 1, detail: "far"}).fly({orbits: circle, add: () => {}}, {body: "Ship", attitude: "radial", burn: {seconds: 2, turn: 1}});
+        const along = (t) => { fast.update(t, {sun}); const n = V(0, 0, 1).applyQuaternion(fast.object.quaternion), v = circle.velocity("Ship", t); return r4(n.dot(V(v[0], v[2], -v[1]).normalize())); };
+        out.push({early: along(2.1), mid: along(3), late: along(3.9)});
         // far away: under a few pixels the craft is a point; turning, a flat face mirrors the sun for a moment
         const cam = new THREE.PerspectiveCamera(35, 16 / 9, 1, 1e6); cam.lookAt(0, 0, -1); cam.updateMatrixWorld();
         const far = C.craft("satellite", {seed: 2, detail: "far"}), levels = [];
@@ -198,12 +206,14 @@ def test_a_craft_follows_the_sun_a_burn_and_the_distance(tmp_path: Path) -> None
     assert f["coast"][:4] == [0, 0, -1, False] and f["back"][:4] == [0, 0, -1, False]   # the nose along the velocity (data +y is three's -z)
     assert f["turning"][3] is False and f["turning"][4] == 1 and 0 < f["turning"][1] < 1   # turning toward the burn, thrusters puffing
     assert f["ready"][:4] == [0, 1, 0, False] and f["burning"][:4] == [0, 1, 0, True] and f["again"] == f["burning"] and f["off"][:4] == [0, 1, 0, False]
-    g = got[4]
+    steer = got[4]
+    assert steer["early"] > 0.999 and steer["mid"] > 0.999 and steer["late"] > 0.999          # 45 degrees of the orbit either side of the burn
+    g = got[5]
     levels = np.array(g["levels"])
     assert g["hidden"] and g["near"] and levels.min() > 0.5 and levels.max() > 4 * np.median(levels)      # a steady point, and a flash
     assert np.abs(np.diff(levels)).max() < 0.45 * levels.max() and (levels > 2 * np.median(levels)).sum() >= 5   # the flash rises and falls over several frames
     assert np.abs(np.diff(levels[20:])).max() < 0.02                                # no noise from frame to frame
-    assert got[5][0] == 1 + got[5][1]                                              # shade() adds the craft's balls once
+    assert got[6][0] == 1 + got[6][1]                                              # shade() adds the craft's balls once
 
 
 def test_the_surfaces_are_computed_from_numbers(tmp_path: Path) -> None:

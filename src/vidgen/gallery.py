@@ -62,11 +62,19 @@ CLIP_HOLD = 2.0
 CLIP_START_SHARE = 0.75
 CLIP_START_MAX = 1.0
 #: A clip larger than this is made again at the next lower frame rate of CLIP_FALLBACK_FPS
-#: (a busy cartoon: rain, camera moves), so every GIF stays light.
+#: (a busy cartoon: rain, camera moves), then with CLIP_FALLBACK_COLORS colours at the lowest
+#: rates (a star field under a camera move: every frame differs everywhere), so every GIF stays light.
 CLIP_MAX_BYTES = 150_000
 CLIP_FALLBACK_FPS = (5, 4)
+CLIP_FALLBACK_COLORS = ((4, 16), (3, 16), (2, 16), (2, 8))
+#: ...and a clip that needs fewer colours is noise more than picture: it is held to this, so its entry
+#: (two clips, two stills, a page) stays within its share of the gallery.
+CLIP_NOISY_MAX_BYTES = 95_000
 #: Stills are saved with a palette of this many colours (flat pictures: no visible loss).
 STILL_COLORS = 256
+#: A still heavier than this is saved again with the next palette of STILL_FALLBACK_COLORS (only star fields are).
+STILL_MAX_BYTES = 80_000
+STILL_FALLBACK_COLORS = (64, 32, 16)
 #: The work project's variant rendering 9:16.
 PORTRAIT_VARIANT = "portrait"
 #: Index group of a project's own types.
@@ -620,10 +628,13 @@ def _save_still(source: Path, target: Path) -> None:
     with Image.open(source) as image:
         picture = image.convert("RGB")
     # a 256-colour palette, no dithering: flat pictures lose nothing visible and the PNG is about
-    # 40 % of the RGB one (the gallery's budget, HANDOFF Step 210)
-    picture = picture.quantize(colors=STILL_COLORS, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-    buffer = io.BytesIO()
-    picture.save(buffer, format="PNG", optimize=True)
+    # 40 % of the RGB one (the gallery's budget, HANDOFF Step 210); a picture of fine noise (a star
+    # field) that is still heavy gets fewer colours
+    for colors in (STILL_COLORS, *STILL_FALLBACK_COLORS):
+        buffer = io.BytesIO()
+        picture.quantize(colors=colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(buffer, format="PNG", optimize=True)
+        if buffer.tell() <= STILL_MAX_BYTES:
+            break
     write_bytes_atomic(target, buffer.getvalue())
 
 
@@ -644,7 +655,8 @@ def clip_start(frames: Any, fps: float) -> float:
 
 def _write_clip(ffmpeg: str, video: Path, target: Path, fmt: str, end: float) -> None:
     """The GIF of ``video`` up to ``end`` s: from :func:`clip_start`, the end held first, at
-    :data:`CLIP_FPS` or, over :data:`CLIP_MAX_BYTES`, a lower rate of :data:`CLIP_FALLBACK_FPS`."""
+    :data:`CLIP_FPS` or, over :data:`CLIP_MAX_BYTES`, a lower rate of :data:`CLIP_FALLBACK_FPS`, then
+    fewer colours (:data:`CLIP_FALLBACK_COLORS`, held to :data:`CLIP_NOISY_MAX_BYTES`)."""
     from vidgen.export import write_gif
     from vidgen.render.ffmpeg import decode_gray_frames
 
@@ -652,12 +664,14 @@ def _write_clip(ffmpeg: str, video: Path, target: Path, fmt: str, end: float) ->
     tmp = target.with_name(f"{target.stem}.partial.gif")
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
-        for fps in (CLIP_FPS, *CLIP_FALLBACK_FPS):
+        steps = [(fps, CLIP_COLORS, CLIP_MAX_BYTES) for fps in (CLIP_FPS, *CLIP_FALLBACK_FPS)]
+        steps += [(fps, colors, CLIP_NOISY_MAX_BYTES) for fps, colors in CLIP_FALLBACK_COLORS]
+        for fps, colors, most in steps:
             size = write_gif(
                 ffmpeg, video, tmp, CLIP_WIDTHS[fmt], fps, start, end,
-                colors=CLIP_COLORS, dither="none", hold=CLIP_HOLD, hold_first=True,
+                colors=colors, dither="none", hold=CLIP_HOLD, hold_first=True,
             )
-            if size <= CLIP_MAX_BYTES:
+            if size <= most:
                 break
         replace_file(tmp, target)
     finally:

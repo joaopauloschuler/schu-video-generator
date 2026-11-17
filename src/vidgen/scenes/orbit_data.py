@@ -28,7 +28,7 @@ from .orbit_systems import ManySpec, OrbitSystem
 rot = orbits.rotation
 
 #: Version of the data's layout and of how it is made (bumped when either changes).
-ORBIT_DATA_VERSION = 1
+ORBIT_DATA_VERSION = 2
 #: Points of a body's path over the scene and of its orbit's conic.
 DEFAULT_PATH_SAMPLES, CONIC_SAMPLES = 256, 360
 #: The frames of the data and their text.
@@ -203,8 +203,10 @@ def make_orbit_data(settings: OrbitData, fps: int, frames: int, scene_frames: in
 
     central = system.central
     central_key = keys[None]
+    # a flyby's frame turns with the planet's motion on the date: its pole (and a moon's) turned into it
+    axes = orbits.ephemeris.flyby_axes(central_key, jd0) if settings.flyby is not None and central_key in orbits.TABLE1 else None
     bodies = [_body_entry(central.name, central_key, None, central, None, "central", np.zeros((frames, 3)), np.zeros((frames, 3)), jds, None,
-                          np.array([0.0, 0.0, 1.0]) if central_key == "sun" else None)]
+                          np.array([0.0, 0.0, 1.0]) if central_key == "sun" else None, axes)]
     for spec, o in zip(model.specs, system.orbiters):
         key = keys[o.name]
         r, v = absolute(o.name)
@@ -217,7 +219,7 @@ def make_orbit_data(settings: OrbitData, fps: int, frames: int, scene_frames: in
             conic = conic @ turn.T
         r0, v0 = (x[0] for x in relative(o.name, np.zeros(1)))
         normal = np.cross(r0, v0)
-        entry = _body_entry(o.name, key, o.parent or central.name, o.body, spec, planes[o.name], r, v, jds, rel, normal / np.linalg.norm(normal))
+        entry = _body_entry(o.name, key, o.parent or central.name, o.body, spec, planes[o.name], r, v, jds, rel, normal / np.linalg.norm(normal), axes)
         entry.update(path=_b64(path), conic=_b64(conic), path_points=len(path), conic_points=len(conic), orbit=_orbit_entry(el0.mu, r0, v0),
                      burns=_burns(o, turn, times))
         bodies.append(entry)
@@ -253,15 +255,18 @@ def _burns(o: Any, turn: np.ndarray | None, times: np.ndarray) -> list[dict[str,
     return out
 
 
-def _rotation_entry(key: str | None, jds: np.ndarray, parent_rel: np.ndarray | None, orbit_normal: np.ndarray | None) -> tuple[dict[str, Any] | None, dict[str, str]]:
-    """A body's rotation facts and its per-frame quaternion and prime-meridian angle (``None`` without rotation data).
+def _rotation_entry(key: str | None, jds: np.ndarray, parent_rel: np.ndarray | None, orbit_normal: np.ndarray | None,
+                    axes: np.ndarray | None = None) -> tuple[dict[str, Any] | None, dict[str, str]]:
+    """A body's rotation facts and its per-frame quaternion and prime-meridian angle (``None`` without rotation data);
+    ``axes``: the data frame's axes in the ecliptic frame when it is another (a flyby's, :func:`vidgen.orbits.ephemeris.flyby_axes`).
     A tidally locked moon (``synchronous``) in orbit around a body of the data faces it: its prime meridian
     points at its parent (projected on its equator) on the model's orbit, instead of the IAU formula's
     meridian (the model does not put the moons where they are on the date)."""
     if key not in rot.ROTATIONS:
         return None, {}
     m = rot.ROTATIONS[key]
-    poles = m.pole(jds)
+    turn = np.eye(3) if axes is None else axes
+    poles = m.pole(jds) @ turn.T
     alpha, delta = m.pole_radec(jds[0])
     locked = m.synchronous and parent_rel is not None
     if locked:
@@ -271,10 +276,10 @@ def _rotation_entry(key: str | None, jds: np.ndarray, parent_rel: np.ndarray | N
         frames = np.stack([x, np.cross(poles, x), poles], axis=-1)
         alpha_all, _ = m.pole_radec(jds)
         node = rot.ecliptic_from_icrf(np.stack([np.cos(np.radians(alpha_all) + math.pi / 2), np.sin(np.radians(alpha_all) + math.pi / 2),
-                                                np.zeros_like(alpha_all)], axis=-1))
+                                                np.zeros_like(alpha_all)], axis=-1)) @ turn.T
         spin = np.mod(np.arctan2(np.sum(x * np.cross(poles, node), axis=-1), np.sum(x * node, axis=-1)), 2 * math.pi)
     else:
-        frames = m.frame(jds)
+        frames = np.einsum("ij,njk->nik", turn, m.frame(jds))
         spin = np.radians(m.prime_meridian(jds))
     facts = {"period": m.period, "retrograde": m.retrograde, "synchronous": m.synchronous, "faces_parent": locked,
              "pole": [float(c) for c in poles[0]], "pole_radec": [alpha, delta], "spin_axis": [float(c) for c in (-poles[0] if m.retrograde else poles[0])],
@@ -285,10 +290,11 @@ def _rotation_entry(key: str | None, jds: np.ndarray, parent_rel: np.ndarray | N
 
 
 def _body_entry(name: str, key: str | None, parent: str | None, body: Any, spec: Any, plane: str, r: np.ndarray, v: np.ndarray, jds: np.ndarray,
-                rel: np.ndarray | None, normal: np.ndarray | None) -> dict[str, Any]:
+                rel: np.ndarray | None, normal: np.ndarray | None, axes: np.ndarray | None = None) -> dict[str, Any]:
     """A body's facts and per-frame series (``rel``: its positions relative to its parent; ``normal``:
-    its orbit's normal at the start, or the ecliptic's for the Sun at the centre, for the tilt)."""
-    rotation, series = _rotation_entry(key, jds, rel, normal)
+    its orbit's normal at the start, or the ecliptic's for the Sun at the centre, for the tilt; ``axes``:
+    a flyby frame's axes, :func:`vidgen.orbits.ephemeris.flyby_axes`)."""
+    rotation, series = _rotation_entry(key, jds, rel, normal, axes)
     color = (str(spec.color) if spec is not None and spec.color else body.color) or None
     label = str(spec.label) if spec is not None and spec.label else name
     return {"name": name, "key": key, "parent": parent, "label": label, "color": color, "gm": body.gm, "radius": body.radius, "plane": plane,

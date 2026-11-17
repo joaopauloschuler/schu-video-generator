@@ -161,6 +161,18 @@ def test_a_ship_on_a_transfer_is_a_body_with_a_path_and_burns() -> None:
     assert ship["orbit"]["period"] == pytest.approx(model.system.orbiter("Ship").elements.period)
 
 
+def test_a_span_that_ends_before_the_second_burn_shows_the_departure_alone() -> None:
+    """Step 378 (Outbound wrote its burn by hand): ``transfer`` with a span that ends between the two burns is a
+    shot of the departure; a span that ends before the first burn is refused with a way out."""
+    leo = {"central": "earth", "bodies": [{"name": "Ship", "altitude": "2000 km"}, {"name": "Far", "altitude": "300000 km"}]}
+    s, data = _data({**leo, "transfer": {"ship": "Ship", "to": "Far", "depart": "2 min"}, "span": "30 min"}, fps=10, frames=52, scene_frames=50)
+    burns = _body(data, "Ship")["burns"]
+    assert burns[0]["magnitude"] == pytest.approx(s.model(None).transfer.result.dv1) and burns[0]["frame"] is not None
+    assert all(b["frame"] is None for b in burns[1:]) or len(burns) == 1
+    with pytest.raises(ValueError, match=r"first burn at .* comes after the scene's span .* give transfer.depart a time inside it"):
+        _data({**leo, "transfer": {"ship": "Ship", "to": "Far"}, "span": "10 min"})
+
+
 def test_a_flyby_probe_is_a_body_in_the_planets_frame() -> None:
     s, data = _data({"central": "jupiter", "flyby": {"v_inf": "5.6 km/s", "altitude": "200000 km"}})
     assert data["frame"] == od.FLYBY_FRAME and [b["name"] for b in data["bodies"]] == ["Jupiter", "Probe"]
@@ -169,6 +181,19 @@ def test_a_flyby_probe_is_a_body_in_the_planets_frame() -> None:
     np.testing.assert_array_equal(_f64(probe["position"]), model.position("Probe", _f64(data["time"], 1)))
     assert probe["orbit"]["kind"] == "hyperbola" and probe["plane"] == "as_written"
     assert any("patched conics" in a for a in data["approximations"])
+    # Step 378: the planet's pole is turned into the flyby's frame (x along its motion on the date, z its orbit's north),
+    # and a space scene's default sun stands where the Sun is in that frame (the y side, the planet's orbit near circular)
+    s, data = _data({"central": "saturn", "date": "2033-04-08", "flyby": {"v_inf": "5.44 km/s", "altitude": "110000 km"}})
+    jd = orbits.ephemeris.julian_date("2033-04-08")
+    axes = orbits.ephemeris.flyby_axes("saturn", jd)
+    pole = np.array(_body(data, "Saturn")["rotation"]["pole"])
+    np.testing.assert_allclose(pole, axes @ rot.ROTATIONS["saturn"].pole(np.array([jd]))[0], atol=1e-12)
+    assert np.allclose(axes @ axes.T, np.eye(3), atol=1e-12) and abs(pole[2]) < 0.95          # tilted 27 degrees from the flyby plane's north
+    from vidgen.scenes import space_page
+    from vidgen.scenes.space import Space
+    params = Space.Params.model_validate({"orbits": {"central": "saturn", "date": "2033-04-08", "flyby": {"v_inf": "5.44 km/s", "altitude": "110000 km"}}, "camera": {"move": "look", "from": [1e9, 0, 0], "to": "Saturn"}})
+    sun = space_page.sun_direction(params)
+    assert sun is not None and sun[1] > 0.999 and abs(sun[2]) < 1e-9
 
 
 def test_an_n_body_run_gives_the_runs_positions() -> None:

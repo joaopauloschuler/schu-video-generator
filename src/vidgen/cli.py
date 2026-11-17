@@ -1211,6 +1211,8 @@ def cmd_space_page(args: argparse.Namespace) -> CommandResult:
         params = Space.Params.model_validate(spec.params)
     rel = args.out or f"extensions/{spec.id}.js"
     target = project.root / rel
+    if not target.resolve().is_relative_to(project.root.resolve()):
+        raise VidgenError(f"--out {rel}: the script goes in the project folder (a path inside {project.root})")
     if target.exists() and not args.force:
         raise VidgenError(f"{rel} exists already (use --force to write over it)")
     outro = Space.outro_seconds(spec.params)

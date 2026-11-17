@@ -330,3 +330,21 @@ def test_the_sky_draws_in_chromium(tmp_path: Path) -> None:
     back, _, made = draw({"sky": {"seed": 1}, "toward": "center", "background": True, "environment": True})
     assert made["environment"] is True and back.mean() > 8
     assert np.corrcoef(back.mean(axis=-1).ravel(), luma.ravel())[0, 1] > 0.6       # the same sky, the same way up
+
+
+def test_a_long_lens_reads_the_cube_coarser() -> None:
+    """Step 378: through a long lens a texel of the 1024 cube spans many pixels (soft blobs of the faint
+    stars, streaks of the band's clouds behind a craft); the sky then reads the cube's coarser levels.
+    At 1280x720 a normal lens reads the finest level, a 300 mm lens a level of about 1.1 degree texels."""
+    source = (MODULES / "space-sky.js").read_text(encoding="utf-8")
+    pixels = float(re.search(r"LENS_PIXELS = ([0-9.]+)", source).group(1))
+    soft = float(re.search(r"LENS_SOFT = ([0-9.]+)", source).group(1))
+    assert "textureLod(uSky, vD, max(0.0, LENS_SOFT * log2(texels / LENS_PIXELS)))" in source and "uSize: {value: this.size}" in source
+
+    def level(fov_deg: float, height: int = 720, size: int = 1024) -> float:
+        texels = (math.pi / 2 / size) / (math.radians(fov_deg) / height)
+        return max(0.0, soft * math.log2(texels / pixels))
+
+    assert level(26.99) == 0 and level(37.85) == 0                      # normal and wide-normal lenses: as before
+    assert 0 < level(15.9) < 1.2 and level(4.58) > 3.5                   # portrait a little coarser, tele smooth
+    assert math.degrees(math.pi / 2 / 1024) * 2 ** level(4.58) > 1.0     # texels wider than a degree: no blob in a 4.6 degree frame

@@ -1699,6 +1699,7 @@ Pictures, screenshots, clips and simple 3D (the 3D craft: `vidgen guide 3d`):
     sun: {direction: [1, -0.3, 0.25]}
     bodies: [{name: Saturn}]
     camera: {move: arc, subject: Saturn, phase: [three-quarter, crescent], distance: {radii: 6}}
+    finish: {grain: 0}   # no film grain (default 0.02): a lighter picture
   beats: [{text: "Round the planet, the Sun goes behind it: a thin crescent."}]
 - id: saying
   type: quote

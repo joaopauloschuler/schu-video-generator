@@ -712,11 +712,17 @@ def resolve_model(central: Any, bodies: list[OrbitBody], *, span: str | None, or
         seconds = (orbit_count if orbit_count is not None else 1.0) * period
     if info_sky is not None and info_sky.jd0 is not None:
         orbits.check_valid(info_sky.jd0, info_sky.jd0 + seconds / orbits.DAY, where="span")
-    late = [(name, b) for name, b in OrbitModel(system, seconds, None, None, {}).burns() if b.time > seconds]
+    every = OrbitModel(system, seconds, None, None, {}).burns()
+    late = [(name, b) for name, b in every if b.time > seconds]
+    if info is not None and len(late) < len(every):
+        late = []   # a transfer's departure inside the span, the rest after it: a shot of the departure alone
     if late:
         name, b = late[0]
-        what = f"the transfer's burn at {_time(b.time)}" if info is not None else f"{name}'s burn at {_time(b.time)}"
-        raise VidgenError(f"{what} comes after the scene's span ({_time(seconds)}); make the span longer or leave it out")
+        if info is not None:
+            raise VidgenError(f"the transfer's first burn at {_time(b.time)} comes after the scene's span ({_time(seconds)}): make the span longer, "
+                              f"leave it out, or give transfer.depart a time inside it ('{max(1, int(seconds / 60 / 5))} min'); a span that ends before the "
+                              "later burns shows the departure alone")
+        raise VidgenError(f"{name}'s burn at {_time(b.time)} comes after the scene's span ({_time(seconds)}); make the span longer or leave it out")
     names = [system.central.name, *system.names]
     if follow is not None and follow not in names:
         raise VidgenError(f"follow: no body '{follow}' (bodies: {', '.join(names)})" + did_you_mean(follow, names))

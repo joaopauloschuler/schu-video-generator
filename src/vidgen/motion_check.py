@@ -28,7 +28,8 @@ field, not a blank frame. The checks of dark pictures:
 - ``blank`` also covers stars or a subject that vanish in one frame and come back (error).
 - ``clipped``: a large area clipped to flat white in a dark frame, an over-exposed sun or planet (warning).
 - ``shimmer``: stars whose brightness jumps from frame to frame, the sub-pixel aliasing of
-  small point stars (warning).
+  small point stars (warning). A star is followed across the frames after taking out the
+  shift most bright stars share (a pan); streaks (a warp) are not point stars and do not count.
 - ``banding``: dark gradients (nebula glow, an atmosphere's limb) in flat steps (info).
 - ``empty``: a long stretch with no star field and only a tiny subject (info).
 - ``lost``: in the scenes named with ``subject=`` (``--subject``), a stretch of dark frames
@@ -161,6 +162,10 @@ class Thresholds:
     """...measured on at least this many stars, half of them found again in a neighbouring frame..."""
     shimmer_share: float = 0.5
     """...on this share of a second's frames."""
+    shimmer_reach: int = 48
+    """A pan is found up to this many detail pixels a frame: the shift most of the brightest stars share is taken out before a star is looked for again..."""
+    shimmer_point: float = 0.6
+    """...and only point-like stars count: at least this share of the light within 3 px of the peak lies within 1 px (a streak of a warp does not)."""
     band_run: int = 6
     """A flat step of a dark gradient (luma codes 3 to 90) at least this many detail pixels long, in a staircase of three steps of 1 or 2 codes the same way..."""
     band_share: float = 0.15
@@ -360,6 +365,26 @@ def _shift_max(a: np.ndarray, r: int) -> np.ndarray:
     return out
 
 
+def _shared_shift(y0: np.ndarray, x0: np.ndarray, v0: np.ndarray, y1: np.ndarray, x1: np.ndarray, v1: np.ndarray,
+                  reach: int, keep: int = 300) -> tuple[int, int]:
+    """The shift ``(dy, dx)`` from one frame's star peaks to the next's that most of the brightest
+    stars share (a pan), within ``reach`` px; ``(0, 0)`` when no shift is shared by enough of them
+    (stars standing still, or each moving its own way: a zoom, a warp)."""
+    a, b = np.argsort(-v0)[:keep], np.argsort(-v1)[:keep]
+    if len(a) < 8 or len(b) < 8:
+        return (0, 0)
+    dy = (y1[b][None, :] - y0[a][:, None]).ravel()
+    dx = (x1[b][None, :] - x0[a][:, None]).ravel()
+    m = (np.abs(dy) <= reach) & (np.abs(dx) <= reach)
+    side = 2 * reach + 1
+    hist = np.bincount((dy[m] + reach) * side + dx[m] + reach, minlength=side * side).reshape(side, side).astype(np.float32)
+    votes = _box_sum(hist, 1)  # a shift of a fraction of a pixel falls into neighbouring bins
+    iy, ix = np.unravel_index(int(np.argmax(votes)), votes.shape)
+    if votes[iy, ix] < max(8.0, 0.2 * min(len(a), len(b))):
+        return (0, 0)
+    return (int(iy) - reach, int(ix) - reach)
+
+
 def _box_sum(a: np.ndarray, r: int) -> np.ndarray:
     """The sum over each pixel's ``(2r + 1)`` square (zeros outside the picture)."""
     h, w = a.shape
@@ -394,8 +419,9 @@ class _DarkMeter:
         self.reset()
 
     def reset(self) -> None:
-        self.recent: deque[tuple[int, np.ndarray, np.ndarray, np.ndarray]] = deque(maxlen=2)
+        self.recent: deque[tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray, tuple[int, int], np.ndarray]] = deque(maxlen=2)
         self.anchor: np.ndarray | None = None
+        self.points = np.zeros(0, bool)
 
     def frame(self, k: int, rgb: np.ndarray) -> tuple[dict[str, float], tuple[int, float] | None]:
         """The numbers of frame ``k`` and, when it can now be judged, ``(k - 1, shimmer)``."""
@@ -424,17 +450,37 @@ class _DarkMeter:
             if not values["still"]:
                 self.anchor = g
         near = _shift_max(s3, 4)  # each star's light, found again within 4 px in the frames around
+        # point stars only: a streak's light runs on beyond 1 px (background: the ring from 3 to 4 px)
+        s7, s9 = _box_sum(g, 3), _box_sum(g, 4)
+        bg = (s9[ys, xs] - s7[ys, xs]) / 32
+        point = (s3[ys, xs] - 9 * bg) >= th.shimmer_point * np.maximum(s7[ys, xs] - 49 * bg, 1e-6)
+        light = g[ys, xs]
+        shift = (0, 0)
+        if self.recent and self.recent[-1][0] == k - 1:
+            _, _, qy, qx, qv, _, _ = self.recent[-1]
+            shift = _shared_shift(qy, qx, qv, ys, xs, light, th.shimmer_reach)
         judged = None
         if len(self.recent) == 2 and self.recent[0][0] == k - 2 and self.recent[1][0] == k - 1:
-            (_, before, _, _), (_, here, py, px) = self.recent
+            (_, before, _, _, _, (ay, ax), seen_before), (_, here, py, px, _, _, _) = self.recent
+            keep = self.points
+            py, px = py[keep], px[keep]
+            h, w = g.shape
+            # the star a frame before and after, where the shared shift (a pan) has taken it
+            inside = (py - ay >= 0) & (py - ay < h) & (px - ax >= 0) & (px - ax < w) & (py + shift[0] >= 0) & (py + shift[0] < h) & (px + shift[1] >= 0) & (px + shift[1] < w)
+            py, px = py[inside], px[inside]
             if len(py) >= th.shimmer_stars:
                 f = here[py, px]
-                a, b = before[py, px], near[py, px]
+                a, b = before[py - ay, px - ax], near[py + shift[0], px + shift[1]]
                 gone = (a < 0.2 * f) & (b < 0.2 * f)
-                if gone.mean() < 0.5:  # most stars found again: not moving more than 4 px a frame
+                # most stars found again within 4 px of where the shift takes them, and most of them as a
+                # star within 2 px there (in a dense field of stars that each move their own way, a zoom or a
+                # warp, the 4 px maximum would find another star's light)
+                again = (seen_before[py - ay, px - ax] & near_star[py + shift[0], px + shift[1]]).mean()
+                if gone.mean() < 0.5 and again >= 0.5:
                     # the median star: lines and glows passing over a few stars do not count
                     judged = (k - 1, float(np.median(np.minimum(np.abs(f - (a + b) / 2) / np.maximum(f, 1e-6), 1.0))))
-        self.recent.append((k, near, ys, xs))
+        self.recent.append((k, near, ys, xs, light, shift, near_star))
+        self.points = point
         return values, judged
 
 

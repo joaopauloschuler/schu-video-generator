@@ -45,6 +45,8 @@ export const VIEWS = Object.freeze({
 export const SUN_RADIUS = 0.2665;
 /** Under this share of a world's radius above its ground a sphere is no ground any more (Step 368: facets, no relief). */
 export const GROUND_SHARE = 1e-3;
+/** Phase angle (sun - craft - camera, degrees) beyond which problems() says the camera sees a craft's unlit side. */
+export const UNLIT_PHASE = 150;
 /** A subject under this radius (px) is "too small to see" for `problems` unless `minPixels` says otherwise. */
 export const MIN_PIXELS = 3;
 
@@ -639,7 +641,7 @@ export class SpaceCamera {
    * breathes (breathe: a slow sway of a few degrees and per cent; 0 for a locked shot); `seed`. `push`:
    * the distance at the end of `over` as a share of the start's (0.7 closes in by 30 %). */
   follow(t, options = {}) {
-    known("follow options", options, [...COMMON, "subject", "view", "lock", "distance", "around", "target", "drift", "seed", "push", "direction", "size"]);
+    known("follow options", options, [...COMMON, "subject", "view", "lock", "distance", "around", "target", "drift", "seed", "push", "direction", "size", "side"]);
     const c = this._common(t, options, "follow"), s = this.subject(options.subject, t, "follow.subject");
     let view = options.view ?? "chase";
     if (typeof view === "string") { if (!(view in VIEWS)) throw fail(`no view "${view}"${hint(view, Object.keys(VIEWS))}; views: ${Object.keys(VIEWS).join(", ")}`); view = {...VIEWS[view], name: view}; }
@@ -676,7 +678,18 @@ export class SpaceCamera {
       if (options.target === undefined) throw fail('view "shoulder" needs target: what the craft is heading for');
       const tg = this.subject(options.target, t, "follow.target"), th = unit(sub(tg.at, s.at)), tu = square(this.up, th, u), tr = cross(th, tu);
       dir = add(add(scale(tr, view.direction[0]), scale(tu, view.direction[1])), scale(th, view.direction[2]));
-    } else dir = toFrame(view.direction);
+    } else {
+      // side: which side of the flight the camera rides on ("left", "right", or "sun": the craft's sunlit side)
+      let d = view.direction;
+      if (options.side !== undefined) {
+        const side = options.side, sun = side === "sun" ? this.toSun(s.at, t) : null;
+        if (!["left", "right", "sun"].includes(side)) throw fail(`follow side must be "left", "right" or "sun", got ${JSON.stringify(side)}`);
+        if (side === "sun" && !sun) throw fail('follow side: "sun" needs to know where the sun is (spaceCamera({sun}) or orbit data with a "Sun")');
+        const sign = side === "sun" ? (dot(sun, rgt) < 0 ? -1 : 1) : side === "right" ? 1 : -1;
+        d = [sign * Math.abs(d[0]), d[1], d[2]];
+      }
+      dir = toFrame(d);
+    }
     dir = unit(dir);
     const sway = breathe(c.time, options.drift ?? 1, options.seed ?? 1);
     dir = turn(turn(dir, u, sway.yaw * RAD), unit(cross(dir, u)), sway.pitch * RAD);
@@ -771,6 +784,14 @@ export class SpaceCamera {
     else if (big ? gone : p.x < box[0] || p.x > box[2] || p.y < box[1] || p.y > box[3]) out.push(`${who} is outside ${options.box ? "its box" : "the frame"} (at x ${p.x.toFixed(2)}, y ${p.y.toFixed(2)}; the frame is -1 to 1)`);
     const disc = discOf(shot, s.at, s.radius), px = discPixels(disc, options.height ?? this.height), min = options.minPixels ?? MIN_PIXELS;
     if (s.radius > 0 && p.depth > 0 && px < min) out.push(`${who} is ${px.toFixed(1)} px in radius, under ${min}: come closer, use a longer lens, or mark it (a craft's marker, an enlarged body)`);
+    // a craft (not a world) whose lit side the camera does not see: in a world's shadow, or the sun behind it
+    if (s.radius > 0 && p.depth > 0 && shot.move !== "reveal" && !worlds.some((w) => w.name === s.name)) {
+      const sun = this.toSun(s.at, t);
+      const shade = sun ? worlds.find((w) => { const a = sub(s.at, w.at), k = dot(a, sun); return k < 0 && len(sub(a, scale(sun, k))) < w.radius; }) : null;
+      const phase = sun ? angleBetween(sun, unit(sub(shot.from, s.at))) / RAD : 0;
+      if (shade) out.push(`${who} is in ${shade.name}'s shadow: only its own lights show (choose a time or place in sunlight, or light: {ambient})`);
+      else if (phase > UNLIT_PHASE) out.push(`the camera sees the unlit side of ${who} (the sun is ${phase.toFixed(0)} degrees round, behind it): if that is not meant, ride on its sunlit side (follow side: "sun") or choose another view`);
+    }
     if (p.depth > 0 && shot.move !== "reveal") for (const w of worlds) {
       if (w.name === s.name || len(sub(w.at, s.at)) < w.radius) continue;
       const v = sub(s.at, shot.from), L = len(v), k = clamp(dot(sub(w.at, shot.from), v) / (L * L)), near = len(sub(add(shot.from, scale(v, k)), w.at));

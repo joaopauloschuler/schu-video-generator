@@ -34,7 +34,7 @@ import {rng} from "vidgen/music-time";
 import {yUp} from "vidgen/space-scale";
 import CATALOG from "vidgen/space-sky-stars";
 
-export const VERSION = 1;
+export const VERSION = 2;
 const RAD = Math.PI / 180, TAU = Math.PI * 2;
 /** The obliquity of the ecliptic at J2000.0 (degrees): equatorial to ecliptic is a turn about x by it. */
 export const OBLIQUITY = 23.4392911;
@@ -560,11 +560,19 @@ vec3 display(vec3 c) {
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
 }`;
 const SKY_VERT = "varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * vec4(mat3(viewMatrix) * (mat3(modelMatrix) * position), 1.0); gl_Position.z = 0.0; }";
+/** Pixels a cube texel may span before the sky's cube is read coarser (long lenses), and how fast it coarsens. */
+export const LENS_PIXELS = 2.5, LENS_SOFT = 1.5;
 const SKY_FRAG = /* glsl */`
-varying vec3 vD; uniform samplerCube uSky; uniform float uGain;
+#define LENS_PIXELS ${LENS_PIXELS.toFixed(2)}
+#define LENS_SOFT ${LENS_SOFT.toFixed(2)}
+varying vec3 vD; uniform samplerCube uSky; uniform float uGain, uSize;
 ${DISPLAY}
 void main() {
-  vec3 c = textureCube(uSky, vD).rgb * uGain;
+  // a long lens enlarges the cube's texels: past LENS_PIXELS pixels a texel its faint stars would be soft
+  // blobs and the band's clouds streaks, so the cube is read coarser there (its local mean, the same light):
+  // through a long lens the sky is the sharp point stars over a smooth glow
+  float pixel = length(fwidth(normalize(vD))) * 0.7071, texels = 1.5708 / uSize / max(pixel, 1e-7);
+  vec3 c = textureLod(uSky, vD, max(0.0, LENS_SOFT * log2(texels / LENS_PIXELS))).rgb * uGain;
   float n = dither(gl_FragCoord.xy) + dither(gl_FragCoord.xy * 1.7 + 91.0) - 1.0;
   // linear light: about one display code of noise where the picture is dark; to the canvas: one code exactly
   gl_FragColor = vec4(uDisplay < 0.5 ? max(c + n * 0.0009 * smoothstep(0.0, 0.004, c.g), 0.0) : display(c) + n / 255.0, 1.0);
@@ -649,7 +657,7 @@ export class SpaceSky {
     this.display = {value: 0};
     const common = {depthTest: false, depthWrite: false, toneMapped: false, fog: false};
     this.skyMaterial = new THREE.ShaderMaterial({...common, side: THREE.BackSide, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG,
-      uniforms: {uSky: {value: this.target.texture}, uGain: {value: o.brightness}, uDisplay: this.display}});
+      uniforms: {uSky: {value: this.target.texture}, uGain: {value: o.brightness}, uSize: {value: this.size}, uDisplay: this.display}});
     this.starUniforms = {uSky: {value: this.target.texture}, uSkyGain: this.skyMaterial.uniforms.uGain, uPixel: {value: new THREE.Vector2()}, uSigma: {value: 1}, uThin: {value: 1}, uGlare: {value: o.glare}, uGain: {value: o.brightness}, uDisplay: this.display};
     const star = {...common, blending: THREE.AdditiveBlending, transparent: false, vertexShader: STAR_VERT, fragmentShader: STAR_FRAG, uniforms: this.starUniforms};
     this.pointMaterial = new THREE.ShaderMaterial(star);

@@ -1220,6 +1220,20 @@ export class Craft {
     return this;
   }
 
+  // a burn's direction at t: the burn's Δv kept in the flight's own axes (along the velocity, out from the parent,
+  // across the plane) as they were at its instant, so a turn and a burn shown for seconds of a sped-up scene
+  // still point the way the burn does there (a prograde burn stays prograde), not along the instant's fixed line
+  _thrustAt(w, state) {
+    const y = (a, b) => V3(a[0] - b[0], a[2] - b[2], -(a[1] - b[1]));
+    const fl = this.flight, ob = fl.orbits, axes = (v, r) => { const e1 = v.clone().normalize(), e3 = r.clone().cross(v).normalize(); return [e1, e3.clone().cross(e1), e3]; };
+    const d = V3(...w.direction);
+    if (!fl.parent || !(state.velocity.lengthSq() > 0) || !(state.radial.lengthSq() > 0)) return d;
+    const zero = [0, 0, 0], pv = ob.velocity(fl.parent, w.at), pp = ob.position(fl.parent, w.at);
+    const then = axes(y(ob.velocity(fl.body, w.at), pv ?? zero), y(ob.position(fl.body, w.at), pp ?? zero)), now = axes(state.velocity, state.radial);
+    if (then.some((e) => !Number.isFinite(e.x)) || now.some((e) => !Number.isFinite(e.x))) return d;
+    return now[0].multiplyScalar(d.dot(then[0])).add(now[1].multiplyScalar(d.dot(then[1]))).add(now[2].multiplyScalar(d.dot(then[2]))).normalize();
+  }
+
   // towards the sun from the craft, from whatever was given: a direction, an Object3D, a Star or a SpaceLight
   _toward(what, out) {
     if (!what) return null;
@@ -1261,7 +1275,7 @@ export class Craft {
       for (const e of schedule(spec).slice(1)) { const u = (t - e.at) / Math.max(e.turn, 1e-6); if (u > 0 && u < 1) turning = Math.max(turning, u < 0.14 ? 1 : u > 0.86 ? -1 : 0); }
       if (fl && fl.burn) for (const w of this.burns) {
         const k = burnWeight(t, w, fl.burn.turn);
-        if (k > 0) q.slerp(attitudeQuaternion(fl.burn.attitude, {...state, thrust: V3(...w.direction)}, Q2), k);
+        if (k > 0) q.slerp(attitudeQuaternion(fl.burn.attitude, {...state, thrust: this._thrustAt(w, state)}, Q2), k);
         const a = (t - (w.start - fl.burn.turn * 1.15)) / fl.burn.turn, b = (t - w.end - fl.burn.turn * 0.15) / fl.burn.turn;
         for (const u of [a, b]) if (u > 0 && u < 1 && (u < 0.14 || u > 0.86)) turning = u < 0.14 ? 1 : -1;
       }

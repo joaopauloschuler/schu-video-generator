@@ -275,6 +275,35 @@ def test_stars_that_jump_in_brightness_shimmer_and_twinkling_does_not() -> None:
     assert check_fine(fast) == []
 
 
+def _zoom(t: int, n: int = 600, seed: int = 2) -> np.ndarray:
+    """Stars flying out from the middle (a fly-through, a warp): each its own way, 4 % farther a frame,
+    drawn as short streaks along their motion (anti-aliased, the same light every frame)."""
+    r = np.random.default_rng(seed)
+    ang, rad, b = r.uniform(0, 2 * np.pi, n), r.uniform(4, 0.5 * DW, n), r.uniform(0.3, 0.9, n)
+    rad = 4 + (rad - 4) * 1.04 ** (t % 25) % (0.5 * DW)
+    img = np.zeros((DH, DW), np.float32)
+    for k in range(6):  # a streak of 6 samples, 1.5 px apart
+        x, y = DW / 2 + (rad - 1.5 * k) * np.cos(ang), DH / 2 + (rad - 1.5 * k) * np.sin(ang)
+        ok = (x >= 0) & (x < DW - 1) & (y >= 0) & (y < DH - 1)
+        x0, y0, fx, fy = np.floor(x[ok]).astype(int), np.floor(y[ok]).astype(int), x[ok] % 1, y[ok] % 1
+        for dy, wy in ((0, 1 - fy), (1, fy)):
+            for dx, wx in ((0, 1 - fx), (1, fx)):
+                np.add.at(img, (y0 + dy, x0 + dx), b[ok] * wy * wx / 2)
+    return img
+
+
+def test_a_pan_and_a_warp_are_not_shimmer_and_aliasing_in_a_pan_is() -> None:
+    """Step 378: stars are followed across a pan (the shift most bright stars share is taken out), and
+    streaks flying out each their own way are not point stars that shimmer (Steps 373, 375, 376: false
+    warnings on a fly-by's pan, a warp and an 8 fps draft)."""
+    pan = [sky(t, drift=12.0) for t in range(40)]  # 12 px a frame: three times the 4 px a star is looked for in
+    assert check_fine(pan) == []
+    r = np.random.default_rng(7)
+    aliased = [sky(t, drift=12.0, flux=r.choice([0.35, 1.0], 300)) for t in range(40)]
+    assert [f.kind for f in check_fine(aliased)] == ["shimmer"]
+    assert check_fine([_zoom(t) for t in range(40)]) == []
+
+
 def test_a_dark_gradient_in_flat_steps_is_banding() -> None:
     x = np.arange(DW, dtype=np.float32)
     ramp = np.where(x < DW / 2, 0.0, (4 + 26 * (x - DW / 2) / (DW / 2)) / 255)  # 26 codes over 160 px: steps of 6 px

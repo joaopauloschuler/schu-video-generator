@@ -30,8 +30,10 @@ DOCS = ROOT / "docs" / "gallery"
 #: data types (mass_spectrum, decay_chain, branching, branching_pie; 0.10–0.33 MB each) took the
 #: gallery to 15.4 MB; the rest is room for Step 243's showcase and one more entry; ENTRY_MAX and the
 #: GIF cap are unchanged. Step 243: the `higgs_diphoton` showcase (0.32 MB) took it to 15.7 MB, within
-#: the budget.
-BUDGET = 16_500_000
+#: the budget. Step 378: 16.5 → 17 MB for Phase AN's `space` entry (0.31 MB: a star field under a
+#: moving camera, its GIFs held to gallery.CLIP_NOISY_MAX_BYTES and its stills to gallery.STILL_MAX_BYTES);
+#: ENTRY_MAX and the GIF cap are unchanged.
+BUDGET = 17_000_000
 #: What one entry may weigh: its two GIFs (each at most gallery.CLIP_MAX_BYTES), two stills and its
 #: page. The heaviest entries before Step 216 weighed 0.33 MB (cross, cell, rainy_evening).
 ENTRY_MAX = 360_000
@@ -44,8 +46,8 @@ def builtin_gallery() -> list[gallery.GalleryType]:
 
 
 #: Built-in types whose gallery entry is still to be rendered, with the step that renders it
-#: (tasklist.md): ``space`` (Step 376) gets its entry in Step 378, the phase's review.
-GALLERY_PENDING = {"space": "Step 378"}
+#: (tasklist.md); none now (``space`` got its entry in Step 378).
+GALLERY_PENDING: dict[str, str] = {}
 
 
 def committed_gallery() -> list[gallery.GalleryType]:
@@ -417,3 +419,20 @@ def test_youtube_id_reads_short_and_watch_links() -> None:
     for bad in ("https://vimeo.com/123", "https://youtu.be/short", "https://www.youtube.com/watch?x=1", "https://www.youtube.com/shorts/short"):
         with pytest.raises(VidgenError, match="not a YouTube video link"):
             gallery.youtube_id(bad)
+
+
+def test_a_still_of_fine_noise_gets_fewer_colours(tmp_path: Path) -> None:
+    """Step 378: a star field's still is saved with a smaller palette until it weighs at most
+    gallery.STILL_MAX_BYTES; a flat picture keeps its 256 colours."""
+    import numpy as np
+
+    rng = np.random.default_rng(1)
+    noise = (rng.random((360, 640, 3)) ** 6 * 255).astype("uint8")
+    flat = np.zeros((360, 640, 3), "uint8")
+    flat[:, :, 0] = np.linspace(0, 255, 640, dtype="uint8")[None, :]
+    for name, pixels in (("noise", noise), ("flat", flat)):
+        Image.fromarray(pixels).save(tmp_path / f"{name}.png")
+        gallery._save_still(tmp_path / f"{name}.png", tmp_path / f"{name}-out.png")
+    with Image.open(tmp_path / "noise-out.png") as a, Image.open(tmp_path / "flat-out.png") as b:
+        assert len(a.getcolors(256) or []) <= 64 and len(b.getcolors(256) or []) > 200
+    assert (tmp_path / "flat-out.png").stat().st_size <= gallery.STILL_MAX_BYTES
