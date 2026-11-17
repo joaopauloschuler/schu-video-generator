@@ -209,7 +209,7 @@ TOOLS = {
     "character_sheet", "direct", "screenplay", "cast", "animatic", "music_preview", "story_draft", "shorts_suggest",
     "music_template", "music_patches", "music_render", "music_check", "music_plan", "audio_check", "motion_check",
     "studio_sessions", "studio_read", "studio_check", "studio_propose", "studio_variations",
-    "generate_plan", "generate_run", "generate_status", "generate_takes", "generate_pick", "generate_host_test", "still",
+    "generate_plan", "generate_run", "generate_status", "generate_takes", "generate_pick", "generate_host_test", "still", "parts",
 }
 
 
@@ -400,6 +400,23 @@ def test_server_music_tools(tmp_path: Path) -> None:
         assert doc["command"] == "audio" and doc["measured"]["integrated_lufs"] == pytest.approx(-28, abs=0.7)
         assert doc["checks"][0]["preset"] == "broadcast" and doc["ok"] is False   # -28 LUFS misses -23
         assert "outside the folder" in error_text(await client.call_tool("audio_check", {"target": "../x.mp3"}))
+
+    run_session(tmp_path, body)
+
+
+@pytest.mark.slow
+def test_server_parts_lists_and_returns_the_sheet(tmp_path: Path) -> None:
+    """Step 369: parts lists the ready-made parts, and with a sheet returns it as a picture."""
+
+    async def body(client: Any) -> None:
+        listed = doc_of(await client.call_tool("parts", {"kind": "sky", "sheet": False}))
+        assert listed["action"] == "list" and {p["kind"] for p in listed["parts"]} == {"sky"}
+        result = await client.call_tool("parts", {"names": ["tesseract", "flare"], "size": "96x54"})
+        doc = doc_of(result)
+        assert doc["action"] == "sheet" and [p["name"] for p in doc["parts"]] == ["tesseract", "flare"]
+        assert [c.type for c in result.content] == ["text", "image"]
+        assert Path(doc["sheet"]) == (tmp_path / "build" / "mcp" / "parts_sheet.png").resolve()
+        assert "did you mean 'flare'" in error_text(await client.call_tool("parts", {"names": ["flair"], "sheet": False}))
 
     run_session(tmp_path, body)
 

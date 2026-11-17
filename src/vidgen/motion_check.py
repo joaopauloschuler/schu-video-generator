@@ -20,6 +20,20 @@ memory is about 1 KB a frame and the time is the decode's. The checks then read 
 - ``frozen``: frames without visible change for long inside a scene (info).
 - ``cut_jump``: a large change of brightness or of the luma histogram across a cut (info).
 
+Dark frames (DESIGN.md §122.5) are also decoded at :attr:`Thresholds.detail_width` (640 px) in
+the same ffmpeg run, where star points, a subject, clipped white, flat steps and the stars'
+frame-to-frame brightness can be seen; a frame with many small bright points on black is a star
+field, not a blank frame. The checks of dark pictures:
+
+- ``blank`` also covers stars or a subject that vanish in one frame and come back (error).
+- ``clipped``: a large area clipped to flat white in a dark frame, an over-exposed sun or planet (warning).
+- ``shimmer``: stars whose brightness jumps from frame to frame, the sub-pixel aliasing of
+  small point stars (warning).
+- ``banding``: dark gradients (nebula glow, an atmosphere's limb) in flat steps (info).
+- ``empty``: a long stretch with no star field and only a tiny subject (info).
+- ``lost``: in the scenes named with ``subject=`` (``--subject``), a stretch of dark frames
+  with no subject, only stars or black (warning).
+
 Each finding has its time, frame, scene and severity and a contact strip PNG of the frames
 around it (decoded again, at :attr:`Thresholds.strip_width`).
 """
@@ -43,6 +57,8 @@ import numpy as np
 from vidgen.errors import VidgenError
 
 Severity = Literal["error", "warning", "info"]
+#: Findings whose contact strip shows the middle of the frame at full size (stars are lost when it is scaled down).
+CROP_KINDS: tuple[str, ...] = ("shimmer",)
 SEVERITIES: tuple[Severity, ...] = ("error", "warning", "info")
 #: Block side in pixels of the decoded frame.
 BLOCK = 10
@@ -111,6 +127,52 @@ class Thresholds:
     """Width of each frame in the contact strips (pixels)."""
     max_strips: int = 40
     """Contact strips written at most (the most severe findings first)."""
+    detail_width: int = 640
+    """Width of the finer picture dark frames are measured at, decoded in the same ffmpeg run (0: none; the checks of dark pictures are left out)."""
+    dark_level: float = 0.05
+    """A pixel of the 160 px frame under this luma is dark..."""
+    dark_share: float = 0.3
+    """...and a frame with at least this share of dark pixels is measured in detail."""
+    star_contrast: float = 0.04
+    """A star point: a pixel that is the brightest of its 3 x 3 and at least this much brighter than the ring around it (the 5 x 5 border)..."""
+    star_ring: float = 0.35
+    """...and that ring at most this share of its brightness (a point, not an edge or a gradient)."""
+    star_field: int = 12
+    """A frame that looks blank at 160 px but has at least this many star points is a star field, not a blank frame."""
+    subject_level: float = 0.06
+    """A detail pixel brighter than this, away from star points, is part of a subject (a planet, a craft, a glow)."""
+    subject_area: float = 0.0005
+    """A subject covers at least this share of the frame (115 px at 640 x 360)."""
+    vanish_area: float = 0.01
+    """A subject this large (share of the frame) that is gone in the next frame, and back within ``vanish_seconds``, vanished (error)."""
+    vanish_seconds: float = 1.0
+    """...the longest gap of such a vanish."""
+    still_level: float = 0.016
+    """A detail pixel that changes by this much (4/255) has changed (encoder noise stays under it)..."""
+    still_pixels: float = 0.0003
+    """...and a dark frame with fewer changed pixels than this share, against the first frame of its still stretch, is unchanged (slow drift adds up)."""
+    clip_level: float = 0.985
+    """A detail pixel at or over this luma is clipped white..."""
+    clip_area: float = 0.03
+    """...and a dark frame with this share of clipped pixels is over-exposed (a disc of 94 px radius at 1280 x 720)."""
+    shimmer: float = 0.2
+    """A frame's stars shimmer when the median star's light (3 x 3 px, found again within 4 px) differs from the mean of the frames before and after by this share..."""
+    shimmer_stars: int = 20
+    """...measured on at least this many stars, half of them found again in a neighbouring frame..."""
+    shimmer_share: float = 0.5
+    """...on this share of a second's frames."""
+    band_run: int = 6
+    """A flat step of a dark gradient (luma codes 3 to 90) at least this many detail pixels long, in a staircase of three steps of 1 or 2 codes the same way..."""
+    band_share: float = 0.15
+    """...covering this share of the frame makes it banded..."""
+    band_seconds: float = 1.0
+    """...for at least this long."""
+    empty_area: float = 0.002
+    """A dark frame with fewer than ``star_field`` stars and a subject under this share of the frame is nearly empty..."""
+    empty_seconds: float = 2.0
+    """...reported (info) when it lasts at least this long."""
+    lost_seconds: float = 1.0
+    """In a scene named with ``--subject``, dark frames without a subject for at least this long: the subject is lost (warning)."""
 
     def with_overrides(self, pairs: Sequence[str]) -> Thresholds:
         """A copy with ``NAME=VALUE`` pairs applied; :class:`VidgenError` for an unknown name or a bad value."""
@@ -196,16 +258,26 @@ def _decoded_size(width: int, height: int, target: int) -> tuple[int, int]:
     return w, h
 
 
-def decode_frames(path: Path, width: int, ffmpeg: str | None = None) -> Iterator[np.ndarray]:
+def decode_frames(path: Path, width: int, ffmpeg: str | None = None, detail: int = 0) -> Iterator[Any]:
     """The video's frames as ``uint8`` RGB arrays ``(h, w, 3)``, scaled to ``width`` by ffmpeg
-    (area filter) and read from a pipe one at a time."""
+    (area filter) and read from a pipe one at a time. With ``detail`` wider than that (and the
+    video wider still), each item is ``(frame, finer)``: the same frame scaled to ``detail`` too,
+    both from one ffmpeg run (the small picture's bytes are the same as without it)."""
     from vidgen.render.ffmpeg import find_ffmpeg
 
     src_w, src_h, _ = probe(path)
     w, h = _decoded_size(src_w, src_h, width)
-    command = [ffmpeg or find_ffmpeg(), "-v", "error", "-nostdin", "-i", str(path), "-map", "0:v:0", "-vf", f"scale={w}:{h}:flags=area",
-               "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
-    size = w * h * 3
+    dw, dh = _decoded_size(src_w, src_h, detail) if detail else (0, 0)
+    head = [ffmpeg or find_ffmpeg(), "-v", "error", "-nostdin", "-i", str(path)]
+    if dw > w:
+        # one picture holds both: the small frame (padded to the finer width) above the finer one
+        graph = (f"[0:v:0]split[a][b];[a]scale={w}:{h}:flags=area,format=rgb24,pad={dw}:{h}[s];"
+                 f"[b]scale={dw}:{dh}:flags=area,format=rgb24[d];[s][d]vstack")
+        command = [*head, "-filter_complex", graph, "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
+    else:
+        dw = 0
+        command = [*head, "-map", "0:v:0", "-vf", f"scale={w}:{h}:flags=area", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
+    size = (dw * (h + dh) if dw else w * h) * 3
     # ffmpeg's messages go to a file, not a second pipe: a damaged file can log more than a pipe holds
     # (4 KB on Windows) while the frames are read, and both programs would wait for each other
     with tempfile.TemporaryFile() as log:
@@ -216,7 +288,11 @@ def decode_frames(path: Path, width: int, ffmpeg: str | None = None) -> Iterator
                 data = proc.stdout.read(size)
                 if len(data) < size:
                     break
-                yield np.frombuffer(data, dtype=np.uint8).reshape(h, w, 3)
+                if dw:
+                    both = np.frombuffer(data, dtype=np.uint8).reshape(h + dh, dw, 3)
+                    yield both[:h, :w], both[h:]
+                else:
+                    yield np.frombuffer(data, dtype=np.uint8).reshape(h, w, 3)
         finally:
             proc.stdout.close()
             code = proc.wait()
@@ -235,7 +311,10 @@ class Features:
     (16 luma bins, shares), ``mad`` mean absolute change from the frame before (NaN at a file's
     first frame), ``blocks`` the block means and ``d1``/``d2``/``d3`` each block's mean absolute
     change from 1, 2 and 3 frames before (NaN where there is none), ``starts`` the frames where a
-    file starts."""
+    file starts. Dark frames measured in the finer picture (``detail`` True; NaN or False
+    elsewhere): ``stars`` (star points), ``subject``, ``clipped`` and ``banded`` (shares of the
+    frame), ``shimmer`` (the stars' mean jump in brightness against the frames around), ``still``
+    (unchanged since the first frame of its still stretch)."""
 
     luma: np.ndarray
     spread: np.ndarray
@@ -248,6 +327,14 @@ class Features:
     d3: np.ndarray
     starts: list[int]
     size: tuple[int, int]
+    detail: np.ndarray = field(default_factory=lambda: np.zeros(0, bool))
+    stars: np.ndarray = field(default_factory=lambda: np.zeros(0, np.float32))
+    subject: np.ndarray = field(default_factory=lambda: np.zeros(0, np.float32))
+    clipped: np.ndarray = field(default_factory=lambda: np.zeros(0, np.float32))
+    banded: np.ndarray = field(default_factory=lambda: np.zeros(0, np.float32))
+    shimmer: np.ndarray = field(default_factory=lambda: np.zeros(0, np.float32))
+    still: np.ndarray = field(default_factory=lambda: np.zeros(0, bool))
+    detail_size: tuple[int, int] = (0, 0)
 
     @property
     def count(self) -> int:
@@ -260,16 +347,115 @@ def _blocks(gray: np.ndarray) -> np.ndarray:
     return gray[: bh * BLOCK, : bw * BLOCK].reshape(bh, BLOCK, bw, BLOCK).mean(axis=(1, 3))
 
 
-def measure(frames_by_file: Sequence[Iterator[np.ndarray]]) -> Features:
-    """The :class:`Features` of the files' frames, one file after the other."""
+def _shift_max(a: np.ndarray, r: int) -> np.ndarray:
+    """The largest value within ``r`` pixels (a square), by shifted maxima."""
+    out = a.copy()
+    for d in range(1, r + 1):
+        np.maximum(out[:, d:], a[:, :-d], out=out[:, d:])
+        np.maximum(out[:, :-d], a[:, d:], out=out[:, :-d])
+    rows = out.copy()
+    for d in range(1, r + 1):
+        np.maximum(out[d:], rows[:-d], out=out[d:])
+        np.maximum(out[:-d], rows[d:], out=out[:-d])
+    return out
+
+
+def _box_sum(a: np.ndarray, r: int) -> np.ndarray:
+    """The sum over each pixel's ``(2r + 1)`` square (zeros outside the picture)."""
+    h, w = a.shape
+    p = np.pad(a, r)
+    cols = sum(p[k : k + h] for k in range(2 * r + 1))
+    return sum(cols[:, k : k + w] for k in range(2 * r + 1))
+
+
+def _banded(q: np.ndarray, ok: np.ndarray, run: int) -> float:
+    """Share of the frame in flat steps along x: runs of at least ``run`` pixels between steps of
+    1 or 2 codes inside ``ok``, where three steps in a row go the same way (a staircase; grain
+    on a flat background goes up and down)."""
+    d = np.diff(q, axis=1)
+    r, c = np.nonzero((d != 0) & ok[:, 1:] & ok[:, :-1])
+    if len(r) < 3:
+        return 0.0
+    step = d[r, c]
+    small = np.abs(step) <= 2
+    pair = (r[1:] == r[:-1]) & (np.sign(step[1:]) == np.sign(step[:-1])) & small[1:] & small[:-1]  # step j and j + 1 alike
+    stair = pair & np.concatenate([[False], pair[:-1]])  # and step j - 1 too
+    gap = c[1:] - c[:-1]
+    return float(gap[stair & (gap >= run)].sum() / q.size)
+
+
+class _DarkMeter:
+    """The finer picture's numbers of dark frames, one frame after the other (a file at a time):
+    star points, subject, clipped and banded shares, the stars' shimmer (of the frame before,
+    once the next is known) and whether the frame is unchanged since its still stretch began."""
+
+    def __init__(self, th: Thresholds) -> None:
+        self.th = th
+        self.reset()
+
+    def reset(self) -> None:
+        self.recent: deque[tuple[int, np.ndarray, np.ndarray, np.ndarray]] = deque(maxlen=2)
+        self.anchor: np.ndarray | None = None
+
+    def frame(self, k: int, rgb: np.ndarray) -> tuple[dict[str, float], tuple[int, float] | None]:
+        """The numbers of frame ``k`` and, when it can now be judged, ``(k - 1, shimmer)``."""
+        th = self.th
+        g = (rgb.astype(np.float32) / 255.0) @ _LUMA
+        s3 = _box_sum(g, 1)
+        ring = (_box_sum(g, 2) - s3) / 16
+        peaks = (g >= _shift_max(g, 1)) & (g - ring >= th.star_contrast) & (ring <= th.star_ring * g)
+        ys, xs = np.nonzero(peaks)
+        near_star = _shift_max(peaks.view(np.uint8), 2).astype(bool)
+        q = np.round(g * 255).astype(np.int16)
+        ok = (q >= 3) & (q <= 90) & ~near_star
+        values = {
+            "stars": float(len(ys)),
+            "subject": float(((g >= th.subject_level) & ~near_star).mean()),
+            "clipped": float((g >= th.clip_level).mean()),
+            # every other row (then column): the share is the same, the work half
+            "banded": max(_banded(q[::2], ok[::2], th.band_run),
+                          _banded(np.ascontiguousarray(q[:, ::2].T), np.ascontiguousarray(ok[:, ::2].T), th.band_run)),
+        }
+        if self.anchor is None or self.anchor.shape != g.shape:
+            values["still"] = 0.0
+            self.anchor = g
+        else:
+            values["still"] = float((np.abs(g - self.anchor) >= th.still_level).mean() < th.still_pixels)
+            if not values["still"]:
+                self.anchor = g
+        near = _shift_max(s3, 4)  # each star's light, found again within 4 px in the frames around
+        judged = None
+        if len(self.recent) == 2 and self.recent[0][0] == k - 2 and self.recent[1][0] == k - 1:
+            (_, before, _, _), (_, here, py, px) = self.recent
+            if len(py) >= th.shimmer_stars:
+                f = here[py, px]
+                a, b = before[py, px], near[py, px]
+                gone = (a < 0.2 * f) & (b < 0.2 * f)
+                if gone.mean() < 0.5:  # most stars found again: not moving more than 4 px a frame
+                    # the median star: lines and glows passing over a few stars do not count
+                    judged = (k - 1, float(np.median(np.minimum(np.abs(f - (a + b) / 2) / np.maximum(f, 1e-6), 1.0))))
+        self.recent.append((k, near, ys, xs))
+        return values, judged
+
+
+def measure(frames_by_file: Sequence[Iterator[Any]], th: Thresholds | None = None) -> Features:
+    """The :class:`Features` of the files' frames, one file after the other. A frame is an RGB
+    array, or ``(frame, finer)`` from :func:`decode_frames` with ``detail``: then dark frames
+    are measured in the finer picture too (``th``'s star, subject, clip and band settings)."""
+    th = th or Thresholds()
     cols: dict[str, list[Any]] = {k: [] for k in ("luma", "spread", "rgb", "hist", "mad", "blocks", "d1", "d2", "d3")}
+    dark: dict[str, list[float]] = {k: [] for k in ("detail", "stars", "subject", "clipped", "banded", "shimmer", "still")}
+    meter = _DarkMeter(th)
     starts: list[int] = []
     size = (0, 0)
+    detail_size = (0, 0)
     nan_blocks: np.ndarray | None = None
     for frames in frames_by_file:
         starts.append(len(cols["luma"]))
         recent: deque[np.ndarray] = deque(maxlen=3)
-        for rgb in frames:
+        meter.reset()
+        for item in frames:
+            rgb, finer = item if isinstance(item, tuple) else (item, None)
             f = rgb.astype(np.float32) / 255.0
             gray = f @ _LUMA
             size = (gray.shape[1], gray.shape[0])
@@ -284,10 +470,24 @@ def measure(frames_by_file: Sequence[Iterator[np.ndarray]]) -> Features:
                 cols[name].append(_blocks(np.abs(gray - recent[-k])).astype(np.float16) if len(recent) >= k else nan_blocks)
             cols["mad"].append(float(np.abs(gray - recent[-1]).mean()) if recent else math.nan)
             recent.append(gray)
+            for name in dark:
+                dark[name].append(0.0 if name in ("detail", "still") else math.nan)
+            if finer is not None and (gray < th.dark_level).mean() >= th.dark_share:
+                k = len(cols["luma"]) - 1
+                values, judged = meter.frame(k, finer)
+                detail_size = (finer.shape[1], finer.shape[0])
+                dark["detail"][k] = 1.0
+                for name, value in values.items():
+                    dark[name][k] = value
+                if judged is not None:
+                    dark["shimmer"][judged[0]] = judged[1]
+            else:
+                meter.reset()
     if not cols["luma"]:
         raise VidgenError("motion check: the video has no frames")
     arrays = {k: np.array(v, dtype=np.float16 if k in ("blocks", "d1", "d2", "d3") else np.float32) for k, v in cols.items()}
-    return Features(starts=starts, size=size, **arrays)
+    flags = {k: np.array(v, dtype=bool if k in ("detail", "still") else np.float32) for k, v in dark.items()}
+    return Features(starts=starts, size=size, detail_size=detail_size, **arrays, **flags)
 
 
 # ----- the checks --------------------------------------------------------------------------------------
@@ -342,10 +542,30 @@ def _on_beat(frames: np.ndarray, hits: np.ndarray, th: Thresholds) -> np.ndarray
     return ok & (gap <= th.beat_frames)
 
 
+def _content(feats: Features, th: Thresholds) -> np.ndarray:
+    """Dark frames whose finer picture shows a star field or a subject: not blank, however even
+    they look at 160 px."""
+    if len(feats.detail) != feats.count:
+        return np.zeros(feats.count, bool)
+    return feats.detail & ((np.nan_to_num(feats.stars) >= th.star_field) | (np.nan_to_num(feats.subject) >= th.subject_area))
+
+
+def _picture(feats: Features, k: int, th: Thresholds) -> str | None:
+    """What dark frame ``k`` shows clearly enough that losing it in one frame is abrupt: words, or ``None``."""
+    if not (0 <= k < feats.count) or len(feats.detail) != feats.count or not feats.detail[k]:
+        return None
+    stars, subject = float(np.nan_to_num(feats.stars[k])), float(np.nan_to_num(feats.subject[k]))
+    if subject >= th.vanish_area:
+        return f"a subject over {subject:.1%} of the frame"
+    if stars >= 4 * th.star_field:
+        return f"a star field of {stars:.0f} points"
+    return None
+
+
 def check_blank(feats: Features, cuts: Sequence[int], th: Thresholds, fps: float) -> list[Finding]:
     n = feats.count
     out = []
-    for a, b in _runs(feats.spread < th.blank_std):
+    for a, b in _runs(_blank_mask(feats, th)):
         if a == 0 or b == n - 1:
             continue  # the video starts or ends on black
         entry = abs(float(feats.luma[a] - feats.luma[a - 1]))
@@ -355,19 +575,47 @@ def check_blank(feats: Features, cuts: Sequence[int], th: Thresholds, fps: float
         count = b - a + 1
         at_cut = any(a - 1 <= c <= b + 2 for c in cuts)
         frames = f"{count} {what} frame{'s' if count > 1 else ''}"
+        before, after = _picture(feats, a - 1, th), _picture(feats, b + 1, th)
         if max(entry, leave) >= th.blank_jump:
             how = f"entered by a step of {entry:.2f}, left by {leave:.2f}"
+        elif before or after:  # a dark picture lost in one frame: the luma barely moves
+            how = ", ".join(([f"entered from {before}"] if before else []) + ([f"left to {after}"] if after else []))
+        else:
+            how = ""
+        if how:
             if at_cut:
                 out.append(Finding("blank", "info", a, b, f"{frames} at a cut ({how})", max(entry, leave)))
             else:
                 out.append(Finding("blank", "error", a, b, f"{frames} inside the scene ({how}): a frame failed to draw?", max(entry, leave)))
         elif count >= th.dark_seconds * fps:
             out.append(Finding("blank", "info", a, b, f"{frames} ({count / fps:.1f} s) reached by a fade", mean))
+    return out + _check_vanish(feats, cuts, th, fps)
+
+
+def _check_vanish(feats: Features, cuts: Sequence[int], th: Thresholds, fps: float) -> list[Finding]:
+    """A subject over :attr:`Thresholds.vanish_area` of a dark frame gone in one frame and back
+    within :attr:`Thresholds.vanish_seconds` while the stars stay: a part failed to draw (error)."""
+    if len(feats.detail) != feats.count or not feats.detail.any():
+        return []
+    subject = np.nan_to_num(feats.subject)
+    gone = feats.detail & (subject < th.subject_area) & ~_blank_mask(feats, th)
+    out = []
+    for a, b in _runs(gone):
+        if a == 0 or b == feats.count - 1 or b - a + 1 > th.vanish_seconds * fps:
+            continue
+        if not (feats.detail[a - 1] and feats.detail[b + 1]) or min(subject[a - 1], subject[b + 1]) < th.vanish_area:
+            continue
+        if any(a - 1 <= c <= b + 2 for c in cuts):
+            continue  # a cut to a shot of stars and back
+        count = b - a + 1
+        out.append(Finding("blank", "error", a, b, f"{count} frame{'s' if count > 1 else ''} of stars only inside the scene: a subject over "
+                           f"{subject[a - 1]:.1%} of the frame vanished in one frame and came back: a part failed to draw?", float(subject[a - 1])))
     return out
 
 
 def _blank_mask(feats: Features, th: Thresholds) -> np.ndarray:
-    return feats.spread < th.blank_std
+    """Near-uniform frames at 160 px, star fields and dark frames with a subject left out."""
+    return (feats.spread < th.blank_std) & ~_content(feats, th)
 
 
 def check_flash(feats: Features, hits: np.ndarray, th: Thresholds) -> list[Finding]:
@@ -574,6 +822,8 @@ def check_strobe(feats: Features, skip: np.ndarray, th: Thresholds, fps: float) 
 def check_frozen(feats: Features, cuts: Sequence[int], th: Thresholds, fps: float) -> list[Finding]:
     still = np.nan_to_num(feats.mad, nan=np.inf) < th.frozen
     still &= ~_blank_mask(feats, th)
+    if len(feats.detail) == feats.count:  # a dark frame's slow drift shows in the finer picture
+        still &= ~feats.detail | feats.still
     for c in cuts:
         still[c] = False
     out = []
@@ -600,8 +850,74 @@ def check_cuts(feats: Features, cuts: Sequence[int], th: Thresholds) -> list[Fin
     return out
 
 
-def find_faults(feats: Features, source: Source, th: Thresholds) -> list[Finding]:
-    """Every check's findings, with their scenes and times, most severe first, then by time."""
+def _stretches(mask: np.ndarray, fps: float, th: Thresholds, seconds: float, share: float = 1.0) -> list[tuple[int, int]]:
+    """Runs of ``mask`` at least ``seconds`` long, merged when closer than
+    :attr:`Thresholds.group_seconds`; with ``share`` under 1, first the frames of every second-long
+    window where at least that share is set (as strobing is found)."""
+    if share < 1:
+        window = max(2, round(fps))
+        csum = np.concatenate([[0], np.cumsum(mask)])
+        hot = np.zeros(len(mask), bool)
+        for k in np.flatnonzero(csum[window:] - csum[:-window] >= share * window):
+            hot[k : k + window] |= mask[k : k + window]
+        mask = hot
+    gap = max(1, round(th.group_seconds * fps))
+    merged: list[tuple[int, int]] = []
+    for a, b in _runs(mask):
+        if merged and a - merged[-1][1] <= gap:
+            merged[-1] = (merged[-1][0], b)
+        else:
+            merged.append((a, b))
+    return [(a, b) for a, b in merged if b - a + 1 >= max(1, seconds * fps)]
+
+
+def check_dark(feats: Features, source: Source, th: Thresholds, subject_scenes: Sequence[str] = ()) -> list[Finding]:
+    """The checks of dark pictures, in the finer picture: ``clipped``, ``shimmer``, ``banding``,
+    ``empty`` and, in ``subject_scenes`` (scene ids, ``all`` for the whole video), ``lost``."""
+    if len(feats.detail) != feats.count or not feats.detail.any():
+        return []
+    fps = source.fps
+    detail = feats.detail
+    out = []
+    clipped = np.nan_to_num(feats.clipped)
+    for a, b in _stretches(detail & (clipped >= th.clip_area), fps, th, 0):
+        most = float(clipped[a : b + 1].max())
+        out.append(Finding("clipped", "warning", a, b, f"over-exposed: up to {most:.1%} of a dark frame clipped to flat white for "
+                           f"{(b - a + 1) / fps:.1f} s (a sun or planet burnt out? lower its light or the exposure)", most))
+    shimmer = np.nan_to_num(feats.shimmer)
+    for a, b in _stretches(shimmer >= th.shimmer, fps, th, 0.5, th.shimmer_share):
+        part = feats.shimmer[a : b + 1]
+        value = float(np.nanmean(part)) if np.isfinite(part).any() else 0.0
+        out.append(Finding("shimmer", "warning", a, b, f"stars shimmer for {(b - a + 1) / fps:.1f} s: the median star's brightness jumps by {value:.0%} "
+                           "from frame to frame (small point stars aliasing as they move; draw them soft and at least 2 px wide)", value))
+    banded = np.nan_to_num(feats.banded)
+    for a, b in _stretches(detail & (banded >= th.band_share), fps, th, th.band_seconds):
+        most = float(banded[a : b + 1].max())
+        out.append(Finding("banding", "info", a, b, f"up to {most:.0%} of the frame is a dark gradient in flat steps for "
+                           f"{(b - a + 1) / fps:.1f} s (a glow or a limb; the encoder flattens dark gradients)", most))
+    stars, subject = np.nan_to_num(feats.stars), np.nan_to_num(feats.subject)
+    empty = detail & ~_blank_mask(feats, th) & (stars < th.star_field) & (subject < th.empty_area)
+    for a, b in _stretches(empty, fps, th, th.empty_seconds):
+        out.append(Finding("empty", "info", a, b, f"nearly empty for {(b - a + 1) / fps:.1f} s: no star field and at most "
+                           f"{float(subject[a : b + 1].max()):.2%} of the frame lit", float(b - a + 1)))
+    if subject_scenes:
+        wanted = np.zeros(feats.count, bool)
+        if "all" in subject_scenes:
+            wanted[:] = True
+        for scene in source.scenes:
+            if scene.id in subject_scenes:
+                wanted[scene.start : scene.end] = True
+        for a, b in _stretches(wanted & detail & (subject < th.subject_area), fps, th, th.lost_seconds):
+            points = float(np.median(stars[a : b + 1]))
+            seen = f"only stars (about {points:.0f} points)" if points >= th.star_field else "black"
+            out.append(Finding("lost", "warning", a, b, f"subject lost in the dark for {(b - a + 1) / fps:.1f} s: {seen}, nothing over "
+                               f"{th.subject_area:.2%} of the frame lit", float(b - a + 1)))
+    return out
+
+
+def find_faults(feats: Features, source: Source, th: Thresholds, subject: Sequence[str] = ()) -> list[Finding]:
+    """Every check's findings, with their scenes and times, most severe first, then by time;
+    ``subject``: the scenes (ids, or ``all``) where a subject is expected (the ``lost`` check)."""
     fps = source.fps
     cuts = _cuts(source, feats)
     hits = np.sort(np.asarray(source.hits, dtype=float))
@@ -619,7 +935,7 @@ def find_faults(feats: Features, source: Source, th: Thresholds) -> list[Finding
     for f in strobe:
         cut_skip[f.frame : f.end + 2] = True
     found += flicker + strobe + check_pop(feats, hits, cut_skip, th, fps)
-    found += check_frozen(feats, cuts, th, fps) + check_cuts(feats, cuts, th)
+    found += check_frozen(feats, cuts, th, fps) + check_cuts(feats, cuts, th) + check_dark(feats, source, th, subject)
     for f in found:
         f.time = f.frame / fps
         f.scene = next((s.id for s in source.scenes if s.start <= f.frame < s.end), None)
@@ -672,10 +988,17 @@ def write_strip(f: Finding, source: Source, count: int, out: Path, index: int, t
     wanted = _strip_frames(f, count)
     images: dict[int, np.ndarray] = {}
     starts = [s.first for s in source.segments]
+    crop = f.kind in CROP_KINDS  # stars vanish when the frame is scaled down: a crop of its middle at full size
     for k, seg in enumerate(source.segments):
         end = starts[k + 1] if k + 1 < len(starts) else count
         local = [t - seg.first for t in wanted if seg.first <= t < end]
-        for t, img in grab_frames(seg.path, source.fps, local, th.strip_width).items():
+        full = probe(seg.path)[0] if crop else th.strip_width
+        for t, img in grab_frames(seg.path, source.fps, local, full).items():
+            if crop and img.shape[1] > th.strip_width:
+                h, w = img.shape[:2]
+                ch = max(2, round(th.strip_width * h / w))
+                y0, x0 = (h - ch) // 2, (w - th.strip_width) // 2
+                img = img[y0 : y0 + ch, x0 : x0 + th.strip_width]
             images[t + seg.first] = img
     tiles = [(t, images[t]) for t in wanted if t in images]
     if not tiles:
@@ -685,13 +1008,14 @@ def write_strip(f: Finding, source: Source, count: int, out: Path, index: int, t
     font = load_font(12)
     sheet = Image.new("RGB", (len(tiles) * (w + pad) + pad, h + label + 2 * pad + 18), (24, 24, 24))
     draw = ImageDraw.Draw(sheet)
-    draw.text((pad, pad), f"{f.severity} {f.kind}: {f.message}"[:160], fill=(235, 235, 235), font=font)
+    title = f"{f.severity} {f.kind}{' (the middle of the frame at full size)' if crop else ''}: {f.message}"
+    draw.text((pad, pad), title[:160], fill=(235, 235, 235), font=font)
     for k, (t, img) in enumerate(tiles):
         x, y = pad + k * (w + pad), pad + 18
         sheet.paste(Image.fromarray(np.ascontiguousarray(img)), (x, y))
         if f.frame <= t <= f.end:
             draw.rectangle((x - 2, y - 2, x + w + 1, y + h + 1), outline=(230, 40, 40), width=2)
-        if f.box is not None:
+        if f.box is not None and not crop:
             x0, y0, x1, y1 = f.box
             draw.rectangle((x + x0 * w - 1, y + y0 * h - 1, x + x1 * w, y + y1 * h), outline=(250, 210, 40), width=1)
         draw.text((x, y + h + 4), f"f {t}  {t / source.fps:.2f} s", fill=(200, 200, 200), font=font)
@@ -715,6 +1039,10 @@ class MotionReport:
     thresholds: Thresholds
     findings: list[Finding]
     out: Path | None
+    dark_frames: int = 0
+    """Frames measured in the finer picture (dark ones)."""
+    detail_size: tuple[int, int] = (0, 0)
+    subject: tuple[str, ...] = ()
 
     def counts(self) -> dict[str, int]:
         return {s: sum(1 for f in self.findings if f.severity == s) for s in SEVERITIES}
@@ -726,23 +1054,32 @@ class MotionReport:
         return any(SEVERITIES.index(f.severity) <= limit for f in self.findings)
 
 
-def run_check(source: Source, th: Thresholds, out: Path | None) -> MotionReport:
+def run_check(source: Source, th: Thresholds, out: Path | None, subject: Sequence[str] = ()) -> MotionReport:
     """Decode ``source``, run the checks and write a contact strip per finding (the
-    :attr:`Thresholds.max_strips` most severe) into ``out`` (none when ``None``)."""
+    :attr:`Thresholds.max_strips` most severe) into ``out`` (none when ``None``); ``subject``:
+    scene ids (or ``all``) where a subject is expected, :class:`VidgenError` for an unknown one."""
+    known = [s.id for s in source.scenes]
+    for name in subject:
+        if name != "all" and name not in known:
+            close = difflib.get_close_matches(name, known, n=1)
+            hint = f" (did you mean '{close[0]}'?)" if close else ""
+            choices = f"; scenes: {', '.join(known[:12])}{' ...' if len(known) > 12 else ''}" if known else "; this video has no scenes: use all"
+            raise VidgenError(f"--subject {name}: no such scene{hint}{choices}")
     began = time.monotonic()
-    feats = measure([decode_frames(seg.path, th.width) for seg in source.segments])
+    feats = measure([decode_frames(seg.path, th.width, detail=th.detail_width) for seg in source.segments], th)
     starts = feats.starts
     source.segments = [dataclasses.replace(seg, first=first) for seg, first in zip(source.segments, starts)]
     if source.clips:
         ends = [*starts[1:], feats.count]
         source.scenes = [SceneSpan(s.id, a, b) for s, a, b in zip(source.scenes, starts, ends)]
-    findings = find_faults(feats, source, th)
+    findings = find_faults(feats, source, th, subject)
     if out is not None:
         for old in out.glob("[0-9][0-9]_*s.png") if out.is_dir() else ():
             old.unlink()
         for k, f in enumerate(findings[: th.max_strips], start=1):
             f.strip = write_strip(f, source, feats.count, out, k, th)
-    return MotionReport(source, feats.count, feats.size, time.monotonic() - began, th, findings, out)
+    return MotionReport(source, feats.count, feats.size, time.monotonic() - began, th, findings, out,
+                        int(feats.detail.sum()), feats.detail_size, tuple(subject))
 
 
 def report_text(report: MotionReport) -> str:
@@ -753,6 +1090,8 @@ def report_text(report: MotionReport) -> str:
              f"{report.size[0]}x{report.size[1]} in {report.seconds:.1f} s"]
     lines.append(f"  scenes: {len(src.scenes)}" if src.scenes else "  scenes: unknown (a plain video file)")
     lines.append(f"  music events: {len(src.hits)} hits and notes of {src.hit_source}" if src.hit_source else "  music events: none (no score file plays)")
+    if report.dark_frames:
+        lines.append(f"  dark frames: {report.dark_frames}, measured at {report.detail_size[0]}x{report.detail_size[1]} too")
     lines += [f"  note: {n}" for n in src.notes]
     for f in report.findings:
         where = f" {f.scene}" if f.scene else ""
@@ -772,6 +1111,7 @@ def report_json(report: MotionReport) -> dict[str, Any]:
         "duration": round(report.frames / src.fps, 3), "size": list(report.size), "seconds": round(report.seconds, 2),
         "scenes": [{"id": s.id, "start": round(s.start / src.fps, 3), "end": round(s.end / src.fps, 3)} for s in src.scenes],
         "hits": len(src.hits), "hit_source": src.hit_source, "notes": list(src.notes),
+        "dark_frames": report.dark_frames, "detail_size": list(report.detail_size), "subject": list(report.subject),
         "counts": report.counts(), "findings": [f.to_json(src.fps) for f in report.findings],
         "out": str(report.out) if report.out else None, "thresholds": report.thresholds.to_json(),
     }

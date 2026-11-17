@@ -3491,6 +3491,15 @@ export function frame(t) {
   field focused far away, give `dofFocus` the same focus. Reference: CONFIG.md `web`,
   "Astronomical scales".
 
+**Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
+ready-made three.js part (skies, structures, effects, environments; more space parts as they are
+added) drawn in one browser, each tile labelled with its name and the one line that uses it.
+`vidgen parts --list` prints the same without drawing; `vidgen parts --kind sky`, `vidgen parts
+portal` (one large tile) or `vidgen parts 'star-*'` narrow it. Copy the line into your page (it
+names its module), or build a part by name with its defaults:
+`import "vidgen/parts/three-kit.js"; import {buildPart, defaultStage} from "vidgen/parts";`
+(CONFIG.md, "Ready-made parts"). Over MCP: `parts`.
+
 **three.js** comes with vidgen: `import * as THREE from "three"` in a `script:` or in a page's
 `<script type="module">` (with a chosen set of its add-ons, below):
 
@@ -3859,6 +3868,15 @@ finding's frames framed in red): open the errors' and warnings' strips, then `vi
 scene at that time to find the cause. Without a whole render, `--source scenes` reads the scene
 clips in `build/`. Thresholds: `--threshold NAME=VALUE` (`docs/CONFIG.md`, "Motion check"); MCP
 `motion_check` returns the strips as pictures.
+
+Dark (space) pictures are measured at 640 px too, so a star field or a small crescent on black is
+not a blank frame, a slow drift of the stars is not "frozen", and black frames that cut into a
+star field are still an error. They add `clipped` (a sun or planet burnt to flat white over 3 %
+of the frame: lower its light), `shimmer` (stars whose brightness jumps from frame to frame:
+small point stars aliasing; draw them soft and at least 2 px wide), `banding` (a dark glow in
+flat steps; info), `empty` (a tiny thing alone on black for 2 s; info) and, for the scenes you
+name with `--subject SCENE` (or `all`), `lost` (only stars or black for 1 s where your planet or
+ship should be).
 
 **Animation and chart libraries.** These ship with vidgen: import them by name, in a
 `<script type="module">` or a `script:`, with no file in the project. Each was run under vidgen's

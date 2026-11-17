@@ -17,6 +17,7 @@ eggs/
 lib/
 lib64/
 parts/
+!src/vidgen/data/web/parts/
 sdist/
 var/
 wheels/

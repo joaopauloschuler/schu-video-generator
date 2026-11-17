@@ -5,10 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–368
+## Steps 193–369
 
-### Space scenes (Phase AN, Steps 367–368)
+### Space scenes (Phase AN, Steps 367–369)
 
+- **`vidgen motion check` understands dark pictures** (Step 369): dark frames are also looked at
+  640 px wide, so a star field or a thin crescent on black is no longer taken for a blank frame
+  and a slow drift of the stars is no longer "frozen", while black frames that break into a star
+  field, or a planet that vanishes for a few frames, are reported as errors. New findings: an
+  over-exposed sun or planet (`clipped`), stars that shimmer as they move (`shimmer`, a common
+  fault of small point stars), a dark glow drawn in steps (`banding`), a nearly empty frame
+  (`empty`) and, for the scenes named with `--subject`, a subject lost in the dark (`lost`).
+  Escapement's opening and ending are no longer listed as frozen: their title fades in and the
+  watch turns.
+- **`vidgen parts`** (Step 369): a labelled contact sheet of the ready-made three.js parts for
+  `web` scenes (skies, crystals, a tesseract, portals, rings, a corridor, tunnels, flares, shock
+  rings, glints, ribbons, spectrum rays, dust, a studio environment), each tile with the one line
+  that uses it, drawn in one browser in about 12 s; `--list` names them without drawing; `--kind`,
+  names and patterns choose; one part gets one large tile. The parts live in a registry,
+  `vidgen/parts`, that a page can build them from by name; the space parts of the coming steps join
+  it. Over MCP: `parts`.
 - **Planets, moons and a ship at their real sizes and distances in three.js** (Step 368):
   `vidgen/space-scale` places what `ctx.orbits` gives camera-relative in double precision every
   frame and draws in depth slices, so a 100 m ship 400 km above the Earth, the Moon behind it and a

@@ -7374,6 +7374,11 @@ export function layout(t, ctx) {
 }
 ```
 
+**Ready-made parts: `vidgen/parts` and `vidgen parts`** (Step 369, DESIGN §122.5). The
+registry of ready-made three.js parts (skies, structures, effects, environments; space bodies,
+lights, craft and phenomena as Phase AN adds them), each with the one line that uses it;
+`vidgen parts` draws them on a labelled contact sheet. See [Ready-made parts](#ready-made-parts-vidgen-parts).
+
 **Single frames: `vidgen still`** (Step 342, DESIGN §120.3). `vidgen still [PROJECT] --scene ID
 (--at SECONDS | --frame N | --count N)... [--size final|preview|draft|WxH] [--variant NAME]
 [--out FILE|DIR] [--sheet FILE [--columns N]] [--exact] [--transparent] [--json]` writes frames of
@@ -16742,10 +16747,12 @@ vidgen motion check . --draft --source scenes --threshold flash=0.12 --fail-on w
 ```
 
 `vidgen motion check [FILE|PROJECT] [--source auto|video|scenes] [--variant NAME] [--preview |
---draft] [--output-dir DIR] [--out DIR] [--no-strips] [--threshold NAME=VALUE ...] [--fail-on
-error|warning|info|never] [--json]` (Step 360, DESIGN §121.3) watches a rendered video for what a
-still cannot show: frames that fail to draw, one-frame flashes, flicker, things popping in and
-out, strobing, frozen stretches and jumps at cuts. It renders nothing.
+--draft] [--output-dir DIR] [--out DIR] [--no-strips] [--threshold NAME=VALUE ...] [--subject
+SCENE ...] [--fail-on error|warning|info|never] [--json]` (Step 360, DESIGN §121.3; dark
+pictures: Step 369, DESIGN §122.5) watches a rendered video for what a still cannot show: frames
+that fail to draw, one-frame flashes, flicker, things popping in and out, strobing, frozen
+stretches and jumps at cuts; and, in dark (space) pictures, over-exposed discs, shimmering stars,
+banding and nearly empty frames. It renders nothing.
 
 - **What it watches.** A video file; or a project's rendered video (`output/<name>.mp4`, the
   `_preview` / `_draft` one with `--preview` / `--draft`) with its scenes from the render's
@@ -16756,6 +16763,21 @@ out, strobing, frozen stretches and jumps at cuts. It renders nothing.
   each frame is reduced to its mean luma and spread, colour means, a 16-bin luma histogram and
   10 x 10 px block means with each block's change from 1, 2 and 3 frames before, then dropped (about
   1 KB a frame). Parallel Space and Escapement (3 min at 1280x720 each) take about 25 s on 2 cores.
+- **Dark pictures** (Step 369). The same ffmpeg run also scales each frame to `detail_width` (640
+  px; the 160 px picture's bytes are the same as without it). A frame with at least `dark_share`
+  of its 160 px pixels under `dark_level` is measured there too: its **star points** (a pixel
+  brighter than every neighbour, by `star_contrast` over the ring around it, the ring at most
+  `star_ring` of it), its **subject** (pixels over `subject_level` away from the stars, as a share
+  of the frame), its **clipped** share (at or over `clip_level`), its **banded** share and how much
+  its stars' light jumps against the frames around (**shimmer**). A frame that looks blank at 160 px
+  but holds `star_field` star points or a subject of `subject_area` is a star field or a small
+  subject on black, **not a blank frame**; a dark frame is frozen only when its finer picture has
+  not changed either (a slow drift of the stars adds up against the first frame of the still
+  stretch). Parallel Space (561 dark frames) takes 26 s instead of 19, Escapement (1,623) 32 s
+  instead of 14; `--threshold detail_width=0` leaves the dark checks out.
+- **A subject expected** (`--subject SCENE`, repeatable; `all` for the whole video; an unknown
+  scene is an error with the closest name): whether a dark stretch of only stars is a fault
+  depends on the shot, so only the scenes named are checked for a lost subject.
 - **The score's events.** In a project whose `music:` plays a score file (a project piece or a
   score bed), every drum hit and note start of its drum and melodic tracks (not pads or chords) is
   placed in video time (the cue's scenes, `start`, `section`, loop). A flash, pop or flicker that
@@ -16771,6 +16793,12 @@ out, strobing, frozen stretches and jumps at cuts. It renders nothing.
 | `strobe` | warning | `strobe_blocks` blocks or more alternating between two pictures (a change of `strobe`, and two frames back almost the same) on `strobe_share` of a second's frames, the region's brightness staying: a wheel or pattern moving about half its repeat a frame |
 | `frozen` | info | frames without visible change (mean change under `frozen`; at 160 px a small slow change, such as thin text fading in, counts as none) for `frozen_seconds` or longer inside a scene (a title held on purpose, or a page whose clock stopped) |
 | `cut_jump` | info | a luma step of `cut_luma` or a histogram distance of `cut_hist` across a cut (a scene start, or a clip's start) |
+| `blank` (dark pictures) | error inside a scene; info at a cut | also: black frames entered from (or left to) a star field of 4 x `star_field` points or a subject over `vanish_area`, the luma barely moving; and a subject over `vanish_area` gone in one frame and back within `vanish_seconds` while the stars stay ("N frames of stars only"), not across a cut |
+| `clipped` | warning | `clip_area` or more of a dark frame clipped to flat white: an over-exposed sun or planet |
+| `shimmer` | warning | stars whose light jumps from frame to frame: the median star's light (3 x 3 px, found again within 4 px) differs from the mean of the frames before and after by `shimmer`, on `shimmer_share` of a second's frames, judged on `shimmer_stars` stars or more, most of them found again (stars moving more than 4 px of 640 a frame are not judged). Small point stars aliasing as they move; smooth twinkling and a fly-through are not reported. The strip shows the middle of the frame at full size |
+| `banding` | info | `band_share` or more of a dark frame in flat steps for `band_seconds`: runs of `band_run` px of one value between steps of 1 or 2 codes, three steps the same way (a staircase; grain on a flat background goes up and down). x264 at crf 18 flattens a dark gradient's fine dither into such steps |
+| `empty` | info | a dark frame with fewer than `star_field` stars and a subject under `empty_area`, for `empty_seconds`: a small thing alone on black |
+| `lost` | warning | only in the scenes named with `--subject`: dark frames with no subject (only stars, or black) for `lost_seconds` |
 
 Findings of one kind closer than `group_seconds` are one finding. The aliasing of a rotation that
 lands near a whole repeat a frame (it seems to turn slowly or backwards) is not found: it looks
@@ -16794,6 +16822,18 @@ like slow motion in the pixels, and only the scene knows the intended speed.
 | `beat_frames` | 1.5 | | `cut_hist` | 0.8 |
 | `beat_share` | 0.7 | | `group_seconds` | 0.5 |
 | `strip_width` | 240 | | `max_strips` | 40 |
+| `detail_width` | 640 (0: no checks of dark pictures) | | `dark_level` | 0.05 |
+| `dark_share` | 0.3 | | `star_contrast` | 0.04 |
+| `star_ring` | 0.35 | | `star_field` | 12 |
+| `subject_level` | 0.06 | | `subject_area` | 0.0005 |
+| `vanish_area` | 0.01 | | `vanish_seconds` | 1.0 |
+| `still_level` | 0.016 | | `still_pixels` | 0.0003 |
+| `clip_level` | 0.985 | | `clip_area` | 0.03 |
+| `shimmer` | 0.2 | | `shimmer_stars` | 20 |
+| `shimmer_share` | 0.5 | | `band_run` | 6 |
+| `band_share` | 0.15 | | `band_seconds` | 1.0 |
+| `empty_area` | 0.002 | | `empty_seconds` | 2.0 |
+| `lost_seconds` | 1.0 | | | |
 
 **Output.** A line per finding, most severe first, then by time:
 
@@ -16812,8 +16852,63 @@ and a **contact strip** per finding (`NN_<kind>_<seconds>s.png`, the `max_strips
 `--no-strips`: none) in `--out` (default `build/<quality>/motion/` in a project, `<video>_motion/`
 in the current folder for a file; old strips there are replaced): two frames before, the
 finding's frames (the first two and last two of a long one) framed in red, two after, each 240 px
-wide and labelled with its frame and time. Exit code 1 when a finding is at `--fail-on` or worse
+wide and labelled with its frame and time (a `shimmer` strip shows the middle of each frame at full
+size: stars are lost when it is scaled down). Exit code 1 when a finding is at `--fail-on` or worse
 (default `error`).
+
+## Ready-made parts (`vidgen parts`)
+
+```bash
+vidgen parts                                 # parts_sheet.png: every part, 320x180 a tile
+vidgen parts --list                          # their names, what each is, the line that uses it (nothing drawn)
+vidgen parts --kind sky --out skies.png      # one kind
+vidgen parts portal                          # one part, one large tile (960x540)
+vidgen parts 'star-*' 'crystal*' --size 480x270 --columns 3 --json
+```
+
+`vidgen parts [NAME ...] [--kind KIND] [--list] [--out FILE] [--size WxH] [--columns N]
+[--time-limit SECONDS] [--json]` (Step 369, DESIGN §122.5) draws the ready-made three.js parts
+for `web` scenes on one labelled contact sheet so you can choose by looking: a tile per part with
+its name, its kind, what it is and the one line that uses it (blue, in the module it names).
+
+- **Choosing.** `NAME` is a part's name or a pattern (`star-*`, `*ring*`; an unknown name is an
+  error with the closest one); `--kind` one of `sky`, `body`, `light`, `craft`, `phenomenon`,
+  `structure`, `effect`, `environment` (a kind without parts yet says so).
+- **Drawing.** One Chromium, one page (`data/web/parts-sheet.js`): frame n builds part n in a scene
+  of its own with the registry's default camera and light, sets it to the part's time `at` and
+  draws it through `vidgen/three-finish` (ACES, a little bloom, no grain) unless the part asks for
+  a plain render. A progress line per part; `--time-limit` (default 300 s) stops after the part
+  that passes it (the first is always drawn) and the sheet's title names the parts left out.
+  Measured: 20 parts at 320x180 in 12 s (page ready 0.7 s; 0.25 to 0.75 s a part, the studio
+  environment 4.3 s: its soft boxes are baked with PMREM in software GL).
+- **`--list`** prints the parts by kind without a browser: name and what it is, then
+  `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
+  document. Over MCP: the `parts` tool.
+
+**On a page.** Each line is the part's own module call (`import {SkyDome} from
+"vidgen/three-kit"`). The registry `vidgen/parts` can also build a part by name with its defaults:
+
+```js
+import "vidgen/parts/three-kit.js";                      // the parts file that describes them
+import {buildPart, defaultStage, parts} from "vidgen/parts";
+const stage = {...defaultStage(ctx.width, ctx.height), renderer, width: ctx.width, height: ctx.height, ctx};
+const part = buildPart("portal", stage, {ring: "#35e8ff"});   // options over the part's defaults
+export function frame(t) { part.frame?.(t); renderer.render(stage.scene, stage.camera); }
+```
+
+| `vidgen/parts` | |
+|---|---|
+| `definePart(info, make)` | register a part: `info` is JSON `{name, kind, module, label, use, options, seed, at}` (name: lower-case words joined by hyphens; `options` default `{}`, `seed` 1, `at` 2 s); `make(stage)` gets `{scene, camera, key, fill, renderer, width, height, ctx, options, seed, part}`, adds the part to `scene` (it may move the camera) and may return `{frame(t)}` and `{finish: false}` |
+| `parts({kind, name})`, `part(name)` | the parts registered (of a kind, names containing `name`); one by name (an error with the closest name) |
+| `buildPart(name, stage, options, seed)` | `make` with the part's options under `options` and its seed (or `seed`) |
+| `defaultStage(width, height)` | `{scene, camera, key, fill}`: black background, a 40° camera at (0, 0.8, 6) looking at the origin, a warm key light from (4, 3, 5), a faint blue hemisphere fill |
+| `KINDS`, `REQUIRED`, `DEFAULTS` | the kinds in the sheet's order, the required fields, the optional ones' defaults |
+
+**Adding parts** (the later steps of Phase AN do this): write `src/vidgen/data/web/parts/<module>.js`
+(served as `vidgen/parts/<module>.js`; it is package data) with one `definePart` per part, the
+first argument in JSON (double-quoted keys and strings: `vidgen parts --list` reads it without a
+browser); `tests/test_web_parts.py` draws every part and fails on a black tile. A part never
+changes its module's file, so pages that import the module keep their keys.
 
 ## Animatic (`vidgen animatic`)
 
@@ -17004,8 +17099,9 @@ default `build/mcp/music/<score>.mp3`), `music_check` (`source` and `compare` gi
 (`vidgen music plan`: `score` given as for `music_render`, `out` the draft's folder (none: the plan only), `force`,
 `max_scene`, `min_scene`), `audio_check`
 (`vidgen audio check`: `target`, `preset`, `variant`, `preview`), `motion_check` (`vidgen motion check`: `target`, `source`,
-`variant`, `preview`, `draft`, `threshold`, `fail_on` default `never`, `out` default `build/mcp/motion` for a file, `images`,
-`image_offset`: returns the contact strips as pictures), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
+`variant`, `preview`, `draft`, `threshold`, `subject`, `fail_on` default `never`, `out` default `build/mcp/motion` for a file, `images`,
+`image_offset`: returns the contact strips as pictures), `parts` (`vidgen parts`: `names`, `kind`, `sheet` default true
+(false: the list only), `size`, `columns`, `images`: returns the contact sheet, written to `build/mcp/parts_sheet.png`), `storyboard`, `animatic`, `lint`, `render` (`audio_only`: the
 sound alone), `tts`, `imagegen`, `readback`, `slides`,
 `thumbnail`, `export`, `gallery`, `translate_template`, `still`, `character_sheet`, `direct`, `screenplay`
 (`input_path` or `screenplay_text`, `out`, `cast`, `species`, `seed`, `force`), `story_draft`
@@ -17409,12 +17505,28 @@ files against each other); `ok` is false when any file or that check fails.
 | `scenes` | list | `{id, start, end}` (seconds; empty for a plain file) |
 | `hits`, `hit_source` | int, str | how many hits and notes of the score were placed, and the score (`null`: none) |
 | `notes` | list | what could not be read (old `timings.json`, scenes not rendered, a score that failed) |
+| `dark_frames`, `detail_size` | int, list | frames measured in the finer picture (dark ones) and its `[width, height]` (`[0, 0]`: none) |
+| `subject` | list | the scenes given with `--subject` |
 | `counts` | object | `{error, warning, info}` |
 | `findings` | list | `{kind, severity, frame, end_frame, time, end_time, scene, message, value, strip, box}`: frames of the whole video (`end_frame` included; `end_time` after it), `value` the number that tripped the check, `strip` the PNG (`null` past `max_strips` or with `--no-strips`), `box` where in the frame (`[x0, y0, x1, y1]` shares) for pops and strobing |
 | `out` | str | the strips' folder (`null` with `--no-strips`) |
 | `thresholds` | object | every threshold as used |
 
 `ok` is false when a finding is at `--fail-on` or worse (default `error`).
+
+### `vidgen parts --json`
+
+`vidgen parts [NAME ...] [--kind KIND] [--list] --json` ([Ready-made parts](#ready-made-parts-vidgen-parts)):
+
+| key | type | |
+|---|---|---|
+| `action` | str | `list` (with `--list`: nothing drawn) or `sheet` |
+| `parts` | list | `{name, kind, module, label, use, options, seed, at, file, import}` per part (in the sheet's order); with `sheet` also `seconds` (building and drawing its tile) |
+| `sheet` | str | the sheet's file (`sheet` only) |
+| `size`, `tile` | list | the sheet's and one tile's `[width, height]` (`sheet` only) |
+| `columns` | int | tiles per row (`sheet` only) |
+| `skipped` | list | names left out at `--time-limit` (`sheet` only) |
+| `load_seconds`, `seconds` | number | until the page was ready, and in all (`sheet` only) |
 
 ### `vidgen storyboard --json`
 

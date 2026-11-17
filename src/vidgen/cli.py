@@ -38,7 +38,7 @@ JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "list-pronunciation", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
     "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast", "animatic", "music", "story", "shorts", "audio",
-    "generate", "motion",
+    "generate", "motion", "parts",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -1051,7 +1051,7 @@ def cmd_motion(args: argparse.Namespace) -> CommandResult:
             raise VidgenError(f"motion check {target}: --source scenes, --variant, --preview and --draft are for a project folder, not a video file")
         source = motion_check.file_source(target)
         out = Path(args.out) if args.out else Path(f"{target.stem}_motion")
-    report = motion_check.run_check(source, thresholds, None if args.no_strips else out)
+    report = motion_check.run_check(source, thresholds, None if args.no_strips else out, args.subject)
     failed = report.fails(args.fail_on)
     if args.json:
         return jsonout.envelope("motion", not failed, action="check", **motion_check.report_json(report))
@@ -1185,6 +1185,37 @@ def cmd_still(args: argparse.Namespace) -> CommandResult:
     print(f"{len(result.stills)} still(s) of {result.scene} ({result.entry}) at {result.width}x{result.height}, {result.fps} fps "
           f"({result.size}{', every frame stepped' if result.exact else ''}): page ready in {result.load_seconds:.1f} s, "
           f"{drawing / len(result.stills):.2f} s per still, {elapsed:.1f} s in all")
+    return 0
+
+
+def cmd_parts(args: argparse.Namespace) -> CommandResult:
+    """``vidgen parts``: a labelled contact sheet of the ready-made three.js parts, or with
+    ``--list`` their names and the line that uses each (DESIGN.md §122.5)."""
+    from vidgen.web import parts
+
+    chosen = parts.select_parts(parts.read_parts(), args.names, args.kind)
+    if args.list:
+        if args.json:
+            return jsonout.envelope("parts", True, action="list", parts=[p.to_json() for p in chosen])
+        print(parts.list_text(chosen))
+        return 0
+    tile = parts.parse_tile(args.size, len(chosen) == 1)
+    out = Path(args.out) if args.out else Path("parts_sheet.png")
+
+    def report(k: int, n: int, done: Any) -> None:
+        print(f"[{k}/{n}] {done.part.name}  {done.seconds:.2f} s", file=sys.stderr if args.json else sys.stdout, flush=True)
+
+    result = parts.make_parts_sheet(chosen, out, tile=tile, columns=args.columns, time_limit=args.time_limit, on_tile=report)
+    drawing = sum(t.seconds for t in result.tiles)
+    if args.json:
+        return jsonout.envelope("parts", True, action="sheet", sheet=str(result.path), size=list(result.size), tile=list(result.tile),
+                                columns=result.columns, parts=[{**t.part.to_json(), "seconds": round(t.seconds, 3)} for t in result.tiles],
+                                skipped=[p.name for p in result.skipped], load_seconds=round(result.load_seconds, 3), seconds=round(result.seconds, 3))
+    print(f"sheet: {result.path}  ({result.size[0]}x{result.size[1]}, {len(result.tiles)} part(s) at {tile[0]}x{tile[1]})")
+    if result.skipped:
+        print(f"left out at the time limit ({args.time_limit:g} s): {', '.join(p.name for p in result.skipped)}")
+    if result.tiles:
+        print(f"page ready in {result.load_seconds:.1f} s, {drawing / len(result.tiles):.2f} s per part, {result.seconds:.1f} s in all")
     return 0
 
 
@@ -2795,7 +2826,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "motion",
         help="motion check: watch a rendered video (a file or a project's render) at low resolution for blank or black frames, "
-        "one-frame flashes, flicker, popping, strobing, frozen stretches and jumps at cuts; a contact strip PNG per finding",
+        "one-frame flashes, flicker, popping, strobing, frozen stretches and jumps at cuts, and in dark (space) pictures for "
+        "over-exposed discs, shimmering stars, banding and empty frames; a contact strip PNG per finding",
     )
     p.add_argument("action", choices=["check"], help="check: decode the video at 160 px wide and report each fault with its time, frame, scene and severity")
     p.add_argument("target", nargs="?", default=".", help="a video file (mp4, mov, webm...), or a project dir or config file: its rendered video, "
@@ -2811,6 +2843,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-strips", action="store_true", help="only the report, no contact strips")
     p.add_argument("--threshold", action="append", default=[], metavar="NAME=VALUE",
                    help="change a threshold, e.g. flash=0.12 or frozen_seconds=3 (repeatable; docs/CONFIG.md lists them)")
+    p.add_argument("--subject", action="append", default=[], metavar="SCENE",
+                   help="a scene where a subject (planet, craft...) should stay in view: dark stretches with only stars or black are "
+                   "reported as 'lost' (repeatable; all = the whole video)")
     p.add_argument("--fail-on", choices=["error", "warning", "info", "never"], default="error", help="lowest severity that makes the exit code 1 (default: error)")
     p.set_defaults(func=cmd_motion)
 
@@ -2871,6 +2906,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--transparent", action="store_true", help="keep the page's transparency (default: the page over the video's background colour)")
     json_arg(p)
     p.set_defaults(func=cmd_still)
+
+    p = sub.add_parser("parts", help="a labelled contact sheet (PNG) of the ready-made three.js parts (skies, bodies, structures, effects...) "
+                       "with the line that uses each, so you can choose by looking; --list names them without drawing")
+    p.add_argument("names", nargs="*", metavar="NAME", help="only these parts (a name or a pattern such as 'star-*'); one part gets one large tile")
+    p.add_argument("--kind", metavar="KIND", help="only parts of this kind (sky, body, light, craft, phenomenon, structure, effect, environment)")
+    p.add_argument("--list", action="store_true", help="print the parts (name, what it is, the import and the line that uses it); nothing drawn")
+    p.add_argument("--out", "-o", metavar="FILE", help="the sheet (.png or .jpg; default: parts_sheet.png here)")
+    p.add_argument("--size", metavar="WxH", help="one tile's size (default 320x180; 960x540 for a single part)")
+    p.add_argument("--columns", type=int, metavar="N", help="tiles per row (default: up to 5)")
+    p.add_argument("--time-limit", type=float, default=300.0, metavar="SECONDS",
+                   help="stop drawing after this long and write the sheet with the parts drawn so far (default 300)")
+    p.set_defaults(func=cmd_parts)
 
     p = sub.add_parser("character", help="show a character of characters: (its look and colours); --png writes one still of it")
     p.add_argument("name", help="the character's name (from characters:)")

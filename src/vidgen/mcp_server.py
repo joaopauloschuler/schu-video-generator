@@ -75,7 +75,8 @@ poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon
 scene's page at exact times without rendering it; \
 `music_template` / `music_patches` / `music_render` / `music_check` write and check original music as score files \
 (assets/music/NAME.yaml, played with music: NAME; the guide's topic "audio" has the recipe), `music_plan` a music \
-video's storyboard and draft from one, `motion_check` watches a rendered video for flicker and black frames. A person shaping music in \
+video's storyboard and draft from one, `motion_check` watches a rendered video for flicker and black frames (and, in dark \
+space pictures, over-exposed discs, shimmering stars and banding), `parts` shows the ready-made three.js parts on a contact sheet. A person shaping music in \
 `vidgen studio` may hand you a session with listening notes: `studio_sessions` -> `studio_read` -> `studio_check` -> \
 `studio_propose` (one line per note; `studio_variations` gives four variations to start from). Every \
 tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
@@ -624,6 +625,23 @@ def build_server(root: Path) -> Any:
         doc = await call(ctx, args_of(["list-themes"], [str(where(project))] if project else [], {"swatches": str(out) if swatches else None}))
         return answer(doc, [Path(doc["swatches"])] if swatches and doc.get("swatches") else [])
 
+    @tool("The ready-made three.js parts for web scenes (skies, bodies, lights, craft, phenomena, structures, effects, "
+          "environments): each with what it is, its module and the one line that uses it; sheet=true (default) also "
+          "draws them in one browser and returns a labelled contact sheet, so you can choose by looking (about 0.3 s a part).", writes)
+    async def parts(
+        ctx: Context,
+        names: Annotated[list[str] | None, Field(description="only these parts (names or patterns such as 'star-*'); one part gets one large tile")] = None,
+        kind: Annotated[str | None, Field(description="only this kind: sky, body, light, craft, phenomenon, structure, effect, environment")] = None,
+        sheet: Annotated[bool, Field(description="draw the contact sheet (false: only the list, nothing drawn)")] = True,
+        size: Annotated[str | None, Field(description="one tile's WIDTHxHEIGHT (default 320x180; 960x540 for a single part)")] = None,
+        columns: Annotated[int | None, Field(ge=1, le=12, description="tiles per row")] = None,
+        images: Images = DEFAULT_IMAGES,
+    ) -> Any:
+        out = policy.root / WORK_DIR / "parts_sheet.png"
+        options = {"kind": kind, "list": not sheet, "out": None if not sheet else str(out), "size": size if sheet else None, "columns": columns if sheet else None}
+        doc = await call(ctx, args_of(["parts"], list(names or []), options), heavy=sheet)
+        return paged(doc, [Path(doc["sheet"])] if doc.get("sheet") else [], 0, images if sheet else 0)
+
     @tool("Sound effects (built-in and the project's assets/sfx) with what they sound like and their params.", read_only)
     async def list_sfx(ctx: Context, project: OptionalProject = None) -> Any:
         return answer(await call(ctx, args_of(["list-sfx"], [str(where(project))] if project else [])))
@@ -740,7 +758,8 @@ def build_server(root: Path) -> Any:
 
     @tool("Watch a rendered video for motion faults, for agents that cannot watch it: decodes it at 160 px wide (no render) "
           "and reports black or blank frames inside a scene, one- or two-frame flashes and drop-outs, flicker, popping regions, "
-          "strobing, frozen stretches and brightness jumps at cuts, each with time, frame, scene and severity (pulses on the "
+          "strobing, frozen stretches and brightness jumps at cuts, and in dark (space) pictures over-exposed discs, shimmering "
+          "stars, banding and empty frames (a star field is not a blank frame), each with time, frame, scene and severity (pulses on the "
           "score's hits and notes are info). Returns the findings' contact strips as pictures (the finding's frames framed in red).", writes)
     async def motion_check(
         ctx: Context,
@@ -750,6 +769,8 @@ def build_server(root: Path) -> Any:
         preview: Annotated[bool, Field(description="a project's preview render")] = False,
         draft: Annotated[bool, Field(description="a project's draft render")] = False,
         threshold: Annotated[list[str] | None, Field(description="NAME=VALUE changes, e.g. flash=0.12 (docs/CONFIG.md lists them)")] = None,
+        subject: Annotated[list[str] | None, Field(description="scenes where a subject should stay in view: dark stretches with "
+                                                   "only stars or black are reported as 'lost' (all = the whole video)")] = None,
         fail_on: Annotated[Literal["error", "warning", "info", "never"], Field(
             description="lowest severity that makes ok false (default never: the strips come back whatever is found)")] = "never",
         images: Images = DEFAULT_IMAGES,
@@ -760,7 +781,7 @@ def build_server(root: Path) -> Any:
         path = where(target, "target")
         video_file = path.is_file() and path.suffix.lower() not in (".yaml", ".yml")
         strips = where(out, "out") if out else where(str(WORK_DIR / "motion"), "out") if video_file else None
-        options = {"source": source, "variant": variant, "preview": preview, "draft": draft, "threshold": threshold, "fail-on": fail_on,
+        options = {"source": source, "variant": variant, "preview": preview, "draft": draft, "threshold": threshold, "subject": subject, "fail-on": fail_on,
                    "out": str(strips) if strips else None}
         doc = await call(ctx, args_of(["motion"], ["check", str(path)], options), heavy=True)
         return paged(doc, [Path(f["strip"]) for f in doc.get("findings", []) if f.get("strip")], image_offset, images)

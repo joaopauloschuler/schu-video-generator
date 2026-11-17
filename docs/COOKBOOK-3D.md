@@ -179,7 +179,9 @@ numbers, easing, keyframes) and `vidgen/three-kit` draws light on black (glowing
 crystals, a tesseract, a nebula sky, portals, star fields, flares, shock rings, the melody's
 ribbon, the spectrum's rays, tunnels, a corridor, great rings, swarms, dust). The worked example
 is [`examples/parallel-space`](../examples/parallel-space/README.md): every scene of the film is
-composed from them in `ps.js`.
+composed from them in `ps.js`. To see them all before you choose, `vidgen parts` draws every
+ready-made part on one contact sheet, each with the line that uses it (`vidgen parts --list`
+without drawing; [CONFIG, "Ready-made parts"](CONFIG.md#ready-made-parts-vidgen-parts)).
 
 - **One script, one song time.** All scenes of a film can share one script that picks its set
   from `data.mode`; each draws from `T = ctx.music.time(t)` alone, so a cut between two scenes on
@@ -285,6 +287,11 @@ vidgen motion check output/my_video.mp4          # any file
   across a cut, deliberate or not.
 - **Before the final render**, check the scene clips you have: `--source scenes` reads the clips
   in `build/` (cut to cut) when the whole video is not rendered yet.
+- **Dark pictures** (space, night): a star field or a thin crescent on black is not a blank frame
+  (dark frames are also looked at 640 px wide), and black frames inside a star field are still an
+  error. Look at `shimmer` (stars flickering as they move: draw them soft and at least 2 px wide),
+  `clipped` (a sun or planet burnt to flat white) and `banding` (a dark glow in steps); give
+  `--subject SCENE` for the shots where a planet or ship must stay in view (`lost`).
 
 On the two finished example films: Parallel Space v7 (fixed) has no blank frames; one warning (a
 tunnel ring passing the camera brightens one frame in `06_build`) and 21 infos (seven cuts with
@@ -292,8 +299,8 @@ jumps in brightness, eleven flashes and dips on notes and hits, among them one-f
 `hook` notes in `05_heart`, a small glint, two held frames in the coda; the dips came from the
 kit's `melody` restarting each note's light at 0, fixed since: a still on such a note keeps the
 light of the frames around it); Escapement has none above
-info (seven cut jumps, small glints in its gears, the still opening on the watch while the title
-fades in, and the held ending).
+info (seven cut jumps and small glints in its gears; its opening and ending, once listed as
+frozen, change at 640 px: the title fades in and the watch turns).
 
 ## 12. Opening titles and end cards for films
 

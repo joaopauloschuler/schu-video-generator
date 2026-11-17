@@ -195,7 +195,8 @@ src/vidgen/
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
-  motion_check.py         # `vidgen motion check`: a rendered video watched at 160 px for blank frames, flashes, flicker, pops, strobing, frozen stretches, jumps at cuts; contact strips (§121.3)
+  motion_check.py         # `vidgen motion check`: a rendered video watched at 160 px for blank frames, flashes, flicker, pops, strobing, frozen stretches, jumps at cuts; contact strips (§121.3);
+                          # dark frames also at 640 px: star fields, clipped discs, shimmer, banding, empty, lost (§122.5)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
                           # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57, §78),
@@ -271,7 +272,8 @@ src/vidgen/
                           # the project folder, errors, screenshots), clip.py (the cached clip), inputs.py (theme
                           # CSS, ctx.data / ctx.beats, import map; §118.9), loaded.py (files the page loaded; §118.10),
                           # layout.py (the page's text as layout objects, for lint; §118.12), still.py
-                          # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8)
+                          # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8), parts.py
+                          # (`vidgen parts`: the parts files read, the contact sheet drawn, §122.5)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -352,7 +354,10 @@ src/vidgen/
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
   data/web/modules/        # vidgen's own modules for web scenes: three-finish.js `vidgen/three-finish` (§120.11); music-time.js
                           # `vidgen/music-time` and three-kit.js `vidgen/three-kit`: building blocks for music videos (§121.1);
-                          # title-cards.js `vidgen/title-cards`: an opening title and an end card for films (§121.7)
+                          # title-cards.js `vidgen/title-cards`: an opening title and an end card for films (§121.7);
+                          # space-scale.js `vidgen/space-scale` (§122.4); parts.js `vidgen/parts`: the registry of ready-made parts (§122.5)
+  data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
+                          # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
   data/sets/              # outdoors.yaml, indoors.yaml: the built-in stage sets `set: NAME` falls back to (§76, §77)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
@@ -25690,7 +25695,8 @@ before the first and selects by frame number: exact frames, checked by a test).
 
 Findings of one kind within 0.5 s merge (a burst of pops is one line). The checks run in an order
 that keeps one cause one finding: blank, flash, flicker, strobe, pop (a pop is not looked for
-inside a flash, flicker, strobe or within two frames of a cut).
+inside a flash, flicker, strobe or within two frames of a cut). Step 369 adds the checks of dark
+pictures (star fields are not blank; clipped, shimmer, banding, empty, lost): §122.5.
 
 **Output.** Text (a line per finding, errors first), `--json` (`motion` document), and a contact
 strip per finding: two frames before, the finding's frames (first two and last two of a long one)
@@ -26043,7 +26049,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 |---|---|---|
 | 367 | The orbit bridge: the third dimension audited and fixed, rotation data for the Sun, planets, Moon and Galilean moons, `orbit_data:` → `ctx.orbits` | §122.1–122.3 |
 | 368 | Scale: floating origin, depth, three scale modes and their honest labels (`vidgen/space-scale`) | §122.4 |
-| 369 | Checks for dark pictures; a contact sheet of ready-made parts | |
+| 369 | Checks for dark pictures in `vidgen motion check`; a registry of ready-made parts (`vidgen/parts`) and its contact sheet (`vidgen parts`) | §122.5 |
 | 370 | The sky (algorithmic, real) | |
 | 371 | Planets, moons and rings | |
 | 372 | Suns and light | |
@@ -26299,3 +26305,174 @@ space.path("Moon", {kind: "conic"});      // a line exact every frame
   errors with did-you-mean; `slow`: the ship and Earth–Moon pages in Chromium, `split` against
   `single`, twice. Stills: `/home/claude/work/scratch/an368/stills/`.
 
+### 122.5 Checks for dark pictures; ready-made parts and their contact sheet (Step 369)
+
+**What fired wrongly on space pictures.** Synthetic clips (1280x720, 3 s, encoded as vidgen does:
+x264 crf 18 yuv420p; numpy, no three.js; `/home/claude/work/scratch/an369/tools/space_clips.py`)
+through the Step 360 check:
+
+| clip | Step 360 said | why | Step 369 says |
+|---|---|---|---|
+| a star field (1,500 gaussian stars), still, drifting 0.3 px a frame, twinkling, flown into | nothing | at 160 px (8 x 8 source pixels a pixel) the stars average to a luma spread of 0.002: the whole clip was one **blank** run, left alone only because it began at frame 0; after a lit shot it is "N black frames at a cut" (info) or, entered quickly inside a scene, an **error** | a star field (its points counted at 640 px): not blank |
+| the same field with 5 black frames inside (the v7 bug in space) | nothing | the black frames are part of the blank run; the luma step stars to black is 0.003, far under `blank_jump` | **error**: "5 black frames inside the scene (entered from a star field…)" |
+| a crescent 60 px wide over stars drifting 0.1 px a frame; a planet sliding 1 px a frame; a sun moving 1 px a frame | **frozen** (info) all 3 s | the mean change of a mostly black 160 px frame stays under 0.0015 | not frozen: the finer picture changes against the stretch's first frame |
+| a planet that vanishes for 3 frames while the stars stay | **blank** error ("3 black frames") | right fault, wrong words; with star fields no longer blank it would have been lost | **error**: "3 frames of stars only inside the scene: a subject over 11.2 % of the frame vanished…" |
+| point-sampled stars (squares 0.6 to 1.5 px, lit only where a pixel centre falls) moving 0.37 px a frame | nothing | each star is a fraction of one 160 px block: no block changes by `pop` or `flicker_block` | **shimmer** warning (the median star's light jumps 38 % frame to frame) |
+| a cut from the star field to a sunlit planet | nothing (the dark shot was "blank" from frame 0) | | `cut_jump` info (as for any hard cut) |
+| a sun disc clipped to white over 7.5 % of the frame | frozen only | | **clipped** warning |
+| a dark nebula gradient (0 to 23 codes) | frozen only | | **banding** info |
+
+Popping and flicker never fired on stars (a star is far below a block's thresholds at 160 px); the
+brightness jump at a cut from dark to sunlit is info as before, and the right severity.
+
+**One decode, two pictures.** ffmpeg's filter graph splits the decoded frame: one branch is
+scaled to 160 px exactly as before (`scale=W:H:flags=area`, rgb24), the other to
+`detail_width` (640 px, area); the two are stacked into one raw picture per frame on the same pipe
+(the small one padded to the finer width). The small picture's bytes are identical to the old
+command's: checked on 120 frames of Parallel Space and on the test clips (a test compares them),
+so every Step 360 number is unchanged. A source no wider than 160 px gets the old command. The
+finer picture is measured only for **dark frames** (`dark_share` 0.3 of the 160 px pixels under
+`dark_level` 0.05): 561 of Parallel Space's 5,546 frames, 1,623 of Escapement's 5,730; about
+8.6 ms a dark frame (numpy on 640x360), and the larger pipe. Parallel Space: 18.7 s → 25.8 s;
+Escapement 13.9 s → 32.5 s (2 cores). `--threshold detail_width=0` turns it off.
+
+**What the finer picture holds**, per dark frame: star points (a pixel that is the brightest of its
+3 x 3, at least `star_contrast` 0.04 brighter than the ring of its 5 x 5 border, the ring at most
+`star_ring` 0.35 of it: a point, not an edge, a disc's inside or a gradient); the subject share
+(pixels over `subject_level` 0.06 more than 2 px from a star point); the clipped share (luma ≥
+0.985); the banded share; whether the frame differs from the first frame of its still stretch
+(`still_level` 4/255 on more than `still_pixels` 0.03 % of the pixels: a slow drift adds up,
+encoder noise does not); and the stars' shimmer. Rules:
+
+- **A star field is not a blank frame**: a frame blank at 160 px with `star_field` (12) star points
+  or a subject of `subject_area` (0.05 %, 115 px at 640 x 360) is left out of `blank` and of every
+  check's blank mask. Black frames entered from (or left to) a frame with 4 x `star_field` points or
+  a subject over `vanish_area` are abrupt even though the luma barely moves: error inside a scene,
+  info at a cut, nothing at the video's ends (Step 360's rules).
+- **A vanished subject**: a subject over `vanish_area` (1 %) gone in one frame (under
+  `subject_area`) and back within `vanish_seconds` (1 s) while the frame is still a star field is
+  reported as `blank` (error): the Step 360 bug, drawn over a sky. Not across a cut.
+- **Frozen in the dark**: a dark frame counts as unchanged only when its finer picture is
+  unchanged too (the old rule AND the new one: this can only remove `frozen` findings).
+- **`clipped`** (warning): `clip_area` (3 %, a disc of 94 px radius at 1280 x 720) of a dark frame
+  at flat white. Only dark frames, so a white title card is not one.
+- **`shimmer`** (warning): for each star point of frame t, its light (the 3 x 3 sum, the largest
+  within 4 px) against the mean of frames t-1 and t+1 found the same way; the median star's
+  relative jump over `shimmer` (0.2), with `shimmer_stars` (20) stars, fewer than half of them lost
+  in both neighbours (else they move more than 4 px a frame and are not judged), on `shimmer_share`
+  of a second's frames. Measured medians: still 0, drift 0.013, smooth twinkling (1–3 Hz, ±35 %)
+  0.028, a fly-through (1.5 % zoom a frame) 0.040, Parallel Space's tunnel with stars 0.118,
+  point-sampled stars 0.38. The median, not the mean: the tunnel's lines crossing stars put the mean
+  at 0.29. Its strip shows the middle of each frame at full size (stars vanish at 240 px).
+- **`banding`** (info): along rows and columns (every other one) of the 8-bit finer picture,
+  inside luma codes 3 to 90 and away from stars, flat runs of `band_run` (6) px or more between
+  steps of 1 or 2 codes, where three steps in a row go the same way (a staircase); its share of the
+  frame over `band_share` (0.15) for `band_seconds` (1 s). Requiring three steps one way was needed:
+  grain on a flat dark background (Escapement's end card) has flat runs between steps up and down,
+  and counted 0.12–0.15 with two steps, 0.02–0.03 with three; the synthetic nebula 0.38, Parallel
+  Space's nebula 0.05–0.09. x264 at crf 18 turns a ±1.5-code dither of a dark gradient into steps
+  of about 1.16 codes (measured: dithered and plain gradients decode alike), so the check reads
+  what the viewer gets; a 2 x 2 area mean would also have hidden the dither.
+- **`empty`** (info): dark frames, not blank, with fewer than `star_field` stars and a subject under
+  `empty_area` (0.2 %) for `empty_seconds` (2 s): a small thing alone on black.
+- **`lost`** (warning) — **a scene-level hint, not automatic**: whether only stars for a while is a
+  fault depends on the shot (a sky shot has no subject on purpose). `--subject SCENE` (repeatable;
+  `all`; MCP `subject`) names the shots where a subject must stay in view; dark frames there with no
+  subject for `lost_seconds` (1 s) are reported. An unknown scene id is an error with the closest
+  name, given before anything is decoded.
+
+**The finished films** (read-only, `--no-strips`): Parallel Space v7's 22 findings are identical
+(kind, frames, message); none of the new checks fires (its tunnel stars shimmer 0.118, its nebula
+bands 0.05–0.09). Escapement loses its 4 `frozen` infos (frames 44–201, 419–479, 5400–5539,
+5552–5665): they were wrong. At 1280 px their first and last frames differ on 17–34 % of the
+pixels (up to 0.95 in luma): the title fades in and the watch turns and moves; the 160 px mean
+change of the mostly dark frame was under 0.0015. Side by side:
+`/home/claude/work/scratch/an369/stills/escapement_frozen_was_wrong.png`. Its other 13 are
+identical.
+
+**Not done**: aliasing that crawls without changing a star's light (a star stepping whole pixels at
+an even brightness) is not found; shimmer of fewer than half the stars is not reported (the
+median); banding is measured only in dark frames; a grainy film's dark frames never count as
+frozen (grain over 4/255 is change).
+
+**Ready-made parts: the registry.** `data/web/modules/parts.js` (`vidgen/parts`, on the import map;
+imports only `three`) keeps the parts by name: `definePart(info, make)`, `parts({kind, name})`,
+`part(name)` (did-you-mean), `buildPart(name, stage, options, seed)`, `defaultStage(width,
+height)` (black background, a 40° camera at (0, 0.8, 6) looking at the origin, a warm key light,
+a faint fill), `KINDS` (`sky`, `body`, `light`, `craft`, `phenomenon`, `structure`, `effect`,
+`environment`: the sheet's order). `info` is `{name, kind, module, label, use, options, seed,
+at}`: `module` the import that has the code, `use` the one line a page writes, `options` the
+defaults `make` reads (colours as `"#rrggbb"` strings), `at` the time the sheet shows. `make(stage)`
+gets `{scene, camera, key, fill, renderer, width, height, ctx, options, seed, part}`, adds the
+part to `scene` (it may move the camera, change the lights or set `scene.background` /
+`environment`) and may return `{frame(t)}` and `{finish: false}`.
+
+Decisions:
+
+- **Parts files beside the modules, not inside them.** Each module's parts are described in
+  `data/web/parts/<module>.js` (served as `__vidgen__/parts/<file>`, imported as
+  `vidgen/parts/<file>` through an import-map prefix). Registering inside `three-kit.js` would have
+  changed its bytes and so the clip keys of every page importing it (the four examples); a parts
+  file is loaded only by the sheet and by pages that import it, so adding or changing a part moves
+  no other key. A later module (Steps 370–374) may call `definePart` in its own file too, but the
+  sheet only imports the parts files: put the calls in `data/web/parts/<module>.js`.
+- **The description is JSON**, so Python reads it without a browser (`vidgen parts --list`,
+  choosing, `--kind`): the first argument of each `definePart(` is parsed with braces matched
+  outside strings and `json.loads`; a non-JSON description is an error naming the file and line.
+  `KINDS` and the required fields are kept equal in Python and JS by a test.
+- **One page, one part a frame.** The page (`data/web/parts-sheet.js`, copied into a temporary
+  folder as the only file of a `script:` scene) imports the parts files `ctx.data.files` names,
+  checks every name, makes one `WebGLRenderer` (stencil on, for portals) and, at frame n (fps 1),
+  takes down part n-1 (geometries, materials, textures, three-finish's targets) and builds part n
+  on `defaultStage`, sets it to `at` and draws it through `vidgen/three-finish` with `grain: 0` and
+  a weak bloom (strength 0.12, radius 0, threshold 1). Python lays out the tiles (`WebPage.frame`,
+  over black) with Pillow: name (bold), kind, label (2 lines), the `use` line in JetBrains Mono
+  (3 lines, wrapped, cut with "…").
+- **Bloom on small tiles.** Three-finish's bloom at strength 0.35–0.6 washed a 320 x 180 tile with
+  colour (UnrealBloom's widest levels cover the whole tile); 0.12 keeps a hint of glow without the
+  wash. Each tile is therefore a little less glowing than the part in a 720p film.
+- **The scale modes of `vidgen/space-scale` have no tile**: they place `ctx.orbits` bodies, and the
+  sheet has no orbit data; a picture of a mode is a picture of the bodies, which Step 371 adds.
+
+**Shipped parts** (20, `data/web/parts/three-kit.js`): skies `nebula-dome` (SkyDome), `nebula-sky`
+(three-finish `nebulaSky`), `star-field`, `star-shell`; structures `crystals` (the five
+polyhedra), `tesseract`, `portal`, `ring-structure`, `lattice`, `crystal-field`, `crystal-swarm`;
+effects `glow-lines`, `flare`, `shock-rings`, `glints`, `ribbon`, `spectrum-rays`, `tunnel`,
+`dust`; environment `studio-environment` (three-finish `studioEnvironment`). Music they react to
+(hits, notes, bands) is made up in the file.
+
+**`vidgen parts`** (`web/parts.py`; CLI `cmd_parts`; MCP `parts`): `[NAME ...]` (names or
+`fnmatch` patterns, did-you-mean), `--kind` (did-you-mean; a kind without parts says so),
+`--list` (text by kind, or `--json`; no browser), `--out` (default `parts_sheet.png`; PNG or JPEG),
+`--size WxH` (tile; default 320x180, one part 960x540; even, 48–1920), `--columns` (default up to
+5), `--time-limit` (default 300 s: after the tile that passes it the rest are left out and named in
+the sheet's title; the first tile is always drawn), a progress line per tile. Measured (2 cores,
+SwiftShader): 20 tiles at 320x180 in 11.9 s, page ready 0.7 s, 0.25–0.76 s a tile, the studio
+environment 4.3 s (PMREM of its soft boxes); one portal at 960x540 in 1.8 s. The sheet:
+`/home/claude/work/scratch/an369/stills/parts_sheet.png`.
+
+**How a later step adds a part** (Steps 370–374):
+
+1. Write the module as usual (`data/web/modules/<name>.js`, in `VIDGEN_MODULES`).
+2. Add `data/web/parts/<name>.js`: `import {definePart} from "vidgen/parts";`, your module, and one
+   `definePart({...JSON...}, (s) => {...})` per part. Give it a `kind` from `KINDS`, a `label` of
+   what it is, a `use` line a page can copy, `options` with the defaults `make` reads, a `seed`
+   when it is random, and an `at` that shows it well. `make` builds the part in `s.scene`, aims
+   `s.camera` so the part fills the tile, and returns `{frame(t)}` if it moves.
+3. `vidgen parts --list` must list it; `vidgen parts NAME` draws it large; look at the tile.
+   `tests/test_web_parts.py::test_the_contact_sheet_draws_every_part` (slow) draws every part and
+   fails on a black tile.
+4. Nothing else: the sheet, the list and MCP read the folder.
+
+**Tests.** `tests/test_motion_check.py`: 9 more default tests on synthetic numpy frames (a 320 x
+160 finer picture, its 4 x 4 area mean as the 160 px one; stars splatted bilinearly so their light
+stays the same as they move): a star field is not blank and black frames in it are an error (and,
+on the 160 px picture alone, the old "60 black frames at a cut"); a slow drift is not frozen,
+held stars are; a vanished subject; a clipped disc; shimmering vs twinkling vs fast-moving stars;
+a dark staircase vs the same gradient with grain; a nearly empty frame; `lost` with `--subject`,
+`all`, an unknown scene; thresholds off; and one `slow` on an encoded clip (the 160 px bytes the
+same with and without the finer picture; the command's JSON; `--subject` errors).
+`tests/test_web_parts.py` (6 default: the files and serving, the kinds equal in JS and Python,
+JSON descriptions and their errors, choosing, `--list`, the registry in Node; 1 `slow`: every part
+at 96 x 54 in Chromium, none black, the time limit, the command's JSON). `tests/test_mcp.py`:
+`parts` in the tool list and a slow call.
