@@ -183,6 +183,15 @@ three.js scenes"; worked example: [`examples/three-finish`](../examples/three-fi
   `light.directional`; `environment: true` adds the sky's reflections; `shadows: {size}` (with
   `renderer`) gives hard shadows round `at`. The default exposure `"film"` keeps stars beside a
   day side by convention; `"camera"` and `"auto"` are the honest ones.
+- **Phenomena.** `blackHole(renderer, {sky})`, `wormhole(renderer, {sky, other})`,
+  `warp(renderer, {seconds, fps: ctx.fps})`, `asteroids(renderer, {light})`, `comet(renderer)`
+  and `aurora(world)` from `vidgen/space-phenomena` (CONFIG `web`, "Phenomena"); call each one's
+  `update` in `Finish`'s `update`. The black hole's disc is linear light over white near its
+  inner edge: a bloom of strength 0.35, radius 0.6 gives it its glow without washing the frame
+  (the stills of Step 373 use it). A hole that fills the frame costs 0.75 to 0.9 s a frame at
+  720p in software GL: budget it like a second scene. The hole draws after the sky and before
+  everything else, so a ship in front of it covers it. Look first: `vidgen parts --kind
+  phenomenon`.
 - **A sky behind it.** `scene.add(spaceSky(renderer, {seed}).object)` from `vidgen/space-sky`
   (CONFIG `web`, "The sky of a space scene") is a sky like a photograph from space: thousands of
   stars with the real sky's spread of brightness, the Milky Way with its dust, optional nebulae and

@@ -3571,6 +3571,37 @@ const update = (t) => { earth.update(t); moon.update(t); sun.update(t); light.up
   inverse-square light (Neptune 900 times dimmer than the Earth).
 - Look first: `vidgen parts --kind light`. Reference: CONFIG.md `web`, "Suns and light".
 
+**Phenomena: `vidgen/space-phenomena`.** A black hole, a wormhole, a jump to warp, asteroids, a
+comet, an aurora: do not write these by hand (a black disc with an orange ring is not a black
+hole). Each is one call and one `update(t)`.
+
+```js
+import {blackHole, wormhole, warp, asteroids, asteroid, comet, aurora} from "vidgen/space-phenomena";
+const hole = blackHole(renderer, {sky});                 // bends that sky; one unit = the horizon's radius
+scene.add(hole.object);                                   // hole.update(t) each frame
+const rocks = asteroids(renderer, {seed: 5, light});      // rocks.update(t, {camera}); or {layout: "belt", inner: 42, outer: 90}
+const tail = comet(renderer);                             // tail.update(t, {sun: [x, y, z], velocity: [x, y, z], activity: 1})
+```
+
+- `blackHole`: `{disc: false}` for the hole and the bent sky alone, `temperature` (5400; lower
+  is redder), `tilt`, `doppler`, `speed`, `quality: "fast"` when time is short. Put the Milky
+  Way behind it (`camera` opposite `sky.direction("center")`) for an Einstein ring. It bends the
+  sky only: keep planets and ships out from behind it.
+- `wormhole(renderer, {sky, other: spaceSky(renderer, {seed: 11}), length: 30})` shows the other
+  sky in a ball; `const state = hole.passage(camera, progress)` flies through (progress 0..1 from
+  your bar clock); when `state.side` is -1 show `other.object` and hide this side's things.
+- `warp(renderer, {seconds, fps: ctx.fps})`: `const state = w.update(t, {progress, camera,
+  intensity})`, then `sky.set({brightness: state.sky})`. Pulse `intensity` with the music; never
+  pump the camera's lens. `vidgen motion check` warns of `shimmer` on the streaks: expected.
+- `comet(renderer, {space, body: "Halley"})` with `orbit_data` takes its place, the sun and its
+  growth near the sun from `ctx.orbits`. `aurora(world)` lights the night side's polar oval.
+- Budget (720p, software GL, on top of sky and finishing): a black hole filling the frame 0.75
+  to 0.9 s a frame, a wormhole 0.45, the others 0.05 to 0.2. A black hole shot doubles a
+  frame's cost: keep such shots short or the hole smaller in the frame.
+- Say in the film's notes what is not physics: the disc's colours, the warp, the sizes of
+  comets and belts. Look first: `vidgen parts --kind phenomenon`. Reference: CONFIG.md `web`,
+  "Phenomena".
+
 **Ready-made parts: look before you build.** `vidgen parts` writes `parts_sheet.png`: every
 ready-made three.js part (skies, structures, effects, environments; more space parts as they are
 added) drawn in one browser, each tile labelled with its name and the one line that uses it.

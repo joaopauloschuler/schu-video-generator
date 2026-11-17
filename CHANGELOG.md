@@ -5,10 +5,26 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–372
+## Steps 193–373
 
-### Space scenes (Phase AN, Steps 367–372)
+### Space scenes (Phase AN, Steps 367–373)
 
+- **Phenomena for space scenes** (Step 373): the new module `vidgen/space-phenomena`.
+  `blackHole(renderer, {sky})` is a non-rotating black hole whose light paths are worked out for
+  every pixel: a shadow of the true size, the sky bent round it (an Einstein ring before the
+  Milky Way, stars brighter near it and seen a second time on the far side), a disc of gas whose
+  far side stands over and under the shadow, brighter where it comes toward the camera,
+  white-hot inside and red outside, turning faster inside. `wormhole(renderer, {sky, other})` is
+  a ball that shows another sky, and `passage(camera, progress)` flies through its tunnel of
+  bent light. `warp(renderer)` stretches stars into streaks for a jump driven by a progress from
+  0 to 1 (a flash, a tunnel, brightness pulses from the music; the lens is never zoomed).
+  `asteroids(renderer)` is a field of thousands of seeded, tumbling rocks to fly through or a
+  belt round a world, `asteroid()` one rock for a close-up. `comet(renderer)` has a dust tail
+  and an ion tail that point away from the sun and, with `orbit_data`, grow as the comet nears
+  it. `aurora(world)` lights the polar oval of a world's night side. Every phenomenon has a
+  `quality` and a measured cost a frame (CONFIG `web`, "Phenomena"; on the sheet of
+  `vidgen parts --kind phenomenon`, 12 parts). What is physics and what is a painter's choice
+  is stated in the reference.
 - **Suns and the light of a space scene** (Step 372): the new module `vidgen/space-light`.
   `star(renderer, "sun")` is a star you can look at: cells that boil in place, a limb that darkens
   and reddens, spots and faculae from a seed, a corona with streamers, loops of gas at the limb;

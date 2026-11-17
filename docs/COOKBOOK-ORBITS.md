@@ -183,6 +183,12 @@ prime meridian), each orbit as a polyline and a ship's burns. The numbers are th
   `spaceLight({scene, camera, sun, bodies, sky})` lights every body from where the Sun is, with
   planet-shine, eclipses on request and `falloff: 2` for the true light with distance; call
   `light.update(t)` after `space.update` and the bodies' `update`.
+- **A comet on its orbit** (Step 373; CONFIG `web`, "Phenomena"): with `orbit_data` holding
+  `{preset: halley}`, `comet(renderer, {space, body: "Halley"})` from `vidgen/space-phenomena`
+  stands where the data puts the comet; `comet.update(t)` points its ion tail away from the
+  data's Sun, bends its dust tail behind its motion and grows both as (1 AU / distance)². One
+  unit of the comet is `unit` metres (2e9 by default): head and tails are drawn at a stated
+  size, not to scale; say so in the film's notes.
 - **The real sky behind them** (Step 370; CONFIG `web`, "The sky of a space scene"):
   `spaceSky(renderer, {stars: "real"})` from `vidgen/space-sky` is in the same frame as
   `ctx.orbits`, so a dated scene has the right stars behind its planets (the Earth in June stands

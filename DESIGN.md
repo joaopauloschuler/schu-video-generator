@@ -359,7 +359,8 @@ src/vidgen/
                           # space-sky.js `vidgen/space-sky`: the sky of a space scene, and space-sky-stars.js, its star file,
                           # written by tools/make_star_catalogue.py (§122.6); space-bodies.js `vidgen/space-bodies`: planets,
                           # moons and rings from a seed (§122.7); space-light.js `vidgen/space-light`: stars and the light of a
-                          # space scene (§122.8)
+                          # space scene (§122.8); space-phenomena.js `vidgen/space-phenomena`: black hole, wormhole, warp,
+                          # asteroids, comet, aurora (§122.9)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -26057,7 +26058,7 @@ star catalogue as an option; the spacecraft kit is its own step.
 | 370 | The sky: from a seed (default) or the real bright stars, the Milky Way, nebulae, galaxies (`vidgen/space-sky`) | §122.6 |
 | 371 | Planets, moons and rings from a seed: seven surface types, air, rings, 21 ready-made worlds (`vidgen/space-bodies`) | §122.7 |
 | 372 | Suns and light: stars by temperature, the far sun's glare, one object for a scene's light (planet-shine, ring-shine, eclipses), exposure modes (`vidgen/space-light`) | §122.8 |
-| 373 | Phenomena | |
+| 373 | Phenomena: a black hole that bends the sky, a wormhole, a jump to warp, asteroid fields and belts, comets, an aurora; their measured costs (`vidgen/space-phenomena`) | §122.9 |
 | 374 | Spacecraft kit | |
 | 375 | Space camera moves | |
 | 376 | Space scenes without code (`video.yaml`) | |
@@ -27078,3 +27079,280 @@ wholly and by half, planet-shine against none, an eclipse's shadow, film against
 exposure, the automatic exposure opening, and the Sun of `ctx.orbits` through
 `vidgen/space-scale` with its glare over the night side. Stills:
 `/home/claude/work/scratch/an372/stills/`.
+
+### 122.9 Phenomena: `vidgen/space-phenomena` (Step 373)
+
+**What it is.** Six ready-made phenomena for a space scene, each one call and one `update(t)`:
+`blackHole`, `wormhole`, `warp`, `asteroids` (and `asteroid`, one rock for a close-up), `comet`,
+`aurora`. The module `data/web/modules/space-phenomena.js` (import name `vidgen/space-phenomena`,
+in `VIDGEN_MODULES`; imports `three`, `rng` of `vidgen/music-time` and `blackbody`, `starColor`,
+`starAmplitude` of `vidgen/space-sky`). Everything is a pure function of the time given to
+`update` and of seeds; nothing is kept between frames. Costs were measured first (prototypes of
+each at 1280x720 in software GL) and decided the design: none needed baking beyond a map made
+once, and no phenomenon has a separate cheap stand-in, only `quality: "fast" | "normal" | "fine"`.
+
+**Black hole.** `blackHole(renderer, {sky})` returns `object`, a quad that covers the ball of
+radius `lens` round the hole (the whole frame when the camera is inside it). One unit of the
+object is the horizon's radius (the Schwarzschild radius rs); its y axis is the disc's axis.
+For every pixel the fragment shader steps the light path back from the camera round the hole:
+in the plane of the camera, the hole and the ray, with u = 1 / r in units of rs and the angle φ
+round the hole, a light path obeys u'' = −u + 1.5 u² exactly. The start is the camera's own
+(u₀ = 1 / r₀, u' = −u₀ cot ψ √(1 − u₀) for a camera at rest that sees the ray ψ from the outward
+direction), the impact parameter b = r₀ sin ψ / √(1 − u₀). The steps (`HOLE_STEPS`: 28 / 44 / 88,
+velocity Verlet) are shared out over the angle the path is expected to sweep (ψ plus an estimate
+of the bending from the strong-field and weak-field formulas), so every pixel uses its steps.
+What comes of it:
+
+- **The shadow** is the set of pixels with b under 3√3 / 2 rs (2.598 rs, `SHADOW`): its true
+  apparent size. Its edge is smoothed over the pixel's footprint in b.
+- **The sky** is read from the Step 370 sky in the direction the path leaves in: the faint light
+  from the sky's own cube (`sky.target`, with its gain and turn), the stars as points (below). An
+  Einstein ring appears where the Milky Way stands behind the hole (still 03); the bent picture
+  moves as the camera moves because nothing is baked.
+- **Stars stay points.** A star is too small to be stretched: a lens makes it brighter, not
+  longer. So the hole draws the sky's stars itself, twice: each star's own image pushed outward
+  and its second image on the far side of the hole. Before each draw JavaScript steps 128 paths
+  for the camera's distance (`lensTables`: the same equation, finer) and writes two small float
+  textures: for the angle β between a star and the hole, the impact parameter of each image and
+  the gain in brightness (sin θ dθ / (sin β dβ), held at 24), and for the 128 paths the radius
+  at 64 angles (where a path crosses the disc: the star's light is dimmed by what the disc
+  covers there). Only the stars near enough are drawn (a loop over all of them in JavaScript
+  chooses them: far cheaper than their vertex shader). Third and later images are left out.
+- **The disc** lies in the object's x–z plane between `inner` (3 rs, the innermost stable orbit)
+  and `outer` (14 rs). The path's first two crossings of that plane are found between steps
+  (a cubic through the two steps' values and slopes): the first is the disc seen directly, the
+  second its far side seen over the top of the shadow or under it. Light and cover are composed
+  front to back. The gas's shift g = √(1 − 1.5 / r) / (1 − Ω L) (Ω = √(0.5 / r³), L the ray's
+  angular momentum about the disc's axis: exact for gas on circular orbits and a far camera)
+  makes the side that comes toward the camera brighter and whiter.
+- **The thin ring** of light that went round the hole once more is drawn as a line at 1.012 ×
+  the shadow's radius, never under 1.5 px wide and thinned in light where it would be, brighter
+  on the approaching side (`ring: 0` for none). The true ring is far thinner than a pixel.
+
+*The disc's look* (the part that is a painter's): one temperature per place gives both colour and
+light, so dim gas is red and white gas is bright, never grey: warm = (T(r) / T_max)^1.6 ×
+(0.62 + 0.9 gas) × g^`doppler`, colour = the black-body colour of `temperature` × warm (from
+`heatRamp`, a 64-texel ramp of `blackbody`), light ∝ warm^2.5. T(r) is a thin disc's
+(r^−3/4 (1 − √(inner / r))^1/4, hottest at 1.36 × inner, zero at the inner edge). The exponent
+1.6 (a steeper fall than the true 1) and the temperatures themselves (5,400 K at the hottest
+ring, where real discs are far hotter and blue-white) are stated choices: they give white-hot
+inside and a red glow outside. `doppler` 0.7 softens the shift's effect on brightness (the true
+exponent is 3 to 4 on g; here 2.5 × 0.7). The gas is a map made once from the seed (1024 × 512:
+long streaks, clumps along trailing spiral arms, fine filaments, rings), read at the crossing's
+radius and angle with the map's level chosen from the pixel's size on the disc. It turns faster
+inside (rate ∝ r^−3/2, `speed` radians a second at the inner edge): two copies of the map are
+each sheared for one period and the finished light of one is faded out as the other's fades in,
+so the pattern flows without winding up and the disc's brightness does not breathe (measured:
+the frame's mean within 5 % over a period). The outer edge thins out in wisps.
+
+*Approximations, plainly.* A non-rotating hole (no frame dragging, a round shadow). A camera at
+rest (no aberration or shift from the camera's own motion). Only the sky is bent: other things
+in the scene are drawn as usual, in front of the hole's middle or hidden behind it inside the
+lens. The lens is finite (`lensRadius`: 2.6 Einstein radii for the camera's distance, at least 20
+rs or 1.4 × `outer`, at most 64): between 55 % and 100 % of it the bending is eased out to
+nothing, which shifts the sky there by up to a few degrees and dims stars by up to 30 % in that
+zone. The disc is thin and flat, with no light of its own between crossings and no shadowing of
+itself. The sky's light is not shifted in colour. `sky` may be a plain cube texture (then stars
+are part of the picture and stretch into arcs) or absent (black).
+
+**Wormhole.** `wormhole(renderer, {sky, other})`: a ball of radius 1 (the mouth) that shows
+`other`, a second sky, with ours bent round its rim. The space is an Ellis wormhole's with a
+straight middle: at the distance l along it the tube's radius is 1 for |l| ≤ `length` / 2 and
+√(1 + (|l| − `length` / 2)²) beyond (`wormholeRadius`). A light path keeps b = r sin ψ; along it
+l'' = b² r' / r³ and φ' = b / r², stepped in strides proportional to r (`WORMHOLE_STEPS`: 24 /
+36 / 72), with the straight middle crossed in one stride (the path winds round it evenly: Δφ =
+b Δl / cos, exact) and the flat space outside the lens (6 radii) by a straight line. Paths with
+b < 1 come out on the other side: the whole other sky is seen inside the mouth, upright in the
+middle and wound up endlessly toward the rim; paths with b > 1 come back to our sky, bent. Both
+skies are read from their `background` cube maps (stars as wide as the cube's texels: softer
+than the sky's own points). `rim` adds a thin line of light at the mouth's edge and `glow` a
+faint light on the walls of the straight middle: both are a painter's, not physics.
+`passage(camera, progress, {from})` flies a camera through: at 0 it stands at `from`, at 0.5 in
+the middle of the throat, at 1 as far out on the other side, along the straight line through
+the centre; `progress` is whatever function of time the page gives, so it locks to bars. It
+returns `{l, side, inside}`: when `side` is −1 the camera is under the other sky (the page shows
+that sky's object and hides this side's things). Inside a long wormhole (`length: 30`) the far
+sky is wound into rings round the way out: the tunnel of bent light (still 05). The camera's own
+frame is carried straight through, so the far sky is attached mirrored across the mouth's plane
+(which way round the far sky is, is a convention: there is no other connection to compare with).
+
+**Warp.** `warp(renderer, {seconds, fps})` and `update(t, {progress, camera, intensity})`. Invented,
+not physics. `warpAt(progress)` is the whole script, a pure function: `speed` (0 at rest, running
+away until `WARP_MARKS.enter` 0.14, 1 in the tunnel, braking between 0.84 and 0.96), `travel`
+(its integral, from a table), `flash` (a burst on entering, 0.6 of it on leaving), `tunnel`,
+`sky` (how bright the ordinary sky should be: the page passes it to `sky.set({brightness})`).
+2,600 stars in a tube round the camera fly toward it along `direction` (default where the
+camera looks: the point they stretch from). Each is a streak from where it is to where it was
+`shutter` (4) frames ago (`warpStreak`), so streaks of following frames overlap and nothing
+strobes; a streak keeps a share of its star's light as it grows and has an even brightness with
+soft ends. Stars ahead turn blue, behind red, the more the faster. The tunnel adds soft bands
+on a tube's wall (two scales of a noise map, moving slower than the stars) and a light ahead;
+the flash is a burst of that light and a faint veil, never a white frame. `intensity` (from
+`ctx.music`) scales the light of streaks and tunnel: a pulse of brightness; the camera's lens is
+never touched.
+
+**Asteroids.** `rockShape(seed)` is a rock: a function from a direction to the surface there
+(lumps at three scales, bowls with raised rims in a power law of sizes, one to three facets
+where what sticks out past a plane is pressed nearly flat) and a shade (dark crater floors,
+light rims). `rockGeometry(seed, detail, {smooth})` makes a mesh of it (smooth normals from the
+shape itself, or flat faces). `asteroids(renderer, {layout})` holds thousands: `"field"` (3,000
+in a box of `size` 120, radii 0.15 to 9 by `power` 1.8: many small, few large; with `follow` the
+box repeats round the camera, a rock shrinking to nothing where it would jump sides, so a
+flight never runs out of rocks) or `"belt"` (16,000 on slightly oval, slightly tilted orbits
+between `inner` and `outer`, faster inside by Kepler's third law, with `gaps` cleared lanes and
+a band of dust). Each frame JavaScript places every rock; those larger than 1.7 px in the
+picture are meshes (`shapes` 4 shapes × three levels of detail, instanced, at most `rocks` 800,
+each tumbling at its own rate), all are points that hold the light of their lit face (a sphere's
+phase law) and fade as their mesh grows in. Meshes are `MeshStandardMaterial`, lit by the
+scene's lights: with Step 372's one sun and no ambient light a rock has a hard terminator and a
+black night side. Rocks cast no shadows on each other. `asteroid({seed})` is one rock of 65,000
+faces for a close-up that casts and takes shadows (`spaceLight({shadows})`: its craters then
+shadow themselves). `glint` (a belt's default 0.5) draws far rocks brighter than their size
+gives, or a belt seen from afar would be black: a stated choice. A belt's sizes are not to scale.
+
+**Comet.** `comet(renderer)`: a dark nucleus (a rock of albedo 0.04 that turns), jets from spots
+that turn with it and shine only while they face the sun, a head (bright in the middle, tight on
+the sunward side, a faint shell), a dust tail and an ion tail. `cometFrame(toSun, velocity)`
+gives the two directions: `away` from the sun (the ion tail's straight line) and `lag`, square
+to it and against the motion (the side the dust tail bends to, by `curve` × s^1.7 along its
+length). The tails are ribbons along those curves that always face the camera, with their
+structure drawn in the fragment shader (dust: a broad fan, sharp on the leading edge, soft on
+the lagging one, faint bands; ions: five thin rays with knots that drift outward); seen
+end-on a tail thins away. `update(t, {sun, velocity, activity})` sets them by hand; with
+`{space, body: "Halley"}` (orbit data, Step 367) place, sun and motion come from `ctx.orbits`
+and `activity` = `cometActivity(distance)` = (1 AU / r)², nothing under 0.1, held at 1.6: the
+tails grow as the comet nears the sun (tail lengths ∝ √activity, light ∝ activity). One unit of
+the object is the head's size; with `space` it is `unit` metres (2 × 10⁹: head and tails are
+drawn at a stated size, far larger than a nucleus and far smaller than the orbit). Seen from
+inside the head, head and tails fade (their glow is all round the camera there).
+
+**Aurora.** `aurora(body)` adds four thin shells over a world of `vidgen/space-bodies` (heights
+0.016 to 0.052 radii × `height`: taller than true, so the curtains read from orbit), each a
+narrow strip of a sphere round a magnetic pole. The light is an oval `latitude` 68° from a magnetic pole that stands `offset` 9°
+off the pole of turning, wandering by ±2.5°, broken into folds and fine rays from a noise map
+that drifts; green below, red above; full on the night side, `day` 0.12 of it on the day side;
+brighter where the eye looks along the sheet (at the limb). It turns with the ground
+(`body.spinner`) and reads the sun from `body.sun`.
+
+**Order and depth.** Hole and wormhole are drawn after the sky and before everything else
+(`renderOrder` −900), test depth at their middle's distance and write none: a thing in front of
+the middle covers them, a thing behind it inside the lens is covered. The warp belongs to the
+sky's pass (`frustumCulled = false`; its flash has `userData.overlay`). Rocks' points, tails,
+head and curtains are additive and test depth. In `vidgen/space-scale`'s slices every object
+has a bounding sphere of its true reach.
+
+**The sun's glare.** A rock or a comet's nucleus hides the glare of a Step 372 star when it is
+named: `sun.occluders = [...sun.occluders, rock]` (`rock.object`'s scale is taken as the radius
+of a ball; checked: the glare's share goes from 1 to 0 behind an `asteroid`). The instanced rocks
+of a field do not hide it.
+
+**Measured** (2 cores, SwiftShader, 1280x720, with the sky and three-finish with a bloom, which
+alone cost 0.27 to 0.29 s a frame; three frames averaged, and the machine's own spread is about
+0.15 s on a one-second frame):
+
+| Shot | s a frame | of that the phenomenon | To make (about) |
+|---|---|---|---|
+| Black hole filling the frame, `normal` | 1.0 – 1.25 | 0.75 – 0.9 | 1.5 s (the gas map) |
+| the same, `fast` / `fine` | 1.06 / 1.30 – 1.44 | about 0.2 less / 0.2 – 0.4 more | |
+| the same from above the disc | 1.02 – 1.08 | 0.75 | |
+| Black hole without a disc | 0.56 – 0.60 | 0.3 | |
+| Wormhole from outside / inside the tunnel | 0.74 / 0.73 | 0.45 | 7 s (the second sky and both skies' cube pictures) |
+| Warp, in the tunnel | 0.38 | 0.1 | 0.2 s |
+| Asteroid field (3,000 rocks, 760 as meshes) | 0.33 | 0.05 (a frame full of large near rocks was not measured) | 0.3 s |
+| Belt of 16,000 round a world | 0.30 | 0.05 or less (the rest is the world) | 0.3 s |
+| One asteroid close up, shadow map 2048 | 0.36 | 0.1 | 2 s (65,000 faces) |
+| Comet, far / at the nucleus | 0.23 – 0.25 / 0.35 | 0.05 / 0.1 (the sparse sky alone 0.19) | 0.5 s |
+| Aurora on an Earth-like world | 0.48 – 0.59 | 0.1 – 0.2 (the world alone 0.38 – 0.41) | 0.2 s |
+
+The films so far ran at 0.75 to 1.2 s a frame in all. So every phenomenon is affordable as a
+shot of a three-minute film; a black hole that fills the frame is the dearest and costs about
+what a whole frame of those films did (a 20-second shot at 30 fps: 10 to 12 minutes; three
+minutes of it alone: about 1.7 hours). Make it smaller in the frame, choose `quality: "fast"`, or
+draw the scene at `Finish`'s `renderScale` 0.75 where time is short. The star points now cost
+less than the machine's spread; before only the near stars were drawn they cost 0.2 to 0.4 s.
+The aurora first covered a whole cap round each pole and cost 0.25 to 0.3 s; it is drawn on
+narrow strips round the magnetic poles.
+
+**Steadiness.** One clip (640x360, 30 fps, 5.5 s; 73 s to render): 2.5 s of the black hole with
+the camera going round it at 5° a second while the gas flows, and a 3 s jump to warp.
+`vidgen motion check`: 0 errors. The black hole has no finding of its own (the frame's mean
+moves by at most 0.005 from frame to frame). The jump has one warning, `shimmer`, over its
+tunnel ("the median star's brightness jumps by 31 %"): the check finds a star again within 4 px
+of where it was, and a warp's streaks move far more than that every frame; the frame's mean
+shows no strobing (the largest step is the entering flash's rise over five frames). It is the
+streaks' motion read as stars, not aliasing, and is expected of any warp shot.
+
+**Found on the way.** The loop of 44 steps is about half of the hole's cost (9 ms a step at
+720p). A sky's stars read from a cube map are blobs that a lens stretches into
+arcs and thins: inside the lens the sky looked emptier than outside and its edge showed; hence
+the lensed points. Blending two sheared copies of the gas map before the non-linear steps made
+the disc's light breathe with the period (the frame's mean rose by a third at mid-blend): the
+finished light is blended instead. Pixels per radius are not constant across a frame (b follows
+the sine of the angle from the hole, the picture its tangent): a lens of 21 rs seen from 34 rs
+covers a whole 16:9 frame through a 40° lens. Giving a jet's uniforms the tails' shared vector
+objects pointed every tail along the last jet. A backtick in a GLSL comment inside a template
+string ends the string. The sky of seed 4 has a straight dark edge in one place
+(seen at the top right from (30, 4.5, −24) looking at the origin, with and without the
+hole): a seam of the Step 370 sky, not of this module; recorded for Step 378.
+
+**Parts** (`data/web/parts/space-phenomena.js`, kind `phenomenon`, 12): `black-hole`,
+`black-hole-from-above`, `einstein-ring`, `wormhole`, `wormhole-tunnel`, `warp-streaks`,
+`warp-tunnel`, `asteroid-field`, `asteroid-belt`, `asteroid`, `comet`, `aurora`; the labels
+carry the measured cost ("+0.7 to 0.9 s a frame"). The twelve tiles take 21 to 27 s.
+
+**Public interface.** `blackHole(renderer, options)` → `BlackHole` (`object`, `update(t)`,
+`set(options)`, `options`, `uniforms`, `lens`, `dispose()`; options `sky`, `disc`, `inner`,
+`outer`, `temperature`, `tint`, `brightness`, `doppler`, `opacity`, `speed`, `ring`, `tilt`,
+`lens`, `stars`, `seed`, `quality`, `skyGain`). `wormhole(renderer, options)` → `Wormhole`
+(`object`, `passage(camera, progress, {from, look})`, `release()`, `state`, `dispose()`; options
+`sky`, `other`, `length`, `rim`, `rimColor`, `glow`, `lens`, `quality`, `skyGain`, `otherGain`).
+`warp(renderer, options)` → `Warp` (`object`, `update(t, {progress, camera, direction,
+intensity})`, `state`, `dispose()`; options `seed`, `count`, `depth`, `radius`, `speed`,
+`seconds`, `fps`, `shutter`, `tunnel`, `flash`, `color`, `ahead`, `behind`, `quality`).
+`asteroids(renderer, options)` → `Asteroids` (`object`, `update(t, {camera, sun})`, `place(i, t,
+eye)`, `count`, `shown`, `dispose()`; options `layout`, `seed`, `count`, `size`, `least`, `most`,
+`power`, `shapes`, `rocks`, `follow`, `tumble`, `glint`, `color`, `variety`, `albedo`,
+`brightness`, `dust`, `inner`, `outer`, `thickness`, `rate`, `gaps`, `eccentricity`, `light`,
+`sun`, `quality`). `asteroid(options)` → `Asteroid` (`object`, `update(t)`, `dispose()`; `seed`,
+`detail`, `craters`, `color`, `roughness`, `spin`, `axis`). `comet(renderer, options)` → `Comet`
+(`object`, `update(t, {sun, velocity, activity})`, `nucleus`, `state`, `dispose()`; `seed`,
+`nucleus`, `coma`, `dust`, `ion`, `jets`, `length`, `ionLength`, `curve`, `activity`,
+`dustColor`, `ionColor`, `comaColor`, `spin`, `space`, `body`, `orbits`, `unit`, `reference`,
+`quality`). `aurora(body, options)` → `Aurora` (`object`, `update(t, {sun})`, `dispose()`;
+`seed`, `latitude`, `width`, `offset`, `height`, `brightness`, `speed`, `color`, `top`, `poles`,
+`day`). Pure helpers (tested in Node): `deflection`, `lightPath`, `lensTables`, `lensRadius`,
+`discShift`, `discTemperature`, `heatRamp`, `wormholeRadius`, `wormholePath`, `warpSpeed`,
+`warpAt`, `warpStreak`, `rockShape`, `rockGeometry`, `rockRadius`, `phaseOfSphere`,
+`beltDensity`, `cometActivity`, `cometFrame`; constants `SHADOW`, `HOLE_STEPS`, `HOLE_DEFAULTS`,
+`WORMHOLE_STEPS`, `WORMHOLE_DEFAULTS`, `WARP_DEFAULTS`, `WARP_MARKS`, `ASTEROID_DEFAULTS`,
+`ASTEROIDS_DEFAULTS`, `COMET_DEFAULTS`, `AURORA_DEFAULTS`, `QUALITIES`, `VERSION`. A misspelt
+option stops with the closest known one. The hole reads `sky.target`, `sky.stars`,
+`sky.starUniforms`, `sky.skyMaterial` and `sky.options` of a `SpaceSky`; the aurora reads
+`body.spinner` and `body.sun` of a `Body`.
+
+**Earlier modules.** None changed: `web/loaded.py` gained the name in `VIDGEN_MODULES`, nothing
+else. No cache key of an existing page changes (the import map is in no key; `engine_id` and
+`runtime.js` are untouched).
+
+**Limits.** Beyond the approximations above: hole and wormhole bend only the sky, one of them at
+a time (two lenses that overlap each draw the unbent sky inside themselves). No rotating hole,
+no jet, no thick disc. An orthographic camera is not supported. The wormhole's skies are cube
+pictures (soft stars). A belt's rocks do not collide or clump, and the world's shadow does not
+fall on the belt. Rocks cast no shadows on each other; a field's meshes do not hide the sun's
+glare. A comet's tails are flat ribbons toward the camera, so a tail pointing at the camera
+thins away, and tails cast no shadow. The aurora's shells show as separate layers very close to
+the limb. On the canvas without `vidgen/three-finish`, light that adds up is only roughly right.
+
+**Tests** (`tests/test_web_space_phenomena.py`): served by its import name with its three
+imports; the 12 parts and the costs in their labels; in Node: the bending of light (Einstein's
+2 rs / b far out, growing without end toward the shadow), the star tables (the ring's radius
+√(2 D), gains, monotone), the disc's shift and temperature, the heat ramp, wormhole paths
+(through for b < 1, back for b > 1, straight far out, the middle's winding exactly), the jump's
+script (pure, monotone travel, flash, sky; a streak at least a frame's flight), rocks from a
+seed, sizes, the phase law, a belt's lanes, a comet's activity and frame, errors; `slow`: in
+Chromium a hole's shadow, its disc beside, over and under it, the brighter approaching side,
+the same frame twice, gas that moves with steady light, the sky bent inside a lens of 12 rs and
+identical outside it; a wormhole's other sky, a camera in the throat and out on the far side;
+a jump at rest and in the tunnel; rocks as meshes, the same twice; a comet's tails on the side
+away from the sun, one blue, one yellowish, the dust behind the motion; an aurora's green on
+the night side. Stills: `/home/claude/work/scratch/an373/stills/`.
