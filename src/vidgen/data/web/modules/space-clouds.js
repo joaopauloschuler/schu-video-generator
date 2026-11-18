@@ -67,6 +67,25 @@ function seeded(seed) {
   return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
+// ---------- the broad weather: gradient noise on an endless lattice (pure; the shader's own arithmetic) ----------
+/** The hash of a lattice point (two integers) and a seed: an unsigned 32-bit integer (wrapping products and shifts only). */
+export function broadHash(ix, iz, seed) {
+  let h = Math.imul(ix | 0, 0x9E3779B1) ^ Math.imul(iz | 0, 0x85EBCA77) ^ Math.imul(seed | 0, 0xC2B2AE3D);
+  h ^= h >>> 15; h = Math.imul(h, 0x2C1B3C6D); h ^= h >>> 12; h = Math.imul(h, 0x297A2D39); h ^= h >>> 15;
+  return h >>> 0;
+}
+/** Gradient noise at (qx, qz), one lattice cell a unit, about -1 to 1; it never repeats (the lattice has no period). */
+export function broadNoise(qx, qz, seed) {
+  const cx = Math.floor(qx), cz = Math.floor(qz), fx = qx - cx, fz = qz - cz, g = (i, j) => { const a = ((broadHash(i, j, seed) & 15) + 0.5) * Math.PI / 8; return [Math.cos(a), Math.sin(a)]; };
+  const a = g(cx, cz), b = g(cx + 1, cz), c = g(cx, cz + 1), d = g(cx + 1, cz + 1);
+  const va = a[0] * fx + a[1] * fz, vb = b[0] * (fx - 1) + b[1] * fz, vc = c[0] * fx + c[1] * (fz - 1), vd = d[0] * (fx - 1) + d[1] * (fz - 1);
+  const ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10), uz = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
+  return Math.SQRT2 * (va + ux * (vb - va) + uz * (vc - va) + ux * uz * (va - vb - vc + vd));
+}
+/** The sizes of the broad weather's octaves, in deck sizes (the last about the tile's own repeat, so its rhythm
+ * never shows), their weights, and the reach round the place where it is drawn to nothing (in the second's sizes). */
+export const FRONTS = Object.freeze({sizes: Object.freeze([40, 15, 5]), weights: Object.freeze([0.7, 0.45, 0.35]), middle: 0.5});
+
 // ---------- the noise tile: one small picture that repeats, read at many sizes (pure) ----------
 function cellHash(x, y, period, salt) {
   x = ((x % period) + period) % period; y = ((y % period) + period) % period;
@@ -159,11 +178,11 @@ export function deckHorizon(radius, height, deck) {
  * `cumulus`: a low broken field, flat bases, heaped tops. `stratus`: a closed deck with a rolling top: a cloud
  * sea from above, an overcast from below. `cirrus`: thin high streaks of ice drawn out along the wind. */
 export const DECKS = Object.freeze({
-  cumulus: {base: 1000, top: 2100, cover: 0.4, size: 2400, stretch: 1, density: 0.006, weather: 0.35, rise: 1.1, floor: 0, soft: 0.035, fray: 0.13, ragged: 0.04, puff: 0.45, color: [0.93, 0.93, 0.93]},
-  stratus: {base: 1800, top: 3000, cover: 1, size: 3200, stretch: 1.4, density: 0.008, weather: 0.35, rise: 0.36, floor: 0.4, soft: 0.05, fray: 0.07, ragged: 0.25, puff: 0.6, color: [0.93, 0.93, 0.93]},
-  cirrus: {base: 9500, top: 10100, cover: 0.5, size: 9000, stretch: 5, density: 0.0006, weather: 0.4, rise: 0, floor: 1.2, soft: 0.3, fray: 0.12, ragged: 0, puff: 0.1, color: [0.95, 0.95, 0.97]},
+  cumulus: {base: 1000, top: 2100, cover: 0.4, size: 2400, stretch: 1, density: 0.006, weather: 0.35, fronts: 0.8, rise: 1.1, floor: 0, soft: 0.035, fray: 0.13, ragged: 0.04, puff: 0.45, color: [0.93, 0.93, 0.93]},
+  stratus: {base: 1800, top: 3000, cover: 1, size: 3200, stretch: 1.4, density: 0.008, weather: 0.35, fronts: 0.8, rise: 0.36, floor: 0.4, soft: 0.05, fray: 0.07, ragged: 0.25, puff: 0.6, color: [0.93, 0.93, 0.93]},
+  cirrus: {base: 9500, top: 10100, cover: 0.5, size: 9000, stretch: 5, density: 0.0006, weather: 0.4, fronts: 0.8, rise: 0, floor: 1.2, soft: 0.3, fray: 0.12, ragged: 0, puff: 0.1, color: [0.95, 0.95, 0.97]},
 });
-const DECK_OPTIONS = ["type", "base", "top", "cover", "size", "stretch", "density", "weather", "rise", "floor", "soft", "fray", "ragged", "puff", "color", "beyond", "stripes", "name"];
+const DECK_OPTIONS = ["type", "base", "top", "cover", "size", "stretch", "density", "weather", "fronts", "rise", "floor", "soft", "fray", "ragged", "puff", "color", "beyond", "stripes", "name"];
 /** A deck in full: `what` a name of DECKS or {type, base, top, cover, ...}; `extra` over it. Pure. */
 export function deckOf(what = "cumulus", extra = {}) {
   let base = what;
@@ -178,7 +197,7 @@ export function deckOf(what = "cumulus", extra = {}) {
   // a deck moved by its base alone keeps its depth
   if (given.base !== undefined && given.top === undefined) o.top = o.base + DECKS[type].top - DECKS[type].base;
   number("base (metres)", o.base, 0, 1e7); number("top (metres)", o.top, o.base + 1, 1e7); number("cover", o.cover, 0, 1); number("size (metres)", o.size, 10, 1e7);
-  number("stretch", o.stretch, 0.2, 20); number("density (a metre)", o.density, 1e-8, 1); number("weather", o.weather, 0, 1); number("rise", o.rise, 0, 50); number("floor", o.floor, 0, 2);
+  number("stretch", o.stretch, 0.2, 20); number("density (a metre)", o.density, 1e-8, 1); number("weather", o.weather, 0, 1); number("fronts", o.fronts, 0, 3); number("rise", o.rise, 0, 50); number("floor", o.floor, 0, 2);
   number("soft", o.soft, 0.005, 1); number("fray", o.fray, 0, 1); number("ragged", o.ragged, 0, 0.9); number("puff", o.puff, 0, 1);
   let beyond = null;
   if (o.beyond !== undefined && o.beyond !== null) {
@@ -250,13 +269,22 @@ export function deckField(d, {seed = 1, wind = 12, direction = 70, index = 0} = 
   };
   const reads = [reading(deck.size * 31, 0.4 + 0.3 * rand(), 1, 0.9), reading(deck.size * 12.7, 1.3 + 0.4 * rand(), 1, 0.75), reading(deck.size * 4, 0.06 * (rand() - 0.5), deck.stretch, 1), reading(deck.size * 0.9, 0.5, Math.sqrt(deck.stretch), 1.2)];
   const read = (r, x, z, t) => { const px = x - r.drift[0] * t, pz = z - r.drift[1] * t; return tile.at(r.u[0] * px + r.u[1] * pz + r.at[0], r.v[0] * px + r.v[1] * pz + r.at[1]); };
-  const valueAt = (x, z, t = 0) => {
+  // the broad weather: two octaves of endless noise tens of km across (drawn last, so the tile's readings keep the seed's numbers)
+  const fronts = FRONTS.sizes.map((k, j) => ({...reading(deck.size * k, 2 * Math.PI * rand(), 1.6, 0.6), seed: (((seed * 7919 + index * 104729) & 0xffffff) + j * 7919) & 0xffffff}));
+  const sum = (x, z, t) => fronts.reduce((acc, r, j) => { const px = x - r.drift[0] * t, pz = z - r.drift[1] * t;
+    return acc + FRONTS.weights[j] * broadNoise(r.u[0] * px + r.u[1] * pz + r.at[0] * 1000, r.v[0] * px + r.v[1] * pz + r.at[1] * 1000, r.seed); }, 0);
+  // round the place (the origin) the broad weather is drawn to nothing, so the cover asked for is the cover seen there
+  const middle = sum(0, 0, 0), reach = 1 / (deck.size * FRONTS.sizes[1] * FRONTS.middle) ** 2;
+  const broad = (x, z, t) => sum(x, z, t) - middle * Math.exp(-(x * x + z * z) * reach);
+  const local = (x, z, t) => {
     const weather = 0.5 * (read(reads[0], x, z, t)[0] + read(reads[1], x, z, t)[3]), c = read(reads[2], x, z, t);
     return (c[0] * (1 - deck.puff) + c[1] * deck.puff) * (1 - deck.weather) + weather * deck.weather;
   };
-  const values = Array.from({length: 4096}, (_, k) => valueAt((part(k * 0.6180339887) - 0.5) * deck.size * 900, (part(k * 0.7548776662) - 0.5) * deck.size * 900)).sort((p, q) => p - q);
+  const valueAt = (x, z, t = 0) => local(x, z, t) + (deck.fronts > 0 ? deck.weather * deck.fronts * broad(x, z, t) : 0);
+  // the level and the span from the deck's own pattern: where the broad weather is nothing, the cover is the one asked for
+  const values = Array.from({length: 4096}, (_, k) => local((part(k * 0.6180339887) - 0.5) * deck.size * 900, (part(k * 0.7548776662) - 0.5) * deck.size * 900, 0)).sort((p, q) => p - q);
   const level = deck.cover >= 1 ? values[0] - 0.06 : deck.cover <= 0 ? values[values.length - 1] + 0.06 : values[Math.floor((1 - deck.cover) * values.length)];
-  return Object.freeze({...deck, reads: Object.freeze(reads), depth: deck.top - deck.base, level, span: Math.max(values[Math.floor(0.985 * values.length)] - level, 0.02),
+  return Object.freeze({...deck, reads: Object.freeze(reads), broad: Object.freeze(fronts.map((r) => Object.freeze(r))), middle, reach, broadAt: broad, depth: deck.top - deck.base, level, span: Math.max(values[Math.floor(0.985 * values.length)] - level, 0.02),
     valueAt, coverAt: (x, z, t = 0) => smooth(0, deck.soft, valueAt(x, z, t) - level)});
 }
 
@@ -344,9 +372,9 @@ export function giantSky(world = "jupiter", {latitude = 22, scale = 27000, radiu
   const zone = lin(pal.zones[0]), oval = lin(pal.oval), h = (x) => x * scale, size = GIANT.size * scale;
   return {band, next, floor: mean.map((x) => x * 0.03), wind: 90, direction: 90,
     decks: [
-      {type: "stratus", name: "deep", base: h(GIANT.deep[0]), top: h(GIANT.deep[1]), cover: 0.8, size: size * 1.6, stretch: 5, density: 10 / (h(GIANT.deep[1]) - h(GIANT.deep[0])), color: light(mean, 0.5)},
-      {type: "stratus", name: "main", base: h(GIANT.main[0]), top: h(GIANT.main[1]), cover: 0.78, size, stretch: 4, density: 9 / (h(GIANT.main[1]) - h(GIANT.main[0])), weather: 0.4, fray: 0.12, color: light(band, 1.05), stripes},
-      {type: "cirrus", name: "haze", base: h(GIANT.haze[0]), top: h(GIANT.haze[1]), cover: 0.5, size: size * 3, stretch: 6, density: 0.3 / (h(GIANT.haze[1]) - h(GIANT.haze[0])), color: light(zone.map((x, i) => 0.5 * (x + oval[i])), 1)},
+      {type: "stratus", name: "deep", base: h(GIANT.deep[0]), top: h(GIANT.deep[1]), cover: 0.8, size: size * 1.6, stretch: 5, fronts: 0, density: 10 / (h(GIANT.deep[1]) - h(GIANT.deep[0])), color: light(mean, 0.5)},
+      {type: "stratus", name: "main", base: h(GIANT.main[0]), top: h(GIANT.main[1]), cover: 0.78, size, stretch: 4, fronts: 0, density: 9 / (h(GIANT.main[1]) - h(GIANT.main[0])), weather: 0.4, fray: 0.12, color: light(band, 1.05), stripes},
+      {type: "cirrus", name: "haze", base: h(GIANT.haze[0]), top: h(GIANT.haze[1]), cover: 0.5, size: size * 3, stretch: 6, fronts: 0, density: 0.3 / (h(GIANT.haze[1]) - h(GIANT.haze[0])), color: light(zone.map((x, i) => 0.5 * (x + oval[i])), 1)},
     ],
     towers: {count: towers, spread: 7 * scale, radius: 0.12 * scale, base: h(GIANT.towers[0]), top: h(GIANT.towers[1]), anvil: 2.4, density: 4 / (0.12 * scale), color: light(oval, 0.95)}};
 }
@@ -377,17 +405,41 @@ void main() {
  * `shade`) read it: `float cloudShade(vec2 p, float height)`: the share of the sun's light that reaches the
  * place `p` (metres from the camera along the scene's +x and +z) at `height` metres through the decks above. */
 const FIELD_GLSL = /* glsl */`
+#define NB ${FRONTS.sizes.length}
 uniform sampler2D uCloudNoise;
 uniform vec4 uDeckA[ND];      // base (m), depth (m), the share of light a metre takes, the pattern's level where cloud begins
 uniform vec4 uDeckB[ND];      // rise, floor, soft, fray
 uniform vec4 uDeckC[ND];      // ragged, the weather's share, the puffs' share, 1: it casts a shadow
 uniform vec4 uDeckR[ND * 8];  // four readings of the tile a deck: two rows of each one's place (x, y, the camera's offset, texels a metre)
+uniform vec4 uDeckF[ND * NB];  // the broad weather's octaves a deck: the matrix from metres to lattice cells (u.x, u.y, v.x, v.y)
+uniform vec4 uDeckO[ND * NB];  // and the camera's place in them: the share of its cell, the whole cells
+uniform vec4 uDeckG[ND];      // the broad weather's strength (fronts), its first octave's seed (the next: + 7919 each), (free), its value at the place (drawn to nothing round it)
+uniform vec4 uDeckH[ND];      // the camera's place (m along +x and +z from the place), one over the square of the reach of that
 uniform vec4 uCloudSun;       // the sun's direction along +x and +z, its sine and cosine over the level
 vec4 cloudRead(int r, vec2 p, float foot) {
   vec4 A = uDeckR[r], B = uDeckR[r + 1];
   return textureLod(uCloudNoise, vec2(dot(A.xy, p) + A.z, dot(B.xy, p) + B.z), log2(max(foot * A.w, 1.0)));
 }
-float cloudWeather(int i, vec2 p, float foot) { return 0.5 * (cloudRead(i * 8, p, foot).r + cloudRead(i * 8 + 2, p, foot).a); }
+uint cloudHash(ivec2 c, uint s) {
+  uint h = (uint(c.x) * 0x9E3779B1u) ^ (uint(c.y) * 0x85EBCA77u) ^ (s * 0xC2B2AE3Du);
+  h ^= h >> 15; h *= 0x2C1B3C6Du; h ^= h >> 12; h *= 0x297A2D39u; h ^= h >> 15;
+  return h;
+}
+vec2 cloudGrad(ivec2 c, uint s) { float a = (float(cloudHash(c, s) & 15u) + 0.5) * 0.39269908; return vec2(cos(a), sin(a)); }
+float cloudBroad(int i, vec2 p) {
+  float sum = 0.0;
+  for (int k = 0; k < NB; k++) {
+    vec4 M = uDeckF[i * NB + k], O = uDeckO[i * NB + k];
+    vec2 q = vec2(dot(M.xy, p), dot(M.zw, p)) + O.xy, c = floor(q), f = q - c; ivec2 ic = ivec2(c) + ivec2(O.zw); uint sd = (uint(uDeckG[i].y) + uint(k) * 7919u) & 0xffffffu;
+    vec2 g = f - 1.0;
+    float va = dot(cloudGrad(ic, sd), f), vb = dot(cloudGrad(ic + ivec2(1, 0), sd), vec2(g.x, f.y)), vc = dot(cloudGrad(ic + ivec2(0, 1), sd), vec2(f.x, g.y)), vd = dot(cloudGrad(ic + ivec2(1, 1), sd), g);
+    vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    sum += (k == 0 ? ${FRONTS.weights[0].toFixed(3)} : k == 1 ? ${FRONTS.weights[1].toFixed(3)} : ${FRONTS.weights[2].toFixed(3)}) * 1.41421356 * (va + u.x * (vb - va) + u.y * (vc - va) + u.x * u.y * (va - vb - vc + vd));
+  }
+  vec2 w = p + uDeckH[i].xy;
+  return sum - uDeckG[i].w * exp(-dot(w, w) * uDeckH[i].z);
+}
+float cloudWeather(int i, vec2 p, float foot) { return 0.5 * (cloudRead(i * 8, p, foot).r + cloudRead(i * 8 + 2, p, foot).a) + (uDeckG[i].x > 0.0 ? uDeckG[i].x * cloudBroad(i, p) : 0.0); }
 // how far the pattern stands over the level where cloud begins (x), and the puffs there (y)
 vec2 cloudLevel(int i, vec2 p, float foot, float weather) {
   vec4 c = cloudRead(i * 8 + 4, p, foot);
@@ -769,7 +821,9 @@ export class Clouds {
     // what the decks' pattern needs: the clouds' own shader's and a shadow's on something else
     this.fieldUniforms = {uCloudNoise: {value: this.noise}, uCloudSun: {value: v4()},
       uDeckA: {value: this.decks.map((d) => new THREE.Vector4(d.base, d.depth, d.density, d.level))}, uDeckB: {value: this.decks.map((d) => new THREE.Vector4(d.rise / d.span, d.floor, d.soft, d.fray))},
-      uDeckC: {value: this.decks.map((d) => new THREE.Vector4(d.ragged, d.weather, d.puff, d.density * d.depth > 1 ? 1 : 0))}, uDeckR: {value: Array.from({length: nd * 8}, v4)}};
+      uDeckC: {value: this.decks.map((d) => new THREE.Vector4(d.ragged, d.weather, d.puff, d.density * d.depth > 1 ? 1 : 0))}, uDeckR: {value: Array.from({length: nd * 8}, v4)},
+      uDeckF: {value: this.decks.flatMap((d) => d.broad.map((r) => new THREE.Vector4(r.u[0], r.u[1], r.v[0], r.v[1])))}, uDeckO: {value: Array.from({length: nd * FRONTS.sizes.length}, v4)},
+      uDeckG: {value: this.decks.map((d) => new THREE.Vector4(d.fronts, d.broad[0].seed, 0, d.middle))}, uDeckH: {value: this.decks.map((d) => new THREE.Vector4(0, 0, d.reach, 0))}};
     this.uniforms = {...sky.uniforms, ...this.fieldUniforms, uCloudGeo: {value: new THREE.Vector4(sky.model.radius, 10, sky.options.unit, 0.002)},
       uCloudFloor: {value: new THREE.Vector4(...(floor ?? [0, 0, 0]), floor ? 1 : 0)}, uCloudE1: {value: this.frame.e1}, uCloudE2: {value: this.frame.e2},
       uCloudView: {value: new THREE.Matrix4()}, uCloudWind: {value: new THREE.Vector2(Math.sin(o.direction * RAD), -Math.cos(o.direction * RAD))}, uCloudProj: {value: v4()},
@@ -851,6 +905,11 @@ export class Clouds {
       u.uDeckR.value[i * 8 + k * 2].set(rd.u[0], rd.u[1], part(rd.u[0] * px + rd.u[1] * pz + rd.at[0]), rd.texels);
       u.uDeckR.value[i * 8 + k * 2 + 1].set(rd.v[0], rd.v[1], part(rd.v[0] * px + rd.v[1] * pz + rd.at[1]), 0);
     }));
+    this.decks.forEach((deck, i) => deck.broad.forEach((rd, k) => {
+      const px = x - rd.drift[0] * t, pz = z - rd.drift[1] * t, qx = rd.u[0] * px + rd.u[1] * pz + rd.at[0] * 1000, qz = rd.v[0] * px + rd.v[1] * pz + rd.at[1] * 1000;
+      u.uDeckO.value[i * FRONTS.sizes.length + k].set(part(qx), part(qz), Math.floor(qx), Math.floor(qz));
+    }));
+    for (const v of u.uDeckH.value) { v.x = x; v.y = z; }
     this.decks.forEach((deck, i) => { if (deck.stripes) u.uDeckStripe.value[i].set(0, -1 / deck.stripes.span, -z / deck.stripes.span, 1); });
     // a deck's second colour: north is towards -z, so the distance north of the origin is -z
     this.decks.forEach((deck, i) => { if (deck.beyond) u.uDeckEdge.value[i].set(0, -Math.sign(deck.beyond.at || 1), (Math.abs(deck.beyond.at) - Math.sign(deck.beyond.at || 1) * -z) / deck.beyond.width, 1 / deck.beyond.width); else u.uDeckEdge.value[i].set(0, 0, 1e9, 0); });

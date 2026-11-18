@@ -85,7 +85,7 @@ const mono = (v) => v.every((x, i) => i === 0 || x >= v[i - 1] - 1e-12), step = 
 out.push({inRange: hs.every((h) => ds.every((d) => { const w = D.globeWeight(h, d, H); return w >= 0 && w <= 1; })),
   byDistance: [3e3, 8e3, 14e3, 1e5].every((h) => mono(ds.map((d) => D.globeWeight(h, d, H)))), byHeight: [2e4, 5e4, 2e6].every((d) => mono(hs.map((h) => D.globeWeight(h, d, H)))),
   step: Math.max(step(hs.map((h) => D.globeWeight(h, 1e9, H))), step(hs.map((h) => D.globeWeight(h, h, H)))),
-  ends: [D.globeWeight(2000, 1e9, H), D.globeWeight(1e5, 1e5, H), D.globeWeight(14e3, 80e3, H), D.globeWeight(14e3, 14e3, H)], high: [D.globeWeight(50e3, 1e9, D.HANDOVERS.high), D.globeWeight(7e5, 7e5, D.HANDOVERS.high)]});
+  ends: [D.globeWeight(2000, 1e9, H), D.globeWeight(4e5, 4e5, H), D.globeWeight(8e4, 4e5, H), D.globeWeight(5e4, 5e4, H)], high: [D.globeWeight(50e3, 1e9, D.HANDOVERS.high), D.globeWeight(7e5, 7e5, D.HANDOVERS.high)]});
 out.push({names: [400e3, 30e3, 5e3, 2000, 10].map((h) => D.stageOf(h, H).name), drawn: [400e3, 30e3, 2000].map((h) => [D.stageOf(h, H).globe, D.stageOf(h, H).local]),
   mars: [700e3, 200e3, 50e3].map((h) => D.stageOf(h, D.HANDOVERS.high).name), stages: D.STAGES});
 const R = 6.371e6, t = D.globeTurn([8, -150]), dotp = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -116,7 +116,7 @@ out.push({option: err(() => D.resolveWorld({see: true})), handover: err(() => D.
     assert np.allclose(geo["ortho"], [0, 0, 0, 1, 1, 1], atol=1e-12) and np.allclose(geo["north"], [0, 1, 0], atol=1e-12)
     assert np.allclose(geo["sun"], [[0, 1, 0], [0, 1, 0], [1, 0, 0]], atol=1e-12)
     assert options["mars"] == ["mars", [-8, 40], "mars", [150e3, 600e3], "mars", None, None]                    # the ground's own planet, place and air; bare ground hands over high
-    assert options["sea"] == ["earth", "earth", [20e3, 80e3], {}, {"sky": "fair"}, None] and options["own"] == {"near": [5e3, 5e4], "height": [1e3, 2e4]}
+    assert options["sea"] == ["earth", "earth", [60e3, 400e3], {}, {"sky": "fair"}, None] and options["own"] == {"near": [5e3, 5e4], "height": [1e3, 2e4]}
     assert fall["top"] == pytest.approx(400e3, rel=1e-6) and fall["bottom"] == pytest.approx(300, rel=1e-6) and fall["falling"]
     assert max(fall["middle"]) - min(fall["middle"]) < 1e-6 and fall["middle"][0] > 0.3                         # equal time for each power of ten of height
     assert abs(fall["sinkEnd"]) < 1e-6 and fall["sinkMid"] > 1000                                               # it ends level; a camera's fall, not a vehicle's
@@ -189,7 +189,7 @@ def test_the_joined_world_draws_from_orbit_to_the_surface_in_chromium(tmp_path: 
         assert np.abs(plain[k] - cold[k]).max() <= 2, HEIGHTS[k]                         # the same frame after other frames, baked cold ...
         assert np.abs(plain[k] - warm[k]).max() <= 2, HEIGHTS[k]                         # ... and from the cache
         assert abs(numbers[k][1] - HEIGHTS[k]) < 0.002 * HEIGHTS[k] + 3 and numbers[k][2] == 0          # over the waves' crests
-    assert [numbers[k][0] for k in forward] == ["globe", "globe", "globe"] + ["handover"] * 9 + ["local"] * 3
+    assert [numbers[k][0] for k in forward] == ["globe"] + ["handover"] * 11 + ["local"] * 3
     # across the handover (100 km down to 3.2 km: above the cumulus, which the next sample is level with) the lower half of the
     # picture (the surface) and its top rows (the sky) change by bounded steps
     ground = np.array([plain[k][45:].mean(axis=(0, 1)) for k in range(2, 12)])

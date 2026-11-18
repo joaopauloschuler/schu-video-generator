@@ -664,7 +664,7 @@ quality other than `standard` scales it, motion blur multiplies it):
 | ground under cumulus | 2.5 |
 | a sea under cumulus | 3.0 |
 | ground, a sea and clouds (not measured: the sum less the dome) | 3.5 |
-| a descent through the handover (80 km to 2.5 km over sea or decks) | 3.1 |
+| a descent through the handover (400 km to 2.5 km over sea or decks) | 3.4 |
 | a plane on top (a third of the frame) | +0.12 |
 | a re-entry's glow on top | +0.37 |
 | a bare hull in a SpaceView (filling the frame, with a sky, a world and a star) | 0.7 |

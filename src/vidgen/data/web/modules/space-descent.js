@@ -39,11 +39,11 @@ const PREFIX = "vidgen/space-descent";
 /** Where the globe's picture hands over to the sea, ground and decks, in metres. `near`: along a pixel's ray,
  * the distance to the world's sphere from which the globe begins to show and from which it is all there is;
  * `height`: the camera's heights between which that far globe fades out altogether (under height[0] nothing
- * of the globe is drawn). "low": a sea or decks (the decks' pattern repeats when seen from far and the sea is
- * empty from high up: the globe takes over early). "high": bare ground (vidgen/space-land holds from orbit;
+ * of the globe is drawn). "low": a sea or decks (the decks hold from about 150 km since their cover varies with a
+ * broad weather that never repeats; the globe takes the far view and the higher heights). "high": bare ground (vidgen/space-land holds from orbit;
  * the globe is needed only where the ground's own map ends). */
 export const HANDOVERS = Object.freeze({
-  low: Object.freeze({near: Object.freeze([20e3, 80e3]), height: Object.freeze([2.5e3, 14e3])}),
+  low: Object.freeze({near: Object.freeze([60e3, 400e3]), height: Object.freeze([2.5e3, 80e3])}),
   high: Object.freeze({near: Object.freeze([150e3, 600e3]), height: Object.freeze([60e3, 300e3])}),
 });
 /** The stages a camera passes: only the globe; both, cross-faded; only the sea, ground and decks. */

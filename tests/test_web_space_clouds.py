@@ -123,7 +123,12 @@ out.push([err(() => C.deckOf("cumlus")), err(() => C.deckOf({type: "cirrus", cov
   err(() => C.stormOf({times: ["a"]}, {deck: C.deckField("cumulus")})), err(() => C.stormOf({rate: 5})), err(() => C.deckOf({type: "stratus", stripes: {colors: [[1, 1, 1]], span: 5}}))]);
 // the cover asked for against the share of places where the pattern stands over its level
 const share = (f, t) => { let n = 0; const N = 12000; for (let i = 0; i < N; i++) if (f.coverAt((i * 7919.3) % 3e6 - 1.5e6, (i * 104729.7) % 2.7e6 - 1e6, t) > 0) n++; return n / N; };
-out.push(["cumulus", "stratus", "cirrus"].map((type) => [0.2, 0.5, 0.8].map((cover) => share(C.deckField({type, cover}, {seed: 5}), 100))));
+out.push(["cumulus", "stratus", "cirrus"].map((type) => [0.2, 0.5, 0.8].map((cover) => share(C.deckField({type, cover, fronts: 0}, {seed: 5}), 100))));
+// the broad weather: round the place the cover asked for, far off it varies (clear lanes, closed fields) and never repeats
+const near = (f) => { let n = 0; const N = 6000; for (let i = 0; i < N; i++) if (f.coverAt(((i * 7919.3) % 2e4) - 1e4, ((i * 104729.7) % 2e4) - 1e4, 0) > 0) n++; return n / N; };
+const patch = (f, x0, z0) => { let n = 0; for (let i = 0; i < 900; i++) if (f.coverAt(x0 + (i % 30) * 700, z0 + Math.floor(i / 30) * 700, 0) > 0) n++; return n / 900; };
+const fair = C.deckField({type: "cumulus", cover: 0.4}, {seed: 5}), patches = Array.from({length: 40}, (_, k) => patch(fair, 3e5 + k * 9.7e4, -2e5 + k * 3.1e4));
+out.push([near(fair) - near(C.deckField({type: "cumulus", cover: 0.4, fronts: 0}, {seed: 5})), share(fair, 0), Math.min(...patches), Math.max(...patches), C.broadNoise(3.3, -7.9, 11) === C.broadNoise(3.3, -7.9, 11), C.broadNoise(3.3, -7.9, 11) !== C.broadNoise(3.3 + 1024, -7.9, 11), fair.middle !== 0 && fair.broadAt(0, 0, 0) === 0]);
 out.push([share(C.deckField({type: "stratus", cover: 1}), 0), share(C.deckField({type: "cumulus", cover: 0}), 0)]);
 // a seed is a sky; time moves it with the wind, and changes it (the readings move at their own speeds)
 const a = C.deckField("cumulus", {seed: 3}), b = C.deckField("cumulus", {seed: 3}), c = C.deckField("cumulus", {seed: 4}), still = C.deckField("cumulus", {seed: 3, wind: 0});
@@ -152,19 +157,22 @@ out.push([storm.map((f) => [f.time, f.power, f.follows, f.strokes, tw.list.some(
     for row in out[2]:
         for got, asked in zip(row, (0.2, 0.5, 0.8)):
             assert got == pytest.approx(asked, abs=0.06), out[2]                                                         # roughly the cover asked for
-    assert out[3] == pytest.approx([1, 0], abs=0.002)
-    first, again, other, later, calm, calm_later, reads, level, span, drift, wind, carried = out[4]
+    here, world, least, most_, same, endless, centred = out[3]
+    assert abs(here) < 0.06 and world == pytest.approx(0.4, abs=0.12) and least < 0.2 and most_ > 0.6       # the cover asked for round the place; lanes and closed fields far off
+    assert same and endless and centred
+    assert out[4] == pytest.approx([1, 0], abs=0.002)
+    first, again, other, later, calm, calm_later, reads, level, span, drift, wind, carried = out[5]
     assert first == again and first != other and first != later and calm == calm_later and reads == 4 and 0.3 < level < 0.8 and span > 0.02
     assert drift == pytest.approx(wind) and max(carried) < 0.12 and max(abs(a - b) for a, b in zip(first, later)) > max(carried)   # the clouds go with the wind, and change a little on the way
-    same, count, towers, placed, none, default = out[5]
+    same, count, towers, placed, none, default = out[6]
     assert same is True and count == 5 and none == 0 and default == 4 and placed == [[1000, -2000], [5, 6]]
     assert all(0.3 * 60000 <= far <= 60000 and 0.75 * 4200 <= radius <= 1.25 * 4200 and base == 1100 and 9000 < top <= 11500 and 1.8 < anvil < 2.6 for far, radius, base, top, anvil in towers)
-    n, same, other, gap, first_time, last, none, within = out[6]
+    n, same, other, gap, first_time, last, none, within = out[7]
     assert n == pytest.approx(120, rel=0.25) and same is True and other is False and gap >= 0.25 and 0 <= first_time < last < 600 and none == 0 and within is True
-    levels, single, seconds = out[7]
+    levels, single, seconds = out[8]
     assert levels[0] == 0 and levels[1] == 0 and levels[3] > levels[2] > 0 and levels[3] > levels[4] > levels[5] and levels[6] > levels[5] and levels[-2] == 0 and levels[-1] == 0 and seconds == 0.55
     assert single < levels[6] and levels[8] < 0.01                                                                        # a second stroke 0.11 s after the first; it ends without a step
-    storm, events, default_storm = out[8]
+    storm, events, default_storm = out[9]
     assert [row[0] for row in storm] == sorted(row[0] for row in storm) and {2, 4} <= {row[0] for row in storm} and len(storm) == 4
     by_time = {row[0]: row for row in storm}
     assert by_time[2][1] < by_time[4][1] * 0.95 and all(row[2] is False and 1 <= row[3] <= 4 and row[4] is True for row in storm)        # the track's gains; every flash inside a tower
