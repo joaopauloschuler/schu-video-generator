@@ -680,6 +680,8 @@ from vidgen.web.inputs import page_viewport as web_page_viewport  # noqa: E402
 from vidgen.web.inputs import scene_page_inputs as web_page_inputs  # noqa: E402
 from vidgen.web.music import MusicDataSettings as WebMusicData, has_music as video_has_music, scene_music as web_scene_music  # noqa: E402
 from vidgen.web.orbits import scene_orbit_data as web_scene_orbits  # noqa: E402
+from vidgen.web.flights import scene_flight_data as web_scene_flights, with_flights as web_with_flights  # noqa: E402
+from vidgen.web.land import land_definition as web_land_definition, land_settings as web_land_settings  # noqa: E402
 from vidgen.web.space_names import constant_entries as web_space_entries, space_names  # noqa: E402
 from vidgen.story_places import PLACES as STORY_PLACES, StoryPlace, choose_place, light_cues, music_of, objects_named, weather_of  # noqa: E402
 from vidgen.story_draft import DraftOptions, StoryDraft, draft_story, report_markdown, story_yaml  # noqa: E402
@@ -735,7 +737,7 @@ from vidgen.cellworld.captions import NoteMode as CellNoteMode, note_text as cel
 from vidgen.cellworld.names import gene_spans  # noqa: E402
 from vidgen import references as video_references  # noqa: E402
 from vidgen import genetics  # noqa: E402
-from vidgen import orbits, particle_physics, plot_draw, plotcore, quantities  # noqa: E402
+from vidgen import flight, orbits, particle_physics, plot_draw, plotcore, quantities  # noqa: E402
 from vidgen.plotcore import register_model  # noqa: E402
 from vidgen.genetics import MODES as INHERITANCE_MODES, PRESETS as GENETICS_PRESETS, CrossResult, GeneticSystem, parse_genotype  # noqa: E402
 from vidgen.genetics import build_system as build_genetic_system, cross as genetic_cross  # noqa: E402
@@ -1009,6 +1011,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "video_has_music",
     "web_scene_music",
     "web_scene_orbits",
+    "web_scene_flights",
+    "web_with_flights",
+    "web_land_definition",
+    "web_land_settings",
     "web_space_entries",
     "space_names",
     "clip_plan",
@@ -2008,6 +2014,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "plot_draw",
     "quantities",
     "orbits",
+    "flight",
     "particle_physics",
     "did_you_mean",
     "format_length",

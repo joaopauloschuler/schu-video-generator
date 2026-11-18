@@ -348,6 +348,64 @@ decks with the bands of the same world in `vidgen/space-bodies` north and south 
 narrower than true, `squeeze`) are a look (DESIGN §123.5).
 Things in the scene are drawn in front of every cloud.
 
+**A plane over that ground** (a `web` scene: the path in `video.yaml`, the picture in its
+script). The flight is planned in Python with `flight_data:` — terrain following, a banked turn,
+a climb — checked never to come under the alpine range, and the page reads it as `ctx.flight`.
+Give the page's `land(...)` the same preset (or options) as `ground:`: the frame is the land's.
+
+```yaml
+- id: pass
+  type: web
+  duration: 20
+  params:
+    script: fly.js
+    flight_data:
+      ground: {land: alpine}
+      flights:
+        - name: Plane
+          start: {x: -6000, z: 2000, above_ground: 600, heading: 70, speed: 140}
+          legs:
+            - {follow: {clearance: 300}, for: 12}
+            - {turn: {by: 60, bank: 35}, follow: {clearance: 300}}
+            - {follow: {clearance: 300}, for: 30}
+            - {climb: {to: 5500, rate: 20}, speed: {to: 180}}
+```
+
+```js
+import * as THREE from "three";
+import {air, sunDirection} from "vidgen/space-air";
+import {land} from "vidgen/space-land";
+import {craft} from "vidgen/space-craft";
+let renderer, scene, camera, sky, ground, plane, f;
+export function load(ctx) {
+  f = ctx.flight;
+  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(50, ctx.width / ctx.height, 1, 4e5);
+  sky = air(renderer, "earth", {sun: sunDirection(35, 200), scene});   // scene: the sun's and the sky's light are added to it
+  ground = land(renderer, sky, {preset: "alpine"});                    // the same ground as flight_data's
+  plane = craft("probe", {seed: 1}).fly(f, {flight: "Plane"});         // a stand-in craft (a few metres); its attitude is the flight's
+  scene.add(sky.object, ground.object, plane.object);
+}
+export function frame(t) {
+  plane.update(t);                                                     // where the flight is, banked as it turns
+  const p = new THREE.Vector3(...f.position("Plane", t)), v = new THREE.Vector3(...f.velocity("Plane", t)).normalize();
+  camera.position.copy(p).addScaledVector(v, -24).add(new THREE.Vector3(4, 7, 0)); camera.lookAt(p);   // a chase from behind
+  sky.update(t, {camera}); ground.update(t, {camera});
+  renderer.render(scene, camera);
+}
+```
+
+`f.aboveGround("Plane", t)` is what the page's `ground.above(position)` says (to 10⁻⁷ m), `f.mach`,
+`f.bank`, `f.load` and `f.heating` drive instruments and effects, and `f.path("Plane")` is the
+whole path as a polyline. A path into a mountain is an error when the scene's frames are made
+(`vidgen render`, `vidgen still`), naming the time and place (`lift: true` raises the path there instead). Far ground is drawn
+a little smoother than `heightAt` (valleys filled at tens of kilometres): keep the camera near the
+plane. A start from orbit: `start: {orbit: Ship, at: 'bar 5'}` with the scene's `orbit_data` and a
+first leg `{reentry: {to: {height: 12000, speed: 250}}}` (DESIGN §123.7: what is physical, what is
+a look).
+
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 

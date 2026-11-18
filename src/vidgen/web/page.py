@@ -638,6 +638,10 @@ class WebPage:
             from vidgen.web.orbits import helper_source as orbit_helper
 
             context.add_init_script(script=orbit_helper())
+            if "flights" in self.orbits:   # ctx.flight (DESIGN.md §123.7): the flights travel in the orbit payload
+                from vidgen.web.flights import helper_source as flight_helper
+
+                context.add_init_script(script=flight_helper())
         context.route("**/*", self._serve)
         self._page = page = context.new_page()
         self._cdp = context.new_cdp_session(page)

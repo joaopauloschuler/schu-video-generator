@@ -235,6 +235,10 @@ src/vidgen/
                           # (elements <-> state vectors, vis-viva, period, energy), bodies.py (GM, radii, preset orbits
                           # with sources), values.py (values with units), system.py (hierarchies, the clock), nbody.py,
                           # laws.py (ellipse geometry, equal-time areas, Newton's cannon, Kepler III; §98.4)
+  flight/                 # flight in the air of a world (§123.7; no manim): spec.py (a flight in words: start, legs),
+                          # plan.py (legs -> position, velocity, attitude; the ground check), profiles.py (the smooth
+                          # functions of time), frames.py (local <-> planet-fixed <-> ecliptic), terrain.py (vidgen/space-land's
+                          # heights in numpy, level ground, sea, flat world), worlds.py (radius, gravity, air), reentry.py (from orbit)
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
@@ -275,7 +279,8 @@ src/vidgen/
                           # (`vidgen still`, §120.3), music.py (`music_data:`: ctx.music, §120.8), parts.py
                           # (`vidgen parts`: the parts files read, the contact sheet drawn, §122.5), space_names.py
                           # (the space modules' names and options read from their source, §122.12), baked.py
-                          # (the cache of baked maps: key, store, limit; §123.2)
+                          # (the cache of baked maps: key, store, limit; §123.2), flights.py (`flight_data:`: ctx.flight,
+                          # its cache and key), land.py (vidgen/space-land's height definition fetched from a page, kept; §123.7)
   three_d/                # 3D scenes (§114): spec.py (the `3d` params: camera, light, floor, objects), world.py
                           # (object transforms, groups, centres), motion.py (object actions -> per-frame
                           # channels and tracks), framing.py (objects on screen, for lint), camera.py (camera
@@ -316,7 +321,8 @@ src/vidgen/
   carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (space.py, space_params.py, space_page.py: the `space` scene, its words and
-                          # the page written from them, §122.12; registered like extensions; actions.py:
+                          # the page written from them, §122.12; flight_data.py: a `web` scene's flights, §123.7;
+                          # registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
                           # pan/follow, §69.7;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
@@ -352,7 +358,8 @@ src/vidgen/
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
   data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
   data/web/               # clock.js, media.js, runtime.js (the virtual clock, animations, errors, hooks; joined and injected into a `web` page), canvas.html (§118),
-                          # layout.js (reads the page's text after a screenshot, for lint; §118.12)
+                          # layout.js (reads the page's text after a screenshot, for lint; §118.12), orbits.js (ctx.orbits, §122.3),
+                          # flight.js (ctx.flight, §123.7)
   data/three/             # three.module.js + three.core.js (three.js 0.186.1, MIT, LICENSE), page.html, vidgen3d.js (§114),
                           # addons/ (23 add-ons from examples/jsm/ for web scenes, LICENSE; §118.14)
   data/web/libs/           # <package>/: anime.js, Motion, D3, Chart.js, lottie-web for web scenes, one build file each, LICENSE (§118.15)
@@ -28992,3 +28999,193 @@ forests and no plants.
   the picture's places against `heightAt`, the horizon's row from 100 m to 100 km, a black
   airless sky, a coast, clouds on and behind the ground, and the same pixels with the macro
   baked, from the cache and without it.
+
+### 123.7 Flight paths: `vidgen.flight`, `flight_data:` → `ctx.flight` (Step 385)
+
+Python beside `vidgen.orbits` (`src/vidgen/flight/`, no manim) turns a flight told in words into
+float64 position, velocity and attitude for every frame of a `web` scene, checked never to come
+under the ground, and hands it to the page the way `orbit_data` does (§122.3).
+
+- **One bridge, not two.** The flights travel inside the orbit bridge's payload
+  (`orbits.flights`): the same `WebPage(orbits=)`, `make_web_clip`, `web_page_layouts`,
+  `clip_inputs` and `vidgen still` plumbing, untouched. The param is a sibling, `flight_data:`,
+  because a flight is not an orbit model (it needs no central body or span and is told in
+  another frame); its maker `vidgen/scenes/flight_data.py` and its cache
+  `vidgen/web/flights.py` (`build/flights/flight-data-<key>.json`) follow `orbit_data`'s files
+  one for one. A second init script, `data/web/flight.js`, is added only on pages whose payload
+  carries flights; it runs after `orbits.js`, takes the flights out and builds `ctx.flight`
+  (a page with flights and no orbit data then has no `ctx.orbits`). `orbits.js` and every
+  existing key are unchanged: the clip inputs gain `orbits.flight_helper` (the helper's
+  SHA-256) only when the payload carries flights.
+- **The frame (one definition, `vidgen.flight.frames`).** *Planet-fixed* (PF): origin the
+  world's centre, z the IAU north pole, x the prime meridian, y = z × x; a place at
+  planetocentric latitude φ, east longitude λ, height h over the sphere of radius R is
+  (R + h)(cos φ cos λ, cos φ sin λ, sin φ) (`vidgen/space-bodies`' `onGlobe` in three.js's
+  axes). *Local* (L, the scene's): metres, origin on the sphere under the anchor `at = [φ₀, λ₀]`,
+  x east, y up, z south (three.js's axes: −z north), the centre at (0, −R, 0) — the frame of
+  `vidgen/space-air`, `space-sea`, `space-clouds` and `space-land` at their defaults
+  (`unit: 1`, `center: null`). Its axes in PF are `space-land`'s `placeFrame(at)`:
+  east = (−sin λ₀, cos λ₀, 0), up = (cos φ₀ cos λ₀, cos φ₀ sin λ₀, sin φ₀),
+  south = (sin φ₀ cos λ₀, sin φ₀ sin λ₀, −cos φ₀); PF = R·up + M·L, L = Mᵀ(PF − R·up),
+  M = [east | up | south]. A height is always over the sphere, |L − (0, −R, 0)| − R; the land's
+  ground at (x, z) is the point (x, √((R + g)² − x² − z²) − R, z) with g = `heightAt(x, z)`, so
+  a craft at L is h − `heightAt(L.x, L.z)` over the ground (`Land.above`). *Ecliptic* (E, the
+  orbit bridge's): E = F(jd)·PF with F the body-fixed frame of `vidgen.orbits.rotation` on that
+  date; v_E = F·v_PF + ω × r_E (ω the spin rate along the pole; the pole's slow motion left out).
+  `LocalFrame.to_fixed / from_fixed / to_ecliptic / from_ecliptic / ecliptic_axes / place /
+  geodetic / chart / heading_vector / heading_of` (tests both ways: 1e-8 m, 1e-9 m/s). A flight's
+  velocity is over the ground; with no wind it is also the air speed. A flat world (`ground:
+  flat`) has no sphere: x, y, z with y the height, no latitudes, no re-entry.
+- **The worlds** (`vidgen.flight.worlds`): radius the page's air's (`space-air` `RADII`, the
+  airless worlds' of `space-land`), GM the body's (`vidgen.orbits.BODIES`; invented worlds the
+  Earth's mean density), turning from `vidgen.orbits.rotation`, and an **isothermal exponential
+  air**: scale height the page's (`AIRS[...].height` × radius: 8.9 km Earth-like, 10.8 km
+  Mars-like), sea-level density and γ this module's (1.225 kg/m³ and 1.40; 0.020 and 1.29;
+  invented `thin` 0.25, `thick` 4.9). Speed of sound a = √(γ g₀ H), the same at every height:
+  350 m/s Earth-like (the real air's falls to 295 m/s at 11 km), 228 m/s Mars-like. A land
+  preset's world is its air's (`canyon` and `dunes` lie on the Mars-like sphere, `snow` and
+  `volcanic` on `thin`'s, `airless` on the Moon's).
+- **Kinematics** (`vidgen.flight.plan`). Three channels of flight time: air speed V(t), height
+  h(t), turn rate ψ̇(t) (heading from north towards east, positive to the right). V_h =
+  √(V² − ḣ²); r = c + (R + h) n̂, ṙ = ḣ n̂ + V_h ê; the frame (n̂, ê, r̂ = ê × n̂) turns with body
+  rates (ψ̇, 0, V_h / (R + h)), integrated by the fourth-order Magnus method at steps of at most
+  0.05 s and composed by a parallel prefix product (log₂ N passes); a frame between grid points
+  takes one Magnus step from the point before. Acceleration analytic:
+  r̈ = (ḧ − k V_h²) n̂ + (V̇_h + k ḣ V_h) ê + V_h ψ̇ r̂, k = 1 / (R + h). Every change of V, ḣ, bank
+  or curvature goes through the septic smoothstep S(u) = 35u⁴ − 84u⁵ + 70u⁶ − 20u⁷ (first three
+  derivatives zero at its ends; peak slope 35/16 of the mean), so position is smooth to its third
+  derivative where legs meet and the attitude has no kink (tested at 30 fps). Integration step
+  0.05 s against 0.005 s: positions agree to 0.5 µm.
+- **Manoeuvres** (legs; `vidgen.flight.spec`). A leg holds at most one horizontal manoeuvre,
+  one vertical one and a speed change; it lasts `for` seconds, `until` a scene time (seconds or
+  'bar 9 beat 3', the `space` scene's `scene_time`), or as long as its manoeuvres need; what it
+  does not name is held (wings level, the vertical rate, the speed). `straight: s`. `turn: {to |
+  by, side, bank | radius, roll_rate}`: a coordinated turn, ψ̇ = g_eff tan φ / V_h with
+  g_eff = g(h) − V_h² / (R + h), radius V_h² / (g_eff tan φ) (v² / (g tan φ) within 0.1 % at
+  airliner speeds), bank rolled in and out at the roll rate (default 20°/s); the hold is solved
+  so the heading change is exact (aimed again after integration: the heading drifts on a
+  sphere). `climb` / `descend: {to | by, rate, accel}` (default 10 m/s, vertical acceleration
+  0.25 g at the ramps' peaks; a target too near for the rate lowers the rate), `{rate}` alone
+  climbs on; `level: true`. `speed: {to | mach, rate}` (mean 2 m/s²). `waypoints: [[x, z] |
+  {lat, lon}, ...]`: septic Hermite pieces in the tangent plane of the leg's start
+  (azimuthal-equidistant), tangents the bisectors, curvature that of the circle through three
+  places, its rate zero at the knots (geometric continuity of order 3), flown at ψ̇ = −κ ṡ
+  (ṡ = V_h R / (R + h)); the bank the sharpest point needs is checked against `bank_limit`
+  (default 60°: an error naming the waypoint). Passes 16 km of places within 1 m. `circle:
+  {around, radius, turns, side}`: a Hermite piece to the tangent point with the circle's
+  curvature, the arc, a roll-out; flown radius within 3 mm of 4,000 m. `follow: {clearance, rate,
+  push, smoothing}`: terrain following over a span of legs that follow one after another (turns
+  inside allowed): the lowest curve over the highest ground of each 0.25 s plus the clearance,
+  the margin and the sea's waves whose push-overs are at most (1 − push) g and slopes at most
+  `rate` (an envelope of parabolas turning into lines), plus the most a smoothing can lose
+  ((1 − push) g w² / 22), smoothed by the bump (1 − s²)⁴ of half-width `smoothing` (4 s): a
+  smooth function of time with all derivatives; blended in from the span's start state and out
+  into a steady rate; planned from the span's track in up to three passes. `land: {glide,
+  flare, touchdown, brake}`: speed to the touchdown speed, a descent at V tan(glide) whose last
+  ramp, 2 × flare / sink seconds long, takes the sink to zero exactly at the ground's height
+  under the touchdown point (found again after integration), then a roll-out to a stop.
+  `reentry`: below.
+- **Attitude and the numbers.** Nose along the velocity, raised by the angle of attack (a look:
+  `aoa` 3° per g of lift; a re-entry's own during the entry); bank from the specific force
+  (acceleration less gravity, with the turning world's Coriolis and centrifugal parts):
+  φ = atan(f_side / D), D = ½(f_up + √(f_up² + (0.1 g)²)), which is the force's own bank in
+  flight (to 0.07°), stays upright through push-overs and is 0 in free fall. Body axes x the left
+  wing, y up, z the nose (three.js's facing +z, `vidgen/space-craft`'s). Load factor: the
+  specific force across the path over g₀, negative when it points down. Per frame: position,
+  velocity (m, m/s, local frame), quaternion (x, y, z, w; w ≥ 0), speed, Mach number, height over
+  the sphere, height over the ground, load factor, bank, pitch (flight-path angle), heading, angle
+  of attack (rad), vertical rate, the heating indicator √(ρ / 10⁻⁴ kg/m³)(v / 7 km/s)³ (1 is about
+  a returning orbiter's peak; a 200 m/s plane at sea level 0.02), flight time (negative before
+  the flight's start: it waits there), the path (`path_samples` points) and the legs as planned
+  (kinds, flight and scene times, a curve's misses, a landing's touchdown).
+- **Never below ground.** The path is checked at 1/24 s wherever it is within 500 m of the
+  highest the ground can be (a land's macro maximum plus its recipe's bound; a level ground's
+  elevation; above that every 0.5 s) against the ground's height plus `margin` (default 20 m:
+  the land's finest map differs from `heightAt` by up to 1.3 m and far ground is drawn smoother —
+  valleys filled — by up to 100–180 m at 30 km, so a camera far from the craft can see it under
+  the drawn ground; keep it near or raise the margin) plus the sea's `waves`; a landing's
+  approach may come down to the touchdown level. Too low: a `VidgenError` naming the flight, the
+  time, the leg, the place (x, z and latitude, longitude), the clearance and the remedies (climb
+  before, follow the terrain, `lift: true`). With `lift: true` the shortfall is raised by a
+  smooth lift (the same envelope at 0.5 g and 30 m/s, the smoothing's margin added first,
+  smoothed over 4 s), the flight planned again with it, up to four times, and a warning said.
+  A load factor over `max_load` (3) is a warning naming the time.
+- **Ground heights** (`vidgen.flight.terrain`, `vidgen/web/land.py`). `LandGround` is
+  `space-land`'s height definition ported to numpy: `hash2` on unsigned 32-bit integers with
+  wrapping products, `noised`'s value, `reliefAt` with every part (mountains, strata, rough,
+  dunes, craters, volcanoes, canyons), `macroAt`'s B-spline, the operations in the same order.
+  The macro lattice is made on the GPU: `land_definition(options, air)` opens a 16x16 page once
+  (headless Chromium, `WebPage`, about 3 s), reads `ground.definition()` and keeps it in vidgen's
+  cache folder (`ground/land-<key>.json`, 0.8 MB, the heights as float32 bits; key: the options,
+  the air, `vidgen/baked`'s digest of vidgen's page modules and three.js, the layout's version;
+  `vidgen cache clear` removes them). Agreement: at 300 seeded places for each of the seven
+  presets the numpy heights equal the page's `heightAt` to 1.4 × 10⁻¹² m (slow test); in Node
+  with a lattice of one's own to 1.2 × 10⁻¹² m (default test; asserted under 10⁻⁹). A page's `ground.above(p)` at the flight's
+  position equals the data's height over the ground to 4 × 10⁻⁸ m (a still of the alpine range).
+  `SphereGround` (a level ground at `elevation`), `SeaGround` (height 0, `waves` added to the
+  margin) and `FlatGround` need no page.
+- **Re-entry** (`vidgen.flight.reentry`; `start: {orbit: Ship, at: 'bar 5'}` reads the orbit
+  data's body at that frame and turns it into the local frame by `from_ecliptic` on that frame's
+  date; or a start with height, speed, climb). *Physical*: the start is the orbit's own two-body
+  motion seen from the turning world (position, velocity and their next derivatives: tested
+  equal to 10⁻⁶ m, 10⁻⁶ m/s, and the Kepler path 2 s later to 1 cm); the glide is the equilibrium
+  glide in the exponential air — L = m g (1 − v²/v_c²), v_c = √(g₀ R), D = L / E (`lift_to_drag`,
+  1.2) — so dv/dt = −(g₀/E)(1 − v²/v_c²) and h_eq(v) = H ln(ρ₀ v² / (2 β g₀ (1 − v²/v_c²))),
+  β = m / (C_L S) (`loading`, 450 kg/m²); the speed has a closed form,
+  v = v_c tanh(atanh(v₀/v_c) − g₀ W(t) / (E v_c)), W the integral of the drag's weight; the
+  heating indicator ∝ √ρ v³. *A look*: over `blend` seconds (600) the orbit's height, speed and
+  turn rate turn into the glide's by S, the drag's weight growing with it (no deorbit burn, no
+  coast); S-turns between ±`bank` (60°) with `reversals` (3) of `reversal` seconds, the heading's
+  weave following the coordinated-turn relation (the glide's height does not answer to the bank;
+  the drawn bank during the entry is the S-turns', not the shaped descent's specific force); the
+  end: from where the glide's own sink, 2 H g₀ / (E v), is a tenth of the speed (or 1.5 × the end
+  speed), over `end` seconds the height turns into `to.height` and the drag's weight falls to
+  zero exactly as the speed reaches `to.speed`, level: the next leg goes on from that state with
+  three derivatives continuous. `aoa` (40°) falls to the cruise's over the end. The air is the
+  page's (8.9 km scale height): the glide is higher than a real entry's (about 90 km at 6.6 km/s
+  against 75 km). Measured from a 400 km orbit to 12 km and 250 m/s: 37 minutes of flight, peak
+  heating 0.66 between 6.8 and 6.2 km/s (90 to 85 km), pitch within −7°, planned in 0.7 s.
+- **YAML** (a `web` scene's `flight_data:`, `vidgen.scenes.flight_data.FlightData`): `flights`
+  (each `name`, `start`, `legs`, `roll_rate`, `accel`, `vertical_accel`, `bank_limit`,
+  `max_load`, `aoa`, `lift`), `ground` (`{land: alpine}` or `{land: {preset | world + at, seed,
+  mountains, ..., air}}`, `sea` / `{sea: {waves}}`, `sphere` / `{sphere: {elevation}}`, `flat`),
+  `world` (default the land's air's, else earth), `at` (default the land's place, else [0, 0]),
+  `start` (the scene time of flight time 0), `speedup` (flight seconds per scene second; default
+  1, with a start from orbit the orbit data's), `margin`, `path_samples`. Unknown keys get a
+  did-you-mean (pydantic models; a land's options and parts are checked against
+  `space-land.js`'s own names); bars need `music_data`, a start from orbit `orbit_data` with
+  that body.
+- **Python API.** `vidgen.flight` (in `vidgen.api` as `flight`): `Flight`, `Leg`, `Start`, …,
+  `FlightContext(world, frame, ground, margin, to_flight)`, `FlightRun(spec, context,
+  start_state)` with `sample(t)`, `position`, `state_at`, `path`, `legs`, `warnings`;
+  `LocalFrame`, `world`, `WORLDS`, the grounds, `height_of`, `relief_at`, `macro_at`, `hash2`,
+  `noise`, `entry_profile`, `heating`. `vidgen.api.web_scene_flights` (= `scene_flight_data`,
+  mirroring `web_scene_orbits`), `web_with_flights`, `web_land_definition`, `web_land_settings`.
+- **The page** (`ctx.flight`): `names`, `flights` (start, end, warnings, legs), `world`,
+  `anchor` (lat, lon, the local axes in the planet-fixed frame), `ground`, `frame`, `units`,
+  `approximations`, `warnings`, `index(t)`, `time(name, t)`, `active`, `position`, `velocity`,
+  `quaternion`, `speed`, `mach`, `height`, `aboveGround`, `load`, `bank`, `pitch`, `heading`,
+  `aoa`, `heating`, `climb`, `path(name)`, `legs(name)`, `series(name)` and
+  `place(object, name, t)` (sets a three.js object's position and quaternion). Every value is
+  the frame's own (round(t × fps)), never interpolated; the slow test reads three frames and gets
+  Python's float64 numbers exactly. `craft.fly(ctx.flight, {flight: "Plane"})`
+  (`vidgen/space-craft`, extended) places and turns a craft by the data every `update(t)`.
+- **Cache and keys.** `build/flights/flight-data-<key>.json`; key: the data version, vidgen's
+  version, the SHA-256 of the flight code (`vidgen/flight/`, `vidgen/orbits/`,
+  `scenes/flight_data.py`, `scenes/space_params.py`, `web/land.py`), the settings, the frame
+  rate, frames drawn and the scene's own, with a land the page code's digest, with bars the
+  score's bar and beat lengths and `t0`, with a start from orbit the orbit payload's digest.
+  Deterministic (the same settings give the same JSON: test). Existing clip keys are unchanged;
+  pages importing `vidgen/space-craft` are drawn again once (its bytes changed: `fly`).
+- **Measured** (2 cores): a sea flight of four legs over 1,802 frames 0.05 s (433 KB of JSON); the
+  alpine range with terrain following over a turn, 602 frames, 2.3 s (151 KB) after the ground's
+  page (3 s, once); the re-entry above 0.7 s to plan. Tests: `tests/test_flight.py` (21 default,
+  about 5 s; slow: the 400 km re-entry, the page's numbers and `craft.fly`, the seven presets'
+  heights against the page, 21 s).
+- **For later steps.** 386: `craft.fly(ctx.flight, {flight})` with the data's bank; a plane's
+  own control surfaces can read `bank`, `load`, `climb`. 387: `heating`, `mach`, `speed`,
+  `height`, `aboveGround` per frame. 390: `ctx.flight.position / velocity / quaternion` for chase
+  and fly-past moves; `path`. 391: `LocalFrame.to_ecliptic` / `ecliptic_axes` place the local
+  frame in the orbit bridge's; `start: {orbit}` hands an orbit over; the page must draw the land
+  and the air with the same `at` and world. 392: `FlightData` is a pydantic model a `space`
+  scene can hold as it is.

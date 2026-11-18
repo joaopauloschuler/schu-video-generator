@@ -23,6 +23,7 @@ from vidgen.web.entry import WebEntry, entry_of, entry_path
 from vidgen.web.inputs import design_width_of, page_shape
 from vidgen.web.loaded import current_loaded, read_record, record_path
 from vidgen.web.music import helper_digest, payload_digest
+from vidgen.web.flights import helper_digest as flight_helper_digest
 from vidgen.web.orbits import helper_digest as orbit_helper_digest
 from vidgen.web.page import WebPage, engine_id, layout_digest
 
@@ -51,12 +52,14 @@ def clip_inputs(root: Path, entry: WebEntry, *, scene_id: str, size: tuple[int, 
     keep their alpha, and vidgen's page files and Playwright version. The other files the page loads are checked
     from the record (:func:`loaded_changed`). ``music`` (§120.8, ``ctx.music``): with it the
     inputs name its SHA-256 and the music helper's; without it they leave ``music`` out, so the
-    keys of clips without music data stay as they were. ``orbits`` (§122.3, ``ctx.orbits``) the same way."""
+    keys of clips without music data stay as they were. ``orbits`` (§122.3, ``ctx.orbits``) the same way; when it
+    carries flights (``orbits.flights``, §123.7, ``ctx.flight``) the flight helper's SHA-256 too."""
     path = entry_path(root, entry, scene_id)
     return {
         **({} if design_width is None else {"design_width": design_width}),
         **({} if music is None else {"music": {"data": payload_digest(music), "helper": helper_digest()}}),
-        **({} if orbits is None else {"orbits": {"data": payload_digest(orbits), "helper": orbit_helper_digest()}}),
+        **({} if orbits is None else {"orbits": {"data": payload_digest(orbits), "helper": orbit_helper_digest(),
+                                                  **({"flight_helper": flight_helper_digest()} if "flights" in orbits else {})}}),
         "version": CLIP_VERSION, "engine": engine_id(), "scene": scene_id, "kind": entry.kind, "path": entry.posix,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "width": size[0], "height": size[1], "fps": fps, "frames": frames,

@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–384
+## Steps 193–385
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -105,6 +105,21 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   40 times narrower than true so that several are in view (`squeeze`; a stated look), with clouds
   drawn out along the wind and deeper gaps in the dark bands. `giantSky` gives no towers unless
   asked. `fair` and `overcast` cost as before within 8 %; towers 14 %, a giant 27 % more.
+- **Flight paths** (Step 385): a `web` scene's `flight_data:` plans flights in words — a start
+  (place, height or height over the ground, heading, speed), then legs: `straight`, `turn` (to a
+  heading or by an angle, at a bank or a radius), `climb` / `descend` / `level`, `speed` (m/s or
+  Mach), `follow` (terrain following at a clearance), `waypoints` (a smooth curve through places),
+  `circle` (round a peak or a ship), `land` (approach, flare, roll-out) and `reentry` (from an
+  orbit of the scene's `orbit_data` down to level flight), each for seconds or until a time ('bar
+  9 beat 3') — over `vidgen/space-land`'s ground (its heights computed in Python to 10⁻¹² m of
+  the page's), the sea, a level ground or a flat world. The page gets `ctx.flight`: for every
+  frame each flight's position, velocity and attitude (banked in turns), speed, Mach number,
+  heights over sea level and over the ground, load factor, bank, pitch, heading and a heating
+  indicator, in the frame the air, sea and land modules draw in; `craft.fly(ctx.flight, {flight})`
+  of `vidgen/space-craft` flies a craft along it. A path that would come under the ground is an
+  error naming the time and the place (or, with `lift: true`, it is raised there). Python:
+  `vidgen.api.flight`, `web_scene_flights`; `vidgen cache clear` also removes the ground heights
+  kept for flights.
 
 ### Space scenes (Phase AN, Steps 367–378)
 

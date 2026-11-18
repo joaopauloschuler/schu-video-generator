@@ -3433,6 +3433,7 @@ own code with it. `vidgen render` tells you instead (below, "Render cost").
 | `scene`, `frame`, `region` | the scene id, the video frame's `{width, height}`, `bleed` or `body` |
 | `music` | with `music_data:` only: the video's music ("Pictures that follow the music" below) |
 | `orbits` | with `orbit_data:` only: planets, moons and spacecraft on their orbits ("Orbits on a page" below) |
+| `flight` | with `flight_data:` only: planes and space planes through the air ("Flight paths" below) |
 
 **The theme.** vidgen puts CSS variables on `:root` before your own styles: `var(--vidgen-text)`,
 `--vidgen-primary` (one per colour), `--vidgen-background`, `--vidgen-palette-0`…,
@@ -3775,6 +3776,46 @@ camera.position.y = Math.max(camera.position.y, ground.heightAt(camera.position.
   frame at 320x180. High views are the strong ones; under about 400 m over the ground a range
   looks soft. Look first: `vidgen parts --kind land`. Reference: CONFIG.md `web`, "Ground with
   relief".
+
+**Flight paths: `flight_data:`.** A plane over the range, a glider round a peak, a space plane
+coming down from orbit: do not move a craft by hand in JavaScript. `flight_data:` in a `web`
+scene's `params` gives the page `ctx.flight`: each flight's position, velocity and attitude (bank in
+turns, nose up in climbs) for every frame, in the frame `vidgen/space-air` and `space-land` draw in,
+checked never to come under the ground.
+
+```yaml
+- id: pass
+  type: web
+  duration: 20
+  params:
+    script: extensions/fly.js
+    flight_data:
+      ground: {land: alpine}               # the same ground the page draws; or sea, sphere, flat
+      flights:
+        - name: Plane
+          start: {x: -6000, z: 2000, above_ground: 600, heading: 70, speed: 140}
+          legs:
+            - {follow: {clearance: 300}, for: 12}                    # terrain following
+            - {turn: {by: 60, bank: 35}, follow: {clearance: 300}}
+            - {follow: {clearance: 300}, for: 30}
+            - {climb: {to: 5500, rate: 20}, speed: {to: 180}}
+            - {circle: {around: [25000, 19000], radius: 4000}}        # round a place; also waypoints: [[x, z], ...], land: {}
+```
+
+```js
+// sketch (parts of a page, not a whole file): a craft on a flight
+ship.fly(ctx.flight, {flight: "Plane"});          // ship = craft(...) of vidgen/space-craft; then ship.update(t) each frame
+ctx.flight.place(marker, "Plane", t);             // or any three.js object
+const above = ctx.flight.aboveGround("Plane", t), mach = ctx.flight.mach("Plane", t);
+```
+
+- Legs: `straight`, `turn` (to or by, bank or radius), `circle`, `waypoints`, `climb` / `descend`,
+  `level`, `follow`, `speed`, `land`, `reentry` (from `start: {orbit: Ship}` of the scene's
+  `orbit_data`); each lasts `for` seconds, `until` a time ('bar 9' with `music_data`) or as long
+  as it needs. Too near the ground is an error naming the time and place; `lift: true` raises the
+  path there instead.
+- Keep the page's `land(...)` options, air and place the same as `ground:` (the frame is the
+  land's). Reference: CONFIG.md `web`, "Flight data".
 
 **Phenomena: `vidgen/space-phenomena`.** A black hole, a wormhole, a jump to warp, asteroids, a
 comet, an aurora: do not write these by hand (a black disc with an orange ring is not a black

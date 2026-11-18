@@ -6775,6 +6775,7 @@ command, same `vidgen validate` warning).
 | `data` | mapping | `{}` | values for the page, read as `ctx.data` (`{teeth: 24, color: primary}`): text, numbers, `true` / `false`, `null`, lists and mappings (a YAML date or a number key is an error naming its place, e.g. `data.when`); theme colour names are not looked up for you (`ctx.theme.colors[ctx.data.color]`) |
 | `music_data` | bool \| mapping | `false` | the video's music for the page as `ctx.music` (Step 347, see "Music data" below): `true`, or `{bands: 16, tracks: [kick, hook], t0: 41.6}` (`bands` 1–64, log-spaced from 40 Hz to 12 kHz; `tracks`: only these score tracks' events, default all; `t0`: the song time at the scene's start, default worked out) |
 | `orbit_data` | mapping | — | bodies on their orbits for the page as `ctx.orbits` (Step 367, see "Orbit data" below), in the `orbit` scene's words: `{bodies: [{preset: earth}, {preset: mars}], span: '1 yr', date: '2026-11-17'}`; keys `central`, `bodies`, `span` / `orbits` / `speedup`, `date`, `dynamics`, `method`, `step`, `transfer`, `flyby`, `system`, `planes`, `path_samples` |
+| `flight_data` | mapping | — | flights through the air for the page as `ctx.flight` (Step 385, see "Flight data" below): `{ground: {land: alpine}, flights: [{name: Plane, start: {x: -6000, z: 2000, above_ground: 600, heading: 70, speed: 140}, legs: [{follow: {clearance: 300}, for: 12}, {turn: {by: 60, bank: 35}}]}]}`; keys `flights`, `ground`, `world`, `at`, `start`, `speedup`, `margin`, `path_samples` |
 
 Give exactly one of `page` and `script`.
 
@@ -6914,6 +6915,7 @@ vidgen follows), and the SVG time a page sets with `setCurrentTime` (vidgen sets
 | `beats` | the scene's narration beats in order: `{id, index, start, end, text, words}`; `start` / `end` in seconds from the scene's start (when the beat's voice starts and ends; the next beat starts after the pause), `words` = `[{text, start, end}]` timed like the captions (the voice's stored timings, else estimated). A scene without narration: `[]` |
 | `music` | only with `music_data:`: the music helper (below) |
 | `orbits` | only with `orbit_data:`: the orbit helper (below) |
+| `flight` | only with `flight_data:`: the flight helper (below) |
 
 **Theme as CSS variables.** vidgen puts a `<style id="vidgen-theme">` first in the page's
 `<head>` (before the page's own styles, which therefore win) with these custom properties on
@@ -7303,6 +7305,105 @@ faces its planet. The data is made once and kept in `build/orbits/orbit-data-<ke
 the settings, the frame rate and frames, vidgen's version and its orbit code); the page's clip key
 holds its SHA-256, so a change of the bodies draws the frames again. A 60 s scene of the eight
 planets and the Moon at 30 fps sends about 2.3 MB.
+
+**Flight data: `flight_data`** (Step 385, DESIGN §123.7). A page that shows a plane, a space plane
+or a capsule in the air gets its path from vidgen instead of writing it in JavaScript: with
+`flight_data:` the page's `ctx` has `flight`, the numbers Python computed for every frame — where
+each flight is, how fast it goes and how it is turned — checked never to come under the ground.
+
+```yaml
+- id: pass
+  type: web
+  duration: 20
+  params:
+    script: fly.js
+    flight_data:
+      ground: {land: alpine}           # vidgen/space-land's alpine range; or sea, sphere, flat
+      flights:
+        - name: Plane
+          start: {x: -6000, z: 2000, above_ground: 600, heading: 70, speed: 140}
+          legs:
+            - {follow: {clearance: 300}, for: 12}          # terrain following, 300 m over the ground
+            - {turn: {by: 60, bank: 35}, follow: {clearance: 300}}
+            - {follow: {clearance: 300}, for: 30}
+            - {climb: {to: 5500, rate: 20}, speed: {to: 180}}
+            - {straight: 20}
+```
+
+*The ground and the frame.* `ground`: `{land: <preset>}` or `{land: {preset | world, at, seed,
+mountains, rough, strata, dunes, craters, canyons, volcanoes, materials, air}}` (the heights of
+`vidgen/space-land` with the same options: fetched once from a small page and kept in vidgen's
+cache folder; the place is the land's `at`), `sea` or `{sea: {waves: 2}}` (the mean sea level;
+the crests are added to the margin), `sphere` or `{sphere: {elevation: 300}}` (a level ground on
+the world's sphere: the default), `flat` or `{flat: {elevation: 0}}` (a flat world without a
+sphere). `world` (default the land's air's world, else `earth`; `mars`, `thin`, `thick`, `moon`,
+...): its radius, gravity, turning and air. `at: [lat, lon]` (default the land's place, else
+[0, 0]): where the scene's origin is. Positions are in the scene's local frame — metres, x east,
+y up, z south, the origin on the world's sphere under `at` — the axes `vidgen/space-air`,
+`space-sea`, `space-clouds` and `space-land` draw in (at their defaults `unit: 1`, no `center`);
+the sphere drops away from y = 0 (3.4 m at 6.6 km), so a height is always over the sphere.
+`start` (a scene time, default 0): when the flights' time 0 is; `speedup` (default 1: true
+timing); `margin` (default 20 m): what every path keeps over the ground besides its legs' own
+clearance; `path_samples` (256).
+
+*A flight*: `name`, `start` and `legs`, and `roll_rate` (20°/s), `accel` (2 m/s² for a speed
+change), `vertical_accel` (0.25 g at the ends of a climb), `bank_limit` (60°: a curve that needs
+more is an error), `max_load` (3: a warning over it), `aoa` (the nose over the air's direction,
+3° per g: a look) and `lift` (true: where the path would come too near the ground, it is raised
+there instead of an error). `start`: `{x, z}` (metres) or `{lat, lon}`, `height` (over sea level)
+or `above_ground`, `heading` (degrees from north towards east), `speed` (m/s), `climb` (m/s); or
+`{orbit: Ship, at: 12}`: where the body `Ship` of the scene's `orbit_data` is at that scene time,
+as fast as it moves (for a `reentry`).
+
+*Legs.* A leg holds at most one turn, circle or curve, one climb, descent, level-off or terrain
+following, and a speed change; it lasts `for` seconds, `until` a time of the scene (seconds or
+`'bar 9 beat 3'`), or as long as its manoeuvres need. What it does not name is held (wings level,
+the vertical rate, the speed).
+
+| Leg key | |
+|---|---|
+| `straight: 20` | straight on for 20 s |
+| `turn: {to \| by, side, bank \| radius, roll_rate}` | a coordinated turn to a heading (`side`: `left`, `right`, `shorter`) or by an angle (positive to the right), at a bank (default 30°) or a radius (bank = atan(v² / (g r))); the bank rolls in and out smoothly |
+| `circle: {around, radius, turns, side}` | circling a place (`[x, z]` or `{lat, lon}`: a peak, a ship), in on a smooth curve, `turns` times round (`left`: anticlockwise from above), out level |
+| `waypoints: [[x, z], ...]` or `{points, bank_limit}` | a smooth curve through the places (its curvature continuous; the bank it needs checked) |
+| `climb` / `descend: {to \| by, rate, accel}` | to a height over sea level or by metres, at `rate` (10 m/s); `{rate: 5}` alone climbs on until another leg changes it |
+| `level: true` | the vertical rate to zero |
+| `follow: {clearance, rate, push, smoothing}` | terrain following `clearance` metres over the ground (legs that follow one after another make one span, turns inside allowed): looking ahead, push-overs at most `1 − push` g (0.5), vertical speed at most `rate` (30 % of the speed), smoothed over `smoothing` seconds (4) |
+| `speed: {to \| mach, rate}` or `speed: 200` | a new air speed (m/s or a Mach number of the air), at `rate` (m/s², mean) |
+| `land: {glide, flare, touchdown, brake}` | an approach at `glide` degrees (3), a flare from `flare` metres (15) to height 0 with no sink at the ground's level under the touchdown, then a roll-out to a stop at `brake` m/s² (on level ground or the sea) |
+| `reentry: {to: {height, speed}, lift_to_drag, loading, blend, end, bank, reversals, reversal, aoa}` | the first leg only: from orbit down to a level flight state (see below) |
+
+*Re-entry.* From the start's orbit state the craft first follows the orbit's own motion, then over
+`blend` seconds (600) turns into an equilibrium glide in the air's exponential atmosphere
+(`lift_to_drag` 1.2, `loading` m / (C_L S) 450 kg/m²: the glide's height for a speed), with
+S-turns of `bank` (60°) and `reversals` (3); at the end it turns into the level state `to`.
+Position and velocity meet the orbit's where it takes over and the next leg's where it ends.
+What is physical and what is a look is in DESIGN §123.7 and the data's `approximations`; the
+heating indicator (√ρ v³, 1 about a returning orbiter's peak) is for a glow.
+
+*Never under the ground.* Every path is checked against the ground's heights (a land's
+`heightAt`) with the margin; a path that comes too near is an error naming the flight, the time,
+the leg, the place and the clearance, with remedies (climb before it, `follow`, or `lift: true`).
+Far ground is drawn smoother than `heightAt` (valleys a little filled at tens of kilometres): keep
+the camera near the craft or raise the margin.
+
+| `ctx.flight.` | |
+|---|---|
+| `position(name, t?)`, `velocity(name, t?)` | `[x, y, z]` in the scene's frame at scene time `t` (default: the frame drawn), m and m/s |
+| `quaternion(name, t?)` | the attitude `[x, y, z, w]`: the craft's axes (x the left wing, y up, z the nose) into the scene's |
+| `place(object, name, t?)` | sets a three.js object's position and quaternion |
+| `speed`, `mach`, `height`, `aboveGround`, `climb` (name, t?) | air speed, Mach number, metres over sea level and over the ground, vertical speed |
+| `load`, `bank`, `pitch`, `heading`, `aoa` (name, t?) | load factor (g), bank, flight-path angle, heading (from north towards east), angle of attack (rad) |
+| `heating(name, t?)` | the heating indicator √(ρ / 10⁻⁴ kg/m³)·(v / 7 km/s)³ |
+| `time(name, t?)`, `active(name, t?)`, `index(t?)` | flight seconds (negative before the flight starts: it waits at its start), whether it has started, the frame read |
+| `path(name)`, `legs(name)` | `[[x, y, z], ...]` over the planned flight; the legs `{number, kind, start, end, scene_start, scene_end, ...}` |
+| `names`, `flights`, `world`, `anchor`, `ground`, `frame`, `units`, `speedup`, `approximations`, `warnings`, `series(name)` | the data's facts; the raw `Float64Array`s |
+
+`craft(...).fly(ctx.flight, {flight: "Plane"})` (`vidgen/space-craft`) flies a craft along a flight
+with its attitude. As with `orbit_data`, each value is the frame's own, never interpolated; the
+data is kept in `build/flights/flight-data-<key>.json` and its SHA-256 is in the clip's key. With
+`orbit_data` too, `ctx.orbits` is there as before; Python: `vidgen.api.flight`,
+`vidgen.api.web_scene_flights`.
 
 **Astronomical scales: `vidgen/space-scale`** (Step 368, DESIGN §122.4). Draws `ctx.orbits` in
 three.js without jitter or z-fighting: a 100 m ship, the planet 400 km under it and the Moon behind
@@ -16889,7 +16990,8 @@ are the same bit for bit, only faster. Nothing to configure; nothing in `video.y
   under 500 MB free on the disk.
 - **Commands**: `vidgen cache` (or `vidgen cache info`) shows the cache folder, the baked maps'
   count, size and limit, and the other folders in it (the SoundFont, studio sessions, the model
-  list); `vidgen cache clear` removes the baked maps (the next pages bake them again).
+  list); `vidgen cache clear` removes the baked maps (the next pages bake them again) and the ground
+  heights flights read (`ground/`; fetched again from a page when needed).
 - **Keys**: a map is found again only when everything it was made from is the same: its options
   (seed, type, size, colours...), vidgen's page modules and three.js (a new vidgen version bakes
   anew), Chromium and its GL. The cache is in no scene's cache key: switching it off or clearing

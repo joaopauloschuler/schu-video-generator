@@ -2133,7 +2133,8 @@ def cmd_soundfont(args: argparse.Namespace) -> int:
 
 def cmd_cache(args: argparse.Namespace) -> int:
     """``info``: what vidgen's cache folder holds, the baked maps of web pages first (DESIGN.md
-    §123.2); ``clear``: remove the baked maps (pages bake them again when they need them)."""
+    §123.2); ``clear``: remove the baked maps (pages bake them again when they need them) and the
+    ground heights flights read (§123.7; fetched again from a page when needed)."""
     from vidgen.render.disk import size_text
     from vidgen.soundfont import cache_dir
     from vidgen.web.baked import FOLDER, LIMIT_ENV, BakedStore, baked_dir, limit_bytes
@@ -2141,8 +2142,13 @@ def cmd_cache(args: argparse.Namespace) -> int:
     limit = limit_bytes()
     store = BakedStore(baked_dir(), limit)
     if args.action == "clear":
+        from vidgen.web.land import clear as clear_grounds
+
         was = store.clear()
         print(f"removed {was.entries} baked map{'s' if was.entries != 1 else ''} ({size_text(was.bytes)}) from {was.folder}")
+        count, size = clear_grounds()
+        if count:
+            print(f"removed {count} ground height definition{'s' if count != 1 else ''} ({size_text(size)})")
         return 0
     used = store.usage()
     state = f"off ({LIMIT_ENV}=0)" if limit == 0 else f"limit {size_text(limit)} ({LIMIT_ENV}), least recently used removed first"
@@ -2156,6 +2162,7 @@ def cmd_cache(args: argparse.Namespace) -> int:
 
 #: Who keeps the other folders of vidgen's cache folder (``vidgen cache info`` names them).
 CACHE_OWNERS: dict[str, str] = {"soundfonts": "`vidgen soundfont`", "studio": "`vidgen studio`; `--clean` removes old renders",
+                                "ground": "flights over vidgen/space-land's ground (`flight_data`); `vidgen cache clear` removes them",
                                 "openrouter": "`vidgen generate models`: the list of video models"}
 
 
@@ -2748,7 +2755,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="fetch: download it again even if the cached file is there")
     p.set_defaults(func=cmd_soundfont)
 
-    p = sub.add_parser("cache", help="vidgen's cache folder: info shows what it holds (the baked maps of web pages, with their limit), clear removes the baked maps")
+    p = sub.add_parser("cache", help="vidgen's cache folder: info shows what it holds (the baked maps of web pages, with their limit), clear removes the baked maps and the ground heights of flights")
     p.add_argument("action", nargs="?", choices=["info", "clear"], default="info",
                    help="info (the default): the cache folder, the baked maps' count, size and limit, the other folders; clear: remove the baked maps")
     p.set_defaults(func=cmd_cache)

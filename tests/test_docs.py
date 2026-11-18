@@ -432,21 +432,21 @@ def test_the_3d_cookbook_and_its_example() -> None:
 
 
 def test_the_space_cookbook_recipes_validate_and_it_is_linked() -> None:
-    """Step 378: every recipe of docs/COOKBOOK-SPACE.md is a valid `space` scene, and the cookbook is linked
-    from the main cookbook, the 3D and orbits cookbooks, the README and the guide."""
+    """Step 378: every recipe of docs/COOKBOOK-SPACE.md is a valid `space` scene (Step 385: or a `web` scene
+    with `flight_data`), and the cookbook is linked from the main cookbook, the 3D and orbits cookbooks,
+    the README and the guide."""
     from vidgen import extensions, registry
 
     extensions.load_builtins()
-    space = registry.get("space").cls
     text = (ROOT / "docs" / "COOKBOOK-SPACE.md").read_text(encoding="utf-8")
     blocks = re.findall(r"```yaml\n(.*?)```", text, re.S)
     ids = []
     for block in blocks:
         (scene,) = yaml.safe_load(block)
-        assert scene["type"] == "space"
-        space.Params.model_validate(scene["params"])
+        assert scene["type"] in ("space", "web")
+        registry.get(scene["type"]).cls.Params.model_validate(scene["params"])
         ids.append(scene["id"])
-    assert ids == ["sunrise", "crescent", "depart", "flyby", "zoom", "hole", "comet", "jump"]
+    assert ids == ["sunrise", "crescent", "depart", "flyby", "zoom", "hole", "comet", "jump", "pass"]
     for doc in ("docs/COOKBOOK.md", "docs/COOKBOOK-3D.md", "docs/COOKBOOK-ORBITS.md", "README.md", "AGENTS.md", "src/vidgen/data/guide/AGENTS.md"):
         assert "COOKBOOK-SPACE.md" in (ROOT / doc).read_text(encoding="utf-8"), doc
     assert "no formal licence" in text and "16.11 h" in text
