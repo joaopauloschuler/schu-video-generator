@@ -236,7 +236,11 @@ export function frame(t) {
 }
 ```
 
-Film exposure (the default) lifts the dusk and brings the stars out as the sky darkens;
+Film exposure (the default) lifts the dusk and brings the stars out as the sky darkens: from
+sunset to a sun 12 degrees down the sky fades through orange and deep blue without a step, night
+by 18 degrees (a time-lapse: a degree every 4 s of film is the real rate times 60). The sun is
+0.53 degrees across: 7 px in a 640 px frame through a 50 degree lens, so film a sunset with a long
+lens (`fov` 15 to 25) if the disc is the subject.
 `exposure: "camera", ev: 0` shows what a camera set for daylight sees. For a height, move the
 camera: at 10 km the horizon curves and the sky darkens, above about 70 km (the Earth-like air's
 top) it is space with the limb's glow.

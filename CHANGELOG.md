@@ -34,6 +34,12 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   stated by its numbers. Exposure `film` (dusk lifted, a convention), `camera` and `auto`, as
   `vidgen/space-light`. 0.19 s a frame at 1280x720 in software GL; ten parts under the new kind
   `air` (`vidgen parts --kind air`). [CONFIG](docs/CONFIG.md#web), [space cookbook](docs/COOKBOOK-SPACE.md).
+- **Twilight, the Mars-like sunset and the sun's disc** (Step 381.1): from sunset to night the
+  sky of `vidgen/space-air` now fades without a step (it went black with the sun 10 degrees down):
+  light scattered twice reaches the shadowed air, the dusk is blue, the arch stays on the horizon,
+  and the film exposure keeps a deep-blue glow at 12 degrees. The Mars-like air's dust has a
+  narrow second lobe (`aureole`): a compact blue-white glow round a low sun in a tawny sky. A low
+  sun is an orange-gold disc with a darker limb and a soft bloom.
 
 ### Space scenes (Phase AN, Steps 367–378)
 

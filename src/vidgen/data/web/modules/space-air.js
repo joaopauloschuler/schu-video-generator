@@ -42,8 +42,9 @@ export const EXPOSURES = Object.freeze(["film", "camera", "auto"]);
 export const QUALITIES = Object.freeze(["fast", "standard", "fine"]);
 /** The sky table by quality: directions round (half the circle: the sky is the same left and right of the sun), rows above and below the horizon each, steps along a ray. */
 export const VIEW_TABLES = Object.freeze({fast: [48, 48, 16], standard: [64, 96, 32], fine: [96, 160, 48]});
-/** The table of light scattered more than once: the sun's heights, the observer's heights; directions and steps of its sum. */
-export const PSI_TABLE = Object.freeze({suns: 64, heights: 32, directions: 8, steps: 16, sunFrom: -0.4});
+/** The table of light scattered more than once: the sun's heights, the observer's heights; of its sum the directions
+ * round, the directions up and down (crowded towards the level, where the twilight's light lies) and the steps along each. */
+export const PSI_TABLE = Object.freeze({suns: 64, heights: 32, directions: 8, elevations: 14, steps: 24, sunFrom: -0.4});
 
 const fail = (message) => new Error(`${PREFIX}: ${message}`);
 function editDistance(a, b) {
@@ -80,21 +81,24 @@ const luma = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
  * rayleigh, haze, absorb, height, forward, glow}) in place of the world's own: hand the same to the body
  * (`planet(renderer, "mars", {air: PRESETS.mars.air})`) to see it from outside; `radius` in metres;
  * `forward`: how sharply the haze throws light onward, per colour (the outside view uses one number);
+ * `aureole` and `aureoleForward`: a second, narrow lobe of the haze, its share of the haze's light per colour
+ * and its forward throw (dust grains larger than the light's wave throw a tight cone of light onward);
  * `ozone` and `ozoneHeight`: a thin absorbing layer's zenith optical depth per colour and its height in
  * metres (the outside view has none); `ground`: the plain ground's colour under the horizon.
  * `earth`: the world's own air with an ozone layer of 300 Dobson units' absorption (physical). `mars`: a
- * dusty season, three times the world's dust with grey extinction, the forward throw chosen for the look
+ * dusty season, three times the world's dust with grey extinction, the two lobes chosen for the look (a
+ * compact blue-white glow round a low sun in a tawny sky)
  * (`{world: "mars"}` is the world's own, clearer air). `thin`, `thick`: invented worlds. */
 export const PRESETS = Object.freeze({
   earth: {world: "earth", ozone: [0.030, 0.028, 0.004], ozoneHeight: 25000, ground: [0.09, 0.10, 0.085]},
-  mars: {world: "mars", air: {like: "mars", density: 3, absorb: [0, 0.013, 0.031]}, forward: [0.52, 0.58, 0.78], ground: [0.30, 0.15, 0.07]},
+  mars: {world: "mars", air: {like: "mars", density: 3, absorb: [0, 0.013, 0.031]}, forward: [0.36, 0.42, 0.55], aureole: [0.02, 0.06, 0.35], aureoleForward: 0.93, ground: [0.30, 0.15, 0.07]},
   thin: {air: "thin", radius: 2.4e6, ground: [0.32, 0.36, 0.42]},
   thick: {air: {like: "earth", density: 4, haze: [0.05, 0.05, 0.05], height: 0.0018}, radius: 7.4e6, ground: [0.05, 0.09, 0.08]},
 });
 /** The radii (metres) of vidgen/space-bodies' worlds that have air: the real ones', invented ones for the invented. */
 export const RADII = Object.freeze({venus: 6.0518e6, earth: 6.371e6, mars: 3.3895e6, jupiter: 6.9911e7, saturn: 5.8232e7, uranus: 2.5362e7, neptune: 2.4622e7, titan: 2.5747e6,
   ember: 3.1e6, boreas: 2.4e6, ochre: 4.2e6, tempest: 6.1e7, verdant: 6.9e6, azure: 2.3e7});
-const AIR_OPTIONS = ["world", "air", "radius", "forward", "ground", "ozone", "ozoneHeight", "name"];
+const AIR_OPTIONS = ["world", "air", "radius", "forward", "aureole", "aureoleForward", "ground", "ozone", "ozoneHeight", "name"];
 
 /** The air in full, as numbers: `what` a name of PRESETS, a world of vidgen/space-bodies, an air of its
  * AIRS, a body made by its `planet()` (that body's air), or {world | air, radius, forward, ozone,
@@ -133,11 +137,14 @@ export function airOf(what = "earth", extra = {}) {
   if (!Array.isArray(forward) || forward.length !== 3) throw fail(`forward must be a number or [red, green, blue] from 0 to 0.95, got ${JSON.stringify(o.forward)}`);
   forward.forEach((g) => number("forward", g, 0, 0.95));
   const ground = linearColor("ground", o.ground ?? [0.1, 0.1, 0.1]), ozone = linearColor("ozone", o.ozone ?? [0, 0, 0]);
+  const aureole = o.aureole ?? [0, 0, 0], aureoleForward = number("aureoleForward", o.aureoleForward ?? 0.93, 0, 0.98);
+  if (!Array.isArray(aureole) || aureole.length !== 3) throw fail(`aureole must be [red, green, blue], each the narrow lobe's share of the haze's light from 0 to 1, got ${JSON.stringify(o.aureole)}`);
+  aureole.forEach((x) => number("aureole", x, 0, 1));
   const ext = air.rayleigh.map((x, i) => x + air.haze[i] + air.absorb[i]), H = air.height * radius;
   const ozoneHeight = number("ozoneHeight (metres)", o.ozoneHeight ?? 2.8 * H, 0.5 * H, (TOP - 1) * H);
   return Object.freeze({name: o.name ?? o.world ?? null, radius, height: air.height, H, X0: 1 / air.height, top: TOP * H,
     rayleigh: Object.freeze([...air.rayleigh]), haze: Object.freeze([...air.haze]), absorb: Object.freeze([...air.absorb]), ext: Object.freeze(ext),
-    ozone: Object.freeze(ozone), hz: ozoneHeight / H,
+    ozone: Object.freeze(ozone), hz: ozoneHeight / H, aureole: Object.freeze([...aureole]), aureoleForward,
     forward: Object.freeze([...forward]), glow: Object.freeze([...air.glow]), ground: Object.freeze(ground)});
 }
 
@@ -152,13 +159,13 @@ export function column(X0, h, c) {
   return Math.max(2 * Math.sqrt(1.5708 * X * s) * Math.exp(-Math.max(ht, -6)) - up, up);
 }
 /** How often, and how aslant, the line from a point (`h` scale heights up) to space along cosine `c` crosses a thin
- * layer `hz` scale heights up: 1 over the cosine at the layer per crossing, at most 16 (the layer has a depth). */
+ * layer `hz` scale heights up: 1 over the cosine at the layer per crossing, at most 41 (the layer has a depth: a ray grazing a layer 15 km deep runs 58 times its depth in it). */
 export function crossings(X0, hz, h, c) {
   const r = X0 + h, Rz = X0 + hz, e = ((hz - h) * (2 * X0 + hz + h) + r * r * c * c) / (Rz * Rz), f = 1 / Math.sqrt(Math.max(e, OZONE_EDGE));
   const below = 1 - smooth(hz - 0.5, hz + 0.5, h);
   return c >= 0 ? below * f : below * f + (1 - below) * 2 * f * smooth(0, 2 * OZONE_EDGE, e);
 }
-const OZONE_EDGE = 0.004;
+const OZONE_EDGE = 0.0006;
 // the optical depth from a point (h scale heights up) to space along cosine c, per colour: the air's and the layer's
 const tau = (m, h, c) => { const k = column(m.X0, h, c), z = m.ozone[0] + m.ozone[1] + m.ozone[2] > 0 ? crossings(m.X0, m.hz, h, c) : 0; return [m.ext[0] * k + m.ozone[0] * z, m.ext[1] * k + m.ozone[1] * z, m.ext[2] * k + m.ozone[2] * z, k]; };
 /** The optical depth (red, green, blue) from `height` metres to space along cosine `c` to the vertical. */
@@ -188,12 +195,12 @@ const airShare = (air, all) => (all > 1e-12 ? Math.min(1, air / all) : 1);
 /** The table of light scattered more than once (see the top of the file), in JavaScript: {suns, heights,
  * data (Float32Array, rgb per cell), at(h, mus) → [r, g, b]} for heights 0..TOP scale heights (rows,
  * spaced by the square root) and the sun's cosine PSI_TABLE.sunFrom..1. Coarser than the baked one by default. */
-export function psiTable(model, {suns = 24, heights = 12, directions = 6, steps = 10} = {}) {
+export function psiTable(model, {suns = 24, heights = 12, directions = 6, elevations = 10, steps = 12} = {}) {
   const data = new Float32Array(suns * heights * 3), X0 = model.X0, scat = model.ext.map((e, i) => (model.rayleigh[i] + model.haze[i]) / e);
   for (let j = 0; j < heights; j++) {
     for (let i = 0; i < suns; i++) {
       const hc = TOP * ((j + 0.5) / heights) ** 2, mus = PSI_TABLE.sunFrom + (1 - PSI_TABLE.sunFrom) * (i + 0.5) / suns;
-      const cell = psiCell(model, X0, scat, hc, mus, directions, steps);
+      const cell = psiCell(model, X0, scat, hc, mus, directions, elevations, steps);
       data.set(cell, (j * suns + i) * 3);
     }
   }
@@ -205,11 +212,13 @@ export function psiTable(model, {suns = 24, heights = 12, directions = 6, steps 
   };
   return {suns, heights, data, at: read};
 }
-function psiCell(model, X0, scat, hc, mus, directions, steps) {
-  const L = [0, 0, 0], F = [0, 0, 0], n = directions * directions, sx = Math.sqrt(Math.max(1 - mus * mus, 0));
-  for (let a = 0; a < directions; a++) {
+function psiCell(model, X0, scat, hc, mus, directions, elevations, steps) {
+  const L = [0, 0, 0], F = [0, 0, 0], sx = Math.sqrt(Math.max(1 - mus * mus, 0));
+  for (let a = 0; a < elevations; a++) {
+    // the cosine to the vertical goes as x |x|: many directions near the level, each weighing its share of the sphere
+    const x = 2 * (a + 0.5) / elevations - 1, mu = x * Math.abs(x), w = Math.abs(x) * 2 / (elevations * directions);
     for (let b = 0; b < directions; b++) {
-      const mu = 1 - 2 * (a + 0.5) / directions, phi = 2 * Math.PI * (b + 0.5) / directions, cosv = Math.sqrt(1 - mu * mu) * Math.cos(phi) * sx + mu * mus;
+      const phi = 2 * Math.PI * (b + 0.5) / directions, cosv = Math.sqrt(1 - mu * mu) * Math.cos(phi) * sx + mu * mus;
       const {t0, t1, hit} = span(X0, hc, mu);
       if (t1 <= t0) continue;
       const p0 = at(X0, hc, mu, cosv, mus, t0), up = p0[1] >= 0, c0 = along(model, p0, up), T = [1, 1, 1], done = [0, 0, 0];
@@ -220,18 +229,18 @@ function psiCell(model, X0, scat, hc, mus, directions, steps) {
         const dk = Math.max(up ? last - d[3] : d[3] - last, 0);
         last = d[3];
         for (let k = 0; k < 3; k++) {
-          const now = Math.max(up ? c0[k] - d[k] : d[k] - c0[k], 0), Tn = Math.exp(-now), share = (T[k] - Tn) * scat[k] * airShare(model.ext[k] * dk, now - done[k]);
+          const now = Math.max(up ? c0[k] - d[k] : d[k] - c0[k], 0), Tn = Math.exp(-now), share = w * (T[k] - Tn) * scat[k] * airShare(model.ext[k] * dk, now - done[k]);
           done[k] = now;
           L[k] += share * 0.25 * Math.exp(-cs[k]); F[k] += share; T[k] = Tn;
         }
       }
       if (hit) {
         const g = at(X0, hc, mu, cosv, mus, t1), cs = tau(model, 0, g[2]);
-        for (let k = 0; k < 3; k++) L[k] += T[k] * model.ground[k] * Math.max(g[2], 0) * Math.exp(-cs[k]);
+        for (let k = 0; k < 3; k++) L[k] += w * T[k] * model.ground[k] * Math.max(g[2], 0) * Math.exp(-cs[k]);
       }
     }
   }
-  return L.map((l, k) => (l / n) / (1 - F[k] / n));
+  return L.map((l, k) => l / (1 - F[k]));
 }
 const tables = new WeakMap();
 const psiOf = (model) => { let t = tables.get(model); if (!t) { t = psiTable(model); tables.set(model, t); } return t; };
@@ -255,7 +264,7 @@ export function skyLight(model, height, mu, cosv, mus, {steps = 32, psi = null, 
     for (let c = 0; c < 3; c++) {
       const now = Math.max(up ? c0[c] - d[c] : d[c] - c0[c], 0), Tn = Math.exp(-now), e = model.ext[c], share = airShare(e * dk, now - done[c]);
       done[c] = now;
-      out[c] += share * (T[c] - Tn) * (Math.exp(-cs[c]) * (model.rayleigh[c] * pr + model.haze[c] * phaseHaze(model.forward[c], cosv)) + (table ? more[c] * (model.rayleigh[c] + model.haze[c]) : 0)) / e;
+      out[c] += share * (T[c] - Tn) * (Math.exp(-cs[c]) * (model.rayleigh[c] * pr + model.haze[c] * ((1 - model.aureole[c]) * phaseHaze(model.forward[c], cosv) + model.aureole[c] * phaseHaze(model.aureoleForward, cosv))) + (table ? more[c] * (model.rayleigh[c] + model.haze[c]) : 0)) / e;
       T[c] = Tn;
     }
   }
@@ -315,11 +324,20 @@ export function ambientTable(model, n = 64) {
  * darkens over a last glow. `heightInScales`: no lift above the air. A convention. */
 export function filmExposure(zenith, day, heightInScales = 0, arch = 0) {
   const x = Math.max(0, Math.log2(day / Math.max(zenith, 1e-30)));
-  return Math.max(0, Math.min(FILM_STOPS, 0.93 * x * x / (x + 0.3), Math.log2(ARCH_WHITE / Math.max(arch, 1e-30)))) * (1 - smooth(3, TOP, heightInScales));
+  // the arch may be as bright before the dusk curve as that curve brings down to ARCH_WHITE; where a hazy
+  // air's glow round a low sun is brighter than that by itself, the exposure closes (at most FILM_CLOSE stops)
+  const lift = Math.min(FILM_STOPS, 0.93 * x * x / (x + 0.3)), most = DUSK_KNEE * Math.pow(ARCH_WHITE / DUSK_KNEE, 1 / (1 - duskCurve(lift)));
+  return Math.max(-FILM_CLOSE, Math.min(lift, Math.log2(most / Math.max(arch, 1e-30)))) * (1 - smooth(3, TOP, heightInScales));
 }
+export const FILM_CLOSE = 3;
+/** The film look's dusk curve: once the exposure is lifted (from half a stop, fully from 4), the air's light over
+ * DUSK_KNEE of white is drawn as knee x (light / knee)^(1 - DUSK_CURVE), its colour kept: a negative's
+ * shoulder, so the twilight arch (hundreds of times the zenith's brightness) and the zenith fit in one picture. */
+export const DUSK_CURVE = 0.5, DUSK_KNEE = 0.05;
+export const duskCurve = (stops) => DUSK_CURVE * smooth(0.5, 4, stops);
 /** How bright the film look lets the twilight arch be drawn (1 = white): the exposure opens no further. */
 export const ARCH_WHITE = 1.6;
-export const FILM_STOPS = 14;
+export const FILM_STOPS = 16;
 /** How much of the stars the film look shows: none until the sky is `stops` = 5 stops darker than by day, all of
  * them from 11; and all of them wherever the zenith is drawn black (`drawn`, 1 = white: high up, by day too). */
 export const filmStars = (stops, drawn = 1) => Math.max(smooth(5, 11, stops), 1 - smooth(0.002, 0.01, drawn));
@@ -337,6 +355,8 @@ uniform vec4 uAirMap;      // the horizon's dip (radians), the span of the rows 
 uniform vec4 uAirTable;    // the sky table's half-texels across and along, the same of the table of second-hand light
 uniform vec3 uAirUp, uAirSun, uAirExt, uAirScatR, uAirScatM, uAirG, uAirLight, uAirGlow;
 uniform vec4 uAirOzone;    // a thin absorbing layer: its zenith optical depth per colour, its height
+uniform vec4 uAirAureole;  // the haze's second, narrow lobe: its share per colour, its forward throw
+uniform vec2 uAirDusk;     // the film look's dusk curve: its strength, its knee
 uniform sampler2D uAirView, uAirPsi;
 float airCol(float h, float c) {
   float X = uAirGeo.x + h, k = sqrt(1.5708 * X), up = k / (k * abs(c) + 1.0) * exp(-h);
@@ -382,22 +402,28 @@ vec2 airWhere(float mu, float cosv) {
 // the sky table's light at a place in it, for a ray whose cosine to the sun is cosv
 vec3 airFromTable(vec2 uv, float cosv) {
   vec3 once = texture2D(uAirView, vec2(uv.x * 0.5, uv.y)).rgb, more = texture2D(uAirView, vec2(0.5 + uv.x * 0.5, uv.y)).rgb;
-  vec3 g = uAirG, haze = 0.25 * (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * cosv, vec3(1.5));
+  // Henyey-Greenstein's lobes: x^-1.5 as the cube of 1 / sqrt(x)
+  vec3 g = uAirG, wide = inversesqrt(1.0 + g * g - 2.0 * g * cosv), haze = 0.25 * (1.0 - g * g) * wide * wide * wide;
+  float n = uAirAureole.w, thin = inversesqrt(1.0 + n * n - 2.0 * n * cosv);
+  haze = mix(haze, vec3(0.25 * (1.0 - n * n) * thin * thin * thin), uAirAureole.rgb);
   return uAirLight * (once * (uAirScatR * 0.1875 * (1.0 + cosv * cosv) + uAirScatM * haze) + more * (uAirScatR + uAirScatM));
 }
+// the film look's dusk curve (nothing by day, and nothing in the other exposures)
+float airDusked;           // what the last airLight's dusk curve left of the ray's light
+vec3 airDusk(vec3 light) { airDusked = pow(max(dot(light, vec3(0.2126, 0.7152, 0.0722)) / uAirDusk.y, 1.0), -uAirDusk.x); return light * airDusked; }
 vec2 airUv;                // where the last airLight read the table
 // the air's light towards the camera along a ray (mu its cosine to the vertical, cosv to the sun) as far as
 // dist (scale heights; negative: to the ground or to space); through: what passes; hit: it ends on the ground
 vec3 airLight(float mu, float cosv, float dist, out vec3 through, out float hit) {
   float hc = uAirGeo.y, mus = uAirMap.w;
   vec3 sp = airSpan(hc, mu);
-  hit = sp.z; through = vec3(1.0); airUv = vec2(0.5, 0.75);
+  hit = sp.z; through = vec3(1.0); airUv = vec2(0.5, 0.75); airDusked = 1.0;
   if (sp.y <= sp.x) return vec3(0.0);
   vec3 p0 = airAt(hc, mu, cosv, mus, sp.x), p1 = airAt(hc, mu, cosv, mus, sp.y);
   float up = step(0.0, p0.y); vec3 c0 = airAlong(p0, up);
   vec3 whole = exp(-max((up > 0.5 ? 1.0 : -1.0) * (c0 - airAlong(p1, up)), 0.0));
   airUv = airWhere(mu, cosv);
-  vec3 light = airFromTable(airUv, cosv) + uAirGlow * (1.0 - whole);
+  vec3 light = airDusk(airFromTable(airUv, cosv)) + uAirGlow * (1.0 - whole);
   through = whole;
   if (dist >= 0.0 && dist < sp.y) {
     vec3 p = airAt(hc, mu, cosv, mus, max(dist, sp.x));
@@ -453,9 +479,11 @@ void main() {
   vec2 uv = gl_FragCoord.xy / uSize;
   float hc = uAirGeo.z * uv.y * uv.y, mus = ${PSI_TABLE.sunFrom.toFixed(2)} + ${(1 - PSI_TABLE.sunFrom).toFixed(2)} * uv.x, sx = sqrt(max(1.0 - mus * mus, 0.0));
   vec3 L = vec3(0.0), F = vec3(0.0), scat = uAirScatR + uAirScatM;
-  for (int a = 0; a < DIRS; a++) {
+  for (int a = 0; a < ELEVS; a++) {
+    // the cosine to the vertical goes as x |x|: many directions near the level, each weighing its share of the sphere
+    float x = 2.0 * (float(a) + 0.5) / float(ELEVS) - 1.0, mu = x * abs(x), w = abs(x) * 2.0 / float(ELEVS * DIRS);
     for (int b = 0; b < DIRS; b++) {
-      float mu = 1.0 - 2.0 * (float(a) + 0.5) / float(DIRS), cosv = sqrt(1.0 - mu * mu) * cos(6.2831853 * (float(b) + 0.5) / float(DIRS)) * sx + mu * mus;
+      float cosv = sqrt(1.0 - mu * mu) * cos(6.2831853 * (float(b) + 0.5) / float(DIRS)) * sx + mu * mus;
       vec3 sp = airSpan(hc, mu), T = vec3(1.0);
       float live = step(sp.x, sp.y - 1e-6);
       vec3 p0 = airAt(hc, mu, cosv, mus, sp.x);
@@ -463,15 +491,14 @@ void main() {
       for (int i = 1; i <= STEPS; i++) {
         vec3 p = airAt(hc, mu, cosv, mus, mix(sp.x, sp.y, float(i) / float(STEPS))), m = airAt(hc, mu, cosv, mus, mix(sp.x, sp.y, (float(i) - 0.5) / float(STEPS)));
         vec4 now = max(sign_ * (c0 - airAlong4(p, up)), 0.0);
-        vec3 Tn = exp(-now.rgb), share = (T - Tn) * airShare(now.a - was.a, now.rgb - was.rgb) * scat * live;
+        vec3 Tn = exp(-now.rgb), share = w * (T - Tn) * airShare(now.a - was.a, now.rgb - was.rgb) * scat * live;
         L += share * 0.25 * exp(-airTau(max(m.x, 0.0), m.z)); F += share; T = Tn; was = now;
       }
       vec3 g = airAt(hc, mu, cosv, mus, sp.y);
-      L += live * sp.z * T * uGround * max(g.z, 0.0) * exp(-airTau(0.0, g.z));
+      L += w * live * sp.z * T * uGround * max(g.z, 0.0) * exp(-airTau(0.0, g.z));
     }
   }
-  float n = float(DIRS * DIRS);
-  gl_FragColor = vec4((L / n) / (1.0 - F / n), 1.0);
+  gl_FragColor = vec4(L / (1.0 - F), 1.0);
 }`;
 const TONE = THREE.ShaderChunk.tonemapping_pars_fragment.replace("uniform float toneMappingExposure;", "const float toneMappingExposure = 1.0;");
 const DOME_VERT = "varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0); gl_Position.z = 0.0; }";
@@ -501,15 +528,20 @@ void main() {
   float sunG = airAt(hc, mu, cosv, mus, max(tg, 0.0)).z;
   vec3 ambient = texture2D(uAmbient, vec2(clamp((sunG - (${PSI_TABLE.sunFrom.toFixed(2)})) / ${(1 - PSI_TABLE.sunFrom).toFixed(2)}, 0.01, 0.99), 0.5)).rgb;
   vec3 ground = uGround * uAirLight * (exp(-airTau(0.0, sunG)) * max(sunG, 0.0) + ambient);
-  vec3 over = airFromTable(vec2(airUv.x, 0.5 + uAirTable.y), cosv);
+  vec3 over = airFromTable(vec2(airUv.x, 0.5 + uAirTable.y), cosv) * airDusked;
   col = mix(col, mix(over, col + ground * through, cover), uGroundOn * step(a, 0.0));
   alpha = mix(alpha, 1.0, cover * uGroundOn);
   // the sun: a disc darker and redder towards its limb, seen through the air on the ray
   float ang = atan(length(cross(rd, uAirSun)), cosv), rim = clamp(ang / uSun.x, 0.0, 1.0);
   float disc = (1.0 - smoothstep(uSun.x - 0.6 * uPix, uSun.x + 0.6 * uPix, ang)) * (1.0 - cover);
   float most = max(max(through.r, through.g), max(through.b, 1e-9)), tint = max(max(uAirLight.r, uAirLight.g), max(uAirLight.b, 1e-9));
-  float bright = uSun.y > 0.0 ? min(uSun.y * most * tint, uSun.z) : uSun.z * pow(most, uSun.w);
-  col += disc * (through / most) * (uAirLight / tint) * bright * (1.0 - uLimb * (1.0 - sqrt(1.0 - rim * rim)));
+  float bright = uSun.y > 0.0 ? min(uSun.y * most * tint, uSun.z) : mix(1.6, uSun.z, pow(most, uSun.w));
+  vec3 sunColour = (through / most) * (uAirLight / tint);
+  // the disc stands in front of the sky's glow (added to it, a low red sun would wash out to the sky's own pale orange)
+  col = mix(col, max(col, vec3(0.0)) * 0.15 + sunColour * bright * (1.0 - uLimb * (1.0 - sqrt(1.0 - rim * rim))), disc);
+  // a soft bloom round the disc, in its colour, never brighter than a few whites: a lens's, not the air's
+  float off = max(ang - uSun.x, 0.0) / uSun.x;
+  col += (1.0 - disc) * (1.0 - cover) * step(1e-6, uSun.x) * sunColour * min(bright, 4.0) * (0.3 / (1.0 + off + off * off) + 0.05 / (1.0 + off * off));
   alpha = max(alpha, disc);
   float n = dither(gl_FragCoord.xy) + dither(gl_FragCoord.xy * 1.7 + 91.0) - 1.0;
   // straight to the canvas what is behind (the stars) is added after the tone curve: it is let through as
@@ -563,13 +595,14 @@ export class Air {
     this.uniforms = {uAirGeo: {value: new THREE.Vector4(m.X0, 0, TOP, o.unit / m.H)}, uAirMap: {value: new THREE.Vector4(0, 1.5708, 1.5708, 0.5)},
       uAirTable: {value: new THREE.Vector4(0.25 / across, 0.25 / rows, 0.5 / PSI_TABLE.suns, 0.5 / PSI_TABLE.heights)},
       uAirUp: {value: new THREE.Vector3(0, 1, 0)}, uAirSun: {value: new THREE.Vector3(0, 1, 0)}, uAirExt: {value: v3(m.ext)}, uAirScatR: {value: scat(m.rayleigh)}, uAirScatM: {value: scat(m.haze)},
-      uAirG: {value: v3(m.forward)}, uAirLight: {value: new THREE.Vector3(1, 1, 1)}, uAirGlow: {value: v3(m.glow)}, uAirOzone: {value: new THREE.Vector4(...m.ozone, m.hz)}, uAirView: {value: this.view.texture}, uAirPsi: {value: this.psi.texture}};
+      uAirG: {value: v3(m.forward)}, uAirLight: {value: new THREE.Vector3(1, 1, 1)}, uAirGlow: {value: v3(m.glow)}, uAirOzone: {value: new THREE.Vector4(...m.ozone, m.hz)},
+      uAirAureole: {value: new THREE.Vector4(...m.aureole, m.aureoleForward)}, uAirDusk: {value: new THREE.Vector2(0, DUSK_KNEE)}, uAirView: {value: this.view.texture}, uAirPsi: {value: this.psi.texture}};
     this._quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms: {...this.uniforms, uSize: {value: new THREE.Vector2(across * 2, rows * 2)}, uSpread: {value: 0.5}},
       defines: {STEPS: steps}, vertexShader: QUAD_VERT, fragmentShader: VIEW_FRAG, depthTest: false, depthWrite: false, toneMapped: false}));
     this._quad.frustumCulled = false;
     this._scene = new THREE.Scene(); this._scene.add(this._quad); this._camera = new THREE.Camera();
     this.material = new THREE.ShaderMaterial({uniforms: {...this.uniforms, uAmbient: {value: this.ambientTexture}, uGround: {value: v3(m.ground)}, uLimb: {value: v3(LIMB)},
-      uSun: {value: new THREE.Vector4(o.sunSize * RAD, 0, BURN, 1.15)}, uPix: {value: 0.002}, uDisplay: {value: 0}, uGroundOn: {value: o.ground ? 1 : 0}, uGrain: {value: 2}},
+      uSun: {value: new THREE.Vector4(o.sunSize * RAD, 0, BURN, 1.6)}, uPix: {value: 0.002}, uDisplay: {value: 0}, uGroundOn: {value: o.ground ? 1 : 0}, uGrain: {value: 2}},
       vertexShader: DOME_VERT, fragmentShader: DOME_FRAG, side: THREE.BackSide, depthTest: false, depthWrite: false, toneMapped: false, fog: false, transparent: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor});
     this.geometry = new THREE.BoxGeometry(2, 2, 2);
@@ -601,15 +634,15 @@ export class Air {
 
   // the table of light scattered more than once: baked once, kept by vidgen between pages
   _bakePsi() {
-    const m = this.model, r = this.renderer, {suns, heights, directions, steps} = PSI_TABLE;
+    const m = this.model, r = this.renderer, {suns, heights, directions, elevations, steps} = PSI_TABLE;
     const inputs = {version: VERSION, table: PSI_TABLE, X0: m.X0, rayleigh: m.rayleigh, haze: m.haze, absorb: m.absorb, ozone: m.ozone, hz: m.hz, ground: m.ground};
     const targets = () => [new THREE.WebGLRenderTarget(suns, heights, {type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false})];
     const draw = ([target]) => {
       const v3 = (a) => new THREE.Vector3(...a), scat = (list) => v3(list.map((x, i) => x / m.ext[i]));
-      const material = new THREE.ShaderMaterial({defines: {DIRS: directions, STEPS: steps}, vertexShader: QUAD_VERT, fragmentShader: PSI_FRAG, depthTest: false, depthWrite: false, toneMapped: false,
+      const material = new THREE.ShaderMaterial({defines: {DIRS: directions, ELEVS: elevations, STEPS: steps}, vertexShader: QUAD_VERT, fragmentShader: PSI_FRAG, depthTest: false, depthWrite: false, toneMapped: false,
         uniforms: {uAirGeo: {value: new THREE.Vector4(m.X0, 0, TOP, 1)}, uAirMap: {value: new THREE.Vector4()}, uAirTable: {value: new THREE.Vector4()}, uAirUp: {value: v3([0, 1, 0])}, uAirSun: {value: v3([0, 1, 0])},
           uAirExt: {value: v3(m.ext)}, uAirScatR: {value: scat(m.rayleigh)}, uAirScatM: {value: scat(m.haze)}, uAirG: {value: v3(m.forward)}, uAirLight: {value: v3([1, 1, 1])}, uAirGlow: {value: v3([0, 0, 0])}, uAirOzone: {value: new THREE.Vector4(...m.ozone, m.hz)},
-          uAirView: {value: null}, uAirPsi: {value: null}, uSize: {value: new THREE.Vector2(suns, heights)}, uGround: {value: v3(m.ground)}}});
+          uAirAureole: {value: new THREE.Vector4(0, 0, 0, 0.9)}, uAirDusk: {value: new THREE.Vector2(0, DUSK_KNEE)}, uAirView: {value: null}, uAirPsi: {value: null}, uSize: {value: new THREE.Vector2(suns, heights)}, uGround: {value: v3(m.ground)}}});
       const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material), scene = new THREE.Scene(), before = r.getRenderTarget();
       quad.frustumCulled = false; scene.add(quad);
       r.setRenderTarget(target); r.render(scene, new THREE.Camera()); r.setRenderTarget(before);
@@ -694,8 +727,9 @@ export class Air {
     const gain = 2 ** stops, film = o.exposure === "film";
     u.uAirLight.value.set(...o.color).multiplyScalar(o.light * gain);
     u.uAirGlow.value.set(...m.glow).multiplyScalar(film ? 1 : Math.min(1, 2 ** (stops - 12)));
+    u.uAirDusk.value.set(film ? duskCurve(stops - ev) : 0, DUSK_KNEE);
     // the sun's disc: in a camera its true brightness over a white ground's (1 / sin^2 of its radius), capped; in the film look a bright disc that keeps its colour as it sinks
-    this.material.uniforms.uSun.value.set(o.sunSize * RAD, film ? 0 : 1 / Math.sin(o.sunSize * RAD) ** 2, BURN, 1.15);
+    this.material.uniforms.uSun.value.set(o.sunSize * RAD, film ? 0 : 1 / Math.sin(o.sunSize * RAD) ** 2, BURN, 1.6);
     if (this.stars && typeof this.stars.set === "function") this.stars.set({brightness: Math.min(16, this._starBase * stars)});
     // the lights: the sun after the air, the sky from above and the lit ground from below
     const direct = sunlightAt(m, height, mus, o.sunSize).map((x, i) => x * o.color[i] * o.light * gain), sky = skyAmbient(m, height, mus, {steps: 8}).map((x, i) => x * o.color[i] * o.light * gain);

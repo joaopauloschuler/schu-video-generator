@@ -92,7 +92,8 @@ const e = A.airOf("earth"), own = W.resolveOptions("earth").air, m = A.airOf("ma
 out.push([e.rayleigh, e.haze, e.absorb, e.ext, e.height, e.H, e.X0, e.top, e.radius, e.ozone, e.hz, e.name], [own.rayleigh, own.haze, own.absorb, own.height]);
 out.push([A.airOf({air: own, radius: 6.371e6}).ext, A.airOf({world: "earth"}).ext, A.airOf("Earth").ext, A.airOf({world: "earth"}).ozone]);       // an air handed over from a body is that air
 const dusty = W.resolveOptions("mars", {air: A.PRESETS.mars.air}).air;
-out.push([m.ext, dusty.rayleigh.map((x, i) => x + dusty.haze[i] + dusty.absorb[i]), m.forward, m.radius, A.airOf({world: "mars"}).ext, A.airOf({world: "mars"}).forward]);
+out.push([m.ext, dusty.rayleigh.map((x, i) => x + dusty.haze[i] + dusty.absorb[i]), m.forward, m.radius, A.airOf({world: "mars"}).ext, A.airOf({world: "mars"}).forward, m.aureole, m.aureoleForward, e.aureole,
+  err(() => A.airOf("mars", {aureole: [2, 0, 0]}))]);
 out.push([A.airOf("titan").radius, A.airOf("thin").name, A.airOf("smoke").radius, A.airOf("thick").ext, A.airOf("earth", {radius: 5e6}).H, A.airOf("earth", {ground: 0xffffff}).ground]);
 out.push([err(() => A.airOf("erth")), err(() => A.airOf("moon")), err(() => A.airOf("earth", {radus: 1})), err(() => A.airOf({world: "plutto"})), err(() => A.airOf("earth", {forward: 2})),
   err(() => A.airOf(7)), err(() => A.airOf({air: {like: "erth"}})), err(() => A.air(null)), err(() => A.airOf("earth", {radius: 10}))]);
@@ -109,7 +110,8 @@ out.push([A.airOf(body(W.resolveOptions("titan").air, "titan")).ext, A.airOf("ti
     assert np.allclose(earth[3], np.sum(own[:3], axis=0)) and abs(earth[5] - 8919.4) < 0.1 and abs(earth[6] - 1 / 0.0014) < 1e-9 and abs(earth[7] - 8 * 8919.4) < 1
     assert earth[8] == 6.371e6 and earth[9] == [0.03, 0.028, 0.004] and abs(earth[10] - 25000 / 8919.4) < 1e-6 and earth[11] == "earth"
     assert same[0] == same[1] == same[2] == earth[3] and same[3] == [0, 0, 0]                                             # the layer belongs to the ready-made air, not to the world
-    assert np.allclose(mars[0], mars[1]) and mars[2] == [0.52, 0.58, 0.78] and mars[3] == 3.3895e6                        # the dusty air, stated for a body too
+    assert np.allclose(mars[0], mars[1]) and mars[2] == [0.36, 0.42, 0.55] and mars[3] == 3.3895e6                        # the dusty air, stated for a body too
+    assert mars[6] == [0.02, 0.06, 0.35] and mars[7] == 0.93 and mars[8] == [0, 0, 0] and "0 to 1" in mars[9]              # the dust's narrow lobe, mostly blue; none in the Earth-like air
     assert max(mars[4]) < 0.5 * min(mars[0]) and len(set(mars[5])) == 1                                                   # the world's own, clearer air stays reachable
     assert others[0] == 2.5747e6 and others[1] == "thin" and others[2] == 6.371e6 and others[3][2] > 4 * earth[3][2] and abs(others[4] - 7000) < 1e-6 and others[5] == [1, 1, 1]
     wrong, airless, key, world, forward, kind, like, renderer, radius = errors
@@ -140,7 +142,7 @@ let r = 0, h = 0; const n = 20000; for (let i = 0; i < n; i++) { const c = -1 + 
     assert np.allclose(zenith, np.array([0.088, 0.164, 0.313]) * columns[0], atol=1e-9)                         # the zenith's optical depth is the stated one (times the closed form's 0.97)
     assert 3 < zenith[2] / zenith[0] < 6 and 0.71 < t_zenith[2] < 0.76 and 0.90 < t_zenith[0] < 0.93            # blue is scattered four times as much as red: the sky is blue
     assert t_horizon[0] > 10 * t_horizon[1] > 100 * t_horizon[2] and t_high[2] > 0.96 and min(t_space) > 0.9999 and a == b
-    assert abs(layer[0] - 1) < 0.01 and layer[1] == 0 and abs(layer[2] - 2) < 0.02 and 5 < layer[3] <= 16 and 8 < layer[4] < 14 and layer[5] <= 16.0 and layer[6] == 0   # aslant through it; twice from above; past it
+    assert abs(layer[0] - 1) < 0.01 and layer[1] == 0 and abs(layer[2] - 2) < 0.02 and 5 < layer[3] <= 16 and 8 < layer[4] < 14 and layer[3] < layer[5] <= 41.0 and layer[6] == 0   # aslant through it; twice from above; past it
     assert np.allclose(layer[7], [0.03, 0.028, 0.004], rtol=0.02) and max(np.abs(layer[8])) < 1e-12              # the layer's own depth, under it only
     assert abs(phase[0] - 0.375) < 1e-12 and abs(phase[1] - 0.1875) < 1e-12 and abs(phase[2] - 0.25) < 1e-12 and phase[3] > 100
     assert abs(kept[0] - 0.25) < 1e-6 and abs(kept[1] - 0.25) < 1e-4
@@ -154,6 +156,8 @@ out.push([sky(m, 40, 90, 0), sky(m, 40, 20, 120), sky(m, 2, 4, 0), sky(m, 2, 20,
 out.push([sky(thin, 50, 90, 0), sky(thick, 50, 90, 0), sky(e, 50, 90, 0, 30000), sky(e, 50, 90, 0, 80000), A.skyLight(e, 80000, -1, -Math.sin(50 * R), Math.sin(50 * R)).hit, A.skyLight(e, 2, -0.5, 0, 0.5).hit]);
 // twilight: the sky dims by orders of magnitude, the zenith stays bluer than the arch
 out.push([-1, -3, -5, -7].map((el) => [sky(e, el, 90, 0), sky(e, el, 3, 0)]));
+// from sunset to night the zenith fades without a cliff: two degrees further never cost more than a factor of 30
+out.push([4, 2, 0, -2, -4, -6, -8, -10, -12, -14, -16, -18].map((el) => sky(e, el, 90, 0)));
 // no more light than came in: the sun after the air on a level ground plus the sky's light on it, over the sunlight on it without air
 out.push([70, 40, 15, 5].map((el) => { const mus = Math.sin(el * R), s = A.sunlightAt(e, 0, mus), a = A.skyAmbient(e, 0, mus); return s.map((x, i) => (x * mus + a[i]) / mus); }));
 out.push([40, 5].map((el) => { const mus = Math.sin(el * R), s = A.sunlightAt(thick, 0, mus), a = A.skyAmbient(thick, 0, mus); return s.map((x, i) => (x * mus + a[i]) / mus); }));
@@ -163,7 +167,7 @@ const p1 = A.psiTable(e), p2 = A.psiTable(e), t = A.ambientTable(e);
 out.push([JSON.stringify(sky(e, 12, 30, 40)) === JSON.stringify(sky(e, 12, 30, 40)), p1.data.every((x, i) => x === p2.data[i]), p1.data.every((x) => x >= 0 && x < 1), p1.at(0, 1), p1.at(0, -0.3), p1.at(7.9, 1),
   t.n, t.at(1), t.zenithAt(1) / t.zenithAt(0), t.archAt(0) / t.zenithAt(0), A.skyLight(e, 0, 1, 0.5, 0.5, {scattered: false}).light.map((x, i) => x / A.skyLight(e, 0, 1, 0.5, 0.5).light[i])]);
 """)
-    earth, mars, others, twilight, energy, thick_energy, sun, same = out
+    earth, mars, others, twilight, fade, energy, thick_energy, sun, same = out
     zenith, horizon, sunset, over_sunset, towards = (np.array(x) for x in earth)
     luma = lambda c: float(0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2])  # noqa: E731
     assert zenith[2] > 2.5 * zenith[0] and zenith[2] > zenith[1] > zenith[0]                                      # a blue zenith
@@ -177,6 +181,8 @@ out.push([JSON.stringify(sky(e, 12, 30, 40)) === JSON.stringify(sky(e, 12, 30, 4
     assert luma(others[2]) < 0.1 * luma(zenith) and others[3] == [0, 0, 0] and others[4] is True and others[5] is True   # black above the air; down is the ground
     levels = [luma(z) for z, _ in twilight]
     assert levels[0] > 2 * levels[1] > 4 * levels[2] > 8 * levels[3] > 0 and all(z[2] / z[0] > 1.5 * a[2] / a[0] for z, a in twilight)
+    steps = [luma(a) / luma(b) for a, b in zip(fade, fade[1:])]
+    assert all(1 < r < 30 for r in steps) and 1e-7 < luma(fade[8]) / luma(fade[2]) < 1e-3 and fade[8][2] > 1.5 * fade[8][0]   # at -12 degrees a ten-thousandth of sunset's, and blue
     assert all(luma(a) > 20 * luma(z) for z, a in twilight[1:])                                                   # the arch: the light is low over where the sun set
     assert all(0.45 < x < 1.02 for row in energy for x in row) and all(0.2 < x < 1.02 for row in thick_energy for x in row)   # air gives no light of its own
     assert energy[0][0] > energy[0][2] and energy[3][0] > energy[3][2]                                            # blue is thrown back to space more than red
@@ -195,20 +201,26 @@ def test_the_film_exposure_and_the_stars(tmp_path: Path) -> None:
     out = _run_in_node(tmp_path, """
 const run = []; for (let i = 0; i <= 120; i++) run.push(A.filmExposure(Math.pow(2, -i / 4), 1)); out.push(run);
 out.push([A.filmExposure(2, 1), A.filmExposure(1, 1), A.filmExposure(1e-3, 1, 9), A.filmExposure(1e-3, 1, 2), A.filmExposure(1e-3, 1, 5) / A.filmExposure(1e-3, 1, 0), A.filmExposure(1e-30, 1), A.FILM_STOPS,
-  A.filmExposure(1e-4, 1, 0, 0.02), Math.log2(A.ARCH_WHITE / 0.02), A.filmExposure(1e-4, 1, 0, 100)]);
+  A.filmExposure(1e-4, 1, 0, 0.02), Math.log2(A.DUSK_KNEE * (A.ARCH_WHITE / A.DUSK_KNEE) ** 2 / 0.02), A.filmExposure(1e-4, 1, 0, 100), A.filmExposure(1, 1, 0, 8), Math.log2(A.ARCH_WHITE / 8),
+  A.filmExposure(1, 1, 0, 1e9), A.duskCurve(0), A.duskCurve(2), A.duskCurve(9), A.DUSK_CURVE]);
 out.push([A.filmStars(0), A.filmStars(5), A.filmStars(8), A.filmStars(11), A.filmStars(14), A.filmStars(0, 0.001), A.filmStars(0, 0.05), A.filmStars(8, 0.001)]);
 // through an evening on the Earth-like ground: the exposure and what it leaves of the zenith and of the arch
 const e = A.airOf("earth"), t = A.ambientTable(e), day = t.zenithAt(Math.sin(25 * R));
-out.push([30, 10, 0, -2, -4, -6, -8, -12, -20].map((el) => { const mus = Math.sin(el * R), ev = A.filmExposure(t.zenithAt(mus), day, 0, t.archAt(mus)); return [ev, t.zenithAt(mus) * 2 ** ev, t.archAt(mus) * 2 ** ev]; }));
+out.push([30, 10, 0, -2, -4, -6, -8, -12, -20].map((el) => { const mus = Math.sin(el * R), ev = A.filmExposure(t.zenithAt(mus), day, 0, t.archAt(mus)); const arch = t.archAt(mus) * 2 ** ev;
+  return [ev, t.zenithAt(mus) * 2 ** ev, A.DUSK_KNEE * Math.pow(Math.max(arch / A.DUSK_KNEE, 1), 1 - A.duskCurve(ev))]; }));
 """)
     run, marks, stars, evening = out
-    assert run[0] == 0 and np.diff(run).min() >= 0 and np.diff(run).max() < 0.26 and run[-1] == 14                 # opens smoothly, never more than the meter, to the cap
-    assert marks[0] == 0 and marks[1] == 0 and marks[2] == 0 and marks[3] == marks[4] * 0 + marks[3] and 0 < marks[4] < 1 and marks[5] == 14 and marks[6] == 14
-    assert abs(marks[7] - marks[8]) < 1e-9 and marks[9] == 0                                                        # never so far that the arch burns out
+    assert run[0] == 0 and np.diff(run).min() >= 0 and np.diff(run).max() < 0.26 and run[-1] == 16                 # opens smoothly, never more than the meter, to the cap
+    assert marks[0] == 0 and marks[1] == 0 and marks[2] == 0 and marks[3] == marks[4] * 0 + marks[3] and 0 < marks[4] < 1 and marks[5] == 16 and marks[6] == 16
+    assert abs(marks[7] - marks[8]) < 1e-9 and -1.5 < marks[9] < 0                                                  # never so far that the arch burns out (the dusk curve allowed for)
+    assert abs(marks[10] - marks[11]) < 1e-9 and marks[12] == -3                                                    # a glow brighter than that by itself closes the exposure, three stops at most
+    assert marks[13] == 0 and 0 < marks[14] < marks[15] == marks[16] == 0.5                                         # the dusk curve: nothing by day, half the contrast at dusk
     assert stars[0] == 0 and stars[1] == 0 and 0 < stars[2] < 1 and stars[3] == 1 and stars[4] == 1 and stars[5] == 1 and stars[6] == 0 and stars[7] == 1
     stops = [row[0] for row in evening]
-    assert stops[0] == 0 and stops[1] < 1.6 and stops == sorted(stops) and 4 < stops[5] < 10 and stops[-1] == 14    # nothing by day; the blue hour lifted; night at the cap
-    assert all(row[2] <= 1.6 + 1e-9 for row in evening[2:]) and evening[5][1] > 0.004 and evening[-1][1] < 1e-6      # the arch never burns out; the zenith is still seen at -6 degrees; then night
+    assert stops[0] == 0 and stops[1] < 1.6 and stops == sorted(stops) and 4 < stops[5] < 10 and stops[-1] == 16    # nothing by day; the blue hour lifted; night at the cap
+    assert all(row[2] <= 1.6 + 1e-9 for row in evening) and evening[5][1] > 0.004 and evening[-1][1] < 1e-5         # the arch never burns out; the zenith is still seen at -6 degrees; then night
+    drawn = [row[1] for row in evening]
+    assert drawn[7] > 0.003 and all(a >= b for a, b in zip(drawn, drawn[1:])) and all(a < 3.5 * b for a, b in zip(drawn[:7], drawn[1:8]))   # still a glow at -12; down to there it fades by small steps
 
 
 PAGE = """
@@ -227,7 +239,7 @@ export function load(ctx) {
   const black = skies[0].haze(new THREE.MeshBasicMaterial({color: 0x000000}));
   for (const [x, d] of [[-0.25, 600], [0.25, 60000]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(d * 0.2, d * 0.2, d * 0.2), black); b.position.set(x * d, d * 0.12, -d); b.visible = false; scene.add(b); boxes.push(b); }
   // the baked table against the one made in JavaScript, at the places the JavaScript one holds
-  const sky = skies[0], m = sky.model, cpu = psiTable(m, {suns: 16, heights: 8, directions: 8, steps: 16}), f = new Uint16Array(PSI_TABLE.suns * PSI_TABLE.heights * 4);
+  const sky = skies[0], m = sky.model, cpu = psiTable(m, {suns: 16, heights: 8, directions: 8, elevations: 14, steps: 24}), f = new Uint16Array(PSI_TABLE.suns * PSI_TABLE.heights * 4);
   renderer.readRenderTargetPixels(sky.psi, 0, 0, PSI_TABLE.suns, PSI_TABLE.heights, f);
   const at = (x, y, k) => THREE.DataUtils.fromHalfFloat(f[(Math.min(PSI_TABLE.heights - 1, Math.floor(y)) * PSI_TABLE.suns + Math.min(PSI_TABLE.suns - 1, Math.floor(x))) * 4 + k]);
   window.psi = [[0.1, 0.9], [1.5, 0.5], [4, 0.2], [0.5, 0.05], [2, -0.1]].map(([h, mus]) => {

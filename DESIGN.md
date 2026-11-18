@@ -28288,12 +28288,16 @@ sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import nam
   bands chosen for the outside look), 36.6 columns of air towards the horizon (the Earth: about 38).
 - **Two things only the inside view has, both stated.** (1) A thin absorbing layer (`ozone`: zenith
   optical depth per colour; `ozoneHeight` metres): each crossing costs the depth over the line's
-  cosine at the layer, at most 16 times (the layer has a depth); the Earth-like preset has 0.030 /
+  cosine at the layer, at most 41 times (the layer has a depth: a ray grazing a layer 15 km deep
+  runs 58 times its depth in it); the Earth-like preset has 0.030 /
   0.028 / 0.004 at 25 km (about 300 Dobson units in the Chappuis band: physical). Without it the
   zenith at sunset is grey (blue over red 1.5); with it 2.1. The outside view has no such layer.
-  (2) `forward` per colour: the Mars-like preset throws blue light onward more sharply (0.52 / 0.58
-  / 0.78: chosen for the look, after the real dust's blue forward peak), which gives the blue glow
-  round a low sun in a tawny sky.
+  (2) The haze's phase function per colour, in two lobes: `forward` (the broad lobe, a number or one
+  per colour) and `aureole` / `aureoleForward` (a narrow second lobe: its share of the haze's light
+  per colour and its forward throw). The Mars-like preset: broad 0.36 / 0.42 / 0.55, narrow 0.93
+  with shares 0.02 / 0.06 / 0.35 (chosen for the look, after the real dust's tight blue forward
+  peak: grains larger than the wave diffract a narrow cone, narrower in blue): a blue-white glow of
+  some 15 degrees round a low sun, falling into a tawny sky.
 - **Presets.** `earth` (the world's own air and the layer); `mars` (a dusty season: `air: {like:
   "mars", density: 3, absorb: [0, 0.013, 0.031]}`, grey extinction 0.26, where the world's own air
   seen from orbit has 0.09: the world's own is `air(renderer, {world: "mars"})`, and
@@ -28308,8 +28312,9 @@ sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import nam
   light behind it, times the air's share of that, times the source at its middle): once-scattered
   light (the sun's light after its own path, Rayleigh's and Henyey-Greenstein's phase functions),
   and light scattered more often as one stated approximation (after Hillaire's 2020 method): a
-  point's second-hand light from all round (64 directions, 16 steps each, an isotropic phase, the
-  ground's bounce included) over one minus what such light passes on, i.e. every later bounce as a
+  point's second-hand light from all round (8 bearings x 14 elevations crowded towards the level,
+  where the twilight's light lies, each weighing its share of the sphere; 24 steps each; an
+  isotropic phase, the ground's bounce included) over one minus what such light passes on, i.e. every later bounce as a
   geometric series. That term is a table over height (32 rows, spaced by the square root, 0 to 8
   scale heights) and the sun's cosine (64 columns, -0.4 to 1), **baked once through `vidgen/baked`**
   (`space-air/psi`, half float; inputs: the module's `VERSION`, the table's shape, every number of
@@ -28331,8 +28336,13 @@ sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import nam
   `ground: false` for none), lit by the sun after the air and by the sky (a table of 64 entries made
   in JavaScript), its edge a pixel soft. The sun's disc (`disc`, `sunSize` degrees): limb darkening
   per colour, seen through the air on its ray; in `camera` and `auto` its true brightness (1 /
-  sin^2 of its radius, 46,000 whites) held at `BURN` 32 with its hue kept; in `film` 32 x
-  (what is left of it)^1.15, so a low sun keeps its colour and its darker limb. Straight to the
+  sin^2 of its radius, 46,000 whites) held at `BURN` 32 with its hue kept; in `film` between 1.6
+  and 32 whites by (what is left of it)^1.6, drawn in front of the sky's glow instead of added to it
+  (added, a low red sun washed out to the glow's pale orange), so a low sun is an orange-gold ball
+  with a darker, redder limb. Round the disc a soft bloom in its colour, at most 1.4 whites at the
+  rim (a lens's, not the air's; stated). The disc has the Sun's true size, 0.53 degrees across: 7 px
+  at 640 px width through a 50 degree lens, 19 px through a 22 degree lens; `sunSize` enlarges it
+  (a stated choice). Straight to the
   canvas the dome applies ACES and sRGB itself and dithers by two display codes (one where the
   picture is bright): with one code `vidgen motion check` found `banding` on 16 % of a dusk clip's
   frame after the encoder; with two, none.
@@ -28352,11 +28362,18 @@ sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import nam
 - **Exposure**, as `vidgen/space-light` (§122.8). `"film"` (default; a convention): nothing changed
   by day (a sunlit ground is 1, as in space); as the zenith darkens the exposure opens by
   `filmExposure` = 0.93 x^2 / (x + 0.3) stops (x: the stops the zenith has lost against a sun 25
-  degrees up), at most 14, never so far that the sky 3 degrees up under the sun is drawn over 1.6
-  whites, and not at all above the air; a `stars` sky is shown from 5 stops (first stars) to 11
-  (all), and wherever the zenith is drawn black (high up, thin air). Measured on the Earth-like
-  ground: 0.4 stops with the sun 10 degrees up, 2.4 at the horizon, 5.4 at -4, 8.1 at -6, 10.1 at
-  -8, 14 by -12. `"camera"`: `ev` stops over a sunlit ground's, honest: the stars at
+  degrees up), at most 16, and not at all above the air; with it comes the **dusk curve**
+  (`duskCurve`: from half a stop of lift, fully from 4): the air's light over a twentieth of white
+  is drawn as knee x (light / knee)^0.5, its colour kept, as a negative's shoulder, because the
+  twilight arch is hundreds of times as bright as the zenith (true: measured skies say the same)
+  and no one exposure shows both. The sky 3 degrees up under the sun is never drawn over 1.6
+  whites after that curve: the lift stops there, and where a hazy air's glow round a low sun is
+  brighter by itself the exposure closes, by at most 3 stops (the Mars-like sunset: a dark tawny sky
+  round the glow, as a camera set for the glow shows it). A `stars` sky is shown from 5 stops
+  (first stars) to 11 (all), and wherever the zenith is drawn black (high up, thin air). Measured
+  on the Earth-like ground: 0.4 stops with the sun 10 degrees up, 2.5 at the horizon, 5.7 at -4,
+  8.4 at -6, 11.7 at -8, 16 from -12; the zenith is drawn 0.033 of white by day, 0.022 at sunset,
+  0.016 at -6, 0.013 at -8, 0.007 at -12, black by -18. `"camera"`: `ev` stops over a sunlit ground's, honest: the stars at
   2^(ev - 20) of their look, the night glow at 2^(ev - 12). `"auto"`: metered on nine rays through
   the frame (a pure function of the frame's inputs).
 - **Measured** (2 cores, SwiftShader, straight to the canvas; `vidgen still` adds the screenshot):
@@ -28386,19 +28403,34 @@ sky.update(t, {camera})`. The module `data/web/modules/space-air.js` (import nam
   no green band). Approximate: later bounces (one isotropic term); the air between the camera and a
   point (differences of the closed form: 4 to 15 % under the true column over 1.5 to 200 km at most
   angles, up to 55 % over it on a short, exactly level path); no refraction (the sun is not flattened and sets when geometry says). A look:
-  the film exposure, the Mars-like forward throw, the invented airs, the plain ground. Weak: after
-  about 8 degrees below the horizon the model's twilight ends early (the real sky keeps a glow to 18
-  degrees from light scattered many times round the world); the zenith at dusk is slate rather than
-  deep blue; the Earth's shadow band opposite the set sun is there but faint; the horizon seen from
-  10 km shows a pinkish line (long red paths over a dark ground).
+  the film exposure, the Mars-like forward throw, the invented airs, the plain ground. Weak: the Earth's shadow band
+  opposite the set sun is there but faint; the horizon seen from 10 km shows a pinkish line (long
+  red paths over a dark ground); from -13 to -16 degrees the last of the arch is a thin red line on
+  the horizon; the sunset disc is orange-gold rather than deep red (clear air).
+- **Twilight to night (Step 381.1).** At Step 381 the sky was black by -10 degrees and the arch a
+  detached band. The cause was the table of second-hand light: its sum took 8 x 8 directions evenly
+  over the sphere, the nearest 7 degrees from the level, and so never saw the twilight arch, which is
+  the only light a shadowed air gets (it lies within a few degrees of the horizon). With the
+  directions crowded towards the level the zenith's light now falls from sunset by 5 x at -3 degrees,
+  70 x at -6, 2,000 x at -9, 30,000 x at -12, 10^7 x at -18 (measured skies, from memory: about 150 x at -6,
+  10^5 x at -12): no cliff, no step over 30 x in two degrees (tested). The ozone layer's longest
+  slant path went from 16 to 41 crossings' worth, which makes the dusk blue (zenith blue over red
+  3.0 at -6, 3.4 at -9, 2.3 at -12; it was 1.6). Physical: both of these. A look: the film
+  exposure's lift to 16 stops, the dusk curve, the closing for a bright glow, the disc's film
+  brightness and its bloom, the Mars-like lobes. A strip of the sun at +4, 0, -3, -6, -9, -12,
+  -15, -18 degrees (`stills/11_twilight_strip.png`) and a 3 s clip from +4 to -18 through
+  `vidgen motion check`: no findings. The noon, 10 km and aerial perspective stills changed by at
+  most 3 display codes; the 100 km still only in the limb's rows (the longer ozone path: a touch
+  bluer). A frame costs 6 % more (0.228 → 0.242 s at 1280x720 in the same session, which ran slower
+  than Step 381's 0.185 s), making the air 0.43 s (0.36 s).
 - **Parts** (`data/web/parts/space-air.js`, a new kind `air` in `vidgen/parts` and
   `vidgen.web.parts.KINDS`, after `light`): `air-earth-noon`, `air-earth-golden-hour`,
   `air-earth-sunset`, `air-earth-twilight`, `air-mars-day`, `air-mars-sunset`, `air-thin`,
   `air-thick`, `air-from-30-km`, `air-haze`.
 - **Exports.** `air`, `Air`, `airOf`, `AIR_GLSL`, `PRESETS`, `RADII`, `column`, `crossings`,
   `opticalDepth`, `transmittance`, `phaseRayleigh`, `phaseHaze`, `psiTable`, `skyLight`, `sunlightAt`,
-  `skyAmbient`, `ambientTable`, `filmExposure`, `filmStars`, `sunDirection`, constants `TOP`,
-  `SUN_SIZE`, `BURN`, `SKY_STOPS`, `FILM_STOPS`, `ARCH_WHITE`, `LIMB`, `EXPOSURES`, `QUALITIES`,
+  `skyAmbient`, `ambientTable`, `filmExposure`, `duskCurve`, `filmStars`, `sunDirection`, constants `TOP`,
+  `SUN_SIZE`, `BURN`, `SKY_STOPS`, `FILM_STOPS`, `FILM_CLOSE`, `ARCH_WHITE`, `DUSK_CURVE`, `DUSK_KNEE`, `LIMB`, `EXPOSURES`, `QUALITIES`,
   `VIEW_TABLES`, `PSI_TABLE`, `VERSION`. The functions without a renderer are pure and run in Node:
   they are the tests' reference and what the lights and the exposure are computed from.
 - **Cache keys.** No shipped module's bytes changed except `parts.js` (the kind; no film page

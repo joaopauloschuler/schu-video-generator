@@ -7827,16 +7827,17 @@ camera's height from where it stands; call it before every draw.
 
 | `air(renderer, what, options)` | default | what it does |
 |---|---|---|
-| `what` | `"earth"` | `earth`, `mars` (a dusty season), `thin`, `thick` (invented worlds); a world of `vidgen/space-bodies` that has air (`venus`, `titan`, `verdant`, ...: its own air and radius); one of its airs (`smoke`, `ice`, ...); a body made by `planet()`; or `{world, air, radius, forward, ozone, ozoneHeight, ground}` |
+| `what` | `"earth"` | `earth`, `mars` (a dusty season), `thin`, `thick` (invented worlds); a world of `vidgen/space-bodies` that has air (`venus`, `titan`, `verdant`, ...: its own air and radius); one of its airs (`smoke`, `ice`, ...); a body made by `planet()`; or `{world, air, radius, forward, aureole, aureoleForward, ozone, ozoneHeight, ground}` |
 | `air` | the world's | another air, stated as for a body: `{like: "earth", density: 2}`, or `{rayleigh: [r, g, b], haze: [r, g, b], absorb: [r, g, b], height: 0.0014, forward: 0.7}` (zenith optical depths per colour; the scale height as a share of the radius) |
 | `radius` | the world's (m) | the world's radius in metres |
 | `forward` | the air's | how sharply the haze throws light onward, a number or per colour `[r, g, b]` (0 to 0.95) |
+| `aureole`, `aureoleForward` | none; `mars`: `[0.02, 0.06, 0.35]`, 0.93 | a second, narrow lobe of the haze: its share of the haze's light per colour, and its forward throw (a compact glow round the sun) |
 | `ozone`, `ozoneHeight` | none; `earth`: `[0.030, 0.028, 0.004]` at 25,000 m | a thin absorbing layer: zenith optical depth per colour and its height in metres (keeps the dusk blue) |
 | `ground` | the preset's colour | the plain ground under the horizon: a colour, or `false` for none (the dome then only lays the air over what is behind it) |
 | `sun` | `[0.35, 0.5, -0.79]` | the direction towards the sun (`[x, y, z]` or a `Vector3`); also `update(t, {sun})` |
 | `color`, `light` | white, 1 | the sunlight's colour and strength before the air |
 | `sunSize`, `disc` | 0.2665, `true` | the sun's angular radius in degrees; `disc: false` draws no disc |
-| `exposure`, `ev` | `"film"`, 0 | `"film"` (a convention: nothing changed by day, dusk lifted up to 14 stops so the blue hour is seen, the stars shown as the sky darkens); `"camera"` (honest: `ev` stops over a sunlit ground's; the stars at 2^(ev - 20)); `"auto"` (honest, metered on the frame). `ev` may be a function of t |
+| `exposure`, `ev` | `"film"`, 0 | `"film"` (a convention: nothing changed by day; from sunset the exposure opens up to 16 stops and the sky's contrast is halved in the logarithm, so the arch and the blue zenith fit in one picture down to a sun 12 degrees under the horizon, night by 18; the stars shown as the sky darkens; closes up to 3 stops for a hazy air's bright glow round a low sun); `"camera"` (honest: `ev` stops over a sunlit ground's; the stars at 2^(ev - 20)); `"auto"` (honest, metered on the frame). `ev` may be a function of t |
 | `stars` | none | a `vidgen/space-sky` sky: its brightness is set every update (give the sky to this module or to `spaceLight`, not both) |
 | `scene` | none | the lights are added to it |
 | `quality` | `"standard"` | the sky table: `fast` (96 x 96, 16 steps), `standard` (128 x 192, 32), `fine` (192 x 320, 48) |
@@ -7857,8 +7858,8 @@ Honest notes: the same air inside and outside means the same optical depths and 
 `mars` is three times the world's own dust (`air(renderer, {world: "mars"})` is the clear air seen
 from orbit; `planet(renderer, "mars", {air: PRESETS.mars.air})` shows the dusty air from outside);
 `thin` and `thick` are invented; light scattered more than once is one approximate term; there is
-no refraction; after about 8 degrees below the horizon the twilight ends earlier than the real
-one. Costs (2 cores, software GL): 0.19 s a frame at 1280x720 for the dome (0.013 s at 320x180),
+no refraction; the sun's disc has its true size (0.53 degrees: use a long lens, or `sunSize`, a
+stated choice). Costs (2 cores, software GL): 0.19 s a frame at 1280x720 for the dome (0.013 s at 320x180),
 0.03 s more while the sun or the height moves, up to 0.2 s more when hazed things fill the frame;
 0.3 s to make. Look first: `vidgen parts --kind air`.
 
