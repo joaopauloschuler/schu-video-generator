@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–388
+## Steps 193–389
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -134,6 +134,19 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   proportions. For later fine detail every hull carries named regions, anchors (bells, hangars,
   docks, lights, the command place) and one atlas of non-overlapping charts with their metres
   per texel. Fourteen parts under `vidgen parts 'hull-*'`.
+- **Giant ships that read as kilometres long** (Step 389): `dress(ship, renderer)` of the new
+  module `vidgen/space-hull-detail` gives a hull of `vidgen/space-hull` its fine detail: panel
+  seams, hatches, pipe runs and vents at 5 to 20 m and panel lines, rivet rows and stencil bars
+  at 1 to 5 m (tiling maps, each fading with the metres a pixel covers); windows by the thousand
+  in rows along the decks, dense on crew regions and absent from tanks, radiators and engines, a
+  seeded share lit, banks coming on with `lights` (for example from `ctx.music`); lit hangar bays
+  with floor marks, parked craft and cargo; clutter on decks and in the trench; hull numbers,
+  floodlit walls, navigation and guide lamps; dressed engine banks with one long plume a bank
+  that lights the stern. `detail.fly(craft, "hangar-2", u)` flies a small craft into a bay. The
+  maps are baked once and kept by `vidgen cache`. A fleet of `hullFleet` now has one palette and
+  one accent (`navy: false` for the old mix); the `lance`, the `twin` and the `ark`'s terraces
+  have more character, and the lance has a hangar. Six new parts under `vidgen parts 'hull-*'`;
+  recipes for the shots that show size and the costs are in `docs/COOKBOOK-SPACE.md`.
 - **Re-entry and flight effects** (Step 387): `vidgen/space-effects` adds to a plane, a craft or
   any object: the glow of a re-entry (a layer on the windward side made from the craft's own shape,
   hot surfaces, a wake, sparks, and from far away a bright head with a train of light along the

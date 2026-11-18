@@ -3956,8 +3956,18 @@ ship.update(t, {sun, throttle: 0.5});
 ```
 
 - These are the large forms: plates, trenches, hangar slots as dark voids, radiators, bells.
-  Fine detail (windows, lit bays) is not there yet; keep the camera far enough that plates of
-  12 to 60 m do not fill the frame, or show a small craft for size.
+  Dress the hull for anything nearer than a distant silhouette:
+  `const detail = dress(ship, renderer)` (`vidgen/space-hull-detail`) and, each frame after
+  `ship.update`, `detail.update(t, {lights: 0.5 + 0.5 * ctx.music.level(t), light})`: seams and
+  pipe runs at two scales, windows in rows along the decks (they come out where the sun does not
+  reach), lit hangar bays with parked craft, deck clutter, marks, navigation lamps, one long
+  plume a bank of bells. `detail.fly(small, "hangar-1", u)` flies the small craft into a bay.
+  The maps are baked once (`vidgen cache`). Options and costs: `docs/CONFIG.md`.
+- What says "kilometres": rows of windows, a small craft in frame, a bay with depth, a wide lens
+  close along a wall, the world behind with a long lens. A hull alone on black from far reads as
+  a model whatever its detail.
+- Never set `frustumCulled = false` on something that must stand in front of the ship (a
+  `SpaceView` draws such things as sky).
 - The world must be a body of `orbit_data` (`planet(renderer, "Earth", {space})`), not an object
   placed by hand, or it is drawn over the ship.
 - `ship.problems()` names buried bells, absurd proportions and one layout the kit refuses to

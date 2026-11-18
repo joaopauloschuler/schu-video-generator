@@ -7938,6 +7938,37 @@ later fine detail. `import {hull, hullSpec, hullFrom, hullFleet, hullKit} from "
 - Cost at 1280x720 in software GL: about 0.3 s a frame for a hull filling the frame (0.1 s
   small in it); a bank of eight bells firing and filling a third of the frame 0.5 s more.
 
+
+**Giant ship detail: `vidgen/space-hull-detail`** (Step 389, DESIGN §123.11). The fine detail of
+a hull of `vidgen/space-hull` and what makes it read as kilometres long: tiling maps at two
+scales, windows by the thousand, lit hangar bays with parked craft, deck clutter, marks, lamps,
+dressed engine banks with one long plume a bank. `import {dress, dressFleet} from
+"vidgen/space-hull-detail"`.
+
+- `const detail = dress(ship, renderer, options)`; each frame, after `ship.update(t, {sun,
+  throttle})`: `detail.update(t, {lights, light})` (`lights` 0..1: the night watch only .. every
+  bank of windows on, e.g. `0.5 + 0.5 * ctx.music.level(t)`; `light`: the `spaceLight`, so that an
+  honest exposure dims windows and lamps). `detail.fly(craft, "hangar-2", u)` puts a craft of
+  `ship.scaleRef(...)` on its way into a bay (u 0..1).
+
+| option | default | meaning |
+|---|---|---|
+| `lights` | 1 | the level `update` starts from |
+| `windows` | on | `false`, or `{lit: 0.36, watch: 0.4, warm: 0.68, cool: 0.22, floor: 3.5, pitch: 3.2, gain: 2.2, lift: 2.6}`: the share lit at full level, the share of those that never go out, colours, metres between decks and between windows, brightness, how much a window under a pixel is lifted (`film` exposure only) |
+| `nav` | on | navigation, guide, flood and work lamps |
+| `hangars` | on | `false`, or `{craft: 1, cargo: 1, curtain: 0.25, light: 1}`: how full the bays are, the faint glow across a mouth (a look; 0: none), the bays' light |
+| `engines` | on | `false`, or `{structure: true, plume: 1, light: 1}`: the thrust structure, the bank plume's length (1: 24 bank radii at full throttle), its light on the stern |
+| `plumes` | `both` | `bank`: only the long plume a bank (cheaper); `bells`: only the craft kit's |
+| `clutter` | 1 | `false`, or a density (1: a piece every 34 m on decks and in the trench, at most 5000) |
+| `marks` | on | hull numbers, deck pads, the bays' floor marks |
+| `atlas` | 2048 (1024 at `far`) | the size of the map unique to the hull |
+| `maps` | 1024 (512 at `far`) | the size of the eight tiling maps |
+
+A hull at `far` detail gets no clutter, parked craft or thrust structure unless asked. The maps
+are baked once and kept by `vidgen cache` (4 MB for the first hull, 1 to 3 MB for each more).
+Cost at 1280x720 in software GL: a dressed hull filling the frame 1.0 s a frame (0.72 s bare), a
+close view where it covers every pixel 2.0 s (1.3 s bare). Look first: `vidgen parts 'hull-*'`.
+
 **Re-entry and flight effects: `vidgen/space-effects`** (Step 387, DESIGN §123.9). The glow of a
 re-entry, vapour trails, engine exhaust in air and condensation, for a plane, a craft of
 `vidgen/space-craft` or any object. `import {effects} from "vidgen/space-effects"`.
@@ -17999,7 +18030,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s, the 9 of `vidgen/space-effects` 13 s, the 14 of `vidgen/space-hull` 23 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s, the 9 of `vidgen/space-land` 28 s, the 15 of `vidgen/space-plane` 25 s, the 9 of `vidgen/space-effects` 13 s, the 14 of `vidgen/space-hull` 23 s, the 6 of `vidgen/space-hull-detail` 17 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

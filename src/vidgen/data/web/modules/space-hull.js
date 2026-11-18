@@ -26,7 +26,7 @@ import * as THREE from "three";
 import {rng} from "vidgen/music-time";
 import {CraftKit, Craft, GLARE, ACCENTS, platingMaps, craft as kitCraft} from "vidgen/space-craft";
 
-export const VERSION = 1;
+export const VERSION = 2;
 const PREFIX = "vidgen/space-hull";
 const TAU = Math.PI * 2, RAD = Math.PI / 180;
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
@@ -481,6 +481,7 @@ export class Shell {
       const g = new THREE.BufferGeometry(), group = groups.get(b.part.name);
       g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(b.pos), 3)); g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(b.nor), 3));
       g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(b.uv), 2)); g.setAttribute("uv1", new THREE.BufferAttribute(uv1, 2)); g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(b.col), 3));
+      g.setAttribute("chart", new THREE.BufferAttribute(Float32Array.from({length: n}, (_, i) => b.cuv[3 * i]), 1));   // the chart each corner lies in (-1: none): vidgen/space-hull-detail reads it
       for (let i = 0; i < n; i++) (b.part.sparse ? loose : samples).push(b.pos[3 * i], b.pos[3 * i + 1], b.pos[3 * i + 2]);
       if (b.part.spin) g.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
       const mesh = new THREE.Mesh(g, this.kit.materials[b.skin]);
@@ -823,6 +824,17 @@ const BUILD = {
     sh.part("tanks").region("tank-1", "tank");
     for (const [a, b] of ringOf(6, 0.5 * bd + 0.4 * bd)) sh.capsule("hull-tank", [a, b, zh - 0.15 * L], [a, b, zh - 0.065 * L], 0.4 * bd);
     sh.part("boom", {sparse: true}).region("truss", "truss").truss([0, 0, z0], [0, 0, zboom], 0.56 * bd);
+    // what makes it more than a tube: a box girder along its back that carries a gantry, a hangar shed slung under
+    // it and open to port, a second, smaller ring of tanks further aft
+    const zg0 = mix(zboom, zt, 0.06), zg1 = mix(zboom, zt, 0.62), zshed = mix(zboom, zt, 0.33), shed = [0.07 * L, 0.9 * bd, 2 * bd];
+    sh.part("girder").region("midship").block("hull-b", [0.42 * bd, 0.5 * bd, zg1 - zg0], [0, 0.72 * bd, 0.5 * (zg0 + zg1)], {chamfer: 0.08 * bd, bevel: 0.1 * bd});
+    if (!sh.far) for (let k = 0; k < 5; k++) sh.block("hull-c", [1.5 * bd, 0.16 * bd, 0.012 * L], [0, 1.02 * bd, mix(zg0, zg1, (k + 0.5) / 5)], {chart: false, plates: false});
+    sh.block("hull-a", [0.8 * bd, 0.7 * bd, 0.05 * L], [0, 1.3 * bd, mix(zg0, zg1, 0.78)], {chamfer: 0.1 * bd, bevel: 0.1 * bd});
+    sh.part("shed").region("midship").mouth("hangar-1", [1.0 * bd, -1.12 * bd, zshed], [1, 0, 0], shed, {skin: "hull-a"});
+    sh.part("shed struts", {sparse: true}).region("truss", "truss");
+    for (const s of [-1, 1]) for (const q of [-0.6, 0.6]) sh.rod("hull-truss", V3(q * bd, -0.4 * bd, zshed + s * 0.03 * L), V3(q * bd, -0.7 * bd, zshed + s * 0.03 * L), 0.12 * bd);
+    sh.part("tanks 2").region("tank-2", "tank");
+    for (const [a, b] of ringOf(3, 0.5 * bd + 0.3 * bd, 0.25)) sh.capsule("hull-tank", [a, b, mix(zboom, zt, 0.1)], [a, b, mix(zboom, zt, 0.2)], 0.3 * bd);
     sh.part("shadow disc").region("engine-block", "engine").drum("hull-b", 1.8 * bd, [z0 + 0.008 * L, z0 + 0.014 * L], {sides: 16, facet: true});
     const chord = 0.6 * (zboom - z0), zc = 0.5 * (zboom + z0) + 0.03 * L;
     for (let k = 0; k < p.vanes; k++) { const a = (p.vanes === 3 ? 90 : 45) * RAD + k * TAU / p.vanes; sh.part(`radiator ${k + 1}`, {sparse: true}).region(`radiator-${k + 1}`, "radiator").vane([0.3 * bd * Math.cos(a), 0.3 * bd * Math.sin(a), zc], [Math.cos(a), Math.sin(a), 0], p.vaneSpan * L, chord, {taper: 0.7, ribs: 5}); }
@@ -869,8 +881,16 @@ const BUILD = {
     p.vaneAngles.forEach((deg, k) => { const a = deg * RAD; sh.part(`radiator ${k + 1}`, {sparse: true}).region(`radiator-${k + 1}`, "radiator").vane([(Rc + th / 2) * Math.cos(a), (Rc + th / 2) * Math.sin(a), zc], [Math.cos(a), Math.sin(a), 0], p.vaneSpan * L, 0.15 * L, {taper: 0.8}); });
     p.towers.forEach((t, k) => {
       const zt = L / 2 - t.at * L, x = t.side * 0.42 * ax, th2 = t.high * ay, wd = t.wid * ax, tl = t.len * L, top = 0.74 * ay;
-      sh.part(`tower ${k + 1}`).region(`tower-${k + 1}`, "windows").block("hull-b", [wd, th2 + 0.1 * ay, tl], [x, top + th2 / 2 - 0.05 * ay, zt], {chamfer: 0.12 * th2, bevel: 0.12 * th2});
-      sh.block("hull-a", [0.5 * wd, 0.6 * th2, 0.55 * tl], [x - t.side * 0.1 * wd, top + 1.28 * th2, zt + 0.1 * tl], {chamfer: 0.08 * th2, bevel: 0.08 * th2});
+      // a terrace is a stepped pile of thin wide tiers, each set back from the one below, with low annexes beside it
+      sh.part(`tower ${k + 1}`).region(`tower-${k + 1}`, "windows");
+      const tiers = 4, hk = (q) => hash3(k, q, 11, y.spec.seed);
+      let base = top - 0.05 * ay, wk = wd, lk = tl, xk = x, zk = zt;
+      for (let q = 0; q < tiers; q++) {
+        const tall = (q === 0 ? 0.42 : 0.26) * 1.6 * th2 + (q === 0 ? 0.05 * ay : 0);
+        sh.block(q % 2 ? "hull-a" : "hull-b", [wk, tall, lk], [xk, base + tall / 2, zk], {chamfer: 0.12 * tall, bevel: 0.1 * tall});
+        base += tall; xk -= t.side * 0.09 * wk * (0.5 + hk(q)); zk += (hk(q + 5) - 0.5) * 0.24 * lk; wk *= 0.62 + 0.14 * hk(q + 9); lk *= 0.6 + 0.2 * hk(q + 13);
+      }
+      for (let q = 0; q < 3; q++) { const aw = wd * (0.3 + 0.3 * hk(q + 20)), al = tl * (0.3 + 0.4 * hk(q + 23)), ah = th2 * (0.25 + 0.3 * hk(q + 26)), side = q === 1 ? -1 : 1; sh.block(q === 2 ? "hull-c" : "hull-b", [aw, ah + 0.05 * ay, al], [x + (q === 2 ? 0 : side * (wd / 2 + aw * 0.45)), top + ah / 2 - 0.025 * ay, zt + (q === 2 ? 1 : hk(q + 29) - 0.5) * (q === 2 ? tl / 2 + al * 0.5 : tl * 0.7)], {chamfer: 0.1 * ah, bevel: 0.1 * ah}); }
       if (k === 0) y.anchors.bridge = {p: [x, top + 0.5 * th2, zt + tl / 2], n: [0, 0, 1]};
     });
     sh.part("mesa works", {sparse: true}).region("rock", "rock").scatter(V3(-0.42 * ax, 0.74 * ay, cz - 0.17 * L), V3(0.84 * ax, 0, 0), V3(0, 0, 0.36 * L), Y, {count: 22, size: [0.008 * L, 0.03 * L], height: [0.03 * ay, 0.1 * ay], sink: 0.4});
@@ -886,13 +906,27 @@ const BUILD = {
       const cuts = [0, range(r, 0.2, 0.3), range(r, 0.45, 0.6), range(r, 0.74, 0.84), 1].map((u) => mix(d.z, q.bow, u)), scales = [0.9, 1, 0.88, 1];
       for (let i = 0; i < 4; i++) {
         const ww = w * q.f * scales[i], hh = h * q.f * scales[i], za2 = cuts[i], zb2 = cuts[i + 1], bow = i === 3 && k === 1, bv = 0.6 * q.c + 0.03 * h;
-        const sec = sectionOf(ww, hh, q.c * scales[i], {trench: k === 0 && i > 0 ? {w: 0.3 * ww, d: 0.22 * hh} : null, slots: [1, -1].map((side) => ({side, y0: 0.08 * hh, y1: 0.2 * hh, d: 0.03 * ww}))});
+        if (k === 1 && i === 1) {   // the cargo hull is open here: its frame and two ball tanks in plain sight
+          sh.part("open bay", {sparse: true}).region("truss", "truss").truss([q.x, q.y, za2], [q.x, q.y, zb2], 0.8 * Math.min(ww, hh), {bay: 0.9});
+          sh.part("bay tanks").region("tank-1", "tank");
+          for (const u of [0.28, 0.72]) sh.capsule("hull-tank", [q.x, q.y, mix(za2, zb2, u)], [q.x, q.y, mix(za2, zb2, u)], Math.min(0.62 * Math.min(ww, hh), 0.2 * (zb2 - za2)));
+          continue;
+        }
+        if (k === 0 && i === 2) {   // the crew live high on the drive hull: a block that stands above its neighbours
+          sh.part("crew block").region("habitat-1", "windows").block("hull-a", [0.8 * ww, 0.5 * hh, 0.8 * (zb2 - za2)], [q.x - 0.08 * ww, q.y + 0.5 * hh + 0.2 * hh, 0.5 * (za2 + zb2)], {chamfer: 0.08 * hh, bevel: 0.1 * hh});
+          sh.block("hull-b", [0.5 * ww, 0.24 * hh, 0.5 * (zb2 - za2)], [q.x - 0.16 * ww, q.y + 0.5 * hh + 0.55 * hh, mix(za2, zb2, 0.56)], {chamfer: 0.05 * hh, bevel: 0.06 * hh});
+        }
+        const sec = sectionOf(ww, hh, q.c * scales[i], {trench: k === 0 && i > 0 && i !== 2 ? {w: 0.3 * ww, d: 0.22 * hh} : null, slots: [1, -1].map((side) => ({side, y0: 0.08 * hh, y1: 0.2 * hh, d: 0.03 * ww}))});
         sh.part(`${q.name} ${i + 1}`).region(bow ? "bow" : q.name, bow ? "dock" : "plating").loft(i % 2 ? "hull-a" : (k ? "hull-b" : "hull-a"), sec.poly, [st(za2, [1 - 2 * bv / ww, 1 - 2 * bv / hh]), st(za2 + bv), st(zb2 - bv), st(zb2, [1 - 2 * bv / ww, 1 - 2 * bv / hh])],
           {at: move(q.x, q.y, 0), edge: (e) => ({name: sec.tags[e], ...(["wall", "floor", "slot", "back"].includes(sec.tags[e]) ? {skin: "hull-c"} : {})})});
         sh.part("deck works", {sparse: true}).scatter(V3(q.x - 0.42 * ww, q.y + hh / 2, za2 + 0.06 * (zb2 - za2)), V3(k === 0 && i > 0 ? 0.24 * ww : 0.84 * ww, 0, 0), V3(0, 0, 0.88 * (zb2 - za2)), Y, {count: 4, seed: 10 * k + i, size: [0.008 * L, 0.035 * L], height: [0.03 * h, 0.12 * h]});
       }
     });
     y.anchors.docks.push({p: [-gap / 2, rise, L / 2], n: [0, 0, 1]});
+    // a yoke round both hulls near the stern: the frame the thrust of two drives is shared through
+    const yz = -L / 2 + stag + 0.07 * L, yw = gap + 1.7 * w, yh = 1.9 * h + Math.abs(rise), yt = 0.26 * h, yd = 0.035 * L, ymid = rise / 2;
+    sh.part("yoke").region("midship");
+    for (const s of [1, -1]) { sh.block("hull-b", [yw, yt, yd], [0, ymid + s * (yh - yt) / 2, yz], {chamfer: 0.25 * yt, bevel: 0.2 * yt}); sh.block("hull-b", [yt, yh - 2 * yt, yd], [s * (yw - yt) / 2, ymid, yz], {chamfer: 0.25 * yt, bevel: 0.2 * yt, caps: [true, true]}); }
     const za = -L / 2 + stag + 0.15 * L, zb = L / 2 - stag - 0.13 * L, span = gap - 0.6 * w, bridge = (z, k) => {
       const at = basis(V3(gap, -rise, 0).normalize(), V3(rise, gap, 0).normalize(), Z.clone(), V3(0, rise / 2, z));
       sh.part(`bridge ${k + 1}`).region("midship").loft("hull-b", rect(Math.hypot(span, rise), 0.46 * h, 0.07 * h), [st(-0.027 * L, 0.9), st(-0.02 * L), st(0.02 * L), st(0.027 * L, 0.9)], {at});
@@ -1006,11 +1040,14 @@ export function hull(family, options = {}) {
 }
 /** A fleet without designing each: `count` hulls of `family` (or of the families of a list, in turn) with
  * seeds seed, seed + 1, ..., in a loose seeded formation `spacing` metres apart (default 0.8 of the longest).
- * Options: count (5), seed (1), spacing, detail ("far"), and anything hull() takes for every family named.
+ * Options: count (5), seed (1), spacing, detail ("far"), navy (true: one maker built them: every hull has the
+ * palette and the accent the fleet's seed chooses; false: each its own), and anything hull() takes for every
+ * family named (a `palette` or an `accent` given here is every hull's).
  * Returns {object, hulls, update(t, options), dispose()}. */
 export function hullFleet(family, options = {}) {
-  const {count = 5, seed = 1, spacing = null, detail = "far", ...rest} = options, kinds = Array.isArray(family) ? family : [family];
-  const hulls = Array.from({length: count}, (_, i) => hull(kinds[i % kinds.length], {...rest, detail, seed: seed + i})), r = rng(seed * 613 + 17), object = new THREE.Group();
+  const {count = 5, seed = 1, spacing = null, detail = "far", navy = true, ...rest} = options, kinds = Array.isArray(family) ? family : [family], maker = rng(seed * 977 + 3);
+  const livery = navy ? {palette: pick(maker, Object.keys(PALETTES)), accent: pick(maker, ACCENTS)} : {};
+  const hulls = Array.from({length: count}, (_, i) => hull(kinds[i % kinds.length], {...livery, ...rest, detail, seed: seed + i})), r = rng(seed * 613 + 17), object = new THREE.Group();
   const step = spacing ?? 0.8 * Math.max(...hulls.map((h) => h.size.length));
   hulls.forEach((c, i) => { const row = Math.floor((i + 1) / 2), side = i === 0 ? 0 : i % 2 ? 1 : -1; c.object.position.set(side * row * step * (0.85 + 0.3 * r()), (r() - 0.5) * step * 0.5, -row * step * (0.6 + 0.4 * r())); object.add(c.object); });
   object.name = "hull fleet";

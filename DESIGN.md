@@ -381,7 +381,8 @@ src/vidgen/
                           # `vidgen/space-land`: ground with relief under that sky, the same world's as the globe's (§123.6); space-plane.js
                           # `vidgen/space-plane`: parametrized space plane parts and ready-made planes on the craft kit (§123.8); space-effects.js
                           # `vidgen/space-effects`: re-entry glow, vapour trails, exhaust in air, condensation round a craft (§123.9); space-hull.js
-                          # `vidgen/space-hull`: hulls of giant ships, 0.5 to 10 km, on the craft kit (§123.10)
+                          # `vidgen/space-hull`: hulls of giant ships, 0.5 to 10 km, on the craft kit (§123.10); space-hull-detail.js
+                          # `vidgen/space-hull-detail`: their fine detail, windows, bays, lamps and plumes (§123.11)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -29539,10 +29540,10 @@ ship.problems();                                         // [] or sentences
   | `spine` | a long open truss: the drive behind a shadow disc, radiator vanes in one plane, clusters of tanks, crew drums far forward, a docking face as the bow, an array on a mast to one side | 1.2–2.8 km | `girth` (the truss), `drum`, `drums`, `tanks`, `tankCount`, `tank` (girths), `vanes` (2, 4), `vaneSpan`, `bells`, `side` |
   | `carrier` | a thick block with a flat deck: a trench down its middle that opens into a gulf between two blunt prongs of unequal length, hangar slots along one side (or both), a gallery line, stepped terraces and low works on the deck, a keel block, a sponson with radiators on the side without hangars | 1.8–4.2 km | `beam`, `depth`, `taper` (the bow's width over the beam), `trench` (of the beam), `segments`, `hangars`, `side` (1 port, -1 starboard, 0 both), `keel` (of the depth), `vaneSpan`, `bells`, `towers` ([{at, side, len, wid, high}]) |
   | `cluster` | an open frame carrying its load in plain sight: pressure balls, pairs of tanks, a tank lying across, container stacks, gaps; a crew block high on the bow; radiators up and down from the stern | 0.7–1.7 km | `girth`, `aspect`, `vaneSpan`, `bells`, `cells` (a list of `ball`, `pair`, `cross`, `cargo`, `gap`) |
-  | `lance` | a very long thin hull behind a faceted shield, the crew drum and tanks close behind it, the drive far aft on a truss among long narrow radiators | 2.5–6 km | `body` (its width), `shield`, `shieldShape` (`cone`, `disc`), `drum` (body widths), `boom`, `vanes` (3, 4), `vaneSpan`, `bells` |
+  | `lance` | a very long thin hull behind a faceted shield, the crew drum and tanks close behind it, a box girder with a gantry along its back, a hangar shed slung under it and open to port, a second ring of tanks, the drive far aft on a truss among long narrow radiators | 2.5–6 km | `body` (its width), `shield`, `shieldShape` (`cone`, `disc`), `drum` (body widths), `boom`, `vanes` (3, 4), `vaneSpan`, `bells` |
   | `wheel` | a thick hub with two polygonal crew rings of unequal size turning against each other (1 g at the rim by default), a docking drum as the bow, tanks, a cross of radiators | 0.9–2.4 km | `hub`, `ring` (radius), `second` (the next ring's size), `rings`, `gap`, `at`, `sides`, `spokes`, `vaneSpan`, `bells`, `spin` (rad/s) |
-  | `ark` | a worked asteroid: cut flat at the bow, on top and at the stern; a hangar portal built out of the bow face, a polygonal collar with radiators, terraces and works on the mesa, the drive block sunk into the stern | 3–8 km | `girth`, `flat`, `rough`, `mouth`, `vaneSpan`, `bells`, `vaneAngles`, `towers` |
-  | `twin` | two unequal hulls side by side, one set back and higher: a drive hull with a trench and radiators standing from it, a cargo hull with container racks; slanting bridges, a hangar pod | 1.2–3.2 km | `beam`, `depth`, `gap`, `stagger`, `second`, `rise` (depths), `bridges`, `vaneSpan`, `bells` |
+  | `ark` | a worked asteroid: cut flat at the bow, on top and at the stern; a hangar portal built out of the bow face, a polygonal collar with radiators, terraces (stepped piles of thin tiers with low annexes) and works on the mesa, the drive block sunk into the stern | 3–8 km | `girth`, `flat`, `rough`, `mouth`, `vaneSpan`, `bells`, `vaneAngles`, `towers` |
+  | `twin` | two unequal hulls side by side, one set back and higher: a drive hull with a trench, a raised crew block and radiators standing from it; a cargo hull with container racks and an open bay of ball tanks in its frame; a yoke round both near the stern, slanting bridges, a hangar pod | 1.2–3.2 km | `beam`, `depth`, `gap`, `stagger`, `second`, `rise` (depths), `bridges`, `vaneSpan`, `bells` |
 
   Common: `seed`, `length` (200 to 20,000 m), `age` (0 new .. 1: soot towards the stern,
   streaks along the hull), `palette` (`PALETTES`: `bone`, `slate`, `iron`, `sand`, `frost`),
@@ -29551,7 +29552,8 @@ ship.problems();                                         // [] or sentences
   `plate` (the big plates' size, 70 m); a craft's `name`, `camera`, `height`, `sun`, `lights`,
   `marker`, `occlusion` (0 here). `hullSpec(family, options)` is the description as plain JSON,
   `hullFrom(spec, options)` builds it, `hullFleet(families, {count, seed, spacing, detail:
-  "far"})` a formation. Unknown names are refused with the closest word.
+  "far", navy: true})` a formation (`navy`: one maker built it: every hull has the palette and
+  the accent the fleet's seed chooses; Step 389). Unknown names are refused with the closest word.
 - **How a hull is modelled** (`Shell`, from `hullKit(options).shell()`; a hull of one's own:
   `kit.hull(shell.finish(), {anchors})`). Faces are collected by part (`part(name, {sparse,
   spin})`: a mass; sparse ones give no shadow balls and are left out of the profile) and region
@@ -29662,3 +29664,157 @@ ship.problems();                                         // [] or sentences
   orbit with a 50 m craft in a `SpaceView` over the Earth: in front of the world, the deck one
   colour without speckle, the small craft where it was put, shadows that only darken, the same
   picture from a second page.
+
+### 123.11 Giant ship detail and sense of size: `vidgen/space-hull-detail` (Step 389)
+
+`data/web/modules/space-hull-detail.js` (import name `vidgen/space-hull-detail`, in
+`VIDGEN_MODULES`; imports `three`, `rng` of `vidgen/music-time`, `baked` of `vidgen/baked`,
+`GLARE` / `PLUMES` / `flicker` / `craft` of `vidgen/space-craft`, `PALETTES` of
+`vidgen/space-hull`). It dresses a hull of §123.10 and answers one question in pictures: why does
+this ship read as three kilometres long?
+
+```js
+import {hull} from "vidgen/space-hull";
+import {dress} from "vidgen/space-hull-detail";
+const ship = hull("carrier", {seed: 4, length: 3000});
+const detail = dress(ship, renderer, {lights: 1});     // maps baked once, clutter, bays, lamps, plumes
+ship.update(t, {sun, throttle});                       // the hull's own update first
+detail.update(t, {lights: 0.5 + 0.5 * ctx.music.level(t), light});   // light: the spaceLight (an honest exposure dims the lamps)
+```
+
+- **A sibling module (decision).** `space-hull.js` changes only where the detail needs it (below);
+  `space-craft.js`, `space-scale.js` and `space-light.js` are byte-identical. Nothing here is a
+  mesh per window; no weapons are modelled and no option adds any.
+- **What is drawn where, and what is baked.**
+
+  | what | how | kept by `vidgen/baked` |
+  |---|---|---|
+  | 5 to 20 m: panel seams inside the big plates, hatches, conduits with brackets, vents with their soot, ribs, hand lines; pipe bundles, gratings and machine boxes on dark metal; panel grid, feed pipes on radiators; straps, blankets, a feed line on tanks | a tiling map per kind of surface (`KINDS`: `plating`, `metal`, `radiator`, `tank`), 192 m a repeat, read with `uv` (metres) | `space-hull-detail/tile`, 8 maps of 1024 (512 at `far`), shared by every hull and page |
+  | 1 to 5 m: fine panel lines, rivet rows, stencil bars, pits, worn edges, small hatches; grating and bolts; radiator fins; quilting and frost | a second tiling map per kind, 32 m a repeat | the same entry |
+  | windows | in the surface shader, from the attribute `win` (metres along the row, metres across the decks, the region's share) and two 256 by 256 tiles of window light (`windowCells`: the night watch, the rest) | not kept (1 ms to make) |
+  | grime and soot, large marks, the light of bays, trenches and floodlights, the plumes' light on the stern | one map on the hull's atlas (`uv1`): R grime, G marks, B fixed light, A plume light (`uniqueMap`) | `space-hull-detail/unique`, 2048 a hull (1024 at `far`), keyed by the hull's charts, regions, anchors and description |
+  | deck and trench clutter (boxes in clusters, pipe runs, stacks, masts, small dishes) | instances that the hull's own surfaces draw (`clutterPlan`: one piece every 34 m, at most 5000) | — |
+  | parked craft and cargo in the bays | instances of the craft kit's `ship` and `tug` at `far` detail, lit by the bay | — |
+  | thrust structure (gimbal rings, actuators, shrouds, a frame round the bank) | instances | — |
+  | navigation, guide, flood and work lamps | one `THREE.Points` (`navLights`) | — |
+  | one long plume a bank of bells | a shell drawn twice (front and back), brightest where the view passes through its middle | — |
+
+  The maps are painted in JavaScript (`detailMap`, `uniqueMap`: pure, tested in Node) and copied
+  byte for byte into the render targets `vidgen/baked` keeps: a cached page never paints them.
+- **Fading by footprint.** Every scale fades with the metres one pixel covers (`fade(scale,
+  metres)`, the shader's rule; `SCALES`): the small scale between 0.35 and 1.4 m a pixel, the
+  middle scale between 2.5 and 9 m; the maps' mipmaps do the same underneath, so with
+  `antialias: "none"` nothing shimmers. A map's mean tone is 0.5 (unchanged), so a faded map
+  changes nothing. With the detail on, the hull's own big-plate map is drawn at 0.55 of its depth:
+  plates of 12 to 60 m with strong joints are what made a hull read as masonry.
+- **Windows.** Rows follow the decks: 3.5 m between floors, 3.2 m between windows, a window 1.25
+  by 0.95 m. On a flat wall decks are level (`windowCoords`: the hull's y across the decks, the
+  wall's horizontal direction along the row); a face that looks up or down has none; on a round
+  face (a drum, a ring) rows run round it and its end faces have none, so a ring's decks lie at
+  constant radius. Use decides how many (`WINDOWS`, by the region's `detail` of §123.10:
+  `windows` 0.82 of the banks, `dock` 0.3, `trench` 0.3, `plating` 0.24, `rock` and `cargo` 0.05;
+  `tank`, `radiator`, `engine`, `shield`, `hangar`, `truss` none; never on a radiator, tank,
+  truss, glass or void surface). A bank is 9 windows by 3 decks; in a bank some decks are blank.
+  The seed decides which windows exist (0.77) and which are lit (`lit` 0.36 of them, clustered by
+  rooms; `watch` 0.4 of those never go out); a run of windows shares its colour: warm (0.68),
+  cool (0.22), white. A window is filtered over the pixel (a box filter in the shader, the cells
+  through mipmaps): larger than a pixel it is a sharp rectangle with dark glass when unlit,
+  smaller it is a steady sparkle. `lights` (0..1) brings the other banks on one after another
+  (never all at once, never blinking); work lamps follow it.
+- **Exposure.** `detail.update(t, {light})` reads the spaceLight's gains. `film` (the default):
+  windows and lamps are drawn at a pleasing brightness, dimmed to 0.15 where the sun lights the
+  wall (so they come out as a face turns from the sun), and a window under a pixel is lifted 2.6
+  times so that the night side sparkles; this is a stated look. `camera` / `auto`: every lamp and
+  window is multiplied by the same gain as a world's city lights (2^(ev - 10), at most 1) with no
+  dimming and no lift: exposed for sunlight they cannot be seen, which is true.
+- **Hangar bays.** The `hull-void` back wall gets ribs, doors and strips of light drawn from its
+  place among the decks; every face inside a bay's box (floor, ceiling, walls) is lit through the
+  atlas, with pools under the strips, and the light spills on the hull round the mouth; the floor
+  carries a threshold line, landing boxes with dashed lead-in lines and the bay's figure; parked
+  craft (42 to 58 m and 19 to 32 m) and stacks of 14 m containers stand on it; amber lamps along
+  the sill, cool ones under the lintel, white pairs running into the bay on vidgen's clock;
+  `curtain` (0.25) is a faint blue glow across the mouth, strongest at its frame and at a grazing
+  view: a look, not physics; 0 removes it.
+- **Engine banks.** Round every bell a gimbal ring, three actuators, two machine boxes and a
+  heat-stained shroud; ties between neighbours and a frame round the bank; soot on the block in
+  the atlas. Firing: the craft kit's glow in the throats and its plume per bell, one long plume
+  per bank (24 bank radii at full throttle, a third of that idling; a disc of light seen from
+  astern), the block and whatever faces the bells lit through the atlas's A channel, all with
+  `throttle` (a number, a list, a function of t: `ctx.music` through the hull's `update`).
+  `plumes: "bank"` hides the kit's plumes (cheaper), `"bells"` the long one.
+- **Marks and lamps.** `markPlan`: the hull's number (two plain numerals, 12 m to 3 % of the
+  length high) on the largest wall of each side with a bar under it, pads with a cross and a
+  figure and a dashed line on the decks, the bays' floors. Numerals only: no alphabet, no emblem.
+  The tiling maps carry bars, never figures (a tile is seen from both sides). `floodPlan`: lamps
+  close over the larger walls whose light runs out along the plate. `navLights`: red along the
+  port side and green along the starboard (from `hull.profile`), white at bow and stern, two
+  strobes, a beacon on every tower and mast. A lamp is a point at least 2.4 pixels wide whose
+  light falls with the square of what it lacks, so a lamp too small to see fades instead of
+  flickering.
+- **A sense of size: which cues work.** Space has no haze, so distance says nothing. What works,
+  strongest first: (1) windows in rows — the eye knows a floor is three metres; eighty rows on a
+  wall is a city block; (2) a craft of known size against the hull, best flying into a bay
+  (`ship.scaleRef`, `detail.fly(craft, "hangar-2", u)`, `bayApproach`); (3) detail at several
+  scales at once — the finest thing in the frame sets the scale, so a close view must show 1 m
+  detail and a far one must not show 60 m plates as its finest; (4) overlap and depth — a
+  trench full of clutter, a bay with a back wall, a wide lens close along a wall so detail
+  streams past at several depths; (5) the planet behind with a long lens (it flattens the hull
+  on the world and says "in orbit"); (6) lamps: small steady points and pools of light on big
+  walls. What does not work: the hull alone on black from far (a model on a table, whatever the
+  detail); strong tone steps between big plates (masonry); large lamps and large glows (they
+  shrink the ship); a fleet seen from above with nothing small in frame; a wide lens from far.
+- **Changes to `vidgen/space-hull`** (its `VERSION` is 2): every hull mesh has the attribute
+  `chart` (the chart each corner lies in, -1 for none); `hullFleet` takes `navy` (above); the
+  lance, the twin and the ark's terraces have more character (the table in §123.10); the lance
+  has a hangar (`hangar-1`). `dress` adds the attributes `win` and `hullAtlas` (the same numbers
+  as `uv1`) to the hull's meshes and patches the hull's materials (`customProgramCacheKey`
+  `vidgen-hull-detail-<kind>`); it scales the kit's five lamp bodies to 0.3 (metres across on a
+  hull, they read as a toy's).
+- **Interface.** `dress(hull, renderer, options)` → `HullDetail` (`update(t, {lights, light |
+  gains, throttle})`, `fly(craft, hangar, u, options)`, `info` (`{windows, lit, lamps, clutter,
+  craft, bake: {ms}}`), `plan`, `maps`, `object`, `dispose()`); `dressFleet(fleet, renderer,
+  options)`. Options: `lights` (1), `windows` (false | `{lit, watch, warm, cool, floor, pitch,
+  gain, lift}`), `nav`, `hangars` (false | `{craft, cargo, curtain, light}`), `engines` (false |
+  `{structure, plume, light}`), `plumes` (`both` | `bank` | `bells`), `clutter` (false | a
+  density), `marks`, `atlas` (2048; 1024 at `far`), `maps` (1024; 512 at `far`). A hull at `far`
+  detail gets no clutter, parked craft or thrust structure unless asked. Pure, for tests and for
+  one's own use: `detailMap`, `windowCells`, `windowCoords`, `windowShare`, `fade`, `uniqueMap`,
+  `markPlan`, `floodPlan`, `navLights`, `clutterPlan`, `bayApproach`, `inBay`; constants
+  `SCALES`, `KINDS`, `WINDOWS`, `PLUME_MODES`, `VERSION`. Unknown options and names are refused
+  with the closest word.
+- **Measured** (2 cores, SwiftShader, in a `SpaceView` with a sky, the Earth and a star; a 3.2 km
+  carrier, `near`; seconds a frame at 1280x720 / 320x180, bare in brackets). Filling the frame
+  from 2.5 km: 1.0 / 0.30 (0.72 / 0.20). Small in the frame: 0.55 / 0.23 (0.48 / 0.11). A close
+  view where the hull covers every pixel: 2.0 (1.3); with the maps and windows only 1.6; the
+  night side close 1.7. Eight bells firing seen from astern: 1.33 (`plumes: "bank"` 0.86). Five
+  dressed hulls at `far`: 0.9. The first frame of a page costs about 3 s more (the surface
+  programs). Dressing (page ready, the hull alone): cache off 2.1 s, cold 4.2 s (painting and
+  storing), warm 0.9 s; a `far` hull 1.1 s cold, 0.4 s warm; the ark 2.1 s cold, 1.1 s warm.
+  Painting in Node: a 1024 tile 55 to 80 ms, a 2048 unique map 0.3 to 1.2 s. On disk: 4 MB for
+  the first hull (the eight tiles 1.5 MB, its unique map 2.5 MB), 1 to 3 MB for every further
+  hull, 0.2 MB at `far`.
+- **Two traps found, not changed** (their modules' bytes are in the keys of existing scenes;
+  for the review step): `vidgen/space-scale` draws every object with `frustumCulled = false` as
+  sky, behind everything (a lamp or a plume marked so vanishes in front of the hull);
+  `vidgen/space-light` does not hide a sun given as a direction behind a world further than 1e6
+  scene units (a ship in a `SpaceView` in metres is never in the Earth's shadow; with the sun as
+  a body it is). The cookbook's terminator recipe applies `sunVisibility` by hand.
+- **Limits and honest notes.** A round face's unique map knows no place in space: grime only, no
+  bay light or plume light on drums and rings. The plume's light on the stern ignores what stands
+  in between. Clutter does not cast shadows (pieces of 2 to 30 m under a 2048 shadow map over
+  3 km). Window rows on a tapered wall follow level decks and are cut by its edge. The rock of
+  the ark gets sparse lights and no marks. A round bay does not exist. `lights` moves banks, not
+  single rooms. The bank plume is a look (no flow, no shock structure).
+- **Parts** (`data/web/parts/space-hull-detail.js`): `hull-dressed`, `hull-windows`, `hull-bay`,
+  `hull-torch`, `hull-fleet-dressed` (kind `craft`), `hull-detail-maps` (`craft-part`).
+- **Tests** (`tests/test_web_space_hull_detail.py`): the module and its parts; in Node (`slow`):
+  rows a floor apart on any wall and none on decks and end faces, shares by use, the lit share
+  from the seed, the fades, the maps' mean tone and sameness, did-you-mean; on real hulls: the
+  unique map (a bay lit on every face, the stern lit by the plumes and a tower not, the spare
+  texel neutral, the same for a seed), marks, lamps and clutter the same for a seed and on the
+  hull, red to port, clutter clear of the bays, the way into a bay, no windows on tanks,
+  radiators and engines of any family, one livery a fleet, the `chart` attribute; in Chromium
+  (`slow`): the night side has the warm light the bare hull lacks, an honest exposure for
+  sunlight shows almost none, the lit hull differs from the bare one, a bay is brighter than the
+  void, the same picture from a second page and with the cache off, cold and warm (the nine maps
+  come from the cache).

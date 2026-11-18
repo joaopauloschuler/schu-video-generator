@@ -64,7 +64,8 @@ MODULES_FOLDER = "modules"
 #: ``vidgen/space-bodies`` paints from orbit, DESIGN.md §123.6; ``vidgen/space-plane``: parametrized space
 #: plane parts and ready-made planes built on ``vidgen/space-craft``, DESIGN.md §123.8; ``vidgen/space-effects``:
 #: re-entry glow, vapour trails, exhaust in air and condensation round a craft, DESIGN.md §123.9;
-#: ``vidgen/space-hull``: hulls of giant ships built on ``vidgen/space-craft``, DESIGN.md §123.10).
+#: ``vidgen/space-hull``: hulls of giant ships built on ``vidgen/space-craft``, DESIGN.md §123.10;
+#: ``vidgen/space-hull-detail``: their fine detail, windows, bays and lights, DESIGN.md §123.11).
 VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
                                   "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js", "vidgen/parts": "parts.js",
                                   "vidgen/space-sky": "space-sky.js", "vidgen/space-sky-stars": "space-sky-stars.js",
@@ -75,7 +76,8 @@ VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vid
                                   "vidgen/space-air": "space-air.js", "vidgen/space-sea": "space-sea.js",
                                   "vidgen/space-clouds": "space-clouds.js", "vidgen/space-land": "space-land.js",
                                   "vidgen/space-plane": "space-plane.js", "vidgen/space-effects": "space-effects.js",
-                                  "vidgen/space-hull": "space-hull.js"}
+                                  "vidgen/space-hull": "space-hull.js",
+                                  "vidgen/space-hull-detail": "space-hull-detail.js"}
 #: The folder of the parts files after ``__vidgen__/`` (``data/web/parts/<module>.js``: each module's
 #: ready-made parts for the registry ``vidgen/parts``; imported as ``vidgen/parts/<module>.js``).
 PARTS_FOLDER = "parts"

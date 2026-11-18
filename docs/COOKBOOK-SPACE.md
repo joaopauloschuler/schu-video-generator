@@ -498,10 +498,55 @@ earth.update(t); ship.update(t, {sun, throttle: 0}); small.update(t, {sun}); sun
 
 Lenses that read as large: a normal lens (30 degrees) a few hundred metres off the hull with the
 small craft in frame; a long lens (12 to 18 degrees) from 10 to 45 km with the world behind
-(`own([9000, 6000, 3500])`). A wide lens close along the hull needs fine detail the hulls do not
-have yet. `ship.anchor("hangar-1")`, `"bridge"`, `"bow"`, `"bell-1"` are places to aim at;
+(`own([9000, 6000, 3500])`). A wide lens close along the hull needs the fine detail of the next
+recipe. `ship.anchor("hangar-1")`, `"bridge"`, `"bow"`, `"bell-1"` are places to aim at;
 `ship.problems()` names what looks wrong; `hullFleet(["carrier", "spine", "twin"], {count: 5,
 seed: 3})` is a formation at `far` detail. Look first: `vidgen parts 'hull-*'`.
+
+**A giant ship that reads as kilometres long** (`vidgen/space-hull-detail` on the recipe above).
+Dress the hull once and update the detail after the hull:
+
+```js
+import {dress} from "vidgen/space-hull-detail";
+const detail = dress(ship, renderer);                 // maps baked once (vidgen cache), clutter, bays, lamps, plumes
+// frame(t), after ship.update(t, {sun, throttle}) and light.update(t):
+detail.update(t, {lights: 0.5 + 0.5 * ctx.music.level(t), light});   // banks of windows come on with the music; never a flicker
+```
+
+The shots, each with the camera in the ship's own axes (`own(...)` of the recipe above; numbers
+for the 3.2 km carrier of seed 1, whose port wall is at x = 525 m, deck at y = 138 m, hangar 2
+at `[518, -44, 132]`):
+
+| shot | camera and light | why it reads as large |
+|---|---|---|
+| a craft into a bay | `const small = ship.scaleRef("ship", {at: "hangar-2"})`; each frame `detail.fly(small, "hangar-2", u)` (u 0..1 over 8 to 12 s); from `[960, 20, 470]` to `[518, -55, 150]`, 30 degrees; the sun high and ahead (`[0.2, 0.75, 0.6]`) so the mouth is in shade | a 50 m craft shrinks to a speck against the mouth; the bay has a floor, a back wall and parked craft |
+| a slow pass along the hull | from `[572, 70, -1150 + 40 * t]` to `[545, 40, 1200]`, 78 degrees, 50 m off the wall; the sun ahead and low (`[0.3, 0.25, 0.9]`) | seams, hatches and windows stream past near the lens while the wall runs to a vanishing point |
+| over the planet | from `[8000, 6800, 5000]` to `[0, -200, 0]`, 15 degrees, a craft 420 m off the port side (`scaleRef("ship", {at: "port", gap: 420})`) | the long lens lays the hull on the cloud deck; the craft is two pixels |
+| the night side | from `[1300, 300, 900]` to `[400, 50, 0]`, 35 degrees, the sun behind the hull (`[-0.7, 0.3, -0.6]`) | thousands of windows in rows, the bays as lit rooms, red lamps along the side |
+| crossing the terminator | the ship's orbit carries it out of (or into) the world's shadow; from ahead and above (`[2300, 1500, 4400]` to `[250, 60, 500]`, 26 degrees) | the windows of every wall the sun leaves come out; the faces it reaches go plain |
+| the bank firing | from `[1500, 500, -3100]` to `[200, 0, -1700]`, 40 degrees; `ship.update(t, {sun, throttle: 0.3 + 0.7 * ctx.music.level(t)})` | the frames and rings round the bells are small against them; the plume is longer than the block |
+| a fleet | `const fleet = hullFleet(["carrier", "spine", "twin", "lance", "cluster"], {count: 5, seed: 3, spacing: 2600}); const details = dressFleet(fleet, renderer)`; `fleet.update(t, {sun}); details.update(t)` | one palette and one accent: one maker; keep one hull near the lens, the rest behind it |
+
+The terminator with a sun given as a direction: a `spaceLight` does not darken the ship in the
+world's shadow then (the sun stands "nearer" than the world). Do it by hand after
+`light.update(t)`:
+
+```js
+import {sunVisibility} from "vidgen/space-light";
+const at = ship.object.getWorldPosition(new THREE.Vector3()), w = earth.object.getWorldPosition(new THREE.Vector3());
+const seen = sunVisibility(sun.direction.toArray().map((x) => x * 1e12), Math.tan(0.267 * Math.PI / 180) * 1e12,
+  [{at: [w.x - at.x, w.y - at.y, w.z - at.z], radius: earth.object.getWorldScale(new THREE.Vector3()).x, air: null}]);
+light.directional.color.setRGB(...seen.fraction);
+```
+
+Honest exposure (`spaceLight({exposure: "camera", ev})` and `detail.update(t, {light})`): exposed
+for sunlight no window can be seen; open up about ten stops on the night side and they are
+there. In `film` (the default) windows are dimmed where the sun lights the wall and lifted when
+smaller than a pixel: a look. Cheaper: `dress(ship, renderer, {plumes: "bank"})` when the bells
+fire, `{clutter: false}` or a hull at `far` detail when it is small in the frame. Never give a
+lamp, a plume or anything else that must stand in front of the ship `frustumCulled = false`: a
+`SpaceView` draws such things as sky. Look first: `vidgen parts 'hull-dressed' 'hull-windows'
+'hull-bay' 'hull-torch' 'hull-fleet-dressed'`.
 
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
@@ -542,6 +587,7 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | effects (`vidgen/space-effects`) on top of a plane a third of the frame wide: a re-entry (shock layer, hot surfaces, wake, sparks, train) / the same at `quality: fast` / without hot surfaces / the plane filling the frame | +0.37 / +0.30 / +0.32 / about +0.7 (+0.04 at 320x180) | 0.5 s (shaders, the windward map) |
 | exhaust in air, a vapour cone and wing vapour, vapour trails: each, or all three, on a plane over the sea | under +0.05 (inside the scatter; +0.01 at 320x180) | |
 | a giant hull (`vidgen/space-hull`) on top of a sky, a world and a star in a `SpaceView`: filling the frame / small in it / `far` detail filling it / a bank of eight bells firing seen from astern | +0.33 / +0.12 / +0.24 / +0.8 (+0.12 / +0.03 at 320x180; its shadows are inside the scatter) | 1.0 s for the first hull, 25 to 110 ms for each more |
+| the same hull dressed (`vidgen/space-hull-detail`: maps, windows, bays, clutter, lamps): filling the frame from 2.5 km / small in it / a close view where it covers every pixel / the night side close / eight bells firing (with `plumes: "bank"`) / five dressed hulls at `far` | +0.28 / +0.07 / +0.7 / +0.4 / +0.16 (-0.3) / 0.9 in all (+0.10 and +0.12 at 320x180; the first frame of a page 3 s more) | dressing: 2.1 s with the cache off, 4.2 s cold, 0.9 s warm (`far`: 1.1 / 0.4 s); 4 MB on disk for the first hull, 1 to 3 MB for each more |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 
