@@ -324,7 +324,7 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * vec4(cameraPosition + vRel, 1.0);
   gl_Position.z = min(gl_Position.z, gl_Position.w * 0.999999);     // the far plane never cuts the sea
 }`;
-const SEA_FRAG = (depth) => /* glsl */`
+const SEA_FRAG = (depth, shade) => /* glsl */`
 ${AIR_GLSL}
 ${DISPLAY_GLSL}
 uniform vec4 uWaveA[NW], uWaveB[NW], uWaveC[NW];
@@ -346,6 +346,7 @@ uniform float uDisplay, uGrain, uSeaShoal, uSeaShow, uSeaGust;   // uSeaShow 1: 
 varying vec3 vRel;
 varying float vClamp;
 ${depth}
+${shade}
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 float seaFresnel(float c) {
   float n = uSeaOptic.x, g = sqrt(n * n - 1.0 + c * c), a = (g - c) / (g + c), b = (c * (g + c) - 1.0) / (c * (g - c) + 1.0);
@@ -412,7 +413,7 @@ void main() {
   float dusk = clamp(uAirDusk.x * 2.0, 0.0, 1.0) * smoothstep(0.0, -0.05, sunG);
   Fs = max(Fs, vec2(${DUSK_MIRROR.toFixed(2)} * dusk));
   float F = 0.5 * (Fs.x + Fs.y);
-  vec3 Tsun = exp(-airTau(0.0, sunG)) * smoothstep(-uSeaOptic.z, uSeaOptic.z, sunG);
+  vec3 Tsun = exp(-airTau(0.0, sunG)) * smoothstep(-uSeaOptic.z, uSeaOptic.z, sunG) * seaShade(p);
   vec3 amb = texture2D(uSeaAmbient, vec2(clamp((sunG - (${PSI_TABLE.sunFrom.toFixed(2)})) / ${(1 - PSI_TABLE.sunFrom).toFixed(2)}, 0.01, 0.99), 0.5)).rgb;
   vec3 mirrored = reflect(rd, n), sky = vec3(0.0);
   for (int k = 0; k < FACES; k++) {
@@ -467,7 +468,7 @@ void main() {
   float grain = mix(uGrain, 1.0, smoothstep(0.45, 0.8, dot(shown, vec3(0.3333))));
   gl_FragColor = uDisplay < 0.5 ? vec4(max(col * (1.0 + grainy * 0.004), 0.0), cover) : vec4(shown + grainy * grain / 255.0, cover);
 }`;
-const DEEP = "float seaDepth(vec2 p) { return 1e6; }";
+const DEEP = "float seaDepth(vec2 p) { return 1e6; }", OPEN = "float seaShade(vec2 p) { return 1.0; }";
 // the foam's fine pattern, a tile that repeats: thin walls between cells (red), soft patches (green), bubbles (blue)
 const LACE_FRAG = /* glsl */`
 uniform vec2 uSize;
@@ -491,7 +492,7 @@ void main() {
 }`;
 const LACE_SIZE = 256;
 
-const OPTIONS = Object.freeze({state: "breeze", seed: 1, water: "ocean", quality: "standard", waves: null, anchor: Object.freeze([0, 1, 0]), filter: 0.8, depth: null, shoal: 4});
+const OPTIONS = Object.freeze({state: "breeze", seed: 1, water: "ocean", quality: "standard", waves: null, anchor: Object.freeze([0, 1, 0]), filter: 0.8, depth: null, shoal: 4, shade: null});
 
 /** Water to the horizon under an air: `object` (add it to the scene), `update(t, {camera})`, `heightAt(x, z, t)`,
  * `normalAt(x, z, t)`, `pointAt(x, z, t)`, `list` (the waves), `state`, `water`, `horizon` (what the last
@@ -504,7 +505,9 @@ export class Sea {
    * `waves` (how many, in place of the quality's), `anchor` (the unit vector from the world's middle to where
    * the waves' plane touches the sphere: default the scene's +y; state the place a far flight ends at),
    * `filter` (how early a wave finer than a pixel fades, in pixels), `depth` ({glsl, uniforms}: the water's
-   * depth, see DESIGN §123.4) with `shoal` (metres of water over which the bottom's colour fades). */
+   * depth, see DESIGN §123.4) with `shoal` (metres of water over which the bottom's colour fades), `shade` ({glsl, uniforms}: what shades the sun's
+   * light on the water, such as `clouds(...).shade` of vidgen/space-clouds: `float seaShade(vec2 p)`, the share of the sun's
+   * light that reaches the water p metres from the camera along the sea's +x and +z). */
   constructor(renderer, sky, options = {}) {
     if (!renderer || !renderer.isWebGLRenderer) throw fail("sea(renderer, sky, options): the first argument must be the page's THREE.WebGLRenderer");
     if (!sky || !sky.uniforms || !sky.model || typeof sky.skyAt !== "function") throw fail("sea(renderer, sky, options): the second argument must be the air the sea lies under (air(renderer, ...) of vidgen/space-air)");
@@ -531,6 +534,10 @@ export class Sea {
       known("depth", o.depth, ["glsl", "uniforms"]);
       if (typeof o.depth.glsl !== "string" || !/float\s+seaDepth\s*\(\s*vec2/.test(o.depth.glsl)) throw fail("depth.glsl must define `float seaDepth(vec2 p)`: the water's depth in metres at p (metres along the sea's +x and +z)");
     }
+    if (o.shade !== null) {
+      known("shade", o.shade, ["glsl", "uniforms"]);
+      if (typeof o.shade.glsl !== "string" || !/float\s+seaShade\s*\(\s*vec2/.test(o.shade.glsl)) throw fail("shade.glsl must define `float seaShade(vec2 p)`: the share of the sun's light (0 to 1) that reaches the water p metres from the camera along the sea's +x and +z");
+    }
     const n = this.list.waves.length, wind = [Math.sin(this.state.direction * RAD), -Math.cos(this.state.direction * RAD)], v4 = () => new THREE.Vector4();
     const A = this.list.waves.map(v4), B = this.list.waves.map((w) => new THREE.Vector4(w.sharp, w.crest, w.ruffled, 0)), C = this.list.waves.map(v4), D = this.list.waves.map((w) => new THREE.Vector2(...w.lag));
     // what is lost when the loop stops at a wave: the slopes and the crest measure of it and all finer ones
@@ -552,8 +559,8 @@ export class Sea {
       uSeaE1: {value: this.frame.e1}, uSeaE2: {value: this.frame.e2}, uSeaAhead: {value: new THREE.Vector3(1, 0, 0)},
       uSeaBody: {value: new THREE.Vector3(...this.water.color)}, uSeaShallow: {value: new THREE.Vector3(...this.water.shallow)}, uSeaFoamColor: {value: new THREE.Vector3(...this.water.foam)},
       uSeaSky: {value: at.texture}, uSeaAmbient: {value: sky.ambientTexture}, uSeaLace: {value: this._lace.texture},
-      uDisplay: {value: 0}, uGrain: {value: 2}, uSeaShoal: {value: o.shoal}, ...(o.depth?.uniforms ?? {})};
-    this.material = new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {NW: n, NG: Math.max(this.list.lifted, 1), FACES: faces}, vertexShader: SEA_VERT, fragmentShader: SEA_FRAG(o.depth?.glsl ?? DEEP),
+      uDisplay: {value: 0}, uGrain: {value: 2}, uSeaShoal: {value: o.shoal}, ...(o.depth?.uniforms ?? {}), ...(o.shade?.uniforms ?? {})};
+    this.material = new THREE.ShaderMaterial({uniforms: this.uniforms, defines: {NW: n, NG: Math.max(this.list.lifted, 1), FACES: faces}, vertexShader: SEA_VERT, fragmentShader: SEA_FRAG(o.depth?.glsl ?? DEEP, o.shade?.glsl ?? OPEN),
       side: THREE.DoubleSide, depthTest: true, depthWrite: true, toneMapped: false, fog: false, transparent: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor});
     this.geometry = null; this._gridFor = "";

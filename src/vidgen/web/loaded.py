@@ -59,7 +59,8 @@ MODULES_FOLDER = "modules"
 #: declarative ``space`` scene needs besides the parts, DESIGN.md §122.12; ``vidgen/baked``: pictures baked once and kept
 #: between pages in vidgen's cache, DESIGN.md §123.2; ``vidgen/space-air``: the sky seen from inside an
 #: atmosphere and aerial perspective, DESIGN.md §123.3; ``vidgen/space-sea``: water to the horizon under that
-#: sky, DESIGN.md §123.4).
+#: sky, DESIGN.md §123.4; ``vidgen/space-clouds``: cloud decks, towers, lightning and a giant's decks under that sky,
+#: DESIGN.md §123.5).
 VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vidgen/music-time": "music-time.js", "vidgen/three-kit": "three-kit.js",
                                   "vidgen/title-cards": "title-cards.js", "vidgen/space-scale": "space-scale.js", "vidgen/parts": "parts.js",
                                   "vidgen/space-sky": "space-sky.js", "vidgen/space-sky-stars": "space-sky-stars.js",
@@ -67,7 +68,8 @@ VIDGEN_MODULES: dict[str, str] = {"vidgen/three-finish": "three-finish.js", "vid
                                   "vidgen/space-phenomena": "space-phenomena.js", "vidgen/space-craft": "space-craft.js",
                                   "vidgen/space-camera": "space-camera.js",
                                   "vidgen/space-scene": "space-scene.js", "vidgen/baked": "baked.js",
-                                  "vidgen/space-air": "space-air.js", "vidgen/space-sea": "space-sea.js"}
+                                  "vidgen/space-air": "space-air.js", "vidgen/space-sea": "space-sea.js",
+                                  "vidgen/space-clouds": "space-clouds.js"}
 #: The folder of the parts files after ``__vidgen__/`` (``data/web/parts/<module>.js``: each module's
 #: ready-made parts for the registry ``vidgen/parts``; imported as ``vidgen/parts/<module>.js``).
 PARTS_FOLDER = "parts"

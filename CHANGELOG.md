@@ -5,7 +5,7 @@ package are `vidgen`. The release notes of 0.2.0 (what changed from 0.1) are in 
 ("Release notes: schu-video-generator 0.2.0") and `DESIGN.md` §63. Step numbers refer to `tasklist.md`;
 each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
 
-## Steps 193–382
+## Steps 193–383
 
 ### Air, planes and giant ships (Phase AO, Steps 379–394)
 
@@ -62,6 +62,24 @@ each step has a section in `HANDOFF.md` and its details in `DESIGN.md`.
   crests, shaded faces) and their foam is broken lines along the crests with thin streaks down
   the wind, no cut-out patches and no net of cells; at dusk in film exposure near water keeps
   the sky's colours until the sun is about 9 degrees down.
+
+- **Cloud decks and gas giants** (Step 383): `vidgen/space-clouds` draws clouds in a
+  `vidgen/space-air` sky, on the world's own sphere: `clouds(renderer, sky, {sky: "fair", seed})`
+  gives decks the camera can be under, in, between and over (`cumulus`: a broken field with flat
+  grey bases; `stratus`: a closed deck, a cloud sea from above; `cirrus`: thin high streaks; by
+  heights, cover and seed, drifting with the wind on vidgen's clock), cloud towers with anvils
+  rising through the decks, and lightning inside them from a seed or at stated times (a
+  `ctx.music` track's hits). The sun lights each deck after the air at the deck's own height
+  (white tops by day, every swell of a cloud sea lit from the side at sunset, high cloud still
+  pink when low cloud is in shadow), thin edges shine towards the sun, bases are grey, upper
+  decks cast shadows on lower ones and, with the sea's new `shade` option, on a
+  `vidgen/space-sea` sea; the air's haze lies over far cloud. A giant of gas has no ground:
+  `giantSky("jupiter", ...)` and `giantAir("jupiter")` give decks in the colours of the band at a
+  latitude of the same world in `vidgen/space-bodies`, towers, a high haze and the dark below
+  (heights and air: a stated look). Ready-made skies `fair`, `overcast`, `layers`, `towers`,
+  `storm`. 0.9 to 1.9 s a frame at 1280x720 in software GL (three decks 2.5 s; `quality: "fast"`
+  0.4 to 0.8 s); nine parts under the new kind `cloud` (`vidgen parts --kind cloud`).
+  [CONFIG](docs/CONFIG.md#web), [space cookbook](docs/COOKBOOK-SPACE.md).
 
 ### Space scenes (Phase AN, Steps 367–378)
 

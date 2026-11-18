@@ -7898,6 +7898,7 @@ plain ground. Keep the camera over the crests (at least 0.5 m over sea level).
 | `anchor` | `[0, 1, 0]` | the direction from the world's middle to where the waves' plane touches the sphere |
 | `filter` | 0.8 | how early a wave finer than a pixel fades, in pixels (smaller: crisper and more shimmer) |
 | `depth`, `shoal` | none, 4 | `{glsl, uniforms}` defining `float seaDepth(vec2 p)` (metres of water at p): the colour goes to the water's `shallow` over `shoal` metres and no sea is drawn where there is none |
+| `shade` | none | `{glsl, uniforms}` defining `float seaShade(vec2 p)`: the share of the sun's light that reaches the water p metres from the camera; `clouds(...).shade` of `vidgen/space-clouds` lays the clouds' shadows on the water |
 
 `water.horizon` holds `{distance, dip, height}` after every update (metres, degrees under the
 level, the camera's height over sea level); `water.heightAt(x, z, t)`, `water.normalAt(x, z, t)`
@@ -7912,6 +7913,63 @@ shapes, spray, wakes or shore waves); the water mirrors the sky and the sun, not
 the scene; `rough` and `storm` are steeper than their winds would raise given days, and
 `methane` is a look. Costs (2 cores, software GL, with the dome): 1.1 s a frame at 1280x720 near
 the water, 0.65 s from 20 km, 0.07 s at 320x180; `fast` 0.8 s. Look first: `vidgen parts --kind sea`.
+
+**Cloud decks, towers, lightning, a giant's decks: `vidgen/space-clouds`** (Step 383, DESIGN §123.5).
+Clouds in a `vidgen/space-air` sky, on the world's own sphere: decks to fly under, through,
+between and over, cloud towers with anvils, lightning inside them at seeded or stated times, and
+the decks of a giant of gas in its band's colours with no ground under them. Lit by the air's sun
+at each deck's own height and by its sky; the decks above cast shadows on those below and on a
+`vidgen/space-sea` sea.
+
+```js
+import {air, sunDirection} from "vidgen/space-air";
+import {clouds, giantSky, giantAir} from "vidgen/space-clouds";
+const sky = air(renderer, "earth", {sun: sunDirection(30, 20)});
+const weather = clouds(renderer, sky, {sky: "fair", seed: 4});      // also "overcast", "layers", "towers", "storm"
+scene.add(sky.object, weather.object);
+function frame(t) { sky.update(t, {camera}); weather.update(t, {camera}); renderer.render(scene, camera); }
+// over a sea: const water = sea(renderer, sky, {shade: weather.shade}); add it before the clouds
+// a giant: const sky = air(renderer, giantAir("jupiter")); clouds(renderer, sky, giantSky("jupiter", {scale: sky.model.H}))
+```
+
+Call `weather.update` after the air's `update`, with the camera the picture is drawn with (the
+clouds' own picture is drawn in `update`). Add the clouds' object after the dome and the sea.
+
+| `clouds(renderer, sky, options)` | default | what it does |
+|---|---|---|
+| `sky` | none | a ready-made sky: `fair` (cumulus under cirrus), `overcast` (a closed deck from 1.8 to 3 km), `layers` (a cloud sea, a broken deck at 6.8 km, cirrus), `towers` (five towers 11 km high through a low deck), `storm` (a dark deck, six towers, lightning) |
+| `decks` | `["cumulus"]` | up to 4 decks, each a name or `{type, base, top, cover, ...}`: `cumulus` (1.0 to 2.1 km, cover 0.4: a broken field with flat bases), `stratus` (1.8 to 3 km, cover 1: a closed deck with a rolling top), `cirrus` (9.5 km, thin streaks along the wind) |
+| a deck's `base`, `top` | the type's | metres over the sphere; a deck moved by `base` alone keeps its depth |
+| a deck's `cover` | the type's | the share of sky it covers, 0 to 1 (roughly: within about a tenth in the picture) |
+| a deck's `size`, `stretch` | the type's | a cloud's width in metres; how much longer than wide along the wind |
+| a deck's `density`, `color` | the type's | the share of light a metre of cloud takes (thinner than real cloud: a look); what the cloud throws back (linear) |
+| a deck's `weather`, `rise`, `floor`, `soft`, `fray`, `ragged`, `puff`, `beyond` | the type's | the shape in numbers (DESIGN §123.5); `beyond: {color, at, width}` gives the deck another colour from `at` metres north of the origin on |
+| `towers` | none | a number, or `{count, seed, spread, radius, base, top, anvil, density, color, at}`: up to 6 towers scattered within `spread` (60 km) of the origin, or at the places `at: [[x, z], ...]` |
+| `lightning` | none | `{rate, times, power, color, radius, seed, from, to}`: `rate` flashes a minute from the seed; `times` in seconds (numbers, `ctx.music`'s events, or a track of `vidgen/music-time`'s `trackArrays`); flashes sit inside the towers, or in the lowest deck when there are none |
+| `seed` | 1 | where the clouds, the towers and the flashes are |
+| `wind`, `direction` | 12, 70 | m/s and degrees (where it blows to; 0 = towards -z): the clouds drift and slowly change |
+| `quality` | `"standard"` | `fast` (a third of the picture's size, 6 x 3 steps), `standard` (half, 8 x 4), `fine` (full size, 10 x 5: four to five times `standard`'s time) |
+| `floor` | none | a giant's dark under the decks, a colour (`giantSky()` gives one): drawn to the horizon in place of any ground |
+| `anchor` | `[0, 1, 0]` | as the sea's |
+
+`weather.decks` and `weather.towers` hold what was made (heights, places, radii);
+`weather.coverAt(deck, x, z, t)` says how much cloud a deck has over a place (0 open, towards 1 in
+a cloud); `weather.horizon(deck)` a deck's horizon for the last camera; `weather.flashes(t)` the
+flashes seen now. `giantSky(world, {latitude, scale, radius, towers})` returns the options of a
+giant's sky (three decks, towers, the dark below) in the colours `vidgen/space-bodies` paints
+that latitude with; `giantAir(world)` the air to fly in. The pure functions (`deckOf`,
+`deckField`, `towerList`, `stormOf`, `strikeTimes`, `flashLevel`, `shellSpan`, `deckHorizon`,
+`noiseTile`) need no renderer.
+
+Honest notes: a cloud is a height field over a flat base (no overhangs), soft-edged, and blurs to
+its mean far away; towers are a round trunk under a lens-shaped anvil; everything in the scene
+stands in front of every cloud (a plane is not hidden inside one); the sea mirrors no cloud; a
+giant's heights, depths and air are a look (stated in DESIGN §123.5), its rings are not drawn in
+the sky, and from orbit the same world's single clouds are elsewhere (colours and cover agree).
+Costs (2 cores, software GL, 1280x720, with the dome): `fair` from below 1.9 s a frame (`fast`
+0.8 s, `fine` 8 s), a cloud sea from above 0.9 s (`fast` 0.4 s), towers 1.4 s, between three decks
+2.5 s, a giant 1.9 s, over a sea 2.8 s; 0.07 to 0.13 s at 320x180. Look first:
+`vidgen parts --kind cloud`.
 
 **Planets, moons and rings: `vidgen/space-bodies`** (Step 371, DESIGN §122.7). A world from a
 seed, or a ready-made one, in one line; every surface is generated (no maps or images).
@@ -17630,7 +17688,7 @@ for `web` scenes on one labelled contact sheet so you can choose by looking: a t
 its name, its kind, what it is and the one line that uses it (blue, in the module it names).
 
 - **Choosing.** `NAME` is a part's name or a pattern (`star-*`, `*ring*`; an unknown name is an
-  error with the closest one); `--kind` one of `sky`, `body`, `light`, `air`, `sea`, `craft`, `craft-part`, `phenomenon`,
+  error with the closest one); `--kind` one of `sky`, `body`, `light`, `air`, `sea`, `cloud`, `craft`, `craft-part`, `phenomenon`,
   `camera`, `structure`, `effect`, `environment` (a kind without parts yet says so).
 - **Drawing.** One Chromium, one page (`data/web/parts-sheet.js`): frame n builds part n in a scene
   of its own with the registry's default camera and light, sets it to the part's time `at` and
@@ -17641,7 +17699,7 @@ its name, its kind, what it is and the one line that uses it (blue, in the modul
   environment 4.3 s: its soft boxes are baked with PMREM in software GL); the eleven parts of
   `vidgen/space-sky` add 29 s (2.5 s a part: each bakes its sky), the 33 of `vidgen/space-bodies`
   33 to 43 s (about 1 s a part), the 15 of `vidgen/space-light` 31 s, the 12 of
-  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s.
+  `vidgen/space-phenomena` 21 to 27 s, the 31 of `vidgen/space-craft` 50 s, the 5 of `vidgen/space-camera` 22 s, the 10 of `vidgen/space-air` 8 s, the 8 of `vidgen/space-sea` 9 s, the 9 of `vidgen/space-clouds` 13 s.
 - **`--list`** prints the parts by kind without a browser: name and what it is, then
   `module: the line that uses it`; with `--json` the [`vidgen parts --json`](#vidgen-parts---json)
   document. Over MCP: the `parts` tool.

@@ -369,7 +369,8 @@ src/vidgen/
                           # `vidgen/space-scene`: what the page of a `space` scene needs besides the parts (§122.12); baked.js
                           # `vidgen/baked`: pictures baked once and kept between pages in vidgen's cache (§123.2); space-air.js
                           # `vidgen/space-air`: the sky seen from inside an atmosphere, aerial perspective (§123.3); space-sea.js
-                          # `vidgen/space-sea`: water to the horizon under that sky (§123.4)
+                          # `vidgen/space-sea`: water to the horizon under that sky (§123.4); space-clouds.js
+                          # `vidgen/space-clouds`: cloud decks, towers, lightning and a giant's decks under that sky (§123.5)
   data/web/parts/          # <module>.js: each module's ready-made parts for `vidgen/parts` (`definePart`, JSON first argument), served as
                           # `vidgen/parts/<module>.js`; parts-sheet.js (in data/web/) is the page `vidgen parts` draws with (§122.5)
   data/web/starters/       # drift, orbit, tunnel, swarm, rings, dust, ribbon .js: the starter pages `vidgen music plan --out` copies, one per role (§121.2)
@@ -28617,3 +28618,154 @@ by default), +y up at the anchor.
   within a row of the formula at 720 rows, the picture's own heights against the lookup at 49
   places (within 8 cm), the sphere's drop 6.6 km out, a frame twice the same, and the same pixels
   with the foam's pattern baked, from the cache and without the cache.
+
+### 123.5 Cloud decks, towers, lightning and a giant's decks: `vidgen/space-clouds` (Step 383)
+
+`const weather = clouds(renderer, sky, {sky: "fair", seed: 4}); scene.add(weather.object);
+weather.update(t, {camera})` after the air's own `update`. The module
+`data/web/modules/space-clouds.js` (import name `vidgen/space-clouds`, in `VIDGEN_MODULES`)
+imports `three`, `AIR_GLSL`, `DISPLAY_GLSL`, `RADII`, `sunlightAt`, `skyAmbient` of
+`vidgen/space-air` and `resolveOptions`, `bandRamp`, `linearColor` of `vidgen/space-bodies`. The
+clouds stand in an air of §123.3: its radius is height 0, its sun, light and exposure are theirs.
+Scene units are the air's (metres by default), +y up at the anchor (as §123.4's sea: the same
+frame, so the two agree on the horizon and on places).
+
+- **Measured first** (2 cores, SwiftShader, 1280x720, the dome's 0.15 to 0.17 s included; the
+  `fair` sky from 150 m unless said): a march of 10 jittered steps a deck at half the picture's
+  size 1.6 s, at a third with 6 steps 0.68 s, at full size with 16 steps 7.8 s. Such a march
+  showed grain (jitter) or terraces (no jitter) on every cloud narrower than a step, at any
+  affordable count: a slanting ray crosses a 1.4 km deck in 4 to 10 km. Chosen instead, at about
+  the same cost: steps that are exact where they can be (below). Not built: shells with parallax
+  (the same code with one step a shell: it cannot be flown through), billboards for towers (a
+  tower costs only on the pixels its two cylinders cover, and a billboard cannot be flown round).
+- **A deck is a shell of the world's sphere** between `base` and `top` (metres). Each pixel's ray
+  is cut with every shell (`shellSpan`: the first stretch of the ray inside; closed form, the
+  sea's stable roots) and with every tower's two cylinders (trunk, anvil); the stretches are walked
+  nearest first, front to back, until 1.5 % of the light is left. So the camera may be under,
+  in, between or over the decks, and nothing changes kind when it crosses a deck's face: inside,
+  the stretch starts at the eye and the first steps are short (the stated simple fog: the same
+  cloud, read as coarsely as its steps).
+- **The cloud is a height field read from one tile of noise.** `noiseTile()`: 256 x 256, four
+  channels (soft noise in five sizes; round caps in three sizes; finer caps; a second soft noise),
+  made in JavaScript from integer hashes (the same numbers on every machine and in Node; 0.09 s a
+  page; not baked through `vidgen/baked`: its key would add nothing, and the tests and
+  `coverAt` read the same numbers). A deck reads it four times (`deckField`): the weather twice
+  (31 and 12.7 clouds' widths a tile, turned against each other, so no repeat can be seen to the
+  horizon), the clouds (4 widths a tile, stretched along the wind by `stretch`), the fine caps
+  (0.9). The pattern is `(soft (1 - puff) + caps puff) (1 - weather) + weather's share`; cloud is
+  where it stands over `level`, the value a share `cover` of 4096 places exceeds (so `cover` is
+  roughly the covered share of sky: within 0.06 in the pattern, tested). A cloud's top is
+  `floor + sqrt(rise (pattern - level) / span)` of the deck's depth (round tops: the caps are one
+  less a squared distance), its base flat but for `ragged`. Each reading has its own drift with
+  the wind (0.75 to 1.2 of it), so the field moves and slowly changes; a pure function of time.
+  Every reading uses the mip level of the larger of the pixel's footprint and the step, so far
+  cloud turns into its mean and the tile is never seen sharper than it is sampled.
+- **Steps that are exact where they can be.** `COARSE` steps a stretch (8 at `standard`) read the
+  pattern's mean; a step with no cloud near (with room for what the mean hides), or that passes
+  wholly over the highest possible top, is skipped. The others are walked in `FINE` steps (4):
+  the pattern is read at a fine step's two ends and taken as even between them, and so is the
+  height; the part of the step under the cloud's top is then a quadratic's roots (`cloudPart`),
+  so a face is found exactly and no step can straddle a cloud unseen. What a step shows is the
+  cloud a fifth into that part (what the ray meets first). A thin sheet (`floor` >= 1: cirrus)
+  takes three steps. A tower's step is a height and a stretch: its trunk (a round body whose
+  width takes the caps) and its anvil (a flat ball under the top) are cut with the step in closed
+  form.
+- **Light** (shaped to look right, not a simulation of scattering in cloud): the sun after the
+  air at each deck's own height (`sunlightAt`: a deck at 10 km is pink when one at 2 km is in the
+  world's shadow), dimmed by `exp(-tau)` where `tau` is the cloud over the place and over a place
+  0.3 depths sunward (one more reading: sunward sides bright, far sides grey), half of it thrown
+  onward by a forward lobe (g 0.76, at most 3.2: the silver lining at thin edges) and half
+  `exp(-0.22 tau)` (many bounces reach deeper); near a top the sun's share follows the top's
+  slope towards the sun (relief on a cloud sea, strong under a low sun); the sky's light from
+  above (`skyAmbient` at the top) on what is open to it, 1.3 times (a look: bluer shadows); the
+  light from below (the sky's at the base and the lit ground's); the fine caps' creases 2.2 x
+  `fray` darker; a thin sheet a third brighter (it passes the sky behind it on: a look). Decks
+  whose depth takes more than 1 optical depth cast a shadow on the decks under them
+  (`cloudShade`: the pattern where the sun's ray crosses the upper deck, read as softly as the
+  deck is deep) and, through `shade`, on §123.4's sea. Then the film look's dusk curve and the air
+  between the camera and the cloud's mean distance (`airLight`: once a stretch).
+  Densities are 0.0006 to 0.012 a metre, a tenth of real cloud's: edges stay soft at the steps
+  the picture can afford.
+- **Lightning.** `stormOf(lightning, {seed, towers, deck})`: the seed's own flashes
+  (`strikeTimes`: `rate` a minute, never two within 0.25 s) and those at stated `times` (seconds:
+  numbers, events with `time` such as `ctx.music`'s, or a track of `vidgen/music-time`'s
+  `trackArrays`, whose gains scale them), each at a seeded place inside a tower (or in the lowest
+  deck near the camera when there are none). A flash is a point of light inside the cloud for
+  `FLASH_SECONDS` (0.55): `flashLevel(age, strokes)`, one to four strokes 0.11 s apart, each
+  rising in 0.01 s and falling in 0.045 s; it adds `3 power level / (1 + (d / radius)^2)^2` of a
+  noon sun's light to the cloud round it, lifted with the film look's exposure to the power
+  `FLASH_LIFT` (0.8; a look: with all of it a flash at dusk turns every cloud white). At most
+  three at once.
+- **A giant of gas** has no ground. `giantAir(world)`: the world's own air of
+  `vidgen/space-bodies` made 8 times as deep (ice giants 8 / 3), so that height 0 has about as
+  much gas overhead as the Earth's sea level (a giant's one-bar level scatters about as much);
+  a stated choice: the limb from orbit is the thinner air, so the two views are not one air here.
+  `giantSky(world, {latitude, scale})`: three decks and towers at `GIANT`'s heights in units of
+  `scale` (the air's scale height, 112 km for the Jupiter-like world in this model): a deep deck
+  at 0.16 to 0.34 in the belts' mean colour, the main deck at 0.56 to 0.8 in the colour
+  `bandRamp` gives that latitude (the ramp the planet is painted with from outside: the same seed,
+  the same bands), changing to the neighbouring band's colour where the ramp says that band
+  begins north or south of the origin (`beyond`), a haze at 1.5, towers from 0.3 to 1.45, and
+  `floor`: the dark under the decks (0.06 of the belts' colour), drawn to the horizon of the
+  sphere, which the dome leaves out (`sky.under(true)`). The heights, the depths and the decks'
+  optical depths (10, 9, 0.3) are a look. The sphere the planet is drawn as from outside is
+  height 0 here: the decks float up to 170 km over it, 0.25 % of the radius.
+- **The picture.** The clouds are drawn into a half-float target of `QUALITIES`' share of the
+  picture (`standard` a half, `fast` a third, `fine` all) in `update`, with their light times
+  their share and the share itself, and laid over the dome and the sea by one full-screen pass
+  (`renderOrder` -800, no depth test), with the dome's tone curve and dither straight to the
+  canvas. So every thing of the scene stands in front of every cloud: a plane is not hidden in a
+  cloud (Step 387 or 390 may add depth).
+- **Options.** `sky` (`fair`, `overcast`, `layers`, `towers`, `storm`) or `decks` (names of
+  `DECKS`: `cumulus`, `stratus`, `cirrus`, or `{type, base, top, cover, size, stretch, density,
+  weather, rise, floor, soft, fray, ragged, puff, color, beyond}`; at most 4), `towers` (a number
+  or `{count, seed, spread, radius, base, top, anvil, density, color, at}`; at most 6),
+  `lightning`, `seed`, `wind`, `direction`, `quality`, `floor`, `anchor`. Unknown names fail with
+  the closest known one.
+- **The object.** `object`, `update(t, {camera})` (the camera the picture is drawn with: the
+  clouds' own picture is drawn here), `decks` (each `deckField`), `towers`, `flashes(t)`,
+  `coverAt(deck, x, z, t)`, `horizon(deck)`, `shade` (`{glsl, uniforms}` for the sea),
+  `uniforms`, `target`, `dispose()`.
+- **Changed in `vidgen/space-sea`**: a new option `shade: {glsl, uniforms}` defining
+  `float seaShade(vec2 p)`, the share of the sun's light that reaches the water p metres from the
+  camera; without it the shader multiplies by 1 (a still of a rough sea: byte-identical).
+- **Measured** (as above; clouds alone = less the dome's 0.17 s): `fair` from 150 m `fast`
+  0.80 s, `standard` 1.89 s, `fine` 8.3 s; `overcast` from 10 km 0.43 / 0.94 / 3.9 s; `towers`
+  from 4 km 1.43 s; `layers` between its decks 2.5 s (three decks and their shadows); a giant
+  1.87 s; `fair` over the sea from 3.5 km 2.75 s (the sea alone 1.12 s); at 320x180 `standard`
+  0.07 to 0.13 s, `fast` 0.05 s; making the clouds 0.1 s; 9 part tiles in 13 s.
+- **Checked.** Eleven stills (`/home/claude/work/scratch/ao383/stills/`); a 5 s clip at 640x360
+  (climbing out of a deck at 150 m/s; over a broken deck with towers at 220 m/s; under cumulus at
+  70 m/s) through `vidgen motion check`: no findings but the `web` scene's own fade-out.
+- **Honest notes.** A cloud is a height field: one top over one base, no overhangs, no cloud
+  over cloud within a deck; cumulus is soft-edged and smooth (no cauliflower detail under about
+  150 m), and blurs to its mean where steps are long (level looks through a deck far away). The
+  towers are a round trunk and a lens: they read as storm towers from afar and as mushrooms
+  close up; a tower casts no shadow and takes none. No rain, no virga, no fog on the ground, no
+  crepuscular rays, no rainbow or glory. The sea mirrors no cloud; the dome's plain ground takes
+  no shadow. The sun's light at a deck is the camera's place's (a deck 500 km away under another
+  sun is lit as here). The decks lie on a plane's coordinates touching the sphere at the anchor:
+  beyond a few thousand kilometres on a giant the pattern is stretched. A giant's rings are not
+  drawn in the sky (`vidgen/space-bodies`' rings are a mesh round a globe, not a function of a
+  direction: a later step may add the arc to the dome). Seen from orbit the same world's clouds
+  are `vidgen/space-bodies`' map: this module agrees with it in colour (`color`, a giant's band)
+  and in `cover` as a share, not in where the single clouds are (Step 391 may read the body's
+  map as the weather).
+- **Parts** (`data/web/parts/space-clouds.js`, a new kind `cloud` after `sea`): `clouds-fair`,
+  `clouds-sea-of-cloud`, `clouds-sunset`, `clouds-towers`, `clouds-between-decks`,
+  `clouds-lightning`, `clouds-over-sea`, `clouds-giant`, `clouds-ice-giant`.
+- **Exports.** `clouds`, `Clouds`, `deckOf`, `deckField`, `towerList`, `stormOf`, `strikeTimes`,
+  `flashLevel`, `giantSky`, `giantAir`, `noiseTile`, `shellSpan`, `deckHorizon`, constants
+  `DECKS`, `SKIES`, `QUALITIES`, `MOST`, `TILE`, `GIANT`, `FLASH_SECONDS`, `FLASH_LIFT`,
+  `VERSION`.
+- **Cache keys.** `space-sea.js` changed (the `shade` option; its pictures are the same), so a
+  page importing it draws once more; no film page imports it. `parts.js` gained the kind. Baked
+  maps are baked once more (their key holds every module's bytes).
+- **Tests** (`tests/test_web_space_clouds.py`): the module and its imports; the parts and their
+  kind; in Node: the tile (a fixed digest, it repeats), `shellSpan` against a walk along the ray
+  for ten rays, a deck's horizon and a ray just over and under it, decks and skies with errors
+  and a did-you-mean, the cover asked for against the pattern's (nine decks), drift with the
+  wind, towers and storms from a seed and from stated times, a giant's decks against `bandRamp`;
+  `slow`, in Chromium: tops brighter than bases, a sunset's tops warmer than noon's, more cover
+  hides more ground, a flash lights a tower, a giant's tawny decks, `fast` the same sky, a frame
+  twice the same, and the same pixels with the air's table baked, from the cache and without it.

@@ -3725,6 +3725,34 @@ const y = water.heightAt(x, z, t);           // metres over sea level; water.poi
   (a smoother sea) 0.8 s. Look first: `vidgen parts --kind sea`. Reference: CONFIG.md `web`,
   "Water to the horizon".
 
+**Clouds: `vidgen/space-clouds`.** For cloud decks, cloud towers, lightning or a flight inside a
+giant of gas do not stack textured planes or billboards: one object draws decks on the world's
+sphere that the camera can be under, in, between and over.
+
+```js
+// sketch (parts of a page, not a whole file): clouds in the air, their shadows on a sea
+import {clouds, giantSky, giantAir} from "vidgen/space-clouds";
+const weather = clouds(renderer, sky, {sky: "fair", seed: 4});    // sky: the air; "overcast", "layers", "towers", "storm"
+const water = sea(renderer, sky, {shade: weather.shade});         // optional: the clouds' shadows on the water
+scene.add(water.object, weather.object);                          // the dome first, then the sea, then the clouds
+const update = (t) => { sky.update(t, {camera}); water.update(t, {camera}); weather.update(t, {camera}); };
+```
+
+- Your own decks: `decks: [{type: "stratus", base: 1800, top: 3000}, {type: "cirrus", base: 11000}]`
+  (`cumulus`, `stratus`, `cirrus`; metres; `cover` 0 to 1; at most 4), `towers: {count: 4}` or
+  `towers: {at: [[x, z], ...]}` (at most 6).
+- Lightning on the music: `lightning: {times: trackArrays(ctx.music, {hits: ["kick"]}).hits.kick}`
+  (or seconds, or `rate: 12` a minute from the seed). A flash's strength is a look.
+- A giant of gas: `const sky = air(renderer, giantAir("jupiter"));
+  clouds(renderer, sky, giantSky("jupiter", {scale: sky.model.H, latitude: 24}))`, the camera
+  about 1.1 x `sky.model.H` up. The decks have the band's colours of the same world in
+  `vidgen/space-bodies`; heights and air are a look (say so).
+- `weather.update(t, {camera})` needs the camera the picture is drawn with. Things in the scene
+  are always in front of the clouds.
+- 0.9 to 1.9 s a frame at 720p (three decks 2.5 s), 0.1 s at 320x180; `quality: "fast"` under half.
+  Look first: `vidgen parts --kind cloud`. Reference: CONFIG.md `web`, "Cloud decks, towers,
+  lightning, a giant's decks".
+
 **Phenomena: `vidgen/space-phenomena`.** A black hole, a wormhole, a jump to warp, asteroids, a
 comet, an aurora: do not write these by hand (a black disc with an orange ring is not a black
 hole). Each is one call and one `update(t)`.

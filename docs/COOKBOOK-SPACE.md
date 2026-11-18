@@ -272,6 +272,46 @@ degrees under the level, from 100 km 10 degrees and it curves. Keep the camera o
 (3.45 m at 6.6 km): take heights from `water.pointAt` and `water.horizon.height`. `quality:
 "fast"` draws a smoother sea (other waves than `standard`) for a quarter to a third less.
 
+**Clouds in that sky** (in a `web` scene's script). `vidgen/space-clouds` draws cloud decks on
+the world's sphere: here a climb through an overcast into the sun, with towers standing through
+the deck and lightning in them on the score's kick drum.
+
+```js
+import * as THREE from "three";
+import {air, sunDirection} from "vidgen/space-air";
+import {clouds} from "vidgen/space-clouds";
+import {trackArrays} from "vidgen/music-time";
+let renderer, scene, camera, sky, weather;
+export function load(ctx) {
+  renderer = new THREE.WebGLRenderer({canvas: ctx.canvas, antialias: false});
+  renderer.setSize(ctx.width, ctx.height, false);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(60, ctx.width / ctx.height, 1, 1e8);
+  sky = air(renderer, "earth", {sun: sunDirection(12, 30)});
+  const kicks = ctx.music ? trackArrays(ctx.music, {hits: ["kick"]}).hits.kick : [];
+  weather = clouds(renderer, sky, {seed: 4, decks: [{type: "stratus", base: 1500, top: 2700}, {type: "cirrus", base: 12000}],
+    towers: {count: 4}, lightning: {times: kicks}});
+  scene.add(sky.object, weather.object);                               // the dome, then the clouds
+}
+export function frame(t) {
+  camera.position.set(0, 900 + 260 * t, -90 * t);                      // under the deck, through it, over it
+  camera.lookAt(0, 900 + 260 * t + 40, -90 * t - 1000);
+  sky.update(t, {camera}); weather.update(t, {camera});                // the air first; the same camera
+  renderer.render(scene, camera);
+}
+```
+
+Under a closed deck the day is grey with a bright line at the horizon; inside it is fog; over it
+the deck is a white sea to its own horizon (`weather.horizon(0)`), with every swell lit from the
+side when the sun is low. `sky: "fair"`, `"overcast"`, `"layers"`, `"towers"` and `"storm"` are
+ready-made; `weather.coverAt(deck, x, z, t)` tells a camera path where the gaps are. Over a sea,
+`sea(renderer, sky, {shade: weather.shade})` puts the clouds' shadows on the water. A giant of
+gas has no ground: `const sky = air(renderer, giantAir("jupiter")); clouds(renderer, sky,
+giantSky("jupiter", {scale: sky.model.H}))` with the camera about 1.1 x `sky.model.H` up gives
+decks in the colours of the band at that `latitude` of the same world in `vidgen/space-bodies`,
+towers, a high haze and the dark below; its heights and its air are a look (DESIGN §123.5).
+Things in the scene are drawn in front of every cloud.
+
 Write numbers with an exponent as `1.0e+9` (YAML 1.1 reads `1e9` and `1e+9` as text; vidgen takes such
 text as metres too).
 
@@ -303,6 +343,8 @@ world opens faster: "warm" below is measured with the maps already in the cache 
 | the sky from inside the air (`vidgen/space-air`), straight to the canvas | 0.19 (0.013 at 320x180); 0.22 while the sun or the height moves (`quality: fast` 0.20, `fine` 0.30) | 0.3 s (0.2 s with its table in the cache) |
 | the same with aerial perspective on a few far things / on a ground filling half the frame | 0.21 / 0.28 | |
 | a sea under that sky (`vidgen/space-sea`), straight to the canvas, with the dome: 50 m up / 20 km up | 1.1 / 0.65 (0.07 / 0.05 at 320x180); `quality: fast` 0.8 / 0.54; `fine` 1.66 / 0.83 | 0.3 s more |
+| clouds in that sky (`vidgen/space-clouds`), with the dome: cumulus and cirrus from below / a cloud sea from above / towers through a deck / between three decks / a giant's decks / cumulus over a sea | 1.9 / 0.9 / 1.4 / 2.5 / 1.9 / 2.8 (0.07 to 0.13 at 320x180); `quality: fast` 0.8 / 0.4; `fine` 8.3 / 3.9 | 0.1 s |
+| the same, methods tried first (cumulus and cirrus from below): 10 jittered steps a deck at half size / 6 at a third / 16 at full size | 1.6 / 0.68 / 7.8: grain or terraces on every cloud narrower than a step, so not shipped | |
 | `vidgen still` of a whole `space` scene | 1.0–1.7 a still | 8–14 s; Outbound's `02_depart` at 320x180: 13.7 s, warm 7.6 s |
 | a `--draft` (426x240, 8 fps) | Outbound's 58 s in 3 minutes | |
 
@@ -313,7 +355,7 @@ it; later pages 6 s).
 
 ## 5. The checks to run
 
-1. **Choose parts by looking**: `vidgen parts --kind body` (and `sky`, `light`, `air`, `sea`, `craft`,
+1. **Choose parts by looking**: `vidgen parts --kind body` (and `sky`, `light`, `air`, `sea`, `cloud`, `craft`,
    `craft-part`, `phenomenon`, `camera`): a contact sheet of every ready-made part with its one
    line of use.
 2. **Validate**: `vidgen validate .` checks every key and name with the closest word, what goes
